@@ -1743,9 +1743,6 @@ build_fb_state (hikaru_renderer_t *hr)
 		VK_ASSERT_NO_GL_ERROR ();
 		glTexStorage2D (GL_TEXTURE_2D, 1, GL_RGBA8, 640, 480);
 		VK_ASSERT_NO_GL_ERROR ();
-		glTexSubImage2D (GL_TEXTURE_2D, 0, 0, 0, 640, 480,
-		                 GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-		VK_ASSERT_NO_GL_ERROR ();
 		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 		VK_ASSERT_NO_GL_ERROR ();
 		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
