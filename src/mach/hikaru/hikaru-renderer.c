@@ -444,6 +444,7 @@ void main (void) {								\n \
 static const char *mesh_fs_source =
 "#version 140									\n \
 										\n \
+out vec4 fragColor;								\n \
 %s										\n \
 										\n \
 struct light_t {								\n \
@@ -558,9 +559,9 @@ main (void)									\n \
 #if HAS_FOG									\n \
 	float z = gl_FragCoord.z / gl_FragCoord.w;				\n \
 	float a = clamp (u_fog.x * (z - u_fog.y), 0.0, 1.0);			\n \
-	gl_FragColor = mix (color, vec4 (u_fog_color, 1.0), a);			\n \
+	fragColor = mix (color, vec4 (u_fog_color, 1.0), a);			\n \
 #else										\n \
-	gl_FragColor = color;							\n \
+	fragColor = color;							\n \
 #endif										\n \
 }";
 
@@ -1647,6 +1648,7 @@ static const char *fb_vs_source =
 static const char *fb_fs_source =
 "#version 140									\n"
 "										\n"
+"out vec4 fragColor;								\n"
 "uniform sampler2D u_front;							\n"
 "uniform sampler2D u_back;							\n"
 "uniform sampler2D u_layer1;							\n"
@@ -1680,7 +1682,7 @@ static const char *fb_fs_source =
 "	vec4 texel_1 = texture (u_layer1, p_texcoords_inv) * u_mult_1;		\n"
 "	vec4 texel_2 = texture (u_layer2, p_texcoords_inv) * u_mult_2;		\n"
 "										\n"
-"	gl_FragColor = mix (texel_f, texel_b, u_factor) + texel_1 + texel_2;	\n"
+"	fragColor = mix (texel_f, texel_b, u_factor) + texel_1 + texel_2;	\n"
 "}\n";
 
 #define NUM_FRAMEBUFFERS 2
