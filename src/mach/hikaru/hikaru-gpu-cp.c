@@ -1261,6 +1261,7 @@ I (0x091)
 		mat->diffuse[1] = (inst[1] >> 8) & 0xFF;
 		mat->diffuse[2] = (inst[1] >> 16) & 0xFF;
 		mat->has_091 = 1;
+		break;
 	case 2:
 		mat->ambient[0] = inst[1] & 0xFF;
 		mat->ambient[1] = (inst[1] >> 8) & 0xFF;
