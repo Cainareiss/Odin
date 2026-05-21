@@ -2327,9 +2327,9 @@ I (0x12C)
 
 	VK_ASSERT (POLY.static_mesh_precision > 0.0f);
 
-	v.body.position[0] = (int16_t)(inst[1] >> 16) * POLY.static_mesh_precision;
-	v.body.position[1] = (int16_t)(inst[2] >> 16) * POLY.static_mesh_precision;
-	v.body.position[2] = (int16_t)(inst[3] >> 16) * POLY.static_mesh_precision;
+	v.body.position[0] = ((int32_t) inst[1] >> 10) * (POLY.static_mesh_precision / 64.0f);
+	v.body.position[1] = ((int32_t) inst[2] >> 10) * (POLY.static_mesh_precision / 64.0f);
+	v.body.position[2] = ((int32_t) inst[3] >> 10) * (POLY.static_mesh_precision / 64.0f);
 
 	v.body.normal[0] = (int16_t)((inst[1] & 0x3FF) << 6) / 16384.0f;
 	v.body.normal[1] = (int16_t)((inst[2] & 0x3FF) << 6) / 16384.0f;
