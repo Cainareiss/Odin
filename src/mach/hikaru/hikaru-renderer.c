@@ -1490,11 +1490,11 @@ draw_scene (hikaru_renderer_t *hr)
 {
 	static const int sorted_polytypes[] = {
 		HIKARU_POLYTYPE_BACKGROUND,
+		HIKARU_POLYTYPE_OPAQUE,
 		HIKARU_POLYTYPE_SHADOW_A,
 		HIKARU_POLYTYPE_SHADOW_B,
-		HIKARU_POLYTYPE_OPAQUE,
-		HIKARU_POLYTYPE_TRANSLUCENT,
 		HIKARU_POLYTYPE_TRANSPARENT,
+		HIKARU_POLYTYPE_TRANSLUCENT,
 	};
 	hikaru_gpu_t *gpu = hr->gpu;
 	unsigned vpi, i;
