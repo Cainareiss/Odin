@@ -1435,6 +1435,16 @@ hikaru_renderer_end_mesh (vk_renderer_t *rend, uint32_t addr)
 	hr->meshes.current = NULL;
 }
 
+static int
+compare_mesh_depth_b2f (const void *a, const void *b)
+{
+	float za = ((const hikaru_mesh_t *) a)->sort_depth;
+	float zb = ((const hikaru_mesh_t *) b)->sort_depth;
+	if (za < zb) return -1;
+	if (za > zb) return  1;
+	return 0;
+}
+
 static void
 draw_meshes_for_polytype (hikaru_renderer_t *hr, unsigned vpi, int polytype)
 {
@@ -1471,7 +1481,18 @@ draw_meshes_for_polytype (hikaru_renderer_t *hr, unsigned vpi, int polytype)
 		glDisable (GL_POLYGON_OFFSET_FILL);
 		break;
 	}
-	
+
+	if (polytype == HIKARU_POLYTYPE_TRANSLUCENT && num > 1) {
+		for (j = 0; j < num; j++) {
+			hikaru_mesh_t *mesh = &meshes[j];
+			if (mesh->mv_index < MAX_MODELVIEWS)
+				mesh->sort_depth = hr->mv_list[mesh->mv_index].mtx[3][2];
+			else
+				mesh->sort_depth = 0.0f;
+		}
+		qsort (meshes, num, sizeof (hikaru_mesh_t), compare_mesh_depth_b2f);
+	}
+
 	for (j = 0; j < num; j++) {
 		hikaru_mesh_t *mesh = &meshes[j];
 		draw_mesh (hr, mesh);

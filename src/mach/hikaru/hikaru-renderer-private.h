@@ -90,6 +90,7 @@ typedef struct {
 	uint32_t		ls_index;
 	float			alpha_thresh[2];
 	float			depth_bias;
+	float			sort_depth;
 	bool			has_two_sided_lighting;
 	uint32_t		num;
 } hikaru_mesh_t;
