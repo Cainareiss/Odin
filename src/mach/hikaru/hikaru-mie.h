@@ -1,6 +1,7 @@
 /* 
  * Valkyrie
  * Copyright (C) 2011, Stefano Teso
+ * Copyright (C) 2026 Réda Chérif-Touil
  * 
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -23,6 +24,7 @@
 
 #include "vk/device.h"
 
-vk_device_t	*hikaru_mie_new (vk_machine_t *mach);
+/* `clock_hz` is the clock of the cycles passed to the device's exec. */
+vk_device_t	*hikaru_mie_new (vk_machine_t *mach, unsigned clock_hz);
 
 #endif /* __VK_HIKARU_MIE_H__ */

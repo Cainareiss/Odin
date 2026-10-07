@@ -20,8 +20,13 @@ HIKARU
 Move the slave GPU access to hikaru-gpu.c. Proper support may require the
 introduction of a new vk_device_accessors_t class.
 
-Proper MIE emulation (wrap a Z80 emulator in a vk_cpu_t sub-class and tape
-it to the code.)
+MIE LLE (src/odin/mie.cpp, ODIN_MIE=lle): HACK in src/odin/mie_bridge.cpp,
+port E bits 0-3 read high while the port is an output; the BOOTROM waits
+for that at 0x0C00B860 and MAME reads 0xFF there. Measure the pins. The
+LLE path is the default; drop the HLE stand-in in hikaru-mie.c once the
+JVS inputs (players, coins, analog) are wired to the real board.
+Ports 0x0B-0x0E (315-5649-style serial block) and 0x40/0x60/0x80/0x81,
+touched by the mask ROM init, are logged as unknown.
 
 AICA (src/odin/aica.cpp + arm7.cpp): control block, timers, interrupts,
 DMA, RTC and the ARM7 are in; still missing: the 64 slots and the DSP

@@ -21,6 +21,13 @@
 			"mach" : "hikaru",
 			"sections" : [
 				{
+					"name" : "mie",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "315-6146.bin", "size" : 2048 }
+					]
+				},
+				{
 					"name" : "bootrom",
 					"type" : "alternative",
 					"data" : [
@@ -59,6 +66,13 @@
 			"name" : "braveff",
 			"mach" : "hikaru",
 			"sections" : [
+				{
+					"name" : "mie",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "315-6146.bin", "size" : 2048 }
+					]
+				},
 				{
 					"name" : "bootrom",
 					"type" : "alternative",
@@ -119,6 +133,13 @@
 			"mach" : "hikaru",
 			"sections" : [
 				{
+					"name" : "mie",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "315-6146.bin", "size" : 2048 }
+					]
+				},
+				{
 					"name" : "bootrom",
 					"type" : "alternative",
 					"data" : [
@@ -171,6 +192,13 @@
 			"name" : "podrace",
 			"mach" : "hikaru",
 			"sections" : [
+				{
+					"name" : "mie",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "315-6146.bin", "size" : 2048 }
+					]
+				},
 				{
 					"name" : "bootrom",
 					"type" : "alternative",
@@ -237,6 +265,13 @@
 			"mach" : "hikaru",
 			"sections" : [
 				{
+					"name" : "mie",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "315-6146.bin", "size" : 2048 }
+					]
+				},
+				{
 					"name" : "bootrom",
 					"type" : "alternative",
 					"data" : [
@@ -290,6 +325,13 @@
 						{ "name" : "hikaru_0.96.bin", "size" : 2097152 },
 						{ "name" : "hikaru_0.92.bin", "size" : 2097152 },
 						{ "name" : "hikaru_0.84.bin", "size" : 2097152 }
+					]
+				},
+				{
+					"name" : "mie",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "315-6146.bin", "size" : 2048 }
 					]
 				},
 				{

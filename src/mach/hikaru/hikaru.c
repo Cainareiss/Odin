@@ -467,6 +467,9 @@ hikaru_run_cycles (vk_machine_t *mach, int cycles)
 	 * like to debug it a bit before enabling it. */
 	vk_device_exec (hikaru->gpu, cycles);
 
+	/* Run the MIE (no-op on the HLE stand-in) */
+	vk_device_exec (hikaru->mie, cycles);
+
 	/* Run the two sound boards */
 	vk_device_exec (hikaru->aica_m, cycles);
 	vk_device_exec (hikaru->aica_s, cycles);
@@ -653,14 +656,25 @@ setup_master_mmap (hikaru_t *hikaru)
 	ret |= vk_mmap_add_dev (mmap, 0x00400000, 0x00400001, 0x00000001,
 	                        VK_REGION_RW | VK_REGION_SIZE_16 | VK_REGION_SIZE_32 | VK_REGION_LOG_RW,
 	                        hikaru->gpu, "UNK/M");
+	/* No LOG_RW: a logged access formats the whole debug string
+	 * (hikaru_get_debug_string) and the MIE is polled in tight loops.
 	ret |= vk_mmap_add_dev (mmap, 0x00800000, 0x0083FFFF, 0x0003FFFF,
 	                        VK_REGION_RW | VK_REGION_SIZE_8 | VK_REGION_SIZE_16 | VK_REGION_LOG_RW,
 	                        hikaru->mie, "MIE/M");
+	*/
+	ret |= vk_mmap_add_dev (mmap, 0x00800000, 0x0083FFFF, 0x0003FFFF,
+	                        VK_REGION_RW | VK_REGION_SIZE_8 | VK_REGION_SIZE_16,
+	                        hikaru->mie, "MIE/M");
 	ret |= vk_mmap_add_ram (mmap, 0x00C00000, 0x00C0FFFF, 0x0000FFFF,
 	                        0, hikaru->bram, "BRAM/M");
+	/* MIE bus request register; was &unk_m, "UNK/M" (toggling semaphore)
 	ret |= vk_mmap_add_dev (mmap, 0x01000000, 0x010001FF, 0x000001FF,
 	                        VK_REGION_RW | VK_REGION_SIZE_16 | VK_REGION_SIZE_32 | VK_REGION_LOG_RW,
 	                        &unk_m, "UNK/M");
+	*/
+	ret |= vk_mmap_add_dev (mmap, 0x01000000, 0x010001FF, 0x000001FF,
+	                        VK_REGION_RW | VK_REGION_SIZE_16 | VK_REGION_SIZE_32,
+	                        hikaru->mie, "MIE-BUSRQ/M");
 	ret |= vk_mmap_add_dev (mmap, 0x02000000, 0x03FFFFFF, 0x01FFFFFF,
 	                        VK_REGION_RW | VK_REGION_SIZE_ALL,
 	                        hikaru->memctl_m, "APERTURE02/M");
@@ -1008,7 +1022,7 @@ hikaru_init (hikaru_t *hikaru)
 	if (!hikaru->mscomm)
 		return -1;
 
-	hikaru->mie = hikaru_mie_new (mach);
+	hikaru->mie = hikaru_mie_new (mach, HIKARU_SH4_CLOCK);
 	if (!hikaru->mie)
 		return -1;
 

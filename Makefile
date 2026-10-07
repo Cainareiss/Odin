@@ -38,7 +38,14 @@ ODIN_OBJ := \
 	src/odin/aica.o \
 	src/odin/aica_bridge.o \
 	src/odin/arm7.o \
-	src/odin/arm7_ops.o
+	src/odin/arm7_ops.o \
+	src/odin/z80.o \
+	src/odin/z80_ops.o \
+	src/odin/eeprom_93c46.o \
+	src/odin/jvs_host.o \
+	src/odin/jvs_io_13551.o \
+	src/odin/mie.o \
+	src/odin/mie_bridge.o
 
 HIKARU_OBJ := \
 	$(SH4_OBJ) \
@@ -69,6 +76,14 @@ bin/vkbswap: $(VK_OBJ) src/utils/bswap.o
 
 %.o: %.cpp
 	$(CXX) -c $< -o $@ $(CXXFLAGS)
+
+# Header dependencies of the MIE objects (a stale object with an older
+# class layout corrupts the heap).
+src/odin/mie.o src/odin/mie_bridge.o: src/odin/mie.hpp src/odin/z80.hpp src/odin/jvs_host.hpp
+src/odin/mie_bridge.o src/mach/hikaru/hikaru-mie.o: src/odin/mie_bridge.hpp
+src/odin/mie_bridge.o src/odin/jvs_io_13551.o: src/odin/jvs_io_13551.hpp src/odin/eeprom_93c46.hpp
+src/odin/jvs_host.o src/odin/jvs_io_13551.o: src/odin/jvs_host.hpp
+src/odin/eeprom_93c46.o: src/odin/eeprom_93c46.hpp
 
 install:
 	@( mkdir -pv $(HOME)/.local/bin )
