@@ -977,7 +977,9 @@ hikaru_gpu_begin_dma (hikaru_gpu_t *gpu)
 		}
 	}
 
-	REG1A (0x24) |= 1;
+	/* The copy is immediate, so the busy bit (1A000024 bit 0) is never
+	 * left set: games poll it before queueing the next blit. */
+	REG1A (0x24) &= ~1;
 }
 
 /****************************************************************************

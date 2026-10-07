@@ -1948,22 +1948,16 @@ draw (hikaru_renderer_t *hr)
 	glUniform1i (hr->framebuffer.locs.u_layer1, 2);
 	glUniform1i (hr->framebuffer.locs.u_layer2, 3);
 	glUniform1f (hr->framebuffer.locs.u_factor, factor);
-	if (f == layer1 && mult1 != 1.0)
-		glUniform1f (hr->framebuffer.locs.u_mult_f, mult1);
-	else if (f == layer2 && mult2 != 1.0)
-		glUniform1f (hr->framebuffer.locs.u_mult_f, mult2);
-	if (b == layer1 && mult1 != 1.0)
-		glUniform1f (hr->framebuffer.locs.u_mult_b, mult1);
-	else if (b == layer2 && mult2 != 1.0)
-		glUniform1f (hr->framebuffer.locs.u_mult_b, mult2);
-	if (mult1 != 1.0)
-		glUniform1f (hr->framebuffer.locs.u_mult_1, mult1);
-	if (mult2 != 1.0)
-		glUniform1f (hr->framebuffer.locs.u_mult_2, mult2);
-	if (n1 >= 2)
-		glUniform1i (hr->framebuffer.locs.u_invert_f, 1);
-	if (n2 >= 2)
-		glUniform1i (hr->framebuffer.locs.u_invert_b, 1);
+	/* Uniforms persist in the program: set them all, every frame. A
+	 * layer that is not uploaded this frame has mult 0 and no texture. */
+	glUniform1f (hr->framebuffer.locs.u_mult_f,
+	             (f == layer1 && layer1) ? mult1 : (f == layer2 && layer2) ? mult2 : 1.0f);
+	glUniform1f (hr->framebuffer.locs.u_mult_b,
+	             (b == layer1 && layer1) ? mult1 : (b == layer2 && layer2) ? mult2 : 1.0f);
+	glUniform1f (hr->framebuffer.locs.u_mult_1, (layer1 && f != layer1 && b != layer1) ? mult1 : 0.0f);
+	glUniform1f (hr->framebuffer.locs.u_mult_2, (layer2 && f != layer2 && b != layer2) ? mult2 : 0.0f);
+	glUniform1i (hr->framebuffer.locs.u_invert_f, (n1 >= 2) ? 1 : 0);
+	glUniform1i (hr->framebuffer.locs.u_invert_b, (n2 >= 2) ? 1 : 0);
 	VK_ASSERT_NO_GL_ERROR ();
 
 	glBindVertexArray (hr->framebuffer.vao);
