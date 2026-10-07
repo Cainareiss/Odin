@@ -42,6 +42,11 @@ and the HACK in hikaru-aica.c (page offset 0 reads 4 for Pharrier).
 
 Implement the three EEPROMs (MAINBD, ROMBD, MIE.)
 
+Bridge DMA (hikaru-memctl.c): the transfer completes at the start
+write, like MAME. HEURISTIC: the real 315-6154 takes time, but games
+refill the source buffer right after starting a transfer (von4 model
+loader at 0x0C055FD4), so it must at least run ahead of the SH-4.
+
 
 SH-4
 ----

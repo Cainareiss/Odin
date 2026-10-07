@@ -694,6 +694,8 @@ hikaru_memctl_get (vk_device_t *dev, unsigned size, uint32_t addr, void *val)
 	return memctl_bus_get (memctl, size, bus_addr, val);
 }
 
+static void memctl_dma_run (hikaru_memctl_t *memctl);
+
 static int
 hikaru_memctl_put (vk_device_t *dev, unsigned size, uint32_t addr, uint64_t val)
 {
@@ -723,6 +725,8 @@ hikaru_memctl_put (vk_device_t *dev, unsigned size, uint32_t addr, uint64_t val)
 			break;
 		}
 		vk_buffer_put (memctl->regs, size, addr & 0x3F, val);
+		if ((addr & 0xFF) == 0x38)
+			memctl_dma_run (memctl);
 		return 0;
 	}
 	if (addr >= 0x04000040 && addr <= 0x04FFFFFF) {
@@ -739,32 +743,27 @@ hikaru_memctl_put (vk_device_t *dev, unsigned size, uint32_t addr, uint64_t val)
 	return memctl_bus_put (memctl, size, bus_addr, val);
 }
 
-static int
-hikaru_memctl_exec (vk_device_t *dev, int cycles)
+/* The bridge DMA copies the whole block as soon as it is started, like
+ * the 315-6154 in MAME: games write the staging buffer for the next
+ * block right after starting a transfer (von4 model loader, 0C055FD4),
+ * so a transfer spread over several scanlines would read overwritten
+ * data. */
+static void
+memctl_dma_run (hikaru_memctl_t *memctl)
 {
-	hikaru_memctl_t *memctl = (hikaru_memctl_t *) dev;
-	uint32_t src, dst, len, ctl, todo;
+	uint32_t src, dst, len;
 
 	len = vk_buffer_get (memctl->regs, 4, 0x38);
-
 	if (!(len & 0x01000000))
-		return 0;
+		return;
 
 	src = vk_buffer_get (memctl->regs, 4, 0x30);
 	dst = vk_buffer_get (memctl->regs, 4, 0x34);
-	ctl = len >> 24;
-	len = len & 0xFFFFFF;
+	len &= 0xFFFFFF;
 
-	/* DMA is running */
 	VK_LOG ("MEMCTL DMA: %08X -> %08X x %08X", src, dst, len);
 
-	/* Assume one word per cycle */
-	todo = MIN2 ((int) len, cycles);
-	len -= todo;
-
-	VK_ASSERT ((len & 0xFF000000) == 0);
-
-	while (todo--) {
+	while (len--) {
 		uint32_t tmp;
 		memctl_bus_get (memctl, 4, src & 0x7FFFFFFF, &tmp);
 		memctl_bus_put (memctl, 4, dst & 0x7FFFFFFF, tmp);
@@ -772,20 +771,19 @@ hikaru_memctl_exec (vk_device_t *dev, int cycles)
 		dst += 4;
 	}
 
-	/* Transfer completed */
-	if (len == 0) {
-		ctl = 0;
-		/* Set DMA done, clear error flags */
-		vk_buffer_put (memctl->regs, 2, 0x04, 0x1000);
-		/* Raise an IRQ */
-		hikaru_raise_memctl_irq (memctl->base.mach);
-	}
-
-	/* Write the values back */
+	/* Transfer completed: set DMA done, clear error flags */
 	vk_buffer_put (memctl->regs, 4, 0x30, src);
 	vk_buffer_put (memctl->regs, 4, 0x34, dst);
-	vk_buffer_put (memctl->regs, 4, 0x38, (ctl << 24) | len);
+	vk_buffer_put (memctl->regs, 4, 0x38, 0);
+	vk_buffer_put (memctl->regs, 2, 0x04, 0x1000);
+	hikaru_raise_memctl_irq (memctl->base.mach);
+}
 
+static int
+hikaru_memctl_exec (vk_device_t *dev, int cycles)
+{
+	(void) dev;
+	(void) cycles;
 	return 0;
 }
 
