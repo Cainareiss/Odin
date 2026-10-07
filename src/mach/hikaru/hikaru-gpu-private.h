@@ -175,7 +175,7 @@ typedef struct {
 	union {
 		struct {
 			uint32_t 	: 16;
-			uint32_t unk1	: 2;
+			uint32_t filter	: 2;	/* bits 17:16, X360 825C6650 */
 			uint32_t 	: 2;
 			uint32_t unk2	: 4;
 			uint32_t unk3	: 4;
@@ -186,7 +186,7 @@ typedef struct {
 	union {
 		struct {
 			uint32_t	: 14;
-			uint32_t unk4	: 1;
+			uint32_t uvtexels: 1;	/* bit 14, UVs in whole texels, else 12.4 (X360 8252D710) */
 			uint32_t unk5	: 1;
 			uint32_t logw	: 3;
 			uint32_t logh	: 3;
@@ -329,7 +329,7 @@ typedef struct {
 
 	uint16_t depth_bias;
 	uint16_t _501;
-	uint16_t texoffset_x, texoffset_y;
+	int16_t texoffset[4][2];	/* 0D1 UV offsets in 1/16 texel, by vertex selector */
 
 	struct {
 		uint32_t in_mesh	: 1;

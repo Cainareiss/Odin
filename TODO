@@ -50,6 +50,11 @@ chip (hikaru-memctl.c, HACK until those boards are measured).
 Static mesh scale (CP 0x901): kept across frames; when a static mesh
 comes before any 0x901 the unit scale is assumed (HEURISTIC, Racer).
 
+GPU textures: the 0D1 UV offsets are added to the vertex UVs the way the
+X360 port's vertex shader is assumed to (the Xenos microcode of vo3d was
+not decoded: the sign is a HEURISTIC). Texhead filter mode 3 is trilinear
+here while the X360 port leaves the sampler defaults (HEURISTIC).
+
 EEPROMs: the main board 93C46 (SH-4 port A, src/odin/eeprom_bridge.cpp)
 and the ROM board X76F100 (bus page 0x14, src/odin/x76f100.cpp) are
 real and read by the BOOTROM; the MIE 93C46 is in the LLE MIE. None of

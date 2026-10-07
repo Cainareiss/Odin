@@ -1564,8 +1564,9 @@ get_texhead_index (uint32_t *inst)
  *
  *	----BBBB AAAA--MM -------o oooooooo
  *
- * A, B = Unknown values.
- * M = Unknown mode.
+ * A, B = Unknown values; the X360 port decodes them and never reads them.
+ * M = Filter: 0 nearest, 1 trilinear, 2 bilinear without mipmaps, 3 left
+ *     at the sampler defaults (X360 825C6650).
  *
  *	Mode 0 is used frequently with values 0 and FF.
  *
@@ -1578,7 +1579,8 @@ get_texhead_index (uint32_t *inst)
  *
  *	UUUFFFrr wwHHHWWW ba-----o oooooooo
  *
- * a = In SGNASCAR it is 1 for hi-res LODs, 0 for lo-res LODs.
+ * a = UVs in whole texels, else 12.4 (X360 8252D710). In SGNASCAR it is 1
+ *     for hi-res LODs, 0 for lo-res LODs.
  *
  * b = Extensively used in PHARRIER.
  *
@@ -1676,33 +1678,25 @@ D (0x0C1)
  *	-------- ------MM -------o oooooooo
  *	YYYYYYYY YYYYYYYY XXXXXXXX XXXXXXXX
  *
- * M = Mode? (0 disabled, 1&2 dunno)
- * X, Y = Amount
+ * M = Offset slot 1..3, picked per vertex by bits 19:18 of the vertex
+ *     header; slot 0 is stored but never applied (X360 82538E08, 82539020).
+ * X, Y = Signed amounts in 1/16 texel.
  */
 
 I (0x0D1)
 {
-	switch (inst[0] >> 16) {
-	case 1:
-	case 2:
-		gpu->texoffset_x = inst[1] & 0xFFFF;
-		gpu->texoffset_y = inst[1] >> 16;
-		break;
-	default:
-		gpu->texoffset_x = 0;
-		gpu->texoffset_y = 0;
-		break;
-	}
+	unsigned m = (inst[0] >> 16) & 3;
+
+	gpu->texoffset[m][0] = (int16_t) inst[1];
+	gpu->texoffset[m][1] = (int16_t) (inst[1] >> 16);
 }
 
 D (0x0D1)
 {
 	UNHANDLED |= !!(inst[0] & 0xFFFCF000);
-	UNHANDLED |= !!(inst[1] & 0x80008000);
-	UNHANDLED |= ((inst[0] >> 16) == 3);
 
-	DISASM ("tex: set panning [%X +%X +%X]",
-	        inst[0] >> 16, inst[1] & 0xFFFF, inst[1] >> 16);
+	DISASM ("tex: set panning [%X %+d %+d]",
+	        (inst[0] >> 16) & 3, (int16_t) inst[1], (int16_t) (inst[1] >> 16));
 }
 
 /* 0C4	Commit Texhead

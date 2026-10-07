@@ -217,12 +217,28 @@ upload_texture (hikaru_renderer_t *hr, hikaru_texhead_t *th)
 	                 th->repeatv ? GL_REPEAT : GL_CLAMP_TO_EDGE);
 	VK_ASSERT_NO_GL_ERROR ();
 
-	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+	/* Filter of the 0C1 mode (X360 825C6650); mode 3 is left at the
+	 * sampler defaults there, trilinear here (HEURISTIC). */
+	switch (th->filter) {
+	case 0:
+		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		break;
+	case 2:
+		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		break;
+	default:
+		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+		break;
+	}
 	VK_ASSERT_NO_GL_ERROR ();
 
-	/* XXX hack to make textures slightly less blurry. */
-	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_LOD_BIAS, -1);
+	/* LOD bias and anisotropy of the X360 port (825C6650). */
+	glTexParameterf (GL_TEXTURE_2D, GL_TEXTURE_LOD_BIAS, -0.5f);
+	if (GLEW_EXT_texture_filter_anisotropic)
+		glTexParameterf (GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, 8.0f);
 	VK_ASSERT_NO_GL_ERROR ();
 
 	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, num_levels - 1);
@@ -1073,12 +1089,24 @@ copy_texcoords (hikaru_renderer_t *hr,
 	hikaru_texhead_t *th = &TEX.scratch;
 	float w = 16 << th->logw;
 	float h = 16 << th->logh;
+	/* Vertex UVs are 12.4 unless the texhead says whole texels; the 0D1
+	 * offset slot picked by the vertex is added in 1/16 texel (X360
+	 * 8252D710, 82538E70). */
+	float k = th->uvtexels ? 16.0f : 1.0f;
+	float u = src->body.texcoords[0] * k;
+	float v = src->body.texcoords[1] * k;
+	unsigned sel = src->info.uv_offset;
 
 	if (th->format == HIKARU_FORMAT_ABGR1111)
 		h *= 2;
 
-	dst->body.texcoords[0] = (src->body.texcoords[0] + (0.5f * gpu->texoffset_x)) / w;
-	dst->body.texcoords[1] = (src->body.texcoords[1] + (0.5f * gpu->texoffset_y)) / h;
+	if (sel) {
+		u += gpu->texoffset[sel][0] / 16.0f;
+		v += gpu->texoffset[sel][1] / 16.0f;
+	}
+
+	dst->body.texcoords[0] = u / w;
+	dst->body.texcoords[1] = v / h;
 }
 
 static void
