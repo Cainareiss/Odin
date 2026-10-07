@@ -80,11 +80,19 @@ struct vk_cpu_t {
 	\
 	} while (0)
 
+/* The debug string is formatted only when it will be printed: it costs a
+ * sprintf of the whole CPU state per call, on every logged bus access. */
+#ifdef NDEBUG
+#define VK_CPU_LOG(cpu_, fmt_, args_...)
+#else
 #define VK_CPU_LOG(cpu_, fmt_, args_...) \
 	do { \
-		const char *str = vk_cpu_get_debug_string ((vk_cpu_t *) cpu_); \
-		VK_LOG ("%s : "fmt_, str, ##args_); \
+		if (vk_verbosity > 0) { \
+			const char *str = vk_cpu_get_debug_string ((vk_cpu_t *) cpu_); \
+			VK_LOG ("%s : "fmt_, str, ##args_); \
+		} \
 	} while (0);
+#endif
 
 #define VK_CPU_ERROR(cpu_, fmt_, args_...) \
 	do { \

@@ -53,11 +53,18 @@ struct vk_machine_t {
 	const char	*(* get_debug_string)(vk_machine_t *mach);
 };
 
+/* Formatted only when printed; see VK_CPU_LOG. */
+#ifdef NDEBUG
+#define VK_MACH_LOG(mach_, fmt_, args_...)
+#else
 #define VK_MACH_LOG(mach_, fmt_, args_...) \
 	do { \
-		const char *str = vk_machine_get_debug_string (mach_); \
-		VK_LOG ("%s : "fmt_, str, ##args_); \
+		if (vk_verbosity > 0) { \
+			const char *str = vk_machine_get_debug_string (mach_); \
+			VK_LOG ("%s : "fmt_, str, ##args_); \
+		} \
 	} while (0);
+#endif
 
 #define VK_MACH_ERROR(mach_, fmt_, args_...) \
 	do { \
