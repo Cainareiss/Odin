@@ -315,7 +315,8 @@ vk_game_list_new (const char *path)
 
 	text = vk_buffer_get_ptr (buf, 0);
 
-	root = json_loads (text, 0, &error);
+	/* The buffer holds the raw file, without a terminating NUL */
+	root = json_loadb (text, vk_buffer_get_size (buf), 0, &error);
 	if (!root) {
 		VK_ERROR ("can't load game list '%s'", error.text);
 		goto fail;
