@@ -208,12 +208,13 @@ upload_texture (hikaru_renderer_t *hr, hikaru_texhead_t *th)
 	glBindTexture (GL_TEXTURE_2D, id);
 	VK_ASSERT_NO_GL_ERROR ();
 
-	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_MIRRORED_REPEAT);
-//	                 (th->wrapu == 0) ? GL_CLAMP_TO_EDGE :
-//	                 (th->repeatu == 0) ? GL_REPEAT : GL_MIRRORED_REPEAT);
-	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_MIRRORED_REPEAT);
-//	                 (th->wrapv == 0) ? GL_CLAMP_TO_EDGE :
-//	                 (th->repeatv == 0) ? GL_REPEAT : GL_MIRRORED_REPEAT);
+	/* Mirror wins over repeat, else clamp (X360 port, 825C6C98) */
+	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_S,
+	                 th->mirroru ? GL_MIRRORED_REPEAT :
+	                 th->repeatu ? GL_REPEAT : GL_CLAMP_TO_EDGE);
+	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_T,
+	                 th->mirrorv ? GL_MIRRORED_REPEAT :
+	                 th->repeatv ? GL_REPEAT : GL_CLAMP_TO_EDGE);
 	VK_ASSERT_NO_GL_ERROR ();
 
 	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -1089,12 +1090,15 @@ add_triangle (hikaru_renderer_t *hr)
 
 		VK_ASSERT ((index + 2) < MAX_VERTICES_PER_MESH);
 
+		/* Bits 19:18 select a UV offset, not two-sided lighting (X360
+		 * port, 8252D590); the two-sided variant is never used now.
 		if (hr->push.tmp[2].info.twosided &&
 		    !hr->push.tmp[2].info.nocull)
 			VK_ERROR ("got a vertex with culling and two-sided lighting!");
 
 		if (hr->push.tmp[2].info.twosided)
 			hr->meshes.current->has_two_sided_lighting = 1;
+		*/
 
 		if (hr->push.tmp[2].info.nocull) {
 			dst[0] = hr->push.tmp[0].body;

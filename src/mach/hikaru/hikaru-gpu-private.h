@@ -190,10 +190,10 @@ typedef struct {
 			uint32_t unk5	: 1;
 			uint32_t logw	: 3;
 			uint32_t logh	: 3;
-			uint32_t wrapu	: 1;
-			uint32_t wrapv	: 1;
-			uint32_t repeatu: 1;
-			uint32_t repeatv: 1;
+			uint32_t repeatu: 1;	/* bit 22, else clamp to edge */
+			uint32_t repeatv: 1;	/* bit 23 */
+			uint32_t mirroru: 1;	/* bit 24, wins over repeat */
+			uint32_t mirrorv: 1;	/* bit 25 */
 			uint32_t format	: 3;
 			uint32_t unk6	: 3;
 		};
@@ -451,8 +451,7 @@ typedef union {
 		uint32_t unknown1	: 1; /* 0x00001000 */
 		uint32_t unknown2	: 3; /* 0x0000E000 */
 		uint32_t		: 2;
-		uint32_t unknown3	: 1; /* 0x00040000 */
-		uint32_t twosided	: 1; /* 0x00080000 */
+		uint32_t uv_offset	: 2; /* 0x000C0000, selector of the UV offset table */
 		uint32_t		: 3;
 		uint32_t nocull		: 1; /* 0x00800000 */
 		uint32_t alpha		: 8; /* 0xFF000000 */

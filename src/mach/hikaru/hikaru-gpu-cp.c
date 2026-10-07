@@ -1577,19 +1577,12 @@ get_texhead_index (uint32_t *inst)
  *
  * F = Format
  *
- * r = Repeat mode
+ * r = Mirror (bit 24 for U, bit 25 for V); wins over repeat.
  *
- *	0 = Normal repeat.
- *	1 = Mirrored repeat.
+ * w = Repeat (bit 22 for U, bit 23 for V); else clamp to edge.
  *
- *	Bit 0 for V, bit 1 for U. Only meaningful if wrapping is enabled.
- *
- * w = Wrap mode
- *
- *	0 = Clamp.
- *	1 = Wrap.
- *
- *	Bit 0 for V, bit 1 for U.
+ *	Read in the X360 port (825C6C98, GPU-RE/05); the PH reading below
+ *	had U and V swapped.
  *
  * H = log16 of Height 
  * W = log16 of Width
