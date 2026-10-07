@@ -1089,6 +1089,7 @@ I (0x161)
 	hikaru_modelview_t *mv = &MV.table[MV.depth];
 	hikaru_light_t *lit = &LIT.scratch;
 	uint32_t push, elem;
+	vec4f_t v, w;
 
 	switch ((inst[0] >> 8) & 0xF) {
 
@@ -1133,8 +1134,6 @@ I (0x161)
 		break;
 	case 0x5:
 		{
-			vec4f_t v, w;
-
 			v[0] = *(float *) &inst[1];
 			v[1] = *(float *) &inst[2];
 			v[2] = *(float *) &inst[3];
@@ -1146,17 +1145,29 @@ I (0x161)
 		break;
 	case 0x9:
 	case 0xB:
+		/* Light vectors go through the current modelview, as in the X360
+		 * port (8253B5B8 directions, 8253B530 positions). */
 		switch (inst[0] & 0x000FF000) {
 		case 0x00008000: /* Direction */
-			lit->direction[0] = *(float *) &inst[1];
-			lit->direction[1] = *(float *) &inst[2];
-			lit->direction[2] = *(float *) &inst[3];
+			v[0] = *(float *) &inst[1];
+			v[1] = *(float *) &inst[2];
+			v[2] = *(float *) &inst[3];
+			v[3] = 0.0f;
+			mult_mtx4x4f_vec4f (w, MV.table[MV.depth].mtx, v);
+			lit->direction[0] = w[0];
+			lit->direction[1] = w[1];
+			lit->direction[2] = w[2];
 			lit->has_direction = 1;
 			break;
 		case 0x00010000: /* Position */
-			lit->position[0] = *(float *) &inst[1];
-			lit->position[1] = *(float *) &inst[2];
-			lit->position[2] = *(float *) &inst[3];
+			v[0] = *(float *) &inst[1];
+			v[1] = *(float *) &inst[2];
+			v[2] = *(float *) &inst[3];
+			v[3] = 1.0f;
+			mult_mtx4x4f_vec4f (w, MV.table[MV.depth].mtx, v);
+			lit->position[0] = w[0];
+			lit->position[1] = w[1];
+			lit->position[2] = w[2];
 			lit->has_position = 1;
 			break;
 		case 0x00016000: /* Use old position */
@@ -1239,7 +1250,8 @@ get_material_index (uint32_t *inst)
  * See PH:@0C0CF742.
  *
  *
- * 291	Material: Set Ambient
+ * 291	Material: Set Colour 1 (blended over 091 by the vertex alpha when
+ *	881 bit a is set, X360 vo3d.0x00100)
  *
  *	-------- -------- -------o oooooooo
  *	-------- BBBBBBBB GGGGGGGG RRRRRRRR
@@ -1257,7 +1269,8 @@ get_material_index (uint32_t *inst)
  * See PH:@0C0CF798, PH:@0C01782C.
  *
  *
- * 691	Material: Set Unknown
+ * 691	Material: Set Lighting Ambient (16 bits per channel; the X360 port
+ *	saturates it to 8 and lights with it, 825B4DE8)
  *
  *	RRRRRRRR RRRRRRRR -------o oooooooo
  *	BBBBBBBB BBBBBBBB GGGGGGGG GGGGGGGG

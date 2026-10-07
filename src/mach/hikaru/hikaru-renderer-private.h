@@ -46,27 +46,24 @@ typedef union {
 		uint64_t has_texture		: 1;
 		uint64_t has_lighting		: 1;
 		uint64_t has_two_sided_lighting	: 1;
-		uint64_t has_phong		: 1;
+		uint64_t shading_mode		: 2;
+		uint64_t alpha_mode		: 1;
 
 		uint64_t has_light0		: 1;
 		uint64_t light0_type		: 2;
 		uint64_t light0_att_type	: 3;
-		uint64_t has_light0_specular	: 1;
 
 		uint64_t has_light1		: 1;
 		uint64_t light1_type		: 2;
 		uint64_t light1_att_type	: 3;
-		uint64_t has_light1_specular	: 1;
 
 		uint64_t has_light2		: 1;
 		uint64_t light2_type		: 2;
 		uint64_t light2_att_type	: 3;
-		uint64_t has_light2_specular	: 1;
 
 		uint64_t has_light3		: 1;
 		uint64_t light3_type		: 2;
 		uint64_t light3_att_type	: 3;
-		uint64_t has_light3_specular	: 1;
 
 		uint64_t has_fog		: 1;
 	};
@@ -141,8 +138,7 @@ typedef struct {
 			struct {
 				GLuint	position;
 				GLuint	direction;
-				GLuint	diffuse;
-				GLuint	specular;
+				GLuint	color;
 				GLuint	extents;
 			} u_lights[4];
 			GLuint		u_ambient;

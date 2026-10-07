@@ -430,7 +430,7 @@ layout(location = 1) in vec3 i_normal;						\n \
 layout(location = 2) in vec3 i_diffuse;						\n \
 layout(location = 3) in vec3 i_ambient;						\n \
 layout(location = 4) in vec4 i_specular;					\n \
-layout(location = 5) in vec3 i_unknown;						\n \
+layout(location = 5) in vec3 i_color1;						\n \
 layout(location = 6) in vec2 i_texcoords;					\n \
 layout(location = 7) in float i_alpha;						\n \
 										\n \
@@ -438,8 +438,8 @@ out vec4 p_position;								\n \
 out vec3 p_normal;								\n \
 out vec3 p_diffuse;								\n \
 out vec4 p_specular;								\n \
+out vec3 p_color1;								\n \
 out vec3 p_ambient;								\n \
-out vec3 p_unknown;								\n \
 out vec2 p_texcoords;								\n \
 out float p_alpha;								\n \
 										\n \
@@ -452,7 +452,7 @@ void main (void) {								\n \
 	p_diffuse = i_diffuse;							\n \
 	p_ambient = i_ambient;							\n \
 	p_specular = i_specular;						\n \
-	p_unknown = i_unknown;							\n \
+	p_color1 = i_color1;							\n \
 	p_texcoords = i_texcoords;						\n \
 	p_alpha = i_alpha;							\n \
 }";
@@ -466,8 +466,7 @@ out vec4 fragColor;								\n \
 struct light_t {								\n \
 	vec3 position;								\n \
 	vec3 direction;								\n \
-	vec3 diffuse;								\n \
-	vec3 specular;								\n \
+	vec3 color;								\n \
 	vec2 extents;								\n \
 };										\n \
 										\n \
@@ -482,96 +481,121 @@ in vec4 p_position;								\n \
 in vec3 p_normal;								\n \
 in vec3 p_diffuse;								\n \
 in vec4 p_specular;								\n \
+in vec3 p_color1;								\n \
 in vec3 p_ambient;								\n \
-in vec3 p_unknown;								\n \
 in vec2 p_texcoords;								\n \
 in float p_alpha;								\n \
 										\n \
-void										\n \
-apply_light (inout vec3 diffuse,						\n \
-             inout vec3 specular,						\n \
-             in light_t light,							\n \
-             in int type,							\n \
-             in int att_type,							\n \
-             in int has_specular)						\n \
-{										\n \
-	vec3 light_direction;							\n \
-	float distance, attenuation, intensity;					\n \
-										\n \
-	if (type == 0) {							\n \
-		light_direction = normalize (light.direction);			\n \
-		distance = 0.001;						\n \
-	} else {								\n \
-		vec3 delta = light.position - p_position.xyz;			\n \
-		distance = length (delta);					\n \
-		light_direction = normalize (delta);				\n \
-	}									\n \
-										\n \
-	if (att_type == 1)							\n \
-		distance = distance*distance;					\n \
-	else if (att_type == 2)							\n \
-		distance = 1.0 / distance;					\n \
-	else if (att_type == 3)							\n \
-		distance = 1.0 / (distance*distance);				\n \
-	attenuation = light.extents.x * (light.extents.y + distance);		\n \
-	attenuation = clamp (attenuation, 0.0, 1.0);				\n \
-										\n \
-	vec3 normal = normalize (p_normal);					\n \
-										\n \
-#if HAS_TWO_SIDED_LIGHTING							\n \
-	intensity = abs (dot (normal, light_direction));			\n \
-#else										\n \
-	intensity = max (dot (normal, light_direction), 0.0);			\n \
-#endif										\n \
-	if (type == 2) {							\n \
-		vec3 spot_direction = normalize (light.direction);		\n \
-		if (dot (spot_direction, light_direction) < 0.95)		\n \
-			intensity = 0.0;					\n \
-	}									\n \
-										\n \
-	diffuse += attenuation * intensity * p_diffuse * light.diffuse;		\n \
-										\n \
-	if (has_specular != 0) {								\n \
-		vec3 view_direction = normalize (-p_position.xyz);				\n \
-		vec3 reflect_direction = reflect (-light_direction, normal);			\n \
-		float angle = max (dot (view_direction, reflect_direction), 0.0);		\n \
-		specular += p_specular.rgb * light.specular * pow (angle, 255.0 * p_specular.a);	\n \
-	}											\n \
-}										\n \
-										\n \
-void										\n \
-main (void)									\n \
-{										\n \
-	vec4 texel, color;							\n \
-										\n \
-#if HAS_TEXTURE									\n \
-	texel = texture (u_texture, p_texcoords);				\n \
-#else										\n \
-	texel = vec4 (1.0);							\n \
-#endif										\n \
-										\n \
-#if HAS_LIGHTING								\n \
-	vec3 diffuse  = vec3 (0.0);						\n \
-	vec3 specular = vec3 (0.0);						\n \
-	vec3 ambient  = u_ambient * p_ambient;					\n \
-										\n \
-#if HAS_LIGHT0									\n \
-	apply_light (diffuse, specular, u_lights[0], LIGHT0_TYPE, LIGHT0_ATT_TYPE, HAS_LIGHT0_SPECULAR);		\n \
-#endif										\n \
-#if HAS_LIGHT1									\n \
-	apply_light (diffuse, specular, u_lights[1], LIGHT1_TYPE, LIGHT1_ATT_TYPE, HAS_LIGHT1_SPECULAR);		\n \
-#endif										\n \
-#if HAS_LIGHT2									\n \
-	apply_light (diffuse, specular, u_lights[2], LIGHT2_TYPE, LIGHT2_ATT_TYPE, HAS_LIGHT2_SPECULAR);		\n \
-#endif										\n \
-#if HAS_LIGHT3									\n \
-	apply_light (diffuse, specular, u_lights[3], LIGHT3_TYPE, LIGHT3_ATT_TYPE, HAS_LIGHT3_SPECULAR);		\n \
-#endif										\n \
-										\n \
-	color = vec4 (ambient +  diffuse, p_alpha) * texel + vec4 (specular, 0.0);	\n \
-#else										\n \
-	color = vec4 (p_ambient, p_alpha) * texel;				\n \
-#endif										\n \
+void	\n \
+apply_light (inout vec3 diffuse,	\n \
+             inout vec3 specular,	\n \
+             in light_t light,	\n \
+             in int type,	\n \
+             in int att_type)	\n \
+{	\n \
+	vec3 normal = normalize (p_normal);	\n \
+	vec3 light_direction;	\n \
+	float distance, attenuation, n_dot_l, n_dot_h;	\n \
+	\n \
+	if (type == 0) {	\n \
+		distance = length (light.direction);	\n \
+		light_direction = light.direction / distance;	\n \
+	} else {	\n \
+		vec3 delta = light.position - p_position.xyz;	\n \
+		distance = length (delta);	\n \
+		light_direction = delta / distance;	\n \
+	}	\n \
+	\n \
+	/* X360 825C5BA0: sat (P d + P Q), sat (P d^2 + P Q), else none. */	\n \
+	if (att_type == 0)	\n \
+		attenuation = clamp (light.extents.x * (distance + light.extents.y), 0.0, 1.0);	\n \
+	else if (att_type == 1)	\n \
+		attenuation = clamp (light.extents.x * (distance * distance + light.extents.y), 0.0, 1.0);	\n \
+	else	\n \
+		attenuation = 1.0;	\n \
+	\n \
+	/* HEURISTIC spot cone; the port does not read it this way. */	\n \
+	if (type == 2) {	\n \
+		vec3 spot_direction = normalize (light.direction);	\n \
+		if (dot (spot_direction, light_direction) < 0.95)	\n \
+			attenuation = 0.0;	\n \
+	}	\n \
+	\n \
+#if HAS_TWO_SIDED_LIGHTING	\n \
+	n_dot_l = abs (dot (normal, light_direction));	\n \
+#else	\n \
+	n_dot_l = dot (normal, light_direction);	\n \
+#endif	\n \
+	diffuse += attenuation * max (n_dot_l, 0.0) * light.color;	\n \
+	\n \
+	/* Blinn half vector of the vo3d pixel shader. */	\n \
+	n_dot_h = dot (normal, normalize (light_direction - normalize (p_position.xyz)));	\n \
+	if (n_dot_l > 0.0 && n_dot_h > 0.0)	\n \
+		specular += attenuation * pow (n_dot_h, 255.0 * p_specular.a) * light.color;	\n \
+}	\n \
+	\n \
+void	\n \
+main (void)	\n \
+{	\n \
+	vec4 color;	\n \
+	vec3 base;	\n \
+	float alpha;	\n \
+	\n \
+#if HAS_TEXTURE	\n \
+	vec4 texel = texture (u_texture, p_texcoords);	\n \
+#if ALPHA_MODE	\n \
+	/* 881 bit a: the vertex alpha blends the texel over the 091 colour	\n \
+	 * (vo3d.0x01100). */	\n \
+	base = mix (p_diffuse, texel.rgb, p_alpha);	\n \
+	alpha = texel.a;	\n \
+#else	\n \
+	base = texel.rgb;	\n \
+	alpha = texel.a * p_alpha;	\n \
+#endif	\n \
+#else	\n \
+#if ALPHA_MODE	\n \
+	/* 881 bit a: the vertex alpha blends the 291 colour over the 091	\n \
+	 * colour (vo3d.0x00100). */	\n \
+	base = mix (p_diffuse, p_color1, p_alpha);	\n \
+	alpha = 1.0;	\n \
+#else	\n \
+	base = p_diffuse;	\n \
+	alpha = p_alpha;	\n \
+#endif	\n \
+#endif	\n \
+	\n \
+#if HAS_LIGHTING	\n \
+	/* vo3d: (ambient + diffuse + emission) * base + specular * material;	\n \
+	 * mode 1 has the ambient, mode 2 the emission, mode 3 neither and no	\n \
+	 * specular (X360 825B4DE8). */	\n \
+	vec3 diffuse  = vec3 (0.0);	\n \
+	vec3 specular = vec3 (0.0);	\n \
+	vec3 ambient  = (SHADING_MODE == 1) ? u_ambient * p_ambient : vec3 (0.0);	\n \
+	vec3 emission = (SHADING_MODE == 2) ? p_ambient : vec3 (0.0);	\n \
+	\n \
+#if HAS_LIGHT0	\n \
+	apply_light (diffuse, specular, u_lights[0], LIGHT0_TYPE, LIGHT0_ATT_TYPE);	\n \
+#endif	\n \
+#if HAS_LIGHT1	\n \
+	apply_light (diffuse, specular, u_lights[1], LIGHT1_TYPE, LIGHT1_ATT_TYPE);	\n \
+#endif	\n \
+#if HAS_LIGHT2	\n \
+	apply_light (diffuse, specular, u_lights[2], LIGHT2_TYPE, LIGHT2_ATT_TYPE);	\n \
+#endif	\n \
+#if HAS_LIGHT3	\n \
+	apply_light (diffuse, specular, u_lights[3], LIGHT3_TYPE, LIGHT3_ATT_TYPE);	\n \
+#endif	\n \
+	\n \
+	color = vec4 ((ambient + diffuse + emission) * base, alpha);	\n \
+	if (SHADING_MODE != 3) {	\n \
+		/* 491 times 4, wrapped to 8 bits like the port. */	\n \
+		vec3 material = mod (p_specular.rgb * 1020.0, 256.0) / 255.0;	\n \
+		color.rgb += specular * material;	\n \
+	}	\n \
+#else	\n \
+	color = vec4 (base, alpha);	\n \
+#endif	\n \
+	\n \
 										\n \
 	/* Alpha test of the render pass (X360 825B2408). */			\n \
 	if (color.a <= u_alpha_ref)						\n \
@@ -649,27 +673,24 @@ get_glsl_variant (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	if (!variant.has_lighting)
 		return variant;
 
-	variant.has_phong		= mat->shading_mode == 2;
+	variant.shading_mode		= mat->shading_mode;
+	variant.alpha_mode		= mat->has_alpha;
 
 	variant.has_light0		= !(ls->mask & (1 << 0));
 	variant.light0_type		= get_light_type (&ls->lights[0]);
 	variant.light0_att_type		= get_light_attenuation_type (&ls->lights[0]);
-	variant.has_light0_specular	= ls->lights[0].has_specular;
 
 	variant.has_light1		= !(ls->mask & (1 << 1));
 	variant.light1_type		= get_light_type (&ls->lights[1]);
 	variant.light1_att_type		= get_light_attenuation_type (&ls->lights[1]);
-	variant.has_light1_specular	= ls->lights[1].has_specular;
 
 	variant.has_light2		= !(ls->mask & (1 << 2));
 	variant.light2_type		= get_light_type (&ls->lights[2]);
 	variant.light2_att_type		= get_light_attenuation_type (&ls->lights[2]);
-	variant.has_light2_specular	= ls->lights[2].has_specular;
 
 	variant.has_light3		= !(ls->mask & (1 << 3));
 	variant.light3_type		= get_light_type (&ls->lights[3]);
 	variant.light3_att_type		= get_light_attenuation_type (&ls->lights[3]);
-	variant.has_light3_specular	= ls->lights[3].has_specular;
 
 	if (mesh->has_two_sided_lighting)
 		variant.has_two_sided_lighting = 1;
@@ -692,23 +713,20 @@ upload_glsl_program (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	"#define HAS_TEXTURE %d\n"
 	"#define HAS_LIGHTING %d\n"
 	"#define HAS_TWO_SIDED_LIGHTING %d\n"
-	"#define HAS_PHONG %d\n"
+	"#define SHADING_MODE %d\n"
+	"#define ALPHA_MODE %d\n"
 	"#define HAS_LIGHT0 %d\n"
 	"#define LIGHT0_TYPE %d\n"
 	"#define LIGHT0_ATT_TYPE %d\n"
-	"#define HAS_LIGHT0_SPECULAR %d\n"
 	"#define HAS_LIGHT1 %d\n"
 	"#define LIGHT1_TYPE %d\n"
 	"#define LIGHT1_ATT_TYPE %d\n"
-	"#define HAS_LIGHT1_SPECULAR %d\n"
 	"#define HAS_LIGHT2 %d\n"
 	"#define LIGHT2_TYPE %d\n"
 	"#define LIGHT2_ATT_TYPE %d\n"
-	"#define HAS_LIGHT2_SPECULAR %d\n"
 	"#define HAS_LIGHT3 %d\n"
 	"#define LIGHT3_TYPE %d\n"
 	"#define LIGHT3_ATT_TYPE %d\n"
-	"#define HAS_LIGHT3_SPECULAR %d\n"
 	"#define HAS_FOG %d\n";
 
 	hikaru_glsl_variant_t variant;
@@ -734,23 +752,20 @@ upload_glsl_program (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	                variant.has_texture,
 	                variant.has_lighting,
 	                variant.has_two_sided_lighting,
-	                variant.has_phong,
+	                variant.shading_mode,
+	                variant.alpha_mode,
 	                variant.has_light0,
 	                variant.light0_type,
 	                variant.light0_att_type,
-	                variant.has_light0_specular,
 	                variant.has_light1,
 	                variant.light1_type,
 	                variant.light1_att_type,
-	                variant.has_light1_specular,
 	                variant.has_light2,
 	                variant.light2_type,
 	                variant.light2_att_type,
-	                variant.has_light2_specular,
 	                variant.has_light3,
 	                variant.light3_type,
 	                variant.light3_att_type,
-	                variant.has_light3_specular,
 	                variant.has_fog);
 	VK_ASSERT (ret >= 0);
 
@@ -797,11 +812,8 @@ update_locations:
 		sprintf (temp, "u_lights[%d].direction", i);
 		hr->meshes.locs.u_lights[i].direction =
 			glGetUniformLocation (hr->meshes.program, temp);
-		sprintf (temp, "u_lights[%d].diffuse", i);
-		hr->meshes.locs.u_lights[i].diffuse =
-			glGetUniformLocation (hr->meshes.program, temp);
-		sprintf (temp, "u_lights[%d].specular", i);
-		hr->meshes.locs.u_lights[i].specular =
+		sprintf (temp, "u_lights[%d].color", i);
+		hr->meshes.locs.u_lights[i].color =
 			glGetUniformLocation (hr->meshes.program, temp);
 		sprintf (temp, "u_lights[%d].extents", i);
 		hr->meshes.locs.u_lights[i].extents =
@@ -970,25 +982,6 @@ get_light_diffuse (hikaru_renderer_t *hr, hikaru_light_t *lit, float *out)
 }
 
 static void
-get_light_specular (hikaru_renderer_t *hr, hikaru_light_t *lit, float *out)
-{
-	if (!lit->has_specular || hr->debug.flags[HR_DEBUG_NO_SPECULAR])
-		out[0] = out[1] = out[2] = 0.0f;
-	else {
-		/* Make sure that specular enabled matches non-zero specular
-		 * colors. */
-		if (lit->specular[0] == 0.0f &&
-		    lit->specular[1] == 0.0f &&
-		    lit->specular[0] == 0.0f)
-			VK_ERROR ("light with specular enabled but no specular color!");
-
-		out[0] = lit->specular[0] * INV255;
-		out[1] = lit->specular[1] * INV255;
-		out[2] = lit->specular[2] * INV255;
-	}
-}
-
-static void
 upload_lightset (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 {
 	hikaru_lightset_t *ls = &hr->ls_list[mesh->ls_index];
@@ -1019,11 +1012,7 @@ upload_lightset (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 		VK_ASSERT_NO_GL_ERROR ();
 
 		get_light_diffuse (hr, lt, tmp);
-		glUniform3fv (hr->meshes.locs.u_lights[i].diffuse, 1, tmp);
-		VK_ASSERT_NO_GL_ERROR ();
-
-		get_light_specular (hr, lt, tmp);
-		glUniform3fv (hr->meshes.locs.u_lights[i].specular, 1, tmp);
+		glUniform3fv (hr->meshes.locs.u_lights[i].color, 1, tmp);
 		VK_ASSERT_NO_GL_ERROR ();
 
 		glUniform2fv (hr->meshes.locs.u_lights[i].extents, 1,
@@ -1066,14 +1055,15 @@ copy_colors (hikaru_renderer_t *hr, hikaru_vertex_t *dst, hikaru_vertex_t *src)
 	for (i = 0; i < 3; i++)
 		dst->body.diffuse[i] = mat->diffuse[i];
 
+	/* The 691 colour is the ambient, saturated like the port (825B4DE8). */
 	for (i = 0; i < 3; i++)
-		dst->body.ambient[i] = mat->ambient[i];
+		dst->body.ambient[i] = MIN2 (mat->unknown[i], 255);
 
 	for (i = 0; i < 4; i++)
 		dst->body.specular[i] = mat->specular[i];
 
 	for (i = 0; i < 3; i++)
-		dst->body.unknown[i] = mat->unknown[i];
+		dst->body.color1[i] = mat->ambient[i];
 
 	/* Vertex alpha times polygon alpha for every type (X360 8252D858);
 	 * the render pass decides what it means. */
@@ -1384,7 +1374,7 @@ draw_mesh (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	VAP (2, 3, GL_UNSIGNED_BYTE,  diffuse,   GL_TRUE);
 	VAP (3, 3, GL_UNSIGNED_BYTE,  ambient,   GL_TRUE);
 	VAP (4, 4, GL_UNSIGNED_BYTE,  specular,  GL_TRUE);
-	VAP (5, 3, GL_UNSIGNED_SHORT, unknown,   GL_TRUE);
+	VAP (5, 3, GL_UNSIGNED_BYTE,  color1,    GL_TRUE);
 	VAP (6, 2, GL_FLOAT,          texcoords, GL_FALSE);
 	VAP (7, 1, GL_UNSIGNED_BYTE,  alpha,     GL_TRUE);
 

@@ -192,8 +192,6 @@ get_vertex_str (hikaru_vertex_t *v)
 	                v->body.ambient[0], v->body.ambient[1], v->body.ambient[2]);
 	tmp += sprintf (tmp, "(Cs: %02X %02X %02X | %02X) ",
 	                v->body.specular[0], v->body.specular[1], v->body.specular[2], v->body.specular[3]);
-	tmp += sprintf (tmp, "(Cu: %04X %04X %04X) ",
-	                v->body.unknown[0], v->body.unknown[1], v->body.unknown[2]);
 	tmp += sprintf (tmp, "(T: %5.3f %5.3f) ",
 	                v->body.texcoords[0], v->body.texcoords[1]);
 
