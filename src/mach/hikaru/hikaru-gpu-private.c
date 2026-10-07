@@ -202,7 +202,7 @@ const char *
 get_layer_str (hikaru_layer_t *layer)
 {
 	static char out[256];
-	sprintf (out, "ena=%u (%u,%u) (%u,%u) fmt=%u", layer->enabled,
+	sprintf (out, "ena=%u keyed=%u (%u,%u) (%u,%u) fmt=%u", layer->enabled, layer->keyed,
 	         layer->x0, layer->y0, layer->x1, layer->y1, layer->format);
 	return (const char *) out;
 }

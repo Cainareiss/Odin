@@ -623,6 +623,10 @@ hikaru_gpu_fill_layer_info (hikaru_gpu_t *gpu)
 				shift = 2;
 			}
 	
+			/* Without this bit the layer covers everything (the white
+			 * SEGA screen of von4 on the cabinet, unit 3C = 2). */
+			layer->keyed = (REG1AUNIT (unit, 0x3C) >> (bank - 1)) & 1;
+
 			/* Get layer coords in the FB. */
 			lo = REG1AUNIT (unit, bank_offs + 0);
 			hi = REG1AUNIT (unit, bank_offs + 4);

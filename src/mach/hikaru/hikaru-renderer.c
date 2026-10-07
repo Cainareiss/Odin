@@ -1737,6 +1737,8 @@ static const char *fb_fs_source =
 "uniform float u_mult_b = 1.0;							\n"
 "uniform float u_mult_1 = 1.0;							\n"
 "uniform float u_mult_2 = 1.0;							\n"
+"uniform float u_keyed_1 = 1.0;							\n"
+"uniform float u_keyed_2 = 1.0;							\n"
 "uniform int u_invert_f = 0;							\n"
 "uniform int u_invert_b = 0;							\n"
 "										\n"
@@ -1762,6 +1764,8 @@ static const char *fb_fs_source =
 "	vec4 texel_2 = texture (u_layer2, p_texcoords_inv);			\n"
 "	float on_1 = (u_mult_1 > 0.0) ? 1.0 : 0.0;				\n"
 "	float on_2 = (u_mult_2 > 0.0) ? 1.0 : 0.0;				\n"
+"	float cover_1 = (u_keyed_1 > 0.0) ? texel_1.a : 1.0;			\n"
+"	float cover_2 = (u_keyed_2 > 0.0) ? texel_2.a : 1.0;			\n"
 "	vec4 color = mix (texel_f, texel_b, u_factor);				\n"
 "										\n"
 "	/* A layer pixel with its alpha bit covers the 3D, black included	\n"
@@ -1770,8 +1774,8 @@ static const char *fb_fs_source =
 "	 * Layer 1 sits above layer 2 (its HUD text over the band).	\n"
 "	 * Cabinet footage, GPU-RE/16 § 10.					\n"
 "	 */									\n"
-"	color.rgb = mix (color.rgb, texel_2.rgb * u_mult_2, texel_2.a * on_2);	\n"
-"	color.rgb = mix (color.rgb, texel_1.rgb * u_mult_1, texel_1.a * on_1);	\n"
+"	color.rgb = mix (color.rgb, texel_2.rgb * u_mult_2, cover_2 * on_2);	\n"
+"	color.rgb = mix (color.rgb, texel_1.rgb * u_mult_1, cover_1 * on_1);	\n"
 "	fragColor = color;							\n"
 "}\n";
 
@@ -1809,6 +1813,10 @@ build_fb_state (hikaru_renderer_t *hr)
 		get_uniform_loc (hr->framebuffer.program, "u_mult_1");
 	hr->framebuffer.locs.u_mult_2 =
 		get_uniform_loc (hr->framebuffer.program, "u_mult_2");
+	hr->framebuffer.locs.u_keyed_1 =
+		get_uniform_loc (hr->framebuffer.program, "u_keyed_1");
+	hr->framebuffer.locs.u_keyed_2 =
+		get_uniform_loc (hr->framebuffer.program, "u_keyed_2");
 	hr->framebuffer.locs.u_invert_f =
 		get_uniform_loc (hr->framebuffer.program, "u_invert_f");
 	hr->framebuffer.locs.u_invert_b =
@@ -2065,6 +2073,8 @@ draw (hikaru_renderer_t *hr)
 	             (b == layer1 && layer1) ? mult1 : (b == layer2 && layer2) ? mult2 : 1.0f);
 	glUniform1f (hr->framebuffer.locs.u_mult_1, (layer1 && f != layer1 && b != layer1) ? mult1 : 0.0f);
 	glUniform1f (hr->framebuffer.locs.u_mult_2, (layer2 && f != layer2 && b != layer2) ? mult2 : 0.0f);
+	glUniform1f (hr->framebuffer.locs.u_keyed_1, LAYERS.layer[0][0].keyed ? 1.0f : 0.0f);
+	glUniform1f (hr->framebuffer.locs.u_keyed_2, LAYERS.layer[0][1].keyed ? 1.0f : 0.0f);
 	glUniform1i (hr->framebuffer.locs.u_invert_f, (n1 >= 2) ? 1 : 0);
 	glUniform1i (hr->framebuffer.locs.u_invert_b, (n2 >= 2) ? 1 : 0);
 	VK_ASSERT_NO_GL_ERROR ();

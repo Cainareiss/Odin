@@ -275,6 +275,7 @@ typedef struct {
 	uint32_t x0, y0, x1, y1;
 	uint32_t format		: 4;
 	uint32_t enabled	: 1;
+	uint32_t keyed		: 1;	/* unit register 3C: pixels without the alpha bit are transparent */
 } hikaru_layer_t;
 
 typedef struct {
