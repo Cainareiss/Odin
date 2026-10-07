@@ -40,7 +40,30 @@ DMA, RTC and the ARM7 are in; still missing: the 64 slots and the DSP
 guess), the nested-FIQ question (does reading 0x2D00 drop the line?),
 and the HACK in hikaru-aica.c (page offset 0 reads 4 for Pharrier).
 
-Implement the three EEPROMs (MAINBD, ROMBD, MIE.)
+ROM board 315-5881 (src/odin/crypt_315_5881.cpp, port of MAME, validated
+on the real self-test of Planet Harriers and 19.7 M words against MAME's
+code): RAM at local bus 0x0A000000, registers at 0x0A010000, keys from
+MAME (airtrix, pharrier, swracer). Its ready bit is never busy (MAME).
+The BOOTROM board probe answers a constant for the boards without the
+chip (hikaru-memctl.c, HACK until those boards are measured).
+
+Static mesh scale (CP 0x901): kept across frames; when a static mesh
+comes before any 0x901 the unit scale is assumed (HEURISTIC, Racer).
+
+EEPROMs: the main board 93C46 (SH-4 port A, src/odin/eeprom_bridge.cpp)
+and the ROM board X76F100 (bus page 0x14, src/odin/x76f100.cpp) are
+real and read by the BOOTROM; the MIE 93C46 is in the LLE MIE. None of
+the three is written back to disk yet.
+
+Game patches (hikaru.c, hikaru_install_game_patches) are all off, kept
+as comments: airtrix 0x0C010F9A (660-frame I/O board wait shortened),
+braveff 0x0C0407D0/0x0C0D522A/0x0C05B53E (forced results, purpose
+unknown), pharrier 0x0C01C322 (AICA loop), sgnascar 0x0C00BC9A (EEPROM
+byte) and 0x0C0130CE (600-frame I/O board wait). The BOOTROM EEPROM
+patch (0x8E6) is off too. Remove the dead code once every game has been
+seen running without it. Kept as a HACK: sgnascar 0x0C00BC9A, because
+the X76F100 image is the Air Trix one (MAME has no NASCAR dump) and the
+BOOTROM region check answers "ERROR 7" with it.
 
 Bridge DMA (hikaru-memctl.c): the transfer completes at the start
 write, like MAME. HEURISTIC: the real 315-6154 takes time, but games

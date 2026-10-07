@@ -170,6 +170,16 @@
 
 /* These functions get called by the SH-4 core */
 
+/* The 315-5881 reads its input from the ROM board RAM, one byte-swapped
+ * word at a time (MAME hikaru.cpp prot_ram_r). */
+static uint16_t
+crypt_read_protram (void *ctx, uint32_t addr)
+{
+	hikaru_t *hikaru = (hikaru_t *) ctx;
+	uint16_t w = vk_buffer_get (hikaru->protram, 2, (addr & 0x7FFF) * 2);
+	return (uint16_t) ((w >> 8) | (w << 8));
+}
+
 static int
 porta_get_m (sh4_t *ctx, uint16_t *val)
 {
@@ -785,12 +795,16 @@ hikaru_set_rombd_config (hikaru_t *hikaru)
 	} else if (!strcmp (game->name, "airtrix")) {
 		eprom_bank_size = 4;
 		maskrom_bank_size = 16;
+		config->has_5881 = true;
+		config->crypt_key = 0x291B02C7;	/* MAME hikaru.cpp */
 	} else if (!strcmp (game->name, "braveff")) {
 		eprom_bank_size = 2;
 		maskrom_bank_size = 8;
 	} else if (!strcmp (game->name, "pharrier")) {
 		eprom_bank_size = 4;
 		maskrom_bank_size = 16;
+		config->has_5881 = true;
+		config->crypt_key = 0x2912C68A;
 	} else if (!strcmp (game->name, "von4")) {
 		/* Same board layout as pharrier: 128M TSOP48 mask ROMs */
 		eprom_bank_size = 4;
@@ -800,6 +814,8 @@ hikaru_set_rombd_config (hikaru_t *hikaru)
 		 * bank (MAME hikaru.cpp swracer: pairs at 0x1000000 steps) */
 		eprom_bank_size = 4;
 		maskrom_bank_size = 16;
+		config->has_5881 = true;
+		config->crypt_key = 0x2903DAD5;
 	} else if (!strcmp (game->name, "sgnascar")) {
 		//rombd_offs = 8;
 		eprom_bank_size = 4;
@@ -1079,6 +1095,18 @@ hikaru_init (hikaru_t *hikaru)
 			VK_PRINT ("ROM board EEPROM: x76f100 image loaded");
 		} else
 			VK_PRINT ("ROM board EEPROM: no image, blank");
+	}
+
+	if (hikaru->rombd_config.has_5881) {
+		hikaru->protram = vk_buffer_le32_new (64*KB, 0);
+		if (!hikaru->protram)
+			return -1;
+		vk_machine_register_buffer (mach, (void *) hikaru->protram);
+		hikaru->crypt = odin_crypt5881_new (hikaru->rombd_config.crypt_key,
+		                                    crypt_read_protram, hikaru);
+		if (!hikaru->crypt)
+			return -1;
+		VK_PRINT ("ROM board 315-5881: key %08X, 64 KB RAM", hikaru->rombd_config.crypt_key);
 	}
 
 	hikaru->base.renderer = hikaru_renderer_new (hikaru->fb,

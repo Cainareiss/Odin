@@ -22,6 +22,7 @@
 #include "vk/mmap.h"
 #include "odin/eeprom_bridge.hpp"
 #include "odin/x76f100_bridge.hpp"
+#include "odin/crypt_315_5881_bridge.hpp"
 #include "vk/cpu.h"
 #include "vk/machine.h"
 
@@ -33,6 +34,9 @@ typedef struct {
 	uint32_t eprom_bank_size;
 	uint32_t maskrom_bank_size;
 	bool maskrom_is_stretched;
+	/* 315-5881 decryption chip and its 64 KB RAM on the ROM board */
+	bool has_5881;
+	uint32_t crypt_key;
 	/* One bit per bank 0x10-0x4F: unpopulated socket already reported */
 	uint64_t unpopulated_logged;
 } hikaru_rombd_config_t;
@@ -65,6 +69,9 @@ typedef struct {
 	odin_eeprom93c46_t *eeprom_main;
 	/* X76F100 of the ROM board, bus page eeprom_bank */
 	odin_x76f100_t *eeprom_rombd;
+	/* RAM of the 315-5881, local bus 0x0A000000, boards with the chip only */
+	vk_buffer_t *protram;
+	odin_crypt5881_t *crypt;
 	unsigned porta_m_bit0_buffer;
 
 	uint16_t porta_s;
