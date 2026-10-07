@@ -2012,8 +2012,16 @@ static void
 hikaru_renderer_end_frame (vk_renderer_t *renderer)
 {
 	hikaru_renderer_t *hr = (hikaru_renderer_t *) renderer;
+	hikaru_gpu_t *gpu = hr->gpu;
 
 	VK_ASSERT_NO_GL_ERROR ();
+
+	/* The CP may still be in the middle of a mesh: draw what it pushed
+	 * so far and let it start a new mesh on the next vertex. */
+	if (hr->meshes.current) {
+		hikaru_renderer_end_mesh (renderer, gpu->cp.pc);
+		gpu->state.in_mesh = 0;
+	}
 
 	draw (hr);
 	VK_ASSERT_NO_GL_ERROR ();

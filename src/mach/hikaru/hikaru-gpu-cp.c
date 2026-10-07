@@ -60,13 +60,24 @@
  * has displayed them on-screen.)
  */
 
+/* Closes the mesh being pushed when the CP stops in the middle of it,
+ * so the renderer never keeps a half-built mesh. */
+static void
+end_open_mesh (hikaru_gpu_t *gpu)
+{
+	if (gpu->state.in_mesh) {
+		hikaru_renderer_end_mesh (gpu->renderer, gpu->cp.pc);
+		gpu->state.in_mesh = 0;
+	}
+}
+
 static void
 on_frame_begin (hikaru_gpu_t *gpu)
 {
 	if (gpu->debug.log_cp)
 		VK_LOG (" ==== CLEARING CP DATA ==== ");
 
-	gpu->state.in_mesh = 0;
+	end_open_mesh (gpu);
 
 	memset ((void *) &POLY, 0, sizeof (POLY));
 
@@ -297,6 +308,7 @@ hikaru_gpu_cp_exec (hikaru_gpu_t *gpu, int cycles)
 
 		if (fetch (gpu, &inst)) {
 			VK_ERROR ("CP %08X: invalid PC, skipping CS", PC);
+			end_open_mesh (gpu);
 			gpu->cp.is_running = false;
 			break;
 		}
@@ -306,6 +318,7 @@ hikaru_gpu_cp_exec (hikaru_gpu_t *gpu, int cycles)
 		flags = insns[op].flags;
 		if (flags & FLAG_INVALID) {
 			VK_ERROR ("CP @%08X: invalid instruction [%08X]", PC, *inst);
+			end_open_mesh (gpu);
 			gpu->cp.is_running = false;
 			break;
 		}
