@@ -1114,6 +1114,11 @@ add_triangle (hikaru_renderer_t *hr)
 	if (hr->push.num_verts >= 3) {
 		uint32_t index = hr->push.num_tris * 3;
 		hikaru_vertex_body_t *dst = &hr->push.all[index];
+		hikaru_vertex_body_t *a = &hr->push.tmp[0].body;
+		hikaru_vertex_body_t *b = &hr->push.tmp[1].body;
+		hikaru_vertex_body_t *c = &hr->push.tmp[2].body;
+		float e1[3], e2[3], n[3], dot = 0.0f;
+		unsigned i;
 
 		VK_ASSERT ((index + 2) < MAX_VERTICES_PER_MESH);
 
@@ -1127,24 +1132,38 @@ add_triangle (hikaru_renderer_t *hr)
 			hr->meshes.current->has_two_sided_lighting = 1;
 		*/
 
-		if (hr->push.tmp[2].info.nocull) {
-			dst[0] = hr->push.tmp[0].body;
-			dst[1] = hr->push.tmp[2].body;
-			dst[2] = hr->push.tmp[1].body;
-			dst[3] = hr->push.tmp[0].body;
-			dst[4] = hr->push.tmp[1].body;
-			dst[5] = hr->push.tmp[2].body;
-			hr->push.num_tris += 1;
-		} else if (hr->push.tmp[2].info.winding) {
-			dst[0] = hr->push.tmp[0].body;
-			dst[1] = hr->push.tmp[2].body;
-			dst[2] = hr->push.tmp[1].body;
-		} else {
-			dst[0] = hr->push.tmp[0].body;
-			dst[1] = hr->push.tmp[1].body;
-			dst[2] = hr->push.tmp[2].body;
+		/* The X360 port drops degenerate triangles and winds each one
+		 * after the sum of its vertex normals; the winding bit of the
+		 * vertex header is not read (825B6100, 825B6218). */
+		for (i = 0; i < 3; i++) {
+			e1[i] = b->position[i] - a->position[i];
+			e2[i] = c->position[i] - a->position[i];
 		}
+		n[0] = e1[1] * e2[2] - e1[2] * e2[1];
+		n[1] = e1[2] * e2[0] - e1[0] * e2[2];
+		n[2] = e1[0] * e2[1] - e1[1] * e2[0];
+		if ((n[0] * n[0] + n[1] * n[1] + n[2] * n[2]) <= 0.0f)
+			return;
+		for (i = 0; i < 3; i++)
+			dot += n[i] * (a->normal[i] + b->normal[i] + c->normal[i]);
+		if (dot <= 0.0f) {
+			hikaru_vertex_body_t *t = b;
+			b = c;
+			c = t;
+		}
+
+		dst[0] = *a;
+		dst[1] = *b;
+		dst[2] = *c;
 		hr->push.num_tris += 1;
+
+		/* Both faces (bit 23): the triangle is emitted twice. */
+		if (hr->push.tmp[2].info.nocull) {
+			dst[3] = *a;
+			dst[4] = *c;
+			dst[5] = *b;
+			hr->push.num_tris += 1;
+		}
 	}
 }
 
