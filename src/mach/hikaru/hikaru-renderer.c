@@ -1751,10 +1751,21 @@ static const char *fb_fs_source =
 "		texel_b = texture (u_back,  p_texcoords_inv);			\n"
 "	texel_b = texel_b * u_mult_b;						\n"
 "										\n"
-"	vec4 texel_1 = texture (u_layer1, p_texcoords_inv) * u_mult_1;		\n"
-"	vec4 texel_2 = texture (u_layer2, p_texcoords_inv) * u_mult_2;		\n"
+"	vec4 texel_1 = texture (u_layer1, p_texcoords_inv);			\n"
+"	vec4 texel_2 = texture (u_layer2, p_texcoords_inv);			\n"
+"	float on_1 = (u_mult_1 > 0.0) ? 1.0 : 0.0;				\n"
+"	float on_2 = (u_mult_2 > 0.0) ? 1.0 : 0.0;				\n"
+"	vec4 color = mix (texel_f, texel_b, u_factor);				\n"
 "										\n"
-"	fragColor = mix (texel_f, texel_b, u_factor) + texel_1 + texel_2;	\n"
+"	/* A layer pixel with its alpha bit covers the 3D, black included	\n"
+"	 * (the black bands of the Racer attract); the others are		\n"
+"	 * transparent whatever their color (its green 0x03E0 boxes).	\n"
+"	 * Layer 1 sits above layer 2 (its HUD text over the band).	\n"
+"	 * Cabinet footage, GPU-RE/16 § 10.					\n"
+"	 */									\n"
+"	color.rgb = mix (color.rgb, texel_2.rgb * u_mult_2, texel_2.a * on_2);	\n"
+"	color.rgb = mix (color.rgb, texel_1.rgb * u_mult_1, texel_1.a * on_1);	\n"
+"	fragColor = color;							\n"
 "}\n";
 
 #define NUM_FRAMEBUFFERS 2
@@ -1913,17 +1924,36 @@ upload_layer (hikaru_renderer_t *hr, hikaru_layer_t *layer, GLuint *id, float *m
 
 	glPixelStorei (GL_UNPACK_ALIGNMENT, 1);
 	switch (layer->format) {
-	case HIKARU_FORMAT_ABGR1555:
-		glPixelStorei (GL_UNPACK_ROW_LENGTH, 2048);
+	case HIKARU_FORMAT_ABGR1555: {
+		/* The two 16-bit pixels of each 32-bit FB word are stored
+		 * swapped, as the IDMA does for TEXRAM (MEASURED on the von4
+		 * title text, GPU-RE/16 § 9). */
+		static uint16_t pixels[640 * 480];
+		unsigned x, y;
+
+		for (y = 0; y < 480; y++) {
+			const uint32_t *row = (const uint32_t *) ((const uint8_t *) data + y * 4096);
+			uint16_t *dst = &pixels[y * 640];
+
+			for (x = 0; x < 320; x++) {
+				uint32_t w = row[x];
+
+				dst[x * 2] = w >> 16;
+				dst[x * 2 + 1] = w & 0xFFFF;
+			}
+		}
+
+		glPixelStorei (GL_UNPACK_ROW_LENGTH, 0);
 
 		glTexImage2D (GL_TEXTURE_2D, 0,
 		              GL_RGB5_A1,
 		              640, 480, 0,
 		              GL_RGBA, GL_UNSIGNED_SHORT_1_5_5_5_REV,
-		              data);
+		              pixels);
 
 		*mult = 1.0f;
 		break;
+	}
 	case HIKARU_FORMAT_A2BGR10:
 		glPixelStorei (GL_UNPACK_ROW_LENGTH, 1024);
 

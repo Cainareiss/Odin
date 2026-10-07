@@ -54,6 +54,10 @@ GPU textures: the 0D1 UV offsets are added to the vertex UVs the way the
 X360 port's vertex shader is assumed to (the Xenos microcode of vo3d was
 not decoded: the sign is a HEURISTIC). Texhead filter mode 3 is trilinear
 here while the X360 port leaves the sampler defaults (HEURISTIC).
+The 2D layers cover the 3D where a pixel has its alpha bit (black
+included: the bands of the Racer attract) and are transparent elsewhere
+(its green 0x03E0 boxes) and layer 1 sits above layer 2, as the Racer
+cabinet footage shows.
 
 EEPROMs: the main board 93C46 (SH-4 port A, src/odin/eeprom_bridge.cpp)
 and the ROM board X76F100 (bus page 0x14, src/odin/x76f100.cpp) are
