@@ -1067,6 +1067,20 @@ hikaru_init (hikaru_t *hikaru)
 			VK_PRINT ("main board EEPROM: no image, blank");
 	}
 
+	hikaru->eeprom_rombd = odin_x76f100_new ();
+	if (!hikaru->eeprom_rombd)
+		return -1;
+	if (game) {
+		vk_buffer_t *image = vk_game_get_section_data (game, "rombd_eeprom");
+		if (image) {
+			odin_x76f100_load (hikaru->eeprom_rombd,
+			                   vk_buffer_get_ptr (image, 0),
+			                   vk_buffer_get_size (image));
+			VK_PRINT ("ROM board EEPROM: x76f100 image loaded");
+		} else
+			VK_PRINT ("ROM board EEPROM: no image, blank");
+	}
+
 	hikaru->base.renderer = hikaru_renderer_new (hikaru->fb,
 	                                             hikaru->texram);
 

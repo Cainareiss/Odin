@@ -21,6 +21,7 @@
 
 #include "vk/mmap.h"
 #include "odin/eeprom_bridge.hpp"
+#include "odin/x76f100_bridge.hpp"
 #include "vk/cpu.h"
 #include "vk/machine.h"
 
@@ -62,6 +63,8 @@ typedef struct {
 	uint16_t porta_m;
 	/* 93C46 of the main board on port A bits 2 (DI), 3 (SK), 4 (CS), 5 (DO) */
 	odin_eeprom93c46_t *eeprom_main;
+	/* X76F100 of the ROM board, bus page eeprom_bank */
+	odin_x76f100_t *eeprom_rombd;
 	unsigned porta_m_bit0_buffer;
 
 	uint16_t porta_s;
