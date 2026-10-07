@@ -68,13 +68,127 @@
 typedef struct {
 	vk_device_t base;
 	vk_buffer_t *regs;
-	bool hack;
 } hikaru_mie_t;
 
 static uint16_t get_mainbd_switches (void)
 {
 	return (vk_input_get_key (SDLK_F5) ? 8 : 0) | /* Test */
 	       (vk_input_get_key (SDLK_F6) ? 4 : 0);  /* Service */
+}
+
+/*
+ * MIE HLE
+ * =======
+ *
+ * The real MIE runs a Z80 program that the BOOTROM uploads into its RAM
+ * (ROM offset 0x40C48, 2316 bytes). That program is not executed here:
+ * the shared RAM is filled with what the program writes, as read from
+ * its code and measured on a complete system. Stand-in until the Z80
+ * is emulated. Z80 addresses below; buffer index = address - 0x8000.
+ *
+ * C000  command from the SH-4: 1 = poll the JVS board, 2 = reset JVS
+ * C001  busy flag, C002 JVS node count, C003 error bits
+ * C004  stage, 3 = ready; C005 main board Test (bit 6) / Service (bit 7)
+ * C100  record of JVS node 1 (837-13551), ID string at C17C
+ * E000  switches, E100 coins, E200 analog, E300-E500 unused.
+ *       Page format: [count][node][size][data...], size counts itself.
+ */
+
+#define MIE_C000	0x4000
+#define MIE_C001	0x4001
+#define MIE_C002	0x4002
+#define MIE_C003	0x4003
+#define MIE_C004	0x4004
+#define MIE_C005	0x4005
+#define MIE_C100	0x4100
+#define MIE_E000	0x6000
+#define MIE_E100	0x6100
+#define MIE_E200	0x6200
+
+static void
+mie_hle_put_bytes (vk_buffer_t *ram, unsigned idx, const uint8_t *p, unsigned n)
+{
+	unsigned i;
+	for (i = 0; i < n; i++)
+		vk_buffer_put (ram, 1, idx + i, p[i]);
+}
+
+static void
+mie_hle_write_switches (vk_buffer_t *ram)
+{
+	uint8_t test = vk_input_get_key (SDLK_F5) ? 0x40 : 0;
+	uint8_t service = vk_input_get_key (SDLK_F6) ? 0x80 : 0;
+	vk_buffer_put (ram, 1, MIE_C005, test | service);
+}
+
+/* Input pages; no JVS control is wired to the host yet. */
+static void
+mie_hle_write_pages (vk_buffer_t *ram)
+{
+	static const uint8_t e000[8] = { 1, 1, 6, 0, 0, 0, 0, 0 };	/* 2 players x 2 bytes */
+	static const uint8_t e100[7] = { 1, 1, 5, 0, 0, 0, 0 };	/* 2 coin slots */
+	uint8_t e200[19] = { 1, 1, 17 };				/* 8 analog channels */
+	unsigned i;
+
+	for (i = 0; i < 8; i++) {
+		e200[3 + 2 * i] = 0x80;
+		e200[4 + 2 * i] = 0x00;
+	}
+	mie_hle_put_bytes (ram, MIE_E000, e000, sizeof (e000));
+	mie_hle_put_bytes (ram, MIE_E100, e100, sizeof (e100));
+	mie_hle_put_bytes (ram, MIE_E200, e200, sizeof (e200));
+}
+
+static void
+mie_hle_write_node_record (vk_buffer_t *ram)
+{
+	static const uint8_t record[12] = {
+		0x01,			/* present */
+		0x13, 0x30, 0x10,	/* command, JVS and comm versions */
+		0x02, 0x02, 0x0D, 0x02,	/* players, players, bits, bytes per player */
+		0x02, 0x02,		/* coin slots */
+		0x08, 0x08		/* analog channels */
+	};
+	static const char id[] = "SEGA ENTERPRISES,LTD.;I/O BD JVS;837-13551";
+
+	mie_hle_put_bytes (ram, MIE_C100, record, sizeof (record));
+	vk_buffer_put (ram, 1, MIE_C100 + 0x19, 6);	/* outputs */
+	vk_buffer_put (ram, 1, MIE_C100 + 0x1A, 1);	/* output bytes */
+	mie_hle_put_bytes (ram, MIE_C100 + 0x7C, (const uint8_t *) id, sizeof (id));
+}
+
+/* What the Z80 program has written once its JVS enumeration is done. */
+static void
+mie_hle_start (vk_buffer_t *ram)
+{
+	vk_buffer_put (ram, 1, MIE_C000, 0);
+	vk_buffer_put (ram, 1, MIE_C001, 0);
+	vk_buffer_put (ram, 1, MIE_C002, 1);
+	vk_buffer_put (ram, 1, MIE_C003, 0);
+	vk_buffer_put (ram, 1, MIE_C004, 3);
+	mie_hle_write_switches (ram);
+	mie_hle_write_node_record (ram);
+	mie_hle_write_pages (ram);
+}
+
+static void
+mie_hle_command (vk_buffer_t *ram, unsigned cmd)
+{
+	switch (cmd) {
+	case 1:
+		mie_hle_write_pages (ram);
+		mie_hle_write_switches (ram);
+		break;
+	case 2:
+		vk_buffer_put (ram, 1, MIE_C002, 1);
+		vk_buffer_put (ram, 1, MIE_C003, 0);
+		vk_buffer_put (ram, 1, MIE_C004, 3);
+		break;
+	default:
+		break;
+	}
+	vk_buffer_put (ram, 1, MIE_C000, 0);
+	vk_buffer_put (ram, 1, MIE_C001, 0);
 }
 
 static int
@@ -109,18 +223,7 @@ hikaru_mie_get (vk_device_t *dev, unsigned size, uint32_t addr, void *val)
 	} else if (addr == 0x0082F000) {
 		return 0;
 	} else if (addr >= 0x00830000 && addr <= 0x0083FFFF) {
-		/* FIXME handle size != 1 */
-		/*set_ptr (val, size, vk_buffer_get (((hikaru_t *) dev->mach)->mie_ram, size, (addr / 2) & 0x7FFF));*/
-		set_ptr (val, size, 0);
-		if (mie->hack) {
-			/* XXX hack: fakes MIE better, but then the games
-			 * don't poll the MAINBD switches anymore. See
-			 * AT:@0C69B34E */
-			if (addr == 0x00838004)
-				set_ptr (val, size, 3);
-			else if (addr == 0x00838008)
-				set_ptr (val, size, 6);
-		}
+		set_ptr (val, size, vk_buffer_get (((hikaru_t *) dev->mach)->mie_ram, 1, (addr / 2) & 0x7FFF));
 	} else
 		return -1;
 	return 0;
@@ -146,10 +249,18 @@ hikaru_mie_put (vk_device_t *dev, unsigned size, uint32_t addr, uint64_t val)
 			return -1;
 		}
 	} else if (addr == 0x0082F000) {
+		if (val & 0x80)
+			mie_hle_start (((hikaru_t *) dev->mach)->mie_ram);
 		return 0;
 	} else if (addr >= 0x00830000 && addr <= 0x0083FFFF) {
-		/* FIXME size */
-		vk_buffer_put (((hikaru_t *) dev->mach)->mie_ram, size, (addr / 2) & 0x7FFF, val);
+		vk_buffer_t *ram = ((hikaru_t *) dev->mach)->mie_ram;
+		unsigned idx = (addr / 2) & 0x7FFF;
+
+		vk_buffer_put (ram, 1, idx, val);
+		if (idx == MIE_C000 && val != 0)
+			mie_hle_command (ram, val);
+		else if (idx == MIE_C001)
+			vk_buffer_put (ram, 1, MIE_C001, 0);	/* never busy */
 	} else
 		return -1;
 	return 0;
@@ -162,8 +273,6 @@ hikaru_mie_reset (vk_device_t *dev, vk_reset_type_t type)
 
 	vk_buffer_clear (mie->regs);
 	vk_buffer_put (mie->regs, 2, 0x00, 0xFFFF);
-
-	mie->hack = vk_util_get_bool_option ("MIE_HACK", false);
 }
 
 vk_device_t *
