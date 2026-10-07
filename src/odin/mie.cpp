@@ -32,6 +32,12 @@ enum : uint8_t {
 	PORT_GPIO_A = 0x00,
 	PORT_GPIO_H = 0x07,
 	PORT_GPIO_DIR = 0x08,
+	PORT_SERIAL_CONTROL = 0x09,
+	PORT_SERIAL_DATA = 0x0A,
+	PORT_SERIAL_REPLY_CONTROL = 0x0B,
+	PORT_SERIAL_REPLY_DATA = 0x0C,
+	PORT_SERIAL_STATUS = 0x0D,
+	PORT_SERIAL_END = 0x0E,
 	PORT_ADC = 0x0F,
 	PORT_UART1 = 0x10,
 	PORT_UART1_END = 0x17,
@@ -79,10 +85,41 @@ constexpr uint32_t UART_CLOCKS_PER_BIT = 16;
  * boards answer within a few character times; not measured. */
 constexpr uint32_t JVS_TURNAROUND_BYTES = 2;
 
+/* Serial adapter block, ports 0x09-0x0E (MAME mie.cpp: "315-5649-style
+ * serial block", nothing more). Semantics from the Z80 code games
+ * upload for their card reader (von4 extension 0x9000-0x932B): write
+ * 0x0A latches a byte, write 0x09 starts an exchange, 0x0D reports it,
+ * 0x0B and 0x0C hold the two reply bytes. */
+enum : uint8_t {
+	SERIAL_CTRL_SEND = 0x01,	/* byte on the line, echo as reply */
+	SERIAL_CTRL_REQUEST = 0x80,	/* adapter request (0x80 and 0x81) */
+	SERIAL_CTRL_LOOPBACK = 0x55,	/* both bytes come straight back */
+	SERIAL_REQ_STATUS = 0x80,	/* reply bit 6: a line byte waits */
+	SERIAL_REQ_TAKE = 0x81,		/* reply: that byte */
+	SERIAL_STATUS_BUSY = 0x03,	/* exchange running */
+	SERIAL_STATUS_LOOP_READY = 0x04,
+	SERIAL_STATUS_READY = 0x08,
+	SERIAL_RX_WAITING = 0x40
+};
+
+enum : uint8_t {
+	SERIAL_OP_NONE = 0,
+	SERIAL_OP_SEND,
+	SERIAL_OP_REQUEST,
+	SERIAL_OP_LOOPBACK
+};
+
+/* HEURISTIC: reply delays, not measured. The program waits ~4 300
+ * cycles before polling a sent byte and gives up ~7 000 cycles after
+ * the control write otherwise. */
+constexpr uint32_t SERIAL_SEND_CYCLES = 640;
+constexpr uint32_t SERIAL_REQUEST_CYCLES = 160;
+
 } /* namespace */
 
 Mie::Mie(MieHost &host, std::span<const uint8_t> rom, std::span<uint8_t> ram)
-	: m_host(host), m_cpu(*this), m_rom(rom), m_ram(ram), m_log(nullptr), m_trace(nullptr),
+	: m_host(host), m_cpu(*this), m_rom(rom), m_ram(ram), m_serial_device(nullptr),
+	  m_log(nullptr), m_trace(nullptr),
 	  m_trace_left(0), m_trace_start(0), m_trace_armed(false), m_busak_traced(false)
 {
 	m_port_logged.fill(false);
@@ -103,6 +140,7 @@ void Mie::reset()
 	m_jvs_control = 0;
 	m_busrq = false;
 	uart_reset();
+	serial_reset();
 	m_jvs.reset();
 	m_cpu.reset();
 }
@@ -236,6 +274,9 @@ uint8_t Mie::in8(uint16_t port)
 	if (p >= PORT_UART1 && p <= PORT_UART1_END) {
 		return uart_read(static_cast<uint8_t>(p - PORT_UART1));
 	}
+	if (p >= PORT_SERIAL_CONTROL && p <= PORT_SERIAL_END) {
+		return serial_read(p);
+	}
 	switch (p) {
 	case PORT_GPIO_DIR:
 		return m_gpio_dir;
@@ -272,6 +313,10 @@ void Mie::out8(uint16_t port, uint8_t value)
 	}
 	if (p >= PORT_UART1 && p <= PORT_UART1_END) {
 		uart_write(static_cast<uint8_t>(p - PORT_UART1), value);
+		return;
+	}
+	if (p >= PORT_SERIAL_CONTROL && p <= PORT_SERIAL_END) {
+		serial_write(p, value);
 		return;
 	}
 	switch (p) {
@@ -530,9 +575,142 @@ void Mie::uart_tick(uint32_t cycles)
 	}
 }
 
+/* Serial adapter block. An exchange starts on the write to 0x09, runs
+ * for a while with the busy bits set, then leaves its two reply bytes
+ * in 0x0B and 0x0C with a ready bit; reading 0x0C clears it. */
+
+void Mie::serial_reset()
+{
+	m_serial.data = 0;
+	m_serial.control = 0;
+	m_serial.reply_control = 0;
+	m_serial.reply_data = 0;
+	m_serial.status = 0;
+	m_serial.op = SERIAL_OP_NONE;
+	m_serial.busy_cycles = 0;
+}
+
+uint8_t Mie::serial_read(uint8_t port)
+{
+	MieSerialState &s = m_serial;
+	switch (port) {
+	case PORT_SERIAL_REPLY_CONTROL:
+		return s.reply_control;
+	case PORT_SERIAL_REPLY_DATA: {
+		const uint8_t v = s.reply_data;
+		s.status = static_cast<uint8_t>(s.status & ~(SERIAL_STATUS_READY | SERIAL_STATUS_LOOP_READY));
+		return v;
+	}
+	case PORT_SERIAL_STATUS:
+		return s.status;
+	default:
+		break;
+	}
+	if (!m_port_logged[port]) {
+		m_port_logged[port] = true;
+		log_unknown('i', "port", port, 0xFF);
+	}
+	return 0xFF;
+}
+
+void Mie::serial_write(uint8_t port, uint8_t value)
+{
+	MieSerialState &s = m_serial;
+	if (port == PORT_SERIAL_DATA) {
+		s.data = value;
+		return;
+	}
+	if (port != PORT_SERIAL_CONTROL) {
+		/* The ROM writes zeros to 0x0D and 0x0E at power-up. */
+		serial_reset();
+		return;
+	}
+	s.control = value;
+	s.status = static_cast<uint8_t>(s.status & ~(SERIAL_STATUS_READY | SERIAL_STATUS_LOOP_READY));
+	switch (value) {
+	case SERIAL_CTRL_SEND:
+		s.op = SERIAL_OP_SEND;
+		s.busy_cycles = SERIAL_SEND_CYCLES;
+		break;
+	case SERIAL_CTRL_REQUEST:
+	case SERIAL_CTRL_REQUEST + 1:
+		if (s.data != SERIAL_REQ_STATUS && s.data != SERIAL_REQ_TAKE) {
+			if (!m_port_logged[256 + port]) {
+				m_port_logged[256 + port] = true;
+				log_unknown('o', "serial request", port, s.data);
+			}
+			return;
+		}
+		s.op = SERIAL_OP_REQUEST;
+		s.busy_cycles = SERIAL_REQUEST_CYCLES;
+		break;
+	case SERIAL_CTRL_LOOPBACK:
+		s.op = SERIAL_OP_LOOPBACK;
+		s.busy_cycles = SERIAL_REQUEST_CYCLES;
+		break;
+	default:
+		if (!m_port_logged[256 + port]) {
+			m_port_logged[256 + port] = true;
+			log_unknown('o', "serial control", port, value);
+		}
+		return;
+	}
+	s.status |= SERIAL_STATUS_BUSY;
+}
+
+void Mie::serial_complete()
+{
+	MieSerialState &s = m_serial;
+	switch (s.op) {
+	case SERIAL_OP_SEND:
+		if (m_serial_device) {
+			m_serial_device->receive(s.data);
+		}
+		s.reply_control = s.control;
+		s.reply_data = s.data;
+		s.status |= SERIAL_STATUS_READY;
+		break;
+	case SERIAL_OP_REQUEST: {
+		const bool waiting = m_serial_device && m_serial_device->has_byte();
+		s.reply_control = s.control;
+		if (s.data == SERIAL_REQ_STATUS) {
+			s.reply_data = waiting ? SERIAL_RX_WAITING : 0;
+		} else {
+			s.reply_data = waiting ? m_serial_device->take_byte() : 0;
+		}
+		s.status |= SERIAL_STATUS_READY;
+		break;
+	}
+	case SERIAL_OP_LOOPBACK:
+		s.reply_control = s.control;
+		s.reply_data = s.data;
+		s.status |= SERIAL_STATUS_LOOP_READY;
+		break;
+	default:
+		break;
+	}
+	s.status = static_cast<uint8_t>(s.status & ~SERIAL_STATUS_BUSY);
+	s.op = SERIAL_OP_NONE;
+}
+
+void Mie::serial_tick(uint32_t cycles)
+{
+	MieSerialState &s = m_serial;
+	if (s.op == SERIAL_OP_NONE) {
+		return;
+	}
+	if (s.busy_cycles > cycles) {
+		s.busy_cycles -= cycles;
+		return;
+	}
+	s.busy_cycles = 0;
+	serial_complete();
+}
+
 void Mie::tick(uint32_t cycles)
 {
 	uart_tick(cycles);
+	serial_tick(cycles);
 }
 
 void Mie::run(uint32_t cycles)
@@ -580,6 +758,7 @@ void Mie::save(MieState &out) const
 	out.jvs_control = m_jvs_control;
 	out.busrq = m_busrq ? 1 : 0;
 	out.uart = m_uart;
+	out.serial = m_serial;
 }
 
 void Mie::load(const MieState &in)
@@ -595,6 +774,7 @@ void Mie::load(const MieState &in)
 	m_jvs_control = in.jvs_control;
 	m_busrq = in.busrq != 0;
 	m_uart = in.uart;
+	m_serial = in.serial;
 }
 
 } /* namespace odin */

@@ -25,8 +25,14 @@ port E bits 0-3 read high while the port is an output; the BOOTROM waits
 for that at 0x0C00B860 and MAME reads 0xFF there. Measure the pins. The
 LLE path is the default; drop the HLE stand-in in hikaru-mie.c once the
 JVS inputs (players, coins, analog) are wired to the real board.
-Ports 0x0B-0x0E (315-5649-style serial block) and 0x40/0x60/0x80/0x81,
-touched by the mask ROM init, are logged as unknown.
+Ports 0x40/0x60/0x80/0x81, touched by the mask ROM init, are logged as
+unknown. The serial adapter block (ports 0x09-0x0E) is modelled from
+the Z80 code von4 uploads; its reply delays are HEURISTIC (mie.cpp
+SERIAL_SEND_CYCLES, SERIAL_REQUEST_CYCLES), measure them on a board.
+The CRP-1231 card reader on that line (src/odin/card_reader.cpp,
+ODIN_CARD=none|reader) is an HLE stand-in: the LLE path is an H8/300H
+core running the dumped firmware (MAME wangmid, crp1231lr10_ver0110.ic2).
+Status byte st1 'V' that von4 tests on command 0x33 is not understood.
 
 AICA (src/odin/aica.cpp + arm7.cpp): control block, timers, interrupts,
 DMA, RTC and the ARM7 are in; still missing: the 64 slots and the DSP

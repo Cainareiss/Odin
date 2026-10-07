@@ -54,6 +54,18 @@ public:
 	virtual uint8_t gpio_readback(uint8_t, uint8_t latched) { return latched; }
 };
 
+/* What sits at the far end of the serial adapter block (ports 0x09-
+ * 0x0E): a device on an RS-232 line. */
+class MieSerialDevice {
+public:
+	virtual ~MieSerialDevice() = default;
+	/* A byte the Z80 sent on the line. */
+	virtual void receive(uint8_t byte) = 0;
+	/* Bytes the device sends back, one at a time. */
+	virtual bool has_byte() = 0;
+	virtual uint8_t take_byte() = 0;
+};
+
 struct MieUartState {
 	uint8_t dll, dlm, ier, fcr, lcr, mcr, scr;
 	std::array<uint8_t, 16> tx_fifo;
@@ -66,6 +78,16 @@ struct MieUartState {
 	uint32_t wire_pos, wire_count, wire_cycles;
 };
 
+struct MieSerialState {
+	uint8_t data;		/* port 0x0A latch */
+	uint8_t control;	/* last port 0x09 write */
+	uint8_t reply_control;	/* port 0x0B */
+	uint8_t reply_data;	/* port 0x0C */
+	uint8_t status;		/* port 0x0D */
+	uint8_t op;		/* exchange in flight */
+	uint32_t busy_cycles;
+};
+
 struct MieState {
 	Z80State cpu;
 	std::array<uint8_t, 0x800> ram_low;
@@ -76,6 +98,7 @@ struct MieState {
 	uint8_t jvs_control;
 	uint8_t busrq;
 	MieUartState uart;
+	MieSerialState serial;
 };
 
 class Mie : public Z80Bus {
@@ -118,6 +141,8 @@ public:
 
 	JvsHost &jvs() { return m_jvs; }
 	const Z80 &cpu() const { return m_cpu; }
+	/* Device on the serial adapter line; nullptr leaves the line open. */
+	void set_serial_device(MieSerialDevice *dev) { m_serial_device = dev; }
 
 	void save(MieState &out) const;
 	void load(const MieState &in);
@@ -148,6 +173,11 @@ private:
 	void uart_tick(uint32_t cycles);
 	uint32_t uart_byte_cycles() const;
 	void uart_commit_frame();
+	uint8_t serial_read(uint8_t port);
+	void serial_write(uint8_t port, uint8_t value);
+	void serial_reset();
+	void serial_tick(uint32_t cycles);
+	void serial_complete();
 	uint8_t jvs_sense() const;
 	void tick(uint32_t cycles);
 	void log_unknown(char rw, const char *space, uint32_t addr, uint32_t value);
@@ -168,6 +198,8 @@ private:
 	uint8_t m_jvs_control;
 	bool m_busrq;
 	MieUartState m_uart;
+	MieSerialState m_serial;
+	MieSerialDevice *m_serial_device;
 
 	FILE *m_log;
 	FILE *m_trace;

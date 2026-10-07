@@ -19,6 +19,7 @@
  */
 
 #include "odin/mie_bridge.hpp"
+#include "odin/card_reader.hpp"
 #include "odin/eeprom_93c46.hpp"
 #include "odin/jvs_io_13551.hpp"
 #include "odin/mie.hpp"
@@ -27,6 +28,7 @@
 #include <cstring>
 #include <memory>
 #include <span>
+#include <string>
 
 namespace {
 
@@ -41,7 +43,7 @@ public:
 	      odin_mie_inputs_fn read_inputs, void *ctx)
 		: m_read_inputs(read_inputs), m_ctx(ctx), m_clock_hz(clock_hz), m_cycle_acc(0),
 		  m_rom(copy_rom(rom)),
-		  m_eeprom(odin::Mie::CLOCK_HZ), m_io(*this), m_mie(*this, m_rom, ram)
+		  m_eeprom(odin::Mie::CLOCK_HZ), m_io(*this), m_mie(*this, m_rom, ram), m_log(nullptr)
 	{
 		m_inputs = {};
 		m_mie.jvs().add_device(&m_io);
@@ -123,6 +125,26 @@ public:
 		m_eeprom.reset();
 		m_io.reset();
 		m_mie.reset();
+		if (m_card)
+			m_card->reset();
+	}
+
+	/* The card reader on the serial block of the MIE. */
+	bool attach_card(const char *card_file, FILE *trace)
+	{
+		m_card = std::make_unique<odin::CardReader>(card_file ? std::string(card_file) : std::string());
+		m_card->set_log(m_log);
+		m_card->set_trace(trace);
+		m_mie.set_serial_device(m_card.get());
+		return m_card->insert_card();
+	}
+
+	void set_log(FILE *out)
+	{
+		m_log = out;
+		m_mie.set_log(out);
+		if (m_card)
+			m_card->set_log(out);
 	}
 
 	void run(uint32_t cycles)
@@ -160,6 +182,8 @@ private:
 	odin::Eeprom93c46 m_eeprom;
 	odin::JvsIo13551 m_io;
 	odin::Mie m_mie;
+	std::unique_ptr<odin::CardReader> m_card;
+	FILE *m_log;
 };
 
 enum : uint32_t {
@@ -266,7 +290,7 @@ odin_mie_run(odin_mie_t *dev, uint32_t cycles)
 void
 odin_mie_set_log(odin_mie_t *dev, FILE *out)
 {
-	dev->board->chip().set_log(out);
+	dev->board->set_log(out);
 }
 
 void
@@ -280,6 +304,12 @@ odin_mie_eeprom_load(odin_mie_t *dev, const uint8_t *data, size_t size)
 {
 	if (data)
 		dev->board->eeprom().load(std::span<const uint8_t>(data, size));
+}
+
+int
+odin_mie_card_attach(odin_mie_t *dev, const char *card_file, FILE *trace)
+{
+	return dev->board->attach_card(card_file, trace) ? 1 : 0;
 }
 
 } /* extern "C" */

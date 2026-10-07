@@ -56,6 +56,12 @@
  * ODIN_MIE_TRACE=<file> writes the Z80 bus trace of ODIN_MIE_TRACE_N
  * instructions (default 300000) from the first time the PC reaches
  * ODIN_MIE_TRACE_START (hex, default 0: from reset).
+ *
+ * The serial block of the MIE (Z80 ports 0x09-0x0E) carries a CRP-1231
+ * card reader (src/odin/card_reader.cpp). ODIN_CARD=none leaves the
+ * line open, ODIN_CARD=reader (default) attaches it, ODIN_CARD_FILE=
+ * <path> is the card image (three tracks, 207 bytes), ODIN_CARD_TRACE=1
+ * logs every frame on the line to stderr.
  */
 
 typedef struct {
@@ -428,6 +434,28 @@ hikaru_mie_setup_trace (hikaru_mie_t *mie)
 	odin_mie_set_trace (mie->chip, mie->trace, n, (uint16_t) start_pc);
 }
 
+static void
+hikaru_mie_setup_card (hikaru_mie_t *mie)
+{
+	const char *mode = getenv ("ODIN_CARD");
+	const char *file = getenv ("ODIN_CARD_FILE");
+	const char *trace = getenv ("ODIN_CARD_TRACE");
+	int loaded;
+
+	if (mode && !strcmp (mode, "none")) {
+		VK_PRINT ("MIE: card reader: none (ODIN_CARD=none)");
+		return;
+	}
+	if (mode && strcmp (mode, "reader"))
+		VK_ERROR ("MIE: ODIN_CARD=%s unknown, using the reader", mode);
+	loaded = odin_mie_card_attach (mie->chip, file, (trace && atoi (trace)) ? stderr : NULL);
+	if (file)
+		VK_PRINT ("MIE: card reader CRP-1231 (HLE), card file '%s'%s",
+		          file, loaded ? "" : " not found: no card");
+	else
+		VK_PRINT ("MIE: card reader CRP-1231 (HLE), no card file");
+}
+
 vk_device_t *
 hikaru_mie_new (vk_machine_t *mach, unsigned clock_hz)
 {
@@ -477,6 +505,7 @@ hikaru_mie_new (vk_machine_t *mach, unsigned clock_hz)
 		dev->exec = hikaru_mie_exec;
 		odin_mie_set_log (mie->chip, stderr);
 		hikaru_mie_setup_trace (mie);
+		hikaru_mie_setup_card (mie);
 		VK_PRINT ("MIE: LLE (315-6146 ROM + uploaded Z80 program)");
 	} else
 		VK_PRINT ("MIE: HLE stand-in (ODIN_MIE=lle for the Z80)");
