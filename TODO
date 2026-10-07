@@ -23,7 +23,11 @@ introduction of a new vk_device_accessors_t class.
 Proper MIE emulation (wrap a Z80 emulator in a vk_cpu_t sub-class and tape
 it to the code.)
 
-Proper AICA emulation (especially the RTC and IRQs.)
+AICA (src/odin/aica.cpp + arm7.cpp): control block, timers, interrupts,
+DMA, RTC and the ARM7 are in; still missing: the 64 slots and the DSP
+(sound output), the real ARM7 speed (64 cycles per sample is MAME's
+guess), the nested-FIQ question (does reading 0x2D00 drop the line?),
+and the HACK in hikaru-aica.c (page offset 0 reads 4 for Pharrier).
 
 Implement the three EEPROMs (MAINBD, ROMBD, MIE.)
 

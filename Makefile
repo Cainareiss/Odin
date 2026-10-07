@@ -1,5 +1,6 @@
 CC := gcc
-LD := gcc
+CXX := g++
+LD := g++
 
 DEFS := -DVK_HAVE_HIKARU
 
@@ -14,6 +15,8 @@ COMMON_FLAGS = $(DEFS) -I src -I /usr/include/json -Wall -Wno-strict-aliasing -W
 CFLAGS  := $(COMMON_FLAGS) $(PKG_CFLAGS) $(SDL_CFLAGS) -O3 -fomit-frame-pointer -flto -march=native
 #CFLAGS  := $(COMMON_FLAGS) $(PKG_CFLAGS) $(SDL_CFLAGS) -O0 -g
 LDFLAGS := -lm $(PKG_LDFLAGS) $(SDL_LDFLAGS)
+
+CXXFLAGS := -std=c++20 -I src -Wall -Wextra -Wpedantic -Wconversion -Wshadow -O2
 
 .PHONY: all install clean
 
@@ -31,8 +34,15 @@ VK_OBJ := \
 SH4_OBJ := \
 	src/cpu/sh/sh4.o
 
+ODIN_OBJ := \
+	src/odin/aica.o \
+	src/odin/aica_bridge.o \
+	src/odin/arm7.o \
+	src/odin/arm7_ops.o
+
 HIKARU_OBJ := \
 	$(SH4_OBJ) \
+	$(ODIN_OBJ) \
 	src/mach/hikaru/hikaru.o \
 	src/mach/hikaru/hikaru-mscomm.o \
 	src/mach/hikaru/hikaru-mie.o \
@@ -46,7 +56,7 @@ HIKARU_OBJ := \
 all: bin/valkyrie bin/vkbswap
 
 bin/valkyrie: $(VK_OBJ) $(HIKARU_OBJ) src/vk/main.o
-	$(CC) $+ -o $@ $(CFLAGS) $(LDFLAGS) 
+	$(LD) $+ -o $@ $(CFLAGS) $(LDFLAGS) 
 
 bin/vkbswap: $(VK_OBJ) src/utils/bswap.o
 	$(CC) $+ -o $@ $(CFLAGS) $(LDFLAGS)
@@ -56,6 +66,9 @@ bin/vkbswap: $(VK_OBJ) src/utils/bswap.o
 
 %.o: %.c %.h
 	$(CC) -c $< -o $@ $(CFLAGS)
+
+%.o: %.cpp
+	$(CXX) -c $< -o $@ $(CXXFLAGS)
 
 install:
 	@( mkdir -pv $(HOME)/.local/bin )

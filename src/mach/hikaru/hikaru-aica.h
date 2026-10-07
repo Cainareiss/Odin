@@ -22,7 +22,7 @@
 #include "vk/types.h"
 #include "vk/device.h"
 
-vk_device_t *hikaru_aica_new (vk_machine_t *mach, vk_buffer_t *ram, bool master);
+vk_device_t *hikaru_aica_new (vk_machine_t *mach, vk_buffer_t *ram, bool master, unsigned clock_hz);
 
 #endif /* __VK_HIKARU_AICA_H__ */
 

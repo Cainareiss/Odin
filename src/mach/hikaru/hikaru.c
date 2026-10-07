@@ -466,6 +466,10 @@ hikaru_run_cycles (vk_machine_t *mach, int cycles)
 	/* XXX run the slave MEMCTL? I've never seen it used, and would
 	 * like to debug it a bit before enabling it. */
 	vk_device_exec (hikaru->gpu, cycles);
+
+	/* Run the two sound boards */
+	vk_device_exec (hikaru->aica_m, cycles);
+	vk_device_exec (hikaru->aica_s, cycles);
 }
 
 static int
@@ -1019,8 +1023,8 @@ hikaru_init (hikaru_t *hikaru)
 
 	hikaru_renderer_set_gpu (hikaru->base.renderer, hikaru->gpu);
 
-	hikaru->aica_m = hikaru_aica_new (mach, hikaru->aica_ram_m, true);
-	hikaru->aica_s = hikaru_aica_new (mach, hikaru->aica_ram_m, false);
+	hikaru->aica_m = hikaru_aica_new (mach, hikaru->aica_ram_m, true, HIKARU_SH4_CLOCK);
+	hikaru->aica_s = hikaru_aica_new (mach, hikaru->aica_ram_s, false, HIKARU_SH4_CLOCK);
 
 	if (!hikaru->aica_m || !hikaru->aica_s)
 		return -1;

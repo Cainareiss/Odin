@@ -1,7 +1,8 @@
-/* 
+/*
  * Valkyrie
  * Copyright (C) 2011, 2012, Stefano Teso
- * 
+ * Copyright (C) 2026 Réda Chérif-Touil
+ *
  * Valkyrie is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -16,7 +17,9 @@
  * along with Valkyrie.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "mach/hikaru/hikaru.h"
 #include "mach/hikaru/hikaru-aica.h"
+#include "odin/aica_bridge.hpp"
 
 /*
  * Sound Boards
@@ -41,62 +44,55 @@
  *
  * 800000-FFFFFF RAM
  *
- * Note: this documentation comes from the following sources: MAME,
- * lxdream, nullDC. Kudos to the original authors.
+ * The chip itself lives in src/odin/aica.cpp; this file is the bridge
+ * between the Valkyrie bus and that device.
  */
 
 typedef struct {
 	vk_device_t base;
+	odin_aica_t *chip;
 	vk_buffer_t *ram;
-	vk_buffer_t *regs;
-	uint32_t rtc[4];
 	bool master;
 } hikaru_aica_t;
 
 static void
-hikaru_aica_reset_cpu (hikaru_aica_t *aica)
+hikaru_aica_main_irq (void *ctx, int level)
 {
+	hikaru_aica_t *aica = (hikaru_aica_t *) ctx;
 	vk_device_t *dev = (vk_device_t *) aica;
-	VK_MACH_LOG (dev->mach, "AICA/%c: resetting ARM cpu",
-	             aica->master ? 'M' : 'S');
+
+	/* IRL2 with bit 7 of port A low; only the master board is wired to
+	 * the SH-4 in this core for now. */
+	if (level && aica->master)
+		hikaru_raise_aica_irq (dev->mach);
 }
 
 static int
 hikaru_aica_get (vk_device_t *device, unsigned size, uint32_t addr, void *val)
 {
 	hikaru_aica_t *aica = (hikaru_aica_t *) device;
-	uint32_t *val32 = (uint32_t *) val;
 	uint32_t offs = addr & 0xFFFFFF;
+	uint64_t value = 0;
 
 	VK_MACH_LOG (device->mach, "AICA/%c R%u @%08X",
 	             aica->master ? 'M' : 'S', 8*size, offs);
 
 	switch (offs) {
 	case 0x000000:
-		/* XXX required for PHARRER; see PH:@0C0B2884 */
+		/* HACK: PHARRIER reads this and wants 4 (PH:@0C0B2884). Not a
+		 * register of the chip; kept until the real board is traced. */
 		set_ptr (val, size, 4);
-		break;
-	case 0x700000 ... 0x703BFF:
-		set_ptr (val, size, vk_buffer_get (aica->regs, size, addr & 0x3FFF));
-		break;
-	case 0x710000:
-	case 0x710004:
-	case 0x710008:
-		/* AICA RTC */
-		VK_ASSERT (size == 4);
-		*val32 = aica->rtc[(offs & 0xF) / 4];
-		break;
-	case 0x800000 ... 0xFFFFFF:
-		/* RAM */
-		set_ptr (val, size, vk_buffer_get (aica->ram, size, addr & 0x7FFFFF));
-		if (offs == 0x80005C)
-			/* XXX hack for AIRTRIX */
-			set_ptr (val, size, 1);
-		break;
+		return 0;
 	default:
+		break;
+	}
+
+	if (odin_aica_host_read (aica->chip, offs, size, &value)) {
 		VK_MACH_ERROR (device->mach, "AICA unhandled R%u %08X", size*8, addr);
+		set_ptr (val, size, 0);
 		return -1;
 	}
+	set_ptr (val, size, value);
 	return 0;
 }
 
@@ -109,40 +105,42 @@ hikaru_aica_put (vk_device_t *device, unsigned size, uint32_t addr, uint64_t val
 	VK_MACH_LOG (device->mach, "AICA/%c W%u @%08X = %lX",
 	             aica->master ? 'M' : 'S', 8*size, offs, val);
 
-	switch (offs) {
-	case 0x700000 ... 0x703BFF:
-		vk_buffer_put (aica->regs, size, addr & 0x3FFF, val);
-		if (offs == 0x702C00 && (val & 1))
-			hikaru_aica_reset_cpu (aica);
-		break;
-	case 0x710000:
-	case 0x710004:
-	case 0x710008:
-		/* AICA RTC */
-		VK_ASSERT (size == 4);
-		return -1;
-	case 0x800000 ... 0xFFFFFF:
-		/* RAM */
-		vk_buffer_put (aica->ram, size, addr & 0x7FFFFF, val);
-		break;
-	default:
+	if (odin_aica_host_write (aica->chip, offs, size, val)) {
 		VK_MACH_ERROR (device->mach, "AICA unhandled W%u %08X = %lX", size*8, addr, val);
 		return -1;
 	}
 	return 0;
 }
 
+static int
+hikaru_aica_exec (vk_device_t *device, int cycles)
+{
+	hikaru_aica_t *aica = (hikaru_aica_t *) device;
+
+	odin_aica_run (aica->chip, (uint32_t) cycles);
+	return cycles;
+}
+
 static void
 hikaru_aica_reset (vk_device_t *dev, vk_reset_type_t type)
 {
 	hikaru_aica_t *aica = (hikaru_aica_t *) dev;
-	aica->rtc[0] = 0x5BFC;
-	aica->rtc[1] = 0x8900;
-	aica->rtc[2] = 0;
+
+	odin_aica_reset (aica->chip);
+}
+
+static void
+hikaru_aica_destroy (vk_device_t **dev_)
+{
+	if (dev_ && *dev_) {
+		hikaru_aica_t *aica = (hikaru_aica_t *) *dev_;
+		odin_aica_delete (aica->chip);
+		aica->chip = NULL;
+	}
 }
 
 vk_device_t *
-hikaru_aica_new (vk_machine_t *mach, vk_buffer_t *ram, bool master)
+hikaru_aica_new (vk_machine_t *mach, vk_buffer_t *ram, bool master, unsigned clock_hz)
 {
 	hikaru_aica_t *aica;
 	vk_device_t *dev;
@@ -152,9 +150,9 @@ hikaru_aica_new (vk_machine_t *mach, vk_buffer_t *ram, bool master)
 	if (!aica)
 		return NULL;
 
-	dev->destroy	= NULL;
+	dev->destroy	= hikaru_aica_destroy;
 	dev->reset	= hikaru_aica_reset;
-	dev->exec	= NULL;
+	dev->exec	= hikaru_aica_exec;
 	dev->get	= hikaru_aica_get;
 	dev->put	= hikaru_aica_put;
 	dev->save_state	= NULL;
@@ -162,12 +160,23 @@ hikaru_aica_new (vk_machine_t *mach, vk_buffer_t *ram, bool master)
 
 	aica->ram	= ram;
 	aica->master	= master;
-
-	aica->regs	= vk_buffer_le32_new (0x3C00, 0);
-	if (!aica->regs)
+	aica->chip	= odin_aica_new (vk_buffer_get_ptr (ram, 0),
+	                                 vk_buffer_get_size (ram), clock_hz,
+	                                 hikaru_aica_main_irq, aica);
+	if (!aica->chip)
 		goto fail;
 
-	vk_machine_register_buffer (mach, aica->regs);
+	odin_aica_set_log (aica->chip, stderr);
+
+	/* VK_ARM7_TRACE=<prefix> writes <prefix>-m.txt / <prefix>-s.txt */
+	{
+		const char *prefix = getenv ("VK_ARM7_TRACE");
+		if (prefix) {
+			char path[1024];
+			snprintf (path, sizeof (path), "%s-%c.txt", prefix, master ? 'm' : 's');
+			odin_aica_set_arm_trace (aica->chip, fopen (path, "w"));
+		}
+	}
 
 	return dev;
 
