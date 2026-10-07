@@ -239,6 +239,55 @@
 					]
 				}
 			]
+		},
+		{
+			"name" : "von4",
+			"mach" : "hikaru",
+			"sections" : [
+				{
+					"name" : "bootrom",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "hikaru_0.96.bin", "size" : 2097152 },
+						{ "name" : "hikaru_0.92.bin", "size" : 2097152 },
+						{ "name" : "hikaru_0.84.bin", "size" : 2097152 }
+					]
+				},
+				{
+					"name" : "eprom",
+					"type" : "interleave",
+					"amnt" : 2,
+					"data" : [
+						{ "name" : "epr23766e.ic29", "size" : 4194304 },
+						{ "name" : "epr23767e.ic30", "size" : 4194304 },
+						{ "name" : "epr23768a.ic31", "size" : 4194304 },
+						{ "name" : "epr23769a.ic32", "size" : 4194304 }
+					]
+				},
+				{
+					"name" : "maskrom",
+					"type" : "interleave",
+					"amnt" : 2,
+					"data" : [
+						{ "name" : "mpr-23750.ic37", "size" : 16777216 },
+						{ "name" : "mpr-23751.ic38", "size" : 16777216 },
+						{ "name" : "mpr-23752.ic41", "size" : 16777216 },
+						{ "name" : "mpr-23753.ic42", "size" : 16777216 },
+						{ "name" : "mpr-23754.ic45", "size" : 16777216 },
+						{ "name" : "mpr-23755.ic46", "size" : 16777216 },
+						{ "name" : "mpr-23756.ic49", "size" : 16777216 },
+						{ "name" : "mpr-23757.ic50", "size" : 16777216 },
+						{ "name" : "mpr-23758.ic53", "size" : 16777216 },
+						{ "name" : "mpr-23759.ic54", "size" : 16777216 },
+						{ "name" : "mpr-23760.ic57", "size" : 16777216 },
+						{ "name" : "mpr-23761.ic58", "size" : 16777216 },
+						{ "name" : "mpr-23762.ic61", "size" : 16777216 },
+						{ "name" : "mpr-23763.ic62", "size" : 16777216 },
+						{ "name" : "mpr-23764.ic65", "size" : 16777216 },
+						{ "name" : "mpr-23765.ic66", "size" : 16777216 }
+					]
+				}
+			]
 		}
 	]
 }

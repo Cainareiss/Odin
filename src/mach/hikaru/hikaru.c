@@ -749,6 +749,10 @@ hikaru_set_rombd_config (hikaru_t *hikaru)
 	} else if (!strcmp (game->name, "pharrier")) {
 		eprom_bank_size = 4;
 		maskrom_bank_size = 16;
+	} else if (!strcmp (game->name, "von4")) {
+		/* Same board layout as pharrier: 128M TSOP48 mask ROMs */
+		eprom_bank_size = 4;
+		maskrom_bank_size = 16;
 	} else if (!strcmp (game->name, "podrace")) {
 		/* XXX doesn't pass the ROMBD test */
 		eprom_bank_size = 4;
