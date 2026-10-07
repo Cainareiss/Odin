@@ -645,7 +645,8 @@ setup_master_mmap (hikaru_t *hikaru)
 	ret |= vk_mmap_add_dev (mmap, 0x02000000, 0x03FFFFFF, 0x01FFFFFF,
 	                        VK_REGION_RW | VK_REGION_SIZE_ALL,
 	                        hikaru->memctl_m, "APERTURE02/M");
-	ret |= vk_mmap_add_dev (mmap, 0x04000000, 0x0400003F, 0x0000003F,
+	/* The whole bridge page: MMIOs at 00-3F, the rest reads as zero */
+	ret |= vk_mmap_add_dev (mmap, 0x04000000, 0x04FFFFFF, 0x00FFFFFF,
 	                        VK_REGION_RW | VK_REGION_SIZE_ALL | VK_REGION_LOG_RW,
 	                        hikaru->memctl_m, "MEMCTL/M");
 	ret |= vk_mmap_add_dev (mmap, 0x14000000, 0x1400002F, 0x0000003F,
@@ -698,7 +699,7 @@ setup_slave_mmap (hikaru_t *hikaru)
 	                        0, hikaru->ram_s, "RAM/S");
 	ret |= vk_mmap_add_rom (mmap, 0x00000000, 0x001FFFFF, 0x001FFFFF,
 	                        0, hikaru->bootrom, "BOOTROM/S");
-	ret |= vk_mmap_add_dev (mmap, 0x04000000, 0x0400003F, 0x0000003F,
+	ret |= vk_mmap_add_dev (mmap, 0x04000000, 0x04FFFFFF, 0x00FFFFFF,
 	                        VK_REGION_RW | VK_REGION_SIZE_ALL | VK_REGION_LOG_RW,
 	                        hikaru->memctl_s, "MEMCTL/S");
 	ret |= vk_mmap_add_dev (mmap, 0x10000000, 0x1000002F, 0x0000003F,

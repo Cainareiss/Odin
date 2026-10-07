@@ -31,6 +31,8 @@ typedef struct {
 	uint32_t eprom_bank_size;
 	uint32_t maskrom_bank_size;
 	bool maskrom_is_stretched;
+	/* One bit per bank 0x10-0x4F: unpopulated socket already reported */
+	uint64_t unpopulated_logged;
 } hikaru_rombd_config_t;
 
 typedef struct {

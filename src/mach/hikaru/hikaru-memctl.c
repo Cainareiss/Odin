@@ -391,7 +391,24 @@ typedef struct {
 
 	vk_buffer_t *regs;
 	bool master;
+	/* The bridge page above the MMIOs was already reported */
+	bool bridge_page_logged;
 } hikaru_memctl_t;
+
+/* The games probe every ROM board socket at boot (von4 0C713C84: banks
+ * 10-1B, 128 bytes each against the +4MB mirror), so an empty socket is
+ * read thousands of times; report it once per bank. */
+static void
+rombd_log_unpopulated (hikaru_t *hikaru, uint32_t bank, unsigned size, uint32_t bus_addr)
+{
+	uint64_t bit = 1ull << ((bank - 0x10) & 63);
+
+	if (hikaru->rombd_config.unpopulated_logged & bit)
+		return;
+	hikaru->rombd_config.unpopulated_logged |= bit;
+	VK_CPU_ERROR (hikaru->sh_current, "ROMBD unpopulated socket: bank %02X reads as zero (first R%u %08X)",
+	              bank, size * 8, bus_addr);
+}
 
 static int
 rombd_get (hikaru_t *hikaru, unsigned size, uint32_t bus_addr, void *val)
@@ -424,8 +441,7 @@ rombd_get (hikaru_t *hikaru, unsigned size, uint32_t bus_addr, void *val)
 		else {
 			/* Unpopulated EPROM socket: reads as zero */
 			set_ptr (val, size, 0);
-			VK_CPU_ERROR (hikaru->sh_current, "ROMBD out-of-bounds R%u %08X [%08X]",
-			              size * 8, bus_addr, real_offs);
+			rombd_log_unpopulated (hikaru, bank, size, bus_addr);
 		}
 
 	} else if (bank >= config->maskrom_bank[0] &&
@@ -442,8 +458,7 @@ rombd_get (hikaru_t *hikaru, unsigned size, uint32_t bus_addr, void *val)
 		else {
 			/* Unpopulated mask ROM socket: reads as zero */
 			set_ptr (val, size, 0);
-			VK_CPU_ERROR (hikaru->sh_current, "ROMBD out-of-bounds R%u %08X [num=%X offs=%X bsize=%X bmask=%X roffs=%08X]",
-			              size * 8, bus_addr, num, offs, bank_size, bank_mask, real_offs);
+			rombd_log_unpopulated (hikaru, bank, size, bus_addr);
 		}
 	}
 	return 0;
@@ -661,6 +676,18 @@ hikaru_memctl_get (vk_device_t *dev, unsigned size, uint32_t addr, void *val)
 		set_ptr (val, size, vk_buffer_get (memctl->regs, size, addr & 0x3F));
 		return 0;
 	}
+	if (addr >= 0x04000040 && addr <= 0x04FFFFFF) {
+		/* Rest of the bridge page: registers 40-FF (MAME hikaru.cpp
+		 * sh4_map_main maps 04000000-040000FF) and nothing above. The
+		 * game loader over-reads into it (0C00B8E6); reads as zero. */
+		set_ptr (val, size, 0);
+		if (!memctl->bridge_page_logged) {
+			memctl->bridge_page_logged = true;
+			VK_CPU_ERROR (((hikaru_t *) dev->mach)->sh_current, "unmapped bridge page R%u %08X (reported once)",
+			              size * 8, addr);
+		}
+		return 0;
+	}
 
 	bank = get_bank_for_addr (memctl, addr) & 0x7F;
 	bus_addr = (bank << 24) | (addr & 0xFFFFFF);
@@ -696,6 +723,14 @@ hikaru_memctl_put (vk_device_t *dev, unsigned size, uint32_t addr, uint64_t val)
 			break;
 		}
 		vk_buffer_put (memctl->regs, size, addr & 0x3F, val);
+		return 0;
+	}
+	if (addr >= 0x04000040 && addr <= 0x04FFFFFF) {
+		if (!memctl->bridge_page_logged) {
+			memctl->bridge_page_logged = true;
+			VK_CPU_ERROR (((hikaru_t *) dev->mach)->sh_current, "unmapped bridge page W%u %08X = %lX (reported once)",
+			              size * 8, addr, val);
+		}
 		return 0;
 	}
 
