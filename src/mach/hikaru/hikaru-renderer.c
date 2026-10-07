@@ -193,9 +193,12 @@ upload_texture (hikaru_renderer_t *hr, hikaru_texhead_t *th)
 
 	w = 16 << th->logw;
 	h = 16 << th->logh;
-	/* Down to 1x1, all levels in the texhead bank (X360 825C6A00, 825C68D8). */
+	/* All levels in the texhead bank (X360 825C68D8), down to the level
+	 * where the smaller side reaches one texel: the games upload no
+	 * further (the sky dome of von4, 256x128, has a zero 1x1 level that
+	 * the port would read, 825C6A00; HEURISTIC). */
 	num_levels = hr->debug.flags[HR_DEBUG_NO_MIPMAPS] ? 1 :
-	             MAX2 (th->logw, th->logh) + 5;
+	             MIN2 (th->logw, th->logh) + 5;
 
 	get_texhead_coords (&basex, &basey, th);
 	bank = th->bank;
