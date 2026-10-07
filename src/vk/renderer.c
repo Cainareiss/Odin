@@ -38,12 +38,13 @@ vk_renderer_begin_frame (vk_renderer_t *renderer)
 
 static uint32_t clock = 0;
 
-/* VK_SCREENSHOT=<prefix> writes <prefix>-<frame>.ppm every 60 frames */
+/* VK_SCREENSHOT=<prefix> writes <prefix>-<frame>.ppm every 60 frames, or
+ * every VK_SCREENSHOT_EVERY frames */
 static void
 vk_renderer_screenshot (vk_renderer_t *renderer)
 {
 	static const char *prefix = NULL;
-	static unsigned frame = 0;
+	static unsigned frame = 0, every = 60;
 	static bool checked = false;
 	char path[512];
 	unsigned w = renderer->width, h = renderer->height, y;
@@ -51,11 +52,14 @@ vk_renderer_screenshot (vk_renderer_t *renderer)
 	FILE *fp;
 
 	if (!checked) {
+		const char *env = getenv ("VK_SCREENSHOT_EVERY");
 		prefix = getenv ("VK_SCREENSHOT");
+		if (env && atoi (env) > 0)
+			every = atoi (env);
 		checked = true;
 	}
 	frame++;
-	if (!prefix || (frame % 60) != 0)
+	if (!prefix || (frame % every) != 0)
 		return;
 
 	pixels = malloc (w * h * 3);
