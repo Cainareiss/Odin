@@ -363,6 +363,7 @@ get_texture (hikaru_renderer_t *hr, hikaru_texhead_t *th)
 	cached = &hr->textures.cache[bank][sloty][slotx];
 	if (is_texhead_eq (hr, th, &cached->th))
 		return cached;
+	LOG ("TEXUPLOAD %s", get_texhead_str (th));
 
 	destroy_texture (cached);
 
@@ -1275,7 +1276,9 @@ hikaru_renderer_push_vertices (vk_renderer_t *rend,
 static void
 print_rendstate (hikaru_renderer_t *hr, hikaru_mesh_t *mesh, char *prefix)
 {
-	LOG ("RENDSTATE %s @%p #instances = %u", prefix, mesh, mesh->num_instances);
+	LOG ("RENDSTATE %s @%p #instances = %u uvoff=[%d %d | %d %d | %d %d | %d %d]", prefix, mesh, mesh->num_instances,
+	     hr->gpu->texoffset[0][0], hr->gpu->texoffset[0][1], hr->gpu->texoffset[1][0], hr->gpu->texoffset[1][1],
+	     hr->gpu->texoffset[2][0], hr->gpu->texoffset[2][1], hr->gpu->texoffset[3][0], hr->gpu->texoffset[3][1]);
 	if (mesh->vp_index < MAX_VIEWPORTS)
 		LOG ("RENDSTATE %s %u vp:  %s", prefix, mesh->num,
 		     get_viewport_str (&hr->vp_list[mesh->vp_index]));
