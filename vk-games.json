@@ -190,6 +190,45 @@
 						{ "name" : "epr-23176.ic31", "size" : 4194304 },
 						{ "name" : "epr-23177.ic32", "size" : 4194304 }
 					]
+				},
+				{
+					"name" : "maskrom",
+					"type" : "interleave",
+					"amnt" : 2,
+					"data" : [
+						{ "name" : "mpr-23086.ic37", "size" : 8388608 },
+						{ "name" : "mpr-23087.ic38", "size" : 8388608 },
+						{ "name" : "mpr-23088.ic39", "size" : 8388608 },
+						{ "name" : "mpr-23089.ic40", "size" : 8388608 },
+						{ "name" : "mpr-23090.ic41", "size" : 8388608 },
+						{ "name" : "mpr-23091.ic42", "size" : 8388608 },
+						{ "name" : "mpr-23092.ic43", "size" : 8388608 },
+						{ "name" : "mpr-23093.ic44", "size" : 8388608 },
+						{ "name" : "mpr-23094.ic45", "size" : 8388608 },
+						{ "name" : "mpr-23095.ic46", "size" : 8388608 },
+						{ "name" : "mpr-23096.ic47", "size" : 8388608 },
+						{ "name" : "mpr-23097.ic48", "size" : 8388608 },
+						{ "name" : "mpr-23098.ic49", "size" : 8388608 },
+						{ "name" : "mpr-23099.ic50", "size" : 8388608 },
+						{ "name" : "mpr-23100.ic51", "size" : 8388608 },
+						{ "name" : "mpr-23101.ic52", "size" : 8388608 },
+						{ "name" : "mpr-23102.ic53s", "size" : 8388608 },
+						{ "name" : "mpr-23103.ic54s", "size" : 8388608 },
+						{ "name" : "mpr-23104.ic55s", "size" : 8388608 },
+						{ "name" : "mpr-23105.ic56s", "size" : 8388608 },
+						{ "name" : "mpr-23106.ic57s", "size" : 8388608 },
+						{ "name" : "mpr-23107.ic58s", "size" : 8388608 },
+						{ "name" : "mpr-23108.ic59s", "size" : 8388608 },
+						{ "name" : "mpr-23109.ic60s", "size" : 8388608 },
+						{ "name" : "mpr-23110.ic61s", "size" : 8388608 },
+						{ "name" : "mpr-23111.ic62s", "size" : 8388608 },
+						{ "name" : "mpr-23112.ic63s", "size" : 8388608 },
+						{ "name" : "mpr-23113.ic64s", "size" : 8388608 },
+						{ "name" : "mpr-23114.ic65s", "size" : 8388608 },
+						{ "name" : "mpr-23115.ic66s", "size" : 8388608 },
+						{ "name" : "mpr-23116.ic67s", "size" : 8388608 },
+						{ "name" : "mpr-23117.ic68s", "size" : 8388608 }
+					]
 				}
 			]
 		},

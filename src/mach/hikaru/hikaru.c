@@ -755,10 +755,10 @@ hikaru_set_rombd_config (hikaru_t *hikaru)
 		eprom_bank_size = 4;
 		maskrom_bank_size = 16;
 	} else if (!strcmp (game->name, "podrace")) {
-		/* XXX doesn't pass the ROMBD test */
+		/* 32 x 64M SOP44 mask ROMs: each interleaved pair fills one 16 MB
+		 * bank (MAME hikaru.cpp swracer: pairs at 0x1000000 steps) */
 		eprom_bank_size = 4;
-		maskrom_bank_size = 8;
-		maskrom_is_stretched = true;
+		maskrom_bank_size = 16;
 	} else if (!strcmp (game->name, "sgnascar")) {
 		//rombd_offs = 8;
 		eprom_bank_size = 4;
