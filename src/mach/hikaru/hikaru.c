@@ -833,12 +833,16 @@ patch_airtrix (vk_cpu_t *cpu, uint32_t pc, uint32_t inst)
 {
 	sh4_t *ctx = (sh4_t *) cpu;
 
+	(void) ctx;
+	(void) pc;
+	/* The WARNING screen waits 660 frames for the I/O board node count
+	 * (0x0C010F30); the real MIE needs that time, so the wait runs.
 	switch (pc) {
 	case 0x0C010F9A:
-		/* Make the 'WARNING' screen faster (well, 656 frames faster) */
 		R(2) = 0x290;
 		break;
 	}
+	*/
 	return inst;
 }
 
@@ -847,6 +851,10 @@ patch_braveff (vk_cpu_t *cpu, uint32_t pc, uint32_t inst)
 {
 	sh4_t *ctx = (sh4_t *) cpu;
 
+	(void) ctx;
+	(void) pc;
+	/* Three forced results of unknown purpose, kept off until the game
+	 * shows what they worked around.
 	switch (pc) {
 	case 0x0C0407D0:
 		R(3) = 0x0C06A620;
@@ -858,6 +866,7 @@ patch_braveff (vk_cpu_t *cpu, uint32_t pc, uint32_t inst)
 		T = 0;
 		break;
 	}
+	*/
 	return inst;
 }
 
@@ -881,11 +890,13 @@ patch_pharrier (vk_cpu_t *cpu, uint32_t pc, uint32_t inst)
 		vk_cpu_put (cpu, 4, 0x0C21D4AC, 0xFFFFFFFF);
 	}
 
+	(void) pc;
+	/* The AICA and its ARM7 are emulated: the loop ends by itself.
 	switch (pc) {
 	case 0x0C01C322:
-		/* Patches an AICA-related while (1) into a NOP */
 		return 0x0009;
 	}
+	*/
 	return inst;
 }
 
@@ -896,15 +907,20 @@ patch_sgnascar (vk_cpu_t *cpu, uint32_t pc, uint32_t inst)
 
 	switch (pc) {
 	case 0x0C00BC9A:
-		/* Make the (non-existent) EEPROM data conform the ROM
-		 * information. This is likely a region/hw version check. */
+		/* HACK: the region check of the BIOS (0x0C00BC5C) reads the
+		 * ROM board X76F100, but the only dump (x76f100.ic85, marked
+		 * bad in MAME) comes from another board and the check ends
+		 * on "ERROR 7". Needs the dump of a NASCAR ROM board. */
 		R(3) = 0xFF;
 		break;
+	}
+	/* The 600-frame wait for the I/O board node count (0x0C0130DE)
+	 * must run: the real MIE answers in about five seconds. Skipping it
+	 * made the game test the board too early ("I/O BD IS NOT CONNECTED").
 	case 0x0C0130CE:
-		/* Skip the "BAD IO BOARD" infinite loop */
 		R(4) = 1;
 		break;
-	}
+	*/
 	return inst;
 }
 
@@ -992,18 +1008,21 @@ hikaru_init (hikaru_t *hikaru)
 		hikaru->maskrom 	= vk_game_get_section_data (game, "maskrom");
 
 		/* Patch theBOOTROM  EEPROM check. Allows games to load. */
-		VK_PRINT ("patching BOOTROM");
-
 		version = (char *) vk_buffer_get_ptr (hikaru->bootrom, 0xD4);
+		VK_PRINT ("%s", version);
+		/* The two EEPROM checks of the BOOTROM (0x8B4 and 0x8DA in 0.96)
+		 * used to be skipped; the main board 93C46 and the ROM board
+		 * X76F100 are emulated now.
 		if (!strcmp (version, "SAMURAI BootROM Version 0.84") ||
 		    !strcmp (version, "SAMURAI BootROM Version 0.92"))
-			vk_buffer_put (hikaru->bootrom, 2, 0x8AE, 0xE00F); /* MOV R0, 0xFFFFFFFF */
+			vk_buffer_put (hikaru->bootrom, 2, 0x8AE, 0xE00F); // MOV R0, 0xFFFFFFFF
 		else if (!strcmp (version, "SAMURAI BootROM Version 0.96"))
-			vk_buffer_put (hikaru->bootrom, 2, 0x8E6, 0xE00F); /* MOV R0, 0xFFFFFFFF */
+			vk_buffer_put (hikaru->bootrom, 2, 0x8E6, 0xE00F); // MOV R0, 0xFFFFFFFF
 		else {
 			VK_ERROR ("unknown BOOTROM version!");
 			return -1;
 		}
+		*/
 
 		if (hikaru_set_rombd_config (hikaru))
 			return -1;
