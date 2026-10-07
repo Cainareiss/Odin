@@ -476,6 +476,7 @@ uniform vec3		u_ambient;						\n \
 uniform sampler2D	u_texture;						\n \
 uniform vec2		u_fog;							\n \
 uniform vec3		u_fog_color;						\n \
+uniform float		u_alpha_ref;						\n \
 										\n \
 in vec4 p_position;								\n \
 in vec3 p_normal;								\n \
@@ -571,6 +572,10 @@ main (void)									\n \
 #else										\n \
 	color = vec4 (p_ambient, p_alpha) * texel;				\n \
 #endif										\n \
+										\n \
+	/* Alpha test of the render pass (X360 825B2408). */			\n \
+	if (color.a <= u_alpha_ref)						\n \
+		discard;							\n \
 										\n \
 #if HAS_FOG									\n \
 	float z = gl_FragCoord.z / gl_FragCoord.w;				\n \
@@ -810,6 +815,8 @@ update_locations:
 		glGetUniformLocation (hr->meshes.program, "u_fog");
 	hr->meshes.locs.u_fog_color =
 		glGetUniformLocation (hr->meshes.program, "u_fog_color");
+	hr->meshes.locs.u_alpha_ref =
+		glGetUniformLocation (hr->meshes.program, "u_alpha_ref");
 	VK_ASSERT_NO_GL_ERROR ();
 }
 
@@ -1068,15 +1075,9 @@ copy_colors (hikaru_renderer_t *hr, hikaru_vertex_t *dst, hikaru_vertex_t *src)
 	for (i = 0; i < 3; i++)
 		dst->body.unknown[i] = mat->unknown[i];
 
-	/* Patch diffuse alpha depending on poly type. NOTE: transparent
-	 * polygons also have an alpha, with unknown meaning (it seems to have
-	 * opposite sign w.r.t. translucent alpha though). */
-	alpha = 1.0f;
-	if (POLY.type == HIKARU_POLYTYPE_TRANSLUCENT) {
-		float p_alpha = POLY.alpha;
-		float v_alpha = src->info.alpha * INV255;
-		alpha = clampf (p_alpha * v_alpha, 0.0f, 1.0f);
-	}
+	/* Vertex alpha times polygon alpha for every type (X360 8252D858);
+	 * the render pass decides what it means. */
+	alpha = clampf (POLY.alpha * (src->info.alpha * INV255), 0.0f, 1.0f);
 	dst->body.alpha = (uint8_t) (alpha * 255.0f);
 }
 
@@ -1369,6 +1370,7 @@ draw_mesh (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	VK_ASSERT_NO_GL_ERROR ();
 
 	upload_glsl_program (hr, mesh);
+	glUniform1f (hr->meshes.locs.u_alpha_ref, hr->meshes.alpha_ref);
 	VK_ASSERT_NO_GL_ERROR ();
 
 	upload_viewport (hr, mesh);
@@ -1531,24 +1533,35 @@ draw_meshes_for_polytype (hikaru_renderer_t *hr, unsigned vpi, int polytype)
 
 	LOG (" ==== DRAWING VP %u, POLYTYPE %d ====", vpi, polytype);
 
+	/* Render passes of the X360 port (825B2408, 825B3EB0): opaque and
+	 * shadow types write the depth without blending nor alpha test; the
+	 * transparent type is punch-through (alpha > 0.5, depth written, no
+	 * blending); background and translucent blend with the material mode,
+	 * keep the depth and drop alpha <= 1/255. */
 	switch (polytype) {
 	case HIKARU_POLYTYPE_TRANSPARENT:
+		glDisable (GL_BLEND);
+		glDepthMask (GL_TRUE);
+		glEnable (GL_POLYGON_OFFSET_FILL);
+		hr->meshes.alpha_ref = 0.5f;
+		break;
 	case HIKARU_POLYTYPE_TRANSLUCENT:
 		glEnable (GL_BLEND);
-		glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 		glDepthMask (GL_FALSE);
 		glEnable (GL_POLYGON_OFFSET_FILL);
+		hr->meshes.alpha_ref = 1.0f / 255.0f;
 		break;
 	case HIKARU_POLYTYPE_BACKGROUND:
 		glEnable (GL_BLEND);
-		glBlendFunc (GL_SRC_COLOR, GL_ONE_MINUS_SRC_COLOR);
 		glDepthMask (GL_FALSE);
 		glDisable (GL_POLYGON_OFFSET_FILL);
+		hr->meshes.alpha_ref = 1.0f / 255.0f;
 		break;
 	default:
 		glDisable (GL_BLEND);
 		glDepthMask (GL_TRUE);
 		glDisable (GL_POLYGON_OFFSET_FILL);
+		hr->meshes.alpha_ref = -1.0f;
 		break;
 	}
 
@@ -1565,7 +1578,7 @@ draw_meshes_for_polytype (hikaru_renderer_t *hr, unsigned vpi, int polytype)
 
 	for (j = 0; j < num; j++) {
 		hikaru_mesh_t *mesh = &meshes[j];
-		if (polytype == HIKARU_POLYTYPE_TRANSPARENT ||
+		if (polytype == HIKARU_POLYTYPE_BACKGROUND ||
 		    polytype == HIKARU_POLYTYPE_TRANSLUCENT)
 			set_material_blend (hr, mesh);
 		draw_mesh (hr, mesh);
@@ -1582,12 +1595,14 @@ destroy_meshes:
 static void
 draw_scene (hikaru_renderer_t *hr)
 {
+	/* Pass order of the X360 port (825B3EB0): punch-through, opaque,
+	 * then the blended types. */
 	static const int sorted_polytypes[] = {
-		HIKARU_POLYTYPE_BACKGROUND,
+		HIKARU_POLYTYPE_TRANSPARENT,
 		HIKARU_POLYTYPE_OPAQUE,
 		HIKARU_POLYTYPE_SHADOW_A,
 		HIKARU_POLYTYPE_SHADOW_B,
-		HIKARU_POLYTYPE_TRANSPARENT,
+		HIKARU_POLYTYPE_BACKGROUND,
 		HIKARU_POLYTYPE_TRANSLUCENT,
 	};
 	hikaru_gpu_t *gpu = hr->gpu;

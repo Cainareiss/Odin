@@ -132,6 +132,7 @@ typedef struct {
 		hikaru_glsl_variant_t	variant;
 		GLuint			program;
 		GLuint			vao;
+		float			alpha_ref;
 
 		struct {
 			GLuint		u_projection;
@@ -148,6 +149,7 @@ typedef struct {
 			GLuint		u_texture;
 			GLuint		u_fog;
 			GLuint		u_fog_color;
+			GLuint		u_alpha_ref;
 		} locs;
 	} meshes;
 
