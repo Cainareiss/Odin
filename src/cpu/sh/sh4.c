@@ -592,6 +592,26 @@ sh4_ireg_get (sh4_t *ctx, unsigned size, uint32_t addr, void *val)
 		VK_ASSERT (size == 4);
 		set_ptr (val, size, ctx->tmu.counter[0]);
 		break;
+	/* Performance counters (SH7750 family, undocumented in the manual;
+	 * Linux arch/sh/kernel/cpu/sh4/perf_event.c). The games clock
+	 * themselves with them: von4 0C011140 writes PMCR1 = E023 (enable,
+	 * start, clear, mode 23 = elapsed time) and reads PMCTR1L. */
+	case PM_PMCR1:
+	case PM_PMCR2:
+		VK_ASSERT (size == 2);
+		break;
+	case PM_PMCTR1H:
+		set_ptr (val, size, (ctx->pm.counter[0] >> 32) & 0xFFFF);
+		break;
+	case PM_PMCTR1L:
+		set_ptr (val, size, ctx->pm.counter[0] & 0xFFFFFFFF);
+		break;
+	case PM_PMCTR2H:
+		set_ptr (val, size, (ctx->pm.counter[1] >> 32) & 0xFFFF);
+		break;
+	case PM_PMCTR2L:
+		set_ptr (val, size, ctx->pm.counter[1] & 0xFFFFFFFF);
+		break;
 	/* Invalid/Unhandled */
 	default:
 		return -1;
@@ -739,6 +759,26 @@ sh4_ireg_put (sh4_t *ctx, unsigned size, uint32_t addr, uint64_t val)
 			sh4_dmac_update_state (ctx, 1);
 			sh4_dmac_run (ctx, 0x7FFFFFFF);
 		}
+		return 0;
+	/* Performance counters: PMCLR (bit 13) clears and self-clears,
+	 * PMEN (15) and PMST (14) together run the counter; every mode
+	 * counts CPU cycles here (HEURISTIC: only mode 23 is elapsed time). */
+	case PM_PMCR1:
+	case PM_PMCR2:
+		{
+			unsigned n = ((addr & 0xFF) == 0x84) ? 0 : 1;
+			VK_ASSERT (size == 2);
+			if (val & 0x2000)
+				ctx->pm.counter[n] = 0;
+			ctx->pm.running[n] = (val & 0xC000) == 0xC000;
+			IREG_PUT (size, addr, val & ~0x2000);
+		}
+		return 0;
+	case PM_PMCTR1H:
+	case PM_PMCTR1L:
+	case PM_PMCTR2H:
+	case PM_PMCTR2L:
+		/* Read-only */
 		return 0;
 	/* TMU */
 	case TMU_TOCR:
@@ -1229,6 +1269,10 @@ sh4_run (vk_cpu_t *cpu, int cycles)
 	}
 	/* XXX BSC, SCI */
 	sh4_tmu_run (ctx, cycles);
+	if (ctx->pm.running[0])
+		ctx->pm.counter[0] = (ctx->pm.counter[0] + (uint64_t) cycles) & 0xFFFFFFFFFFFFull;
+	if (ctx->pm.running[1])
+		ctx->pm.counter[1] = (ctx->pm.counter[1] + (uint64_t) cycles) & 0xFFFFFFFFFFFFull;
 	//sh4_dmac_run (ctx, cycles);
 	return -cpu->remaining;
 }
@@ -1365,6 +1409,7 @@ sh4_reset (vk_device_t *dev, vk_reset_type_t type)
 	memset ((void *) &ctx->dmac, 0, sizeof (ctx->dmac));
 
 	memset ((void *) &ctx->tmu, 0, sizeof (ctx->tmu));
+	memset ((void *) &ctx->pm, 0, sizeof (ctx->pm));
 	ctx->tmu.counter[0] = 0xFFFFFFFF;
 	ctx->tmu.counter[1] = 0xFFFFFFFF;
 	ctx->tmu.counter[2] = 0xFFFFFFFF;

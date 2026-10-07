@@ -175,6 +175,12 @@ struct sh4_t {
 		uint32_t counter[3];
 	} tmu;
 
+	/* Performance counters, 48 bits each */
+	struct {
+		bool	running[2];
+		uint64_t counter[2];
+	} pm;
+
 	struct {
 		int	(* get)(sh4_t *ctx, uint16_t *val);
 		int	(* put)(sh4_t *ctx, uint16_t val);
