@@ -29,6 +29,8 @@
 #define VK_REGION_RW		(VK_REGION_R|VK_REGION_W)
 
 #define VK_REGION_DIRECT	(1 << 2)
+/* Writable on the map but writes are dropped (ROM) */
+#define VK_REGION_ROM		(1 << 3)
 
 #define VK_REGION_LOG_R		(1 << 4)
 #define VK_REGION_LOG_W		(1 << 5)

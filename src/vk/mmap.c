@@ -95,7 +95,7 @@ vk_mmap_add_rom (vk_mmap_t *mmap, uint32_t lo, uint32_t hi, uint32_t mask,
 {
 	VK_ASSERT (!(flags & VK_REGION_W));
 
-	flags |= VK_REGION_DIRECT | VK_REGION_R | VK_REGION_SIZE_ALL;
+	flags |= VK_REGION_DIRECT | VK_REGION_RW | VK_REGION_ROM | VK_REGION_SIZE_ALL;
 	return add_region (mmap, lo, hi, mask, flags, (void *) buf, name);
 }
 
@@ -170,6 +170,10 @@ vk_mmap_put (vk_mmap_t *mmap, unsigned size, uint32_t addr, uint64_t data)
 
 	if (region->flags & VK_REGION_LOG_W)
 		VK_MACH_LOG (mmap->mach, "%s W%u %08X = %lX", region->name, size * 8, addr, data);
+
+	/* Writes to a ROM have no effect, as on the hardware. */
+	if (region->flags & VK_REGION_ROM)
+		return 0;
 
 	if (region->flags & VK_REGION_DIRECT) {
 		uint32_t offs = addr & region->mask;
