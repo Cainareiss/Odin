@@ -1,0 +1,1417 @@
+/*
+ * Odin
+ * Copyright (C) 2026 Réda Chérif-Touil
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+ * 02110-1301, USA.
+ */
+
+/* Unit tests for the Odin ARM7 core: hand-assembled instructions run
+ * on a flat RAM bus, with the expected registers, flags and memory
+ * taken from the ARM7TDMI data sheet and the ARMv4 reference manual.
+ *
+ * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
+ *            -I src tests/arm7/arm7_tests.cpp src/odin/arm7.cpp src/odin/arm7_ops.cpp -o arm7_tests
+ * Use:   arm7_tests [-v]
+ * Exit status is 0 when every check passes. */
+
+#include "odin/arm7.hpp"
+
+#include <cstdio>
+#include <cstring>
+#include <initializer_list>
+#include <string>
+#include <vector>
+
+namespace {
+
+using odin::Arm7;
+
+class RamBus : public odin::Arm7Bus {
+public:
+	std::vector<uint8_t> mem;
+
+	RamBus() : mem(1u << 20, 0) {}
+
+	uint8_t read8(uint32_t addr) override { return mem[addr & 0xFFFFF]; }
+	uint16_t read16(uint32_t addr) override
+	{
+		addr &= 0xFFFFE;
+		return static_cast<uint16_t>(mem[addr] | (mem[addr + 1] << 8));
+	}
+	uint32_t read32(uint32_t addr) override
+	{
+		addr &= 0xFFFFC;
+		return static_cast<uint32_t>(mem[addr]) | (static_cast<uint32_t>(mem[addr + 1]) << 8)
+			| (static_cast<uint32_t>(mem[addr + 2]) << 16) | (static_cast<uint32_t>(mem[addr + 3]) << 24);
+	}
+	void write8(uint32_t addr, uint8_t v) override { mem[addr & 0xFFFFF] = v; }
+	void write16(uint32_t addr, uint16_t v) override
+	{
+		addr &= 0xFFFFE;
+		mem[addr] = static_cast<uint8_t>(v);
+		mem[addr + 1] = static_cast<uint8_t>(v >> 8);
+	}
+	void write32(uint32_t addr, uint32_t v) override
+	{
+		addr &= 0xFFFFC;
+		mem[addr] = static_cast<uint8_t>(v);
+		mem[addr + 1] = static_cast<uint8_t>(v >> 8);
+		mem[addr + 2] = static_cast<uint8_t>(v >> 16);
+		mem[addr + 3] = static_cast<uint8_t>(v >> 24);
+	}
+};
+
+/* Encoders. Field names follow the data sheet figures. */
+
+constexpr uint32_t AL = 0xE;
+enum Opc : uint32_t { AND = 0, EOR, SUB, RSB, ADD, ADC, SBC, RSC, TST, TEQ, CMP, CMN, ORR, MOV, BIC, MVN };
+enum Shift : uint32_t { LSL = 0, LSR, ASR, ROR };
+
+uint32_t dp_imm(uint32_t opc, bool s, uint32_t rn, uint32_t rd, uint32_t imm8, uint32_t rot4, uint32_t cc = AL)
+{
+	return (cc << 28) | (1u << 25) | (opc << 21) | (s ? 1u << 20 : 0) | (rn << 16) | (rd << 12) | (rot4 << 8) | imm8;
+}
+
+uint32_t dp_reg(uint32_t opc, bool s, uint32_t rn, uint32_t rd, uint32_t rm, uint32_t type, uint32_t imm5, uint32_t cc = AL)
+{
+	return (cc << 28) | (opc << 21) | (s ? 1u << 20 : 0) | (rn << 16) | (rd << 12) | (imm5 << 7) | (type << 5) | rm;
+}
+
+uint32_t dp_rs(uint32_t opc, bool s, uint32_t rn, uint32_t rd, uint32_t rm, uint32_t type, uint32_t rs, uint32_t cc = AL)
+{
+	return (cc << 28) | (opc << 21) | (s ? 1u << 20 : 0) | (rn << 16) | (rd << 12) | (rs << 8) | (type << 5) | 0x10 | rm;
+}
+
+uint32_t mul(bool accumulate, bool s, uint32_t rd, uint32_t rn, uint32_t rs, uint32_t rm)
+{
+	return (AL << 28) | (accumulate ? 1u << 21 : 0) | (s ? 1u << 20 : 0) | (rd << 16) | (rn << 12) | (rs << 8) | 0x90 | rm;
+}
+
+uint32_t mull(bool is_signed, bool accumulate, bool s, uint32_t rd_hi, uint32_t rd_lo, uint32_t rs, uint32_t rm)
+{
+	return (AL << 28) | (1u << 23) | (is_signed ? 1u << 22 : 0) | (accumulate ? 1u << 21 : 0) | (s ? 1u << 20 : 0)
+		| (rd_hi << 16) | (rd_lo << 12) | (rs << 8) | 0x90 | rm;
+}
+
+uint32_t swp(bool byte, uint32_t rn, uint32_t rd, uint32_t rm)
+{
+	return (AL << 28) | (1u << 24) | (byte ? 1u << 22 : 0) | (rn << 16) | (rd << 12) | 0x90 | rm;
+}
+
+uint32_t bits_puw(bool p, bool u, bool w) { return (p ? 1u << 24 : 0) | (u ? 1u << 23 : 0) | (w ? 1u << 21 : 0); }
+
+uint32_t ldst_imm(bool load, bool byte, bool p, bool u, bool w, uint32_t rn, uint32_t rd, uint32_t imm12)
+{
+	return (AL << 28) | (1u << 26) | bits_puw(p, u, w) | (byte ? 1u << 22 : 0) | (load ? 1u << 20 : 0) | (rn << 16) | (rd << 12) | imm12;
+}
+
+uint32_t ldst_reg(bool load, bool byte, bool p, bool u, bool w, uint32_t rn, uint32_t rd, uint32_t rm, uint32_t type, uint32_t imm5)
+{
+	return (AL << 28) | (3u << 25) | bits_puw(p, u, w) | (byte ? 1u << 22 : 0) | (load ? 1u << 20 : 0) | (rn << 16) | (rd << 12)
+		| (imm5 << 7) | (type << 5) | rm;
+}
+
+/* sh: 1 = H, 2 = SB, 3 = SH. */
+uint32_t ldsth_imm(bool load, bool p, bool u, bool w, uint32_t rn, uint32_t rd, uint32_t sh, uint32_t imm8)
+{
+	return (AL << 28) | bits_puw(p, u, w) | (1u << 22) | (load ? 1u << 20 : 0) | (rn << 16) | (rd << 12)
+		| ((imm8 >> 4) << 8) | 0x90 | (sh << 5) | (imm8 & 0xF);
+}
+
+uint32_t ldsth_reg(bool load, bool p, bool u, bool w, uint32_t rn, uint32_t rd, uint32_t sh, uint32_t rm)
+{
+	return (AL << 28) | bits_puw(p, u, w) | (load ? 1u << 20 : 0) | (rn << 16) | (rd << 12) | 0x90 | (sh << 5) | rm;
+}
+
+uint32_t ldstm(bool load, bool p, bool u, bool s, bool w, uint32_t rn, uint32_t list)
+{
+	return (AL << 28) | (4u << 25) | bits_puw(p, u, w) | (s ? 1u << 22 : 0) | (load ? 1u << 20 : 0) | (rn << 16) | list;
+}
+
+uint32_t branch(bool link, int32_t words, uint32_t cc = AL)
+{
+	return (cc << 28) | (5u << 25) | (link ? 1u << 24 : 0) | (static_cast<uint32_t>(words) & 0xFFFFFF);
+}
+
+uint32_t bx(uint32_t rm) { return (AL << 28) | 0x012FFF10 | rm; }
+uint32_t mrs(bool spsr, uint32_t rd) { return (AL << 28) | 0x010F0000 | (spsr ? 1u << 22 : 0) | (rd << 12); }
+uint32_t msr_reg(bool spsr, uint32_t fields, uint32_t rm) { return (AL << 28) | 0x0120F000 | (spsr ? 1u << 22 : 0) | (fields << 16) | rm; }
+uint32_t msr_imm(bool spsr, uint32_t fields, uint32_t imm8, uint32_t rot4)
+{
+	return (AL << 28) | 0x0320F000 | (spsr ? 1u << 22 : 0) | (fields << 16) | (rot4 << 8) | imm8;
+}
+uint32_t swi(uint32_t n) { return (AL << 28) | 0x0F000000 | n; }
+constexpr uint32_t NOP = 0xE1A00000; /* mov r0, r0 */
+constexpr uint32_t MCR_CP15 = 0xEE010F10; /* mcr p15, 0, r0, c1, c0, 0 */
+
+/* Test harness. */
+
+int g_failures = 0;
+int g_checks = 0;
+bool g_verbose = false;
+std::string g_current;
+
+void fail(const std::string &what)
+{
+	g_failures++;
+	std::printf("FAIL %s: %s\n", g_current.c_str(), what.c_str());
+}
+
+void check_eq(const char *what, uint64_t got, uint64_t want)
+{
+	g_checks++;
+	if (got != want) {
+		char buf[160];
+		std::snprintf(buf, sizeof buf, "%s = %08llx, expected %08llx", what, static_cast<unsigned long long>(got), static_cast<unsigned long long>(want));
+		fail(buf);
+	}
+}
+
+class Machine {
+public:
+	RamBus bus;
+	Arm7 cpu;
+	uint32_t base;
+
+	explicit Machine(uint32_t cpsr = Arm7::MODE_SVC | Arm7::FLAG_I | Arm7::FLAG_F, uint32_t start = 0x1000)
+		: cpu(bus), base(start)
+	{
+		odin::Arm7State st{};
+		cpu.save(st);
+		st.pc = start;
+		st.cpsr = cpsr;
+		cpu.load(st);
+	}
+
+	void program(std::initializer_list<uint32_t> words, uint32_t at = 0xFFFFFFFF)
+	{
+		uint32_t addr = at == 0xFFFFFFFF ? base : at;
+		for (uint32_t w : words) {
+			bus.write32(addr, w);
+			addr += 4;
+		}
+	}
+
+	void r(uint32_t idx, uint32_t v) { cpu.set_reg(idx, v); }
+	void flags(bool n, bool z, bool c, bool v)
+	{
+		odin::Arm7State st{};
+		cpu.save(st);
+		st.cpsr = (st.cpsr & 0x0FFFFFFF) | (n ? Arm7::FLAG_N : 0) | (z ? Arm7::FLAG_Z : 0) | (c ? Arm7::FLAG_C : 0) | (v ? Arm7::FLAG_V : 0);
+		cpu.load(st);
+	}
+	uint32_t steps(uint32_t n)
+	{
+		uint32_t cycles = 0;
+		for (uint32_t i = 0; i < n; i++) {
+			cycles += cpu.step();
+		}
+		return cycles;
+	}
+	void expect_r(uint32_t idx, uint32_t v)
+	{
+		char name[8];
+		std::snprintf(name, sizeof name, "r%u", idx);
+		check_eq(name, idx == 15 ? cpu.pc() : cpu.reg(idx), v);
+	}
+	void expect_pc(uint32_t v) { check_eq("pc", cpu.pc(), v); }
+	void expect_flags(bool n, bool z, bool c, bool v)
+	{
+		check_eq("nzcv", cpu.cpsr() >> 28, (n ? 8u : 0u) | (z ? 4u : 0u) | (c ? 2u : 0u) | (v ? 1u : 0u));
+	}
+	void expect_cpsr(uint32_t v) { check_eq("cpsr", cpu.cpsr(), v); }
+	void expect_mode(uint32_t m) { check_eq("mode", cpu.mode(), m); }
+	void expect_mem32(uint32_t addr, uint32_t v)
+	{
+		char name[24];
+		std::snprintf(name, sizeof name, "[%08x]", addr);
+		check_eq(name, bus.read32(addr), v);
+	}
+	void expect_mem8(uint32_t addr, uint32_t v)
+	{
+		char name[24];
+		std::snprintf(name, sizeof name, "[%08x].b", addr);
+		check_eq(name, bus.read8(addr), v);
+	}
+};
+
+#define TEST(name) g_current = name; if (g_verbose) std::printf("test %s\n", name)
+
+/* Condition codes. */
+void test_conditions()
+{
+	TEST("conditions");
+	struct Case { uint32_t cc; bool n, z, c, v; bool taken; };
+	const Case cases[] = {
+		{ 0x0, false, true, false, false, true }, { 0x0, false, false, false, false, false },
+		{ 0x1, false, false, false, false, true }, { 0x1, false, true, false, false, false },
+		{ 0x2, false, false, true, false, true }, { 0x2, false, false, false, false, false },
+		{ 0x3, false, false, false, false, true }, { 0x3, false, false, true, false, false },
+		{ 0x4, true, false, false, false, true }, { 0x4, false, false, false, false, false },
+		{ 0x5, false, false, false, false, true }, { 0x5, true, false, false, false, false },
+		{ 0x6, false, false, false, true, true }, { 0x6, false, false, false, false, false },
+		{ 0x7, false, false, false, false, true }, { 0x7, false, false, false, true, false },
+		{ 0x8, false, false, true, false, true }, { 0x8, false, true, true, false, false }, { 0x8, false, false, false, false, false },
+		{ 0x9, false, true, true, false, true }, { 0x9, false, false, false, false, true }, { 0x9, false, false, true, false, false },
+		{ 0xA, true, false, false, true, true }, { 0xA, false, false, false, false, true }, { 0xA, true, false, false, false, false },
+		{ 0xB, true, false, false, false, true }, { 0xB, false, false, false, true, true }, { 0xB, true, false, false, true, false },
+		{ 0xC, false, false, false, false, true }, { 0xC, true, false, false, true, true }, { 0xC, false, true, false, false, false }, { 0xC, true, false, false, false, false },
+		{ 0xD, false, true, false, false, true }, { 0xD, true, false, false, false, true }, { 0xD, false, false, false, false, false },
+		{ 0xE, true, true, true, true, true }, { 0xE, false, false, false, false, true },
+		{ 0xF, false, false, false, false, false }, { 0xF, true, true, true, true, false },
+	};
+	for (const Case &c : cases) {
+		Machine m;
+		m.program({ dp_imm(MOV, false, 0, 0, 1, 0, c.cc) });
+		m.flags(c.n, c.z, c.c, c.v);
+		uint32_t cycles = m.steps(1);
+		char what[48];
+		std::snprintf(what, sizeof what, "cc %x nzcv=%d%d%d%d", c.cc, c.n, c.z, c.c, c.v);
+		check_eq(what, m.cpu.reg(0), c.taken ? 1u : 0u);
+		check_eq("skipped cycles", cycles, c.taken ? 1u : 1u);
+		check_eq("instructions counted", m.cpu.instructions(), c.taken ? 1u : 0u);
+	}
+}
+
+/* Data processing: every opcode, flag edge cases. */
+void test_data_processing()
+{
+	TEST("dp arithmetic");
+	{
+		Machine m;
+		m.r(1, 0x7FFFFFFF);
+		m.r(2, 1);
+		m.program({
+			dp_reg(ADD, true, 1, 0, 2, LSL, 0),   /* adds r0, r1, r2 -> 80000000, V */
+			dp_imm(ADD, true, 1, 0, 1, 0),        /* adds r0, r1, #1 again */
+		});
+		m.steps(1);
+		m.expect_r(0, 0x80000000);
+		m.expect_flags(true, false, false, true);
+	}
+	{
+		Machine m;
+		m.r(1, 0xFFFFFFFF);
+		m.program({ dp_imm(ADD, true, 1, 0, 1, 0) });
+		m.steps(1);
+		m.expect_r(0, 0);
+		m.expect_flags(false, true, true, false);
+	}
+	{
+		Machine m;
+		m.r(1, 5);
+		m.r(2, 7);
+		m.program({ dp_reg(SUB, true, 1, 0, 2, LSL, 0) });
+		m.steps(1);
+		m.expect_r(0, 0xFFFFFFFE);
+		m.expect_flags(true, false, false, false); /* borrow -> C clear */
+	}
+	{
+		Machine m;
+		m.r(1, 0x80000000);
+		m.program({ dp_imm(SUB, true, 1, 0, 1, 0) });
+		m.steps(1);
+		m.expect_r(0, 0x7FFFFFFF);
+		m.expect_flags(false, false, true, true);
+	}
+	{
+		Machine m;
+		m.r(1, 3);
+		m.r(2, 10);
+		m.program({ dp_reg(RSB, true, 1, 0, 2, LSL, 0) });   /* rsbs r0, r1, r2 = 10 - 3 */
+		m.steps(1);
+		m.expect_r(0, 7);
+		m.expect_flags(false, false, true, false);
+	}
+	{
+		Machine m;
+		m.r(1, 10);
+		m.r(2, 20);
+		m.flags(false, false, true, false);
+		m.program({ dp_reg(ADC, true, 1, 0, 2, LSL, 0) });
+		m.steps(1);
+		m.expect_r(0, 31);
+		m.expect_flags(false, false, false, false);
+	}
+	{
+		Machine m;
+		m.r(1, 10);
+		m.r(2, 3);
+		m.flags(false, false, false, false);
+		m.program({ dp_reg(SBC, true, 1, 0, 2, LSL, 0) });   /* 10 - 3 - 1 */
+		m.steps(1);
+		m.expect_r(0, 6);
+		m.expect_flags(false, false, true, false);
+	}
+	{
+		Machine m;
+		m.r(1, 3);
+		m.r(2, 10);
+		m.flags(false, false, true, false);
+		m.program({ dp_reg(RSC, true, 1, 0, 2, LSL, 0) });   /* 10 - 3 - 0 */
+		m.steps(1);
+		m.expect_r(0, 7);
+		m.expect_flags(false, false, true, false);
+	}
+	{
+		Machine m;
+		m.r(1, 0x12345678);
+		m.r(2, 0x0F0F0F0F);
+		m.program({ dp_reg(CMP, true, 1, 0, 2, LSL, 0), dp_reg(CMN, true, 1, 0, 2, LSL, 0) });
+		m.steps(1);
+		m.expect_flags(false, false, true, false);
+		m.steps(1);
+		m.expect_flags(false, false, false, false);
+		m.expect_r(0, 0);
+	}
+	{
+		Machine m;
+		m.r(1, 0x80000000);
+		m.r(2, 0x80000000);
+		m.program({ dp_reg(CMN, true, 1, 0, 2, LSL, 0) });   /* 0x80000000 + 0x80000000 */
+		m.steps(1);
+		m.expect_flags(false, true, true, true);
+	}
+
+	TEST("dp logical");
+	{
+		Machine m;
+		m.r(1, 0xF0F0F0F0);
+		m.r(2, 0xFF00FF00);
+		m.flags(false, false, false, true);
+		m.program({
+			dp_reg(AND, true, 1, 0, 2, LSL, 0),
+			dp_reg(EOR, true, 1, 3, 2, LSL, 0),
+			dp_reg(ORR, true, 1, 4, 2, LSL, 0),
+			dp_reg(BIC, true, 1, 5, 2, LSL, 0),
+			dp_reg(MVN, true, 0, 6, 2, LSL, 0),
+			dp_reg(TST, true, 1, 0, 2, LSL, 0),
+			dp_reg(TEQ, true, 1, 0, 1, LSL, 0),
+		});
+		m.steps(1);
+		m.expect_r(0, 0xF000F000);
+		m.expect_flags(true, false, false, true);   /* V untouched by logical ops */
+		m.steps(1);
+		m.expect_r(3, 0x0FF00FF0);
+		m.steps(1);
+		m.expect_r(4, 0xFFF0FFF0);
+		m.steps(1);
+		m.expect_r(5, 0x00F000F0);
+		m.expect_flags(false, false, false, true);
+		m.steps(1);
+		m.expect_r(6, 0x00FF00FF);
+		m.steps(1);
+		m.expect_r(0, 0xF000F000);
+		m.expect_flags(true, false, false, true);
+		m.steps(1);
+		m.expect_flags(false, true, false, true);
+	}
+	{
+		Machine m;
+		m.program({ dp_imm(MOV, false, 0, 0, 0, 0), dp_imm(MOV, true, 0, 1, 0, 0) });
+		m.flags(true, false, true, false);
+		m.steps(2);
+		m.expect_r(1, 0);
+		m.expect_flags(false, true, true, false);   /* C kept: no rotation */
+	}
+}
+
+/* Shifter operands and carry out. */
+void test_shifter()
+{
+	TEST("shifter immediate");
+	{
+		Machine m;
+		m.flags(false, false, false, false);
+		m.program({
+			dp_imm(MOV, true, 0, 0, 0xFF, 4),    /* movs r0, #0xff000000: rot 8 -> C = bit 31 */
+			dp_imm(MOV, true, 0, 1, 0x80, 4),    /* 0x80000000 -> N, C */
+			dp_imm(MOV, true, 0, 2, 0x01, 1),    /* ror 2 -> 0x40000000, C = 0 */
+		});
+		m.steps(1);
+		m.expect_r(0, 0xFF000000);
+		m.expect_flags(true, false, true, false);
+		m.steps(1);
+		m.expect_r(1, 0x80000000);
+		m.expect_flags(true, false, true, false);
+		m.steps(1);
+		m.expect_r(2, 0x40000000);
+		m.expect_flags(false, false, false, false);
+	}
+
+	TEST("shifter lsl");
+	{
+		Machine m;
+		m.r(1, 0x80000001);
+		m.r(2, 32);
+		m.r(3, 33);
+		m.r(4, 0);
+		m.r(5, 1);
+		m.program({
+			dp_reg(MOV, true, 0, 0, 1, LSL, 0),    /* lsl #0: unchanged, C kept */
+			dp_reg(MOV, true, 0, 0, 1, LSL, 1),    /* lsl #1: 2, C = 1 */
+			dp_rs(MOV, true, 0, 0, 1, LSL, 2),     /* lsl r2 = 32: 0, C = bit 0 = 1 */
+			dp_rs(MOV, true, 0, 0, 1, LSL, 3),     /* lsl r3 = 33: 0, C = 0 */
+			dp_rs(MOV, true, 0, 0, 1, LSL, 4),     /* lsl r4 = 0: unchanged, C kept */
+			dp_rs(MOV, true, 0, 0, 1, LSL, 5),     /* lsl r5 = 1 */
+			dp_reg(MOV, true, 0, 0, 1, LSL, 31),   /* lsl #31: 0x80000000, C = bit 1 = 0 */
+		});
+		m.flags(false, false, false, false);
+		m.steps(1);
+		m.expect_r(0, 0x80000001);
+		m.expect_flags(true, false, false, false);
+		m.steps(1);
+		m.expect_r(0, 2);
+		m.expect_flags(false, false, true, false);
+		m.steps(1);
+		m.expect_r(0, 0);
+		m.expect_flags(false, true, true, false);
+		m.steps(1);
+		m.expect_r(0, 0);
+		m.expect_flags(false, true, false, false);
+		m.flags(false, false, true, false);
+		m.steps(1);
+		m.expect_r(0, 0x80000001);
+		m.expect_flags(true, false, true, false);
+		m.steps(1);
+		m.expect_r(0, 2);
+		m.expect_flags(false, false, true, false);
+		m.steps(1);
+		m.expect_r(0, 0x80000000);
+		m.expect_flags(true, false, false, false);
+	}
+
+	TEST("shifter lsr");
+	{
+		Machine m;
+		m.r(1, 0x80000001);
+		m.r(2, 32);
+		m.r(3, 33);
+		m.r(4, 0xFF00 | 1);   /* only the low byte counts: shift by 1 */
+		m.program({
+			dp_reg(MOV, true, 0, 0, 1, LSR, 0),    /* lsr #32: 0, C = bit 31 */
+			dp_reg(MOV, true, 0, 0, 1, LSR, 1),    /* 0x40000000, C = 1 */
+			dp_rs(MOV, true, 0, 0, 1, LSR, 2),     /* lsr 32: 0, C = bit 31 */
+			dp_rs(MOV, true, 0, 0, 1, LSR, 3),     /* lsr 33: 0, C = 0 */
+			dp_rs(MOV, true, 0, 0, 1, LSR, 4),     /* lsr 1 */
+		});
+		m.steps(1);
+		m.expect_r(0, 0);
+		m.expect_flags(false, true, true, false);
+		m.steps(1);
+		m.expect_r(0, 0x40000000);
+		m.expect_flags(false, false, true, false);
+		m.steps(1);
+		m.expect_r(0, 0);
+		m.expect_flags(false, true, true, false);
+		m.steps(1);
+		m.expect_flags(false, true, false, false);
+		m.steps(1);
+		m.expect_r(0, 0x40000000);
+		m.expect_flags(false, false, true, false);
+	}
+
+	TEST("shifter asr");
+	{
+		Machine m;
+		m.r(1, 0x80000002);
+		m.r(2, 32);
+		m.r(3, 40);
+		m.r(5, 0x00000002);
+		m.program({
+			dp_reg(MOV, true, 0, 0, 1, ASR, 0),    /* asr #32: 0xFFFFFFFF, C = bit 31 */
+			dp_reg(MOV, true, 0, 0, 1, ASR, 1),    /* 0xC0000001, C = 0 */
+			dp_rs(MOV, true, 0, 0, 1, ASR, 2),     /* asr 32 */
+			dp_rs(MOV, true, 0, 0, 1, ASR, 3),     /* asr 40: same */
+			dp_rs(MOV, true, 0, 0, 5, ASR, 3),     /* positive asr 40: 0, C = 0 */
+		});
+		m.steps(1);
+		m.expect_r(0, 0xFFFFFFFF);
+		m.expect_flags(true, false, true, false);
+		m.steps(1);
+		m.expect_r(0, 0xC0000001);
+		m.expect_flags(true, false, false, false);
+		m.steps(1);
+		m.expect_r(0, 0xFFFFFFFF);
+		m.expect_flags(true, false, true, false);
+		m.steps(1);
+		m.expect_r(0, 0xFFFFFFFF);
+		m.expect_flags(true, false, true, false);
+		m.steps(1);
+		m.expect_r(0, 0);
+		m.expect_flags(false, true, false, false);
+	}
+
+	TEST("shifter ror rrx");
+	{
+		Machine m;
+		m.r(1, 0x80000001);
+		m.r(2, 32);
+		m.r(3, 33);
+		m.program({
+			dp_reg(MOV, true, 0, 0, 1, ROR, 4),    /* ror #4: 0x18000000, C = bit 3 = 0 */
+			dp_rs(MOV, true, 0, 0, 1, ROR, 2),     /* ror 32: unchanged, C = bit 31 */
+			dp_rs(MOV, true, 0, 0, 1, ROR, 3),     /* ror 33 = ror 1: 0xC0000000, C = 1 */
+			dp_reg(MOV, true, 0, 0, 1, ROR, 0),    /* rrx with C = 1: 0xC0000000, C = bit 0 = 1 */
+			dp_reg(MOV, true, 0, 4, 0, ROR, 0),    /* rrx of 0xC0000000 with C = 1 */
+		});
+		m.flags(false, false, false, false);
+		m.steps(1);
+		m.expect_r(0, 0x18000000);
+		m.expect_flags(false, false, false, false);
+		m.steps(1);
+		m.expect_r(0, 0x80000001);
+		m.expect_flags(true, false, true, false);
+		m.steps(1);
+		m.expect_r(0, 0xC0000000);
+		m.expect_flags(true, false, true, false);
+		m.steps(1);
+		m.expect_r(0, 0xC0000000);
+		m.expect_flags(true, false, true, false);
+		m.steps(1);
+		m.expect_r(4, 0xE0000000);
+		m.expect_flags(true, false, false, false);
+	}
+
+	TEST("shifter r15 reads");
+	{
+		Machine m;
+		m.r(2, 0);
+		m.program({
+			dp_reg(MOV, false, 0, 0, 15, LSL, 0),   /* mov r0, pc -> pc + 8 */
+			dp_rs(MOV, false, 0, 1, 15, LSL, 2),    /* mov r1, pc, lsl r2 -> pc + 12 */
+			dp_imm(ADD, false, 15, 3, 4, 0),        /* add r3, pc, #4 -> pc + 12 */
+			dp_rs(ADD, false, 15, 4, 2, LSL, 2),    /* add r4, pc, r2, lsl r2 -> pc + 12 */
+		});
+		m.steps(4);
+		m.expect_r(0, 0x1000 + 8);
+		m.expect_r(1, 0x1004 + 12);
+		m.expect_r(3, 0x1008 + 12);
+		m.expect_r(4, 0x100C + 12);
+	}
+
+	TEST("dp pc writes and spsr restore");
+	{
+		Machine m;   /* SVC mode */
+		m.program({
+			dp_imm(MOV, false, 0, 15, 0x20, 0),     /* mov pc, #0x20 */
+		});
+		uint32_t cycles = m.steps(1);
+		m.expect_pc(0x20);
+		check_eq("mov pc cycles", cycles, 3);
+	}
+	{
+		Machine m;   /* SVC mode, SPSR = user mode with N set */
+		odin::Arm7State st{};
+		m.cpu.save(st);
+		st.spsr[2] = Arm7::FLAG_N | Arm7::MODE_USR;
+		st.usr[5] = 0x5555;   /* user r13 */
+		st.svc[0] = 0xAAAA;   /* svc r13 */
+		m.cpu.load(st);
+		m.r(14, 0x2000);
+		m.program({ dp_reg(MOV, true, 0, 15, 14, LSL, 0) });   /* movs pc, lr */
+		m.steps(1);
+		m.expect_pc(0x2000);
+		m.expect_cpsr(Arm7::FLAG_N | Arm7::MODE_USR);
+		m.expect_r(13, 0x5555);
+	}
+	{
+		Machine m(Arm7::MODE_USR);   /* user mode: no SPSR, flags from the operation */
+		m.r(14, 0x3000);
+		m.program({ dp_reg(MOV, true, 0, 15, 14, LSL, 0) });
+		m.steps(1);
+		m.expect_pc(0x3000);
+		m.expect_cpsr(Arm7::MODE_USR);
+	}
+}
+
+/* Multiplies. */
+void test_multiply()
+{
+	TEST("mul mla");
+	{
+		Machine m;
+		m.r(1, 0xFFFFFFFF);
+		m.r(2, 3);
+		m.r(3, 10);
+		m.flags(false, false, true, true);
+		m.program({
+			mul(false, true, 0, 0, 2, 1),       /* muls r0, r1, r2 = -3 */
+			mul(true, true, 4, 3, 2, 1),        /* mlas r4, r1, r2, r3 = -3 + 10 = 7 */
+			mul(false, true, 5, 0, 1, 1),       /* muls r5, r1, r1 = 1 */
+		});
+		m.steps(1);
+		m.expect_r(0, 0xFFFFFFFD);
+		m.expect_flags(true, false, true, true);   /* C and V untouched */
+		m.steps(1);
+		m.expect_r(4, 7);
+		m.expect_flags(false, false, true, true);
+		m.steps(1);
+		m.expect_r(5, 1);
+	}
+	{
+		Machine m;
+		m.r(1, 0);
+		m.r(2, 12345);
+		m.program({ mul(false, true, 0, 0, 2, 1) });
+		m.steps(1);
+		m.expect_r(0, 0);
+		m.expect_flags(false, true, false, false);
+	}
+
+	TEST("umull umlal");
+	{
+		Machine m;
+		m.r(1, 0xFFFFFFFF);
+		m.r(2, 0xFFFFFFFF);
+		m.program({
+			mull(false, false, true, 3, 4, 2, 1),   /* umulls r4, r3, r1, r2 = 0xFFFFFFFE00000001 */
+			mull(false, true, true, 3, 4, 2, 1),    /* umlals: + same -> 0xFFFFFFFC00000002 */
+		});
+		m.steps(1);
+		m.expect_r(3, 0xFFFFFFFE);
+		m.expect_r(4, 0x00000001);
+		m.expect_flags(true, false, false, false);
+		m.steps(1);
+		m.expect_r(3, 0xFFFFFFFC);
+		m.expect_r(4, 0x00000002);
+	}
+	{
+		Machine m;
+		m.r(1, 0);
+		m.r(2, 0x12345678);
+		m.r(3, 0);
+		m.r(4, 0);
+		m.program({ mull(false, false, true, 3, 4, 2, 1) });
+		m.steps(1);
+		m.expect_flags(false, true, false, false);
+	}
+
+	TEST("smull smlal");
+	{
+		Machine m;
+		m.r(1, 0xFFFFFFFF);   /* -1 */
+		m.r(2, 0x7FFFFFFF);
+		m.program({
+			mull(true, false, true, 3, 4, 2, 1),    /* smulls = -0x7FFFFFFF = 0xFFFFFFFF80000001 */
+			mull(true, true, true, 3, 4, 2, 1),     /* smlals: -0xFFFFFFFE = 0xFFFFFFFF00000002 */
+		});
+		m.steps(1);
+		m.expect_r(3, 0xFFFFFFFF);
+		m.expect_r(4, 0x80000001);
+		m.expect_flags(true, false, false, false);
+		m.steps(1);
+		m.expect_r(3, 0xFFFFFFFF);
+		m.expect_r(4, 0x00000002);
+		m.expect_flags(true, false, false, false);
+	}
+	{
+		Machine m;
+		m.r(1, 0x80000000);
+		m.r(2, 0x80000000);
+		m.program({ mull(true, false, true, 3, 4, 2, 1) });   /* (-2^31)^2 = 2^62 */
+		m.steps(1);
+		m.expect_r(3, 0x40000000);
+		m.expect_r(4, 0);
+		m.expect_flags(false, false, false, false);
+	}
+}
+
+/* Single data transfers. */
+void test_single_transfer()
+{
+	TEST("ldr str word byte");
+	{
+		Machine m;
+		m.r(1, 0x8000);
+		m.r(2, 0x12345678);
+		m.r(3, 4);
+		m.program({
+			ldst_imm(false, false, true, true, false, 1, 2, 0x10),   /* str r2, [r1, #0x10] */
+			ldst_imm(true, false, true, true, false, 1, 4, 0x10),    /* ldr r4, [r1, #0x10] */
+			ldst_imm(false, true, true, true, false, 1, 2, 0x20),    /* strb r2, [r1, #0x20] */
+			ldst_imm(true, true, true, true, false, 1, 5, 0x20),     /* ldrb r5, [r1, #0x20] */
+			ldst_imm(true, false, true, true, true, 1, 6, 0x10),     /* ldr r6, [r1, #0x10]! */
+			ldst_imm(true, false, false, false, false, 1, 7, 0x10),  /* ldr r7, [r1], #-0x10 */
+			ldst_reg(false, false, true, true, false, 1, 2, 3, LSL, 2),  /* str r2, [r1, r3, lsl #2] */
+			ldst_reg(true, false, true, false, false, 1, 8, 3, LSL, 0),  /* ldr r8, [r1, -r3] */
+		});
+		m.bus.write32(0x7FFC, 0xCAFEBABE);
+		m.steps(1);
+		m.expect_mem32(0x8010, 0x12345678);
+		m.steps(1);
+		m.expect_r(4, 0x12345678);
+		m.steps(1);
+		m.expect_mem8(0x8020, 0x78);
+		m.expect_mem32(0x8020, 0x78);
+		m.steps(1);
+		m.expect_r(5, 0x78);
+		m.steps(1);
+		m.expect_r(6, 0x12345678);
+		m.expect_r(1, 0x8010);
+		m.steps(1);
+		m.expect_r(7, 0x12345678);
+		m.expect_r(1, 0x8000);
+		m.steps(1);
+		m.expect_mem32(0x8010, 0x12345678);
+		m.steps(1);
+		m.expect_r(8, 0xCAFEBABE);
+	}
+
+	TEST("ldr unaligned rotate");
+	{
+		Machine m;
+		m.bus.write32(0x8000, 0x11223344);
+		m.r(1, 0x8001);
+		m.r(2, 0x8002);
+		m.r(3, 0x8003);
+		m.program({
+			ldst_imm(true, false, true, true, false, 1, 4, 0),
+			ldst_imm(true, false, true, true, false, 2, 5, 0),
+			ldst_imm(true, false, true, true, false, 3, 6, 0),
+			ldst_imm(false, false, true, true, false, 1, 4, 0),   /* str to 0x8001 lands at 0x8000 */
+		});
+		m.steps(3);
+		m.expect_r(4, 0x44112233);
+		m.expect_r(5, 0x33441122);
+		m.expect_r(6, 0x22334411);
+		m.steps(1);
+		m.expect_mem32(0x8000, 0x44112233);
+	}
+
+	TEST("ldr str r15");
+	{
+		Machine m;
+		m.r(1, 0x8000);
+		m.bus.write32(0x8100, 0x4000);
+		m.bus.write32(0x1004 + 8 + 0x40, 0xDEADBEEF);
+		m.program({
+			ldst_imm(false, false, true, true, false, 1, 15, 0),      /* str pc, [r1] -> 0x1000 + 12 */
+			ldst_imm(true, false, true, true, false, 15, 2, 0x40),    /* ldr r2, [pc, #0x40] */
+			ldst_imm(true, false, true, true, false, 1, 15, 0x100),   /* ldr pc, [r1, #0x100] */
+		});
+		m.steps(1);
+		m.expect_mem32(0x8000, 0x100C);
+		m.steps(1);
+		m.expect_r(2, 0xDEADBEEF);
+		uint32_t cycles = m.steps(1);
+		m.expect_pc(0x4000);
+		check_eq("ldr pc cycles", cycles, 5);
+	}
+
+	TEST("ldr rd == rn post-indexed");
+	{
+		Machine m;
+		m.r(1, 0x8000);
+		m.bus.write32(0x8000, 0x77);
+		m.program({ ldst_imm(true, false, false, true, false, 1, 1, 4) });   /* ldr r1, [r1], #4 */
+		m.steps(1);
+		m.expect_r(1, 0x77);
+	}
+	{
+		Machine m;
+		m.r(1, 0x8000);
+		m.program({ ldst_imm(false, false, false, true, false, 1, 1, 4) });  /* str r1, [r1], #4 */
+		m.steps(1);
+		m.expect_mem32(0x8000, 0x8000);
+		m.expect_r(1, 0x8004);
+	}
+
+	TEST("ldr cycles");
+	{
+		Machine m;
+		m.r(1, 0x8000);
+		m.program({
+			ldst_imm(true, false, true, true, false, 1, 2, 0),
+			ldst_imm(false, false, true, true, false, 1, 2, 0),
+		});
+		check_eq("ldr", m.steps(1), 3);
+		check_eq("str", m.steps(1), 2);
+	}
+}
+
+/* Halfword and signed transfers. */
+void test_halfword_transfer()
+{
+	TEST("ldrh strh ldrsb ldrsh");
+	{
+		Machine m;
+		m.r(1, 0x8000);
+		m.r(2, 0x1234ABCD);
+		m.r(3, 2);
+		m.bus.write32(0x8010, 0x80FF7F80);
+		m.program({
+			ldsth_imm(false, true, true, false, 1, 2, 1, 0x20),   /* strh r2, [r1, #0x20] */
+			ldsth_imm(true, true, true, false, 1, 4, 1, 0x20),    /* ldrh r4, [r1, #0x20] */
+			ldsth_imm(true, true, true, false, 1, 5, 2, 0x10),    /* ldrsb r5, [r1, #0x10] = 0x80 */
+			ldsth_imm(true, true, true, false, 1, 6, 2, 0x12),    /* ldrsb r6 = 0xFF */
+			ldsth_imm(true, true, true, false, 1, 7, 3, 0x10),    /* ldrsh r7 = 0x7F80 */
+			ldsth_imm(true, true, true, false, 1, 8, 3, 0x12),    /* ldrsh r8 = 0x80FF */
+			ldsth_reg(true, true, true, true, 1, 9, 1, 3),        /* ldrh r9, [r1, r3]! */
+			ldsth_imm(true, false, true, false, 1, 10, 1, 0x0E),  /* ldrh r10, [r1], #0x0E */
+			ldsth_imm(true, true, false, true, 1, 11, 2, 0x0F),   /* ldrsb r11, [r1, #-0x0F]! */
+		});
+		m.steps(1);
+		m.expect_mem32(0x8020, 0xABCD);
+		m.steps(1);
+		m.expect_r(4, 0xABCD);
+		m.steps(1);
+		m.expect_r(5, 0xFFFFFF80);
+		m.steps(1);
+		m.expect_r(6, 0xFFFFFFFF);
+		m.steps(1);
+		m.expect_r(7, 0x00007F80);
+		m.steps(1);
+		m.expect_r(8, 0xFFFF80FF);
+		m.steps(1);
+		m.expect_r(1, 0x8002);
+		m.expect_r(9, 0);
+		m.steps(1);
+		m.expect_r(10, 0);
+		m.expect_r(1, 0x8010);
+		m.steps(1);
+		m.expect_r(1, 0x8001);
+	}
+
+	TEST("ldrh odd address");
+	{
+		Machine m;
+		m.bus.write32(0x8000, 0x11223344);
+		m.r(1, 0x8001);
+		m.program({
+			ldsth_imm(true, true, true, false, 1, 2, 1, 0),   /* ldrh from 0x8001: rotate */
+			ldsth_imm(true, true, true, false, 1, 3, 3, 0),   /* ldrsh from 0x8001 */
+			ldsth_imm(false, true, true, false, 1, 4, 1, 0),  /* strh to 0x8001 lands at 0x8000 */
+		});
+		m.r(4, 0xBEEF);
+		m.steps(1);
+		m.expect_r(2, 0x44000033);
+		m.steps(1);
+		m.expect_r(3, 0x00000033);
+		m.steps(1);
+		m.expect_mem32(0x8000, 0x1122BEEF);
+	}
+}
+
+/* Block transfers. */
+void test_block_transfer()
+{
+	TEST("stm ldm addressing modes");
+	for (uint32_t mode = 0; mode < 4; mode++) {
+		bool p = (mode & 2) != 0;
+		bool u = (mode & 1) != 0;
+		Machine m;
+		m.r(1, 0x8100);
+		m.r(2, 0x22);
+		m.r(3, 0x33);
+		m.r(5, 0x55);
+		m.program({
+			ldstm(false, p, u, false, true, 1, 0x2C),   /* stm r1!, {r2, r3, r5} */
+			dp_imm(MOV, false, 0, 2, 0, 0),
+			dp_imm(MOV, false, 0, 3, 0, 0),
+			dp_imm(MOV, false, 0, 5, 0, 0),
+			ldstm(true, !p, !u, false, true, 1, 0x2C),  /* ldm back with the opposite mode */
+		});
+		uint32_t cycles = m.steps(1);
+		uint32_t low = u ? (p ? 0x8104 : 0x8100) : (p ? 0x8100 - 12 : 0x8100 - 8);
+		char what[32];
+		std::snprintf(what, sizeof what, "stm mode %u low", mode);
+		check_eq(what, m.bus.read32(low), 0x22);
+		check_eq(what, m.bus.read32(low + 4), 0x33);
+		check_eq(what, m.bus.read32(low + 8), 0x55);
+		check_eq("stm writeback", m.cpu.reg(1), u ? 0x8100 + 12 : 0x8100 - 12);
+		check_eq("stm cycles", cycles, 4);
+		m.steps(3);
+		cycles = m.steps(1);
+		m.expect_r(1, 0x8100);
+		m.expect_r(2, 0x22);
+		m.expect_r(3, 0x33);
+		m.expect_r(5, 0x55);
+		check_eq("ldm cycles", cycles, 5);
+	}
+
+	TEST("stm base in list");
+	{
+		Machine m;
+		m.r(1, 0x8100);
+		m.r(2, 0x22);
+		m.program({ ldstm(false, true, false, false, true, 1, 0x06) });   /* stmdb r1!, {r1, r2}: base first */
+		m.steps(1);
+		m.expect_mem32(0x80F8, 0x8100);
+		m.expect_mem32(0x80FC, 0x22);
+		m.expect_r(1, 0x80F8);
+	}
+	{
+		Machine m;
+		m.r(0, 0x00);
+		m.r(1, 0x8100);
+		m.program({ ldstm(false, true, false, false, true, 1, 0x03) });   /* stmdb r1!, {r0, r1}: base second */
+		m.steps(1);
+		m.expect_mem32(0x80F8, 0);
+		m.expect_mem32(0x80FC, 0x80F8);
+	}
+
+	TEST("ldm base in list");
+	{
+		Machine m;
+		m.r(1, 0x8100);
+		m.bus.write32(0x8100, 0x1111);
+		m.bus.write32(0x8104, 0x9999);
+		m.program({ ldstm(true, false, true, false, true, 1, 0x03) });   /* ldmia r1!, {r0, r1} */
+		m.steps(1);
+		m.expect_r(0, 0x1111);
+		m.expect_r(1, 0x9999);
+	}
+
+	TEST("stm ldm r15");
+	{
+		Machine m;
+		m.r(1, 0x8100);
+		m.program({
+			ldstm(false, false, true, false, false, 1, 0x8001),   /* stmia r1, {r0, pc} */
+			ldstm(true, false, true, false, false, 1, 0x8001),    /* ldmia r1, {r0, pc} -> pc = 0x100C */
+		});
+		m.steps(1);
+		m.expect_mem32(0x8104, 0x100C);
+		uint32_t cycles = m.steps(1);
+		m.expect_pc(0x100C);
+		check_eq("ldm pc cycles", cycles, 6);
+	}
+
+	TEST("ldm stm user bank");
+	{
+		Machine m;   /* SVC mode */
+		odin::Arm7State st{};
+		m.cpu.save(st);
+		st.usr[5] = 0x0D13;
+		st.usr[6] = 0x0D14;
+		st.svc[0] = 0x5013;
+		st.svc[1] = 0x5014;
+		m.cpu.load(st);
+		m.r(1, 0x8100);
+		m.program({
+			ldstm(false, false, true, true, false, 1, 0x6000),   /* stmia r1, {r13, r14}^ */
+			ldstm(true, false, true, true, false, 1, 0x3000),    /* ldmia r1, {r12, r13}^ */
+		});
+		m.steps(1);
+		m.expect_mem32(0x8100, 0x0D13);
+		m.expect_mem32(0x8104, 0x0D14);
+		m.expect_r(13, 0x5013);
+		m.steps(1);
+		m.cpu.save(st);
+		check_eq("user r12", st.usr[4], 0x0D13);
+		check_eq("user r13", st.usr[5], 0x0D14);
+		m.expect_r(13, 0x5013);
+	}
+	{
+		Machine m(Arm7::MODE_FIQ | Arm7::FLAG_I | Arm7::FLAG_F);
+		odin::Arm7State st{};
+		m.cpu.save(st);
+		st.usr[0] = 0x0008;
+		st.fiq[0] = 0xF008;
+		m.cpu.load(st);
+		m.r(1, 0x8100);
+		m.program({ ldstm(false, false, true, true, false, 1, 0x0100) });   /* stmia r1, {r8}^ in FIQ */
+		m.steps(1);
+		m.expect_mem32(0x8100, 0x0008);
+		m.expect_r(8, 0xF008);
+	}
+
+	TEST("ldm pc with spsr restore");
+	{
+		Machine m;   /* SVC */
+		odin::Arm7State st{};
+		m.cpu.save(st);
+		st.spsr[2] = Arm7::FLAG_Z | Arm7::MODE_IRQ;
+		st.irq[0] = 0x1D13;
+		m.cpu.load(st);
+		m.r(1, 0x8100);
+		m.bus.write32(0x8100, 0x77);
+		m.bus.write32(0x8104, 0x3000);
+		m.program({ ldstm(true, false, true, true, false, 1, 0x8004) });   /* ldmia r1, {r2, pc}^ */
+		m.steps(1);
+		m.expect_r(2, 0x77);
+		m.expect_pc(0x3000);
+		m.expect_cpsr(Arm7::FLAG_Z | Arm7::MODE_IRQ);
+		m.expect_r(13, 0x1D13);
+	}
+
+	TEST("ldm stm empty list");
+	{
+		Machine m;
+		m.r(1, 0x8100);
+		m.program({ ldstm(false, false, true, false, true, 1, 0) });   /* stmia r1!, {} */
+		m.steps(1);
+		m.expect_mem32(0x8100, 0x100C);
+		m.expect_r(1, 0x8140);
+	}
+}
+
+/* Swap. */
+void test_swap()
+{
+	TEST("swp swpb");
+	{
+		Machine m;
+		m.r(1, 0x8000);
+		m.r(2, 0xAABBCCDD);
+		m.bus.write32(0x8000, 0x11223344);
+		m.program({
+			swp(false, 1, 3, 2),      /* swp r3, r2, [r1] */
+			swp(true, 1, 4, 3),       /* swpb r4, r3, [r1] */
+			swp(false, 1, 2, 2),      /* swp r2, r2, [r1]: rd == rm */
+		});
+		uint32_t cycles = m.steps(1);
+		m.expect_r(3, 0x11223344);
+		m.expect_mem32(0x8000, 0xAABBCCDD);
+		check_eq("swp cycles", cycles, 4);
+		m.steps(1);
+		m.expect_r(4, 0xDD);
+		m.expect_mem32(0x8000, 0xAABBCC44);
+		m.steps(1);
+		m.expect_r(2, 0xAABBCC44);
+		m.expect_mem32(0x8000, 0xAABBCCDD);
+	}
+	{
+		Machine m;
+		m.r(1, 0x8001);
+		m.r(2, 0x01020304);
+		m.bus.write32(0x8000, 0x11223344);
+		m.program({ swp(false, 1, 3, 2) });
+		m.steps(1);
+		m.expect_r(3, 0x44112233);
+		m.expect_mem32(0x8000, 0x01020304);
+	}
+}
+
+/* Branches. */
+void test_branches()
+{
+	TEST("b bl bx");
+	{
+		Machine m;
+		m.program({
+			branch(false, 2),        /* b +8 -> 0x1010 */
+			NOP, NOP, NOP,
+			branch(true, -4),        /* at 0x1010: bl 0x1008 */
+			NOP,
+		});
+		uint32_t cycles = m.steps(1);
+		m.expect_pc(0x1010);
+		check_eq("b cycles", cycles, 3);
+		m.steps(1);
+		m.expect_pc(0x1008);
+		m.expect_r(14, 0x1014);
+	}
+	{
+		Machine m;
+		m.r(0, 0x2000);
+		m.r(1, 0x3001);
+		m.program({ bx(0) });
+		m.program({ bx(1) }, 0x2000);
+		m.steps(1);
+		m.expect_pc(0x2000);
+		m.steps(1);
+		m.expect_pc(0x3000);   /* Thumb refused, ARM state kept */
+		check_eq("t bit", m.cpu.cpsr() & Arm7::FLAG_T, 0);
+	}
+	{
+		Machine m;
+		m.program({ branch(false, 0xFFFFFF - 1) });   /* b . - 4: offset -2 words */
+		m.steps(1);
+		m.expect_pc(0x1000);
+	}
+}
+
+/* PSR transfers. */
+void test_psr()
+{
+	TEST("mrs msr");
+	{
+		Machine m;   /* SVC, I F set */
+		m.r(1, Arm7::FLAG_N | Arm7::FLAG_C | Arm7::MODE_IRQ);
+		m.r(2, 0x1234);
+		m.program({
+			mrs(false, 0),                    /* mrs r0, cpsr */
+			msr_reg(false, 0x9, 1),           /* msr cpsr_fc, r1 -> IRQ mode, N C, I F cleared */
+			mrs(false, 3),
+			msr_imm(false, 0x8, 0x0F, 2),     /* msr cpsr_f, #0xF0000000 */
+			msr_reg(true, 0xF, 2),            /* msr spsr_fsxc, r2 */
+			mrs(true, 4),                     /* mrs r4, spsr */
+			msr_imm(false, 0x1, 0xD3, 0),     /* msr cpsr_c, #0xD3 -> back to SVC */
+			mrs(false, 5),
+			msr_imm(false, 0x1, 0xD2, 0),     /* -> IRQ */
+			mrs(true, 6),                     /* spsr_irq = 0x1234 */
+		});
+		odin::Arm7State st{};
+		m.cpu.save(st);
+		st.svc[0] = 0x5013;
+		st.irq[0] = 0x1D13;
+		m.cpu.load(st);
+		m.steps(1);
+		m.expect_r(0, 0xD3);
+		m.steps(1);
+		m.expect_cpsr(Arm7::FLAG_N | Arm7::FLAG_C | Arm7::MODE_IRQ);
+		m.expect_r(13, 0x1D13);
+		m.steps(1);
+		m.expect_r(3, Arm7::FLAG_N | Arm7::FLAG_C | Arm7::MODE_IRQ);
+		m.steps(1);
+		m.expect_cpsr(0xF0000000 | Arm7::MODE_IRQ);
+		m.steps(2);
+		m.expect_r(4, 0x1234);
+		m.steps(2);
+		m.expect_r(5, 0xF00000D3);
+		m.expect_r(13, 0x5013);
+		m.steps(2);
+		m.expect_r(6, 0x1234);
+	}
+
+	TEST("msr in user mode");
+	{
+		Machine m(Arm7::MODE_USR);
+		m.r(1, Arm7::FLAG_Z | Arm7::FLAG_I | Arm7::MODE_SVC);
+		m.r(2, 0x77);
+		m.program({
+			msr_reg(false, 0xF, 1),   /* only the flags move */
+			msr_reg(true, 0xF, 2),    /* no SPSR: dropped */
+			mrs(true, 3),             /* reads the CPSR */
+		});
+		m.steps(1);
+		m.expect_cpsr(Arm7::FLAG_Z | Arm7::MODE_USR);
+		m.steps(2);
+		m.expect_r(3, Arm7::FLAG_Z | Arm7::MODE_USR);
+	}
+}
+
+/* Exceptions: SWI, undefined, IRQ, FIQ, vectors, link values, banks. */
+void test_exceptions()
+{
+	TEST("swi");
+	{
+		Machine m(Arm7::FLAG_N | Arm7::MODE_USR);
+		m.r(13, 0x0D13);
+		m.program({ swi(0x123456), NOP });
+		m.program({ dp_reg(MOV, true, 0, 15, 14, LSL, 0) }, 0x08);   /* movs pc, lr */
+		uint32_t cycles = m.steps(1);
+		m.expect_pc(0x08);
+		m.expect_mode(Arm7::MODE_SVC);
+		m.expect_r(14, 0x1004);
+		check_eq("spsr", m.cpu.spsr(), Arm7::FLAG_N | Arm7::MODE_USR);
+		check_eq("i bit", m.cpu.cpsr() & Arm7::FLAG_I, Arm7::FLAG_I);
+		check_eq("f bit kept", m.cpu.cpsr() & Arm7::FLAG_F, 0);
+		check_eq("swi cycles", cycles, 3);
+		m.steps(1);
+		m.expect_pc(0x1004);
+		m.expect_cpsr(Arm7::FLAG_N | Arm7::MODE_USR);
+		m.expect_r(13, 0x0D13);
+	}
+
+	TEST("undefined");
+	{
+		Machine m;
+		m.program({ 0xE7FFFFFF, NOP });   /* undefined: bits 27-25 = 011, bit 4 = 1 */
+		m.steps(1);
+		m.expect_pc(0x04);
+		m.expect_mode(Arm7::MODE_UND);
+		m.expect_r(14, 0x1004);
+	}
+	{
+		Machine m;
+		m.program({ MCR_CP15 });
+		m.steps(1);
+		m.expect_pc(0x04);
+		m.expect_mode(Arm7::MODE_UND);
+	}
+	{
+		Machine m;
+		m.program({ 0xEC000000 });   /* stc */
+		m.steps(1);
+		m.expect_pc(0x04);
+	}
+
+	TEST("irq");
+	{
+		Machine m(Arm7::MODE_SVC | Arm7::FLAG_F);   /* I clear */
+		m.r(13, 0x5013);
+		m.r(14, 0x5014);
+		m.program({ NOP, NOP, NOP });
+		m.program({ dp_imm(SUB, true, 14, 15, 4, 0) }, 0x18);   /* subs pc, lr, #4 */
+		m.cpu.set_irq(true);
+		/* One step takes the exception (3 cycles) and runs the vector
+		 * instruction subs pc, lr, #4 (3 cycles), back to 0x1000. */
+		uint32_t cycles = m.steps(1);
+		m.expect_pc(0x1000);
+		check_eq("irq entry + return cycles", cycles, 3 + 3);
+		m.expect_mode(Arm7::MODE_SVC);
+		m.expect_r(13, 0x5013);
+		m.expect_r(14, 0x5014);
+	}
+	{
+		Machine m(Arm7::MODE_SVC | Arm7::FLAG_F);
+		m.program({ NOP, NOP });
+		m.program({ NOP }, 0x18);
+		m.cpu.set_irq(true);
+		m.steps(1);
+		m.expect_pc(0x1C);
+		m.expect_mode(Arm7::MODE_IRQ);
+		m.expect_r(14, 0x1004);
+		check_eq("spsr", m.cpu.spsr(), Arm7::MODE_SVC | Arm7::FLAG_F);
+		check_eq("i set", m.cpu.cpsr() & Arm7::FLAG_I, Arm7::FLAG_I);
+		m.cpu.set_irq(false);
+	}
+	{
+		Machine m;   /* I set: masked */
+		m.program({ NOP, NOP });
+		m.cpu.set_irq(true);
+		m.steps(1);
+		m.expect_pc(0x1004);
+		m.expect_mode(Arm7::MODE_SVC);
+	}
+
+	TEST("fiq");
+	{
+		Machine m(Arm7::MODE_SVC);   /* I and F clear */
+		odin::Arm7State st{};
+		m.cpu.save(st);
+		st.fiq[0] = 0xF8;
+		st.fiq[5] = 0xF13;
+		m.cpu.load(st);
+		m.r(8, 0x08);
+		m.program({ NOP, NOP });
+		m.program({ NOP }, 0x1C);
+		m.cpu.set_fiq(true);
+		m.cpu.set_irq(true);   /* FIQ wins */
+		m.steps(1);
+		m.expect_pc(0x20);
+		m.expect_mode(Arm7::MODE_FIQ);
+		m.expect_r(14, 0x1004);
+		m.expect_r(8, 0xF8);
+		m.expect_r(13, 0xF13);
+		check_eq("i f set", m.cpu.cpsr() & (Arm7::FLAG_I | Arm7::FLAG_F), Arm7::FLAG_I | Arm7::FLAG_F);
+		m.cpu.set_fiq(false);
+		m.program({ dp_imm(SUB, true, 14, 15, 4, 0) }, 0x20);
+		m.steps(1);
+		m.expect_pc(0x1000);
+		m.expect_mode(Arm7::MODE_SVC);
+		m.expect_r(8, 0x08);
+		/* IRQ is still pending and now unmasked. */
+		m.steps(1);
+		m.expect_pc(0x1C);
+		m.expect_mode(Arm7::MODE_IRQ);
+	}
+
+	TEST("reset");
+	{
+		Machine m;
+		m.r(0, 5);
+		m.cpu.reset();
+		m.expect_pc(0);
+		m.expect_cpsr(Arm7::FLAG_I | Arm7::FLAG_F | Arm7::MODE_SVC);
+		m.expect_r(0, 0);
+	}
+}
+
+/* Save and load keep every bank. */
+void test_save_load()
+{
+	TEST("save load");
+	Machine m;
+	odin::Arm7State st{};
+	m.cpu.save(st);
+	for (uint32_t i = 0; i < 8; i++) {
+		st.r[i] = 0x100 + i;
+	}
+	for (uint32_t i = 0; i < 7; i++) {
+		st.usr[i] = 0x200 + i;
+		st.fiq[i] = 0x300 + i;
+	}
+	st.irq[0] = 0x400; st.irq[1] = 0x401;
+	st.svc[0] = 0x500; st.svc[1] = 0x501;
+	st.abt[0] = 0x600; st.abt[1] = 0x601;
+	st.und[0] = 0x700; st.und[1] = 0x701;
+	for (uint32_t i = 0; i < 5; i++) {
+		st.spsr[i] = 0x800 + i;
+	}
+	st.cpsr = Arm7::MODE_FIQ;
+	st.pc = 0x1234;
+	m.cpu.load(st);
+	m.expect_r(8, 0x300);
+	m.expect_r(13, 0x305);
+	m.program({ msr_imm(false, 1, 0x17, 0), msr_imm(false, 1, 0x1B, 0), msr_imm(false, 1, 0x12, 0) }, 0x1234);
+	m.steps(1);
+	m.expect_r(8, 0x200);
+	m.expect_r(13, 0x600);
+	m.steps(1);
+	m.expect_r(14, 0x701);
+	m.steps(1);
+	m.expect_r(13, 0x400);
+	odin::Arm7State back{};
+	m.cpu.save(back);
+	back.cpsr = st.cpsr;
+	back.pc = st.pc;
+	check_eq("state round trip", std::memcmp(&back, &st, sizeof st) == 0 ? 1u : 0u, 1u);
+}
+
+/* Trace format: one fetch line and one line per data access. */
+void test_trace()
+{
+	TEST("trace");
+	Machine m;
+	m.r(1, 0x8000);
+	m.bus.write32(0x8000, 0xCAFE0001);
+	m.program({ ldst_imm(true, false, true, true, false, 1, 2, 0), ldst_imm(false, true, true, true, false, 1, 2, 5) });
+	char buf[256] = {};
+	FILE *fp = fmemopen(buf, sizeof buf, "w");
+	m.cpu.set_trace(fp);
+	m.steps(2);
+	m.cpu.set_trace(nullptr);
+	std::fclose(fp);
+	const char *want =
+		"arm7 00001000 f 00001000 4 e5912000\n"
+		"arm7 00001000 r 00008000 4 cafe0001\n"
+		"arm7 00001004 f 00001004 4 e5c12005\n"
+		"arm7 00001004 w 00008005 1 01\n";
+	if (std::strcmp(buf, want) != 0) {
+		fail(std::string("trace text:\n") + buf);
+	}
+	g_checks++;
+}
+
+} /* namespace */
+
+int main(int argc, char **argv)
+{
+	for (int i = 1; i < argc; i++) {
+		if (std::strcmp(argv[i], "-v") == 0) {
+			g_verbose = true;
+		}
+	}
+	test_conditions();
+	test_data_processing();
+	test_shifter();
+	test_multiply();
+	test_single_transfer();
+	test_halfword_transfer();
+	test_block_transfer();
+	test_swap();
+	test_branches();
+	test_psr();
+	test_exceptions();
+	test_save_load();
+	test_trace();
+	std::printf("%d checks, %d failures\n", g_checks, g_failures);
+	return g_failures == 0 ? 0 : 1;
+}
