@@ -1450,6 +1450,25 @@ compare_mesh_depth_b2f (const void *a, const void *b)
 	return 0;
 }
 
+/* Blend factors of the material (A81 bits 17:16), as the X360 port
+ * applies them (825B4290). */
+static void
+set_material_blend (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
+{
+	static const GLenum factors[4][4] = {
+		{ GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE_MINUS_SRC_ALPHA },
+		{ GL_DST_COLOR, GL_ZERO,                GL_ZERO, GL_ZERO },
+		{ GL_SRC_ALPHA, GL_ONE,                 GL_ZERO, GL_ONE_MINUS_SRC_ALPHA },
+		{ GL_ONE,       GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE_MINUS_SRC_ALPHA },
+	};
+	unsigned mode = 0;
+
+	if (mesh->mat_index < MAX_MATERIALS)
+		mode = hr->mat_list[mesh->mat_index].blending_mode;
+	glBlendFuncSeparate (factors[mode][0], factors[mode][1],
+	                     factors[mode][2], factors[mode][3]);
+}
+
 static void
 draw_meshes_for_polytype (hikaru_renderer_t *hr, unsigned vpi, int polytype)
 {
@@ -1500,6 +1519,9 @@ draw_meshes_for_polytype (hikaru_renderer_t *hr, unsigned vpi, int polytype)
 
 	for (j = 0; j < num; j++) {
 		hikaru_mesh_t *mesh = &meshes[j];
+		if (polytype == HIKARU_POLYTYPE_TRANSPARENT ||
+		    polytype == HIKARU_POLYTYPE_TRANSLUCENT)
+			set_material_blend (hr, mesh);
 		draw_mesh (hr, mesh);
 	}
 
