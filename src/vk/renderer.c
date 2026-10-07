@@ -38,6 +38,45 @@ vk_renderer_begin_frame (vk_renderer_t *renderer)
 
 static uint32_t clock = 0;
 
+/* VK_SCREENSHOT=<prefix> writes <prefix>-<frame>.ppm every 60 frames */
+static void
+vk_renderer_screenshot (vk_renderer_t *renderer)
+{
+	static const char *prefix = NULL;
+	static unsigned frame = 0;
+	static bool checked = false;
+	char path[512];
+	unsigned w = renderer->width, h = renderer->height, y;
+	uint8_t *pixels;
+	FILE *fp;
+
+	if (!checked) {
+		prefix = getenv ("VK_SCREENSHOT");
+		checked = true;
+	}
+	frame++;
+	if (!prefix || (frame % 60) != 0)
+		return;
+
+	pixels = malloc (w * h * 3);
+	if (!pixels)
+		return;
+	glBindFramebuffer (GL_READ_FRAMEBUFFER, 0);
+	glReadBuffer (GL_BACK);
+	glPixelStorei (GL_PACK_ALIGNMENT, 1);
+	glReadPixels (0, 0, (GLsizei) w, (GLsizei) h, GL_RGB, GL_UNSIGNED_BYTE, pixels);
+
+	snprintf (path, sizeof (path), "%s-%06u.ppm", prefix, frame);
+	fp = fopen (path, "wb");
+	if (fp) {
+		fprintf (fp, "P6\n%u %u\n255\n", w, h);
+		for (y = 0; y < h; y++)
+			fwrite (pixels + (h - 1 - y) * w * 3, 1, w * 3, fp);
+		fclose (fp);
+	}
+	free (pixels);
+}
+
 void
 vk_renderer_end_frame (vk_renderer_t *renderer)
 {
@@ -49,6 +88,7 @@ vk_renderer_end_frame (vk_renderer_t *renderer)
 
 	if (renderer->end_frame)
 		renderer->end_frame (renderer);
+	vk_renderer_screenshot (renderer);
 	SDL_GL_SwapWindow (renderer->window);
 
 	temp = SDL_GetTicks ();
