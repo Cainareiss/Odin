@@ -20,6 +20,7 @@
 #define __VK_HIKARU_H__
 
 #include "vk/mmap.h"
+#include "odin/eeprom_bridge.hpp"
 #include "vk/cpu.h"
 #include "vk/machine.h"
 
@@ -59,6 +60,8 @@ typedef struct {
 
 	/* Port A (master and slave) */
 	uint16_t porta_m;
+	/* 93C46 of the main board on port A bits 2 (DI), 3 (SK), 4 (CS), 5 (DO) */
+	odin_eeprom93c46_t *eeprom_main;
 	unsigned porta_m_bit0_buffer;
 
 	uint16_t porta_s;

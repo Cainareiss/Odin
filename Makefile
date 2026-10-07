@@ -42,6 +42,7 @@ ODIN_OBJ := \
 	src/odin/z80.o \
 	src/odin/z80_ops.o \
 	src/odin/eeprom_93c46.o \
+	src/odin/eeprom_bridge.o \
 	src/odin/jvs_host.o \
 	src/odin/jvs_io_13551.o \
 	src/odin/card_reader.o \
@@ -86,6 +87,8 @@ src/odin/mie_bridge.o src/mach/hikaru/hikaru-mie.o: src/odin/mie_bridge.hpp
 src/odin/mie_bridge.o src/odin/jvs_io_13551.o: src/odin/jvs_io_13551.hpp src/odin/eeprom_93c46.hpp
 src/odin/jvs_host.o src/odin/jvs_io_13551.o: src/odin/jvs_host.hpp
 src/odin/eeprom_93c46.o: src/odin/eeprom_93c46.hpp
+src/odin/eeprom_bridge.o: src/odin/eeprom_93c46.hpp src/odin/eeprom_bridge.hpp
+src/mach/hikaru/hikaru.o: src/odin/eeprom_bridge.hpp
 
 install:
 	@( mkdir -pv $(HOME)/.local/bin )

@@ -28,6 +28,13 @@
 					]
 				},
 				{
+					"name" : "eeprom",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "93c46.ic115", "size" : 128 }
+					]
+				},
+				{
 					"name" : "bootrom",
 					"type" : "alternative",
 					"data" : [
@@ -71,6 +78,13 @@
 					"type" : "alternative",
 					"data" : [
 						{ "name" : "315-6146.bin", "size" : 2048 }
+					]
+				},
+				{
+					"name" : "eeprom",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "93c46.ic115", "size" : 128 }
 					]
 				},
 				{
@@ -140,6 +154,13 @@
 					]
 				},
 				{
+					"name" : "eeprom",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "93c46.ic115", "size" : 128 }
+					]
+				},
+				{
 					"name" : "bootrom",
 					"type" : "alternative",
 					"data" : [
@@ -197,6 +218,13 @@
 					"type" : "alternative",
 					"data" : [
 						{ "name" : "315-6146.bin", "size" : 2048 }
+					]
+				},
+				{
+					"name" : "eeprom",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "93c46.ic115", "size" : 128 }
 					]
 				},
 				{
@@ -272,6 +300,13 @@
 					]
 				},
 				{
+					"name" : "eeprom",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "93c46.ic115", "size" : 128 }
+					]
+				},
+				{
 					"name" : "bootrom",
 					"type" : "alternative",
 					"data" : [
@@ -332,6 +367,13 @@
 					"type" : "alternative",
 					"data" : [
 						{ "name" : "315-6146.bin", "size" : 2048 }
+					]
+				},
+				{
+					"name" : "eeprom",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "93c46.ic115", "size" : 128 }
 					]
 				},
 				{

@@ -175,7 +175,9 @@ porta_get_m (sh4_t *ctx, uint16_t *val)
 {
 	vk_device_t *dev = (vk_device_t *) ctx;
 	hikaru_t *hikaru = (hikaru_t *) dev->mach;
-	*val = hikaru->porta_m;
+	/* Bit 5 is the EEPROM DO pin (MAME hikaru.cpp main_io_r) */
+	*val = (hikaru->porta_m & ~0x20) |
+	       (odin_eeprom93c46_do (hikaru->eeprom_main) ? 0x20 : 0);
 	return 0;
 }
 
@@ -196,6 +198,10 @@ porta_put_m (sh4_t *ctx, uint16_t val)
 	vk_device_t *dev = (vk_device_t *) ctx;
 	hikaru_t *hikaru = (hikaru_t *) dev->mach;
 	hikaru->porta_m = val;
+
+	/* 93C46: bit 2 DI, bit 3 SK, bit 4 CS (MAME hikaru.cpp main_io_w) */
+	odin_eeprom93c46_set_pins (hikaru->eeprom_main,
+	                           (val >> 4) & 1, (val >> 3) & 1, (val >> 2) & 1, 0);
 
 	/* This is a simple hack to detect three consecutive cycles of
 	 * low-high-low pin; the pattern 000-111-000[0000] is there because
@@ -460,6 +466,8 @@ hikaru_run_cycles (vk_machine_t *mach, int cycles)
 	/* Run the slave */
 	hikaru->sh_current = hikaru->sh_s;
 	vk_cpu_run (hikaru->sh_s, cycles);
+
+	odin_eeprom93c46_tick (hikaru->eeprom_main, (uint32_t) cycles);
 
 	/* Run the MEMCTL and GPU */
 	vk_device_exec (hikaru->memctl_m, cycles);
@@ -1044,6 +1052,20 @@ hikaru_init (hikaru_t *hikaru)
 	hikaru->mie = hikaru_mie_new (mach, HIKARU_SH4_CLOCK);
 	if (!hikaru->mie)
 		return -1;
+
+	hikaru->eeprom_main = odin_eeprom93c46_new (HIKARU_SH4_CLOCK);
+	if (!hikaru->eeprom_main)
+		return -1;
+	if (game) {
+		vk_buffer_t *image = vk_game_get_section_data (game, "eeprom");
+		if (image) {
+			odin_eeprom93c46_load (hikaru->eeprom_main,
+			                       vk_buffer_get_ptr (image, 0),
+			                       vk_buffer_get_size (image));
+			VK_PRINT ("main board EEPROM: 93c46 image loaded");
+		} else
+			VK_PRINT ("main board EEPROM: no image, blank");
+	}
 
 	hikaru->base.renderer = hikaru_renderer_new (hikaru->fb,
 	                                             hikaru->texram);
