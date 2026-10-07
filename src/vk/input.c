@@ -24,6 +24,8 @@ static const unsigned keymap[] = {
 	SDLK_q, SDLK_w, SDLK_e, SDLK_r, SDLK_t, SDLK_y, SDLK_u, SDLK_i, SDLK_o, SDLK_p,
 	SDLK_a, SDLK_s, SDLK_d, SDLK_f, SDLK_g, SDLK_h, SDLK_j, SDLK_k, SDLK_l,
 	SDLK_z, SDLK_x, SDLK_c, SDLK_v, SDLK_b, SDLK_n, SDLK_m,
+	SDLK_UP, SDLK_DOWN, SDLK_LEFT, SDLK_RIGHT,
+	SDLK_LCTRL, SDLK_LALT, SDLK_LSHIFT, SDLK_RETURN,
 };
 
 static bool keystate[NUMELEM (keymap)];

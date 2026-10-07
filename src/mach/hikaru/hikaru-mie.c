@@ -274,23 +274,56 @@ hikaru_mie_hle_put (hikaru_mie_t *mie, unsigned size, uint32_t addr, uint64_t va
  * =======
  */
 
-/* The cabinet side: main board switches on F5/F6, nothing yet on the
- * I/O board connectors. */
+/* The cabinet side. Main board switches: F5 Test, F6 Service. JVS I/O
+ * board: F2 Test, 9/0 Service, 5/6 coins; player 1 = 1 Start, arrows,
+ * LCtrl LAlt LShift Z X C; player 2 = 2 Start, R F D G, A S Q W E T.
+ * Analog channels stay centred (no stick yet). */
+static uint16_t
+hikaru_mie_player_word (unsigned start, unsigned service,
+                        unsigned up, unsigned down, unsigned left, unsigned right,
+                        const unsigned *push)
+{
+	uint16_t w = 0;
+	unsigned i;
+
+	if (vk_input_get_key (start))	w |= 0x8000;
+	if (vk_input_get_key (service))	w |= 0x4000;
+	if (vk_input_get_key (up))	w |= 0x2000;
+	if (vk_input_get_key (down))	w |= 0x1000;
+	if (vk_input_get_key (left))	w |= 0x0800;
+	if (vk_input_get_key (right))	w |= 0x0400;
+	/* PUSH1 and PUSH2 in the high byte, PUSH3 to PUSH6 from bit 7 down */
+	for (i = 0; i < 6; i++)
+		if (vk_input_get_key (push[i]))
+			w |= (i < 2) ? (0x0200 >> i) : (0x0080 >> (i - 2));
+	return w;
+}
+
 static void
 hikaru_mie_read_inputs (void *ctx, odin_mie_inputs_t *in)
 {
+	static const unsigned push1[6] = { SDLK_LCTRL, SDLK_LALT, SDLK_LSHIFT, SDLK_z, SDLK_x, SDLK_c };
+	static const unsigned push2[6] = { SDLK_a, SDLK_s, SDLK_q, SDLK_w, SDLK_e, SDLK_t };
+	static const unsigned coin_key[2] = { SDLK_5, SDLK_6 };
+	static bool coin_was[2];
 	unsigned i;
 
 	(void) ctx;
 	in->mainboard_test = vk_input_get_key (SDLK_F5);
 	in->mainboard_service = vk_input_get_key (SDLK_F6);
-	in->jvs_system = 0;
-	in->jvs_player[0] = 0;
-	in->jvs_player[1] = 0;
+	in->jvs_system = vk_input_get_key (SDLK_F2) ? 0x80 : 0;
+	in->jvs_player[0] = hikaru_mie_player_word (SDLK_1, SDLK_9, SDLK_UP, SDLK_DOWN,
+	                                            SDLK_LEFT, SDLK_RIGHT, push1);
+	in->jvs_player[1] = hikaru_mie_player_word (SDLK_2, SDLK_0, SDLK_r, SDLK_f,
+	                                            SDLK_d, SDLK_g, push2);
 	for (i = 0; i < 8; i++)
 		in->jvs_analog[i] = 0x8000;
-	in->jvs_coin[0] = 0;
-	in->jvs_coin[1] = 0;
+	/* A coin is counted on the key press, not while it is held */
+	for (i = 0; i < 2; i++) {
+		bool now = vk_input_get_key (coin_key[i]);
+		in->jvs_coin[i] = now && !coin_was[i];
+		coin_was[i] = now;
+	}
 }
 
 static int
