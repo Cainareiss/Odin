@@ -193,8 +193,9 @@ upload_texture (hikaru_renderer_t *hr, hikaru_texhead_t *th)
 
 	w = 16 << th->logw;
 	h = 16 << th->logh;
+	/* Down to 1x1, all levels in the texhead bank (X360 825C6A00, 825C68D8). */
 	num_levels = hr->debug.flags[HR_DEBUG_NO_MIPMAPS] ? 1 :
-	             MIN2 (th->logw, th->logh) + 4;
+	             MAX2 (th->logw, th->logh) + 5;
 
 	get_texhead_coords (&basex, &basey, th);
 	bank = th->bank;
@@ -313,13 +314,11 @@ upload_texture (hikaru_renderer_t *hr, hikaru_texhead_t *th)
 			goto fail;
 		}
 
-		w >>= 1;
-		h >>= 1;
-		VK_ASSERT (w && h);
+		w = MAX2 (w >> 1, 1);
+		h = MAX2 (h >> 1, 1);
 
 		basex += (2048 - basex) / 2;
 		basey += (1024 - basey) / 2;
-		bank ^= 1;
 	}
 
 	glPixelStorei (GL_UNPACK_ROW_LENGTH, 0);

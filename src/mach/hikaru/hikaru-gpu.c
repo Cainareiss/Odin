@@ -750,7 +750,7 @@ copy_texture (hikaru_gpu_t *gpu, uint32_t bus_addr, unsigned size,
               hikaru_texhead_t *texhead)
 {
 	hikaru_t *hikaru = (hikaru_t *) gpu->base.mach;
-	unsigned level, level_w, level_h, size_copied;
+	unsigned level, max_level, level_w, level_h, size_copied;
 	uint32_t dstx, dsty, bank = texhead->bank;
 	vk_buffer_t *srcbuf;
 
@@ -759,14 +759,17 @@ copy_texture (hikaru_gpu_t *gpu, uint32_t bus_addr, unsigned size,
 	else
 		srcbuf = hikaru->ram_s;
 
+	/* The pyramid goes down to 1x1 and stays in the texhead bank (X360
+	 * 825C6A00, 825C68D8). */
 	level = 0;
+	max_level = MAX2 (texhead->logw, texhead->logh) + 4;
 	level_w = 16 << texhead->logw;
 	level_h = 16 << texhead->logh;
 
 	get_texhead_coords (&dstx, &dsty, texhead);
 
 	size_copied = 0;
-	while (size_copied < size && level_w > 0 && level_h > 0) {
+	while (size_copied < size && level <= max_level) {
 		uint32_t bus_offs =  bus_addr + size_copied;
 
 		VK_LOG ("IDMA copying level %u : @%08X -> (%u,%u), %ux%u [copied=%X]",
@@ -787,11 +790,10 @@ copy_texture (hikaru_gpu_t *gpu, uint32_t bus_addr, unsigned size,
 		/* Update the destination coords for the next level. */
 		dstx += (2048 - dstx) / 2;
 		dsty += (1024 - dsty) / 2;
-		bank ^= 1;
 
 		/* Update the level depth and sizes. */
-		level_w >>= 1;
-		level_h >>= 1;
+		level_w = MAX2 (level_w >> 1, 1);
+		level_h = MAX2 (level_h >> 1, 1);
 		level += 1;
 	}
 
