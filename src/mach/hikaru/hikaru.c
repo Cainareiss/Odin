@@ -429,9 +429,24 @@ hikaru_raise_memctl_irq (vk_machine_t *mach)
 	hikaru_raise_irq (mach, SH4_IESOURCE_IRL1, 0);
 }
 
-/* XXX this should really be 200 MHz; downclocked to 50 MHz to make debugging
- * a little more bearable. */
-static const unsigned cycles_per_line = (50 * MHZ) / (60 * 480);
+/* SH7091 at 200 MHz (Hikaru: 2 x SH-4 @ 200 MHz, see the header of this
+ * file). VK_SH4_MHZ lowers it for debugging only: the interpreter is the
+ * bottleneck and every phase of a game then takes fewer host seconds. */
+static unsigned
+hikaru_sh4_clock (void)
+{
+	static unsigned clock = 0;
+	if (!clock) {
+		const char *env = getenv ("VK_SH4_MHZ");
+		unsigned mhz = env ? (unsigned) atoi (env) : 200;
+		if (mhz < 1 || mhz > 200)
+			mhz = 200;
+		clock = mhz * MHZ;
+	}
+	return clock;
+}
+#define HIKARU_SH4_CLOCK (hikaru_sh4_clock ())
+#define cycles_per_line (HIKARU_SH4_CLOCK / (60 * 480))
 
 static void
 hikaru_run_cycles (vk_machine_t *mach, int cycles)
