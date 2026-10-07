@@ -1517,6 +1517,8 @@ draw_meshes_for_polytype (hikaru_renderer_t *hr, unsigned vpi, int polytype)
 	if (num == 0)
 		return;
 
+	LOG ("POLYTYPE %d: %u meshes", polytype, num);
+
 	if (hr->debug.flags[HR_DEBUG_SELECT_POLYTYPE] >= 0 &&
 	    hr->debug.flags[HR_DEBUG_SELECT_POLYTYPE] != polytype)
 		goto destroy_meshes;
@@ -2111,6 +2113,16 @@ hikaru_renderer_begin_frame (vk_renderer_t *renderer)
 	hr->total_meshes = 0;
 
 	update_debug_flags (hr);
+
+	/* Log the render state of one frame only (HR_LOG_FRAME=N). */
+	{
+		static int probe_want = -1, probe_frame = 0;
+		if (probe_want < 0)
+			probe_want = vk_util_get_int_option ("HR_LOG_FRAME", 0);
+		probe_frame++;
+		if (probe_want)
+			hr->debug.flags[HR_DEBUG_LOG] = (probe_frame == probe_want);
+	}
 
 	VK_ASSERT_NO_GL_ERROR ();
 }
