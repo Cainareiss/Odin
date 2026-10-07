@@ -548,6 +548,22 @@ main (void)	\n \
 	 * (vo3d.0x01100). */	\n \
 	base = mix (p_diffuse, texel.rgb, p_alpha);	\n \
 	alpha = texel.a;	\n \
+#elif TEX_MODE == 1	\n \
+	/* The texel alpha blends the texel over the 091 colour (vo3d.0x01010). */	\n \
+	base = mix (p_diffuse, texel.rgb, texel.a);	\n \
+	alpha = p_alpha;	\n \
+#elif TEX_MODE == 2	\n \
+	/* The texel modulates the 091 colour (vo3d.0x01020). */	\n \
+	base = texel.rgb * p_diffuse;	\n \
+	alpha = texel.a * p_alpha;	\n \
+#elif TEX_MODE == 3	\n \
+	/* The 091 colour with the texel alpha (vo3d.0x01030). */	\n \
+	base = p_diffuse;	\n \
+	alpha = texel.a * p_alpha;	\n \
+#elif TEX_MODE == 4	\n \
+	/* The texel blends the 291 colour over the 091 colour (vo3d.0x01040). */	\n \
+	base = mix (p_diffuse, p_color1, texel.rgb);	\n \
+	alpha = texel.a * p_alpha;	\n \
 #else	\n \
 	base = texel.rgb;	\n \
 	alpha = texel.a * p_alpha;	\n \
@@ -676,6 +692,16 @@ get_glsl_variant (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	variant.shading_mode		= mat->shading_mode;
 	variant.alpha_mode		= mat->has_alpha;
 
+	/* The texture format picks how the texel combines with the material
+	 * colours, numbered as the port's shader variants (825B4340): formats
+	 * 1, 2, 4 and 5 select modes 1 to 4; 3, 6 and 7 keep the previous
+	 * mode there, plain texturing here (HEURISTIC). */
+	if (variant.has_texture) {
+		hikaru_texhead_t *th = &hr->tex_list[mesh->tex_index];
+		static const uint8_t modes[8] = { 0, 1, 2, 0, 3, 4, 0, 0 };
+		variant.tex_mode = modes[th->format];
+	}
+
 	variant.has_light0		= !(ls->mask & (1 << 0));
 	variant.light0_type		= get_light_type (&ls->lights[0]);
 	variant.light0_att_type		= get_light_attenuation_type (&ls->lights[0]);
@@ -715,6 +741,7 @@ upload_glsl_program (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	"#define HAS_TWO_SIDED_LIGHTING %d\n"
 	"#define SHADING_MODE %d\n"
 	"#define ALPHA_MODE %d\n"
+	"#define TEX_MODE %d\n"
 	"#define HAS_LIGHT0 %d\n"
 	"#define LIGHT0_TYPE %d\n"
 	"#define LIGHT0_ATT_TYPE %d\n"
@@ -754,6 +781,7 @@ upload_glsl_program (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	                variant.has_two_sided_lighting,
 	                variant.shading_mode,
 	                variant.alpha_mode,
+	                variant.tex_mode,
 	                variant.has_light0,
 	                variant.light0_type,
 	                variant.light0_att_type,

@@ -48,6 +48,7 @@ typedef union {
 		uint64_t has_two_sided_lighting	: 1;
 		uint64_t shading_mode		: 2;
 		uint64_t alpha_mode		: 1;
+		uint64_t tex_mode		: 3;
 
 		uint64_t has_light0		: 1;
 		uint64_t light0_type		: 2;

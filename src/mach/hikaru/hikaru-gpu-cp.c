@@ -1611,6 +1611,11 @@ get_texhead_index (uint32_t *inst)
  *
  * u = Unknown
  *
+ * The format also picks how the texel combines with the material colours
+ * in the X360 port's shaders (825B4340): 0 texel, 1 texel over 091 by its
+ * alpha, 2 texel times 091, 4 091 with the texel alpha, 5 291 over 091 by
+ * the texel.
+ *
  * See PH:@0C015BCC.
  *
  *

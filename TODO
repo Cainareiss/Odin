@@ -53,11 +53,15 @@ comes before any 0x901 the unit scale is assumed (HEURISTIC, Racer).
 GPU textures: the 0D1 UV offsets are added to the vertex UVs the way the
 X360 port's vertex shader is assumed to (the Xenos microcode of vo3d was
 not decoded: the sign is a HEURISTIC). Texhead filter mode 3 is trilinear
-here while the X360 port leaves the sampler defaults (HEURISTIC).
+here while the X360 port leaves the sampler defaults (HEURISTIC). The
+texture formats 3, 6 and 7 keep the previous texel combine mode in the
+port and mean plain texturing here (HEURISTIC).
 The 2D layers cover the 3D where a pixel has its alpha bit (black
 included: the bands of the Racer attract) and are transparent elsewhere
 (its green 0x03E0 boxes) and layer 1 sits above layer 2, as the Racer
-cabinet footage shows.
+cabinet footage shows. The bit (bank - 1) of the unit register 3C turns
+this keying on; without it the layer covers everything (the white SEGA
+screen of von4 on the cabinet). Read from two cabinets only (HEURISTIC).
 
 GPU lighting follows the X360 port's vo3d shaders: the 691 colour is the
 material ambient, the 091 colour stands for the texel of untextured
