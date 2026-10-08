@@ -1410,8 +1410,9 @@ draw_mesh (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	VK_ASSERT (mesh->vbo);
 
 	LOG ("variant=%016llx", (unsigned long long) hr->meshes.variant.full);
-	LOG ("==== DRAWING MESH @%p (#vertices=%u #instances=%u) ====",
-	     mesh, mesh->num_tris * 3, mesh->num_instances);
+	LOG ("==== DRAWING MESH @%p (#vertices=%u #instances=%u 103alpha=%.3f addr=%08X) ====",
+	     mesh, mesh->num_tris * 3, mesh->num_instances, mesh->poly_alpha,
+	     mesh->addr[0]);
 
 	print_rendstate (hr, mesh, "D");
 
@@ -1513,6 +1514,7 @@ hikaru_renderer_begin_mesh (vk_renderer_t *rend, uint32_t addr,
 	/* Make the mesh current and set the rendering state. */
 	hr->meshes.current = mesh;
 	update_and_set_rendstate (hr, mesh);
+	mesh->poly_alpha = POLY.alpha;
 	mesh->addr[0] = addr;
 
 	/* Clear the push buffer. */
