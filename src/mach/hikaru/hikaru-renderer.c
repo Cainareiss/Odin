@@ -2148,7 +2148,7 @@ static void
 draw (hikaru_renderer_t *hr)
 {
 	hikaru_gpu_t *gpu = hr->gpu;
-	GLuint n1, n2, f, b, layer1 = 0, layer2 = 0;
+	GLuint n1, n2, f, b, scene, layer1 = 0, layer2 = 0;
 	float factor, mult1 = 0.0f, mult2 = 0.0f;
 
 	/* Figure out the GPU framebuffer assignments */
@@ -2179,13 +2179,11 @@ draw (hikaru_renderer_t *hr)
 	b = (n2 < 2) ? hr->framebuffer.cb[n2] : (n2 == 2) ? layer1 : layer2;
 
 	/* Draw the 3D scene to the front buffer. */
-	glBindFramebuffer (GL_FRAMEBUFFER, f);
+	scene = (n1 < 2) ? n1 : (n2 < 2) ? n2 : 0;
+	glBindFramebuffer (GL_FRAMEBUFFER, hr->framebuffer.fb[scene]);
 	VK_ASSERT_NO_GL_ERROR ();
 
 	draw_scene (hr);
-	VK_ASSERT_NO_GL_ERROR ();
-
-	glBindFramebuffer (GL_FRAMEBUFFER, 0);
 	VK_ASSERT_NO_GL_ERROR ();
 
 
@@ -2193,12 +2191,59 @@ draw (hikaru_renderer_t *hr)
 	glDisable (GL_DEPTH_TEST);
 	glDisable (GL_BLEND);
 	glDisable (GL_POLYGON_OFFSET_FILL);
+	glDisable (GL_SCISSOR_TEST);
+	glViewport (0, 0, 640, 480);
+	VK_ASSERT_NO_GL_ERROR ();
+
+	glUseProgram (hr->framebuffer.program);
+	VK_ASSERT_NO_GL_ERROR ();
+
+	/* The blender output goes back into the buffer just drawn: the other
+	 * 3D buffer then holds every earlier frame, fading by the factor at
+	 * each frame. This is the motion blur of the cabinets (the stars of
+	 * the PHARRIER logo scene trail behind them at 181 = 01C6). */
+	if (factor > 0.0f && n1 < 2 && n2 < 2 && n1 != n2) {
+		glActiveTexture (GL_TEXTURE0 + 0);
+		glBindTexture (GL_TEXTURE_2D, b);
+		glActiveTexture (GL_TEXTURE0 + 1);
+		glBindTexture (GL_TEXTURE_2D, b);
+		glActiveTexture (GL_TEXTURE0 + 2);
+		glBindTexture (GL_TEXTURE_2D, 0);
+		glActiveTexture (GL_TEXTURE0 + 3);
+		glBindTexture (GL_TEXTURE_2D, 0);
+
+		glUniform1i (hr->framebuffer.locs.u_front,  0);
+		glUniform1i (hr->framebuffer.locs.u_back,   1);
+		glUniform1i (hr->framebuffer.locs.u_layer1, 2);
+		glUniform1i (hr->framebuffer.locs.u_layer2, 3);
+		glUniform1f (hr->framebuffer.locs.u_factor, 0.0f);
+		glUniform1f (hr->framebuffer.locs.u_mult_f, 1.0f);
+		glUniform1f (hr->framebuffer.locs.u_mult_b, 1.0f);
+		glUniform1f (hr->framebuffer.locs.u_mult_1, 0.0f);
+		glUniform1f (hr->framebuffer.locs.u_mult_2, 0.0f);
+		glUniform1f (hr->framebuffer.locs.u_keyed_3d, 0.0f);
+		glUniform1i (hr->framebuffer.locs.u_invert_f, 0);
+		glUniform1i (hr->framebuffer.locs.u_invert_b, 0);
+
+		glEnable (GL_BLEND);
+		glBlendColor (0.0f, 0.0f, 0.0f, factor);
+		glBlendFunc (GL_CONSTANT_ALPHA, GL_ONE_MINUS_CONSTANT_ALPHA);
+
+		glBindVertexArray (hr->framebuffer.vao);
+		glDrawArrays (GL_TRIANGLE_STRIP, 0, 4);
+		glBindVertexArray (0);
+
+		glDisable (GL_BLEND);
+		VK_ASSERT_NO_GL_ERROR ();
+
+		factor = 0.0f;
+	}
+
+	glBindFramebuffer (GL_FRAMEBUFFER, 0);
 	VK_ASSERT_NO_GL_ERROR ();
 
 
 	/* Composite all the buffers (front, back, layers). */
-	glUseProgram (hr->framebuffer.program);
-	VK_ASSERT_NO_GL_ERROR ();
 
 	/* Figure out the GPU framebuffer assignments. */
 	glActiveTexture (GL_TEXTURE0 + 0);
