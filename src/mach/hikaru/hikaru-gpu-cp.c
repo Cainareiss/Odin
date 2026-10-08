@@ -1913,13 +1913,14 @@ D (0x061)
  *	------f- WWWWWWWW CCCCCCCC CCCCCCCC
  *
  * D = No cone (the library sets it for every light without a cone)
- * C = cos (inner angle), 1.15 fixed point
+ * C = cos (outer angle), 1.15 fixed point
  * W = cos (inner) - cos (outer) as a float: 0xF0 minus its bits 26:19
  * f = Unknown flag (dl_emit_spotlight argument)
  *
  *	Emitted by the von4 library dl_emit_spotlight (0C715FA0) after the
- *	B61 vector; the X360 port fades the light with sat ((L . axis - cos
- *	outer) / (cos inner - cos outer)), axis towards the light.
+ *	B61 vector: it halves its two angles, sorts their cosines and sends
+ *	the smaller one as C. The X360 port fades the light with sat ((L .
+ *	axis - cos outer) / (cos inner - cos outer)), axis towards the light.
  *
  * See PH:@0C017A7C, PH:@0C017B6C, PH:@0C017C58, PH:@0C017CD4, PH:@0C017D64.
  */
@@ -1939,14 +1940,14 @@ I (0x051)
 		break;
 	case 4:
 		{
-			float cos_inner = (inst[1] & 0xFFFF) * (1.0f / 32768.0f);
+			float cos_outer = (inst[1] & 0xFFFF) * (1.0f / 32768.0f);
 			uint32_t bits = 0x38000000 |
 			                (((0xF0 - ((inst[1] >> 16) & 0xFF)) & 0xFF) << 19);
 			float width;
 
 			memcpy (&width, &bits, sizeof (width));
 			lit->has_cone = ((inst[0] >> 24) & 1) ^ 1;
-			lit->cos_outer = cos_inner - width;
+			lit->cos_outer = cos_outer;
 			lit->cone_scale = 1.0f / width;
 		}
 		lit->has_451 = 1;
@@ -1969,7 +1970,7 @@ D (0x051)
 	case 4:
 		UNHANDLED |= !!(inst[0] & 0xFEFFF000);
 		
-		DISASM ("lit: set cone [%s cos_in=%.3f w=%02X]", ((inst[0] >> 24) & 1) ? "none" : "on", (inst[1] & 0xFFFF) / 32768.0f, (inst[1] >> 16) & 0xFF);
+		DISASM ("lit: set cone [%s cos_out=%.3f w=%02X]", ((inst[0] >> 24) & 1) ? "none" : "on", (inst[1] & 0xFFFF) / 32768.0f, (inst[1] >> 16) & 0xFF);
 		break;
 	default:
 		VK_ASSERT (0);

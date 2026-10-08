@@ -77,7 +77,7 @@ light vectors arrive in eye space (the library transforms them on the
 SH-4), the 881 alpha bit turns
 the vertex alpha into a blend factor between 091 and 291 (or the texel),
 and the 451 carries the spot
-cone (cos inner in 1.15, width as 8 float bits; the B61 vector aims it),
+cone (cos outer in 1.15, width as 8 float bits; the B61 vector aims it),
 faded as sat ((L . axis - cos outer) / (cos inner - cos outer)). Kept from
 Valkyrie without an oracle (HEURISTIC): the two-sided lighting.
 On the PHARRIER cabinet the canopy and the hull of the helicopter carry
