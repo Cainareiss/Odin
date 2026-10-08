@@ -922,13 +922,10 @@ static void
 upload_viewport (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 {
 	hikaru_viewport_t *vp = &hr->vp_list[mesh->vp_index];
-	const float h = vp->clip.t - vp->clip.b;
-	const float w = vp->clip.r - vp->clip.l;
+	/* The projection plane is clip.f pixels away on the 640x480 screen. */
 	const float n_over_f = vp->clip.n / vp->clip.f;
-	const float hh_at_n = (h / 2.0f) * n_over_f;
-	const float hw_at_n = hh_at_n * (w / h);
-	const float dcx = (vp->offset.x - (w / 2.0f));
-	const float dcy = (vp->offset.y - (h / 2.0f));
+	const float hw_at_n = 320.0f * n_over_f;
+	const float hh_at_n = 240.0f * n_over_f;
 	mtx4x4f_t projection;
 
 	VK_ASSERT (mesh->vp_index != ~0);
@@ -956,22 +953,26 @@ upload_viewport (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 		/* continue anyway */
 	}
 
-	LOG ("vp  = %s : [w=%f h=%f dcx=%f dcy=%f]",
-	     get_viewport_str (vp), w, h, dcx, dcy);
+	LOG ("vp  = %s", get_viewport_str (vp));
 
 	vk_renderer_frustum (projection,
 	                     -hw_at_n, hw_at_n,
 	                     -hh_at_n, hh_at_n,
 	                     vp->clip.n, 1e5);
-//	vk_renderer_translate (projection, dcx, -dcy, 0.0f);
 
 	glUniformMatrix4fv (hr->meshes.locs.u_projection, 1, GL_FALSE,
 	                    (const GLfloat *) projection);
 
-	glViewport (vp->clip.l,
-	            vp->clip.b,
-	            vp->clip.r - vp->clip.l,
-	            vp->clip.t - vp->clip.b);
+	/* The centre and the clip window are screen coordinates, y down: the
+	 * view is centred on the offset and cut by the window. The driver
+	 * panels of SGNASCAR sit 40 lines below the middle and stop under
+	 * their banner; the letterboxed robots of von4 fill the lines 39 to
+	 * 360, as on the cabinets. */
+	glViewport ((GLint) vp->offset.x - 320, 240 - (GLint) vp->offset.y,
+	            640, 480);
+	glScissor ((GLint) vp->clip.l, 480 - (GLint) vp->clip.t,
+	           (GLsizei) (vp->clip.r - vp->clip.l),
+	           (GLsizei) (vp->clip.t - vp->clip.b));
 
 	if (hr->meshes.variant.has_fog) {
 		/* 621 words: P = 1 / (end - start), Q = near / end (von4
@@ -1877,7 +1878,9 @@ draw_scene (hikaru_renderer_t *hr)
 
 	for (vpi = 0; vpi < 8; vpi++) {
 		glDepthMask (GL_TRUE);
+		glDisable (GL_SCISSOR_TEST);
 		glClear (GL_DEPTH_BUFFER_BIT);
+		glEnable (GL_SCISSOR_TEST);
 		for (i = 0; i < NUMELEM (sorted_polytypes); i++)
 			draw_meshes_for_polytype (hr, vpi, sorted_polytypes[i]);
 	}
