@@ -982,10 +982,14 @@ hikaru_gpu_begin_dma (hikaru_gpu_t *gpu)
 			src_x, src_y, dst_x, dst_y, w, h);
 	}
 
+	/* The two 16-bit pixels of each 32-bit FB word are stored swapped
+	 * (see upload_layer): a copy between columns of different parity
+	 * must follow the pixels, not the memory order (the small print of
+	 * the AIRTRIX title). */
 	for (i = 0; i < h; i++) {
 		for (j = 0; j < w; j++) {
-			uint32_t src_offs = (src_y + i) * 4096 + (src_x + j) * 2;
-			uint32_t dst_offs = (dst_y + i) * 4096 + (dst_x + j) * 2;
+			uint32_t src_offs = (src_y + i) * 4096 + ((src_x + j) ^ 1) * 2;
+			uint32_t dst_offs = (dst_y + i) * 4096 + ((dst_x + j) ^ 1) * 2;
 			uint16_t pixel;
 			pixel = vk_buffer_get (gpu->fb, 2, src_offs);
 			vk_buffer_put (gpu->fb, 2, dst_offs, pixel);
