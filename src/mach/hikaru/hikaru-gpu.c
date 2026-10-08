@@ -669,7 +669,8 @@ hikaru_gpu_fill_layer_info (hikaru_gpu_t *gpu)
  *
  *			-------- -------- nnnnnnnn nnnnnnnn
  *
- *			n = Number of entries to process
+ *			n = Number of entries to process; reads back
+ *			    unchanged after the transfer
  *
  * 15000014  RW		Indirect DMA Control
  *
@@ -886,12 +887,12 @@ hikaru_gpu_step_idma (hikaru_gpu_t *gpu)
 {
 	uint32_t entry[4], addr;
 
-	/* XXX note that the bootrom code assumes that the IDMA may stop even
-	 * if there are still unprocessed entries. This probably means that
-	 * the IDMA may stop processing when any other GPU IRQ fires. There's
-	 * no solid proof however, and it doesn't seem to be required. */
+	/* The length register keeps its value: once the transfer is over the
+	 * library reads it back, adds it to its count of copied entries and
+	 * clears it (BOOTROM @0C006C04). BRAVEFF waits on that count every
+	 * 1024 entries (@0C042F68). */
 
-	if (!(REG15 (0x14) & 1) || !REG15 (0x10))
+	if (!(REG15 (0x14) & 1) || !gpu->idma.left)
 		return;
 
 	VK_ASSERT ((REG15 (0x0C) >> 24) == 0x48);
@@ -908,11 +909,11 @@ hikaru_gpu_step_idma (hikaru_gpu_t *gpu)
 	if (entry[1]) {
 		process_idma_entry (gpu, entry);
 		REG15 (0x0C) += 0x10;
-		REG15 (0x10) --;
+		gpu->idma.left--;
 	}
 
 	/* If there are no more entries, stop */
-	if (REG15 (0x10) == 0) {
+	if (gpu->idma.left == 0) {
 		REG15 (0x14) = 0;
 		hikaru_gpu_raise_irq (gpu, GPU15_IRQ_IDMA_END, 0);
 	}
@@ -1132,7 +1133,11 @@ hikaru_gpu_put (vk_device_t *device, unsigned size, uint32_t addr, uint64_t val)
 		case 0x08:
 		case 0x0C:
 		case 0x10:
-		case 0x14:
+			break;
+		case 0x14: /* IDMA Control */
+			if (val & 1)
+				gpu->idma.left = REG15 (0x10);
+			break;
 		case 0x18 ... 0x34:
 		case 0x38 ... 0x54:
 		case 0x70 ... 0x78:
@@ -1265,6 +1270,7 @@ hikaru_gpu_save_state (vk_device_t *dev, vk_state_t *state)
 
 	SAVE (gpu->regs);
 	SAVE (gpu->cp);
+	SAVE (gpu->idma);
 	SAVE (gpu->state);
 
 	return ret;
@@ -1278,6 +1284,7 @@ hikaru_gpu_load_state (vk_device_t *dev, vk_state_t *state)
 
 	LOAD (gpu->regs);
 	LOAD (gpu->cp);
+	LOAD (gpu->idma);
 	LOAD (gpu->state);
 
 	return ret;

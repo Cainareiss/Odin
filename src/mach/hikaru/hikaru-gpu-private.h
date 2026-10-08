@@ -309,6 +309,10 @@ typedef struct {
 	} cp;
 
 	struct {
+		uint32_t left;	/* entries still to copy */
+	} idma;
+
+	struct {
 		union {
 			struct {
 				uint32_t	: 16;
