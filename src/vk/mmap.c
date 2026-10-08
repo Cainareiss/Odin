@@ -126,8 +126,39 @@ get_region (vk_mmap_t *mmap, uint32_t addr, uint32_t flags)
 	return NULL;
 }
 
+/* A region is read or written in place when it is plain little-endian
+ * memory, is not logged, takes every access size and is the first match of
+ * the search for all of its addresses. */
+static void
+set_window (vk_mmap_t *mmap, vk_mmap_window_t *win, region_t *region,
+            uint32_t access, uint32_t excluded)
+{
+	uint32_t offs;
+
+	if ((region->flags & excluded) ||
+	    (region->flags & VK_REGION_SIZE_ALL) != VK_REGION_SIZE_ALL ||
+	    region->mask > 0x7FFFFFFF ||
+	    !vk_buffer_is_le (region->buf))
+		return;
+
+	VK_VECTOR_FOREACH (mmap->regions, offs) {
+		region_t *other = (region_t *) &mmap->regions->data[offs];
+		if (other == region)
+			break;
+		if ((other->flags & access) &&
+		    other->lo <= region->hi && other->hi >= region->lo)
+			return;
+	}
+
+	win->lo = region->lo;
+	win->span = region->hi - region->lo;
+	win->mask = region->mask;
+	win->size = vk_buffer_get_size (region->buf);
+	win->ptr = region->buf->ptr;
+}
+
 int
-vk_mmap_get (vk_mmap_t *mmap, unsigned size, uint32_t addr, void *data)
+vk_mmap_get_slow (vk_mmap_t *mmap, unsigned size, uint32_t addr, void *data)
 {
 	region_t *region;
 
@@ -147,6 +178,8 @@ vk_mmap_get (vk_mmap_t *mmap, unsigned size, uint32_t addr, void *data)
 		uint64_t temp;
 		temp = region->buf->get (region->buf, size, offs);
 		set_ptr (data, size, temp);
+		set_window (mmap, &mmap->rd, region, VK_REGION_R,
+		            VK_REGION_LOG_R);
 		return 0;
 	}
 
@@ -154,7 +187,7 @@ vk_mmap_get (vk_mmap_t *mmap, unsigned size, uint32_t addr, void *data)
 }
 
 int
-vk_mmap_put (vk_mmap_t *mmap, unsigned size, uint32_t addr, uint64_t data)
+vk_mmap_put_slow (vk_mmap_t *mmap, unsigned size, uint32_t addr, uint64_t data)
 {
 	region_t *region;
 
@@ -178,6 +211,8 @@ vk_mmap_put (vk_mmap_t *mmap, unsigned size, uint32_t addr, uint64_t data)
 	if (region->flags & VK_REGION_DIRECT) {
 		uint32_t offs = addr & region->mask;
 		region->buf->put (region->buf, size, offs, data);
+		set_window (mmap, &mmap->wr, region, VK_REGION_W,
+		            VK_REGION_LOG_W | VK_REGION_ROM);
 		return 0;
 	}
 

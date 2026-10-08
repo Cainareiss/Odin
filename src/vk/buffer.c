@@ -224,6 +224,18 @@ vk_buffer_get_size (vk_buffer_t *buf)
 	return buf ? buf->size : 0;
 }
 
+/* True when the host can read and write the buffer in place. */
+bool
+vk_buffer_is_le (vk_buffer_t *buf)
+{
+#ifdef VK_LITTLE_ENDIAN
+	return buf && buf->get == vk_buffer_le32_get &&
+	       buf->put == vk_buffer_le32_put;
+#else
+	return false;
+#endif
+}
+
 void *
 vk_buffer_get_ptr (vk_buffer_t *buf, unsigned offs)
 {
