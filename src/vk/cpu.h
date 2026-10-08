@@ -41,6 +41,7 @@ typedef enum {
 
 typedef struct vk_cpu_t vk_cpu_t;
 
+/* A patch may change the instruction and the CPU registers, nothing else. */
 typedef uint32_t (* vk_cpu_patch_t)(vk_cpu_t *, uint32_t, uint32_t);
 
 struct vk_cpu_t {

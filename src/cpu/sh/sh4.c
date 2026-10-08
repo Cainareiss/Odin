@@ -884,9 +884,14 @@ sh4_sq_put (sh4_t *ctx, unsigned size, uint32_t addr, uint64_t val)
 static int
 sh4_fetch (sh4_t *ctx, uint32_t addr, uint16_t *inst)
 {
+	vk_mmap_t *mmap = ctx->base.mmap;
 	int ret;
 
-	ret = vk_cpu_get ((vk_cpu_t *) ctx, 2, addr & ADDR_MASK, (void *) inst);
+	if (vk_mmap_get_fast (mmap, 2, addr & ADDR_MASK, (void *) inst))
+		return 0;
+
+	ctx->wait.touched = true;
+	ret = vk_mmap_get_slow (mmap, 2, addr & ADDR_MASK, (void *) inst);
 	if (ret)
 		VK_CPU_ABORT (ctx, "unhandled fetch @%08X", addr);
 	return 0;
@@ -904,9 +909,13 @@ sh4_get (sh4_t *ctx, unsigned size, uint32_t addr, void *val)
 	else if (addr >= 0xF0000000 && addr < 0xF8000000) {
 		VK_CPU_LOG (ctx, "ONCHIP R%d @%08X", 8*size, addr);
 		set_ptr (val, size, 0);
+		ctx->wait.touched = true;
 		return 0;
-	} else
-		ret = vk_cpu_get ((vk_cpu_t *) ctx, size, addr & ADDR_MASK, val);
+	} else if (vk_mmap_get_fast (ctx->base.mmap, size, addr & ADDR_MASK, val))
+		return 0;
+	else
+		ret = vk_mmap_get_slow (ctx->base.mmap, size, addr & ADDR_MASK, val);
+	ctx->wait.touched = true;
 	/* TODO propagate to the caller to allow for memory exceptions */
 	if (ret)
 		VK_CPU_ERROR (ctx, "unhandled R%d @%08X", 8*size, addr);
@@ -917,6 +926,8 @@ static int
 sh4_put (sh4_t *ctx, unsigned size, uint32_t addr, uint64_t val)
 {
 	int ret;
+
+	ctx->wait.touched = true;
 
 	if (IS_ON_CHIP (addr))
 		ret = sh4_ireg_put (ctx, size, addr, val);
@@ -1084,6 +1095,8 @@ sh4_process_irqs (vk_cpu_t *cpu)
 	index = ctx->intc.index;
 	if (ctx->intc.irqs[index].priority > SR.bit.i) {
 		sh4_sr_t tmp;
+
+		ctx->wait.touched = true;
 
 		/* Standard interrupt context switch */
 		SPC = PC;
@@ -1256,13 +1269,44 @@ delay_slot (sh4_t *ctx, uint32_t pc)
 	ctx->in_slot = false;
 }
 
+static void
+wait_mark (sh4_t *ctx)
+{
+	memcpy (&ctx->wait.regs, &ctx->regs, sizeof (ctx->regs));
+	ctx->wait.remaining = ctx->base.remaining;
+	ctx->wait.countdown = ctx->wait.period;
+	ctx->wait.touched = false;
+}
+
 static int
 sh4_run (vk_cpu_t *cpu, int cycles)
 {
 	sh4_t *ctx = (sh4_t *) cpu;
 
 	cpu->remaining = cycles;
+	ctx->wait.period = 16;
+	wait_mark (ctx);
 	while (cpu->remaining > 0 && cpu->state == VK_CPU_STATE_RUN) {
+		if (PC == ctx->wait.regs.pc) {
+			int turn = ctx->wait.remaining - cpu->remaining;
+
+			if (turn > 0) {
+				/* Back at the mark with the same registers, no
+				 * write and only plain memory read: nothing
+				 * else runs before the end of the slice, so
+				 * every further turn is the same. The whole
+				 * turns are counted without being run. */
+				if (!ctx->wait.touched &&
+				    !memcmp (&ctx->regs, &ctx->wait.regs,
+				             sizeof (ctx->regs)))
+					cpu->remaining = (cpu->remaining - 1) % turn + 1;
+				wait_mark (ctx);
+			}
+		} else if (--ctx->wait.countdown == 0) {
+			if (ctx->wait.period < 4096)
+				ctx->wait.period *= 2;
+			wait_mark (ctx);
+		}
 		sh4_process_irqs (cpu);
 		sh4_step (ctx, PC);
 		PC += 2;

@@ -73,8 +73,10 @@ int		 vk_mmap_add_dev (vk_mmap_t *mmap, uint32_t lo, uint32_t hi,
 int		 vk_mmap_get_slow (vk_mmap_t *mmap, unsigned size, uint32_t addr, void *data);
 int		 vk_mmap_put_slow (vk_mmap_t *mmap, unsigned size, uint32_t addr, uint64_t data);
 
-static inline int
-vk_mmap_get (vk_mmap_t *mmap, unsigned size, uint32_t addr, void *data)
+/* Reads in place; false when the address is not in the last plain memory
+ * region read. */
+static inline bool
+vk_mmap_get_fast (vk_mmap_t *mmap, unsigned size, uint32_t addr, void *data)
 {
 	const vk_mmap_window_t *win = &mmap->rd;
 	uint32_t offs = addr & win->mask;
@@ -83,18 +85,26 @@ vk_mmap_get (vk_mmap_t *mmap, unsigned size, uint32_t addr, void *data)
 		switch (size) {
 		case 1:
 			*(uint8_t *) data = win->ptr[offs];
-			return 0;
+			return true;
 		case 2:
 			memcpy (data, &win->ptr[offs], 2);
-			return 0;
+			return true;
 		case 4:
 			memcpy (data, &win->ptr[offs], 4);
-			return 0;
+			return true;
 		case 8:
 			memcpy (data, &win->ptr[offs], 8);
-			return 0;
+			return true;
 		}
 	}
+	return false;
+}
+
+static inline int
+vk_mmap_get (vk_mmap_t *mmap, unsigned size, uint32_t addr, void *data)
+{
+	if (vk_mmap_get_fast (mmap, size, addr, data))
+		return 0;
 	return vk_mmap_get_slow (mmap, size, addr, data);
 }
 
