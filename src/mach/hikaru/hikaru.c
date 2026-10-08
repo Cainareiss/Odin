@@ -948,6 +948,61 @@ patch_sgnascar (vk_cpu_t *cpu, uint32_t pc, uint32_t inst)
 	return inst;
 }
 
+/* The idle loop of the slave, in the BOOTROM, counts in R7 while the byte
+ * the master posts at GBR stays zero:
+ *
+ *	0C002030  mov.b @(0,gbr),r0
+ *	          mov   #2,r2
+ *	          shll8 r2
+ *	          addc  r2,r7
+ *	          mov   #-128,r1
+ *	          bf/s  1f
+ *	          shll16 r1
+ *	          (on a carry: writes port A)
+ *	1:        tst   r0,r0
+ *	          mov   #0,r0
+ *	          bt    0C002030
+ *
+ * A turn without a carry takes ten steps and only adds 0x201 to R7, and
+ * nothing else runs before the end of the slice: such turns are counted
+ * without being run, up to the turn that carries or the last of the slice. */
+static uint32_t
+slave_idle_loop (vk_cpu_t *cpu, uint32_t pc, uint32_t inst)
+{
+	hikaru_t *hikaru = (hikaru_t *) cpu->base.mach;
+	sh4_t *ctx = (sh4_t *) cpu;
+	uint32_t gbr = ctx->regs.gbr, tst, turns;
+	const uint16_t *code;
+
+	if (pc != 0x0C002030 || ctx->in_slot || cpu->remaining <= 10)
+		return inst;
+
+	code = (const uint16_t *) vk_buffer_get_ptr (hikaru->ram_s, 0x2030);
+	if (code[0] != 0xC400 || code[1] != 0xE202 || code[2] != 0x4218 ||
+	    code[3] != 0x372E || code[4] != 0xE180 ||
+	    (code[5] & 0xFF80) != 0x8F00 || code[6] != 0x4128)
+		return inst;
+
+	tst = 7 + (code[5] & 0x7F);
+	if (tst > 16 || code[tst] != 0x2008 || code[tst + 1] != 0xE000 ||
+	    code[tst + 2] != (0x8900 | ((0 - (tst + 4)) & 0xFF)))
+		return inst;
+
+	/* The registers a turn leaves, and the posted byte still zero */
+	if (R(0) != 0 || R(1) != 0xFF800000 || R(2) != 0x200 || !T ||
+	    (gbr >> 29) == 7 || (gbr & 0x1E000000) != 0x0C000000 ||
+	    *(uint8_t *) vk_buffer_get_ptr (hikaru->ram_s, gbr & 0x01FFFFFF))
+		return inst;
+
+	turns = MIN2 ((0xFFFFFFFF - R(7)) / 0x201,
+	              (uint32_t) (cpu->remaining - 1) / 10);
+	R(7) += turns * 0x201;
+	cpu->remaining -= (int) turns * 10;
+	ctx->wait.touched = true;
+
+	return inst;
+}
+
 /* Install game-specific patches into the master SH-4 */
 static void
 hikaru_install_game_patches (hikaru_t *hikaru)
@@ -1142,6 +1197,7 @@ hikaru_init (hikaru_t *hikaru)
 	sh4_set_porta_handlers (hikaru->sh_s, porta_get_s, porta_put_s);
 
 	hikaru_install_game_patches (hikaru);
+	vk_cpu_install_patch (hikaru->sh_s, slave_idle_loop);
 
 	return 0;
 }
