@@ -117,7 +117,8 @@ Fix alpha ordering, urgently.
 
 Fix instanced rendering; there is no linking system, just odd matrices.
 
-Implement framebuffer blending (instructions 781, 181; PHARRIER).
+Check the framebuffer blending (instructions 781, 181) on more footage: a
+2D layer as a blender input is done for the PHARRIER logo screens only.
 
 Figure out the effect of mesh LOD on texturing (normally, and SGNASCAR),
 disable mipmaps when appropriate (instruction 0C1 maybe).

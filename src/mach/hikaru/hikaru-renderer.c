@@ -1840,8 +1840,11 @@ static const char *fb_fs_source =
 "	vec4 texel_2 = texture (u_layer2, p_texcoords_inv);			\n"
 "	float on_1 = (u_mult_1 > 0.0) ? 1.0 : 0.0;				\n"
 "	float on_2 = (u_mult_2 > 0.0) ? 1.0 : 0.0;				\n"
-"	float cover_1 = (u_keyed_1 > 0.0) ? texel_1.a : 1.0;			\n"
-"	float cover_2 = (u_keyed_2 > 0.0) ? texel_2.a : 1.0;			\n"
+"	/* The key is the alpha bit: any non-zero alpha covers (the 2-bit	\n"
+"	 * alpha of the A2BGR10 layers of PHARRIER holds 1).			\n"
+"	 */									\n"
+"	float cover_1 = (u_keyed_1 > 0.0) ? step (0.1, texel_1.a) : 1.0;	\n"
+"	float cover_2 = (u_keyed_2 > 0.0) ? step (0.1, texel_2.a) : 1.0;	\n"
 "	vec4 color = mix (texel_f, texel_b, u_factor);				\n"
 "										\n"
 "	/* A layer pixel with its alpha bit covers the 3D, black included	\n"
@@ -2076,10 +2079,7 @@ draw (hikaru_renderer_t *hr)
 	VK_PRINT ("FRAMEBUFFER 781=%08X 181=%08X", gpu->fb_config._781, gpu->fb_config._181);
 
 	n1 = gpu->fb_config.num_1;
-	f = (n1 < 2) ? hr->framebuffer.cb[n1] : (n1 == 2) ? layer1 : layer2;
-
 	n2 = gpu->fb_config.num_2;
-	b = (n2 < 2) ? hr->framebuffer.cb[n2] : (n2 == 2) ? layer1 : layer2;
 
 	factor = 0.0f;
 	if (gpu->fb_config.blend)
@@ -2096,6 +2096,11 @@ draw (hikaru_renderer_t *hr)
 	    !hr->debug.flags[HR_DEBUG_NO_LAYER2])
 		upload_layer (hr, &LAYERS.layer[0][1], &layer2, &mult2);
 
+	/* The two blender inputs: buffers 0 and 1 are the 3D color buffers,
+	 * 2 and 3 the 2D layers, which must be uploaded by now (PHARRIER
+	 * blends layer 2 in for its logo screens, 781 = 0704/0705). */
+	f = (n1 < 2) ? hr->framebuffer.cb[n1] : (n1 == 2) ? layer1 : layer2;
+	b = (n2 < 2) ? hr->framebuffer.cb[n2] : (n2 == 2) ? layer1 : layer2;
 
 	/* Draw the 3D scene to the front buffer. */
 	glBindFramebuffer (GL_FRAMEBUFFER, f);
