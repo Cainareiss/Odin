@@ -194,8 +194,8 @@ typedef struct {
 			uint32_t repeatv: 1;	/* bit 23 */
 			uint32_t mirroru: 1;	/* bit 24, wins over repeat */
 			uint32_t mirrorv: 1;	/* bit 25 */
-			uint32_t format	: 3;	/* also picks how the texel combines with 091 and 291 (X360 825B4340) */
-			uint32_t unk6	: 3;
+			uint32_t format	: 3;
+			uint32_t texmode: 3;	/* bits 31:29, how the texel combines with 091 and 291 (X360 8252E368, 825B4340) */
 		};
 		uint32_t _2C1;
 	};

@@ -553,15 +553,14 @@ main (void)	\n \
 	base = mix (p_diffuse, texel.rgb, p_alpha);	\n \
 	alpha = texel.a;	\n \
 #elif TEX_MODE == 1	\n \
-	/* The texel alpha blends the texel over the 091 colour (vo3d.0x01010)	\n \
-	 * and still cuts the fragment: the Brave Firefighters cabinet shows	\n \
-	 * no 091 box around its 4444 logos (HEURISTIC: the port keeps the	\n \
-	 * polygon alpha alone). */	\n \
+	/* The texel alpha blends the texel over the 091 colour, the polygon	\n \
+	 * alpha alone remains (vo3d.0x01010). */	\n \
 	base = mix (p_diffuse, texel.rgb, texel.a);	\n \
-	alpha = texel.a * p_alpha;	\n \
+	alpha = p_alpha;	\n \
 #elif TEX_MODE == 2	\n \
-	/* The texel modulates the 091 colour (vo3d.0x01020). */	\n \
-	base = texel.rgb * p_diffuse;	\n \
+	/* The texel modulates the 291 colour: the vo3d.0x01020 vertex	\n \
+	 * shader sends ve_polygon_color1, not color0. */	\n \
+	base = texel.rgb * p_color1;	\n \
 	alpha = texel.a * p_alpha;	\n \
 #elif TEX_MODE == 3	\n \
 	/* The 091 colour with the texel alpha (vo3d.0x01030). */	\n \
@@ -701,14 +700,14 @@ get_glsl_variant (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	 * (vo3d.x1xxxxx variants). */
 	variant.alpha_mode		= mat->has_alpha;
 
-	/* The texture format picks how the texel combines with the material
-	 * colours, numbered as the port's shader variants (825B4340): formats
-	 * 1, 2, 4 and 5 select modes 1 to 4; 3, 6 and 7 keep the previous
-	 * mode there, plain texturing here (HEURISTIC). */
+	/* The 2C1 bits 31:29 pick how the texel combines with the material
+	 * colours, numbered as the port's shader variants (8252E368 byte 6,
+	 * 825B4340): values 1, 2, 4 and 5 select modes 1 to 4; 3, 6 and 7
+	 * keep the previous mode there, plain texturing here (HEURISTIC). */
 	if (variant.has_texture) {
 		hikaru_texhead_t *th = &hr->tex_list[mesh->tex_index];
 		static const uint8_t modes[8] = { 0, 1, 2, 0, 3, 4, 0, 0 };
-		variant.tex_mode = modes[th->format];
+		variant.tex_mode = modes[th->texmode];
 	}
 
 	if (!variant.has_lighting)

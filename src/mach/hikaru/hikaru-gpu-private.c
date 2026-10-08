@@ -133,11 +133,11 @@ get_texhead_str (hikaru_texhead_t *th)
 
 	get_texhead_coords (&basex, &basey, th);
 
-	sprintf (out, "[bank=%X slot=(%2X,%2X) pos=(%3X,%3X) -> offs=%08X] [size=%3ux%3u format=%s] 0C1=%08X 2C1=%08X",
+	sprintf (out, "[bank=%X slot=(%2X,%2X) pos=(%3X,%3X) -> offs=%08X] [size=%3ux%3u format=%s] 0C1=%08X 2C1=%08X mode=%u",
 	         th->bank, th->slotx, th->sloty,
 	         basex, basey, basey*4096 + basex*2,
 	         16 << th->logw, 16 << th->logh,
-	         name[th->format], th->_0C1, th->_2C1);
+	         name[th->format], th->_0C1, th->_2C1, th->texmode);
 
 	return (const char *) out;
 }

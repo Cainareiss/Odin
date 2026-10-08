@@ -1623,12 +1623,11 @@ get_texhead_index (uint32_t *inst)
  * H = log16 of Height 
  * W = log16 of Width
  *
- * u = Unknown
- *
- * The format also picks how the texel combines with the material colours
- * in the X360 port's shaders (825B4340): 0 texel, 1 texel over 091 by its
- * alpha, 2 texel times 091, 4 091 with the texel alpha, 5 291 over 091 by
- * the texel.
+ * U = How the texel combines with the material colours in the X360 port's
+ *     shaders (8252E368 byte 6, 825B4340, vo3d vertex shaders): 0 texel,
+ *     1 texel over 091 by its alpha, 2 texel times 291, 4 091 with the
+ *     texel alpha, 5 291 over 091 by the texel; 3, 6 and 7 keep the
+ *     previous mode there.
  *
  * See PH:@0C015BCC.
  *
@@ -1683,15 +1682,16 @@ D (0x0C1)
 	case 2:
 		UNHANDLED |= !!(inst[0] & 0x00003800);
 
-		DISASM ("tex: set format [%ux%u fmt=%u wrap=(%u %u|%u %u) unk=%X]",
+		DISASM ("tex: set format [%ux%u fmt=%u mode=%u wrap=(%u %u|%u %u) unk=%X]",
 		        16 << ((inst[0] >> 16) & 7),
 		        16 << ((inst[0] >> 19) & 7),
 		        (inst[0] >> 26) & 7,
+		        (inst[0] >> 29) & 7,
 		        (inst[0] >> 22) & 1,
 		        (inst[0] >> 23) & 1,
 		        (inst[0] >> 24) & 1,
 		        (inst[0] >> 25) & 1,
-		        ((inst[0] >> 14) & 3) | (((inst[0] >> 29) & 7) << 2));
+		        (inst[0] >> 14) & 3);
 		break;
 	case 4:
 		DISASM ("tex: set slot [bank=%u (%X,%X)]",
