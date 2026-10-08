@@ -73,13 +73,17 @@ GPU lighting follows the X360 port's vo3d shaders: the 691 colour is the
 material ambient, the 091 colour stands for the texel of untextured
 polygons, the 491 colour is multiplied by 4 (8-bit wrap as in the port),
 the light colour drives both the diffuse and the Blinn specular terms,
-attenuation types 2 and 3 do not attenuate, light vectors arrive in eye
-space (the library transforms them on the SH-4), the 881 alpha bit turns
+light vectors arrive in eye space (the library transforms them on the
+SH-4), the 881 alpha bit turns
 the vertex alpha into a blend factor between 091 and 291 (or the texel),
 and the 451 carries the spot
 cone (cos inner in 1.15, width as 8 float bits; the B61 vector aims it),
 faded as sat ((L . axis - cos outer) / (cos inner - cos outer)). Kept from
 Valkyrie without an oracle (HEURISTIC): the two-sided lighting.
+Not as the port: the attenuation types 2 and 3 fall off on 1 / d and
+1 / d^2 with the P and Q of the library (the port does not attenuate
+them); the PHARRIER cabinet shows its asteroids untouched by the far
+type 3 light of the logo scene.
 
 EEPROMs: the main board 93C46 (SH-4 port A, src/odin/eeprom_bridge.cpp)
 and the ROM board X76F100 (bus page 0x14, src/odin/x76f100.cpp) are

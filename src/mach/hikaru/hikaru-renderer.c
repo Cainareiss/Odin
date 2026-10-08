@@ -528,11 +528,18 @@ apply_light (inout vec3 diffuse,	\n \
 		light_direction = delta / distance;	\n \
 	}	\n \
 	\n \
-	/* X360 825C5BA0: sat (P d + P Q), sat (P d^2 + P Q), else none. */	\n \
+	/* X360 825C5BA0: sat (P d + P Q), sat (P d^2 + P Q). The port does	\n \
+	 * not attenuate the types 2 and 3; the hardware does, on 1 / d and	\n \
+	 * 1 / d^2 (the far red light of the PHARRIER logo scene, which	\n \
+	 * leaves the asteroids grey on the cabinet). */	\n \
 	if (att_type == 0)	\n \
 		attenuation = clamp (light.extents.x * (distance + light.extents.y), 0.0, 1.0);	\n \
 	else if (att_type == 1)	\n \
 		attenuation = clamp (light.extents.x * (distance * distance + light.extents.y), 0.0, 1.0);	\n \
+	else if (att_type == 2)	\n \
+		attenuation = clamp (light.extents.x * (1.0 / distance + light.extents.y), 0.0, 1.0);	\n \
+	else if (att_type == 3)	\n \
+		attenuation = clamp (light.extents.x * (1.0 / (distance * distance) + light.extents.y), 0.0, 1.0);	\n \
 	else	\n \
 		attenuation = 1.0;	\n \
 	\n \
