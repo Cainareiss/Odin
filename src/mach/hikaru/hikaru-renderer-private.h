@@ -135,6 +135,7 @@ typedef struct {
 		GLuint			program;
 		GLuint			vao;
 		float			alpha_ref;
+		bool			depth_bias;
 		bool			weigh_by_alpha;
 
 		struct {
@@ -142,6 +143,7 @@ typedef struct {
 			GLuint		u_modelview;
 			GLuint		u_normal;
 			GLuint		u_modelview2;
+			GLuint		u_depth_scale;
 			GLuint		u_normal2;
 			struct {
 				GLuint	position;

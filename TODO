@@ -139,6 +139,12 @@ lamps of AIRTRIX, the smoke of BRAVEFF). The X360 port reverses its list
 of objects instead. Each run of triangles sets its whole state again:
 batch them when speed matters.
 
+The 101 bias brings a translucent or punch-through mesh nearer by
+bias / 65536 of its own depth (HEURISTIC, bracketed by two cabinets: four
+times as much and a light shaft of AIRTRIX covers the skater, four times
+less and its wall decals sink; the stars of PHARRIER stay behind its
+asteroids). The unit of the hardware is not known.
+
 The 161 with bit 18 loads a second modelview and a vertex with bit 12 of
 its header follows it (the AIRTRIX trails and skater joints); bit 19, set on
 the last row by one library entry, is not understood.

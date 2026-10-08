@@ -439,6 +439,7 @@ uniform mat4 u_modelview;							\n \
 uniform mat3 u_normal;								\n \
 uniform mat4 u_modelview2;							\n \
 uniform mat3 u_normal2;								\n \
+uniform float u_depth_scale;							\n \
 										\n \
 layout(location = 0) in vec3 i_position;					\n \
 layout(location = 1) in vec3 i_normal;						\n \
@@ -467,7 +468,8 @@ void main (void) {								\n \
 		p_position = u_modelview * vec4 (i_position, 1.0);		\n \
 		p_normal = u_normal * i_normal;					\n \
 	}									\n \
-	gl_Position = u_projection * p_position;				\n \
+	/* The depth bias brings the whole position nearer: same pixel. */	\n \
+	gl_Position = u_projection * vec4 (p_position.xyz * u_depth_scale, 1.0);	\n \
 										\n \
 	p_diffuse = i_diffuse;							\n \
 	p_ambient = i_ambient;							\n \
@@ -873,6 +875,8 @@ update_locations:
 		glGetUniformLocation (hr->meshes.program, "u_modelview");
 	hr->meshes.locs.u_normal =
 		glGetUniformLocation (hr->meshes.program, "u_normal");
+	hr->meshes.locs.u_depth_scale =
+		glGetUniformLocation (hr->meshes.program, "u_depth_scale");
 	hr->meshes.locs.u_modelview2 =
 		glGetUniformLocation (hr->meshes.program, "u_modelview2");
 	hr->meshes.locs.u_normal2 =
@@ -1518,7 +1522,14 @@ draw_mesh (hikaru_renderer_t *hr, hikaru_mesh_t *mesh,
 	VAP (7, 1, GL_UNSIGNED_BYTE,  alpha,     GL_TRUE);
 	VAP (8, 1, GL_UNSIGNED_BYTE,  second_mv, GL_TRUE);
 
-	glPolygonOffset (0.0f, -mesh->depth_bias);
+	/* The 101 bias brings the mesh nearer by a fraction of its own depth
+	 * (HEURISTIC, 1/65536 per unit: four times as much and a light shaft
+	 * of AIRTRIX covers the skater, four times less and its wall decals
+	 * sink). As an offset in depth buffer units it let the stars of
+	 * PHARRIER, biased by 0x400, through its far asteroids. */
+	glUniform1f (hr->meshes.locs.u_depth_scale,
+	             hr->meshes.depth_bias ?
+	             1.0f - mesh->depth_bias * (1.0f / 65536.0f) : 1.0f);
 
 	if (hr->debug.flags[HR_DEBUG_NO_INSTANCING]) {
 		unsigned i = MIN2 (hr->debug.flags[HR_DEBUG_SELECT_INSTANCE],
@@ -1784,22 +1795,22 @@ draw_meshes_for_polytype (hikaru_renderer_t *hr, unsigned vpi, int polytype)
 	switch (polytype) {
 	case HIKARU_POLYTYPE_TRANSPARENT:
 		glDepthMask (GL_TRUE);
-		glEnable (GL_POLYGON_OFFSET_FILL);
+		hr->meshes.depth_bias = true;
 		hr->meshes.alpha_ref = 0.5f;
 		break;
 	case HIKARU_POLYTYPE_TRANSLUCENT:
 		glDepthMask (GL_FALSE);
-		glEnable (GL_POLYGON_OFFSET_FILL);
+		hr->meshes.depth_bias = true;
 		hr->meshes.alpha_ref = 1.0f / 255.0f;
 		break;
 	case HIKARU_POLYTYPE_BACKGROUND:
 		glDepthMask (GL_FALSE);
-		glDisable (GL_POLYGON_OFFSET_FILL);
+		hr->meshes.depth_bias = false;
 		hr->meshes.alpha_ref = 1.0f / 255.0f;
 		break;
 	default:
 		glDepthMask (GL_TRUE);
-		glDisable (GL_POLYGON_OFFSET_FILL);
+		hr->meshes.depth_bias = false;
 		hr->meshes.alpha_ref = -1.0f;
 		break;
 	}
@@ -2305,7 +2316,6 @@ draw (hikaru_renderer_t *hr)
 	/* Setup the GL state for 2D drawing. */
 	glDisable (GL_DEPTH_TEST);
 	glDisable (GL_BLEND);
-	glDisable (GL_POLYGON_OFFSET_FILL);
 	glDisable (GL_SCISSOR_TEST);
 	glViewport (0, 0, 640, 480);
 	VK_ASSERT_NO_GL_ERROR ();
