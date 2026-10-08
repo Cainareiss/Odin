@@ -360,6 +360,7 @@ typedef struct {
 	
 		struct {
 			hikaru_modelview_t table[NUM_MODELVIEWS];
+			hikaru_modelview_t second;	/* 161 with bit 18 */
 			uint32_t depth, total;
 		} modelviews;
 	
@@ -453,7 +454,7 @@ typedef union {
 		uint32_t tpivot		: 1; /* 0x00000004 */
 		uint32_t		: 6;
 		uint32_t tricap		: 3; /* 0x00000E00 */
-		uint32_t unknown1	: 1; /* 0x00001000 */
+		uint32_t second_mv	: 1; /* 0x00001000, the vertex follows the second modelview */
 		uint32_t unknown2	: 3; /* 0x0000E000 */
 		uint32_t		: 2;
 		uint32_t uv_offset	: 2; /* 0x000C0000, selector of the UV offset table */
@@ -470,7 +471,7 @@ typedef struct {
 	uint8_t alpha;		/* 0x0F */
 	vec3f_t normal;		/* 0x10 */
 	vec3b_t ambient;	/* 0x1C */
-	uint8_t padding3;
+	uint8_t second_mv;	/* 0x1F, non-zero: follows the second modelview */
 	vec2f_t texcoords;	/* 0x20 */
 	vec4b_t specular;	/* 0x28 */
 	vec3b_t color1;		/* 0x2C */

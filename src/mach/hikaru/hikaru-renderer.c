@@ -27,7 +27,7 @@
 #define LS0	LIT.scratchset
 
 #define MAX_VIEWPORTS	4096
-#define MAX_MODELVIEWS	4096
+#define MAX_MODELVIEWS	8192
 #define MAX_MATERIALS	4096
 #define MAX_TEXHEADS	4096
 #define MAX_LIGHTSETS	4096
@@ -437,6 +437,8 @@ static const char *mesh_vs_source =
 uniform mat4 u_projection;							\n \
 uniform mat4 u_modelview;							\n \
 uniform mat3 u_normal;								\n \
+uniform mat4 u_modelview2;							\n \
+uniform mat3 u_normal2;								\n \
 										\n \
 layout(location = 0) in vec3 i_position;					\n \
 layout(location = 1) in vec3 i_normal;						\n \
@@ -446,6 +448,7 @@ layout(location = 4) in vec4 i_specular;					\n \
 layout(location = 5) in vec3 i_color1;						\n \
 layout(location = 6) in vec2 i_texcoords;					\n \
 layout(location = 7) in float i_alpha;						\n \
+layout(location = 8) in float i_second_mv;					\n \
 										\n \
 out vec4 p_position;								\n \
 out vec3 p_normal;								\n \
@@ -457,10 +460,14 @@ out vec2 p_texcoords;								\n \
 out float p_alpha;								\n \
 										\n \
 void main (void) {								\n \
-	p_position = u_modelview * vec4 (i_position, 1.0);			\n \
+	if (i_second_mv > 0.5) {						\n \
+		p_position = u_modelview2 * vec4 (i_position, 1.0);		\n \
+		p_normal = u_normal2 * i_normal;				\n \
+	} else {								\n \
+		p_position = u_modelview * vec4 (i_position, 1.0);		\n \
+		p_normal = u_normal * i_normal;					\n \
+	}									\n \
 	gl_Position = u_projection * p_position;				\n \
-										\n \
-	p_normal = u_normal * i_normal;						\n \
 										\n \
 	p_diffuse = i_diffuse;							\n \
 	p_ambient = i_ambient;							\n \
@@ -853,6 +860,10 @@ update_locations:
 		glGetUniformLocation (hr->meshes.program, "u_modelview");
 	hr->meshes.locs.u_normal =
 		glGetUniformLocation (hr->meshes.program, "u_normal");
+	hr->meshes.locs.u_modelview2 =
+		glGetUniformLocation (hr->meshes.program, "u_modelview2");
+	hr->meshes.locs.u_normal2 =
+		glGetUniformLocation (hr->meshes.program, "u_normal2");
 	for (i = 0; i < 4; i++) {
 		char temp[64];
 
@@ -992,6 +1003,15 @@ upload_modelview (hikaru_renderer_t *hr, hikaru_mesh_t *mesh, unsigned i)
 	                    (const GLfloat *) mv->mtx);
 
 	glUniformMatrix3fv (hr->meshes.locs.u_normal, 1, GL_FALSE,
+	                    (const GLfloat *) normal);
+
+	/* The second modelview, for the vertices that follow it. */
+	if (mesh->mv2_index < MAX_MODELVIEWS)
+		mv = &hr->mv_list[mesh->mv2_index];
+	vk_renderer_compute_normal_matrix (normal, mv->mtx);
+	glUniformMatrix4fv (hr->meshes.locs.u_modelview2, 1, GL_FALSE,
+	                    (const GLfloat *) mv->mtx);
+	glUniformMatrix3fv (hr->meshes.locs.u_normal2, 1, GL_FALSE,
 	                    (const GLfloat *) normal);
 }
 
@@ -1195,7 +1215,9 @@ add_triangle (hikaru_renderer_t *hr)
 		*/
 
 		/* Degenerate triangles are dropped, as in the X360 port
-		 * (825B6100). */
+		 * (825B6100); not when the vertices follow different
+		 * modelviews, the matrices give them their shape then (the
+		 * AIRTRIX trails). */
 		for (i = 0; i < 3; i++) {
 			e1[i] = b->position[i] - a->position[i];
 			e2[i] = c->position[i] - a->position[i];
@@ -1203,7 +1225,8 @@ add_triangle (hikaru_renderer_t *hr)
 		n[0] = e1[1] * e2[2] - e1[2] * e2[1];
 		n[1] = e1[2] * e2[0] - e1[0] * e2[2];
 		n[2] = e1[0] * e2[1] - e1[1] * e2[0];
-		if ((n[0] * n[0] + n[1] * n[1] + n[2] * n[2]) <= 0.0f)
+		if (a->second_mv == b->second_mv && b->second_mv == c->second_mv &&
+		    (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]) <= 0.0f)
 			return;
 
 		/* The winding is the vertex order, reversed by the winding bit
@@ -1287,6 +1310,11 @@ hikaru_renderer_push_vertices (vk_renderer_t *rend,
 		/* Set the normal. */
 		if (flags & HR_PUSH_NRM)
 			VK_COPY_VEC3F (hr->push.tmp[2].body.normal, v->body.normal);
+
+		/* Bit 12 of the header: the vertex follows the second
+		 * modelview (161 with bit 18), chosen in the vertex shader. */
+		if (flags & HR_PUSH_POS)
+			hr->push.tmp[2].body.second_mv = v->info.second_mv ? 255 : 0;
 
 		/* Set the texcoords. */
 		if (flags & HR_PUSH_TXC)
@@ -1391,6 +1419,16 @@ update_and_set_rendstate (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 		MV.depth = 0;
 	}
 
+	/* The second modelview (161 with bit 18) is listed when it changes. */
+	if (hr->mv2_index >= MAX_MODELVIEWS ||
+	    memcmp (&hr->mv_list[hr->mv2_index], &MV.second,
+	            sizeof (hikaru_modelview_t)) != 0) {
+		VK_ASSERT (hr->num_mvs < MAX_MODELVIEWS);
+		hr->mv2_index = hr->num_mvs;
+		hr->mv_list[hr->num_mvs++] = MV.second;
+	}
+	mesh->mv2_index = hr->mv2_index;
+
 	mesh->depth_bias = gpu->depth_bias;
 
 	mesh->vp_index = hr->num_vps - 1;
@@ -1455,6 +1493,7 @@ draw_mesh (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	VAP (5, 3, GL_UNSIGNED_BYTE,  color1,    GL_TRUE);
 	VAP (6, 2, GL_FLOAT,          texcoords, GL_FALSE);
 	VAP (7, 1, GL_UNSIGNED_BYTE,  alpha,     GL_TRUE);
+	VAP (8, 1, GL_UNSIGNED_BYTE,  second_mv, GL_TRUE);
 
 	glPolygonOffset (0.0f, -mesh->depth_bias);
 
@@ -2197,6 +2236,7 @@ hikaru_renderer_begin_frame (vk_renderer_t *renderer)
 	hr->num_vps = 0;
 	hr->num_mvs = 0;
 	hr->num_instances = 0;
+	hr->mv2_index = ~0;
 	hr->num_mats = 0;
 	hr->num_texs = 0;
 	hr->num_lss = 0;

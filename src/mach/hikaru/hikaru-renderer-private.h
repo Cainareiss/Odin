@@ -82,6 +82,7 @@ typedef struct {
 	uint32_t		addr[2];
 	uint32_t		vp_index;
 	uint32_t		mv_index;
+	uint32_t		mv2_index;	/* second modelview */
 	uint32_t		num_instances;
 	uint32_t		mat_index;
 	uint32_t		tex_index;
@@ -105,6 +106,7 @@ typedef struct {
 	hikaru_modelview_t	*mv_list;
 	uint32_t		 num_mvs;
 	uint32_t		 num_instances;
+	uint32_t		 mv2_index;	/* last second modelview listed this frame */
 
 	hikaru_material_t	*mat_list;
 	uint32_t		 num_mats;
@@ -137,6 +139,8 @@ typedef struct {
 			GLuint		u_projection;
 			GLuint		u_modelview;
 			GLuint		u_normal;
+			GLuint		u_modelview2;
+			GLuint		u_normal2;
 			struct {
 				GLuint	position;
 				GLuint	direction;

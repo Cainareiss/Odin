@@ -116,7 +116,9 @@ see things (affects all games).
 
 Fix alpha ordering, urgently.
 
-Fix instanced rendering; there is no linking system, just odd matrices.
+The 161 with bit 18 loads a second modelview and a vertex with bit 12 of
+its header follows it (the AIRTRIX trails and skater joints); bit 19, set on
+the last row by one library entry, is not understood.
 
 Triangles are wound after the vertex order and the winding bit, as the
 SGNASCAR cabinet shows; the X360 port winds them after the vertex normals,

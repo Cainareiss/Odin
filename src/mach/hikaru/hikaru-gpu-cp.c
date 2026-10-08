@@ -1041,12 +1041,15 @@ norm_vec4 (vec4f_t v)
  *	YYYYYYYY YYYYYYYY YYYYYYYY YYYYYYYY
  *	ZZZZZZZZ ZZZZZZZZ ZZZZZZZZ ZZZZZZZZ
  *
- * M = Multiply with previous?
+ * M = Unknown. One library entry sets it along with P on the last row
+ *     (AIRTRIX 0C69A700); not seen in a display list yet.
  *
- * P = Push
+ * P = Second modelview
  *
- *	Pushes the uploaded modelview matrix in the modelview stack. Used
- *	for instanced drawing.
+ *	The row goes to the second modelview instead of the current one. A
+ *	vertex with bit 12 of its header follows that matrix: each segment
+ *	of the AIRTRIX trails is a quad with one edge on each, and the
+ *	joints of its skater are skinned the same way.
  *
  * U = Unknown
  *
@@ -1099,14 +1102,24 @@ I (0x161)
 	switch ((inst[0] >> 8) & 0xF) {
 
 	case 0x1:
-		/* Ignore conditional version. */
-		if (inst[0] & 0x000CF000) {
-			VK_ERROR ("@%08X: conditional modelview", PC);
-			return;
+		/* Bits 19 and 15:12 are not understood. */
+		if (inst[0] & 0x0008F000) {
+			VK_ERROR ("@%08X: unhandled modelview bits %08X", PC, inst[0]);
+			if (inst[0] & 0x0000F000)
+				return;
 		}
 
 		push = (inst[0] >> 18) & 1;
 		elem = (inst[0] >> 16) & 3;
+
+		if (push) {
+			mv = &MV.second;
+			mv->mtx[elem][0] = *(float *) &inst[1];
+			mv->mtx[elem][1] = *(float *) &inst[2];
+			mv->mtx[elem][2] = *(float *) &inst[3];
+			mv->mtx[elem][3] = (elem == 3) ? 1.0f : 0.0f;
+			break;
+		}
 
 		/* First element during upload. */
 		if (elem == 3) {
@@ -1127,14 +1140,8 @@ I (0x161)
 
 		/* Last element during upload. */
 		if (elem == 0) {
-			if (push) {
-				MV.depth++;
-				VK_ASSERT (MV.depth < NUM_MODELVIEWS);
-			} else {
-				MV.total = MV.depth + 1;
-				MV.depth = 0;
-			}
-			VK_LOG ("DEBUG MTX depth=%u total=%u", MV.depth, MV.total);
+			MV.total = MV.depth + 1;
+			MV.depth = 0;
 		}
 		break;
 	case 0x5:
