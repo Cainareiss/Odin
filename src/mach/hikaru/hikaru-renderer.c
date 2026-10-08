@@ -472,6 +472,8 @@ struct light_t {								\n \
 	vec3 direction;								\n \
 	vec3 color;								\n \
 	vec2 extents;								\n \
+	vec3 spot;								\n \
+	vec2 cone;								\n \
 };										\n \
 										\n \
 uniform light_t		u_lights[4];						\n \
@@ -518,12 +520,10 @@ apply_light (inout vec3 diffuse,	\n \
 	else	\n \
 		attenuation = 1.0;	\n \
 	\n \
-	/* HEURISTIC spot cone; the port does not read it this way. */	\n \
-	if (type == 2) {	\n \
-		vec3 spot_direction = normalize (light.direction);	\n \
-		if (dot (spot_direction, light_direction) < 0.95)	\n \
-			attenuation = 0.0;	\n \
-	}	\n \
+	/* X360 825C5498: sat ((L . axis - cos outer) / (cos inner - cos	\n \
+	 * outer)), the axis pointing from the target to the light. */	\n \
+	if (type == 2)	\n \
+		attenuation *= clamp ((dot (light_direction, normalize (-light.spot)) - light.cone.x) * light.cone.y, 0.0, 1.0);	\n \
 	\n \
 #if HAS_TWO_SIDED_LIGHTING	\n \
 	n_dot_l = abs (dot (normal, light_direction));	\n \
@@ -652,7 +652,7 @@ get_light_type (hikaru_light_t *lit)
 		VK_ERROR ("recalling light with no direction nor position!");
 	if (get_light_attenuation_type (lit) == HIKARU_LIGHT_ATT_INF)
 		return HIKARU_LIGHT_TYPE_DIRECTIONAL;
-	else if (lit->has_direction && lit->has_position)
+	else if (lit->has_position && lit->has_spot && lit->has_cone)
 		return HIKARU_LIGHT_TYPE_SPOT;
 	else if (lit->has_position)
 		return HIKARU_LIGHT_TYPE_POSITIONAL;
@@ -857,6 +857,12 @@ update_locations:
 		sprintf (temp, "u_lights[%d].color", i);
 		hr->meshes.locs.u_lights[i].color =
 			glGetUniformLocation (hr->meshes.program, temp);
+		sprintf (temp, "u_lights[%d].spot", i);
+		hr->meshes.locs.u_lights[i].spot =
+			glGetUniformLocation (hr->meshes.program, temp);
+		sprintf (temp, "u_lights[%d].cone", i);
+		hr->meshes.locs.u_lights[i].cone =
+			glGetUniformLocation (hr->meshes.program, temp);
 		sprintf (temp, "u_lights[%d].extents", i);
 		hr->meshes.locs.u_lights[i].extents =
 			glGetUniformLocation (hr->meshes.program, temp);
@@ -1038,7 +1044,8 @@ upload_lightset (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	if (!hr->meshes.variant.has_lighting)
 		return;
 
-	LOG ("lightset = %s", get_lightset_str (ls));
+	LOG ("lightset [%u] mask=%X = %s", mesh->ls_index, ls->mask,
+	     get_lightset_str (ls));
 
 	get_light_ambient (hr, mesh, tmp);
 	glUniform3fv (hr->meshes.locs.u_ambient, 1, (const GLfloat *) tmp);
@@ -1064,6 +1071,12 @@ upload_lightset (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 
 		glUniform2fv (hr->meshes.locs.u_lights[i].extents, 1,
 		              lt->attenuation);
+
+		glUniform3fv (hr->meshes.locs.u_lights[i].spot, 1, lt->spot);
+		tmp[0] = lt->cos_outer;
+		tmp[1] = lt->cone_scale;
+		glUniform2fv (hr->meshes.locs.u_lights[i].cone, 1, tmp);
+		VK_ASSERT_NO_GL_ERROR ();
 	}
 }
 

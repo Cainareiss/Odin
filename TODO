@@ -69,9 +69,10 @@ polygons, the 491 colour is multiplied by 4 (8-bit wrap as in the port),
 the light colour drives both the diffuse and the Blinn specular terms,
 attenuation types 2 and 3 do not attenuate, light vectors go through the
 current modelview, the 881 alpha bit turns the vertex alpha into a blend
-factor between 091 and 291 (or the texel), and the 451 specular colour is
-unused. Kept from Valkyrie without an oracle (HEURISTIC): the spot cone
-(0.95) and the two-sided lighting.
+factor between 091 and 291 (or the texel), and the 451 carries the spot
+cone (cos inner in 1.15, width as 8 float bits; the B61 vector aims it),
+faded as sat ((L . axis - cos outer) / (cos inner - cos outer)). Kept from
+Valkyrie without an oracle (HEURISTIC): the two-sided lighting.
 
 EEPROMs: the main board 93C46 (SH-4 port A, src/odin/eeprom_bridge.cpp)
 and the ROM board X76F100 (bus page 0x14, src/odin/x76f100.cpp) are
@@ -114,8 +115,6 @@ see things (affects all games).
 Fix alpha ordering, urgently.
 
 Fix instanced rendering; there is no linking system, just odd matrices.
-
-Figure out where the spotlight angles are (194 is the best candidate).
 
 Implement framebuffer blending (instructions 781, 181; PHARRIER).
 

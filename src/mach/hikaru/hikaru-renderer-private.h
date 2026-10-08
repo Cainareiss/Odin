@@ -141,6 +141,8 @@ typedef struct {
 				GLuint	direction;
 				GLuint	color;
 				GLuint	extents;
+				GLuint	spot;
+				GLuint	cone;
 			} u_lights[4];
 			GLuint		u_ambient;
 			GLuint		u_texture;

@@ -1159,6 +1159,15 @@ I (0x161)
 			v[2] = *(float *) &inst[3];
 			v[3] = 0.0f;
 			mult_mtx4x4f_vec4f (w, MV.table[MV.depth].mtx, v);
+			if (((inst[0] >> 8) & 0xF) == 0xB) {
+				/* B61: spot axis, from the light to its target
+				 * (von4 library 0C715FA0). */
+				lit->spot[0] = w[0];
+				lit->spot[1] = w[1];
+				lit->spot[2] = w[2];
+				lit->has_spot = 1;
+				break;
+			}
 			lit->direction[0] = w[0];
 			lit->direction[1] = w[1];
 			lit->direction[2] = w[2];
@@ -1892,12 +1901,19 @@ D (0x061)
  * See PH:@0C0178C6; for a,b,c computation see PH:@0C03DC66.
  *
  *
- * 451	Light: Set Specular
+ * 451	Light: Set Spot Cone
  *
  *	-------D -------- -------o oooooooo
- *	-------- BBBBBBBB GGGGGGGG RRRRRRRR
+ *	------f- WWWWWWWW CCCCCCCC CCCCCCCC
  *
- * D = Disabled.
+ * D = No cone (the library sets it for every light without a cone)
+ * C = cos (inner angle), 1.15 fixed point
+ * W = cos (inner) - cos (outer) as a float: 0xF0 minus its bits 26:19
+ * f = Unknown flag (dl_emit_spotlight argument)
+ *
+ *	Emitted by the von4 library dl_emit_spotlight (0C715FA0) after the
+ *	B61 vector; the X360 port fades the light with sat ((L . axis - cos
+ *	outer) / (cos inner - cos outer)), axis towards the light.
  *
  * See PH:@0C017A7C, PH:@0C017B6C, PH:@0C017C58, PH:@0C017CD4, PH:@0C017D64.
  */
@@ -1916,10 +1932,17 @@ I (0x051)
 		lit->has_051 = 1;
 		break;
 	case 4:
-		lit->has_specular  = ((inst[0] >> 24) & 1) ^ 1;
-		lit->specular[0] = inst[1] & 0xFF;
-		lit->specular[1] = (inst[1] >> 8) & 0xFF;
-		lit->specular[2] = (inst[1] >> 16) & 0xFF;
+		{
+			float cos_inner = (inst[1] & 0xFFFF) * (1.0f / 32768.0f);
+			uint32_t bits = 0x38000000 |
+			                (((0xF0 - ((inst[1] >> 16) & 0xFF)) & 0xFF) << 19);
+			float width;
+
+			memcpy (&width, &bits, sizeof (width));
+			lit->has_cone = ((inst[0] >> 24) & 1) ^ 1;
+			lit->cos_outer = cos_inner - width;
+			lit->cone_scale = 1.0f / width;
+		}
 		lit->has_451 = 1;
 		break;
 	default:
@@ -1940,7 +1963,7 @@ D (0x051)
 	case 4:
 		UNHANDLED |= !!(inst[0] & 0xFEFFF000);
 		
-		DISASM ("lit: set specular [%X]", inst[1]);
+		DISASM ("lit: set cone [%s cos_in=%.3f w=%02X]", ((inst[0] >> 24) & 1) ? "none" : "on", (inst[1] & 0xFFFF) / 32768.0f, (inst[1] >> 16) & 0xFF);
 		break;
 	default:
 		VK_ASSERT (0);

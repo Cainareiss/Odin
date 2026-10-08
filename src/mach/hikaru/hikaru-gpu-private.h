@@ -243,7 +243,9 @@ typedef struct {
 	vec3f_t direction;
 	vec2f_t attenuation;
 	vec3s_t diffuse;
-	vec3b_t specular;
+	vec3f_t spot;		/* B61: towards the target, unnormalized */
+	float cos_outer;	/* 451: cone edge */
+	float cone_scale;	/* 451: 1 / (cos inner - cos outer) */
 	union {
 		struct {
 			uint32_t has_061	: 1;
@@ -254,7 +256,8 @@ typedef struct {
 			uint32_t att_type	: 2;
 			uint32_t _051_index	: 4;
 			uint32_t _051_bit	: 1;
-			uint32_t has_specular	: 1;
+			uint32_t has_spot	: 1;
+			uint32_t has_cone	: 1;
 		};
 		uint32_t flags;
 	};
