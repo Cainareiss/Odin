@@ -122,7 +122,7 @@ Implement framebuffer blending (instructions 781, 181; PHARRIER).
 Figure out the effect of mesh LOD on texturing (normally, and SGNASCAR),
 disable mipmaps when appropriate (instruction 0C1 maybe).
 
-Fix fogging.
+Figure out the 621 bits 16 and 19:18 (ignored like the X360 port).
 
 Implement alpha testing (used in BRAVEFF, instruction 154).
 

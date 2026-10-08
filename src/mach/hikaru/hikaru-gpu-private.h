@@ -83,7 +83,7 @@ typedef struct {
 	} offset;
 	struct {
 		float max, min;
-		float density, bias;
+		float inv_range, near_by_end;
 		vec4b_t mask;
 		uint32_t func		: 3;
 		uint32_t q_type		: 2;

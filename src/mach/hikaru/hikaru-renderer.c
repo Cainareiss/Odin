@@ -60,7 +60,7 @@ static const struct {
 	[HR_DEBUG_NO_AMBIENT]		= {  0, 1, SDLK_a },
 	[HR_DEBUG_NO_DIFFUSE]		= {  0, 1, SDLK_d },
 	[HR_DEBUG_NO_SPECULAR]		= {  0, 1, SDLK_s },
-	[HR_DEBUG_FOG]			= {  0, 1, SDLK_g },
+	[HR_DEBUG_NO_FOG]		= {  0, 1, SDLK_g },
 };
 
 static void
@@ -622,9 +622,9 @@ main (void)	\n \
 		discard;							\n \
 										\n \
 #if HAS_FOG									\n \
-	float z = gl_FragCoord.z / gl_FragCoord.w;				\n \
-	float a = clamp (u_fog.x * (z - u_fog.y), 0.0, 1.0);			\n \
-	fragColor = mix (color, vec4 (u_fog_color, 1.0), a);			\n \
+	/* X360 vo3d: linear fog on the eye depth from start to end. */	\n \
+	float fog = clamp ((-p_position.z - u_fog.x) * u_fog.y, 0.0, 1.0);	\n \
+	fragColor = vec4 (mix (color.rgb, u_fog_color, fog), color.a);		\n \
 #else										\n \
 	fragColor = color;							\n \
 #endif										\n \
@@ -661,6 +661,7 @@ get_glsl_variant (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 {
 	hikaru_material_t *mat	= &hr->mat_list[mesh->mat_index];
 	hikaru_lightset_t *ls	= &hr->ls_list[mesh->ls_index];
+	hikaru_viewport_t *vp	= &hr->vp_list[mesh->vp_index];
 	hikaru_glsl_variant_t variant;
 
 	VK_ASSERT (mesh->vp_index != ~0);
@@ -687,8 +688,11 @@ get_glsl_variant (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	                          mat->shading_mode != 0 &&
 	                          !hr->debug.flags[HR_DEBUG_NO_LIGHTING];
 
-	variant.has_fog		= mat->depth_blend == 0 &&
-	                          hr->debug.flags[HR_DEBUG_FOG];
+	/* The X360 port picks the fogged vo3d variant on the 881 z bit alone
+	 * (shader option 11, digit 1). */
+	variant.has_fog		= mat->depth_blend &&
+	                          vp->depth.q_enabled &&
+	                          !hr->debug.flags[HR_DEBUG_NO_FOG];
 
 	if (!variant.has_lighting)
 		return variant;
@@ -920,11 +924,16 @@ upload_viewport (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	            vp->clip.t - vp->clip.b);
 
 	if (hr->meshes.variant.has_fog) {
-		vec2f_t fog;
+		/* 621 words: P = 1 / (end - start), Q = near / end (von4
+		 * library 0C716320); the port fogs linearly from start to end. */
+		float p = vp->depth.inv_range, q = vp->depth.near_by_end;
+		vec2f_t fog = { 0.0f, 0.0f };
 		vec3f_t fog_color;
 
-		fog[0] = vp->depth.density;
-		fog[1] = vp->depth.bias;
+		if (p > 0.0f && q > 0.0f) {
+			fog[0] = vp->clip.n / q - 1.0f / p;
+			fog[1] = p;
+		}
 		glUniform2fv (hr->meshes.locs.u_fog, 1, fog);
 
 		fog_color[0] = vp->depth.mask[0] * INV255;

@@ -752,8 +752,13 @@ decode_clip_xy (uint32_t c)
  * D = Disable fog
  * T = Unknown
  * R, G, B, A = Fog color
- * P = Fog density
- * Q = Fog offset
+ * P = 1 / (end - start)
+ * Q = near / end
+ *
+ *	The von4 library (0C716320) computes P and Q from a fog start and
+ *	end in eye depth units and sets W from its flag argument. The X360
+ *	port applies a linear fog on the eye depth from start to end to the
+ *	materials with the 881 z bit, and ignores W and T.
  *
  * See PH:@0C0159C4, PH:@0C015A02, PH:@0C015A3E.
  */
@@ -792,8 +797,8 @@ I (0x021)
 		vp->depth.mask[1]	= (inst[1] >> 8) & 0xFF;
 		vp->depth.mask[2]	= (inst[1] >> 16) & 0xFF;
 		vp->depth.mask[3]	= inst[1] >> 24;
-		vp->depth.density	= *(float *) &inst[2];
-		vp->depth.bias		= *(float *) &inst[3];
+		vp->depth.inv_range	= *(float *) &inst[2];
+		vp->depth.near_by_end	= *(float *) &inst[3];
 		vp->has_621 = 1;
 		break;
 	default:
@@ -832,7 +837,7 @@ D (0x021)
 	case 6:
 		UNHANDLED |= !!(inst[0] & 0xFFF0F800);
 	
-		DISASM ("vp: set depth queue [type=%u ena=%u unk=%u mask=(%08X) density=%f bias=%f]",
+		DISASM ("vp: set depth queue [type=%u ena=%u unk=%u mask=(%08X) P=%g Q=%g]",
 		        (inst[0] >> 18) & 3, ((inst[0] >> 17) & 1) ^ 1,
 		        (inst[0] >> 16) & 1, inst[1],
 		        *(float *) &inst[2], *(float *) &inst[3]);
@@ -1390,7 +1395,7 @@ D (0x091)
  *
  * z = Depth blend (fog)
  *
- *	Probably decides whether the material is affected by fog, and that's it.
+ *	Selects the fogged shader variant in the X360 port (vo3d digit 1).
  *
  * t = Textured
  *
