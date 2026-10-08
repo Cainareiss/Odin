@@ -553,9 +553,12 @@ main (void)	\n \
 	base = mix (p_diffuse, texel.rgb, p_alpha);	\n \
 	alpha = texel.a;	\n \
 #elif TEX_MODE == 1	\n \
-	/* The texel alpha blends the texel over the 091 colour (vo3d.0x01010). */	\n \
+	/* The texel alpha blends the texel over the 091 colour (vo3d.0x01010)	\n \
+	 * and still cuts the fragment: the Brave Firefighters cabinet shows	\n \
+	 * no 091 box around its 4444 logos (HEURISTIC: the port keeps the	\n \
+	 * polygon alpha alone). */	\n \
 	base = mix (p_diffuse, texel.rgb, texel.a);	\n \
-	alpha = p_alpha;	\n \
+	alpha = texel.a * p_alpha;	\n \
 #elif TEX_MODE == 2	\n \
 	/* The texel modulates the 091 colour (vo3d.0x01020). */	\n \
 	base = texel.rgb * p_diffuse;	\n \
