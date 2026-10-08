@@ -134,6 +134,7 @@ typedef struct {
 		GLuint			program;
 		GLuint			vao;
 		float			alpha_ref;
+		bool			weigh_by_alpha;
 
 		struct {
 			GLuint		u_projection;
@@ -154,6 +155,7 @@ typedef struct {
 			GLuint		u_fog;
 			GLuint		u_fog_color;
 			GLuint		u_alpha_ref;
+			GLuint		u_weigh_by_alpha;
 		} locs;
 	} meshes;
 

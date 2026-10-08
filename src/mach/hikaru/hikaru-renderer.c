@@ -498,6 +498,7 @@ uniform sampler2D	u_texture;						\n \
 uniform vec2		u_fog;							\n \
 uniform vec3		u_fog_color;						\n \
 uniform float		u_alpha_ref;						\n \
+uniform float		u_weigh_by_alpha;					\n \
 										\n \
 in vec4 p_position;								\n \
 in vec3 p_normal;								\n \
@@ -651,6 +652,13 @@ main (void)	\n \
 #else										\n \
 	fragColor = color;							\n \
 #endif										\n \
+										\n \
+	/* A blended colour is weighted by its alpha before it is clamped: a	\n \
+	 * lit colour above 1 keeps its excess (the galaxy of the PHARRIER	\n \
+	 * logo scene, whose veils burn to white on the cabinet). The blend	\n \
+	 * function takes the source as it is then. */				\n \
+	if (u_weigh_by_alpha > 0.5)						\n \
+		fragColor.rgb *= fragColor.a;					\n \
 }";
 
 static hikaru_light_att_t
@@ -901,6 +909,8 @@ update_locations:
 		glGetUniformLocation (hr->meshes.program, "u_fog_color");
 	hr->meshes.locs.u_alpha_ref =
 		glGetUniformLocation (hr->meshes.program, "u_alpha_ref");
+	hr->meshes.locs.u_weigh_by_alpha =
+		glGetUniformLocation (hr->meshes.program, "u_weigh_by_alpha");
 	VK_ASSERT_NO_GL_ERROR ();
 }
 
@@ -1487,6 +1497,8 @@ draw_mesh (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 
 	upload_glsl_program (hr, mesh);
 	glUniform1f (hr->meshes.locs.u_alpha_ref, hr->meshes.alpha_ref);
+	glUniform1f (hr->meshes.locs.u_weigh_by_alpha,
+	             hr->meshes.weigh_by_alpha ? 1.0f : 0.0f);
 	VK_ASSERT_NO_GL_ERROR ();
 
 	upload_viewport (hr, mesh);
@@ -1617,20 +1629,23 @@ compare_mesh_depth_b2f (const void *a, const void *b)
 }
 
 /* Blend factors of the material (A81 bits 17:16), as the X360 port
- * applies them (825B4290). */
+ * applies them (825B4290): source alpha over the destination, the product,
+ * source alpha added, the source as it is over the destination. Where the
+ * source is weighted by its alpha the shader does it, before the clamp. */
 static void
 set_material_blend (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 {
 	static const GLenum factors[4][4] = {
-		{ GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE_MINUS_SRC_ALPHA },
+		{ GL_ONE,       GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE_MINUS_SRC_ALPHA },
 		{ GL_DST_COLOR, GL_ZERO,                GL_ZERO, GL_ZERO },
-		{ GL_SRC_ALPHA, GL_ONE,                 GL_ZERO, GL_ONE_MINUS_SRC_ALPHA },
+		{ GL_ONE,       GL_ONE,                 GL_ZERO, GL_ONE_MINUS_SRC_ALPHA },
 		{ GL_ONE,       GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE_MINUS_SRC_ALPHA },
 	};
 	unsigned mode = 0;
 
 	if (mesh->mat_index < MAX_MATERIALS)
 		mode = hr->mat_list[mesh->mat_index].blending_mode;
+	hr->meshes.weigh_by_alpha = (mode == 0 || mode == 2);
 	glBlendFuncSeparate (factors[mode][0], factors[mode][1],
 	                     factors[mode][2], factors[mode][3]);
 }
@@ -1663,6 +1678,7 @@ draw_meshes_for_polytype (hikaru_renderer_t *hr, unsigned vpi, int polytype)
 	 * passes that do not blend write 0 there. */
 	glEnable (GL_BLEND);
 	glBlendFuncSeparate (GL_ONE, GL_ZERO, GL_ZERO, GL_ZERO);
+	hr->meshes.weigh_by_alpha = false;
 
 	switch (polytype) {
 	case HIKARU_POLYTYPE_TRANSPARENT:
