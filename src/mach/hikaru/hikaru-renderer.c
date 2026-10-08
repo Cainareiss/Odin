@@ -1397,6 +1397,7 @@ draw_mesh (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	VK_ASSERT (mesh);
 	VK_ASSERT (mesh->vbo);
 
+	LOG ("variant=%016llx", (unsigned long long) hr->meshes.variant.full);
 	LOG ("==== DRAWING MESH @%p (#vertices=%u #instances=%u) ====",
 	     mesh, mesh->num_tris * 3, mesh->num_instances);
 
@@ -2181,6 +2182,11 @@ hikaru_renderer_begin_frame (vk_renderer_t *renderer)
 		probe_frame++;
 		if (probe_want)
 			hr->debug.flags[HR_DEBUG_LOG] = (probe_frame == probe_want);
+		LOG ("frame %d clear=%02X%02X%02X%02X 181=%08X 781=%08X",
+		     probe_frame,
+		     hr->gpu->fb_config.clear[0], hr->gpu->fb_config.clear[1],
+		     hr->gpu->fb_config.clear[2], hr->gpu->fb_config.clear[3],
+		     hr->gpu->fb_config._181, hr->gpu->fb_config._781);
 	}
 
 	VK_ASSERT_NO_GL_ERROR ();
