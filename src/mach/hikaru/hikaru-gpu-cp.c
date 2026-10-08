@@ -954,12 +954,19 @@ D (0x004)
  *
  * Information kindly provided by DreamZzz.
  *
+ * The recall picks the viewport the polygons use and leaves the viewport
+ * registers alone, as in the X360 port (commit 825393E8 copies its whole
+ * staging block into the slot, recall 825394F8 only reads the slot). A
+ * viewport committed without its own 011 or 621 gets the ones executed
+ * last, even after a recall: the AIRTRIX skater is lit by the ambient the
+ * frame before set for the scenery.
+ *
  * See PH:@0C015AF6, PH:@0C015B12, PH:@0C015B32.
  */
 
 I (0x003)
 {
-	hikaru_viewport_t *vp = &VP.scratch;
+	hikaru_viewport_t *vp = &VP.current;
 
 	switch ((inst[0] >> 12) & 0xF) {
 	case 0:

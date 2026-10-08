@@ -21,7 +21,7 @@
 #include "mach/hikaru/hikaru-renderer.h"
 #include "mach/hikaru/hikaru-renderer-private.h"
 
-#define VP0	VP.scratch
+#define VP0	VP.current
 #define MAT0	MAT.scratch
 #define TEX0	TEX.scratch
 #define LS0	LIT.scratchset
