@@ -633,9 +633,7 @@ main (void)	\n \
 	\n \
 	color = vec4 ((ambient + diffuse + emission) * base, alpha);	\n \
 	if (SHADING_MODE != 3) {	\n \
-		/* 491 times 4, wrapped to 8 bits like the port. */	\n \
-		vec3 material = mod (p_specular.rgb * 1020.0, 256.0) / 255.0;	\n \
-		color.rgb += specular * material;	\n \
+		color.rgb += specular * p_specular.rgb;	\n \
 	}	\n \
 #else	\n \
 	color = vec4 (base, alpha);	\n \
@@ -1157,8 +1155,13 @@ copy_colors (hikaru_renderer_t *hr, hikaru_vertex_t *dst, hikaru_vertex_t *src)
 	for (i = 0; i < 3; i++)
 		dst->body.ambient[i] = MIN2 (mat->unknown[i], 255);
 
-	for (i = 0; i < 4; i++)
-		dst->body.specular[i] = mat->specular[i];
+	/* The 491 colour times 4, wrapped to 8 bits like the port (825B4DE8):
+	 * 0x40 gives no specular at all (the canopy of the PHARRIER
+	 * helicopter). Done here on the bytes, a float modulo is unstable at
+	 * the wrap. */
+	for (i = 0; i < 3; i++)
+		dst->body.specular[i] = (uint8_t) (mat->specular[i] << 2);
+	dst->body.specular[3] = mat->specular[3];
 
 	for (i = 0; i < 3; i++)
 		dst->body.color1[i] = mat->ambient[i];

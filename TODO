@@ -80,6 +80,10 @@ and the 451 carries the spot
 cone (cos inner in 1.15, width as 8 float bits; the B61 vector aims it),
 faded as sat ((L . axis - cos outer) / (cos inner - cos outer)). Kept from
 Valkyrie without an oracle (HEURISTIC): the two-sided lighting.
+On the PHARRIER cabinet the canopy and the hull of the helicopter carry
+tight highlights that this does not give (0x40 wraps to no specular at
+all, and the lobe of a shininess of 8 is broad): check the scale of the
+491 and what the shininess byte means.
 Not as the port: the attenuation types 2 and 3 fall off on 1 / d and
 1 / d^2 with the P and Q of the library (the port does not attenuate
 them); the PHARRIER cabinet shows its asteroids untouched by the far
