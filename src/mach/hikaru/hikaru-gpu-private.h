@@ -23,8 +23,9 @@
 
 #define NUM_VIEWPORTS	8
 #define NUM_MODELVIEWS	256
-#define NUM_MATERIALS	16384
-#define NUM_TEXHEADS	16384
+/* Base plus index on 16 bits (X360 8252EE98); von4 sets bases above 0x5000. */
+#define NUM_MATERIALS	65536
+#define NUM_TEXHEADS	65536
 #define NUM_LIGHTS	1024
 #define NUM_LIGHTSETS	256
 

@@ -1533,7 +1533,7 @@ D (0x084)
 
 /* 083	Recall Material
  *
- *	---nnnnn nnnnnnnn ---A---o oooooooo
+ *	nnnnnnnn nnnnnnnn ---A---o oooooooo
  *
  * n = Index
  * A = Active
@@ -1562,7 +1562,7 @@ I (0x083)
 D (0x083)
 {
 	if (!(inst[0] & 0x1000)) {
-		UNHANDLED |= !!(inst[0] & 0xC000E000);
+		UNHANDLED |= !!(inst[0] & 0x0000E000);
 
 		DISASM ("mat: set base %u", get_material_index (inst));
 	} else {
@@ -1746,7 +1746,7 @@ I (0x0C4)
 
 	if (index >= NUM_TEXHEADS) {
 		VK_ERROR ("CP: texhead commit index exceedes MAX (%u >= %u), skipping",
-		          index, NUM_MATERIALS);
+		          index, NUM_TEXHEADS);
 		return;
 	}
 
@@ -1764,7 +1764,7 @@ D (0x0C4)
 
 /* 0C3	Recall Texhead
  *
- *	--nnnnnn nnnnnnnn ---M---o oooooooo
+ *	nnnnnnnn nnnnnnnn ---M---o oooooooo
  *
  * n = Index
  * M = Modifier: 0 = set base only, 1 = recall for real
@@ -1793,7 +1793,7 @@ I (0x0C3)
 D (0x0C3)
 {
 	if (!(inst[0] & 0x1000)) {
-		UNHANDLED |= !!(inst[0] & 0xC000E000);
+		UNHANDLED |= !!(inst[0] & 0x0000E000);
 
 		DISASM ("tex: set base %u", get_texhead_index (inst));
 	} else {
