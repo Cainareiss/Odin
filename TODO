@@ -132,7 +132,12 @@ using the ones provided by the games as they are leads to a far too close
 far clipping plane. Use 'p' to toggle a standard 90 degree FOV projection and
 see things (affects all games).
 
-Fix alpha ordering, urgently.
+Translucent triangles are drawn far to near on the eye depth of their
+centroid, whatever their mesh, without writing the depth (HEURISTIC, read
+from three cabinets: the SEGA letters of the PHARRIER logo, the street
+lamps of AIRTRIX, the smoke of BRAVEFF). The X360 port reverses its list
+of objects instead. Each run of triangles sets its whole state again:
+batch them when speed matters.
 
 The 161 with bit 18 loads a second modelview and a vertex with bit 12 of
 its header follows it (the AIRTRIX trails and skater joints); bit 19, set on

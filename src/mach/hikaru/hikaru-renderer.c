@@ -1475,7 +1475,8 @@ update_and_set_rendstate (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	}
 
 static void
-draw_mesh (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
+draw_mesh (hikaru_renderer_t *hr, hikaru_mesh_t *mesh,
+           uint32_t first_tri, uint32_t num_tris)
 {
 	unsigned i;
 
@@ -1523,11 +1524,11 @@ draw_mesh (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 		unsigned i = MIN2 (hr->debug.flags[HR_DEBUG_SELECT_INSTANCE],
 		                   mesh->num_instances - 1);
 		upload_modelview (hr, mesh, i);
-		glDrawArrays (GL_TRIANGLES, 0, mesh->num_tris * 3);
+		glDrawArrays (GL_TRIANGLES, first_tri * 3, num_tris * 3);
 	} else {
 		for (i = 0; i < mesh->num_instances; i++) {
 			upload_modelview (hr, mesh, i);
-			glDrawArrays (GL_TRIANGLES, 0, mesh->num_tris * 3);
+			glDrawArrays (GL_TRIANGLES, first_tri * 3, num_tris * 3);
 		}
 	}
 
@@ -1536,12 +1537,75 @@ draw_mesh (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 
 #undef OFFSET
 
+typedef struct {
+	float z;
+	uint32_t mesh;
+	uint32_t tri;
+} hikaru_tri_key_t;
+
+/* Far to near, then in the order of the display list. */
+static int
+compare_tri_keys (const void *a_, const void *b_)
+{
+	const hikaru_tri_key_t *a = (const hikaru_tri_key_t *) a_;
+	const hikaru_tri_key_t *b = (const hikaru_tri_key_t *) b_;
+
+	if (a->z < b->z) return -1;
+	if (a->z > b->z) return  1;
+	if (a->mesh != b->mesh) return (a->mesh < b->mesh) ? -1 : 1;
+	if (a->tri != b->tri) return (a->tri < b->tri) ? -1 : 1;
+	return 0;
+}
+
+/* Sorts the pushed triangles of a translucent mesh on the eye depth of their
+ * centroid and keeps the depths for the pass, which merges the meshes. */
+static void
+sort_pushed_triangles (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
+{
+	const hikaru_modelview_t *mv = &hr->mv_list[mesh->mv_index];
+	uint32_t num = hr->push.num_tris, i;
+	hikaru_tri_key_t *keys;
+	hikaru_vertex_body_t *sorted;
+
+	keys = (hikaru_tri_key_t *) malloc (num * sizeof (hikaru_tri_key_t));
+	sorted = (hikaru_vertex_body_t *) malloc (num * 3 * sizeof (hikaru_vertex_body_t));
+	mesh->tri_depth = (float *) malloc (num * sizeof (float));
+	VK_ASSERT (keys && sorted && mesh->tri_depth);
+
+	for (i = 0; i < num; i++) {
+		const hikaru_vertex_body_t *v = &hr->push.all[i * 3];
+		float x = v[0].position[0] + v[1].position[0] + v[2].position[0];
+		float y = v[0].position[1] + v[1].position[1] + v[2].position[1];
+		float z = v[0].position[2] + v[1].position[2] + v[2].position[2];
+
+		keys[i].z = (mv->mtx[0][2] * x + mv->mtx[1][2] * y +
+		             mv->mtx[2][2] * z) / 3.0f + mv->mtx[3][2];
+		keys[i].mesh = 0;
+		keys[i].tri = i;
+	}
+	qsort (keys, num, sizeof (hikaru_tri_key_t), compare_tri_keys);
+
+	for (i = 0; i < num; i++) {
+		memcpy (&sorted[i * 3], &hr->push.all[keys[i].tri * 3],
+		        3 * sizeof (hikaru_vertex_body_t));
+		mesh->tri_depth[i] = keys[i].z;
+	}
+	memcpy (hr->push.all, sorted, num * 3 * sizeof (hikaru_vertex_body_t));
+
+	free (keys);
+	free (sorted);
+}
+
 static void
 upload_vertex_data (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 {
 	VK_ASSERT (mesh);
 
 	mesh->num_tris = hr->push.num_tris;
+
+	if (mesh->polytype == HIKARU_POLYTYPE_TRANSLUCENT &&
+	    mesh->num_tris > 0 && mesh->mv_index < MAX_MODELVIEWS)
+		sort_pushed_triangles (hr, mesh);
 
 	/* Generate the VAO if required. */
 	if (!hr->meshes.vao) {
@@ -1591,6 +1655,7 @@ hikaru_renderer_begin_mesh (vk_renderer_t *rend, uint32_t addr,
 	hr->meshes.current = mesh;
 	update_and_set_rendstate (hr, mesh);
 	mesh->poly_alpha = POLY.alpha;
+	mesh->polytype = polytype;
 	mesh->addr[0] = addr;
 
 	/* Clear the push buffer. */
@@ -1618,16 +1683,6 @@ hikaru_renderer_end_mesh (vk_renderer_t *rend, uint32_t addr)
 	hr->meshes.current = NULL;
 }
 
-static int
-compare_mesh_depth_b2f (const void *a, const void *b)
-{
-	float za = ((const hikaru_mesh_t *) a)->sort_depth;
-	float zb = ((const hikaru_mesh_t *) b)->sort_depth;
-	if (za < zb) return -1;
-	if (za > zb) return  1;
-	return 0;
-}
-
 /* Blend factors of the material (A81 bits 17:16), as the X360 port
  * applies them (825B4290): source alpha over the destination, the product,
  * source alpha added, the source as it is over the destination. Where the
@@ -1648,6 +1703,52 @@ set_material_blend (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	hr->meshes.weigh_by_alpha = (mode == 0 || mode == 2);
 	glBlendFuncSeparate (factors[mode][0], factors[mode][1],
 	                     factors[mode][2], factors[mode][3]);
+}
+
+/* The translucent triangles of a viewport are drawn far to near, whatever
+ * their mesh: the front of a SEGA letter of the PHARRIER logo covers its
+ * back, sent after it, and the glass of an AIRTRIX street lamp shows over
+ * the tree behind it. The X360 port reverses its list of objects instead
+ * (825B3EB0); neither writes the depth here. */
+static void
+draw_translucent_meshes (hikaru_renderer_t *hr, hikaru_mesh_t *meshes,
+                         unsigned num)
+{
+	hikaru_tri_key_t *keys;
+	uint32_t total = 0, i, j, k;
+
+	for (j = 0; j < num; j++)
+		total += meshes[j].num_tris;
+	if (total == 0)
+		return;
+
+	keys = (hikaru_tri_key_t *) malloc (total * sizeof (hikaru_tri_key_t));
+	VK_ASSERT (keys);
+
+	for (j = 0, k = 0; j < num; j++) {
+		hikaru_mesh_t *mesh = &meshes[j];
+
+		for (i = 0; i < mesh->num_tris; i++, k++) {
+			keys[k].z = mesh->tri_depth ? mesh->tri_depth[i] : 0.0f;
+			keys[k].mesh = j;
+			keys[k].tri = i;
+		}
+	}
+	qsort (keys, total, sizeof (hikaru_tri_key_t), compare_tri_keys);
+
+	/* Triangles that follow each other in a mesh go in one draw. */
+	for (k = 0; k < total; k += i) {
+		hikaru_mesh_t *mesh = &meshes[keys[k].mesh];
+
+		for (i = 1; k + i < total &&
+		            keys[k + i].mesh == keys[k].mesh &&
+		            keys[k + i].tri == keys[k].tri + i; i++);
+
+		set_material_blend (hr, mesh);
+		draw_mesh (hr, mesh, keys[k].tri, i);
+	}
+
+	free (keys);
 }
 
 static void
@@ -1703,23 +1804,16 @@ draw_meshes_for_polytype (hikaru_renderer_t *hr, unsigned vpi, int polytype)
 		break;
 	}
 
-	if (polytype == HIKARU_POLYTYPE_TRANSLUCENT && num > 1) {
-		for (j = 0; j < num; j++) {
-			hikaru_mesh_t *mesh = &meshes[j];
-			if (mesh->mv_index < MAX_MODELVIEWS)
-				mesh->sort_depth = hr->mv_list[mesh->mv_index].mtx[3][2];
-			else
-				mesh->sort_depth = 0.0f;
-		}
-		qsort (meshes, num, sizeof (hikaru_mesh_t), compare_mesh_depth_b2f);
+	if (polytype == HIKARU_POLYTYPE_TRANSLUCENT) {
+		draw_translucent_meshes (hr, meshes, num);
+		goto destroy_meshes;
 	}
 
 	for (j = 0; j < num; j++) {
 		hikaru_mesh_t *mesh = &meshes[j];
-		if (polytype == HIKARU_POLYTYPE_BACKGROUND ||
-		    polytype == HIKARU_POLYTYPE_TRANSLUCENT)
+		if (polytype == HIKARU_POLYTYPE_BACKGROUND)
 			set_material_blend (hr, mesh);
-		draw_mesh (hr, mesh);
+		draw_mesh (hr, mesh, 0, mesh->num_tris);
 	}
 
 destroy_meshes:
@@ -1727,6 +1821,8 @@ destroy_meshes:
 		hikaru_mesh_t *mesh = &meshes[j];
 		if (mesh->vbo)
 			glDeleteBuffers (1, &mesh->vbo);
+		free (mesh->tri_depth);
+		mesh->tri_depth = NULL;
 	}
 }
 

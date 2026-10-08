@@ -89,10 +89,11 @@ typedef struct {
 	uint32_t		ls_index;
 	float			alpha_thresh[2];
 	float			depth_bias;
-	float			sort_depth;
+	float			*tri_depth;	/* translucent: eye depth of each triangle */
 	float			poly_alpha;	/* 103 alpha, logged */
 	bool			has_two_sided_lighting;
 	uint32_t		num;
+	uint32_t		polytype;
 } hikaru_mesh_t;
 
 typedef struct {
