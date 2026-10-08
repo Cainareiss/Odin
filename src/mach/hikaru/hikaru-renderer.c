@@ -694,10 +694,8 @@ get_glsl_variant (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	                          vp->depth.q_enabled &&
 	                          !hr->debug.flags[HR_DEBUG_NO_FOG];
 
-	if (!variant.has_lighting)
-		return variant;
-
-	variant.shading_mode		= mat->shading_mode;
+	/* The alpha mode and the texel mode apply to unlit materials too
+	 * (vo3d.x1xxxxx variants). */
 	variant.alpha_mode		= mat->has_alpha;
 
 	/* The texture format picks how the texel combines with the material
@@ -709,6 +707,11 @@ get_glsl_variant (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 		static const uint8_t modes[8] = { 0, 1, 2, 0, 3, 4, 0, 0 };
 		variant.tex_mode = modes[th->format];
 	}
+
+	if (!variant.has_lighting)
+		return variant;
+
+	variant.shading_mode		= mat->shading_mode;
 
 	variant.has_light0		= !(ls->mask & (1 << 0));
 	variant.light0_type		= get_light_type (&ls->lights[0]);
