@@ -1150,15 +1150,16 @@ I (0x161)
 		break;
 	case 0x9:
 	case 0xB:
-		/* Light vectors go through the current modelview, as in the X360
-		 * port (8253B5B8 directions, 8253B530 positions). */
+		/* The light vectors arrive in eye space: the von4 library
+		 * transforms them by XMTRX on the SH-4 before emitting them
+		 * (0C715E00 directions, 0C715F20 positions) and the X360 port
+		 * does the same in its API (8253B5B8, 8253B530); the GPU does
+		 * not apply the modelview to them. */
 		switch (inst[0] & 0x000FF000) {
 		case 0x00008000: /* Direction */
-			v[0] = *(float *) &inst[1];
-			v[1] = *(float *) &inst[2];
-			v[2] = *(float *) &inst[3];
-			v[3] = 0.0f;
-			mult_mtx4x4f_vec4f (w, MV.table[MV.depth].mtx, v);
+			w[0] = *(float *) &inst[1];
+			w[1] = *(float *) &inst[2];
+			w[2] = *(float *) &inst[3];
 			if (((inst[0] >> 8) & 0xF) == 0xB) {
 				/* B61: spot axis, from the light to its target
 				 * (von4 library 0C715FA0). */
@@ -1174,11 +1175,9 @@ I (0x161)
 			lit->has_direction = 1;
 			break;
 		case 0x00010000: /* Position */
-			v[0] = *(float *) &inst[1];
-			v[1] = *(float *) &inst[2];
-			v[2] = *(float *) &inst[3];
-			v[3] = 1.0f;
-			mult_mtx4x4f_vec4f (w, MV.table[MV.depth].mtx, v);
+			w[0] = *(float *) &inst[1];
+			w[1] = *(float *) &inst[2];
+			w[2] = *(float *) &inst[3];
 			lit->position[0] = w[0];
 			lit->position[1] = w[1];
 			lit->position[2] = w[2];

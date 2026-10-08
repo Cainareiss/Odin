@@ -68,8 +68,8 @@ GPU lighting follows the X360 port's vo3d shaders: the 691 colour is the
 material ambient, the 091 colour stands for the texel of untextured
 polygons, the 491 colour is multiplied by 4 (8-bit wrap as in the port),
 the light colour drives both the diffuse and the Blinn specular terms,
-attenuation types 2 and 3 do not attenuate, light vectors go through the
-current modelview, the 881 alpha bit turns the vertex alpha into a blend
+attenuation types 2 and 3 do not attenuate, light vectors arrive in eye
+space (the library transforms them on the SH-4), the 881 alpha bit turns the vertex alpha into a blend
 factor between 091 and 291 (or the texel), and the 451 carries the spot
 cone (cos inner in 1.15, width as 8 float bits; the B61 vector aims it),
 faded as sat ((L . axis - cos outer) / (cos inner - cos outer)). Kept from
