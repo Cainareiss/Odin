@@ -69,8 +69,9 @@ material ambient, the 091 colour stands for the texel of untextured
 polygons, the 491 colour is multiplied by 4 (8-bit wrap as in the port),
 the light colour drives both the diffuse and the Blinn specular terms,
 attenuation types 2 and 3 do not attenuate, light vectors arrive in eye
-space (the library transforms them on the SH-4), the 881 alpha bit turns the vertex alpha into a blend
-factor between 091 and 291 (or the texel), and the 451 carries the spot
+space (the library transforms them on the SH-4), the 881 alpha bit turns
+the vertex alpha into a blend factor between 091 and 291 (or the texel),
+and the 451 carries the spot
 cone (cos inner in 1.15, width as 8 float bits; the B61 vector aims it),
 faded as sat ((L . axis - cos outer) / (cos inner - cos outer)). Kept from
 Valkyrie without an oracle (HEURISTIC): the two-sided lighting.
@@ -116,6 +117,10 @@ see things (affects all games).
 Fix alpha ordering, urgently.
 
 Fix instanced rendering; there is no linking system, just odd matrices.
+
+Triangles are wound after the vertex order and the winding bit, as the
+SGNASCAR cabinet shows; the X360 port winds them after the vertex normals,
+which is the same for von4 only.
 
 Check the framebuffer blending (instructions 781, 181) on more footage: a
 2D layer as a blender input is done for the PHARRIER logo screens only.

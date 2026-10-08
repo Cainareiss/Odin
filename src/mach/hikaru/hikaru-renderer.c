@@ -1179,7 +1179,7 @@ add_triangle (hikaru_renderer_t *hr)
 		hikaru_vertex_body_t *a = &hr->push.tmp[0].body;
 		hikaru_vertex_body_t *b = &hr->push.tmp[1].body;
 		hikaru_vertex_body_t *c = &hr->push.tmp[2].body;
-		float e1[3], e2[3], n[3], dot = 0.0f;
+		float e1[3], e2[3], n[3];
 		unsigned i;
 
 		VK_ASSERT ((index + 2) < MAX_VERTICES_PER_MESH);
@@ -1194,9 +1194,8 @@ add_triangle (hikaru_renderer_t *hr)
 			hr->meshes.current->has_two_sided_lighting = 1;
 		*/
 
-		/* The X360 port drops degenerate triangles and winds each one
-		 * after the sum of its vertex normals; the winding bit of the
-		 * vertex header is not read (825B6100, 825B6218). */
+		/* Degenerate triangles are dropped, as in the X360 port
+		 * (825B6100). */
 		for (i = 0; i < 3; i++) {
 			e1[i] = b->position[i] - a->position[i];
 			e2[i] = c->position[i] - a->position[i];
@@ -1206,9 +1205,13 @@ add_triangle (hikaru_renderer_t *hr)
 		n[2] = e1[0] * e2[1] - e1[1] * e2[0];
 		if ((n[0] * n[0] + n[1] * n[1] + n[2] * n[2]) <= 0.0f)
 			return;
-		for (i = 0; i < 3; i++)
-			dot += n[i] * (a->normal[i] + b->normal[i] + c->normal[i]);
-		if (dot <= 0.0f) {
+
+		/* The winding is the vertex order, reversed by the winding bit
+		 * of the closing vertex. The port winds each triangle after its
+		 * vertex normals instead (825B6218), but the SGNASCAR cabinet
+		 * shows quads whose normals point away from the viewer (the
+		 * dark panels of its ENTRY DRIVERS screen). */
+		if (hr->push.tmp[2].info.winding) {
 			hikaru_vertex_body_t *t = b;
 			b = c;
 			c = t;
