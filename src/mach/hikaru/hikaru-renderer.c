@@ -183,6 +183,40 @@ decode_texture_abgr1111 (vk_buffer_t *texram,
 
 #undef PUT16
 
+/* Wrap and filter of the bound texture. They belong to the texhead, not to
+ * the texels: two texheads may share a slot and differ only there, so this
+ * runs on every bind, as the X360 port does (825C6C98, 825C6650). */
+static void
+set_texhead_sampling (hikaru_texhead_t *th)
+{
+	/* Mirror wins over repeat, else clamp. */
+	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_S,
+	                 th->mirroru ? GL_MIRRORED_REPEAT :
+	                 th->repeatu ? GL_REPEAT : GL_CLAMP_TO_EDGE);
+	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_T,
+	                 th->mirrorv ? GL_MIRRORED_REPEAT :
+	                 th->repeatv ? GL_REPEAT : GL_CLAMP_TO_EDGE);
+	VK_ASSERT_NO_GL_ERROR ();
+
+	/* Filter of the 0C1 mode; mode 3 is left at the sampler defaults in
+	 * the port, trilinear here (HEURISTIC). */
+	switch (th->filter) {
+	case 0:
+		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		break;
+	case 2:
+		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		break;
+	default:
+		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+		break;
+	}
+	VK_ASSERT_NO_GL_ERROR ();
+}
+
 static GLuint
 upload_texture (hikaru_renderer_t *hr, hikaru_texhead_t *th)
 {
@@ -212,32 +246,7 @@ upload_texture (hikaru_renderer_t *hr, hikaru_texhead_t *th)
 	glBindTexture (GL_TEXTURE_2D, id);
 	VK_ASSERT_NO_GL_ERROR ();
 
-	/* Mirror wins over repeat, else clamp (X360 port, 825C6C98) */
-	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_S,
-	                 th->mirroru ? GL_MIRRORED_REPEAT :
-	                 th->repeatu ? GL_REPEAT : GL_CLAMP_TO_EDGE);
-	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_T,
-	                 th->mirrorv ? GL_MIRRORED_REPEAT :
-	                 th->repeatv ? GL_REPEAT : GL_CLAMP_TO_EDGE);
-	VK_ASSERT_NO_GL_ERROR ();
-
-	/* Filter of the 0C1 mode (X360 825C6650); mode 3 is left at the
-	 * sampler defaults there, trilinear here (HEURISTIC). */
-	switch (th->filter) {
-	case 0:
-		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-		break;
-	case 2:
-		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		break;
-	default:
-		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-		break;
-	}
-	VK_ASSERT_NO_GL_ERROR ();
+	set_texhead_sampling (th);
 
 	/* LOD bias and anisotropy of the X360 port (825C6650). */
 	glTexParameterf (GL_TEXTURE_2D, GL_TEXTURE_LOD_BIAS, -0.5f);
@@ -1001,6 +1010,9 @@ upload_material_texhead (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 
 	glBindTexture (GL_TEXTURE_2D, tex ? tex->id : 0);
 	VK_ASSERT_NO_GL_ERROR ();
+
+	if (tex)
+		set_texhead_sampling (&hr->tex_list[mesh->tex_index]);
 
 	glUniform1i (hr->meshes.locs.u_texture, 0);
 	VK_ASSERT_NO_GL_ERROR ();

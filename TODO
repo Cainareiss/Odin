@@ -128,8 +128,6 @@ Implement alpha testing (used in BRAVEFF, instruction 154).
 
 Implement proper model caching using VBOs.
 
-Fix texture wrap/repeat (BRAVEFF, AIRTRIX do not work properly yet.)
-
 
 AIRTRIX
 -------
