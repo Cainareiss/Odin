@@ -567,19 +567,25 @@ hikaru_gpu_raise_irq (hikaru_gpu_t *gpu, uint32_t _15, uint32_t _1A)
  *
  *			See PH:@0C01A124, PH:@0C01A142.
  *
- * 1A0001B8  RW		Draw directly
+ * 1A0001B8  RW		Layer Priority
  *
  *			-------- -------- -------- ------21
  *
- *			n = layer n is drawn directly if 1, blended with
- *			    the 3D framebuffer (according to commands 181 and
- *			    781) if 0.
+ *			n = layer n is drawn above the 3D framebuffer if 1,
+ *			    below it if 0. AIRTRIX puts both layers below for
+ *			    its logo screens, PHARRIER and SGNASCAR layer 2.
  *
- * 1A0001BC  RW		Unknown Control
+ * 1A0001BC  RW		Transparency
  *
- *			-------- -------- -------- -----???
+ *			-------- -------- -------- -----21F
  *
- *			Bitfield. See PH:@0C01A162, PH:@0C01A171.
+ *			n = the pixels of layer n without their alpha bit
+ *			    are transparent if 1; the layer covers everything
+ *			    if 0.
+ *			F = the 3D framebuffer shows what is below it where
+ *			    nothing was drawn. Set whenever a layer is below.
+ *
+ *			See PH:@0C01A162, PH:@0C01A171.
  *
  * The MMIOs at 1A000200-1A00023F have the very same layout. Sometimes they
  * are written with the contents of the unit 0 MMIOs. Their purpose is still
@@ -595,6 +601,7 @@ hikaru_gpu_fill_layer_info (hikaru_gpu_t *gpu)
 
 	VK_LOG ("==== BEGIN LAYERS ==== [1A:100=%X]", REG1A (0x100));
 	LAYERS.enabled = 1; // REG1A (0x100) & 1;
+	LAYERS.fb_keyed = REG1AUNIT (0, 0x3C) & 1;
 
 	for (unit = 0; unit < 2; unit++) {
 
@@ -609,9 +616,11 @@ hikaru_gpu_fill_layer_info (hikaru_gpu_t *gpu)
 				&LAYERS.layer[unit][bank-2];
 	
 			/* Is the layer enabled? */
-			layer->enabled =
-				(REG1AUNIT (unit, 0x34) >> (bank - 2)) &
-			        (REG1AUNIT (unit, 0x38) >> (bank - 2));
+			layer->enabled = (REG1AUNIT (unit, 0x34) >> (bank - 2)) & 1;
+
+			/* Above the 3D, or below it (the white sheet and the
+			 * logo of the AIRTRIX logo screens, unit 38 = 0). */
+			layer->above = (REG1AUNIT (unit, 0x38) >> (bank - 2)) & 1;
 	
 			/* Get the layer format. */
 			format = (REG1AUNIT (unit, 0x30) >> (bank - 1)) & 1;

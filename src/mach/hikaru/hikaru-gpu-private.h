@@ -280,6 +280,7 @@ typedef struct {
 	uint32_t format		: 4;
 	uint32_t enabled	: 1;
 	uint32_t keyed		: 1;	/* unit register 3C: pixels without the alpha bit are transparent */
+	uint32_t above		: 1;	/* unit register 38: drawn above the 3D, below it otherwise */
 } hikaru_layer_t;
 
 typedef struct {
@@ -403,6 +404,7 @@ typedef struct {
 		struct {
 			hikaru_layer_t layer[2][2];
 			bool enabled;
+			bool fb_keyed;	/* unit 0 register 3C bit 0 */
 		} layers;
 
 	} state;

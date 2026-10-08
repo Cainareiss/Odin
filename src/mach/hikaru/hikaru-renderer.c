@@ -1647,28 +1647,30 @@ draw_meshes_for_polytype (hikaru_renderer_t *hr, unsigned vpi, int polytype)
 	 * shadow types write the depth without blending nor alpha test; the
 	 * transparent type is punch-through (alpha > 0.5, depth written, no
 	 * blending); background and translucent blend with the material mode,
-	 * keep the depth and drop alpha <= 1/255. */
+	 * keep the depth and drop alpha <= 1/255.
+	 *
+	 * The alpha of the color buffer holds what the 3D lets through: the
+	 * passes that do not blend write 0 there. */
+	glEnable (GL_BLEND);
+	glBlendFuncSeparate (GL_ONE, GL_ZERO, GL_ZERO, GL_ZERO);
+
 	switch (polytype) {
 	case HIKARU_POLYTYPE_TRANSPARENT:
-		glDisable (GL_BLEND);
 		glDepthMask (GL_TRUE);
 		glEnable (GL_POLYGON_OFFSET_FILL);
 		hr->meshes.alpha_ref = 0.5f;
 		break;
 	case HIKARU_POLYTYPE_TRANSLUCENT:
-		glEnable (GL_BLEND);
 		glDepthMask (GL_FALSE);
 		glEnable (GL_POLYGON_OFFSET_FILL);
 		hr->meshes.alpha_ref = 1.0f / 255.0f;
 		break;
 	case HIKARU_POLYTYPE_BACKGROUND:
-		glEnable (GL_BLEND);
 		glDepthMask (GL_FALSE);
 		glDisable (GL_POLYGON_OFFSET_FILL);
 		hr->meshes.alpha_ref = 1.0f / 255.0f;
 		break;
 	default:
-		glDisable (GL_BLEND);
 		glDepthMask (GL_TRUE);
 		glDisable (GL_POLYGON_OFFSET_FILL);
 		hr->meshes.alpha_ref = -1.0f;
@@ -1725,10 +1727,11 @@ draw_scene (hikaru_renderer_t *hr)
 	 * and the buffer writemasks affect the operation of glClear". */
 	glDepthMask (GL_TRUE);
 	glDisable (GL_SCISSOR_TEST);
+	/* The alpha bit of the clear color covers what is below the 3D. */
 	glClearColor (gpu->fb_config.clear[0] * INV255,
 	              gpu->fb_config.clear[1] * INV255,
 	              gpu->fb_config.clear[2] * INV255,
-	              gpu->fb_config.clear[3] * INV255);
+	              1.0f - gpu->fb_config.clear[3] * INV255);
 	glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	glEnable (GL_SCISSOR_TEST);
@@ -1857,6 +1860,9 @@ static const char *fb_fs_source =
 "uniform float u_mult_2 = 1.0;							\n"
 "uniform float u_keyed_1 = 1.0;							\n"
 "uniform float u_keyed_2 = 1.0;							\n"
+"uniform float u_keyed_3d = 0.0;						\n"
+"uniform float u_above_1 = 1.0;							\n"
+"uniform float u_above_2 = 1.0;							\n"
 "uniform int u_invert_f = 0;							\n"
 "uniform int u_invert_b = 0;							\n"
 "										\n"
@@ -1887,16 +1893,31 @@ static const char *fb_fs_source =
 "	 */									\n"
 "	float cover_1 = (u_keyed_1 > 0.0) ? step (0.1, texel_1.a) : 1.0;	\n"
 "	float cover_2 = (u_keyed_2 > 0.0) ? step (0.1, texel_2.a) : 1.0;	\n"
+"	/* The alpha of a 3D buffer is what it lets through; a layer taken	\n"
+"	 * as a blender input lets nothing through.				\n"
+"	 */									\n"
+"	if (u_invert_f != 0)							\n"
+"		texel_f.a = 0.0;						\n"
+"	if (u_invert_b != 0)							\n"
+"		texel_b.a = 0.0;						\n"
 "	vec4 color = mix (texel_f, texel_b, u_factor);				\n"
+"	float cover_3d = (u_keyed_3d > 0.0) ? 1.0 - step (0.999, color.a) : 1.0;	\n"
 "										\n"
 "	/* A layer pixel with its alpha bit covers the 3D, black included	\n"
 "	 * (the black bands of the Racer attract); the others are		\n"
 "	 * transparent whatever their color (its green 0x03E0 boxes).	\n"
 "	 * Layer 1 sits above layer 2 (its HUD text over the band).	\n"
 "	 * Cabinet footage, GPU-RE/16 § 10.					\n"
+"	 *									\n"
+"	 * A layer can sit below the 3D, which then shows it where nothing	\n"
+"	 * was drawn (the AIRTRIX logo screens).				\n"
 "	 */									\n"
-"	color.rgb = mix (color.rgb, texel_2.rgb * u_mult_2, cover_2 * on_2);	\n"
-"	color.rgb = mix (color.rgb, texel_1.rgb * u_mult_1, cover_1 * on_1);	\n"
+"	vec3 below = color.rgb;							\n"
+"	below = mix (below, texel_2.rgb * u_mult_2, cover_2 * on_2 * (1.0 - u_above_2));	\n"
+"	below = mix (below, texel_1.rgb * u_mult_1, cover_1 * on_1 * (1.0 - u_above_1));	\n"
+"	color.rgb = mix (below, color.rgb, cover_3d);				\n"
+"	color.rgb = mix (color.rgb, texel_2.rgb * u_mult_2, cover_2 * on_2 * u_above_2);	\n"
+"	color.rgb = mix (color.rgb, texel_1.rgb * u_mult_1, cover_1 * on_1 * u_above_1);	\n"
 "	fragColor = color;							\n"
 "}\n";
 
@@ -1938,6 +1959,12 @@ build_fb_state (hikaru_renderer_t *hr)
 		get_uniform_loc (hr->framebuffer.program, "u_keyed_1");
 	hr->framebuffer.locs.u_keyed_2 =
 		get_uniform_loc (hr->framebuffer.program, "u_keyed_2");
+	hr->framebuffer.locs.u_keyed_3d =
+		get_uniform_loc (hr->framebuffer.program, "u_keyed_3d");
+	hr->framebuffer.locs.u_above_1 =
+		get_uniform_loc (hr->framebuffer.program, "u_above_1");
+	hr->framebuffer.locs.u_above_2 =
+		get_uniform_loc (hr->framebuffer.program, "u_above_2");
 	hr->framebuffer.locs.u_invert_f =
 		get_uniform_loc (hr->framebuffer.program, "u_invert_f");
 	hr->framebuffer.locs.u_invert_b =
@@ -2198,6 +2225,9 @@ draw (hikaru_renderer_t *hr)
 	glUniform1f (hr->framebuffer.locs.u_mult_2, (layer2 && f != layer2 && b != layer2) ? mult2 : 0.0f);
 	glUniform1f (hr->framebuffer.locs.u_keyed_1, LAYERS.layer[0][0].keyed ? 1.0f : 0.0f);
 	glUniform1f (hr->framebuffer.locs.u_keyed_2, LAYERS.layer[0][1].keyed ? 1.0f : 0.0f);
+	glUniform1f (hr->framebuffer.locs.u_keyed_3d, LAYERS.fb_keyed ? 1.0f : 0.0f);
+	glUniform1f (hr->framebuffer.locs.u_above_1, LAYERS.layer[0][0].above ? 1.0f : 0.0f);
+	glUniform1f (hr->framebuffer.locs.u_above_2, LAYERS.layer[0][1].above ? 1.0f : 0.0f);
 	glUniform1i (hr->framebuffer.locs.u_invert_f, (n1 >= 2) ? 1 : 0);
 	glUniform1i (hr->framebuffer.locs.u_invert_b, (n2 >= 2) ? 1 : 0);
 	VK_ASSERT_NO_GL_ERROR ();

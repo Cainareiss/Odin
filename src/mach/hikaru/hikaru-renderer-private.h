@@ -178,6 +178,9 @@ typedef struct {
 			GLuint u_mult_2;
 			GLuint	u_keyed_1;
 			GLuint	u_keyed_2;
+			GLuint	u_keyed_3d;
+			GLuint	u_above_1;
+			GLuint	u_above_2;
 			GLuint u_invert_f;
 			GLuint u_invert_b;
 		} locs;
