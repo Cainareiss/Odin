@@ -350,6 +350,7 @@ typedef struct {
 			float value;
 			float radius;
 			bool cond;
+			bool compared;	/* by a 095, since the last 055 */
 			uint16_t branch_id;
 		} lod;
 

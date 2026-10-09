@@ -90,6 +90,7 @@ on_frame_begin (hikaru_gpu_t *gpu)
 	LOD.value = 0.0f;
 	LOD.radius = 0.0f;
 	LOD.cond = false;
+	LOD.compared = false;
 	LOD.branch_id = ~0;
 
 	VP.depth = 0;
@@ -418,6 +419,11 @@ D (0x000)
  * is smaller. PHARRIER picks one of three models of each object this way;
  * its sizes are whole pixels (2, 3, 4, 7, 8, 10, 15, 20, 30, 100, 120, 150
  * and 200).
+ *
+ * Conditions 1 and D test the word a 095 left. Straight after a 055, D
+ * jumps like 5 (HEURISTIC: the SGNASCAR cabinet shows the rows of
+ * spectators near the camera, I = 444; far away they are too small to
+ * tell. 1 is never used this way).
  */
 
 /* Width of the bounding sphere on the screen, in 1/16 of a pixel
@@ -456,7 +462,8 @@ I (0x012)
 		jump = get_lod_size (gpu) < (float) branch_id;
 		break;
 	case 0xD:
-		jump = LOD.branch_id == branch_id;
+		jump = LOD.compared ? LOD.branch_id == branch_id :
+		       get_lod_size (gpu) >= (float) branch_id;
 		break;
 	default:
 		jump = false;
@@ -673,6 +680,7 @@ I (0x055)
 	float thresh = *(float *) &inst[1];
 
 	LOD.radius = thresh;
+	LOD.compared = false;
 }
 
 D (0x055)
@@ -706,6 +714,8 @@ I (0x095)
 	const float size = get_lod_size (gpu);
 	uint16_t hi = inst[1] >> 16;
 	uint16_t lo = inst[1] & 0xFFFF;
+
+	LOD.compared = true;
 
 	switch ((inst[0] >> 12) & 0xF) {
 	case 0x4:

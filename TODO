@@ -208,7 +208,10 @@ the sizes PHARRIER uses, all whole pixels, and the formula from two cabinet
 scenes). The 005 tests the same sphere against the view volume of the
 current viewport. The 095 compares it with two sizes: SGNASCAR draws the
 model plainly on one side, skips it on the other and draws it after a 501
-in between. The 501 does nothing here; it may fade the model in.
+in between; that 501 is the 0 every mesh starts with. Straight after a 055,
+with no 095, the condition D jumps when the size is at least I (HEURISTIC:
+the SGNASCAR cabinet shows the rows of spectators near the camera; far away
+they are too small to tell, and the condition 1 is never used this way).
 
 The 621 sets two kinds of depth queue. With a colour (bit 17 clear) the
 materials with the 881 z bit are fogged, as in the X360 port. Without one
