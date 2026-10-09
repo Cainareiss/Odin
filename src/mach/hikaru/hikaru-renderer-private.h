@@ -217,7 +217,6 @@ typedef struct {
 			fprintf (stdout, "\tHR: " fmt_"\n", ##args_); \
 	} while (0)
 
-uint32_t	rgba1111_to_rgba4444 (uint8_t pixel);
 uint16_t	abgr1555_to_rgba5551 (uint16_t pixel);
 uint16_t	abgr4444_to_rgba4444 (uint16_t pixel);
 uint32_t	a8_to_rgba8888 (uint32_t a);

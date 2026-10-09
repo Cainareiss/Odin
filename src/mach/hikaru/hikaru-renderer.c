@@ -137,51 +137,45 @@ destroy_texture (hikaru_texture_t *tex)
 	memset ((void *) tex, 0, sizeof (hikaru_texture_t));
 }
 
+/* A texel of the format 2 is one 4-bit value: the ramp PHARRIER draws its
+ * red halo with goes 0, 2, 4, 6, 9, B, D, F across. The four channels get
+ * it (HEURISTIC: the halo takes its alpha, the BOOTROM font, 0 or F, its
+ * colour weight and its alpha). */
 static uint16_t
-abgr1111_to_rgba4444 (uint32_t texel)
+i4_to_rgba4444 (uint32_t texel)
 {
-	static const uint16_t table[16] = {
-		0x0000, 0xF000, 0x0F00, 0xFF00,
-		0x00F0, 0xF0F0, 0x0FF0, 0xFFF0,
-		0x000F, 0xF00F, 0x0F0F, 0xFF0F,
-		0x00FF, 0xF0FF, 0x0FFF, 0xFFFF,
-	};
-	return table[texel & 15];
+	return (texel & 15) * 0x1111;
 }
 
-#define PUT16(x, y, t) \
-	*(uint16_t *) &(data[(y)*w*2 + (x)*2]) = (t)
-
+/* A word holds a block of two by two texels: a texhead of w x h words
+ * is a picture of 2w x 2h texels. The font of the BOOTROM menu is one of
+ * 64 x 64 words, its glyphs 8 texels apart across and 16 down. */
 static void *
-decode_texture_abgr1111 (vk_buffer_t *texram,
+decode_texture_i4 (vk_buffer_t *texram,
                          uint32_t w, uint32_t h,
                          uint32_t basex, uint32_t basey)
 {
 	uint32_t x, y;
-	uint8_t *data;
+	uint16_t *data;
 
-	data = (uint8_t *) malloc (w * (h * 2) * 2);
+	data = (uint16_t *) malloc ((w * 2) * (h * 2) * 2);
 	if (!data)
 		return NULL;
 
 	for (y = 0; y < h; y++) {
-		for (x = 0; x < w; x += 4) {
-			uint32_t offs = (basey + y) * 4096 + (basex + x);
-			uint32_t texels = vk_buffer_get (texram, 4, offs);
-			PUT16 (x + 2, y*2 + 0, abgr1111_to_rgba4444 (texels >> 28));
-			PUT16 (x + 3, y*2 + 0, abgr1111_to_rgba4444 (texels >> 24));
-	      		PUT16 (x + 2, y*2 + 1, abgr1111_to_rgba4444 (texels >> 20));
-			PUT16 (x + 3, y*2 + 1, abgr1111_to_rgba4444 (texels >> 16));
-	      		PUT16 (x + 0, y*2 + 0, abgr1111_to_rgba4444 (texels >> 12));
-			PUT16 (x + 1, y*2 + 0, abgr1111_to_rgba4444 (texels >> 8));
-	      		PUT16 (x + 0, y*2 + 1, abgr1111_to_rgba4444 (texels >> 4));
-			PUT16 (x + 1, y*2 + 1, abgr1111_to_rgba4444 (texels >> 0));
+		uint16_t *top = &data[(y * 2 + 0) * (w * 2)];
+		uint16_t *bottom = &data[(y * 2 + 1) * (w * 2)];
+		for (x = 0; x < w; x++) {
+			uint32_t offs = (basey + y) * 4096 + (basex + x) * 2;
+			uint32_t texels = vk_buffer_get (texram, 2, offs);
+			top[x * 2 + 0] = i4_to_rgba4444 (texels >> 12);
+			top[x * 2 + 1] = i4_to_rgba4444 (texels >> 8);
+			bottom[x * 2 + 0] = i4_to_rgba4444 (texels >> 4);
+			bottom[x * 2 + 1] = i4_to_rgba4444 (texels >> 0);
 		}
 	}
 	return (void *) data;
 }
-
-#undef PUT16
 
 /* Wrap and filter of the bound texture. They belong to the texhead, not to
  * the texels: two texheads may share a slot and differ only there, so this
@@ -307,15 +301,15 @@ upload_texture (hikaru_renderer_t *hr, hikaru_texhead_t *th)
 			                  la8_swizzle);
 			VK_ASSERT_NO_GL_ERROR ();
 			break;
-		case HIKARU_FORMAT_ABGR1111:
-			data = decode_texture_abgr1111 (hr->gpu->texram[bank],
+		case HIKARU_FORMAT_I4:
+			data = decode_texture_i4 (hr->gpu->texram[bank],
 			                                w, h, basex, basey);
 			if (!data)
 				goto fail;
 
 			glTexImage2D (GL_TEXTURE_2D, level,
 			              GL_RGBA4,
-			              w, h * 2, 0,
+			              w * 2, h * 2, 0,
 			              GL_RGBA, GL_UNSIGNED_SHORT_4_4_4_4_REV,
 			              data);
 			VK_ASSERT_NO_GL_ERROR ();
@@ -1287,8 +1281,10 @@ copy_texcoords (hikaru_renderer_t *hr,
 	float v = src->body.texcoords[1] * k;
 	unsigned sel = src->info.uv_offset;
 
-	if (th->format == HIKARU_FORMAT_ABGR1111)
+	if (th->format == HIKARU_FORMAT_I4) {
+		w *= 2;
 		h *= 2;
+	}
 
 	if (sel) {
 		u += gpu->texoffset[sel][0] / 16.0f;

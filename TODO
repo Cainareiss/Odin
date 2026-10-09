@@ -60,6 +60,10 @@ the pages BRAVEFF writes to the texture RAM itself hold the half-size
 copy of each bank 0 texture in bank 1, and PODRACE keeps the textures of
 the Watto shot of its intro where the level 1 of the same bank would
 land (they stay intact on the cabinet).
+The texture format 2 holds one 4-bit value a texel, a word being a block
+of 2 x 2 texels (the BOOTROM font, 64 x 64 words for 128 x 128 texels);
+the four channels get the value (HEURISTIC: the ramp of the PHARRIER
+halo, 0 to F, is used for its alpha).
 A texture transfer (IDMA) runs to its end whatever is written to its
 control register, which reads busy until then (HEURISTIC, from the way
 the library polls it; the boot ROM clears the register at a later

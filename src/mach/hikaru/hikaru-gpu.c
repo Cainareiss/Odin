@@ -509,7 +509,7 @@ hikaru_gpu_raise_irq (hikaru_gpu_t *gpu, uint32_t _15, uint32_t _1A)
  * accessed by the CPU through the GPU IDMA device. They are used for 3D
  * only.
  *
- * Textures can be ABGR1555, ABGR4444, ABGR1111, and A8?; other formats
+ * Textures can be ABGR1555, ABGR4444, I4, and A8?; other formats
  * may be possible. Textures may or may not include a complete mipmap tree.
  *
  *
@@ -724,7 +724,7 @@ hikaru_gpu_fill_layer_info (hikaru_gpu_t *gpu)
  *
  *		0 = ABGR1555
  *		1 = ABGR4444
- *		2 = ABGR1111
+ *		2 = I4 (4 bits a texel, 2 x 2 texels a word)
  *		4 = A8?
  *
  *	b = Destination TEXRAM bank
@@ -853,7 +853,7 @@ process_idma_entry (hikaru_gpu_t *gpu, uint32_t entry[4])
 
 	if (texhead.format != HIKARU_FORMAT_ABGR1555 &&
 	    texhead.format != HIKARU_FORMAT_ABGR4444 &&
-	    texhead.format != HIKARU_FORMAT_ABGR1111 &&
+	    texhead.format != HIKARU_FORMAT_I4 &&
 	    texhead.format != HIKARU_FORMAT_LA8) {
 		VK_ERROR ("GPU IDMA: unknown texhead format: %s",
 		          get_texhead_str (&texhead));

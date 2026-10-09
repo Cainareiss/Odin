@@ -118,7 +118,7 @@ get_texhead_str (hikaru_texhead_t *th)
 	static const char *name[8] = {
 		"RGBA5551",
 		"RGBA4444",
-		"RGBA1111",
+		"I4      ",
 		"???3??? ",
 		"LA8     ",
 		"???5??? ",
