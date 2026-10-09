@@ -71,6 +71,30 @@ typedef union {
 	uint64_t full;
 } hikaru_glsl_variant_t;
 
+/* Uniform locations of a mesh program */
+typedef struct {
+	GLuint		u_projection;
+	GLuint		u_modelview;
+	GLuint		u_normal;
+	GLuint		u_modelview2;
+	GLuint		u_depth_scale;
+	GLuint		u_normal2;
+	struct {
+		GLuint	position;
+		GLuint	direction;
+		GLuint	color;
+		GLuint	extents;
+		GLuint	spot;
+		GLuint	cone;
+	} u_lights[4];
+	GLuint		u_ambient;
+	GLuint		u_texture;
+	GLuint		u_fog;
+	GLuint		u_fog_color;
+	GLuint		u_alpha_ref;
+	GLuint		u_weigh_by_alpha;
+} hikaru_mesh_locs_t;
+
 typedef struct {
 	GLuint id;
 	hikaru_texhead_t th;
@@ -144,28 +168,7 @@ typedef struct {
 		bool			depth_bias;
 		bool			weigh_by_alpha;
 
-		struct {
-			GLuint		u_projection;
-			GLuint		u_modelview;
-			GLuint		u_normal;
-			GLuint		u_modelview2;
-			GLuint		u_depth_scale;
-			GLuint		u_normal2;
-			struct {
-				GLuint	position;
-				GLuint	direction;
-				GLuint	color;
-				GLuint	extents;
-				GLuint	spot;
-				GLuint	cone;
-			} u_lights[4];
-			GLuint		u_ambient;
-			GLuint		u_texture;
-			GLuint		u_fog;
-			GLuint		u_fog_color;
-			GLuint		u_alpha_ref;
-			GLuint		u_weigh_by_alpha;
-		} locs;
+		hikaru_mesh_locs_t	locs;
 	} meshes;
 
 	struct {

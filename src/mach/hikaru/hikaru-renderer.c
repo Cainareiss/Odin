@@ -773,6 +773,7 @@ get_glsl_variant (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 static struct {
 	hikaru_glsl_variant_t variant;
 	GLuint program;
+	hikaru_mesh_locs_t locs;
 } program_cache[MAX_PROGRAMS];
 unsigned num_programs;
 
@@ -813,7 +814,10 @@ upload_glsl_program (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	for (i = 0; i < num_programs; i++) {
 		if (program_cache[i].variant.full == variant.full) {
 			hr->meshes.program = program_cache[i].program;
-			goto update_locations;
+			hr->meshes.locs = program_cache[i].locs;
+			glUseProgram (hr->meshes.program);
+			VK_ASSERT_NO_GL_ERROR ();
+			return;
 		}
 	}
 
@@ -858,13 +862,6 @@ upload_glsl_program (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 		vk_renderer_print_uniforms (hr->meshes.program);
 		VK_ASSERT_NO_GL_ERROR ();
 	}
-
-	program_cache[num_programs].variant.full = variant.full;
-	program_cache[num_programs].program = hr->meshes.program;
-	num_programs++;
-	VK_ASSERT (num_programs < MAX_PROGRAMS);
-
-update_locations:
 
 	glUseProgram (hr->meshes.program);
 	VK_ASSERT_NO_GL_ERROR ();
@@ -916,6 +913,12 @@ update_locations:
 	hr->meshes.locs.u_weigh_by_alpha =
 		glGetUniformLocation (hr->meshes.program, "u_weigh_by_alpha");
 	VK_ASSERT_NO_GL_ERROR ();
+
+	program_cache[num_programs].variant.full = variant.full;
+	program_cache[num_programs].program = hr->meshes.program;
+	program_cache[num_programs].locs = hr->meshes.locs;
+	num_programs++;
+	VK_ASSERT (num_programs < MAX_PROGRAMS);
 }
 
 static void
