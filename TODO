@@ -201,6 +201,13 @@ read from the footage, the trails of the stars).
 Figure out the effect of mesh LOD on texturing (normally, and SGNASCAR),
 disable mipmaps when appropriate (instruction 0C1 maybe).
 
+The 012 jumps with the conditions 5 and 9 compare the bounding sphere of
+the model (561 centre, 055 radius) with a size in 1/16 of a pixel
+(HEURISTIC: radius * projection distance / distance; the unit is read from
+the sizes PHARRIER uses, all whole pixels, and the formula from one cabinet
+scene). The conditions 6, 7 and 8 of SGNASCAR still test the old "distance
+below 4 or 8 thresholds" flag, which is a guess of the original code.
+
 The 621 sets two kinds of depth queue. With a colour (bit 17 clear) the
 materials with the 881 z bit are fogged, as in the X360 port. Without one
 (bit 17, two builders of the PHARRIER library, "Depth Queue Start" and

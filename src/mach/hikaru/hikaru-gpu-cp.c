@@ -88,6 +88,7 @@ on_frame_begin (hikaru_gpu_t *gpu)
 	}
 
 	LOD.value = 0.0f;
+	LOD.radius = 0.0f;
 	LOD.cond = false;
 	LOD.branch_id = ~0;
 
@@ -407,11 +408,26 @@ D (0x000)
  *	IIIIIIII IIIIIIII CCCCR--o oooooooo
  *	AAAAAAAA AAAAAAAA AAAAAAAA AAAAAAAA
  *
- * I = Branch identifier?
+ * I = Branch identifier, or a size on the screen in 1/16 of a pixel
  * C = Condition
  * R = Relative
  * A = Address or Offset in 32-bit words.
+ *
+ * Conditions 5 and 9 compare the bounding sphere of the model (561, 055)
+ * with I: 5 jumps when its radius on the screen is at least I, 9 when it
+ * is smaller. PHARRIER picks one of three models of each object this way;
+ * its sizes are whole pixels (2, 3, 4, 7, 8, 10, 15, 20, 30, 100, 120, 150
+ * and 200).
  */
+
+/* Radius of the bounding sphere on the screen, in 1/16 of a pixel
+ * (HEURISTIC: radius * projection distance / distance to the centre; the
+ * PHARRIER cabinet shows the finest player model at 2.8 units). */
+static float
+get_lod_size (hikaru_gpu_t *gpu)
+{
+	return 16.0f * LOD.radius * VP.current.clip.f / LOD.value;
+}
 
 I (0x012)
 {
@@ -427,9 +443,7 @@ I (0x012)
 		jump = LOD.branch_id != branch_id;
 		break;
 	case 0x5:
-		/* XXX draws high-poly player character in PHARRIER; has
-		 * branch_id != 0. */
-		jump = LOD.cond == true;
+		jump = get_lod_size (gpu) >= (float) branch_id;
 		break;
 	case 0x6:
 		jump = LOD.cond == false;
@@ -438,9 +452,7 @@ I (0x012)
 		jump = LOD.cond == true;
 		break;
 	case 0x9:
-		/* XXX draws low-poly player character in PHARRIER; has
-		 * branch_id != 0. */
-		jump = LOD.cond == false;
+		jump = get_lod_size (gpu) < (float) branch_id;
 		break;
 	case 0xD:
 		jump = LOD.branch_id == branch_id;
@@ -606,6 +618,7 @@ I (0x005)
 
 	thresh.u = inst[0] & 0xFFFFF000;
 
+	LOD.radius = thresh.f;
 	LOD.cond = LOD.value < (thresh.f * 8.0f);
 }
 
@@ -626,12 +639,16 @@ D (0x005)
  *	TTTTTTTT TTTTTTTT TTTTTTTT TTTTTTTT
  *
  * T = Floating-point threshold
+ *
+ *	The radius of the bounding sphere of the model, around the point of
+ *	the 561: in PHARRIER it is the distance of the farthest vertex.
  */
 
 I (0x055)
 {
 	float thresh = *(float *) &inst[1];
 
+	LOD.radius = thresh;
 	LOD.cond = LOD.value < (thresh * 4.0f);
 }
 
@@ -1042,9 +1059,9 @@ mult_mtx4x4f_vec4f (vec4f_t res, mtx4x4f_t m, vec4f_t v)
 }
 
 static float
-norm_vec4 (vec4f_t v)
+norm_vec3 (vec4f_t v)
 {
-	return sqrtf (v[0]*v[0] + v[1]*v[1] + v[2]*v[2] + v[3]*v[3]);
+	return sqrtf (v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
 }
 
 /* 161	Set Matrix Vector
@@ -1080,7 +1097,8 @@ norm_vec4 (vec4f_t v)
  *
  * W = Always 11b
  *
- * Uploads a vector used for LOD computations.
+ * Uploads a vector used for LOD computations: the centre of the bounding
+ * sphere of the model.
  *
  *
  * 961	Light: Set Vector 9
@@ -1164,8 +1182,9 @@ I (0x161)
 			v[2] = *(float *) &inst[3];
 			v[3] = 1.0f;
 
+			/* Distance of the point from the eye. */
 			mult_mtx4x4f_vec4f (w, MV.table[MV.depth].mtx, v);
-			LOD.value = norm_vec4 (w);
+			LOD.value = norm_vec3 (w);
 		}
 		break;
 	case 0x9:

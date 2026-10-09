@@ -347,6 +347,7 @@ typedef struct {
 
 		struct {
 			float value;
+			float radius;
 			bool cond;
 			uint16_t branch_id;
 		} lod;
