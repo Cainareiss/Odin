@@ -664,6 +664,15 @@ main (void)	\n \
 	fragColor = color;							\n \
 #endif										\n \
 										\n \
+#if HAS_CUE									\n \
+	/* Depth queue without a colour: the pixel fades into what is behind	\n \
+	 * it, linearly on the eye depth from start to end. */			\n \
+	float cue = clamp ((-p_position.z - u_fog.x) * u_fog.y, 0.0, 1.0);	\n \
+	if (cue >= 1.0)								\n \
+		discard;							\n \
+	fragColor.a = 1.0 - cue;						\n \
+#endif										\n \
+										\n \
 	/* A blended colour is weighted by its alpha before it is clamped: a	\n \
 	 * lit colour above 1 keeps its excess (the galaxy of the PHARRIER	\n \
 	 * logo scene, whose veils burn to white on the cabinet). The blend	\n \
@@ -704,6 +713,26 @@ get_light_type (hikaru_light_t *lit)
 	return HIKARU_LIGHT_TYPE_DIRECTIONAL;
 }
 
+/* A depth queue without a colour (621 bit 17) fades the polygons that do not
+ * blend into what is behind them (HEURISTIC, read from the PHARRIER cabinet:
+ * its demo play loses the far scenery and keeps the mountains, sent as
+ * translucent polygons). */
+static bool
+is_faded_by_depth (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
+{
+	hikaru_viewport_t *vp;
+
+	if (mesh->vp_index >= MAX_VIEWPORTS)
+		return false;
+	vp = &hr->vp_list[mesh->vp_index];
+
+	return vp->depth.q_behind && vp->depth.q_type == 0 &&
+	       vp->depth.inv_range > 0.0f && vp->depth.near_by_edge > 0.0f &&
+	       mesh->polytype != HIKARU_POLYTYPE_BACKGROUND &&
+	       mesh->polytype != HIKARU_POLYTYPE_TRANSLUCENT &&
+	       !hr->debug.flags[HR_DEBUG_NO_FOG];
+}
+
 static hikaru_glsl_variant_t
 get_glsl_variant (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 {
@@ -739,8 +768,9 @@ get_glsl_variant (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	/* The X360 port picks the fogged vo3d variant on the 881 z bit alone
 	 * (shader option 11, digit 1). */
 	variant.has_fog		= mat->depth_blend &&
-	                          vp->depth.q_enabled &&
+	                          !vp->depth.q_behind &&
 	                          !hr->debug.flags[HR_DEBUG_NO_FOG];
+	variant.has_cue		= is_faded_by_depth (hr, mesh);
 
 	/* The alpha mode and the texel mode apply to unlit materials too
 	 * (vo3d.x1xxxxx variants). */
@@ -814,7 +844,8 @@ upload_glsl_program (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	"#define HAS_LIGHT3 %d\n"
 	"#define LIGHT3_TYPE %d\n"
 	"#define LIGHT3_ATT_TYPE %d\n"
-	"#define HAS_FOG %d\n";
+	"#define HAS_FOG %d\n"
+	"#define HAS_CUE %d\n";
 
 	hikaru_glsl_variant_t variant;
 	char *definitions, *vs_source, *fs_source;
@@ -857,7 +888,8 @@ upload_glsl_program (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	                variant.has_light3,
 	                variant.light3_type,
 	                variant.light3_att_type,
-	                variant.has_fog);
+	                variant.has_fog,
+	                variant.has_cue);
 	VK_ASSERT (ret >= 0);
 
 	ret = asprintf (&vs_source, mesh_vs_source, definitions);
@@ -992,10 +1024,20 @@ upload_viewport (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	           (GLsizei) (vp->clip.r - vp->clip.l),
 	           (GLsizei) (vp->clip.t - vp->clip.b));
 
+	if (hr->meshes.variant.has_cue) {
+		/* 621 words without a colour: P = 1 / (end - start),
+		 * Q = near / start (PHARRIER library 0C015A3E). */
+		vec2f_t cue;
+
+		cue[0] = vp->clip.n / vp->depth.near_by_edge;
+		cue[1] = vp->depth.inv_range;
+		glUniform2fv (hr->meshes.locs.u_fog, 1, cue);
+	}
+
 	if (hr->meshes.variant.has_fog) {
 		/* 621 words: P = 1 / (end - start), Q = near / end (von4
 		 * library 0C716320); the port fogs linearly from start to end. */
-		float p = vp->depth.inv_range, q = vp->depth.near_by_end;
+		float p = vp->depth.inv_range, q = vp->depth.near_by_edge;
 		vec2f_t fog = { 0.0f, 0.0f };
 		vec3f_t fog_color;
 
@@ -1751,6 +1793,18 @@ set_material_blend (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	                     factors[mode][2], factors[mode][3]);
 }
 
+/* The passes that do not blend replace the pixel and cover what is below the
+ * 3D; a mesh faded by the depth queue lets through what it does not hide. */
+static void
+set_opaque_blend (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
+{
+	if (is_faded_by_depth (hr, mesh))
+		glBlendFuncSeparate (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA,
+		                     GL_ZERO, GL_ONE_MINUS_SRC_ALPHA);
+	else
+		glBlendFuncSeparate (GL_ONE, GL_ZERO, GL_ZERO, GL_ZERO);
+}
+
 /* The translucent triangles of a viewport are drawn far to near, whatever
  * their mesh: the front of a SEGA letter of the PHARRIER logo covers its
  * back, sent after it, and the glass of an AIRTRIX street lamp shows over
@@ -1859,6 +1913,8 @@ draw_meshes_for_polytype (hikaru_renderer_t *hr, unsigned vpi, int polytype)
 		hikaru_mesh_t *mesh = &meshes[j];
 		if (polytype == HIKARU_POLYTYPE_BACKGROUND)
 			set_material_blend (hr, mesh);
+		else
+			set_opaque_blend (hr, mesh);
 		draw_mesh (hr, mesh, 0, mesh->num_tris);
 	}
 
@@ -1873,14 +1929,16 @@ destroy_meshes:
 static void
 draw_scene (hikaru_renderer_t *hr)
 {
-	/* Pass order of the X360 port (825B3EB0): punch-through, opaque,
-	 * then the blended types. */
+	/* The background first, for the depth queue to fade the polygons
+	 * into it, then the pass order of the X360 port (825B3EB0), which
+	 * draws it after the opaque types: punch-through, opaque, then the
+	 * translucent type. */
 	static const int sorted_polytypes[] = {
+		HIKARU_POLYTYPE_BACKGROUND,
 		HIKARU_POLYTYPE_TRANSPARENT,
 		HIKARU_POLYTYPE_OPAQUE,
 		HIKARU_POLYTYPE_SHADOW_A,
 		HIKARU_POLYTYPE_SHADOW_B,
-		HIKARU_POLYTYPE_BACKGROUND,
 		HIKARU_POLYTYPE_TRANSLUCENT,
 	};
 	hikaru_gpu_t *gpu = hr->gpu;

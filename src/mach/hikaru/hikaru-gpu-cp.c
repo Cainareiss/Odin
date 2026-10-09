@@ -742,22 +742,27 @@ decode_clip_xy (uint32_t c)
  *
  * 621	Viewport: Set Depth Queue
  *
- *	-------- ---TT-DW -------o oooooooo
+ *	-------- ---TTTDW -------o oooooooo
  *	AAAAAAAA BBBBBBBB GGGGGGGG RRRRRRRR
  *	PPPPPPPP PPPPPPPP PPPPPPPP PPPPPPPP
  *	QQQQQQQQ QQQQQQQQ QQQQQQQQ QQQQQQQQ
  *
- * W = Disable depth writes
- * D = Disable fog
- * T = Unknown
- * R, G, B, A = Fog color
+ * W = Unknown; the flag argument of the builders that take a colour
+ * D = No colour: the polygons fade into what is behind them
+ * T = Type; 0 is linear, 2, 4 and 6 send a density as P (not understood)
+ * R, G, B, A = Fog color; not written when D is set
  * P = 1 / (end - start)
- * Q = near / end
+ * Q = near / end; near / start when D is set
  *
  *	The von4 library (0C716320) computes P and Q from a fog start and
  *	end in eye depth units and sets W from its flag argument. The X360
  *	port applies a linear fog on the eye depth from start to end to the
  *	materials with the 881 z bit, and ignores W and T.
+ *
+ *	The PHARRIER library has two more builders, without a colour, that
+ *	set D: 0C015A3E (start, end) and 0C015A72 (type, density, start).
+ *	The viewport menu of the game calls their values "Depth Queue Type",
+ *	"Start", "End" and "Dns".
  *
  * See PH:@0C0159C4, PH:@0C015A02, PH:@0C015A3E.
  */
@@ -789,15 +794,15 @@ I (0x021)
 		vp->has_421 = 1;
 		break;
 	case 6:
-		vp->depth.q_type	= (inst[0] >> 18) & 3;
-		vp->depth.q_enabled	= ((inst[0] >> 17) & 1) ^ 1;
+		vp->depth.q_type	= (inst[0] >> 18) & 7;
+		vp->depth.q_behind	= (inst[0] >> 17) & 1;
 		vp->depth.q_unknown	= (inst[0] >> 16) & 1;
 		vp->depth.mask[0]	= inst[1] & 0xFF;
 		vp->depth.mask[1]	= (inst[1] >> 8) & 0xFF;
 		vp->depth.mask[2]	= (inst[1] >> 16) & 0xFF;
 		vp->depth.mask[3]	= inst[1] >> 24;
 		vp->depth.inv_range	= *(float *) &inst[2];
-		vp->depth.near_by_end	= *(float *) &inst[3];
+		vp->depth.near_by_edge	= *(float *) &inst[3];
 		vp->has_621 = 1;
 		break;
 	default:
@@ -835,9 +840,11 @@ D (0x021)
 
 	case 6:
 		UNHANDLED |= !!(inst[0] & 0xFFF0F800);
+		/* Without a colour only the linear type is understood. */
+		UNHANDLED |= (inst[0] & 0x00020000) && (inst[0] & 0x000C0000);
 	
-		DISASM ("vp: set depth queue [type=%u ena=%u unk=%u mask=(%08X) P=%g Q=%g]",
-		        (inst[0] >> 18) & 3, ((inst[0] >> 17) & 1) ^ 1,
+		DISASM ("vp: set depth queue [type=%u behind=%u unk=%u mask=(%08X) P=%g Q=%g]",
+		        (inst[0] >> 18) & 7, (inst[0] >> 17) & 1,
 		        (inst[0] >> 16) & 1, inst[1],
 		        *(float *) &inst[2], *(float *) &inst[3]);
 		break;

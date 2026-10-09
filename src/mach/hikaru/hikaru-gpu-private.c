@@ -61,17 +61,17 @@ get_viewport_str (hikaru_viewport_t *vp)
 	if (!vp)
 		return none;
 
-	sprintf (out, "clip=(%6.3f %6.3f %6.3f %6.3f %6.3f %6.3f) offs=(%6.3f %6.3f) depth=(%s %6.3f %6.3f) dq=(ena=%u type=%u unk=%u mask=%02X%02X%02X%02X P=%g Q=%g)",
+	sprintf (out, "clip=(%6.3f %6.3f %6.3f %6.3f %6.3f %6.3f) offs=(%6.3f %6.3f) depth=(%s %6.3f %6.3f) dq=(behind=%u type=%u unk=%u mask=%02X%02X%02X%02X P=%g Q=%g)",
 	         vp->clip.l, vp->clip.r,
 	         vp->clip.b, vp->clip.t,
 	         vp->clip.f, vp->clip.n,
 	         vp->offset.x, vp->offset.y,
 	         depth_func_name [vp->depth.func],
 	         vp->depth.min, vp->depth.max,
-	         vp->depth.q_enabled, vp->depth.q_type, vp->depth.q_unknown,
+	         vp->depth.q_behind, vp->depth.q_type, vp->depth.q_unknown,
 	         vp->depth.mask[3], vp->depth.mask[2],
 	         vp->depth.mask[1], vp->depth.mask[0],
-	         vp->depth.inv_range, vp->depth.near_by_end);
+	         vp->depth.inv_range, vp->depth.near_by_edge);
 
 	return (const char *) out;
 }

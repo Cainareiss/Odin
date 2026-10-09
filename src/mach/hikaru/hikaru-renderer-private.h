@@ -67,6 +67,7 @@ typedef union {
 		uint64_t light3_att_type	: 3;
 
 		uint64_t has_fog		: 1;
+		uint64_t has_cue		: 1;
 	};
 	uint64_t full;
 } hikaru_glsl_variant_t;

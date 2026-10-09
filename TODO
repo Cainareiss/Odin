@@ -186,7 +186,18 @@ read from the footage, the trails of the stars).
 Figure out the effect of mesh LOD on texturing (normally, and SGNASCAR),
 disable mipmaps when appropriate (instruction 0C1 maybe).
 
-Figure out the 621 bits 16 and 19:18 (ignored like the X360 port).
+The 621 sets two kinds of depth queue. With a colour (bit 17 clear) the
+materials with the 881 z bit are fogged, as in the X360 port. Without one
+(bit 17, two builders of the PHARRIER library, "Depth Queue Start" and
+"End" in its viewport menu) the polygons that do not blend fade into what
+is behind them, linearly on the eye depth from near / Q to near / Q + 1 / P,
+and the background is drawn first for that. Read from the PHARRIER cabinet
+(HEURISTIC): its demo play loses the scenery past 1010 units and keeps the
+mountains, which the game sends as translucent polygons of alpha 0xFC;
+the start scaled by 0.5 or 1.5, or the end by 0.75 or 1.5, moves the
+picture away from the footage. Not known: the types 2, 4 and 6 of that queue (a density as P),
+whether the punch-through polygons fade like the opaque ones (assumed so),
+bit 16, and the types of the coloured queue (ignored like the X360 port).
 
 Implement alpha testing (used in BRAVEFF, instruction 154).
 

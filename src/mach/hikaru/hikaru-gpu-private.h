@@ -84,11 +84,11 @@ typedef struct {
 	} offset;
 	struct {
 		float max, min;
-		float inv_range, near_by_end;
+		float inv_range, near_by_edge;
 		vec4b_t mask;
 		uint32_t func		: 3;
-		uint32_t q_type		: 2;
-		uint32_t q_enabled	: 1;
+		uint32_t q_type		: 3;
+		uint32_t q_behind	: 1;
 		uint32_t q_unknown	: 1;
 	} depth;
 	struct {
