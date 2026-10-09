@@ -80,8 +80,7 @@ on_frame_begin (hikaru_gpu_t *gpu)
 	end_open_mesh (gpu);
 
 	/* The static mesh scale (0x901) is a register of the CP that outlives
-	 * the frame, like the X360 port's global 82E02B60 (GPU-RE/05); Racer
-	 * sets it once and pushes static meshes in later frames. */
+	 * the frame, like the X360 port's global 82E02B60 (GPU-RE/05). */
 	{
 		float precision = POLY.static_mesh_precision;
 		memset ((void *) &POLY, 0, sizeof (POLY));
@@ -2183,8 +2182,9 @@ I (0x101)
 		gpu->_501 = inst[0] >> 16;
 		break;
 	case 9:
+		/* 2^(log - 0x8D): the sky dome of PODRACE has 0x8E. */
 		log = (inst[0] >> 16) & 0xFF;
-		POLY.static_mesh_precision = 1.0f / (1 << (0x8F - log - 2));
+		POLY.static_mesh_precision = ldexpf (1.0f, (int) log - 0x8D);
 		break;
 	default:
 		VK_ASSERT (0);
@@ -2215,7 +2215,7 @@ D (0x101)
 		break;
 	case 9:
 		log = (inst[0] >> 16) & 0xFF;
-		precision = 1.0f / (1 << (0x8F - log - 2));
+		precision = ldexpf (1.0f, (int) log - 0x8D);
 
 		UNHANDLED |= !!(inst[0] & 0xFF00F000);
 
@@ -2391,17 +2391,6 @@ I (0x12C)
 	hikaru_vertex_t v;
 
 	v.info.full = inst[0];
-
-	if (POLY.static_mesh_precision <= 0.0f) {
-		/* HEURISTIC: no 0x901 seen yet; the chip's power-on scale is
-		 * not known, exponent 0x7F (unit scale) is assumed. */
-		static bool warned;
-		POLY.static_mesh_precision = 1.0f / (1 << (0x8F - 0x7F - 2));
-		if (!warned) {
-			warned = true;
-			VK_ERROR ("CP @%08X: static mesh without a 0x901 scale, unit scale assumed", PC);
-		}
-	}
 
 	v.body.position[0] = ((int32_t) inst[1] >> 10) * (POLY.static_mesh_precision / 64.0f);
 	v.body.position[1] = ((int32_t) inst[2] >> 10) * (POLY.static_mesh_precision / 64.0f);

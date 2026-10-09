@@ -47,9 +47,6 @@ MAME (airtrix, pharrier, swracer). Its ready bit is never busy (MAME).
 The BOOTROM board probe answers a constant for the boards without the
 chip (hikaru-memctl.c, HACK until those boards are measured).
 
-Static mesh scale (CP 0x901): kept across frames; when a static mesh
-comes before any 0x901 the unit scale is assumed (HEURISTIC, Racer).
-
 GPU textures: the 0D1 UV offsets are added to the vertex UVs the way the
 X360 port's vertex shader is assumed to (the Xenos microcode of vo3d was
 not decoded: the sign is a HEURISTIC). Texhead filter mode 3 is trilinear
