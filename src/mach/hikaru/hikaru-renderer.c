@@ -522,6 +522,11 @@ apply_light (inout vec3 diffuse,	\n \
 	vec3 light_direction;	\n \
 	float distance, attenuation, n_dot_l, n_dot_h;	\n \
 	\n \
+	if (type == 3) {	\n \
+		diffuse += light.color;	\n \
+		return;	\n \
+	}	\n \
+	\n \
 	if (type == 0) {	\n \
 		distance = length (light.direction);	\n \
 		light_direction = light.direction / distance;	\n \
@@ -680,9 +685,15 @@ get_light_type (hikaru_light_t *lit)
 	 * at the wrong base, and poof. */
 	if (!lit->has_direction && !lit->has_position)
 		VK_ERROR ("recalling light with no direction nor position!");
-	if (get_light_attenuation_type (lit) == HIKARU_LIGHT_ATT_INF)
+	if (get_light_attenuation_type (lit) == HIKARU_LIGHT_ATT_INF) {
+		/* A parallel light sent with a null direction lights every
+		 * side (HEURISTIC, read from the BRAVEFF cabinet: the light
+		 * its stages add to every lightset). */
+		if (lit->has_direction && lit->direction[0] == 0.0f &&
+		    lit->direction[1] == 0.0f && lit->direction[2] == 0.0f)
+			return HIKARU_LIGHT_TYPE_UNDIRECTED;
 		return HIKARU_LIGHT_TYPE_DIRECTIONAL;
-	else if (lit->has_position && lit->has_spot && lit->has_cone)
+	} else if (lit->has_position && lit->has_spot && lit->has_cone)
 		return HIKARU_LIGHT_TYPE_SPOT;
 	else if (lit->has_position)
 		return HIKARU_LIGHT_TYPE_POSITIONAL;

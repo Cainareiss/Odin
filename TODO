@@ -88,6 +88,13 @@ Not as the port: the attenuation types 2 and 3 fall off on 1 / d and
 1 / d^2 with the P and Q of the library (the port does not attenuate
 them); the PHARRIER cabinet shows its asteroids untouched by the far
 type 3 light of the logo scene.
+A parallel light sent with a null direction and no attenuation lights
+every side fully (HEURISTIC, read from the BRAVEFF cabinet, whose stages
+add such a light, of colour 84 71 71, to every lightset: without it the
+control room, the how to play rooms, the demo play and the wall of the
+ranking are too dark). Weighing it by the material ambient (691), 0x7F in
+the control room, leaves that room too dark whatever the capture curve:
+the cabinet frame has more bright pixels than such a render.
 Not as the port either, whose target clamps at 8 bits: a blended colour
 is weighted by its alpha before it is clamped, so a lit colour above 1
 keeps its excess (HEURISTIC, read from two cabinets: the veils of the
