@@ -1000,6 +1000,27 @@ W64 (sh4_t *ctx, uint32_t addr, uint64_t val)
 	sh4_put (ctx, 8, addr, val);
 }
 
+/* A double has its high word in FRn and its low word in FRn+1. The DR
+ * union only moves the two halves around (FMOV with SZ set). */
+static inline double
+get_dr (sh4_t *ctx, unsigned n)
+{
+	alias64uf_t tmp;
+
+	tmp.u = ((uint64_t) FR (n).u << 32) | FR (n + 1).u;
+	return tmp.f;
+}
+
+static inline void
+set_dr (sh4_t *ctx, unsigned n, double val)
+{
+	alias64uf_t tmp;
+
+	tmp.f = val;
+	FR (n).u = (uint32_t) (tmp.u >> 32);
+	FR (n + 1).u = (uint32_t) tmp.u;
+}
+
 /* Interrupt Controller */
 
 /**

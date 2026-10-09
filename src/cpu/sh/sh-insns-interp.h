@@ -1396,7 +1396,7 @@ I (flt)
 		FRN.f = (float) (int32_t) FPUL.u; /* int32 to float */
 	} else {
 		VK_CPU_ASSERT (ctx, !(_RN & 1));
-		DRN.f = (double) (int32_t) FPUL.u; /* int32 to double */
+		set_dr (ctx, _RN, (double) (int32_t) FPUL.u); /* int32 to double */
 	}
 }
 
@@ -1406,22 +1406,20 @@ I (ftrc)
 		FPUL.u = (int32_t) FRN.f; /* float to int32 */
 	} else {
 		VK_CPU_ASSERT (ctx, !(_RN & 1));
-		FPUL.u = (int32_t) DRN.f; /* double to int32 */
+		FPUL.u = (int32_t) get_dr (ctx, _RN); /* double to int32 */
 	}
 }
 
 I (fcnvsd)
 {
 	VK_CPU_ASSERT (ctx, !(_RN & 1));
-	VK_CPU_ASSERT (ctx, !FPSCR.bit.pr);
-	DRN.f = FPUL.f;
+	set_dr (ctx, _RN, FPUL.f);
 }
 
 I (fcnvds)
 {
 	VK_CPU_ASSERT (ctx, !(_RN & 1));
-	VK_CPU_ASSERT (ctx, !FPSCR.bit.pr);
-	FPUL.f = DRN.f;
+	FPUL.f = get_dr (ctx, _RN);
 }
 
 I (fmov)
@@ -1513,8 +1511,9 @@ I (fneg)
 	if (!FPSCR.bit.pr) {
 		FRN.u = FRN.u ^ 0x80000000;
 	} else {
+		/* The sign of a double is in FRn. */
 		VK_CPU_ASSERT (ctx, !(_RN & 1));
-		DRN.u = DRN.u ^ 0x8000000000000000ull;
+		FRN.u = FRN.u ^ 0x80000000;
 	}
 }
 
@@ -1524,7 +1523,7 @@ I (fabs)
 		FRN.u = FRN.u & 0x7FFFFFFF;
 	} else {
 		VK_CPU_ASSERT (ctx, !(_RN & 1));
-		DRN.u = DRN.u & 0x7FFFFFFFFFFFFFFFull;
+		FRN.u = FRN.u & 0x7FFFFFFF;
 	}
 }
 
@@ -1535,7 +1534,7 @@ I (fadd)
 	} else {
 		VK_CPU_ASSERT (ctx, !(_RN & 1));
 		VK_CPU_ASSERT (ctx, !(_RM & 1));
-		DRN.f += DRM.f;
+		set_dr (ctx, _RN, get_dr (ctx, _RN) + get_dr (ctx, _RM));
 	}
 }
 
@@ -1546,7 +1545,7 @@ I (fsub)
 	} else {
 		VK_CPU_ASSERT (ctx, !(_RN & 1));
 		VK_CPU_ASSERT (ctx, !(_RM & 1));
-		DRN.f -= DRM.f;
+		set_dr (ctx, _RN, get_dr (ctx, _RN) - get_dr (ctx, _RM));
 	}
 }
 
@@ -1557,7 +1556,7 @@ I (fmul)
 	} else {
 		VK_CPU_ASSERT (ctx, !(_RN & 1));
 		VK_CPU_ASSERT (ctx, !(_RM & 1));
-		DRN.f *= DRM.f;
+		set_dr (ctx, _RN, get_dr (ctx, _RN) * get_dr (ctx, _RM));
 	}
 }
 
@@ -1568,7 +1567,7 @@ I (fdiv)
 	} else {
 		VK_CPU_ASSERT (ctx, !(_RN & 1));
 		VK_CPU_ASSERT (ctx, !(_RM & 1));
-		DRN.f /= DRM.f;
+		set_dr (ctx, _RN, get_dr (ctx, _RN) / get_dr (ctx, _RM));
 	}
 }
 
@@ -1602,7 +1601,7 @@ I (fsqrt)
 		FRN.f = sqrtf (FRN.f);
 	} else {
 		VK_CPU_ASSERT (ctx, !(_RN & 1));
-		DRN.f = sqrt (DRN.f);
+		set_dr (ctx, _RN, sqrt (get_dr (ctx, _RN)));
 	}
 }
 
@@ -1660,7 +1659,7 @@ I (fcmpeq)
 	} else {
 		VK_CPU_ASSERT (ctx, !(_RN & 1));
 		VK_CPU_ASSERT (ctx, !(_RM & 1));
-		T = DRN.f == DRM.f;
+		T = get_dr (ctx, _RN) == get_dr (ctx, _RM);
 	}
 }
 
@@ -1671,7 +1670,7 @@ I (fcmpgt)
 	} else {
 		VK_CPU_ASSERT (ctx, !(_RN & 1));
 		VK_CPU_ASSERT (ctx, !(_RM & 1));
-		T = DRN.f > DRM.f;
+		T = get_dr (ctx, _RN) > get_dr (ctx, _RM);
 	}
 }
 
