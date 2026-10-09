@@ -1236,6 +1236,20 @@ hikaru_gpu_is_texram_twiddled (vk_device_t *dev)
 	return REG15 (0x8C) == 0x02020202;
 }
 
+/* The bus wrote the texture RAM itself: the decoded textures of that bank
+ * are stale. */
+void
+hikaru_gpu_texram_written (vk_device_t *dev, unsigned bank)
+{
+	hikaru_gpu_t *gpu = (hikaru_gpu_t *) dev;
+	hikaru_texhead_t texhead;
+
+	memset (&texhead, 0, sizeof (texhead));
+	texhead.bank = bank;
+
+	hikaru_renderer_invalidate_texcache (gpu->renderer, &texhead);
+}
+
 static void
 hikaru_gpu_reset (vk_device_t *dev, vk_reset_type_t type)
 {
