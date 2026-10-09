@@ -995,8 +995,8 @@ upload_viewport (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	hikaru_viewport_t *vp = &hr->vp_list[mesh->vp_index];
 	/* The projection plane is clip.f pixels away on the 640x480 screen
 	 * for x and clip.f2 pixels away for y. */
-	const float hw_at_n = 320.0f * (vp->clip.n / vp->clip.f);
-	const float hh_at_n = 240.0f * (vp->clip.n / vp->clip.f2);
+	const float kx = vp->clip.n / vp->clip.f;
+	const float ky = vp->clip.n / vp->clip.f2;
 	mtx4x4f_t projection;
 
 	VK_ASSERT (mesh->vp_index != ~0);
@@ -1026,21 +1026,24 @@ upload_viewport (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 
 	LOG ("vp  = %s", get_viewport_str (vp));
 
+	/* The centre and the clip window are screen coordinates, y down: the
+	 * view is centred on the offset, reaches the four edges of the
+	 * screen and is cut by the window. The driver panels of SGNASCAR
+	 * sit 40 lines below the middle and stop under their banner; the
+	 * letterboxed robots of von4 fill the lines 39 to 360, as on the
+	 * cabinets. The BOOTROM menu has its centre on the top left corner
+	 * of the screen. */
 	vk_renderer_frustum (projection,
-	                     -hw_at_n, hw_at_n,
-	                     -hh_at_n, hh_at_n,
+	                     (0.0f - vp->offset.x) * kx,
+	                     (640.0f - vp->offset.x) * kx,
+	                     (vp->offset.y - 480.0f) * ky,
+	                     vp->offset.y * ky,
 	                     vp->clip.n, 1e5);
 
 	glUniformMatrix4fv (hr->meshes.locs.u_projection, 1, GL_FALSE,
 	                    (const GLfloat *) projection);
 
-	/* The centre and the clip window are screen coordinates, y down: the
-	 * view is centred on the offset and cut by the window. The driver
-	 * panels of SGNASCAR sit 40 lines below the middle and stop under
-	 * their banner; the letterboxed robots of von4 fill the lines 39 to
-	 * 360, as on the cabinets. */
-	glViewport ((GLint) vp->offset.x - 320, 240 - (GLint) vp->offset.y,
-	            640, 480);
+	glViewport (0, 0, 640, 480);
 	glScissor ((GLint) vp->clip.l, 480 - (GLint) vp->clip.t,
 	           (GLsizei) (vp->clip.r - vp->clip.l),
 	           (GLsizei) (vp->clip.t - vp->clip.b));
