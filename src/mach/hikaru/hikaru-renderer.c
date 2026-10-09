@@ -227,10 +227,10 @@ upload_texture (hikaru_renderer_t *hr, hikaru_texhead_t *th)
 
 	w = 16 << th->logw;
 	h = 16 << th->logh;
-	/* All levels in the texhead bank (X360 825C68D8), down to the level
-	 * where the smaller side reaches one texel: the games upload no
-	 * further (the sky dome of von4, 256x128, has a zero 1x1 level that
-	 * the port would read, 825C6A00; HEURISTIC). */
+	/* The levels alternate between the two banks (see copy_texture),
+	 * down to the level where the smaller side reaches one texel: the
+	 * games upload no further (the sky dome of von4, 256x128, has a zero
+	 * 1x1 level that the port would read, 825C6A00; HEURISTIC). */
 	num_levels = hr->debug.flags[HR_DEBUG_NO_MIPMAPS] ? 1 :
 	             MIN2 (th->logw, th->logh) + 5;
 
@@ -331,6 +331,7 @@ upload_texture (hikaru_renderer_t *hr, hikaru_texhead_t *th)
 
 		basex += (2048 - basex) / 2;
 		basey += (1024 - basey) / 2;
+		bank ^= 1;
 	}
 
 	glPixelStorei (GL_UNPACK_ROW_LENGTH, 0);

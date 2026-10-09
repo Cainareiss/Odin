@@ -773,8 +773,12 @@ copy_texture (hikaru_gpu_t *gpu, uint32_t bus_addr, unsigned size,
 	else
 		srcbuf = hikaru->ram_s;
 
-	/* The pyramid goes down to 1x1 and stays in the texhead bank (X360
-	 * 825C6A00, 825C68D8). */
+	/* The pyramid goes down to 1x1 (X360 825C6A00) and its levels
+	 * alternate between the two banks: the pages BRAVEFF writes to the
+	 * texture RAM itself hold the half-size copy of a bank 0 texture in
+	 * bank 1, and PODRACE keeps textures where the level 1 of the same
+	 * bank would land. The X360 port keeps the levels in the texhead
+	 * bank (825C68D8). */
 	level = 0;
 	max_level = MAX2 (texhead->logw, texhead->logh) + 4;
 	level_w = 16 << texhead->logw;
@@ -804,6 +808,7 @@ copy_texture (hikaru_gpu_t *gpu, uint32_t bus_addr, unsigned size,
 		/* Update the destination coords for the next level. */
 		dstx += (2048 - dstx) / 2;
 		dsty += (1024 - dsty) / 2;
+		bank ^= 1;
 
 		/* Update the level depth and sizes. */
 		level_w = MAX2 (level_w >> 1, 1);

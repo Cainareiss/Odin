@@ -54,6 +54,12 @@ here while the X360 port leaves the sampler defaults (HEURISTIC). The
 texel combine field of the 2C1 (bits 31:29) keeps the previous mode in
 the port for the values 3, 6 and 7 and means plain texturing here
 (HEURISTIC).
+The mipmap levels of a texture alternate between the two texture banks,
+as Valkyrie had it, where the X360 port keeps them in the texhead bank:
+the pages BRAVEFF writes to the texture RAM itself hold the half-size
+copy of each bank 0 texture in bank 1, and PODRACE keeps the textures of
+the Watto shot of its intro where the level 1 of the same bank would
+land (they stay intact on the cabinet).
 The 2D layers cover the 3D where a pixel has its alpha bit (black
 included: the bands of the Racer attract) and are transparent elsewhere
 (its green 0x03E0 boxes) and layer 1 sits above layer 2, as the Racer
