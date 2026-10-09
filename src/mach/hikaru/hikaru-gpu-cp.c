@@ -2144,7 +2144,12 @@ D (0x043)
  *
  *	-----BBB BBBBBBBB -------o oooooooo
  *
- * B = Bias
+ * B = Bias, signed: positive brings the mesh nearer, negative moves it away
+ *
+ *	SGNASCAR stacks the coplanar layers of its track on 0x400 to 0x403,
+ *	0x500 to 0x503, 0x600 and 0x700 (-1024 to -256) under the meshes
+ *	without a bias; PHARRIER sends its stars at 0x400 and 0x500; the
+ *	decals and the shadows of AIRTRIX go from 2 to 0x3D6.
  *
  * See @0C008040, PH:@0C016418, PH:@0C016446.
  *
@@ -2182,7 +2187,8 @@ I (0x101)
 
 	switch ((inst[0] >> 8) & 0xF) {
 	case 1:
-		gpu->depth_bias = inst[0] >> 16;
+		gpu->depth_bias = (int) ((inst[0] >> 16) & 0x7FF) -
+		                  (int) ((inst[0] >> 15) & 0x800);
 		break;
 	case 3:
 		break;
@@ -2209,7 +2215,8 @@ D (0x101)
 	case 1:
 		UNHANDLED |= !!(inst[0] & 0xF800F000);
 
-		DISASM ("mesh: set depth bias [%u]", inst[0] >> 16);
+		DISASM ("mesh: set depth bias [%d]",
+		        (int) ((inst[0] >> 16) & 0x7FF) - (int) ((inst[0] >> 15) & 0x800));
 		break;
 	case 3:
 		UNHANDLED |= !!(inst[0] & 0xFF00F000);

@@ -1572,11 +1572,12 @@ draw_mesh (hikaru_renderer_t *hr, hikaru_mesh_t *mesh,
 	upload_lightset (hr, mesh);
 	VK_ASSERT_NO_GL_ERROR ();
 
-	/* The 101 bias brings the mesh nearer by a fraction of its own depth
-	 * (HEURISTIC, 1/65536 per unit: four times as much and a light shaft
-	 * of AIRTRIX covers the skater, four times less and its wall decals
-	 * sink). As an offset in depth buffer units it let the stars of
-	 * PHARRIER, biased by 0x400, through its far asteroids. */
+	/* The 101 bias moves the mesh by a fraction of its own depth, nearer
+	 * when positive (HEURISTIC, 1/65536 per unit: four times as much and
+	 * a light shaft of AIRTRIX covers the skater). It is signed and holds
+	 * for the opaque types too: the lettering and the painted lines of
+	 * the SGNASCAR track lie on layers of -1024 to -256, the shadow of the
+	 * AIRTRIX skater is opaque. */
 	glUniform1f (hr->meshes.locs.u_depth_scale,
 	             hr->meshes.depth_bias ?
 	             1.0f - mesh->depth_bias * (1.0f / 65536.0f) : 1.0f);
@@ -1899,7 +1900,7 @@ draw_meshes_for_polytype (hikaru_renderer_t *hr, unsigned vpi, int polytype)
 		break;
 	default:
 		glDepthMask (GL_TRUE);
-		hr->meshes.depth_bias = false;
+		hr->meshes.depth_bias = true;
 		hr->meshes.alpha_ref = -1.0f;
 		break;
 	}

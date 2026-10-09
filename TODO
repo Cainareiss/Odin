@@ -163,11 +163,14 @@ lamps of AIRTRIX, the smoke of BRAVEFF). The X360 port reverses its list
 of objects instead. Each run of triangles sets its whole state again:
 batch them when speed matters.
 
-The 101 bias brings a translucent or punch-through mesh nearer by
-bias / 65536 of its own depth (HEURISTIC, bracketed by two cabinets: four
-times as much and a light shaft of AIRTRIX covers the skater, four times
-less and its wall decals sink; the stars of PHARRIER stay behind its
-asteroids). The unit of the hardware is not known.
+The 101 bias is a signed 11-bit number that moves a mesh of any type but
+the background by bias / 65536 of its own depth, nearer when positive
+(HEURISTIC, read from three cabinets: four times as much and a light shaft
+of AIRTRIX covers the skater; the lettering of the wall and the painted
+lines of the SGNASCAR track, on layers of -1024 to -256, show as on the
+cabinet; the shadow of the AIRTRIX skater, opaque, comes out of the floor;
+the stars of PHARRIER, at -1024, stay behind its asteroids). The unit of
+the hardware is not known.
 
 The 161 with bit 18 loads a second modelview and a vertex with bit 12 of
 its header follows it (the AIRTRIX trails and skater joints); bit 19, set on

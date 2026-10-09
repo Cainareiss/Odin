@@ -338,7 +338,7 @@ typedef struct {
 		vec4b_t clear;
 	} fb_config;
 
-	uint16_t depth_bias;
+	int16_t depth_bias;
 	uint16_t _501;
 	int16_t texoffset[4][2];	/* 0D1 UV offsets in 1/16 texel, by vertex selector */
 
