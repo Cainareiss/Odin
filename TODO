@@ -71,8 +71,8 @@ Read from the cabinet footage and the registers of five games
 
 GPU lighting follows the X360 port's vo3d shaders: the 691 colour is the
 material ambient, the 091 colour stands for the texel of untextured
-polygons, the 491 colour is multiplied by 4 (8-bit wrap as in the port),
-the light colour drives both the diffuse and the Blinn specular terms,
+polygons, the 491 colour is the specular colour,
+the light colour drives both the diffuse and the specular terms,
 light vectors arrive in eye space (the library transforms them on the
 SH-4), the 881 alpha bit turns
 the vertex alpha into a blend factor between 091 and 291 (or the texel),
@@ -80,10 +80,12 @@ and the 451 carries the spot
 cone (cos outer in 1.15, width as 8 float bits; the B61 vector aims it),
 faded as sat ((L . axis - cos outer) / (cos inner - cos outer)). Kept from
 Valkyrie without an oracle (HEURISTIC): the two-sided lighting.
-On the PHARRIER cabinet the canopy and the hull of the helicopter carry
-tight highlights that this does not give (0x40 wraps to no specular at
-all, and the lobe of a shininess of 8 is broad): check the scale of the
-491 and what the shininess byte means.
+Not as the port, read from the PHARRIER cabinet (HEURISTIC): the 491
+colour is in 1/64 without the 8-bit wrap of the port (0x40 is 1.0), and
+the specular lobe is the reflected ray against the view, raised to the
+shininess byte, where the port takes the Blinn half vector (the SEGA
+logo seen from the front stays blue, the canopy of the helicopter gets
+its highlight).
 Not as the port: the attenuation types 2 and 3 fall off on 1 / d and
 1 / d^2 with the P and Q of the library (the port does not attenuate
 them); the PHARRIER cabinet shows its asteroids untouched by the far

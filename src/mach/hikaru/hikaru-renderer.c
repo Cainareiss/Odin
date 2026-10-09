@@ -520,7 +520,7 @@ apply_light (inout vec3 diffuse,	\n \
 {	\n \
 	vec3 normal = normalize (p_normal);	\n \
 	vec3 light_direction;	\n \
-	float distance, attenuation, n_dot_l, n_dot_h;	\n \
+	float distance, attenuation, n_dot_l, r_dot_v;	\n \
 	\n \
 	if (type == 3) {	\n \
 		diffuse += light.color;	\n \
@@ -563,10 +563,13 @@ apply_light (inout vec3 diffuse,	\n \
 #endif	\n \
 	diffuse += attenuation * max (n_dot_l, 0.0) * light.color;	\n \
 	\n \
-	/* Blinn half vector of the vo3d pixel shader. */	\n \
-	n_dot_h = dot (normal, normalize (light_direction - normalize (p_position.xyz)));	\n \
-	if (n_dot_l > 0.0 && n_dot_h > 0.0)	\n \
-		specular += attenuation * pow (n_dot_h, 255.0 * p_specular.a) * light.color;	\n \
+	/* The reflected ray against the view. The vo3d pixel shader takes	\n \
+	 * the Blinn half vector, whose lobe is about four times as wide for	\n \
+	 * the same exponent: it washes out the PHARRIER logo seen from the	\n \
+	 * front, which the cabinet shows plain blue. */	\n \
+	r_dot_v = dot (reflect (-light_direction, normal), -normalize (p_position.xyz));	\n \
+	if (n_dot_l > 0.0 && r_dot_v > 0.0)	\n \
+		specular += attenuation * pow (r_dot_v, 255.0 * p_specular.a) * light.color;	\n \
 }	\n \
 	\n \
 void	\n \
@@ -641,7 +644,7 @@ main (void)	\n \
 	\n \
 	color = vec4 ((ambient + diffuse + emission) * base, alpha);	\n \
 	if (SHADING_MODE != 3) {	\n \
-		color.rgb += specular * p_specular.rgb;	\n \
+		color.rgb += specular * p_specular.rgb * (255.0 / 64.0);	\n \
 	}	\n \
 #else	\n \
 	color = vec4 (base, alpha);	\n \
@@ -1184,13 +1187,11 @@ copy_colors (hikaru_renderer_t *hr, hikaru_vertex_t *dst, hikaru_vertex_t *src)
 	for (i = 0; i < 3; i++)
 		dst->body.ambient[i] = MIN2 (mat->unknown[i], 255);
 
-	/* The 491 colour times 4, wrapped to 8 bits like the port (825B4DE8):
-	 * 0x40 gives no specular at all (the canopy of the PHARRIER
-	 * helicopter). Done here on the bytes, a float modulo is unstable at
-	 * the wrap. */
-	for (i = 0; i < 3; i++)
-		dst->body.specular[i] = (uint8_t) (mat->specular[i] << 2);
-	dst->body.specular[3] = mat->specular[3];
+	/* The 491 colour is in 1/64: PHARRIER sets 0x40 and SGNASCAR goes up
+	 * to 0x7F. The port multiplies it by 4 and wraps to 8 bits (825B4DE8),
+	 * the same thing below 0x40; the shader scales it. */
+	for (i = 0; i < 4; i++)
+		dst->body.specular[i] = mat->specular[i];
 
 	for (i = 0; i < 3; i++)
 		dst->body.color1[i] = mat->ambient[i];
