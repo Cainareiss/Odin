@@ -2313,7 +2313,7 @@ D (0x103)
  *
  * They appear to have a common 32-bit header:
  *
- *	AAAAAAAA C---2x-- uuuSTTTo oooootpW
+ *	AAAAAAAA C---2x-- uPRSTTTo oooootpW
  *
  * A = Vertex alpha
  *
@@ -2331,7 +2331,21 @@ D (0x103)
  *
  * u = Unknown
  *
- *     No idea.
+ *     Set on every vertex but the three that close the list.
+ *
+ * P = Position
+ *
+ *     Add the last row of the modelview.
+ *
+ * R = Rotation
+ *
+ *     Apply the 3x3 of the modelview.
+ *
+ *     Nearly every vertex has both. The 2D quads of BRAVEFF have P only
+ *     and get just the last row before each quad. The cloud floor of
+ *     PHARRIER has R only. The trails of its lock-on lasers have none:
+ *     they are built in eye space with XMTRX on the SH-4 (PH:@0C0EE7A0)
+ *     and no matrix is sent for them.
  *
  * S = Unknown
  *

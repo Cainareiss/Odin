@@ -462,12 +462,20 @@ out vec2 p_texcoords;								\n \
 out float p_alpha;								\n \
 										\n \
 void main (void) {								\n \
-	if (i_second_mv > 0.5) {						\n \
+	if (i_second_mv > 0.875) {						\n \
 		p_position = u_modelview2 * vec4 (i_position, 1.0);		\n \
 		p_normal = u_normal2 * i_normal;				\n \
-	} else {								\n \
+	} else if (i_second_mv < 0.125) {					\n \
 		p_position = u_modelview * vec4 (i_position, 1.0);		\n \
 		p_normal = u_normal * i_normal;					\n \
+	} else {								\n \
+		/* 64: without the 3x3, 128: without the last row. */		\n \
+		bool rotate = i_second_mv > 0.375 && i_second_mv < 0.625;	\n \
+		vec3 pos = rotate ? mat3 (u_modelview) * i_position : i_position;	\n \
+		if (i_second_mv < 0.375)					\n \
+			pos += u_modelview[3].xyz;				\n \
+		p_position = vec4 (pos, 1.0);					\n \
+		p_normal = rotate ? u_normal * i_normal : i_normal;		\n \
 	}									\n \
 	/* The depth bias brings the whole position nearer: same pixel. */	\n \
 	gl_Position = u_projection * vec4 (p_position.xyz * u_depth_scale, 1.0);	\n \
@@ -1416,9 +1424,12 @@ hikaru_renderer_push_vertices (vk_renderer_t *rend,
 			VK_COPY_VEC3F (hr->push.tmp[2].body.normal, v->body.normal);
 
 		/* Bit 12 of the header: the vertex follows the second
-		 * modelview (161 with bit 18), chosen in the vertex shader. */
+		 * modelview (161 with bit 18). Bits 13 and 14: it takes the
+		 * 3x3 and the last row of the modelview. The vertex shader
+		 * picks the matrix. */
 		if (flags & HR_PUSH_POS)
-			hr->push.tmp[2].body.second_mv = v->info.second_mv ? 255 : 0;
+			hr->push.tmp[2].body.second_mv = v->info.second_mv ? 255 :
+				(v->info.rotate ? 0 : 64) + (v->info.translate ? 0 : 128);
 
 		/* Set the texcoords. */
 		if (flags & HR_PUSH_TXC)

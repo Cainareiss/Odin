@@ -463,7 +463,9 @@ typedef union {
 		uint32_t		: 6;
 		uint32_t tricap		: 3; /* 0x00000E00 */
 		uint32_t second_mv	: 1; /* 0x00001000, the vertex follows the second modelview */
-		uint32_t unknown2	: 3; /* 0x0000E000 */
+		uint32_t rotate		: 1; /* 0x00002000, apply the 3x3 of the modelview */
+		uint32_t translate	: 1; /* 0x00004000, add the last row of the modelview */
+		uint32_t unknown2	: 1; /* 0x00008000 */
 		uint32_t		: 2;
 		uint32_t uv_offset	: 2; /* 0x000C0000, selector of the UV offset table */
 		uint32_t		: 3;
@@ -479,7 +481,7 @@ typedef struct {
 	uint8_t alpha;		/* 0x0F */
 	vec3f_t normal;		/* 0x10 */
 	vec3b_t ambient;	/* 0x1C */
-	uint8_t second_mv;	/* 0x1F, non-zero: follows the second modelview */
+	uint8_t second_mv;	/* 0x1F, 255: second modelview, else 64: no 3x3, 128: no last row */
 	vec2f_t texcoords;	/* 0x20 */
 	vec4b_t specular;	/* 0x28 */
 	vec3b_t color1;		/* 0x2C */
