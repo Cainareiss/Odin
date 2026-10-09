@@ -181,6 +181,7 @@ typedef struct {
 	struct {
 		GLuint program;
 		GLuint fb[2], cb[2], db[2];
+		GLuint raw;	/* the 3D buffer as drawn, before the blender */
 		GLuint vao, vbo;
 		struct {
 			GLuint u_front;
@@ -199,6 +200,8 @@ typedef struct {
 			GLuint	u_above_2;
 			GLuint u_invert_f;
 			GLuint u_invert_b;
+			GLuint u_raw;
+			GLuint u_holes;
 		} locs;
 	} framebuffer;
 

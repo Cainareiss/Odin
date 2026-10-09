@@ -2122,6 +2122,8 @@ static const char *fb_fs_source =
 "uniform float u_above_2 = 1.0;							\n"
 "uniform int u_invert_f = 0;							\n"
 "uniform int u_invert_b = 0;							\n"
+"uniform sampler2D u_raw;							\n"
+"uniform int u_holes = 0;							\n"
 "										\n"
 "in vec2 p_texcoords;								\n"
 "										\n"
@@ -2158,6 +2160,11 @@ static const char *fb_fs_source =
 "	if (u_invert_b != 0)							\n"
 "		texel_b.a = 0.0;						\n"
 "	vec4 color = mix (texel_f, texel_b, u_factor);				\n"
+"	/* Where the 3D buffer just drawn holds nothing, the blender shows	\n"
+"	 * the other one as it is (SGNASCAR stays white while it loads).	\n"
+"	 */									\n"
+"	if (u_holes != 0 && texture (u_raw, p_texcoords).a >= 0.999)		\n"
+"		color = texel_b;						\n"
 "	float cover_3d = (u_keyed_3d > 0.0) ? 1.0 - step (0.999, color.a) : 1.0;	\n"
 "										\n"
 "	/* A layer pixel with its alpha bit covers the 3D, black included	\n"
@@ -2226,6 +2233,10 @@ build_fb_state (hikaru_renderer_t *hr)
 		get_uniform_loc (hr->framebuffer.program, "u_invert_f");
 	hr->framebuffer.locs.u_invert_b =
 		get_uniform_loc (hr->framebuffer.program, "u_invert_b");
+	hr->framebuffer.locs.u_raw =
+		get_uniform_loc (hr->framebuffer.program, "u_raw");
+	hr->framebuffer.locs.u_holes =
+		get_uniform_loc (hr->framebuffer.program, "u_holes");
 
 	/* Generate two framebuffers (the front and the back buffers), each
 	 * associated with a colorbuffer (texture) and a depth buffer
@@ -2274,6 +2285,15 @@ build_fb_state (hikaru_renderer_t *hr)
 	glBindFramebuffer (GL_FRAMEBUFFER, 0);
 	VK_ASSERT_NO_GL_ERROR ();
 
+	/* A copy of the 3D buffer as it was drawn. */
+	glGenTextures (1, &hr->framebuffer.raw);
+	glBindTexture (GL_TEXTURE_2D, hr->framebuffer.raw);
+	glTexStorage2D (GL_TEXTURE_2D, 1, GL_RGBA8, 640, 480);
+	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glBindTexture (GL_TEXTURE_2D, 0);
+	VK_ASSERT_NO_GL_ERROR ();
+
 	/* Create the VAO/VBO. */
 	glGenVertexArrays (1, &hr->framebuffer.vao);
 	glBindVertexArray (hr->framebuffer.vao);
@@ -2311,6 +2331,7 @@ destroy_fb_state (hikaru_renderer_t *hr)
 	glBindFramebuffer (GL_FRAMEBUFFER, 0);
 	glDeleteFramebuffers (NUM_FRAMEBUFFERS, hr->framebuffer.fb);
 	glDeleteTextures (NUM_FRAMEBUFFERS, hr->framebuffer.cb);
+	glDeleteTextures (1, &hr->framebuffer.raw);
 	glDeleteRenderbuffers (NUM_FRAMEBUFFERS, hr->framebuffer.db);
 	VK_ASSERT_NO_GL_ERROR ();
 
@@ -2400,6 +2421,7 @@ draw (hikaru_renderer_t *hr)
 	hikaru_gpu_t *gpu = hr->gpu;
 	GLuint n1, n2, f, b, scene, layer1 = 0, layer2 = 0;
 	float factor, mult1 = 0.0f, mult2 = 0.0f;
+	bool holes = false;
 
 	/* Figure out the GPU framebuffer assignments */
 	VK_PRINT ("FRAMEBUFFER 781=%08X 181=%08X", gpu->fb_config._781, gpu->fb_config._181);
@@ -2452,6 +2474,15 @@ draw (hikaru_renderer_t *hr)
 	 * each frame. This is the motion blur of the cabinets (the stars of
 	 * the PHARRIER logo scene trail behind them at 181 = 01C6). */
 	if (factor > 0.0f && n1 < 2 && n2 < 2 && n1 != n2) {
+		/* Keep the buffer as it was drawn: where it holds nothing the
+		 * screen shows the other one as it is (HEURISTIC: SGNASCAR
+		 * sends an empty list while it loads and its cabinet stays
+		 * white, the picture of the other buffer, at 181 = 0114). */
+		glActiveTexture (GL_TEXTURE0 + 4);
+		glBindTexture (GL_TEXTURE_2D, hr->framebuffer.raw);
+		glCopyTexSubImage2D (GL_TEXTURE_2D, 0, 0, 0, 0, 0, 640, 480);
+		holes = true;
+
 		glActiveTexture (GL_TEXTURE0 + 0);
 		glBindTexture (GL_TEXTURE_2D, b);
 		glActiveTexture (GL_TEXTURE0 + 1);
@@ -2473,6 +2504,8 @@ draw (hikaru_renderer_t *hr)
 		glUniform1f (hr->framebuffer.locs.u_keyed_3d, 0.0f);
 		glUniform1i (hr->framebuffer.locs.u_invert_f, 0);
 		glUniform1i (hr->framebuffer.locs.u_invert_b, 0);
+		glUniform1i (hr->framebuffer.locs.u_raw, 4);
+		glUniform1i (hr->framebuffer.locs.u_holes, 0);
 
 		glEnable (GL_BLEND);
 		glBlendColor (0.0f, 0.0f, 0.0f, factor);
@@ -2531,6 +2564,8 @@ draw (hikaru_renderer_t *hr)
 	glUniform1f (hr->framebuffer.locs.u_above_2, LAYERS.layer[0][1].above ? 1.0f : 0.0f);
 	glUniform1i (hr->framebuffer.locs.u_invert_f, (n1 >= 2) ? 1 : 0);
 	glUniform1i (hr->framebuffer.locs.u_invert_b, (n2 >= 2) ? 1 : 0);
+	glUniform1i (hr->framebuffer.locs.u_raw, 4);
+	glUniform1i (hr->framebuffer.locs.u_holes, holes ? 1 : 0);
 	VK_ASSERT_NO_GL_ERROR ();
 
 	glBindVertexArray (hr->framebuffer.vao);
@@ -2538,6 +2573,12 @@ draw (hikaru_renderer_t *hr)
 
 	glDrawArrays (GL_TRIANGLE_STRIP, 0, 4);
 	VK_ASSERT_NO_GL_ERROR ();
+
+	if (holes) {
+		glActiveTexture (GL_TEXTURE0 + 4);
+		glBindTexture (GL_TEXTURE_2D, 0);
+		glActiveTexture (GL_TEXTURE0 + 0);
+	}
 
 	glBindVertexArray (0);
 	glUseProgram (0);

@@ -196,7 +196,10 @@ Check the framebuffer blending (instructions 781, 181) on more footage: a
 2D layer as a blender input is done for the PHARRIER logo screens only.
 Between the two 3D buffers the blender output is written back, which
 gives the motion blur of the BRAVEFF and PHARRIER cabinets (HEURISTIC:
-read from the footage, the trails of the stars).
+read from the footage, the trails of the stars). Where the buffer just drawn
+holds nothing, the screen shows the other buffer as it is (HEURISTIC: the
+SGNASCAR cabinet stays white while the game loads; its lists are empty then
+and the blender is at 0x14).
 
 Figure out the effect of mesh LOD on texturing (normally, and SGNASCAR),
 disable mipmaps when appropriate (instruction 0C1 maybe).
