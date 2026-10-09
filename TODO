@@ -80,8 +80,13 @@ light vectors arrive in eye space (the library transforms them on the
 SH-4), the 881 alpha bit turns
 the vertex alpha into a blend factor between 091 and 291 (or the texel),
 and the 451 carries the spot
-cone (cos outer in 1.15, width as 8 float bits; the B61 vector aims it),
-faded as sat ((L . axis - cos outer) / (cos inner - cos outer)).
+cone (cos outer in 1.15, scale as an 8-bit float; the B61 vector aims it),
+faded as sat ((L . axis - cos outer) * scale). The scale is the field
+read as (1 + mantissa / 16) * 2^exponent (HEURISTIC: the library builds
+it as an approximate reciprocal of cos inner - cos outer by subtracting
+float bit patterns; with the exact reciprocal the hall-lit scenes of
+AIRTRIX are 8 to 12 % darker than the cabinet, 2 to 5 % this way; the
+wood itself is still 7 to 12 % under).
 The back of a polygon drawn on both faces (vertex bit 23) is lit with the
 reversed normal (HEURISTIC, read from two cabinets: the SEGA logo of
 PODRACE is as bright from behind as from the front and dark when its

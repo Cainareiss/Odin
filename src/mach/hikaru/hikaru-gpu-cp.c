@@ -1920,13 +1920,17 @@ D (0x061)
  *
  * D = No cone (the library sets it for every light without a cone)
  * C = cos (outer angle), 1.15 fixed point
- * W = cos (inner) - cos (outer) as a float: 0xF0 minus its bits 26:19
+ * W = Scale of the fade, an 8-bit float: 4 bits of exponent, 4 of mantissa
  * f = Unknown flag (dl_emit_spotlight argument)
  *
  *	Emitted by the von4 library dl_emit_spotlight (0C715FA0) after the
  *	B61 vector: it halves its two angles, sorts their cosines and sends
  *	the smaller one as C. The X360 port fades the light with sat ((L .
  *	axis - cos outer) / (cos inner - cos outer)), axis towards the light.
+ *	The library sends W = (bits (1.0f) - bits (cos inner - cos outer))
+ *	>> 19, the top bits of an approximate reciprocal: the scale is taken
+ *	as (1 + mantissa / 16) * 2^exponent, up to 12 % above the exact
+ *	1 / (cos inner - cos outer).
  *
  * See PH:@0C017A7C, PH:@0C017B6C, PH:@0C017C58, PH:@0C017CD4, PH:@0C017D64.
  */
@@ -1947,14 +1951,11 @@ I (0x051)
 	case 4:
 		{
 			float cos_outer = (inst[1] & 0xFFFF) * (1.0f / 32768.0f);
-			uint32_t bits = 0x38000000 |
-			                (((0xF0 - ((inst[1] >> 16) & 0xFF)) & 0xFF) << 19);
-			float width;
+			uint32_t w = (inst[1] >> 16) & 0xFF;
 
-			memcpy (&width, &bits, sizeof (width));
 			lit->has_cone = ((inst[0] >> 24) & 1) ^ 1;
 			lit->cos_outer = cos_outer;
-			lit->cone_scale = 1.0f / width;
+			lit->cone_scale = ldexpf (1.0f + (w & 15) / 16.0f, w >> 4);
 		}
 		lit->has_451 = 1;
 		break;
