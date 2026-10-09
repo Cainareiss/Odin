@@ -77,7 +77,7 @@ typedef struct {
 } hikaru_texture_t;
 
 typedef struct {
-	GLuint			vbo;
+	uint32_t		first;	/* first vertex in the buffer of the frame */
 	uint32_t		num_tris;
 	uint32_t		addr[2];
 	uint32_t		vp_index;
@@ -128,12 +128,18 @@ typedef struct {
 		hikaru_vertex_body_t	all[MAX_VERTICES_PER_MESH];
 	} push;
 
+	/* The vertices of all the meshes of the frame, uploaded in one go */
+	struct {
+		hikaru_vertex_body_t	*all;
+		uint32_t		num, max;
+	} verts;
+
 	struct {
 		hikaru_mesh_t		*current;
 
 		hikaru_glsl_variant_t	variant;
 		GLuint			program;
-		GLuint			vao;
+		GLuint			vao, vbo;
 		float			alpha_ref;
 		bool			depth_bias;
 		bool			weigh_by_alpha;

@@ -1486,7 +1486,6 @@ draw_mesh (hikaru_renderer_t *hr, hikaru_mesh_t *mesh,
 	unsigned i;
 
 	VK_ASSERT (mesh);
-	VK_ASSERT (mesh->vbo);
 
 	LOG ("variant=%016llx", (unsigned long long) hr->meshes.variant.full);
 	LOG ("==== DRAWING MESH @%p (#vertices=%u #instances=%u 103alpha=%.3f addr=%08X) ====",
@@ -1496,9 +1495,6 @@ draw_mesh (hikaru_renderer_t *hr, hikaru_mesh_t *mesh,
 	print_rendstate (hr, mesh, "D");
 
 	glBindVertexArray (hr->meshes.vao);
-	VK_ASSERT_NO_GL_ERROR ();
-
-	glBindBuffer (GL_ARRAY_BUFFER, mesh->vbo);
 	VK_ASSERT_NO_GL_ERROR ();
 
 	upload_glsl_program (hr, mesh);
@@ -1511,17 +1507,6 @@ draw_mesh (hikaru_renderer_t *hr, hikaru_mesh_t *mesh,
 	upload_material_texhead (hr, mesh);
 	upload_lightset (hr, mesh);
 	VK_ASSERT_NO_GL_ERROR ();
-
-	/* We must do it here since locs are computed in upload_glsl_program. */
-	VAP (0, 3, GL_FLOAT,          position,  GL_FALSE);
-	VAP (1, 3, GL_FLOAT,          normal,    GL_FALSE);
-	VAP (2, 3, GL_UNSIGNED_BYTE,  diffuse,   GL_TRUE);
-	VAP (3, 3, GL_UNSIGNED_BYTE,  ambient,   GL_TRUE);
-	VAP (4, 4, GL_UNSIGNED_BYTE,  specular,  GL_TRUE);
-	VAP (5, 3, GL_UNSIGNED_BYTE,  color1,    GL_TRUE);
-	VAP (6, 2, GL_FLOAT,          texcoords, GL_FALSE);
-	VAP (7, 1, GL_UNSIGNED_BYTE,  alpha,     GL_TRUE);
-	VAP (8, 1, GL_UNSIGNED_BYTE,  second_mv, GL_TRUE);
 
 	/* The 101 bias brings the mesh nearer by a fraction of its own depth
 	 * (HEURISTIC, 1/65536 per unit: four times as much and a light shaft
@@ -1536,13 +1521,43 @@ draw_mesh (hikaru_renderer_t *hr, hikaru_mesh_t *mesh,
 		unsigned i = MIN2 (hr->debug.flags[HR_DEBUG_SELECT_INSTANCE],
 		                   mesh->num_instances - 1);
 		upload_modelview (hr, mesh, i);
-		glDrawArrays (GL_TRIANGLES, first_tri * 3, num_tris * 3);
+		glDrawArrays (GL_TRIANGLES, mesh->first + first_tri * 3, num_tris * 3);
 	} else {
 		for (i = 0; i < mesh->num_instances; i++) {
 			upload_modelview (hr, mesh, i);
-			glDrawArrays (GL_TRIANGLES, first_tri * 3, num_tris * 3);
+			glDrawArrays (GL_TRIANGLES, mesh->first + first_tri * 3, num_tris * 3);
 		}
 	}
+
+	glBindVertexArray (0);
+}
+
+/* Uploads the vertices of the frame, once, before its meshes are drawn. */
+static void
+upload_vertex_data (hikaru_renderer_t *hr)
+{
+	if (!hr->meshes.vao) {
+		glGenVertexArrays (1, &hr->meshes.vao);
+		glGenBuffers (1, &hr->meshes.vbo);
+		VK_ASSERT_NO_GL_ERROR ();
+	}
+
+	glBindVertexArray (hr->meshes.vao);
+	glBindBuffer (GL_ARRAY_BUFFER, hr->meshes.vbo);
+	glBufferData (GL_ARRAY_BUFFER,
+	              sizeof (hikaru_vertex_body_t) * hr->verts.num,
+	              (const GLvoid *) hr->verts.all, GL_DYNAMIC_DRAW);
+	VK_ASSERT_NO_GL_ERROR ();
+
+	VAP (0, 3, GL_FLOAT,          position,  GL_FALSE);
+	VAP (1, 3, GL_FLOAT,          normal,    GL_FALSE);
+	VAP (2, 3, GL_UNSIGNED_BYTE,  diffuse,   GL_TRUE);
+	VAP (3, 3, GL_UNSIGNED_BYTE,  ambient,   GL_TRUE);
+	VAP (4, 4, GL_UNSIGNED_BYTE,  specular,  GL_TRUE);
+	VAP (5, 3, GL_UNSIGNED_BYTE,  color1,    GL_TRUE);
+	VAP (6, 2, GL_FLOAT,          texcoords, GL_FALSE);
+	VAP (7, 1, GL_UNSIGNED_BYTE,  alpha,     GL_TRUE);
+	VAP (8, 1, GL_UNSIGNED_BYTE,  second_mv, GL_TRUE);
 
 	glBindVertexArray (0);
 }
@@ -1608,9 +1623,12 @@ sort_pushed_triangles (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	free (sorted);
 }
 
+/* Appends the pushed vertices of a mesh to the buffer of the frame. */
 static void
-upload_vertex_data (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
+store_vertex_data (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 {
+	uint32_t num;
+
 	VK_ASSERT (mesh);
 
 	mesh->num_tris = hr->push.num_tris;
@@ -1619,25 +1637,19 @@ upload_vertex_data (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	    mesh->num_tris > 0 && mesh->mv_index < MAX_MODELVIEWS)
 		sort_pushed_triangles (hr, mesh);
 
-	/* Generate the VAO if required. */
-	if (!hr->meshes.vao) {
-		glGenVertexArrays (1, &hr->meshes.vao);
-		VK_ASSERT_NO_GL_ERROR ();
+	num = mesh->num_tris * 3;
+	if (hr->verts.num + num > hr->verts.max) {
+		hr->verts.max = MAX2 (hr->verts.max * 2, hr->verts.num + num);
+		hr->verts.all = (hikaru_vertex_body_t *)
+			realloc (hr->verts.all,
+			         hr->verts.max * sizeof (hikaru_vertex_body_t));
+		VK_ASSERT (hr->verts.all);
 	}
-
-	/* Bind the VAO. */
-	glBindVertexArray (hr->meshes.vao);
-	VK_ASSERT_NO_GL_ERROR ();
-
-	/* Generate the mesh VBO. */
-	glGenBuffers (1, &mesh->vbo);
-
-	/* Upload the vertex data to the VBO. */
-	glBindBuffer (GL_ARRAY_BUFFER, mesh->vbo);
-	glBufferData (GL_ARRAY_BUFFER,
-	              sizeof (hikaru_vertex_body_t) * mesh->num_tris * 3,
-	              (const GLvoid *) hr->push.all, GL_DYNAMIC_DRAW);
-	VK_ASSERT_NO_GL_ERROR ();
+	if (num)
+		memcpy (&hr->verts.all[hr->verts.num], hr->push.all,
+		        num * sizeof (hikaru_vertex_body_t));
+	mesh->first = hr->verts.num;
+	hr->verts.num += num;
 }
 
 void
@@ -1687,8 +1699,8 @@ hikaru_renderer_end_mesh (vk_renderer_t *rend, uint32_t addr)
 
 	VK_ASSERT (hr->meshes.current);
 
-	/* Upload the pushed vertex data. */
-	upload_vertex_data (hr, hr->meshes.current);
+	/* Store the pushed vertex data. */
+	store_vertex_data (hr, hr->meshes.current);
 	hr->meshes.current->addr[1] = addr;
 
 	/* Make sure there is no current mesh bound. */
@@ -1831,8 +1843,6 @@ draw_meshes_for_polytype (hikaru_renderer_t *hr, unsigned vpi, int polytype)
 destroy_meshes:
 	for (j = 0; j < num; j++) {
 		hikaru_mesh_t *mesh = &meshes[j];
-		if (mesh->vbo)
-			glDeleteBuffers (1, &mesh->vbo);
 		free (mesh->tri_depth);
 		mesh->tri_depth = NULL;
 	}
@@ -1856,6 +1866,8 @@ draw_scene (hikaru_renderer_t *hr)
 
 	if (hr->debug.flags[HR_DEBUG_NO_3D])
 		return;
+
+	upload_vertex_data (hr);
 
 	/* Note that "the pixel ownership test, the scissor test, dithering,
 	 * and the buffer writemasks affect the operation of glClear". */
@@ -1912,7 +1924,9 @@ destroy_3d_state (hikaru_renderer_t *hr)
 	if (hr->meshes.vao) {
 		glBindVertexArray (0);
 		glDeleteVertexArrays (1, &hr->meshes.vao);
+		glDeleteBuffers (1, &hr->meshes.vbo);
 	}
+	free (hr->verts.all);
 }
 
 static int
@@ -2446,6 +2460,7 @@ hikaru_renderer_begin_frame (vk_renderer_t *renderer)
 	hr->num_vps = 0;
 	hr->num_mvs = 0;
 	hr->num_instances = 0;
+	hr->verts.num = 0;
 	hr->mv2_index = ~0;
 	hr->num_mats = 0;
 	hr->num_texs = 0;
