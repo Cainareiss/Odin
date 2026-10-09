@@ -206,8 +206,9 @@ the model (561 centre, 055 radius) with a size in 1/16 of a pixel
 (HEURISTIC: diameter * projection distance / distance; the unit is read from
 the sizes PHARRIER uses, all whole pixels, and the formula from two cabinet
 scenes). The 005 tests the same sphere against the view volume of the
-current viewport. The conditions 6 and 7 of SGNASCAR still test the old
-"distance below 4 thresholds" flag of the 055, a guess of the original code.
+current viewport. The 095 compares it with two sizes: SGNASCAR draws the
+model plainly on one side, skips it on the other and draws it after a 501
+in between. The 501 does nothing here; it may fade the model in.
 
 The 621 sets two kinds of depth queue. With a colour (bit 17 clear) the
 materials with the 881 z bit are fogged, as in the X360 port. Without one

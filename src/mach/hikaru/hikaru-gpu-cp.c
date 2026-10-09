@@ -673,7 +673,6 @@ I (0x055)
 	float thresh = *(float *) &inst[1];
 
 	LOD.radius = thresh;
-	LOD.cond = LOD.value < (thresh * 4.0f);
 }
 
 D (0x055)
@@ -683,26 +682,39 @@ D (0x055)
 	DISASM ("lod: set threshold [%f]", *(float *) &inst[1]);
 }
 
-/* 095	LOD: Set Branch IDs
+/* 095	LOD: Compare The Size
  *
  *	-------- -------- CCCC---o oooooooo
  *	HHHHHHHH HHHHHHHH LLLLLLLL LLLLLLLL
  *
- * C = Condition
- * H, L = Branch IDs
+ * C = Form
+ * H, L = Sizes on the screen in 1/16 of a pixel, H above L
+ *
+ * Compares the bounding sphere of the model with the two sizes. It leaves
+ * a flag for the jumps with the conditions 6 and 7, and one of the two
+ * words for those with the conditions 1 and D.
+ *
+ * SGNASCAR draws each piece of its scenery twice. The near model has the
+ * form 8: drawn from H up, skipped below L, drawn after a 501 in between.
+ * The far model has the form 4: drawn below L, skipped from H up, drawn
+ * after a 501 in between. The sizes are 32 * radius * 554.256 / distance
+ * for 300, 400 and 500 units, 554.256 being a view 60 degrees wide.
  */
 
 I (0x095)
 {
+	const float size = get_lod_size (gpu);
 	uint16_t hi = inst[1] >> 16;
 	uint16_t lo = inst[1] & 0xFFFF;
 
 	switch ((inst[0] >> 12) & 0xF) {
 	case 0x4:
-		LOD.branch_id = LOD.cond ? lo : hi;
+		LOD.cond = size >= (float) lo;
+		LOD.branch_id = (size >= (float) hi) ? lo : hi;
 		break;
 	case 0x8:
-		LOD.branch_id = LOD.cond ? hi : lo;
+		LOD.cond = size >= (float) hi;
+		LOD.branch_id = (size >= (float) lo) ? hi : lo;
 		break;
 	default:
 		LOD.branch_id = ~0;
@@ -714,7 +726,7 @@ D (0x095)
 {
 	UNHANDLED |= !!(inst[0] & 0xFFFF3E00);
 
-	DISASM ("lod: set branch ids [%04X %04X]",
+	DISASM ("lod: compare size [%04X %04X]",
 	        inst[1] >> 16, inst[1] & 0xFFFF);
 }
 
