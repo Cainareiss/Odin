@@ -2755,14 +2755,17 @@ static const struct {
 	/* 0x80 */
 	K(0x081, 0x081, FLAG_CONTINUE),
 	K(0x082, 0x082, FLAG_JUMP),
-	K(0x083, 0x083, FLAG_CONTINUE),
+	/* A recall (083, 0C3) ends the mesh: the polygons that follow take
+	 * the new material and texhead. PHARRIER recalls both between the
+	 * quads of one model, with no other instruction in between. */
+	K(0x083, 0x083, 0),
 	K(0x084, 0x084, 0),
 	K(0x088, 0x088, 0),
 	K(0x091, 0x091, FLAG_CONTINUE),
 	K(0x095, 0x095, 0),
 	/* 0xC0 */
 	K(0x0C1, 0x0C1, 0),
-	K(0x0C3, 0x0C3, FLAG_CONTINUE),
+	K(0x0C3, 0x0C3, 0),
 	K(0x0C4, 0x0C4, 0),
 	K(0x0D1, 0x0D1, 0),
 	K(0x0E8, 0x0E8, FLAG_PUSH),
