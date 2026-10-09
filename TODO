@@ -75,8 +75,15 @@ SH-4), the 881 alpha bit turns
 the vertex alpha into a blend factor between 091 and 291 (or the texel),
 and the 451 carries the spot
 cone (cos outer in 1.15, width as 8 float bits; the B61 vector aims it),
-faded as sat ((L . axis - cos outer) / (cos inner - cos outer)). Kept from
-Valkyrie without an oracle (HEURISTIC): the two-sided lighting.
+faded as sat ((L . axis - cos outer) / (cos inner - cos outer)).
+The back of a polygon drawn on both faces (vertex bit 23) is lit with the
+reversed normal (HEURISTIC, read from two cabinets: the SEGA logo of
+PODRACE is as bright from behind as from the front and dark when its
+back turns away from the light, which rules out the absolute value of
+N . L; the inner faces of the PHARRIER letters). The back is told by the
+winding: turning the normals toward the eye instead darkens the veils of
+the PHARRIER galaxy, which the cabinet shows as bright as here. The X360
+port emits the second face with the same normal.
 Not as the port, read from the PHARRIER cabinet (HEURISTIC): the 491
 colour is in 1/64 without the 8-bit wrap of the port (0x40 is 1.0), and
 the specular lobe is the reflected ray against the view, raised to the

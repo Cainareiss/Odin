@@ -1285,11 +1285,17 @@ add_triangle (hikaru_renderer_t *hr)
 		dst[2] = *c;
 		hr->push.num_tris += 1;
 
-		/* Both faces (bit 23): the triangle is emitted twice. */
+		/* Both faces (bit 23): the triangle is emitted twice, the
+		 * second time for its back, lit with the reversed normals. */
 		if (hr->push.tmp[2].info.nocull) {
+			unsigned j;
+
 			dst[3] = *a;
 			dst[4] = *c;
 			dst[5] = *b;
+			for (i = 3; i < 6; i++)
+				for (j = 0; j < 3; j++)
+					dst[i].normal[j] = -dst[i].normal[j];
 			hr->push.num_tris += 1;
 		}
 	}
