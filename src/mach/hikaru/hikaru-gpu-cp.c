@@ -414,19 +414,20 @@ D (0x000)
  * A = Address or Offset in 32-bit words.
  *
  * Conditions 5 and 9 compare the bounding sphere of the model (561, 055)
- * with I: 5 jumps when its radius on the screen is at least I, 9 when it
+ * with I: 5 jumps when its width on the screen is at least I, 9 when it
  * is smaller. PHARRIER picks one of three models of each object this way;
  * its sizes are whole pixels (2, 3, 4, 7, 8, 10, 15, 20, 30, 100, 120, 150
  * and 200).
  */
 
-/* Radius of the bounding sphere on the screen, in 1/16 of a pixel
- * (HEURISTIC: radius * projection distance / distance to the centre; the
- * PHARRIER cabinet shows the finest player model at 2.8 units). */
+/* Width of the bounding sphere on the screen, in 1/16 of a pixel
+ * (HEURISTIC: diameter * projection distance / distance to the centre.
+ * The PHARRIER cabinet shows the finest player model at 2.8 units; with
+ * the radius, the SGNASCAR stands turn to their far model too early). */
 static float
 get_lod_size (hikaru_gpu_t *gpu)
 {
-	return 16.0f * LOD.radius * VP.current.clip.f / LOD.value;
+	return 32.0f * LOD.radius * VP.current.clip.f / LOD.value;
 }
 
 I (0x012)

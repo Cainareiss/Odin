@@ -203,9 +203,9 @@ disable mipmaps when appropriate (instruction 0C1 maybe).
 
 The 012 jumps with the conditions 5 and 9 compare the bounding sphere of
 the model (561 centre, 055 radius) with a size in 1/16 of a pixel
-(HEURISTIC: radius * projection distance / distance; the unit is read from
-the sizes PHARRIER uses, all whole pixels, and the formula from one cabinet
-scene). The 005 tests the same sphere against the view volume of the
+(HEURISTIC: diameter * projection distance / distance; the unit is read from
+the sizes PHARRIER uses, all whole pixels, and the formula from two cabinet
+scenes). The 005 tests the same sphere against the view volume of the
 current viewport. The conditions 6 and 7 of SGNASCAR still test the old
 "distance below 4 thresholds" flag of the 055, a guess of the original code.
 
