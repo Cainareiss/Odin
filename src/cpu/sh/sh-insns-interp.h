@@ -1426,7 +1426,7 @@ I (fcnvds)
 
 I (fmov)
 {
-	if (FPSCR.bit.sz | FPSCR.bit.pr) {
+	if (FPSCR.bit.sz) {
 		uint64_t tmp;
 		if (_RM & 1)
 			tmp = XDM.u;
@@ -1442,7 +1442,7 @@ I (fmov)
 
 I (fmov_load)
 {
-	if (!(FPSCR.bit.sz | FPSCR.bit.pr))
+	if (!FPSCR.bit.sz)
 		FRN.u = R32 (ctx, RM);
 	else if (_RN & 1)
 		XDN.u = R64 (ctx, RM);
@@ -1452,7 +1452,7 @@ I (fmov_load)
 
 I (fmov_store)
 {
-	if (!(FPSCR.bit.sz | FPSCR.bit.pr))
+	if (!FPSCR.bit.sz)
 		W32 (ctx, RN, FRM.u);
 	else if (_RM & 1)
 		W64 (ctx, RN, XDM.u);
@@ -1462,7 +1462,7 @@ I (fmov_store)
 
 I (fmov_index_load)
 {
-	if (!(FPSCR.bit.sz | FPSCR.bit.pr))
+	if (!FPSCR.bit.sz)
 		FRN.u = R32 (ctx, R0 + RM);
 	else if (_RN & 1)
 		XDN.u = R64 (ctx, R0 + RM);
@@ -1472,7 +1472,7 @@ I (fmov_index_load)
 
 I (fmov_index_store)
 {
-	if (!(FPSCR.bit.sz | FPSCR.bit.pr))
+	if (!FPSCR.bit.sz)
 		W32 (ctx, R0 + RN, FRM.u);
 	else if (_RM & 1)
 		W64 (ctx, R0 + RN, XDM.u);
@@ -1482,7 +1482,7 @@ I (fmov_index_store)
 
 I (fmov_restore)
 {
-	if (!(FPSCR.bit.sz | FPSCR.bit.pr)) {
+	if (!FPSCR.bit.sz) {
 		FRN.u = R32 (ctx, RM);
 		RM += 4;
 	} else if (_RN & 1) {
@@ -1496,7 +1496,7 @@ I (fmov_restore)
 
 I (fmov_save)
 {
-	if (!(FPSCR.bit.sz | FPSCR.bit.pr)) {
+	if (!FPSCR.bit.sz) {
 		RN -= 4;
 		W32 (ctx, RN, FRM.u);
 	} else if (_RM & 1) {
