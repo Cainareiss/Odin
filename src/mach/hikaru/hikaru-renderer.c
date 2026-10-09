@@ -580,6 +580,12 @@ main (void)	\n \
 	vec3 base;	\n \
 	float alpha;	\n \
 	\n \
+	/* The depth buffer holds the logarithm of the eye depth: with the	\n \
+	 * near planes the games send, the projected depth cannot tell apart	\n \
+	 * surfaces that the cabinets do (the shadow of the AIRTRIX combo	\n \
+	 * labels lies 0.06 behind them at a depth of 560). */			\n \
+	gl_FragDepth = log2 (1.0 + 1.0 / gl_FragCoord.w) * (1.0 / 24.0);	\n \
+	\n \
 #if HAS_TEXTURE	\n \
 	vec4 texel = texture (u_texture, p_texcoords);	\n \
 #if ALPHA_MODE	\n \
