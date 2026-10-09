@@ -600,17 +600,40 @@ D (0x1C2)
 	DISASM ("kill");
 }
 
-/* 005	LOD: Set Threshold Lower-Bound
+/* 005	LOD: Test The Bounding Sphere
  *
  *	TTTTTTTT TTTTTTTT TTTT---o oooooooo
  *
- * T = Truncated floating-point threshold.
+ * T = Truncated floating-point radius.
  *
- *	Since the threshold is always positive, truncating the lower 12 bits
- *	makes the resulting value smaller = a lower bound.
- *
- * Used in conjunction with conditional control-flow. See SGNASCAR.
+ * Tells whether the sphere around the point of the 561 touches the view
+ * volume of the current viewport. SGNASCAR recalls a taller viewport for
+ * every 005 (y from -80 to 560) and pops it right after; then it returns
+ * (082 with the condition 4) or calls the model (052 with the condition 8).
+ * Its cabinet shows the pit crews, spheres of 2 to 2.5 units, from hundreds
+ * of units away.
  */
+
+static bool
+is_lod_sphere_visible (hikaru_gpu_t *gpu)
+{
+	hikaru_viewport_t *vp = &VP.current;
+	const float f = vp->clip.f, r = LOD.radius;
+	const float x = LOD.center[0], y = LOD.center[1], z = -LOD.center[2];
+	/* Edges of the window on the projection plane, y up. */
+	const float l = vp->clip.l - vp->offset.x, u = vp->offset.y - vp->clip.b;
+	const float e = vp->clip.r - vp->offset.x, d = vp->offset.y - vp->clip.t;
+
+	if (z + r < vp->clip.n)
+		return false;
+	if (x * f - z * l < -r * hypotf (f, l) ||
+	    z * e - x * f < -r * hypotf (f, e))
+		return false;
+	if (y * f - z * d < -r * hypotf (f, d) ||
+	    z * u - y * f < -r * hypotf (f, u))
+		return false;
+	return true;
+}
 
 I (0x005)
 {
@@ -619,7 +642,7 @@ I (0x005)
 	thresh.u = inst[0] & 0xFFFFF000;
 
 	LOD.radius = thresh.f;
-	LOD.cond = LOD.value < (thresh.f * 8.0f);
+	LOD.cond = is_lod_sphere_visible (gpu);
 }
 
 D (0x005)
@@ -630,7 +653,7 @@ D (0x005)
 
 	UNHANDLED |= !!(inst[0] & 0x00000E00);
 
-	DISASM ("lod: set threshold lb [%f]", thresh.f);
+	DISASM ("lod: test sphere [%f]", thresh.f);
 }
 
 /* 055	LOD: Set Threshold
@@ -1182,8 +1205,11 @@ I (0x161)
 			v[2] = *(float *) &inst[3];
 			v[3] = 1.0f;
 
-			/* Distance of the point from the eye. */
+			/* The point in eye space and its distance. */
 			mult_mtx4x4f_vec4f (w, MV.table[MV.depth].mtx, v);
+			LOD.center[0] = w[0];
+			LOD.center[1] = w[1];
+			LOD.center[2] = w[2];
 			LOD.value = norm_vec3 (w);
 		}
 		break;

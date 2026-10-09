@@ -346,6 +346,7 @@ typedef struct {
 		uint32_t in_mesh	: 1;
 
 		struct {
+			vec3f_t center;
 			float value;
 			float radius;
 			bool cond;
