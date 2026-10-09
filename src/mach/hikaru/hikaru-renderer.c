@@ -993,10 +993,10 @@ static void
 upload_viewport (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 {
 	hikaru_viewport_t *vp = &hr->vp_list[mesh->vp_index];
-	/* The projection plane is clip.f pixels away on the 640x480 screen. */
-	const float n_over_f = vp->clip.n / vp->clip.f;
-	const float hw_at_n = 320.0f * n_over_f;
-	const float hh_at_n = 240.0f * n_over_f;
+	/* The projection plane is clip.f pixels away on the 640x480 screen
+	 * for x and clip.f2 pixels away for y. */
+	const float hw_at_n = 320.0f * (vp->clip.n / vp->clip.f);
+	const float hh_at_n = 240.0f * (vp->clip.n / vp->clip.f2);
 	mtx4x4f_t projection;
 
 	VK_ASSERT (mesh->vp_index != ~0);

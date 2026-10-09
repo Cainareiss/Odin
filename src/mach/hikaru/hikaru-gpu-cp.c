@@ -619,7 +619,7 @@ static bool
 is_lod_sphere_visible (hikaru_gpu_t *gpu)
 {
 	hikaru_viewport_t *vp = &VP.current;
-	const float f = vp->clip.f, r = LOD.radius;
+	const float f = vp->clip.f, g = vp->clip.f2, r = LOD.radius;
 	const float x = LOD.center[0], y = LOD.center[1], z = -LOD.center[2];
 	/* Edges of the window on the projection plane, y up. */
 	const float l = vp->clip.l - vp->offset.x, u = vp->offset.y - vp->clip.b;
@@ -630,8 +630,8 @@ is_lod_sphere_visible (hikaru_gpu_t *gpu)
 	if (x * f - z * l < -r * hypotf (f, l) ||
 	    z * e - x * f < -r * hypotf (f, e))
 		return false;
-	if (y * f - z * d < -r * hypotf (f, d) ||
-	    z * u - y * f < -r * hypotf (f, u))
+	if (y * g - z * d < -r * hypotf (g, d) ||
+	    z * u - y * g < -r * hypotf (g, u))
 		return false;
 	return true;
 }
@@ -759,9 +759,13 @@ decode_clip_xy (uint32_t c)
  *	ffffffff ffffffff ffffffff ffffffff
  *	NNNNNNNN NNNNNNNN NNNNNNNN NNNNNNNN
  *
- * F = Far clipping plane
- * f = Alt. far clipping plane (see SGNASCAR)
+ * F = Distance of the projection plane for x, in pixels
+ * f = Distance of the projection plane for y, in pixels
  * N = Near clipping plane
+ *
+ *	The two distances are equal nearly everywhere. SGNASCAR sends
+ *	735.958 and 755.566 for its main view: its cabinet shows the 3D
+ *	picture 2.7% taller than with one distance for both.
  *
  * See PH:@0C01587C, PH:@0C0158A4, PH:@0C0158E8.
  *
