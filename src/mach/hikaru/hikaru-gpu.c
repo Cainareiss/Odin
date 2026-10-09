@@ -677,7 +677,8 @@ hikaru_gpu_fill_layer_info (hikaru_gpu_t *gpu)
  *			-------- -------- -------- -------E
  *
  *			E = Process the DMA request when set; signal busy
- *			    or ready when read
+ *			    or ready when read. Clearing it does not stop
+ *			    the transfer.
  *
  * 1500001C points to a table in CMDRAM, defaulting to 483FC000. Each entry
  * is 4 words long, and has the following format:
@@ -897,7 +898,7 @@ hikaru_gpu_step_idma (hikaru_gpu_t *gpu)
 	 * clears it (BOOTROM @0C006C04). BRAVEFF waits on that count every
 	 * 1024 entries (@0C042F68). */
 
-	if (!(REG15 (0x14) & 1) || !gpu->idma.left)
+	if (!gpu->idma.left)
 		return;
 
 	VK_ASSERT ((REG15 (0x0C) >> 24) == 0x48);
@@ -1140,9 +1141,16 @@ hikaru_gpu_put (vk_device_t *device, unsigned size, uint32_t addr, uint64_t val)
 		case 0x10:
 			break;
 		case 0x14: /* IDMA Control */
+			/* A transfer runs to its end whatever is written here,
+			 * and reads busy until then. SGNASCAR polls this bit
+			 * with the end interrupt masked; the boot ROM clears
+			 * the register when it meets the latched status bit,
+			 * at a later interrupt (@0C010364): that fell in the
+			 * middle of the next transfer and lost 266 textures. */
 			if (val & 1)
 				gpu->idma.left = REG15 (0x10);
-			break;
+			REG15 (0x14) = gpu->idma.left ? 1 : 0;
+			return 0;
 		case 0x18 ... 0x34:
 		case 0x38 ... 0x54:
 		case 0x70 ... 0x78:
