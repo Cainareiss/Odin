@@ -490,6 +490,7 @@ struct light_t {								\n \
 	vec3 position;								\n \
 	vec3 direction;								\n \
 	vec3 color;								\n \
+	float ambient;								\n \
 	vec2 extents;								\n \
 	vec3 spot;								\n \
 	vec2 cone;								\n \
@@ -562,7 +563,10 @@ apply_light (inout vec3 diffuse,	\n \
 #else	\n \
 	n_dot_l = dot (normal, light_direction);	\n \
 #endif	\n \
-	diffuse += attenuation * max (n_dot_l, 0.0) * light.color;	\n \
+	/* The ambient level of the 051 is a constant share of the colour,	\n \
+	 * cut by the distance and by the cone like the Lambert term	\n \
+	 * (HEURISTIC: the scale and the cuts are read from the cabinets). */	\n \
+	diffuse += attenuation * (max (n_dot_l, 0.0) + light.ambient) * light.color;	\n \
 	\n \
 	/* The reflected ray against the view. The vo3d pixel shader takes	\n \
 	 * the Blinn half vector, whose lobe is about four times as wide for	\n \
@@ -943,6 +947,9 @@ upload_glsl_program (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 		sprintf (temp, "u_lights[%d].color", i);
 		hr->meshes.locs.u_lights[i].color =
 			glGetUniformLocation (hr->meshes.program, temp);
+		sprintf (temp, "u_lights[%d].ambient", i);
+		hr->meshes.locs.u_lights[i].ambient =
+			glGetUniformLocation (hr->meshes.program, temp);
 		sprintf (temp, "u_lights[%d].spot", i);
 		hr->meshes.locs.u_lights[i].spot =
 			glGetUniformLocation (hr->meshes.program, temp);
@@ -1184,6 +1191,8 @@ upload_lightset (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 
 		get_light_diffuse (hr, lt, tmp);
 		glUniform3fv (hr->meshes.locs.u_lights[i].color, 1, tmp);
+		glUniform1f (hr->meshes.locs.u_lights[i].ambient,
+		             lt->ambient * (1.0f / 16.0f));
 		VK_ASSERT_NO_GL_ERROR ();
 
 		glUniform2fv (hr->meshes.locs.u_lights[i].extents, 1,

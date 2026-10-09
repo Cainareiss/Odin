@@ -154,7 +154,7 @@ get_light_str (hikaru_light_t *lit)
 	         lit->att_type, lit->attenuation[0], lit->attenuation[1],
 	         lit->has_direction, lit->direction[0], lit->direction[1], lit->direction[2],
 	         lit->has_position, lit->position[0], lit->position[1], lit->position[2],
-	         lit->_051_index, lit->diffuse[0], lit->diffuse[1], lit->diffuse[2],
+	         lit->ambient, lit->diffuse[0], lit->diffuse[1], lit->diffuse[2],
 	         lit->has_spot, lit->spot[0], lit->spot[1], lit->spot[2],
 	         lit->has_cone, lit->cos_outer, lit->cone_scale);
 

@@ -84,6 +84,7 @@ typedef struct {
 		GLuint	position;
 		GLuint	direction;
 		GLuint	color;
+		GLuint	ambient;
 		GLuint	extents;
 		GLuint	spot;
 		GLuint	cone;

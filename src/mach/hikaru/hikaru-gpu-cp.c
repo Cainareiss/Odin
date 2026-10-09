@@ -1911,11 +1911,17 @@ D (0x061)
 
 /* 051	Light: Set Diffuse
  *
- *	-------- D---XXXX -------o oooooooo
+ *	-------- D---AAAA -------o oooooooo
  *	--BBBBBB BBBBGGGG GGGGGGRR RRRRRRRR
  *
  * D = Disabled?
- * X = Index/Mode.
+ * A = Ambient level, 0 to 15
+ *
+ *	The light adds A / 16 of its colour to every polygon it reaches,
+ *	facing it or not. The light editor of PHARRIER shows the field as
+ *	"amb", 0 to 15, next to the colour (PH:@0C1D7048); SGNASCAR sends
+ *	(int) (16 * level), 15 at most (@0C062200). von4 leaves it at 0 and
+ *	the X360 port ignores it.
  *
  * See PH:@0C0178C6; for a,b,c computation see PH:@0C03DC66.
  *
@@ -1949,7 +1955,7 @@ I (0x051)
 	switch ((inst[0] >> 8) & 7) {
 	case 0:
 		lit->_051_bit   = (inst[0] >> 23) & 1;
-		lit->_051_index = (inst[0] >> 16) & 0xF;
+		lit->ambient    = (inst[0] >> 16) & 0xF;
 		lit->diffuse[0] = inst[1] & 0x3FF;
 		lit->diffuse[1] = (inst[1] >> 10) & 0x3FF;
 		lit->diffuse[2] = (inst[1] >> 20) & 0x3FF;
@@ -1979,7 +1985,7 @@ D (0x051)
 		UNHANDLED |= !!(inst[0] & 0xFF70F000);
 		UNHANDLED |= !!(inst[1] & 0xC0000000);
 
-		DISASM ("lit: set diffuse [%X]", inst[1]);
+		DISASM ("lit: set diffuse [%X amb=%u]", inst[1], (inst[0] >> 16) & 0xF);
 		break;
 	case 4:
 		UNHANDLED |= !!(inst[0] & 0xFEFFF000);

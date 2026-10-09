@@ -112,6 +112,18 @@ control room, the how to play rooms, the demo play and the wall of the
 ranking are too dark). Weighing it by the material ambient (691), 0x7F in
 the control room, leaves that room too dark whatever the capture curve:
 the cabinet frame has more bright pixels than such a render.
+The bits 19:16 of the 051 are the ambient level of the light, 0 to 15:
+the light editor of PHARRIER shows them as "amb" next to the colour and
+SGNASCAR builds them as (int) (16 * level). The light adds level / 16 of
+its colour to every polygon it reaches, facing it or not, without the
+material ambient, cut by the distance and by the cone like the Lambert
+term (HEURISTIC for the scale and the two cuts, read from four cabinets:
+with a level of 4 the track of SGNASCAR and its walls turned away from
+the sun all gain 0.24 of their texture; the red beacon of BRAVEFF
+flashes as strongly as on the cabinet, frame by frame; the board and
+the disc of the AIRTRIX how to play; the explosion flash of PHARRIER.
+Without the cut by the distance BRAVEFF and PHARRIER get far too
+bright). von4 leaves the level at 0 and the X360 port ignores it.
 Not as the port either, whose target clamps at 8 bits: a blended colour
 is weighted by its alpha before it is clamped, so a lit colour above 1
 keeps its excess (HEURISTIC, read from two cabinets: the veils of the
