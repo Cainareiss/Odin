@@ -12,11 +12,11 @@ PKG_LDFLAGS := `pkg-config --libs gl glew jansson`
 
 COMMON_FLAGS = $(DEFS) -I src -I /usr/include/json -Wall -Wno-strict-aliasing -Wno-format -Wno-unused-local-typedefs
 
-CFLAGS  := $(COMMON_FLAGS) $(PKG_CFLAGS) $(SDL_CFLAGS) -O3 -fomit-frame-pointer -flto -march=native
+CFLAGS  := $(COMMON_FLAGS) $(PKG_CFLAGS) $(SDL_CFLAGS) -O3 -fomit-frame-pointer -flto -march=native -fno-stack-protector
 #CFLAGS  := $(COMMON_FLAGS) $(PKG_CFLAGS) $(SDL_CFLAGS) -O0 -g
 LDFLAGS := -lm $(PKG_LDFLAGS) $(SDL_LDFLAGS)
 
-CXXFLAGS := -std=c++20 -I src -Wall -Wextra -Wpedantic -Wconversion -Wshadow -O3 -fomit-frame-pointer -flto -march=native
+CXXFLAGS := -std=c++20 -I src -Wall -Wextra -Wpedantic -Wconversion -Wshadow -O3 -fomit-frame-pointer -flto -march=native -fno-stack-protector
 
 .PHONY: all install clean
 
