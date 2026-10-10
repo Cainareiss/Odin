@@ -493,16 +493,42 @@ hikaru_run_cycles (vk_machine_t *mach, int cycles)
 	vk_device_exec (hikaru->aica_s, cycles);
 }
 
+/* What the scheduler dates. Those due at the same time are taken in this
+ * order. */
+enum {
+	EVENT_LINE,		/* the end of a line */
+	EVENT_VBLANK_IN,
+	EVENT_FRAME_END,
+};
+
+/* HEURISTIC, the frame of Valkyrie: the games set 528 lines (1A000084). */
+#define LINES_SHOWN	480
+#define LINES_PER_FRAME	(480 + 64)
+
+/* Dates the events of the frame that starts now. */
+static void
+hikaru_begin_frame (hikaru_t *hikaru)
+{
+	const uint64_t now = odin_scheduler_now (hikaru->sched);
+	const uint64_t line = (uint64_t) cycles_per_line;
+
+	hikaru->line = 0;
+	odin_scheduler_set (hikaru->sched, EVENT_LINE, now + line);
+	odin_scheduler_set (hikaru->sched, EVENT_VBLANK_IN, now + LINES_SHOWN * line);
+	odin_scheduler_set (hikaru->sched, EVENT_FRAME_END, now + LINES_PER_FRAME * line);
+}
+
 static int
 hikaru_run_frame (vk_machine_t *mach)
 {
 	hikaru_t *hikaru = (hikaru_t *) mach;
-	unsigned line;
+	bool done = false;
 
 	/* XXX move the main loop into vk_machine */
 
 	VK_LOG (" *** VBLANK-OUT %s ***", vk_machine_get_debug_string (mach));
 
+	/* The frame of Valkyrie, line by line:
 	for (line = 0; line < 480; line++) {
 		hikaru_run_cycles (mach, cycles_per_line);
 		hikaru_gpu_hblank_in (hikaru->gpu, line);
@@ -515,12 +541,41 @@ hikaru_run_frame (vk_machine_t *mach)
 		hikaru_run_cycles (mach, cycles_per_line);
 		hikaru_gpu_hblank_in (hikaru->gpu, line);
 	}
+	*/
 
-	/* this may actually be an hblank-out IRQ */
-	hikaru_gpu_vblank_out (hikaru->gpu);
+	/* The chips run up to the next event, then the events due are
+	 * taken. */
+	while (!done) {
+		const uint64_t next = odin_scheduler_next (hikaru->sched);
+		int event;
 
-	/* XXX AICA */
-	hikaru_raise_irq (mach, SH4_IESOURCE_IRL2, 0x80);
+		hikaru_run_cycles (mach, (int) (next - odin_scheduler_now (hikaru->sched)));
+		odin_scheduler_advance (hikaru->sched, next);
+
+		while ((event = odin_scheduler_take (hikaru->sched)) >= 0) {
+			switch (event) {
+			case EVENT_LINE:
+				hikaru_gpu_hblank_in (hikaru->gpu, hikaru->line++);
+				if (hikaru->line < LINES_PER_FRAME)
+					odin_scheduler_set (hikaru->sched, EVENT_LINE,
+					                    next + (uint64_t) cycles_per_line);
+				break;
+			case EVENT_VBLANK_IN:
+				VK_LOG (" *** VBLANK-IN  %s ***", vk_machine_get_debug_string (mach));
+				hikaru_gpu_vblank_in (hikaru->gpu);
+				break;
+			case EVENT_FRAME_END:
+				/* this may actually be an hblank-out IRQ */
+				hikaru_gpu_vblank_out (hikaru->gpu);
+
+				/* XXX AICA */
+				hikaru_raise_irq (mach, SH4_IESOURCE_IRL2, 0x80);
+				done = true;
+				break;
+			}
+		}
+	}
+	hikaru_begin_frame (hikaru);
 
 	return 0;
 }
@@ -545,6 +600,9 @@ hikaru_reset (vk_machine_t *mach, vk_reset_type_t type)
 
 	if (hikaru->actel)
 		odin_actel_m1_reset (hikaru->actel);
+
+	odin_scheduler_reset (hikaru->sched);
+	hikaru_begin_frame (hikaru);
 }
 
 static const char *
@@ -624,6 +682,12 @@ hikaru_load_state (vk_machine_t *mach, vk_state_t *state)
 		LOAD_CHIP (odin_actel_m1, hikaru->actel);
 
 	ret |= hikaru_renderer_load_state (mach->renderer, state);
+
+	/* A state is taken at the end of a frame. */
+	odin_scheduler_reset (hikaru->sched);
+	odin_scheduler_advance (hikaru->sched, (uint64_t) mach->frame *
+	                        LINES_PER_FRAME * (uint64_t) cycles_per_line);
+	hikaru_begin_frame (hikaru);
 
 	return ret;
 }
@@ -1100,6 +1164,7 @@ hikaru_destroy (vk_machine_t **mach_)
 		if (hikaru) {
 			/* dump everything we got before quitting */
 			hikaru_dump ((vk_machine_t *) hikaru);
+			odin_scheduler_delete (hikaru->sched);
 		}
 	}
 }
@@ -1189,6 +1254,10 @@ hikaru_init (hikaru_t *hikaru)
 
 	hikaru->eeprom_main = odin_eeprom93c46_new (HIKARU_SH4_CLOCK);
 	if (!hikaru->eeprom_main)
+		return -1;
+
+	hikaru->sched = odin_scheduler_new ();
+	if (!hikaru->sched)
 		return -1;
 	if (game) {
 		vk_buffer_t *image = vk_game_get_section_data (game, "eeprom");

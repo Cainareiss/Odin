@@ -24,6 +24,7 @@
 #include "odin/x76f100_bridge.hpp"
 #include "odin/crypt_315_5881_bridge.hpp"
 #include "odin/actel_m1_bridge.hpp"
+#include "odin/scheduler_bridge.hpp"
 #include "vk/cpu.h"
 #include "vk/machine.h"
 
@@ -54,6 +55,10 @@ typedef struct {
 	vk_mmap_t *mmap_s;
 
 	vk_cpu_t *sh_current;
+
+	/* The time of the machine, in SH-4 cycles, and the line being drawn */
+	odin_scheduler_t *sched;
+	unsigned line;
 
 	/* Devices */
 	vk_device_t *memctl_m;
