@@ -41,6 +41,9 @@ enum {
 	HR_NUM_DEBUG_VARS
 };
 
+/* Translucent layers found between two answers of the GPU */
+#define MAX_LAYER_BATCH 32
+
 typedef union {
 	struct {
 		uint64_t has_texture		: 1;
@@ -191,10 +194,12 @@ typedef struct {
 		int32_t next;		/* the one it takes at the next frame, or -1 */
 		uint32_t launched;	/* a list was launched during this frame */
 		/* Translucent layers, see draw_translucent_meshes */
-		GLuint layer_fb[3];	/* two to find a layer, one to blend it */
-		GLuint layer_depth[2];
+		struct {
+			GLuint fb, depth, query;
+		} layers[MAX_LAYER_BATCH + 1];	/* [0] is the last one blended */
+		GLuint blend_fb;
 		GLuint solid_depth;	/* depth left by the other types */
-		GLuint layer_query;
+		unsigned num_layers[8];	/* per viewport, at the last frame */
 		unsigned scene;		/* the 3D buffer being drawn */
 		GLuint vao, vbo;
 		struct {

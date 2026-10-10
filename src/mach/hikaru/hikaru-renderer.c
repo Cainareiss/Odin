@@ -1811,13 +1811,17 @@ set_opaque_blend (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
  * Each layer takes two passes over the meshes: one finds, at every pixel,
  * the farthest fragment that is nearer than the last layer blended and not
  * behind the other types; one blends the fragments at that depth, with the
- * factors of their mesh, in the order of the display list. */
+ * factors of their mesh, in the order of the display list.
+ *
+ * Asking the GPU whether a layer holds anything waits for it. A layer only
+ * needs the depth of the one before, not its blending: the layers are found
+ * in a row, as many as at the last frame, then asked about, then blended. */
 static void
 draw_translucent_meshes (hikaru_renderer_t *hr, hikaru_mesh_t *meshes,
-                         unsigned num)
+                         unsigned num, unsigned vpi)
 {
-	unsigned last = 0, layer, j;
-	GLuint found = 0;
+	unsigned total = 0, batch, i, j;
+	bool more = true;
 
 	/* The depth the other types left. */
 	glBindTexture (GL_TEXTURE_2D, hr->framebuffer.solid_depth);
@@ -1829,65 +1833,92 @@ draw_translucent_meshes (hikaru_renderer_t *hr, hikaru_mesh_t *meshes,
 	VK_ASSERT_NO_GL_ERROR ();
 
 	/* Nothing is blended yet: the last layer is at the far end. */
-	glBindFramebuffer (GL_FRAMEBUFFER, hr->framebuffer.layer_fb[last]);
+	glBindFramebuffer (GL_FRAMEBUFFER, hr->framebuffer.layers[0].fb);
 	glDisable (GL_SCISSOR_TEST);
 	glDepthMask (GL_TRUE);
 	glClearDepth (1.0);
 	glClear (GL_DEPTH_BUFFER_BIT);
 
-	for (layer = 0; layer < MAX_TRANSLUCENT_LAYERS; layer++) {
-		unsigned next = last ^ 1;
+	batch = hr->framebuffer.num_layers[vpi] + 1;
+	while (more && total < MAX_TRANSLUCENT_LAYERS) {
+		unsigned n = MIN2 (MIN2 (batch, MAX_LAYER_BATCH),
+		                   MAX_TRANSLUCENT_LAYERS - total);
+		unsigned found = 0;
 
-		/* Find the layer. */
-		glBindFramebuffer (GL_FRAMEBUFFER, hr->framebuffer.layer_fb[next]);
-		glDisable (GL_SCISSOR_TEST);
-		glDepthMask (GL_TRUE);
-		glClearDepth (0.0);
-		glClear (GL_DEPTH_BUFFER_BIT);
-		glEnable (GL_SCISSOR_TEST);
+		/* Find the layers. */
 		glDepthFunc (GL_GREATER);
 		glColorMask (GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-		glActiveTexture (GL_TEXTURE0 + 5);
-		glBindTexture (GL_TEXTURE_2D, hr->framebuffer.layer_depth[last]);
-		glActiveTexture (GL_TEXTURE0);
-
 		hr->meshes.find_layer = true;
-		glBeginQuery (GL_ANY_SAMPLES_PASSED, hr->framebuffer.layer_query);
-		for (j = 0; j < num; j++)
-			draw_mesh (hr, &meshes[j]);
-		glEndQuery (GL_ANY_SAMPLES_PASSED);
-		hr->meshes.find_layer = false;
-		glGetQueryObjectuiv (hr->framebuffer.layer_query,
-		                     GL_QUERY_RESULT, &found);
+		for (i = 1; i <= n; i++) {
+			glBindFramebuffer (GL_FRAMEBUFFER, hr->framebuffer.layers[i].fb);
+			glDisable (GL_SCISSOR_TEST);
+			glDepthMask (GL_TRUE);
+			glClearDepth (0.0);
+			glClear (GL_DEPTH_BUFFER_BIT);
+			glEnable (GL_SCISSOR_TEST);
+			glActiveTexture (GL_TEXTURE0 + 5);
+			glBindTexture (GL_TEXTURE_2D, hr->framebuffer.layers[i - 1].depth);
+			glActiveTexture (GL_TEXTURE0);
 
+			glBeginQuery (GL_ANY_SAMPLES_PASSED, hr->framebuffer.layers[i].query);
+			for (j = 0; j < num; j++)
+				draw_mesh (hr, &meshes[j]);
+			glEndQuery (GL_ANY_SAMPLES_PASSED);
+		}
+		hr->meshes.find_layer = false;
 		glActiveTexture (GL_TEXTURE0 + 5);
 		glBindTexture (GL_TEXTURE_2D, 0);
 		glActiveTexture (GL_TEXTURE0);
 		glColorMask (GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 		VK_ASSERT_NO_GL_ERROR ();
-		if (!found)
-			break;
 
-		/* Blend it into the 3D buffer. */
-		glBindFramebuffer (GL_FRAMEBUFFER, hr->framebuffer.layer_fb[2]);
+		/* Those before the first empty one hold something. */
+		while (found < n) {
+			GLuint any = 0;
+
+			glGetQueryObjectuiv (hr->framebuffer.layers[found + 1].query,
+			                     GL_QUERY_RESULT, &any);
+			if (!any)
+				break;
+			found++;
+		}
+
+		/* Blend them into the 3D buffer. */
+		glBindFramebuffer (GL_FRAMEBUFFER, hr->framebuffer.blend_fb);
 		glFramebufferTexture2D (GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
 		                        GL_TEXTURE_2D,
 		                        hr->framebuffer.cb[hr->framebuffer.scene], 0);
-		glFramebufferTexture2D (GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
-		                        GL_TEXTURE_2D,
-		                        hr->framebuffer.layer_depth[next], 0);
 		glDepthFunc (GL_EQUAL);
 		glDepthMask (GL_FALSE);
-		for (j = 0; j < num; j++) {
-			set_material_blend (hr, &meshes[j]);
-			draw_mesh (hr, &meshes[j]);
+		for (i = 1; i <= found; i++) {
+			glFramebufferTexture2D (GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+			                        GL_TEXTURE_2D,
+			                        hr->framebuffer.layers[i].depth, 0);
+			for (j = 0; j < num; j++) {
+				set_material_blend (hr, &meshes[j]);
+				draw_mesh (hr, &meshes[j]);
+			}
 		}
 		VK_ASSERT_NO_GL_ERROR ();
 
-		last = next;
+		total += found;
+		if (found < n) {
+			more = false;
+		} else {
+			/* The last one becomes the one before the next. */
+			GLuint fb = hr->framebuffer.layers[0].fb;
+			GLuint depth = hr->framebuffer.layers[0].depth;
+
+			hr->framebuffer.layers[0].fb = hr->framebuffer.layers[n].fb;
+			hr->framebuffer.layers[0].depth = hr->framebuffer.layers[n].depth;
+			hr->framebuffer.layers[n].fb = fb;
+			hr->framebuffer.layers[n].depth = depth;
+			batch = (total == n) ? 2 : batch * 2;
+		}
 	}
-	if (found)
+	if (more)
 		VK_ERROR ("more than %u translucent layers", MAX_TRANSLUCENT_LAYERS);
+	hr->framebuffer.num_layers[vpi] = total;
 
 	glActiveTexture (GL_TEXTURE0 + 6);
 	glBindTexture (GL_TEXTURE_2D, 0);
@@ -1955,7 +1986,7 @@ draw_meshes_for_polytype (hikaru_renderer_t *hr, unsigned vpi, int polytype)
 	}
 
 	if (polytype == HIKARU_POLYTYPE_TRANSLUCENT) {
-		draw_translucent_meshes (hr, meshes, num);
+		draw_translucent_meshes (hr, meshes, num, vpi);
 		return;
 	}
 
@@ -2322,31 +2353,33 @@ build_fb_state (hikaru_renderer_t *hr)
 	}
 	VK_ASSERT_NO_GL_ERROR ();
 
-	/* The translucent layers: two depth buffers that take turns, and a
-	 * copy of the depth of the other types. */
-	glGenTextures (2, hr->framebuffer.layer_depth);
+	/* The translucent layers: their depth buffers, and a copy of the
+	 * depth of the other types. */
+	glGenFramebuffers (1, &hr->framebuffer.blend_fb);
 	glGenTextures (1, &hr->framebuffer.solid_depth);
-	glGenFramebuffers (3, hr->framebuffer.layer_fb);
-	glGenQueries (1, &hr->framebuffer.layer_query);
-	for (i = 0; i < 3; i++) {
-		glBindTexture (GL_TEXTURE_2D, (i < 2) ? hr->framebuffer.layer_depth[i] :
-		                                        hr->framebuffer.solid_depth);
-		glTexStorage2D (GL_TEXTURE_2D, 1,
-		                (i < 2) ? GL_DEPTH_COMPONENT32F : GL_DEPTH_COMPONENT24,
-		                640, 480);
+	glBindTexture (GL_TEXTURE_2D, hr->framebuffer.solid_depth);
+	glTexStorage2D (GL_TEXTURE_2D, 1, GL_DEPTH_COMPONENT24, 640, 480);
+	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	for (i = 0; i <= MAX_LAYER_BATCH; i++) {
+		glGenTextures (1, &hr->framebuffer.layers[i].depth);
+		glGenFramebuffers (1, &hr->framebuffer.layers[i].fb);
+		glGenQueries (1, &hr->framebuffer.layers[i].query);
+
+		glBindTexture (GL_TEXTURE_2D, hr->framebuffer.layers[i].depth);
+		glTexStorage2D (GL_TEXTURE_2D, 1, GL_DEPTH_COMPONENT32F, 640, 480);
 		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	}
-	glBindTexture (GL_TEXTURE_2D, 0);
-	for (i = 0; i < 2; i++) {
-		glBindFramebuffer (GL_FRAMEBUFFER, hr->framebuffer.layer_fb[i]);
+
+		glBindFramebuffer (GL_FRAMEBUFFER, hr->framebuffer.layers[i].fb);
 		glFramebufferTexture2D (GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
-		                        GL_TEXTURE_2D, hr->framebuffer.layer_depth[i], 0);
+		                        GL_TEXTURE_2D, hr->framebuffer.layers[i].depth, 0);
 		glDrawBuffer (GL_NONE);
 		glReadBuffer (GL_NONE);
 		if (glCheckFramebufferStatus (GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
 			return -1;
 	}
+	glBindTexture (GL_TEXTURE_2D, 0);
 	glBindFramebuffer (GL_FRAMEBUFFER, 0);
 	VK_ASSERT_NO_GL_ERROR ();
 
@@ -2384,15 +2417,20 @@ build_fb_state (hikaru_renderer_t *hr)
 static void
 destroy_fb_state (hikaru_renderer_t *hr)
 {
+	unsigned i;
+
 	glBindFramebuffer (GL_FRAMEBUFFER, 0);
 	glDeleteFramebuffers (NUM_FRAMEBUFFERS, hr->framebuffer.fb);
 	glDeleteTextures (NUM_FRAMEBUFFERS, hr->framebuffer.cb);
 	glDeleteTextures (3, hr->framebuffer.pipe);
 	glDeleteRenderbuffers (NUM_FRAMEBUFFERS, hr->framebuffer.db);
-	glDeleteFramebuffers (3, hr->framebuffer.layer_fb);
-	glDeleteTextures (2, hr->framebuffer.layer_depth);
+	for (i = 0; i <= MAX_LAYER_BATCH; i++) {
+		glDeleteFramebuffers (1, &hr->framebuffer.layers[i].fb);
+		glDeleteTextures (1, &hr->framebuffer.layers[i].depth);
+		glDeleteQueries (1, &hr->framebuffer.layers[i].query);
+	}
+	glDeleteFramebuffers (1, &hr->framebuffer.blend_fb);
 	glDeleteTextures (1, &hr->framebuffer.solid_depth);
-	glDeleteQueries (1, &hr->framebuffer.layer_query);
 	VK_ASSERT_NO_GL_ERROR ();
 
 	vk_renderer_destroy_program (hr->framebuffer.program);
