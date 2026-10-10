@@ -13,6 +13,16 @@ For later, write an event-driven scheduler.
 
 I'm seriously thinking about slowling "porting" valkyrie to C++... Mmm.
 
+Speed: the frames are held at 60 per second (-u lifts the limit), but the
+heavy scenes do not reach it: about 72 frames per second in PODRACE, 49 in
+SGNASCAR, 40 in VON4, 33 in AIRTRIX, 26 in BRAVEFF and 22 in PHARRIER on a
+Ryzen 5 5600X. What costs, in that order: the SH-4 interpreter (1 to 2
+million instructions run a frame, about 8 ns each); the translucent layers
+(two passes over every translucent mesh for each layer: 25000 to 42000 draws
+a frame in BRAVEFF and PHARRIER); the two ARM7, whose sound driver never
+sleeps (its main loop turns 312 times a frame and reads SCIPD each time, an
+interrupt comes every 22 samples: the turns in between are all the same).
+
 
 HIKARU
 ------
