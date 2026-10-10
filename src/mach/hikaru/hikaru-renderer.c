@@ -422,12 +422,28 @@ hikaru_renderer_invalidate_texcache (vk_renderer_t *rend, hikaru_texhead_t *th)
  State
 ****************************************************************************/
 
+/* The translucent fragments of a viewport, see draw_translucent_meshes:
+ * u_heads has the last one of each pixel and next the one before it, as
+ * indices plus one; 0 ends a list. */
+#define LISTS_GLSL \
+"struct node_t {								\n" \
+"	vec4 color;								\n" \
+"	float depth;								\n" \
+"	uint next;								\n" \
+"	uint order;								\n" \
+"	uint mode;								\n" \
+"};										\n" \
+"layout(binding = 0, r32ui) uniform uimage2D u_heads;				\n" \
+"layout(std430, binding = 0) buffer nodes_t {					\n" \
+"	node_t u_nodes[];							\n" \
+"};										\n"
+
+#define NODE_SIZE 32	/* bytes of a node_t */
+
 static const char *mesh_vs_source =
-"#version 140									\n \
+"%s										\n \
 										\n \
 #extension GL_ARB_explicit_attrib_location : require				\n \
-										\n \
-%s										\n \
 										\n \
 uniform mat4 u_projection;							\n \
 uniform mat4 u_modelview;							\n \
@@ -483,10 +499,9 @@ void main (void) {								\n \
 }";
 
 static const char *mesh_fs_source =
-"#version 140									\n \
+"%s										\n \
 										\n \
 out vec4 fragColor;								\n \
-%s										\n \
 										\n \
 struct light_t {								\n \
 	vec3 position;								\n \
@@ -505,9 +520,16 @@ uniform vec2		u_fog;							\n \
 uniform vec3		u_fog_color;						\n \
 uniform float		u_alpha_ref;						\n \
 uniform float		u_weigh_by_alpha;					\n \
-uniform int		u_find_layer;						\n \
-uniform sampler2D	u_last_layer;						\n \
+										\n \
+#if COLLECT									\n"
+LISTS_GLSL
+"layout(std430, binding = 1) buffer count_t {					\n \
+	uint u_count;								\n \
+};										\n \
 uniform sampler2D	u_solid_depth;						\n \
+uniform uint		u_order;						\n \
+uniform uint		u_blend_mode;						\n \
+#endif										\n \
 										\n \
 in vec4 p_position;								\n \
 in vec3 p_normal;								\n \
@@ -672,15 +694,14 @@ main (void)	\n \
 	if (color.a <= u_alpha_ref)						\n \
 		discard;							\n \
 										\n \
-	/* The pass that finds a translucent layer keeps what is nearer than	\n \
-	 * the last layer and not behind the other types, whose depth buffer	\n \
-	 * has steps of 6e-8. */						\n \
-	if (u_find_layer != 0) {						\n \
-		ivec2 pixel = ivec2 (gl_FragCoord.xy);				\n \
-		if (frag_depth >= texelFetch (u_last_layer, pixel, 0).r ||	\n \
-		    frag_depth > texelFetch (u_solid_depth, pixel, 0).r + 3.0e-8)	\n \
-			discard;						\n \
-	}									\n \
+#if COLLECT									\n \
+	/* A translucent fragment is kept unless it is behind the other	\n \
+	 * types, whose depth buffer has steps of 6e-8. */			\n \
+	ivec2 pixel = ivec2 (gl_FragCoord.xy);					\n \
+	if (frag_depth >= 1.0 ||						\n \
+	    frag_depth > texelFetch (u_solid_depth, pixel, 0).r + 3.0e-8)	\n \
+		discard;							\n \
+#endif										\n \
 										\n \
 #if HAS_FOG									\n \
 	/* X360 vo3d: linear fog on the eye depth from start to end. */	\n \
@@ -705,6 +726,17 @@ main (void)	\n \
 	 * function takes the source as it is then. */				\n \
 	if (u_weigh_by_alpha > 0.5)						\n \
 		fragColor.rgb *= fragColor.a;					\n \
+										\n \
+#if COLLECT									\n \
+	uint n = atomicAdd (u_count, 1u);					\n \
+	if (n < uint (u_nodes.length ())) {					\n \
+		u_nodes[n].color = clamp (fragColor, 0.0, 1.0);			\n \
+		u_nodes[n].depth = frag_depth;					\n \
+		u_nodes[n].next = imageAtomicExchange (u_heads, pixel, n + 1u);	\n \
+		u_nodes[n].order = u_order + uint (gl_PrimitiveID);		\n \
+		u_nodes[n].mode = u_blend_mode;					\n \
+	}									\n \
+#endif										\n \
 }";
 
 static hikaru_light_att_t
@@ -770,6 +802,7 @@ get_glsl_variant (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	VK_ASSERT (mesh->vp_index != ~0);
 
 	variant.full = 0;
+	variant.collect = hr->meshes.collect;
 
 	if (mesh->mat_index == ~0) {
 		VK_ERROR ("no material.");
@@ -853,6 +886,7 @@ static void
 upload_glsl_program (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 {
 	static const char *definitions_template =
+	"#version %d\n"
 	"#define HAS_TEXTURE %d\n"
 	"#define HAS_LIGHTING %d\n"
 	"#define HAS_TWO_SIDED_LIGHTING %d\n"
@@ -872,7 +906,8 @@ upload_glsl_program (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	"#define LIGHT3_TYPE %d\n"
 	"#define LIGHT3_ATT_TYPE %d\n"
 	"#define HAS_FOG %d\n"
-	"#define HAS_CUE %d\n";
+	"#define HAS_CUE %d\n"
+	"#define COLLECT %d\n";
 
 	hikaru_glsl_variant_t variant;
 	char *definitions, *vs_source, *fs_source;
@@ -898,6 +933,7 @@ upload_glsl_program (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	VK_LOG ("compiling shader for variant %lX", variant.full);
 
 	ret = asprintf (&definitions, definitions_template,
+	                variant.collect ? 430 : 140,
 	                variant.has_texture,
 	                variant.has_lighting,
 	                variant.has_two_sided_lighting,
@@ -917,7 +953,8 @@ upload_glsl_program (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	                variant.light3_type,
 	                variant.light3_att_type,
 	                variant.has_fog,
-	                variant.has_cue);
+	                variant.has_cue,
+	                variant.collect);
 	VK_ASSERT (ret >= 0);
 
 	ret = asprintf (&vs_source, mesh_vs_source, definitions);
@@ -990,17 +1027,16 @@ upload_glsl_program (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 		glGetUniformLocation (hr->meshes.program, "u_alpha_ref");
 	hr->meshes.locs.u_weigh_by_alpha =
 		glGetUniformLocation (hr->meshes.program, "u_weigh_by_alpha");
-	hr->meshes.locs.u_find_layer =
-		glGetUniformLocation (hr->meshes.program, "u_find_layer");
-	hr->meshes.locs.u_last_layer =
-		glGetUniformLocation (hr->meshes.program, "u_last_layer");
 	hr->meshes.locs.u_solid_depth =
 		glGetUniformLocation (hr->meshes.program, "u_solid_depth");
+	hr->meshes.locs.u_order =
+		glGetUniformLocation (hr->meshes.program, "u_order");
+	hr->meshes.locs.u_blend_mode =
+		glGetUniformLocation (hr->meshes.program, "u_blend_mode");
 	VK_ASSERT_NO_GL_ERROR ();
 
 	/* The texture units never change. */
 	glUniform1i (hr->meshes.locs.u_texture, 0);
-	glUniform1i (hr->meshes.locs.u_last_layer, 5);
 	glUniform1i (hr->meshes.locs.u_solid_depth, 6);
 	VK_ASSERT_NO_GL_ERROR ();
 
@@ -1619,6 +1655,17 @@ update_and_set_rendstate (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	}
 
 static void
+draw_instance (hikaru_renderer_t *hr, hikaru_mesh_t *mesh, unsigned i)
+{
+	upload_modelview (hr, mesh, i);
+	if (hr->meshes.collect) {
+		glUniform1ui (hr->meshes.locs.u_order, hr->meshes.order);
+		hr->meshes.order += mesh->num_tris;
+	}
+	glDrawArrays (GL_TRIANGLES, mesh->first, mesh->num_tris * 3);
+}
+
+static void
 draw_mesh (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 {
 	hikaru_mesh_held_t *held;
@@ -1645,7 +1692,7 @@ draw_mesh (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 		held->vp_index = held->ls_index = held->ls_vp_index = ~0;
 		held->mv_index = held->mv2_index = ~0;
 		held->alpha_ref = held->depth_scale = NAN;
-		held->weigh_by_alpha = held->find_layer = -1;
+		held->weigh_by_alpha = -1;
 	}
 	if (held->alpha_ref != hr->meshes.alpha_ref) {
 		held->alpha_ref = hr->meshes.alpha_ref;
@@ -1656,11 +1703,8 @@ draw_mesh (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 		glUniform1f (hr->meshes.locs.u_weigh_by_alpha,
 		             hr->meshes.weigh_by_alpha ? 1.0f : 0.0f);
 	}
-	if (held->find_layer != (int) hr->meshes.find_layer) {
-		held->find_layer = hr->meshes.find_layer;
-		glUniform1i (hr->meshes.locs.u_find_layer,
-		             hr->meshes.find_layer ? 1 : 0);
-	}
+	if (hr->meshes.collect)
+		glUniform1ui (hr->meshes.locs.u_blend_mode, hr->meshes.blend_mode);
 	VK_ASSERT_NO_GL_ERROR ();
 
 	upload_viewport (hr, mesh);
@@ -1684,13 +1728,10 @@ draw_mesh (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	if (hr->debug.flags[HR_DEBUG_NO_INSTANCING]) {
 		unsigned i = MIN2 (hr->debug.flags[HR_DEBUG_SELECT_INSTANCE],
 		                   mesh->num_instances - 1);
-		upload_modelview (hr, mesh, i);
-		glDrawArrays (GL_TRIANGLES, mesh->first, mesh->num_tris * 3);
+		draw_instance (hr, mesh, i);
 	} else {
-		for (i = 0; i < mesh->num_instances; i++) {
-			upload_modelview (hr, mesh, i);
-			glDrawArrays (GL_TRIANGLES, mesh->first, mesh->num_tris * 3);
-		}
+		for (i = 0; i < mesh->num_instances; i++)
+			draw_instance (hr, mesh, i);
 	}
 
 	glBindVertexArray (0);
@@ -1819,7 +1860,8 @@ hikaru_renderer_end_mesh (vk_renderer_t *rend, uint32_t addr)
 /* Blend factors of the material (A81 bits 17:16), as the X360 port
  * applies them (825B4290): source alpha over the destination, the product,
  * source alpha added, the source as it is over the destination. Where the
- * source is weighted by its alpha the shader does it, before the clamp. */
+ * source is weighted by its alpha the shader does it, before the clamp.
+ * The translucent type is blended by lists_fs_source, which does the same. */
 static void
 set_material_blend (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 {
@@ -1833,6 +1875,7 @@ set_material_blend (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 
 	if (mesh->mat_index < MAX_MATERIALS)
 		mode = hr->mat_list[mesh->mat_index].blending_mode;
+	hr->meshes.blend_mode = mode;
 	hr->meshes.weigh_by_alpha = (mode == 0 || mode == 2);
 	glBlendFuncSeparate (factors[mode][0], factors[mode][1],
 	                     factors[mode][2], factors[mode][3]);
@@ -1850,7 +1893,113 @@ set_opaque_blend (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 		glBlendFuncSeparate (GL_ONE, GL_ZERO, GL_ZERO, GL_ZERO);
 }
 
-#define MAX_TRANSLUCENT_LAYERS 256
+/* Blends the translucent fragments of every pixel over the colour below:
+ * the farthest first and, at the same depth, in the order they were sent.
+ * The arithmetic is that of an 8-bit colour buffer, each result rounded
+ * to the nearest before the next (HEURISTIC: the precision of the blender
+ * of the hardware is not known); the colour is held as 0 to 255 so that
+ * every host computes the same. KEPT of them are put in order at a time. */
+static const char *lists_vs_source =
+"#version 430									\n"
+"										\n"
+"void main (void) {								\n"
+"	gl_Position = vec4 (vec2 (gl_VertexID & 1, gl_VertexID >> 1) * 4.0 - 1.0,	\n"
+"	                    0.0, 1.0);						\n"
+"}										\n";
+
+static const char *lists_fs_source =
+"#version 430									\n"
+"										\n"
+"#define KEPT 32									\n"
+"										\n"
+LISTS_GLSL
+"uniform sampler2D u_below;							\n"
+"										\n"
+"out vec4 fragColor;								\n"
+"										\n"
+"bool										\n"
+"comes_before (float depth_a, uint order_a, float depth_b, uint order_b)		\n"
+"{										\n"
+"	return depth_a > depth_b ||						\n"
+"	       (depth_a == depth_b && order_a < order_b);			\n"
+"}										\n"
+"										\n"
+"void										\n"
+"main (void)									\n"
+"{										\n"
+"	ivec2 pixel = ivec2 (gl_FragCoord.xy);					\n"
+"	uint head = imageLoad (u_heads, pixel).r;				\n"
+"	float depth[KEPT], last_depth = 2.0;					\n"
+"	uint order[KEPT], index[KEPT], last_order = 0u, i;			\n"
+"	precise vec4 color;							\n"
+"	precise float through;							\n"
+"	bool more;								\n"
+"	int num, j;								\n"
+"										\n"
+"	if (head == 0u)								\n"
+"		discard;							\n"
+"	color = floor (texelFetch (u_below, pixel, 0) * 255.0 + 0.5);		\n"
+"										\n"
+"	for (;;) {								\n"
+"		num = 0;							\n"
+"		more = false;							\n"
+"		for (i = head; i != 0u; i = u_nodes[i - 1u].next) {		\n"
+"			float d = u_nodes[i - 1u].depth;			\n"
+"			uint o = u_nodes[i - 1u].order;				\n"
+"										\n"
+"			if (!comes_before (last_depth, last_order, d, o))	\n"
+"				continue;					\n"
+"			if (num < KEPT) {					\n"
+"				j = num++;					\n"
+"			} else {						\n"
+"				more = true;					\n"
+"				if (!comes_before (d, o, depth[KEPT - 1], order[KEPT - 1]))	\n"
+"					continue;				\n"
+"				j = KEPT - 1;					\n"
+"			}							\n"
+"			for (; j > 0 && comes_before (d, o, depth[j - 1], order[j - 1]); j--) {	\n"
+"				depth[j] = depth[j - 1];			\n"
+"				order[j] = order[j - 1];			\n"
+"				index[j] = index[j - 1];			\n"
+"			}							\n"
+"			depth[j] = d;						\n"
+"			order[j] = o;						\n"
+"			index[j] = i - 1u;					\n"
+"		}								\n"
+"										\n"
+"		for (j = 0; j < num; j++) {					\n"
+"			vec4 src = u_nodes[index[j]].color;			\n"
+"			uint mode = u_nodes[index[j]].mode;			\n"
+"										\n"
+"			through = color.a * (1.0 - src.a);			\n"
+"			if (mode == 1u)						\n"
+"				color = vec4 (src.rgb * color.rgb, 0.0);	\n"
+"			else if (mode == 2u)					\n"
+"				color = vec4 (src.rgb * 255.0 + color.rgb, through);	\n"
+"			else							\n"
+"				color = vec4 (src.rgb * 255.0 + color.rgb * (1.0 - src.a), through);	\n"
+"			color = floor (clamp (color, 0.0, 255.0) + 0.5);	\n"
+"		}								\n"
+"										\n"
+"		if (!more)							\n"
+"			break;							\n"
+"		last_depth = depth[KEPT - 1];					\n"
+"		last_order = order[KEPT - 1];					\n"
+"	}									\n"
+"										\n"
+"	fragColor = color / 255.0;						\n"
+"}										\n";
+
+static void
+size_lists (hikaru_renderer_t *hr, uint32_t max)
+{
+	hr->framebuffer.lists.max = max;
+	glBindBuffer (GL_SHADER_STORAGE_BUFFER, hr->framebuffer.lists.nodes);
+	glBufferData (GL_SHADER_STORAGE_BUFFER, (GLsizeiptr) max * NODE_SIZE,
+	              NULL, GL_DYNAMIC_COPY);
+	glBindBuffer (GL_SHADER_STORAGE_BUFFER, 0);
+	VK_ASSERT_NO_GL_ERROR ();
+}
 
 /* The translucent polygons of a viewport are blended far to near at every
  * pixel, whatever the triangle or the mesh they come from. On the PHARRIER
@@ -1862,128 +2011,87 @@ set_opaque_blend (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
  * the depth drops layers that the cabinet shows. The X360 port reverses its
  * list of objects instead (825B3EB0). Neither writes the depth here.
  *
- * Each layer takes two passes over the meshes: one finds, at every pixel,
- * the farthest fragment that is nearer than the last layer blended and not
- * behind the other types; one blends the fragments at that depth, with the
- * factors of their mesh, in the order of the display list.
- *
- * Asking the GPU whether a layer holds anything waits for it. A layer only
- * needs the depth of the one before, not its blending: the layers are found
- * in a row, as many as at the last frame, then asked about, then blended. */
+ * The meshes are drawn once. A fragment that is not behind the other types
+ * goes to the list of its pixel with its colour, its depth, the blend mode
+ * of its material and its rank in the display list; then every pixel
+ * blends its list, see lists_fs_source. */
 static void
 draw_translucent_meshes (hikaru_renderer_t *hr, hikaru_mesh_t *meshes,
-                         unsigned num, unsigned vpi)
+                         unsigned num)
 {
-	unsigned total = 0, batch, i, j;
-	bool more = true;
+	static const GLuint zero[4] = { 0, 0, 0, 0 };
+	GLuint used;
+	unsigned j;
 
 	/* The depth the other types left. */
+	glActiveTexture (GL_TEXTURE0 + 6);
 	glBindTexture (GL_TEXTURE_2D, hr->framebuffer.solid_depth);
 	glCopyTexSubImage2D (GL_TEXTURE_2D, 0, 0, 0, 0, 0, 640, 480);
-	glBindTexture (GL_TEXTURE_2D, 0);
-	hr->meshes.bound_tex_index = ~0;
-	glActiveTexture (GL_TEXTURE0 + 6);
-	glBindTexture (GL_TEXTURE_2D, hr->framebuffer.solid_depth);
 	glActiveTexture (GL_TEXTURE0);
+
+	glBindImageTexture (0, hr->framebuffer.lists.heads, 0, GL_FALSE, 0,
+	                    GL_READ_WRITE, GL_R32UI);
+	glDisable (GL_DEPTH_TEST);
 	VK_ASSERT_NO_GL_ERROR ();
 
-	/* Nothing is blended yet: the last layer is at the far end. */
-	glBindFramebuffer (GL_FRAMEBUFFER, hr->framebuffer.layers[0].fb);
-	glDisable (GL_SCISSOR_TEST);
-	glDepthMask (GL_TRUE);
-	glClearDepth (1.0);
-	glClear (GL_DEPTH_BUFFER_BIT);
-
-	batch = hr->framebuffer.num_layers[vpi] + 1;
-	while (more && total < MAX_TRANSLUCENT_LAYERS) {
-		unsigned n = MIN2 (MIN2 (batch, MAX_LAYER_BATCH),
-		                   MAX_TRANSLUCENT_LAYERS - total);
-		unsigned found = 0;
-
-		/* Find the layers. */
-		glDepthFunc (GL_GREATER);
+	/* Collect the fragments, once more if their buffer was too small.
+	 * The Intel driver 21.20.16.5174 wants a buffer that has grown bound
+	 * again, and does not always reset an atomic counter buffer: the
+	 * count is in a storage buffer. */
+	hr->meshes.collect = true;
+	for (;;) {
+		glBindBufferBase (GL_SHADER_STORAGE_BUFFER, 0, hr->framebuffer.lists.nodes);
+		glBindBufferBase (GL_SHADER_STORAGE_BUFFER, 1, hr->framebuffer.lists.count);
+		glBindFramebuffer (GL_FRAMEBUFFER, hr->framebuffer.lists.heads_fb);
+		glDisable (GL_SCISSOR_TEST);
+		glClearBufferuiv (GL_COLOR, 0, zero);
+		glBufferSubData (GL_SHADER_STORAGE_BUFFER, 0, sizeof (GLuint), zero);
+		glBindFramebuffer (GL_FRAMEBUFFER,
+		                   hr->framebuffer.fb[hr->framebuffer.scene]);
+		glEnable (GL_SCISSOR_TEST);
 		glColorMask (GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-		hr->meshes.find_layer = true;
-		for (i = 1; i <= n; i++) {
-			glBindFramebuffer (GL_FRAMEBUFFER, hr->framebuffer.layers[i].fb);
-			glDisable (GL_SCISSOR_TEST);
-			glDepthMask (GL_TRUE);
-			glClearDepth (0.0);
-			glClear (GL_DEPTH_BUFFER_BIT);
-			glEnable (GL_SCISSOR_TEST);
-			glActiveTexture (GL_TEXTURE0 + 5);
-			glBindTexture (GL_TEXTURE_2D, hr->framebuffer.layers[i - 1].depth);
-			glActiveTexture (GL_TEXTURE0);
 
-			glBeginQuery (GL_ANY_SAMPLES_PASSED, hr->framebuffer.layers[i].query);
-			for (j = 0; j < num; j++)
-				draw_mesh (hr, &meshes[j]);
-			glEndQuery (GL_ANY_SAMPLES_PASSED);
+		hr->meshes.order = 0;
+		for (j = 0; j < num; j++) {
+			set_material_blend (hr, &meshes[j]);
+			draw_mesh (hr, &meshes[j]);
 		}
-		hr->meshes.find_layer = false;
+
+		glColorMask (GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+		glMemoryBarrier (GL_ALL_BARRIER_BITS);
+		glGetBufferSubData (GL_SHADER_STORAGE_BUFFER, 0, sizeof (GLuint), &used);
+		VK_ASSERT_NO_GL_ERROR ();
+		if (used <= hr->framebuffer.lists.max)
+			break;
+		VK_PRINT ("renderer: more room for %u translucent fragments", used);
+		size_lists (hr, MAX2 (used, hr->framebuffer.lists.max * 2));
+	}
+	hr->meshes.collect = false;
+
+	/* Blend them over the colour below. */
+	if (used) {
 		glActiveTexture (GL_TEXTURE0 + 5);
+		glBindTexture (GL_TEXTURE_2D, hr->framebuffer.lists.below);
+		glCopyTexSubImage2D (GL_TEXTURE_2D, 0, 0, 0, 0, 0, 640, 480);
+
+		glUseProgram (hr->framebuffer.lists.program);
+		hr->meshes.variant.full = ~0;
+		glDisable (GL_BLEND);
+		glDisable (GL_SCISSOR_TEST);
+		glBindVertexArray (hr->framebuffer.vao);
+		glDrawArrays (GL_TRIANGLES, 0, 3);
+		glBindVertexArray (0);
+		glEnable (GL_SCISSOR_TEST);
+		glEnable (GL_BLEND);
+
 		glBindTexture (GL_TEXTURE_2D, 0);
 		glActiveTexture (GL_TEXTURE0);
-		glColorMask (GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-		VK_ASSERT_NO_GL_ERROR ();
-
-		/* Those before the first empty one hold something. */
-		while (found < n) {
-			GLuint any = 0;
-
-			glGetQueryObjectuiv (hr->framebuffer.layers[found + 1].query,
-			                     GL_QUERY_RESULT, &any);
-			if (!any)
-				break;
-			found++;
-		}
-
-		/* Blend them into the 3D buffer. */
-		glBindFramebuffer (GL_FRAMEBUFFER, hr->framebuffer.blend_fb);
-		glFramebufferTexture2D (GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-		                        GL_TEXTURE_2D,
-		                        hr->framebuffer.cb[hr->framebuffer.scene], 0);
-		glDepthFunc (GL_EQUAL);
-		glDepthMask (GL_FALSE);
-		for (i = 1; i <= found; i++) {
-			glFramebufferTexture2D (GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
-			                        GL_TEXTURE_2D,
-			                        hr->framebuffer.layers[i].depth, 0);
-			for (j = 0; j < num; j++) {
-				set_material_blend (hr, &meshes[j]);
-				draw_mesh (hr, &meshes[j]);
-			}
-		}
-		VK_ASSERT_NO_GL_ERROR ();
-
-		total += found;
-		if (found < n) {
-			more = false;
-		} else {
-			/* The last one becomes the one before the next. */
-			GLuint fb = hr->framebuffer.layers[0].fb;
-			GLuint depth = hr->framebuffer.layers[0].depth;
-
-			hr->framebuffer.layers[0].fb = hr->framebuffer.layers[n].fb;
-			hr->framebuffer.layers[0].depth = hr->framebuffer.layers[n].depth;
-			hr->framebuffer.layers[n].fb = fb;
-			hr->framebuffer.layers[n].depth = depth;
-			batch = (total == n) ? 2 : batch * 2;
-		}
 	}
-	if (more)
-		VK_ERROR ("more than %u translucent layers", MAX_TRANSLUCENT_LAYERS);
-	hr->framebuffer.num_layers[vpi] = total;
 
 	glActiveTexture (GL_TEXTURE0 + 6);
 	glBindTexture (GL_TEXTURE_2D, 0);
 	glActiveTexture (GL_TEXTURE0);
-	glBindFramebuffer (GL_FRAMEBUFFER,
-	                   hr->framebuffer.fb[hr->framebuffer.scene]);
-	glEnable (GL_SCISSOR_TEST);
-	glClearDepth (1.0);
-	glDepthFunc (GL_LEQUAL);
-	glDepthMask (GL_FALSE);
+	glEnable (GL_DEPTH_TEST);
 	VK_ASSERT_NO_GL_ERROR ();
 }
 
@@ -2041,7 +2149,7 @@ draw_meshes_for_polytype (hikaru_renderer_t *hr, unsigned vpi, int polytype)
 	}
 
 	if (polytype == HIKARU_POLYTYPE_TRANSLUCENT) {
-		draw_translucent_meshes (hr, meshes, num, vpi);
+		draw_translucent_meshes (hr, meshes, num);
 		return;
 	}
 
@@ -2410,34 +2518,48 @@ build_fb_state (hikaru_renderer_t *hr)
 	}
 	VK_ASSERT_NO_GL_ERROR ();
 
-	/* The translucent layers: their depth buffers, and a copy of the
+	/* The translucent fragments, the colour below them and a copy of the
 	 * depth of the other types. */
-	glGenFramebuffers (1, &hr->framebuffer.blend_fb);
+	hr->framebuffer.lists.program =
+		vk_renderer_compile_program (lists_vs_source, lists_fs_source);
+	glUseProgram (hr->framebuffer.lists.program);
+	glUniform1i (get_uniform_loc (hr->framebuffer.lists.program, "u_below"), 5);
+	glUseProgram (0);
+	VK_ASSERT_NO_GL_ERROR ();
+
+	glGenTextures (1, &hr->framebuffer.lists.heads);
+	glBindTexture (GL_TEXTURE_2D, hr->framebuffer.lists.heads);
+	glTexStorage2D (GL_TEXTURE_2D, 1, GL_R32UI, 640, 480);
+	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glGenFramebuffers (1, &hr->framebuffer.lists.heads_fb);
+	glBindFramebuffer (GL_FRAMEBUFFER, hr->framebuffer.lists.heads_fb);
+	glFramebufferTexture2D (GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+	                        GL_TEXTURE_2D, hr->framebuffer.lists.heads, 0);
+	if (glCheckFramebufferStatus (GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+		return -1;
+	glBindFramebuffer (GL_FRAMEBUFFER, 0);
+
+	glGenTextures (1, &hr->framebuffer.lists.below);
+	glBindTexture (GL_TEXTURE_2D, hr->framebuffer.lists.below);
+	glTexStorage2D (GL_TEXTURE_2D, 1, GL_RGBA8, 640, 480);
+	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+
 	glGenTextures (1, &hr->framebuffer.solid_depth);
 	glBindTexture (GL_TEXTURE_2D, hr->framebuffer.solid_depth);
 	glTexStorage2D (GL_TEXTURE_2D, 1, GL_DEPTH_COMPONENT24, 640, 480);
 	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	for (i = 0; i <= MAX_LAYER_BATCH; i++) {
-		glGenTextures (1, &hr->framebuffer.layers[i].depth);
-		glGenFramebuffers (1, &hr->framebuffer.layers[i].fb);
-		glGenQueries (1, &hr->framebuffer.layers[i].query);
-
-		glBindTexture (GL_TEXTURE_2D, hr->framebuffer.layers[i].depth);
-		glTexStorage2D (GL_TEXTURE_2D, 1, GL_DEPTH_COMPONENT32F, 640, 480);
-		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-
-		glBindFramebuffer (GL_FRAMEBUFFER, hr->framebuffer.layers[i].fb);
-		glFramebufferTexture2D (GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
-		                        GL_TEXTURE_2D, hr->framebuffer.layers[i].depth, 0);
-		glDrawBuffer (GL_NONE);
-		glReadBuffer (GL_NONE);
-		if (glCheckFramebufferStatus (GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-			return -1;
-	}
 	glBindTexture (GL_TEXTURE_2D, 0);
-	glBindFramebuffer (GL_FRAMEBUFFER, 0);
+
+	glGenBuffers (1, &hr->framebuffer.lists.count);
+	glBindBuffer (GL_SHADER_STORAGE_BUFFER, hr->framebuffer.lists.count);
+	glBufferData (GL_SHADER_STORAGE_BUFFER, sizeof (GLuint), NULL,
+	              GL_DYNAMIC_COPY);
+	glBindBuffer (GL_SHADER_STORAGE_BUFFER, 0);
+	glGenBuffers (1, &hr->framebuffer.lists.nodes);
+	size_lists (hr, 4 * 640 * 480);
 	VK_ASSERT_NO_GL_ERROR ();
 
 	/* Create the VAO/VBO. */
@@ -2474,22 +2596,20 @@ build_fb_state (hikaru_renderer_t *hr)
 static void
 destroy_fb_state (hikaru_renderer_t *hr)
 {
-	unsigned i;
-
 	glBindFramebuffer (GL_FRAMEBUFFER, 0);
 	glDeleteFramebuffers (NUM_FRAMEBUFFERS, hr->framebuffer.fb);
 	glDeleteTextures (NUM_FRAMEBUFFERS, hr->framebuffer.cb);
 	glDeleteTextures (3, hr->framebuffer.pipe);
 	glDeleteRenderbuffers (NUM_FRAMEBUFFERS, hr->framebuffer.db);
-	for (i = 0; i <= MAX_LAYER_BATCH; i++) {
-		glDeleteFramebuffers (1, &hr->framebuffer.layers[i].fb);
-		glDeleteTextures (1, &hr->framebuffer.layers[i].depth);
-		glDeleteQueries (1, &hr->framebuffer.layers[i].query);
-	}
-	glDeleteFramebuffers (1, &hr->framebuffer.blend_fb);
+	glDeleteFramebuffers (1, &hr->framebuffer.lists.heads_fb);
+	glDeleteTextures (1, &hr->framebuffer.lists.heads);
+	glDeleteTextures (1, &hr->framebuffer.lists.below);
+	glDeleteBuffers (1, &hr->framebuffer.lists.nodes);
+	glDeleteBuffers (1, &hr->framebuffer.lists.count);
 	glDeleteTextures (1, &hr->framebuffer.solid_depth);
 	VK_ASSERT_NO_GL_ERROR ();
 
+	vk_renderer_destroy_program (hr->framebuffer.lists.program);
 	vk_renderer_destroy_program (hr->framebuffer.program);
 }
 

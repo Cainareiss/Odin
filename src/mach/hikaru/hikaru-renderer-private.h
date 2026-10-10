@@ -41,9 +41,6 @@ enum {
 	HR_NUM_DEBUG_VARS
 };
 
-/* Translucent layers found between two answers of the GPU */
-#define MAX_LAYER_BATCH 32
-
 typedef union {
 	struct {
 		uint64_t has_texture		: 1;
@@ -71,6 +68,8 @@ typedef union {
 
 		uint64_t has_fog		: 1;
 		uint64_t has_cue		: 1;
+
+		uint64_t collect		: 1;	/* see draw_translucent_meshes */
 	};
 	uint64_t full;
 } hikaru_glsl_variant_t;
@@ -98,9 +97,9 @@ typedef struct {
 	GLuint		u_fog_color;
 	GLuint		u_alpha_ref;
 	GLuint		u_weigh_by_alpha;
-	GLuint		u_find_layer;
-	GLuint		u_last_layer;
 	GLuint		u_solid_depth;
+	GLuint		u_order;
+	GLuint		u_blend_mode;
 } hikaru_mesh_locs_t;
 
 /* What a mesh program was given last, so as not to give it again: indices
@@ -113,7 +112,6 @@ typedef struct {
 	float		alpha_ref;
 	float		depth_scale;
 	int		weigh_by_alpha;
-	int		find_layer;
 } hikaru_mesh_held_t;
 
 typedef struct {
@@ -187,7 +185,10 @@ typedef struct {
 		float			alpha_ref;
 		bool			depth_bias;
 		bool			weigh_by_alpha;
-		bool			find_layer;	/* pass that finds a translucent layer */
+		/* The pass that collects the translucent fragments */
+		bool			collect;
+		unsigned		blend_mode;
+		uint32_t		order;	/* triangles sent so far */
 
 		hikaru_mesh_locs_t	locs;
 
@@ -212,13 +213,15 @@ typedef struct {
 		uint32_t shown;		/* the picture on screen */
 		int32_t next;		/* the one it takes at the next frame, or -1 */
 		uint32_t launched;	/* a list was launched during this frame */
-		/* Translucent layers, see draw_translucent_meshes */
+		/* Translucent fragments, see draw_translucent_meshes */
 		struct {
-			GLuint fb, depth, query;
-		} layers[MAX_LAYER_BATCH + 1];	/* [0] is the last one blended */
-		GLuint blend_fb;
+			GLuint program;		/* blends them */
+			GLuint heads, heads_fb;	/* the last one of each pixel */
+			GLuint nodes, count;
+			uint32_t max;		/* nodes */
+			GLuint below;		/* the colour under them */
+		} lists;
 		GLuint solid_depth;	/* depth left by the other types */
-		unsigned num_layers[8];	/* per viewport, at the last frame */
 		unsigned scene;		/* the 3D buffer being drawn */
 		GLuint vao, vbo;
 		struct {
