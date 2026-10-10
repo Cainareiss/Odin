@@ -1306,6 +1306,8 @@ static int
 sh4_run (vk_cpu_t *cpu, int cycles)
 {
 	sh4_t *ctx = (sh4_t *) cpu;
+	/* Passages at the mark to let go before the next look, see below */
+	unsigned pass = 0, busy = 0;
 
 	cpu->remaining = cycles;
 	ctx->wait.period = 16;
@@ -1314,16 +1316,26 @@ sh4_run (vk_cpu_t *cpu, int cycles)
 		if (PC == ctx->wait.regs.pc) {
 			int turn = ctx->wait.remaining - cpu->remaining;
 
-			if (turn > 0) {
+			if (turn > 0 && pass > 0) {
+				pass--;
+			} else if (turn > 0) {
 				/* Back at the mark with the same registers, no
 				 * write and only plain memory read: nothing
 				 * else runs before the end of the slice, so
 				 * every further turn is the same. The whole
-				 * turns are counted without being run. */
+				 * turns are counted without being run.
+				 *
+				 * A loop that works is looked at less and
+				 * less often. */
 				if (!ctx->wait.touched &&
 				    !memcmp (&ctx->regs, &ctx->wait.regs,
-				             sizeof (ctx->regs)))
+				             sizeof (ctx->regs))) {
 					cpu->remaining = (cpu->remaining - 1) % turn + 1;
+				} else {
+					if (busy < 6)
+						busy++;
+					pass = (1u << busy) - 1;
+				}
 				wait_mark (ctx);
 			}
 		} else if (--ctx->wait.countdown == 0) {
