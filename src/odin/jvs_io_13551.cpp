@@ -137,4 +137,18 @@ bool JvsIo13551::swoutput(uint8_t id, uint8_t value)
 	return true;
 }
 
+void JvsIo13551::save(JvsIo13551State &out) const
+{
+	JvsDevice::save(out.node);
+	out.coin_counter = m_coin_counter;
+	out.outputs = m_outputs;
+}
+
+void JvsIo13551::load(const JvsIo13551State &in)
+{
+	JvsDevice::load(in.node);
+	m_coin_counter = in.coin_counter;
+	m_outputs = in.outputs;
+}
+
 } /* namespace odin */

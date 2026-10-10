@@ -781,4 +781,52 @@ void Crypt315_5881::line_fill()
 	}
 }
 
+void Crypt315_5881::save(Crypt315_5881State &out) const
+{
+	out.buffer = m_buffer;
+	out.line_buffer = m_line_buffer;
+	out.line_buffer_prev = m_line_buffer_prev;
+	out.buffer2 = m_buffer2;
+	out.prot_cur_address = m_prot_cur_address;
+	out.dec_header = m_dec_header;
+	out.buffer_pos = m_buffer_pos;
+	out.line_buffer_pos = m_line_buffer_pos;
+	out.line_buffer_size = m_line_buffer_size;
+	out.buffer_bit = m_buffer_bit;
+	out.buffer_bit2 = m_buffer_bit2;
+	out.block_size = m_block_size;
+	out.block_pos = m_block_pos;
+	out.block_numlines = m_block_numlines;
+	out.subkey = m_subkey;
+	out.dec_hist = m_dec_hist;
+	out.buffer2a = m_buffer2a;
+	out.first_read = m_first_read;
+	out.enc_ready = m_enc_ready;
+	out.done_compression = m_done_compression;
+}
+
+void Crypt315_5881::load(const Crypt315_5881State &in)
+{
+	m_buffer = in.buffer;
+	m_line_buffer = in.line_buffer;
+	m_line_buffer_prev = in.line_buffer_prev;
+	m_buffer2 = in.buffer2;
+	m_prot_cur_address = in.prot_cur_address;
+	m_dec_header = in.dec_header;
+	m_buffer_pos = in.buffer_pos;
+	m_line_buffer_pos = in.line_buffer_pos;
+	m_line_buffer_size = in.line_buffer_size;
+	m_buffer_bit = in.buffer_bit;
+	m_buffer_bit2 = in.buffer_bit2;
+	m_block_size = in.block_size;
+	m_block_pos = in.block_pos;
+	m_block_numlines = in.block_numlines;
+	m_subkey = in.subkey;
+	m_dec_hist = in.dec_hist;
+	m_buffer2a = in.buffer2a;
+	m_first_read = in.first_read != 0;
+	m_enc_ready = in.enc_ready != 0;
+	m_done_compression = in.done_compression != 0;
+}
+
 } /* namespace odin */

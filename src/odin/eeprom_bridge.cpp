@@ -7,6 +7,7 @@
 
 #include "odin/eeprom_93c46.hpp"
 
+#include <cstring>
 #include <span>
 
 struct odin_eeprom93c46 {
@@ -57,6 +58,29 @@ void
 odin_eeprom93c46_tick(odin_eeprom93c46_t *dev, uint32_t cycles)
 {
 	dev->chip.tick(cycles);
+}
+
+size_t
+odin_eeprom93c46_state_size(void)
+{
+	return sizeof(odin::Eeprom93c46State);
+}
+
+void
+odin_eeprom93c46_save_state(const odin_eeprom93c46_t *dev, void *out)
+{
+	odin::Eeprom93c46State state;
+	std::memset(&state, 0, sizeof(state));
+	dev->chip.save(state);
+	std::memcpy(out, &state, sizeof(state));
+}
+
+void
+odin_eeprom93c46_load_state(odin_eeprom93c46_t *dev, const void *in)
+{
+	odin::Eeprom93c46State state;
+	std::memcpy(&state, in, sizeof(state));
+	dev->chip.load(state);
 }
 
 } /* extern "C" */

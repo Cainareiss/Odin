@@ -50,6 +50,11 @@ void odin_crypt5881_write(odin_crypt5881_t *dev, uint32_t offset, unsigned size,
 
 void odin_crypt5881_set_log(odin_crypt5881_t *dev, FILE *out);
 
+/* Save state: a block of odin_crypt5881_state_size() bytes. */
+size_t odin_crypt5881_state_size(void);
+void odin_crypt5881_save_state(const odin_crypt5881_t *dev, void *out);
+void odin_crypt5881_load_state(odin_crypt5881_t *dev, const void *in);
+
 #ifdef __cplusplus
 }
 #endif

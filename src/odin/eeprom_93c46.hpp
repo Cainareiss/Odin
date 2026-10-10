@@ -32,6 +32,21 @@ namespace odin {
  * Instructions, the dummy zero bit before read data and the READY/BUSY
  * output after a write come from the 93C46 data sheets (Microchip
  * 93C46B, ST M93C46). */
+/* Everything the chip keeps between two pin changes. Plain data. */
+struct Eeprom93c46State {
+	std::array<uint8_t, 128> data;
+	uint32_t busy_cycles;
+	uint32_t out_shift;
+	uint16_t shift;
+	uint16_t address;
+	uint8_t state;
+	uint8_t cs, sk, di, org;
+	uint8_t write_enabled;
+	uint8_t bits;
+	uint8_t opcode;
+	uint8_t dout;
+};
+
 class Eeprom93c46 {
 public:
 	static constexpr uint32_t SIZE = 128;
@@ -50,6 +65,9 @@ public:
 
 	std::span<uint8_t> data() { return m_data; }
 	void load(std::span<const uint8_t> in);
+
+	void save(Eeprom93c46State &out) const;
+	void load(const Eeprom93c46State &in);
 	bool write_enabled() const { return m_write_enabled; }
 	bool busy() const { return m_busy_cycles != 0; }
 

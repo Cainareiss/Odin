@@ -44,6 +44,11 @@ void odin_x76f100_set_pins(odin_x76f100_t *dev, int cs, int rst, int scl, int sd
 /* SDA as the chip drives it, 1 when released. */
 int odin_x76f100_sda(odin_x76f100_t *dev);
 
+/* Save state: a block of odin_x76f100_state_size() bytes. */
+size_t odin_x76f100_state_size(void);
+void odin_x76f100_save_state(const odin_x76f100_t *dev, void *out);
+void odin_x76f100_load_state(odin_x76f100_t *dev, const void *in);
+
 #ifdef __cplusplus
 }
 #endif

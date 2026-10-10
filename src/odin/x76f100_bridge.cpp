@@ -21,6 +21,7 @@
 #include "odin/x76f100_bridge.hpp"
 #include "odin/x76f100.hpp"
 
+#include <cstring>
 #include <memory>
 #include <span>
 
@@ -67,6 +68,29 @@ int
 odin_x76f100_sda(odin_x76f100_t *dev)
 {
 	return dev->chip.sda_read() ? 1 : 0;
+}
+
+size_t
+odin_x76f100_state_size(void)
+{
+	return sizeof(odin::X76f100State);
+}
+
+void
+odin_x76f100_save_state(const odin_x76f100_t *dev, void *out)
+{
+	odin::X76f100State state;
+	std::memset(&state, 0, sizeof(state));
+	dev->chip.save(state);
+	std::memcpy(out, &state, sizeof(state));
+}
+
+void
+odin_x76f100_load_state(odin_x76f100_t *dev, const void *in)
+{
+	odin::X76f100State state;
+	std::memcpy(&state, in, sizeof(state));
+	dev->chip.load(state);
 }
 
 } /* extern "C" */

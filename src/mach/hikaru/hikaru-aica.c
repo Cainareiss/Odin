@@ -121,6 +121,39 @@ hikaru_aica_exec (vk_device_t *device, int cycles)
 	return cycles;
 }
 
+static int
+hikaru_aica_save_state (vk_device_t *dev, vk_state_t *state)
+{
+	hikaru_aica_t *aica = (hikaru_aica_t *) dev;
+	size_t size = odin_aica_state_size ();
+	void *block = malloc (size);
+	int ret;
+
+	if (!block)
+		return -1;
+	odin_aica_save_state (aica->chip, block);
+	ret = vk_state_put (state, block, size);
+	free (block);
+	return ret;
+}
+
+static int
+hikaru_aica_load_state (vk_device_t *dev, vk_state_t *state)
+{
+	hikaru_aica_t *aica = (hikaru_aica_t *) dev;
+	size_t size = odin_aica_state_size ();
+	void *block = malloc (size);
+	int ret;
+
+	if (!block)
+		return -1;
+	ret = vk_state_get (state, block, size);
+	if (!ret)
+		odin_aica_load_state (aica->chip, block);
+	free (block);
+	return ret;
+}
+
 static void
 hikaru_aica_reset (vk_device_t *dev, vk_reset_type_t type)
 {
@@ -155,8 +188,8 @@ hikaru_aica_new (vk_machine_t *mach, vk_buffer_t *ram, bool master, unsigned clo
 	dev->exec	= hikaru_aica_exec;
 	dev->get	= hikaru_aica_get;
 	dev->put	= hikaru_aica_put;
-	dev->save_state	= NULL;
-	dev->load_state	= NULL;
+	dev->save_state	= hikaru_aica_save_state;
+	dev->load_state	= hikaru_aica_load_state;
 
 	aica->ram	= ram;
 	aica->master	= master;

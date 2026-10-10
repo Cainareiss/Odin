@@ -567,10 +567,35 @@ hikaru_get_debug_string (vk_machine_t *mach)
 }
 
 #define SAVE(thing_) \
-		vk_state_put (state, (void *) &(thing_), sizeof (thing_))
+		ret |= vk_state_put (state, (void *) &(thing_), sizeof (thing_))
 
 #define LOAD(thing_) \
-		vk_state_get (state, (void *) &(thing_), sizeof (thing_))
+		ret |= vk_state_get (state, (void *) &(thing_), sizeof (thing_))
+
+/* The Odin chips save and load a plain block */
+
+#define SAVE_CHIP(name_, dev_) \
+	do { \
+		size_t size_ = name_##_state_size (); \
+		void *block_ = malloc (size_); \
+		if (block_) { \
+			name_##_save_state (dev_, block_); \
+			ret |= vk_state_put (state, block_, size_); \
+			free (block_); \
+		} else \
+			ret = -1; \
+	} while (0)
+
+#define LOAD_CHIP(name_, dev_) \
+	do { \
+		size_t size_ = name_##_state_size (); \
+		void *block_ = malloc (size_); \
+		if (block_ && !vk_state_get (state, block_, size_)) \
+			name_##_load_state (dev_, block_); \
+		else \
+			ret = -1; \
+		free (block_); \
+	} while (0)
 
 static int
 hikaru_load_state (vk_machine_t *mach, vk_state_t *state)
@@ -587,6 +612,13 @@ hikaru_load_state (vk_machine_t *mach, vk_state_t *state)
 	LOAD (hikaru->unk1A800008_s);
 	LOAD (hikaru->unk1B000100_s);
 	LOAD (hikaru->rombd_config);
+
+	LOAD_CHIP (odin_eeprom93c46, hikaru->eeprom_main);
+	LOAD_CHIP (odin_x76f100, hikaru->eeprom_rombd);
+	if (hikaru->crypt)
+		LOAD_CHIP (odin_crypt5881, hikaru->crypt);
+
+	ret |= hikaru_renderer_load_state (mach->renderer, state);
 
 	return ret;
 }
@@ -606,6 +638,13 @@ hikaru_save_state (vk_machine_t *mach, vk_state_t *state)
 	SAVE (hikaru->unk1A800008_s);
 	SAVE (hikaru->unk1B000100_s);
 	SAVE (hikaru->rombd_config);
+
+	SAVE_CHIP (odin_eeprom93c46, hikaru->eeprom_main);
+	SAVE_CHIP (odin_x76f100, hikaru->eeprom_rombd);
+	if (hikaru->crypt)
+		SAVE_CHIP (odin_crypt5881, hikaru->crypt);
+
+	ret |= hikaru_renderer_save_state (mach->renderer, state);
 
 	return ret;
 }

@@ -148,6 +148,16 @@ not written back to disk yet. The COUNTRY SETTING page of the BOOTROM
 menu is the second routine of its EXIT line: how to reach it is not
 found.
 
+Save states: -s <frame>[,...] writes <game>-<frame>.vkstate once that
+frame is on screen and -l <file> resumes from it; F4 and F1 do the same
+with <game>.vkstate. A state holds the RAMs, every chip and the two 3D
+buffers that the blender feeds back: a resumed run gives the pictures and
+the memory of a straight one (checked on the six games, three states
+each). It is a raw dump of about 110 MB, tied to the layouts of the build
+that wrote it: every item carries its size and another build refuses the
+state when one differs. The MIE 93C46 comes back from the state, not from
+ODIN_MIE_EEPROM.
+
 Game patches (hikaru.c, hikaru_install_game_patches) are all off, kept
 as comments: airtrix 0x0C010F9A (660-frame I/O board wait shortened),
 braveff 0x0C0407D0/0x0C0D522A/0x0C05B53E (forced results, purpose

@@ -1481,10 +1481,10 @@ sh4_reset (vk_device_t *dev, vk_reset_type_t type)
 }
 
 #define SAVE(thing_) \
-		vk_state_put (state, (void *) &(thing_), sizeof (thing_))
+		ret |= vk_state_put (state, (void *) &(thing_), sizeof (thing_))
 
 #define LOAD(thing_) \
-		vk_state_get (state, (void *) &(thing_), sizeof (thing_))
+		ret |= vk_state_get (state, (void *) &(thing_), sizeof (thing_))
 
 static int
 sh4_load_state (vk_device_t *dev, vk_state_t *state)
@@ -1492,11 +1492,14 @@ sh4_load_state (vk_device_t *dev, vk_state_t *state)
 	sh4_t *ctx = (sh4_t *) dev;
 	int ret = 0;
 
+	LOAD (ctx->base.state);
 	LOAD (ctx->in_slot);
 	LOAD (ctx->regs);
+	LOAD (ctx->wait);
 	LOAD (ctx->intc);
 	LOAD (ctx->dmac);
 	LOAD (ctx->tmu);
+	LOAD (ctx->pm);
 	LOAD (ctx->config);
 
 	return ret;
@@ -1508,11 +1511,14 @@ sh4_save_state (vk_device_t *dev, vk_state_t *state)
 	sh4_t *ctx = (sh4_t *) dev;
 	int ret = 0;
 
+	SAVE (ctx->base.state);
 	SAVE (ctx->in_slot);
 	SAVE (ctx->regs);
+	SAVE (ctx->wait);
 	SAVE (ctx->intc);
 	SAVE (ctx->dmac);
 	SAVE (ctx->tmu);
+	SAVE (ctx->pm);
 	SAVE (ctx->config);
 
 	return ret;

@@ -2615,10 +2615,11 @@ hikaru_renderer_begin_frame (vk_renderer_t *renderer)
 
 	/* Log the render state of one frame only (HR_LOG_FRAME=N). */
 	{
-		static int probe_want = -1, probe_frame = 0;
+		static int probe_want = -1;
+		/* The frame being built follows the one shown */
+		const int probe_frame = (int) hr->base.frame + 1;
 		if (probe_want < 0)
 			probe_want = vk_util_get_int_option ("HR_LOG_FRAME", 0);
-		probe_frame++;
 		if (probe_want)
 			hr->debug.flags[HR_DEBUG_LOG] = (probe_frame == probe_want);
 		LOG ("frame %d clear=%02X%02X%02X%02X 181=%08X 781=%08X",
@@ -2661,6 +2662,66 @@ static void
 hikaru_renderer_reset (vk_renderer_t *renderer)
 {
 	hikaru_renderer_invalidate_texcache (renderer, NULL);
+}
+
+/* What the renderer keeps from one frame to the next: the two 3D color
+ * buffers, which the blender feeds back. The textures are decoded again
+ * from the texture RAM. */
+
+int
+hikaru_renderer_save_state (vk_renderer_t *renderer, vk_state_t *state)
+{
+	hikaru_renderer_t *hr = (hikaru_renderer_t *) renderer;
+	const uint32_t size = 640 * 480 * 4;
+	uint8_t *pixels = (uint8_t *) malloc (size);
+	int ret = 0;
+	unsigned i;
+
+	if (!pixels)
+		return -1;
+
+	glPixelStorei (GL_PACK_ALIGNMENT, 1);
+	for (i = 0; i < NUM_FRAMEBUFFERS; i++) {
+		glBindFramebuffer (GL_READ_FRAMEBUFFER, hr->framebuffer.fb[i]);
+		glReadBuffer (GL_COLOR_ATTACHMENT0);
+		glReadPixels (0, 0, 640, 480, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+		ret |= vk_state_put (state, pixels, size);
+	}
+	glBindFramebuffer (GL_READ_FRAMEBUFFER, 0);
+	VK_ASSERT_NO_GL_ERROR ();
+
+	free (pixels);
+	return ret;
+}
+
+int
+hikaru_renderer_load_state (vk_renderer_t *renderer, vk_state_t *state)
+{
+	hikaru_renderer_t *hr = (hikaru_renderer_t *) renderer;
+	const uint32_t size = 640 * 480 * 4;
+	uint8_t *pixels = (uint8_t *) malloc (size);
+	int ret = 0;
+	unsigned i;
+
+	if (!pixels)
+		return -1;
+
+	glPixelStorei (GL_UNPACK_ALIGNMENT, 1);
+	for (i = 0; i < NUM_FRAMEBUFFERS; i++) {
+		ret |= vk_state_get (state, pixels, size);
+		if (ret)
+			break;
+		glBindTexture (GL_TEXTURE_2D, hr->framebuffer.cb[i]);
+		glTexSubImage2D (GL_TEXTURE_2D, 0, 0, 0, 640, 480,
+		                 GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+	}
+	glBindTexture (GL_TEXTURE_2D, 0);
+	VK_ASSERT_NO_GL_ERROR ();
+
+	hikaru_renderer_invalidate_texcache (renderer, NULL);
+
+	free (pixels);
+	return ret;
 }
 
 static void

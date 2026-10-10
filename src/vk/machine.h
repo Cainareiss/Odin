@@ -40,6 +40,9 @@ struct vk_machine_t {
 	vk_game_t	*game;
 	vk_renderer_t	*renderer;
 
+	/* Frames run since power on */
+	unsigned	 frame;
+
 	vk_vector_t	*buffers;
 	vk_vector_t	*devices;
 	vk_vector_t	*cpus;

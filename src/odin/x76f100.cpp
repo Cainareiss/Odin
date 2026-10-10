@@ -366,4 +366,40 @@ std::optional<uint32_t> X76f100::data_offset() const
 	return offset;
 }
 
+void X76f100::save(X76f100State &out) const
+{
+	out.image = m_image;
+	out.write_buffer = m_write_buffer;
+	out.byte = m_byte;
+	out.state = static_cast<uint8_t>(m_state);
+	out.cs = m_cs;
+	out.rst = m_rst;
+	out.scl = m_scl;
+	out.sdaw = m_sdaw;
+	out.sdar = m_sdar;
+	out.shift = m_shift;
+	out.bit = m_bit;
+	out.command = m_command;
+	out.password_retry_counter = m_password_retry_counter;
+	out.is_password_accepted = m_is_password_accepted;
+}
+
+void X76f100::load(const X76f100State &in)
+{
+	m_image = in.image;
+	m_write_buffer = in.write_buffer;
+	m_byte = in.byte;
+	m_state = static_cast<State>(in.state);
+	m_cs = in.cs != 0;
+	m_rst = in.rst != 0;
+	m_scl = in.scl != 0;
+	m_sdaw = in.sdaw != 0;
+	m_sdar = in.sdar != 0;
+	m_shift = in.shift;
+	m_bit = in.bit;
+	m_command = in.command;
+	m_password_retry_counter = in.password_retry_counter;
+	m_is_password_accepted = in.is_password_accepted != 0;
+}
+
 } /* namespace odin */

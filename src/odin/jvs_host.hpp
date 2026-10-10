@@ -21,6 +21,20 @@ class JvsDevice;
  * UART are an encoded frame (E0 sync, D0 escapes, checksum); commit
  * decodes it, hands it to the device chain and keeps the encoded reply
  * for the UART to drain. */
+/* The frame being sent and the last reply. Plain data. */
+struct JvsHostState {
+	std::array<uint8_t, 512> send;
+	std::array<uint8_t, 512> recv;
+	uint32_t send_size;
+	uint32_t recv_size;
+};
+
+/* What the generic part of a node keeps. Plain data. */
+struct JvsDeviceState {
+	uint32_t reset_counter;
+	uint8_t address;
+};
+
 class JvsHost {
 public:
 	static constexpr uint32_t BUFFER_SIZE = 512;
@@ -38,6 +52,9 @@ public:
 	bool presence_line() const { return m_first != nullptr; }
 	/* Sense line: every device has taken an address. */
 	bool address_set_line() const;
+
+	void save(JvsHostState &out) const;
+	void load(const JvsHostState &in);
 
 private:
 	void commit_raw(std::span<const uint8_t> frame, bool sum_ok);
@@ -65,6 +82,9 @@ public:
 	uint32_t message(uint8_t dest, std::span<const uint8_t> in, std::span<uint8_t> out);
 	bool address_set_line() const;
 	uint8_t address() const { return m_address; }
+
+	void save(JvsDeviceState &out) const;
+	void load(const JvsDeviceState &in);
 
 protected:
 	JvsDevice();

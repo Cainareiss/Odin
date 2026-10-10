@@ -388,6 +388,47 @@ hikaru_mie_exec (vk_device_t *dev, int cycles)
 	return cycles;
 }
 
+static int
+hikaru_mie_save_state (vk_device_t *dev, vk_state_t *state)
+{
+	hikaru_mie_t *mie = (hikaru_mie_t *) dev;
+	int ret;
+
+	ret = vk_state_put (state, &mie->busrq, sizeof (mie->busrq));
+	if (mie->chip) {
+		size_t size = odin_mie_state_size ();
+		void *block = malloc (size);
+
+		if (!block)
+			return -1;
+		odin_mie_save_state (mie->chip, block);
+		ret |= vk_state_put (state, block, size);
+		free (block);
+	}
+	return ret;
+}
+
+static int
+hikaru_mie_load_state (vk_device_t *dev, vk_state_t *state)
+{
+	hikaru_mie_t *mie = (hikaru_mie_t *) dev;
+	int ret;
+
+	ret = vk_state_get (state, &mie->busrq, sizeof (mie->busrq));
+	if (mie->chip) {
+		size_t size = odin_mie_state_size ();
+		void *block = malloc (size);
+
+		if (!block)
+			return -1;
+		ret |= vk_state_get (state, block, size);
+		if (!ret)
+			ret = odin_mie_load_state (mie->chip, block);
+		free (block);
+	}
+	return ret;
+}
+
 static void
 hikaru_mie_reset (vk_device_t *dev, vk_reset_type_t type)
 {
@@ -519,8 +560,8 @@ hikaru_mie_new (vk_machine_t *mach, unsigned clock_hz)
 	dev->exec	= NULL;
 	dev->get	= hikaru_mie_get;
 	dev->put	= hikaru_mie_put;
-	dev->save_state	= NULL;
-	dev->load_state	= NULL;
+	dev->save_state	= hikaru_mie_save_state;
+	dev->load_state	= hikaru_mie_load_state;
 
 	mie->regs = vk_buffer_le32_new (0x20, 0);
 	if (!mie->regs)

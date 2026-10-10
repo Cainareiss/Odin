@@ -37,7 +37,9 @@ static struct {
 	char rom_path[256];
 	char rom_name[256];
 	int num_frames;
-	int start_state;
+	char state_path[256];
+	unsigned save_frames[16];
+	unsigned num_save_frames;
 } options;
 
 static vk_game_list_t *game_list;
@@ -109,27 +111,48 @@ process_events (void)
 	return quit;
 }
 
+/* -s: <game>-<frame>.vkstate, written once the frame is on screen */
+static void
+save_state_at_frame (vk_machine_t *mach)
+{
+	char path[64];
+	unsigned i;
+
+	for (i = 0; i < options.num_save_frames; i++) {
+		if (options.save_frames[i] != mach->frame)
+			continue;
+		snprintf (path, sizeof (path), "%s-%06u.vkstate",
+		          mach->game->name, mach->frame);
+		if (vk_machine_save_state (mach, path))
+			VK_ERROR ("failed to save state '%s'", path);
+		else
+			VK_PRINT ("saved state '%s'", path);
+	}
+}
+
 static void
 main_loop (vk_machine_t *mach, int num_frames)
 {
-	int frame = 0;
 	while (!process_events ()) {
-		if (num_frames > 0 && frame++ >= num_frames)
+		if (num_frames > 0 && mach->frame >= (unsigned) num_frames)
 			return;
 		if (!paused) {
 			vk_renderer_begin_frame (mach->renderer);
 			vk_machine_run_frame (mach);
+			mach->renderer->frame = mach->frame;
 			vk_renderer_end_frame (mach->renderer);
+			save_state_at_frame (mach);
 		}
 	}
 }
 
-static const char global_opts[] = "R:r:n:l:vh?";
+static const char global_opts[] = "R:r:n:l:s:vh?";
 static const char global_help[] = "Usage: %s [options]\n"
 "	-R <path>	Path to the ROM directory\n"
 "	-r <string>	Name of the game to run\n"
-"	-n <num>	Only run for num frames\n"
-"	-l <num>	Load state num at startup\n"
+"	-n <num>	Stop after the frame num\n"
+"	-l <path>	Load a state at startup\n"
+"	-s <num>[,...]	Save <game>-<num>.vkstate after these frames\n"
 "	-v		Set verbosity (affects debug messages)\n"
 "	-h              Show this help\n";
 
@@ -145,7 +168,6 @@ parse_global_opts (int argc, char **argv)
 	int opt;
 
 	memset (&options, 0, sizeof (options));
-	options.start_state = -1;
 
 	if (argc < 2) {
 		show_help (argc, argv);
@@ -164,8 +186,18 @@ parse_global_opts (int argc, char **argv)
 			options.num_frames = atoi (optarg);
 			break;
 		case 'l':
-			options.start_state = atoi (optarg);
+			strncpy (options.state_path, optarg, 255);
 			break;
+		case 's': {
+			const char *s = optarg;
+			while (s && *s && options.num_save_frames < NUMELEM (options.save_frames)) {
+				options.save_frames[options.num_save_frames++] = (unsigned) atoi (s);
+				s = strchr (s, ',');
+				if (s)
+					s++;
+			}
+			break;
+		}
 		case 'v':
 			vk_verbosity = 1;
 			break;
@@ -275,8 +307,14 @@ main (const int argc, char **argv)
 
 	vk_machine_reset (mach, VK_RESET_TYPE_HARD);
 
-	if (options.start_state >= 0)
-		load_or_save_state (mach, true);
+	if (options.state_path[0]) {
+		if (vk_machine_load_state (mach, options.state_path)) {
+			VK_ERROR ("failed to load state '%s'", options.state_path);
+			return 1;
+		}
+		mach->renderer->frame = mach->frame;
+		VK_PRINT ("loaded state '%s', frame %u", options.state_path, mach->frame);
+	}
 
 	printf ("Running");
 	main_loop (mach, options.num_frames);

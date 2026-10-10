@@ -38,6 +38,30 @@ namespace odin {
  * compressed substream is a run-length / previous-line code read bit
  * by bit out of the decrypted words, A+1 bytes per line, B+1 lines.
  * The first read after an address write returns a dummy 0. */
+/* Everything the chip keeps between two accesses. Plain data. */
+struct Crypt315_5881State {
+	std::array<uint8_t, 2> buffer;
+	std::array<uint8_t, 512> line_buffer;
+	std::array<uint8_t, 512> line_buffer_prev;
+	std::array<uint8_t, 2> buffer2;
+	uint32_t prot_cur_address;
+	uint32_t dec_header;
+	uint32_t buffer_pos;
+	uint32_t line_buffer_pos;
+	uint32_t line_buffer_size;
+	uint32_t buffer_bit;
+	uint32_t buffer_bit2;
+	uint32_t block_size;
+	uint32_t block_pos;
+	uint32_t block_numlines;
+	uint16_t subkey;
+	uint16_t dec_hist;
+	uint16_t buffer2a;
+	uint8_t first_read;
+	uint8_t enc_ready;
+	uint8_t done_compression;
+};
+
 class Crypt315_5881 {
 public:
 	/* Called with the word counter; returns the ciphertext word. */
@@ -56,6 +80,9 @@ public:
 	uint16_t read_decrypt();
 
 	void set_log(FILE *out) { m_log = out; }
+
+	void save(Crypt315_5881State &out) const;
+	void load(const Crypt315_5881State &in);
 
 private:
 	/* MAME reads the stream two bytes at a time. */

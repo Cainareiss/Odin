@@ -22,6 +22,7 @@
 #include "odin/aica.hpp"
 #include "odin/arm7.hpp"
 
+#include <cstring>
 #include <memory>
 #include <span>
 
@@ -88,6 +89,32 @@ public:
 
 	odin::Aica &chip() { return m_aica; }
 	odin::Arm7 &arm() { return m_arm; }
+
+	/* The whole board. Plain data. */
+	struct State {
+		uint64_t sample_acc;
+		odin::Arm7State arm;
+		odin::AicaState aica;
+		uint8_t arm_held;
+	};
+
+	void save(State &out) const
+	{
+		out.sample_acc = m_sample_acc;
+		m_arm.save(out.arm);
+		m_aica.save(out.aica);
+		out.arm_held = m_arm_held ? 1 : 0;
+	}
+
+	/* The chip first: it drives the reset pin of the ARM7, which the
+	 * saved core then replaces. */
+	void load(const State &in)
+	{
+		m_aica.load(in.aica);
+		m_sample_acc = in.sample_acc;
+		m_arm_held = in.arm_held != 0;
+		m_arm.load(in.arm);
+	}
 
 private:
 	uint32_t read(uint32_t addr, uint32_t size)
@@ -204,6 +231,29 @@ void
 odin_aica_set_arm_trace(odin_aica_t *dev, FILE *out)
 {
 	dev->board->arm().set_trace(out);
+}
+
+size_t
+odin_aica_state_size(void)
+{
+	return sizeof(Board::State);
+}
+
+void
+odin_aica_save_state(const odin_aica_t *dev, void *out)
+{
+	auto state = std::make_unique<Board::State>();
+	std::memset(state.get(), 0, sizeof(Board::State));
+	dev->board->save(*state);
+	std::memcpy(out, state.get(), sizeof(Board::State));
+}
+
+void
+odin_aica_load_state(odin_aica_t *dev, const void *in)
+{
+	auto state = std::make_unique<Board::State>();
+	std::memcpy(state.get(), in, sizeof(Board::State));
+	dev->board->load(*state);
 }
 
 } /* extern "C" */

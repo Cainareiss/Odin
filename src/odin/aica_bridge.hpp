@@ -58,6 +58,11 @@ void odin_aica_set_log(odin_aica_t *dev, FILE *out);
 /* ARM7 instruction and bus trace in the charter format; NULL turns it off. */
 void odin_aica_set_arm_trace(odin_aica_t *dev, FILE *out);
 
+/* Save state: a block of odin_aica_state_size() bytes. */
+size_t odin_aica_state_size(void);
+void odin_aica_save_state(const odin_aica_t *dev, void *out);
+void odin_aica_load_state(odin_aica_t *dev, const void *in);
+
 #ifdef __cplusplus
 }
 #endif

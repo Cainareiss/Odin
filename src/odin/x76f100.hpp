@@ -43,6 +43,8 @@ namespace odin {
  *   0x04  8 bytes   write password
  *   0x0C  8 bytes   read password
  *   0x14  112 bytes data, 14 pages of 8 */
+struct X76f100State;
+
 class X76f100 {
 public:
 	static constexpr uint32_t RESPONSE_SIZE = 4;
@@ -69,6 +71,9 @@ public:
 	 * IMAGE_SIZE bytes and returns false, keeping the current image,
 	 * for any other size. */
 	bool load(std::span<const uint8_t> image);
+
+	void save(X76f100State &out) const;
+	void load(const X76f100State &in);
 	std::span<uint8_t> data() { return m_image; }
 
 	void set_log(FILE *out) { m_log = out; }
@@ -110,6 +115,20 @@ private:
 	uint8_t m_password_retry_counter;
 	bool m_is_password_accepted;
 	FILE *m_log;
+};
+
+/* Everything the chip keeps between two pin changes. Plain data. */
+struct X76f100State {
+	std::array<uint8_t, X76f100::IMAGE_SIZE> image;
+	std::array<uint8_t, X76f100::PASSWORD_SIZE> write_buffer;
+	uint32_t byte;
+	uint8_t state;
+	uint8_t cs, rst, scl, sdaw, sdar;
+	uint8_t shift;
+	uint8_t bit;
+	uint8_t command;
+	uint8_t password_retry_counter;
+	uint8_t is_password_accepted;
 };
 
 } /* namespace odin */

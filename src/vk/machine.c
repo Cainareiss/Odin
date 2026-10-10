@@ -121,18 +121,24 @@ vk_machine_reset (vk_machine_t *mach, vk_reset_type_t type)
 	mach->reset (mach, type);
 
 	vk_renderer_reset (mach->renderer);
+
+	if (type == VK_RESET_TYPE_HARD)
+		mach->frame = 0;
 }
 
 int
 vk_machine_run_frame (vk_machine_t *mach)
 {
-	return mach->run_frame (mach);
+	int ret = mach->run_frame (mach);
+	mach->frame++;
+	return ret;
 }
 
 static int
 load_save_state (vk_machine_t *mach, const char *path, uint32_t mode)
 {
 	vk_state_t *state;
+	char name[32];
 	char *op;
 	unsigned i;
 	int ret = 0;
@@ -150,6 +156,27 @@ load_save_state (vk_machine_t *mach, const char *path, uint32_t mode)
 
 	if (mode == VK_STATE_LOAD)
 		vk_machine_reset (mach, VK_RESET_TYPE_HARD);
+
+	/* The game and the frame number */
+	memset (name, 0, sizeof (name));
+	if (mode == VK_STATE_LOAD) {
+		ret = vk_state_get (state, name, sizeof (name));
+		if (!ret && strncmp (name, mach->game->name, sizeof (name))) {
+			VK_ERROR ("load state: made with the game '%.32s'", name);
+			ret = -1;
+		}
+		if (!ret)
+			ret = vk_state_get (state, &mach->frame, sizeof (mach->frame));
+	} else {
+		strncpy (name, mach->game->name, sizeof (name) - 1);
+		ret = vk_state_put (state, name, sizeof (name));
+		if (!ret)
+			ret = vk_state_put (state, &mach->frame, sizeof (mach->frame));
+	}
+	if (ret) {
+		VK_ERROR ("%s state: cannot %s header", op, op);
+		goto done;
+	}
 
 	VK_VECTOR_FOREACH (mach->buffers, i) {
 		vk_buffer_t *buf = *(vk_buffer_t **) &mach->buffers->data[i];
@@ -181,7 +208,8 @@ load_save_state (vk_machine_t *mach, const char *path, uint32_t mode)
 	}
 
 done:
-	vk_state_destroy (&state, ret);
+	if (state)
+		vk_state_destroy (&state, ret);
 	if (ret && mode == VK_STATE_LOAD) {
 		VK_ERROR ("load state: resetting machine");
 		vk_machine_reset (mach, VK_RESET_TYPE_HARD);

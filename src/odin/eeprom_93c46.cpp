@@ -70,6 +70,42 @@ void Eeprom93c46::load(std::span<const uint8_t> in)
 	std::copy_n(in.begin(), n, m_data.begin());
 }
 
+void Eeprom93c46::save(Eeprom93c46State &out) const
+{
+	out.data = m_data;
+	out.busy_cycles = m_busy_cycles;
+	out.out_shift = m_out_shift;
+	out.shift = m_shift;
+	out.address = m_address;
+	out.state = static_cast<uint8_t>(m_state);
+	out.cs = m_cs;
+	out.sk = m_sk;
+	out.di = m_di;
+	out.org = m_org;
+	out.write_enabled = m_write_enabled;
+	out.bits = m_bits;
+	out.opcode = m_opcode;
+	out.dout = m_do;
+}
+
+void Eeprom93c46::load(const Eeprom93c46State &in)
+{
+	m_data = in.data;
+	m_busy_cycles = in.busy_cycles;
+	m_out_shift = in.out_shift;
+	m_shift = in.shift;
+	m_address = in.address;
+	m_state = static_cast<State>(in.state);
+	m_cs = in.cs != 0;
+	m_sk = in.sk != 0;
+	m_di = in.di != 0;
+	m_org = in.org != 0;
+	m_write_enabled = in.write_enabled != 0;
+	m_bits = in.bits;
+	m_opcode = in.opcode;
+	m_do = in.dout != 0;
+}
+
 void Eeprom93c46::set_pins(bool cs, bool sk, bool di, bool org)
 {
 	m_di = di;

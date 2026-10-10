@@ -32,6 +32,13 @@ public:
 /* The board's TMP90PH44 firmware is not run; the node answers the JVS
  * protocol as the firmware does: 2 players x 13 switch bits, 2 coin
  * slots, 8 analog channels, 6 driver outputs. */
+/* The node, its coin counters and its output latch. Plain data. */
+struct JvsIo13551State {
+	JvsDeviceState node;
+	std::array<uint16_t, 2> coin_counter;
+	uint8_t outputs;
+};
+
 class JvsIo13551 : public JvsDevice {
 public:
 	static constexpr uint8_t PLAYERS = 2;
@@ -43,6 +50,9 @@ public:
 	/* One coin through slot 0 or 1. */
 	void inc_coin(uint8_t slot);
 	uint8_t outputs() const { return m_outputs; }
+
+	void save(JvsIo13551State &out) const;
+	void load(const JvsIo13551State &in);
 
 protected:
 	const char *device_id() const override;

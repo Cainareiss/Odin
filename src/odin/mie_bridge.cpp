@@ -129,6 +129,43 @@ public:
 			m_card->reset();
 	}
 
+	/* The whole board. Plain data. */
+	struct State {
+		uint64_t cycle_acc;
+		odin::Eeprom93c46State eeprom;
+		odin::JvsIo13551State io;
+		odin::JvsHostState jvs;
+		odin::MieState mie;
+		odin::CardReaderState card;
+		uint8_t has_card;
+	};
+
+	void save(State &out)
+	{
+		out.cycle_acc = m_cycle_acc;
+		m_eeprom.save(out.eeprom);
+		m_io.save(out.io);
+		m_mie.jvs().save(out.jvs);
+		m_mie.save(out.mie);
+		out.has_card = m_card ? 1 : 0;
+		if (m_card)
+			m_card->save(out.card);
+	}
+
+	bool load(const State &in)
+	{
+		if ((in.has_card != 0) != (m_card != nullptr))
+			return false;
+		m_cycle_acc = in.cycle_acc;
+		m_eeprom.load(in.eeprom);
+		m_io.load(in.io);
+		m_mie.jvs().load(in.jvs);
+		m_mie.load(in.mie);
+		if (m_card)
+			m_card->load(in.card);
+		return true;
+	}
+
 	/* The card reader on the serial block of the MIE. */
 	bool attach_card(const char *card_file, FILE *trace)
 	{
@@ -318,6 +355,29 @@ int
 odin_mie_card_attach(odin_mie_t *dev, const char *card_file, FILE *trace)
 {
 	return dev->board->attach_card(card_file, trace) ? 1 : 0;
+}
+
+size_t
+odin_mie_state_size(void)
+{
+	return sizeof(Board::State);
+}
+
+void
+odin_mie_save_state(odin_mie_t *dev, void *out)
+{
+	auto state = std::make_unique<Board::State>();
+	std::memset(state.get(), 0, sizeof(Board::State));
+	dev->board->save(*state);
+	std::memcpy(out, state.get(), sizeof(Board::State));
+}
+
+int
+odin_mie_load_state(odin_mie_t *dev, const void *in)
+{
+	auto state = std::make_unique<Board::State>();
+	std::memcpy(state.get(), in, sizeof(Board::State));
+	return dev->board->load(*state) ? 0 : -1;
 }
 
 } /* extern "C" */

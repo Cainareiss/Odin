@@ -1298,6 +1298,10 @@ hikaru_gpu_save_state (vk_device_t *dev, vk_state_t *state)
 	SAVE (gpu->regs);
 	SAVE (gpu->cp);
 	SAVE (gpu->idma);
+	SAVE (gpu->fb_config);
+	SAVE (gpu->depth_bias);
+	SAVE (gpu->_501);
+	SAVE (gpu->texoffset);
 	SAVE (gpu->state);
 
 	return ret;
@@ -1312,6 +1316,10 @@ hikaru_gpu_load_state (vk_device_t *dev, vk_state_t *state)
 	LOAD (gpu->regs);
 	LOAD (gpu->cp);
 	LOAD (gpu->idma);
+	LOAD (gpu->fb_config);
+	LOAD (gpu->depth_bias);
+	LOAD (gpu->_501);
+	LOAD (gpu->texoffset);
 	LOAD (gpu->state);
 
 	return ret;

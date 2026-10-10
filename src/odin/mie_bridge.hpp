@@ -87,6 +87,12 @@ void odin_mie_eeprom_read(odin_mie_t *dev, uint8_t *data, size_t size);
  * Returns 1 when a card was loaded, 0 when the reader starts empty. */
 int odin_mie_card_attach(odin_mie_t *dev, const char *card_file, FILE *trace);
 
+/* Save state: a block of odin_mie_state_size() bytes. The load fails (-1)
+ * when the state has a card reader and the board has none, or the reverse. */
+size_t odin_mie_state_size(void);
+void odin_mie_save_state(odin_mie_t *dev, void *out);
+int odin_mie_load_state(odin_mie_t *dev, const void *in);
+
 #ifdef __cplusplus
 }
 #endif

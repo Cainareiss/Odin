@@ -18,7 +18,7 @@
 
 #include "vk/state.h"
 
-#define VK_STATE_VERSION	1
+#define VK_STATE_VERSION	2
 
 vk_state_t *
 vk_state_new (const char *path, uint32_t mode)
@@ -84,6 +84,11 @@ vk_state_put (vk_state_t *state, void *src, uint32_t size)
 
 	VK_LOG ("state: W%08X %p", size, src);
 
+	/* Every item carries its size: a state made by a build with another
+	 * layout is refused instead of misread. */
+	if (fwrite (&size, 1, sizeof (size), state->fp) != sizeof (size))
+		return -1;
+
 	num = fwrite (src, 1, size, state->fp);
 	return (num != size || ferror (state->fp)) ? -1 : 0;
 }
@@ -91,12 +96,19 @@ vk_state_put (vk_state_t *state, void *src, uint32_t size)
 int
 vk_state_get (vk_state_t *state, void *dst, uint32_t size)
 {
+	uint32_t stored;
 	size_t num;
 
 	if (state->mode != VK_STATE_LOAD)
 		return -1;
 
 	VK_LOG ("state: R%08X %p", size, dst);
+
+	if (fread (&stored, 1, sizeof (stored), state->fp) != sizeof (stored) ||
+	    stored != size) {
+		VK_ERROR ("state: item of another size, made by another build?");
+		return -1;
+	}
 
 	num = fread (dst, 1, size, state->fp);
 	return (num != size || ferror (state->fp)) ? -1 : 0;

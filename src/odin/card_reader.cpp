@@ -369,4 +369,34 @@ bool CardReader::save_card()
 	return n == m_card.size();
 }
 
+void CardReader::save(CardReaderState &out) const
+{
+	out.card = m_card;
+	out.rx = m_rx;
+	out.response = m_response;
+	out.tx = m_tx;
+	out.rx_count = m_rx_count;
+	out.response_size = m_response_size;
+	out.tx_head = m_tx_head;
+	out.tx_count = m_tx_count;
+	out.card_present = m_card_present;
+	out.door_open = m_door_open;
+	out.stocker_full = m_stocker_full;
+}
+
+void CardReader::load(const CardReaderState &in)
+{
+	m_card = in.card;
+	m_rx = in.rx;
+	m_response = in.response;
+	m_tx = in.tx;
+	m_rx_count = in.rx_count;
+	m_response_size = in.response_size;
+	m_tx_head = in.tx_head;
+	m_tx_count = in.tx_count;
+	m_card_present = in.card_present != 0;
+	m_door_open = in.door_open != 0;
+	m_stocker_full = in.stocker_full != 0;
+}
+
 } /* namespace odin */

@@ -26,6 +26,11 @@ void odin_eeprom93c46_set_pins(odin_eeprom93c46_t *dev, int cs, int sk, int di, 
 int odin_eeprom93c46_do(odin_eeprom93c46_t *dev);
 void odin_eeprom93c46_tick(odin_eeprom93c46_t *dev, uint32_t cycles);
 
+/* Save state: a block of odin_eeprom93c46_state_size() bytes. */
+size_t odin_eeprom93c46_state_size(void);
+void odin_eeprom93c46_save_state(const odin_eeprom93c46_t *dev, void *out);
+void odin_eeprom93c46_load_state(odin_eeprom93c46_t *dev, const void *in);
+
 #ifdef __cplusplus
 }
 #endif

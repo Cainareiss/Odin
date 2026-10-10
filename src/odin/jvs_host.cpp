@@ -375,4 +375,32 @@ int32_t JvsDevice::handle_message(std::span<const uint8_t> in, std::span<uint8_t
 	}
 }
 
+void JvsHost::save(JvsHostState &out) const
+{
+	out.send = m_send;
+	out.recv = m_recv;
+	out.send_size = m_send_size;
+	out.recv_size = m_recv_size;
+}
+
+void JvsHost::load(const JvsHostState &in)
+{
+	m_send = in.send;
+	m_recv = in.recv;
+	m_send_size = in.send_size;
+	m_recv_size = in.recv_size;
+}
+
+void JvsDevice::save(JvsDeviceState &out) const
+{
+	out.reset_counter = m_reset_counter;
+	out.address = m_address;
+}
+
+void JvsDevice::load(const JvsDeviceState &in)
+{
+	m_reset_counter = in.reset_counter;
+	m_address = in.address;
+}
+
 } /* namespace odin */

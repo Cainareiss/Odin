@@ -44,7 +44,7 @@ static void
 vk_renderer_screenshot (vk_renderer_t *renderer)
 {
 	static const char *prefix = NULL;
-	static unsigned frame = 0, every = 60;
+	static unsigned every = 60;
 	static bool checked = false;
 	char path[512];
 	unsigned w = renderer->width, h = renderer->height, y;
@@ -58,8 +58,7 @@ vk_renderer_screenshot (vk_renderer_t *renderer)
 			every = atoi (env);
 		checked = true;
 	}
-	frame++;
-	if (!prefix || (frame % every) != 0)
+	if (!prefix || (renderer->frame % every) != 0)
 		return;
 
 	pixels = malloc (w * h * 3);
@@ -70,7 +69,7 @@ vk_renderer_screenshot (vk_renderer_t *renderer)
 	glPixelStorei (GL_PACK_ALIGNMENT, 1);
 	glReadPixels (0, 0, (GLsizei) w, (GLsizei) h, GL_RGB, GL_UNSIGNED_BYTE, pixels);
 
-	snprintf (path, sizeof (path), "%s-%06u.ppm", prefix, frame);
+	snprintf (path, sizeof (path), "%s-%06u.ppm", prefix, renderer->frame);
 	fp = fopen (path, "wb");
 	if (fp) {
 		fprintf (fp, "P6\n%u %u\n255\n", w, h);

@@ -21,6 +21,7 @@
 #include "odin/crypt_315_5881_bridge.hpp"
 #include "odin/crypt_315_5881.hpp"
 
+#include <cstring>
 #include <memory>
 
 namespace {
@@ -130,6 +131,29 @@ odin_crypt5881_set_log(odin_crypt5881_t *dev, FILE *out)
 {
 	dev->log = out;
 	dev->chip.set_log(out);
+}
+
+size_t
+odin_crypt5881_state_size(void)
+{
+	return sizeof(odin::Crypt315_5881State);
+}
+
+void
+odin_crypt5881_save_state(const odin_crypt5881_t *dev, void *out)
+{
+	odin::Crypt315_5881State state;
+	std::memset(&state, 0, sizeof(state));
+	dev->chip.save(state);
+	std::memcpy(out, &state, sizeof(state));
+}
+
+void
+odin_crypt5881_load_state(odin_crypt5881_t *dev, const void *in)
+{
+	odin::Crypt315_5881State state;
+	std::memcpy(&state, in, sizeof(state));
+	dev->chip.load(state);
 }
 
 } /* extern "C" */

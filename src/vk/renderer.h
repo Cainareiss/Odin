@@ -65,6 +65,9 @@ struct vk_renderer_t {
 	unsigned height;
 	char message[256];
 
+	/* Number of the frame being shown, set by the main loop */
+	unsigned frame;
+
 	void	(* destroy)(vk_renderer_t **renderer_);
 	void	(* reset)(vk_renderer_t *renderer);
 	void	(* begin_frame)(vk_renderer_t *renderer);

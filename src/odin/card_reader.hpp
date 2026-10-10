@@ -52,6 +52,8 @@ namespace odin {
  *   st2  result (Flycast RESULT2, firmware FUN_00009072): '0' OK.
  *   st3  command state (Flycast RESULT3): '0' OK, '4' waiting for a
  *        card (read or write without one), '5' stocker empty. */
+struct CardReaderState;
+
 class CardReader : public MieSerialDevice {
 public:
 	/* Flycast TRACK_SIZE: three 69-byte tracks. */
@@ -99,6 +101,9 @@ public:
 	bool has_byte() override;
 	uint8_t take_byte() override;
 
+	void save(CardReaderState &out) const;
+	void load(const CardReaderState &in);
+
 	/* Puts the card of the file at the magnetic head; false when the
 	 * file cannot be read. */
 	bool insert_card();
@@ -144,6 +149,21 @@ private:
 	std::array<bool, 256> m_cmd_logged;
 	bool m_frame_logged;
 	bool m_idle_logged;
+};
+
+/* The card in the unit and the frames in flight. Plain data. */
+struct CardReaderState {
+	std::array<uint8_t, CardReader::CARD_SIZE> card;
+	std::array<uint8_t, CardReader::FRAME_MAX> rx;
+	std::array<uint8_t, CardReader::FRAME_MAX> response;
+	std::array<uint8_t, CardReader::FRAME_MAX + 2> tx;
+	uint32_t rx_count;
+	uint32_t response_size;
+	uint32_t tx_head;
+	uint32_t tx_count;
+	uint8_t card_present;
+	uint8_t door_open;
+	uint8_t stocker_full;
 };
 
 } /* namespace odin */

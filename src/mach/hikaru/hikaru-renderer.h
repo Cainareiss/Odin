@@ -24,8 +24,11 @@
 #include "vk/core.h"
 #include "vk/buffer.h"
 #include "vk/renderer.h"
+#include "vk/state.h"
 
 vk_renderer_t	*hikaru_renderer_new (vk_buffer_t *fb, vk_buffer_t *texram[2]);
 void		 hikaru_renderer_set_gpu (vk_renderer_t *, void *);
+int		 hikaru_renderer_save_state (vk_renderer_t *, vk_state_t *);
+int		 hikaru_renderer_load_state (vk_renderer_t *, vk_state_t *);
 
 #endif /* __VK_HIKARU_RENDERER_H__ */
