@@ -14,16 +14,16 @@ For later, write an event-driven scheduler.
 I'm seriously thinking about slowling "porting" valkyrie to C++... Mmm.
 
 Speed: the frames are held at 60 per second (-u lifts the limit), but the
-heavy scenes do not all reach it: about 98 frames per second in PODRACE, 73
-in SGNASCAR, 48 in VON4, 38 in AIRTRIX, 26 in BRAVEFF and 23 in PHARRIER on
-a Ryzen 5 5600X. What costs, in that order: the SH-4 interpreter (1 to 2
-million instructions run a frame, about 8 ns each); the translucent layers
-(two passes over every translucent mesh for each layer: 25000 to 42000 draws
-a frame in BRAVEFF and PHARRIER); the two ARM7. The main loop of the sound
-driver turns 312 times a frame and an interrupt comes every 22 samples: the
-turns in between are counted without being run (src/odin/arm7.cpp), except
-with the drivers that count their turns at 0x40 of the wave memory (VON4,
-BRAVEFF, PHARRIER), whose turns are never the same.
+heavy scenes do not all reach it: about 126 frames per second in PODRACE,
+102 in SGNASCAR, 55 in VON4, 53 in AIRTRIX, 32 in BRAVEFF and 28 in PHARRIER
+on a Ryzen 5 5600X. What costs, in that order: the translucent layers (two
+passes over every translucent mesh for each layer: 25000 to 42000 draws a
+frame in BRAVEFF and PHARRIER); the two SH-4 (1 to 2 million instructions
+run a frame, about 3 ns each, 1 to 5 ms a frame); the two ARM7. The main
+loop of the sound driver turns 312 times a frame and an interrupt comes every
+22 samples: the turns in between are counted without being run
+(src/odin/arm7.cpp), except with the drivers that count their turns at 0x40
+of the wave memory (VON4, BRAVEFF, PHARRIER), whose turns are never the same.
 
 
 HIKARU
@@ -207,13 +207,52 @@ loader at 0x0C055FD4), so it must at least run ahead of the SH-4.
 SH-4
 ----
 
-Import the LLVM jit core into valkyrie. Still a bit rough on the edges, but
-already faster than the interpreter.
+The two SH-4 run on the Odin core (src/odin/sh4.cpp, sh4_ops.cpp,
+sh4_onchip.cpp; src/cpu/sh/sh4-odin.c puts it in the machine). It gives the
+registers and the memory of the old interpreter (src/cpu/sh/sh4.c) at every
+slice of the six games; ODIN_SH4=old runs the old one, to compare, until it
+is taken out. ODIN_SH4_TRACE=<prefix> writes the PC and a hash of the
+registers at every slice, ODIN_SH4_STATS=1 the host time of the slices.
+Tests: tests/sh4.
 
-Fix the TMU frequency, may help with flashing graphics in PHARRIER.
+Speed: 2.3 to 3.6 times the old interpreter. What is left is the host
+missing its branch predictions, one emulated instruction in three in VON4:
+a translator to host code is the next step for the slower machines.
+
+Kept as the old interpreter did, each one HEURISTIC, to make right one at a
+time once the scenes are compared again:
+- the FPU rounds to the nearest; the six games ask for rounding to zero
+  (FPSCR.RM = 1) for nearly every instruction, and treat denormals as zero
+  (FPSCR.DN), which is ignored too;
+- FTRC gives 0x80000000 out of range, the SH-4 saturates; FSCA, FSRRA, FIPR
+  and FTRV are computed by the host, the SH-4 has its own tables and error
+  bounds; a NaN comes out as the host makes it, the SH-4 gives 0x7FBFFFFF;
+- no FPU exception is raised (the slave of PHARRIER enables the division
+  by zero);
+- the timers count one per CPU cycle whatever TCR.TPSC says, and follow
+  at the end of a slice (may be what makes graphics flash in PHARRIER);
+  every mode of a performance counter counts cycles;
+- a store queue write goes to its target at once, PREF sends nothing;
+- RFCR and WTCSR read as port A; BCR1 resets to 0x80000000 on both CPUs;
+- an interrupt source is cleared when taken; IRQ10 has the code of IRQ11;
+- the DMAC moves its whole count within the write that starts it;
+- one instruction is one cycle; a frame is 544 lines where the games
+  program 528 (hikaru.c).
+
+Not implemented, the emulator stops with a message: TRAPA, the exceptions
+(illegal instruction, illegal delay slot, address error, FPU disable,
+privilege), MAC.L with S set, a write to the cache or TLB arrays. SLEEP
+stops the CPU for good. The MMU and the caches are absent: LDTLB, PREF,
+OCBI, OCBP and OCBWB do nothing, MOVCA.L is a plain store. None of this is
+run by the six games up to their attract loops. Every code of the software
+manual is decoded; FSCA and FSRRA, which it does not list, come from the
+SH7091 (MAME sh4.cpp).
 
 A read that nothing answers gives 0 (HEURISTIC: the value of the bus is
 not known; BRAVEFF reads FFFFFFFC at 0C076E48).
+
+The clock of the AICA starts from the host clock (src/odin/aica.cpp): two
+runs do not leave the same byte in the memory of AIRTRIX.
 
 
 GPU / RENDERING
