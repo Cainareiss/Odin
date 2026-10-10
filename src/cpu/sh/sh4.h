@@ -156,7 +156,8 @@ struct sh4_t {
 	/* Registers */
 	sh4_regs_t	regs;
 
-	/* Detection of the loops that only wait, see sh4_run */
+	/* What the interpreter kept of its search for loops that only wait:
+	 * still in the layout of the save files, unused. */
 	struct {
 		sh4_regs_t regs;	/* at the mark */
 		int	remaining;	/* at the mark */
@@ -205,26 +206,18 @@ struct sh4_t {
 		bool	little_endian;
 	} config;
 
-	/* The Odin core (src/odin/sh4.hpp) when it runs this CPU: the
-	 * fields above then only carry its state to the save files and to
-	 * the patches. NULL with ODIN_SH4=old. */
+	/* The Odin core (src/odin/sh4.hpp) runs this CPU: the fields above
+	 * only carry its state to the save files and to the patches. */
 	struct odin_sh4 *odin;
 	uint32_t	hooked_pc;
 
-	/* ODIN_SH4_TRACE=<prefix>: one line per slice in <prefix>-m.txt and
-	 * <prefix>-s.txt, the PC and a hash of the registers. */
-	FILE		*trace;
+	FILE		*trace;	/* see ODIN_SH4_TRACE */
 };
 
 vk_cpu_t	*sh4_new (vk_machine_t *mach, vk_mmap_t *mmap, bool master, bool le);
-vk_cpu_t	*sh4_odin_new (vk_machine_t *mach, vk_mmap_t *mmap, bool master, bool le);
+/* The state of the core into the fields of sh4_t, and back. */
 void		 sh4_odin_pull (sh4_t *ctx);
 void		 sh4_odin_push (sh4_t *ctx);
-void		 sh4_stats_open (void);
-uint64_t	 sh4_stats_begin (void);
-void		 sh4_stats_end (sh4_t *ctx, uint64_t begin);
-void		 sh4_trace_open (sh4_t *ctx);
-void		 sh4_trace_slice (sh4_t *ctx);
 void		 sh4_set_porta_handlers (vk_cpu_t *cpu,
 		                         int (* get)(sh4_t *ctx, uint16_t *val),
 		                         int (* put)(sh4_t *ctx, uint16_t val));

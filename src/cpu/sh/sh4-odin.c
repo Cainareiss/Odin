@@ -19,9 +19,8 @@
  */
 
 /* The Odin SH-4 (src/odin/sh4.hpp) as a CPU of the machine. The sh4_t of
- * the interpreter is kept as its face: the save files have the same
- * layout with either core, and a patch finds the registers where it
- * always did. */
+ * the interpreter it replaced is kept as its face: the save files keep
+ * their layout, and a patch finds the registers where it always did. */
 
 #include "vk/core.h"
 #include "vk/cpu.h"
@@ -223,7 +222,7 @@ bus_hook (void *opaque)
 }
 
 /* ODIN_SH4_STATS=1: at the end, the host time each CPU took in its
- * slices, with either core. */
+ * slices. */
 static bool stats_on;
 static uint64_t stats_ns[2], stats_slices[2];
 
@@ -237,8 +236,8 @@ stats_print (void)
 		         (double) stats_ns[i] / 1e9, stats_slices[i]);
 }
 
-void
-sh4_stats_open (void)
+static void
+stats_open (void)
 {
 	if (!stats_on && getenv ("ODIN_SH4_STATS")) {
 		stats_on = true;
@@ -246,8 +245,8 @@ sh4_stats_open (void)
 	}
 }
 
-uint64_t
-sh4_stats_begin (void)
+static uint64_t
+stats_begin (void)
 {
 	struct timespec now;
 
@@ -257,8 +256,8 @@ sh4_stats_begin (void)
 	return (uint64_t) now.tv_sec * 1000000000ull + (uint64_t) now.tv_nsec;
 }
 
-void
-sh4_stats_end (sh4_t *ctx, uint64_t begin)
+static void
+stats_end (sh4_t *ctx, uint64_t begin)
 {
 	struct timespec now;
 	unsigned i = ctx->config.master ? 0 : 1;
@@ -270,10 +269,11 @@ sh4_stats_end (sh4_t *ctx, uint64_t begin)
 	stats_slices[i]++;
 }
 
-/* Trace */
+/* ODIN_SH4_TRACE=<prefix>: one line per slice in <prefix>-m.txt and
+ * <prefix>-s.txt, the PC and a hash of the registers. */
 
-void
-sh4_trace_open (sh4_t *ctx)
+static void
+trace_open (sh4_t *ctx)
 {
 	const char *prefix = getenv ("ODIN_SH4_TRACE");
 	char path[1024];
@@ -298,8 +298,8 @@ hash_bytes (uint64_t hash, const void *data, size_t size)
 	return hash;
 }
 
-void
-sh4_trace_slice (sh4_t *ctx)
+static void
+trace_slice (sh4_t *ctx)
 {
 	uint64_t hash = 0xCBF29CE484222325ull;
 
@@ -340,15 +340,15 @@ sh4o_run (vk_cpu_t *cpu, int cycles)
 		ctx->hooked_pc = cpu->patch_pc;
 	}
 
-	begin = sh4_stats_begin ();
+	begin = stats_begin ();
 	over = odin_sh4_run (ctx->odin, cycles);
-	sh4_stats_end (ctx, begin);
+	stats_end (ctx, begin);
 
 	cpu->state = (vk_cpu_state_t) odin_sh4_get_run (ctx->odin);
 	cpu->remaining = -over;
 	if (ctx->trace) {
 		sh4_odin_pull (ctx);
-		sh4_trace_slice (ctx);
+		trace_slice (ctx);
 	}
 	return over;
 }
@@ -479,8 +479,19 @@ sh4o_destroy (vk_device_t **dev_)
 	ctx->odin = NULL;
 }
 
+void
+sh4_set_porta_handlers (vk_cpu_t *cpu,
+                        int (* get)(sh4_t *ctx, uint16_t *val),
+                        int (* put)(sh4_t *ctx, uint16_t val))
+{
+	sh4_t *ctx = (sh4_t *) cpu;
+
+	ctx->porta.get = get;
+	ctx->porta.put = put;
+}
+
 vk_cpu_t *
-sh4_odin_new (vk_machine_t *mach, vk_mmap_t *mmap, bool master, bool le)
+sh4_new (vk_machine_t *mach, vk_mmap_t *mmap, bool master, bool le)
 {
 	odin_sh4_bus_t bus;
 	vk_device_t *dev;
@@ -526,8 +537,8 @@ sh4_odin_new (vk_machine_t *mach, vk_mmap_t *mmap, bool master, bool le)
 	if (!ctx->odin)
 		goto fail;
 
-	sh4_trace_open (ctx);
-	sh4_stats_open ();
+	trace_open (ctx);
+	stats_open ();
 
 	return (vk_cpu_t *) ctx;
 fail:
