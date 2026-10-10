@@ -24,6 +24,8 @@
 #include "vk/renderer.h"
 #include "vk/games.h"
 
+#include <time.h>
+
 #ifdef VK_HAVE_HIKARU
 #include "mach/hikaru/hikaru.h"
 #endif
@@ -40,6 +42,7 @@ static struct {
 	char state_path[256];
 	unsigned save_frames[16];
 	unsigned num_save_frames;
+	bool unthrottled;
 } options;
 
 static vk_game_list_t *game_list;
@@ -130,6 +133,30 @@ save_state_at_frame (vk_machine_t *mach)
 	}
 }
 
+/* Holds the frames at the rate of the machine, 60 per second. A frame late
+ * by less than two periods is caught up, a longer delay is dropped. */
+static void
+limit_frame_rate (void)
+{
+	static struct timespec next;
+	const long period = 1000000000L / 60;
+	struct timespec now;
+	long long late;
+
+	clock_gettime (CLOCK_MONOTONIC, &now);
+	next.tv_nsec += period;
+	if (next.tv_nsec >= 1000000000L) {
+		next.tv_sec++;
+		next.tv_nsec -= 1000000000L;
+	}
+	late = (now.tv_sec - next.tv_sec) * 1000000000LL +
+	       (now.tv_nsec - next.tv_nsec);
+	if (late > 2 * period)
+		next = now;
+	else if (late < 0)
+		clock_nanosleep (CLOCK_MONOTONIC, TIMER_ABSTIME, &next, NULL);
+}
+
 static void
 main_loop (vk_machine_t *mach, int num_frames)
 {
@@ -142,17 +169,20 @@ main_loop (vk_machine_t *mach, int num_frames)
 			mach->renderer->frame = mach->frame;
 			vk_renderer_end_frame (mach->renderer);
 			save_state_at_frame (mach);
+			if (!options.unthrottled)
+				limit_frame_rate ();
 		}
 	}
 }
 
-static const char global_opts[] = "R:r:n:l:s:vh?";
+static const char global_opts[] = "R:r:n:l:s:uvh?";
 static const char global_help[] = "Usage: %s [options]\n"
 "	-R <path>	Path to the ROM directory\n"
 "	-r <string>	Name of the game to run\n"
 "	-n <num>	Stop after the frame num\n"
 "	-l <path>	Load a state at startup\n"
 "	-s <num>[,...]	Save <game>-<num>.vkstate after these frames\n"
+"	-u		Run as fast as the host can, not at 60 frames per second\n"
 "	-v		Set verbosity (affects debug messages)\n"
 "	-h              Show this help\n";
 
@@ -198,6 +228,9 @@ parse_global_opts (int argc, char **argv)
 			}
 			break;
 		}
+		case 'u':
+			options.unthrottled = true;
+			break;
 		case 'v':
 			vk_verbosity = 1;
 			break;
