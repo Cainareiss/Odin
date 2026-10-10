@@ -45,7 +45,17 @@ on the real self-test of Planet Harriers and 19.7 M words against MAME's
 code): RAM at local bus 0x0A000000, registers at 0x0A010000, keys from
 MAME (airtrix, pharrier, swracer). Its ready bit is never busy (MAME).
 The BOOTROM board probe answers a constant for the boards without the
-chip (hikaru-memctl.c, HACK until those boards are measured).
+chip, braveff and von4 (hikaru-memctl.c, HACK until those boards are
+measured).
+
+SGNASCAR ROM board security FPGA (src/odin/actel_m1.cpp, the stream
+decoder of MAME's Naomi M1 board): registers at local bus 0x0A000000, key
+from MAME. Proven by the game: it reads 208 bytes at each change of scene,
+compares them with its own copy and, at each mismatch, adds 20 to the
+weight of the previous picture in the 181 blend. HEURISTIC: every start
+reads from the first byte of the mask ROMs (no address register is known),
+the ready flag is on bits 31 and 15 of the status, the other bits of the
+control and of the status are not known.
 
 GPU textures: the 0D1 UV offsets are added to the vertex UVs the way the
 X360 port's vertex shader is assumed to (the Xenos microcode of vo3d was

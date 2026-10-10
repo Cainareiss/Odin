@@ -485,9 +485,12 @@ memctl_bus_get (hikaru_memctl_t *memctl, unsigned size, uint32_t bus_addr, void 
 	} else if (hikaru->crypt && bus_addr >= 0x0A010000 && bus_addr <= 0x0A01000F) {
 		/* 315-5881 registers */
 		set_ptr (val, size, odin_crypt5881_read (hikaru->crypt, offs & 0xF, size));
+	} else if (hikaru->actel && bus_addr >= 0x0A000000 && bus_addr <= 0x0A000013) {
+		/* Security FPGA of the SGNASCAR board */
+		set_ptr (val, size, odin_actel_m1_read (hikaru->actel, offs, size));
 	} else if (bus_addr >= 0x0A000000 && bus_addr <= 0x0AFFFFFF) {
-		/* HACK for the boards without the 315-5881 (braveff, von4,
-		 * sgnascar): the BOOTROM probe (ROM 0x1F3A) writes 0x19620217
+		/* HACK for the boards without the 315-5881 nor the FPGA
+		 * (braveff, von4): the BOOTROM probe (ROM 0x1F3A) writes 0x19620217
 		 * at +0xC and +0x8 and keeps "retained" in GBR+0x1C bits 3/2;
 		 * what those boards answer has not been measured. */
 		/* Here's the thing: the value of bits 2 and 3 of 0C00F01C
@@ -622,6 +625,9 @@ memctl_bus_put (hikaru_memctl_t *memctl, unsigned size, uint32_t bus_addr, uint6
 	} else if (hikaru->crypt && bus_addr >= 0x0A010000 && bus_addr <= 0x0A01000F) {
 		/* 315-5881 registers */
 		odin_crypt5881_write (hikaru->crypt, offs & 0xF, size, (uint32_t) val);
+	} else if (hikaru->actel && bus_addr >= 0x0A000000 && bus_addr <= 0x0A000013) {
+		/* Security FPGA of the SGNASCAR board */
+		odin_actel_m1_write (hikaru->actel, offs, size, (uint32_t) val);
 	} else if (bus_addr >= 0x0A000000 && bus_addr <= 0x0AFFFFFF) {
 		/* Unknown */
 		log = true;

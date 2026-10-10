@@ -542,6 +542,9 @@ hikaru_reset (vk_machine_t *mach, vk_reset_type_t type)
 	hikaru->unk01000100_m = 0;
 	hikaru->unk1A800008_s = 0xFFFF;
 	hikaru->unk1B000100_s = 0xFEFF;
+
+	if (hikaru->actel)
+		odin_actel_m1_reset (hikaru->actel);
 }
 
 static const char *
@@ -617,6 +620,8 @@ hikaru_load_state (vk_machine_t *mach, vk_state_t *state)
 	LOAD_CHIP (odin_x76f100, hikaru->eeprom_rombd);
 	if (hikaru->crypt)
 		LOAD_CHIP (odin_crypt5881, hikaru->crypt);
+	if (hikaru->actel)
+		LOAD_CHIP (odin_actel_m1, hikaru->actel);
 
 	ret |= hikaru_renderer_load_state (mach->renderer, state);
 
@@ -643,6 +648,8 @@ hikaru_save_state (vk_machine_t *mach, vk_state_t *state)
 	SAVE_CHIP (odin_x76f100, hikaru->eeprom_rombd);
 	if (hikaru->crypt)
 		SAVE_CHIP (odin_crypt5881, hikaru->crypt);
+	if (hikaru->actel)
+		SAVE_CHIP (odin_actel_m1, hikaru->actel);
 
 	ret |= hikaru_renderer_save_state (mach->renderer, state);
 
@@ -1201,6 +1208,18 @@ hikaru_init (hikaru_t *hikaru)
 		if (!hikaru->crypt)
 			return -1;
 		VK_PRINT ("ROM board 315-5881: key %08X, 64 KB RAM", hikaru->rombd_config.crypt_key);
+	}
+
+	/* 834-14125 ROM board: Actel A54SX32 stamped 317-0283-COM, ID 0x4252,
+	 * key as in MAME hikaru.cpp. The key is proven by the game: the chip
+	 * then gives the text SGNASCAR compares it with. */
+	if (!strcmp (game->name, "sgnascar") && hikaru->maskrom) {
+		hikaru->actel = odin_actel_m1_new (0x56DEDF33, 0x4252,
+		                                   (const uint8_t *) vk_buffer_get_ptr (hikaru->maskrom, 0),
+		                                   vk_buffer_get_size (hikaru->maskrom));
+		if (!hikaru->actel)
+			return -1;
+		VK_PRINT ("ROM board security FPGA: 317-0283-COM, ID 4252");
 	}
 
 	hikaru->base.renderer = hikaru_renderer_new (hikaru->fb,
