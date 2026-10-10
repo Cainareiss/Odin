@@ -1011,13 +1011,6 @@ upload_viewport (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 		/* continue anyway */
 	}
 
-	if (!isnonnegative (vp->offset.x) || (vp->offset.x >= 640.0f) ||
-	    !isnonnegative (vp->offset.y) || (vp->offset.y >= 480.0f)) {
-		VK_ERROR ("invalid viewport offset: %s",
-		          get_viewport_str (vp));
-		/* continue anyway */
-	}
-
 	LOG ("vp  = %s", get_viewport_str (vp));
 
 	/* The centre and the clip window are screen coordinates, y down: the

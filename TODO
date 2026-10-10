@@ -249,6 +249,11 @@ combo labels drawn over them, the cover of a PODRACE engine over its fan).
 The depth format of the hardware and its use of the 421 range are not
 known, and the 421 depth function is not applied (HEURISTIC).
 
+The 221 offsets are signed 16-bit values: von4 centres the view of its
+lever panel (tutorial of the U.S.A. setting) on (960, -85), and the levers
+land in their panel as on the cabinet. No game sends a negative X: its sign
+is assumed (HEURISTIC).
+
 Implement alpha testing (used in BRAVEFF, instruction 154).
 
 Implement proper model caching using VBOs.

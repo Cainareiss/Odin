@@ -788,7 +788,9 @@ decode_clip_xy (uint32_t c)
  *	--TTTTTT TTTTTTTT -RRRRRRR RRRRRRRR
  *
  * T, B, L, R = Clipping planes
- * X, Y = Viewport offset
+ * X, Y = Viewport offset, signed; von4 centres the view of its lever panel
+ *        on (960, -85), off the screen. No game sends a negative X: its
+ *        sign is assumed (HEURISTIC).
  *
  * See PH:@0C015924
  *
@@ -846,8 +848,8 @@ I (0x021)
 		vp->has_021 = 1;
 		break;
 	case 2:
-		vp->offset.x = (float) (inst[1] & 0xFFFF);
-		vp->offset.y = (float) (inst[1] >> 16);
+		vp->offset.x = (float) (int16_t) (inst[1] & 0xFFFF);
+		vp->offset.y = (float) (int16_t) (inst[1] >> 16);
 		vp->clip.l = decode_clip_xy (inst[2]);
 		vp->clip.r = decode_clip_xy (inst[3]);
 		vp->clip.b = decode_clip_xy (inst[2] >> 16);
@@ -894,7 +896,8 @@ D (0x021)
 		DISASM ("vp: set clip XY [clipxy=(%f %f %f %f) offs=(%f,%f)]",
 		        decode_clip_xy (inst[2]), decode_clip_xy (inst[3]),
 		        decode_clip_xy (inst[2] >> 16), decode_clip_xy (inst[3] >> 16),
-		        (float) (inst[1] & 0xFFFF), (float) (inst[1] >> 16));
+		        (float) (int16_t) (inst[1] & 0xFFFF),
+		        (float) (int16_t) (inst[1] >> 16));
 		break;
 
 	case 4:
