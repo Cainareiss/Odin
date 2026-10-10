@@ -53,7 +53,7 @@ Not allowed:
   devices.
 - Type punning through pointer casts. Use `std::bit_cast` or `memcpy`.
 - Boost or any other third-party library. Dependencies stay SDL2,
-  OpenGL 3.1 core with GLEW, and jansson.
+  OpenGL 4.3 core with GLEW, and jansson.
 
 ## 4. Hardware rules (what LLE means here)
 
