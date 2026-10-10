@@ -13,13 +13,14 @@ For later, write an event-driven scheduler.
 
 I'm seriously thinking about slowling "porting" valkyrie to C++... Mmm.
 
-Speed: the frames are held at 60 per second (-u lifts the limit), but the
-heavy scenes do not all reach it: about 126 frames per second in PODRACE,
-102 in SGNASCAR, 55 in VON4, 53 in AIRTRIX, 32 in BRAVEFF and 28 in PHARRIER
-on a Ryzen 5 5600X. What costs, in that order: the translucent layers (two
-passes over every translucent mesh for each layer: 25000 to 42000 draws a
-frame in BRAVEFF and PHARRIER); the two SH-4 (1 to 2 million instructions
-run a frame, about 3 ns each, 1 to 5 ms a frame); the two ARM7. The main
+Speed: the frames are held at 60 per second (-u lifts the limit) and the
+heavy scenes reach it on a Ryzen 5 5600X with a GeForce RTX 3080: about 152
+frames per second in PODRACE, 126 in SGNASCAR, 80 in AIRTRIX, 78 in PHARRIER,
+67 in BRAVEFF and 61 in VON4. A frame of those scenes takes 7 to 16 ms: the
+renderer 2 to 6, the two SH-4 1 to 5 (1 to 2 million instructions run a
+frame, about 3 ns each), the two ARM7 1.5 to 5. A slower graphics card is
+another matter: on an Intel HD 520 the translucent fragments of a picture
+like the worst of BRAVEFF take 59 ms, against 0.8 ms on the RTX 3080. The main
 loop of the sound driver turns 312 times a frame and an interrupt comes every
 22 samples: the turns in between are counted without being run
 (src/odin/arm7.cpp), except with the drivers that count their turns at 0x40
@@ -268,9 +269,13 @@ the order of the hardware is not known; read from three cabinets: the
 faces of the SEGA letters of the PHARRIER logo, the street lamps of
 AIRTRIX, a wall of fire of BRAVEFF). Whole triangles sorted on their
 centroid broke those letters. The X360 port reverses its list of objects
-instead. Each layer takes two passes over the translucent meshes of the
-viewport, and each mesh sets its whole state again: this is the slowest
-part of the renderer, to redo when speed matters.
+instead. The meshes are drawn once, each fragment going to the list of its
+pixel; a shader then puts every list in order and blends it, rounding to 8
+bits after each blend (HEURISTIC: the precision of the blender of the
+hardware is not known; the blender of the host is not used, a GeForce
+rounds the wrong way once in 5 to 50 blends). This needs OpenGL 4.3. The
+software renderer of Mesa (llvmpipe, LLVM 22.1.3) crashes when it compiles
+the shader that fills the lists; AMD and Intel under Mesa are not tried.
 
 The 101 bias is a signed 11-bit number that moves a mesh of any type but
 the background by bias / 65536 of its own depth, nearer when positive
