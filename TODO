@@ -200,6 +200,9 @@ already faster than the interpreter.
 
 Fix the TMU frequency, may help with flashing graphics in PHARRIER.
 
+A read that nothing answers gives 0 (HEURISTIC: the value of the bus is
+not known; BRAVEFF reads FFFFFFFC at 0C076E48).
+
 
 GPU / RENDERING
 ---------------

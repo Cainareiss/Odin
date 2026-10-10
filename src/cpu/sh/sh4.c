@@ -917,8 +917,11 @@ sh4_get (sh4_t *ctx, unsigned size, uint32_t addr, void *val)
 		ret = vk_mmap_get_slow (ctx->base.mmap, size, addr & ADDR_MASK, val);
 	ctx->wait.touched = true;
 	/* TODO propagate to the caller to allow for memory exceptions */
-	if (ret)
+	if (ret) {
+		/* Zero, not what the caller's variable held. */
+		set_ptr (val, size, 0);
 		VK_CPU_ERROR (ctx, "unhandled R%d @%08X", 8*size, addr);
+	}
 	return ret;
 }
 
