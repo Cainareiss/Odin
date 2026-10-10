@@ -103,6 +103,19 @@ typedef struct {
 	GLuint		u_solid_depth;
 } hikaru_mesh_locs_t;
 
+/* What a mesh program was given last, so as not to give it again: indices
+ * in the lists of the frame `frame`. */
+typedef struct {
+	uint32_t	frame;
+	uint32_t	vp_index;
+	uint32_t	ls_index, ls_vp_index;
+	uint32_t	mv_index, mv2_index;
+	float		alpha_ref;
+	float		depth_scale;
+	int		weigh_by_alpha;
+	int		find_layer;
+} hikaru_mesh_held_t;
+
 typedef struct {
 	GLuint id;
 	hikaru_texhead_t th;
@@ -177,6 +190,12 @@ typedef struct {
 		bool			find_layer;	/* pass that finds a translucent layer */
 
 		hikaru_mesh_locs_t	locs;
+
+		/* See hikaru_mesh_held_t */
+		hikaru_mesh_held_t	*held;
+		uint32_t		frame;
+		uint32_t		scissor_vp_index;	/* of this frame */
+		uint32_t		bound_tex_index;	/* of this frame, on unit 0 */
 	} meshes;
 
 	struct {

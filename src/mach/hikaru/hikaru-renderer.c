@@ -845,6 +845,7 @@ static struct {
 	hikaru_glsl_variant_t variant;
 	GLuint program;
 	hikaru_mesh_locs_t locs;
+	hikaru_mesh_held_t held;
 } program_cache[MAX_PROGRAMS];
 unsigned num_programs;
 
@@ -887,6 +888,7 @@ upload_glsl_program (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 		if (program_cache[i].variant.full == variant.full) {
 			hr->meshes.program = program_cache[i].program;
 			hr->meshes.locs = program_cache[i].locs;
+			hr->meshes.held = &program_cache[i].held;
 			glUseProgram (hr->meshes.program);
 			VK_ASSERT_NO_GL_ERROR ();
 			return;
@@ -996,9 +998,17 @@ upload_glsl_program (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 		glGetUniformLocation (hr->meshes.program, "u_solid_depth");
 	VK_ASSERT_NO_GL_ERROR ();
 
+	/* The texture units never change. */
+	glUniform1i (hr->meshes.locs.u_texture, 0);
+	glUniform1i (hr->meshes.locs.u_last_layer, 5);
+	glUniform1i (hr->meshes.locs.u_solid_depth, 6);
+	VK_ASSERT_NO_GL_ERROR ();
+
 	program_cache[num_programs].variant.full = variant.full;
 	program_cache[num_programs].program = hr->meshes.program;
 	program_cache[num_programs].locs = hr->meshes.locs;
+	program_cache[num_programs].held.frame = ~0;
+	hr->meshes.held = &program_cache[num_programs].held;
 	num_programs++;
 	VK_ASSERT (num_programs < MAX_PROGRAMS);
 }
@@ -1014,6 +1024,18 @@ upload_viewport (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	mtx4x4f_t projection;
 
 	VK_ASSERT (mesh->vp_index != ~0);
+
+	/* The clip window is cut by the scissor, whatever the program. */
+	if (hr->meshes.scissor_vp_index != mesh->vp_index) {
+		hr->meshes.scissor_vp_index = mesh->vp_index;
+		glScissor ((GLint) vp->clip.l, 480 - (GLint) vp->clip.t,
+		           (GLsizei) (vp->clip.r - vp->clip.l),
+		           (GLsizei) (vp->clip.t - vp->clip.b));
+	}
+
+	if (hr->meshes.held->vp_index == mesh->vp_index)
+		return;
+	hr->meshes.held->vp_index = mesh->vp_index;
 
 	if (!isnonnegative (vp->clip.l) || !isnonnegative (vp->clip.r) ||
 	    !isnonnegative (vp->clip.b) || !isnonnegative (vp->clip.t) ||
@@ -1050,11 +1072,6 @@ upload_viewport (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	glUniformMatrix4fv (hr->meshes.locs.u_projection, 1, GL_FALSE,
 	                    (const GLfloat *) projection);
 
-	glViewport (0, 0, 640, 480);
-	glScissor ((GLint) vp->clip.l, 480 - (GLint) vp->clip.t,
-	           (GLsizei) (vp->clip.r - vp->clip.l),
-	           (GLsizei) (vp->clip.t - vp->clip.b));
-
 	if (hr->meshes.variant.has_cue) {
 		/* 621 words without a colour: P = 1 / (end - start),
 		 * Q = near / start (PHARRIER library 0C015A3E). */
@@ -1090,6 +1107,13 @@ upload_modelview (hikaru_renderer_t *hr, hikaru_mesh_t *mesh, unsigned i)
 {
 	hikaru_modelview_t *mv = &hr->mv_list[mesh->mv_index + i];
 	mtx3x3f_t normal;
+
+	if (mesh->mv_index != ~0 &&
+	    hr->meshes.held->mv_index == mesh->mv_index + i &&
+	    hr->meshes.held->mv2_index == mesh->mv2_index)
+		return;
+	hr->meshes.held->mv_index = (mesh->mv_index != ~0) ? mesh->mv_index + i : ~0;
+	hr->meshes.held->mv2_index = mesh->mv2_index;
 
 	if (mesh->mv_index == ~0) {
 		static const hikaru_modelview_t identity_mv = {
@@ -1134,6 +1158,11 @@ upload_material_texhead (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	if (!hr->meshes.variant.has_texture)
 		return;
 
+	/* The texture of a texhead and its sampling stay bound. */
+	if (hr->meshes.bound_tex_index == mesh->tex_index)
+		return;
+	hr->meshes.bound_tex_index = mesh->tex_index;
+
 	tex = get_texture (hr, &hr->tex_list[mesh->tex_index]);
 
 	glActiveTexture (GL_TEXTURE0 + 0);
@@ -1144,9 +1173,6 @@ upload_material_texhead (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 
 	if (tex)
 		set_texhead_sampling (&hr->tex_list[mesh->tex_index]);
-
-	glUniform1i (hr->meshes.locs.u_texture, 0);
-	VK_ASSERT_NO_GL_ERROR ();
 }
 
 static void
@@ -1185,6 +1211,13 @@ upload_lightset (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 
 	if (!hr->meshes.variant.has_lighting)
 		return;
+
+	/* The ambient colour comes from the viewport. */
+	if (hr->meshes.held->ls_index == mesh->ls_index &&
+	    hr->meshes.held->ls_vp_index == mesh->vp_index)
+		return;
+	hr->meshes.held->ls_index = mesh->ls_index;
+	hr->meshes.held->ls_vp_index = mesh->vp_index;
 
 	LOG ("lightset [%u] mask=%X = %s", mesh->ls_index, ls->mask,
 	     get_lightset_str (ls));
@@ -1588,6 +1621,8 @@ update_and_set_rendstate (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 static void
 draw_mesh (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 {
+	hikaru_mesh_held_t *held;
+	float depth_scale;
 	unsigned i;
 
 	VK_ASSERT (mesh);
@@ -1603,13 +1638,29 @@ draw_mesh (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	VK_ASSERT_NO_GL_ERROR ();
 
 	upload_glsl_program (hr, mesh);
-	glUniform1f (hr->meshes.locs.u_alpha_ref, hr->meshes.alpha_ref);
-	glUniform1f (hr->meshes.locs.u_weigh_by_alpha,
-	             hr->meshes.weigh_by_alpha ? 1.0f : 0.0f);
-	glUniform1i (hr->meshes.locs.u_find_layer,
-	             hr->meshes.find_layer ? 1 : 0);
-	glUniform1i (hr->meshes.locs.u_last_layer, 5);
-	glUniform1i (hr->meshes.locs.u_solid_depth, 6);
+	held = hr->meshes.held;
+	if (held->frame != hr->meshes.frame) {
+		/* Nothing of this frame yet. */
+		held->frame = hr->meshes.frame;
+		held->vp_index = held->ls_index = held->ls_vp_index = ~0;
+		held->mv_index = held->mv2_index = ~0;
+		held->alpha_ref = held->depth_scale = NAN;
+		held->weigh_by_alpha = held->find_layer = -1;
+	}
+	if (held->alpha_ref != hr->meshes.alpha_ref) {
+		held->alpha_ref = hr->meshes.alpha_ref;
+		glUniform1f (hr->meshes.locs.u_alpha_ref, hr->meshes.alpha_ref);
+	}
+	if (held->weigh_by_alpha != (int) hr->meshes.weigh_by_alpha) {
+		held->weigh_by_alpha = hr->meshes.weigh_by_alpha;
+		glUniform1f (hr->meshes.locs.u_weigh_by_alpha,
+		             hr->meshes.weigh_by_alpha ? 1.0f : 0.0f);
+	}
+	if (held->find_layer != (int) hr->meshes.find_layer) {
+		held->find_layer = hr->meshes.find_layer;
+		glUniform1i (hr->meshes.locs.u_find_layer,
+		             hr->meshes.find_layer ? 1 : 0);
+	}
 	VK_ASSERT_NO_GL_ERROR ();
 
 	upload_viewport (hr, mesh);
@@ -1623,9 +1674,12 @@ draw_mesh (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	 * for the opaque types too: the lettering and the painted lines of
 	 * the SGNASCAR track lie on layers of -1024 to -256, the shadow of the
 	 * AIRTRIX skater is opaque. */
-	glUniform1f (hr->meshes.locs.u_depth_scale,
-	             hr->meshes.depth_bias ?
-	             1.0f - mesh->depth_bias * (1.0f / 65536.0f) : 1.0f);
+	depth_scale = hr->meshes.depth_bias ?
+	              1.0f - mesh->depth_bias * (1.0f / 65536.0f) : 1.0f;
+	if (held->depth_scale != depth_scale) {
+		held->depth_scale = depth_scale;
+		glUniform1f (hr->meshes.locs.u_depth_scale, depth_scale);
+	}
 
 	if (hr->debug.flags[HR_DEBUG_NO_INSTANCING]) {
 		unsigned i = MIN2 (hr->debug.flags[HR_DEBUG_SELECT_INSTANCE],
@@ -1827,6 +1881,7 @@ draw_translucent_meshes (hikaru_renderer_t *hr, hikaru_mesh_t *meshes,
 	glBindTexture (GL_TEXTURE_2D, hr->framebuffer.solid_depth);
 	glCopyTexSubImage2D (GL_TEXTURE_2D, 0, 0, 0, 0, 0, 640, 480);
 	glBindTexture (GL_TEXTURE_2D, 0);
+	hr->meshes.bound_tex_index = ~0;
 	glActiveTexture (GL_TEXTURE0 + 6);
 	glBindTexture (GL_TEXTURE_2D, hr->framebuffer.solid_depth);
 	glActiveTexture (GL_TEXTURE0);
@@ -2021,6 +2076,8 @@ draw_scene (hikaru_renderer_t *hr)
 		return;
 
 	upload_vertex_data (hr);
+
+	glViewport (0, 0, 640, 480);
 
 	/* Note that "the pixel ownership test, the scissor test, dithering,
 	 * and the buffer writemasks affect the operation of glClear". */
@@ -2722,6 +2779,9 @@ hikaru_renderer_begin_frame (vk_renderer_t *renderer)
 	unsigned vpi, i;
 
 	hr->meshes.variant.full = ~0;
+	hr->meshes.frame++;
+	hr->meshes.scissor_vp_index = ~0;
+	hr->meshes.bound_tex_index = ~0;
 
 	hr->num_vps = 0;
 	hr->num_mvs = 0;
