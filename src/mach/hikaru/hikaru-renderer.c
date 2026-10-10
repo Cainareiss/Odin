@@ -505,6 +505,9 @@ uniform vec2		u_fog;							\n \
 uniform vec3		u_fog_color;						\n \
 uniform float		u_alpha_ref;						\n \
 uniform float		u_weigh_by_alpha;					\n \
+uniform int		u_find_layer;						\n \
+uniform sampler2D	u_last_layer;						\n \
+uniform sampler2D	u_solid_depth;						\n \
 										\n \
 in vec4 p_position;								\n \
 in vec3 p_normal;								\n \
@@ -590,7 +593,8 @@ main (void)	\n \
 	 * near planes the games send, the projected depth cannot tell apart	\n \
 	 * surfaces that the cabinets do (the shadow of the AIRTRIX combo	\n \
 	 * labels lies 0.06 behind them at a depth of 560). */			\n \
-	gl_FragDepth = log2 (1.0 + 1.0 / gl_FragCoord.w) * (1.0 / 24.0);	\n \
+	float frag_depth = log2 (1.0 + 1.0 / gl_FragCoord.w) * (1.0 / 24.0);	\n \
+	gl_FragDepth = frag_depth;						\n \
 	\n \
 #if HAS_TEXTURE	\n \
 	vec4 texel = texture (u_texture, p_texcoords);	\n \
@@ -667,6 +671,16 @@ main (void)	\n \
 	/* Alpha test of the render pass (X360 825B2408). */			\n \
 	if (color.a <= u_alpha_ref)						\n \
 		discard;							\n \
+										\n \
+	/* The pass that finds a translucent layer keeps what is nearer than	\n \
+	 * the last layer and not behind the other types, whose depth buffer	\n \
+	 * has steps of 6e-8. */						\n \
+	if (u_find_layer != 0) {						\n \
+		ivec2 pixel = ivec2 (gl_FragCoord.xy);				\n \
+		if (frag_depth >= texelFetch (u_last_layer, pixel, 0).r ||	\n \
+		    frag_depth > texelFetch (u_solid_depth, pixel, 0).r + 3.0e-8)	\n \
+			discard;						\n \
+	}									\n \
 										\n \
 #if HAS_FOG									\n \
 	/* X360 vo3d: linear fog on the eye depth from start to end. */	\n \
@@ -974,6 +988,12 @@ upload_glsl_program (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 		glGetUniformLocation (hr->meshes.program, "u_alpha_ref");
 	hr->meshes.locs.u_weigh_by_alpha =
 		glGetUniformLocation (hr->meshes.program, "u_weigh_by_alpha");
+	hr->meshes.locs.u_find_layer =
+		glGetUniformLocation (hr->meshes.program, "u_find_layer");
+	hr->meshes.locs.u_last_layer =
+		glGetUniformLocation (hr->meshes.program, "u_last_layer");
+	hr->meshes.locs.u_solid_depth =
+		glGetUniformLocation (hr->meshes.program, "u_solid_depth");
 	VK_ASSERT_NO_GL_ERROR ();
 
 	program_cache[num_programs].variant.full = variant.full;
@@ -1566,8 +1586,7 @@ update_and_set_rendstate (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	}
 
 static void
-draw_mesh (hikaru_renderer_t *hr, hikaru_mesh_t *mesh,
-           uint32_t first_tri, uint32_t num_tris)
+draw_mesh (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 {
 	unsigned i;
 
@@ -1587,6 +1606,10 @@ draw_mesh (hikaru_renderer_t *hr, hikaru_mesh_t *mesh,
 	glUniform1f (hr->meshes.locs.u_alpha_ref, hr->meshes.alpha_ref);
 	glUniform1f (hr->meshes.locs.u_weigh_by_alpha,
 	             hr->meshes.weigh_by_alpha ? 1.0f : 0.0f);
+	glUniform1i (hr->meshes.locs.u_find_layer,
+	             hr->meshes.find_layer ? 1 : 0);
+	glUniform1i (hr->meshes.locs.u_last_layer, 5);
+	glUniform1i (hr->meshes.locs.u_solid_depth, 6);
 	VK_ASSERT_NO_GL_ERROR ();
 
 	upload_viewport (hr, mesh);
@@ -1608,11 +1631,11 @@ draw_mesh (hikaru_renderer_t *hr, hikaru_mesh_t *mesh,
 		unsigned i = MIN2 (hr->debug.flags[HR_DEBUG_SELECT_INSTANCE],
 		                   mesh->num_instances - 1);
 		upload_modelview (hr, mesh, i);
-		glDrawArrays (GL_TRIANGLES, mesh->first + first_tri * 3, num_tris * 3);
+		glDrawArrays (GL_TRIANGLES, mesh->first, mesh->num_tris * 3);
 	} else {
 		for (i = 0; i < mesh->num_instances; i++) {
 			upload_modelview (hr, mesh, i);
-			glDrawArrays (GL_TRIANGLES, mesh->first + first_tri * 3, num_tris * 3);
+			glDrawArrays (GL_TRIANGLES, mesh->first, mesh->num_tris * 3);
 		}
 	}
 
@@ -1651,65 +1674,6 @@ upload_vertex_data (hikaru_renderer_t *hr)
 
 #undef OFFSET
 
-typedef struct {
-	float z;
-	uint32_t mesh;
-	uint32_t tri;
-} hikaru_tri_key_t;
-
-/* Far to near, then in the order of the display list. */
-static int
-compare_tri_keys (const void *a_, const void *b_)
-{
-	const hikaru_tri_key_t *a = (const hikaru_tri_key_t *) a_;
-	const hikaru_tri_key_t *b = (const hikaru_tri_key_t *) b_;
-
-	if (a->z < b->z) return -1;
-	if (a->z > b->z) return  1;
-	if (a->mesh != b->mesh) return (a->mesh < b->mesh) ? -1 : 1;
-	if (a->tri != b->tri) return (a->tri < b->tri) ? -1 : 1;
-	return 0;
-}
-
-/* Sorts the pushed triangles of a translucent mesh on the eye depth of their
- * centroid and keeps the depths for the pass, which merges the meshes. */
-static void
-sort_pushed_triangles (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
-{
-	const hikaru_modelview_t *mv = &hr->mv_list[mesh->mv_index];
-	uint32_t num = hr->push.num_tris, i;
-	hikaru_tri_key_t *keys;
-	hikaru_vertex_body_t *sorted;
-
-	keys = (hikaru_tri_key_t *) malloc (num * sizeof (hikaru_tri_key_t));
-	sorted = (hikaru_vertex_body_t *) malloc (num * 3 * sizeof (hikaru_vertex_body_t));
-	mesh->tri_depth = (float *) malloc (num * sizeof (float));
-	VK_ASSERT (keys && sorted && mesh->tri_depth);
-
-	for (i = 0; i < num; i++) {
-		const hikaru_vertex_body_t *v = &hr->push.all[i * 3];
-		float x = v[0].position[0] + v[1].position[0] + v[2].position[0];
-		float y = v[0].position[1] + v[1].position[1] + v[2].position[1];
-		float z = v[0].position[2] + v[1].position[2] + v[2].position[2];
-
-		keys[i].z = (mv->mtx[0][2] * x + mv->mtx[1][2] * y +
-		             mv->mtx[2][2] * z) / 3.0f + mv->mtx[3][2];
-		keys[i].mesh = 0;
-		keys[i].tri = i;
-	}
-	qsort (keys, num, sizeof (hikaru_tri_key_t), compare_tri_keys);
-
-	for (i = 0; i < num; i++) {
-		memcpy (&sorted[i * 3], &hr->push.all[keys[i].tri * 3],
-		        3 * sizeof (hikaru_vertex_body_t));
-		mesh->tri_depth[i] = keys[i].z;
-	}
-	memcpy (hr->push.all, sorted, num * 3 * sizeof (hikaru_vertex_body_t));
-
-	free (keys);
-	free (sorted);
-}
-
 /* Appends the pushed vertices of a mesh to the buffer of the frame. */
 static void
 store_vertex_data (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
@@ -1719,10 +1683,6 @@ store_vertex_data (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	VK_ASSERT (mesh);
 
 	mesh->num_tris = hr->push.num_tris;
-
-	if (mesh->polytype == HIKARU_POLYTYPE_TRANSLUCENT &&
-	    mesh->num_tris > 0 && mesh->mv_index < MAX_MODELVIEWS)
-		sort_pushed_triangles (hr, mesh);
 
 	num = mesh->num_tris * 3;
 	if (hr->verts.num + num > hr->verts.max) {
@@ -1828,50 +1788,109 @@ set_opaque_blend (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 		glBlendFuncSeparate (GL_ONE, GL_ZERO, GL_ZERO, GL_ZERO);
 }
 
-/* The translucent triangles of a viewport are drawn far to near, whatever
- * their mesh: the front of a SEGA letter of the PHARRIER logo covers its
- * back, sent after it, and the glass of an AIRTRIX street lamp shows over
- * the tree behind it. The X360 port reverses its list of objects instead
- * (825B3EB0); neither writes the depth here. */
+#define MAX_TRANSLUCENT_LAYERS 256
+
+/* The translucent polygons of a viewport are blended far to near at every
+ * pixel, whatever the triangle or the mesh they come from. On the PHARRIER
+ * cabinet the faces of a SEGA letter, alpha 0.8 and drawn on both sides,
+ * show the faces behind them and none over them, from any angle; the glass
+ * of an AIRTRIX street lamp glows over its frame; a wall of fire of BRAVEFF
+ * keeps its texture. How the hardware orders them is not known (HEURISTIC):
+ * whole triangles sorted on their centroid break those letters, and writing
+ * the depth drops layers that the cabinet shows. The X360 port reverses its
+ * list of objects instead (825B3EB0). Neither writes the depth here.
+ *
+ * Each layer takes two passes over the meshes: one finds, at every pixel,
+ * the farthest fragment that is nearer than the last layer blended and not
+ * behind the other types; one blends the fragments at that depth, with the
+ * factors of their mesh, in the order of the display list. */
 static void
 draw_translucent_meshes (hikaru_renderer_t *hr, hikaru_mesh_t *meshes,
                          unsigned num)
 {
-	hikaru_tri_key_t *keys;
-	uint32_t total = 0, i, j, k;
+	unsigned last = 0, layer, j;
+	GLuint found = 0;
 
-	for (j = 0; j < num; j++)
-		total += meshes[j].num_tris;
-	if (total == 0)
-		return;
+	/* The depth the other types left. */
+	glBindTexture (GL_TEXTURE_2D, hr->framebuffer.solid_depth);
+	glCopyTexSubImage2D (GL_TEXTURE_2D, 0, 0, 0, 0, 0, 640, 480);
+	glBindTexture (GL_TEXTURE_2D, 0);
+	glActiveTexture (GL_TEXTURE0 + 6);
+	glBindTexture (GL_TEXTURE_2D, hr->framebuffer.solid_depth);
+	glActiveTexture (GL_TEXTURE0);
+	VK_ASSERT_NO_GL_ERROR ();
 
-	keys = (hikaru_tri_key_t *) malloc (total * sizeof (hikaru_tri_key_t));
-	VK_ASSERT (keys);
+	/* Nothing is blended yet: the last layer is at the far end. */
+	glBindFramebuffer (GL_FRAMEBUFFER, hr->framebuffer.layer_fb[last]);
+	glDisable (GL_SCISSOR_TEST);
+	glDepthMask (GL_TRUE);
+	glClearDepth (1.0);
+	glClear (GL_DEPTH_BUFFER_BIT);
 
-	for (j = 0, k = 0; j < num; j++) {
-		hikaru_mesh_t *mesh = &meshes[j];
+	for (layer = 0; layer < MAX_TRANSLUCENT_LAYERS; layer++) {
+		unsigned next = last ^ 1;
 
-		for (i = 0; i < mesh->num_tris; i++, k++) {
-			keys[k].z = mesh->tri_depth ? mesh->tri_depth[i] : 0.0f;
-			keys[k].mesh = j;
-			keys[k].tri = i;
+		/* Find the layer. */
+		glBindFramebuffer (GL_FRAMEBUFFER, hr->framebuffer.layer_fb[next]);
+		glDisable (GL_SCISSOR_TEST);
+		glDepthMask (GL_TRUE);
+		glClearDepth (0.0);
+		glClear (GL_DEPTH_BUFFER_BIT);
+		glEnable (GL_SCISSOR_TEST);
+		glDepthFunc (GL_GREATER);
+		glColorMask (GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+		glActiveTexture (GL_TEXTURE0 + 5);
+		glBindTexture (GL_TEXTURE_2D, hr->framebuffer.layer_depth[last]);
+		glActiveTexture (GL_TEXTURE0);
+
+		hr->meshes.find_layer = true;
+		glBeginQuery (GL_ANY_SAMPLES_PASSED, hr->framebuffer.layer_query);
+		for (j = 0; j < num; j++)
+			draw_mesh (hr, &meshes[j]);
+		glEndQuery (GL_ANY_SAMPLES_PASSED);
+		hr->meshes.find_layer = false;
+		glGetQueryObjectuiv (hr->framebuffer.layer_query,
+		                     GL_QUERY_RESULT, &found);
+
+		glActiveTexture (GL_TEXTURE0 + 5);
+		glBindTexture (GL_TEXTURE_2D, 0);
+		glActiveTexture (GL_TEXTURE0);
+		glColorMask (GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+		VK_ASSERT_NO_GL_ERROR ();
+		if (!found)
+			break;
+
+		/* Blend it into the 3D buffer. */
+		glBindFramebuffer (GL_FRAMEBUFFER, hr->framebuffer.layer_fb[2]);
+		glFramebufferTexture2D (GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+		                        GL_TEXTURE_2D,
+		                        hr->framebuffer.cb[hr->framebuffer.scene], 0);
+		glFramebufferTexture2D (GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+		                        GL_TEXTURE_2D,
+		                        hr->framebuffer.layer_depth[next], 0);
+		glDepthFunc (GL_EQUAL);
+		glDepthMask (GL_FALSE);
+		for (j = 0; j < num; j++) {
+			set_material_blend (hr, &meshes[j]);
+			draw_mesh (hr, &meshes[j]);
 		}
+		VK_ASSERT_NO_GL_ERROR ();
+
+		last = next;
 	}
-	qsort (keys, total, sizeof (hikaru_tri_key_t), compare_tri_keys);
+	if (found)
+		VK_ERROR ("more than %u translucent layers", MAX_TRANSLUCENT_LAYERS);
 
-	/* Triangles that follow each other in a mesh go in one draw. */
-	for (k = 0; k < total; k += i) {
-		hikaru_mesh_t *mesh = &meshes[keys[k].mesh];
-
-		for (i = 1; k + i < total &&
-		            keys[k + i].mesh == keys[k].mesh &&
-		            keys[k + i].tri == keys[k].tri + i; i++);
-
-		set_material_blend (hr, mesh);
-		draw_mesh (hr, mesh, keys[k].tri, i);
-	}
-
-	free (keys);
+	glActiveTexture (GL_TEXTURE0 + 6);
+	glBindTexture (GL_TEXTURE_2D, 0);
+	glActiveTexture (GL_TEXTURE0);
+	glBindFramebuffer (GL_FRAMEBUFFER,
+	                   hr->framebuffer.fb[hr->framebuffer.scene]);
+	glEnable (GL_SCISSOR_TEST);
+	glClearDepth (1.0);
+	glDepthFunc (GL_LEQUAL);
+	glDepthMask (GL_FALSE);
+	VK_ASSERT_NO_GL_ERROR ();
 }
 
 static void
@@ -1888,7 +1907,7 @@ draw_meshes_for_polytype (hikaru_renderer_t *hr, unsigned vpi, int polytype)
 
 	if (hr->debug.flags[HR_DEBUG_SELECT_POLYTYPE] >= 0 &&
 	    hr->debug.flags[HR_DEBUG_SELECT_POLYTYPE] != polytype)
-		goto destroy_meshes;
+		return;
 
 	LOG (" ==== DRAWING VP %u, POLYTYPE %d ====", vpi, polytype);
 
@@ -1929,7 +1948,7 @@ draw_meshes_for_polytype (hikaru_renderer_t *hr, unsigned vpi, int polytype)
 
 	if (polytype == HIKARU_POLYTYPE_TRANSLUCENT) {
 		draw_translucent_meshes (hr, meshes, num);
-		goto destroy_meshes;
+		return;
 	}
 
 	for (j = 0; j < num; j++) {
@@ -1938,14 +1957,7 @@ draw_meshes_for_polytype (hikaru_renderer_t *hr, unsigned vpi, int polytype)
 			set_material_blend (hr, mesh);
 		else
 			set_opaque_blend (hr, mesh);
-		draw_mesh (hr, mesh, 0, mesh->num_tris);
-	}
-
-destroy_meshes:
-	for (j = 0; j < num; j++) {
-		hikaru_mesh_t *mesh = &meshes[j];
-		free (mesh->tri_depth);
-		mesh->tri_depth = NULL;
+		draw_mesh (hr, mesh);
 	}
 }
 
@@ -2290,6 +2302,34 @@ build_fb_state (hikaru_renderer_t *hr)
 	glBindTexture (GL_TEXTURE_2D, 0);
 	VK_ASSERT_NO_GL_ERROR ();
 
+	/* The translucent layers: two depth buffers that take turns, and a
+	 * copy of the depth of the other types. */
+	glGenTextures (2, hr->framebuffer.layer_depth);
+	glGenTextures (1, &hr->framebuffer.solid_depth);
+	glGenFramebuffers (3, hr->framebuffer.layer_fb);
+	glGenQueries (1, &hr->framebuffer.layer_query);
+	for (i = 0; i < 3; i++) {
+		glBindTexture (GL_TEXTURE_2D, (i < 2) ? hr->framebuffer.layer_depth[i] :
+		                                        hr->framebuffer.solid_depth);
+		glTexStorage2D (GL_TEXTURE_2D, 1,
+		                (i < 2) ? GL_DEPTH_COMPONENT32F : GL_DEPTH_COMPONENT24,
+		                640, 480);
+		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	}
+	glBindTexture (GL_TEXTURE_2D, 0);
+	for (i = 0; i < 2; i++) {
+		glBindFramebuffer (GL_FRAMEBUFFER, hr->framebuffer.layer_fb[i]);
+		glFramebufferTexture2D (GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+		                        GL_TEXTURE_2D, hr->framebuffer.layer_depth[i], 0);
+		glDrawBuffer (GL_NONE);
+		glReadBuffer (GL_NONE);
+		if (glCheckFramebufferStatus (GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+			return -1;
+	}
+	glBindFramebuffer (GL_FRAMEBUFFER, 0);
+	VK_ASSERT_NO_GL_ERROR ();
+
 	/* Create the VAO/VBO. */
 	glGenVertexArrays (1, &hr->framebuffer.vao);
 	glBindVertexArray (hr->framebuffer.vao);
@@ -2329,6 +2369,10 @@ destroy_fb_state (hikaru_renderer_t *hr)
 	glDeleteTextures (NUM_FRAMEBUFFERS, hr->framebuffer.cb);
 	glDeleteTextures (1, &hr->framebuffer.raw);
 	glDeleteRenderbuffers (NUM_FRAMEBUFFERS, hr->framebuffer.db);
+	glDeleteFramebuffers (3, hr->framebuffer.layer_fb);
+	glDeleteTextures (2, hr->framebuffer.layer_depth);
+	glDeleteTextures (1, &hr->framebuffer.solid_depth);
+	glDeleteQueries (1, &hr->framebuffer.layer_query);
 	VK_ASSERT_NO_GL_ERROR ();
 
 	vk_renderer_destroy_program (hr->framebuffer.program);
@@ -2450,6 +2494,7 @@ draw (hikaru_renderer_t *hr)
 	scene = (n1 < 2) ? n1 : (n2 < 2) ? n2 : 0;
 	glBindFramebuffer (GL_FRAMEBUFFER, hr->framebuffer.fb[scene]);
 	VK_ASSERT_NO_GL_ERROR ();
+	hr->framebuffer.scene = scene;
 
 	draw_scene (hr);
 	VK_ASSERT_NO_GL_ERROR ();

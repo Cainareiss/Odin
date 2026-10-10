@@ -95,6 +95,9 @@ typedef struct {
 	GLuint		u_fog_color;
 	GLuint		u_alpha_ref;
 	GLuint		u_weigh_by_alpha;
+	GLuint		u_find_layer;
+	GLuint		u_last_layer;
+	GLuint		u_solid_depth;
 } hikaru_mesh_locs_t;
 
 typedef struct {
@@ -115,7 +118,6 @@ typedef struct {
 	uint32_t		ls_index;
 	float			alpha_thresh[2];
 	float			depth_bias;
-	float			*tri_depth;	/* translucent: eye depth of each triangle */
 	float			poly_alpha;	/* 103 alpha, logged */
 	bool			has_two_sided_lighting;
 	uint32_t		num;
@@ -169,6 +171,7 @@ typedef struct {
 		float			alpha_ref;
 		bool			depth_bias;
 		bool			weigh_by_alpha;
+		bool			find_layer;	/* pass that finds a translucent layer */
 
 		hikaru_mesh_locs_t	locs;
 	} meshes;
@@ -182,6 +185,12 @@ typedef struct {
 		GLuint program;
 		GLuint fb[2], cb[2], db[2];
 		GLuint raw;	/* the 3D buffer as drawn, before the blender */
+		/* Translucent layers, see draw_translucent_meshes */
+		GLuint layer_fb[3];	/* two to find a layer, one to blend it */
+		GLuint layer_depth[2];
+		GLuint solid_depth;	/* depth left by the other types */
+		GLuint layer_query;
+		unsigned scene;		/* the 3D buffer being drawn */
 		GLuint vao, vbo;
 		struct {
 			GLuint u_front;
