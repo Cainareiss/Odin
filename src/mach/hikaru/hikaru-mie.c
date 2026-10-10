@@ -56,6 +56,8 @@
  * ODIN_MIE_TRACE=<file> writes the Z80 bus trace of ODIN_MIE_TRACE_N
  * instructions (default 300000) from the first time the PC reaches
  * ODIN_MIE_TRACE_START (hex, default 0: from reset).
+ * ODIN_MIE_EEPROM=<file> loads the 93C46 from that file when it exists
+ * and writes it back on exit; blank otherwise.
  *
  * The serial block of the MIE (Z80 ports 0x09-0x0E) carries a CRP-1231
  * card reader (src/odin/card_reader.cpp). ODIN_CARD=none leaves the
@@ -401,13 +403,53 @@ hikaru_mie_reset (vk_device_t *dev, vk_reset_type_t type)
 	mie->busrq = 0;
 }
 
+/* The 93C46 holds the system settings the BOOTROM keeps (its test menu:
+ * country, coin chutes, ...). */
+static void
+hikaru_mie_setup_eeprom (hikaru_mie_t *mie)
+{
+	const char *path = getenv ("ODIN_MIE_EEPROM");
+	uint8_t data[128];
+	FILE *fp;
+
+	if (!path)
+		return;
+	fp = fopen (path, "rb");
+	if (fp && fread (data, 1, sizeof (data), fp) == sizeof (data)) {
+		odin_mie_eeprom_load (mie->chip, data, sizeof (data));
+		VK_PRINT ("MIE: EEPROM file '%s' loaded", path);
+	} else
+		VK_PRINT ("MIE: EEPROM file '%s' not found: blank", path);
+	if (fp)
+		fclose (fp);
+}
+
+static void
+hikaru_mie_save_eeprom (hikaru_mie_t *mie)
+{
+	const char *path = getenv ("ODIN_MIE_EEPROM");
+	uint8_t data[128];
+	FILE *fp;
+
+	if (!path)
+		return;
+	odin_mie_eeprom_read (mie->chip, data, sizeof (data));
+	fp = fopen (path, "wb");
+	if (!fp || fwrite (data, 1, sizeof (data), fp) != sizeof (data))
+		VK_ERROR ("MIE: cannot write the EEPROM file '%s'", path);
+	if (fp)
+		fclose (fp);
+}
+
 static void
 hikaru_mie_destroy (vk_device_t **dev_)
 {
 	if (dev_ && *dev_) {
 		hikaru_mie_t *mie = (hikaru_mie_t *) *dev_;
-		if (mie->chip)
+		if (mie->chip) {
+			hikaru_mie_save_eeprom (mie);
 			odin_mie_delete (mie->chip);
+		}
 		mie->chip = NULL;
 		if (mie->trace)
 			fclose (mie->trace);
@@ -506,6 +548,7 @@ hikaru_mie_new (vk_machine_t *mach, unsigned clock_hz)
 		odin_mie_set_log (mie->chip, stderr);
 		hikaru_mie_setup_trace (mie);
 		hikaru_mie_setup_card (mie);
+		hikaru_mie_setup_eeprom (mie);
 		VK_PRINT ("MIE: LLE (315-6146 ROM + uploaded Z80 program)");
 	} else
 		VK_PRINT ("MIE: HLE stand-in (ODIN_MIE=lle for the Z80)");

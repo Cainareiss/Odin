@@ -306,6 +306,14 @@ odin_mie_eeprom_load(odin_mie_t *dev, const uint8_t *data, size_t size)
 		dev->board->eeprom().load(std::span<const uint8_t>(data, size));
 }
 
+void
+odin_mie_eeprom_read(odin_mie_t *dev, uint8_t *data, size_t size)
+{
+	const std::span<uint8_t> cells = dev->board->eeprom().data();
+	if (data && size >= cells.size())
+		std::memcpy(data, cells.data(), cells.size());
+}
+
 int
 odin_mie_card_attach(odin_mie_t *dev, const char *card_file, FILE *trace)
 {

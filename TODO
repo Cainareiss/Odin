@@ -140,8 +140,13 @@ an alpha of 0.7, look opaque).
 
 EEPROMs: the main board 93C46 (SH-4 port A, src/odin/eeprom_bridge.cpp)
 and the ROM board X76F100 (bus page 0x14, src/odin/x76f100.cpp) are
-real and read by the BOOTROM; the MIE 93C46 is in the LLE MIE. None of
-the three is written back to disk yet.
+real and read by the BOOTROM; the MIE 93C46 is in the LLE MIE. It holds
+the system settings of the BOOTROM (two copies of 62 bytes and a CRC,
+the country in byte 5): ODIN_MIE_EEPROM=<file> loads it and writes it
+back on exit. Blank, the BOOTROM falls back on Japan. The other two are
+not written back to disk yet. The COUNTRY SETTING page of the BOOTROM
+menu is the second routine of its EXIT line: how to reach it is not
+found.
 
 Game patches (hikaru.c, hikaru_install_game_patches) are all off, kept
 as comments: airtrix 0x0C010F9A (660-frame I/O board wait shortened),

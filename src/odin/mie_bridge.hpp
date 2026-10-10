@@ -79,6 +79,8 @@ void odin_mie_set_log(odin_mie_t *dev, FILE *out);
 void odin_mie_set_trace(odin_mie_t *dev, FILE *out, uint32_t max_instructions, uint16_t start_pc);
 /* Initial contents of the 128-byte EEPROM; blank (0xFF) otherwise. */
 void odin_mie_eeprom_load(odin_mie_t *dev, const uint8_t *data, size_t size);
+/* Copies the 128 bytes of the EEPROM out; `size` must hold them. */
+void odin_mie_eeprom_read(odin_mie_t *dev, uint8_t *data, size_t size);
 /* Puts a CRP-1231 card reader on the MIE serial block. `card_file`
  * (may be NULL) holds the card's three tracks and is loaded into the
  * reader when it exists; `trace` (may be NULL) gets one line per frame.
