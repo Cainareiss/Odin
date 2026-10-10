@@ -344,10 +344,20 @@ hikaru_mie_get (vk_device_t *dev, unsigned size, uint32_t addr, void *val)
 		return hikaru_mie_hle_get (mie, size, addr, val);
 
 	if (addr >= 0x00800000 && addr <= 0x0083FFFF) {
-		if (odin_mie_host_read (mie->chip, addr - 0x00800000, size, &value)) {
-			VK_MACH_ERROR (dev->mach, "MIE unhandled R%u %08X", size*8, addr);
-			set_ptr (val, size, 0);
-			return -1;
+		/* The MIE sits on a 16-bit bus: the SH-4 reads a longword as
+		 * two words, the low one first. */
+		const unsigned part = (size == 4) ? 2 : size;
+		unsigned i;
+
+		for (i = 0; i < size; i += part) {
+			uint32_t temp;
+
+			if (odin_mie_host_read (mie->chip, addr + i - 0x00800000, part, &temp)) {
+				VK_MACH_ERROR (dev->mach, "MIE unhandled R%u %08X", size*8, addr);
+				set_ptr (val, size, 0);
+				return -1;
+			}
+			value |= temp << (8 * i);
 		}
 	} else if (addr >= 0x01000000 && addr <= 0x010001FF) {
 		value = odin_mie_busrq_read (mie->chip);
@@ -368,9 +378,15 @@ hikaru_mie_put (vk_device_t *dev, unsigned size, uint32_t addr, uint64_t val)
 		return hikaru_mie_hle_put (mie, size, addr, val);
 
 	if (addr >= 0x00800000 && addr <= 0x0083FFFF) {
-		if (odin_mie_host_write (mie->chip, addr - 0x00800000, size, (uint32_t) val)) {
-			VK_MACH_ERROR (dev->mach, "MIE unhandled W%u %08X = %lX", size*8, addr, val);
-			return -1;
+		const unsigned part = (size == 4) ? 2 : size;
+		unsigned i;
+
+		for (i = 0; i < size; i += part) {
+			if (odin_mie_host_write (mie->chip, addr + i - 0x00800000, part,
+			                         (uint32_t) (val >> (8 * i)))) {
+				VK_MACH_ERROR (dev->mach, "MIE unhandled W%u %08X = %lX", size*8, addr, val);
+				return -1;
+			}
 		}
 	} else if (addr >= 0x01000000 && addr <= 0x010001FF) {
 		odin_mie_busrq_write (mie->chip, (uint32_t) val);

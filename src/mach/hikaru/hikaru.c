@@ -727,7 +727,7 @@ setup_master_mmap (hikaru_t *hikaru)
 	                        hikaru->mie, "MIE/M");
 	*/
 	ret |= vk_mmap_add_dev (mmap, 0x00800000, 0x0083FFFF, 0x0003FFFF,
-	                        VK_REGION_RW | VK_REGION_SIZE_8 | VK_REGION_SIZE_16,
+	                        VK_REGION_RW | VK_REGION_SIZE_8 | VK_REGION_SIZE_16 | VK_REGION_SIZE_32,
 	                        hikaru->mie, "MIE/M");
 	ret |= vk_mmap_add_ram (mmap, 0x00C00000, 0x00C0FFFF, 0x0000FFFF,
 	                        0, hikaru->bram, "BRAM/M");
