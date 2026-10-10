@@ -6,18 +6,18 @@ Under Debian (and likely Ubuntu) it's as simple as:
 
 Then just do:
 
- $ cd path/to/valkyrie
+ $ cd path/to/odin
  $ make
 
-This will generate the bin/valkyrie binary. To run the bootrom with valkyrie,
+This will generate the bin/odin binary. To run the bootrom with odin,
 type:
 
- $ bin/valkyrie -R $PATH_TO_ROM_DIRECTORY -r hikaru_0.92
+ $ bin/odin -R $PATH_TO_ROM_DIRECTORY -r hikaru_0.92
 
 If you want to run a game, you have to also enable a hack that fakes the
 IO board a little bit better, as follows:
 
- $ MIE_HACK=1 bin/valkyrie -R $PATH_TO_ROM_DIRECTORY -r airtrix
+ $ MIE_HACK=1 bin/odin -R $PATH_TO_ROM_DIRECTORY -r airtrix
 
 If you forget to enable the hack, the game will either get stuck, or endlessly
 display an "I/O board initializing" screen.
@@ -26,17 +26,17 @@ If you are a developer, and want to display on screen the contents of the
 frame buffer or texture RAM, to see what gets uploaded, then set the
 HR_DRAW_FB or HR_DRAW_TEXRAM environment variables, as follows:
 
- $ MIE_HACK=1 HR_DRAW_TEXRAM=1 bin/valkyrie -R $PATH_TO_ROM_DIRECTORY -r airtrix
+ $ MIE_HACK=1 HR_DRAW_TEXRAM=1 bin/odin -R $PATH_TO_ROM_DIRECTORY -r airtrix
 
-You can also install valkyrie for your user with:
+You can also install odin for your user with:
 
  $ make install
 
-This will compile and install a copy of the valkyrie binary in ~/.local/bin
-and a copy of vk-games.json (the game description list used by valkyrie) in
-~/.local/share/valkyrie. After this step, you can just do:
+This will compile and install a copy of the odin binary in ~/.local/bin
+and a copy of vk-games.json (the game description list used by odin) in
+~/.local/share/odin. After this step, you can just do:
 
- $ valkyrie -R $PATH_TO_ROM_DIRECtory -r $ROM_NAME
+ $ odin -R $PATH_TO_ROM_DIRECtory -r $ROM_NAME
 
 from anywhere in your filesystem.
  
@@ -46,6 +46,6 @@ uncompressed ROM images _and_ a copy of (or a symlink to) the BOOTROM image.
 The latter should be named `hikaru_0.X.bin', where X is the bootrom version,
 that is, one of 84, 92 or 96. I *know* it is very rough, patches are welcome.
 
-XXX: while valkyrie can run all three BOOTROM versions, it only supports
+XXX: while odin can run all three BOOTROM versions, it only supports
 loading games using version 0.92; so make sure you are linking version 0.92
 in the ROM directories!

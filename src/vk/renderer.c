@@ -102,7 +102,7 @@ vk_renderer_end_frame (vk_renderer_t *renderer)
 	if (delta)
 		fps = 1000.0f / delta;
 
-	sprintf (title, "Valkyrie (%4.1f FPS) [%s]", fps, renderer->message);
+	sprintf (title, "Odin (%4.1f FPS) [%s]", fps, renderer->message);
 	SDL_SetWindowTitle (renderer->window, title);
 }
 
@@ -143,7 +143,7 @@ vk_renderer_init (vk_renderer_t *renderer)
 	SDL_GL_SetAttribute (SDL_GL_CONTEXT_PROFILE_MASK,
 	                     SDL_GL_CONTEXT_PROFILE_CORE);
 
-	renderer->window = SDL_CreateWindow ("Valkyrie",
+	renderer->window = SDL_CreateWindow ("Odin",
 	                                     SDL_WINDOWPOS_CENTERED,
 	                                     SDL_WINDOWPOS_CENTERED,
 	                                     renderer->width, renderer->height,

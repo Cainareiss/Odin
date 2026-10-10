@@ -288,7 +288,7 @@ load_game_list (void)
 
 	paths[0] = strdup ("./vk-games.json");
 	ret[1] = asprintf (&paths[1], "%s/vk-games.json", home);
-	ret[2] = asprintf (&paths[2], "%s/.local/share/valkyrie/vk-games.json", home);
+	ret[2] = asprintf (&paths[2], "%s/.local/share/odin/vk-games.json", home);
 
 	for (i = 0; i < 3 && !list; i++)
 		if (!ret[i])
@@ -307,7 +307,8 @@ load_game_list (void)
 int
 main (const int argc, char **argv)
 {
-	fprintf (stdout, "Valkyrie, Copyright(C) 2011-2013 Stefano Teso\n");
+	fprintf (stdout, "Odin, Copyright(C) 2026 Réda Chérif-Touil\n");
+	fprintf (stdout, "A hard fork of Valkyrie, Copyright(C) 2011-2013 Stefano Teso\n");
 	fprintf (stdout, "Version %u.%u. Released under the GPL3 License.\n",
 	         VK_VERSION_MAJOR, VK_VERSION_MINOR);
 	if (VK_VERSION_MINOR % 2)

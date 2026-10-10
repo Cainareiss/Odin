@@ -40,6 +40,7 @@ vk_state_new (const char *path, uint32_t mode)
 
 	state->mode = mode;
 
+	/* The name of the format: the states saved so far keep loading. */
 	sprintf (template, "valkyrie state %08X\n", VK_STATE_VERSION);
 	if (mode == VK_STATE_LOAD) {
 		size = fread ((void *) header, 1, sizeof (template), state->fp);

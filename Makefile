@@ -78,9 +78,9 @@ HIKARU_OBJ := \
 	src/mach/hikaru/hikaru-gpu-private.o \
 	src/mach/hikaru/hikaru-aica.o
 
-all: bin/valkyrie bin/vkbswap
+all: bin/odin bin/vkbswap
 
-bin/valkyrie: $(VK_OBJ) $(HIKARU_OBJ) src/vk/main.o
+bin/odin: $(VK_OBJ) $(HIKARU_OBJ) src/vk/main.o
 	$(LD) $+ -o $@ $(CFLAGS) $(LDFLAGS) 
 
 bin/vkbswap: $(VK_OBJ) src/utils/bswap.o
@@ -113,9 +113,9 @@ src/mach/hikaru/hikaru.o src/mach/hikaru/hikaru-memctl.o: src/odin/actel_m1_brid
 
 install:
 	@( mkdir -pv $(HOME)/.local/bin )
-	@( cp -v bin/valkyrie $(HOME)/.local/bin )
-	@( mkdir -pv $(HOME)/.local/share/valkyrie )
-	@( cp -v vk-games.json $(HOME)/.local/share/valkyrie )
+	@( cp -v bin/odin $(HOME)/.local/bin )
+	@( mkdir -pv $(HOME)/.local/share/odin )
+	@( cp -v vk-games.json $(HOME)/.local/share/odin )
 
 clean:
 	find . -name '*.o' | xargs rm -vf

@@ -1,3 +1,13 @@
+Odin, Copyright(c) 2026 Réda Chérif-Touil
+A hard fork of Valkyrie, Copyright(c) 2011-2013 Stefano Teso
+Released under the GPL v3 License.
+
+Odin is a low-level emulator of the SEGA Hikaru arcade board: it runs the
+programs of the real chips wherever they are known. CODING.md says how its
+code is written, TODO what is missing. What follows is the README of
+Valkyrie, as its author left it.
+
+
 Valkyrie, Copyright(c) 2011-2013 Stefano Teso
 Released under the GPL v3 License.
 
