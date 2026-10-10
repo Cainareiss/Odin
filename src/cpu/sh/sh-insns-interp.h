@@ -802,10 +802,30 @@ I (bt)
 	}
 }
 
+/* A delay loop, DT Rn and BF back to it: the turns left are counted without
+ * being run, up to the last of the count or of the slice. */
+static void
+skip_dt_loop (sh4_t *ctx)
+{
+	uint32_t pc = PC - 2, n, turns;
+	uint16_t dt;
+
+	sh4_fetch (ctx, pc, &dt);
+	dt = vk_cpu_patch ((vk_cpu_t *) ctx, pc & 0x1FFFFFFF, dt);
+	if ((dt & 0xF0FF) != 0x4010)
+		return;
+	n = (dt >> 8) & 15;
+	turns = MIN2 (R(n) - 1, (uint32_t) (ctx->base.remaining - 1) / 2);
+	R(n) -= turns;
+	ctx->base.remaining -= (int) (turns * 2);
+}
+
 I (bf)
 {
 	VK_CPU_ASSERT (ctx, !ctx->in_slot);
 	if (T == 0) {
+		if (inst == 0x8BFD)
+			skip_dt_loop (ctx);
 		PC = PC + (_SIMM8 << 1) + 4;
 		PC = PC - 2;
 	}
