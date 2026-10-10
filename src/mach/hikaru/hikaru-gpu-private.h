@@ -526,6 +526,7 @@ void hikaru_gpu_cp_on_put (hikaru_gpu_t *);
 void hikaru_renderer_begin_mesh (vk_renderer_t *rend, uint32_t addr,
                                  bool is_static);
 void hikaru_renderer_end_mesh (vk_renderer_t *rend, uint32_t addr);
+void hikaru_renderer_launch (vk_renderer_t *rend);
 void hikaru_renderer_push_vertices (vk_renderer_t *rend,
                                     hikaru_vertex_t *v,
                                     uint32_t push,

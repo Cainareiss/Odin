@@ -117,6 +117,7 @@ on_cp_begin (hikaru_gpu_t *gpu)
 		VK_LOG (" ==== CP BEGIN ==== ");
 
 	gpu->cp.is_running = true;
+	hikaru_renderer_launch (gpu->renderer);
 
 	PC = REG15 (0x70);
 	SP(0) = REG15 (0x74);

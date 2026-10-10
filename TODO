@@ -153,13 +153,14 @@ found.
 
 Save states: -s <frame>[,...] writes <game>-<frame>.vkstate once that
 frame is on screen and -l <file> resumes from it; F4 and F1 do the same
-with <game>.vkstate. A state holds the RAMs, every chip and the two 3D
-buffers that the blender feeds back: a resumed run gives the pictures and
-the memory of a straight one (checked on the six games, three states
-each). It is a raw dump of about 110 MB, tied to the layouts of the build
-that wrote it: every item carries its size and another build refuses the
-state when one differs. The MIE 93C46 comes back from the state, not from
-ODIN_MIE_EEPROM.
+with <game>.vkstate. A state holds the RAMs, every chip, the two 3D
+buffers that the blender feeds back and the pictures on their way to the
+screen: a resumed run gives the pictures and the memory of a straight one
+(checked on the six games, three states each, and on three states saved
+while a game loads). It is a raw dump of about 115 MB, tied to the layouts
+of the build that wrote it: every item carries its size and another build
+refuses the state when one differs. The MIE 93C46 comes back from the
+state, not from ODIN_MIE_EEPROM.
 
 Game patches (hikaru.c, hikaru_install_game_patches) are all off, kept
 as comments: airtrix 0x0C010F9A (660-frame I/O board wait shortened),
@@ -225,10 +226,17 @@ Check the framebuffer blending (instructions 781, 181) on more footage: a
 2D layer as a blender input is done for the PHARRIER logo screens only.
 Between the two 3D buffers the blender output is written back, which
 gives the motion blur of the BRAVEFF and PHARRIER cabinets (HEURISTIC:
-read from the footage, the trails of the stars). Where the buffer just drawn
-holds nothing, the screen shows the other buffer as it is (HEURISTIC: the
-SGNASCAR cabinet stays white while the game loads; its lists are empty then
-and the blender is at 0x14).
+read from the footage, the trails of the stars).
+
+The polygons of a list show two frames after its launch, once the next
+list is launched; the clear color is laid under them on the screen, at
+once (the sync routine of the game libraries waits for the end of the
+analysis and of the plot; RACER cabinet at 60 frames/s: the SEGA logo two
+frames on the black of the next scene, the stars gone one frame before
+the layer text). HEURISTIC: the plot of a list fits in a frame whatever
+its size; the 781 and the 181 act at once like the clear color; two 3D
+buffers are blended when their list is drawn; the textures are those of
+the frame of the launch, a frame before the plot.
 
 Figure out the effect of mesh LOD on texturing (normally, and SGNASCAR),
 disable mipmaps when appropriate (instruction 0C1 maybe).

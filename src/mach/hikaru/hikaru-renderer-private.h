@@ -184,7 +184,12 @@ typedef struct {
 	struct {
 		GLuint program;
 		GLuint fb[2], cb[2], db[2];
-		GLuint raw;	/* the 3D buffer as drawn, before the blender */
+		/* The pictures of the last three lists, see draw () */
+		GLuint pipe[3];
+		uint32_t num_lists;	/* lists drawn so far */
+		uint32_t shown;		/* the picture on screen */
+		int32_t next;		/* the one it takes at the next frame, or -1 */
+		uint32_t launched;	/* a list was launched during this frame */
 		/* Translucent layers, see draw_translucent_meshes */
 		GLuint layer_fb[3];	/* two to find a layer, one to blend it */
 		GLuint layer_depth[2];
@@ -209,8 +214,7 @@ typedef struct {
 			GLuint	u_above_2;
 			GLuint u_invert_f;
 			GLuint u_invert_b;
-			GLuint u_raw;
-			GLuint u_holes;
+			GLuint u_clear;
 		} locs;
 	} framebuffer;
 

@@ -1700,6 +1700,14 @@ store_vertex_data (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 }
 
 void
+hikaru_renderer_launch (vk_renderer_t *rend)
+{
+	hikaru_renderer_t *hr = (hikaru_renderer_t *) rend;
+
+	hr->framebuffer.launched = 1;
+}
+
+void
 hikaru_renderer_begin_mesh (vk_renderer_t *rend, uint32_t addr,
                             bool is_static)
 {
@@ -1976,7 +1984,6 @@ draw_scene (hikaru_renderer_t *hr)
 		HIKARU_POLYTYPE_SHADOW_B,
 		HIKARU_POLYTYPE_TRANSLUCENT,
 	};
-	hikaru_gpu_t *gpu = hr->gpu;
 	unsigned vpi, i;
 
 	if (hr->debug.flags[HR_DEBUG_NO_3D])
@@ -1988,11 +1995,9 @@ draw_scene (hikaru_renderer_t *hr)
 	 * and the buffer writemasks affect the operation of glClear". */
 	glDepthMask (GL_TRUE);
 	glDisable (GL_SCISSOR_TEST);
-	/* The alpha bit of the clear color covers what is below the 3D. */
-	glClearColor (gpu->fb_config.clear[0] * INV255,
-	              gpu->fb_config.clear[1] * INV255,
-	              gpu->fb_config.clear[2] * INV255,
-	              1.0f - gpu->fb_config.clear[3] * INV255);
+	/* An empty 3D buffer lets everything through: the clear color comes
+	 * in on the screen, see draw (). */
+	glClearColor (0.0f, 0.0f, 0.0f, 1.0f);
 	glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	glEnable (GL_SCISSOR_TEST);
@@ -2130,8 +2135,7 @@ static const char *fb_fs_source =
 "uniform float u_above_2 = 1.0;							\n"
 "uniform int u_invert_f = 0;							\n"
 "uniform int u_invert_b = 0;							\n"
-"uniform sampler2D u_raw;							\n"
-"uniform int u_holes = 0;							\n"
+"uniform vec4 u_clear = vec4 (0.0);						\n"
 "										\n"
 "in vec2 p_texcoords;								\n"
 "										\n"
@@ -2168,11 +2172,11 @@ static const char *fb_fs_source =
 "	if (u_invert_b != 0)							\n"
 "		texel_b.a = 0.0;						\n"
 "	vec4 color = mix (texel_f, texel_b, u_factor);				\n"
-"	/* Where the 3D buffer just drawn holds nothing, the blender shows	\n"
-"	 * the other one as it is (SGNASCAR stays white while it loads).	\n"
+"	/* The clear color shows where the 3D holds nothing, and covers	\n"
+"	 * what is below it when its alpha bit is set.			\n"
 "	 */									\n"
-"	if (u_holes != 0 && texture (u_raw, p_texcoords).a >= 0.999)		\n"
-"		color = texel_b;						\n"
+"	color.rgb += color.a * u_clear.rgb;					\n"
+"	color.a *= 1.0 - u_clear.a;						\n"
 "	float cover_3d = (u_keyed_3d > 0.0) ? 1.0 - step (0.999, color.a) : 1.0;	\n"
 "										\n"
 "	/* A layer pixel with its alpha bit covers the 3D, black included	\n"
@@ -2241,10 +2245,8 @@ build_fb_state (hikaru_renderer_t *hr)
 		get_uniform_loc (hr->framebuffer.program, "u_invert_f");
 	hr->framebuffer.locs.u_invert_b =
 		get_uniform_loc (hr->framebuffer.program, "u_invert_b");
-	hr->framebuffer.locs.u_raw =
-		get_uniform_loc (hr->framebuffer.program, "u_raw");
-	hr->framebuffer.locs.u_holes =
-		get_uniform_loc (hr->framebuffer.program, "u_holes");
+	hr->framebuffer.locs.u_clear =
+		get_uniform_loc (hr->framebuffer.program, "u_clear");
 
 	/* Generate two framebuffers (the front and the back buffers), each
 	 * associated with a colorbuffer (texture) and a depth buffer
@@ -2293,13 +2295,31 @@ build_fb_state (hikaru_renderer_t *hr)
 	glBindFramebuffer (GL_FRAMEBUFFER, 0);
 	VK_ASSERT_NO_GL_ERROR ();
 
-	/* A copy of the 3D buffer as it was drawn. */
-	glGenTextures (1, &hr->framebuffer.raw);
-	glBindTexture (GL_TEXTURE_2D, hr->framebuffer.raw);
-	glTexStorage2D (GL_TEXTURE_2D, 1, GL_RGBA8, 640, 480);
-	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glBindTexture (GL_TEXTURE_2D, 0);
+	/* The pictures of the last three lists, empty at first. */
+	{
+		uint8_t *empty = (uint8_t *) calloc (640 * 480, 4);
+
+		if (!empty)
+			return -1;
+		for (i = 0; i < 640 * 480; i++)
+			empty[i * 4 + 3] = 0xFF;
+
+		glGenTextures (3, hr->framebuffer.pipe);
+		glPixelStorei (GL_UNPACK_ALIGNMENT, 1);
+		for (i = 0; i < 3; i++) {
+			glBindTexture (GL_TEXTURE_2D, hr->framebuffer.pipe[i]);
+			glTexStorage2D (GL_TEXTURE_2D, 1, GL_RGBA8, 640, 480);
+			glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+			glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+			glTexSubImage2D (GL_TEXTURE_2D, 0, 0, 0, 640, 480,
+			                 GL_RGBA, GL_UNSIGNED_BYTE, empty);
+		}
+		glBindTexture (GL_TEXTURE_2D, 0);
+		free (empty);
+
+		hr->framebuffer.shown = 2;
+		hr->framebuffer.next = -1;
+	}
 	VK_ASSERT_NO_GL_ERROR ();
 
 	/* The translucent layers: two depth buffers that take turns, and a
@@ -2367,7 +2387,7 @@ destroy_fb_state (hikaru_renderer_t *hr)
 	glBindFramebuffer (GL_FRAMEBUFFER, 0);
 	glDeleteFramebuffers (NUM_FRAMEBUFFERS, hr->framebuffer.fb);
 	glDeleteTextures (NUM_FRAMEBUFFERS, hr->framebuffer.cb);
-	glDeleteTextures (1, &hr->framebuffer.raw);
+	glDeleteTextures (3, hr->framebuffer.pipe);
 	glDeleteRenderbuffers (NUM_FRAMEBUFFERS, hr->framebuffer.db);
 	glDeleteFramebuffers (3, hr->framebuffer.layer_fb);
 	glDeleteTextures (2, hr->framebuffer.layer_depth);
@@ -2453,18 +2473,35 @@ upload_layer (hikaru_renderer_t *hr, hikaru_layer_t *layer, GLuint *id, float *m
 	VK_ASSERT_NO_GL_ERROR ();
 }
 
-/* TODO make use of the framebuffer configuration in the GPU:1A registers,
+/* The polygons reach the screen in two steps. The game libraries launch a
+ * list only once the GPU 15 has analysed the last one and the GPU 1A has
+ * plotted the one before (RACER @0C0118C0): a launch hands the last list
+ * over to the GPU 1A, which plots it; it shows at the next frame. Nothing
+ * moves without a launch. The 781, the 181 and the clear color act at once.
+ *
+ * On the RACER cabinet the SEGA logo stays two frames on the black of the
+ * next scene, and the stars leave one frame before the text of the layers;
+ * SGNASCAR keeps its white picture while it loads, with no list launched.
+ *
+ * TODO make use of the framebuffer configuration in the GPU:1A registers,
  * right now it only uses the information in the 781/181 commands. */
 static void
 draw (hikaru_renderer_t *hr)
 {
 	hikaru_gpu_t *gpu = hr->gpu;
-	GLuint n1, n2, f, b, scene, layer1 = 0, layer2 = 0;
+	GLuint n1, n2, f, b, scene, shown, layer1 = 0, layer2 = 0;
 	float factor, mult1 = 0.0f, mult2 = 0.0f;
-	bool holes = false;
+	bool launched = hr->framebuffer.launched;
 
-	/* Figure out the GPU framebuffer assignments */
 	VK_PRINT ("FRAMEBUFFER 781=%08X 181=%08X", gpu->fb_config._781, gpu->fb_config._181);
+
+	hr->framebuffer.launched = 0;
+
+	/* The picture plotted during the last frame. */
+	if (hr->framebuffer.next >= 0) {
+		hr->framebuffer.shown = hr->framebuffer.next;
+		hr->framebuffer.next = -1;
+	}
 
 	n1 = gpu->fb_config.num_1;
 	n2 = gpu->fb_config.num_2;
@@ -2473,32 +2510,16 @@ draw (hikaru_renderer_t *hr)
 	if (gpu->fb_config.blend)
 		factor = gpu->fb_config.alpha * (1.0f / 255);
 
-
-	/* We only care about unit 0 for now. (Unit 1 is probably only used
-	 * for the dual-monitor case.) */
-	if ((LAYERS.layer[0][0].enabled || n1 == 2 || n2 == 2) &&
-	    !hr->debug.flags[HR_DEBUG_NO_LAYER1])
-		upload_layer (hr, &LAYERS.layer[0][0], &layer1, &mult1);
-
-	if ((LAYERS.layer[0][1].enabled || n1 == 3 || n2 == 3) &&
-	    !hr->debug.flags[HR_DEBUG_NO_LAYER2])
-		upload_layer (hr, &LAYERS.layer[0][1], &layer2, &mult2);
-
-	/* The two blender inputs: buffers 0 and 1 are the 3D color buffers,
-	 * 2 and 3 the 2D layers, which must be uploaded by now (PHARRIER
-	 * blends layer 2 in for its logo screens, 781 = 0704/0705). */
-	f = (n1 < 2) ? hr->framebuffer.cb[n1] : (n1 == 2) ? layer1 : layer2;
-	b = (n2 < 2) ? hr->framebuffer.cb[n2] : (n2 == 2) ? layer1 : layer2;
-
-	/* Draw the 3D scene to the front buffer. */
+	/* Draw the list to the 3D buffer its 781 names. */
 	scene = (n1 < 2) ? n1 : (n2 < 2) ? n2 : 0;
-	glBindFramebuffer (GL_FRAMEBUFFER, hr->framebuffer.fb[scene]);
-	VK_ASSERT_NO_GL_ERROR ();
-	hr->framebuffer.scene = scene;
+	if (launched) {
+		glBindFramebuffer (GL_FRAMEBUFFER, hr->framebuffer.fb[scene]);
+		VK_ASSERT_NO_GL_ERROR ();
+		hr->framebuffer.scene = scene;
 
-	draw_scene (hr);
-	VK_ASSERT_NO_GL_ERROR ();
-
+		draw_scene (hr);
+		VK_ASSERT_NO_GL_ERROR ();
+	}
 
 	/* Setup the GL state for 2D drawing. */
 	glDisable (GL_DEPTH_TEST);
@@ -2514,20 +2535,11 @@ draw (hikaru_renderer_t *hr)
 	 * 3D buffer then holds every earlier frame, fading by the factor at
 	 * each frame. This is the motion blur of the cabinets (the stars of
 	 * the PHARRIER logo scene trail behind them at 181 = 01C6). */
-	if (factor > 0.0f && n1 < 2 && n2 < 2 && n1 != n2) {
-		/* Keep the buffer as it was drawn: where it holds nothing the
-		 * screen shows the other one as it is (HEURISTIC: SGNASCAR
-		 * sends an empty list while it loads and its cabinet stays
-		 * white, the picture of the other buffer, at 181 = 0114). */
-		glActiveTexture (GL_TEXTURE0 + 4);
-		glBindTexture (GL_TEXTURE_2D, hr->framebuffer.raw);
-		glCopyTexSubImage2D (GL_TEXTURE_2D, 0, 0, 0, 0, 0, 640, 480);
-		holes = true;
-
+	if (launched && factor > 0.0f && n1 < 2 && n2 < 2 && n1 != n2) {
 		glActiveTexture (GL_TEXTURE0 + 0);
-		glBindTexture (GL_TEXTURE_2D, b);
+		glBindTexture (GL_TEXTURE_2D, hr->framebuffer.cb[n2]);
 		glActiveTexture (GL_TEXTURE0 + 1);
-		glBindTexture (GL_TEXTURE_2D, b);
+		glBindTexture (GL_TEXTURE_2D, hr->framebuffer.cb[n2]);
 		glActiveTexture (GL_TEXTURE0 + 2);
 		glBindTexture (GL_TEXTURE_2D, 0);
 		glActiveTexture (GL_TEXTURE0 + 3);
@@ -2545,8 +2557,7 @@ draw (hikaru_renderer_t *hr)
 		glUniform1f (hr->framebuffer.locs.u_keyed_3d, 0.0f);
 		glUniform1i (hr->framebuffer.locs.u_invert_f, 0);
 		glUniform1i (hr->framebuffer.locs.u_invert_b, 0);
-		glUniform1i (hr->framebuffer.locs.u_raw, 4);
-		glUniform1i (hr->framebuffer.locs.u_holes, 0);
+		glUniform4f (hr->framebuffer.locs.u_clear, 0.0f, 0.0f, 0.0f, 0.0f);
 
 		glEnable (GL_BLEND);
 		glBlendColor (0.0f, 0.0f, 0.0f, factor);
@@ -2558,17 +2569,48 @@ draw (hikaru_renderer_t *hr)
 
 		glDisable (GL_BLEND);
 		VK_ASSERT_NO_GL_ERROR ();
+	}
 
-		factor = 0.0f;
+	/* Keep the picture; the one of the list before shows next. */
+	if (launched) {
+		const uint32_t num = hr->framebuffer.num_lists;
+
+		glActiveTexture (GL_TEXTURE0 + 0);
+		glBindTexture (GL_TEXTURE_2D, hr->framebuffer.pipe[num % 3]);
+		glCopyTexSubImage2D (GL_TEXTURE_2D, 0, 0, 0, 0, 0, 640, 480);
+		VK_ASSERT_NO_GL_ERROR ();
+
+		if (num > 0)
+			hr->framebuffer.next = (int32_t) ((num - 1) % 3);
+		hr->framebuffer.num_lists = num + 1;
 	}
 
 	glBindFramebuffer (GL_FRAMEBUFFER, 0);
 	VK_ASSERT_NO_GL_ERROR ();
 
 
-	/* Composite all the buffers (front, back, layers). */
+	/* Composite the picture shown and the layers. */
 
-	/* Figure out the GPU framebuffer assignments. */
+	/* Two 3D buffers were blended when their list was drawn. */
+	if (n1 < 2 && n2 < 2)
+		factor = 0.0f;
+
+	/* We only care about unit 0 for now. (Unit 1 is probably only used
+	 * for the dual-monitor case.) */
+	if ((LAYERS.layer[0][0].enabled || n1 == 2 || n2 == 2) &&
+	    !hr->debug.flags[HR_DEBUG_NO_LAYER1])
+		upload_layer (hr, &LAYERS.layer[0][0], &layer1, &mult1);
+
+	if ((LAYERS.layer[0][1].enabled || n1 == 3 || n2 == 3) &&
+	    !hr->debug.flags[HR_DEBUG_NO_LAYER2])
+		upload_layer (hr, &LAYERS.layer[0][1], &layer2, &mult2);
+
+	/* The two blender inputs: 0 and 1 are the 3D, 2 and 3 the 2D layers
+	 * (PHARRIER blends layer 2 in for its logo screens, 781 = 0704/0705). */
+	shown = hr->framebuffer.pipe[hr->framebuffer.shown];
+	f = (n1 < 2) ? shown : (n1 == 2) ? layer1 : layer2;
+	b = (n2 < 2) ? shown : (n2 == 2) ? layer1 : layer2;
+
 	glActiveTexture (GL_TEXTURE0 + 0);
 	glBindTexture (GL_TEXTURE_2D, f);
 	VK_ASSERT_NO_GL_ERROR ();
@@ -2605,8 +2647,11 @@ draw (hikaru_renderer_t *hr)
 	glUniform1f (hr->framebuffer.locs.u_above_2, LAYERS.layer[0][1].above ? 1.0f : 0.0f);
 	glUniform1i (hr->framebuffer.locs.u_invert_f, (n1 >= 2) ? 1 : 0);
 	glUniform1i (hr->framebuffer.locs.u_invert_b, (n2 >= 2) ? 1 : 0);
-	glUniform1i (hr->framebuffer.locs.u_raw, 4);
-	glUniform1i (hr->framebuffer.locs.u_holes, holes ? 1 : 0);
+	glUniform4f (hr->framebuffer.locs.u_clear,
+	             gpu->fb_config.clear[0] * INV255,
+	             gpu->fb_config.clear[1] * INV255,
+	             gpu->fb_config.clear[2] * INV255,
+	             gpu->fb_config.clear[3] * INV255);
 	VK_ASSERT_NO_GL_ERROR ();
 
 	glBindVertexArray (hr->framebuffer.vao);
@@ -2614,12 +2659,6 @@ draw (hikaru_renderer_t *hr)
 
 	glDrawArrays (GL_TRIANGLE_STRIP, 0, 4);
 	VK_ASSERT_NO_GL_ERROR ();
-
-	if (holes) {
-		glActiveTexture (GL_TEXTURE0 + 4);
-		glBindTexture (GL_TEXTURE_2D, 0);
-		glActiveTexture (GL_TEXTURE0 + 0);
-	}
 
 	glBindVertexArray (0);
 	glUseProgram (0);
@@ -2714,8 +2753,8 @@ hikaru_renderer_reset (vk_renderer_t *renderer)
 }
 
 /* What the renderer keeps from one frame to the next: the two 3D color
- * buffers, which the blender feeds back. The textures are decoded again
- * from the texture RAM. */
+ * buffers, which the blender feeds back, and the pictures on their way to
+ * the screen. The textures are decoded again from the texture RAM. */
 
 int
 hikaru_renderer_save_state (vk_renderer_t *renderer, vk_state_t *state)
@@ -2737,7 +2776,18 @@ hikaru_renderer_save_state (vk_renderer_t *renderer, vk_state_t *state)
 		ret |= vk_state_put (state, pixels, size);
 	}
 	glBindFramebuffer (GL_READ_FRAMEBUFFER, 0);
+	for (i = 0; i < 3; i++) {
+		glBindTexture (GL_TEXTURE_2D, hr->framebuffer.pipe[i]);
+		glGetTexImage (GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+		ret |= vk_state_put (state, pixels, size);
+	}
+	glBindTexture (GL_TEXTURE_2D, 0);
 	VK_ASSERT_NO_GL_ERROR ();
+
+	ret |= vk_state_put (state, &hr->framebuffer.num_lists, sizeof (hr->framebuffer.num_lists));
+	ret |= vk_state_put (state, &hr->framebuffer.shown, sizeof (hr->framebuffer.shown));
+	ret |= vk_state_put (state, &hr->framebuffer.next, sizeof (hr->framebuffer.next));
+	ret |= vk_state_put (state, &hr->framebuffer.launched, sizeof (hr->framebuffer.launched));
 
 	free (pixels);
 	return ret;
@@ -2764,8 +2814,21 @@ hikaru_renderer_load_state (vk_renderer_t *renderer, vk_state_t *state)
 		glTexSubImage2D (GL_TEXTURE_2D, 0, 0, 0, 640, 480,
 		                 GL_RGBA, GL_UNSIGNED_BYTE, pixels);
 	}
+	for (i = 0; i < 3 && !ret; i++) {
+		ret |= vk_state_get (state, pixels, size);
+		if (ret)
+			break;
+		glBindTexture (GL_TEXTURE_2D, hr->framebuffer.pipe[i]);
+		glTexSubImage2D (GL_TEXTURE_2D, 0, 0, 0, 640, 480,
+		                 GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+	}
 	glBindTexture (GL_TEXTURE_2D, 0);
 	VK_ASSERT_NO_GL_ERROR ();
+
+	ret |= vk_state_get (state, &hr->framebuffer.num_lists, sizeof (hr->framebuffer.num_lists));
+	ret |= vk_state_get (state, &hr->framebuffer.shown, sizeof (hr->framebuffer.shown));
+	ret |= vk_state_get (state, &hr->framebuffer.next, sizeof (hr->framebuffer.next));
+	ret |= vk_state_get (state, &hr->framebuffer.launched, sizeof (hr->framebuffer.launched));
 
 	hikaru_renderer_invalidate_texcache (renderer, NULL);
 
