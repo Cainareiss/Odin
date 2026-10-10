@@ -63,7 +63,11 @@ ODIN_OBJ := \
 	src/odin/jvs_io_13551.o \
 	src/odin/card_reader.o \
 	src/odin/mie.o \
-	src/odin/mie_bridge.o
+	src/odin/mie_bridge.o \
+	src/odin/sh4.o \
+	src/odin/sh4_ops.o \
+	src/odin/sh4_onchip.o \
+	src/odin/sh4_bridge.o
 
 HIKARU_OBJ := \
 	$(SH4_OBJ) \
@@ -110,6 +114,11 @@ src/odin/crypt_315_5881.o src/odin/crypt_315_5881_bridge.o: src/odin/crypt_315_5
 src/mach/hikaru/hikaru.o src/mach/hikaru/hikaru-memctl.o: src/odin/crypt_315_5881_bridge.hpp
 src/odin/actel_m1.o src/odin/actel_m1_bridge.o: src/odin/actel_m1.hpp src/odin/actel_m1_bridge.hpp
 src/mach/hikaru/hikaru.o src/mach/hikaru/hikaru-memctl.o: src/odin/actel_m1_bridge.hpp
+
+src/odin/sh4.o src/odin/sh4_ops.o src/odin/sh4_onchip.o src/odin/sh4_bridge.o: src/odin/sh4.hpp
+src/odin/sh4_bridge.o: src/odin/sh4_bridge.hpp
+# A product is fused with a sum only where the code says std::fma.
+src/odin/sh4_ops.o: CXXFLAGS += -ffp-contract=off
 
 install:
 	@( mkdir -pv $(HOME)/.local/bin )
