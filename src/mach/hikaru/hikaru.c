@@ -898,6 +898,8 @@ hikaru_set_rombd_config (hikaru_t *hikaru)
 #define PR	ctx->regs.pr
 #define T	ctx->regs.sr.bit.t
 
+/* These three games have nothing left to patch. */
+#if 0
 static uint32_t
 patch_airtrix (vk_cpu_t *cpu, uint32_t pc, uint32_t inst)
 {
@@ -969,6 +971,8 @@ patch_pharrier (vk_cpu_t *cpu, uint32_t pc, uint32_t inst)
 	*/
 	return inst;
 }
+
+#endif
 
 static uint32_t
 patch_sgnascar (vk_cpu_t *cpu, uint32_t pc, uint32_t inst)
@@ -1060,14 +1064,16 @@ hikaru_install_game_patches (hikaru_t *hikaru)
 	if (!game)
 		return;
 
+	/*
 	if (!strcmp (game->name, "airtrix"))
 		vk_cpu_install_patch (cpu, patch_airtrix);
 	else if (!strcmp (game->name, "braveff"))
 		vk_cpu_install_patch (cpu, patch_braveff);
 	else if (!strcmp (game->name, "pharrier"))
 		vk_cpu_install_patch (cpu, patch_pharrier);
-	else if (!strcmp (game->name, "sgnascar"))
-		vk_cpu_install_patch (cpu, patch_sgnascar);
+	else */
+	if (!strcmp (game->name, "sgnascar"))
+		vk_cpu_install_patch (cpu, patch_sgnascar, 0x0C00BC9A);
 	else
 		patched = false;
 
@@ -1255,7 +1261,7 @@ hikaru_init (hikaru_t *hikaru)
 	sh4_set_porta_handlers (hikaru->sh_s, porta_get_s, porta_put_s);
 
 	hikaru_install_game_patches (hikaru);
-	vk_cpu_install_patch (hikaru->sh_s, slave_idle_loop);
+	vk_cpu_install_patch (hikaru->sh_s, slave_idle_loop, 0x0C002030);
 
 	return 0;
 }

@@ -50,6 +50,7 @@ struct vk_cpu_t {
 	vk_cpu_state_t	 state;
 	int remaining;
 	vk_cpu_patch_t	patch;
+	uint32_t	patch_pc;	/* the only PC it is asked at */
 
 	int		 (* run) (vk_cpu_t *cpu, int cycles);
 	void		 (* set_state) (vk_cpu_t *cpu, vk_cpu_state_t state);
@@ -165,18 +166,19 @@ vk_cpu_put (vk_cpu_t *cpu, unsigned size, uint32_t addr, uint64_t val)
 }
 
 static inline void
-vk_cpu_install_patch (vk_cpu_t *cpu, vk_cpu_patch_t patch)
+vk_cpu_install_patch (vk_cpu_t *cpu, vk_cpu_patch_t patch, uint32_t pc)
 {
 	VK_ASSERT (cpu != NULL);
 	VK_ASSERT (patch != NULL);
 	cpu->patch = patch;
+	cpu->patch_pc = pc;
 }
 
 static inline uint32_t
 vk_cpu_patch (vk_cpu_t *cpu, uint32_t pc, uint32_t inst)
 {
 	VK_ASSERT (cpu);
-	if (cpu->patch)
+	if (pc == cpu->patch_pc && cpu->patch)
 		return cpu->patch (cpu, pc, inst);
 	return inst;
 }
