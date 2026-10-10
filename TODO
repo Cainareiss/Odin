@@ -229,9 +229,11 @@ time once the scenes are compared again:
   bounds; a NaN comes out as the host makes it, the SH-4 gives 0x7FBFFFFF;
 - no FPU exception is raised (the slave of PHARRIER enables the division
   by zero);
-- the timers count one per CPU cycle whatever TCR.TPSC says, and follow
-  at the end of a slice (may be what makes graphics flash in PHARRIER);
-  every mode of a performance counter counts cycles;
+- the divider of the timers is taken to start with the reset, the
+  hardware manual does not say (they count on the peripheral clock, a
+  quarter of the CPU clock in clock mode 5, as PHARRIER expects: it takes
+  a count for 0.08 microseconds); every mode of a performance counter
+  counts cycles, at the end of a slice;
 - a store queue write goes to its target at once, PREF sends nothing;
 - RFCR and WTCSR read as port A; BCR1 resets to 0x80000000 on both CPUs;
 - an interrupt source is cleared when taken; IRQ10 has the code of IRQ11;
@@ -241,7 +243,9 @@ time once the scenes are compared again:
 
 Not implemented, the emulator stops with a message: TRAPA, the exceptions
 (illegal instruction, illegal delay slot, address error, FPU disable,
-privilege), MAC.L with S set, a write to the cache or TLB arrays. SLEEP
+privilege), MAC.L with S set, a write to the cache or TLB arrays, a timer
+on the RTC or the external clock, clock ratios that FRQCR cannot give in
+whole cycles. The input capture of the timers is absent. SLEEP
 stops the CPU for good. The MMU and the caches are absent: LDTLB, PREF,
 OCBI, OCBP and OCBWB do nothing, MOVCA.L is a plain store. None of this is
 run by the six games up to their attract loops. Every code of the software
