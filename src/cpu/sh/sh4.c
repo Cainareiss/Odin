@@ -902,6 +902,12 @@ sh4_get (sh4_t *ctx, unsigned size, uint32_t addr, void *val)
 {
 	int ret;
 
+	/* Plain memory first: there is none from E0000000 up, nor where the
+	 * on-chip modules are. */
+	if (addr < 0xE0000000 && (addr >> 24) != 0x1F &&
+	    vk_mmap_get_fast (ctx->base.mmap, size, addr & ADDR_MASK, val))
+		return 0;
+
 	if (IS_ON_CHIP (addr))
 		ret = sh4_ireg_get (ctx, size, addr, val);
 	else if (IS_STORE_QUEUE (addr))
@@ -932,7 +938,9 @@ sh4_put (sh4_t *ctx, unsigned size, uint32_t addr, uint64_t val)
 
 	ctx->wait.touched = true;
 
-	if (IS_ON_CHIP (addr))
+	if (addr < 0xE0000000 && (addr >> 24) != 0x1F)
+		ret = vk_cpu_put ((vk_cpu_t *) ctx, size, addr & ADDR_MASK, val);
+	else if (IS_ON_CHIP (addr))
 		ret = sh4_ireg_put (ctx, size, addr, val);
 	else if (addr >= 0xF0000000 && addr < 0xF8000000) {
 		VK_CPU_ABORT (ctx, "ONCHIP W%d @%08X = %lX", 8*size, addr, val);
