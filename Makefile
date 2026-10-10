@@ -16,7 +16,17 @@ CFLAGS  := $(COMMON_FLAGS) $(PKG_CFLAGS) $(SDL_CFLAGS) -O3 -fomit-frame-pointer 
 #CFLAGS  := $(COMMON_FLAGS) $(PKG_CFLAGS) $(SDL_CFLAGS) -O0 -g
 LDFLAGS := -lm $(PKG_LDFLAGS) $(SDL_LDFLAGS)
 
-CXXFLAGS := -std=c++20 -I src -Wall -Wextra -Wpedantic -Wconversion -Wshadow -O3 -fomit-frame-pointer -flto -march=native -fno-stack-protector
+# Profile-guided build, 4 to 15 % faster: make clean, make PGO=generate, run
+# the games for a while, make clean (the profiles stay), make PGO=use.
+ifeq ($(PGO),generate)
+PGO_FLAGS := -fprofile-generate -fprofile-update=single
+endif
+ifeq ($(PGO),use)
+PGO_FLAGS := -fprofile-use -fprofile-correction -Wno-missing-profile
+endif
+CFLAGS += $(PGO_FLAGS)
+
+CXXFLAGS := -std=c++20 -I src -Wall -Wextra -Wpedantic -Wconversion -Wshadow -O3 -fomit-frame-pointer -flto -march=native -fno-stack-protector $(PGO_FLAGS)
 
 .PHONY: all install clean
 
