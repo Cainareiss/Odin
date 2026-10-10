@@ -45,8 +45,9 @@ public:
 
 	Board(std::span<uint8_t> ram, uint32_t clock_hz, odin_aica_irq_fn irq, void *ctx)
 		: m_irq(irq), m_ctx(ctx), m_clock_hz(clock_hz), m_sample_acc(0),
-		  m_arm_held(true), m_arm(*this), m_aica(*this, ram)
+		  m_arm_held(true), m_ram(ram.data()), m_arm(*this), m_aica(*this, ram)
 	{
+		map_ram();
 	}
 
 	/* AicaHost */
@@ -84,8 +85,10 @@ public:
 		m_sample_acc -= samples * m_clock_hz;
 		for (uint64_t s = 0; s < samples; s++) {
 			m_aica.tick(1);
-			if (!m_arm_held)
+			if (!m_arm_held) {
+				map_ram();
 				m_arm.run(ARM_CYCLES_PER_SAMPLE);
+			}
 		}
 	}
 
@@ -130,17 +133,24 @@ private:
 
 	void write(uint32_t addr, uint32_t size, uint32_t value)
 	{
-		if (addr < ARM_REGS)
+		if (addr < ARM_REGS) {
 			m_aica.write_ram(addr, size, value);
-		else if (addr < ARM_REGS_END)
+		} else if (addr < ARM_REGS_END) {
 			m_aica.write_reg(addr - ARM_REGS, size, value);
+			map_ram();
+		}
 	}
+
+	/* The wave memory, as the ARM7 reads it without the bus: a register
+	 * sets how much of it is decoded. */
+	void map_ram() { m_arm.set_ram({m_ram, ARM_REGS, m_aica.ram_mask()}); }
 
 	odin_aica_irq_fn m_irq;
 	void *m_ctx;
 	uint32_t m_clock_hz;
 	uint64_t m_sample_acc;
 	bool m_arm_held;
+	uint8_t *m_ram;
 	odin::Arm7 m_arm;
 	odin::Aica m_aica;
 };

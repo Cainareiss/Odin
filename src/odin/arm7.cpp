@@ -33,7 +33,7 @@
 namespace odin {
 
 Arm7::Arm7(Arm7Bus &bus)
-	: m_bus(bus), m_trace(nullptr)
+	: m_bus(bus), m_ram{nullptr, 0, 0}, m_trace(nullptr)
 {
 	m_irq_line = m_fiq_line = false;
 	reset();
@@ -202,7 +202,13 @@ void Arm7::trace_note(const char *what, uint32_t v) const
 uint32_t Arm7::fetch()
 {
 	uint32_t addr = m_pc & ~3u;
-	uint32_t op = m_bus.read32(addr);
+	uint32_t op;
+	if (addr < m_ram.size) {
+		const uint8_t *p = m_ram.base + (addr & m_ram.mask);
+		op = p[0] | (p[1] << 8) | (p[2] << 16) | (static_cast<uint32_t>(p[3]) << 24);
+	} else {
+		op = m_bus.read32(addr);
+	}
 	if (m_trace) {
 		trace('f', addr, 4, op);
 	}
@@ -211,7 +217,7 @@ uint32_t Arm7::fetch()
 
 uint8_t Arm7::rd8(uint32_t addr)
 {
-	uint8_t v = m_bus.read8(addr);
+	uint8_t v = addr < m_ram.size ? m_ram.base[addr & m_ram.mask] : m_bus.read8(addr);
 	if (m_trace) {
 		trace('r', addr, 1, v);
 	}
@@ -221,7 +227,13 @@ uint8_t Arm7::rd8(uint32_t addr)
 uint16_t Arm7::rd16(uint32_t addr)
 {
 	addr &= ~1u;
-	uint16_t v = m_bus.read16(addr);
+	uint16_t v;
+	if (addr < m_ram.size) {
+		const uint8_t *p = m_ram.base + (addr & m_ram.mask);
+		v = static_cast<uint16_t>(p[0] | (p[1] << 8));
+	} else {
+		v = m_bus.read16(addr);
+	}
 	if (m_trace) {
 		trace('r', addr, 2, v);
 	}
@@ -231,7 +243,13 @@ uint16_t Arm7::rd16(uint32_t addr)
 uint32_t Arm7::rd32(uint32_t addr)
 {
 	addr &= ~3u;
-	uint32_t v = m_bus.read32(addr);
+	uint32_t v;
+	if (addr < m_ram.size) {
+		const uint8_t *p = m_ram.base + (addr & m_ram.mask);
+		v = p[0] | (p[1] << 8) | (p[2] << 16) | (static_cast<uint32_t>(p[3]) << 24);
+	} else {
+		v = m_bus.read32(addr);
+	}
 	if (m_trace) {
 		trace('r', addr, 4, v);
 	}
@@ -243,7 +261,11 @@ void Arm7::wr8(uint32_t addr, uint8_t v)
 	if (m_trace) {
 		trace('w', addr, 1, v);
 	}
-	m_bus.write8(addr, v);
+	if (addr < m_ram.size) {
+		m_ram.base[addr & m_ram.mask] = v;
+	} else {
+		m_bus.write8(addr, v);
+	}
 }
 
 void Arm7::wr16(uint32_t addr, uint16_t v)
@@ -252,7 +274,13 @@ void Arm7::wr16(uint32_t addr, uint16_t v)
 	if (m_trace) {
 		trace('w', addr, 2, v);
 	}
-	m_bus.write16(addr, v);
+	if (addr < m_ram.size) {
+		uint8_t *p = m_ram.base + (addr & m_ram.mask);
+		p[0] = u8(v);
+		p[1] = u8(v >> 8);
+	} else {
+		m_bus.write16(addr, v);
+	}
 }
 
 void Arm7::wr32(uint32_t addr, uint32_t v)
@@ -261,7 +289,15 @@ void Arm7::wr32(uint32_t addr, uint32_t v)
 	if (m_trace) {
 		trace('w', addr, 4, v);
 	}
-	m_bus.write32(addr, v);
+	if (addr < m_ram.size) {
+		uint8_t *p = m_ram.base + (addr & m_ram.mask);
+		p[0] = u8(v);
+		p[1] = u8(v >> 8);
+		p[2] = u8(v >> 16);
+		p[3] = u8(v >> 24);
+	} else {
+		m_bus.write32(addr, v);
+	}
 }
 
 /* Register banks. r0-r7 and r15 are shared; FIQ has its own r8-r14,

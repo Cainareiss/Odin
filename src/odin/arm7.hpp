@@ -58,6 +58,15 @@ public:
 	virtual void write32(uint32_t addr, uint32_t value) = 0;
 };
 
+/* Plain memory at the bottom of the address space, which the core reads and
+ * writes without the bus: the addresses below `size`, wrapped by `mask`.
+ * The machine gives it again whenever it changes. */
+struct Arm7Ram {
+	uint8_t *base;
+	uint32_t size;
+	uint32_t mask;
+};
+
 /* ARM7DI: ARMv4 instruction set in ARM state only, little-endian,
  * 32-bit addressing. Thumb is not implemented; a branch into Thumb state
  * is refused and reported through the trace. */
@@ -79,6 +88,8 @@ public:
 	/* Takes a pending FIQ or IRQ without running an instruction.
 	 * Returns the cycles spent, 0 when nothing was pending. */
 	uint32_t poll_interrupts();
+
+	void set_ram(const Arm7Ram &ram) { m_ram = ram; }
 
 	void set_irq(bool level) { m_irq_line = level; }
 	void set_fiq(bool level) { m_fiq_line = level; }
@@ -161,6 +172,7 @@ private:
 	void load_pc(uint32_t v);
 
 	Arm7Bus &m_bus;
+	Arm7Ram m_ram;
 	FILE *m_trace;
 
 	uint32_t m_r[16];    /* active bank; r15 is kept in m_pc */
