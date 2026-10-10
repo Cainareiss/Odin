@@ -64,8 +64,9 @@ struct odin_sh4 {
 	CBus bus;
 	odin::Sh4 cpu;
 
-	odin_sh4(const odin_sh4_bus_t &b, uint8_t *onchip, bool master, bool little_endian)
-		: bus(b), cpu(bus, std::span<uint8_t>(onchip, 0x10000), master, little_endian)
+	odin_sh4(const odin_sh4_bus_t &b, uint8_t *onchip, bool master, bool little_endian,
+	         uint32_t clock_mode)
+		: bus(b), cpu(bus, std::span<uint8_t>(onchip, 0x10000), master, little_endian, clock_mode)
 	{
 	}
 };
@@ -73,9 +74,10 @@ struct odin_sh4 {
 extern "C" {
 
 odin_sh4_t *
-odin_sh4_new(const odin_sh4_bus_t *bus, uint8_t *onchip, int master, int little_endian)
+odin_sh4_new(const odin_sh4_bus_t *bus, uint8_t *onchip, int master, int little_endian,
+             unsigned clock_mode)
 {
-	return new odin_sh4(*bus, onchip, master != 0, little_endian != 0);
+	return new odin_sh4(*bus, onchip, master != 0, little_endian != 0, clock_mode);
 }
 
 void
@@ -100,6 +102,12 @@ int
 odin_sh4_run(odin_sh4_t *cpu, int cycles)
 {
 	return cpu->cpu.run(cycles);
+}
+
+void
+odin_sh4_set_time(odin_sh4_t *cpu, uint64_t now)
+{
+	cpu->cpu.set_time(now);
 }
 
 void

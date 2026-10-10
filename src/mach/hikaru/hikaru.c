@@ -687,6 +687,8 @@ hikaru_load_state (vk_machine_t *mach, vk_state_t *state)
 	odin_scheduler_reset (hikaru->sched);
 	odin_scheduler_advance (hikaru->sched, (uint64_t) mach->frame *
 	                        LINES_PER_FRAME * (uint64_t) cycles_per_line);
+	sh4_set_time (hikaru->sh_m, odin_scheduler_now (hikaru->sched));
+	sh4_set_time (hikaru->sh_s, odin_scheduler_now (hikaru->sched));
 	hikaru_begin_frame (hikaru);
 
 	return ret;
@@ -1331,8 +1333,12 @@ hikaru_init (hikaru_t *hikaru)
 	if (!hikaru->mmap_m || !hikaru->mmap_s)
 		return -1;
 
-	hikaru->sh_m = sh4_new (mach, hikaru->mmap_m, true, true);
-	hikaru->sh_s = sh4_new (mach, hikaru->mmap_s, false, true);
+	/* Clock operating mode 5: a 33.3333 MHz crystal, the CPU at six times
+	 * that and the peripheral clock at 50 MHz. The timers of PHARRIER
+	 * count 0.08 microseconds (@0C0CF150), a quarter of that clock; MAME
+	 * gives the pins (hikaru.cpp, set_md). */
+	hikaru->sh_m = sh4_new (mach, hikaru->mmap_m, true, true, 5);
+	hikaru->sh_s = sh4_new (mach, hikaru->mmap_s, false, true, 5);
 
 	if (!hikaru->sh_m || !hikaru->sh_s)
 		return -1;

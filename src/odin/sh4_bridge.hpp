@@ -71,7 +71,8 @@ typedef struct {
 
 /* `onchip` is the 64 KB image of the on-chip registers, owned and saved by
  * the caller. */
-odin_sh4_t *odin_sh4_new(const odin_sh4_bus_t *bus, uint8_t *onchip, int master, int little_endian);
+odin_sh4_t *odin_sh4_new(const odin_sh4_bus_t *bus, uint8_t *onchip, int master, int little_endian,
+                         unsigned clock_mode);
 void odin_sh4_delete(odin_sh4_t *cpu);
 void odin_sh4_reset(odin_sh4_t *cpu, int hard);
 
@@ -81,6 +82,7 @@ void odin_sh4_map_page(odin_sh4_t *cpu, uint32_t page, const uint8_t *read, uint
 
 /* Returns the cycles run past the end. */
 int odin_sh4_run(odin_sh4_t *cpu, int cycles);
+void odin_sh4_set_time(odin_sh4_t *cpu, uint64_t now);
 void odin_sh4_set_irq(odin_sh4_t *cpu, unsigned source, int raised);
 void odin_sh4_set_run(odin_sh4_t *cpu, unsigned state);
 unsigned odin_sh4_get_run(const odin_sh4_t *cpu);

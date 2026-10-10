@@ -93,7 +93,7 @@ public:
 	std::function<void()> on_hook, on_device;
 	Sh4 cpu;
 
-	Machine() : ram(1u << 20, 0), onchip(0x10000, 0), cpu(*this, onchip, true, true)
+	Machine() : ram(1u << 20, 0), onchip(0x10000, 0), cpu(*this, onchip, true, true, 5)
 	{
 		/* NOP wherever a program may go */
 		for (uint32_t at = RAM; at < DATA; at += 2) {
@@ -918,7 +918,9 @@ void test_on_chip()
 {
 	g_test = "on-chip modules";
 	{
-		/* TMU channel 0: TCOR = 100, TCNT = 5, TCR = UNIE, then TSTR = 1. */
+		/* TMU channel 0: TCOR = 100, TCNT = 5, TCR = UNIE on Pck/4, then TSTR = 1. In clock mode 5 the
+		 * peripheral clock is a quarter of the CPU clock: a count takes 16 cycles and falls on the cycles
+		 * 16, 32... The sixth, at 96, is the underflow (hardware manual, 10.3 and 12.3.1). */
 		Machine m;
 		m.put32(DATA, 0xFFD80008);
 		/* mov.l @r8,r1 (TCOR0); mov #100,r0; mov.l r0,@r1; mov #5,r0; mov.l r0,@(4,r1); mov #0x20,r0; mov.w r0,@(8,r1)
@@ -928,14 +930,60 @@ void test_on_chip()
 			s.r[8] = DATA;
 			s.sr |= SR_BL;	/* the interrupt stays raised */
 		});
-		eq("TCNT0 read back in the slice it was written", st.r[2], 5);
-		eq("TCR0 has UNF", m.reg32(0xFFD80010) & 0x100, 0x100);
-		eq("TUNI0 is raised", st.irq[Source::TUNI0].raised, 1);
-		m.code(CODE + 22, {0x5212});	/* mov.l @(8,r1),r2 */
+		eq("FRQCR of clock mode 5", m.reg32(0xFFC00000) & 0xFFFF, 0x0E0A);
+		eq("TCNT0 read back before the first count", st.r[2], 5);
+		/* mov.l @(8,r1),r2 at cycle 95, mov.l @(8,r1),r3 at 96, mov.l @(8,r1),r4 at 112 */
+		m.code(CODE + 2 * 95, {0x5212, 0x5312});
+		m.code(CODE + 2 * 112, {0x5412});
+		m.cpu.run(84);
+		eq("no underflow after five counts", m.reg32(0xFFD80010) & 0x100, 0);
 		m.cpu.run(1);
-		/* the eleven cycles of the first slice, counted at its end: 5 down to 1, the zero seen and TCOR taken
-		 * again, then five more */
-		eq("TCNT0 after an underflow", m.state().r[2], 100 - 1 - (11 - 5 - 1));
+		eq("TCNT0 is zero before the sixth count", m.state().r[2], 0);
+		eq("TCR0 has UNF at the sixth count", m.reg32(0xFFD80010) & 0x100, 0x100);
+		eq("TUNI0 is raised", m.state().irq[Source::TUNI0].raised, 1);
+		m.cpu.run(1);
+		eq("TCNT0 takes TCOR0 at the underflow", m.state().r[3], 100);
+		m.cpu.run(16);
+		eq("and counts on", m.state().r[4], 99);
+	}
+	{
+		/* The same timer started in the middle of a slice, interrupts open: the handler is entered at
+		 * cycle 96, before the instruction of that cycle. */
+		Machine m;
+		m.put32(DATA, 0xFFD80008);
+		m.put32(DATA + 4, 0xFFD00004);
+		m.code(RAM + 0x600, {0xE155, NOP, NOP});	/* handler: mov #0x55,r1 */
+		/* mov.l @(4,r8),r3 (IPRA); mov #-16,r0; shll8 r0; mov.w r0,@r3 (TMU0 at priority 15), then as above */
+		Sh4State st = run(m, {0x5381, 0xE0F0, 0x4018, 0x2301,
+		                      0x6182, 0xE064, 0x2102, 0xE005, 0x1101, 0xE020, 0x8114, 0x71FC, 0xE001, 0x2100},
+		                  200, [](Sh4State &s) {
+			s.r[8] = DATA;
+			s.vbr = RAM;
+			s.sr = SR_MD;
+		});
+		eq("the handler runs", st.r[1], 0x55);
+		eq("SPC is the instruction of cycle 96", st.spc, CODE + 2 * 96);
+		eq("INTEVT of TUNI0", m.reg32(0xFF000028), 0x400);
+	}
+	{
+		/* Pck/16 (TPSC = 1): a count every 64 cycles. set_time() places the CPU in the time of the
+		 * machine: from cycle 1000 the first count falls on 1024. */
+		Machine m;
+		m.put32(DATA, 0xFFD80008);
+		m.cpu.set_time(1000);
+		/* mov.l @r8,r1; mov #1,r0; mov.w r0,@(8,r1) (TCR0); mov #50,r0; mov.l r0,@(4,r1) (TCNT0);
+		 * add #-4,r1; mov #1,r0; mov.b r0,@r1 (TSTR) */
+		run(m, {0x6182, 0xE001, 0x8114, 0xE032, 0x1101, 0x71FC, 0xE001, 0x2100}, 8, [](Sh4State &s) {
+			s.r[8] = DATA;
+		});
+		/* mov.l @(8,r1),r2 at cycle 1023 (the 24th instruction), mov.l @(8,r1),r3 at 1024 */
+		m.code(CODE + 2 * 23, {0x5212, 0x5312});
+		m.cpu.run(17);
+		eq("TCNT0 before the first count", m.state().r[2], 50);
+		eq("TCNT0 at the first count", m.state().r[3], 49);
+		m.code(CODE + 2 * 88, {0x5412});	/* at cycle 1088 */
+		m.cpu.run(64);
+		eq("TCNT0 one count later", m.state().r[4], 48);
 	}
 	{
 		/* Port A: pins 0-7 outputs, 8-15 inputs. */

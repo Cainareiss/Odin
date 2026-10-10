@@ -490,8 +490,15 @@ sh4_set_porta_handlers (vk_cpu_t *cpu,
 	ctx->porta.put = put;
 }
 
+void
+sh4_set_time (vk_cpu_t *cpu, uint64_t now)
+{
+	odin_sh4_set_time (((sh4_t *) cpu)->odin, now);
+}
+
 vk_cpu_t *
-sh4_new (vk_machine_t *mach, vk_mmap_t *mmap, bool master, bool le)
+sh4_new (vk_machine_t *mach, vk_mmap_t *mmap, bool master, bool le,
+         unsigned clock_mode)
 {
 	odin_sh4_bus_t bus;
 	vk_device_t *dev;
@@ -533,7 +540,7 @@ sh4_new (vk_machine_t *mach, vk_mmap_t *mmap, bool master, bool le)
 	bus.hook = bus_hook;
 
 	ctx->odin = odin_sh4_new (&bus, (uint8_t *) vk_buffer_get_ptr (ctx->iregs, 0),
-	                          master, le);
+	                          master, le, clock_mode);
 	if (!ctx->odin)
 		goto fail;
 

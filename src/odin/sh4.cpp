@@ -69,7 +69,8 @@ constexpr Sh4IrqSource SOURCES[Sh4Source::COUNT] = {
 
 } /* namespace */
 
-Sh4::Sh4(Sh4Bus &bus, std::span<uint8_t> onchip, bool master, bool little_endian)
+Sh4::Sh4(Sh4Bus &bus, std::span<uint8_t> onchip, bool master, bool little_endian,
+         uint32_t clock_mode)
 	: m_bus(bus), m_onchip(onchip), m_master(master), m_little_endian(little_endian),
 	  m_r{}, m_run(Sh4Run::Stopped), m_remaining(0),
 	  m_blk(nullptr), m_epoch(1), m_code_epoch(PHYSICAL_PAGES, 0),
@@ -78,7 +79,9 @@ Sh4::Sh4(Sh4Bus &bus, std::span<uint8_t> onchip, bool master, bool little_endian
 	  m_near(NEAR_SIZE, Block{1, 0, 0, nullptr, nullptr, nullptr, 0}),
 	  m_hook_on(false), m_hook_addr(0),
 	  m_wait{}, m_touched(false), m_event(false),
-	  m_intc{}, m_dmac_running{}, m_tmu_running{}, m_tmu_counter{}, m_pm_running{}, m_pm_counter{},
+	  m_intc{}, m_dmac_running{}, m_tmu_running{}, m_tmu_counter{},
+	  m_cycles(0), m_at(0), m_tmu_time(0), m_slice(0), m_retime(false), m_clock_mode(clock_mode),
+	  m_pm_running{}, m_pm_counter{},
 	  m_instructions(0), m_skipped(0)
 {
 	if (m_onchip.size() != 0x10000) {
@@ -114,6 +117,7 @@ void Sh4::reset(bool hard)
 	std::fill(std::begin(m_dmac_running), std::end(m_dmac_running), false);
 	std::fill(std::begin(m_tmu_running), std::end(m_tmu_running), false);
 	std::fill(std::begin(m_tmu_counter), std::end(m_tmu_counter), 0xFFFFFFFF);
+	m_cycles = m_at = m_tmu_time = 0;
 	std::fill(std::begin(m_pm_running), std::end(m_pm_running), false);
 	std::fill(std::begin(m_pm_counter), std::end(m_pm_counter), 0);
 }
@@ -359,6 +363,7 @@ bool Sh4::read_slow(const Sh4Op *op, uint32_t addr, uint32_t size, uint64_t &val
 		m_r.pc = pc_of(op);
 	}
 	m_touched = true;
+	m_at = time_at(op);
 	if (!read_any(addr, size, value)) {
 		value = 0;
 		outside();
@@ -373,6 +378,7 @@ bool Sh4::write_slow(const Sh4Op *op, uint32_t addr, uint32_t size, uint64_t val
 		m_r.pc = pc_of(op);
 	}
 	m_touched = true;
+	m_at = time_at(op);
 	if (!write_any(addr, size, value)) {
 		outside();
 		m_bus.unanswered(true, addr, size, value);
@@ -743,10 +749,27 @@ void Sh4::wait_check()
 	wait_mark();
 }
 
+/* A slice is cut where a timer raises its interrupt, for the interrupt to
+ * be taken at its date, and cut again when the program writes a timer. */
 int32_t Sh4::run(int32_t cycles)
+{
+	int32_t over = 0;
+
+	while (cycles > 0) {
+		int32_t used;
+		over = run_part(std::min(cycles, tmu_next_irq()), used);
+		cycles -= used;
+	}
+	return over;
+}
+
+int32_t Sh4::run_part(int32_t cycles, int32_t &used)
 {
 	uint64_t skipped = m_skipped;
 
+	m_slice = cycles;
+	m_at = m_cycles;
+	m_retime = false;
 	m_remaining = cycles;
 	new_epoch();
 	m_wait.period = 4;
@@ -754,7 +777,7 @@ int32_t Sh4::run(int32_t cycles)
 	m_wait.busy = 0;
 	wait_mark();
 
-	while (m_remaining > 0 && m_run == Sh4Run::Running) {
+	while (m_remaining > 0 && m_run == Sh4Run::Running && !m_retime) {
 		if (m_r.pc == m_wait.regs.pc) {
 			wait_check();
 		} else if (--m_wait.countdown <= 0) {
@@ -774,13 +797,16 @@ int32_t Sh4::run(int32_t cycles)
 		run_at(m_r.pc);
 	}
 
-	/* The timers and the performance counters follow at the end of the
-	 * slice. HEURISTIC: one count per CPU cycle, whatever the prescaler,
-	 * and every mode of a performance counter counts cycles. */
-	tmu_run(cycles);
+	/* The time of the machine moves by the cycles asked, whatever the
+	 * last instruction ran over. The performance counters follow at the
+	 * end of the slice. HEURISTIC: every mode of a performance counter
+	 * counts cycles. */
+	used = (m_retime && m_remaining > 0 && m_run == Sh4Run::Running) ? cycles - m_remaining : cycles;
+	m_cycles += static_cast<uint64_t>(used);
+	tmu_sync(m_cycles);
 	for (uint32_t i = 0; i < 2; i++) {
 		if (m_pm_running[i]) {
-			m_pm_counter[i] = (m_pm_counter[i] + static_cast<uint64_t>(cycles)) & 0xFFFFFFFFFFFFull;
+			m_pm_counter[i] = (m_pm_counter[i] + static_cast<uint64_t>(used)) & 0xFFFFFFFFFFFFull;
 		}
 	}
 	m_instructions += static_cast<uint64_t>(cycles - m_remaining) - (m_skipped - skipped);

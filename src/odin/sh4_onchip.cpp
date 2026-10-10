@@ -44,7 +44,7 @@ constexpr uint32_t BSC_BCR1 = 0x800000, BSC_BCR2 = 0x800004, BSC_WCR1 = 0x800008
 	BSC_RTCOR = 0x800024, BSC_RFCR = 0x800028, BSC_PCTRA = 0x80002C, BSC_PDTRA = 0x800030;
 constexpr uint32_t DMAC_SAR0 = 0xA00000, DMAC_DAR0 = 0xA00004, DMAC_TCR0 = 0xA00008, DMAC_CHCR0 = 0xA0000C,
 	DMAC_DMAOR = 0xA00040;
-constexpr uint32_t CPG_STBCR = 0xC00004, CPG_WTCSR = 0xC0000C;
+constexpr uint32_t CPG_FRQCR = 0xC00000, CPG_STBCR = 0xC00004, CPG_WTCSR = 0xC0000C;
 constexpr uint32_t INTC_ICR = 0xD00000, INTC_IPRA = 0xD00004, INTC_IPRB = 0xD00008, INTC_IPRC = 0xD0000C;
 constexpr uint32_t TMU_TOCR = 0xD80000, TMU_TSTR = 0xD80004, TMU_TCOR0 = 0xD80008, TMU_TCNT0 = 0xD8000C,
 	TMU_TCR0 = 0xD80010;
@@ -100,6 +100,12 @@ void Sh4::onchip_reset(bool hard)
 	reg_put(4, BSC_WCR1, 0x77777777);
 	reg_put(4, BSC_WCR2, 0xFFFEEFFF);
 	reg_put(4, BSC_WCR3, 0x07777777);
+	/* Hardware manual, table 10.3 (1). */
+	static constexpr uint16_t FRQCR_OF_MODE[6] = { 0x0E1A, 0x0E23, 0x0E13, 0x0E13, 0x0E0A, 0x0E0A };
+	if (m_clock_mode >= 6) {
+		fatal("clock operating mode that is not implemented", m_clock_mode);
+	}
+	reg_put(2, CPG_FRQCR, FRQCR_OF_MODE[m_clock_mode]);
 	for (uint32_t ch = 0; ch < 3; ch++) {
 		reg_put(4, tcor(ch), 0xFFFFFFFF);
 		reg_put(4, tcnt(ch), 0xFFFFFFFF);
@@ -324,38 +330,92 @@ void Sh4::dmac_update(uint32_t request)
 	}
 }
 
-/* Timers: a channel counts down; at zero it sets TCR.UNF, takes TCOR
- * again and, with TCR.UNIE, raises its interrupt. The zero is seen one
- * cycle before the count goes on from TCOR. */
+/* Timers (hardware manual, section 12). A channel counts down on the
+ * peripheral clock divided by 4, 16, 64, 256 or 1024 (TCR.TPSC). The count
+ * after zero is the underflow: it sets TCR.UNF, takes TCOR again and, with
+ * TCR.UNIE, raises the interrupt. One divider feeds every channel and
+ * never stops: a count falls on a multiple of its period (HEURISTIC: the
+ * divider is taken to start with the reset; the manual does not say). */
 
-void Sh4::tmu_run_channel(uint32_t ch, uint32_t cycles)
+/* The cycles of the CPU clock in one of the peripheral clock: both are
+ * divided from the same clock by FRQCR (section 10.2). */
+uint32_t Sh4::pck_cycles() const
 {
-	uint32_t counter = m_tmu_counter[ch];
+	static constexpr uint8_t IFC[8] = { 1, 2, 3, 4, 6, 8, 0, 0 };
+	static constexpr uint8_t PFC[8] = { 2, 3, 4, 6, 8, 0, 0, 0 };
+	const uint32_t frqcr = static_cast<uint32_t>(reg_get(2, CPG_FRQCR));
+	const uint32_t cpu = IFC[(frqcr >> 6) & 7], peripheral = PFC[frqcr & 7];
 
-	while (cycles > 0) {
-		if (counter >= cycles) {
-			counter -= cycles;
-			break;
-		}
-		cycles -= counter + 1;
-
-		uint32_t control = static_cast<uint32_t>(reg_get(2, tcr(ch)));
-		reg_put(2, tcr(ch), control | 0x100);
-		counter = static_cast<uint32_t>(reg_get(4, tcor(ch))) - 1;
-		if (control & 0x20) {
-			set_irq(Sh4Source::TUNI0 + ch, true);
-		}
+	if (cpu == 0 || peripheral == 0 || peripheral % cpu != 0) {
+		fatal("FRQCR with clock ratios that are not implemented", frqcr);
 	}
-	m_tmu_counter[ch] = counter;
+	return peripheral / cpu;
 }
 
-void Sh4::tmu_run(int32_t cycles)
+/* The cycles of one count of a channel. */
+uint32_t Sh4::tmu_period(uint32_t ch) const
 {
+	const uint32_t tpsc = static_cast<uint32_t>(reg_get(2, tcr(ch))) & 7;
+
+	if (tpsc > 4) {
+		fatal("timer on the RTC or the external clock, not implemented", tpsc);
+	}
+	return pck_cycles() << (2 * tpsc + 2);
+}
+
+void Sh4::tmu_count(uint32_t ch, uint64_t counts)
+{
+	const uint64_t counter = m_tmu_counter[ch];
+
+	if (counts <= counter) {
+		m_tmu_counter[ch] = static_cast<uint32_t>(counter - counts);
+		return;
+	}
+
+	const uint64_t reload = reg_get(4, tcor(ch));
+	const uint32_t control = static_cast<uint32_t>(reg_get(2, tcr(ch)));
+
+	/* Back at TCOR every TCOR + 1 counts. */
+	counts -= counter + 1;
+	m_tmu_counter[ch] = static_cast<uint32_t>(reload - counts % (reload + 1));
+	reg_put(2, tcr(ch), control | 0x100);
+	if (control & 0x20) {
+		set_irq(Sh4Source::TUNI0 + ch, true);
+	}
+}
+
+/* Counts the timers up to `now`. */
+void Sh4::tmu_sync(uint64_t now)
+{
+	if (now <= m_tmu_time) {
+		return;
+	}
 	for (uint32_t ch = 0; ch < 3; ch++) {
-		if (m_tmu_running[ch] && cycles > 0) {
-			tmu_run_channel(ch, static_cast<uint32_t>(cycles));
+		if (m_tmu_running[ch]) {
+			const uint64_t period = tmu_period(ch);
+			const uint64_t counts = now / period - m_tmu_time / period;
+			if (counts) {
+				tmu_count(ch, counts);
+			}
 		}
 	}
+	m_tmu_time = now;
+}
+
+/* The cycles from the start of the slice to the next underflow that raises
+ * an interrupt. */
+int32_t Sh4::tmu_next_irq() const
+{
+	uint64_t soonest = INT32_MAX;
+
+	for (uint32_t ch = 0; ch < 3; ch++) {
+		if (m_tmu_running[ch] && (reg_get(2, tcr(ch)) & 0x20)) {
+			const uint64_t period = tmu_period(ch);
+			const uint64_t date = (m_tmu_time / period + m_tmu_counter[ch] + 1) * period;
+			soonest = std::min(soonest, std::max<uint64_t>(date - std::min(date, m_cycles), 1));
+		}
+	}
+	return static_cast<int32_t>(soonest);
 }
 
 /* Store queues: bits 2-4 of QACR0 or QACR1 are the area of the target. */
@@ -401,12 +461,28 @@ bool Sh4::onchip_read(uint32_t addr, uint32_t size, uint64_t &value)
 	case PM_PMCR2:
 		sized(2);
 		return true;
+	case TMU_TOCR:
 	case TMU_TSTR:
 		sized(1);
 		return true;
-	case TMU_TCNT0:
+	case TMU_TCOR0:
+	case TMU_TCOR0 + 12:
+	case TMU_TCOR0 + 24:
 		sized(4);
-		value = m_tmu_counter[0];
+		return true;
+	case TMU_TCNT0:
+	case TMU_TCNT0 + 12:
+	case TMU_TCNT0 + 24:
+		sized(4);
+		tmu_sync(m_at);
+		value = m_tmu_counter[(reg - TMU_TCNT0) / 12];
+		return true;
+	case TMU_TCR0:
+	case TMU_TCR0 + 12:
+	case TMU_TCR0 + 24:
+		sized(2);
+		tmu_sync(m_at);
+		value = reg_get(size, addr);
 		return true;
 	case PM_PMCTR1H:
 		value = (m_pm_counter[0] >> 32) & 0xFFFF;
@@ -568,6 +644,8 @@ bool Sh4::onchip_write(uint32_t addr, uint32_t size, uint64_t value)
 	case TMU_TSTR:
 		sized(1);
 		only(0x07);
+		tmu_sync(m_at);
+		m_event = m_retime = true;
 		reg_put(size, addr, v);
 		for (uint32_t ch = 0; ch < 3; ch++) {
 			m_tmu_running[ch] = (v >> ch) & 1;
@@ -575,6 +653,8 @@ bool Sh4::onchip_write(uint32_t addr, uint32_t size, uint64_t value)
 		return true;
 	case TMU_TCR0:
 	case TMU_TCR0 + 12: {
+		tmu_sync(m_at);
+		m_event = m_retime = true;
 		uint32_t old = static_cast<uint32_t>(reg_get(size, addr));
 		sized(2);
 		only(0x013F);
@@ -583,6 +663,8 @@ bool Sh4::onchip_write(uint32_t addr, uint32_t size, uint64_t value)
 		return true;
 	}
 	case TMU_TCR0 + 24: {
+		tmu_sync(m_at);
+		m_event = m_retime = true;
 		uint32_t old = static_cast<uint32_t>(reg_get(size, addr));
 		sized(2);
 		/* Input capture is not implemented. */
@@ -594,12 +676,21 @@ bool Sh4::onchip_write(uint32_t addr, uint32_t size, uint64_t value)
 	case TMU_TCOR0 + 12:
 	case TMU_TCOR0 + 24:
 		sized(4);
+		tmu_sync(m_at);
+		m_event = m_retime = true;
 		break;
 	case TMU_TCNT0:
 	case TMU_TCNT0 + 12:
 	case TMU_TCNT0 + 24:
 		sized(4);
+		tmu_sync(m_at);
+		m_event = m_retime = true;
 		m_tmu_counter[(reg - TMU_TCNT0) / 12] = v;
+		return true;
+	case CPG_FRQCR:
+		sized(2);
+		reg_put(size, addr, v);
+		pck_cycles();
 		return true;
 
 	default:

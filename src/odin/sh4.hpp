@@ -122,7 +122,10 @@ public:
 
 	/* `onchip` is the 64 KB image of the on-chip registers, owned by the
 	 * machine and saved by it. */
-	Sh4(Sh4Bus &bus, std::span<uint8_t> onchip, bool master, bool little_endian);
+	/* `clock_mode` is what the pins MD2-MD0 select (hardware manual,
+	 * table 10.3). */
+	Sh4(Sh4Bus &bus, std::span<uint8_t> onchip, bool master, bool little_endian,
+	    uint32_t clock_mode);
 
 	void reset(bool hard);
 
@@ -136,6 +139,13 @@ public:
 	int32_t run(int32_t cycles);
 
 	void set_irq(uint32_t source, bool raised);
+	/* The time of the machine, in cycles since reset, where run() goes
+	 * on from: for a machine that loads a state. */
+	void set_time(uint64_t now)
+	{
+		m_cycles = now;
+		m_tmu_time = now;
+	}
 	void set_run(Sh4Run state)
 	{
 		m_run = state;
@@ -290,11 +300,22 @@ private:
 	void dmac_run_channel(uint32_t ch);
 	void dmac_update_channel(uint32_t ch, uint32_t request);
 	void dmac_update(uint32_t request);
-	void tmu_run(int32_t cycles);
-	void tmu_run_channel(uint32_t ch, uint32_t cycles);
+	uint32_t pck_cycles() const;
+	uint32_t tmu_period(uint32_t ch) const;
+	void tmu_count(uint32_t ch, uint64_t counts);
+	void tmu_sync(uint64_t now);
+	int32_t tmu_next_irq() const;
+	int32_t run_part(int32_t cycles, int32_t &used);
 	uint32_t store_queue_addr(uint32_t addr) const;
 
 	uint32_t pc_of(const Sh4Op *op) const { return m_blk->pc + 2u * op->idx; }
+	/* The time before the instruction: a block takes its cycles when it
+	 * is entered. */
+	uint64_t time_at(const Sh4Op *op) const
+	{
+		return m_cycles + static_cast<uint64_t>(static_cast<int64_t>(m_slice) - m_remaining -
+		                                        m_blk->count + op->idx);
+	}
 
 	/* Leaves the block after an instruction that may have changed an
 	 * interrupt, the cycles left or the run state: the run loop looks at
@@ -435,6 +456,13 @@ private:
 	bool m_dmac_running[4];
 	bool m_tmu_running[3];
 	uint32_t m_tmu_counter[3];
+	/* The time at the start of the slice and its cycles, the time of the
+	 * access to a module being served, the time the timers are counted
+	 * up to. */
+	uint64_t m_cycles, m_at, m_tmu_time;
+	int32_t m_slice;
+	bool m_retime;	/* a timer was written: the slice is cut again */
+	uint32_t m_clock_mode;
 	/* Performance counters, 48 bits each */
 	bool m_pm_running[2];
 	uint64_t m_pm_counter[2];
