@@ -116,7 +116,7 @@ typedef struct {
 	vec3b_t diffuse;	/* 091: base colour of untextured polygons (X360 vo3d) */
 	vec3b_t ambient;	/* 291: colour 1, blended over 091 by the vertex alpha (881 bit a) */
 	vec4b_t specular;	/* 491: specular, times 4 in the port, and exponent */
-	vec3s_t unknown;	/* 691: ambient, 16 bits per channel, clamped to 255 */
+	vec3s_t unknown;	/* 691: ambient, 16 bits per channel, 255 is 1.0 */
 	union {
 		struct {
 			uint32_t		: 12;
@@ -483,12 +483,11 @@ typedef struct {
 	vec3b_t diffuse;	/* 0x0C */
 	uint8_t alpha;		/* 0x0F */
 	vec3f_t normal;		/* 0x10 */
-	vec3b_t ambient;	/* 0x1C */
-	uint8_t second_mv;	/* 0x1F, 255: second modelview, else 64: no 3x3, 128: no last row */
-	vec2f_t texcoords;	/* 0x20 */
-	vec4b_t specular;	/* 0x28 */
-	vec3b_t color1;		/* 0x2C */
-	uint8_t padding2;
+	vec3f_t ambient;	/* 0x1C, the 691 colour over 255 */
+	vec2f_t texcoords;	/* 0x28 */
+	vec4b_t specular;	/* 0x30 */
+	vec3b_t color1;		/* 0x34 */
+	uint8_t second_mv;	/* 0x37, 255: second modelview, else 64: no 3x3, 128: no last row */
 } hikaru_vertex_body_t;
 
 typedef struct {

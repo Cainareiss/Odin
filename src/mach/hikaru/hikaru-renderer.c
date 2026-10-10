@@ -1239,9 +1239,13 @@ copy_colors (hikaru_renderer_t *hr, hikaru_vertex_t *dst, hikaru_vertex_t *src)
 	for (i = 0; i < 3; i++)
 		dst->body.diffuse[i] = mat->diffuse[i];
 
-	/* The 691 colour is the ambient, saturated like the port (825B4DE8). */
+	/* The 691 colour is the ambient of the shading mode 1 and the
+	 * emission of the mode 2, 255 for 1.0. The port saturates it there
+	 * (825B4DE8), the hardware does not: PHARRIER sends 600 in mode 2
+	 * for the syringe of its nurse and 736 in mode 1 for the selection
+	 * frame of its shop, and the cabinet shows both that much brighter. */
 	for (i = 0; i < 3; i++)
-		dst->body.ambient[i] = MIN2 (mat->unknown[i], 255);
+		dst->body.ambient[i] = mat->unknown[i] / 255.0f;
 
 	/* The 491 colour is in 1/64: PHARRIER sets 0x40 and SGNASCAR goes up
 	 * to 0x7F. The port multiplies it by 4 and wraps to 8 bits (825B4DE8),
@@ -1635,7 +1639,7 @@ upload_vertex_data (hikaru_renderer_t *hr)
 	VAP (0, 3, GL_FLOAT,          position,  GL_FALSE);
 	VAP (1, 3, GL_FLOAT,          normal,    GL_FALSE);
 	VAP (2, 3, GL_UNSIGNED_BYTE,  diffuse,   GL_TRUE);
-	VAP (3, 3, GL_UNSIGNED_BYTE,  ambient,   GL_TRUE);
+	VAP (3, 3, GL_FLOAT,          ambient,   GL_FALSE);
 	VAP (4, 4, GL_UNSIGNED_BYTE,  specular,  GL_TRUE);
 	VAP (5, 3, GL_UNSIGNED_BYTE,  color1,    GL_TRUE);
 	VAP (6, 2, GL_FLOAT,          texcoords, GL_FALSE);

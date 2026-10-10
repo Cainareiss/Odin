@@ -1377,8 +1377,9 @@ get_material_index (uint32_t *inst)
  * See PH:@0C0CF798, PH:@0C01782C.
  *
  *
- * 691	Material: Set Lighting Ambient (16 bits per channel; the X360 port
- *	saturates it to 8 and lights with it, 825B4DE8)
+ * 691	Material: Set Lighting Ambient (16 bits per channel, 255 is 1.0;
+ *	the X360 port saturates it to 8 and lights with it, 825B4DE8, but
+ *	the hardware goes above: PHARRIER sends 600)
  *
  *	RRRRRRRR RRRRRRRR -------o oooooooo
  *	BBBBBBBB BBBBBBBB GGGGGGGG GGGGGGGG

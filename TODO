@@ -81,8 +81,11 @@ Read from the cabinet footage and the registers of five games
 (HEURISTIC).
 
 GPU lighting follows the X360 port's vo3d shaders: the 691 colour is the
-material ambient, the 091 colour stands for the texel of untextured
-polygons, the 491 colour is the specular colour,
+material ambient (255 is 1.0 and, unlike the port, a larger value is
+brighter: on the PHARRIER cabinet the syringe of the nurse, emission 600
+in the shading mode 2, and the selection frame of the shop, ambient 736
+in the mode 1, are that much brighter; no other game goes above 255), the
+091 colour stands for the texel of untextured polygons, the 491 colour is the specular colour,
 the light colour drives both the diffuse and the specular terms,
 light vectors arrive in eye space (the library transforms them on the
 SH-4), the 881 alpha bit turns

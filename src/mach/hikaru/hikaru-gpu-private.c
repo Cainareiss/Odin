@@ -193,7 +193,7 @@ get_vertex_str (hikaru_vertex_t *v)
 	                v->body.normal[0], v->body.normal[1], v->body.normal[2]);
 	tmp += sprintf (tmp, "(Cd: %02X %02X %02X) ",
 	                v->body.diffuse[0], v->body.diffuse[1], v->body.diffuse[2]);
-	tmp += sprintf (tmp, "(Ca: %02X %02X %02X) ",
+	tmp += sprintf (tmp, "(Ca: %5.3f %5.3f %5.3f) ",
 	                v->body.ambient[0], v->body.ambient[1], v->body.ambient[2]);
 	tmp += sprintf (tmp, "(Cs: %02X %02X %02X | %02X) ",
 	                v->body.specular[0], v->body.specular[1], v->body.specular[2], v->body.specular[3]);
