@@ -70,6 +70,7 @@ int		 vk_mmap_add_rom (vk_mmap_t *mmap, uint32_t lo, uint32_t hi,
 int		 vk_mmap_add_dev (vk_mmap_t *mmap, uint32_t lo, uint32_t hi,
 		                  uint32_t mask, uint32_t flags,
 		                  vk_device_t *dev, const char *name);
+uint8_t		*vk_mmap_get_page (vk_mmap_t *mmap, uint32_t addr, uint32_t size, bool write);
 int		 vk_mmap_get_slow (vk_mmap_t *mmap, unsigned size, uint32_t addr, void *data);
 int		 vk_mmap_put_slow (vk_mmap_t *mmap, unsigned size, uint32_t addr, uint64_t data);
 

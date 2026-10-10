@@ -157,6 +157,37 @@ set_window (vk_mmap_t *mmap, vk_mmap_window_t *win, region_t *region,
 	win->ptr = region->buf->ptr;
 }
 
+/* The host memory behind the `size` bytes at `addr` when all of them are
+ * plain memory read, or written, in place: little-endian, not logged, not
+ * ROM for a write, and the first match of the search. NULL otherwise. */
+uint8_t *
+vk_mmap_get_page (vk_mmap_t *mmap, uint32_t addr, uint32_t size, bool write)
+{
+	uint32_t access = write ? VK_REGION_W : VK_REGION_R;
+	uint32_t excluded = write ? (VK_REGION_LOG_W | VK_REGION_ROM) : VK_REGION_LOG_R;
+	uint32_t last = addr + size - 1, offs, i;
+	region_t *region = NULL;
+
+	VK_VECTOR_FOREACH (mmap->regions, i) {
+		region_t *other = (region_t *) &mmap->regions->data[i];
+		if ((other->flags & access) && other->lo <= last && other->hi >= addr) {
+			region = other;
+			break;
+		}
+	}
+	if (!region || region->lo > addr || region->hi < last ||
+	    !(region->flags & VK_REGION_DIRECT) || (region->flags & excluded) ||
+	    (region->flags & VK_REGION_SIZE_ALL) != VK_REGION_SIZE_ALL ||
+	    region->mask > 0x7FFFFFFF || !vk_buffer_is_le (region->buf))
+		return NULL;
+
+	offs = addr & region->mask;
+	if ((last & region->mask) != offs + size - 1 ||
+	    offs + size > vk_buffer_get_size (region->buf))
+		return NULL;
+	return region->buf->ptr + offs;
+}
+
 int
 vk_mmap_get_slow (vk_mmap_t *mmap, unsigned size, uint32_t addr, void *data)
 {
