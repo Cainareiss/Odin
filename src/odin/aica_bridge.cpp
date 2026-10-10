@@ -32,11 +32,13 @@ namespace {
  * Time comes in as host-CPU cycles and leaves as sample periods. */
 class Board : public odin::AicaHost, public odin::Arm7Bus {
 public:
-	/* The ARM7DI is clocked at 22.5792 MHz but shares the wave memory with
-	 * the sound unit; MAME runs it at an eighth of that to stand for the
-	 * wait states (hikaru.cpp: ARM7 at 33.8688 MHz * 2 / 3 / 8). That is
-	 * 64 cycles per sample period. HEURISTIC until measured on a board. */
-	static constexpr uint32_t ARM_CYCLES_PER_SAMPLE = 64;
+	/* The ARM7DI runs on the bus clock, 22.5792 MHz (33.8688 MHz * 2 / 3):
+	 * 512 cycles per sample period. MAME gives it one cycle out of eight,
+	 * to stand for wait states; SGNASCAR loads the sound driver again at
+	 * each change of scene and waits for it, and on its cabinet the driver
+	 * answers within a frame: 328000 cycles, 20 MHz at least. HEURISTIC:
+	 * no wait state. */
+	static constexpr uint32_t ARM_CYCLES_PER_SAMPLE = 512;
 
 	static constexpr uint32_t ARM_REGS = 0x800000;
 	static constexpr uint32_t ARM_REGS_END = 0x808000;

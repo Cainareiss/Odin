@@ -36,9 +36,13 @@ Status byte st1 'V' that von4 tests on command 0x33 is not understood.
 
 AICA (src/odin/aica.cpp + arm7.cpp): control block, timers, interrupts,
 DMA, RTC and the ARM7 are in; still missing: the 64 slots and the DSP
-(sound output), the real ARM7 speed (64 cycles per sample is MAME's
-guess), the nested-FIQ question (does reading 0x2D00 drop the line?),
-and the HACK in hikaru-aica.c (page offset 0 reads 4 for Pharrier).
+(sound output), the nested-FIQ question (does reading 0x2D00 drop the
+line?), and the HACK in hikaru-aica.c (page offset 0 reads 4 for
+Pharrier). The ARM7 runs on the 22.5792 MHz bus clock, eight times MAME's
+figure: the SGNASCAR cabinet shows its sound driver ready within a frame
+of each reload, 20 MHz at least (HEURISTIC: no wait state). It costs a
+quarter of the speed: the driver sleeps most of the time, its wait could
+be billed without being run.
 
 ROM board 315-5881 (src/odin/crypt_315_5881.cpp, port of MAME, validated
 on the real self-test of Planet Harriers and 19.7 M words against MAME's
