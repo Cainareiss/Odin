@@ -2796,8 +2796,8 @@ D (0x194)
  *	UUUUUUUU UUUUUUUU UUUUUUUU UUUUUUUU
  *      -------- -------- -------- --------
  *
- * l,L,h,H = Addresses? Possibly watermarks?
- *
+ * l,L and u,U = where the two 3D buffers of unit 0 and of unit 1 lie in the
+ * FB (the values of 1A000180, 1A000188 and of 1A000200, 1A000208).
  * See PH:@0C016308 for both.
  */
 
