@@ -51,6 +51,9 @@ struct vk_machine_t {
 	int		 (* load_game) (vk_machine_t *mach, vk_game_t *game);
 	void		 (* reset) (vk_machine_t *mach, vk_reset_type_t type);
 	int		 (* run_frame) (vk_machine_t *mach);
+	/* Before the buffers are saved: the devices write there what they
+	 * were holding back. */
+	void		 (* settle) (vk_machine_t *mach);
 	int		 (* load_state) (vk_machine_t *mach, vk_state_t *state);
 	int		 (* save_state) (vk_machine_t *mach, vk_state_t *state);
 	const char	*(* get_debug_string)(vk_machine_t *mach);

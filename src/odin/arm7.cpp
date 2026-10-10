@@ -27,13 +27,14 @@
 
 #include "odin/arm7.hpp"
 
+#include <algorithm>
 #include <bit>
 #include <format>
 
 namespace odin {
 
 Arm7::Arm7(Arm7Bus &bus)
-	: m_bus(bus), m_ram{nullptr, 0, 0}, m_trace(nullptr)
+	: m_bus(bus), m_ram{nullptr, 0, 0}, m_trace(nullptr), m_turn(Turn::Off), m_turn_limit(TURN_MAX)
 {
 	m_irq_line = m_fiq_line = false;
 	reset();
@@ -65,15 +66,291 @@ void Arm7::reset()
 	m_op_pc = 0;
 	m_cycles = 0;
 	m_instructions = 0;
+	if (m_turn != Turn::Off) {
+		m_turn = Turn::Idle;
+	}
+	m_turn_wait = m_turn_backoff = 0;
+	m_turn_limit = TURN_MAX;
 }
 
 uint32_t Arm7::run(uint32_t cycles)
 {
 	uint32_t done = 0;
+	if (m_turn == Turn::Replay) {
+		if (!turn_reads_hold()) {
+			settle();
+		}
+	} else if (m_turn == Turn::Idle) {
+		/* A turn of the program, not of an interrupt handler. */
+		bool taken = (m_fiq_line && (m_cpsr & FLAG_F) == 0) || (m_irq_line && (m_cpsr & FLAG_I) == 0);
+		if (m_turn_wait > 0) {
+			m_turn_wait--;
+		} else if (!taken && mode() != MODE_FIQ && mode() != MODE_IRQ) {
+			turn_begin();
+		}
+	}
 	while (done < cycles) {
-		done += step();
+		if (m_turn == Turn::Replay) {
+			done += turn_replay(cycles - done);
+		} else if (m_turn == Turn::Record) {
+			uint64_t before = m_instructions;
+			uint32_t spent = step();
+			done += spent;
+			turn_step(spent, static_cast<uint32_t>(m_instructions - before));
+		} else {
+			done += step();
+		}
 	}
 	return done;
+}
+
+/* Turns counted without being run. A turn starts at any instruction and
+ * ends when the program is back there with every register as it was. It
+ * can be counted from then on if it took no exception, wrote nothing
+ * outside the memory and left the memory as it found it: with the same
+ * memory, the same answers of the bus and the same interrupt lines, the
+ * next turn does the same again. */
+
+void Arm7::set_turn_replay(bool on)
+{
+	settle();
+	m_turn = on ? Turn::Idle : Turn::Off;
+	m_turn_wait = m_turn_backoff = 0;
+	m_turn_limit = TURN_MAX;
+}
+
+void Arm7::turn_begin()
+{
+	if (m_trace || m_ram.size > ((m_turn_pages.size() * 8) << TURN_PAGE)) {
+		return;
+	}
+	save(m_turn_start);
+	m_turn_count = 0;
+	m_turn_cycles[0] = 0;
+	m_turn_passed[0] = 0;
+	m_turn_pages.fill(0);
+	m_turn_changed.fill(0);
+	m_turn_num_reads = 0;
+	m_turn_num_stores = 0;
+	m_turn_bad = false;
+	m_turn = Turn::Record;
+}
+
+void Arm7::turn_abort()
+{
+	/* Once is the turn that follows an interrupt; more is a program
+	 * that does not wait. */
+	m_turn = Turn::Idle;
+	m_turn_wait = m_turn_backoff;
+	m_turn_backoff = m_turn_backoff ? std::min(m_turn_backoff * 2, 64u) : 1;
+	if (m_turn_backoff == 64) {
+		m_turn_limit = TURN_MAX;
+	}
+}
+
+/* Something outside is about to change. */
+void Arm7::turn_break()
+{
+	if (m_turn == Turn::Replay) {
+		settle();
+	} else if (m_turn == Turn::Record) {
+		m_turn = Turn::Idle;
+		m_turn_wait = 0;
+	}
+}
+
+void Arm7::turn_step(uint32_t cycles, uint32_t passed)
+{
+	uint32_t n = ++m_turn_count;
+	m_turn_cycles[n] = m_turn_cycles[n - 1] + cycles;
+	m_turn_passed[n] = u16(m_turn_passed[n - 1] + passed);
+	if (m_turn_bad) {
+		turn_abort();
+		return;
+	}
+	if (m_pc == m_turn_start.pc && m_cpsr == m_turn_start.cpsr) {
+		Arm7State now;
+		save(now);
+		if (now == m_turn_start) {
+			bool same = turn_reads_hold();
+			for (uint32_t i = 0; same && i < m_turn_num_stores; i++) {
+				same = m_ram.base[m_turn_stores[i].offset] == m_turn_stores[i].old;
+			}
+			if (same) {
+				m_turn = Turn::Replay;
+				m_turn_at = 0;
+				m_turn_backoff = 0;
+				/* The next turn should not be much longer. */
+				m_turn_limit = std::min(n * 2, TURN_MAX);
+			} else {
+				turn_abort();
+			}
+			return;
+		}
+	}
+	if (n == m_turn_limit) {
+		turn_abort();
+	}
+}
+
+uint32_t Arm7::bus_read(uint32_t addr, uint32_t size)
+{
+	return size == 1 ? m_bus.read8(addr) : size == 2 ? m_bus.read16(addr) : m_bus.read32(addr);
+}
+
+bool Arm7::turn_reads_hold()
+{
+	for (uint32_t i = 0; i < m_turn_num_reads; i++) {
+		const TurnRead &r = m_turn_reads[i];
+		if (bus_read(r.addr, r.size) != r.value) {
+			return false;
+		}
+	}
+	return true;
+}
+
+/* Stops where run() would: at the first instruction boundary at or past
+ * the budget. */
+uint32_t Arm7::turn_replay(uint32_t budget)
+{
+	uint32_t done = 0;
+	while (done < budget) {
+		uint32_t base = m_turn_cycles[m_turn_at];
+		auto first = m_turn_cycles.begin() + m_turn_at + 1;
+		auto last = m_turn_cycles.begin() + m_turn_count + 1;
+		auto it = std::lower_bound(first, last, base + (budget - done));
+		uint32_t to = it == last ? m_turn_count : static_cast<uint32_t>(it - m_turn_cycles.begin());
+		done += m_turn_cycles[to] - base;
+		m_instructions += static_cast<uint32_t>(m_turn_passed[to] - m_turn_passed[m_turn_at]);
+		m_turn_at = to == m_turn_count ? 0 : to;
+	}
+	return done;
+}
+
+void Arm7::settle()
+{
+	if (m_turn == Turn::Record) {
+		m_turn = Turn::Idle;
+		m_turn_wait = 0;
+	}
+	if (m_turn != Turn::Replay) {
+		return;
+	}
+	/* The bus answers what it did when the turn was recorded: it may
+	 * have changed since the part to run was counted. */
+	uint64_t instructions = m_instructions;
+	uint32_t count = m_turn_at;
+	m_turn = Turn::Settle;
+	m_turn_next_read = 0;
+	for (uint32_t i = 0; i < count; i++) {
+		step();
+	}
+	m_instructions = instructions;
+	m_turn = Turn::Idle;
+	m_turn_wait = 0;
+}
+
+bool Arm7::turn_page(const std::array<uint8_t, 256> &pages, uint32_t addr) const
+{
+	uint32_t page = (addr & m_ram.mask) >> TURN_PAGE;
+	return (pages[page >> 3] >> (page & 7)) & 1;
+}
+
+void Arm7::turn_note_read(uint32_t addr, uint32_t size, uint32_t value)
+{
+	if (addr < m_ram.size) {
+		uint32_t page = (addr & m_ram.mask) >> TURN_PAGE;
+		m_turn_pages[page >> 3] |= u8(1u << (page & 7));
+	} else if (m_turn_num_reads < TURN_READS) {
+		m_turn_reads[m_turn_num_reads++] = {m_turn_count, addr, size, value};
+	} else {
+		m_turn_bad = true;
+	}
+}
+
+/* Before the store: the bytes it changes are kept as they were. */
+void Arm7::turn_note_store(uint32_t addr, uint32_t size, uint32_t value)
+{
+	if (addr >= m_ram.size) {
+		m_turn_bad = true;
+		return;
+	}
+	for (uint32_t i = 0; i < size; i++) {
+		uint32_t offset = (addr + i) & m_ram.mask;
+		if (m_ram.base[offset] == u8(value >> (8 * i))) {
+			continue;
+		}
+		bool known = false;
+		for (uint32_t k = 0; !known && k < m_turn_num_stores; k++) {
+			known = m_turn_stores[k].offset == offset;
+		}
+		if (known) {
+			continue;
+		}
+		if (m_turn_num_stores == TURN_STORES) {
+			m_turn_bad = true;
+			return;
+		}
+		m_turn_stores[m_turn_num_stores++] = {offset, m_ram.base[offset]};
+		uint32_t page = offset >> TURN_PAGE;
+		m_turn_changed[page >> 3] |= u8(1u << (page & 7));
+	}
+}
+
+/* The machine reads the memory: a turn that is only counted has not put
+ * there what it changes for a while. */
+void Arm7::ram_read(uint32_t addr, uint32_t size)
+{
+	if (m_turn != Turn::Replay || size == 0) {
+		return;
+	}
+	if (turn_page(m_turn_changed, addr) || turn_page(m_turn_changed, addr + size - 1)) {
+		settle();
+	}
+}
+
+void Arm7::ram_write(uint32_t addr, uint32_t size)
+{
+	if (m_turn == Turn::Record) {
+		turn_break();
+	}
+	if (m_turn != Turn::Replay || size == 0) {
+		return;
+	}
+	if (turn_page(m_turn_pages, addr) || turn_page(m_turn_pages, addr + size - 1) ||
+	    turn_page(m_turn_changed, addr) || turn_page(m_turn_changed, addr + size - 1)) {
+		settle();
+	}
+}
+
+void Arm7::set_ram(const Arm7Ram &ram)
+{
+	if (ram.base != m_ram.base || ram.size != m_ram.size || ram.mask != m_ram.mask) {
+		turn_break();
+		m_ram = ram;
+	}
+}
+
+void Arm7::set_irq(bool level)
+{
+	if (level != m_irq_line) {
+		turn_break();
+		m_irq_line = level;
+	}
+}
+
+void Arm7::set_fiq(bool level)
+{
+	if (level != m_fiq_line) {
+		turn_break();
+		m_fiq_line = level;
+	}
+}
+
+void Arm7::set_trace(FILE *out)
+{
+	turn_break();
+	m_trace = out;
 }
 
 /* FIQ beats IRQ; both are level sensitive and sampled between two
@@ -181,6 +458,11 @@ void Arm7::load(const Arm7State &in)
 	m_r[15] = 0;
 	m_irq_line = s.irq_line != 0;
 	m_fiq_line = s.fiq_line != 0;
+	if (m_turn != Turn::Off) {
+		m_turn = Turn::Idle;
+	}
+	m_turn_wait = m_turn_backoff = 0;
+	m_turn_limit = TURN_MAX;
 }
 
 /* Bus access. The trace point is one pointer test when off. Word and
@@ -206,8 +488,13 @@ uint32_t Arm7::fetch()
 	if (addr < m_ram.size) {
 		const uint8_t *p = m_ram.base + (addr & m_ram.mask);
 		op = p[0] | (p[1] << 8) | (p[2] << 16) | (static_cast<uint32_t>(p[3]) << 24);
+	} else if (m_turn == Turn::Settle) {
+		op = m_turn_reads[m_turn_next_read++].value;
 	} else {
 		op = m_bus.read32(addr);
+	}
+	if (m_turn == Turn::Record) {
+		turn_note_read(addr, 4, op);
 	}
 	if (m_trace) {
 		trace('f', addr, 4, op);
@@ -217,7 +504,17 @@ uint32_t Arm7::fetch()
 
 uint8_t Arm7::rd8(uint32_t addr)
 {
-	uint8_t v = addr < m_ram.size ? m_ram.base[addr & m_ram.mask] : m_bus.read8(addr);
+	uint8_t v;
+	if (addr < m_ram.size) {
+		v = m_ram.base[addr & m_ram.mask];
+	} else if (m_turn == Turn::Settle) {
+		v = u8(m_turn_reads[m_turn_next_read++].value);
+	} else {
+		v = m_bus.read8(addr);
+	}
+	if (m_turn == Turn::Record) {
+		turn_note_read(addr, 1, v);
+	}
 	if (m_trace) {
 		trace('r', addr, 1, v);
 	}
@@ -231,8 +528,13 @@ uint16_t Arm7::rd16(uint32_t addr)
 	if (addr < m_ram.size) {
 		const uint8_t *p = m_ram.base + (addr & m_ram.mask);
 		v = static_cast<uint16_t>(p[0] | (p[1] << 8));
+	} else if (m_turn == Turn::Settle) {
+		v = u16(m_turn_reads[m_turn_next_read++].value);
 	} else {
 		v = m_bus.read16(addr);
+	}
+	if (m_turn == Turn::Record) {
+		turn_note_read(addr, 2, v);
 	}
 	if (m_trace) {
 		trace('r', addr, 2, v);
@@ -247,8 +549,13 @@ uint32_t Arm7::rd32(uint32_t addr)
 	if (addr < m_ram.size) {
 		const uint8_t *p = m_ram.base + (addr & m_ram.mask);
 		v = p[0] | (p[1] << 8) | (p[2] << 16) | (static_cast<uint32_t>(p[3]) << 24);
+	} else if (m_turn == Turn::Settle) {
+		v = m_turn_reads[m_turn_next_read++].value;
 	} else {
 		v = m_bus.read32(addr);
+	}
+	if (m_turn == Turn::Record) {
+		turn_note_read(addr, 4, v);
 	}
 	if (m_trace) {
 		trace('r', addr, 4, v);
@@ -260,6 +567,9 @@ void Arm7::wr8(uint32_t addr, uint8_t v)
 {
 	if (m_trace) {
 		trace('w', addr, 1, v);
+	}
+	if (m_turn == Turn::Record) {
+		turn_note_store(addr, 1, v);
 	}
 	if (addr < m_ram.size) {
 		m_ram.base[addr & m_ram.mask] = v;
@@ -273,6 +583,9 @@ void Arm7::wr16(uint32_t addr, uint16_t v)
 	addr &= ~1u;
 	if (m_trace) {
 		trace('w', addr, 2, v);
+	}
+	if (m_turn == Turn::Record) {
+		turn_note_store(addr, 2, v);
 	}
 	if (addr < m_ram.size) {
 		uint8_t *p = m_ram.base + (addr & m_ram.mask);
@@ -288,6 +601,9 @@ void Arm7::wr32(uint32_t addr, uint32_t v)
 	addr &= ~3u;
 	if (m_trace) {
 		trace('w', addr, 4, v);
+	}
+	if (m_turn == Turn::Record) {
+		turn_note_store(addr, 4, v);
 	}
 	if (addr < m_ram.size) {
 		uint8_t *p = m_ram.base + (addr & m_ram.mask);
@@ -461,6 +777,9 @@ bool Arm7::cond(uint32_t cc) const
 void Arm7::take_exception(uint32_t vector, uint32_t new_mode, uint32_t lr, bool mask_fiq)
 {
 	uint32_t old_cpsr = m_cpsr;
+	if (m_turn == Turn::Record) {
+		m_turn_bad = true;
+	}
 	switch_mode(new_mode);
 	*spsr_slot(new_mode) = old_cpsr;
 	m_r[14] = lr;

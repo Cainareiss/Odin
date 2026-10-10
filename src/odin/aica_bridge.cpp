@@ -48,6 +48,8 @@ public:
 		  m_arm_held(true), m_ram(ram.data()), m_arm(*this), m_aica(*this, ram)
 	{
 		map_ram();
+		/* The registers read without side effects. */
+		m_arm.set_turn_replay(true);
 	}
 
 	/* AicaHost */
@@ -103,8 +105,9 @@ public:
 		uint8_t arm_held;
 	};
 
-	void save(State &out) const
+	void save(State &out)
 	{
+		m_arm.settle();
 		out.sample_acc = m_sample_acc;
 		m_arm.save(out.arm);
 		m_aica.save(out.aica);
@@ -192,6 +195,7 @@ odin_aica_delete(odin_aica_t *dev)
 void
 odin_aica_reset(odin_aica_t *dev)
 {
+	dev->board->arm().settle();
 	dev->board->chip().reset();
 }
 
@@ -200,6 +204,7 @@ odin_aica_host_read(odin_aica_t *dev, uint32_t offset, unsigned size, uint64_t *
 {
 	odin::Aica &chip = dev->board->chip();
 	if (offset >= PAGE_RAM) {
+		dev->board->arm().ram_read(offset - PAGE_RAM, size);
 		*value = chip.read_ram(offset - PAGE_RAM, size);
 	} else if (offset >= PAGE_REGS && offset < PAGE_REGS_END) {
 		*value = chip.read_reg(offset - PAGE_REGS, size > 4 ? 4 : size);
@@ -216,8 +221,11 @@ odin_aica_host_write(odin_aica_t *dev, uint32_t offset, unsigned size, uint64_t 
 {
 	odin::Aica &chip = dev->board->chip();
 	if (offset >= PAGE_RAM) {
+		dev->board->arm().ram_write(offset - PAGE_RAM, size);
 		chip.write_ram(offset - PAGE_RAM, size, value);
 	} else if (offset >= PAGE_REGS && offset < PAGE_REGS_END) {
+		/* A register may move the memory, the lines or the ARM7. */
+		dev->board->arm().settle();
 		chip.write_reg(offset - PAGE_REGS, size > 4 ? 4 : size, static_cast<uint32_t>(value));
 	} else if (offset >= PAGE_RTC && offset < PAGE_RTC_END) {
 		chip.write_rtc(offset - PAGE_RTC, static_cast<uint32_t>(value));
@@ -231,6 +239,12 @@ void
 odin_aica_run(odin_aica_t *dev, uint32_t cycles)
 {
 	dev->board->run(cycles);
+}
+
+void
+odin_aica_settle(odin_aica_t *dev)
+{
+	dev->board->arm().settle();
 }
 
 void

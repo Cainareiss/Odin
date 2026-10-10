@@ -121,6 +121,15 @@ hikaru_aica_exec (vk_device_t *device, int cycles)
 	return cycles;
 }
 
+/* Before the wave memory is saved or dumped, see odin_aica_settle. */
+void
+hikaru_aica_settle (vk_device_t *dev)
+{
+	hikaru_aica_t *aica = (hikaru_aica_t *) dev;
+
+	odin_aica_settle (aica->chip);
+}
+
 static int
 hikaru_aica_save_state (vk_device_t *dev, vk_state_t *state)
 {

@@ -156,6 +156,8 @@ load_save_state (vk_machine_t *mach, const char *path, uint32_t mode)
 
 	if (mode == VK_STATE_LOAD)
 		vk_machine_reset (mach, VK_RESET_TYPE_HARD);
+	else if (mach->settle)
+		mach->settle (mach);
 
 	/* The game and the frame number */
 	memset (name, 0, sizeof (name));

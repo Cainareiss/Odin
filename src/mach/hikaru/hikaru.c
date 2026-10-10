@@ -660,6 +660,15 @@ hikaru_save_state (vk_machine_t *mach, vk_state_t *state)
 #undef LOAD
 
 static void
+hikaru_settle (vk_machine_t *mach)
+{
+	hikaru_t *hikaru = (hikaru_t *) mach;
+
+	hikaru_aica_settle (hikaru->aica_m);
+	hikaru_aica_settle (hikaru->aica_s);
+}
+
+static void
 hikaru_dump (vk_machine_t *mach)
 {
 	hikaru_t *hikaru = (hikaru_t *) mach;
@@ -667,6 +676,8 @@ hikaru_dump (vk_machine_t *mach)
 
 	if (!name)
 		return;
+
+	hikaru_settle (mach);
 
 	vk_buffer_dumpf (hikaru->ram_m,		"%s-ram-m.bin", name);
 	vk_buffer_dumpf (hikaru->ram_s,		"%s-ram-s.bin", name);
@@ -1286,6 +1297,7 @@ hikaru_new (vk_game_t *game)
 	mach->run_frame		= hikaru_run_frame;
 	mach->load_state	= hikaru_load_state;
 	mach->save_state	= hikaru_save_state;
+	mach->settle		= hikaru_settle;
 	mach->get_debug_string	= hikaru_get_debug_string;
 
 	if (hikaru_init (hikaru))

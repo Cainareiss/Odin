@@ -54,6 +54,11 @@ int odin_aica_host_write(odin_aica_t *dev, uint32_t offset, unsigned size, uint6
 /* Advances the board by `cycles` host-CPU cycles. */
 void odin_aica_run(odin_aica_t *dev, uint32_t cycles);
 
+/* The ARM7 only counts the turns of a program that waits: this puts in the
+ * wave memory what it has not written yet. Call it before the memory is
+ * read from outside the bridge. */
+void odin_aica_settle(odin_aica_t *dev);
+
 void odin_aica_set_log(odin_aica_t *dev, FILE *out);
 /* ARM7 instruction and bus trace in the charter format; NULL turns it off. */
 void odin_aica_set_arm_trace(odin_aica_t *dev, FILE *out);

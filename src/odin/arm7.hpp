@@ -21,6 +21,7 @@
 #ifndef ODIN_ARM7_HPP
 #define ODIN_ARM7_HPP
 
+#include <array>
 #include <cstdint>
 #include <cstdio>
 
@@ -42,6 +43,8 @@ struct Arm7State {
 	uint32_t und[2];
 	uint32_t spsr[5];    /* FIQ, IRQ, SVC, ABT, UND */
 	uint8_t irq_line, fiq_line;
+
+	bool operator==(const Arm7State &) const = default;
 };
 
 /* What the CPU sees outside its pins. The machine implements it.
@@ -89,16 +92,30 @@ public:
 	 * Returns the cycles spent, 0 when nothing was pending. */
 	uint32_t poll_interrupts();
 
-	void set_ram(const Arm7Ram &ram) { m_ram = ram; }
+	void set_ram(const Arm7Ram &ram);
 
-	void set_irq(bool level) { m_irq_line = level; }
-	void set_fiq(bool level) { m_fiq_line = level; }
+	void set_irq(bool level);
+	void set_fiq(bool level);
 
+	/* A program that waits goes round a loop, and every turn reads the
+	 * same things and leaves the registers and the memory as they were.
+	 * With this on, such a turn is run once, then only counted for as long
+	 * as what it read stays the same. The machine must then call
+	 * ram_write() before it changes the plain memory itself, ram_read()
+	 * before it reads it, settle() before it saves the state, and its bus
+	 * must read without side effects. */
+	void set_turn_replay(bool on);
+	void ram_read(uint32_t addr, uint32_t size);
+	void ram_write(uint32_t addr, uint32_t size);
+	/* Runs the part of a turn that was only counted. */
+	void settle();
+
+	/* The state between two instructions: settle() first. */
 	void save(Arm7State &out) const;
 	void load(const Arm7State &in);
 
 	/* Trace lines go to `out`; nullptr turns tracing off. */
-	void set_trace(FILE *out) { m_trace = out; }
+	void set_trace(FILE *out);
 
 	uint32_t pc() const { return m_pc; }
 	uint32_t cpsr() const { return m_cpsr; }
@@ -191,6 +208,46 @@ private:
 	uint32_t m_op_pc;
 	uint32_t m_cycles;
 	uint64_t m_instructions;
+
+	/* Turns counted without being run, see set_turn_replay(). */
+	enum class Turn : uint8_t { Off, Idle, Record, Replay, Settle };
+	static constexpr uint32_t TURN_MAX = 4096;   /* instructions */
+	static constexpr uint32_t TURN_READS = 16;   /* outside the memory */
+	static constexpr uint32_t TURN_STORES = 256; /* bytes changed */
+	static constexpr uint32_t TURN_PAGE = 12;    /* 4 KB */
+	struct TurnRead {
+		uint32_t index, addr, size, value;
+	};
+	struct TurnStore {
+		uint32_t offset;
+		uint8_t old;
+	};
+
+	void turn_begin();
+	void turn_step(uint32_t cycles, uint32_t passed);
+	void turn_abort();
+	void turn_break();
+	bool turn_reads_hold();
+	uint32_t turn_replay(uint32_t budget);
+	void turn_note_read(uint32_t addr, uint32_t size, uint32_t value);
+	void turn_note_store(uint32_t addr, uint32_t size, uint32_t value);
+	uint32_t bus_read(uint32_t addr, uint32_t size);
+	bool turn_page(const std::array<uint8_t, 256> &pages, uint32_t addr) const;
+
+	Turn m_turn;
+	bool m_turn_bad;
+	uint32_t m_turn_wait, m_turn_backoff; /* calls of run() before a record */
+	uint32_t m_turn_limit;                /* instructions to look for one */
+	uint32_t m_turn_count;                /* instructions of the turn */
+	uint32_t m_turn_at;                   /* of them, counted in this turn */
+	uint32_t m_turn_num_reads, m_turn_next_read, m_turn_num_stores;
+	Arm7State m_turn_start;
+	std::array<uint32_t, TURN_MAX + 1> m_turn_cycles; /* summed */
+	std::array<uint16_t, TURN_MAX + 1> m_turn_passed; /* summed */
+	std::array<uint8_t, 256> m_turn_pages;            /* memory read */
+	std::array<uint8_t, 256> m_turn_changed;          /* memory changed */
+	std::array<TurnRead, TURN_READS> m_turn_reads;
+	std::array<TurnStore, TURN_STORES> m_turn_stores;
 };
 
 } /* namespace odin */
