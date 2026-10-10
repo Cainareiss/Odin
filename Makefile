@@ -67,7 +67,9 @@ ODIN_OBJ := \
 	src/odin/sh4.o \
 	src/odin/sh4_ops.o \
 	src/odin/sh4_onchip.o \
-	src/odin/sh4_bridge.o
+	src/odin/sh4_bridge.o \
+	src/odin/scheduler.o \
+	src/odin/scheduler_bridge.o
 
 HIKARU_OBJ := \
 	$(SH4_OBJ) \
@@ -118,6 +120,8 @@ src/mach/hikaru/hikaru.o src/mach/hikaru/hikaru-memctl.o: src/odin/actel_m1_brid
 src/odin/sh4.o src/odin/sh4_ops.o src/odin/sh4_onchip.o src/odin/sh4_bridge.o: src/odin/sh4.hpp
 src/odin/sh4_bridge.o src/cpu/sh/sh4-odin.o: src/odin/sh4_bridge.hpp
 src/cpu/sh/sh4-odin.o src/mach/hikaru/hikaru.o src/mach/hikaru/hikaru-memctl.o: src/cpu/sh/sh4.h
+src/odin/scheduler.o src/odin/scheduler_bridge.o: src/odin/scheduler.hpp
+src/odin/scheduler_bridge.o src/mach/hikaru/hikaru.o: src/odin/scheduler_bridge.hpp
 # A product is fused with a sum only where the code says std::fma.
 src/odin/sh4_ops.o: CXXFLAGS += -ffp-contract=off
 
