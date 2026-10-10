@@ -42,7 +42,8 @@ VK_OBJ := \
 	src/vk/renderer.o
 
 SH4_OBJ := \
-	src/cpu/sh/sh4.o
+	src/cpu/sh/sh4.o \
+	src/cpu/sh/sh4-odin.o
 
 ODIN_OBJ := \
 	src/odin/aica.o \
@@ -116,7 +117,8 @@ src/odin/actel_m1.o src/odin/actel_m1_bridge.o: src/odin/actel_m1.hpp src/odin/a
 src/mach/hikaru/hikaru.o src/mach/hikaru/hikaru-memctl.o: src/odin/actel_m1_bridge.hpp
 
 src/odin/sh4.o src/odin/sh4_ops.o src/odin/sh4_onchip.o src/odin/sh4_bridge.o: src/odin/sh4.hpp
-src/odin/sh4_bridge.o: src/odin/sh4_bridge.hpp
+src/odin/sh4_bridge.o src/cpu/sh/sh4-odin.o: src/odin/sh4_bridge.hpp
+src/cpu/sh/sh4.o src/cpu/sh/sh4-odin.o src/mach/hikaru/hikaru.o src/mach/hikaru/hikaru-memctl.o: src/cpu/sh/sh4.h
 # A product is fused with a sum only where the code says std::fma.
 src/odin/sh4_ops.o: CXXFLAGS += -ffp-contract=off
 

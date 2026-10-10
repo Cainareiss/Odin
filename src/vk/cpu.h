@@ -41,7 +41,9 @@ typedef enum {
 
 typedef struct vk_cpu_t vk_cpu_t;
 
-/* A patch may change the instruction and the CPU registers, nothing else. */
+/* A patch may change the instruction and the CPU registers, nothing else.
+ * On the Odin SH-4 it is called at its PC outside a delay slot, and what it
+ * changes of R0-R15 and of the cycles left is all that is kept. */
 typedef uint32_t (* vk_cpu_patch_t)(vk_cpu_t *, uint32_t, uint32_t);
 
 struct vk_cpu_t {

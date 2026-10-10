@@ -204,9 +204,27 @@ struct sh4_t {
 		bool	master;
 		bool	little_endian;
 	} config;
+
+	/* The Odin core (src/odin/sh4.hpp) when it runs this CPU: the
+	 * fields above then only carry its state to the save files and to
+	 * the patches. NULL with ODIN_SH4=old. */
+	struct odin_sh4 *odin;
+	uint32_t	hooked_pc;
+
+	/* ODIN_SH4_TRACE=<prefix>: one line per slice in <prefix>-m.txt and
+	 * <prefix>-s.txt, the PC and a hash of the registers. */
+	FILE		*trace;
 };
 
 vk_cpu_t	*sh4_new (vk_machine_t *mach, vk_mmap_t *mmap, bool master, bool le);
+vk_cpu_t	*sh4_odin_new (vk_machine_t *mach, vk_mmap_t *mmap, bool master, bool le);
+void		 sh4_odin_pull (sh4_t *ctx);
+void		 sh4_odin_push (sh4_t *ctx);
+void		 sh4_stats_open (void);
+uint64_t	 sh4_stats_begin (void);
+void		 sh4_stats_end (sh4_t *ctx, uint64_t begin);
+void		 sh4_trace_open (sh4_t *ctx);
+void		 sh4_trace_slice (sh4_t *ctx);
 void		 sh4_set_porta_handlers (vk_cpu_t *cpu,
 		                         int (* get)(sh4_t *ctx, uint16_t *val),
 		                         int (* put)(sh4_t *ctx, uint16_t val));

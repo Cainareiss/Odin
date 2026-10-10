@@ -1316,6 +1316,7 @@ sh4_run (vk_cpu_t *cpu, int cycles)
 	sh4_t *ctx = (sh4_t *) cpu;
 	/* Passages at the mark to let go before the next look, see below */
 	unsigned pass = 0, busy = 0;
+	uint64_t begin = sh4_stats_begin ();
 
 	cpu->remaining = cycles;
 	ctx->wait.period = 16;
@@ -1362,6 +1363,9 @@ sh4_run (vk_cpu_t *cpu, int cycles)
 	if (ctx->pm.running[1])
 		ctx->pm.counter[1] = (ctx->pm.counter[1] + (uint64_t) cycles) & 0xFFFFFFFFFFFFull;
 	//sh4_dmac_run (ctx, cycles);
+	sh4_stats_end (ctx, begin);
+	if (ctx->trace)
+		sh4_trace_slice (ctx);
 	return -cpu->remaining;
 }
 
@@ -1574,9 +1578,14 @@ sh4_set_porta_handlers (vk_cpu_t *cpu,
 vk_cpu_t *
 sh4_new (vk_machine_t *mach, vk_mmap_t *mmap, bool master, bool le)
 {
+	const char *which = getenv ("ODIN_SH4");
 	vk_device_t *dev;
 	vk_cpu_t *cpu;
 	sh4_t *ctx;
+
+	/* ODIN_SH4=old keeps the interpreter of this file, to compare. */
+	if (!which || strcmp (which, "old"))
+		return sh4_odin_new (mach, mmap, master, le);
 
 	VK_CPU_ALLOC (ctx, mach, mmap);
 	cpu = (vk_cpu_t *) ctx;
@@ -1604,6 +1613,8 @@ sh4_new (vk_machine_t *mach, vk_mmap_t *mmap, bool master, bool le)
 	vk_machine_register_buffer (mach, ctx->iregs);
 
 	setup_insns_handlers ();
+	sh4_trace_open (ctx);
+	sh4_stats_open ();
 
 	return (vk_cpu_t *) ctx;
 fail:
