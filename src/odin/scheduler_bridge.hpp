@@ -23,6 +23,7 @@
 #ifndef ODIN_SCHEDULER_BRIDGE_HPP
 #define ODIN_SCHEDULER_BRIDGE_HPP
 
+#include <stddef.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -40,6 +41,11 @@ uint64_t odin_scheduler_next(const odin_scheduler_t *sched);
 void odin_scheduler_advance(odin_scheduler_t *sched, uint64_t to);
 /* The lowest source due now, taken; -1 if none is. */
 int odin_scheduler_take(odin_scheduler_t *sched);
+
+/* Save state: a block of odin_scheduler_state_size() bytes. */
+size_t odin_scheduler_state_size(void);
+void odin_scheduler_save_state(const odin_scheduler_t *sched, void *out);
+void odin_scheduler_load_state(odin_scheduler_t *sched, const void *in);
 
 #ifdef __cplusplus
 }

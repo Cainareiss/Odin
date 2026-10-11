@@ -84,4 +84,16 @@ bool Scheduler::take(uint32_t &source)
 	return false;
 }
 
+void Scheduler::save(SchedulerState &out) const
+{
+	out.now = m_now;
+	out.when = m_when;
+}
+
+void Scheduler::load(const SchedulerState &in)
+{
+	m_now = in.now;
+	m_when = in.when;
+}
+
 } /* namespace odin */

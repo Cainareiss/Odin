@@ -22,6 +22,8 @@
 
 #include "odin/scheduler.hpp"
 
+#include <cstring>
+
 struct odin_scheduler {
 	odin::Scheduler sched;
 };
@@ -75,6 +77,28 @@ odin_scheduler_take(odin_scheduler_t *sched)
 {
 	uint32_t source;
 	return sched->sched.take(source) ? static_cast<int>(source) : -1;
+}
+
+size_t
+odin_scheduler_state_size(void)
+{
+	return sizeof(odin::SchedulerState);
+}
+
+void
+odin_scheduler_save_state(const odin_scheduler_t *sched, void *out)
+{
+	odin::SchedulerState state;
+	sched->sched.save(state);
+	std::memcpy(out, &state, sizeof(state));
+}
+
+void
+odin_scheduler_load_state(odin_scheduler_t *sched, const void *in)
+{
+	odin::SchedulerState state;
+	std::memcpy(&state, in, sizeof(state));
+	sched->sched.load(state);
 }
 
 } /* extern "C" */

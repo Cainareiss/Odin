@@ -29,6 +29,12 @@ namespace odin {
 /* The time of a machine, in cycles of its fastest clock since power-on. */
 using Time = uint64_t;
 
+/* Everything a scheduler holds. Plain data. */
+struct SchedulerState {
+	uint64_t now;
+	std::array<uint64_t, 16> when;
+};
+
 /* The dates of what is to come. Each source has one event at most; the
  * machine runs its chips up to the earliest date, moves the time there and
  * takes the events that are due, the lowest source first. */
@@ -55,6 +61,9 @@ public:
 
 	/* Takes the event of the lowest source due now; false if none is. */
 	bool take(uint32_t &source);
+
+	void save(SchedulerState &out) const;
+	void load(const SchedulerState &in);
 
 private:
 	[[noreturn]] void fatal(const char *what, uint64_t value) const;
