@@ -67,9 +67,8 @@
  *
  *    The device can be accessed thru the MMIOs at 1A0400{00,04,08,0C}.
  *
- * There are likely two different hardware revisions: the bootrom checks for
- * them by checking the reaction of the hardware (register 15002000) after
- * poking a few registers. See @0C001AC4.
+ * There are two main boards, 837-13402 and 837-14097: the bootrom tells them
+ * apart with bit 0 of register 15002000, see hikaru_gpu_get.
  *
  *
  * Address Space
@@ -1143,7 +1142,14 @@ hikaru_gpu_get (vk_device_t *dev, unsigned size, uint32_t addr, void *val)
 		}
 		*val32 = REG15 (addr);
 	} else if (addr == 0x15002000) {
-		/* no-op */
+		/* Bit 0 tells the two main boards apart: the system library
+		 * starts a list, waits for a vertical blanking and reads it
+		 * (PHARRIER @0C010790); the BOOTROM then names the board
+		 * 837-13402 when it was set, 837-14097 when it was clear. This
+		 * is the second one. On the first, the library also takes the
+		 * bit, with bit 0 of 1A000024 clear, for a list that is done
+		 * (@0C0126BA). */
+		*val32 = 0;
 	} else if (addr == 0x18001000) {
 		/* SEGA PCI ID */
 		*val32 = 0x17C711DB;
