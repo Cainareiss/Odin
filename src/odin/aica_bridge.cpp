@@ -192,6 +192,12 @@ odin_aica_delete(odin_aica_t *dev)
 	std::unique_ptr<odin_aica> owned(dev);
 }
 
+int
+odin_aica_main_irq(const odin_aica_t *dev)
+{
+	return dev->board->chip().main_irq() ? 1 : 0;
+}
+
 void
 odin_aica_reset(odin_aica_t *dev)
 {

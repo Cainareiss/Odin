@@ -42,6 +42,8 @@ typedef void (*odin_aica_irq_fn)(void *ctx, int level);
 odin_aica_t *odin_aica_new(uint8_t *ram, size_t ram_size, uint32_t host_clock_hz,
                            odin_aica_irq_fn main_irq, void *ctx);
 void odin_aica_delete(odin_aica_t *dev);
+/* The level of that line. */
+int odin_aica_main_irq(const odin_aica_t *dev);
 void odin_aica_reset(odin_aica_t *dev);
 
 /* `offset` is the byte offset inside the board's 16 MB bus page:

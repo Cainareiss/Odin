@@ -466,13 +466,29 @@ hikaru_gpu_update_irq_status (hikaru_gpu_t *gpu)
 	if (REG1A (0x18) & 0xF)
 		REG15 (0x88) |= 0x80;
 
-	/* Raise IRL2 and lower bit 5 of the PDTRA, if the IRQs are
-	 * not masked. */
+	/* Valkyrie sent a pulse:
+	 * Raise IRL2 and lower bit 5 of the PDTRA, if the IRQs are
+	 * not masked.
 	if (REG15 (0x88) & REG15 (0x84)) {
 		VK_CPU_LOG (cpu, " ## sending GPU IRQ to CPU: %02X/%02X",
 		            REG15 (0x84), REG15 (0x88));
 		hikaru_raise_gpu_irq (gpu->base.mach);
 	}
+	*/
+	(void) cpu;
+	hikaru_update_irqs (gpu->base.mach);
+}
+
+/* ANT_INT, the line of the command processor to the interrupt controller
+ * of the board: held while a cause passes the mask, let go when the
+ * handler of the games has written every cause back as 0 (PHARRIER
+ * @0C0102C0). */
+bool
+hikaru_gpu_irq_line (vk_device_t *dev)
+{
+	hikaru_gpu_t *gpu = (hikaru_gpu_t *) dev;
+
+	return (REG15 (0x88) & REG15 (0x84)) != 0;
 }
 
 void

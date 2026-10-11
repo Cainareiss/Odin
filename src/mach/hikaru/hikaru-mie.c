@@ -71,6 +71,7 @@ typedef struct {
 	odin_mie_t *chip;	/* LLE */
 	vk_buffer_t *regs;	/* HLE: port page */
 	uint32_t busrq;		/* HLE: bus request bit */
+	uint8_t irq_lines;	/* HLE */
 	FILE *trace;
 } hikaru_mie_t;
 
@@ -393,6 +394,28 @@ hikaru_mie_put (vk_device_t *dev, unsigned size, uint32_t addr, uint64_t val)
 	} else
 		return -1;
 	return 0;
+}
+
+/* The interrupt controller of the board, see src/odin/mie_bridge.hpp. The
+ * stand-in has the mask the program of the MIE writes, 0xE1. */
+void
+hikaru_mie_set_irq_lines (vk_device_t *dev, uint8_t lines)
+{
+	hikaru_mie_t *mie = (hikaru_mie_t *) dev;
+
+	if (mie->chip)
+		odin_mie_set_irq_lines (mie->chip, lines);
+	mie->irq_lines = lines;
+}
+
+bool
+hikaru_mie_irq_out (vk_device_t *dev)
+{
+	hikaru_mie_t *mie = (hikaru_mie_t *) dev;
+
+	if (mie->chip)
+		return odin_mie_irq_out (mie->chip) != 0;
+	return (mie->irq_lines & 0xE1) != 0;
 }
 
 static int

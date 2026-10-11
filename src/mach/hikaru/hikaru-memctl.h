@@ -22,5 +22,6 @@
 #include "vk/device.h"
 
 vk_device_t	*hikaru_memctl_new (vk_machine_t *mach, bool master);
+bool		 hikaru_memctl_irq_line (vk_device_t *dev);
 
 #endif /* __VK_HKMEMCTL_H __ */

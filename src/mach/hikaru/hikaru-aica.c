@@ -61,10 +61,16 @@ hikaru_aica_main_irq (void *ctx, int level)
 	hikaru_aica_t *aica = (hikaru_aica_t *) ctx;
 	vk_device_t *dev = (vk_device_t *) aica;
 
-	/* IRL2 with bit 7 of port A low; only the master board is wired to
-	 * the SH-4 in this core for now. */
-	if (level && aica->master)
-		hikaru_raise_aica_irq (dev->mach);
+	(void) level;
+	hikaru_update_irqs (dev->mach);
+}
+
+bool
+hikaru_aica_irq_line (vk_device_t *dev)
+{
+	hikaru_aica_t *aica = (hikaru_aica_t *) dev;
+
+	return odin_aica_main_irq (aica->chip) != 0;
 }
 
 static int

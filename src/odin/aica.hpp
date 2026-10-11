@@ -93,6 +93,8 @@ public:
 	void tick(uint32_t n);
 
 	bool arm_in_reset() const { return m_arm_reset; }
+	/* The interrupt line to the host CPU. */
+	bool main_irq() const { return m_main_irq; }
 	uint32_t ram_mask() const { return m_mem8mb ? 0x7FFFFF : 0x1FFFFF; }
 
 	void save(AicaState &out) const;

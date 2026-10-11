@@ -26,5 +26,7 @@
 
 /* `clock_hz` is the clock of the cycles passed to the device's exec. */
 vk_device_t	*hikaru_mie_new (vk_machine_t *mach, unsigned clock_hz);
+void		 hikaru_mie_set_irq_lines (vk_device_t *dev, uint8_t lines);
+bool		 hikaru_mie_irq_out (vk_device_t *dev);
 
 #endif /* __VK_HIKARU_MIE_H__ */

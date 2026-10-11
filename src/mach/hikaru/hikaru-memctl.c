@@ -733,11 +733,17 @@ hikaru_memctl_put (vk_device_t *dev, unsigned size, uint32_t addr, uint64_t val)
 			{
 				uint16_t old;
 				old = vk_buffer_get (memctl->regs, size, 0x04);
+				/* Valkyrie kept bit 12:
 				val = (old & 0xF000) |
+				*/
+				val = (old & 0xE000) |
+				      (old & ~val & 0x1000) | /* DMA done, see hikaru_memctl_irq_line */
 				      (old & ~val & 0xFC0) | /* Master BUS/DMA error */
 				      (old & ~val & 0x03F); /* Slave BUS/DMA error */
 			}
-			break;
+			vk_buffer_put (memctl->regs, size, addr & 0x3F, val);
+			hikaru_update_irqs (dev->mach);
+			return 0;
 		case 0x06:
 			VK_ASSERT (size == 2);
 			break;
@@ -799,7 +805,21 @@ memctl_dma_run (hikaru_memctl_t *memctl)
 	vk_buffer_put (memctl->regs, 4, 0x34, dst);
 	vk_buffer_put (memctl->regs, 4, 0x38, 0);
 	vk_buffer_put (memctl->regs, 2, 0x04, 0x1000);
-	hikaru_raise_memctl_irq (memctl->base.mach);
+	/* hikaru_raise_memctl_irq (memctl->base.mach); */
+	if (!memctl->master)
+		VK_ABORT ("the bridge of the slave ended a DMA: where its interrupt goes is not known");
+	hikaru_update_irqs (memctl->base.mach);
+}
+
+/* IRL1 of the master SH-4, held while bit 12 of +04 is set: the handler of
+ * the games (PHARRIER @0C0102A0) tests the bit and writes back what it read
+ * to let the line go. */
+bool
+hikaru_memctl_irq_line (vk_device_t *dev)
+{
+	hikaru_memctl_t *memctl = (hikaru_memctl_t *) dev;
+
+	return (vk_buffer_get (memctl->regs, 2, 0x04) & 0x1000) != 0;
 }
 
 static int

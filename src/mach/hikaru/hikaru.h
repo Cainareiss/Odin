@@ -74,6 +74,7 @@ typedef struct {
 
 	/* Port A (master and slave) */
 	uint16_t porta_m;
+	uint8_t irq_lines;	/* see hikaru_update_irqs */
 	/* 93C46 of the main board on port A bits 2 (DI), 3 (SK), 4 (CS), 5 (DO) */
 	odin_eeprom93c46_t *eeprom_main;
 	/* X76F100 of the ROM board, bus page eeprom_bank */
@@ -117,8 +118,8 @@ typedef struct {
 } hikaru_t;
 
 vk_machine_t	*hikaru_new (vk_game_t *game);
-void		 hikaru_raise_gpu_irq (vk_machine_t *mach);
-void		 hikaru_raise_aica_irq (vk_machine_t *mach);
-void		 hikaru_raise_memctl_irq (vk_machine_t *mach);
+/* The interrupt lines of the master SH-4 from those of the chips: a chip
+ * calls it when its line changes. */
+void		 hikaru_update_irqs (vk_machine_t *mach);
 
 #endif /* __VK_HIKARU_H__ */

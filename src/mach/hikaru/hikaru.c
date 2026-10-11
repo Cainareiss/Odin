@@ -187,9 +187,20 @@ porta_get_m (sh4_t *ctx, uint16_t *val)
 {
 	vk_device_t *dev = (vk_device_t *) ctx;
 	hikaru_t *hikaru = (hikaru_t *) dev->mach;
+	const uint8_t lines = hikaru->irq_lines;
 	/* Bit 5 is the EEPROM DO pin (MAME hikaru.cpp main_io_r) */
+	/* Valkyrie read back what was written:
 	*val = (hikaru->porta_m & ~0x20) |
 	       (odin_eeprom93c46_do (hikaru->eeprom_main) ? 0x20 : 0);
+	*/
+	/* Bits 6 to 9 are the lines of hikaru_update_irqs, low while they
+	 * ask; nothing is known on the other pins, pulled up. */
+	*val = 0xFC1F |
+	       (odin_eeprom93c46_do (hikaru->eeprom_main) ? 0x20 : 0) |
+	       ((lines & 0x01) ? 0 : 0x040) |	/* ANT_INT */
+	       ((lines & 0x10) ? 0 : 0x080) |	/* SZK_INT */
+	       ((lines & 0x20) ? 0 : 0x100) |	/* CN4_INT */
+	       ((lines & 0x80) ? 0 : 0x200);	/* CN3_INT1 */
 	return 0;
 }
 
@@ -257,9 +268,12 @@ porta_put_s (sh4_t *ctx, uint16_t val)
 	vk_device_t *dev = (vk_device_t *) ctx;
 	hikaru_t *hikaru = (hikaru_t *) dev->mach;
 	hikaru->porta_s = val;
-	hikaru->porta_s_bit1_buffer = (hikaru->porta_s_bit1_buffer << 1) |
-	                              ((val >> 1) & 1);
-	/* TODO */
+	/* hikaru->porta_s_bit1_buffer = (hikaru->porta_s_bit1_buffer << 1) |
+	                              ((val >> 1) & 1); */
+	/* Bit 0 is the line of the slave to the master, on IRL3 for MAME
+	 * (hikaru.cpp, slave SH4 port A); the games leave it high. */
+	if (!(val & 1))
+		VK_ABORT ("the slave SH-4 pulls its line to the master, which is not implemented");
 	return 0;
 }
 
@@ -406,14 +420,14 @@ static vk_device_t unk_s = {
  * looks like that the IRQ sources are as follows:
  *
  *  IRL0 unused/unhandled
- *  IRL1 GPU hardware, 
- *  IRL2 memory controller DMA termination
+ *  IRL1 memory controller DMA termination
+ *  IRL2 the interrupt controller of the board, see below
  *  IRL3 unused/unhandled
  *
  * IRQ-related Registers
  * =====================
  *
- * The following registers are used in the IRL1 handling routine to check
+ * The following registers are used in the IRL2 handling routine to check
  * what happened, see @0C00174C.
  *
  * PDTRA (active low):
@@ -424,8 +438,57 @@ static vk_device_t unk_s = {
  *  0200	Error
  *
  * For more informations on the GPU IRQs, see hikaru-gpu.c
+ *
+ * The interrupt controller
+ * ========================
+ *
+ * Five lines, named as on the schematics (MAME hikaru.cpp, MIE GPIO
+ * ports), go to port B of the MIE, and four of them to port A of the
+ * master as well:
+ *
+ *  ANT_INT	the command processor	port B bit 0	PDTRA 0040
+ *  SZK_INT	the sound boards	port B bit 4	PDTRA 0080
+ *  CN4_INT	connector CN4		port B bit 5	PDTRA 0100
+ *  CN3_INT0	connector CN3		port B bit 6
+ *  CN3_INT1	connector CN3		port B bit 7	PDTRA 0200
+ *
+ * The MIE holds IRL2 while one of them passes the mask its program writes
+ * to port C (0xE1 in every game: the sound boards do not interrupt). Each
+ * is a level, held until its handler has acknowledged the chip it comes
+ * from. Nothing is on CN3 and CN4.
+ *
+ * HEURISTIC: the second sound board is taken to share SZK_INT with the
+ * first, whose handler acknowledges both (PHARRIER @0C0102F2).
  */
 
+void
+hikaru_update_irqs (vk_machine_t *mach)
+{
+	hikaru_t *hikaru = (hikaru_t *) mach;
+	uint8_t lines = 0;
+
+	/* A chip may call while the machine is being built */
+	if (!hikaru->sh_m)
+		return;
+
+	if (hikaru_gpu_irq_line (hikaru->gpu))
+		lines |= 0x01;
+	if (hikaru_aica_irq_line (hikaru->aica_m) ||
+	    hikaru_aica_irq_line (hikaru->aica_s))
+		lines |= 0x10;
+	hikaru->irq_lines = lines;
+	hikaru_mie_set_irq_lines (hikaru->mie, lines);
+
+	vk_cpu_set_irq_state (hikaru->sh_m, SH4_IESOURCE_IRL1,
+	                      hikaru_memctl_irq_line (hikaru->memctl_m) ?
+	                      VK_IRQ_STATE_RAISED : VK_IRQ_STATE_CLEAR);
+	vk_cpu_set_irq_state (hikaru->sh_m, SH4_IESOURCE_IRL2,
+	                      hikaru_mie_irq_out (hikaru->mie) ?
+	                      VK_IRQ_STATE_RAISED : VK_IRQ_STATE_CLEAR);
+}
+
+/* Valkyrie raised each interrupt once, with its bit of port A low until the
+ * port was written again:
 static void
 hikaru_raise_irq (vk_machine_t *mach, unsigned num, uint16_t porta)
 {
@@ -451,6 +514,7 @@ hikaru_raise_memctl_irq (vk_machine_t *mach)
 {
 	hikaru_raise_irq (mach, SH4_IESOURCE_IRL1, 0);
 }
+*/
 
 /* SH7091 at 200 MHz (Hikaru: 2 x SH-4 @ 200 MHz, see the header of this
  * file). VK_SH4_MHZ lowers it for debugging only: the interpreter is the
@@ -494,6 +558,8 @@ hikaru_run_cycles (vk_machine_t *mach, int cycles)
 
 	/* Run the MIE (no-op on the HLE stand-in) */
 	vk_device_exec (hikaru->mie, cycles);
+	/* Its program may have written the mask of the interrupts */
+	hikaru_update_irqs (mach);
 
 	/* Run the two sound boards */
 	vk_device_exec (hikaru->aica_m, cycles);
@@ -596,7 +662,7 @@ hikaru_run_frame (vk_machine_t *mach)
 			hikaru_gpu_vblank_out (hikaru->gpu);
 
 			/* XXX AICA */
-			hikaru_raise_irq (mach, SH4_IESOURCE_IRL2, 0x80);
+			/* hikaru_raise_irq (mach, SH4_IESOURCE_IRL2, 0x80); */
 			done = true;
 		}
 	}
@@ -720,6 +786,8 @@ hikaru_load_state (vk_machine_t *mach, vk_state_t *state)
 	LOAD (hikaru->lines_per_frame);
 	LOAD (hikaru->lines_shown);
 	LOAD (hikaru->line_rest);
+
+	hikaru_update_irqs (mach);
 
 	return ret;
 }
