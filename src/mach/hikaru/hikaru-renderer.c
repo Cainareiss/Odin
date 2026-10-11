@@ -2174,8 +2174,7 @@ draw_translucent_meshes (hikaru_renderer_t *hr, unsigned vpi,
 		glDisable (GL_SCISSOR_TEST);
 		glClearBufferuiv (GL_COLOR, 0, zero);
 		glBufferSubData (GL_SHADER_STORAGE_BUFFER, 0, sizeof (GLuint), zero);
-		glBindFramebuffer (GL_FRAMEBUFFER,
-		                   hr->framebuffer.fb[hr->framebuffer.scene]);
+		glBindFramebuffer (GL_FRAMEBUFFER, hr->framebuffer.fb);
 		glEnable (GL_SCISSOR_TEST);
 		glColorMask (GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
 
@@ -2560,8 +2559,6 @@ static const char *fb_fs_source =
 "	fragColor = color;							\n"
 "}\n";
 
-#define NUM_FRAMEBUFFERS 2
-
 #define OFFSET(member_) \
 	((const GLvoid *) offsetof (typeof (fb_vbo_data[0]), member_))
 
@@ -2611,54 +2608,37 @@ build_fb_state (hikaru_renderer_t *hr)
 	hr->framebuffer.locs.u_clear =
 		get_uniform_loc (hr->framebuffer.program, "u_clear");
 
-	/* Generate two framebuffers (the front and the back buffers), each
-	 * associated with a colorbuffer (texture) and a depth buffer
-	 * (renderbuffer). */
-	glGenFramebuffers (NUM_FRAMEBUFFERS, hr->framebuffer.fb);
-	glGenTextures (NUM_FRAMEBUFFERS, hr->framebuffer.cb);
-	glGenRenderbuffers (NUM_FRAMEBUFFERS, hr->framebuffer.db);
+	/* Where the lists are drawn: a color buffer (texture) and a depth
+	 * buffer (renderbuffer). */
+	glGenFramebuffers (1, &hr->framebuffer.fb);
+	glBindFramebuffer (GL_FRAMEBUFFER, hr->framebuffer.fb);
 	VK_ASSERT_NO_GL_ERROR ();
 
-	for (i = 0; i < NUM_FRAMEBUFFERS; i++) {
+	glGenTextures (1, &hr->framebuffer.cb);
+	glBindTexture (GL_TEXTURE_2D, hr->framebuffer.cb);
+	glTexStorage2D (GL_TEXTURE_2D, 1, GL_RGBA8, 640, 480);
+	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glFramebufferTexture2D (GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+	                        GL_TEXTURE_2D, hr->framebuffer.cb, 0);
+	glDrawBuffers (1, targets);
+	VK_ASSERT_NO_GL_ERROR ();
 
-		/* Bind the i'th framebuffer */
-		glBindFramebuffer (GL_FRAMEBUFFER, hr->framebuffer.fb[i]);
-		VK_ASSERT_NO_GL_ERROR ();
+	glGenRenderbuffers (1, &hr->framebuffer.db);
+	glBindRenderbuffer (GL_RENDERBUFFER, hr->framebuffer.db);
+	glRenderbufferStorage (GL_RENDERBUFFER, GL_DEPTH_COMPONENT, 640, 480);
+	glFramebufferRenderbuffer (GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+	                           GL_RENDERBUFFER, hr->framebuffer.db);
+	VK_ASSERT_NO_GL_ERROR ();
 
-		/* Create and attach a texture as color buffer. */
-		glBindTexture (GL_TEXTURE_2D, hr->framebuffer.cb[i]);
-		VK_ASSERT_NO_GL_ERROR ();
-		glTexStorage2D (GL_TEXTURE_2D, 1, GL_RGBA8, 640, 480);
-		VK_ASSERT_NO_GL_ERROR ();
-		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		VK_ASSERT_NO_GL_ERROR ();
-		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-		VK_ASSERT_NO_GL_ERROR ();
-
-		glFramebufferTexture2D (GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-		                        GL_TEXTURE_2D, hr->framebuffer.cb[i], 0);
-		VK_ASSERT_NO_GL_ERROR ();
-
-		glDrawBuffers (1, targets);
-		VK_ASSERT_NO_GL_ERROR ();
-
-		/* Create and attach a renderbuffer as depth buffer. */
-		glBindRenderbuffer (GL_RENDERBUFFER, hr->framebuffer.db[i]);
-		glRenderbufferStorage (GL_RENDERBUFFER, GL_DEPTH_COMPONENT, 640, 480);
-		VK_ASSERT_NO_GL_ERROR ();
-
-		glFramebufferRenderbuffer (GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
-		                           GL_RENDERBUFFER, hr->framebuffer.db[i]);
-		VK_ASSERT_NO_GL_ERROR ();
-
-		if (glCheckFramebufferStatus (GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-			return -1;
-	}
+	if (glCheckFramebufferStatus (GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+		return -1;
 
 	glBindFramebuffer (GL_FRAMEBUFFER, 0);
 	VK_ASSERT_NO_GL_ERROR ();
 
-	/* The pictures of the last three lists, empty at first. */
+	/* The two 3D buffers and the pictures of the last three lists, empty
+	 * at first. */
 	{
 		uint8_t *empty = (uint8_t *) calloc (640 * 480, 4);
 
@@ -2667,10 +2647,12 @@ build_fb_state (hikaru_renderer_t *hr)
 		for (i = 0; i < 640 * 480; i++)
 			empty[i * 4 + 3] = 0xFF;
 
+		glGenTextures (2, hr->framebuffer.bank);
 		glGenTextures (3, hr->framebuffer.pipe);
 		glPixelStorei (GL_UNPACK_ALIGNMENT, 1);
-		for (i = 0; i < 3; i++) {
-			glBindTexture (GL_TEXTURE_2D, hr->framebuffer.pipe[i]);
+		for (i = 0; i < 5; i++) {
+			glBindTexture (GL_TEXTURE_2D, (i < 2) ? hr->framebuffer.bank[i] :
+			                              hr->framebuffer.pipe[i - 2]);
 			glTexStorage2D (GL_TEXTURE_2D, 1, GL_RGBA8, 640, 480);
 			glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 			glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -2790,11 +2772,12 @@ static void
 destroy_fb_state (hikaru_renderer_t *hr)
 {
 	glBindFramebuffer (GL_FRAMEBUFFER, 0);
-	glDeleteFramebuffers (NUM_FRAMEBUFFERS, hr->framebuffer.fb);
-	glDeleteTextures (NUM_FRAMEBUFFERS, hr->framebuffer.cb);
+	glDeleteFramebuffers (1, &hr->framebuffer.fb);
+	glDeleteTextures (1, &hr->framebuffer.cb);
+	glDeleteTextures (2, hr->framebuffer.bank);
 	glDeleteFramebuffers (3, hr->framebuffer.pipe_fb);
 	glDeleteTextures (3, hr->framebuffer.pipe);
-	glDeleteRenderbuffers (NUM_FRAMEBUFFERS, hr->framebuffer.db);
+	glDeleteRenderbuffers (1, &hr->framebuffer.db);
 	glDeleteFramebuffers (1, &hr->framebuffer.lists.heads_fb);
 	glDeleteTextures (1, &hr->framebuffer.lists.heads);
 	glDeleteTextures (1, &hr->framebuffer.lists.below);
@@ -2905,16 +2888,14 @@ set_2d_state (hikaru_renderer_t *hr)
 	VK_ASSERT_NO_GL_ERROR ();
 }
 
-/* Draws the list to its 3D buffer and keeps the picture, as
- * framebuffer.last tells. */
+/* Draws the list and blends it into its picture, as framebuffer.last
+ * tells. */
 static void
 draw_list (hikaru_renderer_t *hr)
 {
 	const int back = hr->framebuffer.last.back;
 
-	hr->framebuffer.scene = hr->framebuffer.last.scene;
-	glBindFramebuffer (GL_FRAMEBUFFER,
-	                   hr->framebuffer.fb[hr->framebuffer.scene]);
+	glBindFramebuffer (GL_FRAMEBUFFER, hr->framebuffer.fb);
 	VK_ASSERT_NO_GL_ERROR ();
 
 	draw_scene (hr);
@@ -2922,14 +2903,11 @@ draw_list (hikaru_renderer_t *hr)
 
 	set_2d_state (hr);
 
-	/* The blender output goes back into the buffer just drawn: the other
-	 * 3D buffer then holds every earlier frame, fading by the rate at
+	/* The blender output is what the 3D buffer of the list keeps: the
+	 * other one then holds every earlier frame, fading by the rate at
 	 * each frame. This is the motion blur of the cabinets (the stars of
 	 * the PHARRIER logo scene trail behind them at 181 = 01C6). */
 	if (back >= 0) {
-		const GLuint picture =
-			hr->framebuffer.pipe[hr->framebuffer.last.slot];
-
 		glBindFramebuffer (GL_FRAMEBUFFER,
 		                   hr->framebuffer.pipe_fb[hr->framebuffer.last.slot]);
 		glUseProgram (hr->framebuffer.blend.program);
@@ -2937,18 +2915,13 @@ draw_list (hikaru_renderer_t *hr)
 		             (GLint) hr->framebuffer.last.rate);
 
 		glActiveTexture (GL_TEXTURE0 + 1);
-		glBindTexture (GL_TEXTURE_2D, hr->framebuffer.cb[back]);
+		glBindTexture (GL_TEXTURE_2D, hr->framebuffer.bank[back]);
 		glActiveTexture (GL_TEXTURE0 + 0);
-		glBindTexture (GL_TEXTURE_2D,
-		               hr->framebuffer.cb[hr->framebuffer.scene]);
+		glBindTexture (GL_TEXTURE_2D, hr->framebuffer.cb);
 
 		glBindVertexArray (hr->framebuffer.vao);
 		glDrawArrays (GL_TRIANGLES, 0, 3);
 		glBindVertexArray (0);
-
-		glCopyImageSubData (picture, GL_TEXTURE_2D, 0, 0, 0, 0,
-		                    hr->framebuffer.cb[hr->framebuffer.scene],
-		                    GL_TEXTURE_2D, 0, 0, 0, 0, 640, 480, 1);
 
 		glUseProgram (hr->framebuffer.program);
 		VK_ASSERT_NO_GL_ERROR ();
@@ -2969,7 +2942,8 @@ draw_list (hikaru_renderer_t *hr)
  * the next frame while the card draws. The counts are read here, a frame
  * later, when the card is done. If the buffer of the fragments was too
  * small the list is drawn again, from what it was drawn from, before its
- * picture is shown or blended into the next one. */
+ * picture is shown or blended into the next one. Its 3D buffer takes the
+ * picture then. */
 static void
 check_last_list (hikaru_renderer_t *hr)
 {
@@ -2980,9 +2954,6 @@ check_last_list (hikaru_renderer_t *hr)
 	if (!list)
 		return;
 	hr->framebuffer.last.list = NULL;
-
-	if (!hr->framebuffer.last.views)
-		return;
 
 	for (vpi = 0; vpi < 8; vpi++) {
 		if (!(hr->framebuffer.last.views & (1 << vpi)))
@@ -2996,18 +2967,24 @@ check_last_list (hikaru_renderer_t *hr)
 	glBindBuffer (GL_SHADER_STORAGE_BUFFER, 0);
 	VK_ASSERT_NO_GL_ERROR ();
 
-	if (used <= hr->framebuffer.lists.max)
-		return;
-	VK_PRINT ("renderer: more room for %u translucent fragments", used);
-	size_lists (hr, MAX2 (used, hr->framebuffer.lists.max * 2));
+	if (used > hr->framebuffer.lists.max) {
+		VK_PRINT ("renderer: more room for %u translucent fragments", used);
+		size_lists (hr, MAX2 (used, hr->framebuffer.lists.max * 2));
 
-	hr->list = list;
-	hr->meshes.again = true;
-	forget_held (hr);
-	draw_list (hr);
-	forget_held (hr);
-	hr->meshes.again = false;
-	hr->list = current;
+		hr->list = list;
+		hr->meshes.again = true;
+		forget_held (hr);
+		draw_list (hr);
+		forget_held (hr);
+		hr->meshes.again = false;
+		hr->list = current;
+	}
+
+	glCopyImageSubData (hr->framebuffer.pipe[hr->framebuffer.last.slot],
+	                    GL_TEXTURE_2D, 0, 0, 0, 0,
+	                    hr->framebuffer.bank[hr->framebuffer.last.bank],
+	                    GL_TEXTURE_2D, 0, 0, 0, 0, 640, 480, 1);
+	VK_ASSERT_NO_GL_ERROR ();
 }
 
 /* The polygons reach the screen in two steps. The game libraries launch a
@@ -3056,7 +3033,7 @@ draw (hikaru_renderer_t *hr)
 		const uint32_t num = hr->framebuffer.num_lists;
 
 		hr->framebuffer.last.list = hr->list;
-		hr->framebuffer.last.scene = (n1 < 2) ? n1 : (n2 < 2) ? n2 : 0;
+		hr->framebuffer.last.bank = (n1 < 2) ? n1 : (n2 < 2) ? n2 : 0;
 		hr->framebuffer.last.back =
 			(rate > 0 && n1 < 2 && n2 < 2 && n1 != n2) ? (int) n2 : -1;
 		hr->framebuffer.last.rate = rate;
@@ -3269,13 +3246,11 @@ hikaru_renderer_save_state (vk_renderer_t *renderer, vk_state_t *state)
 	check_last_list (hr);
 
 	glPixelStorei (GL_PACK_ALIGNMENT, 1);
-	for (i = 0; i < NUM_FRAMEBUFFERS; i++) {
-		glBindFramebuffer (GL_READ_FRAMEBUFFER, hr->framebuffer.fb[i]);
-		glReadBuffer (GL_COLOR_ATTACHMENT0);
-		glReadPixels (0, 0, 640, 480, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+	for (i = 0; i < 2; i++) {
+		glBindTexture (GL_TEXTURE_2D, hr->framebuffer.bank[i]);
+		glGetTexImage (GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
 		ret |= vk_state_put (state, pixels, size);
 	}
-	glBindFramebuffer (GL_READ_FRAMEBUFFER, 0);
 	for (i = 0; i < 3; i++) {
 		glBindTexture (GL_TEXTURE_2D, hr->framebuffer.pipe[i]);
 		glGetTexImage (GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
@@ -3306,11 +3281,11 @@ hikaru_renderer_load_state (vk_renderer_t *renderer, vk_state_t *state)
 		return -1;
 
 	glPixelStorei (GL_UNPACK_ALIGNMENT, 1);
-	for (i = 0; i < NUM_FRAMEBUFFERS; i++) {
+	for (i = 0; i < 2; i++) {
 		ret |= vk_state_get (state, pixels, size);
 		if (ret)
 			break;
-		glBindTexture (GL_TEXTURE_2D, hr->framebuffer.cb[i]);
+		glBindTexture (GL_TEXTURE_2D, hr->framebuffer.bank[i]);
 		glTexSubImage2D (GL_TEXTURE_2D, 0, 0, 0, 640, 480,
 		                 GL_RGBA, GL_UNSIGNED_BYTE, pixels);
 	}
