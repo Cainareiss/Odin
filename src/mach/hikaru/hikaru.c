@@ -189,10 +189,6 @@ porta_get_m (sh4_t *ctx, uint16_t *val)
 	hikaru_t *hikaru = (hikaru_t *) dev->mach;
 	const uint8_t lines = hikaru->irq_lines;
 	/* Bit 5 is the EEPROM DO pin (MAME hikaru.cpp main_io_r) */
-	/* Valkyrie read back what was written:
-	*val = (hikaru->porta_m & ~0x20) |
-	       (odin_eeprom93c46_do (hikaru->eeprom_main) ? 0x20 : 0);
-	*/
 	/* Bits 6 to 9 are the lines of hikaru_update_irqs, low while they
 	 * ask; nothing is known on the other pins, pulled up. */
 	*val = 0xFC1F |
@@ -230,35 +226,6 @@ porta_put_m (sh4_t *ctx, uint16_t val)
 	 * clear). */
 	sh4_set_nmi_pin (hikaru->sh_s, val & 1);
 
-	/* Valkyrie looked for the whole pulse:
-	 * This is a simple hack to detect three consecutive cycles of
-	 * low-high-low pin; the pattern 000-111-000[0000] is there because
-	 * in the SH-4:
-	 *
-	 * "A noise-cancellation feature is built in, and the IRL interrupt
-	 *  is not detected unless the levels sampled at every bus clock
-	 *  cycle remain unchanged for three consecutive cycles, so that no
-	 *  transient level on the IRL pin change is detected."
-	 *
-	 * The additional [0000] bits can be explained with:
-	 *
-	 *  "[...] the NMI interrupt is not detected for a maximum of 6 bus
-	 *   clock cycles after the modification."
-	 *
-	 * Basically it's flipping the NMI pin 0->1->0.
-	 *
-	 * See sections 19.2.1 and 19.2.2 of the SH-4 manual.
-	 *
-	 * XXX ideally this should be done automatically by the SH-4 core;
-	 * but it requires a rewrite of the IRQ code based on lines
-	hikaru->porta_m_bit0_buffer = (hikaru->porta_m_bit0_buffer << 1) |
-	                              (val & 1);
-	if ((hikaru->porta_m_bit0_buffer & 0x1FFF) == 0x1C7F) {
-		VK_CPU_LOG (ctx, " ### PORTA: sending NMI to SLAVE!");
-		vk_cpu_set_irq_state (hikaru->sh_s, SH4_IESOURCE_NMI, VK_IRQ_STATE_RAISED);
-		hikaru->porta_m_bit0_buffer = 0;
-	}
-	*/
 	return 0;
 }
 
@@ -268,79 +235,12 @@ porta_put_s (sh4_t *ctx, uint16_t val)
 	vk_device_t *dev = (vk_device_t *) ctx;
 	hikaru_t *hikaru = (hikaru_t *) dev->mach;
 	hikaru->porta_s = val;
-	/* hikaru->porta_s_bit1_buffer = (hikaru->porta_s_bit1_buffer << 1) |
-	                              ((val >> 1) & 1); */
 	/* Bit 0 is the line of the slave to the master, on IRL3 for MAME
 	 * (hikaru.cpp, slave SH4 port A); the games leave it high. */
 	if (!(val & 1))
 		VK_ABORT ("the slave SH-4 pulls its line to the master, which is not implemented");
 	return 0;
 }
-
-/*
- * Unknown MMIOs (Master)
- * ======================
- *
- * All of these seem connected in some way. All of them act as semaphores
- * of some kind, and are definitely related to the GPU.
- *
- * 00400000  RW 16-bit
- *
- * 01000000  RW 16-bit	
- * 01000006   W 16-bit	See PH:@0C012752.
- *
- * 01000100  RW 16-bit	
- */
-
-static int
-unk_m_get (vk_device_t *dev, unsigned size, uint32_t addr, void *val)
-{
-	hikaru_t *hikaru = (hikaru_t *) dev->mach;
-	uint16_t *val16 = (uint16_t *) val;
-
-	VK_ASSERT (size == 2);
-
-	switch (addr) {
-	case 0x01000000:
-		hikaru->unk01000000_m ^= ~0ul;
-		*val16 = hikaru->unk01000000_m;
-		break;
-	case 0x01000100:
-		hikaru->unk01000100_m ^= ~0ul;
-		*val16 = hikaru->unk01000100_m;
-		break;
-	default:
-		return -1;
-	}
-	return 0;
-}
-
-static int
-unk_m_put (vk_device_t *dev, unsigned size, uint32_t addr, uint64_t val)
-{
-	hikaru_t *hikaru = (hikaru_t *) dev->mach;
-
-	VK_ASSERT (size == 2);
-
-	switch (addr) {
-	case 0x01000000:
-		hikaru->unk01000000_m = val;
-		break;
-	case 0x01000100:
-		hikaru->unk01000100_m = val;
-		break;
-	default:
-		return -1;
-	}
-	return 0;
-}
-
-/* XXX hack */
-static vk_device_t unk_m = {
-	0,
-	.get = unk_m_get,
-	.put = unk_m_put
-};
 
 /* Unknown devices in the slave address space */
 
@@ -530,35 +430,6 @@ hikaru_set_resets (vk_machine_t *mach, uint8_t pins)
 	}
 }
 
-/* Valkyrie raised each interrupt once, with its bit of port A low until the
- * port was written again:
-static void
-hikaru_raise_irq (vk_machine_t *mach, unsigned num, uint16_t porta)
-{
-	hikaru_t *hikaru = (hikaru_t *) mach;
-	vk_cpu_set_irq_state (hikaru->sh_m, num, VK_IRQ_STATE_RAISED);
-	hikaru->porta_m &= ~porta;
-}
-
-void
-hikaru_raise_gpu_irq (vk_machine_t *mach)
-{
-	hikaru_raise_irq (mach, SH4_IESOURCE_IRL2, 0x40);
-}
-
-void
-hikaru_raise_aica_irq (vk_machine_t *mach)
-{
-	hikaru_raise_irq (mach, SH4_IESOURCE_IRL2, 0x80);
-}
-
-void
-hikaru_raise_memctl_irq (vk_machine_t *mach)
-{
-	hikaru_raise_irq (mach, SH4_IESOURCE_IRL1, 0);
-}
-*/
-
 /* SH7091 at 200 MHz (Hikaru: 2 x SH-4 @ 200 MHz, see the header of this
  * file). VK_SH4_MHZ lowers it for debugging only: the interpreter is the
  * bottleneck and every phase of a game then takes fewer host seconds. */
@@ -665,21 +536,6 @@ hikaru_run_frame (vk_machine_t *mach)
 
 	VK_LOG (" *** VBLANK-OUT %s ***", vk_machine_get_debug_string (mach));
 
-	/* The frame of Valkyrie, line by line:
-	for (line = 0; line < 480; line++) {
-		hikaru_run_cycles (mach, cycles_per_line);
-		hikaru_gpu_hblank_in (hikaru->gpu, line);
-	}
-
-	VK_LOG (" *** VBLANK-IN  %s ***", vk_machine_get_debug_string (mach));
-	hikaru_gpu_vblank_in (hikaru->gpu);
-
-	for (line = 480; line < (480+64); line++) {
-		hikaru_run_cycles (mach, cycles_per_line);
-		hikaru_gpu_hblank_in (hikaru->gpu, line);
-	}
-	*/
-
 	/* The chips run up to the next event, then the events due are
 	 * taken. */
 	while (!done) {
@@ -706,8 +562,6 @@ hikaru_run_frame (vk_machine_t *mach)
 			/* this may actually be an hblank-out IRQ */
 			hikaru_gpu_vblank_out (hikaru->gpu);
 
-			/* XXX AICA */
-			/* hikaru_raise_irq (mach, SH4_IESOURCE_IRL2, 0x80); */
 			done = true;
 		}
 	}
@@ -950,21 +804,13 @@ setup_master_mmap (hikaru_t *hikaru)
 	                        VK_REGION_RW | VK_REGION_SIZE_16 | VK_REGION_SIZE_32 | VK_REGION_LOG_RW,
 	                        hikaru->gpu, "UNK/M");
 	/* No LOG_RW: a logged access formats the whole debug string
-	 * (hikaru_get_debug_string) and the MIE is polled in tight loops.
-	ret |= vk_mmap_add_dev (mmap, 0x00800000, 0x0083FFFF, 0x0003FFFF,
-	                        VK_REGION_RW | VK_REGION_SIZE_8 | VK_REGION_SIZE_16 | VK_REGION_LOG_RW,
-	                        hikaru->mie, "MIE/M");
-	*/
+	 * (hikaru_get_debug_string) and the MIE is polled in tight loops. */
 	ret |= vk_mmap_add_dev (mmap, 0x00800000, 0x0083FFFF, 0x0003FFFF,
 	                        VK_REGION_RW | VK_REGION_SIZE_8 | VK_REGION_SIZE_16 | VK_REGION_SIZE_32,
 	                        hikaru->mie, "MIE/M");
 	ret |= vk_mmap_add_ram (mmap, 0x00C00000, 0x00C0FFFF, 0x0000FFFF,
 	                        0, hikaru->bram, "BRAM/M");
-	/* MIE bus request register; was &unk_m, "UNK/M" (toggling semaphore)
-	ret |= vk_mmap_add_dev (mmap, 0x01000000, 0x010001FF, 0x000001FF,
-	                        VK_REGION_RW | VK_REGION_SIZE_16 | VK_REGION_SIZE_32 | VK_REGION_LOG_RW,
-	                        &unk_m, "UNK/M");
-	*/
+	/* The bus request register of the MIE */
 	ret |= vk_mmap_add_dev (mmap, 0x01000000, 0x010001FF, 0x000001FF,
 	                        VK_REGION_RW | VK_REGION_SIZE_16 | VK_REGION_SIZE_32,
 	                        hikaru->mie, "MIE-BUSRQ/M");
@@ -1092,7 +938,6 @@ hikaru_set_rombd_config (hikaru_t *hikaru)
 		config->has_5881 = true;
 		config->crypt_key = 0x2903DAD5;
 	} else if (!strcmp (game->name, "sgnascar")) {
-		//rombd_offs = 8;
 		eprom_bank_size = 4;
 		maskrom_bank_size = 16;
 		maskrom_is_stretched = true;
@@ -1127,82 +972,6 @@ hikaru_set_rombd_config (hikaru_t *hikaru)
 #define PR	ctx->regs.pr
 #define T	ctx->regs.sr.bit.t
 
-/* These three games have nothing left to patch. */
-#if 0
-static uint32_t
-patch_airtrix (vk_cpu_t *cpu, uint32_t pc, uint32_t inst)
-{
-	sh4_t *ctx = (sh4_t *) cpu;
-
-	(void) ctx;
-	(void) pc;
-	/* The WARNING screen waits 660 frames for the I/O board node count
-	 * (0x0C010F30); the real MIE needs that time, so the wait runs.
-	switch (pc) {
-	case 0x0C010F9A:
-		R(2) = 0x290;
-		break;
-	}
-	*/
-	return inst;
-}
-
-static uint32_t
-patch_braveff (vk_cpu_t *cpu, uint32_t pc, uint32_t inst)
-{
-	sh4_t *ctx = (sh4_t *) cpu;
-
-	(void) ctx;
-	(void) pc;
-	/* Three forced results of unknown purpose, kept off until the game
-	 * shows what they worked around.
-	switch (pc) {
-	case 0x0C0407D0:
-		R(3) = 0x0C06A620;
-		break;
-	case 0x0C0D522A:
-		T = 1;
-		break;
-	case 0x0C05B53E:
-		T = 0;
-		break;
-	}
-	*/
-	return inst;
-}
-
-static uint32_t
-patch_pharrier (vk_cpu_t *cpu, uint32_t pc, uint32_t inst)
-{
-	if (0) {
-		/* Debug switches
-		 *
-		 * 0C21D4A8 00000003 Enable axis on top right
-		 * 0C21D4A8 00000007 CPU bar
-		 * 0C21D4A8 0000000F Date
-		 * 0C21D4A8 00000041 Char ball
-		 * 0C21D4A8 000000F0 World bounding boxes?
-		 * 0C21D4A8 00000F00 Light list + fog debug?
-		 * 0C21D4A8 00020000 Disable char + world
-		 * 0C21D4A8 00F00000 Switch between world and bounding boxes
-		 * 0C21D4A8 F0000000 Mod light?
-		 */
-		vk_cpu_put (cpu, 4, 0x0C21D4A8, 0xFFFFFFFF);
-		vk_cpu_put (cpu, 4, 0x0C21D4AC, 0xFFFFFFFF);
-	}
-
-	(void) pc;
-	/* The AICA and its ARM7 are emulated: the loop ends by itself.
-	switch (pc) {
-	case 0x0C01C322:
-		return 0x0009;
-	}
-	*/
-	return inst;
-}
-
-#endif
-
 static uint32_t
 patch_sgnascar (vk_cpu_t *cpu, uint32_t pc, uint32_t inst)
 {
@@ -1217,13 +986,8 @@ patch_sgnascar (vk_cpu_t *cpu, uint32_t pc, uint32_t inst)
 		R(3) = 0xFF;
 		break;
 	}
-	/* The 600-frame wait for the I/O board node count (0x0C0130DE)
-	 * must run: the real MIE answers in about five seconds. Skipping it
-	 * made the game test the board too early ("I/O BD IS NOT CONNECTED").
-	case 0x0C0130CE:
-		R(4) = 1;
-		break;
-	*/
+	/* The 600-frame wait for the I/O board node count (0x0C0130DE) must
+	 * run: the real MIE answers in about five seconds. */
 	return inst;
 }
 
@@ -1293,14 +1057,6 @@ hikaru_install_game_patches (hikaru_t *hikaru)
 	if (!game)
 		return;
 
-	/*
-	if (!strcmp (game->name, "airtrix"))
-		vk_cpu_install_patch (cpu, patch_airtrix);
-	else if (!strcmp (game->name, "braveff"))
-		vk_cpu_install_patch (cpu, patch_braveff);
-	else if (!strcmp (game->name, "pharrier"))
-		vk_cpu_install_patch (cpu, patch_pharrier);
-	else */
 	if (!strcmp (game->name, "sgnascar"))
 		vk_cpu_install_patch (cpu, patch_sgnascar, 0x0C00BC9A);
 	else
@@ -1329,7 +1085,6 @@ hikaru_init (hikaru_t *hikaru)
 	vk_machine_t *mach = (vk_machine_t *) hikaru;
 	vk_game_t *game = mach->game;
 
-	unk_m.mach = mach;
 	unk_s.mach = mach;
 
 	hikaru->ram_m		= vk_buffer_le32_new (32*MB, 0);
@@ -1368,23 +1123,8 @@ hikaru_init (hikaru_t *hikaru)
 		hikaru->eprom   	= vk_game_get_section_data (game, "eprom");
 		hikaru->maskrom 	= vk_game_get_section_data (game, "maskrom");
 
-		/* Patch theBOOTROM  EEPROM check. Allows games to load. */
 		version = (char *) vk_buffer_get_ptr (hikaru->bootrom, 0xD4);
 		VK_PRINT ("%s", version);
-		/* The two EEPROM checks of the BOOTROM (0x8B4 and 0x8DA in 0.96)
-		 * used to be skipped; the main board 93C46 and the ROM board
-		 * X76F100 are emulated now.
-		if (!strcmp (version, "SAMURAI BootROM Version 0.84") ||
-		    !strcmp (version, "SAMURAI BootROM Version 0.92"))
-			vk_buffer_put (hikaru->bootrom, 2, 0x8AE, 0xE00F); // MOV R0, 0xFFFFFFFF
-		else if (!strcmp (version, "SAMURAI BootROM Version 0.96"))
-			vk_buffer_put (hikaru->bootrom, 2, 0x8E6, 0xE00F); // MOV R0, 0xFFFFFFFF
-		else {
-			VK_ERROR ("unknown BOOTROM version!");
-			return -1;
-		}
-		*/
-
 		if (hikaru_set_rombd_config (hikaru))
 			return -1;
 	} else {
