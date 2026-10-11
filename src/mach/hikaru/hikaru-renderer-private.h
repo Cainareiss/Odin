@@ -166,6 +166,9 @@ typedef struct {
 		hikaru_vertex_body_t	*all;
 		uint32_t		num, max;
 	} verts;
+
+	/* The texture each texhead was drawn with, see check_last_list */
+	GLuint			*tex_ids;
 } hikaru_list_t;
 
 typedef struct {
@@ -173,8 +176,8 @@ typedef struct {
 
 	hikaru_gpu_t *gpu;
 
-	/* The list being built, then drawn */
-	hikaru_list_t		*list;
+	/* The list being built, then drawn, and the one before it */
+	hikaru_list_t		*list, *other;
 
 	struct {
 		unsigned		num_verts, num_tris;
@@ -193,6 +196,8 @@ typedef struct {
 		bool			weigh_by_alpha;
 		/* The pass that collects the translucent fragments */
 		bool			collect;
+		/* The list is drawn again, see check_last_list */
+		bool			again;
 		unsigned		blend_mode;
 		uint32_t		order;	/* triangles sent so far */
 
@@ -226,10 +231,21 @@ typedef struct {
 		struct {
 			GLuint program;		/* blends them */
 			GLuint heads, heads_fb;	/* the last one of each pixel */
-			GLuint nodes, count;
+			GLuint nodes;
+			GLuint count[8];	/* one per viewport */
 			uint32_t max;		/* nodes */
 			GLuint below;		/* the colour under them */
 		} lists;
+		/* The list drawn last, until its translucent fragments are
+		 * counted: see check_last_list */
+		struct {
+			hikaru_list_t *list;	/* NULL once counted */
+			unsigned scene;		/* its 3D buffer */
+			int back;		/* the one blended into it, or -1 */
+			float factor;
+			uint32_t slot;		/* its picture in the pipe */
+			uint32_t views;		/* that have such fragments */
+		} last;
 		GLuint solid_depth;	/* depth left by the other types */
 		unsigned scene;		/* the 3D buffer being drawn */
 		GLuint vao, vbo;

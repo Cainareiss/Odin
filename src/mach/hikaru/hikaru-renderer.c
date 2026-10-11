@@ -128,7 +128,9 @@ is_texhead_eq (hikaru_renderer_t *hr,
 }
 
 /* A texture the graphics card may still be drawing with is not deleted at
- * once: the driver would wait for the card. It goes at the next frame. */
+ * once: the driver would wait for the card, and the list drawn last may have
+ * to be drawn again with it (see check_last_list). It goes at the next
+ * frame. */
 static void
 bury_texture (hikaru_renderer_t *hr, GLuint id)
 {
@@ -1213,7 +1215,8 @@ upload_modelview (hikaru_renderer_t *hr, hikaru_mesh_t *mesh, unsigned i)
 static void
 upload_material_texhead (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 {
-	hikaru_texture_t *tex;
+	hikaru_texhead_t *th;
+	GLuint id;
 
 	if (!hr->meshes.variant.has_texture)
 		return;
@@ -1223,16 +1226,27 @@ upload_material_texhead (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 		return;
 	hr->meshes.bound_tex_index = mesh->tex_index;
 
-	tex = get_texture (hr, &hr->list->tex_list[mesh->tex_index]);
+	th = &hr->list->tex_list[mesh->tex_index];
+
+	/* A list drawn again takes the textures it had: the texture RAM may
+	 * have changed since. */
+	if (hr->meshes.again)
+		id = hr->list->tex_ids[mesh->tex_index];
+	else {
+		hikaru_texture_t *tex = get_texture (hr, th);
+
+		id = tex ? tex->id : 0;
+		hr->list->tex_ids[mesh->tex_index] = id;
+	}
 
 	glActiveTexture (GL_TEXTURE0 + 0);
 	VK_ASSERT_NO_GL_ERROR ();
 
-	glBindTexture (GL_TEXTURE_2D, tex ? tex->id : 0);
+	glBindTexture (GL_TEXTURE_2D, id);
 	VK_ASSERT_NO_GL_ERROR ();
 
-	if (tex)
-		set_texhead_sampling (&hr->list->tex_list[mesh->tex_index]);
+	if (id)
+		set_texhead_sampling (th);
 }
 
 static void
@@ -1609,6 +1623,7 @@ update_and_set_rendstate (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	VK_ASSERT (hr->list->num_mats < MAX_MATERIALS);
 
 	LOG ("RENDSTATE updating tex %u/%u", hr->list->num_texs, MAX_TEXHEADS);
+	hr->list->tex_ids[hr->list->num_texs] = 0;
 	hr->list->tex_list[hr->list->num_texs++] = TEX0;
 	VK_ASSERT (hr->list->num_texs < MAX_TEXHEADS);
 
@@ -2042,11 +2057,11 @@ size_lists (hikaru_renderer_t *hr, uint32_t max)
  * of its material and its rank in the display list; then every pixel
  * blends its list, see lists_fs_source. */
 static void
-draw_translucent_meshes (hikaru_renderer_t *hr, hikaru_mesh_t *meshes,
-                         unsigned num)
+draw_translucent_meshes (hikaru_renderer_t *hr, unsigned vpi,
+                         hikaru_mesh_t *meshes, unsigned num)
 {
 	static const GLuint zero[4] = { 0, 0, 0, 0 };
-	GLuint used;
+	GLuint used = 1;	/* not known yet */
 	unsigned j;
 
 	/* The depth the other types left. */
@@ -2060,14 +2075,19 @@ draw_translucent_meshes (hikaru_renderer_t *hr, hikaru_mesh_t *meshes,
 	glDisable (GL_DEPTH_TEST);
 	VK_ASSERT_NO_GL_ERROR ();
 
-	/* Collect the fragments, once more if their buffer was too small.
+	/* Collect the fragments. Whether their buffer was large enough is
+	 * known once the graphics card has drawn them: nobody waits for it
+	 * here, the count is left for check_last_list. A list drawn again
+	 * does wait, and collects once more if the buffer is too small.
+	 * Each viewport has its count: writing a part of a buffer the card
+	 * is using waits for the card as well.
 	 * The Intel driver 21.20.16.5174 wants a buffer that has grown bound
 	 * again, and does not always reset an atomic counter buffer: the
 	 * count is in a storage buffer. */
 	hr->meshes.collect = true;
 	for (;;) {
 		glBindBufferBase (GL_SHADER_STORAGE_BUFFER, 0, hr->framebuffer.lists.nodes);
-		glBindBufferBase (GL_SHADER_STORAGE_BUFFER, 1, hr->framebuffer.lists.count);
+		glBindBufferBase (GL_SHADER_STORAGE_BUFFER, 1, hr->framebuffer.lists.count[vpi]);
 		glBindFramebuffer (GL_FRAMEBUFFER, hr->framebuffer.lists.heads_fb);
 		glDisable (GL_SCISSOR_TEST);
 		glClearBufferuiv (GL_COLOR, 0, zero);
@@ -2085,6 +2105,10 @@ draw_translucent_meshes (hikaru_renderer_t *hr, hikaru_mesh_t *meshes,
 
 		glColorMask (GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 		glMemoryBarrier (GL_ALL_BARRIER_BITS);
+		if (!hr->meshes.again) {
+			hr->framebuffer.last.views |= 1 << vpi;
+			break;
+		}
 		glGetBufferSubData (GL_SHADER_STORAGE_BUFFER, 0, sizeof (GLuint), &used);
 		VK_ASSERT_NO_GL_ERROR ();
 		if (used <= hr->framebuffer.lists.max)
@@ -2175,7 +2199,7 @@ draw_meshes_for_polytype (hikaru_renderer_t *hr, unsigned vpi, int polytype)
 	}
 
 	if (polytype == HIKARU_POLYTYPE_TRANSLUCENT) {
-		draw_translucent_meshes (hr, meshes, num);
+		draw_translucent_meshes (hr, vpi, meshes, num);
 		return;
 	}
 
@@ -2264,6 +2288,7 @@ destroy_list (hikaru_list_t *list)
 			free (list->mesh_list[vpi][i]);
 
 	free (list->verts.all);
+	free (list->tex_ids);
 	free (list);
 }
 
@@ -2286,9 +2311,10 @@ new_list (void)
 			malloc (sizeof (hikaru_texhead_t) * MAX_TEXHEADS);
 	list->ls_list = (hikaru_lightset_t *)
 			malloc (sizeof (hikaru_lightset_t) * MAX_LIGHTSETS);
+	list->tex_ids = (GLuint *) malloc (sizeof (GLuint) * MAX_TEXHEADS);
 
 	if (!list->vp_list || !list->mv_list || !list->mat_list ||
-	    !list->tex_list || !list->ls_list)
+	    !list->tex_list || !list->ls_list || !list->tex_ids)
 		goto fail;
 
 	for (vpi = 0; vpi < 8; vpi++) {
@@ -2311,6 +2337,7 @@ static void
 destroy_3d_state (hikaru_renderer_t *hr)
 {
 	destroy_list (hr->list);
+	destroy_list (hr->other);
 
 	vk_renderer_destroy_program (hr->meshes.program);
 	VK_ASSERT_NO_GL_ERROR ();
@@ -2326,8 +2353,9 @@ static int
 build_3d_state (hikaru_renderer_t *hr)
 {
 	hr->list = new_list ();
+	hr->other = new_list ();
 
-	return hr->list ? 0 : -1;
+	return (hr->list && hr->other) ? 0 : -1;
 }
 
 /****************************************************************************
@@ -2607,10 +2635,12 @@ build_fb_state (hikaru_renderer_t *hr)
 	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glBindTexture (GL_TEXTURE_2D, 0);
 
-	glGenBuffers (1, &hr->framebuffer.lists.count);
-	glBindBuffer (GL_SHADER_STORAGE_BUFFER, hr->framebuffer.lists.count);
-	glBufferData (GL_SHADER_STORAGE_BUFFER, sizeof (GLuint), NULL,
-	              GL_DYNAMIC_COPY);
+	glGenBuffers (8, hr->framebuffer.lists.count);
+	for (i = 0; i < 8; i++) {
+		glBindBuffer (GL_SHADER_STORAGE_BUFFER, hr->framebuffer.lists.count[i]);
+		glBufferData (GL_SHADER_STORAGE_BUFFER, sizeof (GLuint), NULL,
+		              GL_DYNAMIC_COPY);
+	}
 	glBindBuffer (GL_SHADER_STORAGE_BUFFER, 0);
 	glGenBuffers (1, &hr->framebuffer.lists.nodes);
 	size_lists (hr, 4 * 640 * 480);
@@ -2659,7 +2689,7 @@ destroy_fb_state (hikaru_renderer_t *hr)
 	glDeleteTextures (1, &hr->framebuffer.lists.heads);
 	glDeleteTextures (1, &hr->framebuffer.lists.below);
 	glDeleteBuffers (1, &hr->framebuffer.lists.nodes);
-	glDeleteBuffers (1, &hr->framebuffer.lists.count);
+	glDeleteBuffers (8, hr->framebuffer.lists.count);
 	glDeleteTextures (1, &hr->framebuffer.solid_depth);
 	VK_ASSERT_NO_GL_ERROR ();
 
@@ -2742,57 +2772,19 @@ upload_layer (hikaru_renderer_t *hr, hikaru_layer_t *layer, GLuint *id, float *m
 	VK_ASSERT_NO_GL_ERROR ();
 }
 
-/* The polygons reach the screen in two steps. The game libraries launch a
- * list only once the GPU 15 has analysed the last one and the GPU 1A has
- * plotted the one before (RACER @0C0118C0): a launch hands the last list
- * over to the GPU 1A, which plots it; it shows at the next frame. Nothing
- * moves without a launch. The 781, the 181 and the clear color act at once.
- *
- * On the RACER cabinet the SEGA logo stays two frames on the black of the
- * next scene, and the stars leave one frame before the text of the layers;
- * SGNASCAR keeps its white picture while it loads, with no list launched.
- *
- * TODO make use of the framebuffer configuration in the GPU:1A registers,
- * right now it only uses the information in the 781/181 commands. */
+/* Nothing a program holds, nothing bound is of the list about to be drawn. */
 static void
-draw (hikaru_renderer_t *hr)
+forget_held (hikaru_renderer_t *hr)
 {
-	hikaru_gpu_t *gpu = hr->gpu;
-	GLuint n1, n2, f, b, scene, shown, layer1 = 0, layer2 = 0;
-	float factor, mult1 = 0.0f, mult2 = 0.0f;
-	bool launched = hr->framebuffer.launched;
+	hr->meshes.variant.full = ~0;
+	hr->meshes.frame++;
+	hr->meshes.scissor_vp_index = ~0;
+	hr->meshes.bound_tex_index = ~0;
+}
 
-	VK_PRINT ("FRAMEBUFFER 781=%08X 181=%08X", gpu->fb_config._781, gpu->fb_config._181);
-
-	hr->framebuffer.launched = 0;
-
-	delete_dead_textures (hr);
-
-	/* The picture plotted during the last frame. */
-	if (hr->framebuffer.next >= 0) {
-		hr->framebuffer.shown = hr->framebuffer.next;
-		hr->framebuffer.next = -1;
-	}
-
-	n1 = gpu->fb_config.num_1;
-	n2 = gpu->fb_config.num_2;
-
-	factor = 0.0f;
-	if (gpu->fb_config.blend)
-		factor = gpu->fb_config.alpha * (1.0f / 255);
-
-	/* Draw the list to the 3D buffer its 781 names. */
-	scene = (n1 < 2) ? n1 : (n2 < 2) ? n2 : 0;
-	if (launched) {
-		glBindFramebuffer (GL_FRAMEBUFFER, hr->framebuffer.fb[scene]);
-		VK_ASSERT_NO_GL_ERROR ();
-		hr->framebuffer.scene = scene;
-
-		draw_scene (hr);
-		VK_ASSERT_NO_GL_ERROR ();
-	}
-
-	/* Setup the GL state for 2D drawing. */
+static void
+set_2d_state (hikaru_renderer_t *hr)
+{
 	glDisable (GL_DEPTH_TEST);
 	glDisable (GL_BLEND);
 	glDisable (GL_SCISSOR_TEST);
@@ -2801,16 +2793,34 @@ draw (hikaru_renderer_t *hr)
 
 	glUseProgram (hr->framebuffer.program);
 	VK_ASSERT_NO_GL_ERROR ();
+}
+
+/* Draws the list to its 3D buffer and keeps the picture, as
+ * framebuffer.last tells. */
+static void
+draw_list (hikaru_renderer_t *hr)
+{
+	const int back = hr->framebuffer.last.back;
+
+	hr->framebuffer.scene = hr->framebuffer.last.scene;
+	glBindFramebuffer (GL_FRAMEBUFFER,
+	                   hr->framebuffer.fb[hr->framebuffer.scene]);
+	VK_ASSERT_NO_GL_ERROR ();
+
+	draw_scene (hr);
+	VK_ASSERT_NO_GL_ERROR ();
+
+	set_2d_state (hr);
 
 	/* The blender output goes back into the buffer just drawn: the other
 	 * 3D buffer then holds every earlier frame, fading by the factor at
 	 * each frame. This is the motion blur of the cabinets (the stars of
 	 * the PHARRIER logo scene trail behind them at 181 = 01C6). */
-	if (launched && factor > 0.0f && n1 < 2 && n2 < 2 && n1 != n2) {
+	if (back >= 0) {
 		glActiveTexture (GL_TEXTURE0 + 0);
-		glBindTexture (GL_TEXTURE_2D, hr->framebuffer.cb[n2]);
+		glBindTexture (GL_TEXTURE_2D, hr->framebuffer.cb[back]);
 		glActiveTexture (GL_TEXTURE0 + 1);
-		glBindTexture (GL_TEXTURE_2D, hr->framebuffer.cb[n2]);
+		glBindTexture (GL_TEXTURE_2D, hr->framebuffer.cb[back]);
 		glActiveTexture (GL_TEXTURE0 + 2);
 		glBindTexture (GL_TEXTURE_2D, 0);
 		glActiveTexture (GL_TEXTURE0 + 3);
@@ -2831,7 +2841,7 @@ draw (hikaru_renderer_t *hr)
 		glUniform4f (hr->framebuffer.locs.u_clear, 0.0f, 0.0f, 0.0f, 0.0f);
 
 		glEnable (GL_BLEND);
-		glBlendColor (0.0f, 0.0f, 0.0f, factor);
+		glBlendColor (0.0f, 0.0f, 0.0f, hr->framebuffer.last.factor);
 		glBlendFunc (GL_CONSTANT_ALPHA, GL_ONE_MINUS_CONSTANT_ALPHA);
 
 		glBindVertexArray (hr->framebuffer.vao);
@@ -2842,22 +2852,126 @@ draw (hikaru_renderer_t *hr)
 		VK_ASSERT_NO_GL_ERROR ();
 	}
 
-	/* Keep the picture; the one of the list before shows next. */
+	glActiveTexture (GL_TEXTURE0 + 0);
+	glBindTexture (GL_TEXTURE_2D,
+	               hr->framebuffer.pipe[hr->framebuffer.last.slot]);
+	glCopyTexSubImage2D (GL_TEXTURE_2D, 0, 0, 0, 0, 0, 640, 480);
+	VK_ASSERT_NO_GL_ERROR ();
+
+	glBindFramebuffer (GL_FRAMEBUFFER, 0);
+	VK_ASSERT_NO_GL_ERROR ();
+}
+
+/* The translucent fragments of the list drawn last were collected without
+ * waiting for the graphics card to count them: the processor goes on with
+ * the next frame while the card draws. The counts are read here, a frame
+ * later, when the card is done. If the buffer of the fragments was too
+ * small the list is drawn again, from what it was drawn from, before its
+ * picture is shown or blended into the next one. */
+static void
+check_last_list (hikaru_renderer_t *hr)
+{
+	hikaru_list_t *list = hr->framebuffer.last.list, *current = hr->list;
+	GLuint count, used = 0;
+	unsigned vpi;
+
+	if (!list)
+		return;
+	hr->framebuffer.last.list = NULL;
+
+	if (!hr->framebuffer.last.views)
+		return;
+
+	for (vpi = 0; vpi < 8; vpi++) {
+		if (!(hr->framebuffer.last.views & (1 << vpi)))
+			continue;
+		glBindBuffer (GL_SHADER_STORAGE_BUFFER,
+		              hr->framebuffer.lists.count[vpi]);
+		glGetBufferSubData (GL_SHADER_STORAGE_BUFFER, 0,
+		                    sizeof (GLuint), &count);
+		used = MAX2 (used, count);
+	}
+	glBindBuffer (GL_SHADER_STORAGE_BUFFER, 0);
+	VK_ASSERT_NO_GL_ERROR ();
+
+	if (used <= hr->framebuffer.lists.max)
+		return;
+	VK_PRINT ("renderer: more room for %u translucent fragments", used);
+	size_lists (hr, MAX2 (used, hr->framebuffer.lists.max * 2));
+
+	hr->list = list;
+	hr->meshes.again = true;
+	forget_held (hr);
+	draw_list (hr);
+	forget_held (hr);
+	hr->meshes.again = false;
+	hr->list = current;
+}
+
+/* The polygons reach the screen in two steps. The game libraries launch a
+ * list only once the GPU 15 has analysed the last one and the GPU 1A has
+ * plotted the one before (RACER @0C0118C0): a launch hands the last list
+ * over to the GPU 1A, which plots it; it shows at the next frame. Nothing
+ * moves without a launch. The 781, the 181 and the clear color act at once.
+ *
+ * On the RACER cabinet the SEGA logo stays two frames on the black of the
+ * next scene, and the stars leave one frame before the text of the layers;
+ * SGNASCAR keeps its white picture while it loads, with no list launched.
+ *
+ * TODO make use of the framebuffer configuration in the GPU:1A registers,
+ * right now it only uses the information in the 781/181 commands. */
+static void
+draw (hikaru_renderer_t *hr)
+{
+	hikaru_gpu_t *gpu = hr->gpu;
+	GLuint n1, n2, f, b, shown, layer1 = 0, layer2 = 0;
+	float factor, mult1 = 0.0f, mult2 = 0.0f;
+	bool launched = hr->framebuffer.launched;
+
+	VK_PRINT ("FRAMEBUFFER 781=%08X 181=%08X", gpu->fb_config._781, gpu->fb_config._181);
+
+	hr->framebuffer.launched = 0;
+
+	check_last_list (hr);
+	delete_dead_textures (hr);
+
+	/* The picture plotted during the last frame. */
+	if (hr->framebuffer.next >= 0) {
+		hr->framebuffer.shown = hr->framebuffer.next;
+		hr->framebuffer.next = -1;
+	}
+
+	n1 = gpu->fb_config.num_1;
+	n2 = gpu->fb_config.num_2;
+
+	factor = 0.0f;
+	if (gpu->fb_config.blend)
+		factor = gpu->fb_config.alpha * (1.0f / 255);
+
+	/* Draw the list to the 3D buffer its 781 names and keep the picture;
+	 * the one of the list before shows next. */
 	if (launched) {
 		const uint32_t num = hr->framebuffer.num_lists;
 
-		glActiveTexture (GL_TEXTURE0 + 0);
-		glBindTexture (GL_TEXTURE_2D, hr->framebuffer.pipe[num % 3]);
-		glCopyTexSubImage2D (GL_TEXTURE_2D, 0, 0, 0, 0, 0, 640, 480);
-		VK_ASSERT_NO_GL_ERROR ();
+		hr->framebuffer.last.list = hr->list;
+		hr->framebuffer.last.scene = (n1 < 2) ? n1 : (n2 < 2) ? n2 : 0;
+		hr->framebuffer.last.back =
+			(factor > 0.0f && n1 < 2 && n2 < 2 && n1 != n2) ? (int) n2 : -1;
+		hr->framebuffer.last.factor = factor;
+		hr->framebuffer.last.slot = num % 3;
+		hr->framebuffer.last.views = 0;
+		draw_list (hr);
 
 		if (num > 0)
 			hr->framebuffer.next = (int32_t) ((num - 1) % 3);
 		hr->framebuffer.num_lists = num + 1;
+
+		/* A picture that is on the screen already is checked now. */
+		if (hr->framebuffer.last.slot == hr->framebuffer.shown)
+			check_last_list (hr);
 	}
 
-	glBindFramebuffer (GL_FRAMEBUFFER, 0);
-	VK_ASSERT_NO_GL_ERROR ();
+	set_2d_state (hr);
 
 
 	/* Composite the picture shown and the layers. */
@@ -2950,10 +3064,14 @@ hikaru_renderer_begin_frame (vk_renderer_t *renderer)
 	hikaru_renderer_t *hr = (hikaru_renderer_t *) renderer;
 	unsigned vpi, i;
 
-	hr->meshes.variant.full = ~0;
-	hr->meshes.frame++;
-	hr->meshes.scissor_vp_index = ~0;
-	hr->meshes.bound_tex_index = ~0;
+	/* The list drawn last is kept until its translucent fragments are
+	 * counted, see check_last_list: this one is built aside. */
+	if (hr->framebuffer.last.list == hr->list) {
+		hr->list = hr->other;
+		hr->other = hr->framebuffer.last.list;
+	}
+
+	forget_held (hr);
 
 	hr->list->num_vps = 0;
 	hr->list->num_mvs = 0;
@@ -3038,6 +3156,8 @@ hikaru_renderer_save_state (vk_renderer_t *renderer, vk_state_t *state)
 	if (!pixels)
 		return -1;
 
+	check_last_list (hr);
+
 	glPixelStorei (GL_PACK_ALIGNMENT, 1);
 	for (i = 0; i < NUM_FRAMEBUFFERS; i++) {
 		glBindFramebuffer (GL_READ_FRAMEBUFFER, hr->framebuffer.fb[i]);
@@ -3099,6 +3219,9 @@ hikaru_renderer_load_state (vk_renderer_t *renderer, vk_state_t *state)
 	ret |= vk_state_get (state, &hr->framebuffer.shown, sizeof (hr->framebuffer.shown));
 	ret |= vk_state_get (state, &hr->framebuffer.next, sizeof (hr->framebuffer.next));
 	ret |= vk_state_get (state, &hr->framebuffer.launched, sizeof (hr->framebuffer.launched));
+
+	/* The pictures of the state are whole. */
+	hr->framebuffer.last.list = NULL;
 
 	hikaru_renderer_invalidate_texcache (renderer, NULL);
 
