@@ -307,6 +307,7 @@ typedef struct {
 		uint32_t sp[2];
 		uint32_t is_running	: 1;
 		uint32_t is_unhandled	: 1;
+		uint32_t patterns	: 30;	/* of the callers, see 501 */
 	} cp;
 
 	struct {
@@ -339,7 +340,7 @@ typedef struct {
 	} fb_config;
 
 	int16_t depth_bias;
-	uint16_t _501;
+	uint16_t pattern;	/* 501 */
 	int16_t texoffset[4][2];	/* 0D1 UV offsets in 1/16 texel, by vertex selector */
 
 	struct {

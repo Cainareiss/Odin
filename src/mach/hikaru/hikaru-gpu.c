@@ -1342,7 +1342,7 @@ hikaru_gpu_save_state (vk_device_t *dev, vk_state_t *state)
 	SAVE (gpu->idma);
 	SAVE (gpu->fb_config);
 	SAVE (gpu->depth_bias);
-	SAVE (gpu->_501);
+	SAVE (gpu->pattern);
 	SAVE (gpu->texoffset);
 	SAVE (gpu->state);
 
@@ -1360,7 +1360,9 @@ hikaru_gpu_load_state (vk_device_t *dev, vk_state_t *state)
 	LOAD (gpu->idma);
 	LOAD (gpu->fb_config);
 	LOAD (gpu->depth_bias);
-	LOAD (gpu->_501);
+	LOAD (gpu->pattern);
+	/* Older states hold the whole word */
+	gpu->pattern &= 0x1F;
 	LOAD (gpu->texoffset);
 	LOAD (gpu->state);
 

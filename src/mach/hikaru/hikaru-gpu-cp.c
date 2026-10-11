@@ -122,6 +122,7 @@ on_cp_begin (hikaru_gpu_t *gpu)
 	PC = REG15 (0x70);
 	SP(0) = REG15 (0x74);
 	SP(1) = REG15 (0x78);
+	gpu->cp.patterns = 0;
 }
 
 static void
@@ -523,6 +524,8 @@ I (0x052)
 
 	check_self_loop (gpu, addr);
 	if (jump) {
+		/* See 501 */
+		gpu->cp.patterns = (gpu->cp.patterns << 5) | gpu->pattern;
 		push_pc (gpu);
 		PC = addr;
 	} else
@@ -570,9 +573,11 @@ I (0x082)
 		break;
 	}
 
-	if (jump)
+	if (jump) {
+		gpu->pattern = gpu->cp.patterns & 0x1F;
+		gpu->cp.patterns >>= 5;
 		pop_pc (gpu);
-	else
+	} else
 		PC += 4;
 }
 
@@ -2284,17 +2289,35 @@ D (0x043)
  * U, N = Unknown (N != 1)
  *
  *
- * 501	Mesh: Set Unknown                                                             
- *                                                                             
+ * 501	Mesh: Set Pattern
+ *
  *	-------- ---PPPPP -------o oooooooo
- *                                                                             
- * P = Unknown parameter.
- *                                                                             
- * Used by the BOOTROM.                                                        
- *                                                                             
- * See AT:@0C0C841C, the table that holds the constant parameters to the 501   
- * command, set by the routine AT:@0C049BA6 in variable AT:@0C61404C, which    
- * is wrapped into the 501 command in AT:@0C049D08.                            
+ *
+ * P = Pattern of 4 x 4 pixels of the screen: the polygons that follow are
+ *     drawn on its pixels only, whatever their type.
+ *
+ *	The low four bits go from every pixel (0) down to none (8), then up
+ *	again with the pixels the first half leaves out (8 + n is what n
+ *	does not draw); bit 4 mirrors the pattern left to right. The X360
+ *	port holds the 32 patterns (823000D0) and kills the pixels with
+ *	them in every shader (825C6608, vo3d variants xxxxxx1).
+ *
+ *	The AIRTRIX library keeps the codes of nine levels at four places
+ *	(AT:@0C0C841C, AT:@0C049BA6) and wraps a model between a 501 and a
+ *	501 0 (AT:@0C049D08): its cabinet shows the combo labels come and
+ *	go in dots. PHARRIER draws the shadow of the player with C and 4 in
+ *	turn, BRAVEFF its smoke: both cabinets show what lies behind them.
+ *
+ *	PODRACE sends -7 to -1 on 16 bits for the far scenery it brings in:
+ *	the low five bits are taken (HEURISTIC), 1/8 to 7/8 of the pixels.
+ *
+ *	A subroutine returns with the pattern it was called with (HEURISTIC:
+ *	what saves it is not known). A model of the BRAVEFF burning hall
+ *	sets C in its own list and never clears it, and the cabinet shows
+ *	the firemen and the furniture that follow whole; the port starts
+ *	every model without a pattern (82530198). A pattern holds across
+ *	the material definitions: the frame of the AIRTRIX messages, drawn
+ *	after some, goes away in dots on the cabinet.
  *
  *
  * 901	Mesh: Set Precision (Static)
@@ -2316,7 +2339,7 @@ I (0x101)
 	case 3:
 		break;
 	case 5:
-		gpu->_501 = inst[0] >> 16;
+		gpu->pattern = (inst[0] >> 16) & 0x1F;
 		break;
 	case 9:
 		/* 2^(log - 0x8D): the sky dome of PODRACE has 0x8E. */
@@ -2349,7 +2372,7 @@ D (0x101)
 	case 5:	
 		UNHANDLED |= !!(inst[0] & 0xFFE0F000);
 
-		DISASM ("mesh: set unknown [%u]", (inst[0] >> 16) & 0x1F);
+		DISASM ("mesh: set pattern [%X]", (inst[0] >> 16) & 0x1F);
 		break;
 	case 9:
 		log = (inst[0] >> 16) & 0xFF;

@@ -586,6 +586,9 @@ uniform vec2		u_fog;							\n \
 uniform vec3		u_fog_color;						\n \
 uniform float		u_alpha_ref;						\n \
 uniform float		u_weigh_by_alpha;					\n \
+#if HAS_PATTERN									\n \
+uniform uint		u_pattern;						\n \
+#endif										\n \
 										\n \
 #if COLLECT									\n"
 LISTS_GLSL
@@ -690,6 +693,12 @@ main (void)	\n \
 	 * near planes the games send, the projected depth cannot tell apart	\n \
 	 * surfaces that the cabinets do (the shadow of the AIRTRIX combo	\n \
 	 * labels lies 0.06 behind them at a depth of 560). */			\n \
+#if HAS_PATTERN									\n \
+	/* 501: bit 0 is the top left pixel of the 4 x 4 pattern. */		\n \
+	ivec2 dot = ivec2 (gl_FragCoord.xy) & 3;				\n \
+	if (((u_pattern >> uint ((3 - dot.y) * 4 + dot.x)) & 1u) == 0u)	\n \
+		discard;							\n \
+#endif										\n \
 	float frag_depth = log2 (1.0 + 1.0 / gl_FragCoord.w) * (1.0 / 24.0);	\n \
 	gl_FragDepth = frag_depth;						\n \
 	\n \
@@ -878,6 +887,8 @@ get_glsl_variant (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 
 	variant.full = 0;
 	variant.collect = hr->meshes.collect;
+	/* 0 and 16 are every pixel */
+	variant.has_pattern = (mesh->pattern & 15) != 0;
 
 	if (mesh->mat_index == ~0) {
 		VK_ERROR ("no material.");
@@ -982,7 +993,8 @@ upload_glsl_program (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	"#define LIGHT3_ATT_TYPE %d\n"
 	"#define HAS_FOG %d\n"
 	"#define HAS_CUE %d\n"
-	"#define COLLECT %d\n";
+	"#define COLLECT %d\n"
+	"#define HAS_PATTERN %d\n";
 
 	hikaru_glsl_variant_t variant;
 	char *definitions, *vs_source, *fs_source;
@@ -1029,7 +1041,8 @@ upload_glsl_program (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	                variant.light3_att_type,
 	                variant.has_fog,
 	                variant.has_cue,
-	                variant.collect);
+	                variant.collect,
+	                variant.has_pattern);
 	VK_ASSERT (ret >= 0);
 
 	ret = asprintf (&vs_source, mesh_vs_source, definitions);
@@ -1101,6 +1114,8 @@ upload_glsl_program (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 		glGetUniformLocation (hr->meshes.program, "u_fog");
 	hr->meshes.locs.u_fog_color =
 		glGetUniformLocation (hr->meshes.program, "u_fog_color");
+	hr->meshes.locs.u_pattern =
+		glGetUniformLocation (hr->meshes.program, "u_pattern");
 	hr->meshes.locs.u_alpha_ref =
 		glGetUniformLocation (hr->meshes.program, "u_alpha_ref");
 	hr->meshes.locs.u_weigh_by_alpha =
@@ -1731,6 +1746,7 @@ update_and_set_rendstate (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	mesh->mv2_index = hr->list->mv2_index;
 
 	mesh->depth_bias = gpu->depth_bias;
+	mesh->pattern = gpu->pattern;
 
 	mesh->vp_index = hr->list->num_vps - 1;
 	mesh->mat_index = hr->list->num_mats - 1;
@@ -1794,6 +1810,19 @@ draw_mesh (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 		held->mv_index = held->mv2_index = ~0;
 		held->alpha_ref = held->depth_scale = NAN;
 		held->weigh_by_alpha = -1;
+		held->pattern = ~0;
+	}
+	if (hr->meshes.variant.has_pattern && held->pattern != mesh->pattern) {
+		/* The 32 patterns of the X360 port (823000D0), a bit a pixel,
+		 * bit 0 at the top left. */
+		static const uint16_t patterns[32] = {
+			0xFFFF, 0xFBFE, 0xFAFA, 0x7ADA, 0x5A5A, 0x5258, 0x5050, 0x1040,
+			0x0000, 0x0401, 0x0505, 0x8525, 0xA5A5, 0xADA7, 0xAFAF, 0xEFBF,
+			0xFFFF, 0xFDF7, 0xF5F5, 0xE5B5, 0xA5A5, 0xA4A1, 0xA0A0, 0x8020,
+			0x0000, 0x0208, 0x0A0A, 0x1A4A, 0x5A5A, 0x5B5E, 0x5F5F, 0x7FDF,
+		};
+		held->pattern = mesh->pattern;
+		glUniform1ui (hr->meshes.locs.u_pattern, patterns[mesh->pattern]);
 	}
 	if (held->alpha_ref != hr->meshes.alpha_ref) {
 		held->alpha_ref = hr->meshes.alpha_ref;

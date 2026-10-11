@@ -70,6 +70,7 @@ typedef union {
 		uint64_t has_cue		: 1;
 
 		uint64_t collect		: 1;	/* see draw_translucent_meshes */
+		uint64_t has_pattern		: 1;	/* 501 */
 	};
 	uint64_t full;
 } hikaru_glsl_variant_t;
@@ -101,6 +102,7 @@ typedef struct {
 	GLuint		u_solid_depth;
 	GLuint		u_order;
 	GLuint		u_blend_mode;
+	GLuint		u_pattern;
 } hikaru_mesh_locs_t;
 
 /* What a mesh program was given last, so as not to give it again: indices
@@ -113,6 +115,7 @@ typedef struct {
 	float		alpha_ref;
 	float		depth_scale;
 	int		weigh_by_alpha;
+	uint32_t	pattern;
 } hikaru_mesh_held_t;
 
 typedef struct hikaru_texture_t hikaru_texture_t;
@@ -137,6 +140,7 @@ typedef struct {
 	uint32_t		ls_index;
 	float			alpha_thresh[2];
 	float			depth_bias;
+	uint32_t		pattern;	/* 501 */
 	float			poly_alpha;	/* 103 alpha, logged */
 	bool			has_two_sided_lighting;
 	uint32_t		num;
