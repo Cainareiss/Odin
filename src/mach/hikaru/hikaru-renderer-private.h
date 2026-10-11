@@ -90,6 +90,7 @@ typedef struct {
 		GLuint	extents;
 		GLuint	spot;
 		GLuint	cone;
+		GLuint	table;
 	} u_lights[4];
 	GLuint		u_ambient;
 	GLuint		u_texture;
@@ -160,6 +161,8 @@ typedef struct {
 
 	hikaru_lightset_t	*ls_list;
 	uint32_t		 num_lss;
+	/* The 194 table of the four lights of each lightset */
+	uint16_t		(*ls_tables)[4][16];
 
 	hikaru_mesh_t		*mesh_list[8][8];
 	uint32_t		 num_meshes[8][8];

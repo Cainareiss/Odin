@@ -576,6 +576,7 @@ struct light_t {								\n \
 	vec2 extents;								\n \
 	vec3 spot;								\n \
 	vec2 cone;								\n \
+	float table[16];							\n \
 };										\n \
 										\n \
 uniform light_t		u_lights[4];						\n \
@@ -645,10 +646,19 @@ apply_light (inout vec3 diffuse,	\n \
 	else	\n \
 		attenuation = 1.0;	\n \
 	\n \
-	/* X360 825C5498: sat ((L . axis - cos outer) / (cos inner - cos	\n \
-	 * outer)), the axis pointing from the target to the light. */	\n \
-	if (type == 2)	\n \
-		attenuation *= clamp ((dot (light_direction, normalize (-light.spot)) - light.cone.x) * light.cone.y, 0.0, 1.0);	\n \
+	/* The cone. sat ((L . axis - cos outer) * scale), the axis pointing	\n \
+	 * from the target to the light, is not the light itself as in the	\n \
+	 * X360 port (825C5498): it addresses the table of the light, whose	\n \
+	 * sixteen points go from the cutoff to the cone angle with straight	\n \
+	 * lines between them (US patent 6,333,742 of SEGA; the 194 loads	\n \
+	 * the table). HEURISTIC: the first point is taken at the cutoff,	\n \
+	 * the last at the cone angle, and nothing is lit beyond the cutoff,	\n \
+	 * which the patent says is deleted. */	\n \
+	if (type == 2) {	\n \
+		float where = 15.0 * clamp ((dot (light_direction, normalize (-light.spot)) - light.cone.x) * light.cone.y, 0.0, 1.0);	\n \
+		int point = min (int (where), 14);	\n \
+		attenuation *= (where > 0.0) ? mix (light.table[point], light.table[point + 1], where - float (point)) : 0.0;	\n \
+	}	\n \
 	\n \
 #if HAS_TWO_SIDED_LIGHTING	\n \
 	n_dot_l = abs (dot (normal, light_direction));	\n \
@@ -1076,6 +1086,9 @@ upload_glsl_program (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 		sprintf (temp, "u_lights[%d].cone", i);
 		hr->meshes.locs.u_lights[i].cone =
 			glGetUniformLocation (hr->meshes.program, temp);
+		sprintf (temp, "u_lights[%d].table", i);
+		hr->meshes.locs.u_lights[i].table =
+			glGetUniformLocation (hr->meshes.program, temp);
 		sprintf (temp, "u_lights[%d].extents", i);
 		hr->meshes.locs.u_lights[i].extents =
 			glGetUniformLocation (hr->meshes.program, temp);
@@ -1319,8 +1332,8 @@ static void
 upload_lightset (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 {
 	hikaru_lightset_t *ls = &hr->list->ls_list[mesh->ls_index];
-	float tmp[4];
-	unsigned i;
+	float tmp[4], table[16];
+	unsigned i, j;
 
 	if (!hr->meshes.variant.has_lighting)
 		return;
@@ -1366,6 +1379,10 @@ upload_lightset (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 		tmp[0] = lt->cos_outer;
 		tmp[1] = lt->cone_scale;
 		glUniform2fv (hr->meshes.locs.u_lights[i].cone, 1, tmp);
+		/* The points of the table: 0x400 is 1.0 */
+		for (j = 0; j < 16; j++)
+			table[j] = hr->list->ls_tables[mesh->ls_index][i][j] * (1.0f / 1024.0f);
+		glUniform1fv (hr->meshes.locs.u_lights[i].table, 16, table);
 		VK_ASSERT_NO_GL_ERROR ();
 	}
 }
@@ -1642,7 +1659,7 @@ static void
 update_and_set_rendstate (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 {
 	hikaru_gpu_t *gpu = hr->gpu;
-	unsigned i;
+	unsigned i, j;
 
 	memset ((void *) mesh, 0, sizeof (hikaru_mesh_t));
 
@@ -1660,6 +1677,18 @@ update_and_set_rendstate (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	VK_ASSERT (hr->list->num_texs < MAX_TEXHEADS);
 
 	LOG ("RENDSTATE updating ls %u/%u", hr->list->num_lss, MAX_LIGHTSETS);
+	/* The 194 table of each light: a word has two points, the even one
+	 * in its upper half; the first of the four tables of a light is
+	 * taken (HEURISTIC: what picks one is not known, the games load
+	 * the same ramp in all of them). */
+	for (i = 0; i < 4; i++) {
+		for (j = 0; j < 8; j++) {
+			const uint32_t word = LTABLE[i][j].full;
+
+			hr->list->ls_tables[hr->list->num_lss][i][j * 2] = word >> 16;
+			hr->list->ls_tables[hr->list->num_lss][i][j * 2 + 1] = word & 0xFFFF;
+		}
+	}
 	hr->list->ls_list[hr->list->num_lss++] = LS0;
 	VK_ASSERT (hr->list->num_lss < MAX_LIGHTSETS);
 
@@ -2321,6 +2350,7 @@ destroy_list (hikaru_list_t *list)
 
 	free (list->verts.all);
 	free (list->tex_ids);
+	free (list->ls_tables);
 	free (list);
 }
 
@@ -2344,9 +2374,11 @@ new_list (void)
 	list->ls_list = (hikaru_lightset_t *)
 			malloc (sizeof (hikaru_lightset_t) * MAX_LIGHTSETS);
 	list->tex_ids = (GLuint *) malloc (sizeof (GLuint) * MAX_TEXHEADS);
+	list->ls_tables = malloc (sizeof (list->ls_tables[0]) * MAX_LIGHTSETS);
 
 	if (!list->vp_list || !list->mv_list || !list->mat_list ||
-	    !list->tex_list || !list->ls_list || !list->tex_ids)
+	    !list->tex_list || !list->ls_list || !list->tex_ids ||
+	    !list->ls_tables)
 		goto fail;
 
 	for (vpi = 0; vpi < 8; vpi++) {
