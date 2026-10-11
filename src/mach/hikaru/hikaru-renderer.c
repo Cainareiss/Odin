@@ -242,7 +242,8 @@ upload_texture (hikaru_renderer_t *hr, hikaru_texhead_t *th)
 {
 	static const GLint la8_swizzle[4] = { GL_RED, GL_RED, GL_RED, GL_GREEN };
 
-	uint32_t w, h, num_levels, level, basex, basey, bank;
+	uint32_t w, h, num_levels, level, basex, basey, bank, scale = 1;
+	GLenum internal;
 	GLuint id;
 
 	w = 16 << th->logw;
@@ -280,6 +281,29 @@ upload_texture (hikaru_renderer_t *hr, hikaru_texhead_t *th)
 	glPixelStorei (GL_UNPACK_ALIGNMENT, 1);
 	VK_ASSERT_NO_GL_ERROR ();
 
+	/* The levels are allocated at once: given one by one, a 64x64 texture
+	 * takes the NVIDIA driver 595 some 1.7 ms instead of 0.03. */
+	switch (th->format) {
+	case HIKARU_FORMAT_ABGR1555:
+		internal = GL_RGB5_A1;
+		break;
+	case HIKARU_FORMAT_ABGR4444:
+		internal = GL_RGBA4;
+		break;
+	case HIKARU_FORMAT_LA8:
+		internal = GL_RGBA8;
+		break;
+	case HIKARU_FORMAT_I4:
+		/* Four texels in a word */
+		internal = GL_RGBA4;
+		scale = 2;
+		break;
+	default:
+		goto fail;
+	}
+	glTexStorage2D (GL_TEXTURE_2D, num_levels, internal, w * scale, h * scale);
+	VK_ASSERT_NO_GL_ERROR ();
+
 	for (level = 0; level < num_levels; level++) {
 		void *data = (void *) hr->gpu->texram[bank]->ptr;
 
@@ -290,11 +314,9 @@ upload_texture (hikaru_renderer_t *hr, hikaru_texhead_t *th)
 			glPixelStorei (GL_UNPACK_SKIP_PIXELS, basex);
 			VK_ASSERT_NO_GL_ERROR ();
 	
-			glTexImage2D (GL_TEXTURE_2D, level,
-			              GL_RGB5_A1,
-			              w, h, 0,
-			              GL_RGBA, GL_UNSIGNED_SHORT_1_5_5_5_REV,
-			              data);
+			glTexSubImage2D (GL_TEXTURE_2D, level, 0, 0, w, h,
+			                 GL_RGBA, GL_UNSIGNED_SHORT_1_5_5_5_REV,
+			                 data);
 			VK_ASSERT_NO_GL_ERROR ();
 			break;
 		case HIKARU_FORMAT_ABGR4444:
@@ -303,11 +325,9 @@ upload_texture (hikaru_renderer_t *hr, hikaru_texhead_t *th)
 			glPixelStorei (GL_UNPACK_SKIP_PIXELS, basex);
 			VK_ASSERT_NO_GL_ERROR ();
 	
-			glTexImage2D (GL_TEXTURE_2D, level,
-			              GL_RGBA4,
-			              w, h, 0,
-			              GL_RGBA, GL_UNSIGNED_SHORT_4_4_4_4_REV,
-			              data);
+			glTexSubImage2D (GL_TEXTURE_2D, level, 0, 0, w, h,
+			                 GL_RGBA, GL_UNSIGNED_SHORT_4_4_4_4_REV,
+			                 data);
 			VK_ASSERT_NO_GL_ERROR ();
 			break;
 		case HIKARU_FORMAT_LA8:
@@ -316,11 +336,8 @@ upload_texture (hikaru_renderer_t *hr, hikaru_texhead_t *th)
 			glPixelStorei (GL_UNPACK_SKIP_PIXELS, basex);
 			VK_ASSERT_NO_GL_ERROR ();
 	
-			glTexImage2D (GL_TEXTURE_2D, level,
-			              GL_RGBA8,
-			              w, h, 0,
-			              GL_RG, GL_UNSIGNED_BYTE,
-			              data);
+			glTexSubImage2D (GL_TEXTURE_2D, level, 0, 0, w, h,
+			                 GL_RG, GL_UNSIGNED_BYTE, data);
 			VK_ASSERT_NO_GL_ERROR ();
 
 			glTexParameteriv (GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA,
@@ -333,17 +350,13 @@ upload_texture (hikaru_renderer_t *hr, hikaru_texhead_t *th)
 			if (!data)
 				goto fail;
 
-			glTexImage2D (GL_TEXTURE_2D, level,
-			              GL_RGBA4,
-			              w * 2, h * 2, 0,
-			              GL_RGBA, GL_UNSIGNED_SHORT_4_4_4_4_REV,
-			              data);
+			glTexSubImage2D (GL_TEXTURE_2D, level, 0, 0, w * 2, h * 2,
+			                 GL_RGBA, GL_UNSIGNED_SHORT_4_4_4_4_REV,
+			                 data);
 			VK_ASSERT_NO_GL_ERROR ();
 
 			free (data);
 			break;
-		default:
-			goto fail;
 		}
 
 		w = MAX2 (w >> 1, 1);
