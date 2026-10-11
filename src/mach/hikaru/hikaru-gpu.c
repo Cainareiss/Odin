@@ -416,24 +416,36 @@
  * ========
  *
  * IRQs are signalled to the main SH-4 through IRL2: priority 7, INTEVT 0x300,
- * vector 0x220. At the same time, bit 4 of the master SH-4 Port A is cleared
- * (it is active low).
+ * vector 0x220. At the same time, bit 6 of the master SH-4 Port A is low
+ * (see hikaru_update_irqs in hikaru.c).
  *
  * The two registers 15000088 and 1A000018 signal 8 and 4 different IRQs
  * causes, respectively. When any of the IRQs in 1A000018 is raised, bit 7 of
  * 15000088 is set. 15000084 is the IRQ mask register, and is applied to
- * 15000088.
+ * 15000088: a cause whose bit is SET there does not interrupt. The system
+ * library (PHARRIER @0C010AB6, the same in the BOOTROM) writes 0x72 to
+ * 15000088, which clears the causes 0, 2, 3 and 7, then 0x72 to 15000084:
+ * it clears what it lets through. Valkyrie took a set bit for a cause let
+ * through, and with it had to make up an interrupt at every frame.
  *
  * Bits in 15000088:
  *
  *  01, bit 0 = GPU 15 indirect DMA done
- *  02, bit 1 = GPU 15 polygon-out done
+ *  02, bit 1 = an error (Valkyrie: GPU 15 polygon-out done)
  *  04, bit 2 = GPU 15 command analysis done
- *  08, bit 3 = Unknown
- *  10, bit 4 = Unknown
- *  20, bit 5 = Unknown
- *  40, bit 6 = Unknown
+ *  08, bit 3 = an error
+ *  10, bit 4 = an error
+ *  20, bit 5 = an error
+ *  40, bit 6 = an error
  *  80, bit 7 = GPU 1A
+ *
+ * PHARRIER logs bits 1, 3, 4, 5 and 6 as errors at each interrupt
+ * (@0C01B020, mask 0x7A) and then goes through a recovery that writes 0x02
+ * to 15000084 (@0C012752). None of them is raised here.
+ *
+ * HEURISTIC: bit 7 follows the causes of 1A000018. The handler writes it
+ * back before it acknowledges them (@0C0102C0): were it to stay set until
+ * written, every interrupt of the GPU 1A would be taken twice.
  *
  * Bits in 1A000088:
  *
@@ -480,15 +492,15 @@ hikaru_gpu_update_irq_status (hikaru_gpu_t *gpu)
 }
 
 /* ANT_INT, the line of the command processor to the interrupt controller
- * of the board: held while a cause passes the mask, let go when the
- * handler of the games has written every cause back as 0 (PHARRIER
- * @0C0102C0). */
+ * of the board: held while a cause is not masked, let go when the handler
+ * of the games has written every cause back as 0 (PHARRIER @0C0102C0).
+ * HEURISTIC: 15000084 is taken to be 0 at reset. */
 bool
 hikaru_gpu_irq_line (vk_device_t *dev)
 {
 	hikaru_gpu_t *gpu = (hikaru_gpu_t *) dev;
 
-	return (REG15 (0x88) & REG15 (0x84)) != 0;
+	return (REG15 (0x88) & ~REG15 (0x84) & 0xFF) != 0;
 }
 
 void
