@@ -127,6 +127,15 @@ hikaru_aica_exec (vk_device_t *device, int cycles)
 	return cycles;
 }
 
+/* The reset line of the sound boards, from the MIE (hikaru_set_resets). */
+void
+hikaru_aica_reset_pin (vk_device_t *dev)
+{
+	hikaru_aica_t *aica = (hikaru_aica_t *) dev;
+
+	odin_aica_reset_pin (aica->chip);
+}
+
 /* Before the wave memory is saved or dumped, see odin_aica_settle. */
 void
 hikaru_aica_settle (vk_device_t *dev)

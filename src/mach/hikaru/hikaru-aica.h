@@ -24,6 +24,7 @@
 
 vk_device_t *hikaru_aica_new (vk_machine_t *mach, vk_buffer_t *ram, bool master, unsigned clock_hz);
 void hikaru_aica_settle (vk_device_t *dev);
+void hikaru_aica_reset_pin (vk_device_t *dev);
 /* The interrupt line of the board to the SH-4. */
 bool hikaru_aica_irq_line (vk_device_t *dev);
 

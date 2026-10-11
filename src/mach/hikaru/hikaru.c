@@ -487,6 +487,49 @@ hikaru_update_irqs (vk_machine_t *mach)
 	                      VK_IRQ_STATE_RAISED : VK_IRQ_STATE_CLEAR);
 }
 
+/*
+ * Resets
+ * ======
+ *
+ * Port D of the MIE holds the reset lines of the board, active low (MAME
+ * hikaru.cpp, MIE GPIO ports): bit 0 the system, 1 the GPU, 2 the slave
+ * SH-4, 3 CN4, 4 the bridge, 5 the sound boards; bits 6 and 7 choose the
+ * video clock. The master writes the port through the window of the MIE:
+ *
+ *  - the BOOTROM, as soon as the MIE gives its bus (@0C00BE52): 0xFB, then
+ *    0xFF some 250 cycles later, for the slave;
+ *  - the system library of the game (0xDF, then 0xFF): the sound boards.
+ *
+ * The reset of the slave is NOT done. The slave takes a frame and a half
+ * to start again (it clears its memory) and then clears the word where
+ * the master leaves its first job (14000000); the master writes that word
+ * without waiting for anything (PHARRIER @0C010BC4), after a copy of the
+ * game from the ROM board that takes no time here. With the reset done,
+ * BRAVEFF and PHARRIER write the word a frame too early and never start.
+ */
+
+void
+hikaru_set_resets (vk_machine_t *mach, uint8_t pins)
+{
+	hikaru_t *hikaru = (hikaru_t *) mach;
+	const uint8_t fell = hikaru->mie_port_d & ~pins;
+
+	hikaru->mie_port_d = pins;
+
+	if ((pins & 0xC0) != 0xC0)
+		VK_ABORT ("video clock %u chosen on port D of the MIE: only 3 is known", pins >> 6);
+	if (~pins & 0x1B)
+		VK_ABORT ("resets %02X asked on port D of the MIE, which are not implemented", ~pins & 0x1B);
+
+	/* The boards are held as long as the line is low, see
+	 * hikaru_run_cycles */
+	if (fell & 0x20) {
+		hikaru_aica_reset_pin (hikaru->aica_m);
+		hikaru_aica_reset_pin (hikaru->aica_s);
+		hikaru_update_irqs (mach);
+	}
+}
+
 /* Valkyrie raised each interrupt once, with its bit of port A low until the
  * port was written again:
 static void
@@ -561,9 +604,11 @@ hikaru_run_cycles (vk_machine_t *mach, int cycles)
 	/* Its program may have written the mask of the interrupts */
 	hikaru_update_irqs (mach);
 
-	/* Run the two sound boards */
-	vk_device_exec (hikaru->aica_m, cycles);
-	vk_device_exec (hikaru->aica_s, cycles);
+	/* Run the two sound boards, unless their reset line is low */
+	if (hikaru->mie_port_d & 0x20) {
+		vk_device_exec (hikaru->aica_m, cycles);
+		vk_device_exec (hikaru->aica_s, cycles);
+	}
 }
 
 /* What the scheduler dates. Those due at the same time are taken in this
@@ -686,6 +731,7 @@ hikaru_reset (vk_machine_t *mach, vk_reset_type_t type)
 	/* HEURISTIC: nothing is known to pull the NMI pin of the master. */
 	sh4_set_nmi_pin (hikaru->sh_m, true);
 	sh4_set_nmi_pin (hikaru->sh_s, true);
+	hikaru->mie_port_d = 0xFF;
 
 	hikaru->unk01000000_m = 0;
 	hikaru->unk01000100_m = 0;
@@ -787,6 +833,7 @@ hikaru_load_state (vk_machine_t *mach, vk_state_t *state)
 	LOAD (hikaru->lines_shown);
 	LOAD (hikaru->line_rest);
 
+	hikaru->mie_port_d = hikaru_mie_get_port_d (hikaru->mie);
 	hikaru_update_irqs (mach);
 
 	return ret;

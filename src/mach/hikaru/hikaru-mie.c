@@ -396,6 +396,23 @@ hikaru_mie_put (vk_device_t *dev, unsigned size, uint32_t addr, uint64_t val)
 	return 0;
 }
 
+static void
+hikaru_mie_port_d (void *ctx, uint8_t pins)
+{
+	vk_device_t *dev = (vk_device_t *) ctx;
+
+	hikaru_set_resets (dev->mach, pins);
+}
+
+/* The pins of port D, see hikaru_set_resets. The stand-in leaves them high. */
+uint8_t
+hikaru_mie_get_port_d (vk_device_t *dev)
+{
+	hikaru_mie_t *mie = (hikaru_mie_t *) dev;
+
+	return mie->chip ? odin_mie_port_d (mie->chip) : 0xFF;
+}
+
 /* The interrupt controller of the board, see src/odin/mie_bridge.hpp. The
  * stand-in has the mask the program of the MIE writes, 0xE1. */
 void
@@ -625,6 +642,7 @@ hikaru_mie_new (vk_machine_t *mach, unsigned clock_hz)
 		if (!mie->chip)
 			goto fail;
 		dev->exec = hikaru_mie_exec;
+		odin_mie_set_port_d (mie->chip, hikaru_mie_port_d, mie);
 		odin_mie_set_log (mie->chip, stderr);
 		hikaru_mie_setup_trace (mie);
 		hikaru_mie_setup_card (mie);
