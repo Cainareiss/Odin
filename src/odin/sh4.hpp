@@ -303,10 +303,12 @@ private:
 	void dmac_run_channel(uint32_t ch);
 	void dmac_update_channel(uint32_t ch, uint32_t request);
 	void dmac_update(uint32_t request);
+	void dmac_update_irqs();
 	uint32_t pck_cycles() const;
 	uint32_t tmu_period(uint32_t ch) const;
 	void tmu_count(uint32_t ch, uint64_t counts);
 	void tmu_sync(uint64_t now);
+	void tmu_update_irq(uint32_t ch);
 	int32_t tmu_next_irq() const;
 	int32_t run_part(int32_t cycles, int32_t &used);
 	uint32_t store_queue_addr(uint32_t addr) const;

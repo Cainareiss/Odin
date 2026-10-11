@@ -276,9 +276,10 @@ void Sh4::set_nmi(bool high)
 	update_irqs();
 }
 
-/* Takes the pending interrupt when its priority is above SR.I.
- * HEURISTIC: the source is cleared here; on the chip it stays raised
- * until what raised it lets go. */
+/* Takes the pending interrupt when its priority is above SR.I. The edge of
+ * NMI is used up; any other request lasts as long as its source holds it
+ * (hardware manual, 19.2.2 for the IRL pins, and the flags of the on-chip
+ * modules). */
 void Sh4::take_irq()
 {
 	Sh4IrqSource &source = m_intc.source[m_intc.index];
@@ -294,7 +295,9 @@ void Sh4::take_irq()
 	m_r.pc = m_r.vbr + source.offset;
 	set_sr(m_r.sr | m_r.t | SR_BL | SR_MD | SR_RB);
 	reg_put(4, CCN_INTEVT, source.code);
-	source.raised = 0;
+	if (&source == &m_intc.source[Sh4Source::NMI]) {
+		source.raised = 0;
+	}
 	update_irqs();
 }
 

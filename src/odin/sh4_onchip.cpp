@@ -279,12 +279,21 @@ void Sh4::dmac_run_channel(uint32_t ch)
 
 	if (tcr == 0) {
 		chcr |= 2;	/* TE */
-		if (chcr & 4) {	/* IE */
-			set_irq(Sh4Source::DMTE0 + ch, true);
-		}
 		m_dmac_running[ch] = false;
 		reg_put(4, DMAC_CHCR0 + offs, chcr);
+		dmac_update_irqs();
 	}
+}
+
+/* DMTE is asked for while a channel has TE and IE, DMAE while DMAOR has
+ * AE (section 14.2). */
+void Sh4::dmac_update_irqs()
+{
+	for (uint32_t ch = 0; ch < 4; ch++) {
+		const uint32_t chcr = static_cast<uint32_t>(reg_get(4, DMAC_CHCR0 + ch * 0x10));
+		set_irq(Sh4Source::DMTE0 + ch, (chcr & 6) == 6);
+	}
+	set_irq(Sh4Source::DMAE, (reg_get(4, DMAC_DMAOR) & 4) != 0);
 }
 
 void Sh4::dmac_run()
@@ -318,7 +327,8 @@ void Sh4::dmac_update_channel(uint32_t ch, uint32_t request)
 		fatal("DMAC channel setting", chcr);
 	}
 	if ((sar | dar) & (DMAC_UNIT[ts] - 1)) {
-		set_irq(Sh4Source::DMAE, true);
+		reg_put(4, DMAC_DMAOR, dmaor | 4);	/* AE */
+		dmac_update_irqs();
 		return;
 	}
 	/* NMIF, AE or TE */
@@ -386,9 +396,13 @@ void Sh4::tmu_count(uint32_t ch, uint64_t counts)
 	counts -= counter + 1;
 	m_tmu_counter[ch] = static_cast<uint32_t>(reload - counts % (reload + 1));
 	reg_put(2, tcr(ch), control | 0x100);
-	if (control & 0x20) {
-		set_irq(Sh4Source::TUNI0 + ch, true);
-	}
+	tmu_update_irq(ch);
+}
+
+/* TUNI is asked for while TCR has UNF and UNIE (section 12.2.6). */
+void Sh4::tmu_update_irq(uint32_t ch)
+{
+	set_irq(Sh4Source::TUNI0 + ch, (reg_get(2, tcr(ch)) & 0x120) == 0x120);
 }
 
 /* Counts the timers up to `now`. */
@@ -608,6 +622,7 @@ bool Sh4::onchip_write(uint32_t addr, uint32_t size, uint64_t value)
 		only(ch < 2 ? ~0x00F00008u : ~0x00F50008u);
 		/* TE can only be cleared */
 		reg_put(size, addr, (v & ~2u) | (old & v & 2));
+		dmac_update_irqs();
 		dmac_update_channel(ch, 1);
 		dmac_run();
 		return true;
@@ -618,6 +633,7 @@ bool Sh4::onchip_write(uint32_t addr, uint32_t size, uint64_t value)
 		only(0x00008307);
 		/* AE and NMIF can only be cleared */
 		reg_put(size, addr, (v & ~6u) | (old & v & 6));
+		dmac_update_irqs();
 		dmac_update(1);
 		dmac_run();
 		return true;
@@ -665,6 +681,7 @@ bool Sh4::onchip_write(uint32_t addr, uint32_t size, uint64_t value)
 		only(0x013F);
 		/* UNF can only be cleared */
 		reg_put(size, addr, (v & 0x00FF) | (old & v & 0x0100));
+		tmu_update_irq(reg == TMU_TCR0 ? 0 : 1);
 		return true;
 	}
 	case TMU_TCR0 + 24: {
@@ -675,6 +692,7 @@ bool Sh4::onchip_write(uint32_t addr, uint32_t size, uint64_t value)
 		/* Input capture is not implemented. */
 		only(0x037F);
 		reg_put(size, addr, (v & 0x00FF) | (old & v & 0x0300));
+		tmu_update_irq(2);
 		return true;
 	}
 	case TMU_TCOR0:

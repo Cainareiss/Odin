@@ -913,6 +913,24 @@ void test_interrupts()
 		eq("the instruction after the LDC has not run", st.rbank[2], 0);
 	}
 	{
+		/* A request lasts as long as its source holds it (19.2.2): the handler, add #1,r1; rte, runs
+		 * again and again until the line is let go. */
+		Machine m;
+		m.code(CODE, {NOP, NOP, NOP, NOP});
+		m.code(RAM + 0x600, {0x7101, 0x002B, NOP});
+		Sh4State st = m.state();
+		st.vbr = RAM;
+		st.sr = SR_MD;
+		m.cpu.load(st);
+		m.cpu.set_irq(Source::IRL2, true);
+		m.cpu.run(6);
+		m.cpu.set_irq(Source::IRL2, false);
+		m.cpu.run(2);
+		st = m.state();
+		eq("a held request is taken again after RTE", st.rbank[1], 2);
+		eq("and no more once let go", st.pc, CODE + 4);
+	}
+	{
 		/* The NMI pin (hardware manual, 19.2.1 and DMAOR.NMIF in 14.2.5). */
 		Machine m;
 		m.code(CODE, {NOP, NOP, NOP, NOP, NOP, NOP});
@@ -1004,6 +1022,10 @@ void test_on_chip()
 		eq("TCNT0 takes TCOR0 at the underflow", m.state().r[3], 100);
 		m.cpu.run(16);
 		eq("and counts on", m.state().r[4], 99);
+		/* mov #0x20,r0; mov.w r0,@(12,r1) (TCR0: UNF written as 0) */
+		m.code(CODE + 2 * 113, {0xE020, 0x8116});
+		m.cpu.run(2);
+		eq("TUNI0 lasts until UNF is cleared", m.state().irq[Source::TUNI0].raised, 0);
 	}
 	{
 		/* The same timer started in the middle of a slice, interrupts open: the handler is entered at
@@ -1077,6 +1099,10 @@ void test_on_chip()
 		eq("TCR2 at zero", m.reg32(0xFFA00028), 0);
 		eq("CHCR2 has TE", m.reg32(0xFFA0002C) & 2, 2);
 		eq("DMTE2 is raised", m.state().irq[Source::DMTE2].raised, 1);
+		/* mov #0,r0; mov.l r0,@(12,r1) (CHCR2) */
+		m.code(CODE + 2 * 11, {0xE000, 0x1103});
+		m.cpu.run(2);
+		eq("DMTE2 lasts until TE and IE are cleared", m.state().irq[Source::DMTE2].raised, 0);
 	}
 	{
 		/* Store queues: QACR0 = area 3; a write at E0000008 lands at 0C000008 + what the address carries. */
