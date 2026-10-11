@@ -73,6 +73,15 @@ void odin_mie_busrq_write(odin_mie_t *dev, uint32_t value);
 /* Advances the chip by `cycles` host-CPU cycles. */
 void odin_mie_run(odin_mie_t *dev, uint32_t cycles);
 
+/* Port D carries the resets of the main board, active low (bit 0 the
+ * system, 1 the GPU, 2 the slave SH-4, 3 CN4, 4 the bridge, 5 the sound
+ * boards), and on bits 6 and 7 the choice of the video clock. `fn` is
+ * called with the pins each time the chip drives a new value. */
+typedef void (*odin_mie_port_d_fn)(void *ctx, uint8_t pins);
+void odin_mie_set_port_d(odin_mie_t *dev, odin_mie_port_d_fn fn, void *ctx);
+/* The pins now; 0xFF while the chip does not drive them. */
+uint8_t odin_mie_port_d(const odin_mie_t *dev);
+
 /* The interrupt controller of the main board, on ports B, C and F. The
  * lines from outside, active high: bit 0 ANT_INT, 4 SZK_INT, 5 CN4_INT,
  * 6 CN3_INT0, 7 CN3_INT1. They are not part of the save state. */

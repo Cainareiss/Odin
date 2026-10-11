@@ -419,11 +419,35 @@ void test_interrupts()
 	odin_mie_delete(mie);
 }
 
+uint8_t g_port_d = 0;
+int g_port_d_calls = 0;
+
+/* Port D, the resets of the main board: the board is told each value the
+ * chip drives. */
+void test_port_d()
+{
+	std::vector<uint8_t> rom(2048, 0), ram(32768, 0);
+	odin_mie_t *mie = odin_mie_new(rom.data(), rom.size(), ram.data(), ram.size(), 200000000,
+	                               nullptr, nullptr);
+
+	odin_mie_set_port_d(mie, [](void *, uint8_t pins) { g_port_d = pins; g_port_d_calls++; }, nullptr);
+	check(odin_mie_port_d(mie) == 0xFF, "port D is high while the chip does not drive it");
+	odin_mie_host_write(mie, 2 * 3, 1, 0xFB);
+	check(g_port_d_calls == 0 && odin_mie_port_d(mie) == 0xFF, "its latch written, it is still not driven");
+	odin_mie_host_write(mie, 2 * 8, 1, 0x43);
+	check(g_port_d_calls == 1 && g_port_d == 0xFB && odin_mie_port_d(mie) == 0xFB,
+	      "the latch is driven when the port becomes an output");
+	odin_mie_host_write(mie, 2 * 3, 1, 0xFF);
+	check(g_port_d_calls == 2 && g_port_d == 0xFF, "and each new value is told");
+	odin_mie_delete(mie);
+}
+
 int main()
 {
 	test_eeprom();
 	test_jvs();
 	test_interrupts();
+	test_port_d();
 	std::printf("%u checks passed, %u failed\n", g_passed, g_failed);
 	return g_failed ? 1 : 0;
 }

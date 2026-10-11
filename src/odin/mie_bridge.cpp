@@ -50,7 +50,7 @@ public:
 		: m_read_inputs(read_inputs), m_ctx(ctx), m_clock_hz(clock_hz), m_cycle_acc(0),
 		  m_rom(copy_rom(rom)),
 		  m_eeprom(odin::Mie::CLOCK_HZ), m_io(*this), m_mie(*this, m_rom, ram), m_log(nullptr),
-		  m_irq_lines(0)
+		  m_irq_lines(0), m_port_d(nullptr), m_port_d_ctx(nullptr)
 	{
 		m_inputs = {};
 		m_mie.jvs().add_device(&m_io);
@@ -95,6 +95,8 @@ public:
 		if (port == 5)
 			m_eeprom.set_pins((value & 0x08) != 0, (value & 0x01) != 0,
 			                  (value & 0x02) != 0, (value & 0x04) != 0);
+		if (port == 3 && m_port_d)
+			m_port_d(m_port_d_ctx, value);
 	}
 
 	uint8_t gpio_readback(uint8_t port, uint8_t latched) override
@@ -204,6 +206,19 @@ public:
 	odin::Mie &chip() { return m_mie; }
 	odin::Eeprom93c46 &eeprom() { return m_eeprom; }
 
+	void set_port_d(odin_mie_port_d_fn fn, void *ctx)
+	{
+		m_port_d = fn;
+		m_port_d_ctx = ctx;
+	}
+
+	/* HEURISTIC: the lines of port D are high while the chip does not
+	 * drive them. */
+	uint8_t port_d() const
+	{
+		return m_mie.gpio_is_output(3) ? m_mie.gpio_latch(3) : 0xFF;
+	}
+
 	/* The five lines that come from outside, on the bits of port B. */
 	void set_irq_lines(uint8_t lines) { m_irq_lines = lines & 0xF1; }
 
@@ -245,6 +260,8 @@ private:
 	std::unique_ptr<odin::CardReader> m_card;
 	FILE *m_log;
 	uint8_t m_irq_lines;
+	odin_mie_port_d_fn m_port_d;
+	void *m_port_d_ctx;
 };
 
 enum : uint32_t {
@@ -346,6 +363,18 @@ void
 odin_mie_run(odin_mie_t *dev, uint32_t cycles)
 {
 	dev->board->run(cycles);
+}
+
+void
+odin_mie_set_port_d(odin_mie_t *dev, odin_mie_port_d_fn fn, void *ctx)
+{
+	dev->board->set_port_d(fn, ctx);
+}
+
+uint8_t
+odin_mie_port_d(const odin_mie_t *dev)
+{
+	return dev->board->port_d();
 }
 
 void
