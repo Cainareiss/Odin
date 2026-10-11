@@ -143,8 +143,11 @@ hikaru_gpu_cp_vblank_in (hikaru_gpu_t *gpu)
 {
 	on_frame_begin (gpu);
 
-	/* Notify that the drawing is done */
+	/* Valkyrie raised bit 1 of 15000088 at every vblank-in, see GPU IRQs
+	 * in hikaru-gpu.c:
+	 * Notify that the drawing is done
 	hikaru_gpu_raise_irq (gpu, GPU15_IRQ_POLY_OUT_END, 0);
+	*/
 }
 
 void
