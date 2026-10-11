@@ -1109,6 +1109,31 @@ mult_mtx4x4f_vec4f (vec4f_t res, mtx4x4f_t m, vec4f_t v)
 		res[i] = m[0][i] * v[0] + m[1][i] * v[1] + m[2][i] * v[2] + m[3][i] * v[3];
 }
 
+/* The modelview the geometry goes through: the local matrix first, if one
+ * was sent since the last row of the modelview. HEURISTIC: whether a second
+ * local matrix adds to the first, and what it does to the second modelview,
+ * is not known. */
+void
+hikaru_gpu_cp_get_modelview (hikaru_gpu_t *gpu, hikaru_modelview_t *mv)
+{
+	const hikaru_modelview_t *m = &MV.table[0], *l = &MV.local;
+	unsigned i, j;
+
+	if (!MV.has_local) {
+		*mv = *m;
+		return;
+	}
+
+	for (i = 0; i < 4; i++) {
+		for (j = 0; j < 3; j++)
+			mv->mtx[i][j] = m->mtx[0][j] * l->mtx[i][0] +
+			                m->mtx[1][j] * l->mtx[i][1] +
+			                m->mtx[2][j] * l->mtx[i][2] +
+			                ((i == 3) ? m->mtx[3][j] : 0.0f);
+		mv->mtx[i][3] = (i == 3) ? 1.0f : 0.0f;
+	}
+}
+
 static float
 norm_vec3 (vec4f_t v)
 {
@@ -1117,13 +1142,12 @@ norm_vec3 (vec4f_t v)
 
 /* 161	Set Matrix Vector
  *
- *	-------- ----MPNN --U----o oooooooo
+ *	-------- ----MPNN -EL----o oooooooo
  *	XXXXXXXX XXXXXXXX XXXXXXXX XXXXXXXX
  *	YYYYYYYY YYYYYYYY YYYYYYYY YYYYYYYY
  *	ZZZZZZZZ ZZZZZZZZ ZZZZZZZZ ZZZZZZZZ
  *
- * M = Unknown. One library entry sets it along with P on the last row
- *     (AIRTRIX 0C69A700); not seen in a display list yet.
+ * M = Unknown. The libraries set it on the last row of a local matrix.
  *
  * P = Second modelview
  *
@@ -1132,7 +1156,15 @@ norm_vec3 (vec4f_t v)
  *	of the AIRTRIX trails is a quad with one edge on each, and the
  *	joints of its skater are skinned the same way.
  *
- * U = Unknown
+ * L = Local matrix
+ *
+ *	The row belongs to a matrix that the geometry goes through before
+ *	the modelview; E marks its last row. The libraries send rows 0 to 2
+ *	as 4 to 6 and the last one as F (PHARRIER 0C016076, a translation).
+ *	PHARRIER moves the second half of a door with it, from the modelview
+ *	of the first (0C0DEA90), and turns the second stroke of its star
+ *	sparkles a quarter of a turn; the cabinet shows the stars. The
+ *	models of RACER set it to the identity.
  *
  * N = Column index
  *
@@ -1184,15 +1216,27 @@ I (0x161)
 	switch ((inst[0] >> 8) & 0xF) {
 
 	case 0x1:
-		/* Bits 19 and 15:12 are not understood. */
+		push = (inst[0] >> 18) & 1;
+		elem = (inst[0] >> 16) & 3;
+
+		/* A row of the local matrix; bit 14 is on its last one. */
+		if ((inst[0] & 0x0000B000) == 0x00002000) {
+			mv = &MV.local;
+			mv->mtx[elem][0] = *(float *) &inst[1];
+			mv->mtx[elem][1] = *(float *) &inst[2];
+			mv->mtx[elem][2] = *(float *) &inst[3];
+			mv->mtx[elem][3] = (elem == 3) ? 1.0f : 0.0f;
+			if (inst[0] & 0x00004000)
+				MV.has_local = 1;
+			break;
+		}
+
+		/* Bit 19 alone and bits 15, 14 and 12 are not understood. */
 		if (inst[0] & 0x0008F000) {
 			VK_ERROR ("@%08X: unhandled modelview bits %08X", PC, inst[0]);
 			if (inst[0] & 0x0000F000)
 				return;
 		}
-
-		push = (inst[0] >> 18) & 1;
-		elem = (inst[0] >> 16) & 3;
 
 		if (push) {
 			mv = &MV.second;
@@ -1214,6 +1258,7 @@ I (0x161)
 		mv->mtx[elem][1] = *(float *) &inst[2];
 		mv->mtx[elem][2] = *(float *) &inst[3];
 		mv->mtx[elem][3] = (elem == 3) ? 1.0f : 0.0f;
+		MV.has_local = 0;
 
 		/* Last element during upload. */
 		if (elem == 0) {
@@ -1228,8 +1273,11 @@ I (0x161)
 			v[2] = *(float *) &inst[3];
 			v[3] = 1.0f;
 
+			hikaru_modelview_t eye;
+
 			/* The point in eye space and its distance. */
-			mult_mtx4x4f_vec4f (w, MV.table[MV.depth].mtx, v);
+			hikaru_gpu_cp_get_modelview (gpu, &eye);
+			mult_mtx4x4f_vec4f (w, eye.mtx, v);
 			LOD.center[0] = w[0];
 			LOD.center[1] = w[1];
 			LOD.center[2] = w[2];

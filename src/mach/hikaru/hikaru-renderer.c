@@ -1713,7 +1713,7 @@ update_and_set_rendstate (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 			     hr->list->num_mvs, MAX_MODELVIEWS, MV.total);
 	
 			VK_ASSERT (hr->list->num_mvs < MAX_MODELVIEWS);
-			hr->list->mv_list[hr->list->num_mvs] = MV.table[i];
+			hikaru_gpu_cp_get_modelview (gpu, &hr->list->mv_list[hr->list->num_mvs]);
 		}
 
 		MV.total = 0;

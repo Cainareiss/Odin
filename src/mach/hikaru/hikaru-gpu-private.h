@@ -369,7 +369,12 @@ typedef struct {
 		} viewports;
 	
 		struct {
-			hikaru_modelview_t table[NUM_MODELVIEWS];
+			/* [0] is the modelview. The saved states keep the size
+			 * the table had before the next three came out of it. */
+			hikaru_modelview_t table[NUM_MODELVIEWS - 2];
+			hikaru_modelview_t local;	/* 161 with bit 13 */
+			uint32_t has_local;
+			uint32_t unused[15];
 			hikaru_modelview_t second;	/* 161 with bit 18 */
 			uint32_t depth, total;
 		} modelviews;
@@ -521,6 +526,7 @@ void hikaru_gpu_cp_exec (hikaru_gpu_t *, int cycles);
 void hikaru_gpu_cp_vblank_in (hikaru_gpu_t *);
 void hikaru_gpu_cp_vblank_out (hikaru_gpu_t *);
 void hikaru_gpu_cp_on_put (hikaru_gpu_t *);
+void hikaru_gpu_cp_get_modelview (hikaru_gpu_t *, hikaru_modelview_t *);
 
 /* hikaru-renderer.c */
 void hikaru_renderer_begin_mesh (vk_renderer_t *rend, uint32_t addr,
