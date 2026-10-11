@@ -80,26 +80,3 @@ vk_vector_append_entry (vk_vector_t *vector)
 	return entry;
 }
 
-void
-vk_vector_append (vk_vector_t *vector, void *key)
-{
-	void **entry = (void **) vk_vector_append_entry (vector);
-	*entry = key;
-}
-
-void
-vk_vector_clear (vk_vector_t *vector)
-{
-	VK_ASSERT (vector);
-
-	memset (vector->data, 0, vector->size);
-	vector->used = 0;
-}
-
-void
-vk_vector_clear_fast (vk_vector_t *vector)
-{
-	VK_ASSERT (vector);
-
-	vector->used = 0;
-}

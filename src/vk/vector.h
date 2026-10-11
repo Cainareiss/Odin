@@ -31,9 +31,6 @@ typedef struct {
 vk_vector_t	*vk_vector_new (unsigned min_elements, unsigned element_size);
 void		 vk_vector_destroy (vk_vector_t **vector_);
 void		*vk_vector_append_entry (vk_vector_t *vector);
-void		 vk_vector_append (vk_vector_t *vector, void *key);
-void		 vk_vector_clear (vk_vector_t *vector);
-void		 vk_vector_clear_fast (vk_vector_t *vector);
 
 #define VK_VECTOR_LAST(vector_) \
 	&(vector_)->data[(vector_)->used - (vector_)->element_size]

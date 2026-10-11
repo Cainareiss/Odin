@@ -91,7 +91,6 @@ void		 vk_machine_destroy (vk_machine_t **mach_);
 void		 vk_machine_register_buffer (vk_machine_t *, void *);
 void		 vk_machine_register_device (vk_machine_t *, void *);
 void		 vk_machine_register_cpu (vk_machine_t *, void *);
-int		 vk_machine_load_game (vk_machine_t *mach, vk_game_t *game);
 void		 vk_machine_reset (vk_machine_t *mach, vk_reset_type_t type);
 int		 vk_machine_run_frame (vk_machine_t *mach);
 int		 vk_machine_load_state (vk_machine_t *mach, const char *path);

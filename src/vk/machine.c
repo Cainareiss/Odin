@@ -93,12 +93,6 @@ vk_machine_register_cpu (vk_machine_t *mach, void *ptr)
 	VK_LOG ("machine: registered cpu %p", ptr);
 }
 
-int
-vk_machine_load_game (vk_machine_t *mach, vk_game_t *game)
-{
-	return mach->load_game (mach, game);
-}
-
 void
 vk_machine_reset (vk_machine_t *mach, vk_reset_type_t type)
 {

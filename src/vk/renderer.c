@@ -217,25 +217,6 @@ vk_renderer_set_scale (vk_renderer_t *renderer, unsigned scale)
 	                       SDL_WINDOWPOS_CENTERED);
 }
 
-vk_renderer_t *
-vk_renderer_new (unsigned width, unsigned height)
-{
-	vk_renderer_t *renderer = ALLOC (vk_renderer_t);
-	if (!renderer)
-		return NULL;
-
-	renderer->width = width;
-	renderer->height = height;
-
-	renderer->begin_frame = NULL;
-	renderer->end_frame = NULL;
-	renderer->destroy = NULL;
-
-	vk_renderer_init (renderer);
-
-	return renderer;
-}
-
 static GLuint
 compile_shader (GLenum type, const char *src)
 {
@@ -317,31 +298,6 @@ vk_renderer_print_uniforms (GLuint program)
 		loc = glGetUniformLocation (program, id);
 		VK_LOG ("uniform %u : %s <size %d>", loc, id, size);
 	}
-}
-
-/* Taken from Mesa */
-void
-vk_renderer_ortho (mtx4x4f_t proj, float l, float r, float b, float t, float n, float f)
-{
-	proj[0][0] = 2.0f / (r - l);
-	proj[1][0] = 0.0f;
-	proj[2][0] = 0.0f;
-	proj[3][0] = - (r + l) / (r - l);
-
-	proj[0][1] = 0.0f;
-	proj[1][1] = 2.0f / (t - b);
-	proj[2][1] = 0.0f;
-	proj[3][1] = - (t + b) / (t - b);
-
-	proj[0][2] = 0.0f;
-	proj[1][2] = 0.0f;
-	proj[2][2] = -2.0f / (f - n);
-	proj[3][2] = - (f + n) / (f - n);
-
-	proj[0][3] = 0.0f;
-	proj[1][3] = 0.0f;
-	proj[2][3] = 0.0f;
-	proj[3][3] = 1.0f;
 }
 
 /* Taken from Mesa */
@@ -509,11 +465,3 @@ vk_renderer_compute_normal_matrix (mtx3x3f_t dst, mtx4x4f_t src)
 	return true;
 }
 
-void
-vk_renderer_translate (mtx4x4f_t m, float x, float y, float z)
-{
-	m[3][0] += m[0][0] * x + m[1][0] * y + m[2][0] * z;
-	m[3][1] += m[0][1] * x + m[1][1] * y + m[2][1] * z;
-	m[3][2] += m[0][2] * x + m[1][2] * y + m[2][2] * z;
-	m[3][3] += m[0][3] * x + m[1][3] * y + m[2][3] * z;
-}

@@ -62,14 +62,11 @@ set_ptr (void *ptr, unsigned size, uint64_t val)
 vk_buffer_t	*vk_buffer_new (unsigned size, unsigned alignment);
 vk_buffer_t	*vk_buffer_new_from_file (const char *path, unsigned size);
 vk_buffer_t	*vk_buffer_le32_new (unsigned size, unsigned alignment);
-vk_buffer_t	*vk_buffer_be32_new (unsigned size, unsigned alignment);
 void		 vk_buffer_destroy (vk_buffer_t **buffer_);
 unsigned	 vk_buffer_get_size (vk_buffer_t *buf);
 bool		 vk_buffer_is_le (vk_buffer_t *buf);
 void		*vk_buffer_get_ptr (vk_buffer_t *buf, unsigned offs);
 void		 vk_buffer_clear (vk_buffer_t *buffer);
-void		 vk_buffer_print (vk_buffer_t *buffer);
-void		 vk_buffer_print_some (vk_buffer_t *, unsigned lo, unsigned hi);
 void		 vk_buffer_dump (vk_buffer_t *buffer, const char *path);
 void		 vk_buffer_dumpf (vk_buffer_t *buffer, const char *fmt, ...);
 int		 vk_buffer_load_state (vk_buffer_t *buffer, vk_state_t *state);

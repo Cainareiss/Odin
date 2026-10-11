@@ -69,46 +69,6 @@ vk_buffer_le32_put (vk_buffer_t *buf, unsigned size, uint32_t offs, uint64_t val
 	}
 }
 
-static uint64_t
-vk_buffer_be32_get (vk_buffer_t *buf, unsigned size, uint32_t offs)
-{
-	VK_ASSERT (is_size_valid (size));
-	VK_ASSERT ((offs + size - 1) < buf->size);
-
-	switch (size) {
-	case 1:
-		return buf->ptr[offs];
-	case 2:
-		return cpu_to_be16 (*(uint16_t *) &buf->ptr[offs]);
-	case 4:
-		return cpu_to_be32 (*(uint32_t *) &buf->ptr[offs]);
-	default:
-		return cpu_to_be64 (*(uint64_t *) &buf->ptr[offs]);
-	}
-}
-
-static void
-vk_buffer_be32_put (vk_buffer_t *buf, unsigned size, uint32_t offs, uint64_t val)
-{
-	VK_ASSERT (is_size_valid (size));
-	VK_ASSERT ((offs + size - 1) < buf->size);
-
-	switch (size) {
-	case 1:
-		buf->ptr[offs] = (uint8_t) val;
-		break;
-	case 2:
-		*(uint16_t *) &(buf->ptr[offs]) = cpu_to_be16 ((uint16_t) val);
-		break;
-	case 4:
-		*(uint32_t *) &(buf->ptr[offs]) = cpu_to_be32 ((uint32_t) val);
-		break;
-	default:
-		*(uint64_t *) &(buf->ptr[offs]) = cpu_to_be64 ((uint32_t) val);
-		break;
-	}
-}
-
 #ifdef VK_LITTLE_ENDIAN
 #define vk_buffer_native_get vk_buffer_le32_get
 #define vk_buffer_native_put vk_buffer_le32_put
@@ -155,17 +115,6 @@ vk_buffer_le32_new (unsigned size, unsigned alignment)
 	if (buf) {
 		buf->get = vk_buffer_le32_get;
 		buf->put = vk_buffer_le32_put;
-	}
-	return buf;
-}
-
-vk_buffer_t *
-vk_buffer_be32_new (unsigned size, unsigned alignment)
-{
-	vk_buffer_t *buf = vk_buffer_new (size, alignment);
-	if (buf) {
-		buf->get = vk_buffer_be32_get;
-		buf->put = vk_buffer_be32_put;
 	}
 	return buf;
 }
@@ -250,44 +199,6 @@ vk_buffer_clear (vk_buffer_t *buf)
 	VK_ASSERT (buf);
 	VK_ASSERT (buf->ptr);
 	memset (buf->ptr, 0, buf->size);
-}
-
-int
-vk_buffer_copy (vk_buffer_t *dst, vk_buffer_t *src, unsigned offs, unsigned nbytes)
-{
-	VK_ASSERT (dst);
-	VK_ASSERT (src);
-	VK_ASSERT (nbytes > 0);
-
-	/* TODO see games.c */
-	return -1;
-}
-
-int
-vk_buffer_copy_interleave (vk_buffer_t *dst, vk_buffer_t *src, unsigned offs, unsigned nbytes)
-{
-	VK_ASSERT (dst);
-	VK_ASSERT (src);
-	VK_ASSERT (nbytes > 0);
-
-	/* TODO see games.c */
-	return -1;
-}
-
-void
-vk_buffer_print_some (vk_buffer_t *buffer, unsigned lo, unsigned hi)
-{
-	uint8_t *ptr = (uint8_t *) buffer->ptr;
-	unsigned i;
-	for (i = lo; i < hi; i++)
-		printf ("%02X %c\n", ptr[i], ptr[i]);
-}
-
-void
-vk_buffer_print (vk_buffer_t *buffer)
-{
-	if (buffer)
-		vk_buffer_print_some (buffer, 0, buffer->size);
 }
 
 void
