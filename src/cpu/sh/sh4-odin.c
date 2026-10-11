@@ -82,6 +82,7 @@ sh4_odin_pull (sh4_t *ctx)
 		ctx->pm.running[i] = st.pm_running[i] != 0;
 		ctx->pm.counter[i] = st.pm_counter[i];
 	}
+	ctx->over = st.over;
 }
 
 /* And back. */
@@ -133,6 +134,7 @@ sh4_odin_push (sh4_t *ctx)
 		st.pm_running[i] = ctx->pm.running[i];
 		st.pm_counter[i] = ctx->pm.counter[i];
 	}
+	st.over = ctx->over;
 
 	odin_sh4_load_state (ctx->odin, &st);
 }
@@ -432,6 +434,7 @@ sh4o_load_state (vk_device_t *dev, vk_state_t *state)
 	LOAD (ctx->dmac);
 	LOAD (ctx->tmu);
 	LOAD (ctx->pm);
+	LOAD (ctx->over);
 	LOAD (ctx->config);
 
 	sh4_odin_push (ctx);
@@ -456,6 +459,7 @@ sh4o_save_state (vk_device_t *dev, vk_state_t *state)
 	SAVE (ctx->dmac);
 	SAVE (ctx->tmu);
 	SAVE (ctx->pm);
+	SAVE (ctx->over);
 	SAVE (ctx->config);
 
 	return ret;

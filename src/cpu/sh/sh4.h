@@ -195,6 +195,9 @@ struct sh4_t {
 		uint64_t counter[2];
 	} pm;
 
+	/* Cycles the last slice ran past its end */
+	int32_t		over;
+
 	struct {
 		int	(* get)(sh4_t *ctx, uint16_t *val);
 		int	(* put)(sh4_t *ctx, uint16_t val);

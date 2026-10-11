@@ -74,6 +74,7 @@ struct Sh4State {
 	uint32_t tmu_counter[3];
 	uint8_t pm_running[2];
 	uint64_t pm_counter[2];
+	int32_t over;	/* cycles the last slice ran past its end */
 };
 
 /* What the SH-4 sees outside the plain memory given by map_page() and its
@@ -405,6 +406,9 @@ private:
 	Regs m_r;
 	Sh4Run m_run;
 	int32_t m_remaining;
+	/* Cycles the last slice ran past its end: a branch is not cut from
+	 * its delay slot. The next slice has that many less. */
+	int32_t m_over;
 
 	const Block *m_blk;	/* the running block */
 

@@ -67,6 +67,7 @@ typedef struct {
 	uint32_t tmu_counter[3];
 	uint8_t pm_running[2];
 	uint64_t pm_counter[2];
+	int32_t over;	/* cycles the last slice ran past its end */
 } odin_sh4_state_t;
 
 /* `onchip` is the 64 KB image of the on-chip registers, owned and saved by

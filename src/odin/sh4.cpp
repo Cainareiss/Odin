@@ -72,7 +72,7 @@ constexpr Sh4IrqSource SOURCES[Sh4Source::COUNT] = {
 Sh4::Sh4(Sh4Bus &bus, std::span<uint8_t> onchip, bool master, bool little_endian,
          uint32_t clock_mode)
 	: m_bus(bus), m_onchip(onchip), m_master(master), m_little_endian(little_endian),
-	  m_r{}, m_run(Sh4Run::Stopped), m_remaining(0),
+	  m_r{}, m_run(Sh4Run::Stopped), m_remaining(0), m_over(0),
 	  m_blk(nullptr), m_epoch(1), m_code_epoch(PHYSICAL_PAGES, 0),
 	  m_rd(1u << (32 - PAGE_BITS), nullptr), m_wr(1u << (32 - PAGE_BITS), nullptr),
 	  m_page_of(1u << (32 - PAGE_BITS), 0),
@@ -118,6 +118,7 @@ void Sh4::reset(bool hard)
 	std::fill(std::begin(m_tmu_running), std::end(m_tmu_running), false);
 	std::fill(std::begin(m_tmu_counter), std::end(m_tmu_counter), 0xFFFFFFFF);
 	m_cycles = m_at = m_tmu_time = 0;
+	m_over = 0;
 	std::fill(std::begin(m_pm_running), std::end(m_pm_running), false);
 	std::fill(std::begin(m_pm_counter), std::end(m_pm_counter), 0);
 }
@@ -788,11 +789,13 @@ int32_t Sh4::run(int32_t cycles)
 int32_t Sh4::run_part(int32_t cycles, int32_t &used)
 {
 	uint64_t skipped = m_skipped;
+	const int32_t owed = m_over;
 
 	m_slice = cycles;
 	m_at = m_cycles;
 	m_retime = false;
-	m_remaining = cycles;
+	m_remaining = cycles - owed;
+	m_over = 0;
 	new_epoch();
 	m_wait.period = 4;
 	m_wait.pass = 0;
@@ -819,11 +822,14 @@ int32_t Sh4::run_part(int32_t cycles, int32_t &used)
 		run_at(m_r.pc);
 	}
 
-	/* The time of the machine moves by the cycles asked, whatever the
-	 * last instruction ran over. The performance counters follow at the
-	 * end of the slice. HEURISTIC: every mode of a performance counter
-	 * counts cycles. */
+	/* The time of the machine moves by the cycles asked; what the last
+	 * instruction ran over is owed to the next slice. The performance
+	 * counters follow at the end of the slice. HEURISTIC: every mode of a
+	 * performance counter counts cycles. */
 	used = (m_retime && m_remaining > 0 && m_run == Sh4Run::Running) ? cycles - m_remaining : cycles;
+	if (m_remaining < 0) {
+		m_over = -m_remaining;
+	}
 	m_cycles += static_cast<uint64_t>(used);
 	tmu_sync(m_cycles);
 	for (uint32_t i = 0; i < 2; i++) {
@@ -831,7 +837,7 @@ int32_t Sh4::run_part(int32_t cycles, int32_t &used)
 			m_pm_counter[i] = (m_pm_counter[i] + static_cast<uint64_t>(used)) & 0xFFFFFFFFFFFFull;
 		}
 	}
-	m_instructions += static_cast<uint64_t>(cycles - m_remaining) - (m_skipped - skipped);
+	m_instructions += static_cast<uint64_t>(cycles - owed - m_remaining) - (m_skipped - skipped);
 	return -m_remaining;
 }
 
@@ -866,6 +872,7 @@ void Sh4::save(Sh4State &out) const
 	std::copy(std::begin(m_tmu_counter), std::end(m_tmu_counter), std::begin(out.tmu_counter));
 	std::copy(std::begin(m_pm_running), std::end(m_pm_running), std::begin(out.pm_running));
 	std::copy(std::begin(m_pm_counter), std::end(m_pm_counter), std::begin(out.pm_counter));
+	out.over = m_over;
 }
 
 /* The registers are taken as they are: the banks are already where SR and
@@ -905,6 +912,7 @@ void Sh4::load(const Sh4State &in)
 		m_pm_running[i] = in.pm_running[i] != 0;
 		m_pm_counter[i] = in.pm_counter[i];
 	}
+	m_over = in.over;
 }
 
 } /* namespace odin */

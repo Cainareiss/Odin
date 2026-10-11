@@ -57,6 +57,7 @@ static_assert(ODIN_SH4_SOURCES == odin::Sh4Source::COUNT);
 static_assert(ODIN_SH4_PAGE_SIZE == odin::Sh4::PAGE_SIZE);
 static_assert(offsetof(odin_sh4_state_t, irq) == offsetof(odin::Sh4State, irq));
 static_assert(offsetof(odin_sh4_state_t, pm_counter) == offsetof(odin::Sh4State, pm_counter));
+static_assert(offsetof(odin_sh4_state_t, over) == offsetof(odin::Sh4State, over));
 
 } /* namespace */
 

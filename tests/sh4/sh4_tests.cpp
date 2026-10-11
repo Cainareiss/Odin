@@ -629,6 +629,12 @@ void test_branches()
 		eq("bra with one cycle left runs its slot", st.r[1], 1);
 		eq("and reports the cycle run past the end", static_cast<uint32_t>(over), 1);
 		eq("pc at the target", st.pc, CODE + 8);
+		eq("the state keeps the cycle owed", static_cast<uint32_t>(st.over), 1);
+		/* The next slice has one cycle less: two cycles asked, one instruction run. */
+		m.cpu.load(st);
+		over = m.cpu.run(2);
+		eq("the cycle run over is taken from the next slice", m.state().pc, CODE + 10);
+		eq("which ends on time", static_cast<uint32_t>(over), 0);
 	}
 	{
 		/* The same program by slices of every length gives the same state. */
@@ -652,9 +658,11 @@ void test_branches()
 			m.code(CODE, loop);
 			int32_t left = 56;
 			while (left > 0) {
-				/* a slice may run one cycle past its end: the next one is shorter */
+				/* a slice may run one cycle past its end: the core takes it
+				 * from the next one */
 				int32_t now = slice < left ? slice : left;
-				left -= now + m.cpu.run(now);
+				m.cpu.run(now);
+				left -= now;
 			}
 			Sh4State st = m.state();
 			bool same = st.pc == want.pc && st.r[0] == want.r[0] && st.r[1] == want.r[1]
