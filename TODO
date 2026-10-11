@@ -213,8 +213,42 @@ gives it. Measure it on a board: PHARRIER keeps the length of its frames,
 in microseconds, at 0x0C27D088. HEURISTIC: the frame is the same before
 the game sets it, some thirty frames after power-on. Any other screen (the
 24 kHz one) stops the emulator. As Valkyrie had them: the chips run a line
-each in turn, the line counter is written at the end of its line, and an
-interrupt of the AICA is made up at the end of every frame.
+each in turn, and the line counter is written at the end of its line.
+
+Interrupts (hikaru.c, hikaru_update_irqs): the lines of the chips are
+levels, held until the handler of the game has acknowledged the chip.
+IRL1 of the master is the bridge; IRL2 is what the interrupt controller on
+ports B, C and F of the MIE lets through (src/odin/mie_bridge.cpp; the
+lines have the names MAME's hikaru.cpp takes from the schematics), and
+port A of the master reads the same lines. The master sets the mask of the
+MIE to 0xE1: the sound boards do not interrupt the SH-4. The mask of the
+command processor (15000084) cuts the causes whose bit is set: the system
+library writes 0x72 to 15000088, which clears the causes 0, 2, 3 and 7,
+then 0x72 to 15000084. What interrupts is the end of the indirect DMA, the
+end of the analysis of a list, and the causes of the GPU 1A (vertical
+blanking, end of the plot). Bits 1, 3, 4, 5 and 6 of 15000088 are errors
+for PHARRIER, which logs them and recovers (0x0C01B020): none is raised.
+Valkyrie read the mask the other way round, raised bit 1 at every frame
+and made up an interrupt of the AICA at the end of the frame. The NMI pin
+of the slave is bit 0 of the port A of the master, taken at the falling
+edge: the slave clears the NMI flag of its DMAC at each interrupt, where
+MAME names the pin IRL3.
+HEURISTIC: bit 12 of the status of the bridge (04000004) is cleared by
+writing 1, the handler writes back what it read; the second sound board
+shares the line of the first, the handler acknowledges both; nothing
+passes while the MIE does not drive its mask, and pins 4 to 6 of its port
+F ask for nothing while it does not drive them; a pin of port A of an
+SH-4 that is not an output is high; the NMI pin of the master is held
+high; bit 7 of 15000088 follows the causes of 1A000018, which the handler
+acknowledges after it; 15000084 is 0 at reset.
+Not implemented, the emulator stops with a message: the slave pulling its
+line to the master (IRL3 of the master for MAME), a DMA of the bridge of
+the slave. Not wired: the resets on port D of the MIE, whose program pulses
+the one of the slave SH-4 (bit 2) and the one of the sound boards (bit 5)
+some thirty frames after power-on, and the choice of the video clock on
+bits 6 and 7 of that port. Not served: 15002000, which the library reads
+with 1A000024 when a list is not reported done; PHARRIER goes once through
+its recovery at power-on for want of it, and keeps the mask 0x02 from it.
 
 
 SH-4
@@ -248,7 +282,7 @@ time once the scenes are compared again:
   counts cycles, at the end of a slice;
 - a store queue write goes to its target at once, PREF sends nothing;
 - RFCR and WTCSR read as port A; BCR1 resets to 0x80000000 on both CPUs;
-- an interrupt source is cleared when taken; IRQ10 has the code of IRQ11;
+- IRQ10 has the code of IRQ11;
 - the DMAC moves its whole count within the write that starts it;
 - one instruction is one cycle.
 
@@ -256,7 +290,8 @@ Not implemented, the emulator stops with a message: TRAPA, the exceptions
 (illegal instruction, illegal delay slot, address error, FPU disable,
 privilege), MAC.L with S set, a write to the cache or TLB arrays, a timer
 on the RTC or the external clock, clock ratios that FRQCR cannot give in
-whole cycles. The input capture of the timers is absent. SLEEP
+whole cycles, an IRL pin held while ICR.IRLM is clear (the four pins as one
+encoded level). The input capture of the timers is absent. SLEEP
 stops the CPU for good. The MMU and the caches are absent: LDTLB, PREF,
 OCBI, OCBP and OCBWB do nothing, MOVCA.L is a plain store. None of this is
 run by the six games up to their attract loops. Every code of the software
