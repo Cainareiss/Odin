@@ -138,11 +138,8 @@ typedef struct {
 	uint32_t		polytype;
 } hikaru_mesh_t;
 
+/* What the CP sent of a list, as its meshes are drawn */
 typedef struct {
-	vk_renderer_t base;
-
-	hikaru_gpu_t *gpu;
-
 	hikaru_viewport_t	*vp_list;
 	uint32_t		 num_vps;
 
@@ -164,17 +161,26 @@ typedef struct {
 	uint32_t		 num_meshes[8][8];
 	uint32_t		 total_meshes;
 
+	/* The vertices of all the meshes, uploaded in one go */
+	struct {
+		hikaru_vertex_body_t	*all;
+		uint32_t		num, max;
+	} verts;
+} hikaru_list_t;
+
+typedef struct {
+	vk_renderer_t base;
+
+	hikaru_gpu_t *gpu;
+
+	/* The list being built, then drawn */
+	hikaru_list_t		*list;
+
 	struct {
 		unsigned		num_verts, num_tris;
 		hikaru_vertex_t		tmp[4];
 		hikaru_vertex_body_t	all[MAX_VERTICES_PER_MESH];
 	} push;
-
-	/* The vertices of all the meshes of the frame, uploaded in one go */
-	struct {
-		hikaru_vertex_body_t	*all;
-		uint32_t		num, max;
-	} verts;
 
 	struct {
 		hikaru_mesh_t		*current;

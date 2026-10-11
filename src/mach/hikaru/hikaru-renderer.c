@@ -806,7 +806,7 @@ is_faded_by_depth (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 
 	if (mesh->vp_index >= MAX_VIEWPORTS)
 		return false;
-	vp = &hr->vp_list[mesh->vp_index];
+	vp = &hr->list->vp_list[mesh->vp_index];
 
 	return vp->depth.q_behind && vp->depth.q_type == 0 &&
 	       vp->depth.inv_range > 0.0f && vp->depth.near_by_edge > 0.0f &&
@@ -818,9 +818,9 @@ is_faded_by_depth (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 static hikaru_glsl_variant_t
 get_glsl_variant (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 {
-	hikaru_material_t *mat	= &hr->mat_list[mesh->mat_index];
-	hikaru_lightset_t *ls	= &hr->ls_list[mesh->ls_index];
-	hikaru_viewport_t *vp	= &hr->vp_list[mesh->vp_index];
+	hikaru_material_t *mat	= &hr->list->mat_list[mesh->mat_index];
+	hikaru_lightset_t *ls	= &hr->list->ls_list[mesh->ls_index];
+	hikaru_viewport_t *vp	= &hr->list->vp_list[mesh->vp_index];
 	hikaru_glsl_variant_t variant;
 
 	VK_ASSERT (mesh->vp_index != ~0);
@@ -864,7 +864,7 @@ get_glsl_variant (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	 * 825B4340): values 1, 2, 4 and 5 select modes 1 to 4; 3, 6 and 7
 	 * keep the previous mode there, plain texturing here (HEURISTIC). */
 	if (variant.has_texture) {
-		hikaru_texhead_t *th = &hr->tex_list[mesh->tex_index];
+		hikaru_texhead_t *th = &hr->list->tex_list[mesh->tex_index];
 		static const uint8_t modes[8] = { 0, 1, 2, 0, 3, 4, 0, 0 };
 		variant.tex_mode = modes[th->texmode];
 	}
@@ -1076,7 +1076,7 @@ upload_glsl_program (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 static void
 upload_viewport (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 {
-	hikaru_viewport_t *vp = &hr->vp_list[mesh->vp_index];
+	hikaru_viewport_t *vp = &hr->list->vp_list[mesh->vp_index];
 	/* The projection plane is clip.f pixels away on the 640x480 screen
 	 * for x and clip.f2 pixels away for y. */
 	const float kx = vp->clip.n / vp->clip.f;
@@ -1165,7 +1165,7 @@ upload_viewport (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 static void
 upload_modelview (hikaru_renderer_t *hr, hikaru_mesh_t *mesh, unsigned i)
 {
-	hikaru_modelview_t *mv = &hr->mv_list[mesh->mv_index + i];
+	hikaru_modelview_t *mv = &hr->list->mv_list[mesh->mv_index + i];
 	mtx3x3f_t normal;
 
 	if (mesh->mv_index != ~0 &&
@@ -1202,7 +1202,7 @@ upload_modelview (hikaru_renderer_t *hr, hikaru_mesh_t *mesh, unsigned i)
 
 	/* The second modelview, for the vertices that follow it. */
 	if (mesh->mv2_index < MAX_MODELVIEWS)
-		mv = &hr->mv_list[mesh->mv2_index];
+		mv = &hr->list->mv_list[mesh->mv2_index];
 	vk_renderer_compute_normal_matrix (normal, mv->mtx);
 	glUniformMatrix4fv (hr->meshes.locs.u_modelview2, 1, GL_FALSE,
 	                    (const GLfloat *) mv->mtx);
@@ -1223,7 +1223,7 @@ upload_material_texhead (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 		return;
 	hr->meshes.bound_tex_index = mesh->tex_index;
 
-	tex = get_texture (hr, &hr->tex_list[mesh->tex_index]);
+	tex = get_texture (hr, &hr->list->tex_list[mesh->tex_index]);
 
 	glActiveTexture (GL_TEXTURE0 + 0);
 	VK_ASSERT_NO_GL_ERROR ();
@@ -1232,14 +1232,14 @@ upload_material_texhead (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	VK_ASSERT_NO_GL_ERROR ();
 
 	if (tex)
-		set_texhead_sampling (&hr->tex_list[mesh->tex_index]);
+		set_texhead_sampling (&hr->list->tex_list[mesh->tex_index]);
 }
 
 static void
 get_light_ambient (hikaru_renderer_t *hr, hikaru_mesh_t *mesh, float *out)
 {
-	hikaru_viewport_t *vp =
-		(mesh->vp_index == ~0) ? NULL : &hr->vp_list[mesh->vp_index];
+	hikaru_viewport_t *vp = (mesh->vp_index == ~0) ? NULL :
+	                        &hr->list->vp_list[mesh->vp_index];
 
 	if (hr->debug.flags[HR_DEBUG_NO_AMBIENT] || !vp)
 		out[0] = out[1] = out[2] = 0.0f;
@@ -1265,7 +1265,7 @@ get_light_diffuse (hikaru_renderer_t *hr, hikaru_light_t *lit, float *out)
 static void
 upload_lightset (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 {
-	hikaru_lightset_t *ls = &hr->ls_list[mesh->ls_index];
+	hikaru_lightset_t *ls = &hr->list->ls_list[mesh->ls_index];
 	float tmp[4];
 	unsigned i;
 
@@ -1575,19 +1575,19 @@ print_rendstate (hikaru_renderer_t *hr, hikaru_mesh_t *mesh, char *prefix)
 	     hr->gpu->texoffset[2][0], hr->gpu->texoffset[2][1], hr->gpu->texoffset[3][0], hr->gpu->texoffset[3][1]);
 	if (mesh->vp_index < MAX_VIEWPORTS)
 		LOG ("RENDSTATE %s %u vp:  %s", prefix, mesh->num,
-		     get_viewport_str (&hr->vp_list[mesh->vp_index]));
+		     get_viewport_str (&hr->list->vp_list[mesh->vp_index]));
 	if (mesh->mv_index < MAX_MODELVIEWS)
 		LOG ("RENDSTATE %s %u mv:  %s", prefix, mesh->num,
-		     get_modelview_str (&hr->mv_list[mesh->mv_index]));
+		     get_modelview_str (&hr->list->mv_list[mesh->mv_index]));
 	if (mesh->mat_index < MAX_MATERIALS)
 		LOG ("RENDSTATE %s %u mat: %s", prefix, mesh->num,
-		     get_material_str (&hr->mat_list[mesh->mat_index]));
+		     get_material_str (&hr->list->mat_list[mesh->mat_index]));
 	if (mesh->tex_index < MAX_TEXHEADS)
 		LOG ("RENDSTATE %s %u tex: %s", prefix, mesh->num,
-		     get_texhead_str (&hr->tex_list[mesh->tex_index]));
+		     get_texhead_str (&hr->list->tex_list[mesh->tex_index]));
 	if (mesh->ls_index < MAX_LIGHTSETS)
 		LOG ("RENDSTATE %s %u ls:  %s", prefix, mesh->num,
-		     get_lightset_str (&hr->ls_list[mesh->ls_index]));
+		     get_lightset_str (&hr->list->ls_list[mesh->ls_index]));
 }
 
 /* TODO check boundary conditions when nothing is uploaded in a frame. */
@@ -1600,43 +1600,44 @@ update_and_set_rendstate (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 
 	memset ((void *) mesh, 0, sizeof (hikaru_mesh_t));
 
-	LOG ("RENDSTATE updating vp %u/%u", hr->num_vps, MAX_VIEWPORTS);
-	hr->vp_list[hr->num_vps++] = VP0;
-	VK_ASSERT (hr->num_vps < MAX_VIEWPORTS);
+	LOG ("RENDSTATE updating vp %u/%u", hr->list->num_vps, MAX_VIEWPORTS);
+	hr->list->vp_list[hr->list->num_vps++] = VP0;
+	VK_ASSERT (hr->list->num_vps < MAX_VIEWPORTS);
 
-	LOG ("RENDSTATE updating mat %u/%u", hr->num_mats, MAX_MATERIALS);
-	hr->mat_list[hr->num_mats++] = MAT0;
-	VK_ASSERT (hr->num_mats < MAX_MATERIALS);
+	LOG ("RENDSTATE updating mat %u/%u", hr->list->num_mats, MAX_MATERIALS);
+	hr->list->mat_list[hr->list->num_mats++] = MAT0;
+	VK_ASSERT (hr->list->num_mats < MAX_MATERIALS);
 
-	LOG ("RENDSTATE updating tex %u/%u", hr->num_texs, MAX_TEXHEADS);
-	hr->tex_list[hr->num_texs++] = TEX0;
-	VK_ASSERT (hr->num_texs < MAX_TEXHEADS);
+	LOG ("RENDSTATE updating tex %u/%u", hr->list->num_texs, MAX_TEXHEADS);
+	hr->list->tex_list[hr->list->num_texs++] = TEX0;
+	VK_ASSERT (hr->list->num_texs < MAX_TEXHEADS);
 
-	LOG ("RENDSTATE updating ls %u/%u", hr->num_lss, MAX_LIGHTSETS);
-	hr->ls_list[hr->num_lss++] = LS0;
-	VK_ASSERT (hr->num_lss < MAX_LIGHTSETS);
+	LOG ("RENDSTATE updating ls %u/%u", hr->list->num_lss, MAX_LIGHTSETS);
+	hr->list->ls_list[hr->list->num_lss++] = LS0;
+	VK_ASSERT (hr->list->num_lss < MAX_LIGHTSETS);
 
 	/* Copy the per-instance modelviews from last to first. */
 	/* TODO optimize by setting MV.total to 0 (and fix the fallback). */
 	if (MV.total == ~0) {
 		LOG ("RENDSTATE adding no mvs %u/%u [#instances=%u]",
-		     hr->num_mvs, MAX_MODELVIEWS, hr->num_instances);
+		     hr->list->num_mvs, MAX_MODELVIEWS,
+		     hr->list->num_instances);
 
-		mesh->mv_index = hr->num_mvs - 1;
-		mesh->num_instances = hr->num_instances;
+		mesh->mv_index = hr->list->num_mvs - 1;
+		mesh->num_instances = hr->list->num_instances;
 	} else {
 		MV.total = 1;
 
-		mesh->mv_index = hr->num_mvs;
+		mesh->mv_index = hr->list->num_mvs;
 		mesh->num_instances = MV.total;
-		hr->num_instances = MV.total;
+		hr->list->num_instances = MV.total;
 
-		for (i = 0; i < MV.total; i++, hr->num_mvs++) {
+		for (i = 0; i < MV.total; i++, hr->list->num_mvs++) {
 			LOG ("RENDSTATE adding mv %u/%u [#instances=%u]",
-			     hr->num_mvs, MAX_MODELVIEWS, MV.total);
+			     hr->list->num_mvs, MAX_MODELVIEWS, MV.total);
 	
-			VK_ASSERT (hr->num_mvs < MAX_MODELVIEWS);
-			hr->mv_list[hr->num_mvs] = MV.table[i];
+			VK_ASSERT (hr->list->num_mvs < MAX_MODELVIEWS);
+			hr->list->mv_list[hr->list->num_mvs] = MV.table[i];
 		}
 
 		MV.total = 0;
@@ -1644,23 +1645,23 @@ update_and_set_rendstate (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	}
 
 	/* The second modelview (161 with bit 18) is listed when it changes. */
-	if (hr->mv2_index >= MAX_MODELVIEWS ||
-	    memcmp (&hr->mv_list[hr->mv2_index], &MV.second,
+	if (hr->list->mv2_index >= MAX_MODELVIEWS ||
+	    memcmp (&hr->list->mv_list[hr->list->mv2_index], &MV.second,
 	            sizeof (hikaru_modelview_t)) != 0) {
-		VK_ASSERT (hr->num_mvs < MAX_MODELVIEWS);
-		hr->mv2_index = hr->num_mvs;
-		hr->mv_list[hr->num_mvs++] = MV.second;
+		VK_ASSERT (hr->list->num_mvs < MAX_MODELVIEWS);
+		hr->list->mv2_index = hr->list->num_mvs;
+		hr->list->mv_list[hr->list->num_mvs++] = MV.second;
 	}
-	mesh->mv2_index = hr->mv2_index;
+	mesh->mv2_index = hr->list->mv2_index;
 
 	mesh->depth_bias = gpu->depth_bias;
 
-	mesh->vp_index = hr->num_vps - 1;
-	mesh->mat_index = hr->num_mats - 1;
-	mesh->tex_index = hr->num_texs - 1;
-	mesh->ls_index = hr->num_lss - 1;
+	mesh->vp_index = hr->list->num_vps - 1;
+	mesh->mat_index = hr->list->num_mats - 1;
+	mesh->tex_index = hr->list->num_texs - 1;
+	mesh->ls_index = hr->list->num_lss - 1;
 
-	mesh->num = hr->total_meshes++;
+	mesh->num = hr->list->total_meshes++;
 	print_rendstate (hr, mesh, "U");
 }
 
@@ -1774,8 +1775,8 @@ upload_vertex_data (hikaru_renderer_t *hr)
 	glBindVertexArray (hr->meshes.vao);
 	glBindBuffer (GL_ARRAY_BUFFER, hr->meshes.vbo);
 	glBufferData (GL_ARRAY_BUFFER,
-	              sizeof (hikaru_vertex_body_t) * hr->verts.num,
-	              (const GLvoid *) hr->verts.all, GL_DYNAMIC_DRAW);
+	              sizeof (hikaru_vertex_body_t) * hr->list->verts.num,
+	              (const GLvoid *) hr->list->verts.all, GL_DYNAMIC_DRAW);
 	VK_ASSERT_NO_GL_ERROR ();
 
 	VAP (0, 3, GL_FLOAT,          position,  GL_FALSE);
@@ -1797,6 +1798,7 @@ upload_vertex_data (hikaru_renderer_t *hr)
 static void
 store_vertex_data (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 {
+	hikaru_list_t *list = hr->list;
 	uint32_t num;
 
 	VK_ASSERT (mesh);
@@ -1804,18 +1806,18 @@ store_vertex_data (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	mesh->num_tris = hr->push.num_tris;
 
 	num = mesh->num_tris * 3;
-	if (hr->verts.num + num > hr->verts.max) {
-		hr->verts.max = MAX2 (hr->verts.max * 2, hr->verts.num + num);
-		hr->verts.all = (hikaru_vertex_body_t *)
-			realloc (hr->verts.all,
-			         hr->verts.max * sizeof (hikaru_vertex_body_t));
-		VK_ASSERT (hr->verts.all);
+	if (list->verts.num + num > list->verts.max) {
+		list->verts.max = MAX2 (list->verts.max * 2, list->verts.num + num);
+		list->verts.all = (hikaru_vertex_body_t *)
+			realloc (list->verts.all,
+			         list->verts.max * sizeof (hikaru_vertex_body_t));
+		VK_ASSERT (list->verts.all);
 	}
 	if (num)
-		memcpy (&hr->verts.all[hr->verts.num], hr->push.all,
+		memcpy (&list->verts.all[list->verts.num], hr->push.all,
 		        num * sizeof (hikaru_vertex_body_t));
-	mesh->first = hr->verts.num;
-	hr->verts.num += num;
+	mesh->first = list->verts.num;
+	list->verts.num += num;
 }
 
 void
@@ -1834,7 +1836,7 @@ hikaru_renderer_begin_mesh (vk_renderer_t *rend, uint32_t addr,
 	hikaru_gpu_t *gpu = hr->gpu;
 	unsigned vp_index = VP0.depth.func;
 	unsigned polytype = POLY.type;
-	unsigned mesh_index = hr->num_meshes[vp_index][polytype];
+	unsigned mesh_index = hr->list->num_meshes[vp_index][polytype];
 	hikaru_mesh_t *mesh;
 
 	VK_ASSERT (hr);
@@ -1844,10 +1846,10 @@ hikaru_renderer_begin_mesh (vk_renderer_t *rend, uint32_t addr,
 		return;
 
 	/* Create a new mesh. */
-	mesh = &hr->mesh_list[vp_index][polytype][mesh_index++];
+	mesh = &hr->list->mesh_list[vp_index][polytype][mesh_index++];
 	VK_ASSERT (mesh_index < MAX_MESHES);
 
-	hr->num_meshes[vp_index][polytype] = mesh_index;
+	hr->list->num_meshes[vp_index][polytype] = mesh_index;
 
 	/* Make the mesh current and set the rendering state. */
 	hr->meshes.current = mesh;
@@ -1898,7 +1900,7 @@ set_material_blend (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	unsigned mode = 0;
 
 	if (mesh->mat_index < MAX_MATERIALS)
-		mode = hr->mat_list[mesh->mat_index].blending_mode;
+		mode = hr->list->mat_list[mesh->mat_index].blending_mode;
 	hr->meshes.blend_mode = mode;
 	hr->meshes.weigh_by_alpha = (mode == 0 || mode == 2);
 	glBlendFuncSeparate (factors[mode][0], factors[mode][1],
@@ -2122,8 +2124,8 @@ draw_translucent_meshes (hikaru_renderer_t *hr, hikaru_mesh_t *meshes,
 static void
 draw_meshes_for_polytype (hikaru_renderer_t *hr, unsigned vpi, int polytype)
 {
-	hikaru_mesh_t *meshes = hr->mesh_list[vpi][polytype];
-	unsigned num = hr->num_meshes[vpi][polytype];
+	hikaru_mesh_t *meshes = hr->list->mesh_list[vpi][polytype];
+	unsigned num = hr->list->num_meshes[vpi][polytype];
 	int j;
 
 	if (num == 0)
@@ -2244,19 +2246,71 @@ draw_scene (hikaru_renderer_t *hr)
 }
 
 static void
-destroy_3d_state (hikaru_renderer_t *hr)
+destroy_list (hikaru_list_t *list)
 {
 	unsigned vpi, i;
 
-	free (hr->vp_list);
-	free (hr->mv_list);
-	free (hr->mat_list);
-	free (hr->tex_list);
-	free (hr->ls_list);
+	if (!list)
+		return;
+
+	free (list->vp_list);
+	free (list->mv_list);
+	free (list->mat_list);
+	free (list->tex_list);
+	free (list->ls_list);
 
 	for (vpi = 0; vpi < 8; vpi++)
 		for (i = 0; i < 8; i++)
-			free (hr->mesh_list[vpi][i]);
+			free (list->mesh_list[vpi][i]);
+
+	free (list->verts.all);
+	free (list);
+}
+
+static hikaru_list_t *
+new_list (void)
+{
+	hikaru_list_t *list = ALLOC (hikaru_list_t);
+	unsigned vpi, i;
+
+	if (!list)
+		return NULL;
+
+	list->vp_list = (hikaru_viewport_t *)
+			malloc (sizeof (hikaru_viewport_t) * MAX_VIEWPORTS);
+	list->mv_list = (hikaru_modelview_t *)
+			malloc (sizeof (hikaru_modelview_t) * MAX_MODELVIEWS);
+	list->mat_list = (hikaru_material_t *)
+			malloc (sizeof (hikaru_material_t) * MAX_MATERIALS);
+	list->tex_list = (hikaru_texhead_t *)
+			malloc (sizeof (hikaru_texhead_t) * MAX_TEXHEADS);
+	list->ls_list = (hikaru_lightset_t *)
+			malloc (sizeof (hikaru_lightset_t) * MAX_LIGHTSETS);
+
+	if (!list->vp_list || !list->mv_list || !list->mat_list ||
+	    !list->tex_list || !list->ls_list)
+		goto fail;
+
+	for (vpi = 0; vpi < 8; vpi++) {
+		for (i = 0; i < 8; i++) {
+			list->mesh_list[vpi][i] =
+				(hikaru_mesh_t *) malloc (sizeof (hikaru_mesh_t) * MAX_MESHES);
+			if (!list->mesh_list[vpi][i])
+				goto fail;
+		}
+	}
+
+	return list;
+
+fail:
+	destroy_list (list);
+	return NULL;
+}
+
+static void
+destroy_3d_state (hikaru_renderer_t *hr)
+{
+	destroy_list (hr->list);
 
 	vk_renderer_destroy_program (hr->meshes.program);
 	VK_ASSERT_NO_GL_ERROR ();
@@ -2266,38 +2320,14 @@ destroy_3d_state (hikaru_renderer_t *hr)
 		glDeleteVertexArrays (1, &hr->meshes.vao);
 		glDeleteBuffers (1, &hr->meshes.vbo);
 	}
-	free (hr->verts.all);
 }
 
 static int
 build_3d_state (hikaru_renderer_t *hr)
 {
-	unsigned vpi, i;
+	hr->list = new_list ();
 
-	hr->vp_list = (hikaru_viewport_t *)
-			malloc (sizeof (hikaru_viewport_t) * MAX_VIEWPORTS);
-	hr->mv_list = (hikaru_modelview_t *)
-			malloc (sizeof (hikaru_modelview_t) * MAX_MODELVIEWS);
-	hr->mat_list = (hikaru_material_t *)
-			malloc (sizeof (hikaru_material_t) * MAX_MATERIALS);
-	hr->tex_list = (hikaru_texhead_t *)
-			malloc (sizeof (hikaru_texhead_t) * MAX_TEXHEADS);
-	hr->ls_list = (hikaru_lightset_t *)
-			malloc (sizeof (hikaru_lightset_t) * MAX_LIGHTSETS);
-
-	if (!hr->vp_list || !hr->mv_list || !hr->mat_list || !hr->tex_list || !hr->ls_list)
-		return -1;
-
-	for (vpi = 0; vpi < 8; vpi++) {
-		for (i = 0; i < 8; i++) {
-			hr->mesh_list[vpi][i] =
-				(hikaru_mesh_t *) malloc (sizeof (hikaru_mesh_t) * MAX_MESHES);
-			if (!hr->mesh_list[vpi][i])
-				return -1;
-		}
-	}
-
-	return 0;
+	return hr->list ? 0 : -1;
 }
 
 /****************************************************************************
@@ -2925,19 +2955,19 @@ hikaru_renderer_begin_frame (vk_renderer_t *renderer)
 	hr->meshes.scissor_vp_index = ~0;
 	hr->meshes.bound_tex_index = ~0;
 
-	hr->num_vps = 0;
-	hr->num_mvs = 0;
-	hr->num_instances = 0;
-	hr->verts.num = 0;
-	hr->mv2_index = ~0;
-	hr->num_mats = 0;
-	hr->num_texs = 0;
-	hr->num_lss = 0;
+	hr->list->num_vps = 0;
+	hr->list->num_mvs = 0;
+	hr->list->num_instances = 0;
+	hr->list->verts.num = 0;
+	hr->list->mv2_index = ~0;
+	hr->list->num_mats = 0;
+	hr->list->num_texs = 0;
+	hr->list->num_lss = 0;
 
 	for (vpi = 0; vpi < 8; vpi++)
 		for (i = 0; i < 8; i++)
-			hr->num_meshes[vpi][i] = 0;
-	hr->total_meshes = 0;
+			hr->list->num_meshes[vpi][i] = 0;
+	hr->list->total_meshes = 0;
 
 	update_debug_flags (hr);
 
@@ -2979,11 +3009,11 @@ hikaru_renderer_end_frame (vk_renderer_t *renderer)
 	VK_ASSERT_NO_GL_ERROR ();
 
 	LOG (" ==== RENDSTATE STATISTICS ==== ");
-	LOG ("  vp  : %u", hr->num_vps);
-	LOG ("  mv  : %u", hr->num_mvs);
-	LOG ("  mat : %u", hr->num_mats);
-	LOG ("  tex : %u", hr->num_texs);
-	LOG ("  ls  : %u", hr->num_lss);
+	LOG ("  vp  : %u", hr->list->num_vps);
+	LOG ("  mv  : %u", hr->list->num_mvs);
+	LOG ("  mat : %u", hr->list->num_mats);
+	LOG ("  tex : %u", hr->list->num_texs);
+	LOG ("  ls  : %u", hr->list->num_lss);
 }
 
 static void
