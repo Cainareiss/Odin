@@ -1203,16 +1203,11 @@ I (0x161)
 			break;
 		}
 
-		/* First element during upload. */
-		if (elem == 3) {
-			unsigned i, j;
-
-			for (i = 0; i < 4; i++)
-				for (j = 0; j < 4; j++)
-					mv->mtx[i][j] = (i == j) ? 1.0f : 0.0;
-		}
-
-		/* We store the columns as rows to facilitate the
+		/* A row alone leaves the others as they are: PHARRIER sends
+		 * the four rows with the first character of a "+50", scaled
+		 * by 0.1875, then the last row only for the next ones.
+		 *
+		 * We store the columns as rows to facilitate the
 		 * translation to GL column-major convertion in the
 		 * renderer. */
 		mv->mtx[elem][0] = *(float *) &inst[1];
