@@ -381,11 +381,21 @@ Triangles are wound after the vertex order and the winding bit, as the
 SGNASCAR cabinet shows; the X360 port winds them after the vertex normals,
 which is the same for von4 only.
 
-Check the framebuffer blending (instructions 781, 181) on more footage: a
-2D layer as a blender input is done for the PHARRIER logo screens only.
-Between the two 3D buffers the blender output is written back, which
-gives the motion blur of the BRAVEFF and PHARRIER cabinets (HEURISTIC:
-read from the footage, the trails of the stars).
+The framebuffer blender (instructions 781, 181). Between the 3D buffers it
+works as Sega draws it in US patent 6,549,209 (figures 6, 10 and 11): the
+list is drawn apart, blended with the buffer the 781 names and the output
+is what the buffer of the list keeps, which gives the motion blur of the
+BRAVEFF and PHARRIER cabinets; the rate counts one more from 0x80 up and
+each product loses its fraction before the sum; a buffer blended with
+itself keeps what it held (BRAVEFF, 781 = 0505 at rate FF: on the cabinet
+the screen stays black until the city and its text fade in together).
+HEURISTIC: the patent describes an example and nothing else tells that the
+chip rounds the same way (a picture under the blur is 1 to 25 levels of
+255 darker than with a rounded blend); the alpha of the buffer goes through
+the blender like a colour; the emphasis bit of the patent, which keeps a
+pixel out of the blend, is not looked for. A 2D layer as a blender input is
+done for the PHARRIER logo screens only, on the screen, with the rounding
+of the host: check it on more footage.
 
 The polygons of a list show two frames after its launch, once the next
 list is launched; the clear color is laid under them on the screen, at
