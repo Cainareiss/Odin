@@ -462,7 +462,7 @@ hikaru_sh4_clock (void)
 	return clock;
 }
 #define HIKARU_SH4_CLOCK (hikaru_sh4_clock ())
-#define cycles_per_line (HIKARU_SH4_CLOCK / (60 * 480))
+/* #define cycles_per_line (HIKARU_SH4_CLOCK / (60 * 480)) */
 
 static void
 hikaru_run_cycles (vk_machine_t *mach, int cycles)
@@ -497,25 +497,44 @@ hikaru_run_cycles (vk_machine_t *mach, int cycles)
  * order. */
 enum {
 	EVENT_LINE,		/* the end of a line */
-	EVENT_VBLANK_IN,
-	EVENT_FRAME_END,
 };
 
-/* HEURISTIC, the frame of Valkyrie: the games set 528 lines (1A000084). */
-#define LINES_SHOWN	480
-#define LINES_PER_FRAME	(480 + 64)
+/* The dot clock of the 31 kHz screen, which draws the 818 dots of a line.
+ * HEURISTIC: the value of MAME (hikaru.cpp, 51894580 / 2), which does not
+ * say where it comes from; no game sets or reads it. It gives 60.08 frames
+ * a second. */
+#define DOT_CLOCK	25947290
 
-/* Dates the events of the frame that starts now. */
+/* The cycles of the next line. A line is not a whole number of cycles: the
+ * rest is kept. */
+static uint64_t
+hikaru_line_cycles (hikaru_t *hikaru)
+{
+	const uint64_t n = (uint64_t) hikaru->dots_per_line * HIKARU_SH4_CLOCK +
+	                   hikaru->line_rest;
+
+	hikaru->line_rest = (uint32_t) (n % DOT_CLOCK);
+	return n / DOT_CLOCK;
+}
+
+/* Starts a frame with the lines the game has set by now. The line counter
+ * of the GPU is 0 on the first line shown (PHARRIER waits for 240 to 479,
+ * @0C01C106): a frame goes from that line to the end of the blanking. */
 static void
 hikaru_begin_frame (hikaru_t *hikaru)
 {
-	const uint64_t now = odin_scheduler_now (hikaru->sched);
-	const uint64_t line = (uint64_t) cycles_per_line;
+	hikaru_gpu_get_frame_size (hikaru->gpu, &hikaru->dots_per_line,
+	                           &hikaru->lines_per_frame, &hikaru->lines_shown);
+	if (hikaru->dots_per_line != 818)
+		VK_ABORT ("a screen of %u dots per line: only the 31 kHz one (818) is known",
+		          hikaru->dots_per_line);
+	if (hikaru->lines_shown == 0 || hikaru->lines_shown >= hikaru->lines_per_frame)
+		VK_ABORT ("a screen of %u lines with %u shown",
+		          hikaru->lines_per_frame, hikaru->lines_shown);
 
 	hikaru->line = 0;
-	odin_scheduler_set (hikaru->sched, EVENT_LINE, now + line);
-	odin_scheduler_set (hikaru->sched, EVENT_VBLANK_IN, now + LINES_SHOWN * line);
-	odin_scheduler_set (hikaru->sched, EVENT_FRAME_END, now + LINES_PER_FRAME * line);
+	odin_scheduler_set (hikaru->sched, EVENT_LINE,
+	                    odin_scheduler_now (hikaru->sched) + hikaru_line_cycles (hikaru));
 }
 
 static int
@@ -553,26 +572,25 @@ hikaru_run_frame (vk_machine_t *mach)
 		odin_scheduler_advance (hikaru->sched, next);
 
 		while ((event = odin_scheduler_take (hikaru->sched)) >= 0) {
-			switch (event) {
-			case EVENT_LINE:
-				hikaru_gpu_hblank_in (hikaru->gpu, hikaru->line++);
-				if (hikaru->line < LINES_PER_FRAME)
-					odin_scheduler_set (hikaru->sched, EVENT_LINE,
-					                    next + (uint64_t) cycles_per_line);
-				break;
-			case EVENT_VBLANK_IN:
+			VK_ASSERT (event == EVENT_LINE);
+
+			hikaru_gpu_hblank_in (hikaru->gpu, hikaru->line++);
+			if (hikaru->line == hikaru->lines_shown) {
 				VK_LOG (" *** VBLANK-IN  %s ***", vk_machine_get_debug_string (mach));
 				hikaru_gpu_vblank_in (hikaru->gpu);
-				break;
-			case EVENT_FRAME_END:
-				/* this may actually be an hblank-out IRQ */
-				hikaru_gpu_vblank_out (hikaru->gpu);
-
-				/* XXX AICA */
-				hikaru_raise_irq (mach, SH4_IESOURCE_IRL2, 0x80);
-				done = true;
-				break;
 			}
+			if (hikaru->line < hikaru->lines_per_frame) {
+				odin_scheduler_set (hikaru->sched, EVENT_LINE,
+				                    next + hikaru_line_cycles (hikaru));
+				continue;
+			}
+
+			/* this may actually be an hblank-out IRQ */
+			hikaru_gpu_vblank_out (hikaru->gpu);
+
+			/* XXX AICA */
+			hikaru_raise_irq (mach, SH4_IESOURCE_IRL2, 0x80);
+			done = true;
 		}
 	}
 	hikaru_begin_frame (hikaru);
@@ -602,6 +620,7 @@ hikaru_reset (vk_machine_t *mach, vk_reset_type_t type)
 		odin_actel_m1_reset (hikaru->actel);
 
 	odin_scheduler_reset (hikaru->sched);
+	hikaru->line_rest = 0;
 	hikaru_begin_frame (hikaru);
 }
 
@@ -683,13 +702,14 @@ hikaru_load_state (vk_machine_t *mach, vk_state_t *state)
 
 	ret |= hikaru_renderer_load_state (mach->renderer, state);
 
-	/* A state is taken at the end of a frame. */
-	odin_scheduler_reset (hikaru->sched);
-	odin_scheduler_advance (hikaru->sched, (uint64_t) mach->frame *
-	                        LINES_PER_FRAME * (uint64_t) cycles_per_line);
+	LOAD_CHIP (odin_scheduler, hikaru->sched);
 	sh4_set_time (hikaru->sh_m, odin_scheduler_now (hikaru->sched));
 	sh4_set_time (hikaru->sh_s, odin_scheduler_now (hikaru->sched));
-	hikaru_begin_frame (hikaru);
+	LOAD (hikaru->line);
+	LOAD (hikaru->dots_per_line);
+	LOAD (hikaru->lines_per_frame);
+	LOAD (hikaru->lines_shown);
+	LOAD (hikaru->line_rest);
 
 	return ret;
 }
@@ -718,6 +738,13 @@ hikaru_save_state (vk_machine_t *mach, vk_state_t *state)
 		SAVE_CHIP (odin_actel_m1, hikaru->actel);
 
 	ret |= hikaru_renderer_save_state (mach->renderer, state);
+
+	SAVE_CHIP (odin_scheduler, hikaru->sched);
+	SAVE (hikaru->line);
+	SAVE (hikaru->dots_per_line);
+	SAVE (hikaru->lines_per_frame);
+	SAVE (hikaru->lines_shown);
+	SAVE (hikaru->line_rest);
 
 	return ret;
 }

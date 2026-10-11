@@ -56,9 +56,12 @@ typedef struct {
 
 	vk_cpu_t *sh_current;
 
-	/* The time of the machine, in SH-4 cycles, and the line being drawn */
+	/* The time of the machine, in SH-4 cycles, and the frame being
+	 * drawn, see hikaru_begin_frame */
 	odin_scheduler_t *sched;
 	unsigned line;
+	unsigned dots_per_line, lines_per_frame, lines_shown;
+	uint32_t line_rest;	/* of a cycle, in dot clocks */
 
 	/* Devices */
 	vk_device_t *memctl_m;
