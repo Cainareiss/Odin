@@ -204,6 +204,18 @@ write, like MAME. HEURISTIC: the real 315-6154 takes time, but games
 refill the source buffer right after starting a transfer (von4 model
 loader at 0x0C055FD4), so it must at least run ahead of the SH-4.
 
+Frame (hikaru.c): the machine keeps its time in SH-4 cycles
+(src/odin/scheduler.cpp) and cuts the frame in the lines the game sets:
+818 dots a line, 528 lines, 480 of them shown (1A000080, 1A000084,
+1A00008C). HEURISTIC: the dot clock is the value of MAME, 25.94729 MHz,
+which gives 60.08 frames a second; no game sets or reads it and no manual
+gives it. Measure it on a board: PHARRIER keeps the length of its frames,
+in microseconds, at 0x0C27D088. HEURISTIC: the frame is the same before
+the game sets it, some thirty frames after power-on. Any other screen (the
+24 kHz one) stops the emulator. As Valkyrie had them: the chips run a line
+each in turn, the line counter is written at the end of its line, and an
+interrupt of the AICA is made up at the end of every frame.
+
 
 SH-4
 ----
@@ -238,8 +250,7 @@ time once the scenes are compared again:
 - RFCR and WTCSR read as port A; BCR1 resets to 0x80000000 on both CPUs;
 - an interrupt source is cleared when taken; IRQ10 has the code of IRQ11;
 - the DMAC moves its whole count within the write that starts it;
-- one instruction is one cycle; a frame is 544 lines where the games
-  program 528 (hikaru.c).
+- one instruction is one cycle.
 
 Not implemented, the emulator stops with a message: TRAPA, the exceptions
 (illegal instruction, illegal delay slot, address error, FPU disable,
