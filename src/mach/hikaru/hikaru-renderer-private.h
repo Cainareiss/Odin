@@ -234,6 +234,7 @@ typedef struct {
 			GLuint nodes;
 			GLuint count[8];	/* one per viewport */
 			uint32_t max;		/* nodes */
+			bool test;		/* ODIN_LISTS_TEST */
 			GLuint below;		/* the colour under them */
 		} lists;
 		/* The list drawn last, until its translucent fragments are

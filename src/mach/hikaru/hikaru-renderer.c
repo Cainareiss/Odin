@@ -2644,6 +2644,8 @@ build_fb_state (hikaru_renderer_t *hr)
 	glBindBuffer (GL_SHADER_STORAGE_BUFFER, 0);
 	glGenBuffers (1, &hr->framebuffer.lists.nodes);
 	size_lists (hr, 4 * 640 * 480);
+	hr->framebuffer.lists.test =
+		vk_util_get_int_option ("ODIN_LISTS_TEST", 0) != 0;
 	VK_ASSERT_NO_GL_ERROR ();
 
 	/* Create the VAO/VBO. */
@@ -2960,6 +2962,13 @@ draw (hikaru_renderer_t *hr)
 		hr->framebuffer.last.factor = factor;
 		hr->framebuffer.last.slot = num % 3;
 		hr->framebuffer.last.views = 0;
+
+		/* ODIN_LISTS_TEST=1 leaves no room for the translucent
+		 * fragments: every list that has some is drawn again, and
+		 * must come out the same. */
+		if (hr->framebuffer.lists.test)
+			size_lists (hr, 1);
+
 		draw_list (hr);
 
 		if (num > 0)
