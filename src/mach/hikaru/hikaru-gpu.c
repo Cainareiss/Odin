@@ -475,8 +475,11 @@ hikaru_gpu_update_irq_status (hikaru_gpu_t *gpu)
 	               ((REG1A (0x14) & 1) << 3);
 
 	/* Update 15000088 bit 7 from 1A000018 */
+	/* Valkyrie left it set until written:
 	if (REG1A (0x18) & 0xF)
 		REG15 (0x88) |= 0x80;
+	*/
+	REG15 (0x88) = (REG15 (0x88) & ~0x80) | ((REG1A (0x18) & 0xF) ? 0x80 : 0);
 
 	/* Valkyrie sent a pulse:
 	 * Raise IRL2 and lower bit 5 of the PDTRA, if the IRQs are
