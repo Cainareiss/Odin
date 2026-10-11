@@ -230,6 +230,15 @@ void Sh4::update_irqs()
 			return;
 		}
 	}
+	/* The IRL pins are four requests with ICR.IRLM, one encoded level
+	 * without (19.2.2). */
+	if (!(icr & 0x80)) {
+		for (uint32_t i = Sh4Source::IRL0; i <= Sh4Source::IRL3; i++) {
+			if (m_intc.source[i].raised) {
+				fatal("IRL pin held while ICR.IRLM is clear, not implemented", i);
+			}
+		}
+	}
 	if (m_r.sr & SR_BL) {
 		return;
 	}

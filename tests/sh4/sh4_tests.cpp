@@ -186,6 +186,10 @@ public:
 		std::memcpy(&v, &ram[addr - RAM], 4);
 		return v;
 	}
+	void irlm()	/* ICR.IRLM: the IRL pins are four requests */
+	{
+		onchip[0xD000] |= 0x80;
+	}
 	uint32_t reg32(uint32_t addr) const	/* an on-chip register, as the image keeps it */
 	{
 		uint32_t at = ((addr >> 8) & 0xFF00) | (addr & 0xFF), v;
@@ -858,6 +862,7 @@ void test_interrupts()
 	g_test = "interrupts";
 	{
 		Machine m;
+		m.irlm();
 		m.code(CODE, {NOP, NOP, NOP, NOP});
 		m.code(RAM + 0x600, {0xE155, NOP, NOP});	/* handler: mov #0x55,r1 */
 		Sh4State st = m.state();
@@ -879,6 +884,7 @@ void test_interrupts()
 	}
 	{
 		Machine m;
+		m.irlm();
 		m.code(CODE, {NOP, NOP, NOP, NOP});
 		Sh4State st = m.state();
 		st.sr = SR_MD | 0x70;	/* mask 7: IRL2 (7) waits, IRL0 (13) passes */
@@ -894,6 +900,7 @@ void test_interrupts()
 	}
 	{
 		Machine m;
+		m.irlm();
 		m.code(CODE, {NOP, NOP, NOP, NOP});
 		Sh4State st = m.state();
 		st.sr = SR_MD | SR_BL;
@@ -916,6 +923,7 @@ void test_interrupts()
 		/* A request lasts as long as its source holds it (19.2.2): the handler, add #1,r1; rte, runs
 		 * again and again until the line is let go. */
 		Machine m;
+		m.irlm();
 		m.code(CODE, {NOP, NOP, NOP, NOP});
 		m.code(RAM + 0x600, {0x7101, 0x002B, NOP});
 		Sh4State st = m.state();
@@ -1137,6 +1145,7 @@ void test_on_chip()
 	{
 		/* An interrupt raised by a device is taken before the next instruction. */
 		Machine m;
+		m.irlm();
 		m.put32(DATA, DEVICE);
 		m.code(RAM + 0x600, {0xE777, NOP});	/* mov #0x77,r7 */
 		m.on_device = [&m] { m.cpu.set_irq(Source::IRL0, true); };
