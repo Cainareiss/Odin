@@ -243,12 +243,26 @@ high; bit 7 of 15000088 follows the causes of 1A000018, which the handler
 acknowledges after it; 15000084 is 0 at reset.
 Not implemented, the emulator stops with a message: the slave pulling its
 line to the master (IRL3 of the master for MAME), a DMA of the bridge of
-the slave. Not wired: the resets on port D of the MIE, whose program pulses
-the one of the slave SH-4 (bit 2) and the one of the sound boards (bit 5)
-some thirty frames after power-on, and the choice of the video clock on
-bits 6 and 7 of that port. Not served: 15002000, which the library reads
-with 1A000024 when a list is not reported done; PHARRIER goes once through
-its recovery at power-on for want of it, and keeps the mask 0x02 from it.
+the slave.
+
+Resets (hikaru.c, hikaru_set_resets): the master drives port D of the MIE
+through its window. The system library pulses bit 5 and the sound boards
+are reset, their clock aside. The BOOTROM pulses bit 2, the reset of the
+slave SH-4, as soon as the MIE gives its bus (frame 27): that one is NOT
+done. The slave needs a frame and a half to start again, then clears the
+word where the master leaves its first job; the master writes that word
+without waiting, after it has copied the game from the ROM board, which
+takes no time here: BRAVEFF and PHARRIER write it a frame too early and
+never start. It waits for the transfers of the bridge to take their time.
+The other resets (system, GPU, CN4, bridge) and a video clock other than
+the one the games choose (bits 6 and 7 set) stop the emulator. HEURISTIC:
+the lines are high while the MIE does not drive the port.
+
+Main board: bit 0 of 15002000 reads 0, which makes Odin the second main
+board, 837-14097, for the BOOTROM (it prints the name in its system menu).
+On the first, 837-13402, the bit is set a frame after a list is started,
+and the library also takes it, with bit 0 of 1A000024 clear, for a list
+that is done. What else differs between the two boards is not known.
 
 
 SH-4
