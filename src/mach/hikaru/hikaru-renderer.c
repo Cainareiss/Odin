@@ -127,13 +127,37 @@ is_texhead_eq (hikaru_renderer_t *hr,
 	       (a->sloty == b->sloty);
 }
 
+/* A texture the graphics card may still be drawing with is not deleted at
+ * once: the driver would wait for the card. It goes at the next frame. */
 static void
-destroy_texture (hikaru_texture_t *tex)
+bury_texture (hikaru_renderer_t *hr, GLuint id)
 {
-	if (tex->id) {
-		glDeleteTextures (1, &tex->id);
-		VK_ASSERT_NO_GL_ERROR ();
+	if (!id)
+		return;
+	if (hr->textures.num_dead == hr->textures.max_dead) {
+		hr->textures.max_dead = MAX2 (hr->textures.max_dead * 2, 256);
+		hr->textures.dead = (GLuint *)
+			realloc (hr->textures.dead,
+			         hr->textures.max_dead * sizeof (GLuint));
+		VK_ASSERT (hr->textures.dead);
 	}
+	hr->textures.dead[hr->textures.num_dead++] = id;
+}
+
+static void
+delete_dead_textures (hikaru_renderer_t *hr)
+{
+	if (!hr->textures.num_dead)
+		return;
+	glDeleteTextures (hr->textures.num_dead, hr->textures.dead);
+	VK_ASSERT_NO_GL_ERROR ();
+	hr->textures.num_dead = 0;
+}
+
+static void
+destroy_texture (hikaru_renderer_t *hr, hikaru_texture_t *tex)
+{
+	bury_texture (hr, tex->id);
 	memset ((void *) tex, 0, sizeof (hikaru_texture_t));
 }
 
@@ -369,11 +393,11 @@ get_texture (hikaru_renderer_t *hr, hikaru_texhead_t *th)
 		return cached;
 	LOG ("TEXUPLOAD %s", get_texhead_str (th));
 
-	destroy_texture (cached);
+	destroy_texture (hr, cached);
 
 	id = upload_texture (hr, th);
 	if (!id) {
-		destroy_texture (cached);
+		destroy_texture (hr, cached);
 		return NULL;
 	}
 
@@ -396,7 +420,7 @@ clear_texcache_bank (hikaru_renderer_t *hr, unsigned bank)
 	/* Free all allocated surfaces. */
 	for (y = 0; y < 0x40; y++)
 		for (x = 0; x < 0x80; x++)
-			destroy_texture (&hr->textures.cache[bank][y][x]);
+			destroy_texture (hr, &hr->textures.cache[bank][y][x]);
 
 	/* Zero out the cache itself, to avoid spurious hits. Note that
 	 * texture RAM origin is (80,C0), so (slotx, sloty) will never match
@@ -2712,6 +2736,8 @@ draw (hikaru_renderer_t *hr)
 
 	hr->framebuffer.launched = 0;
 
+	delete_dead_textures (hr);
+
 	/* The picture plotted during the last frame. */
 	if (hr->framebuffer.next >= 0) {
 		hr->framebuffer.shown = hr->framebuffer.next;
@@ -2880,12 +2906,8 @@ draw (hikaru_renderer_t *hr)
 	VK_ASSERT_NO_GL_ERROR ();
 
 
-	/* Get rid of the layer texture. */
-	if (layer1)
-		glDeleteTextures (1, &layer1);
-	if (layer2)
-		glDeleteTextures (1, &layer2);
-	VK_ASSERT_NO_GL_ERROR ();
+	bury_texture (hr, layer1);
+	bury_texture (hr, layer2);
 }
 
 /****************************************************************************
@@ -3064,6 +3086,8 @@ hikaru_renderer_destroy (vk_renderer_t **renderer_)
 		destroy_fb_state (hr);
 
 		hikaru_renderer_invalidate_texcache (*renderer_, NULL);
+		delete_dead_textures (hr);
+		free (hr->textures.dead);
 	}
 }
 

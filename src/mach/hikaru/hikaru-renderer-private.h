@@ -202,6 +202,9 @@ typedef struct {
 	struct {
 		hikaru_texture_t cache[2][0x40][0x80];
 		bool is_clear[2];
+		/* No longer wanted, see bury_texture */
+		GLuint *dead;
+		uint32_t num_dead, max_dead;
 	} textures;
 
 	struct {
