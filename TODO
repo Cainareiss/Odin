@@ -486,6 +486,11 @@ byte of the 091 colour word is not used either; BRAVEFF sets it in the
 materials it builds with A91 and C91, one-word forms of A81 and C81 whose
 bit 4 is not understood.
 
+006 and 046 do nothing. Every game sends the pair in the lists of its first
+frames; RACER wraps its models of one flat quad with them, the 400 stars of
+its opening text among them, which match the cabinet as they are. No list
+of the attract loops shows what they change.
+
 Implement proper model caching using VBOs.
 
 

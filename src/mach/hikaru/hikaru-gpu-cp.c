@@ -2120,9 +2120,15 @@ D (0x051)
 	}
 }
 
-/* 006	Light: Unknown
+/* 006	Unknown
  *
  *	-------- -------- -------o oooooooo
+ *
+ * Every game sends 006 then 046 with n set in the lists of its first
+ * frames, after an identity modelview. RACER alone sends them later: its
+ * models of one flat quad open with 006 and an identity local matrix and
+ * close with 046, n clear. The 400 stars behind its opening text are such
+ * models, and they match the cabinet with both ignored.
  */
 
 I (0x006)
@@ -2136,11 +2142,13 @@ D (0x006)
 	DISASM ("lit: unknown");
 }
 
-/* 046	Light: Unknown
+/* 046	Unknown
  *
  *	-------- -------n ----oooo oooooooo
  *
  * n = Unknown
+ *
+ * See 006.
  */
 
 I (0x046)
