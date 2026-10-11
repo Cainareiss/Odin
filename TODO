@@ -13,12 +13,16 @@ For later, write an event-driven scheduler.
 
 I'm seriously thinking about slowling "porting" valkyrie to C++... Mmm.
 
-Speed: the frames are held at 60 per second (-u lifts the limit) and the
-heavy scenes reach it on a Ryzen 5 5600X with a GeForce RTX 3080: about 152
-frames per second in PODRACE, 126 in SGNASCAR, 80 in AIRTRIX, 78 in PHARRIER,
-67 in BRAVEFF and 61 in VON4. A frame of those scenes takes 7 to 16 ms: the
-renderer 2 to 6, the two SH-4 1 to 5 (1 to 2 million instructions run a
-frame, about 3 ns each), the two ARM7 1.5 to 5. A slower graphics card is
+Speed: the frames are held at 60 per second (-u lifts the limit). On a
+Ryzen 5 5600X with a GeForce RTX 3080 the whole demo loops, from power-on
+and without the limit, never fall under 60 in any second: the slowest second
+runs at 64 frames per second in PHARRIER, 70 in AIRTRIX and BRAVEFF, 74 in
+VON4, 96 in SGNASCAR and 112 in PODRACE (two runs each). A run resumed from
+a saved state reads higher for its first seconds: the card lowers its clock
+some 3.5 s after the program starts. In a heavy scene of PHARRIER a
+frame takes 13 ms: the master SH-4 4.2 (1 to 2 million instructions run a
+frame, about 3 ns each), the two sound boards 4.3, the display lists 0.9,
+the MIE 0.4, the slave 0.2 and the renderer 3. A slower graphics card is
 another matter: on an Intel HD 520 the translucent fragments of a picture
 like the worst of BRAVEFF take 59 ms, against 0.8 ms on the RTX 3080. The main
 loop of the sound driver turns 312 times a frame and an interrupt comes every
@@ -340,6 +344,18 @@ hardware is not known; the blender of the host is not used, a GeForce
 rounds the wrong way once in 5 to 50 blends). This needs OpenGL 4.3. The
 software renderer of Mesa (llvmpipe, LLVM 22.1.3) crashes when it compiles
 the shader that fills the lists; AMD and Intel under Mesa are not tried.
+
+The renderer does not wait for the graphics card. The translucent fragments
+of a list are counted a frame later, when the card has drawn them; a list
+whose buffer of fragments was too small is drawn again, with the textures
+it had, before its picture is shown or blended into the next one
+(ODIN_LISTS_TEST=1 leaves no room in the buffer: every list is drawn again
+and the pictures must stay the same). A texture is deleted a frame after it
+was dropped. Not tried on the Intel driver.
+
+A write to the texture RAM drops every decoded texture of its bank. The
+levels a texture keeps in the other bank are not followed: a texture whose
+smaller levels alone are rewritten would keep the old ones (no case known).
 
 The 101 bias is a signed 11-bit number that moves a mesh of any type but
 the background by bias / 65536 of its own depth, nearer when positive
