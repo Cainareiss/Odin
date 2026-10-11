@@ -374,8 +374,21 @@ the stars of PHARRIER, at -1024, stay behind its asteroids). The unit of
 the hardware is not known.
 
 The 161 with bit 18 loads a second modelview and a vertex with bit 12 of
-its header follows it (the AIRTRIX trails and skater joints); bit 19, set on
-the last row by one library entry, is not understood.
+its header follows it (the AIRTRIX trails and skater joints).
+
+A row of the 161 changes that row only: PHARRIER sends the four rows with
+the first character of a "+50" and the last row alone for the next ones,
+BRAVEFF a scale of 0.2 and then the last row of each ember.
+
+The 161 with bit 13 loads a local matrix that the geometry goes through
+before the modelview (rows 4 to 6, then F with bits 14 and 19). Read in
+PHARRIER: its library entry 0C016076 sends a translation that way, the
+game moves the second half of a door from the modelview of the first
+(0C0DEA90) and turns the second stroke of a star sparkle by a quarter of a
+turn; the cabinet shows the stars. HEURISTIC: the local matrix lasts until
+the next row of the modelview and a second one replaces the first; what it
+does to the second modelview, and what bits 18 and 19 mean on these rows,
+is not known. RACER sets it to the identity in its models.
 
 Triangles are wound after the vertex order and the winding bit, as the
 SGNASCAR cabinet shows; the X360 port winds them after the vertex normals,
