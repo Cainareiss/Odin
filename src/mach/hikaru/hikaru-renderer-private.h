@@ -277,6 +277,9 @@ typedef struct {
 
 	struct {
 		int32_t flags[HR_NUM_DEBUG_VARS];
+		/* ODIN_DEBUG_KEYS: the keys change the flags */
+		bool keys;
+		bool held[HR_NUM_DEBUG_VARS];
 	} debug;
 
 } hikaru_renderer_t;

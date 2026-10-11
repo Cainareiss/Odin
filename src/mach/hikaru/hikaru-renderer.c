@@ -73,23 +73,32 @@ init_debug_flags (hikaru_renderer_t *hr)
 
 	hr->debug.flags[HR_DEBUG_LOG] =
 		vk_util_get_bool_option ("HR_LOG", false) ? 1 : 0;
+	hr->debug.keys = vk_util_get_bool_option ("ODIN_DEBUG_KEYS", false);
 }
 
+/* The keys of the debug flags are keys of the players too: they act with
+ * ODIN_DEBUG_KEYS=1 only, once for each press. */
 static void
 update_debug_flags (hikaru_renderer_t *hr)
 {
 	char *msg = hr->base.message;
 	unsigned i;
 
+	if (!hr->debug.keys)
+		return;
+
 	for (i = 0; i < NUMELEM (debug_controls); i++) {
 		uint32_t key = debug_controls[i].key;
-		if (key != ~0 && vk_input_get_key (key)) {
+		bool down = key != ~0 && vk_input_get_key (key);
+
+		if (down && !hr->debug.held[i]) {
 			hr->debug.flags[i] += 1;
 			if (i == HR_DEBUG_NO_MIPMAPS)
 				hikaru_renderer_invalidate_texcache (&hr->base, NULL);
 			if (hr->debug.flags[i] > debug_controls[i].max)
 				hr->debug.flags[i] = debug_controls[i].min;
 		}
+		hr->debug.held[i] = down;
 		msg += sprintf (msg, "%d|", hr->debug.flags[i]);
 	}
 }

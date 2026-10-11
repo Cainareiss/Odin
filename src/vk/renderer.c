@@ -95,9 +95,14 @@ show_speed (vk_renderer_t *renderer)
 
 	/* Nothing to tell at the start nor after a pause */
 	if (since && now - since < 2 * second) {
-		snprintf (title, sizeof (title), "Odin (%4.1f FPS) [%s]",
-		          (double) frames * (double) second / (double) (now - since),
-		          renderer->message);
+		const double fps = (double) frames * (double) second /
+		                   (double) (now - since);
+
+		if (renderer->message[0])
+			snprintf (title, sizeof (title), "Odin (%4.1f FPS) [%s]",
+			          fps, renderer->message);
+		else
+			snprintf (title, sizeof (title), "Odin (%4.1f FPS)", fps);
 		SDL_SetWindowTitle (renderer->window, title);
 	}
 	since = now;
