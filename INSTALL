@@ -1,51 +1,46 @@
+BUILDING
+========
 
-Make sure you have development packages for SDL and libjansson installed.
-Under Debian (and likely Ubuntu) it's as simple as:
-
- $ sudo apt-get install libsdl1.2-dev libjansson-dev
-
-Then just do:
+Odin is built on GNU/Linux with GCC (C and C++20), GNU make and pkg-config.
+It needs the development files of SDL 2, GLEW and Jansson, and a graphics
+driver that offers OpenGL 4.3.
 
  $ cd path/to/odin
  $ make
 
-This will generate the bin/odin binary. To run the bootrom with odin,
-type:
+This makes bin/odin. An object is built again when a header it includes
+changes. "make install" copies the binary to ~/.local/bin and the list of the
+games, vk-games.json, to ~/.local/share/odin.
 
- $ bin/odin -R $PATH_TO_ROM_DIRECTORY -r hikaru_0.92
 
-If you want to run a game, you have to also enable a hack that fakes the
-IO board a little bit better, as follows:
+RUNNING
+=======
 
- $ MIE_HACK=1 bin/odin -R $PATH_TO_ROM_DIRECTORY -r airtrix
+ $ bin/odin -R <ROM directory> -r <game>
 
-If you forget to enable the hack, the game will either get stuck, or endlessly
-display an "I/O board initializing" screen.
+The games are those of vk-games.json: airtrix, braveff, pharrier, podrace,
+sgnascar and von4. The file is looked for in the current directory, then in
+$HOME, then in ~/.local/share/odin. The ROM directory holds one directory
+for each game, of the name of the game, with the files vk-games.json lists
+for it.
 
-If you are a developer, and want to display on screen the contents of the
-frame buffer or texture RAM, to see what gets uploaded, then set the
-HR_DRAW_FB or HR_DRAW_TEXRAM environment variables, as follows:
+Options:
 
- $ MIE_HACK=1 HR_DRAW_TEXRAM=1 bin/odin -R $PATH_TO_ROM_DIRECTORY -r airtrix
+ -n <frame>		stops after that frame
+ -s <frame>[,...]	saves <game>-<frame>.vkstate after these frames
+ -l <file>		loads a state at startup
+ -u			lifts the limit of 60 frames per second
+ -v			more messages
 
-You can also install odin for your user with:
+Keys: Escape quits, Space pauses, F4 saves <game>.vkstate and F1 loads it.
+F5 and F6 are the Test and Service switches of the main board, F2 the Test
+of the I/O board, 9 and 0 its Service switches, 5 and 6 the coins. Player 1
+has 1 for Start, the arrows, and Left Ctrl, Left Alt, Left Shift, Z, X, C;
+player 2 has 2 for Start, R F D G, and A, S, Q, W, E, T.
 
- $ make install
+The settings of the BIOS live in the EEPROM of the I/O board, which is
+blank at every start unless ODIN_MIE_EEPROM=<file> names a file to load it
+from and to write it back to on exit.
 
-This will compile and install a copy of the odin binary in ~/.local/bin
-and a copy of vk-games.json (the game description list used by odin) in
-~/.local/share/odin. After this step, you can just do:
-
- $ odin -R $PATH_TO_ROM_DIRECtory -r $ROM_NAME
-
-from anywhere in your filesystem.
- 
-XXX: due to the (dumb) way the loading code is designed, the ROM_DIRECTORY
-is expected to contain a sub-directory for each game, containing the
-uncompressed ROM images _and_ a copy of (or a symlink to) the BOOTROM image.
-The latter should be named `hikaru_0.X.bin', where X is the bootrom version,
-that is, one of 84, 92 or 96. I *know* it is very rough, patches are welcome.
-
-XXX: while odin can run all three BOOTROM versions, it only supports
-loading games using version 0.92; so make sure you are linking version 0.92
-in the ROM directories!
+The comments at the top of the source files tell the other variables of the
+environment; they are for debugging.
