@@ -26,7 +26,11 @@ PGO_FLAGS := -fprofile-use -fprofile-correction -Wno-missing-profile
 endif
 CFLAGS += $(PGO_FLAGS)
 
-CXXFLAGS := -std=c++20 -I src -Wall -Wextra -Wpedantic -Wconversion -Wshadow -O3 -fomit-frame-pointer -flto -march=native -fno-stack-protector $(PGO_FLAGS)
+# Each object notes the headers it was built from, in a .d file next to it.
+DEP_FLAGS := -MMD -MP
+CFLAGS += $(DEP_FLAGS)
+
+CXXFLAGS := -std=c++20 -I src -Wall -Wextra -Wpedantic -Wconversion -Wshadow -O3 -fomit-frame-pointer -flto -march=native -fno-stack-protector $(PGO_FLAGS) $(DEP_FLAGS)
 
 .PHONY: all install clean
 
@@ -101,27 +105,8 @@ bin/vkbswap: $(VK_OBJ) src/utils/bswap.o
 %.o: %.cpp
 	$(CXX) -c $< -o $@ $(CXXFLAGS)
 
-# Header dependencies of the MIE objects (a stale object with an older
-# class layout corrupts the heap).
-src/odin/mie.o src/odin/mie_bridge.o src/odin/card_reader.o: src/odin/mie.hpp src/odin/z80.hpp src/odin/jvs_host.hpp
-src/odin/mie_bridge.o src/odin/card_reader.o: src/odin/card_reader.hpp
-src/odin/mie_bridge.o src/mach/hikaru/hikaru-mie.o: src/odin/mie_bridge.hpp
-src/odin/mie_bridge.o src/odin/jvs_io_13551.o: src/odin/jvs_io_13551.hpp src/odin/eeprom_93c46.hpp
-src/odin/jvs_host.o src/odin/jvs_io_13551.o: src/odin/jvs_host.hpp
-src/odin/eeprom_93c46.o: src/odin/eeprom_93c46.hpp
-src/odin/eeprom_bridge.o: src/odin/eeprom_93c46.hpp src/odin/eeprom_bridge.hpp
-src/mach/hikaru/hikaru.o src/mach/hikaru/hikaru-memctl.o: src/odin/eeprom_bridge.hpp src/odin/x76f100_bridge.hpp
-src/odin/x76f100.o src/odin/x76f100_bridge.o: src/odin/x76f100.hpp src/odin/x76f100_bridge.hpp
-src/odin/crypt_315_5881.o src/odin/crypt_315_5881_bridge.o: src/odin/crypt_315_5881.hpp src/odin/crypt_315_5881_bridge.hpp
-src/mach/hikaru/hikaru.o src/mach/hikaru/hikaru-memctl.o: src/odin/crypt_315_5881_bridge.hpp
-src/odin/actel_m1.o src/odin/actel_m1_bridge.o: src/odin/actel_m1.hpp src/odin/actel_m1_bridge.hpp
-src/mach/hikaru/hikaru.o src/mach/hikaru/hikaru-memctl.o: src/odin/actel_m1_bridge.hpp
+-include $(patsubst %.o,%.d,$(VK_OBJ) $(HIKARU_OBJ) src/vk/main.o src/utils/bswap.o)
 
-src/odin/sh4.o src/odin/sh4_ops.o src/odin/sh4_onchip.o src/odin/sh4_bridge.o: src/odin/sh4.hpp
-src/odin/sh4_bridge.o src/cpu/sh/sh4-odin.o: src/odin/sh4_bridge.hpp
-src/cpu/sh/sh4-odin.o src/mach/hikaru/hikaru.o src/mach/hikaru/hikaru-memctl.o: src/cpu/sh/sh4.h
-src/odin/scheduler.o src/odin/scheduler_bridge.o: src/odin/scheduler.hpp
-src/odin/scheduler_bridge.o src/mach/hikaru/hikaru.o: src/odin/scheduler_bridge.hpp
 # A product is fused with a sum only where the code says std::fma.
 src/odin/sh4_ops.o: CXXFLAGS += -ffp-contract=off
 
@@ -132,6 +117,6 @@ install:
 	@( cp -v vk-games.json $(HOME)/.local/share/odin )
 
 clean:
-	find . -name '*.o' | xargs rm -vf
+	find . -name '*.o' -o -name '*.d' | xargs rm -vf
 	rm -vf bin/*
 
