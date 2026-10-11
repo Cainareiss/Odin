@@ -805,7 +805,6 @@ memctl_dma_run (hikaru_memctl_t *memctl)
 	vk_buffer_put (memctl->regs, 4, 0x34, dst);
 	vk_buffer_put (memctl->regs, 4, 0x38, 0);
 	vk_buffer_put (memctl->regs, 2, 0x04, 0x1000);
-	/* hikaru_raise_memctl_irq (memctl->base.mach); */
 	if (!memctl->master)
 		VK_ABORT ("the bridge of the slave ended a DMA: where its interrupt goes is not known");
 	hikaru_update_irqs (memctl->base.mach);

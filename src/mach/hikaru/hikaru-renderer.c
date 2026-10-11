@@ -1473,14 +1473,7 @@ add_triangle (hikaru_renderer_t *hr)
 		VK_ASSERT ((index + 2) < MAX_VERTICES_PER_MESH);
 
 		/* Bits 19:18 select a UV offset, not two-sided lighting (X360
-		 * port, 8252D590); the two-sided variant is never used now.
-		if (hr->push.tmp[2].info.twosided &&
-		    !hr->push.tmp[2].info.nocull)
-			VK_ERROR ("got a vertex with culling and two-sided lighting!");
-
-		if (hr->push.tmp[2].info.twosided)
-			hr->meshes.current->has_two_sided_lighting = 1;
-		*/
+		 * port, 8252D590); the two-sided variant is never used now. */
 
 		/* Degenerate triangles are dropped, as in the X360 port
 		 * (825B6100); not when the vertices follow different

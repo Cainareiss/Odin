@@ -464,8 +464,6 @@
 static void
 hikaru_gpu_update_irq_status (hikaru_gpu_t *gpu) 
 {
-	vk_cpu_t *cpu = ((hikaru_t *) gpu->base.mach)->sh_current;
-
 	/* Update 1A000018 from 1A0000[08,0C,10,14] */
 	REG1A (0x18) = (REG1A (0x18) & ~0xF) |
 	               (REG1A (0x08) & 1) |
@@ -474,22 +472,8 @@ hikaru_gpu_update_irq_status (hikaru_gpu_t *gpu)
 	               ((REG1A (0x14) & 1) << 3);
 
 	/* Update 15000088 bit 7 from 1A000018 */
-	/* Valkyrie left it set until written:
-	if (REG1A (0x18) & 0xF)
-		REG15 (0x88) |= 0x80;
-	*/
 	REG15 (0x88) = (REG15 (0x88) & ~0x80) | ((REG1A (0x18) & 0xF) ? 0x80 : 0);
 
-	/* Valkyrie sent a pulse:
-	 * Raise IRL2 and lower bit 5 of the PDTRA, if the IRQs are
-	 * not masked.
-	if (REG15 (0x88) & REG15 (0x84)) {
-		VK_CPU_LOG (cpu, " ## sending GPU IRQ to CPU: %02X/%02X",
-		            REG15 (0x84), REG15 (0x88));
-		hikaru_raise_gpu_irq (gpu->base.mach);
-	}
-	*/
-	(void) cpu;
 	hikaru_update_irqs (gpu->base.mach);
 }
 
