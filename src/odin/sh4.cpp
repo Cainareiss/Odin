@@ -247,22 +247,32 @@ void Sh4::update_irqs()
 
 void Sh4::set_irq(uint32_t source, bool raised)
 {
-	if (source >= Sh4Source::COUNT) {
+	if (source >= Sh4Source::COUNT || source == Sh4Source::NMI) {
 		return;
 	}
 	m_intc.source[source].raised = raised;
+	update_irqs();
+}
 
-	if (source == Sh4Source::NMI) {
-		if (raised) {
-			/* ICR.NMIL and DMAOR.NMIF; the DMAC stops on an NMI. */
-			reg_put(2, INTC_ICR, reg_get(2, INTC_ICR) | 0x8000);
-			reg_put(4, DMAC_DMAOR, reg_get(4, DMAC_DMAOR) | 2);
-			dmac_update(0);
-			dmac_run();
-		} else {
-			reg_put(2, INTC_ICR, reg_get(2, INTC_ICR) & 0x7FFF);
-		}
+/* The NMI pin (hardware manual, 19.2.1): ICR.NMIL is its level, and the
+ * edge ICR.NMIE names asks for the interrupt, which is kept until taken.
+ * It sets DMAOR.NMIF, which stops the DMAC. */
+void Sh4::set_nmi(bool high)
+{
+	const uint32_t icr = static_cast<uint32_t>(reg_get(2, INTC_ICR));
+	const bool rising = (icr & 0x100) != 0;
+
+	if (((icr & 0x8000) != 0) == high) {
+		return;
 	}
+	reg_put(2, INTC_ICR, (icr & 0x7FFF) | (high ? 0x8000u : 0u));
+	if (high != rising) {
+		return;
+	}
+	m_intc.source[Sh4Source::NMI].raised = 1;
+	reg_put(4, DMAC_DMAOR, reg_get(4, DMAC_DMAOR) | 2);
+	dmac_update(0);
+	dmac_run();
 	update_irqs();
 }
 

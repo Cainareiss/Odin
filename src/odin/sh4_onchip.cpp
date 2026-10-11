@@ -90,7 +90,11 @@ void Sh4::reg_put(uint32_t size, uint32_t addr, uint64_t value)
 
 void Sh4::onchip_reset(bool hard)
 {
+	/* The level of the NMI pin is not the chip's to reset. */
+	const uint64_t nmil = reg_get(2, INTC_ICR) & 0x8000;
+
 	std::fill(m_onchip.begin(), m_onchip.end(), uint8_t{0});
+	reg_put(2, INTC_ICR, nmil);
 
 	reg_put(4, CCN_EXPEVT, hard ? 0 : 0x20);
 	/* HEURISTIC: bit 31 alone, endian, whichever CPU it is. The master
@@ -610,12 +614,10 @@ bool Sh4::onchip_write(uint32_t addr, uint32_t size, uint64_t value)
 	}
 	case DMAC_DMAOR: {
 		uint32_t old = static_cast<uint32_t>(reg_get(size, addr));
-		uint32_t nmil = (reg_get(2, INTC_ICR) & 0x8000) ? 1 : 0;
 		sized(4);
 		only(0x00008307);
-		/* AE and NMIF can only be cleared, and NMIF stays while NMI is
-		 * raised. */
-		reg_put(size, addr, (v & ~6u) | (old & v & 6) | (nmil << 1));
+		/* AE and NMIF can only be cleared */
+		reg_put(size, addr, (v & ~6u) | (old & v & 6));
 		dmac_update(1);
 		dmac_run();
 		return true;

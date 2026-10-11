@@ -138,7 +138,10 @@ public:
 	 * delay slot are never split. Returns the cycles run past the end. */
 	int32_t run(int32_t cycles);
 
+	/* Any source but NMI. */
 	void set_irq(uint32_t source, bool raised);
+	/* The level of the NMI pin, low until the machine says otherwise. */
+	void set_nmi(bool high);
 	/* The time of the machine, in cycles since reset, where run() goes
 	 * on from: for a machine that loads a state. */
 	void set_time(uint64_t now)

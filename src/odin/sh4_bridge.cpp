@@ -117,6 +117,12 @@ odin_sh4_set_irq(odin_sh4_t *cpu, unsigned source, int raised)
 }
 
 void
+odin_sh4_set_nmi(odin_sh4_t *cpu, int high)
+{
+	cpu->cpu.set_nmi(high != 0);
+}
+
+void
 odin_sh4_set_run(odin_sh4_t *cpu, unsigned state)
 {
 	cpu->cpu.set_run(static_cast<odin::Sh4Run>(state));

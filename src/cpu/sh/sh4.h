@@ -218,6 +218,9 @@ vk_cpu_t	*sh4_new (vk_machine_t *mach, vk_mmap_t *mmap, bool master, bool le,
 		          unsigned clock_mode);
 /* The time of the machine, in cycles, after a state is loaded. */
 void		 sh4_set_time (vk_cpu_t *cpu, uint64_t now);
+/* The level of the NMI pin, low until set: the interrupt comes with the
+ * edge the program has chosen. */
+void		 sh4_set_nmi_pin (vk_cpu_t *cpu, bool high);
 /* The state of the core into the fields of sh4_t, and back. */
 void		 sh4_odin_pull (sh4_t *ctx);
 void		 sh4_odin_push (sh4_t *ctx);

@@ -83,7 +83,9 @@ void odin_sh4_map_page(odin_sh4_t *cpu, uint32_t page, const uint8_t *read, uint
 /* Returns the cycles run past the end. */
 int odin_sh4_run(odin_sh4_t *cpu, int cycles);
 void odin_sh4_set_time(odin_sh4_t *cpu, uint64_t now);
+/* Any source but NMI, which is a pin: the interrupt comes with its edge. */
 void odin_sh4_set_irq(odin_sh4_t *cpu, unsigned source, int raised);
+void odin_sh4_set_nmi(odin_sh4_t *cpu, int high);
 void odin_sh4_set_run(odin_sh4_t *cpu, unsigned state);
 unsigned odin_sh4_get_run(const odin_sh4_t *cpu);
 

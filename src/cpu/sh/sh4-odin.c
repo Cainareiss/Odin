@@ -367,7 +367,8 @@ sh4o_set_irq_state (vk_cpu_t *cpu, unsigned num, vk_irq_state_t state)
 {
 	sh4_t *ctx = (sh4_t *) cpu;
 
-	if (num >= SH4_NUM_IESOURCES)
+	/* NMI is a pin, see sh4_set_nmi_pin */
+	if (num >= SH4_NUM_IESOURCES || num == SH4_IESOURCE_NMI)
 		return -1;
 	odin_sh4_set_irq (ctx->odin, num, state == VK_IRQ_STATE_RAISED);
 	return 0;
@@ -494,6 +495,12 @@ void
 sh4_set_time (vk_cpu_t *cpu, uint64_t now)
 {
 	odin_sh4_set_time (((sh4_t *) cpu)->odin, now);
+}
+
+void
+sh4_set_nmi_pin (vk_cpu_t *cpu, bool high)
+{
+	odin_sh4_set_nmi (((sh4_t *) cpu)->odin, high);
 }
 
 vk_cpu_t *

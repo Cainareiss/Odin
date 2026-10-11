@@ -158,8 +158,10 @@
  * e = MAINBD EEPROM
  * M = master-to-slave communication
  *
- * Note: apparently bit M is connected to the slave NMI pin; writing a
- * specific bit pattern there requestes an NMI to the slave SH-4.
+ * Bit M is the NMI pin of the slave SH-4: the master pulls it low for three
+ * writes and the slave, at each interrupt, clears the NMI flag of its DMAC
+ * as the hardware manual asks (read DMAOR, write 0x8001, @0C002000). MAME
+ * names the pin IRL3 instead (hikaru.cpp, main SH4 port A).
  *
  * [S] xxxx xxxx xxxx xxSx
  *
@@ -213,7 +215,12 @@ porta_put_m (sh4_t *ctx, uint16_t val)
 	odin_eeprom93c46_set_pins (hikaru->eeprom_main,
 	                           (val >> 4) & 1, (val >> 3) & 1, (val >> 2) & 1, 0);
 
-	/* This is a simple hack to detect three consecutive cycles of
+	/* The NMI of the slave comes with the falling edge (its ICR.NMIE is
+	 * clear). */
+	sh4_set_nmi_pin (hikaru->sh_s, val & 1);
+
+	/* Valkyrie looked for the whole pulse:
+	 * This is a simple hack to detect three consecutive cycles of
 	 * low-high-low pin; the pattern 000-111-000[0000] is there because
 	 * in the SH-4:
 	 *
@@ -230,17 +237,17 @@ porta_put_m (sh4_t *ctx, uint16_t val)
 	 * Basically it's flipping the NMI pin 0->1->0.
 	 *
 	 * See sections 19.2.1 and 19.2.2 of the SH-4 manual.
-	 */
-	/* XXX ideally this should be done automatically by the SH-4 core;
-	 * but it requires a rewrite of the IRQ code based on lines */
+	 *
+	 * XXX ideally this should be done automatically by the SH-4 core;
+	 * but it requires a rewrite of the IRQ code based on lines
 	hikaru->porta_m_bit0_buffer = (hikaru->porta_m_bit0_buffer << 1) |
 	                              (val & 1);
 	if ((hikaru->porta_m_bit0_buffer & 0x1FFF) == 0x1C7F) {
-		/* Send an IRQ to the slave */
 		VK_CPU_LOG (ctx, " ### PORTA: sending NMI to SLAVE!");
 		vk_cpu_set_irq_state (hikaru->sh_s, SH4_IESOURCE_NMI, VK_IRQ_STATE_RAISED);
 		hikaru->porta_m_bit0_buffer = 0;
 	}
+	*/
 	return 0;
 }
 
@@ -610,6 +617,9 @@ hikaru_reset (vk_machine_t *mach, vk_reset_type_t type)
 	/* Port A's are active low */
 	hikaru->porta_m = 0xFFFF;
 	hikaru->porta_s = 0xFFFF;
+	/* HEURISTIC: nothing is known to pull the NMI pin of the master. */
+	sh4_set_nmi_pin (hikaru->sh_m, true);
+	sh4_set_nmi_pin (hikaru->sh_s, true);
 
 	hikaru->unk01000000_m = 0;
 	hikaru->unk01000100_m = 0;

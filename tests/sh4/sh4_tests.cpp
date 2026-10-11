@@ -912,6 +912,65 @@ void test_interrupts()
 		eq("taken right after the LDC that clears BL", st.spc, CODE + 6);
 		eq("the instruction after the LDC has not run", st.rbank[2], 0);
 	}
+	{
+		/* The NMI pin (hardware manual, 19.2.1 and DMAOR.NMIF in 14.2.5). */
+		Machine m;
+		m.code(CODE, {NOP, NOP, NOP, NOP, NOP, NOP});
+		m.code(RAM + 0x600, {0xE155, 0x002B, NOP});	/* handler: mov #0x55,r1; rte */
+		Sh4State st = m.state();
+		st.vbr = RAM;
+		st.sr = SR_MD | 0xF0;	/* mask 15 */
+		m.cpu.load(st);
+		m.cpu.set_nmi(true);
+		m.cpu.run(1);
+		eq("the rising edge of NMI asks for nothing", m.state().pc, CODE + 2);
+		eq("ICR.NMIL is the level of the pin", m.reg32(0xFFD00000) & 0x8000, 0x8000);
+		m.cpu.set_nmi(false);
+		eq("the falling edge sets DMAOR.NMIF", m.reg32(0xFFA00040) & 2, 2);
+		m.cpu.run(1);
+		st = m.state();
+		eq("and is taken whatever the mask", st.spc, CODE + 2);
+		eq("with the code of NMI", m.reg32(0xFF000028), 0x1C0);
+		eq("NMIL follows the pin down", m.reg32(0xFFD00000) & 0x8000, 0);
+		m.cpu.run(3);	/* rte, its slot, one instruction */
+		st = m.state();
+		eq("an NMI is taken once though the pin stays low", st.pc, CODE + 4);
+		m.cpu.set_nmi(true);
+		m.cpu.run(1);
+		eq("and not at the edge back", m.state().pc, CODE + 6);
+	}
+	{
+		/* SR.BL keeps an NMI waiting; with ICR.NMIE the rising edge asks. */
+		Machine m;
+		m.code(CODE, {NOP, NOP, 0x410E, NOP, NOP, NOP});	/* ldc r1,sr */
+		m.code(RAM + 0x600, {0xE155, NOP, NOP});
+		m.put32(DATA, 0xFFD00000);
+		Sh4State st = m.state();
+		st.vbr = RAM;
+		st.sr = SR_MD | SR_BL;
+		st.r[1] = SR_MD;
+		m.cpu.load(st);
+		m.cpu.set_nmi(true);
+		m.cpu.set_nmi(false);
+		m.cpu.set_nmi(true);
+		m.cpu.run(2);
+		eq("SR.BL holds an NMI back", m.state().pc, CODE + 4);
+		m.cpu.run(2);
+		eq("the edge is kept until BL is clear", m.state().spc, CODE + 6);
+	}
+	{
+		Machine m;
+		m.put32(DATA, 0xFFD00000);
+		/* mov.l @r8,r1; mov.w @(4,r8),r0; mov.w r0,@r1 (ICR = NMIE) */
+		m.put32(DATA + 4, 0x0100);
+		m.code(RAM + 0x600, {0xE255, NOP, NOP});
+		Sh4State st = run(m, {0x6182, 0x8582, 0x2101, NOP, NOP, NOP}, 3, [](Sh4State &s) { s.r[8] = DATA; s.vbr = RAM; });
+		m.cpu.set_nmi(true);
+		m.cpu.run(1);
+		st = m.state();
+		eq("with ICR.NMIE the rising edge asks", st.spc, CODE + 6);
+		eq("a write to ICR leaves NMIL alone", m.reg32(0xFFD00000) & 0x8100, 0x8100);
+	}
 }
 
 void test_on_chip()
