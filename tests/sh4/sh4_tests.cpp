@@ -994,6 +994,7 @@ void test_on_chip()
 		m.put32(DATA + 4, 0x00005555);
 		Sh4State st = run(m, {0x6182, 0x5081, 0x2102, 0xE03C, 0x8112, 0x8512}, 6, [](Sh4State &s) { s.r[8] = DATA; });
 		eq("port A outputs", m.pins_out & 0xFF, 0x3C);
+		eq("a pin that is not an output is left high", m.pins_out >> 8, 0xFF);
 		eq("port A reads the input pins and its own outputs", st.r[0] & 0xFFFF, 0xA53C);
 	}
 	{

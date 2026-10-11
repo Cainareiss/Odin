@@ -136,14 +136,17 @@ uint16_t Sh4::port_a_get()
 	return static_cast<uint16_t>(pins);
 }
 
+/* The machine is given the pins as the chip leaves them: one that is not an
+ * output is high, pulled up (the pull-ups are on at reset; HEURISTIC for a
+ * pin whose pull-up is off). */
 void Sh4::port_a_put(uint16_t value)
 {
-	uint32_t pins = static_cast<uint32_t>(reg_get(2, BSC_PDTRA));
+	uint32_t pins = 0xFFFF;
 	uint32_t pctra = static_cast<uint32_t>(reg_get(4, BSC_PCTRA));
 
 	for (uint32_t i = 0; i < 16; i++) {
-		if ((pctra >> (i * 2)) & 1) {
-			pins = (pins & ~(1u << i)) | (value & (1u << i));
+		if (((pctra >> (i * 2)) & 1) && !(value & (1u << i))) {
+			pins &= ~(1u << i);
 		}
 	}
 	outside();
