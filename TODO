@@ -448,6 +448,23 @@ picture away from the footage. Not known: the types 2, 4 and 6 of that queue (a 
 whether the punch-through polygons fade like the opaque ones (assumed so),
 bit 16, and the types of the coloured queue (ignored like the X360 port).
 
+The 501 sets a pattern of 4 x 4 pixels of the screen and the polygons that
+follow are drawn on its pixels only: 32 patterns, read in the X360 port
+(823000D0; its shaders kill the other pixels whatever the polygon type),
+which the AIRTRIX library addresses as nine levels at four places. Seen on
+the cabinets: the combo labels and the message frames of AIRTRIX come and
+go in dots, the shadow of the PHARRIER player and the smoke of the BRAVEFF
+fire show what lies behind them (both games swap two halves of the pixels
+every frame). Not seen on footage: von4, which the port draws this way,
+and PODRACE, whose far rocks now come in little by little.
+HEURISTIC: the pattern is laid from the top left pixel of the screen, as
+the port lays its texture; the low five bits of the word are taken (PODRACE
+sends -7 to -1); a subroutine returns with the pattern it was called with,
+since BRAVEFF sets one in a model of its burning hall and never clears it
+and its cabinet shows what follows whole, but what the chip saves
+at a call is not known (it has a second stack pointer, 15000078, that
+nothing here uses).
+
 The depth buffer holds log2 (1 + eye depth) / 24, written per pixel: the
 projected depth of a near plane at 0.1 or 0.01 was too coarse (black
 patches on the cars of the SGNASCAR entry list, the shadow of the AIRTRIX
@@ -460,7 +477,14 @@ lever panel (tutorial of the U.S.A. setting) on (960, -85), and the levers
 land in their panel as on the cabinet. No game sends a negative X: its sign
 is assumed (HEURISTIC).
 
-Implement alpha testing (used in BRAVEFF, instruction 154).
+The 154 table gives each material a low and a high alpha threshold through
+its C81 index ("Alpha Low Threshold" and "Alpha High Threshold" in the
+material editor of PHARRIER; the library writes the entry index XOR 0x20,
+with a high of 0xFF, and the entries no game sets hold 0x80 and 0xFFFFFF):
+neither is used, the passes test alpha as the X360 port does. The fourth
+byte of the 091 colour word is not used either; BRAVEFF sets it in the
+materials it builds with A91 and C91, one-word forms of A81 and C81 whose
+bit 4 is not understood.
 
 Implement proper model caching using VBOs.
 
