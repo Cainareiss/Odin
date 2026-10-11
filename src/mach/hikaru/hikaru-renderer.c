@@ -2092,6 +2092,27 @@ LISTS_GLSL
 "	fragColor = color / 255.0;						\n"
 "}										\n";
 
+/* The blender of the two 3D buffers, as the patent of the hardware draws it
+ * (US 6,549,209, fig. 11): the rate of the buffer kept counts one more from
+ * 0x80 up, 0xFF keeps it whole, and each product loses its fraction before
+ * the sum. */
+static const char *blend_fs_source =
+"#version 430									\n"
+"										\n"
+"out vec4 fragColor;								\n"
+"uniform sampler2D u_drawn;							\n"
+"uniform sampler2D u_kept;							\n"
+"uniform int u_rate;								\n"
+"										\n"
+"void main (void) {								\n"
+"	ivec2 at = ivec2 (gl_FragCoord.xy);					\n"
+"	ivec4 drawn = ivec4 (texelFetch (u_drawn, at, 0) * 255.0 + 0.5);	\n"
+"	ivec4 kept = ivec4 (texelFetch (u_kept, at, 0) * 255.0 + 0.5);		\n"
+"	int k = u_rate + (u_rate >> 7);						\n"
+"										\n"
+"	fragColor = vec4 (((kept * k) >> 8) + ((drawn * (256 - k)) >> 8)) / 255.0;	\n"
+"}										\n";
+
 static void
 size_lists (hikaru_renderer_t *hr, uint32_t max)
 {
@@ -2664,6 +2685,28 @@ build_fb_state (hikaru_renderer_t *hr)
 	}
 	VK_ASSERT_NO_GL_ERROR ();
 
+	/* The blender of the 3D buffers writes to the pictures. */
+	glGenFramebuffers (3, hr->framebuffer.pipe_fb);
+	for (i = 0; i < 3; i++) {
+		glBindFramebuffer (GL_FRAMEBUFFER, hr->framebuffer.pipe_fb[i]);
+		glFramebufferTexture2D (GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+		                        GL_TEXTURE_2D, hr->framebuffer.pipe[i], 0);
+		glDrawBuffers (1, targets);
+		if (glCheckFramebufferStatus (GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+			return -1;
+	}
+	glBindFramebuffer (GL_FRAMEBUFFER, 0);
+
+	hr->framebuffer.blend.program =
+		vk_renderer_compile_program (lists_vs_source, blend_fs_source);
+	hr->framebuffer.blend.u_rate =
+		get_uniform_loc (hr->framebuffer.blend.program, "u_rate");
+	glUseProgram (hr->framebuffer.blend.program);
+	glUniform1i (get_uniform_loc (hr->framebuffer.blend.program, "u_drawn"), 0);
+	glUniform1i (get_uniform_loc (hr->framebuffer.blend.program, "u_kept"), 1);
+	glUseProgram (0);
+	VK_ASSERT_NO_GL_ERROR ();
+
 	/* The translucent fragments, the colour below them and a copy of the
 	 * depth of the other types. */
 	hr->framebuffer.lists.program =
@@ -2749,6 +2792,7 @@ destroy_fb_state (hikaru_renderer_t *hr)
 	glBindFramebuffer (GL_FRAMEBUFFER, 0);
 	glDeleteFramebuffers (NUM_FRAMEBUFFERS, hr->framebuffer.fb);
 	glDeleteTextures (NUM_FRAMEBUFFERS, hr->framebuffer.cb);
+	glDeleteFramebuffers (3, hr->framebuffer.pipe_fb);
 	glDeleteTextures (3, hr->framebuffer.pipe);
 	glDeleteRenderbuffers (NUM_FRAMEBUFFERS, hr->framebuffer.db);
 	glDeleteFramebuffers (1, &hr->framebuffer.lists.heads_fb);
@@ -2879,50 +2923,42 @@ draw_list (hikaru_renderer_t *hr)
 	set_2d_state (hr);
 
 	/* The blender output goes back into the buffer just drawn: the other
-	 * 3D buffer then holds every earlier frame, fading by the factor at
+	 * 3D buffer then holds every earlier frame, fading by the rate at
 	 * each frame. This is the motion blur of the cabinets (the stars of
 	 * the PHARRIER logo scene trail behind them at 181 = 01C6). */
 	if (back >= 0) {
-		glActiveTexture (GL_TEXTURE0 + 0);
-		glBindTexture (GL_TEXTURE_2D, hr->framebuffer.cb[back]);
+		const GLuint picture =
+			hr->framebuffer.pipe[hr->framebuffer.last.slot];
+
+		glBindFramebuffer (GL_FRAMEBUFFER,
+		                   hr->framebuffer.pipe_fb[hr->framebuffer.last.slot]);
+		glUseProgram (hr->framebuffer.blend.program);
+		glUniform1i (hr->framebuffer.blend.u_rate,
+		             (GLint) hr->framebuffer.last.rate);
+
 		glActiveTexture (GL_TEXTURE0 + 1);
 		glBindTexture (GL_TEXTURE_2D, hr->framebuffer.cb[back]);
-		glActiveTexture (GL_TEXTURE0 + 2);
-		glBindTexture (GL_TEXTURE_2D, 0);
-		glActiveTexture (GL_TEXTURE0 + 3);
-		glBindTexture (GL_TEXTURE_2D, 0);
-
-		glUniform1i (hr->framebuffer.locs.u_front,  0);
-		glUniform1i (hr->framebuffer.locs.u_back,   1);
-		glUniform1i (hr->framebuffer.locs.u_layer1, 2);
-		glUniform1i (hr->framebuffer.locs.u_layer2, 3);
-		glUniform1f (hr->framebuffer.locs.u_factor, 0.0f);
-		glUniform1f (hr->framebuffer.locs.u_mult_f, 1.0f);
-		glUniform1f (hr->framebuffer.locs.u_mult_b, 1.0f);
-		glUniform1f (hr->framebuffer.locs.u_mult_1, 0.0f);
-		glUniform1f (hr->framebuffer.locs.u_mult_2, 0.0f);
-		glUniform1f (hr->framebuffer.locs.u_keyed_3d, 0.0f);
-		glUniform1i (hr->framebuffer.locs.u_invert_f, 0);
-		glUniform1i (hr->framebuffer.locs.u_invert_b, 0);
-		glUniform4f (hr->framebuffer.locs.u_clear, 0.0f, 0.0f, 0.0f, 0.0f);
-
-		glEnable (GL_BLEND);
-		glBlendColor (0.0f, 0.0f, 0.0f, hr->framebuffer.last.factor);
-		glBlendFunc (GL_CONSTANT_ALPHA, GL_ONE_MINUS_CONSTANT_ALPHA);
+		glActiveTexture (GL_TEXTURE0 + 0);
+		glBindTexture (GL_TEXTURE_2D,
+		               hr->framebuffer.cb[hr->framebuffer.scene]);
 
 		glBindVertexArray (hr->framebuffer.vao);
-		glDrawArrays (GL_TRIANGLE_STRIP, 0, 4);
+		glDrawArrays (GL_TRIANGLES, 0, 3);
 		glBindVertexArray (0);
 
-		glDisable (GL_BLEND);
+		glCopyImageSubData (picture, GL_TEXTURE_2D, 0, 0, 0, 0,
+		                    hr->framebuffer.cb[hr->framebuffer.scene],
+		                    GL_TEXTURE_2D, 0, 0, 0, 0, 640, 480, 1);
+
+		glUseProgram (hr->framebuffer.program);
+		VK_ASSERT_NO_GL_ERROR ();
+	} else {
+		glActiveTexture (GL_TEXTURE0 + 0);
+		glBindTexture (GL_TEXTURE_2D,
+		               hr->framebuffer.pipe[hr->framebuffer.last.slot]);
+		glCopyTexSubImage2D (GL_TEXTURE_2D, 0, 0, 0, 0, 0, 640, 480);
 		VK_ASSERT_NO_GL_ERROR ();
 	}
-
-	glActiveTexture (GL_TEXTURE0 + 0);
-	glBindTexture (GL_TEXTURE_2D,
-	               hr->framebuffer.pipe[hr->framebuffer.last.slot]);
-	glCopyTexSubImage2D (GL_TEXTURE_2D, 0, 0, 0, 0, 0, 640, 480);
-	VK_ASSERT_NO_GL_ERROR ();
 
 	glBindFramebuffer (GL_FRAMEBUFFER, 0);
 	VK_ASSERT_NO_GL_ERROR ();
@@ -2992,6 +3028,7 @@ draw (hikaru_renderer_t *hr)
 	hikaru_gpu_t *gpu = hr->gpu;
 	GLuint n1, n2, f, b, shown, layer1 = 0, layer2 = 0;
 	float factor, mult1 = 0.0f, mult2 = 0.0f;
+	uint32_t rate;
 	bool launched = hr->framebuffer.launched;
 
 	VK_PRINT ("FRAMEBUFFER 781=%08X 181=%08X", gpu->fb_config._781, gpu->fb_config._181);
@@ -3010,9 +3047,8 @@ draw (hikaru_renderer_t *hr)
 	n1 = gpu->fb_config.num_1;
 	n2 = gpu->fb_config.num_2;
 
-	factor = 0.0f;
-	if (gpu->fb_config.blend)
-		factor = gpu->fb_config.alpha * (1.0f / 255);
+	rate = gpu->fb_config.blend ? gpu->fb_config.alpha : 0;
+	factor = rate * (1.0f / 255);
 
 	/* Draw the list to the 3D buffer its 781 names and keep the picture;
 	 * the one of the list before shows next. */
@@ -3022,8 +3058,8 @@ draw (hikaru_renderer_t *hr)
 		hr->framebuffer.last.list = hr->list;
 		hr->framebuffer.last.scene = (n1 < 2) ? n1 : (n2 < 2) ? n2 : 0;
 		hr->framebuffer.last.back =
-			(factor > 0.0f && n1 < 2 && n2 < 2 && n1 != n2) ? (int) n2 : -1;
-		hr->framebuffer.last.factor = factor;
+			(rate > 0 && n1 < 2 && n2 < 2 && n1 != n2) ? (int) n2 : -1;
+		hr->framebuffer.last.rate = rate;
 		hr->framebuffer.last.slot = num % 3;
 		hr->framebuffer.last.views = 0;
 

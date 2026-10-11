@@ -229,7 +229,7 @@ typedef struct {
 		GLuint program;
 		GLuint fb[2], cb[2], db[2];
 		/* The pictures of the last three lists, see draw () */
-		GLuint pipe[3];
+		GLuint pipe[3], pipe_fb[3];
 		uint32_t num_lists;	/* lists drawn so far */
 		uint32_t shown;		/* the picture on screen */
 		int32_t next;		/* the one it takes at the next frame, or -1 */
@@ -250,10 +250,15 @@ typedef struct {
 			hikaru_list_t *list;	/* NULL once counted */
 			unsigned scene;		/* its 3D buffer */
 			int back;		/* the one blended into it, or -1 */
-			float factor;
+			uint32_t rate;		/* 181 */
 			uint32_t slot;		/* its picture in the pipe */
 			uint32_t views;		/* that have such fragments */
 		} last;
+		/* Blends two 3D buffers, see draw_list */
+		struct {
+			GLuint program;
+			GLuint u_rate;
+		} blend;
 		GLuint solid_depth;	/* depth left by the other types */
 		unsigned scene;		/* the 3D buffer being drawn */
 		GLuint vao, vbo;
