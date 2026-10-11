@@ -36,8 +36,6 @@ vk_renderer_begin_frame (vk_renderer_t *renderer)
 		renderer->begin_frame (renderer);
 }
 
-static uint32_t clock = 0;
-
 /* VK_SCREENSHOT=<prefix> writes <prefix>-<frame>.ppm every 60 frames, or
  * every VK_SCREENSHOT_EVERY frames */
 static void
@@ -80,13 +78,35 @@ vk_renderer_screenshot (vk_renderer_t *renderer)
 	free (pixels);
 }
 
+/* The title of the window tells the frames shown in the last second: the
+ * time of one frame, in milliseconds, reads 59 or 62 for 60. */
+static void
+show_speed (vk_renderer_t *renderer)
+{
+	static Uint64 since;
+	static unsigned frames;
+	const Uint64 second = SDL_GetPerformanceFrequency ();
+	const Uint64 now = SDL_GetPerformanceCounter ();
+	char title[256];
+
+	frames++;
+	if (since && now - since < second)
+		return;
+
+	/* Nothing to tell at the start nor after a pause */
+	if (since && now - since < 2 * second) {
+		snprintf (title, sizeof (title), "Odin (%4.1f FPS) [%s]",
+		          (double) frames * (double) second / (double) (now - since),
+		          renderer->message);
+		SDL_SetWindowTitle (renderer->window, title);
+	}
+	since = now;
+	frames = 0;
+}
+
 void
 vk_renderer_end_frame (vk_renderer_t *renderer)
 {
-	char title[256];
-	uint32_t temp, delta;
-	float fps;
-
 	VK_ASSERT (renderer);
 
 	if (renderer->end_frame)
@@ -94,16 +114,7 @@ vk_renderer_end_frame (vk_renderer_t *renderer)
 	vk_renderer_screenshot (renderer);
 	SDL_GL_SwapWindow (renderer->window);
 
-	temp = SDL_GetTicks ();
-	delta = temp - clock;
-	clock = temp;
-
-	fps = 0.0f;
-	if (delta)
-		fps = 1000.0f / delta;
-
-	sprintf (title, "Odin (%4.1f FPS) [%s]", fps, renderer->message);
-	SDL_SetWindowTitle (renderer->window, title);
+	show_speed (renderer);
 }
 
 int
