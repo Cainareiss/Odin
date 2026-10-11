@@ -122,13 +122,20 @@ light vectors arrive in eye space (the library transforms them on the
 SH-4), the 881 alpha bit turns
 the vertex alpha into a blend factor between 091 and 291 (or the texel),
 and the 451 carries the spot
-cone (cos outer in 1.15, scale as an 8-bit float; the B61 vector aims it),
-faded as sat ((L . axis - cos outer) * scale). The scale is the field
+cone (cos outer in 1.15, scale as an 8-bit float; the B61 vector aims it).
+sat ((L . axis - cos outer) * scale) addresses the table that the 194 loads
+for each light, sixteen points with straight lines between them: SEGA
+describes it in its US patent 6,333,742, the X360 port takes the value as
+it is. HEURISTIC: the first point sits at the cutoff and the last at the
+cone angle, nothing is lit beyond the cutoff, the first of the four tables
+of a light is the one used, and 0x400 is 1.0. With the ramp the games load
+(0.05, 0.1, 0.2 to 0.5, then 0.55 to 1.0) the wood of the AIRTRIX hall,
+4 to 13 % under the cabinet with the plain value, is within 6 % of it.
+The scale is the field
 read as (1 + mantissa / 16) * 2^exponent (HEURISTIC: the library builds
 it as an approximate reciprocal of cos inner - cos outer by subtracting
 float bit patterns; with the exact reciprocal the hall-lit scenes of
-AIRTRIX are 8 to 12 % darker than the cabinet, 2 to 5 % this way; the
-wood itself is still 7 to 12 % under).
+AIRTRIX are 8 to 12 % darker than the cabinet).
 The back of a polygon drawn on both faces (vertex bit 23) is lit with the
 reversed normal (HEURISTIC, read from two cabinets: the SEGA logo of
 PODRACE is as bright from behind as from the front and dark when its
