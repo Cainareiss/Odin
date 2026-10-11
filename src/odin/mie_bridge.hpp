@@ -73,6 +73,15 @@ void odin_mie_busrq_write(odin_mie_t *dev, uint32_t value);
 /* Advances the chip by `cycles` host-CPU cycles. */
 void odin_mie_run(odin_mie_t *dev, uint32_t cycles);
 
+/* The interrupt controller of the main board, on ports B, C and F. The
+ * lines from outside, active high: bit 0 ANT_INT, 4 SZK_INT, 5 CN4_INT,
+ * 6 CN3_INT0, 7 CN3_INT1. They are not part of the save state. */
+void odin_mie_set_irq_lines(odin_mie_t *dev, uint8_t lines);
+/* What port B reads. */
+uint8_t odin_mie_irq_pending(const odin_mie_t *dev);
+/* IRL2 of the main SH-4: 1 while something pending passes the mask. */
+int odin_mie_irq_out(const odin_mie_t *dev);
+
 void odin_mie_set_log(odin_mie_t *dev, FILE *out);
 /* Z80 bus trace for `max_instructions` instructions from the first time
  * the PC reaches `start_pc` (0 = from reset). */

@@ -27,12 +27,15 @@
  *
  * Build: g++ -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
  *            -O2 -I src tests/mie/mie_test.cpp src/odin/eeprom_93c46.cpp \
- *            src/odin/jvs_host.cpp src/odin/jvs_io_13551.cpp -o mie_test
+ *            src/odin/jvs_host.cpp src/odin/jvs_io_13551.cpp src/odin/mie.cpp \
+ *            src/odin/mie_bridge.cpp src/odin/card_reader.cpp src/odin/z80.cpp \
+ *            src/odin/z80_ops.cpp -o mie_test
  * Exit status is 0 when every check passes. */
 
 #include "odin/eeprom_93c46.hpp"
 #include "odin/jvs_host.hpp"
 #include "odin/jvs_io_13551.hpp"
+#include "odin/mie_bridge.hpp"
 
 #include <cstdio>
 #include <cstring>
@@ -379,10 +382,48 @@ void test_jvs()
 
 } /* namespace */
 
+/* The interrupt controller on ports B, C and F, through the window of the
+ * host: a port is at twice its number, the direction register at 0x10. */
+void test_interrupts()
+{
+	std::vector<uint8_t> rom(2048, 0), ram(32768, 0);
+	odin_mie_t *mie = odin_mie_new(rom.data(), rom.size(), ram.data(), ram.size(), 200000000,
+	                               nullptr, nullptr);
+	uint32_t v = 0;
+
+	odin_mie_set_irq_lines(mie, 0x01);
+	check(odin_mie_irq_pending(mie) == 0x01 && odin_mie_irq_out(mie) == 0,
+	      "nothing passes while port C is an input");
+	odin_mie_host_write(mie, 2 * 2, 1, 0xE1);
+	check(odin_mie_irq_out(mie) == 0, "writing the latch of port C is not driving it");
+	odin_mie_host_write(mie, 2 * 8, 1, 0xFB);
+	check(odin_mie_irq_out(mie) == 1, "ANT_INT passes the mask E1");
+	odin_mie_set_irq_lines(mie, 0x10);
+	check(odin_mie_irq_out(mie) == 0, "SZK_INT does not");
+	odin_mie_host_read(mie, 2 * 1, 1, &v);
+	check(v == 0x10, "but port B reads it");
+	odin_mie_host_write(mie, 2 * 2, 1, 0xF1);
+	check(odin_mie_irq_out(mie) == 1, "until the mask has its bit");
+	odin_mie_set_irq_lines(mie, 0);
+	check(odin_mie_irq_out(mie) == 0, "a line let go asks no more");
+
+	odin_mie_host_write(mie, 2 * 5, 1, 0x70);
+	check(odin_mie_irq_pending(mie) == 0, "port F asks for nothing while it is an input");
+	odin_mie_host_write(mie, 2 * 8, 1, 0xDB);
+	check(odin_mie_irq_pending(mie) == 0x0E, "pins 4 to 6 of port F are bits 1 to 3 of port B");
+	check(odin_mie_irq_out(mie) == 0, "masked by F1");
+	odin_mie_host_write(mie, 2 * 2, 1, 0x04);
+	check(odin_mie_irq_out(mie) == 1, "and passing with their bit in the mask");
+	odin_mie_host_write(mie, 2 * 5, 1, 0x50);
+	check(odin_mie_irq_out(mie) == 0, "each pin on its own bit");
+	odin_mie_delete(mie);
+}
+
 int main()
 {
 	test_eeprom();
 	test_jvs();
+	test_interrupts();
 	std::printf("%u checks passed, %u failed\n", g_passed, g_failed);
 	return g_failed ? 1 : 0;
 }

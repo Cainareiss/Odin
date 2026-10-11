@@ -139,6 +139,11 @@ public:
 	/* Runs the chip for `cycles` Z80 clocks. */
 	void run(uint32_t cycles);
 
+	/* A GPIO port from the board: whether the chip drives its pins, and
+	 * with what. */
+	bool gpio_is_output(uint8_t port) const { return !(m_gpio_dir & (1u << port)); }
+	uint8_t gpio_latch(uint8_t port) const { return m_gpio_val[port]; }
+
 	JvsHost &jvs() { return m_jvs; }
 	const Z80 &cpu() const { return m_cpu; }
 	/* Device on the serial adapter line; nullptr leaves the line open. */

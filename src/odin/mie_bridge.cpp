@@ -35,15 +35,22 @@ namespace {
 /* The Hikaru main board around the MIE (MAME hikaru.cpp, MIE GPIO
  * ports): port F drives the 93C46 (0 SK, 1 DI, 2 ORG, 3 CS), port G
  * reads its DO on bit 0 and the Test and Service switches, active low,
- * on bits 2 and 3. Port A is an unpopulated DIP switch, B the pending
- * interrupts, C their mask, D the resets, E the LEDs. */
+ * on bits 2 and 3. Port A is an unpopulated DIP switch, D the resets, E
+ * the LEDs.
+ *
+ * Ports B and C are the interrupt controller of the board, with the names
+ * of the schematics. B reads what is pending: bit 0 ANT_INT (the command
+ * processor), 4 SZK_INT (the sound boards), 5 CN4_INT, 6 CN3_INT0, 7
+ * CN3_INT1, and on bits 1 to 3 what the chip itself puts on pins 4 to 6 of
+ * port F. C is the mask of what reaches IRL2 of the main SH-4. */
 class Board : public odin::MieHost, public odin::JvsInputs {
 public:
 	Board(std::span<const uint8_t> rom, std::span<uint8_t> ram, uint32_t clock_hz,
 	      odin_mie_inputs_fn read_inputs, void *ctx)
 		: m_read_inputs(read_inputs), m_ctx(ctx), m_clock_hz(clock_hz), m_cycle_acc(0),
 		  m_rom(copy_rom(rom)),
-		  m_eeprom(odin::Mie::CLOCK_HZ), m_io(*this), m_mie(*this, m_rom, ram), m_log(nullptr)
+		  m_eeprom(odin::Mie::CLOCK_HZ), m_io(*this), m_mie(*this, m_rom, ram), m_log(nullptr),
+		  m_irq_lines(0)
 	{
 		m_inputs = {};
 		m_mie.jvs().add_device(&m_io);
@@ -76,8 +83,7 @@ public:
 			return v;
 		}
 		case 1:
-			/* Pending interrupts: none routed through the MIE here. */
-			return 0x00;
+			return irq_pending();
 		default:
 			/* Unpopulated switches and unused inputs read high. */
 			return 0xFF;
@@ -198,6 +204,23 @@ public:
 	odin::Mie &chip() { return m_mie; }
 	odin::Eeprom93c46 &eeprom() { return m_eeprom; }
 
+	/* The five lines that come from outside, on the bits of port B. */
+	void set_irq_lines(uint8_t lines) { m_irq_lines = lines & 0xF1; }
+
+	/* HEURISTIC: pins 4 to 6 of port F ask for nothing while the chip
+	 * does not drive them. */
+	uint8_t irq_pending() const
+	{
+		const uint8_t own = m_mie.gpio_is_output(5) ? (m_mie.gpio_latch(5) >> 3) & 0x0E : 0;
+		return static_cast<uint8_t>(m_irq_lines | own);
+	}
+
+	/* HEURISTIC: nothing passes while the chip does not drive the mask. */
+	bool irq_out() const
+	{
+		return m_mie.gpio_is_output(2) && (irq_pending() & m_mie.gpio_latch(2)) != 0;
+	}
+
 private:
 	void poll_inputs()
 	{
@@ -221,6 +244,7 @@ private:
 	odin::Mie m_mie;
 	std::unique_ptr<odin::CardReader> m_card;
 	FILE *m_log;
+	uint8_t m_irq_lines;
 };
 
 enum : uint32_t {
@@ -322,6 +346,24 @@ void
 odin_mie_run(odin_mie_t *dev, uint32_t cycles)
 {
 	dev->board->run(cycles);
+}
+
+void
+odin_mie_set_irq_lines(odin_mie_t *dev, uint8_t lines)
+{
+	dev->board->set_irq_lines(lines);
+}
+
+uint8_t
+odin_mie_irq_pending(const odin_mie_t *dev)
+{
+	return dev->board->irq_pending();
+}
+
+int
+odin_mie_irq_out(const odin_mie_t *dev)
+{
+	return dev->board->irq_out() ? 1 : 0;
 }
 
 void
