@@ -63,6 +63,8 @@ struct vk_renderer_t {
 
 	unsigned width;
 	unsigned height;
+	/* The window is the picture, scale times as wide and as high */
+	unsigned scale;
 	char message[256];
 
 	/* Number of the frame being shown, set by the main loop */
@@ -76,6 +78,7 @@ struct vk_renderer_t {
 
 vk_renderer_t		*vk_renderer_new (unsigned width, unsigned height);
 int			 vk_renderer_init (vk_renderer_t *renderer);
+void			 vk_renderer_set_scale (vk_renderer_t *renderer, unsigned scale);
 void			 vk_renderer_begin_frame (vk_renderer_t *renderer);
 void			 vk_renderer_end_frame (vk_renderer_t *renderer);
 void			 vk_renderer_clear_gl_errors (void);

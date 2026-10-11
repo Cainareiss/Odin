@@ -40,6 +40,7 @@ static struct {
 	unsigned save_frames[16];
 	unsigned num_save_frames;
 	bool unthrottled;
+	unsigned scale;
 } options;
 
 static vk_game_list_t *game_list;
@@ -172,7 +173,7 @@ main_loop (vk_machine_t *mach, int num_frames)
 	}
 }
 
-static const char global_opts[] = "R:r:n:l:s:uvh?";
+static const char global_opts[] = "R:r:n:l:s:ux:vh?";
 static const char global_help[] = "Usage: %s [options]\n"
 "	-R <path>	Path to the ROM directory\n"
 "	-r <string>	Name of the game to run\n"
@@ -180,6 +181,7 @@ static const char global_help[] = "Usage: %s [options]\n"
 "	-l <path>	Load a state at startup\n"
 "	-s <num>[,...]	Save <game>-<num>.vkstate after these frames\n"
 "	-u		Run as fast as the host can, not at 60 frames per second\n"
+"	-x <num>	Make the window num times 640 by 480 (1 to 8)\n"
 "	-v		Set verbosity (affects debug messages)\n"
 "	-h              Show this help\n";
 
@@ -227,6 +229,9 @@ parse_global_opts (int argc, char **argv)
 		}
 		case 'u':
 			options.unthrottled = true;
+			break;
+		case 'x':
+			options.scale = (unsigned) atoi (optarg);
 			break;
 		case 'v':
 			vk_verbosity = 1;
@@ -332,6 +337,9 @@ main (const int argc, char **argv)
 	atexit (finalize);
 	//signal (SIGINT,  finalize);
 	//signal (SIGKILL, finalize);
+
+	if (options.scale >= 2 && options.scale <= 8)
+		vk_renderer_set_scale (mach->renderer, options.scale);
 
 	vk_machine_reset (mach, VK_RESET_TYPE_HARD);
 

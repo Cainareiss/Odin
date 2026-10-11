@@ -3022,7 +3022,8 @@ draw (hikaru_renderer_t *hr)
 	set_2d_state (hr);
 
 
-	/* Composite the picture shown and the layers. */
+	/* Composite the picture shown and the layers, on the whole window. */
+	glViewport (0, 0, 640 * hr->base.scale, 480 * hr->base.scale);
 
 	/* Two 3D buffers were blended when their list was drawn. */
 	if (n1 < 2 && n2 < 2)

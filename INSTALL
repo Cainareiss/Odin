@@ -30,6 +30,7 @@ Options:
  -s <frame>[,...]	saves <game>-<frame>.vkstate after these frames
  -l <file>		loads a state at startup
  -u			lifts the limit of 60 frames per second
+ -x <num>		makes the window num times 640 by 480
  -v			more messages
 
 Keys: Escape quits, Space pauses, F4 saves <game>.vkstate and F1 loads it.

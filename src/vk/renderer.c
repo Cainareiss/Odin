@@ -45,7 +45,8 @@ vk_renderer_screenshot (vk_renderer_t *renderer)
 	static unsigned every = 60;
 	static bool checked = false;
 	char path[512];
-	unsigned w = renderer->width, h = renderer->height, y;
+	unsigned w = renderer->width * renderer->scale;
+	unsigned h = renderer->height * renderer->scale, y;
 	uint8_t *pixels;
 	FILE *fp;
 
@@ -159,6 +160,7 @@ vk_renderer_init (vk_renderer_t *renderer)
 	SDL_GL_SetAttribute (SDL_GL_CONTEXT_PROFILE_MASK,
 	                     SDL_GL_CONTEXT_PROFILE_CORE);
 
+	renderer->scale = 1;
 	renderer->window = SDL_CreateWindow ("Odin",
 	                                     SDL_WINDOWPOS_CENTERED,
 	                                     SDL_WINDOWPOS_CENTERED,
@@ -203,6 +205,16 @@ vk_renderer_init (vk_renderer_t *renderer)
 	vk_renderer_clear_gl_errors ();
 
 	return 0;
+}
+
+void
+vk_renderer_set_scale (vk_renderer_t *renderer, unsigned scale)
+{
+	renderer->scale = scale;
+	SDL_SetWindowSize (renderer->window, (int) (renderer->width * scale),
+	                   (int) (renderer->height * scale));
+	SDL_SetWindowPosition (renderer->window, SDL_WINDOWPOS_CENTERED,
+	                       SDL_WINDOWPOS_CENTERED);
 }
 
 vk_renderer_t *
