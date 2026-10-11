@@ -88,13 +88,10 @@ HIKARU_OBJ := \
 	src/mach/hikaru/hikaru-gpu-private.o \
 	src/mach/hikaru/hikaru-aica.o
 
-all: bin/odin bin/vkbswap
+all: bin/odin
 
 bin/odin: $(VK_OBJ) $(HIKARU_OBJ) src/vk/main.o
 	$(LD) $+ -o $@ $(CFLAGS) $(LDFLAGS) 
-
-bin/vkbswap: $(VK_OBJ) src/utils/bswap.o
-	$(CC) $+ -o $@ $(CFLAGS) $(LDFLAGS)
 
 %.o: %.c
 	$(CC) -c $< -o $@ $(CFLAGS)
@@ -105,7 +102,7 @@ bin/vkbswap: $(VK_OBJ) src/utils/bswap.o
 %.o: %.cpp
 	$(CXX) -c $< -o $@ $(CXXFLAGS)
 
--include $(patsubst %.o,%.d,$(VK_OBJ) $(HIKARU_OBJ) src/vk/main.o src/utils/bswap.o)
+-include $(patsubst %.o,%.d,$(VK_OBJ) $(HIKARU_OBJ) src/vk/main.o)
 
 # A product is fused with a sum only where the code says std::fma.
 src/odin/sh4_ops.o: CXXFLAGS += -ffp-contract=off
