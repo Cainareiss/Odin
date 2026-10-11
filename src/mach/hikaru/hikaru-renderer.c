@@ -3034,8 +3034,12 @@ draw (hikaru_renderer_t *hr)
 
 		hr->framebuffer.last.list = hr->list;
 		hr->framebuffer.last.bank = (n1 < 2) ? n1 : (n2 < 2) ? n2 : 0;
+		/* A 3D buffer can be blended with what it holds itself, "two
+		 * frames previous" in the patent: BRAVEFF does at rate FF
+		 * (781 = 0505) and its screen stays black until the city
+		 * fades in, as on the cabinet. */
 		hr->framebuffer.last.back =
-			(rate > 0 && n1 < 2 && n2 < 2 && n1 != n2) ? (int) n2 : -1;
+			(rate > 0 && n1 < 2 && n2 < 2) ? (int) n2 : -1;
 		hr->framebuffer.last.rate = rate;
 		hr->framebuffer.last.slot = num % 3;
 		hr->framebuffer.last.views = 0;
