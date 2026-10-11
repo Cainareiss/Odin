@@ -335,8 +335,6 @@ main (const int argc, char **argv)
 	}
 
 	atexit (finalize);
-	//signal (SIGINT,  finalize);
-	//signal (SIGKILL, finalize);
 
 	if (options.scale >= 2 && options.scale <= 8)
 		vk_renderer_set_scale (mach->renderer, options.scale);
