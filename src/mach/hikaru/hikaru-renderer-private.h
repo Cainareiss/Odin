@@ -114,10 +114,14 @@ typedef struct {
 	int		weigh_by_alpha;
 } hikaru_mesh_held_t;
 
-typedef struct {
+typedef struct hikaru_texture_t hikaru_texture_t;
+
+struct hikaru_texture_t {
 	GLuint id;
 	hikaru_texhead_t th;
-} hikaru_texture_t;
+	/* Another size or format read at the same slot */
+	hikaru_texture_t *next;
+};
 
 typedef struct {
 	uint32_t		first;	/* first vertex in the buffer of the frame */

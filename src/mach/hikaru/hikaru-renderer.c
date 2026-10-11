@@ -373,10 +373,13 @@ fail:
 	return 0;
 }
 
+/* A slot of the texture RAM has a texture for each size and format it is
+ * read with: PHARRIER draws the same frames with a 32x64 and a 128x128 texture
+ * at the slot C8,D0 of the bank 1. */
 hikaru_texture_t *
 get_texture (hikaru_renderer_t *hr, hikaru_texhead_t *th)
 {
-	hikaru_texture_t *cached;
+	hikaru_texture_t *first, *cached;
 	uint32_t bank, slotx, sloty;
 	GLuint id;
 
@@ -390,19 +393,23 @@ get_texture (hikaru_renderer_t *hr, hikaru_texhead_t *th)
 	slotx -= 0x80;
 	sloty -= 0xC0;
 
-	cached = &hr->textures.cache[bank][sloty][slotx];
-	if (is_texhead_eq (hr, th, &cached->th))
-		return cached;
+	first = &hr->textures.cache[bank][sloty][slotx];
+	for (cached = first; cached; cached = cached->next)
+		if (is_texhead_eq (hr, th, &cached->th))
+			return cached;
 	LOG ("TEXUPLOAD %s", get_texhead_str (th));
 
-	destroy_texture (hr, cached);
-
 	id = upload_texture (hr, th);
-	if (!id) {
-		destroy_texture (hr, cached);
+	if (!id)
 		return NULL;
-	}
 
+	cached = first;
+	if (first->id) {
+		cached = ALLOC (hikaru_texture_t);
+		VK_ASSERT (cached);
+		cached->next = first->next;
+		first->next = cached;
+	}
 	cached->th = *th;
 	cached->id = id;
 
@@ -420,9 +427,19 @@ clear_texcache_bank (hikaru_renderer_t *hr, unsigned bank)
 	hr->textures.is_clear[bank] = true;
 
 	/* Free all allocated surfaces. */
-	for (y = 0; y < 0x40; y++)
-		for (x = 0; x < 0x80; x++)
-			destroy_texture (hr, &hr->textures.cache[bank][y][x]);
+	for (y = 0; y < 0x40; y++) {
+		for (x = 0; x < 0x80; x++) {
+			hikaru_texture_t *first = &hr->textures.cache[bank][y][x];
+			hikaru_texture_t *tex, *next;
+
+			for (tex = first->next; tex; tex = next) {
+				next = tex->next;
+				bury_texture (hr, tex->id);
+				free (tex);
+			}
+			destroy_texture (hr, first);
+		}
+	}
 
 	/* Zero out the cache itself, to avoid spurious hits. Note that
 	 * texture RAM origin is (80,C0), so (slotx, sloty) will never match
