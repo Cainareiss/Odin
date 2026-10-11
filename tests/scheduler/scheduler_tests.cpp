@@ -30,6 +30,7 @@
 #include "odin/scheduler_bridge.hpp"
 
 #include <cstdio>
+#include <vector>
 
 namespace {
 
@@ -143,6 +144,23 @@ void test_frame()
 	check(s.next() == Scheduler::NEVER, "nothing is left at the end of the frame");
 }
 
+void test_save_load()
+{
+	Scheduler a, b;
+	odin::SchedulerState state;
+	uint32_t source = 99;
+
+	a.set(2, 40);
+	a.set(5, 90);
+	a.advance(40);
+	a.save(state);
+	b.set(7, 10);
+	b.load(state);
+	check(b.now() == 40 && b.next() == 40, "a loaded scheduler is at the saved time");
+	check(b.take(source) && source == 2 && b.next() == 90, "with the saved events only");
+	check(a.take(source) && source == 2 && a.next() == 90, "saving changes nothing");
+}
+
 void test_bridge()
 {
 	odin_scheduler_t *s = odin_scheduler_new();
@@ -156,6 +174,14 @@ void test_bridge()
 	      odin_scheduler_take(s) == -1, "bridge: the events due, then none");
 	odin_scheduler_reset(s);
 	check(odin_scheduler_now(s) == 0 && odin_scheduler_next(s) == UINT64_MAX, "bridge: reset");
+
+	odin_scheduler_t *t = odin_scheduler_new();
+	std::vector<uint8_t> block(odin_scheduler_state_size());
+	odin_scheduler_set(s, 3, 12);
+	odin_scheduler_save_state(s, block.data());
+	odin_scheduler_load_state(t, block.data());
+	check(odin_scheduler_next(t) == 12, "bridge: a state saved and loaded");
+	odin_scheduler_delete(t);
 	odin_scheduler_delete(s);
 }
 
@@ -166,6 +192,7 @@ int main()
 	test_dates();
 	test_same_date();
 	test_frame();
+	test_save_load();
 	test_bridge();
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures == 0 ? 0 : 1;
