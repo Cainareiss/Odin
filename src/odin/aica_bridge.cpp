@@ -205,6 +205,13 @@ odin_aica_reset(odin_aica_t *dev)
 	dev->board->chip().reset();
 }
 
+void
+odin_aica_reset_pin(odin_aica_t *dev)
+{
+	dev->board->arm().settle();
+	dev->board->chip().reset(false);
+}
+
 int
 odin_aica_host_read(odin_aica_t *dev, uint32_t offset, unsigned size, uint64_t *value)
 {

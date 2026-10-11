@@ -182,6 +182,9 @@ test_rtc()
 	check(aica.read_rtc(0) == 0x1234 && aica.read_rtc(4) == 0xFFFF, "RTC set through write enable");
 	aica.tick(44100);
 	check(aica.read_rtc(0) == 0x1235 && aica.read_rtc(4) == 0x0000, "RTC carries after one second");
+	aica.reset(false);
+	check(aica.read_rtc(0) == 0x1235 && aica.read_rtc(4) == 0x0000, "the reset pin leaves the RTC its time");
+	check(aica.arm_in_reset(), "and puts the ARM7 back in reset");
 }
 
 void

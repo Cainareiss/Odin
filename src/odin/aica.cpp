@@ -33,7 +33,7 @@ Aica::Aica(AicaHost &host, std::span<uint8_t> ram)
 }
 
 void
-Aica::reset()
+Aica::reset(bool power_on)
 {
 	m_regs.fill(0);
 	m_timer_count.fill(0);
@@ -48,14 +48,17 @@ Aica::reset()
 	m_fiq = false;
 	m_main_irq = false;
 	m_rtc_we = false;
-	m_rtc_samples = 0;
 	m_unknown_logged = 0;
 
-	/* Seconds since 1950-01-01 00:00:00, the epoch of the AICA RTC
-	 * (MAME aicartc.cpp rtc_clock_updated). 631152000 s separate it from
-	 * the Unix epoch, 14 of those years being leap years. */
-	const time_t now = time(nullptr);
-	m_rtc_seconds = static_cast<uint32_t>(now) + 631152000u;
+	if (power_on) {
+		/* Seconds since 1950-01-01 00:00:00, the epoch of the AICA
+		 * RTC (MAME aicartc.cpp rtc_clock_updated). 631152000 s
+		 * separate it from the Unix epoch, 14 of those years being
+		 * leap years. */
+		const time_t now = time(nullptr);
+		m_rtc_seconds = static_cast<uint32_t>(now) + 631152000u;
+		m_rtc_samples = 0;
+	}
 
 	m_host.arm_reset(true);
 	m_host.arm_fiq(false);

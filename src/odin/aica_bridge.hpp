@@ -45,6 +45,8 @@ void odin_aica_delete(odin_aica_t *dev);
 /* The level of that line. */
 int odin_aica_main_irq(const odin_aica_t *dev);
 void odin_aica_reset(odin_aica_t *dev);
+/* The reset pin of the board: as above, but the clock keeps its time. */
+void odin_aica_reset_pin(odin_aica_t *dev);
 
 /* `offset` is the byte offset inside the board's 16 MB bus page:
  * 0x700000 registers, 0x710000 RTC, 0x800000 wave memory; size 1, 2, 4 or

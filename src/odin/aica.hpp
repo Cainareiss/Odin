@@ -72,7 +72,9 @@ public:
 
 	Aica(AicaHost &host, std::span<uint8_t> ram);
 
-	void reset();
+	/* Power-on, or the reset pin of the board: the clock, on its battery,
+	 * is set at power-on only. */
+	void reset(bool power_on = true);
 
 	/* Register file, byte offset 0x0000-0x7FFF, size 1, 2 or 4. The same
 	 * window is seen by the ARM7 at 0x00800000 and by the host CPU. */
