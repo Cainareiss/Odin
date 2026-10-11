@@ -1012,6 +1012,27 @@ hikaru_gpu_begin_dma (hikaru_gpu_t *gpu)
  External events
 ****************************************************************************/
 
+/* The frame as the games set it: dots per line (1A000080), lines
+ * (1A000084), last and first line shown (1A00008C). The six games write
+ * 818, 528, 516 and 36 some thirty frames after power-on and never again.
+ * HEURISTIC: before that the frame is taken to be the same. */
+void
+hikaru_gpu_get_frame_size (vk_device_t *dev, unsigned *dots, unsigned *lines,
+                           unsigned *shown)
+{
+	hikaru_gpu_t *gpu = (hikaru_gpu_t *) dev;
+
+	if (REG1A (0x80) == 0 && REG1A (0x84) == 0 && REG1A (0x8C) == 0) {
+		*dots = 818;
+		*lines = 528;
+		*shown = 480;
+		return;
+	}
+	*dots = REG1A (0x80);
+	*lines = REG1A (0x84);
+	*shown = (REG1A (0x8C) >> 16) - (REG1A (0x8C) & 0xFFFF);
+}
+
 void
 hikaru_gpu_hblank_in (vk_device_t *dev, unsigned line)
 {
