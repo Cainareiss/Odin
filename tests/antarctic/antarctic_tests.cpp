@@ -17,13 +17,14 @@
  */
 
 /* Unit tests for the command processor of the Hikaru: small lists written
- * by hand, and what they leave in the display list.
+ * by hand and what they leave in the display list, its registers and its
+ * texture transfer.
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
  *            -I src tests/antarctic/antarctic_tests.cpp src/odin/antarctic.cpp \
  *            src/odin/antarctic_ops.cpp src/odin/antarctic_mesh.cpp \
- *            src/odin/antarctic_disasm.cpp src/odin/antarctic_list.cpp \
- *            -o antarctic_tests
+ *            src/odin/antarctic_io.cpp src/odin/antarctic_disasm.cpp \
+ *            src/odin/antarctic_list.cpp -o antarctic_tests
  * Exit status is 0 when every check passes. */
 
 #include "odin/antarctic.hpp"
@@ -65,7 +66,8 @@ constexpr uint32_t STACK = 0x483FC000;
 struct Machine {
 	std::vector<uint8_t> cmdram = std::vector<uint8_t>(4 << 20);
 	std::vector<uint8_t> ram_s = std::vector<uint8_t>(32 << 20);
-	std::unique_ptr<Antarctic> cp = std::make_unique<Antarctic>(cmdram, ram_s);
+	std::vector<uint8_t> texram[2] = { std::vector<uint8_t>(4 << 20), std::vector<uint8_t>(4 << 20) };
+	std::unique_ptr<Antarctic> cp = std::make_unique<Antarctic>(cmdram, ram_s, texram[0], texram[1]);
 	odin_display_list_t *list = nullptr;
 	bool ended = false;
 
@@ -275,6 +277,79 @@ void test_viewport_and_state()
 	check(m.cp->state().vp.current.depth.func == 0 && m.cp->pc() == 0, "power-on clears everything");
 }
 
+void test_registers()
+{
+	Machine m;
+	uint32_t value = 0;
+
+	check(m.cp->write_register(0x15000070, LIST) == Antarctic::Written::DONE &&
+	      m.cp->write_register(0x15000074, STACK) == Antarctic::Written::DONE,
+	      "the start address and the stack pointer are registers");
+	check(m.cp->write_register(0x15000058, 3) == Antarctic::Written::CONTROL && m.cp->list_asked(),
+	      "15000058 = 3 asks for a list");
+	m.write(LIST, { END });
+	m.cp->set_log(nullptr);
+	m.cp->begin_list(false);
+	m.cp->start_list();
+	check(m.cp->pc() == LIST && m.cp->run(10), "the list starts where 15000070 tells");
+	m.cp->list_ended();
+	check(!m.cp->list_asked(), "the two bits go off when the list ends");
+
+	check(!m.cp->irq_line(), "no cause, no interrupt");
+	m.cp->raise(Antarctic::IRQ_ANALYSIS_END);
+	check(m.cp->irq_line(), "a cause holds the line");
+	check(m.cp->write_register(0x15000084, 0x04) == Antarctic::Written::CAUSES && !m.cp->irq_line(),
+	      "a bit set in 15000084 masks its cause");
+	m.cp->write_register(0x15000084, 0);
+	m.cp->write_register(0x15000088, ~0x04u);
+	check(m.cp->read_register(0x15000088, value) && value == 0 && !m.cp->irq_line(),
+	      "a cause is cleared by writing it back as 0");
+	m.cp->set_display_irq(true);
+	check(m.cp->read_register(0x15000088, value) && value == 0x80, "bit 7 follows the display chip");
+
+	check(!m.cp->read_register(0x15000058, value), "15000058 is not read");
+	check(m.cp->write_register(0x150000FC, 0) == Antarctic::Written::UNKNOWN, "a register that is not known");
+	check(m.cp->read_register(0x15002000, value) && value == 0, "15002000 reads 0: the second main board");
+}
+
+/* A 16x16 texture, 512 bytes on the bus, to the first slot of bank 1 */
+void test_texture_transfer()
+{
+	Machine m;
+	const uint32_t table = 0x483FC000, texels = 0x48100000;
+	int written = -1;
+	uint32_t value = 0;
+
+	for (uint32_t i = 0; i < 256; i++) {
+		const uint16_t texel = static_cast<uint16_t>(0x8000 | i);
+
+		std::memcpy(&m.cmdram[(texels & 0x3FFFFF) + i * 2], &texel, 2);
+	}
+	m.write(table, { texels, 512, 0x0000C080, 1 });
+	m.cp->set_log(nullptr);
+	m.cp->set_texture_written([](void *ctx, unsigned bank) { *static_cast<int *>(ctx) = static_cast<int>(bank); }, &written);
+
+	m.cp->write_register(0x1500000C, table);
+	m.cp->write_register(0x15000010, 1);
+	check(!m.cp->step_texture_transfer(), "no transfer before it is asked");
+	m.cp->write_register(0x15000014, 1);
+	check(m.cp->read_register(0x15000014, value) && value == 1, "the transfer reads busy");
+	check(m.cp->step_texture_transfer(), "one entry: the transfer ends at the first step");
+	check(m.cp->read_register(0x15000014, value) && value == 0, "then it reads ready");
+	check(m.cp->read_register(0x15000088, value) && (value & Antarctic::IRQ_TRANSFER_END), "and its end is a cause");
+	check(m.cp->read_register(0x15000010, value) && value == 1, "the length register keeps its value");
+	check(written == 1, "the board is told which bank was written");
+
+	/* The two texels of a 32-bit word are swapped in the texture RAM. */
+	uint16_t first, second;
+	std::memcpy(&first, &m.texram[1][2], 2);
+	std::memcpy(&second, &m.texram[1][0], 2);
+	check(first == 0x8000 && second == 0x8001, "the texels land in the bank, two by two swapped");
+	uint16_t next_row;
+	std::memcpy(&next_row, &m.texram[1][4096 + 2], 2);
+	check(next_row == 0x8010, "a row of the texture RAM is 2048 texels long");
+}
+
 void test_disassembler()
 {
 	const uint32_t jump[8] = { 0x00000012, 0x12000043 };
@@ -301,6 +376,8 @@ int main()
 	test_strip_through_recall();
 	test_texhead_of_0E8_and_second_modelview();
 	test_viewport_and_state();
+	test_registers();
+	test_texture_transfer();
 	test_disassembler();
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures == 0 ? 0 : 1;
