@@ -301,6 +301,16 @@ On the first, 837-13402, the bit is set a frame after a list is started,
 and the library also takes it, with bit 0 of 1A000024 clear, for a list
 that is done. What else differs between the two boards is not known.
 
+Counters: the eleven registers 15002800 to 15002848 (primitives of each
+type, texture heads, materials and lights, by the names of the debug menu
+of PHARRIER) read 0, nothing says what each counts exactly. AIRTRIX,
+BRAVEFF, PODRACE and SGNASCAR copy them to their memory at every list; a
+debug text is all that is seen made of them, and the six attract loops
+send the same lists when the counters read 1000000. Read as 0 too, for
+want of a source: 1A000020 (once at start, 12 times in BRAVEFF) and
+1A08006C, which the frame swap of AIRTRIX and VON4 wants at 0 before it
+launches a list.
+
 
 SH-4
 ----
@@ -350,7 +360,11 @@ manual is decoded; FSCA and FSRRA, which it does not list, come from the
 SH7091 (MAME sh4.cpp).
 
 A read that nothing answers gives 0 (HEURISTIC: the value of the bus is
-not known; BRAVEFF reads FFFFFFFC at 0C076E48).
+not known; BRAVEFF reads FFFFFFFC at 0C076E48). A write that nothing
+answers is dropped. PHARRIER makes four of them at every frame, twice:
+its copy through the store queues (0x0C011AF0) masks the low bits of the
+target away, writes its first 32 bytes below the queues, at DFFFFFE0, and
+sends no PREF; it is called for one block.
 
 The clock of the AICA starts on the local time of the host
 (src/odin/aica.cpp): two runs do not leave the same byte in the memory of
