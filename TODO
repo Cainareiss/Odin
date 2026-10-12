@@ -402,6 +402,16 @@ GPU_LOG_IDMA=1 each texture transfer, GPU_LOG_DMA=1 each blit.
 ODIN_LIST_FP=1 prints a fingerprint of the list of each frame, to compare two
 builds; ODIN_LIST_DUMP=<frame> adds one line for each mesh of that frame.
 ODIN_PICTURE_FP=1 prints a fingerprint of the picture of each frame.
+
+The renderer (src/odin/renderer.hpp, OpenGL 4.3) stands for the chips that
+plot the polygons. A frame, the two 3D buffers and the composition with the
+layers are in renderer.cpp, the passes of a list in renderer_scene.cpp, the
+translucent fragments in renderer_translucent.cpp, the programs and the text
+of their shaders in renderer_programs.cpp and renderer_shaders.cpp, the
+textures in renderer_textures.cpp, the 2D layers in renderer_layers.cpp.
+Every buffer is 640 x 480. HR_LOG=1 logs the objects of every mesh,
+HR_LOG_FRAME=<frame> those of one frame; ODIN_DEBUG_KEYS=1 gives the keys
+1 2 3 t u p i j l a d g a switch each (renderer_debug.cpp).
 Tests: tests/antarctic, tests/eurasia, tests/hikaru_gpu. As Valkyrie had it,
 and HEURISTIC: a list is run one instruction a cycle of the SH-4 from its
 launch on, the end of its analysis and the end of its plot are told together
@@ -413,8 +423,18 @@ until the next launch, as BRAVEFF does once at start.
 
 The projection clipping planes are probably scaled by some value, because
 using the ones provided by the games as they are leads to a far too close
-far clipping plane. Use 'p' to toggle a standard 90 degree FOV projection and
-see things (affects all games).
+far clipping plane. The far plane is put at 1e5 (HEURISTIC).
+
+A modelview without inverse has no matrix of the normals: the one sent last
+is sent again (HEURISTIC; the renderer of Valkyrie did it by leaving a
+variable unset). The second modelview is null most of the time and its
+normals then turn with the first one. Over the six attract loops the first
+modelview has no inverse 0 (SGNASCAR) to 35877 times (VON4), on lit meshes
+24131 times in PHARRIER and 4571 times in PODRACE. How the hardware lights
+a flattened mesh is not known.
+
+The A2BGR10 layers are shown four times as bright (HEURISTIC, as Valkyrie
+had it).
 
 Translucent polygons are blended far to near at every pixel, whatever the
 triangle or the mesh they come from, without writing the depth (HEURISTIC:
