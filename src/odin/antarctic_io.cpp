@@ -174,6 +174,12 @@ namespace odin {
  * See PH:@0C0127B8 and the menu list at PH:@0C1D4EA4. Counter names are taken
  * from the latter.
  *
+ * They read 0 here: nothing says what each counts exactly. The libraries of
+ * AIRTRIX, BRAVEFF, PODRACE and SGNASCAR copy the eleven to their memory at
+ * every list; a debug text is all that is seen made of them (BRAVEFF
+ * @0C040A66), and the six attract loops send the same lists when they read
+ * 1000000.
+ *
  * Unknown
  * -------
  *
