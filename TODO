@@ -335,6 +335,16 @@ screen of the BOOTROM shows a date in 2040: where it takes it is not read.
 GPU / RENDERING
 ---------------
 
+Command processor (src/odin/antarctic.hpp, the 315-6083): the instructions
+are in antarctic_ops.cpp, the triangles and the display list of a frame in
+antarctic_mesh.cpp and antarctic_list.h; the renderer only draws that list.
+GPU_LOG_CP=1 prints each instruction as it is executed (antarctic_disasm.cpp).
+ODIN_LIST_FP=1 prints a fingerprint of the list of each frame, to compare two
+builds; ODIN_LIST_DUMP=<frame> adds one line for each mesh of that frame.
+Tests: tests/antarctic. As Valkyrie had it, and HEURISTIC: a list is run one
+instruction a cycle of the SH-4 from its launch on, and the end of its
+analysis and the end of its plot are told together when it stops.
+
 The projection clipping planes are probably scaled by some value, because
 using the ones provided by the games as they are leads to a far too close
 far clipping plane. Use 'p' to toggle a standard 90 degree FOV projection and
