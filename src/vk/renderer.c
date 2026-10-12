@@ -79,6 +79,42 @@ vk_renderer_screenshot (vk_renderer_t *renderer)
 	free (pixels);
 }
 
+/* ODIN_PICTURE_FP=1: one line for the picture of each frame, FNV-1a 64 of
+ * its pixels, to compare two builds. */
+static void
+vk_renderer_print_fingerprint (vk_renderer_t *renderer)
+{
+	static int wanted = -1;
+	static uint8_t *pixels;
+	static size_t held;
+	const unsigned w = renderer->width * renderer->scale;
+	const unsigned h = renderer->height * renderer->scale;
+	const size_t size = (size_t) w * h * 3;
+	uint64_t fp = 0xCBF29CE484222325ull;
+	size_t i;
+
+	if (wanted < 0)
+		wanted = vk_util_get_bool_option ("ODIN_PICTURE_FP", false) ? 1 : 0;
+	if (!wanted)
+		return;
+
+	if (held != size) {
+		pixels = (uint8_t *) realloc (pixels, size);
+		VK_ASSERT (pixels);
+		held = size;
+	}
+	glBindFramebuffer (GL_READ_FRAMEBUFFER, 0);
+	glReadBuffer (GL_BACK);
+	glPixelStorei (GL_PACK_ALIGNMENT, 1);
+	glReadPixels (0, 0, (GLsizei) w, (GLsizei) h, GL_RGB, GL_UNSIGNED_BYTE, pixels);
+
+	for (i = 0; i < size; i++) {
+		fp ^= pixels[i];
+		fp *= 0x100000001B3ull;
+	}
+	fprintf (stderr, "PICFP frame=%u fp=%016lx\n", renderer->frame, fp);
+}
+
 /* The title of the window tells the frames shown in the last second: the
  * time of one frame, in milliseconds, reads 59 or 62 for 60. */
 static void
@@ -118,6 +154,7 @@ vk_renderer_end_frame (vk_renderer_t *renderer)
 	if (renderer->end_frame)
 		renderer->end_frame (renderer);
 	vk_renderer_screenshot (renderer);
+	vk_renderer_print_fingerprint (renderer);
 	SDL_GL_SwapWindow (renderer->window);
 
 	show_speed (renderer);
