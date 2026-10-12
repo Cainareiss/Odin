@@ -444,13 +444,15 @@ The projection clipping planes are probably scaled by some value, because
 using the ones provided by the games as they are leads to a far too close
 far clipping plane. The far plane is put at 1e5 (HEURISTIC).
 
-A modelview without inverse has no matrix of the normals: the one sent last
-is sent again (HEURISTIC; the renderer of Valkyrie did it by leaving a
-variable unset). The second modelview is null most of the time and its
-normals then turn with the first one. Over the six attract loops the first
-modelview has no inverse 0 (SGNASCAR) to 35877 times (VON4), on lit meshes
-24131 times in PHARRIER and 4571 times in PODRACE. How the hardware lights
-a flattened mesh is not known.
+A normal goes through the 3x3 of its modelview, as the position does: US
+patent 6,714,690 of SEGA says the geometry processor multiplies both by the
+same matrix, the translation switched off for a normal. Valkyrie took the
+inverse transposed, which differs when an object is stretched: the droid of
+the PODRACE attract was 1.6 times darker than on the cabinet at its chest,
+1.1 now; four other zones of PODRACE and PHARRIER moved by a level or two,
+none away. AIRTRIX, SGNASCAR and VON4 hardly use such matrices. A modelview
+whose 3x3 is null needs no special case any more (a sprite placed by the
+last row alone: PHARRIER sends one 21431 times a loop).
 
 The A2BGR10 layers are shown four times as bright (HEURISTIC, as Valkyrie
 had it).
