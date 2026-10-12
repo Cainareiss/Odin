@@ -540,8 +540,17 @@ material editor of PHARRIER; the library writes the entry index XOR 0x20,
 with a high of 0xFF, and the entries no game sets hold 0x80 and 0xFFFFFF):
 neither is used, the passes test alpha as the X360 port does. The fourth
 byte of the 091 colour word is not used either; BRAVEFF sets it in the
-materials it builds with A91 and C91, one-word forms of A81 and C81 whose
-bit 4 is not understood.
+materials of its 12-word routine (0x0C0D69C8).
+
+That routine makes the words 881, A81 and C81 by adding 0x200 to 0x891 and
+takes the 0x10 off the first alone (VON4 has it right, 0x0C716B1A): the
+blending mode leaves as A91 with a C91 behind it, 24136 times in the loop
+of BRAVEFF and in no other game. A91 is read as its size bits say, two
+words, and sets the blending mode from the first: the fires of the game
+are then added to the picture as on the cabinet (mean colour of the flames
+within 6 % at four instants; a quarter to a half too dark without it).
+HEURISTIC: the second word is dropped. The board may run it as a C81
+instead; the alpha index it would set is not used.
 
 006 and 046 do nothing. Every game sends the pair at the end of the list
 that resets the GPU; RACER wraps seven hand-written lists of one flat quad
