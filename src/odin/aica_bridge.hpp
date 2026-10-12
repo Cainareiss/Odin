@@ -47,11 +47,16 @@ int odin_aica_main_irq(const odin_aica_t *dev);
 void odin_aica_reset(odin_aica_t *dev);
 /* The reset pin of the board: as above, but the clock keeps its time. */
 void odin_aica_reset_pin(odin_aica_t *dev);
+/* The battery of the RTC: the seconds the clock of the board is ahead of the
+ * local time of the host. */
+int32_t odin_aica_rtc_ahead(const odin_aica_t *dev);
+void odin_aica_set_rtc_ahead(odin_aica_t *dev, int32_t seconds);
 
 /* `offset` is the byte offset inside the board's 16 MB bus page:
  * 0x700000 registers, 0x710000 RTC, 0x800000 wave memory; size 1, 2, 4 or
  * 8 (wave memory only). Returns 0, or
- * -1 for an offset the board does not decode. */
+ * -1 for an offset the board does not decode; a write that sets the count
+ * of the RTC returns 1. */
 int odin_aica_host_read(odin_aica_t *dev, uint32_t offset, unsigned size, uint64_t *value);
 int odin_aica_host_write(odin_aica_t *dev, uint32_t offset, unsigned size, uint64_t value);
 

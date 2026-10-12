@@ -91,6 +91,12 @@ public:
 	 * (see rtc_of_host_clock in aica.cpp). */
 	uint32_t read_rtc(uint32_t offset) const;
 	void write_rtc(uint32_t offset, uint32_t value);
+	/* For the battery of the RTC, which the board keeps: by how many
+	 * seconds the clock is ahead of the local time of the host, and
+	 * whether the software has set the count since the last call. */
+	int32_t rtc_ahead() const;
+	void set_rtc_ahead(int32_t seconds);
+	bool take_rtc_set();
 
 	/* Advances the chip by `n` sample periods (1/44100 s each). */
 	void tick(uint32_t n);
@@ -179,6 +185,7 @@ private:
 	bool m_fiq;
 	bool m_main_irq;
 	bool m_rtc_we;
+	bool m_rtc_set;
 	uint32_t m_rtc_seconds;
 	uint32_t m_rtc_samples;
 	uint32_t m_unknown_logged;

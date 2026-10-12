@@ -194,10 +194,22 @@ test_rtc()
 	aica.write_rtc(8, 1);
 	aica.write_rtc(4, 0xFFFF);
 	check(aica.read_rtc(0) == 0x1234 && aica.read_rtc(4) == 0xFFFF, "RTC set through write enable");
+	check(aica.take_rtc_set() && !aica.take_rtc_set(), "a count set by the software is told once");
 	aica.tick(44100);
 	check(aica.read_rtc(0) == 0x1235 && aica.read_rtc(4) == 0x0000, "RTC carries after one second");
 	aica.reset(false);
 	check(aica.read_rtc(0) == 0x1235 && aica.read_rtc(4) == 0x0000, "the reset pin leaves the RTC its time");
+
+	/* The battery: a day ahead of the host, then set an hour further */
+	aica.set_rtc_ahead(86400);
+	check(aica.rtc_ahead() >= 86399 && aica.rtc_ahead() <= 86401, "the clock is put a day ahead of the host");
+	const uint32_t later = ((aica.read_rtc(0) << 16) | aica.read_rtc(4)) + 3600;
+	aica.write_rtc(8, 1);
+	aica.write_rtc(0, later >> 16);
+	aica.write_rtc(8, 1);
+	aica.write_rtc(4, later & 0xFFFF);
+	check(aica.take_rtc_set() && aica.rtc_ahead() >= 89999 && aica.rtc_ahead() <= 90001,
+	      "and reads an hour further once the software has set it so");
 	check(aica.arm_in_reset(), "and puts the ARM7 back in reset");
 }
 

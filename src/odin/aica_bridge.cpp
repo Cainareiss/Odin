@@ -205,6 +205,18 @@ odin_aica_reset(odin_aica_t *dev)
 	dev->board->chip().reset();
 }
 
+int32_t
+odin_aica_rtc_ahead(const odin_aica_t *dev)
+{
+	return dev->board->chip().rtc_ahead();
+}
+
+void
+odin_aica_set_rtc_ahead(odin_aica_t *dev, int32_t seconds)
+{
+	dev->board->chip().set_rtc_ahead(seconds);
+}
+
 void
 odin_aica_reset_pin(odin_aica_t *dev)
 {
@@ -242,6 +254,7 @@ odin_aica_host_write(odin_aica_t *dev, uint32_t offset, unsigned size, uint64_t 
 		chip.write_reg(offset - PAGE_REGS, size > 4 ? 4 : size, static_cast<uint32_t>(value));
 	} else if (offset >= PAGE_RTC && offset < PAGE_RTC_END) {
 		chip.write_rtc(offset - PAGE_RTC, static_cast<uint32_t>(value));
+		return chip.take_rtc_set() ? 1 : 0;
 	} else {
 		return -1;
 	}

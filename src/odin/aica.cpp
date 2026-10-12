@@ -70,6 +70,7 @@ Aica::reset(bool power_on)
 	m_fiq = false;
 	m_main_irq = false;
 	m_rtc_we = false;
+	m_rtc_set = false;
 	m_unknown_logged = 0;
 
 	if (power_on) {
@@ -301,6 +302,28 @@ Aica::read_rtc(uint32_t offset) const
 	}
 }
 
+int32_t
+Aica::rtc_ahead() const
+{
+	return static_cast<int32_t>(m_rtc_seconds - rtc_of_host_clock());
+}
+
+void
+Aica::set_rtc_ahead(int32_t seconds)
+{
+	m_rtc_seconds = rtc_of_host_clock() + static_cast<uint32_t>(seconds);
+	m_rtc_samples = 0;
+}
+
+bool
+Aica::take_rtc_set()
+{
+	const bool set = m_rtc_set;
+
+	m_rtc_set = false;
+	return set;
+}
+
 void
 Aica::write_rtc(uint32_t offset, uint32_t value)
 {
@@ -309,12 +332,14 @@ Aica::write_rtc(uint32_t offset, uint32_t value)
 		if (m_rtc_we) {
 			m_rtc_seconds = (m_rtc_seconds & 0xFFFF) | ((value & 0xFFFF) << 16);
 			m_rtc_we = false;
+			m_rtc_set = true;
 		}
 		break;
 	case 4:
 		if (m_rtc_we) {
 			m_rtc_seconds = (m_rtc_seconds & 0xFFFF0000) | (value & 0xFFFF);
 			m_rtc_samples = 0;
+			m_rtc_set = true;
 		}
 		break;
 	case 8:

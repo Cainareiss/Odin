@@ -38,8 +38,8 @@
  * 703200-7033FF MADRS
  * 703400-703BFF MPRO; 3BFE --> AICA DSP start
  *
- * 710000 RTC Lo
- * 710004 RTC Hi
+ * 710000 RTC, high half of the count
+ * 710004 RTC, low half
  * 710008 RTC Write Enable
  *
  * 800000-FFFFFF RAM
@@ -102,19 +102,71 @@ hikaru_aica_get (vk_device_t *device, unsigned size, uint32_t addr, void *val)
 	return 0;
 }
 
+/*
+ * The battery of the clock
+ * ========================
+ *
+ * The RTC of the main board keeps counting when the cabinet is off. The
+ * count it starts with here is the local time of the host, as on a board
+ * whose clock was set once and whose battery never died. With
+ * ODIN_CLOCK_FILE=<path> the board keeps the clock it was set to (CLOCK
+ * SETTING in the SYSTEM MENU): the file holds, in seconds, how far that
+ * clock is ahead of the time of the host.
+ */
+
+static void
+hikaru_aica_load_clock (hikaru_aica_t *aica)
+{
+	const char *path = getenv ("ODIN_CLOCK_FILE");
+	int ahead = 0;
+	FILE *fp;
+
+	if (!path || !aica->master)
+		return;
+	fp = fopen (path, "r");
+	if (fp && fscanf (fp, "%d", &ahead) == 1) {
+		odin_aica_set_rtc_ahead (aica->chip, ahead);
+		VK_PRINT ("AICA: clock file '%s': %d s ahead of the host", path, ahead);
+	} else
+		VK_PRINT ("AICA: clock file '%s' not found: the time of the host", path);
+	if (fp)
+		fclose (fp);
+}
+
+static void
+hikaru_aica_save_clock (hikaru_aica_t *aica)
+{
+	const char *path = getenv ("ODIN_CLOCK_FILE");
+	FILE *fp;
+
+	if (!path || !aica->master)
+		return;
+	fp = fopen (path, "w");
+	if (!fp) {
+		VK_ERROR ("AICA: can't write the clock file '%s'", path);
+		return;
+	}
+	fprintf (fp, "%d\n", (int) odin_aica_rtc_ahead (aica->chip));
+	fclose (fp);
+}
+
 static int
 hikaru_aica_put (vk_device_t *device, unsigned size, uint32_t addr, uint64_t val)
 {
 	hikaru_aica_t *aica = (hikaru_aica_t *) device;
 	uint32_t offs = addr & 0xFFFFFF;
+	int ret;
 
 	VK_MACH_LOG (device->mach, "AICA/%c W%u @%08X = %lX",
 	             aica->master ? 'M' : 'S', 8*size, offs, val);
 
-	if (odin_aica_host_write (aica->chip, offs, size, val)) {
+	ret = odin_aica_host_write (aica->chip, offs, size, val);
+	if (ret < 0) {
 		VK_MACH_ERROR (device->mach, "AICA unhandled W%u %08X = %lX", size*8, addr, val);
 		return -1;
 	}
+	if (ret > 0)
+		hikaru_aica_save_clock (aica);
 	return 0;
 }
 
@@ -184,6 +236,7 @@ hikaru_aica_reset (vk_device_t *dev, vk_reset_type_t type)
 	hikaru_aica_t *aica = (hikaru_aica_t *) dev;
 
 	odin_aica_reset (aica->chip);
+	hikaru_aica_load_clock (aica);
 }
 
 static void
