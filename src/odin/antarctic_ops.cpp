@@ -539,13 +539,15 @@ Antarctic::op_viewport_ambient(const uint32_t *inst)
 /* 191	Viewport: Set Clear Color
  *
  *	-------- -------- ----1--o oooooooo
- *	-------a gggggggg bbbbbbbb rrrrrrrr
+ *	-------a bbbbbbbb gggggggg rrrrrrrr
  *
- * a,r,g,b = color.
+ * a,r,g,b = color. The libraries send one bit of their alpha, the top one
+ * (PH:@0C016368, PH:@0C016396).
  *
- * NOTE: yes, apparently blue and green _are_ swapped.
- *
- * XXX double check the alpha mask.
+ *	The viewport editor of PHARRIER names the second byte "Blue" and the
+ *	third "Green" (its table at PH:@0C1D7430, sent by PH:@0C037760): its
+ *	labels are crossed. The game clears its sky with 01CC2D0F, and the
+ *	cabinet shows it blue.
  *
  * See PH:@0C016368, PH:@0C016396, PH:@0C037760.
  */
