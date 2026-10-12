@@ -1640,8 +1640,8 @@ Antarctic::op_lightset_recall(const uint32_t *inst)
  *
  *	-------- UNNNNNNN -------o oooooooo
  *
- * U, N = Unknown. Five games send it once a frame, always 0, and the X360
- *        port skips it.
+ * U, N = Unknown. Five games send it once a frame, always 0 in their
+ *        attract loops.
  *
  *
  * 501	Mesh: Set Pattern
