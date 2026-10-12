@@ -286,7 +286,9 @@ time of a list. Three things come with the resets:
 - HEURISTIC: the command RAM is mirrored up to 14FFFFFF (10FFFFFF for the
   slave), its two upper address lines taken as not wired; only the page at
   FFF000 is seen, and the 8 MB of RAM the RAM test does not reach (IC 33
-  to 36) are not placed;
+  to 36) are not placed. The command processor sees it twice as well, at
+  48 and at 4C: the system library calls at 4C3FB900 the routine it keeps
+  at 483FB900;
 - no cause interrupts after a reset until 15000084 is written (0xFF there;
   HEURISTIC for bits 0 to 6): VON4 waits for the frame cause by reading
   1A000018 with its interrupts open, then writes the mask;
