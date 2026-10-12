@@ -2645,7 +2645,7 @@ D (0x1B8)
 
 /* 0E8	Mesh: Push Texcoords 3
  *
- *	-------- -------x ----WWWo oooooooC
+ *	TTTTTTTT TTTTTTTT ----WWWo oooooooC
  *	vvvvvvvv vvvvvvvv uuuuuuuu uuuuuuuu
  *	vvvvvvvv vvvvvvvv uuuuuuuu uuuuuuuu
  *	vvvvvvvv vvvvvvvv uuuuuuuu uuuuuuuu
@@ -2653,16 +2653,29 @@ D (0x1B8)
  * The interaction of U, u, P, W, with the ones specified by the push position/
  * push all instructions is still unknown.
  *
+ * T = Texhead of the triangle, from the base. The BOOTROM commits two
+ *     texheads and recalls the first only: its text has 0 here, the grid
+ *     of its C.R.T. test (lists at ROM 9BE0 and 9C60) has 1, the 16x16
+ *     tile that repeats, with texcoords in whole texels.
  * u, v = Texcoords for three points.
  */
 
 I (0x0E8)
 {
 	hikaru_vertex_t vs[3];
+	uint32_t index = TEX.base + (inst[0] >> 16);
 	unsigned i;
 
+	/* Another texhead: the three vertices go on in a new mesh. */
+	if (index < NUM_TEXHEADS &&
+	    memcmp (&TEX.scratch, &TEX.table[index], sizeof (TEX.scratch))) {
+		hikaru_renderer_end_mesh (HR, PC);
+		TEX.scratch = TEX.table[index];
+		hikaru_renderer_begin_mesh (HR, PC, false);
+	}
+
 	for (i = 0; i < 3; i++) {
-		vs[i].info.full = inst[0];
+		vs[i].info.full = inst[0] & 0xFFFF;
 
 		vs[i].body.texcoords[0] = ((int16_t) inst[i+1]) / 16.0f;
 		vs[i].body.texcoords[1] = ((int16_t) (inst[i+1] >> 16)) / 16.0f;
@@ -2674,9 +2687,9 @@ I (0x0E8)
 D (0x0E8)
 {
 
-	UNHANDLED |= !!(inst[0] & 0xFFFEF000);
+	UNHANDLED |= !!(inst[0] & 0x0000F000);
 
-	DISASM ("mesh: push texcoords 3");
+	DISASM ("mesh: push texcoords 3 [texhead @base+%u]", inst[0] >> 16);
 }
 
 /* 158	Mesh: Push Texcoords 1
