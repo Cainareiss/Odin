@@ -183,6 +183,32 @@ keeps its excess (HEURISTIC, read from two cabinets: the veils of the
 PHARRIER galaxy burn to white and the white floor decals of AIRTRIX, at
 an alpha of 0.7, look opaque).
 
+A lightset keeps the numbers of its four lights, and the lights are read
+when the set is recalled: the X360 port does so (825C51D0, 825C6090), and
+the US patent 6,333,742 of SEGA has the two tables, the groups of four
+designations and the lights, read through the Light-ID of the polygon. A
+light named three times counts three times (four light circuits in the
+patent, four copies in the port). A set never committed has no light, as
+in the port; what the board holds there is not known.
+The games commit a light again after it was used, up to 76032 times in a
+loop (PHARRIER), so a light is not read once the whole list is in. Over the
+six loops one mesh in 87 million has a light changed between the recall of
+its set and the mesh (RACER, 483FB828): reading at the recall or at each
+polygon gives the same lists.
+BRAVEFF recalls its set 3 with every light on one frame before it commits
+it, when the control room takes fire. From the second loop on that set
+still names the lights 6 and 0 of an earlier scene, and the room flashes
+for a frame, as on the cabinet: the door and the switchboard are within 2
+levels of the footage for three frames. The wall on the right is twice too
+bright there: not explained.
+
+No attract loop sends a polygon of the types 2 and 3 of the 103, the
+shadows: they are drawn as opaque, as in the X360 port, and the command
+processor says once when a type never met comes in. The patents (US
+6,320,580 and 6,356,264) describe shadow volumes, polygons that are not
+drawn and switch the lights off on what they cover: nothing here does it.
+The types 0 and 7 are not drawn.
+
 EEPROMs: the main board 93C46 (SH-4 port A, src/odin/eeprom_bridge.cpp)
 and the ROM board X76F100 (bus page 0x14, src/odin/x76f100.cpp) are
 real and read by the BOOTROM; the MIE 93C46 is in the LLE MIE. It holds
