@@ -2124,11 +2124,14 @@ D (0x051)
  *
  *	-------- -------- -------o oooooooo
  *
- * Every game sends 006 then 046 with n set in the lists of its first
- * frames, after an identity modelview. RACER alone sends them later: its
- * models of one flat quad open with 006 and an identity local matrix and
- * close with 046, n clear. The 400 stars behind its opening text are such
- * models, and they match the cabinet with both ignored.
+ * Every game sends 006 then 046 with n set at the end of the list that
+ * resets the GPU (von4 library 0C711F90), after an identity modelview.
+ * RACER alone sends them later: seven lists written by hand in its
+ * program, each one flat quad that opens with 006 and an identity local
+ * matrix and closes with 046, n clear. The 400 stars behind its opening
+ * text are such lists, and they match the cabinet with both ignored. No
+ * library emits them, and the decoder of the X360 port skips every word
+ * of this type (8252E5C8).
  */
 
 I (0x006)
