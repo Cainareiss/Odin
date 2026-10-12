@@ -115,6 +115,28 @@ vk_renderer_print_fingerprint (vk_renderer_t *renderer)
 	fprintf (stderr, "PICFP frame=%u fp=%016lx\n", renderer->frame, fp);
 }
 
+/* ODIN_SPEED=1: one line every 60 frames with the frames a second over
+ * them, to find the slow scenes of a run. */
+static void
+vk_renderer_print_speed (vk_renderer_t *renderer)
+{
+	static int wanted = -1;
+	static Uint64 since;
+	Uint64 now;
+
+	if (wanted < 0)
+		wanted = vk_util_get_bool_option ("ODIN_SPEED", false) ? 1 : 0;
+	if (!wanted || (renderer->frame % 60) != 0)
+		return;
+
+	now = SDL_GetPerformanceCounter ();
+	if (since)
+		fprintf (stderr, "SPEED frame=%u fps=%.1f\n", renderer->frame,
+		         60.0 * (double) SDL_GetPerformanceFrequency () /
+		         (double) (now - since));
+	since = now;
+}
+
 /* The title of the window tells the frames shown in the last second: the
  * time of one frame, in milliseconds, reads 59 or 62 for 60. */
 static void
@@ -158,6 +180,7 @@ vk_renderer_end_frame (vk_renderer_t *renderer)
 	SDL_GL_SwapWindow (renderer->window);
 
 	show_speed (renderer);
+	vk_renderer_print_speed (renderer);
 }
 
 int
