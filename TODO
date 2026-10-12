@@ -415,9 +415,10 @@ HR_LOG_FRAME=<frame> those of one frame; ODIN_DEBUG_KEYS=1 gives the keys
 1 2 3 t u p i j l a d g a switch each (renderer_debug.cpp).
 
 -x N draws the 3D N times finer than the 640 x 480 screen of the hardware
-(1 to 6; renderer_buffers.cpp). What the hardware counts in its own pixels
-keeps them, each N x N pixels wide: the clip windows, the 501 pattern, the
-2D layers. The window has a size of its own: -w N asks for N times 640 x
+(1 to 6; renderer_buffers.cpp). The clip windows and the 2D layers keep the
+pixels of the hardware, each N x N pixels wide. The 501 pattern does not:
+its dots are pixels of the drawing, finer than on the cabinet from 2 up,
+where they hardly show. The window has a size of its own: -w N asks for N times 640 x
 480, cut down to what the display has room for, -f or F11 for the whole
 display; the picture of the frame is fitted in it, each pixel of the window
 taking the mean of what it covers (a window smaller than the picture
