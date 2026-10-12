@@ -182,7 +182,10 @@ Antarctic::fetch(uint32_t inst[8]) const
 	uint32_t offs;
 
 	/* The program has been seen in the command RAM and in the RAM of
-	 * the slave only. */
+	 * the slave only. The command RAM answers at 4C too: once at start
+	 * the system library calls, as 4C3FB900 (052 130FEE40), the four
+	 * NOP and the return it keeps at 483FB900, and nothing else calls
+	 * them. */
 	switch (m_s.pc >> 24) {
 	case 0x40:
 	case 0x41:
@@ -190,7 +193,7 @@ Antarctic::fetch(uint32_t inst[8]) const
 		offs = m_s.pc & 0x01FFFFFF;
 		break;
 	case 0x48:
-	case 0x4C: /* XXX not sure */
+	case 0x4C:
 		mem = m_cmdram;
 		offs = m_s.pc & 0x003FFFFF;
 		break;
