@@ -102,8 +102,8 @@ get_material_str (hikaru_material_t *mat)
 	if (!mat)
 		return none;
 
-	sprintf (out, "#%02X%02X%02X,%02X #%02X%02X%02X #%02X%02X%02X,%02X #%04X,%04X,%04X 081=%08X 881=%08X A81=%08X C81=%08X",
-	         mat->diffuse[0], mat->diffuse[1], mat->diffuse[2], mat->diffuse[3],
+	sprintf (out, "#%02X%02X%02X #%02X%02X%02X #%02X%02X%02X,%02X #%04X,%04X,%04X 081=%08X 881=%08X A81=%08X C81=%08X",
+	         mat->diffuse[0], mat->diffuse[1], mat->diffuse[2],
 	         mat->ambient[0], mat->ambient[1], mat->ambient[2],
 	         mat->specular[0], mat->specular[1], mat->specular[2], mat->specular[3],
 	         mat->unknown[0], mat->unknown[1], mat->unknown[2],
