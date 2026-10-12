@@ -1167,7 +1167,10 @@ texhead_index(const uint32_t *inst)
  *
  *	----BBBB AAAA--MM -------o oooooooo
  *
- * A, B = Unknown values; the X360 port decodes them and never reads them.
+ * A, B = One byte of the texture record of the game (von4 0C716B60), which
+ *        the X360 port decodes and never reads. With the filter 1 the
+ *        games send 0, E0, D0, F0, D8, B0, F8...: a level bias by its
+ *        look; its unit is not known and it is not applied.
  * M = Filter: 0 nearest, 1 trilinear, 2 bilinear without mipmaps, 3 left
  *     at the sampler defaults (X360 825C6650).
  *
@@ -1407,7 +1410,8 @@ Antarctic::op_light_attenuation(const uint32_t *inst)
  *	-------- D---AAAA -------o oooooooo
  *	--BBBBBB BBBBGGGG GGGGGGRR RRRRRRRR
  *
- * D = Disabled?
+ * D = Unknown. BRAVEFF sets it on the light of its aiming reticles, which
+ *     its cabinet shows lit: it does not switch the light off.
  * A = Ambient level, 0 to 15
  *
  *	The light adds A / 16 of its colour to every polygon it reaches,
@@ -1428,6 +1432,16 @@ Antarctic::op_light_attenuation(const uint32_t *inst)
  * C = cos (outer angle), 1.15 fixed point
  * W = Scale of the fade, an 8-bit float: 4 bits of exponent, 4 of mantissa
  * f = Unknown flag (dl_emit_spotlight argument)
+ *
+ *	Without a cone the second word is no field: the library writes the
+ *	first word again (PH:@0C017C58, 01000451 01000451) or the constant
+ *	it builds it from (PH:@0C017D64, 01000451 01000400).
+ *
+ *	The light editor of PHARRIER names four types of light, INFINITE,
+ *	POINT, SPOT and CONSTANT (table at PH:@0C16E664), and sends them
+ *	(PH:@0C03DCD0) as a direction through the view matrix, a position, a
+ *	position with a cone, and a direction left as it is (0C017D64). Its
+ *	attenuations are NO, LINEAR, RECIPROCAL, RECIPROCAL2 and SQUARE.
  *
  *	Emitted by the von4 library dl_emit_spotlight (0C715FA0) after the
  *	B61 vector: it halves its two angles, sorts their cosines and sends
@@ -1631,7 +1645,8 @@ Antarctic::op_lightset_recall(const uint32_t *inst)
  *
  *	-------- UNNNNNNN -------o oooooooo
  *
- * U, N = Unknown (N != 1)
+ * U, N = Unknown. Five games send it once a frame, always 0, and the X360
+ *        port skips it.
  *
  *
  * 501	Mesh: Set Pattern
@@ -1705,7 +1720,8 @@ Antarctic::op_mesh_set(const uint32_t *inst)
  *	AAAAAAAA -------- -------o oooxoooo
  *
  * A = Base mesh alpha value
- * x = Unknown
+ * x = Size bit: the 113 has a second word. PHARRIER, the only game to
+ *     send it, repeats the first word there.
  *
  *  3: Opaque. Alpha is ignored.
  *  9: Punch-through. Alpha is ignored.
@@ -1741,7 +1757,7 @@ Antarctic::op_polygon_type(const uint32_t *inst)
  *
  * They appear to have a common 32-bit header:
  *
- *	AAAAAAAA C---2x-- uPRSTTTo oooootpW
+ *	AAAAAAAA C---OO-- uPRSTTTo oooootpW
  *
  * A = Vertex alpha
  *
@@ -1749,13 +1765,9 @@ Antarctic::op_polygon_type(const uint32_t *inst)
  *
  *     Disables face culling for this mesh.
  *
- * 2 = 2-sided
+ * O = Texcoord offset
  *
- *     Used in PHARRIER (the big SEGA text).
- *
- * x = Unknown
- *
- *     No idea (use in PHARRIER for the player' shoulder lights).
+ *     Which of the three offsets of the 0D1 the texcoords take; 0 is none.
  *
  * u = Unknown
  *
@@ -1775,10 +1787,9 @@ Antarctic::op_polygon_type(const uint32_t *inst)
  *     they are built in eye space with XMTRX on the SH-4 (PH:@0C0EE7A0)
  *     and no matrix is sent for them.
  *
- * S = Unknown
+ * S = Second modelview
  *
- *     Seemingly used for shadows in AIRTRIX (attract mode) and for edges of
- *     flames/smoke in BRAVEFF (inter mesh linking? anim/modelview selection?)
+ *     The vertex goes through the matrix a 161 with bit 18 loaded.
  *
  * T = Triangle
  *
