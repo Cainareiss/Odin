@@ -55,7 +55,7 @@ class HikaruGpu;
  *
  * Two sizes are told apart. The screen of the hardware, WIDTH by HEIGHT, is
  * what the games address: the centre of a view, its clip window, the 2D
- * layers, the 501 pattern, the pictures of a save state. The buffers the 3D
+ * layers, the pictures of a save state. The buffers the 3D
  * is drawn in are `scale` times as wide and as high, and so is the picture
  * on its way to the screen: a pixel of the hardware is scale x scale pixels
  * there. The window has a size of its own.

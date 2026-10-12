@@ -126,7 +126,6 @@ uniform float		u_alpha_ref;
 uniform float		u_weigh_by_alpha;
 #if HAS_PATTERN
 uniform uint		u_pattern;
-uniform int		u_scale;
 #endif
 
 #if COLLECT
@@ -230,9 +229,10 @@ main (void)
 	 * surfaces that the cabinets do (the shadow of the AIRTRIX combo
 	 * labels lies 0.06 behind them at a depth of 560). */
 #if HAS_PATTERN
-	/* 501: bit 0 is the top left pixel of the 4 x 4 pattern, in pixels
-	 * of the screen of the hardware: each is u_scale pixels wide here. */
-	ivec2 dot = (ivec2 (gl_FragCoord.xy) / u_scale) & 3;
+	/* 501: bit 0 is the top left pixel of the 4 x 4 pattern. The pattern
+	 * is laid in the pixels drawn: at a finer scale its dots are finer
+	 * than those of the hardware, and hardly show. */
+	ivec2 dot = ivec2 (gl_FragCoord.xy) & 3;
 	if (((u_pattern >> uint ((3 - dot.y) * 4 + dot.x)) & 1u) == 0u)
 		discard;
 #endif

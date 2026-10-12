@@ -450,7 +450,6 @@ Renderer::draw_mesh(const odin_mesh_t &mesh)
 	if (m_variant.has_pattern && held.pattern != mesh.pattern) {
 		held.pattern = mesh.pattern;
 		glUniform1ui(locs.pattern, patterns[mesh.pattern]);
-		glUniform1i(locs.scale, static_cast<GLint>(m_scale));
 	}
 	if (held.alpha_ref != m_pass.alpha_ref) {
 		held.alpha_ref = m_pass.alpha_ref;
