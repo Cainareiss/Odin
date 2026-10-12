@@ -265,10 +265,35 @@ word where the master leaves its first job; the master writes that word
 without waiting, after it has copied the game from the ROM board, which
 takes no time here: BRAVEFF and PHARRIER write it a frame too early and
 never start. It waits for the transfers of the bridge to take their time.
-The other resets (system, GPU, CN4, bridge) and a video clock other than
-the one the games choose (bits 6 and 7 set) stop the emulator: VON4 pulses
-the reset of the bridge when its SYSTEM MENU is left with EXIT. HEURISTIC:
-the lines are high while the MIE does not drive the port.
+Bits 1 and 4 are the reset lines of the graphics chips (GP_RES, every
+chip; PCI1_RES, the display chip): a chip goes back to its power-on state
+when its line falls and does nothing until it rises
+(src/odin/hikaru_gpu.cpp, set_reset_lines). VON4 pulses both when two
+lists in a row did not end (0x0C711C30), then has the slave run a program
+it leaves at 14FFF000, sets the chips again and starts over. Here it
+happens each time its SYSTEM MENU is left with EXIT (the five other games
+reboot through the BOOTROM): the game closes its interrupts 682
+instructions after the launch of a last list of 36 instructions, starts
+again from its entry point and clears the causes, so the end of that list
+is never seen. HEURISTIC: a list ends here at the end of a line; on the
+board the end of the analysis may come before the interrupts are closed,
+and the game then starts again without the resets. It waits for the real
+time of a list. Three things come with the resets:
+- HEURISTIC: the command RAM is mirrored up to 14FFFFFF (10FFFFFF for the
+  slave), its two upper address lines taken as not wired; only the page at
+  FFF000 is seen, and the 8 MB of RAM the RAM test does not reach (IC 33
+  to 36) are not placed;
+- no cause interrupts after a reset until 15000084 is written (0xFF there;
+  HEURISTIC for bits 0 to 6): VON4 waits for the frame cause by reading
+  1A000018 with its interrupts open, then writes the mask;
+- a 0 written to 1A000008-14 acknowledges nothing.
+Not known: what the bus reads and writes in a chip whose line is low. The
+same routine writes a short list to 120FEE00, the word address the command
+processor has for 483FB800 taken for one of the bus: nothing answers there
+(48 "unhandled" lines).
+The other resets (system, CN4) and a video clock other than the one the
+games choose (bits 6 and 7 set) stop the emulator. HEURISTIC: the lines
+are high while the MIE does not drive the port.
 
 Main board: bit 0 of 15002000 reads 0, which makes Odin the second main
 board, 837-14097, for the BOOTROM (it prints the name in its system menu).
