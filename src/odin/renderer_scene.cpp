@@ -45,12 +45,6 @@ attenuation_of(const odin_light_t &light)
 	return static_cast<LightAttenuation>(odin_light_att_type(&light));
 }
 
-bool
-has_place(const odin_light_t &light)
-{
-	return (light.flags & (ODIN_LIGHT_HAS_DIRECTION | ODIN_LIGHT_HAS_POSITION)) != 0;
-}
-
 LightType
 type_of(const odin_light_t &light)
 {
@@ -167,10 +161,6 @@ Renderer::variant_of(const odin_mesh_t &mesh) const
 
 	variant.shading_mode = odin_mat_shading_mode(&mat);
 	for (unsigned i = 0; i < 4; i++) {
-		/* Violated by BRAVEFF, in the intro sequence; it recalls a
-		 * lightset at the wrong base, and poof. */
-		if (!has_place(ls.lights[i]))
-			error("recalling light with no direction nor position!");
 		variant.lights[i].on = !(odin_lightset_mask(&ls) & (1u << i));
 		variant.lights[i].type = type_of(ls.lights[i]);
 		variant.lights[i].attenuation = attenuation_of(ls.lights[i]);
