@@ -654,9 +654,14 @@ The 154 table gives each material a low and a high alpha threshold through
 its C81 index ("Alpha Low Threshold" and "Alpha High Threshold" in the
 material editor of PHARRIER; the library writes the entry index XOR 0x20,
 with a high of 0xFF, and the entries no game sets hold 0x80 and 0xFFFFFF):
-neither is used, the passes test alpha as the X360 port does. The fourth
-byte of the 091 colour word is not used either; BRAVEFF sets it in the
-materials of its 12-word routine (0x0C0D69C8).
+neither is used, the passes test alpha as the X360 port does.
+
+The fourth byte of the 091 colour word is not a field: the material routine
+of the libraries of VON4 (0x0C716AC0) and of BRAVEFF (0x0C0D69A0) loads the
+three bytes of the colour as a word, and the byte it takes with them is the
+red of the 291 kept behind (the same in every material of a loop of the two
+games where the byte is neither 0 nor FF). The hose and the masks of the
+firemen of BRAVEFF have it between the two and are plain on the cabinet.
 
 That routine makes the words 881, A81 and C81 by adding 0x200 to 0x891 and
 takes the 0x10 off the first alone (VON4 has it right, 0x0C716B1A): the
@@ -681,8 +686,8 @@ command were counted, and set against the comments of antarctic_ops.cpp):
   setting of that console: the patents of the chip have trilinear
   filtering and nothing else, so there is none here unless -a <num> asks
   for it.
-- 301, once a frame in five games, always 0.
-- the fourth byte of the 091 in VON4 (121 values) and BRAVEFF.
+- 301, once a frame in five games, always 0: the library of VON4 has it at
+  the head of a fixed list, with a 101 of 0 behind it (0x0C71234C).
 - 2C1 bit 15 (PHARRIER, SGNASCAR), 621 bit 16, 051 bit 23 (the light of the
   aiming reticles of BRAVEFF, lit on its cabinet).
 That the X360 port of VON4 skips a field tells nothing of the board: each

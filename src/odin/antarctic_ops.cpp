@@ -907,7 +907,11 @@ material_index(const uint32_t *inst)
 /* 091	Material: Set Diffuse
  *
  *	-------- -------- -------o oooooooo
- *	-------- BBBBBBBB GGGGGGGG RRRRRRRR
+ *	xxxxxxxx BBBBBBBB GGGGGGGG RRRRRRRR
+ *
+ * x = Not a field. The libraries of VON4 (@0C716AC0) and of BRAVEFF
+ *     (@0C0D69A0) keep each colour of a material in three bytes and load
+ *     this one as a word: the byte is the red of the 291 that follows.
  *
  * See PH:@0C0CF742.
  *
@@ -1008,15 +1012,10 @@ Antarctic::op_material_color(const uint32_t *inst)
  *
  *	XXXXXXXX xyhatzSS -------o oooooooo
  *
- * X = Unknown
+ * X = Copies of x: the libraries load the flags of the game as a signed
+ *     byte (VON4 @0C716B16).
  *
- *	Used in BRAVEFF.
- *
- * x = Has X.
- *
- * y = Unknown.
- *
- *	Used in BRAVEFF.
+ * x, y = Unknown. Used in BRAVEFF, not in its attract loop.
  *
  * S = Shading mode
  *
@@ -1641,7 +1640,8 @@ Antarctic::op_lightset_recall(const uint32_t *inst)
  *	-------- UNNNNNNN -------o oooooooo
  *
  * U, N = Unknown. Five games send it once a frame, always 0 in their
- *        attract loops.
+ *        attract loops: the VON4 library has it at the head of a fixed
+ *        list, with a 101 of 0 behind it (@0C71234C).
  *
  *
  * 501	Mesh: Set Pattern
