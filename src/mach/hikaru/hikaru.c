@@ -841,12 +841,16 @@ setup_master_mmap (hikaru_t *hikaru)
 	ret |= vk_mmap_add_dev (mmap, 0x14000000, 0x1400002F, 0x0000003F,
 	                        VK_REGION_RW | VK_REGION_SIZE_ALL | VK_REGION_LOG_RW,
 	                        hikaru->mscomm, "MSCOMM/M");
+	ret |= vk_mmap_add_ram (mmap, 0x14000030, 0x143FFFFF, 0x003FFFFF,
+	                        0, hikaru->cmdram, "CMDRAM/M");
 	/* The command RAM answers above its 4 MB: VON4 leaves a program at
 	 * 14FFF000, which the slave runs at 10FFF000 (@0C711C84).
 	 * HEURISTIC: mirrors, the two upper address lines taken as not
-	 * wired; only that page is seen. */
-	ret |= vk_mmap_add_ram (mmap, 0x14000030, 0x14FFFFFF, 0x003FFFFF,
-	                        0, hikaru->cmdram, "CMDRAM/M");
+	 * wired; only that page is seen. They go through the bus (the log
+	 * flags): a page the SH-4 core sees twice is no longer written in
+	 * place, and the games write their lists through the first 4 MB. */
+	ret |= vk_mmap_add_ram (mmap, 0x14400000, 0x14FFFFFF, 0x003FFFFF,
+	                        VK_REGION_LOG_RW, hikaru->cmdram, "CMDRAM/M mirrors");
 	ret |= vk_mmap_add_dev (mmap, 0x15000000, 0x150FFFFF, 0x000FFFFF,
 	                        VK_REGION_RW | VK_REGION_SIZE_16 | VK_REGION_SIZE_32 | VK_REGION_LOG_RW,
 	                        hikaru->gpu, "GPU/M");
