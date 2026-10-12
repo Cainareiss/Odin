@@ -48,6 +48,11 @@ void
 Antarctic::reset()
 {
 	std::memset(&m_s, 0, sizeof(m_s));
+	/* No cause interrupts until the mask is written: after its reset of
+	 * the chips VON4 waits for the frame cause by reading 1A000018, its
+	 * interrupts open, and writes the mask next (@0C711F4A). HEURISTIC:
+	 * bits 0 to 6, only bit 7 is seen. */
+	reg(0x84) = 0xFF;
 	m_push.num_verts = 0;
 	m_push.num_tris = 0;
 	std::memset(m_push.tmp, 0, sizeof(m_push.tmp));

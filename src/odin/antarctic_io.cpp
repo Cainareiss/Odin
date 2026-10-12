@@ -96,7 +96,8 @@ namespace odin {
  * Interrupt Control
  * -----------------
  *
- * 15000084   W		GPU IRQ Mask
+ * 15000084   W		GPU IRQ Mask: a set bit keeps its cause from
+ *			interrupting; all set after a reset
  * 15000088  RW		GPU IRQ Status
  *			 80 = GPU 1A IRQ fired
  *			 40 = Unknown

@@ -297,7 +297,9 @@ void test_registers()
 
 	check(!m.cp->irq_line(), "no cause, no interrupt");
 	m.cp->raise(Antarctic::IRQ_ANALYSIS_END);
-	check(m.cp->irq_line(), "a cause holds the line");
+	check(!m.cp->irq_line(), "nothing interrupts before the mask is written");
+	m.cp->write_register(0x15000084, 0x72);
+	check(m.cp->irq_line(), "a cause let through holds the line");
 	check(m.cp->write_register(0x15000084, 0x04) == Antarctic::Written::CAUSES && !m.cp->irq_line(),
 	      "a bit set in 15000084 masks its cause");
 	m.cp->write_register(0x15000084, 0);

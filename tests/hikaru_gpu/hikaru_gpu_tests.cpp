@@ -93,6 +93,7 @@ void test_list()
 	std::memcpy(&b.cmdram[LIST & 0x3FFFFF], &end, 4);
 	b.gpu->antarctic().begin_list(false);
 
+	b.gpu->write(0x15000084, 4, 0x72);
 	b.gpu->write(0x15000070, 4, LIST);
 	b.gpu->write(0x15000074, 4, 0x483FC000);
 	b.gpu->write(0x1A000024, 4, 1);
