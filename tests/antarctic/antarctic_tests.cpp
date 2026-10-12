@@ -377,6 +377,68 @@ void test_texture_transfer()
 	check(next_row == 0x8010, "a row of the texture RAM is 2048 texels long");
 }
 
+/* The lights of the first mesh of the list */
+const odin_lightset_t &lights_of(const Machine &m)
+{
+	return m.list->ls_list[m.mesh(1, 0).ls_index];
+}
+
+void test_lightsets()
+{
+	Machine m;
+
+	/* Light 1 is red when the set 5 takes its number, green when the
+	 * set is recalled. */
+	m.run({ 0x00000051, 0x000000FF,
+	        0x00008961, f(0.0f), f(0.0f), f(1.0f),
+	        0x00010104,
+	        0x00051064, 0x00000001, 0x00000000, 0x00000000,
+	        0x00000051, 0x0003FC00,
+	        0x00010104,
+	        0x00051043,
+	        OPAQUE, VERTEX(0.0f, 0.0f), VERTEX(1.0f, 0.0f), VERTEX_CLOSING(0.0f, 1.0f),
+	        END });
+	check(lights_of(m).lights[0].diffuse[0] == 0 && lights_of(m).lights[0].diffuse[1] == 0xFF,
+	      "a lightset keeps the number of a light, read when the set is recalled");
+
+	/* The next list recalls the set without committing it again: the
+	 * light of the day. */
+	m.run({ 0x00000051, 0x0FF00000,
+	        0x00010104,
+	        0x00051043,
+	        OPAQUE, VERTEX(0.0f, 0.0f), VERTEX(1.0f, 0.0f), VERTEX_CLOSING(0.0f, 1.0f),
+	        END });
+	check(lights_of(m).lights[0].diffuse[1] == 0 && lights_of(m).lights[0].diffuse[2] == 0xFF,
+	      "a set left by another list names the light as it is now");
+
+	Machine n;
+	n.run({ 0x00000051, 0x000000FF,
+	        0x00000104,
+	        0x00071043,
+	        OPAQUE, VERTEX(0.0f, 0.0f), VERTEX(1.0f, 0.0f), VERTEX_CLOSING(0.0f, 1.0f),
+	        END });
+	check(lights_of(n).lights[0].flags == 0 && lights_of(n).lights[0].diffuse[0] == 0,
+	      "a set never committed has no light");
+}
+
+void test_light_position_with_w()
+{
+	Machine m;
+
+	/* The position of the light of the SEGA init program: 961 with the
+	 * bits 14 and 13. */
+	m.run({ 0x00016961, f(100.0f), f(100.0f), f(100.0f),
+	        0x00020104,
+	        0x00061064, 0x00000002, 0x00000000, 0x00000000,
+	        0x00061043,
+	        OPAQUE, VERTEX(0.0f, 0.0f), VERTEX(1.0f, 0.0f), VERTEX_CLOSING(0.0f, 1.0f),
+	        END });
+	const odin_light_t &light = lights_of(m).lights[0];
+	check((light.flags & ODIN_LIGHT_HAS_POSITION) && light.position[0] == 100.0f &&
+	      light.position[1] == 100.0f && light.position[2] == 100.0f,
+	      "a 961 with the bits 14 and 13 gives the position it carries");
+}
+
 void test_disassembler()
 {
 	const uint32_t jump[8] = { 0x00000012, 0x12000043 };
@@ -407,6 +469,8 @@ int main()
 	test_viewport_and_state();
 	test_registers();
 	test_texture_transfer();
+	test_lightsets();
+	test_light_position_with_w();
 	test_disassembler();
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures == 0 ? 0 : 1;
