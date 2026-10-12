@@ -143,6 +143,16 @@ void test_invalid()
 	check(n.cp->run(10), "a program counter out of the two memories ends the list");
 }
 
+void test_jump_to_itself()
+{
+	Machine m;
+
+	m.run({ 0x00000012, LIST / 4 }, 100);
+	check(!m.ended && m.cp->running() && m.cp->pc() == LIST, "a jump to itself keeps the processor there");
+	m.write(LIST, { END });
+	check(m.cp->run(10), "until the word is changed");
+}
+
 void test_call_and_return()
 {
 	Machine m;
@@ -384,6 +394,7 @@ int main()
 {
 	test_sizes_and_end();
 	test_invalid();
+	test_jump_to_itself();
 	test_call_and_return();
 	test_strip();
 	test_degenerate_and_both_faces();

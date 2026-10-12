@@ -253,7 +253,6 @@ private:
 	bool fetch(uint32_t inst[8]) const;
 	void push_pc();
 	void pop_pc();
-	void check_self_loop(uint32_t target);
 
 	/* antarctic_ops.cpp: the instructions */
 

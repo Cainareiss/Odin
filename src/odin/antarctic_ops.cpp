@@ -127,6 +127,10 @@ Antarctic::op_nop(const uint32_t *)
  * its sizes are whole pixels (2, 3, 4, 7, 8, 10, 15, 20, 30, 100, 120, 150
  * and 200).
  *
+ * A jump to itself keeps the processor there until the next launch. The
+ * first swap of BRAVEFF leaves one in its entry at 48000100 (@0C0D3F64);
+ * ending the list there instead changes nothing to its loop.
+ *
  * Conditions 1 and D test the word a 095 left. Straight after a 055, D
  * jumps like 5 (HEURISTIC: the SGNASCAR cabinet shows the rows of
  * spectators near the camera, I = 444; far away they are too small to
@@ -178,7 +182,6 @@ Antarctic::op_jump(const uint32_t *inst)
 		break;
 	}
 
-	check_self_loop(addr);
 	if (jump)
 		m_s.pc = addr;
 	else
@@ -217,7 +220,6 @@ Antarctic::op_call(const uint32_t *inst)
 		break;
 	}
 
-	check_self_loop(addr);
 	if (jump) {
 		/* See 501 */
 		m_s.patterns = ((m_s.patterns << 5) | m_s.pattern) & 0x3FFFFFFF;

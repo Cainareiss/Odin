@@ -293,14 +293,4 @@ Antarctic::pop_pc()
 	m_s.pc += 8;
 }
 
-void
-Antarctic::check_self_loop(uint32_t target)
-{
-	/* XXX at some point we'll need something better than this */
-	if (target == m_s.pc) {
-		error("CP: @%08X: self-jump, terminating", target);
-		m_s.running = 0;
-	}
-}
-
 } /* namespace odin */
