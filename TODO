@@ -685,7 +685,14 @@ command were counted, and set against the comments of antarctic_ops.cpp):
   -0.5 (HEURISTIC). The port also filters with an anisotropy of 8, a
   setting of that console: the patents of the chip have trilinear
   filtering and nothing else, so there is none here unless -a <num> asks
-  for it.
+  for it. The cabinets show that this is not the rule of the board: far
+  textures are sharper there (the joints of the arena floor of VON4,
+  whose texture sends D8, the white grid of the stands of RACER, which
+  sends 0, the crowd of SGNASCAR, B0). Neither the byte taken as a bias in
+  sixteenths of a level nor a level taken from the area of the pixel in
+  texels gives the three at once. A patent of SEGA (US 6,522,337) has the
+  level worked out "on the basis of the size of the polygon"; nothing
+  read gives the rule or the unit of the byte.
 - 301, once a frame in five games, always 0: the library of VON4 has it at
   the head of a fixed list, with a 101 of 0 behind it (0x0C71234C).
 - 2C1 bit 15 (PHARRIER, SGNASCAR), 621 bit 16, 051 bit 23 (the light of the
