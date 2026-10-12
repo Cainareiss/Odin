@@ -34,6 +34,8 @@ struct vk_renderer_t {
 	unsigned height;
 	/* The 3D is drawn `scale` times finer than that screen */
 	unsigned scale;
+	/* Anisotropic filtering of the textures; 1 is none */
+	unsigned anisotropy;
 	/* The picture of the frame, whatever the window shows of it: the
 	 * framebuffer to read it from (0: the window) and its size. The
 	 * screenshots and the fingerprints are taken there. */

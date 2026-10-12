@@ -59,6 +59,7 @@ hikaru_renderer_begin_frame (vk_renderer_t *renderer)
 	hikaru_renderer_t *hr = (hikaru_renderer_t *) renderer;
 
 	odin_renderer_set_scale (hr->odin, renderer->scale);
+	odin_renderer_set_anisotropy (hr->odin, renderer->anisotropy);
 	/* The frame being built follows the one shown. */
 	odin_renderer_begin_frame (hr->odin, renderer->frame + 1);
 	snprintf (renderer->message, sizeof (renderer->message), "%s",

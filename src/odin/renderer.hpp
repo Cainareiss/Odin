@@ -95,6 +95,8 @@ public:
 	/* Draws the 3D `scale` times finer than the screen of the hardware,
 	 * 1 at first. The pictures kept are carried over, pixel for pixel. */
 	void set_scale(unsigned scale);
+	/* Anisotropic filtering of the textures, 1 for none as on the board */
+	void set_anisotropy(unsigned level) { m_textures.set_anisotropy(level); }
 
 	/* A display list was launched. */
 	void launch() { m_launched = 1; }

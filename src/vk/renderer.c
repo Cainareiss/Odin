@@ -228,6 +228,7 @@ vk_renderer_init (vk_renderer_t *renderer)
 	                     SDL_GL_CONTEXT_PROFILE_CORE);
 
 	renderer->scale = 1;
+	renderer->anisotropy = 1;
 	renderer->picture_fb = 0;
 	renderer->picture_width = renderer->width;
 	renderer->picture_height = renderer->height;

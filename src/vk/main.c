@@ -41,6 +41,7 @@ static struct {
 	unsigned num_save_frames;
 	bool unthrottled;
 	unsigned scale;
+	unsigned anisotropy;
 	unsigned window;
 	bool fullscreen;
 } options;
@@ -182,7 +183,7 @@ main_loop (vk_machine_t *mach, int num_frames)
 	}
 }
 
-static const char global_opts[] = "R:r:n:l:s:ux:w:fvh?";
+static const char global_opts[] = "R:r:n:l:s:ux:a:w:fvh?";
 static const char global_help[] = "Usage: %s [options]\n"
 "	-R <path>	Path to the ROM directory\n"
 "	-r <string>	Name of the game to run\n"
@@ -191,6 +192,7 @@ static const char global_help[] = "Usage: %s [options]\n"
 "	-s <num>[,...]	Save <game>-<num>.vkstate after these frames\n"
 "	-u		Run as fast as the host can, not at 60 frames per second\n"
 "	-x <num>	Draw the 3D num times finer than 640 by 480 (1 to 6)\n"
+"	-a <num>	Filter the textures with an anisotropy of num (2 to 16); the board has none\n"
 "	-w <num>	Make the window num times 640 by 480, as far as the display has room\n"
 "	-f		Take the whole display (F11 or Alt+Enter goes back and forth)\n"
 "	-v		Set verbosity (affects debug messages)\n"
@@ -243,6 +245,9 @@ parse_global_opts (int argc, char **argv)
 			break;
 		case 'x':
 			options.scale = (unsigned) atoi (optarg);
+			break;
+		case 'a':
+			options.anisotropy = (unsigned) atoi (optarg);
 			break;
 		case 'w':
 			options.window = (unsigned) atoi (optarg);
@@ -355,6 +360,8 @@ main (const int argc, char **argv)
 
 	if (options.scale >= 2 && options.scale <= 6)
 		mach->renderer->scale = options.scale;
+	if (options.anisotropy >= 2 && options.anisotropy <= 16)
+		mach->renderer->anisotropy = options.anisotropy;
 	if (options.window >= 2 || options.fullscreen)
 		vk_renderer_set_window (mach->renderer, options.window ? options.window : 1,
 		                        options.fullscreen);

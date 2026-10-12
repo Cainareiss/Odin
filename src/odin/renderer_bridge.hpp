@@ -76,6 +76,10 @@ void odin_renderer_set_gpu(odin_renderer_t *renderer, odin_hikaru_gpu_t *gpu);
  * first. */
 void odin_renderer_set_scale(odin_renderer_t *renderer, unsigned scale);
 
+/* Filters the textures with this anisotropy; 1, the start, is none, as on
+ * the board. */
+void odin_renderer_set_anisotropy(odin_renderer_t *renderer, unsigned level);
+
 /* A display list was launched. */
 void odin_renderer_launch(odin_renderer_t *renderer);
 /* The texture RAM of a bank has changed; every bank if negative. */

@@ -58,7 +58,7 @@ i4_to_rgba4444(uint32_t texel)
 } /* namespace */
 
 TextureCache::TextureCache(const std::span<const uint8_t> texram[2])
-	: m_texram{texram[0], texram[1]}, m_is_clear{true, true}, m_no_mipmaps(false),
+	: m_texram{texram[0], texram[1]}, m_is_clear{true, true}, m_no_mipmaps(false), m_anisotropy(1),
 	  m_log(nullptr)
 {
 	for (auto &bank : m_slots)
@@ -202,10 +202,14 @@ TextureCache::decode(const odin_texhead_t &th) const
 	glBindTexture(GL_TEXTURE_2D, id);
 	set_sampling(th);
 
-	/* LOD bias and anisotropy of the X360 port (825C6650). */
+	/* LOD bias of the X360 port (825C6650), which also filters with an
+	 * anisotropy of 8. The board does not: its patents have trilinear
+	 * filtering alone. HEURISTIC: the 0C1 has a byte per texture that
+	 * looks like a level bias; its unit is not known. */
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_LOD_BIAS, -0.5f);
-	if (GLEW_EXT_texture_filter_anisotropic)
-		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, 8.0f);
+	if (m_anisotropy > 1 && GLEW_EXT_texture_filter_anisotropic)
+		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT,
+		                static_cast<float>(m_anisotropy));
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, static_cast<GLint>(num_levels - 1));
 	if (format == ODIN_FORMAT_LA8)
 		glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, la8_swizzle);
@@ -286,6 +290,15 @@ TextureCache::clear_bank(unsigned bank)
 			bury(held.id);
 		slot.clear();
 	}
+}
+
+void
+TextureCache::set_anisotropy(unsigned level)
+{
+	if (level == m_anisotropy)
+		return;
+	m_anisotropy = level;
+	invalidate(-1);
 }
 
 void

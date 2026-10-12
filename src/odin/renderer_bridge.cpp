@@ -87,6 +87,12 @@ odin_renderer_set_scale(odin_renderer_t *renderer, unsigned scale)
 }
 
 void
+odin_renderer_set_anisotropy(odin_renderer_t *renderer, unsigned level)
+{
+	renderer->renderer.set_anisotropy(level);
+}
+
+void
 odin_renderer_launch(odin_renderer_t *renderer)
 {
 	renderer->renderer.launch();
