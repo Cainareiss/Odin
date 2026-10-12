@@ -21,17 +21,6 @@
 #include "mach/hikaru/hikaru-renderer.h"
 #include "mach/hikaru/hikaru-renderer-private.h"
 
-#define VP0	VP.current
-#define MAT0	MAT.scratch
-#define TEX0	TEX.scratch
-#define LS0	LIT.scratchset
-
-#define MAX_VIEWPORTS	4096
-#define MAX_MODELVIEWS	8192
-#define MAX_MATERIALS	4096
-#define MAX_TEXHEADS	4096
-#define MAX_LIGHTSETS	4096
-#define MAX_MESHES	16384
 
 #define INV255	(1.0f / 255.0f)
 
@@ -74,6 +63,9 @@ init_debug_flags (hikaru_renderer_t *hr)
 	hr->debug.flags[HR_DEBUG_LOG] =
 		vk_util_get_bool_option ("HR_LOG", false) ? 1 : 0;
 	hr->debug.keys = vk_util_get_bool_option ("ODIN_DEBUG_KEYS", false);
+	hr->debug.list_dump = vk_util_get_int_option ("ODIN_LIST_DUMP", -1);
+	hr->debug.list_fp = hr->debug.list_dump >= 0 ||
+	                     vk_util_get_bool_option ("ODIN_LIST_FP", false);
 }
 
 /* The keys of the debug flags are keys of the players too: they act with
@@ -126,14 +118,14 @@ get_uniform_loc (GLuint prog, const char *id)
 
 static bool
 is_texhead_eq (hikaru_renderer_t *hr,
-               hikaru_texhead_t *a, hikaru_texhead_t *b)
+               odin_texhead_t *a, odin_texhead_t *b)
 {
-	return (a->format == b->format) &&
-	       (a->logw == b->logw) &&
-	       (a->logh == b->logh) &&
-	       (a->bank == b->bank) &&
-	       (a->slotx == b->slotx) &&
-	       (a->sloty == b->sloty);
+	return (odin_tex_format (a) == odin_tex_format (b)) &&
+	       (odin_tex_logw (a) == odin_tex_logw (b)) &&
+	       (odin_tex_logh (a) == odin_tex_logh (b)) &&
+	       (odin_tex_bank (a) == odin_tex_bank (b)) &&
+	       (odin_tex_slotx (a) == odin_tex_slotx (b)) &&
+	       (odin_tex_sloty (a) == odin_tex_sloty (b));
 }
 
 /* A texture the graphics card may still be drawing with is not deleted at
@@ -216,20 +208,20 @@ decode_texture_i4 (vk_buffer_t *texram,
  * the texels: two texheads may share a slot and differ only there, so this
  * runs on every bind, as the X360 port does (825C6C98, 825C6650). */
 static void
-set_texhead_sampling (hikaru_texhead_t *th)
+set_texhead_sampling (odin_texhead_t *th)
 {
 	/* Mirror wins over repeat, else clamp. */
 	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_S,
-	                 th->mirroru ? GL_MIRRORED_REPEAT :
-	                 th->repeatu ? GL_REPEAT : GL_CLAMP_TO_EDGE);
+	                 odin_tex_mirroru (th) ? GL_MIRRORED_REPEAT :
+	                 odin_tex_repeatu (th) ? GL_REPEAT : GL_CLAMP_TO_EDGE);
 	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_T,
-	                 th->mirrorv ? GL_MIRRORED_REPEAT :
-	                 th->repeatv ? GL_REPEAT : GL_CLAMP_TO_EDGE);
+	                 odin_tex_mirrorv (th) ? GL_MIRRORED_REPEAT :
+	                 odin_tex_repeatv (th) ? GL_REPEAT : GL_CLAMP_TO_EDGE);
 	VK_ASSERT_NO_GL_ERROR ();
 
 	/* Filter of the 0C1 mode; mode 3 is left at the sampler defaults in
 	 * the port, trilinear here (HEURISTIC). */
-	switch (th->filter) {
+	switch (odin_tex_filter (th)) {
 	case 0:
 		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 		glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -247,7 +239,7 @@ set_texhead_sampling (hikaru_texhead_t *th)
 }
 
 static GLuint
-upload_texture (hikaru_renderer_t *hr, hikaru_texhead_t *th)
+upload_texture (hikaru_renderer_t *hr, odin_texhead_t *th)
 {
 	static const GLint la8_swizzle[4] = { GL_RED, GL_RED, GL_RED, GL_GREEN };
 
@@ -255,17 +247,17 @@ upload_texture (hikaru_renderer_t *hr, hikaru_texhead_t *th)
 	GLenum internal;
 	GLuint id;
 
-	w = 16 << th->logw;
-	h = 16 << th->logh;
+	w = 16 << odin_tex_logw (th);
+	h = 16 << odin_tex_logh (th);
 	/* The levels alternate between the two banks (see copy_texture),
 	 * down to the level where the smaller side reaches one texel: the
 	 * games upload no further (the sky dome of von4, 256x128, has a zero
 	 * 1x1 level that the port would read, 825C6A00; HEURISTIC). */
 	num_levels = hr->debug.flags[HR_DEBUG_NO_MIPMAPS] ? 1 :
-	             MIN2 (th->logw, th->logh) + 5;
+	             MIN2 (odin_tex_logw (th), odin_tex_logh (th)) + 5;
 
-	get_texhead_coords (&basex, &basey, th);
-	bank = th->bank;
+	odin_tex_coords (th, &basex, &basey);
+	bank = odin_tex_bank (th);
 
 	glGenTextures (1, &id);
 	VK_ASSERT_NO_GL_ERROR ();
@@ -292,17 +284,17 @@ upload_texture (hikaru_renderer_t *hr, hikaru_texhead_t *th)
 
 	/* The levels are allocated at once: given one by one, a 64x64 texture
 	 * takes the NVIDIA driver 595 some 1.7 ms instead of 0.03. */
-	switch (th->format) {
-	case HIKARU_FORMAT_ABGR1555:
+	switch (odin_tex_format (th)) {
+	case ODIN_FORMAT_ABGR1555:
 		internal = GL_RGB5_A1;
 		break;
-	case HIKARU_FORMAT_ABGR4444:
+	case ODIN_FORMAT_ABGR4444:
 		internal = GL_RGBA4;
 		break;
-	case HIKARU_FORMAT_LA8:
+	case ODIN_FORMAT_LA8:
 		internal = GL_RGBA8;
 		break;
-	case HIKARU_FORMAT_I4:
+	case ODIN_FORMAT_I4:
 		/* Four texels in a word */
 		internal = GL_RGBA4;
 		scale = 2;
@@ -316,8 +308,8 @@ upload_texture (hikaru_renderer_t *hr, hikaru_texhead_t *th)
 	for (level = 0; level < num_levels; level++) {
 		void *data = (void *) hr->gpu->texram[bank]->ptr;
 
-		switch (th->format) {
-		case HIKARU_FORMAT_ABGR1555:
+		switch (odin_tex_format (th)) {
+		case ODIN_FORMAT_ABGR1555:
 			glPixelStorei (GL_UNPACK_ROW_LENGTH, 2048);
 			glPixelStorei (GL_UNPACK_SKIP_ROWS, basey);
 			glPixelStorei (GL_UNPACK_SKIP_PIXELS, basex);
@@ -328,7 +320,7 @@ upload_texture (hikaru_renderer_t *hr, hikaru_texhead_t *th)
 			                 data);
 			VK_ASSERT_NO_GL_ERROR ();
 			break;
-		case HIKARU_FORMAT_ABGR4444:
+		case ODIN_FORMAT_ABGR4444:
 			glPixelStorei (GL_UNPACK_ROW_LENGTH, 2048);
 			glPixelStorei (GL_UNPACK_SKIP_ROWS, basey);
 			glPixelStorei (GL_UNPACK_SKIP_PIXELS, basex);
@@ -339,7 +331,7 @@ upload_texture (hikaru_renderer_t *hr, hikaru_texhead_t *th)
 			                 data);
 			VK_ASSERT_NO_GL_ERROR ();
 			break;
-		case HIKARU_FORMAT_LA8:
+		case ODIN_FORMAT_LA8:
 			glPixelStorei (GL_UNPACK_ROW_LENGTH, 2048);
 			glPixelStorei (GL_UNPACK_SKIP_ROWS, basey);
 			glPixelStorei (GL_UNPACK_SKIP_PIXELS, basex);
@@ -353,7 +345,7 @@ upload_texture (hikaru_renderer_t *hr, hikaru_texhead_t *th)
 			                  la8_swizzle);
 			VK_ASSERT_NO_GL_ERROR ();
 			break;
-		case HIKARU_FORMAT_I4:
+		case ODIN_FORMAT_I4:
 			data = decode_texture_i4 (hr->gpu->texram[bank],
 			                                w, h, basex, basey);
 			if (!data)
@@ -399,15 +391,15 @@ fail:
  * read with: PHARRIER draws the same frames with a 32x64 and a 128x128 texture
  * at the slot C8,D0 of the bank 1. */
 hikaru_texture_t *
-get_texture (hikaru_renderer_t *hr, hikaru_texhead_t *th)
+get_texture (hikaru_renderer_t *hr, odin_texhead_t *th)
 {
 	hikaru_texture_t *first, *cached;
 	uint32_t bank, slotx, sloty;
 	GLuint id;
 
-	bank  = th->bank;
-	slotx = th->slotx;
-	sloty = th->sloty;
+	bank  = odin_tex_bank (th);
+	slotx = odin_tex_slotx (th);
+	sloty = odin_tex_sloty (th);
 
 	if (slotx < 0x80 || sloty < 0xC0)
 		return NULL;
@@ -419,7 +411,7 @@ get_texture (hikaru_renderer_t *hr, hikaru_texhead_t *th)
 	for (cached = first; cached; cached = cached->next)
 		if (is_texhead_eq (hr, th, &cached->th))
 			return cached;
-	LOG ("TEXUPLOAD %s", get_texhead_str (th));
+	LOG ("TEXUPLOAD %s", odin_texhead_str (th));
 
 	id = upload_texture (hr, th);
 	if (!id)
@@ -470,7 +462,7 @@ clear_texcache_bank (hikaru_renderer_t *hr, unsigned bank)
 }
 
 void
-hikaru_renderer_invalidate_texcache (vk_renderer_t *rend, hikaru_texhead_t *th)
+hikaru_renderer_invalidate_texcache (vk_renderer_t *rend, const odin_texhead_t *th)
 {
 	hikaru_renderer_t *hr = (hikaru_renderer_t *) rend;
 
@@ -480,7 +472,7 @@ hikaru_renderer_invalidate_texcache (vk_renderer_t *rend, hikaru_texhead_t *th)
 		clear_texcache_bank (hr, 0);
 		clear_texcache_bank (hr, 1);
 	} else
-		clear_texcache_bank (hr, th->bank);
+		clear_texcache_bank (hr, odin_tex_bank (th));
 }
 
 /****************************************************************************
@@ -833,33 +825,33 @@ main (void)	\n \
 }";
 
 static hikaru_light_att_t
-get_light_attenuation_type (hikaru_light_t *lit)
+get_light_attenuation_type (odin_light_t *lit)
 {
-	if (lit->att_type == 0 &&
+	if (odin_light_att_type (lit) == 0 &&
 	    lit->attenuation[0] == 1.0f &&
 	    lit->attenuation[1] == 1.0f)
 		return HIKARU_LIGHT_ATT_INF;
-	return lit->att_type;
+	return odin_light_att_type (lit);
 }
 
 static hikaru_light_type_t
-get_light_type (hikaru_light_t *lit)
+get_light_type (odin_light_t *lit)
 {
 	/* Violated by BRAVEFF, in the intro sequence; it recalls a lightset
 	 * at the wrong base, and poof. */
-	if (!lit->has_direction && !lit->has_position)
+	if (!(lit->flags & ODIN_LIGHT_HAS_DIRECTION) && !(lit->flags & ODIN_LIGHT_HAS_POSITION))
 		VK_ERROR ("recalling light with no direction nor position!");
 	if (get_light_attenuation_type (lit) == HIKARU_LIGHT_ATT_INF) {
 		/* A parallel light sent with a null direction lights every
 		 * side (HEURISTIC, read from the BRAVEFF cabinet: the light
 		 * its stages add to every lightset). */
-		if (lit->has_direction && lit->direction[0] == 0.0f &&
+		if ((lit->flags & ODIN_LIGHT_HAS_DIRECTION) && lit->direction[0] == 0.0f &&
 		    lit->direction[1] == 0.0f && lit->direction[2] == 0.0f)
 			return HIKARU_LIGHT_TYPE_UNDIRECTED;
 		return HIKARU_LIGHT_TYPE_DIRECTIONAL;
-	} else if (lit->has_position && lit->has_spot && lit->has_cone)
+	} else if ((lit->flags & ODIN_LIGHT_HAS_POSITION) && (lit->flags & ODIN_LIGHT_HAS_SPOT) && (lit->flags & ODIN_LIGHT_HAS_CONE))
 		return HIKARU_LIGHT_TYPE_SPOT;
-	else if (lit->has_position)
+	else if ((lit->flags & ODIN_LIGHT_HAS_POSITION))
 		return HIKARU_LIGHT_TYPE_POSITIONAL;
 	return HIKARU_LIGHT_TYPE_DIRECTIONAL;
 }
@@ -869,27 +861,27 @@ get_light_type (hikaru_light_t *lit)
  * its demo play loses the far scenery and keeps the mountains, sent as
  * translucent polygons). */
 static bool
-is_faded_by_depth (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
+is_faded_by_depth (hikaru_renderer_t *hr, odin_mesh_t *mesh)
 {
-	hikaru_viewport_t *vp;
+	odin_viewport_t *vp;
 
-	if (mesh->vp_index >= MAX_VIEWPORTS)
+	if (mesh->vp_index >= ODIN_LIST_MAX_VIEWPORTS)
 		return false;
 	vp = &hr->list->vp_list[mesh->vp_index];
 
 	return vp->depth.q_behind && vp->depth.q_type == 0 &&
 	       vp->depth.inv_range > 0.0f && vp->depth.near_by_edge > 0.0f &&
-	       mesh->polytype != HIKARU_POLYTYPE_BACKGROUND &&
-	       mesh->polytype != HIKARU_POLYTYPE_TRANSLUCENT &&
+	       mesh->polytype != ODIN_POLYTYPE_BACKGROUND &&
+	       mesh->polytype != ODIN_POLYTYPE_TRANSLUCENT &&
 	       !hr->debug.flags[HR_DEBUG_NO_FOG];
 }
 
 static hikaru_glsl_variant_t
-get_glsl_variant (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
+get_glsl_variant (hikaru_renderer_t *hr, odin_mesh_t *mesh)
 {
-	hikaru_material_t *mat	= &hr->list->mat_list[mesh->mat_index];
-	hikaru_lightset_t *ls	= &hr->list->ls_list[mesh->ls_index];
-	hikaru_viewport_t *vp	= &hr->list->vp_list[mesh->vp_index];
+	odin_material_t *mat	= &hr->list->mat_list[mesh->mat_index];
+	odin_lightset_t *ls	= &hr->list->ls_list[mesh->ls_index];
+	odin_viewport_t *vp	= &hr->list->vp_list[mesh->vp_index];
 	hikaru_glsl_variant_t variant;
 
 	VK_ASSERT (mesh->vp_index != ~0);
@@ -912,57 +904,54 @@ get_glsl_variant (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 		return variant;
 	}
 
-	variant.has_texture	= mat->has_texture &&
+	variant.has_texture	= odin_mat_has_texture (mat) &&
 	                          !hr->debug.flags[HR_DEBUG_NO_TEXTURES];
 
-	variant.has_lighting	= ls->mask != 0xF &&
-	                          mat->shading_mode != 0 &&
+	variant.has_lighting	= odin_lightset_mask (ls) != 0xF &&
+	                          odin_mat_shading_mode (mat) != 0 &&
 	                          !hr->debug.flags[HR_DEBUG_NO_LIGHTING];
 
 	/* The X360 port picks the fogged vo3d variant on the 881 z bit alone
 	 * (shader option 11, digit 1). */
-	variant.has_fog		= mat->depth_blend &&
+	variant.has_fog		= odin_mat_depth_blend (mat) &&
 	                          !vp->depth.q_behind &&
 	                          !hr->debug.flags[HR_DEBUG_NO_FOG];
 	variant.has_cue		= is_faded_by_depth (hr, mesh);
 
 	/* The alpha mode and the texel mode apply to unlit materials too
 	 * (vo3d.x1xxxxx variants). */
-	variant.alpha_mode		= mat->has_alpha;
+	variant.alpha_mode		= odin_mat_has_alpha (mat);
 
 	/* The 2C1 bits 31:29 pick how the texel combines with the material
 	 * colours, numbered as the port's shader variants (8252E368 byte 6,
 	 * 825B4340): values 1, 2, 4 and 5 select modes 1 to 4; 3, 6 and 7
 	 * keep the previous mode there, plain texturing here (HEURISTIC). */
 	if (variant.has_texture) {
-		hikaru_texhead_t *th = &hr->list->tex_list[mesh->tex_index];
+		odin_texhead_t *th = &hr->list->tex_list[mesh->tex_index];
 		static const uint8_t modes[8] = { 0, 1, 2, 0, 3, 4, 0, 0 };
-		variant.tex_mode = modes[th->texmode];
+		variant.tex_mode = modes[odin_tex_texmode (th)];
 	}
 
 	if (!variant.has_lighting)
 		return variant;
 
-	variant.shading_mode		= mat->shading_mode;
+	variant.shading_mode		= odin_mat_shading_mode (mat);
 
-	variant.has_light0		= !(ls->mask & (1 << 0));
+	variant.has_light0		= !(odin_lightset_mask (ls) & (1 << 0));
 	variant.light0_type		= get_light_type (&ls->lights[0]);
 	variant.light0_att_type		= get_light_attenuation_type (&ls->lights[0]);
 
-	variant.has_light1		= !(ls->mask & (1 << 1));
+	variant.has_light1		= !(odin_lightset_mask (ls) & (1 << 1));
 	variant.light1_type		= get_light_type (&ls->lights[1]);
 	variant.light1_att_type		= get_light_attenuation_type (&ls->lights[1]);
 
-	variant.has_light2		= !(ls->mask & (1 << 2));
+	variant.has_light2		= !(odin_lightset_mask (ls) & (1 << 2));
 	variant.light2_type		= get_light_type (&ls->lights[2]);
 	variant.light2_att_type		= get_light_attenuation_type (&ls->lights[2]);
 
-	variant.has_light3		= !(ls->mask & (1 << 3));
+	variant.has_light3		= !(odin_lightset_mask (ls) & (1 << 3));
 	variant.light3_type		= get_light_type (&ls->lights[3]);
 	variant.light3_att_type		= get_light_attenuation_type (&ls->lights[3]);
-
-	if (mesh->has_two_sided_lighting)
-		variant.has_two_sided_lighting = 1;
 
 	return variant;
 }
@@ -978,7 +967,7 @@ static struct {
 unsigned num_programs;
 
 static void
-upload_glsl_program (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
+upload_glsl_program (hikaru_renderer_t *hr, odin_mesh_t *mesh)
 {
 	static const char *definitions_template =
 	"#version %d\n"
@@ -1152,9 +1141,9 @@ upload_glsl_program (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 }
 
 static void
-upload_viewport (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
+upload_viewport (hikaru_renderer_t *hr, odin_mesh_t *mesh)
 {
-	hikaru_viewport_t *vp = &hr->list->vp_list[mesh->vp_index];
+	odin_viewport_t *vp = &hr->list->vp_list[mesh->vp_index];
 	/* The projection plane is clip.f pixels away on the 640x480 screen
 	 * for x and clip.f2 pixels away for y. */
 	const float kx = vp->clip.n / vp->clip.f;
@@ -1179,7 +1168,7 @@ upload_viewport (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	    !isnonnegative (vp->clip.b) || !isnonnegative (vp->clip.t) ||
 	    !isnonnegative (vp->clip.f) || !isnonnegative (vp->clip.n)) {
 		VK_ERROR ("non-positive viewport clipping planes: %s",
-		          get_viewport_str (vp));
+		          odin_viewport_str (vp));
 		/* continue anyway */
 	}
 
@@ -1187,11 +1176,11 @@ upload_viewport (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	    (vp->clip.b >= vp->clip.t) ||
 	    (vp->clip.n >= vp->clip.f)) {
 		VK_ERROR ("inverted viewport clipping planes: %s",
-		          get_viewport_str (vp));
+		          odin_viewport_str (vp));
 		/* continue anyway */
 	}
 
-	LOG ("vp  = %s", get_viewport_str (vp));
+	LOG ("vp  = %s", odin_viewport_str (vp));
 
 	/* The centre and the clip window are screen coordinates, y down: the
 	 * view is centred on the offset, reaches the four edges of the
@@ -1241,9 +1230,9 @@ upload_viewport (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 }
 
 static void
-upload_modelview (hikaru_renderer_t *hr, hikaru_mesh_t *mesh, unsigned i)
+upload_modelview (hikaru_renderer_t *hr, odin_mesh_t *mesh, unsigned i)
 {
-	hikaru_modelview_t *mv = &hr->list->mv_list[mesh->mv_index + i];
+	odin_modelview_t *mv = &hr->list->mv_list[mesh->mv_index + i];
 	mtx3x3f_t normal;
 
 	if (mesh->mv_index != ~0 &&
@@ -1254,7 +1243,7 @@ upload_modelview (hikaru_renderer_t *hr, hikaru_mesh_t *mesh, unsigned i)
 	hr->meshes.held->mv2_index = mesh->mv2_index;
 
 	if (mesh->mv_index == ~0) {
-		static const hikaru_modelview_t identity_mv = {
+		static const odin_modelview_t identity_mv = {
 			.mtx = {
 				{ 1.0f, 0.0f, 0.0f, 0.0f },
 				{ 0.0f, 1.0f, 0.0f, 0.0f },
@@ -1266,12 +1255,12 @@ upload_modelview (hikaru_renderer_t *hr, hikaru_mesh_t *mesh, unsigned i)
 		VK_ERROR ("attempting to draw with no modelview!");
 
 		/* Attempt to render something anyway. */
-		mv = (hikaru_modelview_t *) &identity_mv;
+		mv = (odin_modelview_t *) &identity_mv;
 	}
 
 	vk_renderer_compute_normal_matrix (normal, mv->mtx);
 
-	LOG ("mv  = [%u+%u] %s", mesh->mv_index, i, get_modelview_str (mv));
+	LOG ("mv  = [%u+%u] %s", mesh->mv_index, i, odin_modelview_str (mv));
 	glUniformMatrix4fv (hr->meshes.locs.u_modelview, 1, GL_FALSE,
 	                    (const GLfloat *) mv->mtx);
 
@@ -1279,7 +1268,7 @@ upload_modelview (hikaru_renderer_t *hr, hikaru_mesh_t *mesh, unsigned i)
 	                    (const GLfloat *) normal);
 
 	/* The second modelview, for the vertices that follow it. */
-	if (mesh->mv2_index < MAX_MODELVIEWS)
+	if (mesh->mv2_index < ODIN_LIST_MAX_MODELVIEWS)
 		mv = &hr->list->mv_list[mesh->mv2_index];
 	vk_renderer_compute_normal_matrix (normal, mv->mtx);
 	glUniformMatrix4fv (hr->meshes.locs.u_modelview2, 1, GL_FALSE,
@@ -1288,10 +1277,28 @@ upload_modelview (hikaru_renderer_t *hr, hikaru_mesh_t *mesh, unsigned i)
 	                    (const GLfloat *) normal);
 }
 
-static void
-upload_material_texhead (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
+/* The texture each texhead of the list was drawn with: a list drawn again
+ * takes them back, see check_last_list. The command processor builds its
+ * lists in two buffers, there is an array for each. */
+static GLuint *
+list_tex_ids (hikaru_renderer_t *hr)
 {
-	hikaru_texhead_t *th;
+	unsigned i;
+
+	for (i = 0; i < 2; i++) {
+		if (!hr->tex_ids[i].list)
+			hr->tex_ids[i].list = hr->list;
+		if (hr->tex_ids[i].list == hr->list)
+			return hr->tex_ids[i].ids;
+	}
+	VK_ABORT ("renderer: a third display list");
+	return NULL;
+}
+
+static void
+upload_material_texhead (hikaru_renderer_t *hr, odin_mesh_t *mesh)
+{
+	odin_texhead_t *th;
 	GLuint id;
 
 	if (!hr->meshes.variant.has_texture)
@@ -1307,12 +1314,12 @@ upload_material_texhead (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	/* A list drawn again takes the textures it had: the texture RAM may
 	 * have changed since. */
 	if (hr->meshes.again)
-		id = hr->list->tex_ids[mesh->tex_index];
+		id = list_tex_ids (hr)[mesh->tex_index];
 	else {
 		hikaru_texture_t *tex = get_texture (hr, th);
 
 		id = tex ? tex->id : 0;
-		hr->list->tex_ids[mesh->tex_index] = id;
+		list_tex_ids (hr)[mesh->tex_index] = id;
 	}
 
 	glActiveTexture (GL_TEXTURE0 + 0);
@@ -1326,9 +1333,9 @@ upload_material_texhead (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 }
 
 static void
-get_light_ambient (hikaru_renderer_t *hr, hikaru_mesh_t *mesh, float *out)
+get_light_ambient (hikaru_renderer_t *hr, odin_mesh_t *mesh, float *out)
 {
-	hikaru_viewport_t *vp = (mesh->vp_index == ~0) ? NULL :
+	odin_viewport_t *vp = (mesh->vp_index == ~0) ? NULL :
 	                        &hr->list->vp_list[mesh->vp_index];
 
 	if (hr->debug.flags[HR_DEBUG_NO_AMBIENT] || !vp)
@@ -1341,7 +1348,7 @@ get_light_ambient (hikaru_renderer_t *hr, hikaru_mesh_t *mesh, float *out)
 }
 
 static void
-get_light_diffuse (hikaru_renderer_t *hr, hikaru_light_t *lit, float *out)
+get_light_diffuse (hikaru_renderer_t *hr, odin_light_t *lit, float *out)
 {
 	if (hr->debug.flags[HR_DEBUG_NO_DIFFUSE])
 		out[0] = out[1] = out[2] = 0.0f;
@@ -1353,9 +1360,9 @@ get_light_diffuse (hikaru_renderer_t *hr, hikaru_light_t *lit, float *out)
 }
 
 static void
-upload_lightset (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
+upload_lightset (hikaru_renderer_t *hr, odin_mesh_t *mesh)
 {
-	hikaru_lightset_t *ls = &hr->list->ls_list[mesh->ls_index];
+	odin_lightset_t *ls = &hr->list->ls_list[mesh->ls_index];
 	float tmp[4], table[16];
 	unsigned i, j;
 
@@ -1369,17 +1376,17 @@ upload_lightset (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	hr->meshes.held->ls_index = mesh->ls_index;
 	hr->meshes.held->ls_vp_index = mesh->vp_index;
 
-	LOG ("lightset [%u] mask=%X = %s", mesh->ls_index, ls->mask,
-	     get_lightset_str (ls));
+	LOG ("lightset [%u] mask=%X = %s", mesh->ls_index, odin_lightset_mask (ls),
+	     odin_lightset_str (ls));
 
 	get_light_ambient (hr, mesh, tmp);
 	glUniform3fv (hr->meshes.locs.u_ambient, 1, (const GLfloat *) tmp);
 	VK_ASSERT_NO_GL_ERROR ();
 
 	for (i = 0; i < 4; i++) {
-		hikaru_light_t *lt = &ls->lights[i];
+		odin_light_t *lt = &ls->lights[i];
 
-		if (ls->mask & (1 << i))
+		if (odin_lightset_mask (ls) & (1 << i))
 			continue;
 
 		glUniform3fv (hr->meshes.locs.u_lights[i].position, 1,
@@ -1393,7 +1400,7 @@ upload_lightset (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 		get_light_diffuse (hr, lt, tmp);
 		glUniform3fv (hr->meshes.locs.u_lights[i].color, 1, tmp);
 		glUniform1f (hr->meshes.locs.u_lights[i].ambient,
-		             lt->ambient * (1.0f / 16.0f));
+		             odin_light_ambient (lt) * (1.0f / 16.0f));
 		VK_ASSERT_NO_GL_ERROR ();
 
 		glUniform2fv (hr->meshes.locs.u_lights[i].extents, 1,
@@ -1428,359 +1435,35 @@ upload_lightset (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 		dst_[2] = src_[2]; \
 	} while (0)
 
-static float
-clampf (float x, float min_, float max_)
-{
-	return (min_ > x) ? min_ :
-	       (max_ < x) ? max_ : x;
-}
-
 static void
-copy_material (hikaru_renderer_t *hr, hikaru_vertex_t *dst)
+print_rendstate (hikaru_renderer_t *hr, odin_mesh_t *mesh, char *prefix)
 {
-	hikaru_gpu_t *gpu = hr->gpu;
-	hikaru_material_t *mat = &MAT.scratch;
-	unsigned i;
-
-	for (i = 0; i < 3; i++)
-		dst->body.diffuse[i] = mat->diffuse[i];
-
-	/* The 691 colour is the ambient of the shading mode 1 and the
-	 * emission of the mode 2, 255 for 1.0. The port saturates it there
-	 * (825B4DE8), the hardware does not: PHARRIER sends 600 in mode 2
-	 * for the syringe of its nurse and 736 in mode 1 for the selection
-	 * frame of its shop, and the cabinet shows both that much brighter. */
-	for (i = 0; i < 3; i++)
-		dst->body.ambient[i] = mat->unknown[i] / 255.0f;
-
-	/* The 491 colour is in 1/64: PHARRIER sets 0x40 and SGNASCAR goes up
-	 * to 0x7F. The port multiplies it by 4 and wraps to 8 bits (825B4DE8),
-	 * the same thing below 0x40; the shader scales it. */
-	for (i = 0; i < 4; i++)
-		dst->body.specular[i] = mat->specular[i];
-
-	for (i = 0; i < 3; i++)
-		dst->body.color1[i] = mat->ambient[i];
-}
-
-static void
-copy_colors (hikaru_renderer_t *hr, hikaru_vertex_t *dst, hikaru_vertex_t *src)
-{
-	hikaru_gpu_t *gpu = hr->gpu;
-	float alpha;
-
-	copy_material (hr, dst);
-
-	/* Vertex alpha times polygon alpha for every type (X360 8252D858);
-	 * the render pass decides what it means. */
-	alpha = clampf (POLY.alpha * (src->info.alpha * INV255), 0.0f, 1.0f);
-	dst->body.alpha = (uint8_t) (alpha * 255.0f);
-}
-
-static void
-copy_texcoords (hikaru_renderer_t *hr,
-                hikaru_vertex_t *dst, hikaru_vertex_t *src)
-{
-	hikaru_gpu_t *gpu = hr->gpu;
-	hikaru_texhead_t *th = &TEX.scratch;
-	float w = 16 << th->logw;
-	float h = 16 << th->logh;
-	/* Vertex UVs are 12.4 unless the texhead says whole texels; the 0D1
-	 * offset slot picked by the vertex is added in 1/16 texel (X360
-	 * 8252D710, 82538E70). */
-	float k = th->uvtexels ? 16.0f : 1.0f;
-	float u = src->body.texcoords[0] * k;
-	float v = src->body.texcoords[1] * k;
-	unsigned sel = src->info.uv_offset;
-
-	if (th->format == HIKARU_FORMAT_I4) {
-		w *= 2;
-		h *= 2;
-	}
-
-	if (sel) {
-		u += gpu->texoffset[sel][0] / 16.0f;
-		v += gpu->texoffset[sel][1] / 16.0f;
-	}
-
-	dst->body.texcoords[0] = u / w;
-	dst->body.texcoords[1] = v / h;
-}
-
-static void
-add_triangle (hikaru_renderer_t *hr)
-{
-	if (hr->push.num_verts >= 3) {
-		uint32_t index = hr->push.num_tris * 3;
-		hikaru_vertex_body_t *dst = &hr->push.all[index];
-		hikaru_vertex_body_t *a = &hr->push.tmp[0].body;
-		hikaru_vertex_body_t *b = &hr->push.tmp[1].body;
-		hikaru_vertex_body_t *c = &hr->push.tmp[2].body;
-		float e1[3], e2[3], n[3];
-		unsigned i;
-
-		VK_ASSERT ((index + 2) < MAX_VERTICES_PER_MESH);
-
-		/* Bits 19:18 select a UV offset, not two-sided lighting (X360
-		 * port, 8252D590); the two-sided variant is never used now. */
-
-		/* Degenerate triangles are dropped, as in the X360 port
-		 * (825B6100); not when the vertices follow different
-		 * modelviews, the matrices give them their shape then (the
-		 * AIRTRIX trails). */
-		for (i = 0; i < 3; i++) {
-			e1[i] = b->position[i] - a->position[i];
-			e2[i] = c->position[i] - a->position[i];
-		}
-		n[0] = e1[1] * e2[2] - e1[2] * e2[1];
-		n[1] = e1[2] * e2[0] - e1[0] * e2[2];
-		n[2] = e1[0] * e2[1] - e1[1] * e2[0];
-		if (a->second_mv == b->second_mv && b->second_mv == c->second_mv &&
-		    (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]) <= 0.0f)
-			return;
-
-		/* The winding is the vertex order, reversed by the winding bit
-		 * of the closing vertex. The port winds each triangle after its
-		 * vertex normals instead (825B6218), but the SGNASCAR cabinet
-		 * shows quads whose normals point away from the viewer (the
-		 * dark panels of its ENTRY DRIVERS screen). */
-		if (hr->push.tmp[2].info.winding) {
-			hikaru_vertex_body_t *t = b;
-			b = c;
-			c = t;
-		}
-
-		dst[0] = *a;
-		dst[1] = *b;
-		dst[2] = *c;
-		hr->push.num_tris += 1;
-
-		/* Both faces (bit 23): the triangle is emitted twice, the
-		 * second time for its back, lit with the reversed normals. */
-		if (hr->push.tmp[2].info.nocull) {
-			unsigned j;
-
-			dst[3] = *a;
-			dst[4] = *c;
-			dst[5] = *b;
-			for (i = 3; i < 6; i++)
-				for (j = 0; j < 3; j++)
-					dst[i].normal[j] = -dst[i].normal[j];
-			hr->push.num_tris += 1;
-		}
-	}
-}
-
-void
-hikaru_renderer_push_vertices (vk_renderer_t *rend,
-                               hikaru_vertex_t *v,
-                               uint32_t flags,
-                               unsigned num)
-{
-	hikaru_renderer_t *hr = (hikaru_renderer_t *) rend;
-	hikaru_gpu_t *gpu = hr->gpu;
-	unsigned i, vp_index = VP0.depth.func;
-
-	VK_ASSERT (hr);
-	VK_ASSERT (v);
-	VK_ASSERT (num == 1 || num == 3);
-	VK_ASSERT (v->info.tricap == 0 || v->info.tricap == 7);
-
-	if (hr->debug.flags[HR_DEBUG_NO_3D])
-		return;
-
-	if (hr->debug.flags[HR_DEBUG_SELECT_VIEWPORT] >= 0 &&
-	    hr->debug.flags[HR_DEBUG_SELECT_VIEWPORT] != vp_index)
-		return;
-
-	switch (num) {
-
-	case 1:
-		/* Note that VTX(2) always points to the last pushed vertex,
-		 * which for instructions 12x, 1Ax and 1Bx means the vertex
-		 * pushed by the instruction itself, and for instructions 1Ex
-		 * and 15x the vertex pushed by the previous "push"
-		 * instruction.
-		 */
-
-		/* If the incoming vertex includes the position, push it
-		 * in the temporary buffer, updating it according to the
-		 * p(osition)pivot bit. */
-		if (flags & HR_PUSH_POS) {
-
-			/* Do not change the pivot if it is not required */
-			if (!v->info.ppivot)
-				hr->push.tmp[0] = hr->push.tmp[1];
-			hr->push.tmp[1] = hr->push.tmp[2];
-			memset ((void *) &hr->push.tmp[2], 0, sizeof (hikaru_vertex_t));
-
-			/* Set the position, colors and alpha. */
-			VK_COPY_VEC3F (hr->push.tmp[2].body.position, v->body.position);
-			copy_colors (hr, &hr->push.tmp[2], v);
-
-			/* Account for the added vertex. */
-			hr->push.num_verts += 1;
-			VK_ASSERT (hr->push.num_verts < MAX_VERTICES_PER_MESH);
-		}
-
-		/* Set the normal. */
-		if (flags & HR_PUSH_NRM)
-			VK_COPY_VEC3F (hr->push.tmp[2].body.normal, v->body.normal);
-
-		/* Bit 12 of the header: the vertex follows the second
-		 * modelview (161 with bit 18). Bits 13 and 14: it takes the
-		 * 3x3 and the last row of its modelview. The vertex shader
-		 * picks the matrix. */
-		if (flags & HR_PUSH_POS)
-			hr->push.tmp[2].body.second_mv = (v->info.second_mv ? 1 : 0) +
-				(v->info.rotate ? 0 : 64) + (v->info.translate ? 0 : 128);
-
-		/* Set the texcoords. */
-		if (flags & HR_PUSH_TXC)
-			copy_texcoords (hr, &hr->push.tmp[2], v);
-		break;
-
-	case 3:
-		VK_ASSERT (flags == HR_PUSH_TXC);
-
-		if (hr->push.num_verts < 3)
-			return;
-
-		for (i = 0; i < 3; i++)
-			copy_texcoords (hr, &hr->push.tmp[2 - i], &v[i]);
-		break;
-
-	default:
-		VK_ASSERT (!"num is neither 1 nor 3");
-		break;
-	}
-
-	/* Finish the previous triangle. */
-	if (v[0].info.tricap == 7) {
-		hr->push.tmp[2].info.full = v[0].info.full;
-		add_triangle (hr);
-	}
-}
-
-static void
-print_rendstate (hikaru_renderer_t *hr, hikaru_mesh_t *mesh, char *prefix)
-{
-	LOG ("RENDSTATE %s @%p #instances = %u uvoff=[%d %d | %d %d | %d %d | %d %d]", prefix, mesh, mesh->num_instances,
-	     hr->gpu->texoffset[0][0], hr->gpu->texoffset[0][1], hr->gpu->texoffset[1][0], hr->gpu->texoffset[1][1],
-	     hr->gpu->texoffset[2][0], hr->gpu->texoffset[2][1], hr->gpu->texoffset[3][0], hr->gpu->texoffset[3][1]);
-	if (mesh->vp_index < MAX_VIEWPORTS)
+	LOG ("RENDSTATE %s @%p #instances = %u", prefix, mesh, mesh->num_instances);
+	if (mesh->vp_index < ODIN_LIST_MAX_VIEWPORTS)
 		LOG ("RENDSTATE %s %u vp:  %s", prefix, mesh->num,
-		     get_viewport_str (&hr->list->vp_list[mesh->vp_index]));
-	if (mesh->mv_index < MAX_MODELVIEWS)
+		     odin_viewport_str (&hr->list->vp_list[mesh->vp_index]));
+	if (mesh->mv_index < ODIN_LIST_MAX_MODELVIEWS)
 		LOG ("RENDSTATE %s %u mv:  %s", prefix, mesh->num,
-		     get_modelview_str (&hr->list->mv_list[mesh->mv_index]));
-	if (mesh->mat_index < MAX_MATERIALS)
+		     odin_modelview_str (&hr->list->mv_list[mesh->mv_index]));
+	if (mesh->mat_index < ODIN_LIST_MAX_MATERIALS)
 		LOG ("RENDSTATE %s %u mat: %s", prefix, mesh->num,
-		     get_material_str (&hr->list->mat_list[mesh->mat_index]));
-	if (mesh->tex_index < MAX_TEXHEADS)
+		     odin_material_str (&hr->list->mat_list[mesh->mat_index]));
+	if (mesh->tex_index < ODIN_LIST_MAX_TEXHEADS)
 		LOG ("RENDSTATE %s %u tex: %s", prefix, mesh->num,
-		     get_texhead_str (&hr->list->tex_list[mesh->tex_index]));
-	if (mesh->ls_index < MAX_LIGHTSETS)
+		     odin_texhead_str (&hr->list->tex_list[mesh->tex_index]));
+	if (mesh->ls_index < ODIN_LIST_MAX_LIGHTSETS)
 		LOG ("RENDSTATE %s %u ls:  %s", prefix, mesh->num,
-		     get_lightset_str (&hr->list->ls_list[mesh->ls_index]));
+		     odin_lightset_str (&hr->list->ls_list[mesh->ls_index]));
 }
 
 /* TODO check boundary conditions when nothing is uploaded in a frame. */
-/* TODO alpha threshold */
-static void
-update_and_set_rendstate (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
-{
-	hikaru_gpu_t *gpu = hr->gpu;
-	unsigned i, j;
-
-	memset ((void *) mesh, 0, sizeof (hikaru_mesh_t));
-
-	LOG ("RENDSTATE updating vp %u/%u", hr->list->num_vps, MAX_VIEWPORTS);
-	hr->list->vp_list[hr->list->num_vps++] = VP0;
-	VK_ASSERT (hr->list->num_vps < MAX_VIEWPORTS);
-
-	LOG ("RENDSTATE updating mat %u/%u", hr->list->num_mats, MAX_MATERIALS);
-	hr->list->mat_list[hr->list->num_mats++] = MAT0;
-	VK_ASSERT (hr->list->num_mats < MAX_MATERIALS);
-
-	LOG ("RENDSTATE updating tex %u/%u", hr->list->num_texs, MAX_TEXHEADS);
-	hr->list->tex_ids[hr->list->num_texs] = 0;
-	hr->list->tex_list[hr->list->num_texs++] = TEX0;
-	VK_ASSERT (hr->list->num_texs < MAX_TEXHEADS);
-
-	LOG ("RENDSTATE updating ls %u/%u", hr->list->num_lss, MAX_LIGHTSETS);
-	/* The 194 table of each light: a word has two points, the even one
-	 * in its upper half; the first of the four tables of a light is
-	 * taken (HEURISTIC: what picks one is not known, the games load
-	 * the same ramp in all of them). */
-	for (i = 0; i < 4; i++) {
-		for (j = 0; j < 8; j++) {
-			const uint32_t word = LTABLE[i][j].full;
-
-			hr->list->ls_tables[hr->list->num_lss][i][j * 2] = word >> 16;
-			hr->list->ls_tables[hr->list->num_lss][i][j * 2 + 1] = word & 0xFFFF;
-		}
-	}
-	hr->list->ls_list[hr->list->num_lss++] = LS0;
-	VK_ASSERT (hr->list->num_lss < MAX_LIGHTSETS);
-
-	/* Copy the per-instance modelviews from last to first. */
-	/* TODO optimize by setting MV.total to 0 (and fix the fallback). */
-	if (MV.total == ~0) {
-		LOG ("RENDSTATE adding no mvs %u/%u [#instances=%u]",
-		     hr->list->num_mvs, MAX_MODELVIEWS,
-		     hr->list->num_instances);
-
-		mesh->mv_index = hr->list->num_mvs - 1;
-		mesh->num_instances = hr->list->num_instances;
-	} else {
-		MV.total = 1;
-
-		mesh->mv_index = hr->list->num_mvs;
-		mesh->num_instances = MV.total;
-		hr->list->num_instances = MV.total;
-
-		for (i = 0; i < MV.total; i++, hr->list->num_mvs++) {
-			LOG ("RENDSTATE adding mv %u/%u [#instances=%u]",
-			     hr->list->num_mvs, MAX_MODELVIEWS, MV.total);
-	
-			VK_ASSERT (hr->list->num_mvs < MAX_MODELVIEWS);
-			hikaru_gpu_cp_get_modelview (gpu, &hr->list->mv_list[hr->list->num_mvs]);
-		}
-
-		MV.total = 0;
-		MV.depth = 0;
-	}
-
-	/* The second modelview (161 with bit 18) is listed when it changes. */
-	if (hr->list->mv2_index >= MAX_MODELVIEWS ||
-	    memcmp (&hr->list->mv_list[hr->list->mv2_index], &MV.second,
-	            sizeof (hikaru_modelview_t)) != 0) {
-		VK_ASSERT (hr->list->num_mvs < MAX_MODELVIEWS);
-		hr->list->mv2_index = hr->list->num_mvs;
-		hr->list->mv_list[hr->list->num_mvs++] = MV.second;
-	}
-	mesh->mv2_index = hr->list->mv2_index;
-
-	mesh->depth_bias = gpu->depth_bias;
-	mesh->pattern = gpu->pattern;
-
-	mesh->vp_index = hr->list->num_vps - 1;
-	mesh->mat_index = hr->list->num_mats - 1;
-	mesh->tex_index = hr->list->num_texs - 1;
-	mesh->ls_index = hr->list->num_lss - 1;
-
-	mesh->num = hr->list->total_meshes++;
-	print_rendstate (hr, mesh, "U");
-}
-
 #define OFFSET(member_) \
-	((const GLvoid *) offsetof (hikaru_vertex_body_t, member_))
+	((const GLvoid *) offsetof (odin_vertex_body_t, member_))
 
 #define VAP(loc_, num_, type_, member_, normalize_) \
 	if (loc_ != (GLuint) -1) { \
 		glVertexAttribPointer (loc_, num_, type_, normalize_, \
-		                       sizeof (hikaru_vertex_body_t), \
+		                       sizeof (odin_vertex_body_t), \
 		                       OFFSET (member_)); \
 		VK_ASSERT_NO_GL_ERROR (); \
 		\
@@ -1789,7 +1472,7 @@ update_and_set_rendstate (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	}
 
 static void
-draw_instance (hikaru_renderer_t *hr, hikaru_mesh_t *mesh, unsigned i)
+draw_instance (hikaru_renderer_t *hr, odin_mesh_t *mesh, unsigned i)
 {
 	upload_modelview (hr, mesh, i);
 	if (hr->meshes.collect) {
@@ -1800,7 +1483,7 @@ draw_instance (hikaru_renderer_t *hr, hikaru_mesh_t *mesh, unsigned i)
 }
 
 static void
-draw_mesh (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
+draw_mesh (hikaru_renderer_t *hr, odin_mesh_t *mesh)
 {
 	hikaru_mesh_held_t *held;
 	float depth_scale;
@@ -1897,7 +1580,7 @@ upload_vertex_data (hikaru_renderer_t *hr)
 	glBindVertexArray (hr->meshes.vao);
 	glBindBuffer (GL_ARRAY_BUFFER, hr->meshes.vbo);
 	glBufferData (GL_ARRAY_BUFFER,
-	              sizeof (hikaru_vertex_body_t) * hr->list->verts.num,
+	              sizeof (odin_vertex_body_t) * hr->list->verts.num,
 	              (const GLvoid *) hr->list->verts.all, GL_DYNAMIC_DRAW);
 	VK_ASSERT_NO_GL_ERROR ();
 
@@ -1916,101 +1599,12 @@ upload_vertex_data (hikaru_renderer_t *hr)
 
 #undef OFFSET
 
-/* Appends the pushed vertices of a mesh to the buffer of the frame. */
-static void
-store_vertex_data (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
-{
-	hikaru_list_t *list = hr->list;
-	uint32_t num;
-
-	VK_ASSERT (mesh);
-
-	mesh->num_tris = hr->push.num_tris;
-
-	num = mesh->num_tris * 3;
-	if (list->verts.num + num > list->verts.max) {
-		list->verts.max = MAX2 (list->verts.max * 2, list->verts.num + num);
-		list->verts.all = (hikaru_vertex_body_t *)
-			realloc (list->verts.all,
-			         list->verts.max * sizeof (hikaru_vertex_body_t));
-		VK_ASSERT (list->verts.all);
-	}
-	if (num)
-		memcpy (&list->verts.all[list->verts.num], hr->push.all,
-		        num * sizeof (hikaru_vertex_body_t));
-	mesh->first = list->verts.num;
-	list->verts.num += num;
-}
-
 void
 hikaru_renderer_launch (vk_renderer_t *rend)
 {
 	hikaru_renderer_t *hr = (hikaru_renderer_t *) rend;
 
 	hr->framebuffer.launched = 1;
-	hr->push.num_verts = 0;
-}
-
-void
-hikaru_renderer_begin_mesh (vk_renderer_t *rend, uint32_t addr,
-                            bool is_static)
-{
-	hikaru_renderer_t *hr = (hikaru_renderer_t *) rend;
-	hikaru_gpu_t *gpu = hr->gpu;
-	unsigned vp_index = VP0.depth.func;
-	unsigned polytype = POLY.type;
-	unsigned mesh_index = hr->list->num_meshes[vp_index][polytype];
-	hikaru_mesh_t *mesh;
-	unsigned i;
-
-	VK_ASSERT (hr);
-	VK_ASSERT (!hr->meshes.current);
-
-	if (hr->debug.flags[HR_DEBUG_NO_3D])
-		return;
-
-	/* Create a new mesh. */
-	mesh = &hr->list->mesh_list[vp_index][polytype][mesh_index++];
-	VK_ASSERT (mesh_index < MAX_MESHES);
-
-	hr->list->num_meshes[vp_index][polytype] = mesh_index;
-
-	/* Make the mesh current and set the rendering state. */
-	hr->meshes.current = mesh;
-	update_and_set_rendstate (hr, mesh);
-	mesh->poly_alpha = POLY.alpha;
-	mesh->polytype = polytype;
-	mesh->addr[0] = addr;
-
-	/* The last vertices stay and take the new material: a strip goes
-	 * on through a recall. The colour bars of the BOOTROM C.R.T. test
-	 * are one strip, with a material recalled before the two vertices
-	 * that close each bar. */
-	if (hr->push.num_verts > 3)
-		hr->push.num_verts = 3;
-	for (i = 3 - hr->push.num_verts; i < 3; i++)
-		copy_material (hr, &hr->push.tmp[i]);
-	hr->push.num_tris = 0;
-}
-
-void
-hikaru_renderer_end_mesh (vk_renderer_t *rend, uint32_t addr)
-{
-	hikaru_renderer_t *hr = (hikaru_renderer_t *) rend;
-
-	VK_ASSERT (hr);
-
-	if (hr->debug.flags[HR_DEBUG_NO_3D])
-		return;
-
-	VK_ASSERT (hr->meshes.current);
-
-	/* Store the pushed vertex data. */
-	store_vertex_data (hr, hr->meshes.current);
-	hr->meshes.current->addr[1] = addr;
-
-	/* Make sure there is no current mesh bound. */
-	hr->meshes.current = NULL;
 }
 
 /* Blend factors of the material (A81 bits 17:16), as the X360 port
@@ -2019,7 +1613,7 @@ hikaru_renderer_end_mesh (vk_renderer_t *rend, uint32_t addr)
  * source is weighted by its alpha the shader does it, before the clamp.
  * The translucent type is blended by lists_fs_source, which does the same. */
 static void
-set_material_blend (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
+set_material_blend (hikaru_renderer_t *hr, odin_mesh_t *mesh)
 {
 	static const GLenum factors[4][4] = {
 		{ GL_ONE,       GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE_MINUS_SRC_ALPHA },
@@ -2029,8 +1623,8 @@ set_material_blend (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 	};
 	unsigned mode = 0;
 
-	if (mesh->mat_index < MAX_MATERIALS)
-		mode = hr->list->mat_list[mesh->mat_index].blending_mode;
+	if (mesh->mat_index < ODIN_LIST_MAX_MATERIALS)
+		mode = odin_mat_blending_mode (&hr->list->mat_list[mesh->mat_index]);
 	hr->meshes.blend_mode = mode;
 	hr->meshes.weigh_by_alpha = (mode == 0 || mode == 2);
 	glBlendFuncSeparate (factors[mode][0], factors[mode][1],
@@ -2040,7 +1634,7 @@ set_material_blend (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
 /* The passes that do not blend replace the pixel and cover what is below the
  * 3D; a mesh faded by the depth queue lets through what it does not hide. */
 static void
-set_opaque_blend (hikaru_renderer_t *hr, hikaru_mesh_t *mesh)
+set_opaque_blend (hikaru_renderer_t *hr, odin_mesh_t *mesh)
 {
 	if (is_faded_by_depth (hr, mesh))
 		glBlendFuncSeparate (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA,
@@ -2194,7 +1788,7 @@ size_lists (hikaru_renderer_t *hr, uint32_t max)
  * blends its list, see lists_fs_source. */
 static void
 draw_translucent_meshes (hikaru_renderer_t *hr, unsigned vpi,
-                         hikaru_mesh_t *meshes, unsigned num)
+                         odin_mesh_t *meshes, unsigned num)
 {
 	static const GLuint zero[4] = { 0, 0, 0, 0 };
 	GLuint used = 1;	/* not known yet */
@@ -2283,7 +1877,7 @@ draw_translucent_meshes (hikaru_renderer_t *hr, unsigned vpi,
 static void
 draw_meshes_for_polytype (hikaru_renderer_t *hr, unsigned vpi, int polytype)
 {
-	hikaru_mesh_t *meshes = hr->list->mesh_list[vpi][polytype];
+	odin_mesh_t *meshes = hr->list->mesh_list[vpi][polytype];
 	unsigned num = hr->list->num_meshes[vpi][polytype];
 	int j;
 
@@ -2311,17 +1905,17 @@ draw_meshes_for_polytype (hikaru_renderer_t *hr, unsigned vpi, int polytype)
 	hr->meshes.weigh_by_alpha = false;
 
 	switch (polytype) {
-	case HIKARU_POLYTYPE_TRANSPARENT:
+	case ODIN_POLYTYPE_TRANSPARENT:
 		glDepthMask (GL_TRUE);
 		hr->meshes.depth_bias = true;
 		hr->meshes.alpha_ref = 0.5f;
 		break;
-	case HIKARU_POLYTYPE_TRANSLUCENT:
+	case ODIN_POLYTYPE_TRANSLUCENT:
 		glDepthMask (GL_FALSE);
 		hr->meshes.depth_bias = true;
 		hr->meshes.alpha_ref = 1.0f / 255.0f;
 		break;
-	case HIKARU_POLYTYPE_BACKGROUND:
+	case ODIN_POLYTYPE_BACKGROUND:
 		glDepthMask (GL_FALSE);
 		hr->meshes.depth_bias = false;
 		hr->meshes.alpha_ref = 1.0f / 255.0f;
@@ -2333,14 +1927,14 @@ draw_meshes_for_polytype (hikaru_renderer_t *hr, unsigned vpi, int polytype)
 		break;
 	}
 
-	if (polytype == HIKARU_POLYTYPE_TRANSLUCENT) {
+	if (polytype == ODIN_POLYTYPE_TRANSLUCENT) {
 		draw_translucent_meshes (hr, vpi, meshes, num);
 		return;
 	}
 
 	for (j = 0; j < num; j++) {
-		hikaru_mesh_t *mesh = &meshes[j];
-		if (polytype == HIKARU_POLYTYPE_BACKGROUND)
+		odin_mesh_t *mesh = &meshes[j];
+		if (polytype == ODIN_POLYTYPE_BACKGROUND)
 			set_material_blend (hr, mesh);
 		else
 			set_opaque_blend (hr, mesh);
@@ -2356,12 +1950,12 @@ draw_scene (hikaru_renderer_t *hr)
 	 * draws it after the opaque types: punch-through, opaque, then the
 	 * translucent type. */
 	static const int sorted_polytypes[] = {
-		HIKARU_POLYTYPE_BACKGROUND,
-		HIKARU_POLYTYPE_TRANSPARENT,
-		HIKARU_POLYTYPE_OPAQUE,
-		HIKARU_POLYTYPE_SHADOW_A,
-		HIKARU_POLYTYPE_SHADOW_B,
-		HIKARU_POLYTYPE_TRANSLUCENT,
+		ODIN_POLYTYPE_BACKGROUND,
+		ODIN_POLYTYPE_TRANSPARENT,
+		ODIN_POLYTYPE_OPAQUE,
+		ODIN_POLYTYPE_SHADOW_A,
+		ODIN_POLYTYPE_SHADOW_B,
+		ODIN_POLYTYPE_TRANSLUCENT,
 	};
 	unsigned vpi, i;
 
@@ -2405,77 +1999,10 @@ draw_scene (hikaru_renderer_t *hr)
 }
 
 static void
-destroy_list (hikaru_list_t *list)
-{
-	unsigned vpi, i;
-
-	if (!list)
-		return;
-
-	free (list->vp_list);
-	free (list->mv_list);
-	free (list->mat_list);
-	free (list->tex_list);
-	free (list->ls_list);
-
-	for (vpi = 0; vpi < 8; vpi++)
-		for (i = 0; i < 8; i++)
-			free (list->mesh_list[vpi][i]);
-
-	free (list->verts.all);
-	free (list->tex_ids);
-	free (list->ls_tables);
-	free (list);
-}
-
-static hikaru_list_t *
-new_list (void)
-{
-	hikaru_list_t *list = ALLOC (hikaru_list_t);
-	unsigned vpi, i;
-
-	if (!list)
-		return NULL;
-
-	list->vp_list = (hikaru_viewport_t *)
-			malloc (sizeof (hikaru_viewport_t) * MAX_VIEWPORTS);
-	list->mv_list = (hikaru_modelview_t *)
-			malloc (sizeof (hikaru_modelview_t) * MAX_MODELVIEWS);
-	list->mat_list = (hikaru_material_t *)
-			malloc (sizeof (hikaru_material_t) * MAX_MATERIALS);
-	list->tex_list = (hikaru_texhead_t *)
-			malloc (sizeof (hikaru_texhead_t) * MAX_TEXHEADS);
-	list->ls_list = (hikaru_lightset_t *)
-			malloc (sizeof (hikaru_lightset_t) * MAX_LIGHTSETS);
-	list->tex_ids = (GLuint *) malloc (sizeof (GLuint) * MAX_TEXHEADS);
-	list->ls_tables = malloc (sizeof (list->ls_tables[0]) * MAX_LIGHTSETS);
-
-	if (!list->vp_list || !list->mv_list || !list->mat_list ||
-	    !list->tex_list || !list->ls_list || !list->tex_ids ||
-	    !list->ls_tables)
-		goto fail;
-
-	for (vpi = 0; vpi < 8; vpi++) {
-		for (i = 0; i < 8; i++) {
-			list->mesh_list[vpi][i] =
-				(hikaru_mesh_t *) malloc (sizeof (hikaru_mesh_t) * MAX_MESHES);
-			if (!list->mesh_list[vpi][i])
-				goto fail;
-		}
-	}
-
-	return list;
-
-fail:
-	destroy_list (list);
-	return NULL;
-}
-
-static void
 destroy_3d_state (hikaru_renderer_t *hr)
 {
-	destroy_list (hr->list);
-	destroy_list (hr->other);
+	free (hr->tex_ids[0].ids);
+	free (hr->tex_ids[1].ids);
 
 	vk_renderer_destroy_program (hr->meshes.program);
 	VK_ASSERT_NO_GL_ERROR ();
@@ -2490,10 +2017,17 @@ destroy_3d_state (hikaru_renderer_t *hr)
 static int
 build_3d_state (hikaru_renderer_t *hr)
 {
-	hr->list = new_list ();
-	hr->other = new_list ();
+	unsigned i;
 
-	return (hr->list && hr->other) ? 0 : -1;
+	for (i = 0; i < 2; i++) {
+		hr->tex_ids[i].list = NULL;
+		hr->tex_ids[i].ids = (GLuint *)
+			calloc (ODIN_LIST_MAX_TEXHEADS, sizeof (GLuint));
+		if (!hr->tex_ids[i].ids)
+			return -1;
+	}
+
+	return 0;
 }
 
 /****************************************************************************
@@ -2849,7 +2383,9 @@ upload_layer (hikaru_renderer_t *hr, hikaru_layer_t *layer, GLuint *id, float *m
 {
 	void *data;
 
-	LOG ("uploading LAYER %s", get_layer_str (layer));
+	LOG ("uploading LAYER ena=%u keyed=%u above=%u (%u,%u) (%u,%u) fmt=%u",
+	     layer->enabled, layer->keyed, layer->above,
+	     layer->x0, layer->y0, layer->x1, layer->y1, layer->format);
 
 	data = vk_buffer_get_ptr (hr->gpu->fb,
 	                          layer->y0 * 4096 + layer->x0 * 4);
@@ -2871,7 +2407,7 @@ upload_layer (hikaru_renderer_t *hr, hikaru_layer_t *layer, GLuint *id, float *m
 
 	glPixelStorei (GL_UNPACK_ALIGNMENT, 1);
 	switch (layer->format) {
-	case HIKARU_FORMAT_ABGR1555: {
+	case ODIN_FORMAT_ABGR1555: {
 		/* The two 16-bit pixels of each 32-bit FB word are stored
 		 * swapped, as the IDMA does for TEXRAM (MEASURED on the von4
 		 * title text, GPU-RE/16 § 9). */
@@ -2901,7 +2437,7 @@ upload_layer (hikaru_renderer_t *hr, hikaru_layer_t *layer, GLuint *id, float *m
 		*mult = 1.0f;
 		break;
 	}
-	case HIKARU_FORMAT_A2BGR10:
+	case ODIN_FORMAT_A2BGR10:
 		glPixelStorei (GL_UNPACK_ROW_LENGTH, 1024);
 
 		glTexImage2D (GL_TEXTURE_2D, 0,
@@ -3001,7 +2537,7 @@ draw_list (hikaru_renderer_t *hr)
 static void
 check_last_list (hikaru_renderer_t *hr)
 {
-	hikaru_list_t *list = hr->framebuffer.last.list, *current = hr->list;
+	odin_display_list_t *list = hr->framebuffer.last.list, *current = hr->list;
 	GLuint count, used = 0;
 	unsigned vpi;
 
@@ -3041,6 +2577,21 @@ check_last_list (hikaru_renderer_t *hr)
 	VK_ASSERT_NO_GL_ERROR ();
 }
 
+/* ODIN_LIST_FP=1: one line for the list of each frame that draws one, to
+ * compare two builds; ODIN_LIST_DUMP=<frame> adds a line for each mesh of
+ * that frame. */
+static void
+print_list_fingerprint (hikaru_renderer_t *hr, const odin_fb_config_t *fb)
+{
+	uint32_t meshes, tris;
+	uint64_t fp;
+
+	fp = odin_display_list_fingerprint (hr->list, fb, &meshes, &tris,
+	                                    (hr->debug.list_dump == (int) hr->base.frame) ? stderr : NULL);
+	fprintf (stderr, "LISTFP frame=%u fp=%016lx meshes=%u tris=%u\n",
+	         hr->base.frame, fp, meshes, tris);
+}
+
 /* The polygons reach the screen in two steps. The game libraries launch a
  * list only once the GPU 15 has analysed the last one and the GPU 1A has
  * plotted the one before (RACER @0C0118C0): a launch hands the last list
@@ -3057,12 +2608,13 @@ static void
 draw (hikaru_renderer_t *hr)
 {
 	hikaru_gpu_t *gpu = hr->gpu;
+	const odin_fb_config_t *fb = odin_antarctic_fb_config (gpu->cp);
 	GLuint n1, n2, f, b, shown, layer1 = 0, layer2 = 0;
 	float factor, mult1 = 0.0f, mult2 = 0.0f;
 	uint32_t rate;
 	bool launched = hr->framebuffer.launched;
 
-	VK_PRINT ("FRAMEBUFFER 781=%08X 181=%08X", gpu->fb_config._781, gpu->fb_config._181);
+	VK_PRINT ("FRAMEBUFFER 781=%08X 181=%08X", fb->w781, fb->w181);
 
 	hr->framebuffer.launched = 0;
 
@@ -3075,16 +2627,19 @@ draw (hikaru_renderer_t *hr)
 		hr->framebuffer.next = -1;
 	}
 
-	n1 = gpu->fb_config.num_1;
-	n2 = gpu->fb_config.num_2;
+	n1 = odin_fb_num_1 (fb);
+	n2 = odin_fb_num_2 (fb);
 
-	rate = gpu->fb_config.blend ? gpu->fb_config.alpha : 0;
+	rate = odin_fb_blend (fb) ? odin_fb_alpha (fb) : 0;
 	factor = rate * (1.0f / 255);
 
 	/* Draw the list to the 3D buffer its 781 names and keep the picture;
 	 * the one of the list before shows next. */
 	if (launched) {
 		const uint32_t num = hr->framebuffer.num_lists;
+
+		if (hr->debug.list_fp)
+			print_list_fingerprint (hr, fb);
 
 		hr->framebuffer.last.list = hr->list;
 		hr->framebuffer.last.bank = (n1 < 2) ? n1 : (n2 < 2) ? n2 : 0;
@@ -3178,10 +2733,10 @@ draw (hikaru_renderer_t *hr)
 	glUniform1i (hr->framebuffer.locs.u_invert_f, (n1 >= 2) ? 1 : 0);
 	glUniform1i (hr->framebuffer.locs.u_invert_b, (n2 >= 2) ? 1 : 0);
 	glUniform4f (hr->framebuffer.locs.u_clear,
-	             gpu->fb_config.clear[0] * INV255,
-	             gpu->fb_config.clear[1] * INV255,
-	             gpu->fb_config.clear[2] * INV255,
-	             gpu->fb_config.clear[3] * INV255);
+	             fb->clear[0] * INV255,
+	             fb->clear[1] * INV255,
+	             fb->clear[2] * INV255,
+	             fb->clear[3] * INV255);
 	VK_ASSERT_NO_GL_ERROR ();
 
 	glBindVertexArray (hr->framebuffer.vao);
@@ -3207,30 +2762,15 @@ static void
 hikaru_renderer_begin_frame (vk_renderer_t *renderer)
 {
 	hikaru_renderer_t *hr = (hikaru_renderer_t *) renderer;
-	unsigned vpi, i;
+	const odin_fb_config_t *fb = odin_antarctic_fb_config (hr->gpu->cp);
 
 	/* The list drawn last is kept until its translucent fragments are
 	 * counted, see check_last_list: this one is built aside. */
-	if (hr->framebuffer.last.list == hr->list) {
-		hr->list = hr->other;
-		hr->other = hr->framebuffer.last.list;
-	}
+	hr->list = odin_antarctic_begin_list (hr->gpu->cp,
+	                                      hr->list && hr->framebuffer.last.list == hr->list);
+	memset (list_tex_ids (hr), 0, sizeof (GLuint) * ODIN_LIST_MAX_TEXHEADS);
 
 	forget_held (hr);
-
-	hr->list->num_vps = 0;
-	hr->list->num_mvs = 0;
-	hr->list->num_instances = 0;
-	hr->list->verts.num = 0;
-	hr->list->mv2_index = ~0;
-	hr->list->num_mats = 0;
-	hr->list->num_texs = 0;
-	hr->list->num_lss = 0;
-
-	for (vpi = 0; vpi < 8; vpi++)
-		for (i = 0; i < 8; i++)
-			hr->list->num_meshes[vpi][i] = 0;
-	hr->list->total_meshes = 0;
 
 	update_debug_flags (hr);
 
@@ -3245,9 +2785,8 @@ hikaru_renderer_begin_frame (vk_renderer_t *renderer)
 			hr->debug.flags[HR_DEBUG_LOG] = (probe_frame == probe_want);
 		LOG ("frame %d clear=%02X%02X%02X%02X 181=%08X 781=%08X",
 		     probe_frame,
-		     hr->gpu->fb_config.clear[0], hr->gpu->fb_config.clear[1],
-		     hr->gpu->fb_config.clear[2], hr->gpu->fb_config.clear[3],
-		     hr->gpu->fb_config._181, hr->gpu->fb_config._781);
+		     fb->clear[0], fb->clear[1], fb->clear[2], fb->clear[3],
+		     fb->w181, fb->w781);
 	}
 
 	VK_ASSERT_NO_GL_ERROR ();
@@ -3263,10 +2802,7 @@ hikaru_renderer_end_frame (vk_renderer_t *renderer)
 
 	/* The CP may still be in the middle of a mesh: draw what it pushed
 	 * so far and let it start a new mesh on the next vertex. */
-	if (hr->meshes.current) {
-		hikaru_renderer_end_mesh (renderer, gpu->cp.pc);
-		gpu->state.in_mesh = 0;
-	}
+	odin_antarctic_end_open_mesh (gpu->cp);
 
 	draw (hr);
 	VK_ASSERT_NO_GL_ERROR ();

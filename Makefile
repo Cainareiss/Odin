@@ -49,6 +49,12 @@ SH4_OBJ := \
 	src/cpu/sh/sh4-odin.o
 
 ODIN_OBJ := \
+	src/odin/antarctic.o \
+	src/odin/antarctic_ops.o \
+	src/odin/antarctic_mesh.o \
+	src/odin/antarctic_disasm.o \
+	src/odin/antarctic_list.o \
+	src/odin/antarctic_bridge.o \
 	src/odin/aica.o \
 	src/odin/aica_bridge.o \
 	src/odin/arm7.o \
@@ -84,8 +90,6 @@ HIKARU_OBJ := \
 	src/mach/hikaru/hikaru-memctl.o \
 	src/mach/hikaru/hikaru-renderer.o \
 	src/mach/hikaru/hikaru-gpu.o \
-	src/mach/hikaru/hikaru-gpu-cp.o \
-	src/mach/hikaru/hikaru-gpu-private.o \
 	src/mach/hikaru/hikaru-aica.o
 
 all: bin/odin

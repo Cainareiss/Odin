@@ -1,0 +1,299 @@
+/*
+ * Odin
+ * Copyright (C) 2026 Réda Chérif-Touil
+ *
+ * Valkyrie
+ * Copyright (C) 2011-2014, Stefano Teso
+ *
+ * Valkyrie is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Valkyrie is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Valkyrie.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+/* Power-on, the launch of a list and the loop that executes it. */
+
+#include "odin/antarctic.hpp"
+
+#include <algorithm>
+#include <cstdarg>
+#include <cstdlib>
+#include <cstring>
+#include <string>
+
+#include "odin/antarctic_disasm.hpp"
+
+namespace odin {
+
+Antarctic::Antarctic(std::span<uint8_t> cmdram, std::span<uint8_t> ram_s)
+	: m_cmdram(cmdram), m_ram_s(ram_s),
+	  m_list(std::make_unique<List>()), m_other(std::make_unique<List>()),
+	  m_disasm(nullptr), m_log(stderr)
+{
+	m_push.all.reset(new odin_vertex_body_t[MAX_VERTICES_PER_MESH]);
+	reset();
+}
+
+void
+Antarctic::reset()
+{
+	std::memset(&m_s, 0, sizeof(m_s));
+	m_push.num_verts = 0;
+	m_push.num_tris = 0;
+	std::memset(m_push.tmp, 0, sizeof(m_push.tmp));
+	m_mesh = nullptr;
+	m_list->clear();
+	m_other->clear();
+}
+
+void
+Antarctic::load(const AntarcticState &in)
+{
+	m_s = in;
+	m_mesh = nullptr;
+}
+
+void
+Antarctic::fatal(const char *what, uint32_t value) const
+{
+	std::fprintf(stderr, "antarctic: %s (%08X) at %08X\n", what, value, m_s.pc);
+	std::abort();
+}
+
+void
+Antarctic::error(const char *fmt, ...) const
+{
+	va_list args;
+
+	if (!m_log)
+		return;
+	std::fputs("ERROR: ", m_log);
+	va_start(args, fmt);
+	std::vfprintf(m_log, fmt, args);
+	va_end(args);
+	std::fputc('\n', m_log);
+}
+
+/*
+ * CP Execution
+ * ============
+ *
+ * The games start a list by writing 15000058 = 3; it starts again when
+ * 1A000024 is written with that value still there. It ends at a 1C2.
+ *
+ * (From a software perspective, the CP program is uploaded when both IRQs 2 of
+ * GPU 15 and GPU 1A are fired, meaning that at this point the CP is supposed
+ * to have consumed the previous command stream and is ready to accept a new
+ * one.)
+ *
+ * Note also that a CP program is uploaded to two different areas in CMDRAM on
+ * odd and even frames. This may mean that there are *two* CPs performing
+ * double-buffered 3D rendering.
+ */
+
+void
+Antarctic::start(uint32_t pc, uint32_t sp0, uint32_t sp1)
+{
+	if (m_disasm)
+		std::fputs(" ==== CP BEGIN ==== \n", m_disasm);
+
+	m_s.running = 1;
+	m_s.pc = pc;
+	m_s.sp[0] = sp0;
+	m_s.sp[1] = sp1;
+	m_s.patterns = 0;
+
+	/* HEURISTIC: a strip does not go on from a list to the next. */
+	m_push.num_verts = 0;
+}
+
+void
+Antarctic::frame_start()
+{
+	if (m_disasm)
+		std::fputs(" ==== CLEARING CP DATA ==== \n", m_disasm);
+
+	end_open_mesh();
+
+	/* The static mesh scale (0x901) is a register of the CP that outlives
+	 * the frame, like the X360 port's global 82E02B60 (GPU-RE/05). */
+	const float precision = m_s.poly.static_mesh_precision;
+	m_s.poly.type = 0;
+	m_s.poly.alpha = 0.0f;
+	m_s.poly.static_mesh_precision = precision;
+
+	m_s.lod.value = 0.0f;
+	m_s.lod.radius = 0.0f;
+	m_s.lod.cond = 0;
+	m_s.lod.compared = 0;
+	m_s.lod.branch_id = 0xFFFF;
+
+	m_s.vp.depth = 0;
+	m_s.vp.scratch.flags = 0;
+
+	m_s.mat.base = 0;
+	m_s.mat.scratch.flags = 0;
+
+	m_s.tex.base = 0;
+	m_s.tex.scratch.flags = 0;
+
+	m_s.lit.base = 0;
+	m_s.lit.scratch.flags = 0;
+	m_s.lit.scratchset.flags = 0;
+}
+
+void
+Antarctic::end_open_mesh()
+{
+	if (m_s.in_mesh) {
+		end_mesh(m_s.pc);
+		m_s.in_mesh = 0;
+	}
+}
+
+/* The size of an instruction, in bytes */
+static uint32_t
+insn_size(uint32_t word)
+{
+	return 1u << (((word >> 4) & 3) + 2);
+}
+
+/* Reads the instruction at the program counter: its words, zeroes after
+ * them. False where there is no program. */
+bool
+Antarctic::fetch(uint32_t inst[8]) const
+{
+	std::span<const uint8_t> mem;
+	uint32_t offs;
+
+	/* The program has been seen in the command RAM and in the RAM of
+	 * the slave only. */
+	switch (m_s.pc >> 24) {
+	case 0x40:
+	case 0x41:
+		mem = m_ram_s;
+		offs = m_s.pc & 0x01FFFFFF;
+		break;
+	case 0x48:
+	case 0x4C: /* XXX not sure */
+		mem = m_cmdram;
+		offs = m_s.pc & 0x003FFFFF;
+		break;
+	default:
+		return false;
+	}
+	if (offs + 4 > mem.size())
+		return false;
+
+	std::memset(inst, 0, 8 * sizeof(uint32_t));
+	std::memcpy(inst, &mem[offs], 4);
+	std::memcpy(inst, &mem[offs],
+	            std::min<size_t>(insn_size(inst[0]), mem.size() - offs));
+	return true;
+}
+
+bool
+Antarctic::run(uint32_t budget)
+{
+	const auto &table = insns();
+
+	if (!m_s.running)
+		return false;
+
+	while (budget > 0 && m_s.running) {
+		uint32_t inst[8];
+
+		if (!fetch(inst)) {
+			error("CP %08X: invalid PC, skipping CS", m_s.pc);
+			end_open_mesh();
+			m_s.running = 0;
+			break;
+		}
+
+		const Insn &insn = table[inst[0] & 0x1FF];
+		if (!insn.handler) {
+			error("CP @%08X: invalid instruction [%08X]", m_s.pc, inst[0]);
+			end_open_mesh();
+			m_s.running = 0;
+			break;
+		}
+
+		/* A vertex opens a mesh; anything that is not part of a
+		 * mesh closes it. */
+		if (!m_s.in_mesh && (insn.flags & OPENS_MESH)) {
+			begin_mesh(m_s.pc);
+			m_s.in_mesh = 1;
+		} else if (m_s.in_mesh && !(insn.flags & KEEPS_MESH)) {
+			end_mesh(m_s.pc);
+			m_s.in_mesh = 0;
+		}
+
+		if (m_disasm) {
+			bool unhandled = false;
+			const std::string text =
+				antarctic_disassemble(m_s.pc, inst, m_s.in_mesh != 0, unhandled);
+
+			std::fprintf(m_disasm, "%s\n", text.c_str());
+			if (unhandled)
+				error("CP @%08X : unhandled instruction", m_s.pc);
+		}
+
+		(this->*insn.handler)(inst);
+
+		if (!(insn.flags & SETS_PC))
+			m_s.pc += insn_size(inst[0]);
+
+		budget--;
+	}
+
+	if (!m_s.running && m_disasm)
+		std::fputs(" ==== CP END ==== \n", m_disasm);
+
+	return !m_s.running;
+}
+
+/* The call stack, in the command RAM */
+
+void
+Antarctic::push_pc()
+{
+	const uint32_t offs = m_s.sp[0] & 0x3FFFFFF;
+
+	if ((m_s.sp[0] >> 24) != 0x48 || offs + 4 > m_cmdram.size())
+		fatal("stack out of the command RAM", m_s.sp[0]);
+	std::memcpy(&m_cmdram[offs], &m_s.pc, 4);
+	m_s.sp[0] -= 4;
+}
+
+void
+Antarctic::pop_pc()
+{
+	m_s.sp[0] += 4;
+
+	const uint32_t offs = m_s.sp[0] & 0x3FFFFFF;
+
+	if ((m_s.sp[0] >> 24) != 0x48 || offs + 4 > m_cmdram.size())
+		fatal("stack out of the command RAM", m_s.sp[0]);
+	std::memcpy(&m_s.pc, &m_cmdram[offs], 4);
+	m_s.pc += 8;
+}
+
+void
+Antarctic::check_self_loop(uint32_t target)
+{
+	/* XXX at some point we'll need something better than this */
+	if (target == m_s.pc) {
+		error("CP: @%08X: self-jump, terminating", target);
+		m_s.running = 0;
+	}
+}
+
+} /* namespace odin */

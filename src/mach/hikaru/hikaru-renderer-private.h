@@ -122,83 +122,46 @@ typedef struct hikaru_texture_t hikaru_texture_t;
 
 struct hikaru_texture_t {
 	GLuint id;
-	hikaru_texhead_t th;
+	odin_texhead_t th;
 	/* Another size or format read at the same slot */
 	hikaru_texture_t *next;
 };
 
-typedef struct {
-	uint32_t		first;	/* first vertex in the buffer of the frame */
-	uint32_t		num_tris;
-	uint32_t		addr[2];
-	uint32_t		vp_index;
-	uint32_t		mv_index;
-	uint32_t		mv2_index;	/* second modelview */
-	uint32_t		num_instances;
-	uint32_t		mat_index;
-	uint32_t		tex_index;
-	uint32_t		ls_index;
-	float			alpha_thresh[2];
-	float			depth_bias;
-	uint32_t		pattern;	/* 501 */
-	float			poly_alpha;	/* 103 alpha, logged */
-	bool			has_two_sided_lighting;
-	uint32_t		num;
-	uint32_t		polytype;
-} hikaru_mesh_t;
+/* How a light of the list is drawn */
+typedef enum {
+	HIKARU_LIGHT_TYPE_DIRECTIONAL,
+	HIKARU_LIGHT_TYPE_POSITIONAL,
+	HIKARU_LIGHT_TYPE_SPOT,
+	HIKARU_LIGHT_TYPE_UNDIRECTED,
 
-/* What the CP sent of a list, as its meshes are drawn */
-typedef struct {
-	hikaru_viewport_t	*vp_list;
-	uint32_t		 num_vps;
+	HIKARU_NUM_LIGHT_TYPES
+} hikaru_light_type_t;
 
-	hikaru_modelview_t	*mv_list;
-	uint32_t		 num_mvs;
-	uint32_t		 num_instances;
-	uint32_t		 mv2_index;	/* last second modelview listed this frame */
+typedef enum {
+	HIKARU_LIGHT_ATT_LINEAR = 0,
+	HIKARU_LIGHT_ATT_SQUARE = 1,
+	HIKARU_LIGHT_ATT_INVLINEAR = 2,
+	HIKARU_LIGHT_ATT_INVSQUARE = 3,
+	HIKARU_LIGHT_ATT_INF = 4,
 
-	hikaru_material_t	*mat_list;
-	uint32_t		 num_mats;
-
-	hikaru_texhead_t	*tex_list;
-	uint32_t		 num_texs;
-
-	hikaru_lightset_t	*ls_list;
-	uint32_t		 num_lss;
-	/* The 194 table of the four lights of each lightset */
-	uint16_t		(*ls_tables)[4][16];
-
-	hikaru_mesh_t		*mesh_list[8][8];
-	uint32_t		 num_meshes[8][8];
-	uint32_t		 total_meshes;
-
-	/* The vertices of all the meshes, uploaded in one go */
-	struct {
-		hikaru_vertex_body_t	*all;
-		uint32_t		num, max;
-	} verts;
-
-	/* The texture each texhead was drawn with, see check_last_list */
-	GLuint			*tex_ids;
-} hikaru_list_t;
+	HIKARU_NUM_LIGHT_ATTS
+} hikaru_light_att_t;
 
 typedef struct {
 	vk_renderer_t base;
 
 	hikaru_gpu_t *gpu;
 
-	/* The list being built, then drawn, and the one before it */
-	hikaru_list_t		*list, *other;
+	/* The list of the frame, built by the command processor */
+	odin_display_list_t	*list;
+	/* The texture each of its texheads was drawn with, see
+	 * list_tex_ids */
+	struct {
+		const odin_display_list_t *list;
+		GLuint *ids;
+	} tex_ids[2];
 
 	struct {
-		unsigned		num_verts, num_tris;
-		hikaru_vertex_t		tmp[4];
-		hikaru_vertex_body_t	all[MAX_VERTICES_PER_MESH];
-	} push;
-
-	struct {
-		hikaru_mesh_t		*current;
-
 		hikaru_glsl_variant_t	variant;
 		GLuint			program;
 		GLuint			vao, vbo;
@@ -254,7 +217,7 @@ typedef struct {
 		/* The list drawn last, until its translucent fragments are
 		 * counted: see check_last_list */
 		struct {
-			hikaru_list_t *list;	/* NULL once counted */
+			odin_display_list_t *list;	/* NULL once counted */
 			unsigned bank;		/* its 3D buffer */
 			int back;		/* the one blended into it, or -1 */
 			uint32_t rate;		/* 181 */
@@ -293,6 +256,9 @@ typedef struct {
 		int32_t flags[HR_NUM_DEBUG_VARS];
 		/* ODIN_DEBUG_KEYS: the keys change the flags */
 		bool keys;
+		/* ODIN_LIST_FP, ODIN_LIST_DUMP: see print_list_fingerprint */
+		bool list_fp;
+		int list_dump;
 		bool held[HR_NUM_DEBUG_VARS];
 	} debug;
 

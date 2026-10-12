@@ -18,7 +18,8 @@
 
 #include "vk/state.h"
 
-#define VK_STATE_VERSION	2
+/* 3: the command processor keeps its own state (src/odin/antarctic.hpp) */
+#define VK_STATE_VERSION	3
 
 vk_state_t *
 vk_state_new (const char *path, uint32_t mode)
@@ -40,8 +41,8 @@ vk_state_new (const char *path, uint32_t mode)
 
 	state->mode = mode;
 
-	/* The name of the format: the states saved so far keep loading. */
-	sprintf (template, "valkyrie state %08X\n", VK_STATE_VERSION);
+	/* The name of the format: a state of another version is refused. */
+	sprintf (template, "odin state %08X\n", VK_STATE_VERSION);
 	if (mode == VK_STATE_LOAD) {
 		size = fread ((void *) header, 1, sizeof (template), state->fp);
 		if (size != sizeof (template) || strcmp (template, header))

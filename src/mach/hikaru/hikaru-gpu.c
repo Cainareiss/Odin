@@ -46,7 +46,7 @@
  *    14000000-143FFFFF in master SH-4 space, and 10000000-103FFFFF in slave
  *    SH-4 space.
  *
- *    See hikaru-gpu-cp.c for more details.
+ *    See src/odin/antarctic.hpp for more details.
  *
  *    NOTE: there may be two command processors. Notice how there are a bunch
  *    of symmetrical graphical-related ICs on the motherboard, and many MMIOs
@@ -608,6 +608,18 @@ hikaru_gpu_raise_irq (hikaru_gpu_t *gpu, uint32_t _15, uint32_t _1A)
  * NOTE: it may be the case that unit 1 is used for a second GPU/screen.
  */
 
+static const char *
+get_layer_str (hikaru_layer_t *layer)
+{
+	static char out[256];
+
+	sprintf (out, "ena=%u keyed=%u above=%u (%u,%u) (%u,%u) fmt=%u",
+	         layer->enabled, layer->keyed, layer->above,
+	         layer->x0, layer->y0, layer->x1, layer->y1, layer->format);
+
+	return (const char *) out;
+}
+
 static void
 hikaru_gpu_fill_layer_info (hikaru_gpu_t *gpu)
 {
@@ -639,10 +651,10 @@ hikaru_gpu_fill_layer_info (hikaru_gpu_t *gpu)
 			/* Get the layer format. */
 			format = (REG1AUNIT (unit, 0x30) >> (bank - 1)) & 1;
 			if (format == 0) {
-				layer->format = HIKARU_FORMAT_ABGR1555;
+				layer->format = ODIN_FORMAT_ABGR1555;
 				shift = 1;
 			} else {
-				layer->format = HIKARU_FORMAT_A2BGR10;
+				layer->format = ODIN_FORMAT_A2BGR10;
 				shift = 2;
 			}
 	
@@ -776,11 +788,11 @@ copy_level (vk_buffer_t *srcbuf, vk_buffer_t *texram, uint32_t bus_addr,
 
 static unsigned
 copy_texture (hikaru_gpu_t *gpu, uint32_t bus_addr, unsigned size,
-              hikaru_texhead_t *texhead)
+              const odin_texhead_t *texhead)
 {
 	hikaru_t *hikaru = (hikaru_t *) gpu->base.mach;
 	unsigned level, max_level, level_w, level_h, size_copied;
-	uint32_t dstx, dsty, bank = texhead->bank;
+	uint32_t dstx, dsty, bank = odin_tex_bank (texhead);
 	vk_buffer_t *srcbuf;
 
 	if ((bus_addr >> 24) == 0x48)
@@ -795,11 +807,11 @@ copy_texture (hikaru_gpu_t *gpu, uint32_t bus_addr, unsigned size,
 	 * bank would land. The X360 port keeps the levels in the texhead
 	 * bank (825C68D8). */
 	level = 0;
-	max_level = MAX2 (texhead->logw, texhead->logh) + 4;
-	level_w = 16 << texhead->logw;
-	level_h = 16 << texhead->logh;
+	max_level = MAX2 (odin_tex_logw (texhead), odin_tex_logh (texhead)) + 4;
+	level_w = 16 << odin_tex_logw (texhead);
+	level_h = 16 << odin_tex_logh (texhead);
 
-	get_texhead_coords (&dstx, &dsty, texhead);
+	odin_tex_coords (texhead, &dstx, &dsty);
 
 	size_copied = 0;
 	while (size_copied < size && level <= max_level) {
@@ -810,7 +822,7 @@ copy_texture (hikaru_gpu_t *gpu, uint32_t bus_addr, unsigned size,
 
 		if ((dstx + level_w > 2048) || (dsty + level_h > 1024)) {
 			VK_ERROR ("GPU IDMA: out-of-bounds transfer: %s",
-			          get_texhead_str (texhead));
+			          odin_texhead_str (texhead));
 			break;
 		}
 
@@ -837,25 +849,23 @@ copy_texture (hikaru_gpu_t *gpu, uint32_t bus_addr, unsigned size,
 static void
 process_idma_entry (hikaru_gpu_t *gpu, uint32_t entry[4])
 {
-	hikaru_texhead_t texhead;
+	const odin_texhead_t texhead =
+		odin_tex_make (entry[3] & 1,
+		               entry[2] & 0xFF, (entry[2] >> 8) & 0xFF,
+		               (entry[2] >> 16) & 7, (entry[2] >> 19) & 7,
+		               (entry[2] >> 26) & 7);
+	const unsigned format = odin_tex_format (&texhead);
+	const unsigned slotx = odin_tex_slotx (&texhead);
+	const unsigned sloty = odin_tex_sloty (&texhead);
 	uint32_t bus_addr, size, size_copied;
-
-	memset (&texhead, 0, sizeof (texhead));
 
 	bus_addr = entry[0];
 	size     = entry[1];
 
-	texhead.bank	= entry[3] & 1;
-	texhead.sloty	= (entry[2] >> 8) & 0xFF;
-	texhead.slotx	= entry[2] & 0xFF;
-	texhead.logw	= (entry[2] >> 16) & 7;
-	texhead.logh	= (entry[2] >> 19) & 7;
-	texhead.format	= (entry[2] >> 26) & 7;
-
 	if (gpu->debug.log_idma) {
 		VK_LOG ("GPU IDMA %08X %08X %08X %08X : %s",
 		        entry[0], entry[1], entry[2], entry[3],
-		        get_texhead_str (&texhead));
+		        odin_texhead_str (&texhead));
 	}
 
 	if ((entry[2] & 0xE3C00000) ||
@@ -865,30 +875,30 @@ process_idma_entry (hikaru_gpu_t *gpu, uint32_t entry[4])
 		/* continue anyway */
 	}
 
-	if (texhead.format != HIKARU_FORMAT_ABGR1555 &&
-	    texhead.format != HIKARU_FORMAT_ABGR4444 &&
-	    texhead.format != HIKARU_FORMAT_I4 &&
-	    texhead.format != HIKARU_FORMAT_LA8) {
+	if (format != ODIN_FORMAT_ABGR1555 &&
+	    format != ODIN_FORMAT_ABGR4444 &&
+	    format != ODIN_FORMAT_I4 &&
+	    format != ODIN_FORMAT_LA8) {
 		VK_ERROR ("GPU IDMA: unknown texhead format: %s",
-		          get_texhead_str (&texhead));
+		          odin_texhead_str (&texhead));
 		/* continue anyway */
 	}
 
-	if (texhead.slotx < 0x80 || texhead.sloty < 0xC0) {
+	if (slotx < 0x80 || sloty < 0xC0) {
 		VK_ERROR ("GPU IDMA: unknown texhead slot, skipping: %s",
-		          get_texhead_str (&texhead));
+		          odin_texhead_str (&texhead));
 		return;
 	}
 
-	if (texhead.slotx > 0xC0 && texhead.sloty > 0xE0) {
+	if (slotx > 0xC0 && sloty > 0xE0) {
 		VK_ERROR ("GPU IDMA: mipmap texhead slot: %s",
-		          get_texhead_str (&texhead));
+		          odin_texhead_str (&texhead));
 	}
 
 	if ((bus_addr & 0xFE000000) != 0x40000000 &&
 	    (bus_addr & 0xFF000000) != 0x48000000) {
 		VK_ERROR ("GPU IDMA: unknown texhead address, skipping: %s",
-		          get_texhead_str (&texhead));
+		          odin_texhead_str (&texhead));
 		return;
 	}
 
@@ -1022,6 +1032,52 @@ hikaru_gpu_begin_dma (hikaru_gpu_t *gpu)
 	REG1A (0x24) &= ~1;
 }
 
+/*
+ * Command Processor
+ * =================
+ *
+ * A list starts when 15000058 = 3; see src/odin/antarctic.hpp for what it
+ * does. When execution ends:
+ *
+ *  - 1A00000C bit 0 is set (not sure)
+ *    - 1A000018 bit 1 is set as a consequence
+ *      - 15000088 bit 7 is set as a consequence
+ *  - 15000088 bit 1 is set; a GPU IRQ is raised (if not masked by 15000084)
+ *  - 15002000 bit 0 is set on some HW revisions (not sure)
+ *  - 1A000024 bit 0 is cleared if some additional condition occurred (not sure)
+ *
+ * 15002000 and 1A000024 signal different things; see the termination condition
+ * in sync().
+ *
+ * (Guesstimate: 15000088 bit 1 is set when the CP ends verifying/processing
+ * the CS (if there is such a thing!); 15002000 is cleared when the CP submits
+ * the completely rasterized frame buffer to the GPU 1A; 1A000024 is cleared
+ * when the GPU 1A is done compositing the frame buffer with the 2D layers and
+ * has displayed them on-screen.)
+ */
+
+/* The list has ended: the busy bits go off and the GPUs tell that they are
+ * done and need feeding. */
+static void
+on_cp_end (hikaru_gpu_t *gpu)
+{
+	REG15 (0x58) &= ~3;
+	REG1A (0x24) &= ~1;
+
+	hikaru_gpu_raise_irq (gpu, GPU15_IRQ_CMD_ANALYSIS_END, GPU1A_IRQ_PLOT_END);
+}
+
+/* 15000058 or 1A000024 was written. */
+static void
+on_cp_put (hikaru_gpu_t *gpu)
+{
+	if (REG15 (0x58) == 3) {
+		odin_antarctic_start (gpu->cp, REG15 (0x70), REG15 (0x74), REG15 (0x78));
+		hikaru_renderer_launch (gpu->renderer);
+	} else
+		REG1A (0x24) = 0; /* XXX really? */
+}
+
 /****************************************************************************
  External events
 ****************************************************************************/
@@ -1064,7 +1120,7 @@ hikaru_gpu_vblank_in (vk_device_t *dev)
 
 	REG1A(0x1C) ^= 0x01800000;
 
-	hikaru_gpu_cp_vblank_in (gpu);
+	odin_antarctic_frame_start (gpu->cp);
 }
 
 void
@@ -1074,7 +1130,6 @@ hikaru_gpu_vblank_out (vk_device_t *dev)
 
 	hikaru_gpu_raise_irq (gpu, 0, GPU1A_IRQ_VBLANK);
 	hikaru_gpu_fill_layer_info (gpu);
-	hikaru_gpu_cp_vblank_out (gpu);
 }
 
 static int
@@ -1089,8 +1144,8 @@ hikaru_gpu_exec (vk_device_t *dev, int cycles)
 	hikaru_gpu_step_idma (gpu);
 
 	/* Exec the CP */
-	if (REG15 (0x58) == 3)
-		hikaru_gpu_cp_exec (gpu, cycles);
+	if (REG15 (0x58) == 3 && odin_antarctic_run (gpu->cp, cycles))
+		on_cp_end (gpu);
 
 	return 0;
 }
@@ -1203,7 +1258,7 @@ hikaru_gpu_put (vk_device_t *device, unsigned size, uint32_t addr, uint64_t val)
 			break;
 		case 0x58: /* CP Control */
 			REG15 (0x58) = val;
-			hikaru_gpu_cp_on_put (gpu);
+			on_cp_put (gpu);
 			return 0;
 		case 0x84: /* IRQ mask */
 			REG15 (addr) = val;
@@ -1246,7 +1301,7 @@ hikaru_gpu_put (vk_device_t *device, unsigned size, uint32_t addr, uint64_t val)
 			return 0;
 		case 0x24:
 			REG1A (addr) = val;
-			hikaru_gpu_cp_on_put (gpu);
+			on_cp_put (gpu);
 			return 0;
 		case 0x80 ... 0xC0: /* Display Config? */
 		case 0xC4: /* Unknown control */
@@ -1292,10 +1347,7 @@ void
 hikaru_gpu_texram_written (vk_device_t *dev, unsigned bank)
 {
 	hikaru_gpu_t *gpu = (hikaru_gpu_t *) dev;
-	hikaru_texhead_t texhead;
-
-	memset (&texhead, 0, sizeof (texhead));
-	texhead.bank = bank;
+	const odin_texhead_t texhead = odin_tex_make (bank, 0, 0, 0, 0, 0);
 
 	hikaru_renderer_invalidate_texcache (gpu->renderer, &texhead);
 }
@@ -1306,9 +1358,9 @@ hikaru_gpu_reset (vk_device_t *dev, vk_reset_type_t type)
 	hikaru_gpu_t *gpu = (hikaru_gpu_t *) dev;
 
 	memset ((void *) &gpu->regs, 0, sizeof (gpu->regs));
-	memset ((void *) &gpu->state, 0, sizeof (gpu->state));
+	memset ((void *) &gpu->layers, 0, sizeof (gpu->layers));
 
-	gpu->cp.is_running = 0;
+	odin_antarctic_reset (gpu->cp);
 }
 
 const char *
@@ -1318,7 +1370,8 @@ hikaru_gpu_get_debug_str (vk_device_t *dev)
 	static char out[256];
 
 	sprintf (out, "@%08X %u 15:58=%u 1A:24=%u 15:84=%X 15:88=%X 1A:18=%X",
-	         gpu->cp.pc, (unsigned) gpu->cp.is_running,
+	         odin_antarctic_pc (gpu->cp),
+	         (unsigned) odin_antarctic_running (gpu->cp),
 	         REG15 (0x58), REG1A (0x24),
 	         REG15 (0x84), REG15 (0x88), REG1A (0x18));
 
@@ -1338,13 +1391,10 @@ hikaru_gpu_save_state (vk_device_t *dev, vk_state_t *state)
 	int ret = 0;
 
 	SAVE (gpu->regs);
-	SAVE (gpu->cp);
 	SAVE (gpu->idma);
-	SAVE (gpu->fb_config);
-	SAVE (gpu->depth_bias);
-	SAVE (gpu->pattern);
-	SAVE (gpu->texoffset);
-	SAVE (gpu->state);
+	SAVE (gpu->layers);
+	ret |= vk_state_put (state, (void *) odin_antarctic_state (gpu->cp),
+	                     odin_antarctic_state_size ());
 
 	return ret;
 }
@@ -1353,18 +1403,20 @@ static int
 hikaru_gpu_load_state (vk_device_t *dev, vk_state_t *state)
 {
 	hikaru_gpu_t *gpu = (hikaru_gpu_t *) dev;
+	void *cp_state;
 	int ret = 0;
 
 	LOAD (gpu->regs);
-	LOAD (gpu->cp);
 	LOAD (gpu->idma);
-	LOAD (gpu->fb_config);
-	LOAD (gpu->depth_bias);
-	LOAD (gpu->pattern);
-	/* Older states hold the whole word */
-	gpu->pattern &= 0x1F;
-	LOAD (gpu->texoffset);
-	LOAD (gpu->state);
+	LOAD (gpu->layers);
+
+	cp_state = malloc (odin_antarctic_state_size ());
+	if (!cp_state)
+		return -1;
+	ret |= vk_state_get (state, cp_state, odin_antarctic_state_size ());
+	if (!ret)
+		odin_antarctic_load_state (gpu->cp, cp_state);
+	free (cp_state);
 
 	return ret;
 }
@@ -1379,6 +1431,7 @@ hikaru_gpu_new (vk_machine_t *mach,
                 vk_buffer_t *texram[2],
                 vk_renderer_t *renderer)
 {
+	hikaru_t *hikaru = (hikaru_t *) mach;
 	hikaru_gpu_t *gpu;
 	vk_device_t *dev;
 
@@ -1408,7 +1461,14 @@ hikaru_gpu_new (vk_machine_t *mach,
 	gpu->debug.log_cp =
 		vk_util_get_bool_option ("GPU_LOG_CP", false);
 
-	hikaru_gpu_cp_init (gpu);
+	gpu->cp = odin_antarctic_new (
+		(uint8_t *) vk_buffer_get_ptr (cmdram, 0), vk_buffer_get_size (cmdram),
+		(uint8_t *) vk_buffer_get_ptr (hikaru->ram_s, 0),
+		vk_buffer_get_size (hikaru->ram_s));
+	if (!gpu->cp)
+		return NULL;
+	if (gpu->debug.log_cp)
+		odin_antarctic_set_disasm (gpu->cp, stdout);
 
 	return dev;
 }
