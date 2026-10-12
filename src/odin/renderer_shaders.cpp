@@ -43,9 +43,7 @@ const char *const MESH_VERTEX = R"glsl(#extension GL_ARB_explicit_attrib_locatio
 
 uniform mat4 u_projection;
 uniform mat4 u_modelview;
-uniform mat3 u_normal;
 uniform mat4 u_modelview2;
-uniform mat3 u_normal2;
 uniform float u_depth_scale;
 
 layout(location = 0) in vec3 i_position;
@@ -69,28 +67,30 @@ out float p_alpha;
 
 void main (void) {
 	/* 1: the second modelview, 64: without the 3x3, 128: without
-	 * the last row. */
+	 * the last row. A normal goes through the 3x3 of its modelview,
+	 * as the position does (US patent 6,714,690 of SEGA: the same
+	 * matrix, the translation switched off). */
 	int which = int (i_second_mv * 255.0 + 0.5);
 	if (which == 1) {
 		p_position = u_modelview2 * vec4 (i_position, 1.0);
-		p_normal = u_normal2 * i_normal;
+		p_normal = mat3 (u_modelview2) * i_normal;
 	} else if (which == 0) {
 		p_position = u_modelview * vec4 (i_position, 1.0);
-		p_normal = u_normal * i_normal;
+		p_normal = mat3 (u_modelview) * i_normal;
 	} else if ((which & 1) != 0) {
 		bool rotate = (which & 64) == 0;
 		vec3 pos = rotate ? mat3 (u_modelview2) * i_position : i_position;
 		if ((which & 128) == 0)
 			pos += u_modelview2[3].xyz;
 		p_position = vec4 (pos, 1.0);
-		p_normal = rotate ? u_normal2 * i_normal : i_normal;
+		p_normal = rotate ? mat3 (u_modelview2) * i_normal : i_normal;
 	} else {
 		bool rotate = (which & 64) == 0;
 		vec3 pos = rotate ? mat3 (u_modelview) * i_position : i_position;
 		if ((which & 128) == 0)
 			pos += u_modelview[3].xyz;
 		p_position = vec4 (pos, 1.0);
-		p_normal = rotate ? u_normal * i_normal : i_normal;
+		p_normal = rotate ? mat3 (u_modelview) * i_normal : i_normal;
 	}
 	/* The depth bias brings the whole position nearer: same pixel. */
 	gl_Position = u_projection * vec4 (p_position.xyz * u_depth_scale, 1.0);

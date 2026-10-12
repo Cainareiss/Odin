@@ -275,13 +275,8 @@ Renderer::upload_viewport(const odin_mesh_t &mesh)
 }
 
 /* The modelview of the instance i of the mesh, and the second modelview for
- * the vertices that follow it.
- *
- * A modelview without inverse has no matrix of the normals: the one sent
- * last is sent again. The games leave the second modelview null most of the
- * time, and its normals then turn with the first one. HEURISTIC: this is
- * what the renderer of Valkyrie did, by leaving a variable unset; how the
- * hardware lights a flattened mesh is not known. */
+ * the vertices that follow it. The normals go through them too, see the
+ * vertex shader. */
 void
 Renderer::upload_modelview(const odin_mesh_t &mesh, unsigned i)
 {
@@ -305,17 +300,13 @@ Renderer::upload_modelview(const odin_mesh_t &mesh, unsigned i)
 		error("attempting to draw with no modelview!");
 	const odin_modelview_t *mv = none ? &identity : &m_list->mv_list[mesh.mv_index + i];
 
-	gl::normal_matrix(m_normal, mv->mtx);
 	if (logging())
 		log("mv  = [%u+%u] %s", mesh.mv_index, i, odin_modelview_str(mv));
 	glUniformMatrix4fv(locs.modelview, 1, GL_FALSE, &mv->mtx[0][0]);
-	glUniformMatrix3fv(locs.normal, 1, GL_FALSE, &m_normal[0][0]);
 
 	if (mesh.mv2_index < ODIN_LIST_MAX_MODELVIEWS)
 		mv = &m_list->mv_list[mesh.mv2_index];
-	gl::normal_matrix(m_normal, mv->mtx);
 	glUniformMatrix4fv(locs.modelview2, 1, GL_FALSE, &mv->mtx[0][0]);
-	glUniformMatrix3fv(locs.normal2, 1, GL_FALSE, &m_normal[0][0]);
 }
 
 /* Binds the texture of the mesh on the unit 0. */

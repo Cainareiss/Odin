@@ -38,7 +38,7 @@ constexpr float INV255 = 1.0f / 255.0f;
 Renderer::Renderer(const Memory &memory, const Options &options)
 	: m_gpu(nullptr), m_fb(memory.fb), m_options(options), m_list(nullptr),
 	  m_textures(memory.texram), m_mesh_vao(0), m_mesh_vbo(0),
-	  m_program(nullptr), m_variant_key(0), m_drawing(0), m_normal{},
+	  m_program(nullptr), m_variant_key(0), m_drawing(0),
 	  m_scissor_vp_index(~0u), m_bound_tex_index(~0u), m_pass{}, m_again(false),
 	  m_scale(1), m_num_lists(0), m_shown(2), m_next(-1), m_launched(0), m_last{},
 	  m_layer_pixels(size_t{WIDTH} * HEIGHT), m_message{}

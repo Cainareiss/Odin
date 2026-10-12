@@ -79,8 +79,8 @@ struct MeshProgram {
 	/* The locations of its uniforms, -1 for one the variant leaves out */
 	struct Locations {
 		GLint projection;
-		GLint modelview, normal;
-		GLint modelview2, normal2;
+		GLint modelview;
+		GLint modelview2;
 		GLint depth_scale;
 		Light lights[4];
 		GLint ambient;

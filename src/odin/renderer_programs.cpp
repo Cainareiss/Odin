@@ -115,9 +115,7 @@ MeshPrograms::compile(const MeshVariant &variant)
 
 	locs.projection = find("u_projection");
 	locs.modelview = find("u_modelview");
-	locs.normal = find("u_normal");
 	locs.modelview2 = find("u_modelview2");
-	locs.normal2 = find("u_normal2");
 	locs.depth_scale = find("u_depth_scale");
 	for (unsigned i = 0; i < 4; i++) {
 		const std::string light = "u_lights[" + std::to_string(i) + "].";

@@ -23,7 +23,7 @@
 #define ODIN_RENDERER_GL_HPP
 
 /* What the renderer needs around OpenGL: a program from its two texts, a
- * check after a stage, and the two matrices it computes for the shaders. */
+ * check after a stage, and the projection it computes for the shaders. */
 
 #include <GL/glew.h>
 
@@ -39,9 +39,6 @@ void check(const char *stage);
 
 /* The perspective projection of the box l..r by b..t at the distance n. */
 void frustum(float out[4][4], float l, float r, float b, float t, float n, float f);
-/* The matrix of the normals of a modelview: the 3x3 of its inverse,
- * transposed. False, and `out` as it was, for a matrix without inverse. */
-bool normal_matrix(float out[3][3], const float in[4][4]);
 
 } /* namespace odin::gl */
 

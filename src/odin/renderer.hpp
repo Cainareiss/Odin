@@ -264,8 +264,6 @@ private:
 	MeshVariant m_variant;		/* of m_program */
 	uint64_t m_variant_key;
 	uint32_t m_drawing;		/* counts the lists drawn, see forget_held */
-	/* The matrix of the normals sent last, see upload_modelview */
-	float m_normal[3][3];
 	uint32_t m_scissor_vp_index;	/* of the list being drawn */
 	uint32_t m_bound_tex_index;	/* of the list being drawn, on the unit 0 */
 	Pass m_pass;
