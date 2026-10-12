@@ -381,6 +381,11 @@ AIRTRIX. The chip counts seconds, and the software of the Hikaru counts
 them from 1964-01-01 (the date routine of the BOOTROM, 0x0C008464, and its
 copies in the games), not from 1950 as the Dreamcast does: the CLOCK
 SETTING screen showed the right day 14 years late.
+ODIN_CLOCK_FILE=<path> is the battery of that clock: the file keeps, in
+seconds, how far the clock set in CLOCK SETTING is ahead of the time of the
+host, and the board starts from it; without it the board has the time of
+the host at every start. Like the settings of the BOOTROM
+(ODIN_MIE_EEPROM), it waits for a place of its own on the disk.
 
 
 GPU / RENDERING
