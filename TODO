@@ -490,7 +490,8 @@ bit 4 is not understood.
 that resets the GPU; RACER wraps seven hand-written lists of one flat quad
 with them, the 400 stars of its opening text among them, which match the
 cabinet as they are. No library emits them, the X360 port skips them, and
-no list of the attract loops shows what they change.
+no list of the attract loops shows what they change. A whole game of RACER
+(course and pod selection, race, walls hit, time out) sends none.
 
 Implement proper model caching using VBOs.
 
