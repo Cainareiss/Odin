@@ -493,7 +493,7 @@ typedef struct {
 	vec2f_t texcoords;	/* 0x28 */
 	vec4b_t specular;	/* 0x30 */
 	vec3b_t color1;		/* 0x34 */
-	uint8_t second_mv;	/* 0x37, 255: second modelview, else 64: no 3x3, 128: no last row */
+	uint8_t second_mv;	/* 0x37, 1: second modelview, 64: no 3x3, 128: no last row */
 } hikaru_vertex_body_t;
 
 typedef struct {

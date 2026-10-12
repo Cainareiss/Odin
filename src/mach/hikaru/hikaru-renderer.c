@@ -537,17 +537,26 @@ out vec2 p_texcoords;								\n \
 out float p_alpha;								\n \
 										\n \
 void main (void) {								\n \
-	if (i_second_mv > 0.875) {						\n \
+	/* 1: the second modelview, 64: without the 3x3, 128: without	\n \
+	 * the last row. */							\n \
+	int which = int (i_second_mv * 255.0 + 0.5);				\n \
+	if (which == 1) {							\n \
 		p_position = u_modelview2 * vec4 (i_position, 1.0);		\n \
 		p_normal = u_normal2 * i_normal;				\n \
-	} else if (i_second_mv < 0.125) {					\n \
+	} else if (which == 0) {						\n \
 		p_position = u_modelview * vec4 (i_position, 1.0);		\n \
 		p_normal = u_normal * i_normal;					\n \
+	} else if ((which & 1) != 0) {						\n \
+		bool rotate = (which & 64) == 0;				\n \
+		vec3 pos = rotate ? mat3 (u_modelview2) * i_position : i_position;	\n \
+		if ((which & 128) == 0)						\n \
+			pos += u_modelview2[3].xyz;				\n \
+		p_position = vec4 (pos, 1.0);					\n \
+		p_normal = rotate ? u_normal2 * i_normal : i_normal;		\n \
 	} else {								\n \
-		/* 64: without the 3x3, 128: without the last row. */		\n \
-		bool rotate = i_second_mv > 0.375 && i_second_mv < 0.625;	\n \
+		bool rotate = (which & 64) == 0;				\n \
 		vec3 pos = rotate ? mat3 (u_modelview) * i_position : i_position;	\n \
-		if (i_second_mv < 0.375)					\n \
+		if ((which & 128) == 0)						\n \
 			pos += u_modelview[3].xyz;				\n \
 		p_position = vec4 (pos, 1.0);					\n \
 		p_normal = rotate ? u_normal * i_normal : i_normal;		\n \
@@ -1620,10 +1629,10 @@ hikaru_renderer_push_vertices (vk_renderer_t *rend,
 
 		/* Bit 12 of the header: the vertex follows the second
 		 * modelview (161 with bit 18). Bits 13 and 14: it takes the
-		 * 3x3 and the last row of the modelview. The vertex shader
+		 * 3x3 and the last row of its modelview. The vertex shader
 		 * picks the matrix. */
 		if (flags & HR_PUSH_POS)
-			hr->push.tmp[2].body.second_mv = v->info.second_mv ? 255 :
+			hr->push.tmp[2].body.second_mv = (v->info.second_mv ? 1 : 0) +
 				(v->info.rotate ? 0 : 64) + (v->info.translate ? 0 : 128);
 
 		/* Set the texcoords. */
