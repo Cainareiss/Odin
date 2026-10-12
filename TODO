@@ -198,9 +198,23 @@ polygon gives the same lists.
 BRAVEFF recalls its set 3 with every light on one frame before it commits
 it, when the control room takes fire. From the second loop on that set
 still names the lights 6 and 0 of an earlier scene, and the room flashes
-for a frame, as on the cabinet: the door and the switchboard are within 2
-levels of the footage for three frames. The wall on the right is twice too
-bright there: not explained.
+for a frame, as on the cabinet.
+The light 0 it then shows three times is the light of the SEGA init
+program, which a list of BRAVEFF sends again: white, full to 100 and none
+at 500, at (100, 100, 100). Its 961 has the bits 14 and 13 set; Valkyrie
+read them as "use the old position" and put the light at (0, 0, 0), in the
+eye: the room was up to twice too bright. The six loops send that form
+with (100, 100, 100) alone, under an identity modelview; what the two bits
+say is not known. With the position the door, the walls and the
+switchboard are 2 to 4 levels under the footage during the flash, as they
+are 1 to 3 under it the frame before.
+The 451 of that light is 00000451 01000000: no "no cone" bit in the first
+word, where every library light without a cone has 01000451. A cone is
+taken when the list sent an axis (B61) as well (HEURISTIC): the init
+program sends (0, 0, 1) and its four lights are spots that light nothing
+in front; the list of BRAVEFF sends none and its light has no cone. With
+the cone on the axis another light left, the room is 3 to 6 levels darker
+than the footage.
 
 No attract loop sends a polygon of the types 2 and 3 of the 103, the
 shadows: they are drawn as opaque, as in the X360 port, and the command
