@@ -670,10 +670,11 @@ AIRTRIX
 Attract mode works.
 
 A wooden board leaning on a brick wall (mesh 408252C4, 42 s into the
-cabinet footage) is lit by the spotlight 58 of its lightset and dark on the
-cabinet. It stands at the end of the range of that light, halfway into the
-fade of its cone. Elsewhere the cabinet shows 0.95 to 0.99 of what the
-spotlights add here, at every place of the cone.
+cabinet footage) is lit by the spotlight 58 of its lightset in the first
+loop after power-on only (frame 8850). From the second loop on the game
+commits that light at another place (15369, 22096) and the board is dark,
+as on the cabinet. The footage shows a cabinet that has run for a while: a
+difference with it is to be looked at in the second loop first.
 
 
 BRAVEFF
