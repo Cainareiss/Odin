@@ -398,7 +398,10 @@ Tests: tests/antarctic, tests/eurasia, tests/hikaru_gpu. As Valkyrie had it,
 and HEURISTIC: a list is run one instruction a cycle of the SH-4 from its
 launch on, the end of its analysis and the end of its plot are told together
 when it stops, a texture transfer copies one entry a line and a blit is done
-at once.
+at once. A launch clears the stacks, the bases and the scratch objects
+(Valkyrie did at every vertical blanking; HEURISTIC either way, the six
+attract loops send the same lists). A jump to itself holds the processor
+until the next launch, as BRAVEFF does once at start.
 
 The projection clipping planes are probably scaled by some value, because
 using the ones provided by the games as they are leads to a far too close
