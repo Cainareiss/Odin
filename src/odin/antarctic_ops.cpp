@@ -1717,13 +1717,23 @@ Antarctic::op_mesh_set(const uint32_t *inst)
  *
  * Information kindly contributed by DreamZzz.
  *
+ *	The six attract loops send the types 1, 4, 5 and 6 only. The types 2
+ *	and 3, the shadows, are drawn as opaque, as in the X360 port; 0 and 7
+ *	are not drawn.
+ *
  * See AT:@0C049CDA, PH:@0C0173CA, AT:@0C69A220.
  */
 
 void
 Antarctic::op_polygon_type(const uint32_t *inst)
 {
-	m_s.poly.type  = (inst[0] >> 9) & 7;
+	const uint32_t type = (inst[0] >> 9) & 7;
+
+	if (((0x8Du >> type) & 1) && !((m_types_told >> type) & 1)) {
+		m_types_told |= 1u << type;
+		error("CP @%08X : polygon type %u, never met", m_s.pc, type);
+	}
+	m_s.poly.type  = type;
 	m_s.poly.alpha = static_cast<float>(inst[0] >> 24) * (1.0f / 255.0f);
 }
 

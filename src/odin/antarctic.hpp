@@ -406,6 +406,7 @@ private:
 	void *m_texture_written_ctx;
 
 	FILE *m_disasm, *m_log, *m_transfer_log;
+	uint32_t m_types_told;	/* polygon types never met, told once each */
 };
 
 } /* namespace odin */
