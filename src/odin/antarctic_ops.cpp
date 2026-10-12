@@ -1539,13 +1539,15 @@ Antarctic::op_light_commit(const uint32_t *inst)
  * n = Lightset index
  * a,b,c,d = Indices of four lights
  *
+ *	The set keeps the four numbers, as in the X360 port (825C51D0): the
+ *	lights are read when it is recalled.
+ *
  * See PH:@0C017DF0.
  */
 
 void
 Antarctic::op_lightset_commit(const uint32_t *inst)
 {
-	odin_lightset_t *ls;
 	uint32_t index = m_s.lit.base + lightset_index(inst);
 
 	if (index >= AntarcticState::LIGHTSETS) {
@@ -1554,13 +1556,13 @@ Antarctic::op_lightset_commit(const uint32_t *inst)
 		return;
 	}
 
-	ls = &m_s.lit.sets[index];
+	AntarcticState::Lightset &set = m_s.lit.sets[index];
 
-	ls->lights[0] = m_s.lit.table[inst[1] & (AntarcticState::LIGHTS - 1)];
-	ls->lights[1] = m_s.lit.table[(inst[1] >> 16) & (AntarcticState::LIGHTS - 1)];
-	ls->lights[2] = m_s.lit.table[inst[2] & (AntarcticState::LIGHTS - 1)];
-	ls->lights[3] = m_s.lit.table[(inst[2] >> 16) & (AntarcticState::LIGHTS - 1)];
-	ls->flags |= ODIN_LIGHTSET_SET;
+	set.lights[0] = inst[1] & (AntarcticState::LIGHTS - 1);
+	set.lights[1] = (inst[1] >> 16) & (AntarcticState::LIGHTS - 1);
+	set.lights[2] = inst[2] & (AntarcticState::LIGHTS - 1);
+	set.lights[3] = (inst[2] >> 16) & (AntarcticState::LIGHTS - 1);
+	set.committed = 1;
 }
 
 
@@ -1571,6 +1573,13 @@ Antarctic::op_lightset_commit(const uint32_t *inst)
  * A = Active
  * D = Disabled lights mask
  * n = Index
+ *
+ *	The four lights are taken as they are now, as in the X360 port
+ *	(825C6090): a light committed after its set counts, and a set recalled
+ *	before it is committed again gives the lights its old numbers name
+ *	today. BRAVEFF recalls its set 3 one frame before it commits it, when
+ *	the control room takes fire, and the room flashes on its cabinet. A
+ *	set never committed has no light, as in the port.
  */
 
 void
@@ -1588,8 +1597,15 @@ Antarctic::op_lightset_recall(const uint32_t *inst)
 		return;
 	}
 
-	m_s.lit.scratchset = m_s.lit.sets[index];
-	set_field(m_s.lit.scratchset.flags, ODIN_LIGHTSET_MASK_SHIFT, 4, inst[0] >> 24);
+	const AntarcticState::Lightset &set = m_s.lit.sets[index];
+	odin_lightset_t &ls = m_s.lit.scratchset;
+
+	if (!set.committed)
+		error("CP: lightset %u recalled before it is committed", index);
+	for (uint32_t i = 0; i < 4; i++)
+		ls.lights[i] = set.committed ? m_s.lit.table[set.lights[i]] : odin_light_t{};
+	ls.flags = set.committed ? ODIN_LIGHTSET_SET : 0;
+	set_field(ls.flags, ODIN_LIGHTSET_MASK_SHIFT, 4, inst[0] >> 24);
 }
 
 

@@ -97,8 +97,14 @@ struct AntarcticState {
 		uint32_t base;
 	} tex;
 
+	/* A lightset in its table: the numbers of four lights. */
+	struct Lightset {
+		uint16_t lights[4];
+		uint16_t committed;
+	};
+
 	struct {
-		odin_lightset_t sets[LIGHTSETS];
+		Lightset sets[LIGHTSETS];
 		odin_lightset_t scratchset;
 		odin_light_t table[LIGHTS];
 		odin_light_t scratch;

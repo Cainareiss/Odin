@@ -19,7 +19,7 @@
 #include "vk/state.h"
 
 /* 3: the command processor keeps its own state (src/odin/antarctic.hpp) */
-#define VK_STATE_VERSION	3
+#define VK_STATE_VERSION	4
 
 vk_state_t *
 vk_state_new (const char *path, uint32_t mode)
