@@ -50,10 +50,18 @@ class HikaruGpu;
  *  - its picture is blended into a 3D buffer of the hardware and waits: it
  *    reaches the screen at the next launch (renderer.cpp);
  *  - the picture on the screen is composed with the layers at every frame
- *    (renderer.cpp, renderer_layers.cpp).
+ *    (renderer.cpp, renderer_layers.cpp), then brought to the size of the
+ *    window.
  *
- * Every buffer has the size of the screen of the hardware. An OpenGL 4.3
- * context must be current for every call, the constructor included. */
+ * Two sizes are told apart. The screen of the hardware, WIDTH by HEIGHT, is
+ * what the games address: the centre of a view, its clip window, the 2D
+ * layers, the 501 pattern, the pictures of a save state. The buffers the 3D
+ * is drawn in are `scale` times as wide and as high, and so is the picture
+ * on its way to the screen: a pixel of the hardware is scale x scale pixels
+ * there. The window has a size of its own.
+ *
+ * An OpenGL 4.3 context must be current for every call, the constructor
+ * included. */
 class Renderer {
 public:
 	/* The screen of the hardware, in pixels */
@@ -84,16 +92,30 @@ public:
 
 	void set_gpu(HikaruGpu *gpu) { m_gpu = gpu; }
 
+	/* Draws the 3D `scale` times finer than the screen of the hardware,
+	 * 1 at first. The pictures kept are carried over, pixel for pixel. */
+	void set_scale(unsigned scale);
+
 	/* A display list was launched. */
 	void launch() { m_launched = 1; }
 	/* The texture RAM of a bank has changed; every bank if negative. */
 	void invalidate_textures(int bank) { m_textures.invalidate(bank); }
 
 	/* A frame of the machine: begin_frame before it runs, end_frame once
-	 * it has, with the number of that frame. The window is `scale` times
-	 * the screen. */
+	 * it has, with the number of that frame. The picture of the frame is
+	 * shown in the window, of window_w by window_h pixels: as large as
+	 * fits, in the shape of the screen of the hardware, black around. */
 	void begin_frame(unsigned frame);
-	void end_frame(unsigned frame, unsigned scale);
+	void end_frame(unsigned frame, unsigned window_w, unsigned window_h);
+
+	/* The picture of the last frame, whatever the size of the window:
+	 * the framebuffer it can be read from, and its size. */
+	GLuint frame_picture(unsigned &w, unsigned &h) const
+	{
+		w = width();
+		h = height();
+		return m_frame_fb;
+	}
 
 	/* The debug switches as text, for the title of the window; empty
 	 * without the debug keys. */
@@ -102,8 +124,10 @@ public:
 	/* Save state. The renderer keeps from one frame to the next the two
 	 * 3D buffers, which the blender feeds back, and the pictures on their
 	 * way to the screen: PICTURES pictures of PICTURE_SIZE bytes, then
-	 * the counters. The textures are decoded again from the texture
-	 * RAM. */
+	 * the counters. A picture of a state has the size of the screen of
+	 * the hardware whatever the scale: one pixel of each scale x scale is
+	 * saved, and comes back as all of them. The textures are decoded
+	 * again from the texture RAM. */
 	static constexpr unsigned PICTURES = 5;
 	static constexpr size_t PICTURE_SIZE = size_t{WIDTH} * HEIGHT * 4;
 	struct Counters {
@@ -160,20 +184,28 @@ private:
 	};
 
 	/* renderer.cpp */
-	void build_scene_target();
-	void build_pictures();
 	void build_blender();
 	void build_quad();
 	void build_compose();
+	void build_presenter();
 	void forget_held();
 	void set_2d_state();
-	void show(unsigned frame, unsigned scale);
+	void show(unsigned frame);
 	void draw_list();
 	void check_last_list();
-	void compose(const odin_fb_config_t &fb, unsigned scale);
-	GLuint picture(unsigned i) const { return (i < 2) ? m_buffers[i] : m_pipe[i - 2]; }
-	static GLuint new_screen_texture(GLenum format);
+	void compose(const odin_fb_config_t &fb);
+	void present(unsigned window_w, unsigned window_h);
+
+	/* renderer_buffers.cpp */
+	unsigned width() const { return WIDTH * m_scale; }
+	unsigned height() const { return HEIGHT * m_scale; }
+	void build_buffers();
+	void destroy_buffers(bool pictures_too);
+	static GLuint new_buffer_texture(GLenum format, unsigned w, unsigned h);
 	static GLuint new_framebuffer(GLuint color);
+	GLuint &picture(unsigned i) { return (i < 2) ? m_buffers[i] : m_pipe[i - 2]; }
+	void copy_picture(GLuint from, unsigned from_w, unsigned from_h,
+	                  GLuint to, unsigned to_w, unsigned to_h);
 
 	/* renderer_scene.cpp */
 	void draw_scene();
@@ -196,6 +228,8 @@ private:
 	void build_lists();
 	void destroy_lists();
 	void size_lists(uint32_t max);
+	bool grow_lists(uint32_t used);
+	uint32_t room_at_start() const;
 	void draw_translucent(unsigned vpi, const odin_mesh_t *meshes, unsigned num);
 
 	/* renderer_layers.cpp */
@@ -238,6 +272,9 @@ private:
 	/* The list is drawn again, see check_last_list */
 	bool m_again;
 
+	/* How many times finer than the screen of the hardware the buffers
+	 * below are */
+	unsigned m_scale;
 	/* Where a list is drawn: a colour buffer and a depth buffer */
 	GLuint m_scene_fb, m_scene_color, m_scene_depth;
 	/* The depth the polygon types other than the translucent left */
@@ -252,11 +289,20 @@ private:
 	int32_t m_next;			/* the one it takes at the next frame, or -1 */
 	uint32_t m_launched;		/* a list was launched during this frame */
 	Last m_last;
+	/* For copy_picture, and a picture of the size of the screen of the
+	 * hardware for the save states */
+	GLuint m_copy_fb[2];
+	GLuint m_state_picture;
 
 	/* Blends two 3D buffers, see draw_list */
 	GLuint m_blender;
 	GLint m_blender_rate;
-	/* Composes the picture and the layers on the window */
+	/* The picture of the frame: the 3D and the layers, composed */
+	GLuint m_frame_fb, m_frame_color;
+	/* Brings it to the size of the window */
+	GLuint m_presenter;
+	GLint m_presenter_rect;
+	/* Composes the picture and the layers */
 	GLuint m_quad_vao, m_quad_vbo;
 	GLuint m_compose;
 	struct {
@@ -277,6 +323,8 @@ private:
 		GLuint nodes;
 		GLuint count[8];	/* one per viewport */
 		uint32_t max;		/* nodes */
+		uint32_t limit;		/* nodes the graphics card takes in a buffer */
+		bool full;		/* a list did not fit, and it was told */
 		GLuint below;		/* the colour under them */
 	} m_lists;
 

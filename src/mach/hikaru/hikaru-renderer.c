@@ -58,6 +58,7 @@ hikaru_renderer_begin_frame (vk_renderer_t *renderer)
 {
 	hikaru_renderer_t *hr = (hikaru_renderer_t *) renderer;
 
+	odin_renderer_set_scale (hr->odin, renderer->scale);
 	/* The frame being built follows the one shown. */
 	odin_renderer_begin_frame (hr->odin, renderer->frame + 1);
 	snprintf (renderer->message, sizeof (renderer->message), "%s",
@@ -69,7 +70,13 @@ hikaru_renderer_end_frame (vk_renderer_t *renderer)
 {
 	hikaru_renderer_t *hr = (hikaru_renderer_t *) renderer;
 
-	odin_renderer_end_frame (hr->odin, renderer->frame, renderer->scale);
+	int w, h;
+
+	SDL_GL_GetDrawableSize (renderer->window, &w, &h);
+	odin_renderer_end_frame (hr->odin, renderer->frame, (unsigned) w, (unsigned) h);
+	renderer->picture_fb = odin_renderer_frame_picture (hr->odin,
+	                                                    &renderer->picture_width,
+	                                                    &renderer->picture_height);
 }
 
 static void

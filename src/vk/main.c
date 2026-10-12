@@ -41,6 +41,8 @@ static struct {
 	unsigned num_save_frames;
 	bool unthrottled;
 	unsigned scale;
+	unsigned window;
+	bool fullscreen;
 } options;
 
 static vk_game_list_t *game_list;
@@ -96,6 +98,13 @@ process_events (void)
 				break;
 			case SDLK_F4:
 				load_or_save_state (mach, false);
+				break;
+			case SDLK_F11:
+				vk_renderer_toggle_fullscreen (mach->renderer);
+				break;
+			case SDLK_RETURN:
+				if (event.key.keysym.mod & KMOD_ALT)
+					vk_renderer_toggle_fullscreen (mach->renderer);
 				break;
 			default:
 				break;
@@ -173,7 +182,7 @@ main_loop (vk_machine_t *mach, int num_frames)
 	}
 }
 
-static const char global_opts[] = "R:r:n:l:s:ux:vh?";
+static const char global_opts[] = "R:r:n:l:s:ux:w:fvh?";
 static const char global_help[] = "Usage: %s [options]\n"
 "	-R <path>	Path to the ROM directory\n"
 "	-r <string>	Name of the game to run\n"
@@ -181,7 +190,9 @@ static const char global_help[] = "Usage: %s [options]\n"
 "	-l <path>	Load a state at startup\n"
 "	-s <num>[,...]	Save <game>-<num>.vkstate after these frames\n"
 "	-u		Run as fast as the host can, not at 60 frames per second\n"
-"	-x <num>	Make the window num times 640 by 480 (1 to 8)\n"
+"	-x <num>	Draw the 3D num times finer than 640 by 480 (1 to 6)\n"
+"	-w <num>	Make the window num times 640 by 480, as far as the display has room\n"
+"	-f		Take the whole display (F11 or Alt+Enter goes back and forth)\n"
 "	-v		Set verbosity (affects debug messages)\n"
 "	-h              Show this help\n";
 
@@ -232,6 +243,12 @@ parse_global_opts (int argc, char **argv)
 			break;
 		case 'x':
 			options.scale = (unsigned) atoi (optarg);
+			break;
+		case 'w':
+			options.window = (unsigned) atoi (optarg);
+			break;
+		case 'f':
+			options.fullscreen = true;
 			break;
 		case 'v':
 			vk_verbosity = 1;
@@ -336,8 +353,11 @@ main (const int argc, char **argv)
 
 	atexit (finalize);
 
-	if (options.scale >= 2 && options.scale <= 8)
-		vk_renderer_set_scale (mach->renderer, options.scale);
+	if (options.scale >= 2 && options.scale <= 6)
+		mach->renderer->scale = options.scale;
+	if (options.window >= 2 || options.fullscreen)
+		vk_renderer_set_window (mach->renderer, options.window ? options.window : 1,
+		                        options.fullscreen);
 
 	vk_machine_reset (mach, VK_RESET_TYPE_HARD);
 

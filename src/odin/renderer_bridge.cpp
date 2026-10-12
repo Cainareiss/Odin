@@ -81,6 +81,12 @@ odin_renderer_set_gpu(odin_renderer_t *renderer, odin_hikaru_gpu_t *gpu)
 }
 
 void
+odin_renderer_set_scale(odin_renderer_t *renderer, unsigned scale)
+{
+	renderer->renderer.set_scale(scale);
+}
+
+void
 odin_renderer_launch(odin_renderer_t *renderer)
 {
 	renderer->renderer.launch();
@@ -99,9 +105,16 @@ odin_renderer_begin_frame(odin_renderer_t *renderer, unsigned frame)
 }
 
 void
-odin_renderer_end_frame(odin_renderer_t *renderer, unsigned frame, unsigned scale)
+odin_renderer_end_frame(odin_renderer_t *renderer, unsigned frame,
+                        unsigned window_w, unsigned window_h)
 {
-	renderer->renderer.end_frame(frame, scale);
+	renderer->renderer.end_frame(frame, window_w, window_h);
+}
+
+unsigned
+odin_renderer_frame_picture(const odin_renderer_t *renderer, unsigned *width, unsigned *height)
+{
+	return renderer->renderer.frame_picture(*width, *height);
 }
 
 const char *

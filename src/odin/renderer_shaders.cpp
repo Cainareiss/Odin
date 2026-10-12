@@ -126,6 +126,7 @@ uniform float		u_alpha_ref;
 uniform float		u_weigh_by_alpha;
 #if HAS_PATTERN
 uniform uint		u_pattern;
+uniform int		u_scale;
 #endif
 
 #if COLLECT
@@ -229,8 +230,9 @@ main (void)
 	 * surfaces that the cabinets do (the shadow of the AIRTRIX combo
 	 * labels lies 0.06 behind them at a depth of 560). */
 #if HAS_PATTERN
-	/* 501: bit 0 is the top left pixel of the 4 x 4 pattern. */
-	ivec2 dot = ivec2 (gl_FragCoord.xy) & 3;
+	/* 501: bit 0 is the top left pixel of the 4 x 4 pattern, in pixels
+	 * of the screen of the hardware: each is u_scale pixels wide here. */
+	ivec2 dot = (ivec2 (gl_FragCoord.xy) / u_scale) & 3;
 	if (((u_pattern >> uint ((3 - dot.y) * 4 + dot.x)) & 1u) == 0u)
 		discard;
 #endif
@@ -578,6 +580,37 @@ void main (void) {
 	color.rgb = mix (color.rgb, texel_2.rgb * u_mult_2, cover_2 * on_2 * u_above_2);
 	color.rgb = mix (color.rgb, texel_1.rgb * u_mult_1, cover_1 * on_1 * u_above_1);
 	fragColor = color;
+}
+)glsl";
+
+/* Each pixel of the window takes the mean of the part of the picture it
+ * covers, each pixel of the picture weighted by the share of it that is
+ * covered. A window that is a whole number of times the picture shows it
+ * pixel for pixel; a smaller one smooths it, which the hardware does not.
+ * u_rect: where the rectangle starts in the window, and the pixels of the
+ * picture one pixel of the window covers each way. */
+const char *const PRESENT_FRAGMENT = R"glsl(#version 430
+
+uniform sampler2D u_picture;
+uniform vec4 u_rect;
+
+out vec4 fragColor;
+
+void main (void) {
+	ivec2 last = textureSize (u_picture, 0) - 1;
+	vec2 from = (gl_FragCoord.xy - 0.5 - u_rect.xy) * u_rect.zw;
+	vec2 to = from + u_rect.zw;
+	ivec2 a = ivec2 (floor (from)), b = ivec2 (ceil (to)) - 1;
+	vec3 sum = vec3 (0.0);
+
+	for (int y = a.y; y <= b.y; y++) {
+		float wy = min (to.y, float (y + 1)) - max (from.y, float (y));
+		for (int x = a.x; x <= b.x; x++) {
+			float wx = min (to.x, float (x + 1)) - max (from.x, float (x));
+			sum += texelFetch (u_picture, clamp (ivec2 (x, y), ivec2 (0), last), 0).rgb * (wx * wy);
+		}
+	}
+	fragColor = vec4 (sum / (u_rect.z * u_rect.w), 1.0);
 }
 )glsl";
 

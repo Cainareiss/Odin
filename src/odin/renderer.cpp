@@ -35,43 +35,12 @@ constexpr float INV255 = 1.0f / 255.0f;
 
 } /* namespace */
 
-/* A texture the size of the screen, read pixel for pixel. It is left
- * bound. */
-GLuint
-Renderer::new_screen_texture(GLenum format)
-{
-	GLuint id;
-
-	glGenTextures(1, &id);
-	glBindTexture(GL_TEXTURE_2D, id);
-	glTexStorage2D(GL_TEXTURE_2D, 1, format, WIDTH, HEIGHT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	return id;
-}
-
-/* A framebuffer that draws to a texture. It is left bound. */
-GLuint
-Renderer::new_framebuffer(GLuint color)
-{
-	static const GLenum targets[1] = { GL_COLOR_ATTACHMENT0 };
-	GLuint id;
-
-	glGenFramebuffers(1, &id);
-	glBindFramebuffer(GL_FRAMEBUFFER, id);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, color, 0);
-	glDrawBuffers(1, targets);
-	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-		fatal("a framebuffer is not complete");
-	return id;
-}
-
 Renderer::Renderer(const Memory &memory, const Options &options)
 	: m_gpu(nullptr), m_fb(memory.fb), m_options(options), m_list(nullptr),
 	  m_textures(memory.texram), m_mesh_vao(0), m_mesh_vbo(0),
 	  m_program(nullptr), m_variant_key(0), m_drawing(0), m_normal{},
 	  m_scissor_vp_index(~0u), m_bound_tex_index(~0u), m_pass{}, m_again(false),
-	  m_num_lists(0), m_shown(2), m_next(-1), m_launched(0), m_last{},
+	  m_scale(1), m_num_lists(0), m_shown(2), m_next(-1), m_launched(0), m_last{},
 	  m_layer_pixels(size_t{WIDTH} * HEIGHT), m_message{}
 {
 	for (ListTextures &textures : m_list_textures) {
@@ -81,11 +50,15 @@ Renderer::Renderer(const Memory &memory, const Options &options)
 	init_debug();
 
 	build_compose();
-	build_scene_target();
-	build_pictures();
+	build_presenter();
+	build_buffers();
 	build_blender();
 	build_lists();
 	build_quad();
+
+	glGenFramebuffers(2, m_copy_fb);
+	m_state_picture = new_buffer_texture(GL_RGBA8, WIDTH, HEIGHT);
+	glBindTexture(GL_TEXTURE_2D, 0);
 	gl::check("building the renderer");
 }
 
@@ -99,65 +72,15 @@ Renderer::~Renderer()
 	glDeleteVertexArrays(1, &m_quad_vao);
 	glDeleteBuffers(1, &m_quad_vbo);
 
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	glDeleteFramebuffers(1, &m_scene_fb);
-	glDeleteTextures(1, &m_scene_color);
-	glDeleteRenderbuffers(1, &m_scene_depth);
-	glDeleteTextures(1, &m_solid_depth);
-	glDeleteTextures(2, m_buffers);
-	glDeleteFramebuffers(3, m_pipe_fb);
-	glDeleteTextures(3, m_pipe);
+	destroy_buffers(true);
 	destroy_lists();
+	glDeleteFramebuffers(2, m_copy_fb);
+	glDeleteTextures(1, &m_state_picture);
 
 	glUseProgram(0);
 	glDeleteProgram(m_blender);
 	glDeleteProgram(m_compose);
-}
-
-/* Where the lists are drawn. */
-void
-Renderer::build_scene_target()
-{
-	m_scene_color = new_screen_texture(GL_RGBA8);
-	m_scene_fb = new_framebuffer(m_scene_color);
-
-	glGenRenderbuffers(1, &m_scene_depth);
-	glBindRenderbuffer(GL_RENDERBUFFER, m_scene_depth);
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, WIDTH, HEIGHT);
-	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
-	                          GL_RENDERBUFFER, m_scene_depth);
-	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-		fatal("the framebuffer of the lists is not complete");
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-	m_solid_depth = new_screen_texture(GL_DEPTH_COMPONENT24);
-	glBindTexture(GL_TEXTURE_2D, 0);
-}
-
-/* The two 3D buffers and the pictures of the last three lists, empty at
- * first: an empty 3D buffer lets everything through, its alpha is 1. */
-void
-Renderer::build_pictures()
-{
-	std::vector<uint8_t> empty(PICTURE_SIZE, 0);
-
-	for (size_t i = 3; i < empty.size(); i += 4)
-		empty[i] = 0xFF;
-
-	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-	for (unsigned i = 0; i < PICTURES; i++) {
-		GLuint &id = (i < 2) ? m_buffers[i] : m_pipe[i - 2];
-
-		id = new_screen_texture(GL_RGBA8);
-		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, WIDTH, HEIGHT,
-		                GL_RGBA, GL_UNSIGNED_BYTE, empty.data());
-	}
-	glBindTexture(GL_TEXTURE_2D, 0);
-
-	/* The blender of the 3D buffers writes to the pictures. */
-	for (unsigned i = 0; i < 3; i++)
-		m_pipe_fb[i] = new_framebuffer(m_pipe[i]);
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glDeleteProgram(m_presenter);
 }
 
 void
@@ -227,6 +150,16 @@ Renderer::build_compose()
 	m_compose_locs.clear = gl::uniform(m_compose, "u_clear");
 }
 
+void
+Renderer::build_presenter()
+{
+	m_presenter = gl::compile_program(shaders::WHOLE_PICTURE_VERTEX, shaders::PRESENT_FRAGMENT);
+	m_presenter_rect = gl::uniform(m_presenter, "u_rect");
+	glUseProgram(m_presenter);
+	glUniform1i(gl::uniform(m_presenter, "u_picture"), 0);
+	glUseProgram(0);
+}
+
 /* Nothing a program holds, nothing bound is of the list about to be
  * drawn. */
 void
@@ -244,7 +177,7 @@ Renderer::set_2d_state()
 	glDisable(GL_DEPTH_TEST);
 	glDisable(GL_BLEND);
 	glDisable(GL_SCISSOR_TEST);
-	glViewport(0, 0, WIDTH, HEIGHT);
+	glViewport(0, 0, static_cast<GLsizei>(width()), static_cast<GLsizei>(height()));
 	glUseProgram(m_compose);
 }
 
@@ -261,14 +194,15 @@ Renderer::begin_frame(unsigned frame)
 }
 
 void
-Renderer::end_frame(unsigned frame, unsigned scale)
+Renderer::end_frame(unsigned frame, unsigned window_w, unsigned window_h)
 {
 	/* The command processor may still be in the middle of a mesh: draw
 	 * what it pushed so far and let it start a new mesh on the next
 	 * vertex. */
 	m_gpu->antarctic().end_open_mesh();
 
-	show(frame, scale);
+	show(frame);
+	present(window_w, window_h);
 	gl::check("a frame");
 
 	if (logging()) {
@@ -311,7 +245,8 @@ Renderer::draw_list()
 	} else {
 		glActiveTexture(GL_TEXTURE0 + 0);
 		glBindTexture(GL_TEXTURE_2D, m_pipe[m_last.slot]);
-		glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, WIDTH, HEIGHT);
+		glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0,
+		                    static_cast<GLsizei>(width()), static_cast<GLsizei>(height()));
 	}
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -346,10 +281,7 @@ Renderer::check_last_list()
 	}
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
-	if (used > m_lists.max) {
-		std::printf("renderer: more room for %u translucent fragments\n", used);
-		size_lists(std::max(used, m_lists.max * 2));
-
+	if (used > m_lists.max && grow_lists(used)) {
 		m_list = list;
 		m_again = true;
 		forget_held();
@@ -361,7 +293,7 @@ Renderer::check_last_list()
 
 	glCopyImageSubData(m_pipe[m_last.slot], GL_TEXTURE_2D, 0, 0, 0, 0,
 	                   m_buffers[m_last.buffer], GL_TEXTURE_2D, 0, 0, 0, 0,
-	                   WIDTH, HEIGHT, 1);
+	                   static_cast<GLsizei>(width()), static_cast<GLsizei>(height()), 1);
 	gl::check("keeping a picture");
 }
 
@@ -376,7 +308,7 @@ Renderer::check_last_list()
  * next scene, and the stars leave one frame before the text of the layers;
  * SGNASCAR keeps its white picture while it loads, with no list launched. */
 void
-Renderer::show(unsigned frame, unsigned scale)
+Renderer::show(unsigned frame)
 {
 	const odin_fb_config_t &fb = m_gpu->antarctic().fb_config();
 	const bool launched = m_launched != 0;
@@ -431,16 +363,16 @@ Renderer::show(unsigned frame, unsigned scale)
 			check_last_list();
 	}
 
-	compose(fb, scale);
+	compose(fb);
 }
 
-/* The picture shown and the layers, on the whole window.
+/* The picture shown and the layers, composed into the picture of the frame.
  *
  * Only the unit 0 of the display chip is drawn (the unit 1 is probably the
  * second monitor), and only what the 781 and the 181 tell: the registers
  * of the display chip that set up the framebuffer are not used. */
 void
-Renderer::compose(const odin_fb_config_t &fb, unsigned scale)
+Renderer::compose(const odin_fb_config_t &fb)
 {
 	const odin_layers_t &layers = m_gpu->eurasia().layers();
 	const uint32_t n1 = odin_fb_num_1(&fb), n2 = odin_fb_num_2(&fb);
@@ -451,7 +383,7 @@ Renderer::compose(const odin_fb_config_t &fb, unsigned scale)
 	const float factor = (n1 < 2 && n2 < 2) ? 0.0f : static_cast<float>(rate) * (1.0f / 255);
 
 	set_2d_state();
-	glViewport(0, 0, static_cast<GLsizei>(WIDTH * scale), static_cast<GLsizei>(HEIGHT * scale));
+	glBindFramebuffer(GL_FRAMEBUFFER, m_frame_fb);
 
 	if ((layers.layer[0][0].enabled || n1 == 2 || n2 == 2) && !m_debug[DEBUG_NO_LAYER1])
 		layer1 = upload_layer(layers.layer[0][0], mult1);
@@ -503,9 +435,61 @@ Renderer::compose(const odin_fb_config_t &fb, unsigned scale)
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 	glBindVertexArray(0);
 	glUseProgram(0);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 	m_textures.bury(layer1);
 	m_textures.bury(layer2);
+}
+
+/* The picture of the frame in the window: the largest rectangle of the
+ * shape of the screen of the hardware that fits, in the middle, black
+ * around. A rectangle of the size of the picture takes it pixel for pixel;
+ * any other takes for each of its pixels the mean of what it covers. */
+void
+Renderer::present(unsigned window_w, unsigned window_h)
+{
+	unsigned w = window_w, h = window_w * HEIGHT / WIDTH;
+
+	if (h > window_h) {
+		h = window_h;
+		w = window_h * WIDTH / HEIGHT;
+	}
+	if (w == 0 || h == 0)
+		return;
+	const GLint x = static_cast<GLint>((window_w - w) / 2);
+	const GLint y = static_cast<GLint>((window_h - h) / 2);
+	const GLint pw = static_cast<GLint>(width()), ph = static_cast<GLint>(height());
+
+	glDisable(GL_SCISSOR_TEST);
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_BLEND);
+	if (w != window_w || h != window_h) {
+		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT);
+	}
+
+	if (w == width() && h == height()) {
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, m_frame_fb);
+		glBlitFramebuffer(0, 0, pw, ph, x, y, x + pw, y + ph,
+		                  GL_COLOR_BUFFER_BIT, GL_NEAREST);
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+		return;
+	}
+
+	/* Where the rectangle starts, and the pixels of the picture one of
+	 * its pixels covers each way */
+	glViewport(x, y, static_cast<GLsizei>(w), static_cast<GLsizei>(h));
+	glUseProgram(m_presenter);
+	glUniform4f(m_presenter_rect, static_cast<float>(x), static_cast<float>(y),
+	            static_cast<float>(pw) / static_cast<float>(w),
+	            static_cast<float>(ph) / static_cast<float>(h));
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, m_frame_color);
+	glBindVertexArray(m_quad_vao);
+	glDrawArrays(GL_TRIANGLES, 0, 3);
+	glBindVertexArray(0);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	glUseProgram(0);
 }
 
 } /* namespace odin */

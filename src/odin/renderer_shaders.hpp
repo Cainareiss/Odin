@@ -38,9 +38,13 @@ extern const char *const WHOLE_PICTURE_VERTEX;
 extern const char *const SORT_FRAGMENT;
 extern const char *const BLEND_FRAGMENT;
 
-/* The picture shown and the 2D layers, on the window */
+/* The picture shown and the 2D layers, composed */
 extern const char *const COMPOSE_VERTEX;
 extern const char *const COMPOSE_FRAGMENT;
+
+/* For the whole picture triangle: the picture of the frame at the size of
+ * the window */
+extern const char *const PRESENT_FRAGMENT;
 
 } /* namespace odin::shaders */
 

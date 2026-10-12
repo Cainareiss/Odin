@@ -205,13 +205,16 @@ Renderer::upload_viewport(const odin_mesh_t &mesh)
 	const float ky = vp.clip.n / vp.clip.f2;
 	float projection[4][4];
 
-	/* The clip window is cut by the scissor, whatever the program. */
+	/* The clip window is cut by the scissor, whatever the program: whole
+	 * pixels of the screen of the hardware. */
 	if (m_scissor_vp_index != mesh.vp_index) {
+		const GLint n = static_cast<GLint>(m_scale);
+
 		m_scissor_vp_index = mesh.vp_index;
-		glScissor(static_cast<GLint>(vp.clip.l),
-		          static_cast<GLint>(HEIGHT) - static_cast<GLint>(vp.clip.t),
-		          static_cast<GLsizei>(vp.clip.r - vp.clip.l),
-		          static_cast<GLsizei>(vp.clip.t - vp.clip.b));
+		glScissor(static_cast<GLint>(vp.clip.l) * n,
+		          (static_cast<GLint>(HEIGHT) - static_cast<GLint>(vp.clip.t)) * n,
+		          static_cast<GLsizei>(vp.clip.r - vp.clip.l) * n,
+		          static_cast<GLsizei>(vp.clip.t - vp.clip.b) * n);
 	}
 
 	if (m_program->held.vp_index == mesh.vp_index)
@@ -447,6 +450,7 @@ Renderer::draw_mesh(const odin_mesh_t &mesh)
 	if (m_variant.has_pattern && held.pattern != mesh.pattern) {
 		held.pattern = mesh.pattern;
 		glUniform1ui(locs.pattern, patterns[mesh.pattern]);
+		glUniform1i(locs.scale, static_cast<GLint>(m_scale));
 	}
 	if (held.alpha_ref != m_pass.alpha_ref) {
 		held.alpha_ref = m_pass.alpha_ref;
@@ -649,7 +653,7 @@ Renderer::draw_scene()
 
 	upload_vertices();
 
-	glViewport(0, 0, WIDTH, HEIGHT);
+	glViewport(0, 0, static_cast<GLsizei>(width()), static_cast<GLsizei>(height()));
 
 	/* The scissor test and the write masks hold for a clear too. An
 	 * empty 3D buffer lets everything through: the clear color comes in
@@ -678,7 +682,7 @@ Renderer::draw_scene()
 
 	glDepthMask(GL_TRUE);
 	glDisable(GL_SCISSOR_TEST);
-	glViewport(0, 0, WIDTH, HEIGHT);
+	glViewport(0, 0, static_cast<GLsizei>(width()), static_cast<GLsizei>(height()));
 	gl::check("a scene");
 }
 

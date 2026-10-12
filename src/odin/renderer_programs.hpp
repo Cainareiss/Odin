@@ -90,6 +90,7 @@ struct MeshProgram {
 		GLint order;
 		GLint blend_mode;
 		GLint pattern;
+		GLint scale;
 	};
 	/* What it was given last, so as not to give it again: indices in
 	 * the display list being drawn, see Renderer::forget_held. */

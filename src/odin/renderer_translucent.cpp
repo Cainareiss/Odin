@@ -39,6 +39,7 @@
 #include "odin/renderer_shaders.hpp"
 
 #include <algorithm>
+#include <cstdint>
 #include <cstdio>
 
 namespace odin {
@@ -56,17 +57,12 @@ constexpr GLenum UNIT_BELOW = 5;
 void
 Renderer::build_lists()
 {
+	GLint64 limit = 0;
+
 	m_lists.program = gl::compile_program(shaders::WHOLE_PICTURE_VERTEX, shaders::SORT_FRAGMENT);
 	glUseProgram(m_lists.program);
 	glUniform1i(gl::uniform(m_lists.program, "u_below"), UNIT_BELOW);
 	glUseProgram(0);
-
-	m_lists.heads = new_screen_texture(GL_R32UI);
-	m_lists.heads_fb = new_framebuffer(m_lists.heads);
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-	m_lists.below = new_screen_texture(GL_RGBA8);
-	glBindTexture(GL_TEXTURE_2D, 0);
 
 	glGenBuffers(8, m_lists.count);
 	for (const GLuint count : m_lists.count) {
@@ -75,20 +71,29 @@ Renderer::build_lists()
 	}
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
-	/* Four fragments a pixel to begin with */
+	glGetInteger64v(GL_MAX_SHADER_STORAGE_BLOCK_SIZE, &limit);
+	m_lists.limit = static_cast<uint32_t>(std::min<GLint64>(limit / NODE_SIZE, UINT32_MAX));
+	m_lists.full = false;
+
 	glGenBuffers(1, &m_lists.nodes);
-	size_lists(4 * WIDTH * HEIGHT);
+	size_lists(room_at_start());
 }
 
 void
 Renderer::destroy_lists()
 {
-	glDeleteFramebuffers(1, &m_lists.heads_fb);
-	glDeleteTextures(1, &m_lists.heads);
-	glDeleteTextures(1, &m_lists.below);
 	glDeleteBuffers(1, &m_lists.nodes);
 	glDeleteBuffers(8, m_lists.count);
 	glDeleteProgram(m_lists.program);
+}
+
+/* A fragment a pixel of the buffers, and four a pixel of the screen of the
+ * hardware at least: the six games fit in that at the scale 1, but for one
+ * list of VON4. */
+uint32_t
+Renderer::room_at_start() const
+{
+	return std::max(4 * WIDTH * HEIGHT, width() * height());
 }
 
 /* Room for `max` fragments. What the buffer held is lost. */
@@ -103,6 +108,26 @@ Renderer::size_lists(uint32_t max)
 	gl::check("sizing the fragment lists");
 }
 
+/* More room, for `used` fragments at least. False if the graphics card has
+ * no more to give: the fragments that do not fit are lost. */
+bool
+Renderer::grow_lists(uint32_t used)
+{
+	const uint32_t twice = (m_lists.max > m_lists.limit / 2) ? m_lists.limit : m_lists.max * 2;
+	const uint32_t wanted = std::min(std::max(used, twice), m_lists.limit);
+
+	if (wanted <= m_lists.max) {
+		if (!m_lists.full)
+			error("no room for %u translucent fragments, the card takes %u",
+			      used, m_lists.limit);
+		m_lists.full = true;
+		return false;
+	}
+	std::printf("renderer: more room for %u translucent fragments\n", used);
+	size_lists(wanted);
+	return true;
+}
+
 void
 Renderer::draw_translucent(unsigned vpi, const odin_mesh_t *meshes, unsigned num)
 {
@@ -112,7 +137,8 @@ Renderer::draw_translucent(unsigned vpi, const odin_mesh_t *meshes, unsigned num
 	/* The depth the other types left. */
 	glActiveTexture(GL_TEXTURE0 + MeshPrograms::UNIT_SOLID_DEPTH);
 	glBindTexture(GL_TEXTURE_2D, m_solid_depth);
-	glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, WIDTH, HEIGHT);
+	glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0,
+	                    static_cast<GLsizei>(width()), static_cast<GLsizei>(height()));
 	glActiveTexture(GL_TEXTURE0);
 
 	glBindImageTexture(0, m_lists.heads, 0, GL_FALSE, 0, GL_READ_WRITE, GL_R32UI);
@@ -152,10 +178,8 @@ Renderer::draw_translucent(unsigned vpi, const odin_mesh_t *meshes, unsigned num
 			break;
 		}
 		glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &used);
-		if (used <= m_lists.max)
+		if (used <= m_lists.max || !grow_lists(used))
 			break;
-		std::printf("renderer: more room for %u translucent fragments\n", used);
-		size_lists(std::max(used, m_lists.max * 2));
 	}
 	m_pass.collect = false;
 
@@ -163,7 +187,8 @@ Renderer::draw_translucent(unsigned vpi, const odin_mesh_t *meshes, unsigned num
 	if (used) {
 		glActiveTexture(GL_TEXTURE0 + UNIT_BELOW);
 		glBindTexture(GL_TEXTURE_2D, m_lists.below);
-		glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, WIDTH, HEIGHT);
+		glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0,
+		                    static_cast<GLsizei>(width()), static_cast<GLsizei>(height()));
 
 		glUseProgram(m_lists.program);
 		m_program = nullptr;

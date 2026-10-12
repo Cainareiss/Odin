@@ -36,6 +36,20 @@ vk_renderer_begin_frame (vk_renderer_t *renderer)
 		renderer->begin_frame (renderer);
 }
 
+/* The picture of the frame as bytes of red, green and blue, the bottom line
+ * first. */
+static void
+read_picture (vk_renderer_t *renderer, uint8_t *pixels)
+{
+	glBindFramebuffer (GL_READ_FRAMEBUFFER, renderer->picture_fb);
+	glReadBuffer (renderer->picture_fb ? GL_COLOR_ATTACHMENT0 : GL_BACK);
+	glPixelStorei (GL_PACK_ALIGNMENT, 1);
+	glReadPixels (0, 0, (GLsizei) renderer->picture_width,
+	              (GLsizei) renderer->picture_height,
+	              GL_RGB, GL_UNSIGNED_BYTE, pixels);
+	glBindFramebuffer (GL_READ_FRAMEBUFFER, 0);
+}
+
 /* VK_SCREENSHOT=<prefix> writes <prefix>-<frame>.ppm every 60 frames, or
  * every VK_SCREENSHOT_EVERY frames */
 static void
@@ -45,8 +59,8 @@ vk_renderer_screenshot (vk_renderer_t *renderer)
 	static unsigned every = 60;
 	static bool checked = false;
 	char path[512];
-	unsigned w = renderer->width * renderer->scale;
-	unsigned h = renderer->height * renderer->scale, y;
+	unsigned w = renderer->picture_width;
+	unsigned h = renderer->picture_height, y;
 	uint8_t *pixels;
 	FILE *fp;
 
@@ -63,10 +77,7 @@ vk_renderer_screenshot (vk_renderer_t *renderer)
 	pixels = malloc (w * h * 3);
 	if (!pixels)
 		return;
-	glBindFramebuffer (GL_READ_FRAMEBUFFER, 0);
-	glReadBuffer (GL_BACK);
-	glPixelStorei (GL_PACK_ALIGNMENT, 1);
-	glReadPixels (0, 0, (GLsizei) w, (GLsizei) h, GL_RGB, GL_UNSIGNED_BYTE, pixels);
+	read_picture (renderer, pixels);
 
 	snprintf (path, sizeof (path), "%s-%06u.ppm", prefix, renderer->frame);
 	fp = fopen (path, "wb");
@@ -87,9 +98,8 @@ vk_renderer_print_fingerprint (vk_renderer_t *renderer)
 	static int wanted = -1;
 	static uint8_t *pixels;
 	static size_t held;
-	const unsigned w = renderer->width * renderer->scale;
-	const unsigned h = renderer->height * renderer->scale;
-	const size_t size = (size_t) w * h * 3;
+	const size_t size = (size_t) renderer->picture_width *
+	                    renderer->picture_height * 3;
 	uint64_t fp = 0xCBF29CE484222325ull;
 	size_t i;
 
@@ -103,10 +113,7 @@ vk_renderer_print_fingerprint (vk_renderer_t *renderer)
 		VK_ASSERT (pixels);
 		held = size;
 	}
-	glBindFramebuffer (GL_READ_FRAMEBUFFER, 0);
-	glReadBuffer (GL_BACK);
-	glPixelStorei (GL_PACK_ALIGNMENT, 1);
-	glReadPixels (0, 0, (GLsizei) w, (GLsizei) h, GL_RGB, GL_UNSIGNED_BYTE, pixels);
+	read_picture (renderer, pixels);
 
 	for (i = 0; i < size; i++) {
 		fp ^= pixels[i];
@@ -221,11 +228,14 @@ vk_renderer_init (vk_renderer_t *renderer)
 	                     SDL_GL_CONTEXT_PROFILE_CORE);
 
 	renderer->scale = 1;
+	renderer->picture_fb = 0;
+	renderer->picture_width = renderer->width;
+	renderer->picture_height = renderer->height;
 	renderer->window = SDL_CreateWindow ("Odin",
 	                                     SDL_WINDOWPOS_CENTERED,
 	                                     SDL_WINDOWPOS_CENTERED,
 	                                     renderer->width, renderer->height,
-	                                     SDL_WINDOW_OPENGL);
+	                                     SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
 	if (!renderer->window) {
 		VK_ERROR ("could not create SDL window: '%s'", SDL_GetError ());
 		return -1;
@@ -268,11 +278,39 @@ vk_renderer_init (vk_renderer_t *renderer)
 }
 
 void
-vk_renderer_set_scale (vk_renderer_t *renderer, unsigned scale)
+vk_renderer_set_window (vk_renderer_t *renderer, unsigned times, bool fullscreen)
 {
-	renderer->scale = scale;
-	SDL_SetWindowSize (renderer->window, (int) (renderer->width * scale),
-	                   (int) (renderer->height * scale));
+	int w = (int) (renderer->width * times), h = (int) (renderer->height * times);
+	int top = 0, left = 0, bottom = 0, right = 0;
+	SDL_Rect room;
+
+	/* Not larger than what the display has room for, borders
+	 * included, and of the shape of the screen of the machine */
+	SDL_GetWindowBordersSize (renderer->window, &top, &left, &bottom, &right);
+	if (!SDL_GetDisplayUsableBounds (SDL_GetWindowDisplayIndex (renderer->window), &room)) {
+		room.w -= left + right;
+		room.h -= top + bottom;
+		if (w > room.w) {
+			h = h * room.w / w;
+			w = room.w;
+		}
+		if (h > room.h) {
+			w = w * room.h / h;
+			h = room.h;
+		}
+	}
+	SDL_SetWindowSize (renderer->window, w, h);
 	SDL_SetWindowPosition (renderer->window, SDL_WINDOWPOS_CENTERED,
 	                       SDL_WINDOWPOS_CENTERED);
+	if (fullscreen)
+		SDL_SetWindowFullscreen (renderer->window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+}
+
+void
+vk_renderer_toggle_fullscreen (vk_renderer_t *renderer)
+{
+	const bool on = (SDL_GetWindowFlags (renderer->window) &
+	                 SDL_WINDOW_FULLSCREEN_DESKTOP) != 0;
+
+	SDL_SetWindowFullscreen (renderer->window, on ? 0 : SDL_WINDOW_FULLSCREEN_DESKTOP);
 }

@@ -29,10 +29,17 @@ struct vk_renderer_t {
 	SDL_Window *window;
 	SDL_GLContext *gl_context;
 
+	/* The screen of the machine, in pixels */
 	unsigned width;
 	unsigned height;
-	/* The window is the picture, scale times as wide and as high */
+	/* The 3D is drawn `scale` times finer than that screen */
 	unsigned scale;
+	/* The picture of the frame, whatever the window shows of it: the
+	 * framebuffer to read it from (0: the window) and its size. The
+	 * screenshots and the fingerprints are taken there. */
+	unsigned picture_fb;
+	unsigned picture_width;
+	unsigned picture_height;
 	char message[256];
 
 	/* Number of the frame being shown, set by the main loop */
@@ -45,7 +52,10 @@ struct vk_renderer_t {
 };
 
 int			 vk_renderer_init (vk_renderer_t *renderer);
-void			 vk_renderer_set_scale (vk_renderer_t *renderer, unsigned scale);
+/* The window: `times` the screen of the machine, as far as the display
+ * has room for it, or the whole display. */
+void			 vk_renderer_set_window (vk_renderer_t *renderer, unsigned times, bool fullscreen);
+void			 vk_renderer_toggle_fullscreen (vk_renderer_t *renderer);
 void			 vk_renderer_begin_frame (vk_renderer_t *renderer);
 void			 vk_renderer_end_frame (vk_renderer_t *renderer);
 void			 vk_renderer_clear_gl_errors (void);

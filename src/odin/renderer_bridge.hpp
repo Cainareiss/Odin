@@ -72,16 +72,25 @@ odin_renderer_t *odin_renderer_new(const odin_renderer_memory_t *memory,
 void odin_renderer_delete(odin_renderer_t *renderer);
 void odin_renderer_set_gpu(odin_renderer_t *renderer, odin_hikaru_gpu_t *gpu);
 
+/* Draws the 3D `scale` times finer than the screen of the hardware, 1 at
+ * first. */
+void odin_renderer_set_scale(odin_renderer_t *renderer, unsigned scale);
+
 /* A display list was launched. */
 void odin_renderer_launch(odin_renderer_t *renderer);
 /* The texture RAM of a bank has changed; every bank if negative. */
 void odin_renderer_invalidate_textures(odin_renderer_t *renderer, int bank);
 
 /* A frame of the machine: begin_frame before it runs, end_frame once it
- * has, with the number of that frame. The window is `scale` times the
- * screen. */
+ * has, with the number of that frame and the size of the window in
+ * pixels. */
 void odin_renderer_begin_frame(odin_renderer_t *renderer, unsigned frame);
-void odin_renderer_end_frame(odin_renderer_t *renderer, unsigned frame, unsigned scale);
+void odin_renderer_end_frame(odin_renderer_t *renderer, unsigned frame,
+                             unsigned window_w, unsigned window_h);
+/* The picture of the last frame, whatever the size of the window: the
+ * OpenGL framebuffer it can be read from, and its size. */
+unsigned odin_renderer_frame_picture(const odin_renderer_t *renderer,
+                                     unsigned *width, unsigned *height);
 /* For the title of the window; empty without the debug keys. */
 const char *odin_renderer_message(const odin_renderer_t *renderer);
 
