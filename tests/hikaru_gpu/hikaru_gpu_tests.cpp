@@ -17,7 +17,8 @@
  */
 
 /* Unit tests for the wiring of the two graphics chips of the Hikaru: the
- * bus, the launch and the end of a list, the interrupt line.
+ * bus, the launch and the end of a list, the interrupt line, the reset
+ * lines.
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
  *            -I src tests/hikaru_gpu/hikaru_gpu_tests.cpp src/odin/hikaru_gpu.cpp \
@@ -139,12 +140,49 @@ void test_bus()
 	check(b.read(0x15000088) == 0x80 && b.read(0x1A000018) == 0x2, "the vertical blanking reaches the board through bit 7");
 }
 
+/* The two reset lines of port D of the MIE. */
+void test_resets()
+{
+	Board b;
+
+	b.gpu->vblank_out();
+	check(b.read(0x15000088) == 0x80 && !b.gpu->irq_line(), "at power-on no cause reaches the board");
+	b.gpu->write(0x15000084, 4, 0x72);
+	check(b.gpu->irq_line(), "the mask written, it does");
+
+	/* PCI1_RES: the display chip alone */
+	b.gpu->write(0x15000010, 4, 0x00012345);
+	b.gpu->set_reset_lines(false, true);
+	check(b.read(0x1A000018) == 0 && b.read(0x15000088) == 0 && !b.gpu->irq_line(),
+	      "PCI1_RES puts the display chip back to power-on");
+	check(b.read(0x15000010) == 0x00012345, "and leaves the command processor");
+	b.gpu->vblank_out();
+	check(b.read(0x1A000018) == 0, "the display chip does nothing while its line is low");
+	b.gpu->set_reset_lines(false, false);
+	b.gpu->vblank_out();
+	check(b.read(0x1A000018) == 0x2, "it goes on when the line rises");
+
+	/* GP_RES: every chip */
+	b.gpu->write(0x15000070, 4, LIST);
+	b.gpu->write(0x15000058, 4, 3);
+	check(b.gpu->antarctic().running(), "a list is running");
+	b.gpu->set_reset_lines(true, false);
+	check(!b.gpu->antarctic().running() && b.read(0x15000010) == 0 && b.read(0x1A000018) == 0,
+	      "GP_RES puts the two chips back to power-on");
+	b.gpu->vblank_out();
+	check(b.read(0x15000088) == 0, "nothing happens while GP_RES is low");
+	b.gpu->set_reset_lines(false, false);
+	b.gpu->vblank_out();
+	check(b.read(0x15000088) == 0x80 && !b.gpu->irq_line(), "the mask is closed again when the chips come back");
+}
+
 } /* namespace */
 
 int main()
 {
 	test_list();
 	test_bus();
+	test_resets();
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures == 0 ? 0 : 1;
 }

@@ -392,13 +392,18 @@ hikaru_update_irqs (vk_machine_t *mach)
  * ======
  *
  * Port D of the MIE holds the reset lines of the board, active low (MAME
- * hikaru.cpp, MIE GPIO ports): bit 0 the system, 1 the GPU, 2 the slave
- * SH-4, 3 CN4, 4 the bridge, 5 the sound boards; bits 6 and 7 choose the
- * video clock. The master writes the port through the window of the MIE:
+ * hikaru.cpp, MIE GPIO ports): bit 0 the system, 1 the graphics chips
+ * (GP_RES), 2 the slave SH-4, 3 CN4, 4 the display chip (PCI1_RES), 5 the
+ * sound boards; bits 6 and 7 choose the video clock. The master writes the
+ * port through the window of the MIE:
  *
  *  - the BOOTROM, as soon as the MIE gives its bus (@0C00BE52): 0xFB, then
  *    0xFF some 250 cycles later, for the slave;
- *  - the system library of the game (0xDF, then 0xFF): the sound boards.
+ *  - the system library of the game (0xDF, then 0xFF): the sound boards;
+ *  - VON4, when two lists in a row did not end (@0C711C30): 0xEF, 0xFD,
+ *    then 0xFF, for the graphics chips, see HikaruGpu::set_reset_lines.
+ *    Here it does each time its SYSTEM MENU is left with EXIT, see the
+ *    TODO.
  *
  * The reset of the slave is NOT done. The slave takes a frame and a half
  * to start again (it clears its memory) and then clears the word where
@@ -407,6 +412,14 @@ hikaru_update_irqs (vk_machine_t *mach)
  * game from the ROM board that takes no time here. With the reset done,
  * BRAVEFF and PHARRIER write the word a frame too early and never start.
  */
+
+/* Bits 1 and 4 of port D, to the graphics chips */
+static void
+hikaru_set_gpu_reset_lines (hikaru_t *hikaru)
+{
+	hikaru_gpu_set_reset_lines (hikaru->gpu, !(hikaru->mie_port_d & 0x02),
+	                            !(hikaru->mie_port_d & 0x10));
+}
 
 void
 hikaru_set_resets (vk_machine_t *mach, uint8_t pins)
@@ -418,8 +431,10 @@ hikaru_set_resets (vk_machine_t *mach, uint8_t pins)
 
 	if ((pins & 0xC0) != 0xC0)
 		VK_ABORT ("video clock %u chosen on port D of the MIE: only 3 is known", pins >> 6);
-	if (~pins & 0x1B)
-		VK_ABORT ("resets %02X asked on port D of the MIE, which are not implemented", ~pins & 0x1B);
+	if (~pins & 0x09)
+		VK_ABORT ("resets %02X asked on port D of the MIE, which are not implemented", ~pins & 0x09);
+
+	hikaru_set_gpu_reset_lines (hikaru);
 
 	/* The boards are held as long as the line is low, see
 	 * hikaru_run_cycles */
@@ -586,6 +601,7 @@ hikaru_reset (vk_machine_t *mach, vk_reset_type_t type)
 	sh4_set_nmi_pin (hikaru->sh_m, true);
 	sh4_set_nmi_pin (hikaru->sh_s, true);
 	hikaru->mie_port_d = 0xFF;
+	hikaru_set_gpu_reset_lines (hikaru);
 
 	hikaru->unk01000000_m = 0;
 	hikaru->unk01000100_m = 0;
@@ -688,6 +704,7 @@ hikaru_load_state (vk_machine_t *mach, vk_state_t *state)
 	LOAD (hikaru->line_rest);
 
 	hikaru->mie_port_d = hikaru_mie_get_port_d (hikaru->mie);
+	hikaru_set_gpu_reset_lines (hikaru);
 	hikaru_update_irqs (mach);
 
 	return ret;

@@ -59,6 +59,8 @@ odin_hikaru_gpu_t *odin_hikaru_gpu_new(const odin_hikaru_gpu_memory_t *memory,
                                        const odin_hikaru_gpu_hooks_t *hooks);
 void odin_hikaru_gpu_delete(odin_hikaru_gpu_t *gpu);
 void odin_hikaru_gpu_reset(odin_hikaru_gpu_t *gpu);
+/* The two reset lines of the chips, not zero while low. */
+void odin_hikaru_gpu_set_reset_lines(odin_hikaru_gpu_t *gpu, int gp_res, int pci1_res);
 
 /* The bus, 2 or 4 bytes: 0, or -1 for a register that is not known. */
 int odin_hikaru_gpu_read(const odin_hikaru_gpu_t *gpu, uint32_t addr, unsigned size, uint32_t *value);

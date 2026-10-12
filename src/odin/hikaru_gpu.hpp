@@ -59,7 +59,7 @@ namespace odin {
  * The wiring done here: bit 7 of 15000088 follows the causes of the display
  * chip; the end of a list ends the plot too and clears the busy bit of
  * 1A000024; a write to 1A000024 starts the list again while 15000058 asks
- * for one. */
+ * for one; the two reset lines. */
 class HikaruGpu {
 public:
 	/* The memories the chips work on */
@@ -80,6 +80,12 @@ public:
 	HikaruGpu(const Memory &memory, const Hooks &hooks);
 
 	void reset();
+
+	/* The reset lines of the chips, on port D of the MIE; true while a
+	 * line is low. GP_RES holds every chip, PCI1_RES the display chip. A
+	 * chip goes back to its power-on state when its line falls and does
+	 * nothing until the line rises. */
+	void set_reset_lines(bool gp_res, bool pci1_res);
 
 	/* The bus: size is 2 or 4 bytes. False for a register that is not
 	 * known. */
@@ -110,6 +116,7 @@ public:
 	void set_unknown_00400000(uint16_t value) { m_00400000 = value; }
 
 private:
+	bool display_held() const { return m_gp_res || m_pci1_res; }
 	void update_irq();
 	void list_control_written();
 	void list_ended();
@@ -118,6 +125,8 @@ private:
 	Eurasia m_eurasia;
 	Hooks m_hooks;
 	uint16_t m_00400000;
+	bool m_gp_res;
+	bool m_pci1_res;
 };
 
 } /* namespace odin */

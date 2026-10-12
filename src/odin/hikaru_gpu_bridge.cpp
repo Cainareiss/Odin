@@ -81,6 +81,12 @@ odin_hikaru_gpu_reset(odin_hikaru_gpu_t *gpu)
 	gpu->chips.reset();
 }
 
+void
+odin_hikaru_gpu_set_reset_lines(odin_hikaru_gpu_t *gpu, int gp_res, int pci1_res)
+{
+	gpu->chips.set_reset_lines(gp_res != 0, pci1_res != 0);
+}
+
 int
 odin_hikaru_gpu_read(const odin_hikaru_gpu_t *gpu, uint32_t addr, unsigned size, uint32_t *value)
 {

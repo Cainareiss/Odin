@@ -27,7 +27,9 @@ HikaruGpu::HikaruGpu(const Memory &memory, const Hooks &hooks)
 	: m_antarctic(memory.cmdram, memory.ram_s, memory.texram[0], memory.texram[1]),
 	  m_eurasia(memory.fb),
 	  m_hooks(hooks),
-	  m_00400000(0)
+	  m_00400000(0),
+	  m_gp_res(false),
+	  m_pci1_res(false)
 {
 	m_antarctic.set_texture_written(m_hooks.texture_written, m_hooks.ctx);
 }
@@ -37,6 +39,29 @@ HikaruGpu::reset()
 {
 	m_antarctic.reset();
 	m_eurasia.reset();
+}
+
+/* The names are those of the schematics, as MAME gives them (hikaru.cpp, MIE
+ * GPIO ports): GP_RES, "all GPU ASICs reset", and PCI1_RES, "Eurasia". VON4
+ * pulses both when two lists in a row did not end (@0C711C30): PCI1_RES for
+ * a few instructions, then GP_RES for a loop of 524288 turns. The slave then
+ * sets the PCI side of the command processor again, the master the display
+ * chip and the registers. */
+void
+HikaruGpu::set_reset_lines(bool gp_res, bool pci1_res)
+{
+	const bool chips_fell = gp_res && !m_gp_res;
+	const bool display_fell = pci1_res && !m_pci1_res;
+
+	m_gp_res = gp_res;
+	m_pci1_res = pci1_res;
+
+	if (chips_fell)
+		m_antarctic.reset();
+	if (chips_fell || display_fell) {
+		m_eurasia.reset();
+		update_irq();
+	}
 }
 
 /* GPU IRQs
@@ -147,6 +172,9 @@ HikaruGpu::list_ended()
 void
 HikaruGpu::run(uint32_t cycles)
 {
+	if (m_gp_res)
+		return;
+
 	if (m_antarctic.step_texture_transfer())
 		update_irq();
 
@@ -157,19 +185,27 @@ HikaruGpu::run(uint32_t cycles)
 void
 HikaruGpu::end_of_line(uint32_t line)
 {
+	if (display_held())
+		return;
+
 	m_eurasia.end_of_line(line);
 }
 
 void
 HikaruGpu::vblank_in()
 {
-	m_eurasia.vblank_in();
-	m_antarctic.frame_start();
+	if (!display_held())
+		m_eurasia.vblank_in();
+	if (!m_gp_res)
+		m_antarctic.frame_start();
 }
 
 void
 HikaruGpu::vblank_out()
 {
+	if (display_held())
+		return;
+
 	m_eurasia.vblank_out();
 	update_irq();
 }

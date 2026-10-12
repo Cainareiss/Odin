@@ -103,6 +103,14 @@ hikaru_gpu_irq_line (vk_device_t *dev)
 	return odin_hikaru_gpu_irq_line (gpu->chips) != 0;
 }
 
+void
+hikaru_gpu_set_reset_lines (vk_device_t *dev, bool gp_res, bool pci1_res)
+{
+	hikaru_gpu_t *gpu = (hikaru_gpu_t *) dev;
+
+	odin_hikaru_gpu_set_reset_lines (gpu->chips, gp_res, pci1_res);
+}
+
 bool
 hikaru_gpu_is_texram_twiddled (vk_device_t *dev)
 {

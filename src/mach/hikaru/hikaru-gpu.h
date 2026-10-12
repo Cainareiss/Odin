@@ -35,6 +35,9 @@ void		 hikaru_gpu_vblank_out (vk_device_t *dev);
 void		 hikaru_gpu_vblank_in (vk_device_t *dev);
 void		 hikaru_gpu_hblank_in (vk_device_t *dev, unsigned line);
 bool		 hikaru_gpu_irq_line (vk_device_t *dev);
+/* The reset lines of the chips, true while low */
+void		 hikaru_gpu_set_reset_lines (vk_device_t *dev, bool gp_res,
+		                             bool pci1_res);
 void		 hikaru_gpu_get_frame_size (vk_device_t *dev, unsigned *dots,
 		                            unsigned *lines, unsigned *shown);
 const char	*hikaru_gpu_get_debug_str (vk_device_t *dev);
