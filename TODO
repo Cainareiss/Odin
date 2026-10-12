@@ -99,6 +99,10 @@ A texture transfer (IDMA) runs to its end whatever is written to its
 control register, which reads busy until then (HEURISTIC, from the way
 the library polls it; the boot ROM clears the register at a later
 interrupt, in the middle of the next transfer of SGNASCAR).
+An entry that asks for more bytes than the levels of its size hold gets
+those levels and a message: BRAVEFF gives 39 of its 64x32 textures the
+bytes of 64x64, twice in its loop, and draws them as 64x32 (HEURISTIC:
+what the board does with the rest is not known).
 The 2D layers cover the 3D where a pixel has its alpha bit (black
 included: the bands of the Racer attract) and are transparent elsewhere
 (its green 0x03E0 boxes) and layer 1 sits above layer 2, as the Racer
