@@ -74,9 +74,6 @@ set_flag(uint32_t &word, uint32_t flag, bool on)
 	word = on ? (word | flag) : (word & ~flag);
 }
 
-/* What a 095 leaves when it has nothing to tell */
-static constexpr uint32_t NO_BRANCH = 0xFFFF;
-
 /*
  * Control Flow
  * ============
@@ -178,8 +175,7 @@ Antarctic::op_jump(const uint32_t *inst)
 		       get_lod_size() >= static_cast<float>(branch_id);
 		break;
 	default:
-		jump = false;
-		break;
+		fatal("condition not known", inst[0]);
 	}
 
 	if (jump)
@@ -216,8 +212,7 @@ Antarctic::op_call(const uint32_t *inst)
 		jump = m_s.lod.cond != 0;
 		break;
 	default:
-		jump = false;
-		break;
+		fatal("condition not known", inst[0]);
 	}
 
 	if (jump) {
@@ -253,8 +248,7 @@ Antarctic::op_return(const uint32_t *inst)
 		jump = m_s.lod.cond != 0;
 		break;
 	default:
-		jump = false;
-		break;
+		fatal("condition not known", inst[0]);
 	}
 
 	if (jump) {
@@ -378,8 +372,7 @@ Antarctic::op_lod_compare(const uint32_t *inst)
 		m_s.lod.branch_id = (size >= static_cast<float>(lo)) ? hi : lo;
 		break;
 	default:
-		m_s.lod.branch_id = NO_BRANCH;
-		break;
+		fatal("instruction form not known", inst[0]);
 	}
 }
 
@@ -1091,6 +1084,8 @@ Antarctic::op_material_flags(const uint32_t *inst)
 		mat->wC81 = inst[0];
 		mat->flags |= ODIN_MAT_HAS_C81;
 		break;
+	default:
+		fatal("instruction form not known", inst[0]);
 	}
 }
 
