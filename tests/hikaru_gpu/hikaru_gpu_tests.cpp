@@ -135,6 +135,13 @@ void test_bus()
 	check(!b.gpu->read(0x15000058, 4, value) && !b.gpu->write(0x150000FC, 4, 0),
 	      "the registers that are not known are refused");
 	check(b.read(0x18001000) == 0x17C711DB, "the PCI identifier of the display chip");
+	check(b.gpu->read(0x15002000, 4, value) && b.gpu->read(0x15002848, 4, value) && value == 0 &&
+	      b.gpu->read(0x1A08006C, 4, value) && value == 0,
+	      "the board bit, the counters and 1A08006C read 0");
+	check(!b.gpu->read(0x15002900, 4, value) && !b.gpu->read(0x1A080000, 4, value) &&
+	      !b.gpu->write(0x15040E04, 4, 0) && !b.gpu->write(0x1A0A2000, 4, 0),
+	      "what lies beside them is refused");
+	check(b.gpu->write(0x1A0A1FFC, 4, 0x83709075), "the word VON4 writes to 1A0A1FFC is taken");
 
 	b.gpu->vblank_out();
 	check(b.read(0x15000088) == 0x80 && b.read(0x1A000018) == 0x2, "the vertical blanking reaches the board through bit 7");

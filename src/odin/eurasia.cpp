@@ -208,6 +208,8 @@ namespace odin {
  * 1A08006C  R		Unknown, See AT:@0C697A5E.
  *
  * 1A0A1600   W		Unknown (seems related 15040E00, see PHARRIER)
+ *
+ * 1A0A1FFC   W		Unknown; = 83709075 or 83709076 (VON4 @0C716780)
  */
 
 Eurasia::Eurasia(std::span<uint8_t> fb)
@@ -253,8 +255,13 @@ Eurasia::read(uint32_t addr, uint32_t &value) const
 		value = unit(0, addr);
 	} else if (addr >= 0x1A000200 && addr < 0x1A000240) {
 		value = unit(1, addr);
+	} else if (addr == 0x1A08006C) {
+		/* HEURISTIC: 0, what the frame swap of AIRTRIX and VON4
+		 * waits for before it starts a list (VON4 @0C711AFC), where
+		 * the older one waits for the end of the plot. */
+	} else {
+		return false;
 	}
-	/* 1A080000 - 1A0800FF: ??? */
 
 	return true;
 }
@@ -314,6 +321,13 @@ Eurasia::write(uint32_t addr, uint32_t value)
 	} else if (addr == 0x1A0A1600) {
 		if (value != 1)
 			fatal("write not known", addr, value);
+	} else if (addr == 0x1A0A1FFC) {
+		/* VON4 alone, once: 83709075, or 83709076 when the argument
+		 * of its routine is 0 (@0C716780). */
+		if (value != 0x83709075 && value != 0x83709076)
+			fatal("write not known", addr, value);
+	} else {
+		return Written::UNKNOWN;
 	}
 
 	return Written::DONE;

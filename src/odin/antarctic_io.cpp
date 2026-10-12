@@ -204,13 +204,19 @@ Antarctic::read_register(uint32_t addr, uint32_t &value) const
 		default:
 			return false;
 		}
+	} else if (addr == 0x15002000) {
+		/* Bit 0 tells the two main boards apart: the system library
+		 * starts a list, waits for a vertical blanking and reads it
+		 * (PHARRIER @0C010790); the BOOTROM then names the board
+		 * 837-13402 when it was set, 837-14097 when it was clear.
+		 * This is the second one. On the first, the library also
+		 * takes the bit, with bit 0 of 1A000024 clear, for a list
+		 * that is done (@0C0126BA). */
+	} else if (addr >= 0x15002800 && addr < 0x1500284C) {
+		/* The counters, see above */
+	} else {
+		return false;
 	}
-	/* 15002000: bit 0 tells the two main boards apart: the system
-	 * library starts a list, waits for a vertical blanking and reads it
-	 * (PHARRIER @0C010790); the BOOTROM then names the board 837-13402
-	 * when it was set, 837-14097 when it was clear. This is the second
-	 * one. On the first, the library also takes the bit, with bit 0 of
-	 * 1A000024 clear, for a list that is done (@0C0126BA). */
 
 	return true;
 }
@@ -267,6 +273,8 @@ Antarctic::write_register(uint32_t addr, uint32_t value)
 	} else if (addr == 0x15040E00) {
 		if (value != 0)
 			fatal("write to 15040E00 not known", value);
+	} else {
+		return Written::UNKNOWN;
 	}
 
 	return Written::DONE;
