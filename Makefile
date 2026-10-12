@@ -54,7 +54,10 @@ ODIN_OBJ := \
 	src/odin/antarctic_mesh.o \
 	src/odin/antarctic_disasm.o \
 	src/odin/antarctic_list.o \
-	src/odin/antarctic_bridge.o \
+	src/odin/antarctic_io.o \
+	src/odin/eurasia.o \
+	src/odin/hikaru_gpu.o \
+	src/odin/hikaru_gpu_bridge.o \
 	src/odin/aica.o \
 	src/odin/aica_bridge.o \
 	src/odin/arm7.o \

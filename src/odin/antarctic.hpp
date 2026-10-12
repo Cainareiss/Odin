@@ -107,6 +107,9 @@ struct AntarcticState {
 
 	uint32_t alpha_table[0x40];		/* 154 */
 	uint32_t light_table[4][0x20];		/* 194 */
+
+	uint32_t regs[0x100 / 4];		/* 15000000 - 150000FF */
+	uint32_t transfer_left;			/* texture transfer: entries still to copy */
 };
 
 /* The command processor of the Hikaru, 315-6083 "Antarctic".
@@ -136,18 +139,54 @@ struct AntarcticState {
  * table. When a mesh is drawn, the current scratch objects affect its
  * rendering.
  *
- * What comes out is the display list of the frame (antarctic_list.h). */
+ * What comes out is the display list of the frame (antarctic_list.h).
+ *
+ * The chip also moves the textures the game leaves on the bus into the
+ * texture RAM. Its registers are at 15000000 for the master SH-4: see
+ * antarctic_io.cpp. */
 class Antarctic {
 public:
+	/* The interrupt causes of 15000088 */
+	enum : uint32_t {
+		IRQ_TRANSFER_END = 0x01,	/* texture transfer done */
+		IRQ_ANALYSIS_END = 0x04,	/* the list has been read */
+		IRQ_DISPLAY = 0x80		/* a cause of the display chip */
+	};
+	/* What the board has to do after a write to a register */
+	enum class Written {
+		UNKNOWN,	/* not a register the chip is known to have */
+		DONE,
+		CAUSES,		/* the interrupt causes or their mask changed */
+		CONTROL		/* 15000058 was written */
+	};
+
 	/* cmdram: the 4 MB of the command RAM; ram_s: the 32 MB of the RAM
-	 * of the slave. */
-	Antarctic(std::span<uint8_t> cmdram, std::span<uint8_t> ram_s);
+	 * of the slave; texram: the two banks of 4 MB of the texture RAM. */
+	Antarctic(std::span<uint8_t> cmdram, std::span<uint8_t> ram_s,
+	          std::span<uint8_t> texram0, std::span<uint8_t> texram1);
 
 	/* Power-on: every object cleared, nothing running. */
 	void reset();
 
-	/* Starts a list at pc, with the two stack pointers of the
-	 * registers (15000070, 15000074, 15000078). */
+	/* The registers. read_register is false for a register the chip is
+	 * not known to have. */
+	bool read_register(uint32_t addr, uint32_t &value) const;
+	Written write_register(uint32_t addr, uint32_t value);
+
+	/* Interrupt causes, the display chip being one of them; the line to
+	 * the board is held while a cause is not masked. */
+	void raise(uint32_t causes) { reg(0x88) |= causes; }
+	void set_display_irq(bool on);
+	bool irq_line() const { return (reg(0x88) & ~reg(0x84) & 0xFF) != 0; }
+
+	/* 15000058: both low bits set ask for a list */
+	bool list_asked() const { return reg(0x58) == 3; }
+	/* Starts the list the registers describe (15000070, 15000074,
+	 * 15000078). */
+	void start_list() { start(reg(0x70), reg(0x74), reg(0x78)); }
+	/* The list has ended: the two bits go off. */
+	void list_ended() { reg(0x58) &= ~3u; }
+	/* Starts a list at pc, with the two stack pointers. */
 	void start(uint32_t pc, uint32_t sp0, uint32_t sp1);
 	bool running() const { return m_s.running != 0; }
 	/* Executes up to budget instructions. True when the list ended
@@ -165,11 +204,25 @@ public:
 	const odin_fb_config_t &fb_config() const { return m_s.fb; }
 	uint32_t pc() const { return m_s.pc; }
 
+	/* Texture transfer: copies one entry of the table. True when the
+	 * transfer ended at this call. */
+	bool step_texture_transfer();
+	/* 1500008C: the texture RAM twiddles what the bus writes to it */
+	bool texture_ram_twiddled() const { return reg(0x8C) == 0x02020202; }
+	/* Called with the bank a transfer has written. */
+	void set_texture_written(void (*fn)(void *ctx, unsigned bank), void *ctx)
+	{
+		m_texture_written = fn;
+		m_texture_written_ctx = ctx;
+	}
+
 	const AntarcticState &state() const { return m_s; }
 	void load(const AntarcticState &in);
 
 	/* Each instruction is printed there as it is executed. */
 	void set_disasm(FILE *out) { m_disasm = out; }
+	/* Each texture transfer is told there (GPU_LOG_IDMA). */
+	void set_transfer_log(FILE *out) { m_transfer_log = out; }
 	/* What the chip cannot do is told there. */
 	void set_log(FILE *out) { m_log = out; }
 
@@ -193,6 +246,9 @@ private:
 
 	[[noreturn]] void fatal(const char *what, uint32_t value) const;
 	void error(const char *fmt, ...) const __attribute__((format(printf, 2, 3)));
+
+	uint32_t &reg(uint32_t offs) { return m_s.regs[(offs & 0xFF) / 4]; }
+	uint32_t reg(uint32_t offs) const { return m_s.regs[(offs & 0xFF) / 4]; }
 
 	bool fetch(uint32_t inst[8]) const;
 	void push_pc();
@@ -320,7 +376,15 @@ private:
 	void add_triangle();
 	void push_vertices(const Vertex *v, uint32_t flags, uint32_t num);
 
+	/* antarctic_io.cpp: the registers and the texture transfer */
+
+	void transfer_texture(const uint32_t entry[4]);
+	uint32_t copy_texture(uint32_t bus_addr, uint32_t size, const odin_texhead_t &texhead);
+	void copy_level(std::span<const uint8_t> src, std::span<uint8_t> texram, uint32_t bus_addr,
+	                uint32_t x0, uint32_t y0, uint32_t w, uint32_t h);
+
 	std::span<uint8_t> m_cmdram, m_ram_s;
+	std::span<uint8_t> m_texram[2];
 	AntarcticState m_s;
 
 	/* The vertices on their way to triangles: the last three, and the
@@ -334,7 +398,10 @@ private:
 
 	std::unique_ptr<List> m_list, m_other;
 
-	FILE *m_disasm, *m_log;
+	void (*m_texture_written)(void *ctx, unsigned bank);
+	void *m_texture_written_ctx;
+
+	FILE *m_disasm, *m_log, *m_transfer_log;
 };
 
 } /* namespace odin */

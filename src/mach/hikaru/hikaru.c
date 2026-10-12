@@ -1211,7 +1211,8 @@ hikaru_init (hikaru_t *hikaru)
 	if (!hikaru->gpu || !hikaru->base.renderer)
 		return -1;
 
-	hikaru_renderer_set_gpu (hikaru->base.renderer, hikaru->gpu);
+	hikaru_renderer_set_gpu (hikaru->base.renderer,
+	                         hikaru_gpu_get_chips (hikaru->gpu));
 
 	hikaru->aica_m = hikaru_aica_new (mach, hikaru->aica_ram_m, true, HIKARU_SH4_CLOCK);
 	hikaru->aica_s = hikaru_aica_new (mach, hikaru->aica_ram_s, false, HIKARU_SH4_CLOCK);

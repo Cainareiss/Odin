@@ -86,7 +86,7 @@ update_debug_flags (hikaru_renderer_t *hr)
 		if (down && !hr->debug.held[i]) {
 			hr->debug.flags[i] += 1;
 			if (i == HR_DEBUG_NO_MIPMAPS)
-				hikaru_renderer_invalidate_texcache (&hr->base, NULL);
+				hikaru_renderer_invalidate_texcache (&hr->base, -1);
 			if (hr->debug.flags[i] > debug_controls[i].max)
 				hr->debug.flags[i] = debug_controls[i].min;
 		}
@@ -306,7 +306,7 @@ upload_texture (hikaru_renderer_t *hr, odin_texhead_t *th)
 	VK_ASSERT_NO_GL_ERROR ();
 
 	for (level = 0; level < num_levels; level++) {
-		void *data = (void *) hr->gpu->texram[bank]->ptr;
+		void *data = (void *) hr->texram[bank]->ptr;
 
 		switch (odin_tex_format (th)) {
 		case ODIN_FORMAT_ABGR1555:
@@ -346,7 +346,7 @@ upload_texture (hikaru_renderer_t *hr, odin_texhead_t *th)
 			VK_ASSERT_NO_GL_ERROR ();
 			break;
 		case ODIN_FORMAT_I4:
-			data = decode_texture_i4 (hr->gpu->texram[bank],
+			data = decode_texture_i4 (hr->texram[bank],
 			                                w, h, basex, basey);
 			if (!data)
 				goto fail;
@@ -462,17 +462,17 @@ clear_texcache_bank (hikaru_renderer_t *hr, unsigned bank)
 }
 
 void
-hikaru_renderer_invalidate_texcache (vk_renderer_t *rend, const odin_texhead_t *th)
+hikaru_renderer_invalidate_texcache (vk_renderer_t *rend, int bank)
 {
 	hikaru_renderer_t *hr = (hikaru_renderer_t *) rend;
 
 	VK_ASSERT (hr);
 
-	if (th == NULL) {
+	if (bank < 0) {
 		clear_texcache_bank (hr, 0);
 		clear_texcache_bank (hr, 1);
 	} else
-		clear_texcache_bank (hr, odin_tex_bank (th));
+		clear_texcache_bank (hr, (unsigned) bank);
 }
 
 /****************************************************************************
@@ -2379,7 +2379,7 @@ destroy_fb_state (hikaru_renderer_t *hr)
 }
 
 static void
-upload_layer (hikaru_renderer_t *hr, hikaru_layer_t *layer, GLuint *id, float *mult)
+upload_layer (hikaru_renderer_t *hr, const odin_layer_t *layer, GLuint *id, float *mult)
 {
 	void *data;
 
@@ -2387,7 +2387,7 @@ upload_layer (hikaru_renderer_t *hr, hikaru_layer_t *layer, GLuint *id, float *m
 	     layer->enabled, layer->keyed, layer->above,
 	     layer->x0, layer->y0, layer->x1, layer->y1, layer->format);
 
-	data = vk_buffer_get_ptr (hr->gpu->fb,
+	data = vk_buffer_get_ptr (hr->fb,
 	                          layer->y0 * 4096 + layer->x0 * 4);
 
 	/* Upload the layer data to a new texture. */
@@ -2607,8 +2607,8 @@ print_list_fingerprint (hikaru_renderer_t *hr, const odin_fb_config_t *fb)
 static void
 draw (hikaru_renderer_t *hr)
 {
-	hikaru_gpu_t *gpu = hr->gpu;
-	const odin_fb_config_t *fb = odin_antarctic_fb_config (gpu->cp);
+	const odin_fb_config_t *fb = odin_hikaru_gpu_fb_config (hr->gpu);
+	const odin_layers_t *layers = odin_hikaru_gpu_layers (hr->gpu);
 	GLuint n1, n2, f, b, shown, layer1 = 0, layer2 = 0;
 	float factor, mult1 = 0.0f, mult2 = 0.0f;
 	uint32_t rate;
@@ -2682,13 +2682,13 @@ draw (hikaru_renderer_t *hr)
 
 	/* We only care about unit 0 for now. (Unit 1 is probably only used
 	 * for the dual-monitor case.) */
-	if ((LAYERS.layer[0][0].enabled || n1 == 2 || n2 == 2) &&
+	if ((layers->layer[0][0].enabled || n1 == 2 || n2 == 2) &&
 	    !hr->debug.flags[HR_DEBUG_NO_LAYER1])
-		upload_layer (hr, &LAYERS.layer[0][0], &layer1, &mult1);
+		upload_layer (hr, &layers->layer[0][0], &layer1, &mult1);
 
-	if ((LAYERS.layer[0][1].enabled || n1 == 3 || n2 == 3) &&
+	if ((layers->layer[0][1].enabled || n1 == 3 || n2 == 3) &&
 	    !hr->debug.flags[HR_DEBUG_NO_LAYER2])
-		upload_layer (hr, &LAYERS.layer[0][1], &layer2, &mult2);
+		upload_layer (hr, &layers->layer[0][1], &layer2, &mult2);
 
 	/* The two blender inputs: 0 and 1 are the 3D, 2 and 3 the 2D layers
 	 * (PHARRIER blends layer 2 in for its logo screens, 781 = 0704/0705). */
@@ -2725,11 +2725,11 @@ draw (hikaru_renderer_t *hr)
 	             (b == layer1 && layer1) ? mult1 : (b == layer2 && layer2) ? mult2 : 1.0f);
 	glUniform1f (hr->framebuffer.locs.u_mult_1, (layer1 && f != layer1 && b != layer1) ? mult1 : 0.0f);
 	glUniform1f (hr->framebuffer.locs.u_mult_2, (layer2 && f != layer2 && b != layer2) ? mult2 : 0.0f);
-	glUniform1f (hr->framebuffer.locs.u_keyed_1, LAYERS.layer[0][0].keyed ? 1.0f : 0.0f);
-	glUniform1f (hr->framebuffer.locs.u_keyed_2, LAYERS.layer[0][1].keyed ? 1.0f : 0.0f);
-	glUniform1f (hr->framebuffer.locs.u_keyed_3d, LAYERS.fb_keyed ? 1.0f : 0.0f);
-	glUniform1f (hr->framebuffer.locs.u_above_1, LAYERS.layer[0][0].above ? 1.0f : 0.0f);
-	glUniform1f (hr->framebuffer.locs.u_above_2, LAYERS.layer[0][1].above ? 1.0f : 0.0f);
+	glUniform1f (hr->framebuffer.locs.u_keyed_1, layers->layer[0][0].keyed ? 1.0f : 0.0f);
+	glUniform1f (hr->framebuffer.locs.u_keyed_2, layers->layer[0][1].keyed ? 1.0f : 0.0f);
+	glUniform1f (hr->framebuffer.locs.u_keyed_3d, layers->fb_keyed ? 1.0f : 0.0f);
+	glUniform1f (hr->framebuffer.locs.u_above_1, layers->layer[0][0].above ? 1.0f : 0.0f);
+	glUniform1f (hr->framebuffer.locs.u_above_2, layers->layer[0][1].above ? 1.0f : 0.0f);
 	glUniform1i (hr->framebuffer.locs.u_invert_f, (n1 >= 2) ? 1 : 0);
 	glUniform1i (hr->framebuffer.locs.u_invert_b, (n2 >= 2) ? 1 : 0);
 	glUniform4f (hr->framebuffer.locs.u_clear,
@@ -2762,11 +2762,11 @@ static void
 hikaru_renderer_begin_frame (vk_renderer_t *renderer)
 {
 	hikaru_renderer_t *hr = (hikaru_renderer_t *) renderer;
-	const odin_fb_config_t *fb = odin_antarctic_fb_config (hr->gpu->cp);
+	const odin_fb_config_t *fb = odin_hikaru_gpu_fb_config (hr->gpu);
 
 	/* The list drawn last is kept until its translucent fragments are
 	 * counted, see check_last_list: this one is built aside. */
-	hr->list = odin_antarctic_begin_list (hr->gpu->cp,
+	hr->list = odin_hikaru_gpu_begin_list (hr->gpu,
 	                                      hr->list && hr->framebuffer.last.list == hr->list);
 	memset (list_tex_ids (hr), 0, sizeof (GLuint) * ODIN_LIST_MAX_TEXHEADS);
 
@@ -2796,13 +2796,11 @@ static void
 hikaru_renderer_end_frame (vk_renderer_t *renderer)
 {
 	hikaru_renderer_t *hr = (hikaru_renderer_t *) renderer;
-	hikaru_gpu_t *gpu = hr->gpu;
-
 	VK_ASSERT_NO_GL_ERROR ();
 
 	/* The CP may still be in the middle of a mesh: draw what it pushed
 	 * so far and let it start a new mesh on the next vertex. */
-	odin_antarctic_end_open_mesh (gpu->cp);
+	odin_hikaru_gpu_end_open_mesh (hr->gpu);
 
 	draw (hr);
 	VK_ASSERT_NO_GL_ERROR ();
@@ -2818,7 +2816,7 @@ hikaru_renderer_end_frame (vk_renderer_t *renderer)
 static void
 hikaru_renderer_reset (vk_renderer_t *renderer)
 {
-	hikaru_renderer_invalidate_texcache (renderer, NULL);
+	hikaru_renderer_invalidate_texcache (renderer, -1);
 }
 
 /* What the renderer keeps from one frame to the next: the two 3D color
@@ -2902,7 +2900,7 @@ hikaru_renderer_load_state (vk_renderer_t *renderer, vk_state_t *state)
 	/* The pictures of the state are whole. */
 	hr->framebuffer.last.list = NULL;
 
-	hikaru_renderer_invalidate_texcache (renderer, NULL);
+	hikaru_renderer_invalidate_texcache (renderer, -1);
 
 	free (pixels);
 	return ret;
@@ -2917,7 +2915,7 @@ hikaru_renderer_destroy (vk_renderer_t **renderer_)
 		destroy_3d_state (hr);
 		destroy_fb_state (hr);
 
-		hikaru_renderer_invalidate_texcache (*renderer_, NULL);
+		hikaru_renderer_invalidate_texcache (*renderer_, -1);
 		delete_dead_textures (hr);
 		free (hr->textures.dead);
 	}
@@ -2935,6 +2933,10 @@ hikaru_renderer_new (vk_buffer_t *fb, vk_buffer_t *texram[2])
 
 	hr->base.width = 640;
 	hr->base.height = 480;
+
+	hr->fb = fb;
+	hr->texram[0] = texram[0];
+	hr->texram[1] = texram[1];
 
 	hr->base.destroy = hikaru_renderer_destroy;
 	hr->base.reset = hikaru_renderer_reset;
@@ -2968,10 +2970,9 @@ fail:
 }
 
 void
-hikaru_renderer_set_gpu (vk_renderer_t *renderer, void *gpu_as_void)
+hikaru_renderer_set_gpu (vk_renderer_t *renderer, odin_hikaru_gpu_t *chips)
 {
 	hikaru_renderer_t *hr = (hikaru_renderer_t *) renderer;
-	hikaru_gpu_t *gpu = (hikaru_gpu_t *) gpu_as_void;
 
-	hr->gpu = gpu;
+	hr->gpu = chips;
 }

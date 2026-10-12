@@ -19,7 +19,7 @@
 #ifndef __HIKARU_RENDERER_PRIVATE_H__
 #define __HIKARU_RENDERER_PRIVATE_H__
 
-#include "mach/hikaru/hikaru-gpu-private.h"
+#include "mach/hikaru/hikaru-renderer.h"
 
 enum {
 	HR_DEBUG_LOG,
@@ -150,7 +150,9 @@ typedef enum {
 typedef struct {
 	vk_renderer_t base;
 
-	hikaru_gpu_t *gpu;
+	/* The graphics chips and the memories they fill */
+	odin_hikaru_gpu_t *gpu;
+	vk_buffer_t *fb, *texram[2];
 
 	/* The list of the frame, built by the command processor */
 	odin_display_list_t	*list;

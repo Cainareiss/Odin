@@ -33,10 +33,12 @@
 
 namespace odin {
 
-Antarctic::Antarctic(std::span<uint8_t> cmdram, std::span<uint8_t> ram_s)
-	: m_cmdram(cmdram), m_ram_s(ram_s),
+Antarctic::Antarctic(std::span<uint8_t> cmdram, std::span<uint8_t> ram_s,
+                     std::span<uint8_t> texram0, std::span<uint8_t> texram1)
+	: m_cmdram(cmdram), m_ram_s(ram_s), m_texram{texram0, texram1},
 	  m_list(std::make_unique<List>()), m_other(std::make_unique<List>()),
-	  m_disasm(nullptr), m_log(stderr)
+	  m_texture_written(nullptr), m_texture_written_ctx(nullptr),
+	  m_disasm(nullptr), m_log(stderr), m_transfer_log(nullptr)
 {
 	m_push.all.reset(new odin_vertex_body_t[MAX_VERTICES_PER_MESH]);
 	reset();
