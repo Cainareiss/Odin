@@ -34,7 +34,7 @@ of the wave memory (VON4, BRAVEFF, PHARRIER), whose turns are never the same.
 HIKARU
 ------
 
-Move the slave GPU access to hikaru-gpu.c. Proper support may require the
+Move the slave GPU access to src/odin/hikaru_gpu.cpp. Proper support may require the
 introduction of a new vk_device_accessors_t class.
 
 MIE LLE (src/odin/mie.cpp, ODIN_MIE=lle): HACK in src/odin/mie_bridge.cpp,
@@ -335,15 +335,21 @@ screen of the BOOTROM shows a date in 2040: where it takes it is not read.
 GPU / RENDERING
 ---------------
 
-Command processor (src/odin/antarctic.hpp, the 315-6083): the instructions
-are in antarctic_ops.cpp, the triangles and the display list of a frame in
-antarctic_mesh.cpp and antarctic_list.h; the renderer only draws that list.
-GPU_LOG_CP=1 prints each instruction as it is executed (antarctic_disasm.cpp).
+Graphics chips (src/odin/hikaru_gpu.hpp, wired as on the board). The command
+processor, 315-6083 (antarctic.hpp): its instructions are in
+antarctic_ops.cpp, the triangles and the display list of a frame in
+antarctic_mesh.cpp and antarctic_list.h, its registers and the texture
+transfer in antarctic_io.cpp; the renderer only draws that list. The display
+chip, 315-6087 (eurasia.hpp): the screen, the layers, the blitter.
+GPU_LOG_CP=1 prints each instruction as it is executed (antarctic_disasm.cpp),
+GPU_LOG_IDMA=1 each texture transfer, GPU_LOG_DMA=1 each blit.
 ODIN_LIST_FP=1 prints a fingerprint of the list of each frame, to compare two
 builds; ODIN_LIST_DUMP=<frame> adds one line for each mesh of that frame.
-Tests: tests/antarctic. As Valkyrie had it, and HEURISTIC: a list is run one
-instruction a cycle of the SH-4 from its launch on, and the end of its
-analysis and the end of its plot are told together when it stops.
+Tests: tests/antarctic, tests/eurasia, tests/hikaru_gpu. As Valkyrie had it,
+and HEURISTIC: a list is run one instruction a cycle of the SH-4 from its
+launch on, the end of its analysis and the end of its plot are told together
+when it stops, a texture transfer copies one entry a line and a blit is done
+at once.
 
 The projection clipping planes are probably scaled by some value, because
 using the ones provided by the games as they are leads to a far too close
