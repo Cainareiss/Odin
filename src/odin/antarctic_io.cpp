@@ -331,6 +331,10 @@ Antarctic::set_display_irq(bool on)
  *
  *	    Without a mipmap it would just be: 64*64*2 = 0x2000 bytes.
  *
+ *	    The tree of a texture that is not square ends when its short
+ *	    side is 1: BRAVEFF gives 0x1554 for 64x32 (down to 2x1), 0x2AA8
+ *	    for 128x32 (down to 4x1), 0x5550 for 256x32 (down to 8x1).
+ *
  *	y = Destination slot y
  *
  *	x = Destination slot x
@@ -457,6 +461,11 @@ Antarctic::transfer_texture(const uint32_t entry[4])
 		return;
 	}
 
+	/* An entry may ask for more bytes than its levels hold: BRAVEFF gives
+	 * 39 of its 64x32 textures the bytes of 64x64 (its files keep 0x2AC0
+	 * bytes a texture) and draws them as 64x32. HEURISTIC: the levels of
+	 * the size the entry gives are copied and the rest is left; what the
+	 * board does with the rest is not known. */
 	const uint32_t size_copied = copy_texture(bus_addr, size, texhead);
 	if (size_copied != size) {
 		error("GPU IDMA: requested vs. copied sizes mismatch: %u vs %u", size, size_copied);
