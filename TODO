@@ -352,9 +352,12 @@ SH7091 (MAME sh4.cpp).
 A read that nothing answers gives 0 (HEURISTIC: the value of the bus is
 not known; BRAVEFF reads FFFFFFFC at 0C076E48).
 
-The clock of the AICA starts from the host clock (src/odin/aica.cpp): two
-runs do not leave the same byte in the memory of AIRTRIX. The CLOCK SETTING
-screen of the BOOTROM shows a date in 2040: where it takes it is not read.
+The clock of the AICA starts on the local time of the host
+(src/odin/aica.cpp): two runs do not leave the same byte in the memory of
+AIRTRIX. The chip counts seconds, and the software of the Hikaru counts
+them from 1964-01-01 (the date routine of the BOOTROM, 0x0C008464, and its
+copies in the games), not from 1950 as the Dreamcast does: the CLOCK
+SETTING screen showed the right day 14 years late.
 
 
 GPU / RENDERING
