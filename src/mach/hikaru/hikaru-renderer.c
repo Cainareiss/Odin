@@ -1164,9 +1164,9 @@ upload_viewport (hikaru_renderer_t *hr, odin_mesh_t *mesh)
 		return;
 	hr->meshes.held->vp_index = mesh->vp_index;
 
-	if (!isnonnegative (vp->clip.l) || !isnonnegative (vp->clip.r) ||
-	    !isnonnegative (vp->clip.b) || !isnonnegative (vp->clip.t) ||
-	    !isnonnegative (vp->clip.f) || !isnonnegative (vp->clip.n)) {
+	/* The window may leave the screen: VON4 sends some with a left edge
+	 * at -22 or a top one at -4; the scissor cuts them to the screen. */
+	if (!isnonnegative (vp->clip.f) || !isnonnegative (vp->clip.n)) {
 		VK_ERROR ("non-positive viewport clipping planes: %s",
 		          odin_viewport_str (vp));
 		/* continue anyway */
