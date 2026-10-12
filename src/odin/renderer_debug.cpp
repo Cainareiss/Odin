@@ -1,0 +1,183 @@
+/*
+ * Odin
+ * Copyright (C) 2026 Réda Chérif-Touil
+ *
+ * Valkyrie
+ * Copyright (C) 2011-2014, Stefano Teso
+ *
+ * Valkyrie is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Valkyrie is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Valkyrie.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+/* What helps to look at a scene: switches the keys change, a log of what
+ * is drawn, the fingerprint of a list. */
+
+#include "odin/renderer.hpp"
+#include "odin/hikaru_gpu.hpp"
+
+#include <cinttypes>
+#include <cstdarg>
+#include <cstdio>
+#include <cstdlib>
+
+namespace odin {
+
+namespace {
+
+/* The values a switch takes, the first at the start, and its key */
+struct Control {
+	int min, max;
+	char key;	/* 0: none */
+};
+
+constexpr Control CONTROLS[] = {
+	{  0, 1, 0 },	/* DEBUG_LOG */
+	{  0, 1, '1' },	/* DEBUG_NO_LAYER1 */
+	{  0, 1, '2' },	/* DEBUG_NO_LAYER2 */
+	{  0, 1, '3' },	/* DEBUG_NO_3D */
+	{  0, 1, 't' },	/* DEBUG_NO_TEXTURES */
+	{  0, 1, 'u' },	/* DEBUG_NO_MIPMAPS */
+	{ -1, 7, 'p' },	/* DEBUG_SELECT_POLYTYPE: -1 draws them all */
+	{  0, 1, 'i' },	/* DEBUG_NO_INSTANCING */
+	{  0, 3, 'j' },	/* DEBUG_SELECT_INSTANCE: the one drawn without instancing */
+	{  0, 1, 'l' },	/* DEBUG_NO_LIGHTING */
+	{  0, 1, 'a' },	/* DEBUG_NO_AMBIENT */
+	{  0, 1, 'd' },	/* DEBUG_NO_DIFFUSE */
+	{  0, 1, 'g' },	/* DEBUG_NO_FOG */
+};
+
+} /* namespace */
+
+void
+Renderer::init_debug()
+{
+	static_assert(sizeof(CONTROLS) / sizeof(CONTROLS[0]) == NUM_DEBUG);
+
+	for (unsigned i = 0; i < NUM_DEBUG; i++) {
+		m_debug[i] = CONTROLS[i].min;
+		m_debug_held[i] = false;
+	}
+	m_debug[DEBUG_LOG] = m_options.log ? 1 : 0;
+}
+
+/* The keys of the switches are keys of the players too: they act with the
+ * debug keys only, once for each press. */
+void
+Renderer::update_debug(unsigned frame)
+{
+	if (m_options.debug_keys) {
+		char *msg = m_message;
+
+		for (unsigned i = 0; i < NUM_DEBUG; i++) {
+			const bool down = CONTROLS[i].key &&
+			                  m_options.key_down(m_options.ctx, CONTROLS[i].key);
+
+			if (down && !m_debug_held[i]) {
+				m_debug[i] += 1;
+				if (i == DEBUG_NO_MIPMAPS)
+					m_textures.invalidate(-1);
+				if (m_debug[i] > CONTROLS[i].max)
+					m_debug[i] = CONTROLS[i].min;
+			}
+			m_debug_held[i] = down;
+			msg += std::sprintf(msg, "%d|", m_debug[i]);
+		}
+		m_textures.set_no_mipmaps(m_debug[DEBUG_NO_MIPMAPS] != 0);
+	}
+
+	/* The log of one frame only */
+	if (m_options.log_frame)
+		m_debug[DEBUG_LOG] = (static_cast<int>(frame) == m_options.log_frame);
+	m_textures.set_log(logging() ? stdout : nullptr);
+
+	if (logging()) {
+		const odin_fb_config_t &fb = m_gpu->antarctic().fb_config();
+
+		log("frame %u clear=%02X%02X%02X%02X 181=%08X 781=%08X", frame,
+		    fb.clear[0], fb.clear[1], fb.clear[2], fb.clear[3], fb.w181, fb.w781);
+	}
+}
+
+void
+Renderer::log(const char *fmt, ...) const
+{
+	va_list args;
+
+	std::fputs("\tHR: ", stdout);
+	va_start(args, fmt);
+	std::vprintf(fmt, args);
+	va_end(args);
+	std::fputc('\n', stdout);
+}
+
+/* The mesh about to be drawn and the objects of the list it is drawn
+ * with */
+void
+Renderer::log_mesh(const odin_mesh_t &mesh) const
+{
+	log("==== DRAWING MESH @%p (#vertices=%u #instances=%u 103alpha=%.3f addr=%08X) ====",
+	    static_cast<const void *>(&mesh), mesh.num_tris * 3, mesh.num_instances,
+	    static_cast<double>(mesh.poly_alpha), mesh.addr[0]);
+
+	log("RENDSTATE D @%p #instances = %u", static_cast<const void *>(&mesh), mesh.num_instances);
+	if (mesh.vp_index < ODIN_LIST_MAX_VIEWPORTS)
+		log("RENDSTATE D %u vp:  %s", mesh.num,
+		    odin_viewport_str(&m_list->vp_list[mesh.vp_index]));
+	if (mesh.mv_index < ODIN_LIST_MAX_MODELVIEWS)
+		log("RENDSTATE D %u mv:  %s", mesh.num,
+		    odin_modelview_str(&m_list->mv_list[mesh.mv_index]));
+	if (mesh.mat_index < ODIN_LIST_MAX_MATERIALS)
+		log("RENDSTATE D %u mat: %s", mesh.num,
+		    odin_material_str(&m_list->mat_list[mesh.mat_index]));
+	if (mesh.tex_index < ODIN_LIST_MAX_TEXHEADS)
+		log("RENDSTATE D %u tex: %s", mesh.num,
+		    odin_texhead_str(&m_list->tex_list[mesh.tex_index]));
+	if (mesh.ls_index < ODIN_LIST_MAX_LIGHTSETS)
+		log("RENDSTATE D %u ls:  %s", mesh.num,
+		    odin_lightset_str(&m_list->ls_list[mesh.ls_index]));
+}
+
+/* One line for the list of each frame that draws one, to compare two
+ * builds, and a line for each mesh of the frame of the list dump. */
+void
+Renderer::print_list_fingerprint(const odin_fb_config_t &fb, unsigned frame) const
+{
+	uint32_t meshes, tris;
+	const uint64_t fp = odin_display_list_fingerprint(
+		m_list, &fb, &meshes, &tris,
+		(m_options.list_dump == static_cast<int>(frame)) ? stderr : nullptr);
+
+	std::fprintf(stderr, "LISTFP frame=%u fp=%016" PRIx64 " meshes=%u tris=%u\n",
+	             frame, fp, meshes, tris);
+}
+
+void
+Renderer::error(const char *fmt, ...)
+{
+	va_list args;
+
+	std::fputs("ERROR: ", stderr);
+	va_start(args, fmt);
+	std::vfprintf(stderr, fmt, args);
+	va_end(args);
+	std::fputc('\n', stderr);
+}
+
+void
+Renderer::fatal(const char *what)
+{
+	std::fprintf(stderr, "renderer: %s\n", what);
+	std::abort();
+}
+
+} /* namespace odin */

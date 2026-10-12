@@ -34,6 +34,12 @@ struct odin_hikaru_gpu {
 	odin::HikaruGpu chips;
 };
 
+odin::HikaruGpu &
+odin_hikaru_gpu_chips(odin_hikaru_gpu_t *gpu)
+{
+	return gpu->chips;
+}
+
 namespace {
 
 /* The layout of a saved state */

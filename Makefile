@@ -58,6 +58,17 @@ ODIN_OBJ := \
 	src/odin/eurasia.o \
 	src/odin/hikaru_gpu.o \
 	src/odin/hikaru_gpu_bridge.o \
+	src/odin/renderer.o \
+	src/odin/renderer_scene.o \
+	src/odin/renderer_translucent.o \
+	src/odin/renderer_programs.o \
+	src/odin/renderer_shaders.o \
+	src/odin/renderer_textures.o \
+	src/odin/renderer_layers.o \
+	src/odin/renderer_state.o \
+	src/odin/renderer_debug.o \
+	src/odin/renderer_gl.o \
+	src/odin/renderer_bridge.o \
 	src/odin/aica.o \
 	src/odin/aica_bridge.o \
 	src/odin/arm7.o \

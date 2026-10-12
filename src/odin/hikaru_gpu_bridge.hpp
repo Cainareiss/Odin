@@ -101,6 +101,10 @@ void odin_hikaru_gpu_load_state(odin_hikaru_gpu_t *gpu, const void *in);
 
 #ifdef __cplusplus
 }
+
+namespace odin { class HikaruGpu; }
+/* The chips themselves, for the parts of the machine that are C++. */
+odin::HikaruGpu &odin_hikaru_gpu_chips(odin_hikaru_gpu_t *gpu);
 #endif
 
 #endif /* ODIN_HIKARU_GPU_BRIDGE_HPP */
