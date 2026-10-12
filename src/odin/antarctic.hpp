@@ -186,14 +186,13 @@ public:
 	void start_list() { start(reg(0x70), reg(0x74), reg(0x78)); }
 	/* The list has ended: the two bits go off. */
 	void list_ended() { reg(0x58) &= ~3u; }
-	/* Starts a list at pc, with the two stack pointers. */
+	/* Starts a list at pc, with the two stack pointers; stacks and
+	 * bases are cleared. */
 	void start(uint32_t pc, uint32_t sp0, uint32_t sp1);
 	bool running() const { return m_s.running != 0; }
 	/* Executes up to budget instructions. True when the list ended
 	 * during the call. */
 	bool run(uint32_t budget);
-	/* The vertical blanking begins: stacks and bases are cleared. */
-	void frame_start();
 	/* Closes the mesh left open when a frame ends in the middle of
 	 * it. */
 	void end_open_mesh();

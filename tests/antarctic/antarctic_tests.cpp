@@ -293,8 +293,11 @@ void test_viewport_and_state()
 	check(n.cp->state().vp.current.depth.func == 3 && n.cp->pc() == m.cp->pc(),
 	      "a state saved and loaded");
 
-	m.cp->frame_start();
-	check(m.cp->state().vp.current.depth.func == 3, "the current viewport outlives the frame");
+	m.run({ 0x00080083, END });	/* 083 without its bit 12: a material base of 8 */
+	check(m.cp->state().mat.base == 8, "a list sets a base");
+	m.run({ END });
+	check(m.cp->state().mat.base == 0, "which the next launch clears");
+	check(m.cp->state().vp.current.depth.func == 3, "the current viewport outlives the list");
 	m.cp->reset();
 	check(m.cp->state().vp.current.depth.func == 0 && m.cp->pc() == 0, "power-on clears everything");
 }

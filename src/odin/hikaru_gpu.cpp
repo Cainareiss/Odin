@@ -196,8 +196,6 @@ HikaruGpu::vblank_in()
 {
 	if (!display_held())
 		m_eurasia.vblank_in();
-	if (!m_gp_res)
-		m_antarctic.frame_start();
 }
 
 void

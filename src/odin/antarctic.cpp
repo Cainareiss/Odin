@@ -112,6 +112,9 @@ Antarctic::start(uint32_t pc, uint32_t sp0, uint32_t sp1)
 	if (m_disasm)
 		std::fputs(" ==== CP BEGIN ==== \n", m_disasm);
 
+	/* A launch over a list that has not ended leaves its mesh there */
+	end_open_mesh();
+
 	m_s.running = 1;
 	m_s.pc = pc;
 	m_s.sp[0] = sp0;
@@ -120,18 +123,15 @@ Antarctic::start(uint32_t pc, uint32_t sp0, uint32_t sp1)
 
 	/* HEURISTIC: a strip does not go on from a list to the next. */
 	m_push.num_verts = 0;
-}
 
-void
-Antarctic::frame_start()
-{
-	if (m_disasm)
-		std::fputs(" ==== CLEARING CP DATA ==== \n", m_disasm);
-
-	end_open_mesh();
+	/* HEURISTIC: a list starts with the stacks and the bases cleared, and
+	 * the scratch objects empty; the current viewport, the matrices and
+	 * the tables stay. Valkyrie cleared them at every vertical blanking,
+	 * a list running or not; the six attract loops send the same lists
+	 * either way. */
 
 	/* The static mesh scale (0x901) is a register of the CP that outlives
-	 * the frame, like the X360 port's global 82E02B60 (GPU-RE/05). */
+	 * the list, like the X360 port's global 82E02B60 (GPU-RE/05). */
 	const float precision = m_s.poly.static_mesh_precision;
 	m_s.poly.type = 0;
 	m_s.poly.alpha = 0.0f;
