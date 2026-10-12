@@ -1427,11 +1427,10 @@ clampf (float x, float min_, float max_)
 }
 
 static void
-copy_colors (hikaru_renderer_t *hr, hikaru_vertex_t *dst, hikaru_vertex_t *src)
+copy_material (hikaru_renderer_t *hr, hikaru_vertex_t *dst)
 {
 	hikaru_gpu_t *gpu = hr->gpu;
 	hikaru_material_t *mat = &MAT.scratch;
-	float alpha;
 	unsigned i;
 
 	for (i = 0; i < 3; i++)
@@ -1453,6 +1452,15 @@ copy_colors (hikaru_renderer_t *hr, hikaru_vertex_t *dst, hikaru_vertex_t *src)
 
 	for (i = 0; i < 3; i++)
 		dst->body.color1[i] = mat->ambient[i];
+}
+
+static void
+copy_colors (hikaru_renderer_t *hr, hikaru_vertex_t *dst, hikaru_vertex_t *src)
+{
+	hikaru_gpu_t *gpu = hr->gpu;
+	float alpha;
+
+	copy_material (hr, dst);
 
 	/* Vertex alpha times polygon alpha for every type (X360 8252D858);
 	 * the render pass decides what it means. */
@@ -1931,6 +1939,7 @@ hikaru_renderer_launch (vk_renderer_t *rend)
 	hikaru_renderer_t *hr = (hikaru_renderer_t *) rend;
 
 	hr->framebuffer.launched = 1;
+	hr->push.num_verts = 0;
 }
 
 void
@@ -1943,6 +1952,7 @@ hikaru_renderer_begin_mesh (vk_renderer_t *rend, uint32_t addr,
 	unsigned polytype = POLY.type;
 	unsigned mesh_index = hr->list->num_meshes[vp_index][polytype];
 	hikaru_mesh_t *mesh;
+	unsigned i;
 
 	VK_ASSERT (hr);
 	VK_ASSERT (!hr->meshes.current);
@@ -1963,8 +1973,14 @@ hikaru_renderer_begin_mesh (vk_renderer_t *rend, uint32_t addr,
 	mesh->polytype = polytype;
 	mesh->addr[0] = addr;
 
-	/* Clear the push buffer. */
-	hr->push.num_verts = 0;
+	/* The last vertices stay and take the new material: a strip goes
+	 * on through a recall. The colour bars of the BOOTROM C.R.T. test
+	 * are one strip, with a material recalled before the two vertices
+	 * that close each bar. */
+	if (hr->push.num_verts > 3)
+		hr->push.num_verts = 3;
+	for (i = 3 - hr->push.num_verts; i < 3; i++)
+		copy_material (hr, &hr->push.tmp[i]);
 	hr->push.num_tris = 0;
 }
 
