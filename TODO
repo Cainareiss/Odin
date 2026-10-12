@@ -266,7 +266,8 @@ without waiting, after it has copied the game from the ROM board, which
 takes no time here: BRAVEFF and PHARRIER write it a frame too early and
 never start. It waits for the transfers of the bridge to take their time.
 The other resets (system, GPU, CN4, bridge) and a video clock other than
-the one the games choose (bits 6 and 7 set) stop the emulator. HEURISTIC:
+the one the games choose (bits 6 and 7 set) stop the emulator: VON4 pulses
+the reset of the bridge when its SYSTEM MENU is left with EXIT. HEURISTIC:
 the lines are high while the MIE does not drive the port.
 
 Main board: bit 0 of 15002000 reads 0, which makes Odin the second main
@@ -327,7 +328,8 @@ A read that nothing answers gives 0 (HEURISTIC: the value of the bus is
 not known; BRAVEFF reads FFFFFFFC at 0C076E48).
 
 The clock of the AICA starts from the host clock (src/odin/aica.cpp): two
-runs do not leave the same byte in the memory of AIRTRIX.
+runs do not leave the same byte in the memory of AIRTRIX. The CLOCK SETTING
+screen of the BOOTROM shows a date in 2040: where it takes it is not read.
 
 
 GPU / RENDERING
@@ -374,7 +376,21 @@ the stars of PHARRIER, at -1024, stay behind its asteroids). The unit of
 the hardware is not known.
 
 The 161 with bit 18 loads a second modelview and a vertex with bit 12 of
-its header follows it (the AIRTRIX trails and skater joints).
+its header follows it (the AIRTRIX trails and skater joints). Bits 13 and
+14 of the header take the 3x3 and the last row of that matrix as of the
+first: the grid of the BOOTROM C.R.T. test sets the last row alone and has
+D in bits 15:12 of its vertices; the six games send F.
+
+The screens of the BOOTROM, read from the lists it sends. A strip goes on
+through a material recall and its last vertices take the new material: the
+four colour bars of the C.R.T. test are one strip. The 0E8 word names the
+texhead of its triangle, from the base: 0 for the text, 1 for the grid, a
+texhead that is committed and never recalled. HEURISTIC: the strip is cut
+when a list is launched; the texhead number is taken on 16 bits, 0 and 1
+are the only ones seen. The SYSTEM MENU and its eleven screens show for
+the six games, and so do the test menus of the games with the first screen
+of each entry. Not looked at: the pages behind them, CARD R/W CLEANING of
+VON4 (a title and nothing else), the sounds.
 
 A row of the 161 changes that row only: PHARRIER sends the four rows with
 the first character of a "+50" and the last row alone for the next ones,
