@@ -98,6 +98,8 @@ void test_causes()
 	check(chip.irq() && chip.read(0x1A000018, value) && value == 0x6, "two causes in 1A000018");
 	check(chip.write(0x1A00000C, 1) == Eurasia::Written::CAUSES, "a cause is acknowledged with a 1");
 	check(chip.read(0x1A000018, value) && value == 0x4, "the other one stays");
+	chip.write(0x1A000010, 0);
+	check(chip.read(0x1A000018, value) && value == 0x4, "a 0 acknowledges nothing");
 	chip.write(0x1A000010, 1);
 	check(!chip.irq(), "no cause left");
 

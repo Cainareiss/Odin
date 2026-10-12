@@ -276,9 +276,11 @@ Eurasia::write(uint32_t addr, uint32_t value)
 		case 0x0C:
 		case 0x10:
 		case 0x14:
-			/* Bit 0 is ANDNOT'ed on write; I have no clue about
-			 * the other bits. */
-			if (value != 1)
+			/* Bit 0 is ANDNOT'ed on write: a 1 clears the cause,
+			 * a 0 leaves it (VON4 writes each bit of 1A000018
+			 * back to its register, @0C711F62). I have no clue
+			 * about the other bits. */
+			if (value > 1)
 				fatal("interrupt acknowledge not known", addr, value);
 			reg(offs) &= ~value;
 			update_status();
