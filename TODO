@@ -499,15 +499,11 @@ AIRTRIX
 
 Attract mode works.
 
-Emulation wise, the biggest issue is with the player character: it is not
-animated. Talking with the Demul guys, we figured out the following: the game
-uploads matrix data to CMDRAM  48100000-48100E2x, along with commands, but we
-don't know what device that data is for. It is written by the master SH-4 but
-never reads them back, and there is strong evidence that the slave SH-4 does
-not touch them ever. The matrices come along with a pointer to a GPU routine in
-CMDRAM (in master-SH-4-address-space-format), which, guess what?, draws the
-player character. I *think* they specify additional transformations to be
-applied to the skater body parts, but I don't know yet how.
+A wooden board leaning on a brick wall (mesh 408252C4, 42 s into the
+cabinet footage) is lit by the spotlight 58 of its lightset and dark on the
+cabinet. It stands at the end of the range of that light, halfway into the
+fade of its cone. Elsewhere the cabinet shows 0.95 to 0.99 of what the
+spotlights add here, at every place of the cone.
 
 
 BRAVEFF
@@ -519,10 +515,14 @@ References:
  http://www.youtube.com/watch?v=rwzzj7dzxE8
 
 
-Cyber Troops Virtual On 4
--------------------------
+VON4
+----
 
-Not dumped yet.
+Attract mode works. Its scenes do not come in the order of the cabinet
+footage.
+
+The veil over the 4 of the title (one mesh, blending mode 3, lit) shows
+less of the scene behind it than on the cabinet, and a less white highlight.
 
 
 PHARRIER
@@ -538,13 +538,14 @@ References:
 PODRACE
 -------
 
-Not fully dumped yet.
+Attract mode works.
 
 
 SGNASCAR
 --------
 
-Attract mode works.
+Attract mode works. The car of its demo is not the one of the cabinet
+footage (HOME DEPOT here, CAT there); why is not known.
 
 The BOOTROM (all version) reads from invalid memory regions when loading the
 game data from ROM to RAM; that is likely a game bug.
