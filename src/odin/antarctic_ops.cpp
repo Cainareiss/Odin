@@ -752,7 +752,9 @@ length3(const float v[4])
  *	ZZZZZZZZ ZZZZZZZZ ZZZZZZZZ ZZZZZZZZ
  *
  * T = Direction/Position/etc.
- * W = Unknown
+ * W = Unknown. 3 in the position of the light of the SEGA init program,
+ *     (100, 100, 100) under an identity modelview, which a list of
+ *     BRAVEFF sends too; 0 everywhere else in the six attract loops.
  *
  *
  * B61	Light: Set Vector B
@@ -885,14 +887,8 @@ Antarctic::vector_light(const uint32_t *inst)
 		}
 		break;
 	case 0x00010000: /* Position */
+	case 0x00016000: /* Position, W = 3 */
 		read_vector(lit.position, inst);
-		lit.flags |= ODIN_LIGHT_HAS_POSITION;
-		break;
-	case 0x00016000: /* Use old position */
-		/* XXX TODO */
-		lit.position[0] = 0.0f;
-		lit.position[1] = 0.0f;
-		lit.position[2] = 0.0f;
 		lit.flags |= ODIN_LIGHT_HAS_POSITION;
 		break;
 	default:
