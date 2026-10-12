@@ -27,6 +27,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <ctime>
 #include <vector>
 
 namespace {
@@ -171,7 +172,20 @@ test_rtc()
 {
 	Host host;
 	std::vector<uint8_t> ram(odin::Aica::RAM_SIZE);
+	const time_t now = time(nullptr);
+	const std::tm local = *std::localtime(&now);
 	odin::Aica aica(host, ram);
+
+	/* The count at power-on, read as the BOOTROM does: four years of
+	 * 1461 days from 1964, the first of them a leap year */
+	const uint32_t days = ((aica.read_rtc(0) << 16) | aica.read_rtc(4)) / 86400;
+	uint32_t year = 1964 + 4 * (days / 1461), day = days % 1461;
+	for (uint32_t length = 366; day >= length; length = 365) {
+		day -= length;
+		year++;
+	}
+	check(year == static_cast<uint32_t>(local.tm_year + 1900) && day == static_cast<uint32_t>(local.tm_yday),
+	      "the RTC starts on the local date of the host, counted from 1964");
 
 	aica.write_rtc(0, 0x1234);
 	check(aica.read_rtc(0) != 0x1234, "RTC ignores writes without enable");

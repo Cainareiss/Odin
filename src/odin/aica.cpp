@@ -25,6 +25,28 @@
 
 namespace odin {
 
+namespace {
+
+/* The count of the RTC on a board whose clock was set to the local time of
+ * the host. The chip counts seconds; the BOOTROM, which sets the count in
+ * its CLOCK SETTING screen, takes it from 1964-01-01 00:00 (its date routine
+ * @0C008464, the same in the libraries of the games: four years of 1461
+ * days from a leap one, year 1964 + ..., day of the week (days + 3) mod 7).
+ * Right until 2100, as that routine is. */
+uint32_t
+rtc_of_host_clock()
+{
+	const time_t now = time(nullptr);
+	const std::tm *local = std::localtime(&now);
+	const uint32_t years = local->tm_year > 64 ? static_cast<uint32_t>(local->tm_year - 64) : 0;
+	const uint32_t days = years * 365 + (years + 3) / 4 + static_cast<uint32_t>(local->tm_yday);
+
+	return days * 86400 +
+	       static_cast<uint32_t>(local->tm_hour * 3600 + local->tm_min * 60 + local->tm_sec);
+}
+
+} /* namespace */
+
 Aica::Aica(AicaHost &host, std::span<uint8_t> ram)
 	: m_host(host), m_ram(ram), m_log(nullptr)
 {
@@ -51,12 +73,7 @@ Aica::reset(bool power_on)
 	m_unknown_logged = 0;
 
 	if (power_on) {
-		/* Seconds since 1950-01-01 00:00:00, the epoch of the AICA
-		 * RTC (MAME aicartc.cpp rtc_clock_updated). 631152000 s
-		 * separate it from the Unix epoch, 14 of those years being
-		 * leap years. */
-		const time_t now = time(nullptr);
-		m_rtc_seconds = static_cast<uint32_t>(now) + 631152000u;
+		m_rtc_seconds = rtc_of_host_clock();
 		m_rtc_samples = 0;
 	}
 

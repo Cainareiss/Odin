@@ -87,7 +87,8 @@ public:
 	void write_ram(uint32_t addr, uint32_t size, uint64_t value);
 
 	/* RTC: offset 0 = high 16 bits, 4 = low 16 bits, 8 = write enable.
-	 * Seconds since 1950-01-01 (MAME aicartc.cpp). */
+	 * Seconds, which the software of the Hikaru counts from 1964-01-01
+	 * (see rtc_of_host_clock in aica.cpp). */
 	uint32_t read_rtc(uint32_t offset) const;
 	void write_rtc(uint32_t offset, uint32_t value);
 
