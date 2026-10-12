@@ -401,6 +401,7 @@ GPU_LOG_CP=1 prints each instruction as it is executed (antarctic_disasm.cpp),
 GPU_LOG_IDMA=1 each texture transfer, GPU_LOG_DMA=1 each blit.
 ODIN_LIST_FP=1 prints a fingerprint of the list of each frame, to compare two
 builds; ODIN_LIST_DUMP=<frame> adds one line for each mesh of that frame.
+ODIN_PICTURE_FP=1 prints a fingerprint of the picture of each frame.
 Tests: tests/antarctic, tests/eurasia, tests/hikaru_gpu. As Valkyrie had it,
 and HEURISTIC: a list is run one instruction a cycle of the SH-4 from its
 launch on, the end of its analysis and the end of its plot are told together
