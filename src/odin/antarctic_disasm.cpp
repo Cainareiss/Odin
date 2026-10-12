@@ -369,8 +369,10 @@ text_material_color(Out &o, const uint32_t *inst)
 		        inst[0] >> 16, inst[1] >> 16, inst[1] & 0xFFFF);
 		break;
 	case 0xA:
-	case 0xC:
-		text_material_flags(o, inst);
+		o.unhandled |= !!(inst[0] & 0xFFFCF000);
+
+		o.print("mat: set blending mode [mode=%u], second word dropped [%08X]",
+		        (inst[0] >> 16) & 3, inst[1]);
 		break;
 	default:
 		o.unknown();

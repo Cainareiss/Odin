@@ -949,8 +949,20 @@ material_index(const uint32_t *inst)
  *
  * See PH:@0C0CF7CC.
  *
- * NOTE: A91 and C91 are used in BRAVEFF title screen. They clearly alias A81
- * and C81.
+ *
+ * A91	Material: Set Blending Mode, in two words
+ *
+ *	-------- ------mm -------o oooooooo
+ *	-------- -------- -------- --------
+ *
+ * BRAVEFF only. Its library makes the words 881, A81 and C81 by adding 0x200
+ * to 0x891 and takes the 0x10 off the first alone (@0C0D6A0A; VON4 has it
+ * right, @0C716B1A): the blending mode leaves as A91 and the alpha index as
+ * a C91 behind it, which the size bits make the second word of the A91. The
+ * cabinet shows the fires of the game added to the picture, as mode 2 does:
+ * the board takes the mode from the first word, as it does for A81.
+ * HEURISTIC: the second word is dropped. The board may run it as a C81
+ * instead; the alpha index it would set is not used here.
  */
 
 void
@@ -985,11 +997,8 @@ Antarctic::op_material_color(const uint32_t *inst)
 		mat->flags |= ODIN_MAT_HAS_691;
 		break;
 	case 0xA:
-	case 0xC:
 		op_material_flags(inst);
-		/* XXX HACK */
-		m_s.pc -= 4;
-		return;
+		break;
 	default:
 		fatal("instruction form not known", inst[0]);
 		break;

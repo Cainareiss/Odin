@@ -227,6 +227,18 @@ void test_strip_through_recall()
 
 /* The grid of the BOOTROM C.R.T. test: the 0E8 names its texhead, and its
  * vertices follow the second modelview without its 3x3. */
+/* BRAVEFF sends the blending mode as A91, a C91 behind it. */
+void test_blending_mode_in_two_words()
+{
+	Machine m;
+
+	m.run({ 0x00020A91, 0x003F0C91,
+	        END });
+	check(m.ended && m.cp->pc() == LIST + 8, "A91 takes two words");
+	check(odin_mat_blending_mode(&m.cp->state().mat.scratch) == 2, "the blending mode comes from the first");
+	check(!(m.cp->state().mat.scratch.flags & ODIN_MAT_HAS_C81), "the second is not run as a C81");
+}
+
 void test_texhead_of_0E8_and_second_modelview()
 {
 	Machine m;
@@ -376,6 +388,7 @@ int main()
 	test_strip();
 	test_degenerate_and_both_faces();
 	test_strip_through_recall();
+	test_blending_mode_in_two_words();
 	test_texhead_of_0E8_and_second_modelview();
 	test_viewport_and_state();
 	test_registers();
