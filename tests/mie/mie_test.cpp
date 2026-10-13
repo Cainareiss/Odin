@@ -28,14 +28,14 @@
  * Build: g++ -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
  *            -O2 -I src tests/mie/mie_test.cpp src/odin/eeprom_93c46.cpp \
  *            src/odin/jvs_host.cpp src/odin/jvs_io_13551.cpp src/odin/mie.cpp \
- *            src/odin/mie_bridge.cpp src/odin/card_reader.cpp src/odin/z80.cpp \
+ *            src/odin/mie_board.cpp src/odin/card_reader.cpp src/odin/z80.cpp \
  *            src/odin/z80_ops.cpp -o mie_test
  * Exit status is 0 when every check passes. */
 
 #include "odin/eeprom_93c46.hpp"
 #include "odin/jvs_host.hpp"
 #include "odin/jvs_io_13551.hpp"
-#include "odin/mie_bridge.hpp"
+#include "odin/mie_board.hpp"
 
 #include <cstdio>
 #include <cstring>
@@ -387,59 +387,54 @@ void test_jvs()
 void test_interrupts()
 {
 	std::vector<uint8_t> rom(2048, 0), ram(32768, 0);
-	odin_mie_t *mie = odin_mie_new(rom.data(), rom.size(), ram.data(), ram.size(), 200000000,
-	                               nullptr, nullptr);
+	odin::MieBoard mie(rom, ram, 200000000, nullptr);
 	uint32_t v = 0;
 
-	odin_mie_set_irq_lines(mie, 0x01);
-	check(odin_mie_irq_pending(mie) == 0x01 && odin_mie_irq_out(mie) == 0,
+	mie.set_irq_lines(0x01);
+	check(mie.irq_pending() == 0x01 && !mie.irq_out(),
 	      "nothing passes while port C is an input");
-	odin_mie_host_write(mie, 2 * 2, 1, 0xE1);
-	check(odin_mie_irq_out(mie) == 0, "writing the latch of port C is not driving it");
-	odin_mie_host_write(mie, 2 * 8, 1, 0xFB);
-	check(odin_mie_irq_out(mie) == 1, "ANT_INT passes the mask E1");
-	odin_mie_set_irq_lines(mie, 0x10);
-	check(odin_mie_irq_out(mie) == 0, "SZK_INT does not");
-	odin_mie_host_read(mie, 2 * 1, 1, &v);
+	mie.host_write(2 * 2, 1, 0xE1);
+	check(!mie.irq_out(), "writing the latch of port C is not driving it");
+	mie.host_write(2 * 8, 1, 0xFB);
+	check(mie.irq_out(), "ANT_INT passes the mask E1");
+	mie.set_irq_lines(0x10);
+	check(!mie.irq_out(), "SZK_INT does not");
+	mie.host_read(2 * 1, 1, v);
 	check(v == 0x10, "but port B reads it");
-	odin_mie_host_write(mie, 2 * 2, 1, 0xF1);
-	check(odin_mie_irq_out(mie) == 1, "until the mask has its bit");
-	odin_mie_set_irq_lines(mie, 0);
-	check(odin_mie_irq_out(mie) == 0, "a line let go asks no more");
+	mie.host_write(2 * 2, 1, 0xF1);
+	check(mie.irq_out(), "until the mask has its bit");
+	mie.set_irq_lines(0);
+	check(!mie.irq_out(), "a line let go asks no more");
 
-	odin_mie_host_write(mie, 2 * 5, 1, 0x70);
-	check(odin_mie_irq_pending(mie) == 0, "port F asks for nothing while it is an input");
-	odin_mie_host_write(mie, 2 * 8, 1, 0xDB);
-	check(odin_mie_irq_pending(mie) == 0x0E, "pins 4 to 6 of port F are bits 1 to 3 of port B");
-	check(odin_mie_irq_out(mie) == 0, "masked by F1");
-	odin_mie_host_write(mie, 2 * 2, 1, 0x04);
-	check(odin_mie_irq_out(mie) == 1, "and passing with their bit in the mask");
-	odin_mie_host_write(mie, 2 * 5, 1, 0x50);
-	check(odin_mie_irq_out(mie) == 0, "each pin on its own bit");
-	odin_mie_delete(mie);
+	mie.host_write(2 * 5, 1, 0x70);
+	check(mie.irq_pending() == 0, "port F asks for nothing while it is an input");
+	mie.host_write(2 * 8, 1, 0xDB);
+	check(mie.irq_pending() == 0x0E, "pins 4 to 6 of port F are bits 1 to 3 of port B");
+	check(!mie.irq_out(), "masked by F1");
+	mie.host_write(2 * 2, 1, 0x04);
+	check(mie.irq_out(), "and passing with their bit in the mask");
+	mie.host_write(2 * 5, 1, 0x50);
+	check(!mie.irq_out(), "each pin on its own bit");
 }
-
-uint8_t g_port_d = 0;
-int g_port_d_calls = 0;
 
 /* Port D, the resets of the main board: the board is told each value the
  * chip drives. */
 void test_port_d()
 {
 	std::vector<uint8_t> rom(2048, 0), ram(32768, 0);
-	odin_mie_t *mie = odin_mie_new(rom.data(), rom.size(), ram.data(), ram.size(), 200000000,
-	                               nullptr, nullptr);
+	odin::MieBoard mie(rom, ram, 200000000, nullptr);
+	uint8_t pins_told = 0;
+	int calls = 0;
 
-	odin_mie_set_port_d(mie, [](void *, uint8_t pins) { g_port_d = pins; g_port_d_calls++; }, nullptr);
-	check(odin_mie_port_d(mie) == 0xFF, "port D is high while the chip does not drive it");
-	odin_mie_host_write(mie, 2 * 3, 1, 0xFB);
-	check(g_port_d_calls == 0 && odin_mie_port_d(mie) == 0xFF, "its latch written, it is still not driven");
-	odin_mie_host_write(mie, 2 * 8, 1, 0x43);
-	check(g_port_d_calls == 1 && g_port_d == 0xFB && odin_mie_port_d(mie) == 0xFB,
+	mie.set_port_d([&](uint8_t pins) { pins_told = pins; calls++; });
+	check(mie.port_d() == 0xFF, "port D is high while the chip does not drive it");
+	mie.host_write(2 * 3, 1, 0xFB);
+	check(calls == 0 && mie.port_d() == 0xFF, "its latch written, it is still not driven");
+	mie.host_write(2 * 8, 1, 0x43);
+	check(calls == 1 && pins_told == 0xFB && mie.port_d() == 0xFB,
 	      "the latch is driven when the port becomes an output");
-	odin_mie_host_write(mie, 2 * 3, 1, 0xFF);
-	check(g_port_d_calls == 2 && g_port_d == 0xFF, "and each new value is told");
-	odin_mie_delete(mie);
+	mie.host_write(2 * 3, 1, 0xFF);
+	check(calls == 2 && pins_told == 0xFF, "and each new value is told");
 }
 
 int main()

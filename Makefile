@@ -81,7 +81,7 @@ ODIN_OBJ := \
 	src/odin/jvs_io_13551.o \
 	src/odin/card_reader.o \
 	src/odin/mie.o \
-	src/odin/mie_bridge.o \
+	src/odin/mie_board.o \
 	src/odin/sh4.o \
 	src/odin/sh4_ops.o \
 	src/odin/sh4_onchip.o \

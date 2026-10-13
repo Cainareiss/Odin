@@ -26,7 +26,9 @@
 
 #include "mach/hikaru/hikaru.h"
 #include "mach/hikaru/hikaru-mie.h"
-#include "odin/mie_bridge.hpp"
+#include <memory>
+
+#include "odin/mie_board.hpp"
 
 /*
  * MIE (315-6146)
@@ -50,7 +52,7 @@
  *                    bit 8 read is clear once it is granted
  *
  * The chip lives in src/odin/mie.cpp, the board wiring in
- * src/odin/mie_bridge.cpp. That path is the default (it needs the
+ * src/odin/mie_board.cpp. That path is the default (it needs the
  * "mie" ROM section); ODIN_MIE=hle selects the stand-in below.
  * ODIN_MIE_TRACE=<file> writes the Z80 bus trace of ODIN_MIE_TRACE_N
  * instructions (default 300000) from the first time the PC reaches
@@ -67,7 +69,7 @@
 
 typedef struct {
 	vk_device_t base;
-	odin_mie_t *chip;	/* LLE */
+	odin::MieBoard *chip;	/* LLE */
 	vk_buffer_t *regs;	/* HLE: port page */
 	uint32_t busrq;		/* HLE: bus request bit */
 	uint8_t irq_lines;	/* HLE */
@@ -213,7 +215,7 @@ hikaru_mie_hle_get (hikaru_mie_t *mie, unsigned size, uint32_t addr, void *val)
 			break;
 		case 0x08:
 			/* HACK: passes the check at @0C00B860 in all the
-			 * BOOTROM versions (see mie_bridge.cpp for the chip) */
+			 * BOOTROM versions (see mie_board.cpp for the chip) */
 			tmp = vk_buffer_get (mie->regs, 2, 0x08);
 			vk_buffer_put (mie->regs, 2, 0x08, tmp ^ 0xF);
 			break;
@@ -308,7 +310,7 @@ hikaru_mie_player_word (unsigned start, unsigned service,
 }
 
 static void
-hikaru_mie_read_inputs (void *ctx, odin_mie_inputs_t *in)
+hikaru_mie_read_inputs (odin::MieBoard::Inputs *in)
 {
 	static const unsigned push1[6] = { SDLK_LCTRL, SDLK_LALT, SDLK_LSHIFT, SDLK_z, SDLK_x, SDLK_c };
 	static const unsigned push2[6] = { SDLK_a, SDLK_s, SDLK_q, SDLK_w, SDLK_e, SDLK_t };
@@ -316,7 +318,6 @@ hikaru_mie_read_inputs (void *ctx, odin_mie_inputs_t *in)
 	static bool coin_was[2];
 	unsigned i;
 
-	(void) ctx;
 	in->mainboard_test = vk_input_get_key (SDLK_F5);
 	in->mainboard_service = vk_input_get_key (SDLK_F6);
 	in->jvs_system = vk_input_get_key (SDLK_F2) ? 0x80 : 0;
@@ -352,7 +353,7 @@ hikaru_mie_get (vk_device_t *dev, unsigned size, uint32_t addr, void *val)
 		for (i = 0; i < size; i += part) {
 			uint32_t temp;
 
-			if (odin_mie_host_read (mie->chip, addr + i - 0x00800000, part, &temp)) {
+			if (!mie->chip->host_read (addr + i - 0x00800000, part, temp)) {
 				VK_MACH_ERROR (dev->mach, "MIE unhandled R%u %08X", size*8, addr);
 				set_ptr (val, size, 0);
 				return -1;
@@ -360,7 +361,7 @@ hikaru_mie_get (vk_device_t *dev, unsigned size, uint32_t addr, void *val)
 			value |= temp << (8 * i);
 		}
 	} else if (addr >= 0x01000000 && addr <= 0x010001FF) {
-		value = odin_mie_busrq_read (mie->chip);
+		value = mie->chip->busrq_read ();
 	} else {
 		set_ptr (val, size, 0);
 		return -1;
@@ -382,25 +383,17 @@ hikaru_mie_put (vk_device_t *dev, unsigned size, uint32_t addr, uint64_t val)
 		unsigned i;
 
 		for (i = 0; i < size; i += part) {
-			if (odin_mie_host_write (mie->chip, addr + i - 0x00800000, part,
-			                         (uint32_t) (val >> (8 * i)))) {
+			if (!mie->chip->host_write (addr + i - 0x00800000, part,
+			                            (uint32_t) (val >> (8 * i)))) {
 				VK_MACH_ERROR (dev->mach, "MIE unhandled W%u %08X = %lX", size*8, addr, val);
 				return -1;
 			}
 		}
 	} else if (addr >= 0x01000000 && addr <= 0x010001FF) {
-		odin_mie_busrq_write (mie->chip, (uint32_t) val);
+		mie->chip->busrq_write ((uint32_t) val);
 	} else
 		return -1;
 	return 0;
-}
-
-static void
-hikaru_mie_port_d (void *ctx, uint8_t pins)
-{
-	vk_device_t *dev = (vk_device_t *) ctx;
-
-	hikaru_set_resets (dev->mach, pins);
 }
 
 /* The pins of port D, see hikaru_set_resets. The stand-in leaves them high. */
@@ -409,10 +402,10 @@ hikaru_mie_get_port_d (vk_device_t *dev)
 {
 	hikaru_mie_t *mie = (hikaru_mie_t *) dev;
 
-	return mie->chip ? odin_mie_port_d (mie->chip) : 0xFF;
+	return mie->chip ? mie->chip->port_d () : 0xFF;
 }
 
-/* The interrupt controller of the board, see src/odin/mie_bridge.hpp. The
+/* The interrupt controller of the board, see src/odin/mie_board.hpp. The
  * stand-in has the mask the program of the MIE writes, 0xE1. */
 void
 hikaru_mie_set_irq_lines (vk_device_t *dev, uint8_t lines)
@@ -420,7 +413,7 @@ hikaru_mie_set_irq_lines (vk_device_t *dev, uint8_t lines)
 	hikaru_mie_t *mie = (hikaru_mie_t *) dev;
 
 	if (mie->chip)
-		odin_mie_set_irq_lines (mie->chip, lines);
+		mie->chip->set_irq_lines (lines);
 	mie->irq_lines = lines;
 }
 
@@ -430,7 +423,7 @@ hikaru_mie_irq_out (vk_device_t *dev)
 	hikaru_mie_t *mie = (hikaru_mie_t *) dev;
 
 	if (mie->chip)
-		return odin_mie_irq_out (mie->chip) != 0;
+		return mie->chip->irq_out ();
 	return (mie->irq_lines & 0xE1) != 0;
 }
 
@@ -439,7 +432,7 @@ hikaru_mie_exec (vk_device_t *dev, int cycles)
 {
 	hikaru_mie_t *mie = (hikaru_mie_t *) dev;
 
-	odin_mie_run (mie->chip, (uint32_t) cycles);
+	mie->chip->run ((uint32_t) cycles);
 	return cycles;
 }
 
@@ -451,14 +444,11 @@ hikaru_mie_save_state (vk_device_t *dev, vk_state_t *state)
 
 	ret = vk_state_put (state, &mie->busrq, sizeof (mie->busrq));
 	if (mie->chip) {
-		size_t size = odin_mie_state_size ();
-		void *block = malloc (size);
+		auto block = std::make_unique<odin::MieBoard::State> ();
 
-		if (!block)
-			return -1;
-		odin_mie_save_state (mie->chip, block);
-		ret |= vk_state_put (state, block, size);
-		free (block);
+		memset (block.get (), 0, sizeof (*block));
+		mie->chip->save (*block);
+		ret |= vk_state_put (state, block.get (), sizeof (*block));
 	}
 	return ret;
 }
@@ -471,15 +461,11 @@ hikaru_mie_load_state (vk_device_t *dev, vk_state_t *state)
 
 	ret = vk_state_get (state, &mie->busrq, sizeof (mie->busrq));
 	if (mie->chip) {
-		size_t size = odin_mie_state_size ();
-		void *block = malloc (size);
+		auto block = std::make_unique<odin::MieBoard::State> ();
 
-		if (!block)
-			return -1;
-		ret |= vk_state_get (state, block, size);
+		ret |= vk_state_get (state, block.get (), sizeof (*block));
 		if (!ret)
-			ret = odin_mie_load_state (mie->chip, block);
-		free (block);
+			ret = mie->chip->load (*block) ? 0 : -1;
 	}
 	return ret;
 }
@@ -491,7 +477,7 @@ hikaru_mie_reset (vk_device_t *dev, vk_reset_type_t type)
 
 	(void) type;
 	if (mie->chip) {
-		odin_mie_reset (mie->chip);
+		mie->chip->reset ();
 		return;
 	}
 	vk_buffer_clear (mie->regs);
@@ -512,7 +498,7 @@ hikaru_mie_setup_eeprom (hikaru_mie_t *mie)
 		return;
 	fp = fopen (path, "rb");
 	if (fp && fread (data, 1, sizeof (data), fp) == sizeof (data)) {
-		odin_mie_eeprom_load (mie->chip, data, sizeof (data));
+		mie->chip->eeprom ().load (std::span<const uint8_t> (data, sizeof (data)));
 		VK_PRINT ("MIE: EEPROM file '%s' loaded", path);
 	} else
 		VK_PRINT ("MIE: EEPROM file '%s' not found: blank", path);
@@ -524,14 +510,13 @@ static void
 hikaru_mie_save_eeprom (hikaru_mie_t *mie)
 {
 	const char *path = getenv ("ODIN_MIE_EEPROM");
-	uint8_t data[128];
+	const std::span<uint8_t> cells = mie->chip->eeprom ().data ();
 	FILE *fp;
 
 	if (!path)
 		return;
-	odin_mie_eeprom_read (mie->chip, data, sizeof (data));
 	fp = fopen (path, "wb");
-	if (!fp || fwrite (data, 1, sizeof (data), fp) != sizeof (data))
+	if (!fp || fwrite (cells.data (), 1, cells.size (), fp) != cells.size ())
 		VK_ERROR ("MIE: cannot write the EEPROM file '%s'", path);
 	if (fp)
 		fclose (fp);
@@ -544,7 +529,7 @@ hikaru_mie_destroy (vk_device_t **dev_)
 		hikaru_mie_t *mie = (hikaru_mie_t *) *dev_;
 		if (mie->chip) {
 			hikaru_mie_save_eeprom (mie);
-			odin_mie_delete (mie->chip);
+			delete mie->chip;
 		}
 		mie->chip = NULL;
 		if (mie->trace)
@@ -569,7 +554,7 @@ hikaru_mie_setup_trace (hikaru_mie_t *mie)
 		VK_ERROR ("MIE: can't open trace file '%s'", path);
 		return;
 	}
-	odin_mie_set_trace (mie->chip, mie->trace, n, (uint16_t) start_pc);
+	mie->chip->set_trace (mie->trace, n, (uint16_t) start_pc);
 }
 
 static void
@@ -586,7 +571,7 @@ hikaru_mie_setup_card (hikaru_mie_t *mie)
 	}
 	if (mode && strcmp (mode, "reader"))
 		VK_ERROR ("MIE: ODIN_CARD=%s unknown, using the reader", mode);
-	loaded = odin_mie_card_attach (mie->chip, file, (trace && atoi (trace)) ? stderr : NULL);
+	loaded = mie->chip->attach_card (file, (trace && atoi (trace)) ? stderr : NULL);
 	if (file)
 		VK_PRINT ("MIE: card reader CRP-1231 (HLE), card file '%s'%s",
 		          file, loaded ? "" : " not found: no card");
@@ -633,16 +618,19 @@ hikaru_mie_new (vk_machine_t *mach, unsigned clock_hz)
 	}
 
 	if (lle) {
-		mie->chip = odin_mie_new ((const uint8_t *) vk_buffer_get_ptr (rom, 0),
-		                          vk_buffer_get_size (rom),
-		                          (uint8_t *) vk_buffer_get_ptr (hikaru->mie_ram, 0),
-		                          vk_buffer_get_size (hikaru->mie_ram),
-		                          clock_hz, hikaru_mie_read_inputs, mie);
-		if (!mie->chip)
+		if (vk_buffer_get_size (rom) != odin::Mie::ROM_SIZE ||
+		    vk_buffer_get_size (hikaru->mie_ram) != odin::Mie::RAM_SIZE || clock_hz == 0)
 			goto fail;
+		mie->chip = new odin::MieBoard (
+			std::span<const uint8_t> ((const uint8_t *) vk_buffer_get_ptr (rom, 0),
+			                          vk_buffer_get_size (rom)),
+			std::span<uint8_t> ((uint8_t *) vk_buffer_get_ptr (hikaru->mie_ram, 0),
+			                    vk_buffer_get_size (hikaru->mie_ram)),
+			clock_hz,
+			[] (odin::MieBoard::Inputs &inputs) { hikaru_mie_read_inputs (&inputs); });
 		dev->exec = hikaru_mie_exec;
-		odin_mie_set_port_d (mie->chip, hikaru_mie_port_d, mie);
-		odin_mie_set_log (mie->chip, stderr);
+		mie->chip->set_port_d ([mach] (uint8_t pins) { hikaru_set_resets (mach, pins); });
+		mie->chip->set_log (stderr);
 		hikaru_mie_setup_trace (mie);
 		hikaru_mie_setup_card (mie);
 		hikaru_mie_setup_eeprom (mie);
