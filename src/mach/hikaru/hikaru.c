@@ -1229,7 +1229,7 @@ hikaru_init (hikaru_t *hikaru)
 	}
 
 	hikaru->base.renderer = hikaru_renderer_new (hikaru->fb,
-	                                             hikaru->texram);
+	                                             hikaru->texram, game->name);
 
 	hikaru->gpu = hikaru_gpu_new (mach, hikaru->cmdram, hikaru->fb,
 	                              hikaru->texram, hikaru->base.renderer);

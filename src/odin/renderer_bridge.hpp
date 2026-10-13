@@ -43,7 +43,7 @@ typedef struct {
 	const uint8_t *texram[2];	size_t texram_size;
 } odin_renderer_memory_t;
 
-/* For looking at what is drawn, see odin::Renderer::Options */
+/* See odin::Renderer::Options. The two paths may be NULL. */
 typedef struct {
 	bool log;
 	int log_frame;
@@ -53,6 +53,8 @@ typedef struct {
 	bool debug_keys;
 	bool (*key_down)(void *ctx, char key);
 	void *ctx;
+	const char *programs_seed;
+	const char *programs_kept;
 } odin_renderer_options_t;
 
 /* What a save state holds besides the pictures */
@@ -71,6 +73,9 @@ odin_renderer_t *odin_renderer_new(const odin_renderer_memory_t *memory,
                                    const odin_renderer_options_t *options);
 void odin_renderer_delete(odin_renderer_t *renderer);
 void odin_renderer_set_gpu(odin_renderer_t *renderer, odin_hikaru_gpu_t *gpu);
+/* Makes ready the mesh programs the lists of the options name; on the
+ * thread the frames are drawn on. */
+void odin_renderer_prepare_programs(odin_renderer_t *renderer);
 
 /* Draws the 3D `scale` times finer than the screen of the hardware, 1 at
  * first. */

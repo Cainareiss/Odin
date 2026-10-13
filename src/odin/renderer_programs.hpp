@@ -23,6 +23,10 @@
 #define ODIN_RENDERER_PROGRAMS_HPP
 
 #include <cstdint>
+#include <cstdio>
+#include <functional>
+#include <optional>
+#include <string>
 #include <unordered_map>
 
 #include <GL/glew.h>
@@ -66,8 +70,10 @@ struct MeshVariant {
 	bool collect = false;		/* translucent fragments go to the lists */
 	bool has_pattern = false;	/* 501 */
 
-	/* The whole of it as one number */
+	/* The whole of it as one number, and the variant of a number, if
+	 * it is the number of one. */
 	uint64_t key() const;
+	static std::optional<MeshVariant> from_key(uint64_t key);
 };
 
 /* A compiled program of the mesh shaders */
@@ -107,7 +113,15 @@ struct MeshProgram {
 	Held held;
 };
 
-/* The programs compiled so far, by variant */
+/* The programs compiled so far, by variant.
+ *
+ * The first time a program is needed the graphics driver compiles it, and
+ * the first time it draws the driver works on it again (NVIDIA 595: some
+ * 20 ms, then 10 on the thread that draws): a stutter each time a game
+ * shows something new. So the programs a game draws with are listed in a
+ * file, which starts with a line that tells what it is and then has the
+ * key of a program a line: listed programs are compiled, and draw once,
+ * when the game starts. */
 class MeshPrograms {
 public:
 	/* The texture units the programs read, set once */
@@ -122,10 +136,19 @@ public:
 	 * compiled is left in use. */
 	MeshProgram &get(const MeshVariant &variant);
 
+	/* Compiles the programs a file lists and calls `draw` with each of
+	 * them in use; tells how many it did. A file that is not such a list
+	 * is left unread. */
+	unsigned compile_listed(const std::string &path, const std::function<void()> &draw);
+	/* Lists in a file the programs compiled from now on, after the ones
+	 * it lists already. */
+	void list_in(const std::string &path);
+
 private:
 	static MeshProgram compile(const MeshVariant &variant);
 
 	std::unordered_map<uint64_t, MeshProgram> m_programs;
+	std::FILE *m_list = nullptr;
 };
 
 } /* namespace odin */

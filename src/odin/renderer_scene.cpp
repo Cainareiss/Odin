@@ -472,9 +472,9 @@ Renderer::draw_mesh(const odin_mesh_t &mesh)
 	gl::check("a mesh");
 }
 
-/* Uploads the vertices of the list, once, before its meshes are drawn. */
+/* Uploads the vertices of a list, once, before its meshes are drawn. */
 void
-Renderer::upload_vertices()
+Renderer::upload_vertices(const odin_vertex_body_t *vertices, uint32_t num)
 {
 	const auto attribute = [](GLuint index, GLint size, GLenum type, GLboolean normalized,
 	                          size_t offset) {
@@ -491,8 +491,8 @@ Renderer::upload_vertices()
 	glBindVertexArray(m_mesh_vao);
 	glBindBuffer(GL_ARRAY_BUFFER, m_mesh_vbo);
 	glBufferData(GL_ARRAY_BUFFER,
-	             static_cast<GLsizeiptr>(sizeof(odin_vertex_body_t) * m_list->verts.num),
-	             m_list->verts.all, GL_DYNAMIC_DRAW);
+	             static_cast<GLsizeiptr>(sizeof(odin_vertex_body_t) * num),
+	             vertices, GL_DYNAMIC_DRAW);
 
 	/* The locations of the mesh vertex shader */
 	attribute(0, 3, GL_FLOAT, GL_FALSE, offsetof(odin_vertex_body_t, position));
@@ -631,7 +631,7 @@ Renderer::draw_scene()
 	if (m_debug[DEBUG_NO_3D])
 		return;
 
-	upload_vertices();
+	upload_vertices(m_list->verts.all, m_list->verts.num);
 
 	glViewport(0, 0, static_cast<GLsizei>(width()), static_cast<GLsizei>(height()));
 

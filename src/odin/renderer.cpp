@@ -162,6 +162,31 @@ Renderer::build_presenter()
 	glUseProgram(0);
 }
 
+/* Compiles the mesh programs the lists of the game name, and draws a
+ * triangle without area with each. See MeshPrograms; on the thread that
+ * draws the frames. */
+void
+Renderer::prepare_programs()
+{
+	static const odin_vertex_body_t none[3] = {};
+	const auto draw = [] { glDrawArrays(GL_TRIANGLES, 0, 3); };
+
+	upload_vertices(none, 3);
+	glBindVertexArray(m_mesh_vao);
+	glBindFramebuffer(GL_FRAMEBUFFER, m_scene_fb);
+
+	if (!m_options.programs_seed.empty())
+		m_programs.compile_listed(m_options.programs_seed, draw);
+	if (!m_options.programs_kept.empty()) {
+		m_programs.compile_listed(m_options.programs_kept, draw);
+		m_programs.list_in(m_options.programs_kept);
+	}
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glBindVertexArray(0);
+	gl::check("preparing the programs");
+}
+
 /* Nothing a program holds, nothing bound is of the list about to be
  * drawn. */
 void

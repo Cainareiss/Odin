@@ -25,6 +25,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <span>
+#include <string>
 #include <vector>
 
 #include <GL/glew.h>
@@ -73,7 +74,10 @@ public:
 		std::span<const uint8_t> fb;		/* framebuffer RAM, 8 MB */
 		std::span<const uint8_t> texram[2];	/* texture RAM, two banks of 4 MB */
 	};
-	/* For looking at what is drawn. Everything is off at zero. */
+	/* For looking at what is drawn; everything is off at zero. And the
+	 * lists of the mesh programs of the game, see MeshPrograms: the
+	 * one that comes with Odin, and the one kept on this computer,
+	 * which takes the programs met later. Empty for none. */
 	struct Options {
 		bool log;		/* the objects of every mesh, on stdout */
 		int log_frame;		/* that log for this frame only */
@@ -83,6 +87,7 @@ public:
 		bool debug_keys;	/* the keys change the debug switches */
 		bool (*key_down)(void *ctx, char key);
 		void *ctx;
+		std::string programs_seed, programs_kept;
 	};
 
 	Renderer(const Memory &memory, const Options &options);
@@ -91,6 +96,11 @@ public:
 	Renderer &operator=(const Renderer &) = delete;
 
 	void set_gpu(HikaruGpu *gpu) { m_gpu = gpu; }
+
+	/* Makes ready the mesh programs the lists of the options name, so
+	 * that the game does not stutter when it first draws with one. To
+	 * be called on the thread draw_frame runs on. */
+	void prepare_programs();
 
 	/* Draws the 3D `scale` times finer than the screen of the hardware,
 	 * 1 at first. The pictures kept are carried over, pixel for pixel. */
@@ -236,7 +246,7 @@ private:
 	void draw_polytype(unsigned vpi, unsigned polytype);
 	void draw_mesh(const odin_mesh_t &mesh);
 	void draw_instance(const odin_mesh_t &mesh, unsigned i);
-	void upload_vertices();
+	void upload_vertices(const odin_vertex_body_t *vertices, uint32_t num);
 	MeshVariant variant_of(const odin_mesh_t &mesh) const;
 	bool is_faded_by_depth(const odin_mesh_t &mesh) const;
 	void use_program(const odin_mesh_t &mesh);

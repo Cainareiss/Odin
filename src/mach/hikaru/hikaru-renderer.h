@@ -27,7 +27,8 @@
 #include "vk/state.h"
 #include "odin/hikaru_gpu_bridge.hpp"
 
-vk_renderer_t	*hikaru_renderer_new (vk_buffer_t *fb, vk_buffer_t *texram[2]);
+/* game: its name in the list of the games */
+vk_renderer_t	*hikaru_renderer_new (vk_buffer_t *fb, vk_buffer_t *texram[2], const char *game);
 void		 hikaru_renderer_set_gpu (vk_renderer_t *, odin_hikaru_gpu_t *chips);
 /* A display list was launched */
 void		 hikaru_renderer_launch (vk_renderer_t *);

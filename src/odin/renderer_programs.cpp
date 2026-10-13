@@ -23,10 +23,36 @@
 #include "odin/renderer_gl.hpp"
 #include "odin/renderer_shaders.hpp"
 
+#include <cinttypes>
 #include <cstdio>
+#include <cstring>
 #include <string>
 
 namespace odin {
+
+namespace {
+
+/* The first line of a list of programs. The number goes up when
+ * MeshVariant::key changes: the lists made before are then left unread. */
+constexpr char LIST_HEADER[] = "odin mesh programs 1\n";
+
+/* The file, open after its first line, or nullptr if it is not a list. */
+std::FILE *
+open_list(const std::string &path)
+{
+	char line[sizeof(LIST_HEADER)];
+	std::FILE *file = std::fopen(path.c_str(), "r");
+
+	if (!file)
+		return nullptr;
+	if (!std::fgets(line, sizeof(line), file) || std::strcmp(line, LIST_HEADER) != 0) {
+		std::fclose(file);
+		return nullptr;
+	}
+	return file;
+}
+
+} /* namespace */
 
 uint64_t
 MeshVariant::key() const
@@ -55,8 +81,47 @@ MeshVariant::key() const
 	return k;
 }
 
+std::optional<MeshVariant>
+MeshVariant::from_key(uint64_t key)
+{
+	MeshVariant variant;
+	unsigned at = 0;
+	const auto take = [&](unsigned bits) {
+		const unsigned value = static_cast<unsigned>(key >> at) & ((1u << bits) - 1);
+
+		at += bits;
+		return value;
+	};
+	bool known = true;
+
+	variant.has_texture = take(1);
+	variant.has_lighting = take(1);
+	variant.shading_mode = take(2);
+	variant.alpha_mode = take(1);
+	variant.tex_mode = take(3);
+	known = known && variant.tex_mode <= 4;
+	for (Light &light : variant.lights) {
+		light.on = take(1);
+		light.type = static_cast<LightType>(take(2));
+		const unsigned attenuation = take(3);
+
+		light.attenuation = static_cast<LightAttenuation>(attenuation);
+		known = known && attenuation <= static_cast<unsigned>(LightAttenuation::NONE);
+	}
+	variant.has_fog = take(1);
+	variant.has_cue = take(1);
+	variant.collect = take(1);
+	variant.has_pattern = take(1);
+
+	if (!known || variant.key() != key)
+		return std::nullopt;
+	return variant;
+}
+
 MeshPrograms::~MeshPrograms()
 {
+	if (m_list)
+		std::fclose(m_list);
 	glUseProgram(0);
 	for (const auto &[key, program] : m_programs)
 		glDeleteProgram(program.id);
@@ -70,7 +135,60 @@ MeshPrograms::get(const MeshVariant &variant)
 
 	if (held != m_programs.end())
 		return held->second;
+	if (m_list) {
+		std::fprintf(m_list, "%016" PRIx64 "\n", key);
+		std::fflush(m_list);
+	}
 	return m_programs.emplace(key, compile(variant)).first->second;
+}
+
+unsigned
+MeshPrograms::compile_listed(const std::string &path, const std::function<void()> &draw)
+{
+	std::FILE *const file = open_list(path);
+	unsigned compiled = 0;
+	char line[32];
+
+	if (!file)
+		return 0;
+	while (std::fgets(line, sizeof(line), file)) {
+		char *end;
+		const uint64_t key = std::strtoull(line, &end, 16);
+
+		/* Sixteen digits and the end of the line: a line cut short
+		 * by a crash is not a key. */
+		if (end != line + 16 || *end != '\n')
+			continue;
+		const std::optional<MeshVariant> variant = MeshVariant::from_key(key);
+
+		if (variant && !m_programs.contains(key)) {
+			m_programs.emplace(key, compile(*variant));
+			draw();
+			compiled++;
+		}
+	}
+	std::fclose(file);
+	glUseProgram(0);
+	return compiled;
+}
+
+void
+MeshPrograms::list_in(const std::string &path)
+{
+	std::FILE *const held = open_list(path);
+
+	if (m_list)
+		std::fclose(m_list);
+	if (held) {
+		std::fclose(held);
+		m_list = std::fopen(path.c_str(), "a");
+	} else {
+		m_list = std::fopen(path.c_str(), "w");
+		if (m_list) {
+			std::fputs(LIST_HEADER, m_list);
+			std::fflush(m_list);
+		}
+	}
 }
 
 MeshProgram

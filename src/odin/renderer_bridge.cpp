@@ -63,6 +63,10 @@ odin_renderer_new(const odin_renderer_memory_t *memory,
 	o.debug_keys = options->debug_keys;
 	o.key_down = options->key_down;
 	o.ctx = options->ctx;
+	if (options->programs_seed)
+		o.programs_seed = options->programs_seed;
+	if (options->programs_kept)
+		o.programs_kept = options->programs_kept;
 
 	auto renderer = std::make_unique<odin_renderer>(m, o);
 	return renderer.release();
@@ -78,6 +82,12 @@ void
 odin_renderer_set_gpu(odin_renderer_t *renderer, odin_hikaru_gpu_t *gpu)
 {
 	renderer->renderer.set_gpu(&odin_hikaru_gpu_chips(gpu));
+}
+
+void
+odin_renderer_prepare_programs(odin_renderer_t *renderer)
+{
+	renderer->renderer.prepare_programs();
 }
 
 void

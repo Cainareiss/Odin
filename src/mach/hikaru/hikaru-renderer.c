@@ -16,6 +16,9 @@
  * along with Valkyrie.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <sys/stat.h>
+#include <unistd.h>
+
 #include "vk/input.h"
 
 #include "mach/hikaru/hikaru-renderer.h"
@@ -187,12 +190,53 @@ hikaru_renderer_destroy (vk_renderer_t **renderer_)
 	}
 }
 
+/* The lists of the mesh programs of a game (odin::MeshPrograms): the one
+ * that comes with Odin, in shaders/ where the list of the games is, and
+ * the one kept for the user, in the cache of their home. A path is left
+ * empty when there is no such file or no place for it. */
+static void
+find_program_lists (const char *game, char *seed, char *kept, size_t size)
+{
+	const char *home = getenv ("HOME"), *cache = getenv ("XDG_CACHE_HOME");
+	char dir[512];
+
+	kept[0] = '\0';
+	snprintf (seed, size, "shaders/%s.txt", game);
+	if (access (seed, R_OK) && home)
+		snprintf (seed, size, "%s/.local/share/odin/shaders/%s.txt", home, game);
+	if (access (seed, R_OK))
+		seed[0] = '\0';
+
+	if (cache && cache[0])
+		snprintf (dir, sizeof (dir), "%s", cache);
+	else if (home)
+		snprintf (dir, sizeof (dir), "%s/.cache", home);
+	else
+		return;
+	mkdir (dir, 0700);
+	strncat (dir, "/odin", sizeof (dir) - strlen (dir) - 1);
+	mkdir (dir, 0755);
+	strncat (dir, "/shaders", sizeof (dir) - strlen (dir) - 1);
+	mkdir (dir, 0755);
+	snprintf (kept, size, "%s/%s.txt", dir, game);
+}
+
+/* On the drawing thread */
+static void
+prepare_programs (void *ctx)
+{
+	hikaru_renderer_t *hr = (hikaru_renderer_t *) ctx;
+
+	odin_renderer_prepare_programs (hr->odin);
+}
+
 vk_renderer_t *
-hikaru_renderer_new (vk_buffer_t *fb, vk_buffer_t *texram[2])
+hikaru_renderer_new (vk_buffer_t *fb, vk_buffer_t *texram[2], const char *game)
 {
 	odin_renderer_memory_t memory;
 	odin_renderer_options_t options;
 	hikaru_renderer_t *hr;
+	char seed[640], kept[640];
 
 	hr = ALLOC (hikaru_renderer_t);
 	if (!hr)
@@ -227,6 +271,10 @@ hikaru_renderer_new (vk_buffer_t *fb, vk_buffer_t *texram[2])
 	options.key_down	= is_key_down;
 	options.ctx		= NULL;
 
+	find_program_lists (game, seed, kept, sizeof (seed));
+	options.programs_seed	= seed[0] ? seed : NULL;
+	options.programs_kept	= kept[0] ? kept : NULL;
+
 	hr->odin = odin_renderer_new (&memory, &options);
 	if (!hr->odin) {
 		free (hr);
@@ -234,6 +282,7 @@ hikaru_renderer_new (vk_buffer_t *fb, vk_buffer_t *texram[2])
 	}
 
 	vk_renderer_start ((vk_renderer_t *) hr);
+	vk_renderer_run ((vk_renderer_t *) hr, prepare_programs, hr);
 
 	return (vk_renderer_t *) hr;
 }
