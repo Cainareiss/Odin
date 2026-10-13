@@ -24,6 +24,7 @@
 #include <array>
 #include <cstdint>
 #include <cstdio>
+#include <vector>
 
 namespace odin {
 
@@ -99,9 +100,12 @@ public:
 
 	/* A program that waits goes round a loop, and every turn reads the
 	 * same things and leaves the registers and the memory as they were,
-	 * but for one word it may count its turns in. With this on, such a
+	 * but for one word it may count its turns in; or a few turns do, one
+	 * after the other, and make one. With this on, such a
 	 * turn is run once, then only counted for as long as what it read
-	 * stays the same. The machine must then call
+	 * stays the same; and once the program has left it, for an interrupt
+	 * say, it is counted again as soon as the program is back at its
+	 * start with everything it read as it was. The machine must then call
 	 * ram_write() before it changes the plain memory itself, ram_read()
 	 * before it reads it, settle() before it saves the state, and its bus
 	 * must read without side effects. */
@@ -110,6 +114,9 @@ public:
 	void ram_write(uint32_t addr, uint32_t size);
 	/* Runs the part of a turn that was only counted. */
 	void settle();
+	/* Turns run to be recorded and turns counted so far, for measuring. */
+	uint64_t turns_recorded() const { return m_turn_recorded; }
+	uint64_t turns_counted() const { return m_turn_counted; }
 
 	/* The state between two instructions: settle() first. */
 	void save(Arm7State &out) const;
@@ -212,7 +219,10 @@ private:
 
 	/* Turns counted without being run, see set_turn_replay(). */
 	enum class Turn : uint8_t { Off, Idle, Record, Replay, Settle };
-	static constexpr uint32_t TURN_MAX = 4096;   /* instructions */
+	static constexpr uint32_t TURN_MAX = 8192;   /* instructions */
+	static constexpr uint32_t TURN_TRAIL = 4 * TURN_MAX; /* loads and stores */
+	static constexpr uint32_t TURN_ROUND = 16;   /* turns that make one */
+	static constexpr uint32_t TURN_AWAY = 1u << 16; /* instructions away from one kept */
 	static constexpr uint32_t TURN_READS = 16;   /* outside the memory */
 	static constexpr uint32_t TURN_STORES = 256; /* bytes changed */
 	static constexpr uint32_t TURN_PAGE = 12;    /* 4 KB */
@@ -231,6 +241,17 @@ private:
 		uint32_t load_lo, load_hi, store_lo, store_hi;
 		bool ran;
 	};
+	/* A load or a store of the turn in the memory, an instruction read
+	 * being a load; and a byte the turn leaves there. */
+	struct TurnAccess {
+		uint32_t offset, value;
+		uint8_t size;
+		bool store;
+	};
+	struct TurnByte {
+		uint32_t offset;
+		uint8_t value;
+	};
 	static constexpr uint32_t TURN_NO_COUNTER = 0xFFFFFFFF;
 
 	void turn_begin();
@@ -240,6 +261,10 @@ private:
 	bool turn_reads_hold();
 	bool turn_counts(uint32_t counter);
 	uint32_t turn_replay(uint32_t budget);
+	bool turn_keep();
+	bool turn_rejoin();
+	bool turn_registers_same() const;
+	void turn_trail(uint32_t offset, uint32_t value, uint32_t size, bool store);
 	void turn_note_fetch(uint32_t addr, uint32_t op);
 	void turn_note_read(uint32_t addr, uint32_t size, uint32_t value);
 	void turn_note_store(uint32_t addr, uint32_t size, uint32_t value);
@@ -251,6 +276,7 @@ private:
 	uint32_t m_turn_wait, m_turn_backoff; /* calls of run() before a record */
 	uint32_t m_turn_limit;                /* instructions to look for one */
 	uint32_t m_turn_count;                /* instructions of the turn */
+	uint32_t m_turn_rounds;               /* times back at its start so far */
 	uint32_t m_turn_at;                   /* of them, counted in this turn */
 	uint32_t m_turn_num_reads, m_turn_next_read, m_turn_num_stores;
 	Arm7State m_turn_start;
@@ -264,6 +290,17 @@ private:
 	/* The word the turn counts in, or TURN_NO_COUNTER: what a turn adds
 	 * to it, and the turns counted that it has not been given yet */
 	uint32_t m_turn_counter, m_turn_delta, m_turn_laps;
+	/* The turn recorded last can be counted again: what it took from the
+	 * memory and what it leaves there, drawn from the trail of its loads
+	 * and stores; the instructions the program still has to come back
+	 * to it, and the times it was at its start since without being in
+	 * it. See turn_rejoin(). */
+	bool m_turn_kept, m_turn_trail_full;
+	bool m_turn_one_mode;	/* the turn stays in its mode, with its registers */
+	uint32_t m_turn_try, m_turn_misses;
+	std::vector<TurnAccess> m_turn_trail, m_turn_inputs;
+	std::vector<TurnByte> m_turn_outputs;
+	uint64_t m_turn_recorded, m_turn_counted;
 };
 
 } /* namespace odin */

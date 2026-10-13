@@ -1413,15 +1413,42 @@ struct TurnsRun {
 	uint32_t bus_reads;
 	uint32_t seen;	/* the count as the machine read it on the way */
 	uint64_t instructions;
+	uint64_t recorded, counted;	/* turns run to be recorded, turns counted */
+	uint64_t watched;	/* a word of the memory as the machine read it before each call */
+};
+
+/* What the machine does besides, in a run of turns: an interrupt, held for
+ * one call out of `fiq_every`, a byte it writes at a call, and another
+ * answer of the bus from a call on. The handler of the interrupt counts in
+ * a register of its own, in a register of the program, or in the count,
+ * which it then loads into the User r13 or r9; or it calls the supervisor
+ * with the carry set every other time, which leaves the SVC mode another
+ * saved status. */
+enum class Handler { Own, Shared, User13, User9, Supervisor };
+struct TurnsEvents {
+	uint32_t fiq_every = 0;
+	uint32_t poke_call = 0, poke_at = 0;
+	uint8_t poke = 0;
+	uint32_t bus_call = 0;
+	uint8_t bus_answer = 0;
+	Handler handler = Handler::Own;
+	/* The flags the program starts with, and a byte of the memory */
+	uint32_t flags = 0;
+	uint32_t first_at = 0;
+	uint8_t first = 0;
+	/* A word the machine reads before each call */
+	uint32_t watch = 0;
+	/* Calls of 512 cycles */
+	uint32_t calls = 300;
 };
 
 constexpr uint32_t TURN_CODE = 0x1000, TURN_COUNT = 0x8000, TURN_FLAG = 0x8010;
 
-/* 300 calls of 512 cycles, as a sound board runs its ARM7. The machine
+/* 300 calls of 512 cycles, unless told, as a sound board runs its ARM7. The machine
  * reads the count at call 100, sets the flag the loop waits for at call
  * `flag_at` and, if asked, writes the count at call 150. */
 TurnsRun run_turns(bool counted, const std::vector<uint32_t> &code, uint32_t count, uint32_t flag_at, bool write_count = false,
-                   uint32_t set_byte = 0)
+                   uint32_t set_byte = 0, const TurnsEvents &events = {})
 {
 	CountingBus bus;
 	Arm7 cpu(bus);
@@ -1439,19 +1466,60 @@ TurnsRun run_turns(bool counted, const std::vector<uint32_t> &code, uint32_t cou
 	if (set_byte) {
 		out.ram[set_byte] = 1;
 	}
+	if (events.first_at) {
+		out.ram[events.first_at] = events.first;
+	}
+	std::vector<uint32_t> handler;
+	switch (events.handler) {
+	case Handler::Own:
+		handler = { dp_imm(ADD, false, 8, 8, 1, 0) };				/* add r8, r8, #1 */
+		break;
+	case Handler::Shared:
+		handler = { dp_imm(ADD, false, 6, 6, 1, 0) };				/* add r6, r6, #1 */
+		break;
+	case Handler::User13:
+	case Handler::User9:
+		handler = {
+			ldst_imm(true, false, true, true, false, 7, 8, 0),		/* ldr r8, [r7] */
+			dp_imm(ADD, false, 8, 8, 1, 0),
+			ldst_imm(false, false, true, true, false, 7, 8, 0),		/* str r8, [r7] */
+			/* ldmia r7, {r13}^ or {r9}^ */
+			ldstm(true, false, true, true, false, 7, 1u << (events.handler == Handler::User13 ? 13 : 9)),
+		};
+		break;
+	case Handler::Supervisor: {
+		const uint32_t back = dp_reg(MOV, true, 0, 15, 14, LSL, 0);		/* at 08: movs pc, lr */
+
+		for (uint32_t b = 0; b < 4; b++) {
+			out.ram[0x08 + b] = static_cast<uint8_t>(back >> (8 * b));
+		}
+		handler = {
+			dp_imm(EOR, false, 8, 8, 1, 0),					/* eor r8, r8, #1 */
+			dp_reg(MOV, true, 0, 9, 8, LSR, 1),				/* movs r9, r8, lsr #1 */
+			swi(0),
+		};
+		break;
+	}
+	}
+	handler.push_back(dp_imm(SUB, true, 14, 15, 4, 0));				/* subs pc, lr, #4 */
+	for (size_t i = 0; i < handler.size(); i++) {
+		for (uint32_t b = 0; b < 4; b++) {
+			out.ram[0x1C + i * 4 + b] = static_cast<uint8_t>(handler[i] >> (8 * b));
+		}
+	}
 	cpu.set_ram({out.ram.data(), 0x10000, 0xFFFF});
 
 	odin::Arm7State st{};
 	cpu.save(st);
 	st.pc = TURN_CODE;
-	st.cpsr = Arm7::MODE_SVC | Arm7::FLAG_I | Arm7::FLAG_F;
+	st.cpsr = Arm7::MODE_SVC | Arm7::FLAG_I | (events.fiq_every ? 0 : Arm7::FLAG_F) | events.flags;
 	cpu.load(st);
 	cpu.set_reg(1, TURN_FLAG);
 	cpu.set_reg(4, 0x00800000);
 	cpu.set_reg(7, TURN_COUNT);
 	cpu.set_turn_replay(counted);
 
-	for (uint32_t call = 0; call < 300; call++) {
+	for (uint32_t call = 0; call < events.calls; call++) {
 		if (call == 100) {
 			cpu.ram_read(TURN_COUNT, 4);
 			out.seen = static_cast<uint32_t>(out.ram[TURN_COUNT]) | (static_cast<uint32_t>(out.ram[TURN_COUNT + 1]) << 8)
@@ -1468,12 +1536,30 @@ TurnsRun run_turns(bool counted, const std::vector<uint32_t> &code, uint32_t cou
 			cpu.ram_write(TURN_FLAG, 1);
 			out.ram[TURN_FLAG] = 1;
 		}
+		if (events.poke_at && call == events.poke_call) {
+			cpu.ram_write(events.poke_at, 1);
+			out.ram[events.poke_at] = events.poke;
+		}
+		if (events.bus_call && call == events.bus_call) {
+			bus.mem[0] = events.bus_answer;
+		}
+		if (events.fiq_every) {
+			cpu.set_fiq(call % events.fiq_every == events.fiq_every - 1);
+		}
+		if (events.watch) {
+			cpu.ram_read(events.watch, 4);
+			for (uint32_t b = 0; b < 4; b++) {
+				out.watched = out.watched * 0x100000001B3ull + out.ram[events.watch + b];
+			}
+		}
 		cpu.run(512);
 	}
 	cpu.settle();
 	cpu.save(out.state);
 	out.bus_reads = bus.reads;
 	out.instructions = cpu.instructions();
+	out.recorded = cpu.turns_recorded();
+	out.counted = cpu.turns_counted();
 	return out;
 }
 
@@ -1620,6 +1706,150 @@ void test_turns()
 			std::snprintf(buf, sizeof buf, "the loop ended at a count of %u, pc %08x", run.ram[TURN_COUNT], run.state.pc);
 			fail(buf);
 		}
+	}
+
+	/* A turn that was counted is taken again when the program is back in
+	 * it: an interrupt every ten calls does not have it recorded each
+	 * time. Then what must stop that: something the turn read is no
+	 * longer the same, or what it leaves in the memory is no longer
+	 * there; the turn has to run. */
+	const auto kept = [&](const char *name, const std::vector<uint32_t> &code, TurnsEvents events, uint64_t most,
+	                      uint32_t turn) {	/* turn 0: however few are counted */
+		/* The flags the CMP of the wait leaves: the first turn is
+		 * then one from its first instruction on. The word the
+		 * turns of these programs write is looked at all along. */
+		events.flags = 0x60000000;
+		if (!events.watch) {
+			events.watch = TURN_COUNT + 20;
+		}
+		const TurnsRun counted = run_turns(true, code, 0, 1000, false, 0, events);
+		const TurnsRun run = run_turns(false, code, 0, 1000, false, 0, events);
+
+		g_current = name;
+		g_checks += 5;
+		if (!(counted.state == run.state) || counted.ram != run.ram || counted.instructions != run.instructions) {
+			fail("differs from every turn run");
+		}
+		if (counted.watched != run.watched) {
+			fail("the machine read something else on the way");
+		}
+		if (run.recorded != 0 || run.counted != 0) {
+			fail("turns recorded or counted with the counting off");
+		}
+		if (counted.recorded == 0 || counted.recorded > most) {
+			char buf[64];
+			std::snprintf(buf, sizeof buf, "%u turns were recorded", static_cast<unsigned>(counted.recorded));
+			fail(buf);
+		}
+		/* Two thirds of the instructions at least are in turns that
+		 * were counted: the interrupt is held one call out of ten. */
+		if (turn && counted.counted * turn * 3 < run.instructions * 2) {
+			char buf[96];
+			std::snprintf(buf, sizeof buf, "%u turns of %u instructions counted out of %u instructions",
+			              static_cast<unsigned>(counted.counted), turn, static_cast<unsigned>(run.instructions));
+			fail(buf);
+		}
+	};
+	const uint32_t copy_in = ldst_imm(true, false, true, true, false, 7, 5, 32);	/* ldr r5, [r7, #32] */
+	const uint32_t copy_out = ldst_imm(false, false, true, true, false, 7, 5, 20);	/* str r5, [r7, #20] */
+	const uint32_t seven = dp_imm(MOV, false, 0, 5, 7, 0);				/* mov r5, #7 */
+	const uint32_t no_r5 = dp_imm(MOV, false, 0, 5, 0, 0);				/* mov r5, #0 */
+	/* A byte that goes from 0 to 7 and round: eight turns make one. */
+	const std::vector<uint32_t> round = {
+		ldst_imm(true, true, true, true, false, 7, 0, 24),	/* ldrb r0, [r7, #24] */
+		add1,
+		dp_imm(AND, false, 0, 0, 7, 0),				/* and r0, r0, #7 */
+		ldst_imm(false, true, true, true, false, 7, 0, 24),	/* strb r0, [r7, #24] */
+		drop,
+	};
+
+	kept("a turn taken again after an interrupt", with_wait({}), {10}, 4, 4);
+	kept("a turn taken again after an interrupt, with its count", with_wait({load, add1, store, drop}), {10}, 4, 8);
+	kept("a round of eight turns taken again after an interrupt", with_wait(round), {10}, 4, 72);
+	/* The turn sets a word and clears it: what it reads back there is
+	 * its own, not what the memory held before. */
+	kept("a turn that reads back what it stored", with_wait({seven, copy_out, ldst_imm(true, false, true, true, false, 7, 6, 20),
+	     no_r5, copy_out, dp_imm(MOV, false, 0, 6, 0, 0)}), {10}, 4, 10);
+	/* Where the program is when the machine comes in changes what the
+	 * turn kept has to tell: at several calls, with several periods. */
+	for (const uint32_t every : { 7u, 10u, 13u }) {
+		for (uint32_t call = 101; call < 109; call++) {
+			kept("what a turn read is changed while it was left", with_wait({copy_in, copy_out, no_r5}),
+			     {every, call, TURN_COUNT + 32, 0x55}, 8, 7);
+			kept("what a turn leaves is changed while it was left", with_wait({seven, copy_out, no_r5}),
+			     {every, call, TURN_COUNT + 20, 9, 0, 0, Handler::Own, 0, TURN_COUNT + 20, 7}, 8, 7);
+			kept("a turn changed while it was left", with_wait({seven, copy_out, no_r5}),
+			     {every, call, TURN_CODE, 9, 0, 0, Handler::Own, 0, TURN_COUNT + 20, 7}, 8, 7);
+			kept("the bus answers something else while a turn was left", {
+				ldst_imm(true, false, true, true, false, 4, 3, 0),	/* ldr r3, [r4] */
+				ldst_imm(false, false, true, true, false, 7, 3, 20),	/* str r3, [r7, #20] */
+				dp_imm(MOV, false, 0, 3, 0, 0),				/* mov r3, #0 */
+				ldst_imm(true, true, true, true, false, 1, 2, 0),
+				dp_imm(CMP, true, 2, 0, 0, 0),
+				branch(false, -7, EQ),
+				branch(false, -2),
+			}, {every, 0, 0, 0, call, 0x33}, 8, 6);
+		}
+	}
+	/* The registers the turn can see must be as they were: one the
+	 * handler changes, the User r13 a transfer reads from another mode,
+	 * the r13 of a mode the turn goes to. */
+	kept("an interrupt that changes a register of the turn", with_wait({ldst_imm(false, false, true, true, false, 7, 6, 20)}),
+	     {10, 0, 0, 0, 0, 0, Handler::Shared}, 40, 5);
+	/* The turn leaves when the register is high enough, and writes
+	 * nothing: only the register tells that it is no longer the same. */
+	kept("an interrupt that changes what the turn leaves at", with_wait({dp_imm(CMP, true, 6, 0, 2, 12),	/* cmp r6, #0x200 */
+	     branch(false, 4, CS), dp_imm(CMP, true, 2, 0, 0, 0)}), {10, 0, 0, 0, 0, 0, Handler::Shared}, 40, 0);
+	kept("a turn that transfers a User register", with_wait({dp_imm(ADD, false, 7, 9, 20, 0),
+	     ldstm(false, false, true, true, false, 9, 1u << 13), dp_imm(MOV, false, 0, 9, 0, 0)}),
+	     {10, 0, 0, 0, 0, 0, Handler::User13}, 40, 7);
+	kept("an interrupt that changes a register of the mode of the turn", with_wait({ldst_imm(false, false, true, true, false, 7, 9, 20)}),
+	     {10, 0, 0, 0, 0, 0, Handler::User9}, 40, 5);
+	kept("an interrupt that changes the saved status of the mode of the turn", with_wait({mrs(true, 5), copy_out, no_r5}),
+	     {10, 0, 0, 0, 0, 0, Handler::Supervisor}, 40, 0);
+	kept("a turn that goes to another mode", with_wait({msr_imm(false, 1, 0x9F, 0),
+	     ldst_imm(false, false, true, true, false, 7, 13, 20), msr_imm(false, 1, 0x93, 0)}),
+	     {10, 0, 0, 0, 0, 0, Handler::User13}, 40, 7);
+	/* A word the turn loads after it stored one byte of it: what the
+	 * other bytes hold is not told apart, the turn is not kept. The
+	 * machine changes one of them. */
+	for (uint32_t call = 101; call < 109; call++) {
+		kept("a turn that loads a word it stored a byte of", with_wait({seven,
+		     ldst_imm(false, true, true, true, false, 7, 5, 36),	/* strb r5, [r7, #36] */
+		     ldst_imm(true, false, true, true, false, 7, 6, 36),	/* ldr r6, [r7, #36] */
+		     ldst_imm(false, false, true, true, false, 7, 6, 20),	/* str r6, [r7, #20] */
+		     no_r5, dp_imm(MOV, false, 0, 6, 0, 0)}),
+		     {10, call, TURN_COUNT + 37, 0x55, 0, 0, Handler::Own, 0, TURN_COUNT + 36, 7}, 40, 0);
+	}
+	{
+		/* More loads than the trail of a turn takes: 4 100 loads of
+		 * seven registers, then a word that makes the turn leave
+		 * when it is set, and 3 000 loads more. The turn is not
+		 * kept: the word, read past the end of the trail, could not
+		 * be looked at when the program comes back. The machine sets
+		 * it while the program is away, at several calls: some fall
+		 * after the turn read it. */
+		const uint32_t loads = ldstm(true, false, true, false, false, 9, 0x0D4D);	/* ldmia r9, {r0, r2, r3, r6, r8, r10, r11} */
+		std::vector<uint32_t> code(4100, loads);
+
+		code.push_back(copy_in);
+		code.push_back(dp_imm(CMP, true, 5, 0, 0, 0));		/* cmp r5, #0 */
+		code.push_back(branch(false, 3000 + 4, 1));		/* bne out */
+		code.insert(code.end(), 3000, loads);
+		code.push_back(dp_imm(MOV, false, 0, 2, 0, 0));		/* mov r2, #0 */
+		for (uint32_t call = 401; call < 521; call += 8) {
+			kept("a turn with more loads than its trail takes", with_wait(code),
+			     {400, call, TURN_COUNT + 32, 0x55, 0, 0, Handler::Own, 0, 0, 0, 0, 4000}, 80, 0);
+		}
+	}
+	{
+		/* A round of 5 680 instructions */
+		std::vector<uint32_t> code(700, dp_reg(MOV, false, 0, 5, 5, LSL, 0));	/* mov r5, r5 */
+
+		code.insert(code.end(), round.begin(), round.end());
+		/* The word looked at is away from the byte of the round:
+		 * the machine reading there would have it run. */
+		kept("a round longer than 4 096 instructions", with_wait(code), {0, 0, 0, 0, 0, 0, Handler::Own, 0, 0, 0, 0x9000}, 3, 8 * 709);
 	}
 }
 
