@@ -209,8 +209,6 @@ porta_get_s (sh4_t *ctx, uint16_t *val)
 	return 0;
 }
 
-/* XXX check port A in the core; wrong values reported (0 instead of 1)? */
-
 static int
 porta_put_m (sh4_t *ctx, uint16_t val)
 {
@@ -305,7 +303,12 @@ unk_s_put (vk_device_t *dev, unsigned size, uint32_t addr, uint64_t val)
 	return 0;
 }
 
-/* XXX hack */
+/* The window of the slave on the MIE: 1A800008 is among its ports and
+ * 1B000100 asks for its bus, as 01000100 does for the master; the slave
+ * checks the MIE through it at start (@0C00BE9A). HACK: a stand-in, the
+ * bus is given at once and the port keeps what was written. 14000800 is
+ * the configuration space of the command processor, read through the bridge
+ * of the slave. */
 static vk_device_t unk_s = {
 	0,
 	.get = unk_s_get,
@@ -481,8 +484,8 @@ hikaru_run_cycles (vk_machine_t *mach, int cycles)
 
 	/* Run the MEMCTL and GPU */
 	vk_device_exec (hikaru->memctl_m, cycles);
-	/* XXX run the slave MEMCTL? I've never seen it used, and would
-	 * like to debug it a bit before enabling it. */
+	/* The MEMCTL of the slave is not run (HEURISTIC, as Valkyrie had
+	 * it: no game is known to start a transfer there). */
 	vk_device_exec (hikaru->gpu, cycles);
 
 	/* Run the MIE (no-op on the HLE stand-in) */
@@ -547,8 +550,6 @@ hikaru_run_frame (vk_machine_t *mach)
 	hikaru_t *hikaru = (hikaru_t *) mach;
 	bool done = false;
 
-	/* XXX move the main loop into vk_machine */
-
 	VK_LOG (" *** VBLANK-OUT %s ***", vk_machine_get_debug_string (mach));
 
 	/* The chips run up to the next event, then the events due are
@@ -589,8 +590,6 @@ static void
 hikaru_reset (vk_machine_t *mach, vk_reset_type_t type)
 {
 	hikaru_t *hikaru = (hikaru_t *) mach;
-
-	/* XXX load bram from file */
 
 	vk_cpu_set_state (hikaru->sh_s, VK_CPU_STATE_RUN);
 
@@ -929,7 +928,6 @@ hikaru_set_rombd_config (hikaru_t *hikaru)
 	/* The fields computed here are used in hikaru-memctl.c::rombd_get () */
 
 	/* We require at least the bootrom to be loaded */
-	/* XXX add a "required" field to the json file */
 	if (!hikaru->bootrom)
 		return -1;
 
@@ -978,7 +976,6 @@ hikaru_set_rombd_config (hikaru_t *hikaru)
 		config->eprom_bank[0] = rombd_offs + 0x10;
 		config->eprom_bank[1] = rombd_offs + 0x13;
 		/* There are sixteen MASKROM banks */
-		/* XXX how does MASKROM stretching affect this? */
 		config->maskrom_bank[0] = (rombd_offs == 0) ? 0x20 : 0x30;
 		config->maskrom_bank[1] = (rombd_offs == 0) ? 0x2F : 0x4F;
 		/* Set the remaining configuration btis */
@@ -992,8 +989,6 @@ hikaru_set_rombd_config (hikaru_t *hikaru)
 	return 0;
 }
 
-/* XXX actually make sh4_t opaque and add accessors for the registers; that's
- * going to be needed for any possible future debugger anyway. */
 #define R(n_)	ctx->regs.r[n_]
 #define PR	ctx->regs.pr
 #define T	ctx->regs.sr.bit.t

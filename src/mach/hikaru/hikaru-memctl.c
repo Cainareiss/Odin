@@ -159,7 +159,7 @@
  * by setting bit 24 of +38. Upon termination, the MEMCTL raises IRL 1 on
  * the master SH-4, and sets bit 12 of +04 and its corresponding error field.
  *
- * See @0C008640 for more details XXX
+ * See @0C008640 for more details.
  *
  * NOTE: it may be the case that bit 12 and the error field are mutually
  * exclusive.
@@ -383,9 +383,6 @@
  * See memctl_get () and @0C004B32. 
  */
 
-/* TODO modify the hikaru->mmap_[ms] instead */
-/* TODO raise m/s bus error on bad access */
-
 typedef struct {
 	vk_device_t base;
 
@@ -447,7 +444,7 @@ rombd_get (hikaru_t *hikaru, unsigned size, uint32_t bus_addr, void *val)
 	} else if (bank >= config->maskrom_bank[0] &&
 	           bank <= config->maskrom_bank[1]) {
 		/* ROMBD MASKROM */
-		/* XXX take in account MASKROM stretching here */
+		/* Sixteen banks of 16 MB, whatever the size of the ROMs */
 		uint32_t num = bank - config->maskrom_bank[0]; /* 0 ... 15 */
 		uint32_t bank_size = 16*MB;
 		uint32_t bank_mask = bank_size - 1;
