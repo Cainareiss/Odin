@@ -42,6 +42,10 @@ struct vk_machine_t {
 
 	/* Frames run since power on */
 	unsigned	 frame;
+	/* The buffers and the devices are being reset, one by one: what
+	 * one of them shows of another is half old, half new until `reset`
+	 * is called. */
+	bool		 resetting;
 
 	vk_vector_t	*buffers;
 	vk_vector_t	*devices;

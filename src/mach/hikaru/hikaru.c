@@ -370,8 +370,11 @@ hikaru_update_irqs (vk_machine_t *mach)
 	hikaru_t *hikaru = (hikaru_t *) mach;
 	uint8_t lines = 0;
 
-	/* A chip may call while the machine is being built */
-	if (!hikaru->sh_m)
+	/* A chip may call while the machine is being built. While it is
+	 * reset the lines wait for hikaru_reset: the registers of the SH-4
+	 * are cleared first, and a chip that is not reset yet may still
+	 * ask. */
+	if (!hikaru->sh_m || mach->resetting)
 		return;
 
 	if (hikaru_gpu_irq_line (hikaru->gpu))
@@ -613,6 +616,8 @@ hikaru_reset (vk_machine_t *mach, vk_reset_type_t type)
 	odin_scheduler_reset (hikaru->sched);
 	hikaru->line_rest = 0;
 	hikaru_begin_frame (hikaru);
+
+	hikaru_update_irqs (mach);
 }
 
 static const char *
