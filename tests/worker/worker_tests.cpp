@@ -20,12 +20,10 @@
  * time, and its owner waits for it only when it asks to.
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow -pthread \
- *            -I src tests/worker/worker_tests.cpp src/odin/worker.cpp \
- *            src/odin/worker_bridge.cpp -o worker_tests
+ *            -I src tests/worker/worker_tests.cpp src/odin/worker.cpp -o worker_tests
  * Exit status is 0 when every check passes. */
 
 #include "odin/worker.hpp"
-#include "odin/worker_bridge.hpp"
 
 #include <atomic>
 #include <chrono>
@@ -126,27 +124,6 @@ void test_end()
 	check(done, "a worker that ends waits for the job given last");
 }
 
-void test_c_entry_points()
-{
-	odin_worker_t *worker = odin_worker_new();
-	int value = 0;
-
-	odin_worker_run(worker, [](void *ctx) { *static_cast<int *>(ctx) += 1; }, &value);
-	check(value == 1, "odin_worker_run waits for its job");
-	odin_worker_post(worker, [](void *ctx) {
-		nap();
-		*static_cast<int *>(ctx) += 2;
-	}, &value);
-	odin_worker_wait(worker);
-	check(value == 3, "odin_worker_post, then odin_worker_wait");
-	odin_worker_post(worker, [](void *ctx) {
-		nap();
-		*static_cast<int *>(ctx) += 4;
-	}, &value);
-	odin_worker_delete(worker);
-	check(value == 7, "odin_worker_delete waits for the job given last");
-}
-
 } /* namespace */
 
 int main()
@@ -155,7 +132,6 @@ int main()
 	test_post();
 	test_one_at_a_time();
 	test_end();
-	test_c_entry_points();
 
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures ? 1 : 0;

@@ -22,7 +22,7 @@
 #define __VK_REND_H__
 
 #include "vk/core.h"
-#include "odin/worker_bridge.hpp"
+#include "odin/worker.hpp"
 
 typedef struct vk_renderer_t vk_renderer_t;
 
@@ -30,7 +30,7 @@ struct vk_renderer_t {
 	SDL_Window *window;
 	SDL_GLContext gl_context;
 	/* The thread the frames are drawn on, see vk_renderer_start */
-	odin_worker_t *drawing;
+	odin::Worker *drawing;
 	/* ODIN_LATE_DRAW=1, a test: the drawing of a frame is held until
 	 * the machine has run the whole next frame, or waits for it. The
 	 * pictures must come out the same. */

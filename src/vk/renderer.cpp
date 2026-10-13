@@ -202,8 +202,8 @@ void
 vk_renderer_start (vk_renderer_t *renderer)
 {
 	SDL_GL_MakeCurrent (renderer->window, NULL);
-	renderer->drawing = odin_worker_new ();
-	odin_worker_run (renderer->drawing, take_gl_context, renderer);
+	renderer->drawing = new odin::Worker;
+	renderer->drawing->run ([renderer] { take_gl_context (renderer); });
 
 	if (vk_util_get_bool_option ("ODIN_LATE_DRAW", false))
 		renderer->late_draw = SDL_CreateSemaphore (0);
@@ -215,7 +215,7 @@ vk_renderer_stop (vk_renderer_t *renderer)
 	if (!renderer->drawing)
 		return;
 	vk_renderer_run (renderer, leave_gl_context, renderer);
-	odin_worker_delete (renderer->drawing);
+	delete renderer->drawing;
 	renderer->drawing = NULL;
 	SDL_GL_MakeCurrent (renderer->window, renderer->gl_context);
 }
@@ -227,14 +227,14 @@ vk_renderer_finish (vk_renderer_t *renderer)
 		renderer->held = false;
 		SDL_SemPost (renderer->late_draw);
 	}
-	odin_worker_wait (renderer->drawing);
+	renderer->drawing->wait ();
 }
 
 void
 vk_renderer_run (vk_renderer_t *renderer, void (* job)(void *ctx), void *ctx)
 {
 	vk_renderer_finish (renderer);
-	odin_worker_run (renderer->drawing, job, ctx);
+	renderer->drawing->run ([job, ctx] { job (ctx); });
 }
 
 /* On the drawing thread */
@@ -264,7 +264,7 @@ vk_renderer_end_frame (vk_renderer_t *renderer, unsigned frame)
 	renderer->logged = false;
 	if (renderer->take_frame)
 		renderer->take_frame (renderer);
-	odin_worker_post (renderer->drawing, draw_frame, renderer);
+	renderer->drawing->post ([renderer] { draw_frame (renderer); });
 	renderer->held = renderer->late_draw != NULL;
 	if (renderer->logged)
 		vk_renderer_finish (renderer);

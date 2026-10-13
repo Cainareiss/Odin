@@ -94,8 +94,7 @@ ODIN_OBJ := \
 	src/odin/sh4_bridge.o \
 	src/odin/scheduler.o \
 	src/odin/scheduler_bridge.o \
-	src/odin/worker.o \
-	src/odin/worker_bridge.o
+	src/odin/worker.o
 
 MACH_OBJ := \
 	src/mach/hikaru/hikaru.o \
