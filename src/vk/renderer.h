@@ -31,6 +31,11 @@ struct vk_renderer_t {
 	SDL_GLContext *gl_context;
 	/* The thread the frames are drawn on, see vk_renderer_start */
 	odin_worker_t *drawing;
+	/* ODIN_LATE_DRAW=1, a test: the drawing of a frame is held until
+	 * the machine has run the whole next frame, or waits for it. The
+	 * pictures must come out the same. */
+	SDL_sem *late_draw;
+	bool held;
 
 	/* The screen of the machine, in pixels */
 	unsigned width;
