@@ -294,31 +294,31 @@ get_home_dir (void)
 	return path;
 }
 
+/* The list of the games: in the folder Odin is started from, else in the
+ * home of the user, else where `make install` puts it. */
 static vk_game_list_t *
 load_game_list (void)
 {
-	vk_game_list_t *list = NULL;
-	char *paths[3], *home;
-	unsigned i, ret[3] = { 0, 0, 0 };
+	const char *home = get_home_dir ();
+	char paths[3][512];
+	unsigned i;
 
-	home = get_home_dir ();
+	snprintf (paths[0], sizeof (paths[0]), "./vk-games.json");
+	snprintf (paths[1], sizeof (paths[1]), "%s/vk-games.json", home ? home : ".");
+	snprintf (paths[2], sizeof (paths[2]), "%s/.local/share/odin/vk-games.json", home ? home : ".");
 
-	paths[0] = strdup ("./vk-games.json");
-	ret[1] = asprintf (&paths[1], "%s/vk-games.json", home);
-	ret[2] = asprintf (&paths[2], "%s/.local/share/odin/vk-games.json", home);
+	for (i = 0; i < 3; i++) {
+		vk_game_list_t *list;
 
-	for (i = 0; i < 3 && !list; i++)
-		if (!ret[i])
-			list = vk_game_list_new (paths[i]);
-
-	if (list)
-		printf ("loading game list from '%s'", paths[i]);
-
-	free (paths[0]);
-	free (paths[1]);
-	free (paths[2]);
-
-	return list;
+		if (access (paths[i], R_OK))
+			continue;
+		list = vk_game_list_new (paths[i]);
+		if (list)
+			printf ("loading game list from '%s'", paths[i]);
+		return list;
+	}
+	VK_ERROR ("no list of the games: '%s', '%s' nor '%s'", paths[0], paths[1], paths[2]);
+	return NULL;
 }
 
 int
