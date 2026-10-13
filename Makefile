@@ -10,7 +10,7 @@ SDL_LDFLAGS := `sdl2-config --libs`
 PKG_CFLAGS := `pkg-config --cflags gl glew jansson`
 PKG_LDFLAGS := `pkg-config --libs gl glew jansson`
 
-COMMON_FLAGS = $(DEFS) -I src -I /usr/include/json -Wall -Wno-strict-aliasing -Wno-format -Wno-unused-local-typedefs
+COMMON_FLAGS = $(DEFS) -pthread -I src -I /usr/include/json -Wall -Wno-strict-aliasing -Wno-format -Wno-unused-local-typedefs
 
 CFLAGS  := $(COMMON_FLAGS) $(PKG_CFLAGS) $(SDL_CFLAGS) -O3 -fomit-frame-pointer -flto -march=native -fno-stack-protector
 #CFLAGS  := $(COMMON_FLAGS) $(PKG_CFLAGS) $(SDL_CFLAGS) -O0 -g
@@ -30,7 +30,7 @@ CFLAGS += $(PGO_FLAGS)
 DEP_FLAGS := -MMD -MP
 CFLAGS += $(DEP_FLAGS)
 
-CXXFLAGS := -std=c++20 -I src -Wall -Wextra -Wpedantic -Wconversion -Wshadow -O3 -fomit-frame-pointer -flto -march=native -fno-stack-protector $(PGO_FLAGS) $(DEP_FLAGS)
+CXXFLAGS := -std=c++20 -pthread -I src -Wall -Wextra -Wpedantic -Wconversion -Wshadow -O3 -fomit-frame-pointer -flto -march=native -fno-stack-protector $(PGO_FLAGS) $(DEP_FLAGS)
 
 .PHONY: all install clean
 
@@ -94,7 +94,9 @@ ODIN_OBJ := \
 	src/odin/sh4_onchip.o \
 	src/odin/sh4_bridge.o \
 	src/odin/scheduler.o \
-	src/odin/scheduler_bridge.o
+	src/odin/scheduler_bridge.o \
+	src/odin/worker.o \
+	src/odin/worker_bridge.o
 
 HIKARU_OBJ := \
 	$(SH4_OBJ) \

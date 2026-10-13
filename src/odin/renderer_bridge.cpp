@@ -123,6 +123,12 @@ odin_renderer_draw_frame(odin_renderer_t *renderer)
 	renderer->renderer.draw_frame();
 }
 
+bool
+odin_renderer_frame_is_logged(const odin_renderer_t *renderer)
+{
+	return renderer->renderer.frame_is_logged();
+}
+
 unsigned
 odin_renderer_frame_picture(const odin_renderer_t *renderer, unsigned *width, unsigned *height)
 {

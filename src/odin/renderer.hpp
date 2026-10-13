@@ -120,6 +120,8 @@ public:
 	void begin_frame();
 	void take_frame(unsigned frame, unsigned window_w, unsigned window_h);
 	void draw_frame();
+	/* The drawing of the frame taken last writes a log. */
+	bool frame_is_logged() const { return logging(); }
 
 	/* The picture of the last frame, whatever the size of the window:
 	 * the framebuffer it can be read from, and its size. */

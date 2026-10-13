@@ -100,6 +100,9 @@ vk_machine_reset (vk_machine_t *mach, vk_reset_type_t type)
 
 	VK_LOG ("resetting machine %p", mach);
 
+	/* The frame being drawn reads the memories. */
+	vk_renderer_finish (mach->renderer);
+
 	VK_VECTOR_FOREACH (mach->buffers, offs) {
 		vk_buffer_t *buf = *(vk_buffer_t **) &mach->buffers->data[offs];
 		VK_LOG ("resetting buf %p", (void *) buf);

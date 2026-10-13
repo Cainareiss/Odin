@@ -45,12 +45,14 @@ hikaru_renderer_launch (vk_renderer_t *renderer)
 	odin_renderer_launch (hr->odin);
 }
 
-/* The decoded textures of that bank are stale. */
+/* The frame being drawn reads the texture RAM as its own frame left it;
+ * the decoded textures of that bank are stale then. */
 void
 hikaru_renderer_before_texram_write (vk_renderer_t *renderer, unsigned bank)
 {
 	hikaru_renderer_t *hr = (hikaru_renderer_t *) renderer;
 
+	vk_renderer_finish (renderer);
 	odin_renderer_invalidate_textures (hr->odin, (int) bank);
 }
 
@@ -70,10 +72,12 @@ hikaru_renderer_take_frame (vk_renderer_t *renderer)
 
 	SDL_GL_GetDrawableSize (renderer->window, &w, &h);
 	odin_renderer_take_frame (hr->odin, renderer->frame, (unsigned) w, (unsigned) h);
+	renderer->logged = odin_renderer_frame_is_logged (hr->odin);
 	snprintf (renderer->message, sizeof (renderer->message), "%s",
 	          odin_renderer_message (hr->odin));
 }
 
+/* On the drawing thread */
 static void
 hikaru_renderer_draw_frame (vk_renderer_t *renderer)
 {
@@ -92,33 +96,56 @@ hikaru_renderer_reset (vk_renderer_t *renderer)
 {
 	hikaru_renderer_t *hr = (hikaru_renderer_t *) renderer;
 
+	vk_renderer_finish (renderer);
 	odin_renderer_invalidate_textures (hr->odin, -1);
 }
 
-/* The pictures the renderer keeps, one item each, then its four counters. */
+/* The pictures the renderer keeps, one item each, then its four counters.
+ * They are read and written on the drawing thread. */
+
+typedef struct {
+	odin_renderer_t *odin;
+	uint8_t *pictures;
+	odin_renderer_counters_t counters;
+} kept_t;
+
+static void
+save_kept (void *ctx)
+{
+	kept_t *kept = (kept_t *) ctx;
+
+	odin_renderer_save_state (kept->odin, kept->pictures, &kept->counters);
+}
+
+static void
+load_kept (void *ctx)
+{
+	kept_t *kept = (kept_t *) ctx;
+
+	odin_renderer_load_state (kept->odin, kept->pictures, &kept->counters);
+}
 
 int
 hikaru_renderer_save_state (vk_renderer_t *renderer, vk_state_t *state)
 {
 	hikaru_renderer_t *hr = (hikaru_renderer_t *) renderer;
 	const uint32_t size = (uint32_t) odin_renderer_picture_size ();
-	uint8_t *pictures = (uint8_t *) malloc ((size_t) size * ODIN_RENDERER_PICTURES);
-	odin_renderer_counters_t counters;
+	kept_t kept = { hr->odin, (uint8_t *) malloc ((size_t) size * ODIN_RENDERER_PICTURES) };
 	int ret = 0;
 	unsigned i;
 
-	if (!pictures)
+	if (!kept.pictures)
 		return -1;
 
-	odin_renderer_save_state (hr->odin, pictures, &counters);
+	vk_renderer_run (renderer, save_kept, &kept);
 	for (i = 0; i < ODIN_RENDERER_PICTURES; i++)
-		ret |= vk_state_put (state, pictures + (size_t) i * size, size);
-	ret |= vk_state_put (state, &counters.num_lists, sizeof (counters.num_lists));
-	ret |= vk_state_put (state, &counters.shown, sizeof (counters.shown));
-	ret |= vk_state_put (state, &counters.next, sizeof (counters.next));
-	ret |= vk_state_put (state, &counters.launched, sizeof (counters.launched));
+		ret |= vk_state_put (state, kept.pictures + (size_t) i * size, size);
+	ret |= vk_state_put (state, &kept.counters.num_lists, sizeof (kept.counters.num_lists));
+	ret |= vk_state_put (state, &kept.counters.shown, sizeof (kept.counters.shown));
+	ret |= vk_state_put (state, &kept.counters.next, sizeof (kept.counters.next));
+	ret |= vk_state_put (state, &kept.counters.launched, sizeof (kept.counters.launched));
 
-	free (pictures);
+	free (kept.pictures);
 	return ret;
 }
 
@@ -127,24 +154,23 @@ hikaru_renderer_load_state (vk_renderer_t *renderer, vk_state_t *state)
 {
 	hikaru_renderer_t *hr = (hikaru_renderer_t *) renderer;
 	const uint32_t size = (uint32_t) odin_renderer_picture_size ();
-	uint8_t *pictures = (uint8_t *) malloc ((size_t) size * ODIN_RENDERER_PICTURES);
-	odin_renderer_counters_t counters;
+	kept_t kept = { hr->odin, (uint8_t *) malloc ((size_t) size * ODIN_RENDERER_PICTURES) };
 	int ret = 0;
 	unsigned i;
 
-	if (!pictures)
+	if (!kept.pictures)
 		return -1;
 
 	for (i = 0; i < ODIN_RENDERER_PICTURES && !ret; i++)
-		ret |= vk_state_get (state, pictures + (size_t) i * size, size);
-	ret |= vk_state_get (state, &counters.num_lists, sizeof (counters.num_lists));
-	ret |= vk_state_get (state, &counters.shown, sizeof (counters.shown));
-	ret |= vk_state_get (state, &counters.next, sizeof (counters.next));
-	ret |= vk_state_get (state, &counters.launched, sizeof (counters.launched));
+		ret |= vk_state_get (state, kept.pictures + (size_t) i * size, size);
+	ret |= vk_state_get (state, &kept.counters.num_lists, sizeof (kept.counters.num_lists));
+	ret |= vk_state_get (state, &kept.counters.shown, sizeof (kept.counters.shown));
+	ret |= vk_state_get (state, &kept.counters.next, sizeof (kept.counters.next));
+	ret |= vk_state_get (state, &kept.counters.launched, sizeof (kept.counters.launched));
 	if (!ret)
-		odin_renderer_load_state (hr->odin, pictures, &counters);
+		vk_renderer_run (renderer, load_kept, &kept);
 
-	free (pictures);
+	free (kept.pictures);
 	return ret;
 }
 
@@ -154,6 +180,7 @@ hikaru_renderer_destroy (vk_renderer_t **renderer_)
 	if (renderer_ && *renderer_) {
 		hikaru_renderer_t *hr = (hikaru_renderer_t *) *renderer_;
 
+		vk_renderer_stop (*renderer_);
 		if (hr->odin)
 			odin_renderer_delete (hr->odin);
 		hr->odin = NULL;
@@ -205,6 +232,8 @@ hikaru_renderer_new (vk_buffer_t *fb, vk_buffer_t *texram[2])
 		free (hr);
 		return NULL;
 	}
+
+	vk_renderer_start ((vk_renderer_t *) hr);
 
 	return (vk_renderer_t *) hr;
 }

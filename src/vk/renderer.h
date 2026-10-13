@@ -22,12 +22,15 @@
 #define __VK_REND_H__
 
 #include "vk/core.h"
+#include "odin/worker_bridge.hpp"
 
 typedef struct vk_renderer_t vk_renderer_t;
 
 struct vk_renderer_t {
 	SDL_Window *window;
 	SDL_GLContext *gl_context;
+	/* The thread the frames are drawn on, see vk_renderer_start */
+	odin_worker_t *drawing;
 
 	/* The screen of the machine, in pixels */
 	unsigned width;
@@ -44,14 +47,18 @@ struct vk_renderer_t {
 	unsigned picture_height;
 	char message[256];
 
-	/* Number of the frame being shown, set by the main loop */
+	/* Number of the frame taken last */
 	unsigned frame;
+	/* Its drawing writes a log, set by take_frame: the machine waits
+	 * for it, and the logs of the two stay in order. */
+	bool logged;
 
 	void	(* destroy)(vk_renderer_t **renderer_);
 	void	(* reset)(vk_renderer_t *renderer);
 	/* A frame: begin_frame before the machine runs it; once it has,
 	 * take_frame takes from the machine what there is to draw and
-	 * draw_frame draws it. */
+	 * draw_frame draws it, on the drawing thread, while the machine
+	 * runs the next frame. */
 	void	(* begin_frame)(vk_renderer_t *renderer);
 	void	(* take_frame)(vk_renderer_t *renderer);
 	void	(* draw_frame)(vk_renderer_t *renderer);
@@ -62,8 +69,20 @@ int			 vk_renderer_init (vk_renderer_t *renderer);
  * has room for it, or the whole display. */
 void			 vk_renderer_set_window (vk_renderer_t *renderer, unsigned times, bool fullscreen);
 void			 vk_renderer_toggle_fullscreen (vk_renderer_t *renderer);
+/* Starts the drawing thread and gives it the OpenGL context: from there on
+ * what needs the context goes through vk_renderer_run. vk_renderer_stop
+ * ends the thread and brings the context back. */
+void			 vk_renderer_start (vk_renderer_t *renderer);
+void			 vk_renderer_stop (vk_renderer_t *renderer);
+/* Waits for the frame being drawn. It reads memories of the machine as its
+ * own frame left them: wait before changing them. */
+void			 vk_renderer_finish (vk_renderer_t *renderer);
+/* Runs a job on the drawing thread, after the frame being drawn, and waits
+ * for it. */
+void			 vk_renderer_run (vk_renderer_t *renderer, void (* job)(void *ctx), void *ctx);
 void			 vk_renderer_begin_frame (vk_renderer_t *renderer);
-void			 vk_renderer_end_frame (vk_renderer_t *renderer);
+/* The machine has run that frame. */
+void			 vk_renderer_end_frame (vk_renderer_t *renderer, unsigned frame);
 void			 vk_renderer_clear_gl_errors (void);
 
 static inline void

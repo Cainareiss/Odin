@@ -172,18 +172,82 @@ show_speed (vk_renderer_t *renderer)
 	frames = 0;
 }
 
-void
-vk_renderer_end_frame (vk_renderer_t *renderer)
+static void
+take_gl_context (void *ctx)
 {
-	VK_ASSERT (renderer);
+	vk_renderer_t *renderer = (vk_renderer_t *) ctx;
 
-	if (renderer->take_frame)
-		renderer->take_frame (renderer);
+	SDL_GL_MakeCurrent (renderer->window, renderer->gl_context);
+	SDL_GL_SetSwapInterval (0);
+}
+
+static void
+leave_gl_context (void *ctx)
+{
+	vk_renderer_t *renderer = (vk_renderer_t *) ctx;
+
+	SDL_GL_MakeCurrent (renderer->window, NULL);
+}
+
+void
+vk_renderer_start (vk_renderer_t *renderer)
+{
+	SDL_GL_MakeCurrent (renderer->window, NULL);
+	renderer->drawing = odin_worker_new ();
+	odin_worker_run (renderer->drawing, take_gl_context, renderer);
+}
+
+void
+vk_renderer_stop (vk_renderer_t *renderer)
+{
+	if (!renderer->drawing)
+		return;
+	odin_worker_run (renderer->drawing, leave_gl_context, renderer);
+	odin_worker_delete (renderer->drawing);
+	renderer->drawing = NULL;
+	SDL_GL_MakeCurrent (renderer->window, renderer->gl_context);
+}
+
+void
+vk_renderer_finish (vk_renderer_t *renderer)
+{
+	odin_worker_wait (renderer->drawing);
+}
+
+void
+vk_renderer_run (vk_renderer_t *renderer, void (* job)(void *ctx), void *ctx)
+{
+	odin_worker_run (renderer->drawing, job, ctx);
+}
+
+/* On the drawing thread */
+static void
+draw_frame (void *ctx)
+{
+	vk_renderer_t *renderer = (vk_renderer_t *) ctx;
+
 	if (renderer->draw_frame)
 		renderer->draw_frame (renderer);
 	vk_renderer_screenshot (renderer);
 	vk_renderer_print_fingerprint (renderer);
 	SDL_GL_SwapWindow (renderer->window);
+}
+
+void
+vk_renderer_end_frame (vk_renderer_t *renderer, unsigned frame)
+{
+	VK_ASSERT (renderer);
+
+	/* The frame before is drawn first: this one is taken with the
+	 * drawing thread at rest, then drawn while the machine goes on. */
+	vk_renderer_finish (renderer);
+	renderer->frame = frame;
+	renderer->logged = false;
+	if (renderer->take_frame)
+		renderer->take_frame (renderer);
+	odin_worker_post (renderer->drawing, draw_frame, renderer);
+	if (renderer->logged)
+		vk_renderer_finish (renderer);
 
 	show_speed (renderer);
 	vk_renderer_print_speed (renderer);
@@ -284,6 +348,8 @@ vk_renderer_set_window (vk_renderer_t *renderer, unsigned times, bool fullscreen
 	int top = 0, left = 0, bottom = 0, right = 0;
 	SDL_Rect room;
 
+	vk_renderer_finish (renderer);
+
 	/* Not larger than what the display has room for, borders
 	 * included, and of the shape of the screen of the machine */
 	SDL_GetWindowBordersSize (renderer->window, &top, &left, &bottom, &right);
@@ -312,5 +378,6 @@ vk_renderer_toggle_fullscreen (vk_renderer_t *renderer)
 	const bool on = (SDL_GetWindowFlags (renderer->window) &
 	                 SDL_WINDOW_FULLSCREEN_DESKTOP) != 0;
 
+	vk_renderer_finish (renderer);
 	SDL_SetWindowFullscreen (renderer->window, on ? 0 : SDL_WINDOW_FULLSCREEN_DESKTOP);
 }

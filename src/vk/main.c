@@ -117,7 +117,7 @@ process_events (void)
 	return quit;
 }
 
-/* -s: <game>-<frame>.vkstate, written once the frame is on screen */
+/* -s: <game>-<frame>.vkstate, written once the frame is drawn */
 static void
 save_state_at_frame (vk_machine_t *mach)
 {
@@ -169,8 +169,7 @@ main_loop (vk_machine_t *mach, int num_frames)
 		if (!paused) {
 			vk_renderer_begin_frame (mach->renderer);
 			vk_machine_run_frame (mach);
-			mach->renderer->frame = mach->frame;
-			vk_renderer_end_frame (mach->renderer);
+			vk_renderer_end_frame (mach->renderer, mach->frame);
 			save_state_at_frame (mach);
 			if (!options.unthrottled)
 				limit_frame_rate ();
@@ -367,7 +366,6 @@ main (const int argc, char **argv)
 			VK_ERROR ("failed to load state '%s'", options.state_path);
 			return 1;
 		}
-		mach->renderer->frame = mach->frame;
 		VK_PRINT ("loaded state '%s', frame %u", options.state_path, mach->frame);
 	}
 

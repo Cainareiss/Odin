@@ -94,6 +94,8 @@ void odin_renderer_begin_frame(odin_renderer_t *renderer);
 void odin_renderer_take_frame(odin_renderer_t *renderer, unsigned frame,
                               unsigned window_w, unsigned window_h);
 void odin_renderer_draw_frame(odin_renderer_t *renderer);
+/* The drawing of the frame taken last writes a log. */
+bool odin_renderer_frame_is_logged(const odin_renderer_t *renderer);
 /* The picture of the last frame, whatever the size of the window: the
  * OpenGL framebuffer it can be read from, and its size. */
 unsigned odin_renderer_frame_picture(const odin_renderer_t *renderer,
