@@ -36,11 +36,13 @@ constexpr float INV255 = 1.0f / 255.0f;
 } /* namespace */
 
 Renderer::Renderer(const Memory &memory, const Options &options)
-	: m_gpu(nullptr), m_fb(memory.fb), m_options(options), m_list(nullptr),
-	  m_textures(memory.texram), m_mesh_vao(0), m_mesh_vbo(0),
+	: m_gpu(nullptr), m_fb(memory.fb), m_options(options), m_building(nullptr), m_list(nullptr),
+	  m_frame{}, m_textures(memory.texram), m_mesh_vao(0), m_mesh_vbo(0),
 	  m_program(nullptr), m_variant_key(0), m_drawing(0),
 	  m_scissor_vp_index(~0u), m_bound_tex_index(~0u), m_pass{}, m_again(false),
 	  m_scale(1), m_num_lists(0), m_shown(2), m_next(-1), m_launched(0), m_last{},
+	  m_layer_ram{std::vector<uint8_t>(size_t{WIDTH} * HEIGHT * 4),
+	              std::vector<uint8_t>(size_t{WIDTH} * HEIGHT * 4)},
 	  m_layer_pixels(size_t{WIDTH} * HEIGHT), m_message{}
 {
 	for (ListTextures &textures : m_list_textures) {
@@ -182,27 +184,46 @@ Renderer::set_2d_state()
 }
 
 void
-Renderer::begin_frame(unsigned frame)
+Renderer::begin_frame()
 {
 	/* The list drawn last is kept until its translucent fragments are
 	 * counted, see check_last_list: the command processor leaves it. */
-	m_list = m_gpu->antarctic().begin_list();
-	std::fill(tex_ids().begin(), tex_ids().end(), 0);
-
-	forget_held();
-	update_debug(frame);
+	m_building = m_gpu->antarctic().begin_list();
 }
 
 void
-Renderer::end_frame(unsigned frame, unsigned window_w, unsigned window_h)
+Renderer::take_frame(unsigned frame, unsigned window_w, unsigned window_h)
 {
 	/* The command processor may still be in the middle of a mesh: draw
 	 * what it pushed so far and let it start a new mesh on the next
 	 * vertex. */
 	m_gpu->antarctic().end_open_mesh();
 
-	show(frame);
-	present(window_w, window_h);
+	m_list = m_building;
+	m_frame.number = frame;
+	m_frame.launched = m_launched != 0;
+	m_launched = 0;
+	m_frame.fb = m_gpu->antarctic().fb_config();
+	m_frame.layers = m_gpu->eurasia().layers();
+	m_frame.window_w = window_w;
+	m_frame.window_h = window_h;
+
+	update_debug();
+	for (unsigned i = 0; i < 2; i++)
+		if (shows_layer(i))
+			take_layer(i);
+
+	std::printf("FRAMEBUFFER 781=%08X 181=%08X\n", m_frame.fb.w781, m_frame.fb.w181);
+	if (m_frame.launched && (m_options.list_fp || m_options.list_dump >= 0))
+		print_list_fingerprint();
+}
+
+void
+Renderer::draw_frame()
+{
+	forget_held();
+	show();
+	present(m_frame.window_w, m_frame.window_h);
 	gl::check("a frame");
 
 	if (logging()) {
@@ -308,14 +329,9 @@ Renderer::check_last_list()
  * next scene, and the stars leave one frame before the text of the layers;
  * SGNASCAR keeps its white picture while it loads, with no list launched. */
 void
-Renderer::show(unsigned frame)
+Renderer::show()
 {
-	const odin_fb_config_t &fb = m_gpu->antarctic().fb_config();
-	const bool launched = m_launched != 0;
-
-	std::printf("FRAMEBUFFER 781=%08X 181=%08X\n", fb.w781, fb.w181);
-
-	m_launched = 0;
+	const odin_fb_config_t &fb = m_frame.fb;
 
 	check_last_list();
 	m_textures.delete_dead();
@@ -328,13 +344,10 @@ Renderer::show(unsigned frame)
 
 	/* Draw the list to the 3D buffer its 781 names and keep the picture;
 	 * the one of the list before shows next. */
-	if (launched) {
+	if (m_frame.launched) {
 		const uint32_t n1 = odin_fb_num_1(&fb), n2 = odin_fb_num_2(&fb);
 		const uint32_t rate = odin_fb_blend(&fb) ? odin_fb_alpha(&fb) : 0;
 		const uint32_t num = m_num_lists;
-
-		if (m_options.list_fp || m_options.list_dump >= 0)
-			print_list_fingerprint(fb, frame);
 
 		m_last.list = m_list;
 		m_last.buffer = (n1 < 2) ? n1 : (n2 < 2) ? n2 : 0;
@@ -352,6 +365,7 @@ Renderer::show(unsigned frame)
 		if (m_options.lists_test)
 			size_lists(1);
 
+		std::fill(tex_ids().begin(), tex_ids().end(), 0);
 		draw_list();
 
 		if (num > 0)
@@ -363,7 +377,7 @@ Renderer::show(unsigned frame)
 			check_last_list();
 	}
 
-	compose(fb);
+	compose();
 }
 
 /* The picture shown and the layers, composed into the picture of the frame.
@@ -372,9 +386,10 @@ Renderer::show(unsigned frame)
  * second monitor), and only what the 781 and the 181 tell: the registers
  * of the display chip that set up the framebuffer are not used. */
 void
-Renderer::compose(const odin_fb_config_t &fb)
+Renderer::compose()
 {
-	const odin_layers_t &layers = m_gpu->eurasia().layers();
+	const odin_fb_config_t &fb = m_frame.fb;
+	const odin_layers_t &layers = m_frame.layers;
 	const uint32_t n1 = odin_fb_num_1(&fb), n2 = odin_fb_num_2(&fb);
 	const uint32_t rate = odin_fb_blend(&fb) ? odin_fb_alpha(&fb) : 0;
 	GLuint layer1 = 0, layer2 = 0;
@@ -385,10 +400,10 @@ Renderer::compose(const odin_fb_config_t &fb)
 	set_2d_state();
 	glBindFramebuffer(GL_FRAMEBUFFER, m_frame_fb);
 
-	if ((layers.layer[0][0].enabled || n1 == 2 || n2 == 2) && !m_debug[DEBUG_NO_LAYER1])
-		layer1 = upload_layer(layers.layer[0][0], mult1);
-	if ((layers.layer[0][1].enabled || n1 == 3 || n2 == 3) && !m_debug[DEBUG_NO_LAYER2])
-		layer2 = upload_layer(layers.layer[0][1], mult2);
+	if (shows_layer(0))
+		layer1 = upload_layer(0, mult1);
+	if (shows_layer(1))
+		layer2 = upload_layer(1, mult2);
 
 	/* The two blender inputs: 0 and 1 are the 3D, 2 and 3 the 2D layers
 	 * (PHARRIER blends layer 2 in for its logo screens, 781 = 0704/0705). */

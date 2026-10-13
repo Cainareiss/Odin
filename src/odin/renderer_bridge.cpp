@@ -105,16 +105,22 @@ odin_renderer_invalidate_textures(odin_renderer_t *renderer, int bank)
 }
 
 void
-odin_renderer_begin_frame(odin_renderer_t *renderer, unsigned frame)
+odin_renderer_begin_frame(odin_renderer_t *renderer)
 {
-	renderer->renderer.begin_frame(frame);
+	renderer->renderer.begin_frame();
 }
 
 void
-odin_renderer_end_frame(odin_renderer_t *renderer, unsigned frame,
-                        unsigned window_w, unsigned window_h)
+odin_renderer_take_frame(odin_renderer_t *renderer, unsigned frame,
+                         unsigned window_w, unsigned window_h)
 {
-	renderer->renderer.end_frame(frame, window_w, window_h);
+	renderer->renderer.take_frame(frame, window_w, window_h);
+}
+
+void
+odin_renderer_draw_frame(odin_renderer_t *renderer)
+{
+	renderer->renderer.draw_frame();
 }
 
 unsigned

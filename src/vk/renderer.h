@@ -49,8 +49,12 @@ struct vk_renderer_t {
 
 	void	(* destroy)(vk_renderer_t **renderer_);
 	void	(* reset)(vk_renderer_t *renderer);
+	/* A frame: begin_frame before the machine runs it; once it has,
+	 * take_frame takes from the machine what there is to draw and
+	 * draw_frame draws it. */
 	void	(* begin_frame)(vk_renderer_t *renderer);
-	void	(* end_frame)(vk_renderer_t *renderer);
+	void	(* take_frame)(vk_renderer_t *renderer);
+	void	(* draw_frame)(vk_renderer_t *renderer);
 };
 
 int			 vk_renderer_init (vk_renderer_t *renderer);

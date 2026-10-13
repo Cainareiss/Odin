@@ -29,7 +29,6 @@ vk_renderer_clear_gl_errors (void)
 void
 vk_renderer_begin_frame (vk_renderer_t *renderer)
 {
-	renderer->message[0] = '\0';
 	if (renderer->begin_frame)
 		renderer->begin_frame (renderer);
 }
@@ -178,8 +177,10 @@ vk_renderer_end_frame (vk_renderer_t *renderer)
 {
 	VK_ASSERT (renderer);
 
-	if (renderer->end_frame)
-		renderer->end_frame (renderer);
+	if (renderer->take_frame)
+		renderer->take_frame (renderer);
+	if (renderer->draw_frame)
+		renderer->draw_frame (renderer);
 	vk_renderer_screenshot (renderer);
 	vk_renderer_print_fingerprint (renderer);
 	SDL_GL_SwapWindow (renderer->window);

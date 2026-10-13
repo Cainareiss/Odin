@@ -73,7 +73,7 @@ Renderer::init_debug()
 /* The keys of the switches are keys of the players too: they act with the
  * debug keys only, once for each press. */
 void
-Renderer::update_debug(unsigned frame)
+Renderer::update_debug()
 {
 	if (m_options.debug_keys) {
 		char *msg = m_message;
@@ -97,13 +97,13 @@ Renderer::update_debug(unsigned frame)
 
 	/* The log of one frame only */
 	if (m_options.log_frame)
-		m_debug[DEBUG_LOG] = (static_cast<int>(frame) == m_options.log_frame);
+		m_debug[DEBUG_LOG] = (static_cast<int>(m_frame.number) == m_options.log_frame);
 	m_textures.set_log(logging() ? stdout : nullptr);
 
 	if (logging()) {
-		const odin_fb_config_t &fb = m_gpu->antarctic().fb_config();
+		const odin_fb_config_t &fb = m_frame.fb;
 
-		log("frame %u clear=%02X%02X%02X%02X 181=%08X 781=%08X", frame,
+		log("frame %u clear=%02X%02X%02X%02X 181=%08X 781=%08X", m_frame.number,
 		    fb.clear[0], fb.clear[1], fb.clear[2], fb.clear[3], fb.w181, fb.w781);
 	}
 }
@@ -150,15 +150,15 @@ Renderer::log_mesh(const odin_mesh_t &mesh) const
 /* One line for the list of each frame that draws one, to compare two
  * builds, and a line for each mesh of the frame of the list dump. */
 void
-Renderer::print_list_fingerprint(const odin_fb_config_t &fb, unsigned frame) const
+Renderer::print_list_fingerprint() const
 {
 	uint32_t meshes, tris;
 	const uint64_t fp = odin_display_list_fingerprint(
-		m_list, &fb, &meshes, &tris,
-		(m_options.list_dump == static_cast<int>(frame)) ? stderr : nullptr);
+		m_list, &m_frame.fb, &meshes, &tris,
+		(m_options.list_dump == static_cast<int>(m_frame.number)) ? stderr : nullptr);
 
 	std::fprintf(stderr, "LISTFP frame=%u fp=%016" PRIx64 " meshes=%u tris=%u\n",
-	             frame, fp, meshes, tris);
+	             m_frame.number, fp, meshes, tris);
 }
 
 void

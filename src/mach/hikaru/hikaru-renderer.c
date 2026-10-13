@@ -59,23 +59,29 @@ hikaru_renderer_begin_frame (vk_renderer_t *renderer)
 {
 	hikaru_renderer_t *hr = (hikaru_renderer_t *) renderer;
 
-	odin_renderer_set_scale (hr->odin, renderer->scale);
-	odin_renderer_set_anisotropy (hr->odin, renderer->anisotropy);
-	/* The frame being built follows the one shown. */
-	odin_renderer_begin_frame (hr->odin, renderer->frame + 1);
+	odin_renderer_begin_frame (hr->odin);
+}
+
+static void
+hikaru_renderer_take_frame (vk_renderer_t *renderer)
+{
+	hikaru_renderer_t *hr = (hikaru_renderer_t *) renderer;
+	int w, h;
+
+	SDL_GL_GetDrawableSize (renderer->window, &w, &h);
+	odin_renderer_take_frame (hr->odin, renderer->frame, (unsigned) w, (unsigned) h);
 	snprintf (renderer->message, sizeof (renderer->message), "%s",
 	          odin_renderer_message (hr->odin));
 }
 
 static void
-hikaru_renderer_end_frame (vk_renderer_t *renderer)
+hikaru_renderer_draw_frame (vk_renderer_t *renderer)
 {
 	hikaru_renderer_t *hr = (hikaru_renderer_t *) renderer;
 
-	int w, h;
-
-	SDL_GL_GetDrawableSize (renderer->window, &w, &h);
-	odin_renderer_end_frame (hr->odin, renderer->frame, (unsigned) w, (unsigned) h);
+	odin_renderer_set_scale (hr->odin, renderer->scale);
+	odin_renderer_set_anisotropy (hr->odin, renderer->anisotropy);
+	odin_renderer_draw_frame (hr->odin);
 	renderer->picture_fb = odin_renderer_frame_picture (hr->odin,
 	                                                    &renderer->picture_width,
 	                                                    &renderer->picture_height);
@@ -170,7 +176,8 @@ hikaru_renderer_new (vk_buffer_t *fb, vk_buffer_t *texram[2])
 	hr->base.destroy = hikaru_renderer_destroy;
 	hr->base.reset = hikaru_renderer_reset;
 	hr->base.begin_frame = hikaru_renderer_begin_frame;
-	hr->base.end_frame = hikaru_renderer_end_frame;
+	hr->base.take_frame = hikaru_renderer_take_frame;
+	hr->base.draw_frame = hikaru_renderer_draw_frame;
 
 	/* The window and its OpenGL context */
 	if (vk_renderer_init ((vk_renderer_t *) hr)) {

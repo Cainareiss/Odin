@@ -100,15 +100,26 @@ public:
 
 	/* A display list was launched. */
 	void launch() { m_launched = 1; }
-	/* The texture RAM of a bank has changed; every bank if negative. */
+	/* The texture RAM of a bank is about to be written; every bank if
+	 * negative. */
 	void invalidate_textures(int bank) { m_textures.invalidate(bank); }
 
-	/* A frame of the machine: begin_frame before it runs, end_frame once
-	 * it has, with the number of that frame. The picture of the frame is
-	 * shown in the window, of window_w by window_h pixels: as large as
-	 * fits, in the shape of the screen of the hardware, black around. */
-	void begin_frame(unsigned frame);
-	void end_frame(unsigned frame, unsigned window_w, unsigned window_h);
+	/* A frame of the machine, in three calls:
+	 *  - begin_frame, before the machine runs it;
+	 *  - take_frame, once it has, with the number of the frame and the
+	 *    size of the window in pixels: what the frame leaves to be drawn
+	 *    is taken from the machine;
+	 *  - draw_frame draws it. Its picture is shown in the window: as
+	 *    large as fits, in the shape of the screen of the hardware,
+	 *    black around.
+	 *
+	 * draw_frame reads nothing of the machine but the texture RAM and
+	 * the display lists of the last two frames: the machine may run the
+	 * next frame meanwhile. It must be over before the texture RAM is
+	 * written, and before any call but launch and begin_frame. */
+	void begin_frame();
+	void take_frame(unsigned frame, unsigned window_w, unsigned window_h);
+	void draw_frame();
 
 	/* The picture of the last frame, whatever the size of the window:
 	 * the framebuffer it can be read from, and its size. */
@@ -184,6 +195,15 @@ private:
 		const odin_display_list_t *list;
 		std::vector<GLuint> ids;
 	};
+	/* What take_frame keeps of the machine for draw_frame, with the
+	 * list and the layers */
+	struct Frame {
+		unsigned number;
+		bool launched;		/* a list was launched during it */
+		odin_fb_config_t fb;
+		odin_layers_t layers;
+		unsigned window_w, window_h;
+	};
 
 	/* renderer.cpp */
 	void build_blender();
@@ -192,10 +212,10 @@ private:
 	void build_presenter();
 	void forget_held();
 	void set_2d_state();
-	void show(unsigned frame);
+	void show();
 	void draw_list();
 	void check_last_list();
-	void compose(const odin_fb_config_t &fb);
+	void compose();
 	void present(unsigned window_w, unsigned window_h);
 
 	/* renderer_buffers.cpp */
@@ -235,15 +255,17 @@ private:
 	void draw_translucent(unsigned vpi, const odin_mesh_t *meshes, unsigned num);
 
 	/* renderer_layers.cpp */
-	GLuint upload_layer(const odin_layer_t &layer, float &mult);
+	bool shows_layer(unsigned i) const;
+	void take_layer(unsigned i);
+	GLuint upload_layer(unsigned i, float &mult);
 
 	/* renderer_debug.cpp */
 	void init_debug();
-	void update_debug(unsigned frame);
+	void update_debug();
 	bool logging() const { return m_debug[DEBUG_LOG] != 0; }
 	void log(const char *fmt, ...) const __attribute__((format(printf, 2, 3)));
 	void log_mesh(const odin_mesh_t &mesh) const;
-	void print_list_fingerprint(const odin_fb_config_t &fb, unsigned frame) const;
+	void print_list_fingerprint() const;
 	static void error(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 	[[noreturn]] static void fatal(const char *what);
 
@@ -251,8 +273,11 @@ private:
 	std::span<const uint8_t> m_fb;
 	Options m_options;
 
-	/* The list of the frame, built by the command processor */
+	/* The list the command processor builds, and the one of the frame
+	 * taken last */
+	odin_display_list_t *m_building;
 	odin_display_list_t *m_list;
+	Frame m_frame;
 	/* The command processor builds its lists in three buffers. */
 	ListTextures m_list_textures[3];
 
@@ -287,7 +312,7 @@ private:
 	uint32_t m_num_lists;		/* lists drawn so far */
 	uint32_t m_shown;		/* the picture on the screen */
 	int32_t m_next;			/* the one it takes at the next frame, or -1 */
-	uint32_t m_launched;		/* a list was launched during this frame */
+	uint32_t m_launched;		/* a list was launched since the last frame taken */
 	Last m_last;
 	/* For copy_picture, and a picture of the size of the screen of the
 	 * hardware for the save states */
@@ -314,6 +339,10 @@ private:
 		GLint invert_f, invert_b;
 		GLint clear;
 	} m_compose_locs;
+	/* The framebuffer RAM of the two layers as the frame left it,
+	 * WIDTH words a line, and the pixels of a layer on their way to
+	 * its texture */
+	std::vector<uint8_t> m_layer_ram[2];
 	std::vector<uint16_t> m_layer_pixels;
 
 	/* The translucent fragments, see renderer_translucent.cpp */

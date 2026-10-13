@@ -82,15 +82,18 @@ void odin_renderer_set_anisotropy(odin_renderer_t *renderer, unsigned level);
 
 /* A display list was launched. */
 void odin_renderer_launch(odin_renderer_t *renderer);
-/* The texture RAM of a bank has changed; every bank if negative. */
+/* The texture RAM of a bank is about to be written; every bank if
+ * negative. */
 void odin_renderer_invalidate_textures(odin_renderer_t *renderer, int bank);
 
-/* A frame of the machine: begin_frame before it runs, end_frame once it
- * has, with the number of that frame and the size of the window in
- * pixels. */
-void odin_renderer_begin_frame(odin_renderer_t *renderer, unsigned frame);
-void odin_renderer_end_frame(odin_renderer_t *renderer, unsigned frame,
-                             unsigned window_w, unsigned window_h);
+/* A frame of the machine: begin_frame before it runs; take_frame once it
+ * has, with the number of that frame and the size of the window in pixels;
+ * draw_frame then draws what was taken. See odin::Renderer for what may
+ * run meanwhile. */
+void odin_renderer_begin_frame(odin_renderer_t *renderer);
+void odin_renderer_take_frame(odin_renderer_t *renderer, unsigned frame,
+                              unsigned window_w, unsigned window_h);
+void odin_renderer_draw_frame(odin_renderer_t *renderer);
 /* The picture of the last frame, whatever the size of the window: the
  * OpenGL framebuffer it can be read from, and its size. */
 unsigned odin_renderer_frame_picture(const odin_renderer_t *renderer,
