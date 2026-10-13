@@ -25,7 +25,8 @@
 #include "odin/hikaru.hpp"
 
 #include <cstdlib>
-#include <cstring>
+
+#include "odin/bytes.hpp"
 
 namespace odin {
 
@@ -42,12 +43,9 @@ fatal(const char *what, uint32_t addr, unsigned size)
 uint64_t
 load(std::span<const uint8_t> memory, uint32_t offs, unsigned size)
 {
-	uint64_t value = 0;
-
 	if (offs + size > memory.size())
 		fatal("a read past the end of a memory", offs, size);
-	std::memcpy(&value, &memory[offs], size);
-	return value;
+	return load_bytes(&memory[offs], size);
 }
 
 void
@@ -55,7 +53,7 @@ store(std::span<uint8_t> memory, uint32_t offs, unsigned size, uint64_t value)
 {
 	if (offs + size > memory.size())
 		fatal("a write past the end of a memory", offs, size);
-	std::memcpy(&memory[offs], &value, size);
+	store_bytes(&memory[offs], size, value);
 }
 
 uint16_t

@@ -23,7 +23,8 @@
 
 #include <cstdio>
 #include <cstdlib>
-#include <cstring>
+
+#include "odin/bytes.hpp"
 
 /*
  * Memory Controller
@@ -220,12 +221,9 @@ MemCtl::reset()
 uint32_t
 MemCtl::reg(uint32_t offs, unsigned size) const
 {
-	uint32_t value = 0;
-
 	if (size > 4 || offs + size > NUM_REGS)
 		fatal("a register read of that size", size, offs);
-	std::memcpy(&value, &m_regs[offs], size);
-	return value;
+	return static_cast<uint32_t>(load_bytes(&m_regs[offs], size));
 }
 
 void
@@ -233,7 +231,7 @@ MemCtl::set_reg(uint32_t offs, unsigned size, uint64_t value)
 {
 	if (size > 8 || offs + size > NUM_REGS)
 		fatal("a register write of that size", size, offs);
-	std::memcpy(&m_regs[offs], &value, size);
+	store_bytes(&m_regs[offs], size, value);
 }
 
 /* The page of the external bus a window is open on: a byte of the registers

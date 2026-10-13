@@ -25,6 +25,8 @@
 #include <cstring>
 #include <utility>
 
+#include "odin/bytes.hpp"
+
 /*
  * Rom Board (ROMBD)
  * =================
@@ -358,7 +360,7 @@ RomBoard::read_guard(uint32_t offs, unsigned size)
 	if (m_crypt && offs <= 0xFFFF) {
 		/* RAM of the 315-5881 (MAME hikaru.cpp localbus_map_5881) */
 		if (offs + size <= CRYPT_RAM_SIZE)
-			std::memcpy(&value, &m_crypt_ram[offs], size);
+			value = load_bytes(&m_crypt_ram[offs], size);
 		return value;
 	}
 	if (m_crypt && offs >= 0x10000 && offs <= 0x1000F)
@@ -400,7 +402,7 @@ RomBoard::write_guard(uint32_t offs, unsigned size, uint64_t value)
 {
 	if (m_crypt && offs <= 0xFFFF) {
 		if (offs + size <= CRYPT_RAM_SIZE)
-			std::memcpy(&m_crypt_ram[offs], &value, size);
+			store_bytes(&m_crypt_ram[offs], size, value);
 	} else if (m_crypt && offs >= 0x10000 && offs <= 0x1000F) {
 		m_crypt->bus_write(offs & 0xF, size, static_cast<uint32_t>(value));
 	} else if (m_fpga && offs <= 0x13) {
@@ -419,7 +421,7 @@ RomBoard::read_rom(std::span<const uint8_t> rom, uint32_t offs, unsigned size, u
 
 	if (offs < rom.size()) {
 		if (offs + size <= rom.size())
-			std::memcpy(&value, &rom[offs], size);
+			value = load_bytes(&rom[offs], size);
 		return value;
 	}
 

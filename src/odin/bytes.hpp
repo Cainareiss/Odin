@@ -1,0 +1,95 @@
+/*
+ * Odin
+ * Copyright (C) 2026 Réda Chérif-Touil
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#ifndef ODIN_BYTES_HPP
+#define ODIN_BYTES_HPP
+
+#include <cstdint>
+#include <cstring>
+
+namespace odin {
+
+/* A value of `size` bytes at a place of a memory of the board, the least
+ * significant byte first. The sizes of the bus, 1, 2, 4 and 8, are told
+ * apart so that each is a plain load or store: a copy of a size the compiler
+ * does not know is a call into the C library, and the ROMs of a game put
+ * together that way took a third of a second at each start. */
+inline uint64_t
+load_bytes(const uint8_t *at, unsigned size)
+{
+	switch (size) {
+	case 1:
+		return *at;
+	case 2: {
+		uint16_t value;
+
+		std::memcpy(&value, at, sizeof(value));
+		return value;
+	}
+	case 4: {
+		uint32_t value;
+
+		std::memcpy(&value, at, sizeof(value));
+		return value;
+	}
+	case 8: {
+		uint64_t value;
+
+		std::memcpy(&value, at, sizeof(value));
+		return value;
+	}
+	default: {
+		uint64_t value = 0;
+
+		std::memcpy(&value, at, size);
+		return value;
+	}
+	}
+}
+
+inline void
+store_bytes(uint8_t *at, unsigned size, uint64_t value)
+{
+	switch (size) {
+	case 1:
+		*at = static_cast<uint8_t>(value);
+		break;
+	case 2: {
+		const uint16_t low = static_cast<uint16_t>(value);
+
+		std::memcpy(at, &low, sizeof(low));
+		break;
+	}
+	case 4: {
+		const uint32_t low = static_cast<uint32_t>(value);
+
+		std::memcpy(at, &low, sizeof(low));
+		break;
+	}
+	case 8:
+		std::memcpy(at, &value, sizeof(value));
+		break;
+	default:
+		std::memcpy(at, &value, size);
+		break;
+	}
+}
+
+} /* namespace odin */
+
+#endif /* ODIN_BYTES_HPP */
