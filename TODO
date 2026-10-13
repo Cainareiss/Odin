@@ -41,13 +41,16 @@ loop of the sound driver turns 312 times a frame and an interrupt comes every
 the word at 0x40 of the wave memory: a turn that only adds a constant to one
 word, and looks at it nowhere else, is counted too, and the word is given
 the turns it is owed before anything reads it (Arm7::turn_counts; their
-sound boards cost 2.4 times less). ODIN_TURNS=0 runs every turn: the
-memory, the states and the pictures must be the same. Not counted: the
-driver of BRAVEFF, whose turn serves one of eight slots in turn (the byte at
-0x9312 goes from 0 to 7): the eight turns that bring it back do not fit
-between two interrupts, and the try costs more than it saves there. A
-recorded turn is forgotten at each interrupt: keeping it, to be checked
-against what it read, would count more turns in every game.
+sound boards cost 2.4 times less). The turn of the driver of BRAVEFF serves
+one of eight slots (the byte at 0x9312 goes from 0 to 7): the eight turns
+that bring it back are recorded as one. A turn that was counted is kept
+through the interrupts: when the program is back at its start with the
+registers it can see as they were, what it read and what it leaves in the
+memory still there, it is counted again without being run (Arm7::
+turn_rejoin; the sound boards cost 1.2 to 1.8 times less again).
+ODIN_TURNS=0 runs every turn: the memory, the states and the pictures must
+be the same. What is left of the sound boards is mostly what each of the
+1 470 samples of a frame costs by itself, turns counted or not.
 
 The frames are drawn on a thread of their own (src/odin/worker.hpp,
 src/odin/display.cpp) while the machine runs the next one: without the limit
