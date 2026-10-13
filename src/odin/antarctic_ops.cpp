@@ -900,7 +900,8 @@ Antarctic::vector_light(const uint32_t *inst)
  * Materials
  * =========
  *
- * It supports flat, diffuse and phong shading. XXX more to come.
+ * A material holds the colours of a polygon, its shading mode, its blending
+ * mode and its alpha thresholds.
  */
 
 static uint32_t
@@ -1273,8 +1274,8 @@ Antarctic::op_texcoord_offset(const uint32_t *inst)
  *
  *	------nn nnnnnnnn ---uoooo oooooooo
  *
- * n = Index
- * u = Unknown; always 1?
+ * n = Index, added to the base
+ * u = Always 1 in the attract loops
  *
  * See PH:@0C01545C.
  */
@@ -1301,7 +1302,9 @@ Antarctic::op_texhead_commit(const uint32_t *inst)
  * n = Index
  * M = Modifier: 0 = set base only, 1 = recall for real
  *
- * XXX n here is likely too large.
+ *	The index is added to the base. The attract loops set bases of up to
+ *	7AC3 (VON4) and recall indices of up to 16D (PHARRIER); how many bits
+ *	of the sum the board keeps is not known, 16 here.
  */
 
 void
