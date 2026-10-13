@@ -46,6 +46,7 @@ OBJ := \
 	src/odin/crypt_315_5881.o \
 	src/odin/actel_m1.o \
 	src/odin/sh4.o \
+	src/odin/sh4_host.o \
 	src/odin/sh4_ops.o \
 	src/odin/sh4_onchip.o \
 	src/odin/mie_board.o \

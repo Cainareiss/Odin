@@ -24,7 +24,8 @@
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
  *            -ffp-contract=off -I src tests/sh4/sh4_tests.cpp src/odin/sh4.cpp \
- *            src/odin/sh4_ops.cpp src/odin/sh4_onchip.cpp -o sh4_tests
+ *            src/odin/sh4_ops.cpp src/odin/sh4_onchip.cpp src/odin/sh4_host.cpp \
+ *            -o sh4_tests
  * Use:   sh4_tests [-v]
  * Exit status is 0 when every check passes. */
 
@@ -1493,6 +1494,267 @@ void test_save_load()
 
 } /* namespace */
 
+/* Host code: the same program on two machines, one that reads its blocks
+ * and one that runs them as host code, in slices of every length. After
+ * each slice the two must be the same: registers, on-chip state, memory,
+ * what the bus saw, the cycles run over and the counts. */
+struct Pair {
+	Machine read, host;
+	unsigned slices = 0, differ = 0;
+
+	Pair() { host.cpu.set_translate(true); }
+	void each(const std::function<void(Machine &)> &set)
+	{
+		set(read);
+		set(host);
+	}
+	static bool same_log(const std::vector<Machine::Access> &a, const std::vector<Machine::Access> &b)
+	{
+		if (a.size() != b.size()) {
+			return false;
+		}
+		for (size_t i = 0; i < a.size(); i++) {
+			if (a[i].write != b[i].write || a[i].addr != b[i].addr || a[i].size != b[i].size ||
+			    a[i].value != b[i].value) {
+				return false;
+			}
+		}
+		return true;
+	}
+	void slice(int32_t cycles)
+	{
+		const int32_t over_read = read.cpu.run(cycles), over_host = host.cpu.run(cycles);
+		const Sh4State a = read.state(), b = host.state();
+
+		slices++;
+		if (over_read != over_host || std::memcmp(&a, &b, sizeof(a)) != 0 || read.ram != host.ram ||
+		    read.onchip != host.onchip || !same_log(read.device, host.device) ||
+		    !same_log(read.unanswered_log, host.unanswered_log) || read.seen != host.seen ||
+		    read.cpu.instructions() != host.cpu.instructions() || read.cpu.skipped() != host.cpu.skipped()) {
+			differ++;
+		}
+	}
+	/* `total` cycles in slices of 1 to `longest`, from a fixed series,
+	 * or as many as the two stay the same for. */
+	void slices_of(uint32_t total, uint32_t longest, uint32_t seed)
+	{
+		for (uint32_t done = 0; done < total && differ == 0;) {
+			seed = seed * 1664525u + 1013904223u;
+			const uint32_t cycles = 1 + (seed >> 8) % longest;
+			slice(static_cast<int32_t>(cycles));
+			done += cycles;
+		}
+	}
+	void verdict(const std::string &what)
+	{
+		check(slices > 0 && differ == 0, what + ": read and as host code, the same after each slice");
+		check(host.cpu.instructions() > 0, what + ": the program ran");
+	}
+};
+
+void test_host_code()
+{
+	g_test = "host code";
+	{
+		Pair probe;
+		if (!probe.host.cpu.translates()) {
+			std::printf("host code: none on this machine, not tested\n");
+			return;
+		}
+	}
+
+	/* Programs from a series, with the device and its interrupt. */
+	for (uint32_t seed = 1; seed <= 40; seed++) {
+		Pair p;
+
+		p.each([seed](Machine &m) {
+			with_device(m);
+			random_program(m, 300 + 40 * (seed % 8), seed * 7919u);
+		});
+		p.slices_of(60000, seed % 2 ? 400 : 6313, seed);
+		p.verdict("program " + std::to_string(seed));
+	}
+
+	/* Programs that go past the end of a page. */
+	for (uint32_t seed = 41; seed <= 44; seed++) {
+		Pair p;
+
+		p.each([seed](Machine &m) {
+			with_device(m);
+			random_program(m, 2100 + 150 * (seed % 4), seed * 7919u);
+		});
+		p.slices_of(120000, 6313, seed);
+		p.verdict("long program " + std::to_string(seed));
+	}
+
+	/* 200 instructions in a row: blocks that end for their length. */
+	{
+		Pair p;
+
+		p.each([](Machine &m) {
+			with_device(m);
+			for (uint32_t i = 0; i < 200; i++) {
+				m.put16(CODE + 2 * i, static_cast<uint16_t>(0x7001 | ((1 + i % 7) << 8)));	/* add #1, rn */
+			}
+			m.code(CODE + 400, { 0xAF36, 0x0009 });	/* bra CODE / nop */
+		});
+		p.slices_of(20000, 500, 7);
+		p.verdict("blocks that end for their length");
+	}
+
+	/* A loop that stores an instruction, add #k, r2 with a k that
+	 * changes, over one of another block, which then stores it over the
+	 * instruction that follows the store. */
+	{
+		Pair p;
+
+		p.each([](Machine &m) {
+			with_device(m);
+			m.code(CODE, {
+				0x7401,		/* add #1, r4 */
+				0x6043,		/* mov r4, r0 */
+				0xC907,		/* and #7, r0 */
+				0x6503,		/* mov r0, r5 */
+				0x9004,		/* mov.w @(8, pc), r0: add #0, r2 */
+				0x305C,		/* add r5, r0 */
+				0xD102,		/* mov.l @(8, pc), r1: CODE + 46 */
+				0x2101,		/* mov.w r0, @r1 */
+				0xA00A,		/* bra CODE + 40 */
+				0x0009,
+				0x7200, 0x0009,
+				0x0009, 0x0009,	/* CODE + 46 */
+				0x0009, 0x0009, 0x0009, 0x0009, 0x0009, 0x0009,
+				0xD102,		/* CODE + 40: mov.l @(8, pc), r1: CODE + 44 */
+				0x2101,		/* mov.w r0, @r1 */
+				0x7201,		/* add #1, r2: stored over by the store before it */
+				0x7303,		/* add #3, r3: stored over by the first block */
+				0xAFE6,		/* bra CODE */
+				0x0009,
+			});
+			m.put32(CODE + 24, CODE + 46);
+			m.put32(CODE + 52, CODE + 44);
+		});
+		p.slices_of(20000, 300, 5);
+		p.verdict("stores over the code of another block and of the running one");
+	}
+
+	/* An interrupt raised while another is served: RTE lets it in at
+	 * once, before the instruction it returns to. */
+	{
+		Pair p;
+
+		p.each([](Machine &m) {
+			Machine *self = &m;
+
+			with_device(m);
+			/* The handler drops its request and raises IRL2 once. */
+			m.on_device = [self] {
+				const Machine::Access &last = self->device.back();
+
+				self->seen.push_back(self->cpu.pc());
+				if (last.write) {
+					self->cpu.set_irq(Source::IRL1, false);
+					self->cpu.set_irq(Source::IRL2, self->device.size() % 3 == 0);
+				} else {
+					self->cpu.set_irq(Source::IRL1, true);
+				}
+			};
+			m.code(CODE, {
+				0x7101,		/* add #1, r1 */
+				0x60C2,		/* mov.l @r12, r0: the device raises IRL1 */
+				0x7201,		/* add #1, r2 */
+				0x7301,		/* add #1, r3 */
+				0xAFFA,		/* bra CODE */
+				0x7401,		/* add #1, r4 */
+			});
+		});
+		p.slices_of(20000, 500, 9);
+		p.verdict("an interrupt let in by RTE");
+	}
+
+	/* A request held while the program masks it: one turn in four, the
+	 * delay slot of a branch lets it in, and it is taken before the
+	 * instruction the branch goes to, which the handler can tell from
+	 * R8. */
+	{
+		Pair p;
+
+		p.each([](Machine &m) {
+			Machine *self = &m;
+
+			with_device(m);
+			m.on_device = [self] {
+				self->seen.push_back(self->cpu.pc());
+				if (self->device.back().write) {
+					self->cpu.set_irq(Source::IRL1, false);
+				}
+			};
+			m.code(RAM + 0x7000, {
+				0x1E83,		/* mov.l r8, @(12, r14) */
+				0x1C01,		/* mov.l r0, @(4, r12): the request is dropped */
+				0x002B, 0x0009,	/* rte / nop */
+			});
+			m.code(CODE, {
+				0xD108,		/* mov.l @(32, pc), r1: SR with every level masked */
+				0xD209,		/* mov.l @(36, pc), r2: SR with none */
+				0x410E,		/* ldc r1, sr */
+				0x7301,		/* CODE + 6: add #1, r3 */
+				0x6033,		/* mov r3, r0 */
+				0xC903,		/* and #3, r0 */
+				0x8800,		/* cmp/eq #0, r0 */
+				0x8B01,		/* bf CODE + 20 */
+				0xA002,		/* bra CODE + 24 */
+				0x420E,		/* ldc r2, sr: in the delay slot */
+				0xA000,		/* CODE + 20: bra CODE + 24 */
+				0x0009,
+				0x7801,		/* CODE + 24: add #1, r8 */
+				0x1E81,		/* mov.l r8, @(4, r14) */
+				0x410E,		/* ldc r1, sr */
+				0xAFF2,		/* bra CODE + 6 */
+				0x0009, 0x0009,
+			});
+			m.put32(CODE + 36, SR_MD | 0xF0);
+			m.put32(CODE + 40, SR_MD);
+		});
+		for (uint32_t i = 0, seed = 11; i < 200 && p.differ == 0; i++) {
+			seed = seed * 1664525u + 1013904223u;
+			p.each([](Machine &m) { m.cpu.set_irq(Source::IRL1, true); });
+			p.slice(static_cast<int32_t>(100 + (seed >> 8) % 600));
+		}
+		p.verdict("a request let in by a delay slot");
+		check(p.host.device.size() > 100, "the handler ran");
+	}
+
+	/* A timer read in the middle of a block, and a wait. */
+	{
+		Pair p;
+
+		p.each([](Machine &m) {
+			with_device(m);
+			m.code(CODE, {
+				0xD006,		/* mov.l @(24, pc), r0: TSTR */
+				0xE101,		/* mov #1, r1 */
+				0x2010,		/* mov.b r1, @r0: channel 0 runs */
+				0xD006,		/* mov.l @(24, pc), r0: TCNT0 */
+				0x7201,		/* add #1, r2 */
+				0x6302,		/* mov.l @r0, r3 */
+				0x1E31,		/* mov.l r3, @(4, r14) */
+				0x7201,		/* add #1, r2 */
+				0x6402,		/* mov.l @r0, r4 */
+				0x1E42,		/* mov.l r4, @(8, r14) */
+				0xAFFE,		/* bra itself: a wait */
+				0x0009,
+				0x0009, 0x0009,
+			});
+			m.put32(CODE + 28, 0xFFD80004);
+			m.put32(CODE + 32, 0xFFD8000C);
+		});
+		p.slices_of(30000, 700, 3);
+		p.verdict("a timer read in a block, then a wait");
+		check(p.host.cpu.skipped() > 0, "the wait is counted");
+	}
+}
+
 int main(int argc, char **argv)
 {
 	for (int i = 1; i < argc; i++) {
@@ -1514,6 +1776,7 @@ int main(int argc, char **argv)
 	test_blocks_found_again();
 	test_hook();
 	test_save_load();
+	test_host_code();
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures == 0 ? 0 : 1;
 }

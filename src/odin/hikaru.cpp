@@ -300,6 +300,13 @@ Hikaru::Hikaru(const Game &game, const RomBoard::Config &rombd, bool verbose)
 	for (unsigned which : { MASTER, SLAVE }) {
 		m_sh[which] = std::make_unique<Sh4>(m_bus[which], std::span<uint8_t>(m_iregs[which]),
 		                                    which == MASTER, true, 5);
+		/* ODIN_SH4_TRANSLATE=1, a test for now: the kept blocks run as
+		 * host code. The memory and the states must be the same. */
+		if (env_flag("ODIN_SH4_TRANSLATE", false)) {
+			m_sh[which]->set_translate(true);
+			if (!m_sh[which]->translates())
+				std::fprintf(stderr, "sh4: no host code on this machine, the blocks are read\n");
+		}
 		/* ODIN_SH4_TRACE=<prefix>: one line per slice in <prefix>-m.txt
 		 * and <prefix>-s.txt, the PC and a hash of the registers. */
 		if (const char *prefix = std::getenv("ODIN_SH4_TRACE")) {
@@ -331,6 +338,10 @@ Hikaru::~Hikaru()
 			             " kept of %" PRIu64 " decoded\n", which == MASTER ? 'M' : 'S',
 			             m_sh[which]->instructions(), m_sh[which]->skipped(), m_sh[which]->blocks(),
 			             m_sh[which]->blocks_decoded());
+		if (m_stats && m_sh[which]->translates())
+			std::fprintf(stderr, "sh4 %c: host code of %u KB, %" PRIu64 " calls out of direct reach\n",
+			             which == MASTER ? 'M' : 'S', m_sh[which]->host_bytes() / 1024,
+			             m_sh[which]->host_far_calls());
 	}
 	if (m_stats) {
 		const auto seconds = [this](unsigned part) { return static_cast<double>(m_stats_ns[part]) / 1e9; };

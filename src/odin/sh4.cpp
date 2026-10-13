@@ -76,8 +76,8 @@ Sh4::Sh4(Sh4Bus &bus, std::span<uint8_t> onchip, bool master, bool little_endian
 	  m_blk(nullptr), m_resumed(false), m_epoch(1), m_code_epoch(PHYSICAL_PAGES, 0),
 	  m_rd(1u << (32 - PAGE_BITS), nullptr), m_wr(1u << (32 - PAGE_BITS), nullptr),
 	  m_page_of(1u << (32 - PAGE_BITS), 0),
-	  m_near(NEAR_SIZE, Block{1, 0, 0, nullptr, nullptr, nullptr, 0}),
-	  m_hook_on(false), m_hook_addr(0),
+	  m_near(NEAR_SIZE, Block{1, 0, 0, nullptr, nullptr, nullptr, 0, 0}),
+	  m_translate(false), m_hook_on(false), m_hook_addr(0),
 	  m_wait{}, m_touched(false), m_event(false),
 	  m_intc{}, m_dmac_running{}, m_tmu_running{}, m_tmu_counter{},
 	  m_cycles(0), m_at(0), m_tmu_time(0), m_slice(0), m_retime(false), m_clock_mode(clock_mode),
@@ -479,8 +479,11 @@ void Sh4::drop_blocks()
 	m_code_pages.clear();
 	std::fill(m_page_of.begin(), m_page_of.end(), 0);
 	std::fill(m_code_epoch.begin(), m_code_epoch.end(), 0);
+	if (m_host) {
+		m_host->clear();
+	}
 	/* An odd PC: no block is kept for one. */
-	std::fill(m_near.begin(), m_near.end(), Block{1, 0, 0, nullptr, nullptr, nullptr, 0});
+	std::fill(m_near.begin(), m_near.end(), Block{1, 0, 0, nullptr, nullptr, nullptr, 0, 0});
 }
 
 /* What may not be in a delay slot: a branch, a PC-relative instruction
@@ -541,6 +544,7 @@ bool Sh4::decode_block(uint32_t pc, uint32_t limit, Block &b, std::vector<Sh4Op>
 			slot.flags |= OP_SLOT;
 			words = count + 2;
 			if (kind == Kind::Jump) {
+				op.flags |= OP_JUMP;
 				op.m = 1;
 				body[count++] = op;
 				body[count++] = slot;
@@ -549,8 +553,12 @@ bool Sh4::decode_block(uint32_t pc, uint32_t limit, Block &b, std::vector<Sh4Op>
 			}
 			/* Taken, the branch runs a copy of its delay slot kept
 			 * behind the block; not taken, the block goes on. */
+			op.flags |= OP_DELAYED;
 			op.m = static_cast<uint8_t>(slot_count);
 			slots[slot_count++] = slot;
+		}
+		if (kind == Kind::Branch) {
+			op.flags |= OP_BRANCH;
 		}
 		body[count++] = op;
 		if (kind == Kind::End || hooked(at + 2)) {
@@ -566,6 +574,7 @@ bool Sh4::decode_block(uint32_t pc, uint32_t limit, Block &b, std::vector<Sh4Op>
 	b.code = code;
 	b.copy = nullptr;
 	b.checked = 0;
+	b.host = 0;
 
 	/* After the slot of a jump nothing is left to give back; after the
 	 * copy of the slot of a conditional branch, what follows the branch
@@ -611,7 +620,7 @@ uint16_t Sh4::fetch(uint32_t pc)
 void Sh4::decode_once(uint32_t pc)
 {
 	Sh4Op op, end{};
-	Block b{pc, 1, 0, nullptr, nullptr, nullptr, 0};
+	Block b{pc, 1, 0, nullptr, nullptr, nullptr, 0, 0};
 	Kind kind = decode(fetch(pc), pc, op);
 
 	m_short_ops.clear();
@@ -651,7 +660,70 @@ void Sh4::run_block(const Block &b, uint32_t from)
 	/* The cycles of all that is left of the block; an instruction that
 	 * leaves it gives back those of the instructions not run. */
 	m_remaining -= static_cast<int32_t>(b.count - from);
+	/* Host code is entered at the start of a block only. */
+	if (b.host && from == 0) {
+		return m_host->run(*this, b.host);
+	}
 	ops->run(*this, ops);
+}
+
+/* Host code */
+
+void Sh4::set_translate(bool on)
+{
+	if (on && !m_host) {
+		m_host = std::make_unique<Sh4Host>();
+	}
+	m_translate = on && m_host->usable();
+	drop_blocks();
+}
+
+/* Writes the host code of a kept block: its instructions called in turn,
+ * the block left as soon as one says so. A conditional branch that goes
+ * says where to; one with a delay slot has the copy of its slot and the end
+ * that follows it called behind the block, as a jump has its own in line. */
+void Sh4::translate(Block &b)
+{
+	struct Taken {
+		Sh4Host::Jump jump;
+		uint32_t op;
+	};
+	std::array<Taken, BLOCK_MAX + 1> taken;
+	uint32_t num_taken = 0;
+	const Sh4Op *ops = b.ops;
+	Sh4Host &host = *m_host;
+	bool jumped = false;
+
+	b.host = host.begin(ops);
+	for (uint32_t i = 0; i < b.count && !jumped; i++) {
+		host.call(called(ops[i].run), i);
+		if (ops[i].flags & OP_JUMP) {
+			host.call(called(ops[i + 1].run), i + 1);
+			host.call(called(ops[i + 2].run), i + 2);
+			host.go_where_told();
+			jumped = true;
+		} else if (ops[i].flags & (OP_BRANCH | OP_DELAYED)) {
+			taken[num_taken++] = Taken{host.jump_if_told(), i};
+		} else {
+			host.loop_if_told();
+		}
+	}
+	if (!jumped) {
+		host.call(called(ops[b.count].run), b.count);
+		host.go_where_told();
+	}
+	for (uint32_t k = 0; k < num_taken; k++) {
+		const uint32_t i = taken[k].op;
+
+		host.bind(taken[k].jump);
+		if (ops[i].flags & OP_DELAYED) {
+			const uint32_t slot = i + ops[i].m;
+
+			host.call(called(ops[slot].run), slot);
+			host.call(called(ops[slot + 1].run), slot + 1);
+		}
+		host.go_where_told();
+	}
 }
 
 /* A kept block serves, from its instruction `from` on, when the slice has
@@ -718,7 +790,7 @@ void Sh4::run_far(uint32_t pc, bool resumed)
 	}
 
 	/* A block takes less than 4 * BLOCK_MAX places: m_ops never moves. */
-	if (m_ops.size() + 4 * BLOCK_MAX > OPS_MAX) {
+	if (m_ops.size() + 4 * BLOCK_MAX > OPS_MAX || (m_translate && !m_host->room())) {
 		drop_blocks();
 	}
 	if (!decode_block(pc, limit, b, m_ops)) {
@@ -730,6 +802,9 @@ void Sh4::run_far(uint32_t pc, bool resumed)
 	}
 	b.checked = m_epoch;
 	guard_code(b);
+	if (m_translate) {
+		translate(b);
+	}
 	uint32_t &slot = m_page_of[pc >> PAGE_BITS];
 	if (slot == 0) {
 		m_code_pages.emplace_back();

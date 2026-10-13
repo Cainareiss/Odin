@@ -60,6 +60,21 @@ struct Sh4Threaded {
 	static void loop(Sh4 &) {}
 };
 
+/* Host code calls each instruction of a block in turn and is told what
+ * comes next: 0, the block goes on; 1, back to the run loop; anything else,
+ * the host code of the block to go to. */
+struct Sh4Called {
+	using Ret = uintptr_t;
+
+	static uintptr_t go(Sh4 &, const Sh4Op *) { return 0; }
+	static uintptr_t stop(Sh4 &c, const Sh4Op *op) { return c.stopped(op); }
+	/* The host code calls the slot itself, then the end that follows
+	 * it. */
+	static uintptr_t slot(Sh4 &, const Sh4Op *) { return 1; }
+	static uintptr_t follow(Sh4 &c, uint32_t pc) { return c.link(pc); }
+	static uintptr_t loop(Sh4 &) { return 1; }
+};
+
 /* The instructions, written once for every way to hand over. */
 template <class Way>
 struct Sh4OpsT {
@@ -1847,6 +1862,26 @@ Sh4::Kind Sh4::decode(uint16_t inst, uint32_t pc, Sh4Op &op)
 		break;
 	}
 	return e.kind;
+}
+
+/* The instruction, or the end of a block, as host code calls it. */
+Sh4Host::Call Sh4::called(void (*run)(Sh4 &, const Sh4Op *))
+{
+	using Calls = Sh4OpsT<Sh4Called>;
+	static const std::unordered_map<void (*)(Sh4 &, const Sh4Op *), Sh4Host::Call> both = [] {
+		std::unordered_map<void (*)(Sh4 &, const Sh4Op *), Sh4Host::Call> m;
+
+		for (uint32_t i = 0; i < Sh4Ops::table_size; i++) {
+			m.emplace(Sh4Ops::table[i].run, Calls::table[i].run);
+		}
+		m.emplace(Sh4Ops::invalid, Calls::invalid);
+		m.emplace(Sh4Ops::bf_dt, Calls::bf_dt);
+		m.emplace(&Sh4::op_next, Calls::end_next);
+		m.emplace(&Sh4::op_leave, Calls::end_leave);
+		return m;
+	}();
+
+	return both.at(run);
 }
 
 /* The two ends of a block, see Sh4OpsT. */

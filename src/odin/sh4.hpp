@@ -24,9 +24,12 @@
 #include <array>
 #include <cstdint>
 #include <cstring>
+#include <memory>
 #include <span>
 #include <unordered_map>
 #include <vector>
+
+#include "odin/sh4_host.hpp"
 
 namespace odin {
 
@@ -97,6 +100,7 @@ public:
 
 class Sh4;
 struct Sh4Threaded;
+struct Sh4Called;
 template <class Way>
 struct Sh4OpsT;
 
@@ -118,7 +122,12 @@ struct Sh4Op {
  * runs, so code that changed is decoded again whoever wrote it. The check
  * is not made again as long as nothing can have written the code: the
  * slice has not ended, the bus was not used, and no store of the program
- * fell on a page of code that was checked. */
+ * fell on a page of code that was checked.
+ *
+ * A kept block is run by the reader, one instruction handing over to the
+ * next, or, when set_translate() says so and the host allows it, by host
+ * code written for the block that calls the same instructions in turn. The
+ * two must give the same, cycle for cycle. */
 class Sh4 {
 public:
 	static constexpr uint32_t PAGE_BITS = 12;
@@ -159,6 +168,10 @@ public:
 		m_event = true;
 	}
 	Sh4Run run_state() const { return m_run; }
+	/* Whether the kept blocks run as host code; false on a host that
+	 * has none. To be set before anything runs. */
+	void set_translate(bool on);
+	bool translates() const { return m_translate; }
 
 	/* The state between two calls of run(). */
 	void save(Sh4State &out) const;
@@ -191,9 +204,12 @@ public:
 	/* The blocks kept now, and all those decoded to be kept. */
 	size_t blocks() const { return m_blocks.size(); }
 	uint64_t blocks_decoded() const { return m_decoded; }
+	uint32_t host_bytes() const { return m_host ? m_host->used() : 0; }
+	uint64_t host_far_calls() const { return m_host ? m_host->far_calls() : 0; }
 
 private:
 	friend struct Sh4Threaded;
+	friend struct Sh4Called;
 	template <class Way>
 	friend struct Sh4OpsT;
 
@@ -209,6 +225,10 @@ private:
 	static constexpr uint32_t PHYSICAL_PAGES = 1u << (29 - PAGE_BITS);
 	static constexpr uint8_t OP_BAD_SLOT = 1;	/* the delay slot holds what it may not */
 	static constexpr uint8_t OP_SLOT = 2;		/* runs as a delay slot */
+	/* What a branch is, for the host code of its block */
+	static constexpr uint8_t OP_BRANCH = 4;		/* conditional, no delay slot */
+	static constexpr uint8_t OP_DELAYED = 8;	/* conditional, its slot `m` further */
+	static constexpr uint8_t OP_JUMP = 16;		/* always taken, its slot comes next */
 
 	struct Regs {
 		uint32_t r[16];
@@ -233,6 +253,7 @@ private:
 		const uint16_t *copy;	/* the code as it was decoded */
 		const Sh4Op *ops;
 		uint32_t checked;	/* m_epoch when the code was last compared */
+		uint32_t host;		/* place of its host code, 0: none */
 	};
 
 	/* For each instruction of a page, the kept block that runs it: rank
@@ -276,6 +297,7 @@ private:
 	uint16_t fetch(uint32_t pc);
 	void drop_blocks();
 	void run_block(const Block &b, uint32_t from = 0);
+	void translate(Block &b);
 	void wait_mark();
 	void wait_check();
 	void take_irq();
@@ -295,6 +317,7 @@ private:
 
 	/* sh4_ops.cpp */
 	static Kind decode(uint16_t inst, uint32_t pc, Sh4Op &op);
+	static Sh4Host::Call called(void (*run)(Sh4 &, const Sh4Op *));
 	static void op_next(Sh4 &c, const Sh4Op *op);
 	static void op_leave(Sh4 &c, const Sh4Op *op);
 	static void pair_delay_loop(const Sh4Op &before, uint32_t before_pc, Sh4Op &op);
@@ -345,38 +368,76 @@ private:
 		if (op->flags & OP_SLOT) {
 			return op[1].run(*this, op + 1);
 		}
+		stop_here(op);
+	}
+	/* The same for host code, which is told what comes next: after a
+	 * delay slot the block goes on, to the end that follows it. */
+	uintptr_t stopped(const Sh4Op *op)
+	{
+		if (op->flags & OP_SLOT) {
+			return 0;
+		}
+		stop_here(op);
+		return 1;
+	}
+	void stop_here(const Sh4Op *op)
+	{
 		m_r.pc = pc_of(op) + 2;
 		m_remaining += m_blk->count - op->idx - 1;
 		m_resumed = true;
 	}
 
-	/* At the end of a block that nothing disturbed: straight into the
-	 * block at `pc` when it is kept, was compared in this epoch and fits
-	 * in the slice, unless the search for waits has something to do
-	 * here. Otherwise back to the run loop. The calls only nest when the
-	 * compiler does not turn them into jumps, to the length of a slice. */
-	void chain(uint32_t pc)
+	/* At the end of a block that nothing disturbed: the block at `pc`,
+	 * entered, when it is kept, was compared in this epoch and fits in
+	 * the slice, unless the search for waits has something to do here.
+	 * Otherwise nullptr, and nothing has changed. */
+	const Block *enter(uint32_t pc)
 	{
 		Block &b = m_near[(pc >> 1) & (NEAR_SIZE - 1)];
 
 		if (b.pc != pc || b.checked != m_epoch || b.count > m_remaining) [[unlikely]] {
-			return;
+			return nullptr;
 		}
 		if (pc == m_wait.regs.pc) {
 			/* A loop that works is looked at less and less often. */
 			if (m_wait.pass == 0) {
-				return;
+				return nullptr;
 			}
 			m_wait.pass--;
 		} else {
 			if (m_wait.countdown <= 1) {
-				return;
+				return nullptr;
 			}
 			m_wait.countdown--;
 		}
 		m_blk = &b;
 		m_remaining -= b.count;
-		return b.ops->run(*this, b.ops);
+		return &b;
+	}
+	/* Straight into that block, or back to the run loop. The calls only
+	 * nest when the compiler does not turn them into jumps, to the
+	 * length of a slice. */
+	void chain(uint32_t pc)
+	{
+		/* Host code is for the run loop to enter. */
+		if (m_near[(pc >> 1) & (NEAR_SIZE - 1)].host) [[unlikely]] {
+			return;
+		}
+		if (const Block *b = enter(pc)) [[likely]] {
+			return b->ops->run(*this, b->ops);
+		}
+	}
+	/* The same for host code: the host code of that block, or 1 for the
+	 * run loop, which a block without host code is left to. */
+	uintptr_t link(uint32_t pc)
+	{
+		if (m_near[(pc >> 1) & (NEAR_SIZE - 1)].host == 0) [[unlikely]] {
+			return 1;
+		}
+		if (const Block *b = enter(pc)) [[likely]] {
+			return m_host->address(b->host);
+		}
+		return 1;
 	}
 
 	/* Reads plain memory in place. False when the block must be left
@@ -457,6 +518,9 @@ private:
 	std::vector<uint16_t> m_words;
 	std::vector<Block> m_near;		/* the last block found for each low part of PC */
 	std::vector<Sh4Op> m_short_ops;		/* a block decoded for one use */
+	/* The host code of the kept blocks, once asked for */
+	std::unique_ptr<Sh4Host> m_host;
+	bool m_translate;
 
 	bool m_hook_on;
 	uint32_t m_hook_addr;
