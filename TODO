@@ -690,6 +690,12 @@ within 6 % at four instants; a quarter to a half too dark without it).
 HEURISTIC: the second word is dropped. The board may run it as a C81
 instead; the alpha index it would set is not used.
 
+A 043 without its bit 12 sets the base of the lightsets and recalls the set
+too, as Valkyrie had it; a 083 or a 0C3 without theirs sets the base and no
+more. The games send it with the index 0 alone (00000043, thousands of
+times a loop in SGNASCAR and PHARRIER, and 0E000043 at start), and the six
+attract loops draw the same pictures when it does not recall (HEURISTIC).
+
 What the six attract loops send and nothing here reads (the bits of every
 command were counted, and set against the comments of antarctic_ops.cpp):
 - 881 bit 21, "Highlight Mode" in the material menu of PHARRIER, which uses

@@ -1582,9 +1582,14 @@ Antarctic::op_lightset_commit(const uint32_t *inst)
  *
  *	----DDDD nnnnnnnn ---A---o oooooooo
  *
- * A = Active
+ * A = Clear, the index is the new base of the lightsets
  * D = Disabled lights mask
  * n = Index
+ *
+ *	Without A the set is recalled all the same (HEURISTIC, as Valkyrie
+ *	had it, where the 083 and the 0C3 set their base and no more): the
+ *	games send 00000043, and 0E000043 at start, and the six attract loops
+ *	draw the same pictures either way.
  *
  *	The four lights are taken as they are now, as in the X360 port
  *	(825C6090): a light committed after its set counts, and a set recalled
