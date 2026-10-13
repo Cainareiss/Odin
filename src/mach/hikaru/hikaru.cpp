@@ -714,7 +714,7 @@ hikaru_load_state (vk_machine_t *mach, vk_state_t *state)
 	LOAD (hikaru->rombd_config);
 
 	ret |= load_chip<odin::Eeprom93c46State> (state, *hikaru->eeprom_main);
-	LOAD_CHIP (odin_x76f100, hikaru->eeprom_rombd);
+	ret |= load_chip<odin::X76f100State> (state, *hikaru->eeprom_rombd);
 	if (hikaru->crypt)
 		LOAD_CHIP (odin_crypt5881, hikaru->crypt);
 	if (hikaru->actel)
@@ -755,7 +755,7 @@ hikaru_save_state (vk_machine_t *mach, vk_state_t *state)
 	SAVE (hikaru->rombd_config);
 
 	ret |= save_chip<odin::Eeprom93c46State> (state, *hikaru->eeprom_main);
-	SAVE_CHIP (odin_x76f100, hikaru->eeprom_rombd);
+	ret |= save_chip<odin::X76f100State> (state, *hikaru->eeprom_rombd);
 	if (hikaru->crypt)
 		SAVE_CHIP (odin_crypt5881, hikaru->crypt);
 	if (hikaru->actel)
@@ -1212,15 +1212,13 @@ hikaru_init (hikaru_t *hikaru)
 			VK_PRINT ("main board EEPROM: no image, blank");
 	}
 
-	hikaru->eeprom_rombd = odin_x76f100_new ();
-	if (!hikaru->eeprom_rombd)
-		return -1;
+	hikaru->eeprom_rombd = new odin::X76f100;
 	if (game) {
 		vk_buffer_t *image = vk_game_get_section_data (game, "rombd_eeprom");
 		if (image) {
-			odin_x76f100_load (hikaru->eeprom_rombd,
-			                   (const uint8_t *) vk_buffer_get_ptr (image, 0),
-			                   vk_buffer_get_size (image));
+			hikaru->eeprom_rombd->load (std::span<const uint8_t> (
+				(const uint8_t *) vk_buffer_get_ptr (image, 0),
+				vk_buffer_get_size (image)));
 			VK_PRINT ("ROM board EEPROM: x76f100 image loaded");
 		} else
 			VK_PRINT ("ROM board EEPROM: no image, blank");

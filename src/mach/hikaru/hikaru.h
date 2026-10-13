@@ -21,7 +21,7 @@
 
 #include "vk/mmap.h"
 #include "odin/eeprom_93c46.hpp"
-#include "odin/x76f100_bridge.hpp"
+#include "odin/x76f100.hpp"
 #include "odin/crypt_315_5881_bridge.hpp"
 #include "odin/actel_m1_bridge.hpp"
 #include "odin/scheduler_bridge.hpp"
@@ -79,7 +79,7 @@ typedef struct {
 	/* 93C46 of the main board on port A bits 2 (DI), 3 (SK), 4 (CS), 5 (DO) */
 	odin::Eeprom93c46 *eeprom_main;
 	/* X76F100 of the ROM board, bus page eeprom_bank */
-	odin_x76f100_t *eeprom_rombd;
+	odin::X76f100 *eeprom_rombd;
 	/* RAM of the 315-5881, local bus 0x0A000000, boards with the chip only */
 	vk_buffer_t *protram;
 	odin_crypt5881_t *crypt;

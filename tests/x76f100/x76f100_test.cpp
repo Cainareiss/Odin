@@ -22,18 +22,16 @@
  * bit-bangs it: response to reset, a read with the read password, a
  * page write with the write password and its readback, a wrong
  * password, the erase after eight wrong passwords, an out-of-range
- * page, and the C entry points.
+ * page.
  *
  * Build: g++ -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
  *            -O2 -I src tests/x76f100/x76f100_test.cpp \
- *            src/odin/x76f100.cpp src/odin/x76f100_bridge.cpp \
- *            -o x76f100_test
+ *            src/odin/x76f100.cpp -o x76f100_test
  * The sgnascar x76f100.ic85 dump is used when it is found, a built-in
  * image with the same layout otherwise. Exit status is 0 when every
  * check passes. */
 
 #include "odin/x76f100.hpp"
-#include "odin/x76f100_bridge.hpp"
 
 #include <array>
 #include <cstdio>
@@ -330,25 +328,6 @@ int main()
 	check(w2.open(read_command(0), blank), "blank password accepted after the erase");
 	check(w2.read_byte(false) == 0, "erased page reads zero");
 	w2.close();
-
-	/* C entry points: response to reset byte 0 through the bridge. */
-	odin_x76f100_t *c = odin_x76f100_new();
-	odin_x76f100_load(c, image.data(), image.size());
-	odin_x76f100_reset(c);
-	odin_x76f100_set_pins(c, 1, 0, 0, 1);
-	check(odin_x76f100_sda(c) == 1, "bridge: SDA released");
-	odin_x76f100_set_pins(c, 0, 0, 0, 1);
-	odin_x76f100_set_pins(c, 0, 1, 0, 1);
-	uint8_t v = 0;
-	for (uint8_t i = 0; i < 8; i++) {
-		odin_x76f100_set_pins(c, 0, 1, 1, 1);
-		odin_x76f100_set_pins(c, 0, 1, 0, 1);
-		if (odin_x76f100_sda(c)) {
-			v = static_cast<uint8_t>(v | (1u << i));
-		}
-	}
-	check(v == image[0], "bridge: response to reset byte 0");
-	odin_x76f100_delete(c);
 
 	std::printf("%u/%u checks passed\n", g_passed, g_passed + g_failed);
 	return g_failed ? 1 : 0;

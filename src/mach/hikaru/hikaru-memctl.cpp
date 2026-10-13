@@ -528,7 +528,7 @@ memctl_bus_get (hikaru_memctl_t *memctl, unsigned size, uint32_t bus_addr, void 
 		log = true;
 	} else if (bank == hikaru->rombd_config.eeprom_bank) {
 		/* ROMBD EEPROM: bit 0 = SDA (MAME hikaru.cpp:907) */
-		set_ptr (val, size, odin_x76f100_sda (hikaru->eeprom_rombd));
+		set_ptr (val, size, hikaru->eeprom_rombd->sda_read () ? 1 : 0);
 	} else if (bus_addr >= 0x10000000 && bus_addr <= 0x3FFFFFFF) {
 		/* ROMBD */
 		return rombd_get (hikaru, size, bus_addr, val);
@@ -648,8 +648,7 @@ memctl_bus_put (hikaru_memctl_t *memctl, unsigned size, uint32_t bus_addr, uint6
 		vk_buffer_put (hikaru->ram_m, size, bus_addr & 0x01FFFFFF, val);
 	} else if (bank == hikaru->rombd_config.eeprom_bank) {
 		/* ROMBD EEPROM: bit 0 SDA, 1 SCL, 2 /CS, 3 /RST (MAME hikaru.cpp:909) */
-		odin_x76f100_set_pins (hikaru->eeprom_rombd,
-		                       !(val & 4), !(val & 8), (val >> 1) & 1, val & 1);
+		hikaru->eeprom_rombd->set_pins (!(val & 4), !(val & 8), (val >> 1) & 1, val & 1);
 	} else {
 		VK_CPU_ERROR (hikaru->sh_current, "MEMCTL W%u %08X = %lX", size * 8, bus_addr, val);
 		return -1;
