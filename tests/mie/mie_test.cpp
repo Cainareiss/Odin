@@ -37,6 +37,7 @@
 #include "odin/jvs_io_13551.hpp"
 #include "odin/mie_board.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <vector>
@@ -437,12 +438,98 @@ void test_port_d()
 	check(calls == 2 && pins_told == 0xFF, "and each new value is told");
 }
 
+/* Loops of the program that only wait: with the turns counted and with
+ * every turn run, the chip and its memory must be the same after each call
+ * of 505 Z80 clocks, a line of the Hikaru. The host writes 1 at C000 before
+ * the call `release`. Returns the share of the clocks that were counted, in
+ * percent. */
+unsigned waits(const char *name, const std::vector<uint8_t> &program, unsigned release)
+{
+	std::vector<uint8_t> rom_a(2048, 0), rom_b(2048, 0), ram_a(32768, 0), ram_b(32768, 0);
+
+	std::copy(program.begin(), program.end(), rom_a.begin());
+	std::copy(program.begin(), program.end(), rom_b.begin());
+	odin::MieBoard counted(rom_a, ram_a, 200000000, nullptr), run(rom_b, ram_b, 200000000, nullptr);
+	bool same = true;
+	const unsigned calls = 60;
+
+	run.set_waits_counted(false);
+	for (unsigned call = 0; call < calls; call++) {
+		if (call == release) {
+			counted.host_write(0x20000 + 2 * 0xC000, 1, 1);
+			run.host_write(0x20000 + 2 * 0xC000, 1, 1);
+		}
+		counted.run(6313);
+		run.run(6313);
+
+		odin::MieBoard::State a{}, b{};
+		counted.save(a);
+		run.save(b);
+		same = same && a.mie.cpu == b.mie.cpu && a.cycle_acc == b.cycle_acc && ram_a == ram_b &&
+		       std::memcmp(&a.mie.uart, &b.mie.uart, sizeof(a.mie.uart)) == 0 &&
+		       std::memcmp(&a.jvs, &b.jvs, sizeof(a.jvs)) == 0;
+	}
+	check(same, name);
+	check(run.waits_counted() == 0, "nothing is counted when every turn is run");
+	return static_cast<unsigned>(counted.waits_counted() * 100 / (calls * 505ull));
+}
+
+void test_waits()
+{
+	/* 0000: ld a, (C000) / or a / jr z, 0000 / halt */
+	unsigned share = waits("a loop that reads the memory until the host writes there",
+	                       { 0x3A, 0x00, 0xC0, 0xB7, 0x28, 0xFA, 0x76 }, 20);
+	check(share >= 80, "most of its turns are counted, and those of the halt after it");
+
+	/* The same, with a count in the memory at each turn. */
+	share = waits("a loop that writes the memory",
+	              { 0x21, 0x01, 0xC0, 0x34, 0x3A, 0x00, 0xC0, 0xB7, 0x28, 0xF6, 0x76 }, 50);
+	check(share <= 25, "its turns are run; the halt after it is counted");
+
+	/* 256 turns at most: djnz. */
+	waits("a loop that counts its turns in a register",
+	      { 0x06, 0x00, 0x3A, 0x00, 0xC0, 0xB7, 0x20, 0x02, 0x10, 0xF8, 0x76 }, 59);
+
+	/* A character sent, then the wait for the transmitter of the UART,
+	 * as the program of the MIE does: in a, (15) / bit 5, a / jr z. */
+	waits("a loop that reads a port",
+	      { 0x3E, 0x55, 0xD3, 0x10, 0xDB, 0x15, 0xCB, 0x6F, 0x28, 0xFA, 0x76 }, 59);
+
+	/* The same with the divisor at 16 and the wait for the end of the
+	 * character, in a, (15) / bit 6, a / jr z: the answer of the port
+	 * changes in the middle of a call, with the registers of every turn
+	 * before it the same. */
+	share = waits("a loop that reads a port whose answer changes", {
+		0x3E, 0x80, 0xD3, 0x13, 0x3E, 0x10, 0xD3, 0x10, 0xAF, 0xD3, 0x13,
+		0x3E, 0x55, 0xD3, 0x10,
+		0xDB, 0x15, 0xCB, 0x77, 0x28, 0xFA, 0x76,
+	}, 59);
+	check(share >= 80, "its turns are run; the halt after it is counted");
+
+	/* A character sent at each turn until the host writes. */
+	waits("a loop that writes a port",
+	      { 0x3A, 0x00, 0xC0, 0xB7, 0x20, 0x06, 0x3E, 0x41, 0xD3, 0x10, 0x18, 0xF4, 0x76 }, 3);
+
+	/* The divisor of the UART at 16, three characters to send, 2 560
+	 * clocks each, then the loop of the first test: the transmitter gets
+	 * the clocks of the turns that are only counted. */
+	share = waits("a loop that waits while the UART sends", {
+		0x3E, 0x80, 0xD3, 0x13,		/* ld a, 80 / out (13), a: the divisor latch */
+		0x3E, 0x10, 0xD3, 0x10,		/* ld a, 10 / out (10), a */
+		0xAF, 0xD3, 0x13,		/* xor a / out (13), a */
+		0x3E, 0x55, 0xD3, 0x10, 0xD3, 0x10, 0xD3, 0x10,
+		0x3A, 0x00, 0xC0, 0xB7, 0x28, 0xFA, 0x76,
+	}, 40);
+	check(share >= 80, "its turns are counted");
+}
+
 int main()
 {
 	test_eeprom();
 	test_jvs();
 	test_interrupts();
 	test_port_d();
+	test_waits();
 	std::printf("%u checks passed, %u failed\n", g_passed, g_failed);
 	return g_failed ? 1 : 0;
 }

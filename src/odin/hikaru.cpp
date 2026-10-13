@@ -368,6 +368,9 @@ Hikaru::build_mie()
 	});
 	m_mie->set_port_d([this](uint8_t pins) { set_resets(pins); });
 	m_mie->set_log(stderr);
+	/* ODIN_TURNS=0, a test: the program of the MIE runs every turn of its
+	 * waits. The memory and the states must be the same. */
+	m_mie->set_waits_counted(env_flag("ODIN_TURNS", true));
 
 	/* ODIN_MIE_TRACE=<path>: the bus of the Z80 for ODIN_MIE_TRACE_N
 	 * instructions, from the first time its PC is ODIN_MIE_TRACE_START */

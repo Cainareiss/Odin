@@ -117,6 +117,9 @@ public:
 	bool irq_out() const;
 
 	void set_log(FILE *out);
+	/* See Mie::set_waits_counted. */
+	void set_waits_counted(bool on) { m_mie.set_waits_counted(on); }
+	uint64_t waits_counted() const { return m_mie.waits_counted(); }
 	/* Z80 bus trace for max_instructions instructions from the first
 	 * time the PC reaches start_pc (0: from reset). */
 	void set_trace(FILE *out, uint32_t max_instructions, uint16_t start_pc)

@@ -138,6 +138,13 @@ public:
 
 	/* Runs the chip for `cycles` Z80 clocks. */
 	void run(uint32_t cycles);
+	/* A program that waits goes round a loop that only reads the memory
+	 * and leaves every register as it was. Nothing changes what it reads
+	 * before the chip is run again: the turns left are counted without
+	 * being run. Off, every turn is run; the two must give the same. */
+	void set_waits_counted(bool on) { m_waits_counted = on; }
+	/* Z80 clocks counted that way so far, for measuring. */
+	uint64_t waits_counted() const { return m_wait_cycles; }
 
 	/* A GPIO port from the board: whether the chip drives its pins, and
 	 * with what. */
@@ -185,6 +192,8 @@ private:
 	void serial_complete();
 	uint8_t jvs_sense() const;
 	void tick(uint32_t cycles);
+	void wait_mark(uint32_t done);
+	uint32_t wait_check(uint32_t done, uint32_t cycles);
 	void log_unknown(char rw, const char *space, uint32_t addr, uint32_t value);
 	void trace_host(char rw, uint32_t addr, uint8_t value) const;
 
@@ -205,6 +214,21 @@ private:
 	MieUartState m_uart;
 	MieSerialState m_serial;
 	MieSerialDevice *m_serial_device;
+
+	/* The search for a loop that waits, in a call of run(): the
+	 * registers at a mark and the cycles run before it, whether the
+	 * program has written or used a port since, the instructions to the
+	 * next mark, and the returns to the mark left to be let through. */
+	struct Wait {
+		Z80State regs;
+		uint32_t done;
+		bool touched;
+		uint32_t countdown, period;
+		uint32_t pass, busy;
+	};
+	Wait m_wait;
+	bool m_waits_counted;
+	uint64_t m_wait_cycles;
 
 	FILE *m_log;
 	FILE *m_trace;

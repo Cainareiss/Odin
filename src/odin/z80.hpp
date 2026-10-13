@@ -39,6 +39,8 @@ struct Z80State {
 	uint8_t int_line, nmi_pending;
 	uint8_t after_ei, after_ldair;
 	uint8_t q, q_prev;
+
+	bool operator==(const Z80State &) const = default;
 };
 
 /* What the CPU sees outside its pins. The machine implements it. */
@@ -66,6 +68,9 @@ public:
 	uint32_t step();
 
 	void set_int(bool level) { m_int_line = level; }
+	/* R as that many more M1 cycles leave it, for a machine that counts
+	 * instructions it does not run. */
+	void add_refresh(uint32_t m1) { m_r = u8((m_r & 0x80) | ((m_r + m1) & 0x7F)); }
 	void set_nmi() { m_nmi_pending = true; }
 	bool halted() const { return m_halted; }
 
