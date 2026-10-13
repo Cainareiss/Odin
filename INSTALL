@@ -1,7 +1,7 @@
 BUILDING
 ========
 
-Odin is built on GNU/Linux with GCC (C and C++20), GNU make and pkg-config.
+Odin is built on GNU/Linux with GCC (C++20), GNU make and pkg-config.
 It needs the development files of SDL 2, GLEW and Jansson, and a graphics
 driver that offers OpenGL 4.3.
 
@@ -9,8 +9,9 @@ driver that offers OpenGL 4.3.
  $ make
 
 This makes bin/odin. An object is built again when a header it includes
-changes. "make install" copies the binary to ~/.local/bin and the list of the
-games, vk-games.json, to ~/.local/share/odin.
+changes. "make install" copies the binary to ~/.local/bin, and to
+~/.local/share/odin the list of the games, vk-games.json, with the lists of
+the mesh programs of each game (shaders/).
 
 
 RUNNING
@@ -30,7 +31,12 @@ Options:
  -s <frame>[,...]	saves <game>-<frame>.vkstate after these frames
  -l <file>		loads a state at startup
  -u			lifts the limit of 60 frames per second
- -x <num>		makes the window num times 640 by 480
+ -x <num>		draws the 3D num times finer than 640 by 480 (1 to 6)
+ -a <num>		filters the textures with an anisotropy of num (2 to
+			16); the board has none
+ -w <num>		makes the window num times 640 by 480
+ -f			takes the whole display (F11 or Alt+Enter goes back
+			and forth)
  -v			more messages
 
 Keys: Escape quits, Space pauses, F4 saves <game>.vkstate and F1 loads it.
