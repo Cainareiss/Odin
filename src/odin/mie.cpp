@@ -726,11 +726,12 @@ void Mie::wait_mark(uint32_t done)
 	m_wait.done = done;
 	m_wait.countdown = m_wait.period;
 	m_wait.touched = false;
+	m_cpu.forget_refresh_read();
 }
 
-/* Back at the mark with the registers it had, R aside, and nothing written
- * nor any port used since: only the memory was read, which nothing changes
- * before the end of the call, so every further turn is the same. The whole
+/* Back at the mark with the registers it had, R aside, and nothing written,
+ * no port used and R not read since: only the memory was read, which nothing
+ * changes before the end of the call, so every further turn is the same. The whole
  * turns that end before the call does are counted without being run: R gets
  * the instructions they fetch, the rest of the chip their cycles at once
  * (tick() of a sum is tick() of each part). Returns their cycles. A loop
@@ -751,7 +752,7 @@ uint32_t Mie::wait_check(uint32_t done, uint32_t cycles)
 	m_cpu.save(now);
 	const uint32_t refresh = (now.r - m_wait.regs.r) & 0x7Fu;
 	now.r = static_cast<uint8_t>((now.r & 0x80) | (m_wait.regs.r & 0x7F));
-	if (!m_wait.touched && now == m_wait.regs) {
+	if (!m_wait.touched && !m_cpu.refresh_read() && now == m_wait.regs) {
 		const uint32_t turns = (cycles - done - 1) / turn;
 
 		counted = turns * turn;

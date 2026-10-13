@@ -506,6 +506,17 @@ void test_waits()
 	}, 59);
 	check(share >= 80, "its turns are run; the halt after it is counted");
 
+	/* A loop that looks at R and forgets it: ld a, r / cp n / jr z, out
+	 * / xor a / jr loop. After xor a the registers of every turn are the
+	 * same, R aside, and R is what ends the loop. */
+	for (const unsigned last : { 0x04u, 0x22u, 0x58u, 0x7Eu }) {
+		waits("a loop that reads R",
+		      { 0xED, 0x5F, 0xFE, static_cast<uint8_t>(last), 0x28, 0x03, 0xAF, 0x18, 0xF7, 0x76 }, 59);
+	}
+	/* R read once, then the loop of the first test. */
+	share = waits("a loop that waits after R was read", { 0xED, 0x5F, 0x3A, 0x00, 0xC0, 0xB7, 0x28, 0xFA, 0x76 }, 40);
+	check(share >= 80, "its turns are counted");
+
 	/* A character sent at each turn until the host writes. */
 	waits("a loop that writes a port",
 	      { 0x3A, 0x00, 0xC0, 0xB7, 0x20, 0x06, 0x3E, 0x41, 0xD3, 0x10, 0x18, 0xF4, 0x76 }, 3);

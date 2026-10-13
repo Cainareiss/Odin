@@ -52,6 +52,7 @@ void Z80::reset()
 	m_wz = 0;
 	m_i = 0;
 	m_r = 0;
+	m_r_read = false;
 	m_iff1 = m_iff2 = false;
 	m_im = 0;
 	m_halted = false;

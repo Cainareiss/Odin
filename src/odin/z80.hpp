@@ -71,6 +71,10 @@ public:
 	/* R as that many more M1 cycles leave it, for a machine that counts
 	 * instructions it does not run. */
 	void add_refresh(uint32_t m1) { m_r = u8((m_r & 0x80) | ((m_r + m1) & 0x7F)); }
+	/* Whether the program has read R since this was last forgotten:
+	 * what it then does cannot be counted. */
+	bool refresh_read() const { return m_r_read; }
+	void forget_refresh_read() { m_r_read = false; }
 	void set_nmi() { m_nmi_pending = true; }
 	bool halted() const { return m_halted; }
 
@@ -190,6 +194,7 @@ private:
 	uint8_t m_ixh, m_ixl, m_iyh, m_iyl;
 	uint16_t m_sp, m_pc, m_wz;
 	uint8_t m_i, m_r;
+	bool m_r_read;	/* see refresh_read() */
 	bool m_iff1, m_iff2;
 	uint8_t m_im;
 	bool m_halted;

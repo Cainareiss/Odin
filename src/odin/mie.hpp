@@ -139,9 +139,10 @@ public:
 	/* Runs the chip for `cycles` Z80 clocks. */
 	void run(uint32_t cycles);
 	/* A program that waits goes round a loop that only reads the memory
-	 * and leaves every register as it was. Nothing changes what it reads
-	 * before the chip is run again: the turns left are counted without
-	 * being run. Off, every turn is run; the two must give the same. */
+	 * and leaves every register as it was, R aside, which it does not
+	 * read. Nothing changes what it reads before the chip is run again:
+	 * the turns left are counted without being run. Off, every turn is
+	 * run; the two must give the same. */
 	void set_waits_counted(bool on) { m_waits_counted = on; }
 	/* Z80 clocks counted that way so far, for measuring. */
 	uint64_t waits_counted() const { return m_wait_cycles; }

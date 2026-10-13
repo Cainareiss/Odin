@@ -491,6 +491,7 @@ void Z80::exec_ed_x1_z7(uint8_t y)
 		break;
 	case 3:
 		ld_a_ir(m_r);
+		m_r_read = true;
 		break;
 	case 4:
 		rrd();
