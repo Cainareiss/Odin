@@ -49,7 +49,7 @@ typedef struct {
 	void *ctx;
 	void (*irq_changed)(void *ctx);
 	void (*list_started)(void *ctx);
-	void (*texture_written)(void *ctx, unsigned bank);
+	void (*before_texture_write)(void *ctx, unsigned bank);
 } odin_hikaru_gpu_hooks_t;
 
 odin_hikaru_gpu_t *odin_hikaru_gpu_new(const odin_hikaru_gpu_memory_t *memory,

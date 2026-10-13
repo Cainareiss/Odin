@@ -31,8 +31,8 @@ vk_renderer_t	*hikaru_renderer_new (vk_buffer_t *fb, vk_buffer_t *texram[2]);
 void		 hikaru_renderer_set_gpu (vk_renderer_t *, odin_hikaru_gpu_t *chips);
 /* A display list was launched */
 void		 hikaru_renderer_launch (vk_renderer_t *);
-/* The texture RAM of a bank has changed; every bank if negative */
-void		 hikaru_renderer_invalidate_texcache (vk_renderer_t *, int bank);
+/* The texture RAM of a bank is about to be written */
+void		 hikaru_renderer_before_texram_write (vk_renderer_t *, unsigned bank);
 int		 hikaru_renderer_save_state (vk_renderer_t *, vk_state_t *);
 int		 hikaru_renderer_load_state (vk_renderer_t *, vk_state_t *);
 

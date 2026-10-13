@@ -31,7 +31,7 @@ HikaruGpu::HikaruGpu(const Memory &memory, const Hooks &hooks)
 	  m_gp_res(false),
 	  m_pci1_res(false)
 {
-	m_antarctic.set_texture_written(m_hooks.texture_written, m_hooks.ctx);
+	m_antarctic.set_before_texture_write(m_hooks.before_texture_write, m_hooks.ctx);
 }
 
 void

@@ -469,6 +469,9 @@ Antarctic::transfer_texture(const uint32_t entry[4])
 		return;
 	}
 
+	if (m_before_texture_write)
+		m_before_texture_write(m_before_texture_write_ctx, odin_tex_bank(&texhead));
+
 	/* An entry may ask for more bytes than its levels hold: BRAVEFF gives
 	 * 39 of its 64x32 textures the bytes of 64x64 (its files keep 0x2AC0
 	 * bytes a texture) and draws them as 64x32. HEURISTIC: the levels of
@@ -479,9 +482,6 @@ Antarctic::transfer_texture(const uint32_t entry[4])
 		error("GPU IDMA: requested vs. copied sizes mismatch: %u vs %u", size, size_copied);
 		/* continue anyway */
 	}
-
-	if (m_texture_written)
-		m_texture_written(m_texture_written_ctx, odin_tex_bank(&texhead));
 }
 
 /* Copies the levels of a texture, returns the bytes copied. */

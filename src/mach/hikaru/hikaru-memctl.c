@@ -587,6 +587,8 @@ twiddle_offs (uint32_t offs)
 static void
 texram_put (hikaru_t *hikaru, uint32_t bank, uint32_t size, uint32_t offs, uint64_t val)
 {
+	hikaru_gpu_before_texram_write (hikaru->gpu, bank);
+
 	if (hikaru_gpu_is_texram_twiddled (hikaru->gpu)) 
 		vk_buffer_put (hikaru->texram[bank], size, offs, val);
 	else {
@@ -598,8 +600,6 @@ texram_put (hikaru_t *hikaru, uint32_t bank, uint32_t size, uint32_t offs, uint6
 		vk_buffer_put (hikaru->texram[bank], 2, toffs_lo, bswap16 (val));
 		vk_buffer_put (hikaru->texram[bank], 2, toffs_hi, bswap16 (val >> 16));
 	}
-
-	hikaru_gpu_texram_written (hikaru->gpu, bank);
 }
 
 static int

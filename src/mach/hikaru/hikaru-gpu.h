@@ -42,7 +42,7 @@ void		 hikaru_gpu_get_frame_size (vk_device_t *dev, unsigned *dots,
 		                            unsigned *lines, unsigned *shown);
 const char	*hikaru_gpu_get_debug_str (vk_device_t *dev);
 bool		 hikaru_gpu_is_texram_twiddled (vk_device_t *dev);
-void		 hikaru_gpu_texram_written (vk_device_t *dev, unsigned bank);
+void		 hikaru_gpu_before_texram_write (vk_device_t *dev, unsigned bank);
 /* The chips, for the renderer */
 odin_hikaru_gpu_t *hikaru_gpu_get_chips (vk_device_t *dev);
 

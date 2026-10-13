@@ -45,12 +45,13 @@ hikaru_renderer_launch (vk_renderer_t *renderer)
 	odin_renderer_launch (hr->odin);
 }
 
+/* The decoded textures of that bank are stale. */
 void
-hikaru_renderer_invalidate_texcache (vk_renderer_t *renderer, int bank)
+hikaru_renderer_before_texram_write (vk_renderer_t *renderer, unsigned bank)
 {
 	hikaru_renderer_t *hr = (hikaru_renderer_t *) renderer;
 
-	odin_renderer_invalidate_textures (hr->odin, bank);
+	odin_renderer_invalidate_textures (hr->odin, (int) bank);
 }
 
 static void
@@ -83,7 +84,9 @@ hikaru_renderer_end_frame (vk_renderer_t *renderer)
 static void
 hikaru_renderer_reset (vk_renderer_t *renderer)
 {
-	hikaru_renderer_invalidate_texcache (renderer, -1);
+	hikaru_renderer_t *hr = (hikaru_renderer_t *) renderer;
+
+	odin_renderer_invalidate_textures (hr->odin, -1);
 }
 
 /* The pictures the renderer keeps, one item each, then its four counters. */

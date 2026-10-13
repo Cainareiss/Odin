@@ -49,13 +49,12 @@ on_list_started (void *ctx)
 	hikaru_renderer_launch (gpu->renderer);
 }
 
-/* The decoded textures of that bank are stale. */
 static void
-on_texture_written (void *ctx, unsigned bank)
+on_before_texture_write (void *ctx, unsigned bank)
 {
 	hikaru_gpu_t *gpu = (hikaru_gpu_t *) ctx;
 
-	hikaru_renderer_invalidate_texcache (gpu->renderer, (int) bank);
+	hikaru_renderer_before_texram_write (gpu->renderer, bank);
 }
 
 /****************************************************************************
@@ -119,11 +118,11 @@ hikaru_gpu_is_texram_twiddled (vk_device_t *dev)
 	return odin_hikaru_gpu_texture_ram_twiddled (gpu->chips) != 0;
 }
 
-/* The bus wrote the texture RAM itself. */
+/* The bus is about to write the texture RAM itself. */
 void
-hikaru_gpu_texram_written (vk_device_t *dev, unsigned bank)
+hikaru_gpu_before_texram_write (vk_device_t *dev, unsigned bank)
 {
-	on_texture_written ((void *) dev, bank);
+	on_before_texture_write ((void *) dev, bank);
 }
 
 odin_hikaru_gpu_t *
@@ -265,7 +264,7 @@ hikaru_gpu_new (vk_machine_t *mach,
 	hooks.ctx		= (void *) gpu;
 	hooks.irq_changed	= on_irq_changed;
 	hooks.list_started	= on_list_started;
-	hooks.texture_written	= on_texture_written;
+	hooks.before_texture_write = on_before_texture_write;
 
 	gpu->chips = odin_hikaru_gpu_new (&memory, &hooks);
 	if (!gpu->chips)

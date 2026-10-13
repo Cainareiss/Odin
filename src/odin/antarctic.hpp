@@ -214,11 +214,11 @@ public:
 	bool step_texture_transfer();
 	/* 1500008C: the texture RAM twiddles what the bus writes to it */
 	bool texture_ram_twiddled() const { return reg(0x8C) == 0x02020202; }
-	/* Called with the bank a transfer has written. */
-	void set_texture_written(void (*fn)(void *ctx, unsigned bank), void *ctx)
+	/* Called with the bank a transfer is about to write. */
+	void set_before_texture_write(void (*fn)(void *ctx, unsigned bank), void *ctx)
 	{
-		m_texture_written = fn;
-		m_texture_written_ctx = ctx;
+		m_before_texture_write = fn;
+		m_before_texture_write_ctx = ctx;
 	}
 
 	const AntarcticState &state() const { return m_s; }
@@ -405,8 +405,8 @@ private:
 	unsigned m_building;
 	List *m_list;
 
-	void (*m_texture_written)(void *ctx, unsigned bank);
-	void *m_texture_written_ctx;
+	void (*m_before_texture_write)(void *ctx, unsigned bank);
+	void *m_before_texture_write_ctx;
 
 	FILE *m_disasm, *m_log, *m_transfer_log;
 	uint32_t m_types_told;	/* polygon types never met, told once each */

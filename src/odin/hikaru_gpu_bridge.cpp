@@ -69,7 +69,7 @@ odin_hikaru_gpu_new(const odin_hikaru_gpu_memory_t *memory,
 	h.ctx = hooks->ctx;
 	h.irq_changed = hooks->irq_changed;
 	h.list_started = hooks->list_started;
-	h.texture_written = hooks->texture_written;
+	h.before_texture_write = hooks->before_texture_write;
 
 	auto gpu = std::make_unique<odin_hikaru_gpu>(m, h);
 	return gpu.release();

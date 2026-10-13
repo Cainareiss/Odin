@@ -371,7 +371,12 @@ void test_texture_transfer()
 {
 	Machine m;
 	const uint32_t table = 0x483FC000, texels = 0x48100000;
-	int written = -1;
+	/* What the board is told, and the texture RAM as it is then */
+	struct Told {
+		const Machine *machine;
+		int bank = -1;
+		uint16_t texel = 0xFFFF;
+	} told = { &m };
 	uint32_t value = 0;
 
 	for (uint32_t i = 0; i < 256; i++) {
@@ -381,7 +386,12 @@ void test_texture_transfer()
 	}
 	m.write(table, { texels, 512, 0x0000C080, 1 });
 	m.cp->set_log(nullptr);
-	m.cp->set_texture_written([](void *ctx, unsigned bank) { *static_cast<int *>(ctx) = static_cast<int>(bank); }, &written);
+	m.cp->set_before_texture_write([](void *ctx, unsigned bank) {
+		Told *t = static_cast<Told *>(ctx);
+
+		t->bank = static_cast<int>(bank);
+		std::memcpy(&t->texel, &t->machine->texram[bank][2], 2);
+	}, &told);
 
 	m.cp->write_register(0x1500000C, table);
 	m.cp->write_register(0x15000010, 1);
@@ -392,7 +402,8 @@ void test_texture_transfer()
 	check(m.cp->read_register(0x15000014, value) && value == 0, "then it reads ready");
 	check(m.cp->read_register(0x15000088, value) && (value & Antarctic::IRQ_TRANSFER_END), "and its end is a cause");
 	check(m.cp->read_register(0x15000010, value) && value == 1, "the length register keeps its value");
-	check(written == 1, "the board is told which bank was written");
+	check(told.bank == 1, "the board is told which bank is written");
+	check(told.texel == 0, "before the texels land");
 
 	/* The two texels of a 32-bit word are swapped in the texture RAM. */
 	uint16_t first, second;

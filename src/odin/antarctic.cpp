@@ -38,7 +38,7 @@ Antarctic::Antarctic(std::span<uint8_t> cmdram, std::span<uint8_t> ram_s,
 	: m_cmdram(cmdram), m_ram_s(ram_s), m_texram{texram0, texram1},
 	  m_lists{std::make_unique<List>(), std::make_unique<List>(), std::make_unique<List>()},
 	  m_building(0), m_list(m_lists[0].get()),
-	  m_texture_written(nullptr), m_texture_written_ctx(nullptr),
+	  m_before_texture_write(nullptr), m_before_texture_write_ctx(nullptr),
 	  m_disasm(nullptr), m_log(stderr), m_transfer_log(nullptr),
 	  m_types_told(0)
 {
