@@ -24,6 +24,7 @@
 
 #include "odin/hikaru.hpp"
 
+#include <cinttypes>
 #include <cstdlib>
 
 #include "odin/bytes.hpp"
@@ -481,7 +482,7 @@ Hikaru::mie_write(uint32_t addr, unsigned size, uint64_t value)
 
 		for (unsigned i = 0; i < size; i += part) {
 			if (!m_mie->host_write(addr + i - 0x00800000, part, static_cast<uint32_t>(value >> (8 * i)))) {
-				board_error("MIE unhandled W%u %08X = %lX", size * 8, addr, static_cast<unsigned long>(value));
+				board_error("MIE unhandled W%u %08X = %" PRIX64, size * 8, addr, value);
 				return false;
 			}
 		}
@@ -682,12 +683,12 @@ Hikaru::sound_write(unsigned which, uint32_t addr, unsigned size, uint64_t value
 	const uint32_t offs = addr & 0xFFFFFF;
 
 	if (m_verbose)
-		std::printf("%s : AICA/%c W%u @%08X = %lX\n", board_string().c_str(), which == MASTER ? 'M' : 'S',
-		            8 * size, offs, static_cast<unsigned long>(value));
+		std::printf("%s : AICA/%c W%u @%08X = %" PRIX64 "\n", board_string().c_str(),
+		            which == MASTER ? 'M' : 'S', 8 * size, offs, value);
 
 	switch (m_sound[which]->host_write(offs, size, value)) {
 	case SoundBoard::Written::NOWHERE:
-		board_error("AICA unhandled W%u %08X = %lX", size * 8, addr, static_cast<unsigned long>(value));
+		board_error("AICA unhandled W%u %08X = %" PRIX64, size * 8, addr, value);
 		return false;
 	case SoundBoard::Written::CLOCK_SET:
 		if (which == MASTER)
@@ -782,12 +783,12 @@ Hikaru::bus_write(uint32_t bus_addr, unsigned size, uint64_t value)
 	} else if (bus_addr >= 0x70000000 && bus_addr <= 0x71FFFFFF) {
 		store(m_ram[MASTER], bus_addr & 0x01FFFFFF, size, value);
 	} else if (!m_rombd.write(bus_addr, size, value)) {
-		cpu_error("MEMCTL W%u %08X = %lX", size * 8, bus_addr, static_cast<unsigned long>(value));
+		cpu_error("MEMCTL W%u %08X = %" PRIX64, size * 8, bus_addr, value);
 		return false;
 	}
 	if (log && m_verbose)
-		std::printf("%s : MEMCTL W%u %08X = %lX\n", cpu_string(m_current).c_str(), size * 8, bus_addr,
-		            static_cast<unsigned long>(value));
+		std::printf("%s : MEMCTL W%u %08X = %" PRIX64 "\n", cpu_string(m_current).c_str(), size * 8,
+		            bus_addr, value);
 	return true;
 }
 
@@ -882,8 +883,7 @@ Hikaru::Bus::unanswered(bool is_write, uint32_t addr, uint32_t size, uint64_t va
 	char text[64];
 
 	if (is_write)
-		std::snprintf(text, sizeof(text), "unhandled W%u @%08X = %lX", 8 * size, addr,
-		              static_cast<unsigned long>(value));
+		std::snprintf(text, sizeof(text), "unhandled W%u @%08X = %" PRIX64, 8 * size, addr, value);
 	else
 		std::snprintf(text, sizeof(text), "unhandled R%u @%08X", 8 * size, addr);
 	std::fprintf(stderr, "ERROR: %s : %s\n", m_board.cpu_string(m_which).c_str(), text);

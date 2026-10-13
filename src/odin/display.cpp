@@ -21,6 +21,7 @@
 
 #include "odin/display.hpp"
 
+#include <cinttypes>
 #include <cstdlib>
 #include <filesystem>
 
@@ -329,7 +330,7 @@ Display::print_fingerprint()
 		fp ^= byte;
 		fp *= 0x100000001B3ull;
 	}
-	std::fprintf(stderr, "PICFP frame=%u fp=%016lx\n", m_frame, static_cast<unsigned long>(fp));
+	std::fprintf(stderr, "PICFP frame=%u fp=%016" PRIx64 "\n", m_frame, fp);
 }
 
 void

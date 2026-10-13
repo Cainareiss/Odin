@@ -24,6 +24,7 @@
 
 #include "odin/antarctic_list.hpp"
 
+#include <cinttypes>
 #include <cstdio>
 
 namespace {
@@ -143,7 +144,9 @@ odin_display_list_fingerprint(const odin_display_list_t *list,
 		*meshes += 1;
 		*tris += m.num_tris;
 		if (out)
-			std::fprintf(out, "LISTMESH %u %u.%u.%u @%08X-%08X tris=%u m=%016lx vp=%016lx mv=%016lx mat=%016lx tex=%016lx ls=%016lx v=%016lx\n",
+			std::fprintf(out, "LISTMESH %u %u.%u.%u @%08X-%08X tris=%u m=%016" PRIx64 " vp=%016" PRIx64
+			             " mv=%016" PRIx64 " mat=%016" PRIx64 " tex=%016" PRIx64 " ls=%016" PRIx64
+			             " v=%016" PRIx64 "\n",
 			             m.num, vp, type, i, m.addr[0], m.addr[1], m.num_tris,
 			             mesh.value, viewport, modelviews.value, material,
 			             texhead, lightset, vertices.value);

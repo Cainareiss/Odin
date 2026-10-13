@@ -21,6 +21,7 @@
 
 #include "odin/memctl.hpp"
 
+#include <cinttypes>
 #include <cstdio>
 #include <cstdlib>
 
@@ -266,8 +267,8 @@ MemCtl::tell_bridge_page(char rw, unsigned size, uint32_t addr, uint64_t value)
 	if (rw == 'R')
 		std::snprintf(text, sizeof(text), "unmapped bridge page R%u %08X (reported once)", size * 8, addr);
 	else
-		std::snprintf(text, sizeof(text), "unmapped bridge page W%u %08X = %lX (reported once)",
-		              size * 8, addr, static_cast<unsigned long>(value));
+		std::snprintf(text, sizeof(text), "unmapped bridge page W%u %08X = %" PRIX64 " (reported once)",
+		              size * 8, addr, value);
 	m_host.memctl_error(text);
 }
 

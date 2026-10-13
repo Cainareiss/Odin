@@ -137,6 +137,7 @@
 #include "odin/hikaru.hpp"
 
 #include <algorithm>
+#include <cinttypes>
 #include <cstdarg>
 #include <cstdlib>
 #include <cstring>
@@ -335,16 +336,13 @@ Hikaru::~Hikaru()
 		if (m_sh_trace[which])
 			std::fclose(m_sh_trace[which]);
 		if (m_stats)
-			std::fprintf(stderr, "sh4 %c: %lu instructions run, %lu cycles skipped\n",
-			             which == MASTER ? 'M' : 'S',
-			             static_cast<unsigned long>(m_sh[which]->instructions()),
-			             static_cast<unsigned long>(m_sh[which]->skipped()));
+			std::fprintf(stderr, "sh4 %c: %" PRIu64 " instructions run, %" PRIu64 " cycles skipped\n",
+			             which == MASTER ? 'M' : 'S', m_sh[which]->instructions(), m_sh[which]->skipped());
 	}
 	if (m_stats)
 		for (unsigned which : { MASTER, SLAVE })
-			std::fprintf(stderr, "sh4 %c: %.3f s in %lu slices\n", which == MASTER ? 'M' : 'S',
-			             static_cast<double>(m_stats_ns[which]) / 1e9,
-			             static_cast<unsigned long>(m_stats_slices[which]));
+			std::fprintf(stderr, "sh4 %c: %.3f s in %" PRIu64 " slices\n", which == MASTER ? 'M' : 'S',
+			             static_cast<double>(m_stats_ns[which]) / 1e9, m_stats_slices[which]);
 }
 
 /* The MIE: the chip and its board if its ROM is there, else the stand-in.
@@ -958,8 +956,7 @@ Hikaru::log_access(const char *name, char rw, unsigned size, uint32_t addr, uint
 	if (rw == 'R')
 		std::printf("%s : %s R%u %08X\n", board_string().c_str(), name, size * 8, addr);
 	else
-		std::printf("%s : %s W%u %08X = %lX\n", board_string().c_str(), name, size * 8, addr,
-		            static_cast<unsigned long>(value));
+		std::printf("%s : %s W%u %08X = %" PRIX64 "\n", board_string().c_str(), name, size * 8, addr, value);
 }
 
 /* A line of ODIN_SH4_TRACE: the PC and a hash of the registers, FNV-1a over
@@ -997,7 +994,7 @@ Hikaru::trace_slice(unsigned which)
 	add(st.tmu_counter, sizeof(st.tmu_counter));
 	add(&st.irq_index, 4);
 
-	std::fprintf(m_sh_trace[which], "%08X %016lX\n", st.pc, static_cast<unsigned long>(hash));
+	std::fprintf(m_sh_trace[which], "%08X %016" PRIX64 "\n", st.pc, hash);
 }
 
 } /* namespace odin */
