@@ -1,0 +1,368 @@
+/*
+ * Odin
+ * Copyright (C) 2026 Réda Chérif-Touil
+ *
+ * Valkyrie
+ * Copyright (C) 2011-2013, Stefano Teso
+ *
+ * Valkyrie is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Valkyrie is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Valkyrie.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <ctime>
+#include <memory>
+#include <optional>
+#include <string>
+#include <vector>
+
+#include <pwd.h>
+#include <unistd.h>
+
+#include <SDL.h>
+
+#include "odin/display.hpp"
+#include "odin/games.hpp"
+#include "odin/hikaru.hpp"
+#include "odin/keyboard.hpp"
+
+namespace {
+
+struct Options {
+	std::string rom_path;
+	std::string game;
+	unsigned num_frames = 0;
+	std::string state_path;
+	std::vector<unsigned> save_frames;
+	bool unthrottled = false;
+	bool verbose = false;
+	odin::Display::Options display = { 1, 1, 0, false };
+};
+
+const char HELP[] = "Usage: %s [options]\n"
+"	-R <path>	Path to the ROM directory\n"
+"	-r <string>	Name of the game to run\n"
+"	-n <num>	Stop after the frame num\n"
+"	-l <path>	Load a state at startup\n"
+"	-s <num>[,...]	Save <game>-<num>.vkstate after these frames\n"
+"	-u		Run as fast as the host can, not at 60 frames per second\n"
+"	-x <num>	Draw the 3D num times finer than 640 by 480 (1 to 6)\n"
+"	-a <num>	Filter the textures with an anisotropy of num (2 to 16); the board has none\n"
+"	-w <num>	Make the window num times 640 by 480, as far as the display has room\n"
+"	-f		Take the whole display (F11 or Alt+Enter goes back and forth)\n"
+"	-v		Set verbosity (affects debug messages)\n"
+"	-h              Show this help\n";
+
+/* False when there is nothing to run: the help was shown. */
+bool
+parse_options(int argc, char **argv, Options &options)
+{
+	int opt = (argc < 2) ? 'h' : 0;
+
+	while (opt != 'h' && (opt = getopt(argc, argv, "R:r:n:l:s:ux:a:w:fvh?")) != -1) {
+		switch (opt) {
+		case 'R':
+			options.rom_path = optarg;
+			break;
+		case 'r':
+			options.game = optarg;
+			break;
+		case 'n':
+			options.num_frames = static_cast<unsigned>(std::atoi(optarg));
+			break;
+		case 'l':
+			options.state_path = optarg;
+			break;
+		case 's':
+			for (const char *s = optarg; s && *s;) {
+				options.save_frames.push_back(static_cast<unsigned>(std::atoi(s)));
+				s = std::strchr(s, ',');
+				if (s)
+					s++;
+			}
+			break;
+		case 'u':
+			options.unthrottled = true;
+			break;
+		case 'x':
+			if (const int scale = std::atoi(optarg); scale >= 2 && scale <= 6)
+				options.display.scale = static_cast<unsigned>(scale);
+			break;
+		case 'a':
+			if (const int level = std::atoi(optarg); level >= 2 && level <= 16)
+				options.display.anisotropy = static_cast<unsigned>(level);
+			break;
+		case 'w':
+			options.display.window = static_cast<unsigned>(std::atoi(optarg));
+			break;
+		case 'f':
+			options.display.fullscreen = true;
+			break;
+		case 'v':
+			options.verbose = true;
+			break;
+		default:
+			opt = 'h';
+			break;
+		}
+	}
+	if (opt == 'h')
+		std::printf(HELP, argv[0]);
+	return opt != 'h';
+}
+
+/* The list of the games: in the folder Odin is started from, else in the
+ * home of the user, else where `make install` puts it. */
+bool
+load_game_list(odin::GameList &games)
+{
+	const char *home = std::getenv("HOME");
+
+	if (!home)
+		if (const struct passwd *const user = getpwuid(getuid()))
+			home = user->pw_dir;
+
+	const std::string base = home ? home : ".";
+	const std::string paths[3] = {
+		"./vk-games.json",
+		base + "/vk-games.json",
+		base + "/.local/share/odin/vk-games.json",
+	};
+
+	for (const std::string &path : paths) {
+		if (access(path.c_str(), R_OK))
+			continue;
+		if (!games.load(path))
+			return false;
+		std::printf("loading game list from '%s'", path.c_str());
+		return true;
+	}
+	std::fprintf(stderr, "ERROR: no list of the games: '%s', '%s' nor '%s'\n",
+	             paths[0].c_str(), paths[1].c_str(), paths[2].c_str());
+	return false;
+}
+
+/* A game being run: its board, with the window and the keyboard around
+ * it. */
+class Session {
+public:
+	Session(const Options &options, odin::Hikaru &board, odin::Display &display, odin::Keyboard &keys)
+		: m_options(options), m_board(board), m_display(display), m_keys(keys),
+		  m_paused(false), m_next{}
+	{
+	}
+
+	/* Runs the frames until the user quits or the last one asked is
+	 * done. */
+	void run();
+
+private:
+	bool process_events();
+	void load_or_save_state(bool load);
+	void save_state_at_frame();
+	void limit_frame_rate();
+
+	const Options &m_options;
+	odin::Hikaru &m_board;
+	odin::Display &m_display;
+	odin::Keyboard &m_keys;
+	bool m_paused;
+	struct timespec m_next;	/* when the next frame is due */
+};
+
+/* F1 and F4: <game>.vkstate */
+void
+Session::load_or_save_state(bool load)
+{
+	const std::string path = m_board.game_name() + ".vkstate";
+
+	if (load ? m_board.load_state(path) : m_board.save_state(path))
+		std::printf("%s state '%s'", load ? "loaded" : "saved", path.c_str());
+	else
+		std::fprintf(stderr, "ERROR: failed to %s state '%s'\n", load ? "load" : "save", path.c_str());
+}
+
+/* The keys of the emulator: Escape quits, Space pauses, F1 loads the state
+ * of the game and F4 saves it, F11 or Alt+Enter takes the whole display.
+ * The others are the control panel, see keyboard.hpp. True to quit. */
+bool
+Session::process_events()
+{
+	SDL_Event event;
+	bool quit = false;
+
+	while (SDL_PollEvent(&event)) {
+		switch (event.type) {
+		case SDL_KEYDOWN:
+			m_keys.set(event.key.keysym.sym, true);
+			switch (event.key.keysym.sym) {
+			case SDLK_ESCAPE:
+				quit = true;
+				break;
+			case SDLK_SPACE:
+				m_paused = !m_paused;
+				break;
+			case SDLK_F1:
+				load_or_save_state(true);
+				break;
+			case SDLK_F4:
+				load_or_save_state(false);
+				break;
+			case SDLK_F11:
+				m_display.toggle_fullscreen();
+				break;
+			case SDLK_RETURN:
+				if (event.key.keysym.mod & KMOD_ALT)
+					m_display.toggle_fullscreen();
+				break;
+			default:
+				break;
+			}
+			break;
+		case SDL_KEYUP:
+			m_keys.set(event.key.keysym.sym, false);
+			break;
+		case SDL_QUIT:
+			quit = true;
+			break;
+		default:
+			break;
+		}
+	}
+	return quit;
+}
+
+/* -s: <game>-<frame>.vkstate, written once the frame is drawn */
+void
+Session::save_state_at_frame()
+{
+	char path[64];
+
+	for (const unsigned frame : m_options.save_frames) {
+		if (frame != m_board.frame())
+			continue;
+		std::snprintf(path, sizeof(path), "%s-%06u.vkstate", m_board.game_name().c_str(), frame);
+		if (m_board.save_state(path))
+			std::printf("saved state '%s'\n", path);
+		else
+			std::fprintf(stderr, "ERROR: failed to save state '%s'\n", path);
+	}
+}
+
+/* Holds the frames at the rate of the board, 60 per second. A frame late
+ * by less than two periods is caught up, a longer delay is dropped. */
+void
+Session::limit_frame_rate()
+{
+	const long period = 1000000000L / 60;
+	struct timespec now;
+
+	clock_gettime(CLOCK_MONOTONIC, &now);
+	m_next.tv_nsec += period;
+	if (m_next.tv_nsec >= 1000000000L) {
+		m_next.tv_sec++;
+		m_next.tv_nsec -= 1000000000L;
+	}
+
+	const long long late = (now.tv_sec - m_next.tv_sec) * 1000000000LL + (now.tv_nsec - m_next.tv_nsec);
+
+	if (late > 2 * period)
+		m_next = now;
+	else if (late < 0)
+		clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &m_next, nullptr);
+}
+
+void
+Session::run()
+{
+	while (!process_events()) {
+		if (m_options.num_frames > 0 && m_board.frame() >= m_options.num_frames)
+			return;
+		if (m_paused)
+			continue;
+		m_display.begin_frame();
+		m_board.run_frame();
+		m_display.end_frame(m_board.frame());
+		save_state_at_frame();
+		if (!m_options.unthrottled)
+			limit_frame_rate();
+	}
+}
+
+} /* namespace */
+
+int
+main(int argc, char **argv)
+{
+	Options options;
+	odin::GameList games;
+
+	std::printf("Odin, Copyright(C) 2026 Réda Chérif-Touil\n");
+	std::printf("A hard fork of Valkyrie, Copyright(C) 2011-2013 Stefano Teso\n");
+	std::printf("Released under the GPL3 License.\n");
+
+	if (!parse_options(argc, argv, options))
+		return 0;
+
+	if (!load_game_list(games)) {
+		std::fprintf(stderr, "ERROR: failed to load the game list\n");
+		return 0;
+	}
+
+	if (!games.has(options.game)) {
+		std::fprintf(stderr, "ERROR: failed to load '%s': game name not in game list\n", options.game.c_str());
+		return 0;
+	}
+
+	const std::optional<odin::Game> game = games.load_game(options.rom_path, options.game);
+	if (!game) {
+		std::fprintf(stderr, "ERROR: failed to load '%s': can't load game files\n", options.game.c_str());
+		return 0;
+	}
+	if (game->machine != "hikaru") {
+		std::fprintf(stderr, "ERROR: failed to load '%s': a game of the %s, not of the Hikaru\n",
+		             options.game.c_str(), game->machine.c_str());
+		return 0;
+	}
+
+	const std::unique_ptr<odin::Hikaru> board = odin::Hikaru::make(*game, options.verbose);
+	if (!board)
+		return 0;
+
+	odin::Keyboard keys;
+	const std::unique_ptr<odin::Display> display = odin::Display::make(*board, keys, options.display);
+	if (!display)
+		return 0;
+	board->set_panel(&keys);
+
+	bool started = true;
+
+	board->reset();
+	if (!options.state_path.empty()) {
+		started = board->load_state(options.state_path);
+		if (started)
+			std::printf("loaded state '%s', frame %u\n", options.state_path.c_str(), board->frame());
+		else
+			std::fprintf(stderr, "ERROR: failed to load state '%s'\n", options.state_path.c_str());
+	}
+	if (started) {
+		std::printf("Running");
+		Session(options, *board, *display, keys).run();
+	}
+
+	std::printf("Finalizing");
+	board->power_off();
+	return started ? 0 : 1;
+}
