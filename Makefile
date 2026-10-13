@@ -76,7 +76,6 @@ ODIN_OBJ := \
 	src/odin/z80.o \
 	src/odin/z80_ops.o \
 	src/odin/eeprom_93c46.o \
-	src/odin/eeprom_bridge.o \
 	src/odin/x76f100.o \
 	src/odin/x76f100_bridge.o \
 	src/odin/crypt_315_5881.o \

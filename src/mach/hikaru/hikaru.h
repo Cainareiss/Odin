@@ -20,7 +20,7 @@
 #define __VK_HIKARU_H__
 
 #include "vk/mmap.h"
-#include "odin/eeprom_bridge.hpp"
+#include "odin/eeprom_93c46.hpp"
 #include "odin/x76f100_bridge.hpp"
 #include "odin/crypt_315_5881_bridge.hpp"
 #include "odin/actel_m1_bridge.hpp"
@@ -77,7 +77,7 @@ typedef struct {
 	uint8_t irq_lines;	/* see hikaru_update_irqs */
 	uint8_t mie_port_d;	/* see hikaru_set_resets */
 	/* 93C46 of the main board on port A bits 2 (DI), 3 (SK), 4 (CS), 5 (DO) */
-	odin_eeprom93c46_t *eeprom_main;
+	odin::Eeprom93c46 *eeprom_main;
 	/* X76F100 of the ROM board, bus page eeprom_bank */
 	odin_x76f100_t *eeprom_rombd;
 	/* RAM of the 315-5881, local bus 0x0A000000, boards with the chip only */

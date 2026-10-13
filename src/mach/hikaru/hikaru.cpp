@@ -131,6 +131,8 @@
  * See hikaru-mie.c
  */
 
+#include <span>
+
 #include "vk/core.h"
 #include "vk/games.h"
 
@@ -192,7 +194,7 @@ porta_get_m (sh4_t *ctx, uint16_t *val)
 	/* Bits 6 to 9 are the lines of hikaru_update_irqs, low while they
 	 * ask; nothing is known on the other pins, pulled up. */
 	*val = 0xFC1F |
-	       (odin_eeprom93c46_do (hikaru->eeprom_main) ? 0x20 : 0) |
+	       (hikaru->eeprom_main->do_read () ? 0x20 : 0) |
 	       ((lines & 0x01) ? 0 : 0x040) |	/* ANT_INT */
 	       ((lines & 0x10) ? 0 : 0x080) |	/* SZK_INT */
 	       ((lines & 0x20) ? 0 : 0x100) |	/* CN4_INT */
@@ -217,8 +219,7 @@ porta_put_m (sh4_t *ctx, uint16_t val)
 	hikaru->porta_m = val;
 
 	/* 93C46: bit 2 DI, bit 3 SK, bit 4 CS (MAME hikaru.cpp main_io_w) */
-	odin_eeprom93c46_set_pins (hikaru->eeprom_main,
-	                           (val >> 4) & 1, (val >> 3) & 1, (val >> 2) & 1, 0);
+	hikaru->eeprom_main->set_pins ((val >> 4) & 1, (val >> 3) & 1, (val >> 2) & 1, false);
 
 	/* The NMI of the slave comes with the falling edge (its ICR.NMIE is
 	 * clear). */
@@ -482,7 +483,7 @@ hikaru_run_cycles (vk_machine_t *mach, int cycles)
 	hikaru->sh_current = hikaru->sh_s;
 	vk_cpu_run (hikaru->sh_s, cycles);
 
-	odin_eeprom93c46_tick (hikaru->eeprom_main, (uint32_t) cycles);
+	hikaru->eeprom_main->tick ((uint32_t) cycles);
 
 	/* Run the MEMCTL and GPU */
 	vk_device_exec (hikaru->memctl_m, cycles);
@@ -647,7 +648,31 @@ hikaru_get_debug_string (vk_machine_t *mach)
 #define LOAD(thing_) \
 		ret |= vk_state_get (state, (void *) &(thing_), sizeof (thing_))
 
-/* The Odin chips save and load a plain block */
+/* The Odin chips save and load a block of plain data */
+
+template <typename State, typename Chip>
+static int
+save_chip (vk_state_t *state, const Chip &chip)
+{
+	State block;
+
+	memset (&block, 0, sizeof (block));
+	chip.save (block);
+	return vk_state_put (state, &block, sizeof (block));
+}
+
+template <typename State, typename Chip>
+static int
+load_chip (vk_state_t *state, Chip &chip)
+{
+	State block;
+
+	if (vk_state_get (state, &block, sizeof (block)))
+		return -1;
+	chip.load (block);
+	return 0;
+}
+
 
 #define SAVE_CHIP(name_, dev_) \
 	do { \
@@ -688,7 +713,7 @@ hikaru_load_state (vk_machine_t *mach, vk_state_t *state)
 	LOAD (hikaru->unk1B000100_s);
 	LOAD (hikaru->rombd_config);
 
-	LOAD_CHIP (odin_eeprom93c46, hikaru->eeprom_main);
+	ret |= load_chip<odin::Eeprom93c46State> (state, *hikaru->eeprom_main);
 	LOAD_CHIP (odin_x76f100, hikaru->eeprom_rombd);
 	if (hikaru->crypt)
 		LOAD_CHIP (odin_crypt5881, hikaru->crypt);
@@ -729,7 +754,7 @@ hikaru_save_state (vk_machine_t *mach, vk_state_t *state)
 	SAVE (hikaru->unk1B000100_s);
 	SAVE (hikaru->rombd_config);
 
-	SAVE_CHIP (odin_eeprom93c46, hikaru->eeprom_main);
+	ret |= save_chip<odin::Eeprom93c46State> (state, *hikaru->eeprom_main);
 	SAVE_CHIP (odin_x76f100, hikaru->eeprom_rombd);
 	if (hikaru->crypt)
 		SAVE_CHIP (odin_crypt5881, hikaru->crypt);
@@ -1171,9 +1196,7 @@ hikaru_init (hikaru_t *hikaru)
 	if (!hikaru->mie)
 		return -1;
 
-	hikaru->eeprom_main = odin_eeprom93c46_new (HIKARU_SH4_CLOCK);
-	if (!hikaru->eeprom_main)
-		return -1;
+	hikaru->eeprom_main = new odin::Eeprom93c46 (HIKARU_SH4_CLOCK);
 
 	hikaru->sched = odin_scheduler_new ();
 	if (!hikaru->sched)
@@ -1181,9 +1204,9 @@ hikaru_init (hikaru_t *hikaru)
 	if (game) {
 		vk_buffer_t *image = vk_game_get_section_data (game, "eeprom");
 		if (image) {
-			odin_eeprom93c46_load (hikaru->eeprom_main,
-			                       (const uint8_t *) vk_buffer_get_ptr (image, 0),
-			                       vk_buffer_get_size (image));
+			hikaru->eeprom_main->load (std::span<const uint8_t> (
+				(const uint8_t *) vk_buffer_get_ptr (image, 0),
+				vk_buffer_get_size (image)));
 			VK_PRINT ("main board EEPROM: 93c46 image loaded");
 		} else
 			VK_PRINT ("main board EEPROM: no image, blank");
