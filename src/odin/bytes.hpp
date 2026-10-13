@@ -19,6 +19,7 @@
 #ifndef ODIN_BYTES_HPP
 #define ODIN_BYTES_HPP
 
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 
@@ -88,6 +89,26 @@ store_bytes(uint8_t *at, unsigned size, uint64_t value)
 		std::memcpy(at, &value, size);
 		break;
 	}
+}
+
+/* Whether two objects hold the same bytes. It is compiled in place whatever
+ * their size, for what is compared at every mesh: memcmp is a call into the
+ * C library on some hosts. */
+template <typename T>
+inline bool
+same_bytes(const T &a, const T &b)
+{
+	const void *const first = &a, *const second = &b;
+	const uint8_t *const x = static_cast<const uint8_t *>(first);
+	const uint8_t *const y = static_cast<const uint8_t *>(second);
+	uint64_t differ = 0;
+	size_t i = 0;
+
+	for (; i + 8 <= sizeof(T); i += 8)
+		differ |= load_bytes(x + i, 8) ^ load_bytes(y + i, 8);
+	for (; i < sizeof(T); i++)
+		differ |= static_cast<uint64_t>(x[i] ^ y[i]);
+	return differ == 0;
 }
 
 } /* namespace odin */
