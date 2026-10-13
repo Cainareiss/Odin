@@ -643,7 +643,10 @@ projected depth of a near plane at 0.1 or 0.01 was too coarse (black
 patches on the cars of the SGNASCAR entry list, the shadow of the AIRTRIX
 combo labels drawn over them, the cover of a PODRACE engine over its fan).
 The depth format of the hardware and its use of the 421 range are not
-known, and the 421 depth function is not applied (HEURISTIC).
+known. The top three bits of the 421, which Valkyrie read as a depth
+function, number the viewports here: those of a lower number are drawn
+first, each over what is there and with a depth buffer of its own
+(HEURISTIC: the games use the eight values).
 
 The 221 offsets are signed 16-bit values: von4 centres the view of its
 lever panel (tutorial of the U.S.A. setting) on (960, -85), and the levers

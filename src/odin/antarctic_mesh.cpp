@@ -145,8 +145,8 @@ void
 Antarctic::begin_mesh(uint32_t addr)
 {
 	odin_display_list_t &l = m_list->view;
-	/* The meshes are kept by viewport, which the depth function of the
-	 * 421 numbers, and by polygon type. */
+	/* The meshes are kept by viewport, which the top bits of the 421
+	 * number, and by polygon type. */
 	const uint32_t vp = m_s.vp.current.depth.func;
 	const uint32_t type = m_s.poly.type;
 	const uint32_t index = l.num_meshes[vp][type];

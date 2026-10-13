@@ -435,7 +435,10 @@ viewport_index(const uint32_t *inst)
  *
  * m = Minimum
  * M = Maximum
- * F = Depth test function
+ * F = Number of the viewport. Those of a lower number are drawn first,
+ *     each over what is there and with a depth buffer of its own
+ *     (HEURISTIC: the games use the eight values; what the board does
+ *     with them is not known).
  *
  * See PH:@0C015AA6
  *

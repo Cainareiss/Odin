@@ -186,19 +186,14 @@ odin_tex_coords(const odin_texhead_t *th, uint32_t *x, uint32_t *y)
 const char *
 odin_viewport_str(const odin_viewport_t *vp)
 {
-	/* XXX tentative, mirrors OpenGL's ordering. */
-	static const char depth_func_name[8][3] = {
-		"NV", "LT", "EQ", "LE",
-		"GT", "NE", "GE", "AW"
-	};
 	static char out[512];
 
-	std::snprintf(out, sizeof(out), "clip=(%6.3f %6.3f %6.3f %6.3f %6.3f %6.3f) offs=(%6.3f %6.3f) depth=(%s %6.3f %6.3f) dq=(behind=%u type=%u unk=%u mask=%02X%02X%02X%02X P=%g Q=%g)",
+	std::snprintf(out, sizeof(out), "clip=(%6.3f %6.3f %6.3f %6.3f %6.3f %6.3f) offs=(%6.3f %6.3f) depth=(%u %6.3f %6.3f) dq=(behind=%u type=%u unk=%u mask=%02X%02X%02X%02X P=%g Q=%g)",
 	              vp->clip.l, vp->clip.r,
 	              vp->clip.b, vp->clip.t,
 	              vp->clip.f, vp->clip.n,
 	              vp->offset.x, vp->offset.y,
-	              depth_func_name[vp->depth.func & 7],
+	              vp->depth.func & 7u,
 	              vp->depth.min, vp->depth.max,
 	              vp->depth.q_behind, vp->depth.q_type, vp->depth.q_unknown,
 	              vp->depth.mask[3], vp->depth.mask[2],
