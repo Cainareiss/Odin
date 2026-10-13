@@ -41,7 +41,7 @@ struct vk_device_t {
 	\
 		VK_ASSERT (mach_); \
 	\
-		(derivedptr_) = ALLOC (typeof (*(derivedptr_))); \
+		(derivedptr_) = ALLOC (__typeof__ (*(derivedptr_))); \
 		if (!(derivedptr_)) \
 			break; \
 	\

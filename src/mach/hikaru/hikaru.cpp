@@ -310,7 +310,6 @@ unk_s_put (vk_device_t *dev, unsigned size, uint32_t addr, uint64_t val)
  * the configuration space of the command processor, read through the bridge
  * of the slave. */
 static vk_device_t unk_s = {
-	0,
 	.get = unk_s_get,
 	.put = unk_s_put
 };
@@ -1183,7 +1182,7 @@ hikaru_init (hikaru_t *hikaru)
 		vk_buffer_t *image = vk_game_get_section_data (game, "eeprom");
 		if (image) {
 			odin_eeprom93c46_load (hikaru->eeprom_main,
-			                       vk_buffer_get_ptr (image, 0),
+			                       (const uint8_t *) vk_buffer_get_ptr (image, 0),
 			                       vk_buffer_get_size (image));
 			VK_PRINT ("main board EEPROM: 93c46 image loaded");
 		} else
@@ -1197,7 +1196,7 @@ hikaru_init (hikaru_t *hikaru)
 		vk_buffer_t *image = vk_game_get_section_data (game, "rombd_eeprom");
 		if (image) {
 			odin_x76f100_load (hikaru->eeprom_rombd,
-			                   vk_buffer_get_ptr (image, 0),
+			                   (const uint8_t *) vk_buffer_get_ptr (image, 0),
 			                   vk_buffer_get_size (image));
 			VK_PRINT ("ROM board EEPROM: x76f100 image loaded");
 		} else

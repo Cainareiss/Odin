@@ -71,7 +71,7 @@ vk_renderer_screenshot (vk_renderer_t *renderer)
 	if (!prefix || (renderer->frame % every) != 0)
 		return;
 
-	pixels = malloc (w * h * 3);
+	pixels = (uint8_t *) malloc (w * h * 3);
 	if (!pixels)
 		return;
 	read_picture (renderer, pixels);

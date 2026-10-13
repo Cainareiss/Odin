@@ -24,7 +24,7 @@
 vk_state_t *
 vk_state_new (const char *path, uint32_t mode)
 {
-	char template[32] = "", header[32];
+	char name[32] = "", header[32];
 	vk_state_t *state;
 	size_t size;
 
@@ -42,14 +42,14 @@ vk_state_new (const char *path, uint32_t mode)
 	state->mode = mode;
 
 	/* The name of the format: a state of another version is refused. */
-	sprintf (template, "odin state %08X\n", VK_STATE_VERSION);
+	sprintf (name, "odin state %08X\n", VK_STATE_VERSION);
 	if (mode == VK_STATE_LOAD) {
-		size = fread ((void *) header, 1, sizeof (template), state->fp);
-		if (size != sizeof (template) || strcmp (template, header))
+		size = fread ((void *) header, 1, sizeof (name), state->fp);
+		if (size != sizeof (name) || strcmp (name, header))
 			goto fail;
 	} else {
-		size = fwrite ((void *) template, 1, sizeof (template), state->fp);
-		if (size != sizeof (template))
+		size = fwrite ((void *) name, 1, sizeof (name), state->fp);
+		if (size != sizeof (name))
 			goto fail;
 	}
 

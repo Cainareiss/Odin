@@ -19,7 +19,9 @@
 #ifndef __VK_CORE_H__
 #define __VK_CORE_H__
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -263,7 +265,7 @@ signext_n_64 (const uint64_t in, const unsigned sign_bit)
 /** Prints a formatted message to stdout */
 #define VK_PRINT(fmt_, args_...) \
 	do { \
-		fprintf (stdout, fmt_"\n", ##args_); \
+		fprintf (stdout, fmt_ "\n", ##args_); \
 	} while (0)
 
 /** Prints a formatted message to stdout in DEBUG builds, and only if verbosity
@@ -274,20 +276,20 @@ signext_n_64 (const uint64_t in, const unsigned sign_bit)
 #define VK_LOG(fmt_, args_...) \
 	do { \
 		if (vk_verbosity > 0) \
-			fprintf (stdout, fmt_"\n", ##args_); \
+			fprintf (stdout, fmt_ "\n", ##args_); \
 	} while (0)
 #endif
 
 /** Prints a formatted message, prefixed by 'ERROR', to stderr */
 #define VK_ERROR(fmt_, args_...) \
 	do { \
-		fprintf (stderr, "ERROR: "fmt_"\n", ##args_); \
+		fprintf (stderr, "ERROR: " fmt_ "\n", ##args_); \
 	} while (0)
 
 /** Prints a formatted message, prefixed by 'FATAL', to stderr, and aborts */
 #define VK_ABORT(fmt_, args_...) \
 	do { \
-		fprintf (stderr, "FATAL: %s:%d %s(): "fmt_"\n", \
+		fprintf (stderr, "FATAL: %s:%d %s(): " fmt_ "\n", \
 		         __FILE__, __LINE__, __FUNCTION__, ##args_); \
 		abort (); \
 	} while (0)

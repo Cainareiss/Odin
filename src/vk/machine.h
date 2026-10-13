@@ -71,7 +71,7 @@ struct vk_machine_t {
 	do { \
 		if (vk_verbosity > 0) { \
 			const char *str = vk_machine_get_debug_string (mach_); \
-			VK_LOG ("%s : "fmt_, str, ##args_); \
+			VK_LOG ("%s : " fmt_, str, ##args_); \
 		} \
 	} while (0);
 #endif
@@ -79,13 +79,13 @@ struct vk_machine_t {
 #define VK_MACH_ERROR(mach_, fmt_, args_...) \
 	do { \
 		const char *str = vk_machine_get_debug_string (mach_); \
-		VK_ERROR ("%s : "fmt_, str, ##args_); \
+		VK_ERROR ("%s : " fmt_, str, ##args_); \
 	} while (0);
 
 #define VK_MACH_ABORT(mach_, fmt_, args_...) \
 	do { \
 		const char *str = vk_machine_get_debug_string (mach_); \
-		VK_ABORT ("%s : "fmt_, str, ##args_); \
+		VK_ABORT ("%s : " fmt_, str, ##args_); \
 	} while (0);
 
 #define VK_MACH_ASSERT(mach_, cond_) \

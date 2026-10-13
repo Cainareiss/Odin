@@ -139,7 +139,7 @@ load_save_state (vk_machine_t *mach, const char *path, uint32_t mode)
 {
 	vk_state_t *state;
 	char name[32];
-	char *op;
+	const char *op;
 	unsigned i;
 	int ret = 0;
 

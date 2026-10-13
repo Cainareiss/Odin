@@ -270,7 +270,7 @@ hikaru_aica_new (vk_machine_t *mach, vk_buffer_t *ram, bool master, unsigned clo
 
 	aica->ram	= ram;
 	aica->master	= master;
-	aica->chip	= odin_aica_new (vk_buffer_get_ptr (ram, 0),
+	aica->chip	= odin_aica_new ((uint8_t *) vk_buffer_get_ptr (ram, 0),
 	                                 vk_buffer_get_size (ram), clock_hz,
 	                                 hikaru_aica_main_irq, aica);
 	if (!aica->chip)

@@ -68,7 +68,7 @@ struct vk_cpu_t {
 		VK_ASSERT (mach_); \
 		VK_ASSERT (mmap_); \
 	\
-		(derivedptr_) = ALLOC (typeof (*(derivedptr_))); \
+		(derivedptr_) = ALLOC (__typeof__ (*(derivedptr_))); \
 		if (!(derivedptr_)) \
 			break; \
 	\
@@ -93,7 +93,7 @@ struct vk_cpu_t {
 	do { \
 		if (vk_verbosity > 0) { \
 			const char *str = vk_cpu_get_debug_string ((vk_cpu_t *) cpu_); \
-			VK_LOG ("%s : "fmt_, str, ##args_); \
+			VK_LOG ("%s : " fmt_, str, ##args_); \
 		} \
 	} while (0);
 #endif
@@ -101,13 +101,13 @@ struct vk_cpu_t {
 #define VK_CPU_ERROR(cpu_, fmt_, args_...) \
 	do { \
 		const char *str = vk_cpu_get_debug_string ((vk_cpu_t *) cpu_); \
-		VK_ERROR ("%s : "fmt_, str, ##args_); \
+		VK_ERROR ("%s : " fmt_, str, ##args_); \
 	} while (0);
 
 #define VK_CPU_ABORT(cpu_, fmt_, args_...) \
 	do { \
 		const char *str = vk_cpu_get_debug_string ((vk_cpu_t *) cpu_); \
-		VK_ABORT ("%s : "fmt_, str, ##args_); \
+		VK_ABORT ("%s : " fmt_, str, ##args_); \
 	} while (0);
 
 #define VK_CPU_ASSERT(cpu_, cond_) \

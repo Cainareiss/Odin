@@ -90,9 +90,9 @@ vk_buffer_new (unsigned size, unsigned alignment)
 	VK_ASSERT (is_pow2 (alignment));
 
 	if (alignment)
-		ret = posix_memalign ((void *) &buf->ptr, alignment, size);
+		ret = posix_memalign ((void **) &buf->ptr, alignment, size);
 	else
-		buf->ptr = malloc (size);
+		buf->ptr = (uint8_t *) malloc (size);
 
 	if (!buf->ptr || ret)
 		goto fail;
@@ -131,7 +131,7 @@ vk_buffer_new_from_file (const char *path, unsigned reqsize)
 		goto fail;
 
 	size = get_file_size (fp);
-	if (size != reqsize && reqsize != ~0)
+	if (size != reqsize && reqsize != ~0u)
 		goto fail;
 
 	buffer = vk_buffer_new (size, 0);

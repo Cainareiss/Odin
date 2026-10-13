@@ -267,7 +267,7 @@ parse_rom_list (json_t *roms, vk_game_list_t *list)
 {
 	unsigned i, nentries = json_array_size (roms);
 
-	list->entries = calloc (nentries, sizeof (vk_game_entry_t));
+	list->entries = (vk_game_entry_t *) calloc (nentries, sizeof (vk_game_entry_t));
 	if (!list->entries)
 		return -1;
 	list->nentries = nentries;
@@ -316,7 +316,7 @@ vk_game_list_new (const char *path)
 	text = vk_buffer_get_ptr (buf, 0);
 
 	/* The buffer holds the raw file, without a terminating NUL */
-	root = json_loadb (text, vk_buffer_get_size (buf), 0, &error);
+	root = json_loadb ((const char *) text, vk_buffer_get_size (buf), 0, &error);
 	if (!root) {
 		VK_ERROR ("can't load game list '%s'", error.text);
 		goto fail;

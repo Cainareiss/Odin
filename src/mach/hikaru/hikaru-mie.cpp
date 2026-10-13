@@ -633,9 +633,9 @@ hikaru_mie_new (vk_machine_t *mach, unsigned clock_hz)
 	}
 
 	if (lle) {
-		mie->chip = odin_mie_new (vk_buffer_get_ptr (rom, 0),
+		mie->chip = odin_mie_new ((const uint8_t *) vk_buffer_get_ptr (rom, 0),
 		                          vk_buffer_get_size (rom),
-		                          vk_buffer_get_ptr (hikaru->mie_ram, 0),
+		                          (uint8_t *) vk_buffer_get_ptr (hikaru->mie_ram, 0),
 		                          vk_buffer_get_size (hikaru->mie_ram),
 		                          clock_hz, hikaru_mie_read_inputs, mie);
 		if (!mie->chip)

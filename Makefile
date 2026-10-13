@@ -1,4 +1,3 @@
-CC := gcc
 CXX := g++
 LD := g++
 
@@ -10,10 +9,8 @@ SDL_LDFLAGS := `sdl2-config --libs`
 PKG_CFLAGS := `pkg-config --cflags gl glew jansson`
 PKG_LDFLAGS := `pkg-config --libs gl glew jansson`
 
-COMMON_FLAGS = $(DEFS) -pthread -I src -I /usr/include/json -Wall -Wno-strict-aliasing -Wno-format -Wno-unused-local-typedefs
-
-CFLAGS  := $(COMMON_FLAGS) $(PKG_CFLAGS) $(SDL_CFLAGS) -O3 -fomit-frame-pointer -flto -march=native -fno-stack-protector
-#CFLAGS  := $(COMMON_FLAGS) $(PKG_CFLAGS) $(SDL_CFLAGS) -O0 -g
+OPT_FLAGS := -O3 -fomit-frame-pointer -flto -march=native -fno-stack-protector
+#OPT_FLAGS := -O0 -g
 LDFLAGS := -lm $(PKG_LDFLAGS) $(SDL_LDFLAGS)
 
 # Profile-guided build, 4 to 15 % faster: make clean, make PGO=generate, run
@@ -24,13 +21,15 @@ endif
 ifeq ($(PGO),use)
 PGO_FLAGS := -fprofile-use -fprofile-correction -Wno-missing-profile
 endif
-CFLAGS += $(PGO_FLAGS)
 
 # Each object notes the headers it was built from, in a .d file next to it.
 DEP_FLAGS := -MMD -MP
-CFLAGS += $(DEP_FLAGS)
 
-CXXFLAGS := -std=c++20 -pthread -I src -Wall -Wextra -Wpedantic -Wconversion -Wshadow -O3 -fomit-frame-pointer -flto -march=native -fno-stack-protector $(PGO_FLAGS) $(DEP_FLAGS)
+CXXFLAGS := -std=c++20 -pthread -I src -Wall -Wextra -Wpedantic -Wconversion -Wshadow $(OPT_FLAGS) $(PGO_FLAGS) $(DEP_FLAGS)
+
+# The files that were C until they are written again: without the warnings
+# the others are held to.
+OLD_CXXFLAGS := -std=c++20 -pthread $(DEFS) -I src -I /usr/include/json -Wall -Wno-strict-aliasing -Wno-format -Wno-unused-local-typedefs $(PKG_CFLAGS) $(SDL_CFLAGS) $(OPT_FLAGS) $(PGO_FLAGS) $(DEP_FLAGS)
 
 .PHONY: all install clean
 
@@ -98,9 +97,7 @@ ODIN_OBJ := \
 	src/odin/worker.o \
 	src/odin/worker_bridge.o
 
-HIKARU_OBJ := \
-	$(SH4_OBJ) \
-	$(ODIN_OBJ) \
+MACH_OBJ := \
 	src/mach/hikaru/hikaru.o \
 	src/mach/hikaru/hikaru-mscomm.o \
 	src/mach/hikaru/hikaru-mie.o \
@@ -109,21 +106,19 @@ HIKARU_OBJ := \
 	src/mach/hikaru/hikaru-gpu.o \
 	src/mach/hikaru/hikaru-aica.o
 
+OLD_OBJ := $(VK_OBJ) $(SH4_OBJ) $(MACH_OBJ) src/vk/main.o
+
 all: bin/odin
 
-bin/odin: $(VK_OBJ) $(HIKARU_OBJ) src/vk/main.o
-	$(LD) $+ -o $@ $(CFLAGS) $(LDFLAGS) 
+bin/odin: $(OLD_OBJ) $(ODIN_OBJ)
+	$(LD) $+ -o $@ $(CXXFLAGS) $(LDFLAGS)
 
-%.o: %.c
-	$(CC) -c $< -o $@ $(CFLAGS)
-
-%.o: %.c %.h
-	$(CC) -c $< -o $@ $(CFLAGS)
+$(OLD_OBJ): CXXFLAGS := $(OLD_CXXFLAGS)
 
 %.o: %.cpp
 	$(CXX) -c $< -o $@ $(CXXFLAGS)
 
--include $(patsubst %.o,%.d,$(VK_OBJ) $(HIKARU_OBJ) src/vk/main.o)
+-include $(patsubst %.o,%.d,$(OLD_OBJ) $(ODIN_OBJ))
 
 # A product is fused with a sum only where the code says std::fma.
 src/odin/sh4_ops.o: CXXFLAGS += -ffp-contract=off
