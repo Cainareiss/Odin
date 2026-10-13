@@ -136,6 +136,13 @@ Hikaru::map_pages()
 	map(*m_sh[MASTER], 0x14001000, 0x14400000, m_cmdram, 0x003FFFFF, true, true);
 	map(*m_sh[MASTER], 0x1B000000, 0x1B800000, m_fb, 0x007FFFFF, true, true);
 	map(*m_sh[SLAVE], 0x10001000, 0x10400000, m_cmdram, 0x003FFFFF, true, true);
+
+	/* The window of the master on the MIE and its bus request register,
+	 * which the games poll all along: the MIE has no way to the memory
+	 * of the master, see mie_read() and mie_write(). */
+	for (uint32_t addr = 0x00800000; addr < 0x00840000; addr += page_size)
+		m_sh[MASTER]->map_quiet(addr / page_size);
+	m_sh[MASTER]->map_quiet(0x01000000 / page_size);
 }
 
 /*
