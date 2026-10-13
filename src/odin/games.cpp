@@ -23,6 +23,8 @@
 
 #include <jansson.h>
 
+#include "odin/bytes.hpp"
+
 namespace odin {
 
 namespace {
@@ -98,7 +100,8 @@ load_section(const json_t *section, const std::string &dir)
 			if (out.size() < base + file->size() * 2)
 				out.resize(base + file->size() * 2);
 			for (size_t j = 0; j + step <= file->size(); j += step)
-				std::memcpy(&out[base + (i & 1) * step + j * 2], &(*file)[j], step);
+				store_bytes(&out[base + (i & 1) * step + j * 2], static_cast<unsigned>(step),
+				            load_bytes(&(*file)[j], static_cast<unsigned>(step)));
 			if (i & 1)
 				base += file->size() * 2;
 		}
