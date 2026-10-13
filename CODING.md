@@ -5,22 +5,17 @@ low-level emulation (LLE) of the Sega Hikaru arcade system. Fidelity comes
 first, speed second, convenience last. This file says how new code is
 written so that everyone knows what to do.
 
-## 1. Languages
+## 1. Language
 
-- All new code is C++20, in the sober subset described in section 3.
-- The existing C code of Valkyrie stays as it is until a component is
-  rewritten for real. Do not convert files for the sake of converting them.
-- C and C++ meet through a small, explicit bridge: a C++ device is exposed to
-  the C core as a `vk_device_t` with `extern "C"` entry points. Nothing else
-  crosses the boundary.
-- Build flags for C++: `-std=c++20 -Wall -Wextra -Wpedantic -Wconversion
-  -Wshadow`. New C++ files compile warning-free. No compiler extensions.
+- All the code is C++20, in the sober subset described in section 3.
+- Build flags: `-std=c++20 -Wall -Wextra -Wpedantic -Wconversion
+  -Wshadow`. Every file compiles warning-free. No compiler extensions.
 
 ## 2. One class per chip
 
 - One source pair per real chip or board: `src/odin/<chip>.hpp` and
   `src/odin/<chip>.cpp`. Examples: `mie.cpp` (315-6146), `z80.cpp`,
-  `bridge_6154.cpp` (315-6154), `jvs_io_13551.cpp`, `aica.cpp`.
+  `memctl.cpp` (315-6154), `jvs_io_13551.cpp`, `aica.cpp`.
 - Every device implements the same small interface: `reset()`,
   `read(addr, size)`, `write(addr, size, value)`, `run(cycles)` or
   `tick()`, interrupt lines in and out, `save(state&)` / `load(state&)`,
