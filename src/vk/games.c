@@ -139,8 +139,9 @@ load_section (json_t *root, vk_game_section_t *section, const char *path, const 
 			return -1;
 		break;
 	case MODE_INTERLEAVE:
-		/* XXX wrong, we need to interleave 2 by 2 for hikaru eproms,
-		 * see braveff */
+		/* The files go in pairs: amnt bytes of the first, then amnt
+		 * bytes of the second, and so on; the pairs follow each
+		 * other. */
 		section->buffer = vk_buffer_new (total_size, 0);
 		if (!section->buffer)
 			return -1;
