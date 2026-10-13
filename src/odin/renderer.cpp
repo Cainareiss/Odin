@@ -37,7 +37,7 @@ constexpr float INV255 = 1.0f / 255.0f;
 
 Renderer::Renderer(const Memory &memory, const Options &options)
 	: m_gpu(nullptr), m_fb(memory.fb), m_options(options), m_building(nullptr), m_list(nullptr),
-	  m_frame{}, m_textures(memory.texram), m_mesh_vao(0), m_mesh_vbo(0),
+	  m_frame{}, m_textures(memory.texram), m_times(options.times), m_mesh_vao(0), m_mesh_vbo(0),
 	  m_program(nullptr), m_variant_key(0), m_drawing(0),
 	  m_scissor_vp_index(~0u), m_bound_tex_index(~0u), m_pass{}, m_again(false),
 	  m_scale(1), m_num_lists(0), m_shown(2), m_next(-1), m_launched(0), m_last{},
@@ -66,6 +66,8 @@ Renderer::Renderer(const Memory &memory, const Options &options)
 
 Renderer::~Renderer()
 {
+	m_times.tell();
+
 	glBindVertexArray(0);
 	if (m_mesh_vao) {
 		glDeleteVertexArrays(1, &m_mesh_vao);
@@ -246,10 +248,13 @@ Renderer::take_frame(unsigned frame, unsigned window_w, unsigned window_h)
 void
 Renderer::draw_frame()
 {
+	m_times.begin();
 	forget_held();
 	show();
+	m_times.part(DrawTimes::PART_PRESENT);
 	present(m_frame.window_w, m_frame.window_h);
 	gl::check("a frame");
+	m_times.part(DrawTimes::PART_SHOWN);
 
 	if (logging()) {
 		log(" ==== RENDSTATE STATISTICS ==== ");
@@ -267,6 +272,7 @@ Renderer::draw_list()
 {
 	glBindFramebuffer(GL_FRAMEBUFFER, m_scene_fb);
 	draw_scene();
+	m_times.part(DrawTimes::PART_BLENDER);
 	set_2d_state();
 
 	/* The blender output is what the 3D buffer of the list keeps: the
@@ -315,6 +321,7 @@ Renderer::check_last_list()
 	if (!list)
 		return;
 	m_last.list = nullptr;
+	m_times.part(DrawTimes::PART_LAST_LIST);
 
 	for (unsigned vpi = 0; vpi < 8; vpi++) {
 		GLuint count;
@@ -326,6 +333,7 @@ Renderer::check_last_list()
 		used = std::max(used, count);
 	}
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+	m_times.fragments(used);
 
 	if (used > m_lists.max && grow_lists(used)) {
 		m_list = list;
@@ -335,6 +343,7 @@ Renderer::check_last_list()
 		forget_held();
 		m_again = false;
 		m_list = current;
+		m_times.part(DrawTimes::PART_LAST_LIST);
 	}
 
 	glCopyImageSubData(m_pipe[m_last.slot], GL_TEXTURE_2D, 0, 0, 0, 0,
@@ -358,6 +367,7 @@ Renderer::show()
 {
 	const odin_fb_config_t &fb = m_frame.fb;
 
+	m_times.part(DrawTimes::PART_LAST_LIST);
 	check_last_list();
 	m_textures.delete_dead();
 
@@ -422,6 +432,7 @@ Renderer::compose()
 	/* Two 3D buffers were blended when their list was drawn. */
 	const float factor = (n1 < 2 && n2 < 2) ? 0.0f : static_cast<float>(rate) * (1.0f / 255);
 
+	m_times.part(DrawTimes::PART_LAYERS);
 	set_2d_state();
 	glBindFramebuffer(GL_FRAMEBUFFER, m_frame_fb);
 
@@ -429,6 +440,7 @@ Renderer::compose()
 		layer1 = upload_layer(0, mult1);
 	if (shows_layer(1))
 		layer2 = upload_layer(1, mult2);
+	m_times.part(DrawTimes::PART_COMPOSE);
 
 	/* The two blender inputs: 0 and 1 are the 3D, 2 and 3 the 2D layers
 	 * (PHARRIER blends layer 2 in for its logo screens, 781 = 0704/0705). */

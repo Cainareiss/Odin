@@ -320,8 +320,15 @@ Renderer::upload_texture(const odin_mesh_t &mesh)
 	if (m_again) {
 		id = tex_ids()[mesh.tex_index];
 	} else {
+		/* A texture that is decoded is a part of its own in the
+		 * times of the drawing. */
+		const bool decoded = m_times.on() && !m_textures.holds(th);
+		const DrawTimes::Part part = decoded ? m_times.part(DrawTimes::PART_TEXTURES) : DrawTimes::NUM_PARTS;
+
 		id = m_textures.get(th);
 		tex_ids()[mesh.tex_index] = id;
+		if (decoded)
+			m_times.part(part);
 	}
 
 	glActiveTexture(GL_TEXTURE0 + 0);
@@ -467,6 +474,7 @@ Renderer::draw_mesh(const odin_mesh_t &mesh)
 		for (unsigned i = 0; i < mesh.num_instances; i++)
 			draw_instance(mesh, i);
 	}
+	m_times.mesh(mesh.num_tris * mesh.num_instances);
 
 	glBindVertexArray(0);
 	gl::check("a mesh");
@@ -577,21 +585,25 @@ Renderer::draw_polytype(unsigned vpi, unsigned polytype)
 
 	switch (polytype) {
 	case ODIN_POLYTYPE_TRANSPARENT:
+		m_times.part(DrawTimes::PART_PUNCH_THROUGH);
 		glDepthMask(GL_TRUE);
 		m_pass.depth_bias = true;
 		m_pass.alpha_ref = 0.5f;
 		break;
 	case ODIN_POLYTYPE_TRANSLUCENT:
+		m_times.part(DrawTimes::PART_COLLECT);
 		glDepthMask(GL_FALSE);
 		m_pass.depth_bias = true;
 		m_pass.alpha_ref = 1.0f / 255.0f;
 		break;
 	case ODIN_POLYTYPE_BACKGROUND:
+		m_times.part(DrawTimes::PART_BACKGROUND);
 		glDepthMask(GL_FALSE);
 		m_pass.depth_bias = false;
 		m_pass.alpha_ref = 1.0f / 255.0f;
 		break;
 	default:
+		m_times.part(polytype == ODIN_POLYTYPE_OPAQUE ? DrawTimes::PART_OPAQUE : DrawTimes::PART_SHADOWS);
 		glDepthMask(GL_TRUE);
 		m_pass.depth_bias = true;
 		m_pass.alpha_ref = -1.0f;
@@ -631,6 +643,7 @@ Renderer::draw_scene()
 	if (m_debug[DEBUG_NO_3D])
 		return;
 
+	m_times.part(DrawTimes::PART_VERTICES);
 	upload_vertices(m_list->verts.all, m_list->verts.num);
 
 	glViewport(0, 0, static_cast<GLsizei>(width()), static_cast<GLsizei>(height()));
@@ -652,6 +665,7 @@ Renderer::draw_scene()
 
 	/* Each viewport starts from an empty depth buffer. */
 	for (unsigned vpi = 0; vpi < 8; vpi++) {
+		m_times.part(DrawTimes::PART_VERTICES);
 		glDepthMask(GL_TRUE);
 		glDisable(GL_SCISSOR_TEST);
 		glClear(GL_DEPTH_BUFFER_BIT);

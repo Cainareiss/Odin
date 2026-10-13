@@ -184,6 +184,7 @@ Renderer::draw_translucent(unsigned vpi, const odin_mesh_t *meshes, unsigned num
 	m_pass.collect = false;
 
 	/* Blend them over the colour below. */
+	m_times.part(DrawTimes::PART_SORT);
 	if (used) {
 		glActiveTexture(GL_TEXTURE0 + UNIT_BELOW);
 		glBindTexture(GL_TEXTURE_2D, m_lists.below);

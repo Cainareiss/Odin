@@ -34,6 +34,7 @@
 #include "odin/eurasia_layers.hpp"
 #include "odin/renderer_programs.hpp"
 #include "odin/renderer_textures.hpp"
+#include "odin/renderer_times.hpp"
 
 namespace odin {
 
@@ -84,6 +85,7 @@ public:
 		bool list_fp;		/* a fingerprint of each list, on stderr */
 		int list_dump;		/* with a line for each mesh of this frame, or -1 */
 		bool lists_test;	/* no room for the translucent fragments at first */
+		bool times;		/* what each part of the drawings cost, on stderr at the end */
 		bool debug_keys;	/* the keys change the debug switches */
 		bool (*key_down)(void *ctx, char key);
 		void *ctx;
@@ -130,6 +132,9 @@ public:
 	void begin_frame();
 	void take_frame(unsigned frame, unsigned window_w, unsigned window_h);
 	void draw_frame();
+	/* The window has taken the picture of the frame: the times of its
+	 * drawing end there. */
+	void frame_shown() { m_times.end(); }
 	/* The drawing of the frame taken last writes a log. */
 	bool frame_is_logged() const { return logging(); }
 
@@ -295,6 +300,7 @@ private:
 
 	TextureCache m_textures;
 	MeshPrograms m_programs;
+	DrawTimes m_times;
 
 	/* The meshes: their vertices, the program in use and what is set
 	 * for the list being drawn */

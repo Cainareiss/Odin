@@ -75,6 +75,7 @@ OBJ := \
 	src/odin/renderer_programs.o \
 	src/odin/renderer_shaders.o \
 	src/odin/renderer_textures.o \
+	src/odin/renderer_times.o \
 	src/odin/renderer_layers.o \
 	src/odin/renderer_state.o \
 	src/odin/renderer_debug.o \

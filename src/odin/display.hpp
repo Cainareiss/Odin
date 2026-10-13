@@ -64,6 +64,9 @@ class Worker;
  *				drawings and what the board waited for them
  *				(and the time of each part of the board, see
  *				hikaru.cpp)
+ *  ODIN_DRAW_TIMES=1		at the end, on stderr: what each part of the
+ *				drawings cost, on their thread and for the
+ *				graphics card (renderer_times.hpp)
  *  ODIN_LATE_DRAW=1		a test of the thread: the drawing of a frame
  *				starts when the board has run the next one,
  *				or has to wait for it. The pictures must be

@@ -259,17 +259,43 @@ TextureCache::decode(const odin_texhead_t &th) const
 	return id;
 }
 
-GLuint
-TextureCache::get(const odin_texhead_t &th)
+bool
+TextureCache::slot_of(const odin_texhead_t &th, uint32_t &bank, size_t &index)
 {
-	const uint32_t bank = odin_tex_bank(&th);
 	const uint32_t slotx = odin_tex_slotx(&th);
 	const uint32_t sloty = odin_tex_sloty(&th);
 
 	if (slotx < FIRST_SLOT_X || sloty < FIRST_SLOT_Y)
+		return false;
+	bank = odin_tex_bank(&th);
+	index = (sloty - FIRST_SLOT_Y) * SLOTS_X + (slotx - FIRST_SLOT_X);
+	return true;
+}
+
+bool
+TextureCache::holds(const odin_texhead_t &th) const
+{
+	uint32_t bank;
+	size_t index;
+
+	if (!slot_of(th, bank, index))
+		return true;
+	for (const Texture &held : m_slots[bank][index])
+		if (same_texture(th, held.th))
+			return true;
+	return false;
+}
+
+GLuint
+TextureCache::get(const odin_texhead_t &th)
+{
+	uint32_t bank;
+	size_t index;
+
+	if (!slot_of(th, bank, index))
 		return 0;
 
-	Slot &slot = m_slots[bank][(sloty - FIRST_SLOT_Y) * SLOTS_X + (slotx - FIRST_SLOT_X)];
+	Slot &slot = m_slots[bank][index];
 	for (const Texture &held : slot)
 		if (same_texture(th, held.th))
 			return held.id;

@@ -49,6 +49,8 @@ public:
 	/* The texture of a texhead, decoded if it is not held; 0 if it
 	 * cannot be. It is left bound on the unit 0 when decoded. */
 	GLuint get(const odin_texhead_t &th);
+	/* get would not decode it. */
+	bool holds(const odin_texhead_t &th) const;
 	/* The texture RAM of a bank has changed; every bank if negative. */
 	void invalidate(int bank);
 
@@ -85,6 +87,8 @@ private:
 		SLOTS_Y = 0x40
 	};
 
+	/* The slot a texhead reads, if it reads one */
+	static bool slot_of(const odin_texhead_t &th, uint32_t &bank, size_t &index);
 	GLuint decode(const odin_texhead_t &th) const;
 	std::vector<uint16_t> decode_i4(uint32_t bank, uint32_t w, uint32_t h,
 	                                uint32_t x0, uint32_t y0) const;

@@ -180,6 +180,7 @@ Display::Display(Hikaru &board, const Keyboard &keys, const Options &options, SD
 	looks.list_fp = env_flag("ODIN_LIST_FP");
 	looks.list_dump = env_int("ODIN_LIST_DUMP", -1);
 	looks.lists_test = env_int("ODIN_LISTS_TEST", 0) != 0;
+	looks.times = env_flag("ODIN_DRAW_TIMES");
 	looks.debug_keys = env_flag("ODIN_DEBUG_KEYS");
 	looks.key_down = [](void *ctx, char key) {
 		return static_cast<const Keyboard *>(ctx)->down(static_cast<SDL_Keycode>(key));
@@ -297,6 +298,7 @@ Display::draw()
 	screenshot();
 	print_fingerprint();
 	SDL_GL_SwapWindow(m_window);
+	m_renderer->frame_shown();
 	if (m_stats) {
 		m_draw_ns += host_ns() - begin;
 		m_drawn++;
