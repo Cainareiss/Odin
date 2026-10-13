@@ -70,7 +70,7 @@ ODIN_OBJ := \
 	src/odin/renderer_gl.o \
 	src/odin/renderer_bridge.o \
 	src/odin/aica.o \
-	src/odin/aica_bridge.o \
+	src/odin/sound_board.o \
 	src/odin/arm7.o \
 	src/odin/arm7_ops.o \
 	src/odin/z80.o \

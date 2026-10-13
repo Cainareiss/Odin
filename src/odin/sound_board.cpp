@@ -1,0 +1,183 @@
+/*
+ * Odin
+ * Copyright (C) 2026 Réda Chérif-Touil
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+ * 02110-1301, USA.
+ */
+
+#include "odin/sound_board.hpp"
+
+#include <utility>
+
+namespace odin {
+
+namespace {
+
+/* Where the ARM7 has the registers */
+constexpr uint32_t ARM_REGS = 0x800000;
+constexpr uint32_t ARM_REGS_END = 0x808000;
+
+/* The page of the board on the bus of the main processor */
+constexpr uint32_t PAGE_REGS = 0x700000;
+constexpr uint32_t PAGE_REGS_END = 0x708000;
+constexpr uint32_t PAGE_RTC = 0x710000;
+constexpr uint32_t PAGE_RTC_END = 0x710010;
+constexpr uint32_t PAGE_RAM = 0x800000;
+
+} /* namespace */
+
+SoundBoard::SoundBoard(std::span<uint8_t> ram, uint32_t clock_hz, std::function<void(bool)> main_irq)
+	: m_main_irq(std::move(main_irq)), m_clock_hz(clock_hz), m_sample_acc(0),
+	  m_arm_held(true), m_ram(ram.data()), m_arm(*this), m_aica(*this, ram)
+{
+	map_ram();
+	/* The registers read without side effects. */
+	m_arm.set_turn_replay(true);
+}
+
+void
+SoundBoard::reset()
+{
+	m_arm.settle();
+	m_aica.reset();
+}
+
+void
+SoundBoard::reset_pin()
+{
+	m_arm.settle();
+	m_aica.reset(false);
+}
+
+void
+SoundBoard::arm_reset(bool level)
+{
+	if (level) {
+		m_arm_held = true;
+	} else if (m_arm_held) {
+		m_arm_held = false;
+		m_arm.reset();
+	}
+}
+
+void
+SoundBoard::main_irq(bool level)
+{
+	if (m_main_irq)
+		m_main_irq(level);
+}
+
+bool
+SoundBoard::host_read(uint32_t offset, unsigned size, uint64_t &value)
+{
+	if (offset >= PAGE_RAM) {
+		m_arm.ram_read(offset - PAGE_RAM, size);
+		value = m_aica.read_ram(offset - PAGE_RAM, size);
+	} else if (offset >= PAGE_REGS && offset < PAGE_REGS_END) {
+		value = m_aica.read_reg(offset - PAGE_REGS, size > 4 ? 4 : size);
+	} else if (offset >= PAGE_RTC && offset < PAGE_RTC_END) {
+		value = m_aica.read_rtc(offset - PAGE_RTC);
+	} else {
+		return false;
+	}
+	return true;
+}
+
+SoundBoard::Written
+SoundBoard::host_write(uint32_t offset, unsigned size, uint64_t value)
+{
+	if (offset >= PAGE_RAM) {
+		m_arm.ram_write(offset - PAGE_RAM, size);
+		m_aica.write_ram(offset - PAGE_RAM, size, value);
+	} else if (offset >= PAGE_REGS && offset < PAGE_REGS_END) {
+		/* A register may move the memory, the lines or the ARM7. */
+		m_arm.settle();
+		m_aica.write_reg(offset - PAGE_REGS, size > 4 ? 4 : size, static_cast<uint32_t>(value));
+	} else if (offset >= PAGE_RTC && offset < PAGE_RTC_END) {
+		m_aica.write_rtc(offset - PAGE_RTC, static_cast<uint32_t>(value));
+		return m_aica.take_rtc_set() ? Written::CLOCK_SET : Written::DONE;
+	} else {
+		return Written::NOWHERE;
+	}
+	return Written::DONE;
+}
+
+void
+SoundBoard::run(uint32_t cycles)
+{
+	m_sample_acc += static_cast<uint64_t>(cycles) * Aica::SAMPLE_RATE;
+	const uint64_t samples = m_sample_acc / m_clock_hz;
+	m_sample_acc -= samples * m_clock_hz;
+	for (uint64_t s = 0; s < samples; s++) {
+		m_aica.tick(1);
+		if (!m_arm_held) {
+			map_ram();
+			m_arm.run(ARM_CYCLES_PER_SAMPLE);
+		}
+	}
+}
+
+void
+SoundBoard::save(State &out)
+{
+	m_arm.settle();
+	out.sample_acc = m_sample_acc;
+	m_arm.save(out.arm);
+	m_aica.save(out.aica);
+	out.arm_held = m_arm_held ? 1 : 0;
+}
+
+/* The chip first: it drives the reset pin of the ARM7, which the saved
+ * core then replaces. */
+void
+SoundBoard::load(const State &in)
+{
+	m_aica.load(in.aica);
+	m_sample_acc = in.sample_acc;
+	m_arm_held = in.arm_held != 0;
+	m_arm.load(in.arm);
+}
+
+uint32_t
+SoundBoard::read(uint32_t addr, uint32_t size)
+{
+	if (addr < ARM_REGS)
+		return static_cast<uint32_t>(m_aica.read_ram(addr, size));
+	if (addr < ARM_REGS_END)
+		return m_aica.read_reg(addr - ARM_REGS, size);
+	return 0xFFFFFFFFu;
+}
+
+void
+SoundBoard::write(uint32_t addr, uint32_t size, uint32_t value)
+{
+	if (addr < ARM_REGS) {
+		m_aica.write_ram(addr, size, value);
+	} else if (addr < ARM_REGS_END) {
+		m_aica.write_reg(addr - ARM_REGS, size, value);
+		map_ram();
+	}
+}
+
+/* The wave memory, as the ARM7 reads it without the bus: a register sets
+ * how much of it is decoded. */
+void
+SoundBoard::map_ram()
+{
+	m_arm.set_ram({m_ram, ARM_REGS, m_aica.ram_mask()});
+}
+
+} /* namespace odin */

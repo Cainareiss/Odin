@@ -19,7 +19,9 @@
 
 #include "mach/hikaru/hikaru.h"
 #include "mach/hikaru/hikaru-aica.h"
-#include "odin/aica_bridge.hpp"
+#include <memory>
+
+#include "odin/sound_board.hpp"
 
 /*
  * Sound Boards
@@ -44,33 +46,23 @@
  *
  * 800000-FFFFFF RAM
  *
- * The chip itself lives in src/odin/aica.cpp; this file is the bridge
- * between the Valkyrie bus and that device.
+ * The board itself lives in src/odin/sound_board.cpp; this file puts it on
+ * the bus of the machine.
  */
 
 typedef struct {
 	vk_device_t base;
-	odin_aica_t *chip;
+	odin::SoundBoard *board;
 	vk_buffer_t *ram;
 	bool master;
 } hikaru_aica_t;
-
-static void
-hikaru_aica_main_irq (void *ctx, int level)
-{
-	hikaru_aica_t *aica = (hikaru_aica_t *) ctx;
-	vk_device_t *dev = (vk_device_t *) aica;
-
-	(void) level;
-	hikaru_update_irqs (dev->mach);
-}
 
 bool
 hikaru_aica_irq_line (vk_device_t *dev)
 {
 	hikaru_aica_t *aica = (hikaru_aica_t *) dev;
 
-	return odin_aica_main_irq (aica->chip) != 0;
+	return aica->board->main_irq ();
 }
 
 static int
@@ -93,7 +85,7 @@ hikaru_aica_get (vk_device_t *device, unsigned size, uint32_t addr, void *val)
 		break;
 	}
 
-	if (odin_aica_host_read (aica->chip, offs, size, &value)) {
+	if (!aica->board->host_read (offs, size, value)) {
 		VK_MACH_ERROR (device->mach, "AICA unhandled R%u %08X", size*8, addr);
 		set_ptr (val, size, 0);
 		return -1;
@@ -125,7 +117,7 @@ hikaru_aica_load_clock (hikaru_aica_t *aica)
 		return;
 	fp = fopen (path, "r");
 	if (fp && fscanf (fp, "%d", &ahead) == 1) {
-		odin_aica_set_rtc_ahead (aica->chip, ahead);
+		aica->board->set_rtc_ahead (ahead);
 		VK_PRINT ("AICA: clock file '%s': %d s ahead of the host", path, ahead);
 	} else
 		VK_PRINT ("AICA: clock file '%s' not found: the time of the host", path);
@@ -146,7 +138,7 @@ hikaru_aica_save_clock (hikaru_aica_t *aica)
 		VK_ERROR ("AICA: can't write the clock file '%s'", path);
 		return;
 	}
-	fprintf (fp, "%d\n", (int) odin_aica_rtc_ahead (aica->chip));
+	fprintf (fp, "%d\n", (int) aica->board->rtc_ahead ());
 	fclose (fp);
 }
 
@@ -155,18 +147,20 @@ hikaru_aica_put (vk_device_t *device, unsigned size, uint32_t addr, uint64_t val
 {
 	hikaru_aica_t *aica = (hikaru_aica_t *) device;
 	uint32_t offs = addr & 0xFFFFFF;
-	int ret;
 
 	VK_MACH_LOG (device->mach, "AICA/%c W%u @%08X = %lX",
 	             aica->master ? 'M' : 'S', 8*size, offs, val);
 
-	ret = odin_aica_host_write (aica->chip, offs, size, val);
-	if (ret < 0) {
+	switch (aica->board->host_write (offs, size, val)) {
+	case odin::SoundBoard::Written::NOWHERE:
 		VK_MACH_ERROR (device->mach, "AICA unhandled W%u %08X = %lX", size*8, addr, val);
 		return -1;
-	}
-	if (ret > 0)
+	case odin::SoundBoard::Written::CLOCK_SET:
 		hikaru_aica_save_clock (aica);
+		break;
+	case odin::SoundBoard::Written::DONE:
+		break;
+	}
 	return 0;
 }
 
@@ -175,7 +169,7 @@ hikaru_aica_exec (vk_device_t *device, int cycles)
 {
 	hikaru_aica_t *aica = (hikaru_aica_t *) device;
 
-	odin_aica_run (aica->chip, (uint32_t) cycles);
+	aica->board->run ((uint32_t) cycles);
 	return cycles;
 }
 
@@ -185,48 +179,38 @@ hikaru_aica_reset_pin (vk_device_t *dev)
 {
 	hikaru_aica_t *aica = (hikaru_aica_t *) dev;
 
-	odin_aica_reset_pin (aica->chip);
+	aica->board->reset_pin ();
 }
 
-/* Before the wave memory is saved or dumped, see odin_aica_settle. */
+/* Before the wave memory is saved or dumped, see SoundBoard::settle. */
 void
 hikaru_aica_settle (vk_device_t *dev)
 {
 	hikaru_aica_t *aica = (hikaru_aica_t *) dev;
 
-	odin_aica_settle (aica->chip);
+	aica->board->settle ();
 }
 
 static int
 hikaru_aica_save_state (vk_device_t *dev, vk_state_t *state)
 {
 	hikaru_aica_t *aica = (hikaru_aica_t *) dev;
-	size_t size = odin_aica_state_size ();
-	void *block = malloc (size);
-	int ret;
+	auto block = std::make_unique<odin::SoundBoard::State> ();
 
-	if (!block)
-		return -1;
-	odin_aica_save_state (aica->chip, block);
-	ret = vk_state_put (state, block, size);
-	free (block);
-	return ret;
+	memset (block.get (), 0, sizeof (*block));
+	aica->board->save (*block);
+	return vk_state_put (state, block.get (), sizeof (*block));
 }
 
 static int
 hikaru_aica_load_state (vk_device_t *dev, vk_state_t *state)
 {
 	hikaru_aica_t *aica = (hikaru_aica_t *) dev;
-	size_t size = odin_aica_state_size ();
-	void *block = malloc (size);
-	int ret;
+	auto block = std::make_unique<odin::SoundBoard::State> ();
+	const int ret = vk_state_get (state, block.get (), sizeof (*block));
 
-	if (!block)
-		return -1;
-	ret = vk_state_get (state, block, size);
 	if (!ret)
-		odin_aica_load_state (aica->chip, block);
-	free (block);
+		aica->board->load (*block);
 	return ret;
 }
 
@@ -235,7 +219,7 @@ hikaru_aica_reset (vk_device_t *dev, vk_reset_type_t type)
 {
 	hikaru_aica_t *aica = (hikaru_aica_t *) dev;
 
-	odin_aica_reset (aica->chip);
+	aica->board->reset ();
 	hikaru_aica_load_clock (aica);
 }
 
@@ -244,8 +228,8 @@ hikaru_aica_destroy (vk_device_t **dev_)
 {
 	if (dev_ && *dev_) {
 		hikaru_aica_t *aica = (hikaru_aica_t *) *dev_;
-		odin_aica_delete (aica->chip);
-		aica->chip = NULL;
+		delete aica->board;
+		aica->board = NULL;
 	}
 }
 
@@ -270,13 +254,13 @@ hikaru_aica_new (vk_machine_t *mach, vk_buffer_t *ram, bool master, unsigned clo
 
 	aica->ram	= ram;
 	aica->master	= master;
-	aica->chip	= odin_aica_new ((uint8_t *) vk_buffer_get_ptr (ram, 0),
-	                                 vk_buffer_get_size (ram), clock_hz,
-	                                 hikaru_aica_main_irq, aica);
-	if (!aica->chip)
+	if (vk_buffer_get_size (ram) != odin::Aica::RAM_SIZE || clock_hz == 0)
 		goto fail;
+	aica->board	= new odin::SoundBoard (
+		std::span<uint8_t> ((uint8_t *) vk_buffer_get_ptr (ram, 0), vk_buffer_get_size (ram)),
+		clock_hz, [mach] (bool) { hikaru_update_irqs (mach); });
 
-	odin_aica_set_log (aica->chip, stderr);
+	aica->board->set_log (stderr);
 
 	/* VK_ARM7_TRACE=<prefix> writes <prefix>-m.txt / <prefix>-s.txt */
 	{
@@ -284,7 +268,7 @@ hikaru_aica_new (vk_machine_t *mach, vk_buffer_t *ram, bool master, unsigned clo
 		if (prefix) {
 			char path[1024];
 			snprintf (path, sizeof (path), "%s-%c.txt", prefix, master ? 'm' : 's');
-			odin_aica_set_arm_trace (aica->chip, fopen (path, "w"));
+			aica->board->set_arm_trace (fopen (path, "w"));
 		}
 	}
 
