@@ -51,8 +51,7 @@
  *
  * The chip lives in src/odin/mie.cpp, the board wiring in
  * src/odin/mie_bridge.cpp. That path is the default (it needs the
- * "mie" ROM section); ODIN_MIE=hle selects the stand-in below; the
- * default is the stand-in until the LLE path is validated.
+ * "mie" ROM section); ODIN_MIE=hle selects the stand-in below.
  * ODIN_MIE_TRACE=<file> writes the Z80 bus trace of ODIN_MIE_TRACE_N
  * instructions (default 300000) from the first time the PC reaches
  * ODIN_MIE_TRACE_START (hex, default 0: from reset).
@@ -213,8 +212,8 @@ hikaru_mie_hle_get (hikaru_mie_t *mie, unsigned size, uint32_t addr, void *val)
 			/* no-op */
 			break;
 		case 0x08:
-			/* XXX hack: passes the check at @0C00B860 in all the
-			 * BOOTROM versions */
+			/* HACK: passes the check at @0C00B860 in all the
+			 * BOOTROM versions (see mie_bridge.cpp for the chip) */
 			tmp = vk_buffer_get (mie->regs, 2, 0x08);
 			vk_buffer_put (mie->regs, 2, 0x08, tmp ^ 0xF);
 			break;
