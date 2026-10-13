@@ -16,9 +16,6 @@
  * along with Valkyrie.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* TODO: move to a scheduler-based system, so that machines register their
- * components and the scheduler executes them. */
-
 #include "vk/machine.h"
 #include "vk/input.h"
 #include "vk/renderer.h"
@@ -85,8 +82,6 @@ process_events (void)
 		switch (event.type) {
 		case SDL_KEYDOWN:
 			vk_input_set_key (event.key.keysym.sym, true);
-			/* XXX use CTRL+[1,5] for saving, SHIFT+[1,5] for
-			 * loading */
 			switch (event.key.keysym.sym) {
 			case SDLK_ESCAPE:
 				quit = true;
@@ -282,7 +277,6 @@ get_machine_for_game (vk_game_t *game, const char *game_name)
 static void
 finalize (void)
 {
-	/* XXX free the game list and the game data */
 	printf ("Finalizing");
 	if (mach)
 		vk_machine_destroy (&mach);
