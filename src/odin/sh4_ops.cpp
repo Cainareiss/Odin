@@ -895,6 +895,7 @@ struct Sh4OpsT {
 		need(c, op, !(op->flags & Sh4::OP_BAD_SLOT), "instruction not allowed in a delay slot");
 		/* The delay slot already runs with the restored SR. */
 		c.set_sr(c.m_r.ssr);
+		c.m_resumed = true;
 		return jump(c, op, target);
 	}
 

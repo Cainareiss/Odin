@@ -327,8 +327,10 @@ Hikaru::~Hikaru()
 		if (m_sh_trace[which])
 			std::fclose(m_sh_trace[which]);
 		if (m_stats)
-			std::fprintf(stderr, "sh4 %c: %" PRIu64 " instructions run, %" PRIu64 " cycles skipped\n",
-			             which == MASTER ? 'M' : 'S', m_sh[which]->instructions(), m_sh[which]->skipped());
+			std::fprintf(stderr, "sh4 %c: %" PRIu64 " instructions run, %" PRIu64 " cycles skipped, %zu blocks"
+			             " kept of %" PRIu64 " decoded\n", which == MASTER ? 'M' : 'S',
+			             m_sh[which]->instructions(), m_sh[which]->skipped(), m_sh[which]->blocks(),
+			             m_sh[which]->blocks_decoded());
 	}
 	if (m_stats) {
 		const auto seconds = [this](unsigned part) { return static_cast<double>(m_stats_ns[part]) / 1e9; };

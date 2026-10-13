@@ -188,6 +188,9 @@ public:
 	/* Counts since the reset, for the measurements. */
 	uint64_t instructions() const { return m_instructions; }
 	uint64_t skipped() const { return m_skipped; }
+	/* The blocks kept now, and all those decoded to be kept. */
+	size_t blocks() const { return m_blocks.size(); }
+	uint64_t blocks_decoded() const { return m_decoded; }
 
 private:
 	friend struct Sh4Threaded;
@@ -232,9 +235,14 @@ private:
 		uint32_t checked;	/* m_epoch when the code was last compared */
 	};
 
+	/* For each instruction of a page, the kept block that runs it: rank
+	 * + 1 in m_blocks, and above PLACE_BITS the rank of the instruction
+	 * in the block. A block that starts there comes before any other,
+	 * else it is the first one decoded that holds the instruction. */
 	struct CodePage {
-		std::array<uint32_t, PAGE_SIZE / 2> block;	/* rank + 1 in m_blocks */
+		std::array<uint32_t, PAGE_SIZE / 2> block;
 	};
+	static constexpr uint32_t PLACE_BITS = 25;
 
 	enum class Kind : uint8_t {
 		Plain,
@@ -247,8 +255,8 @@ private:
 
 	/* sh4.cpp: the run loop */
 	void run_at(uint32_t pc);
-	void run_far(uint32_t pc);
-	bool fits(Block &b);
+	void run_far(uint32_t pc, bool resumed);
+	bool fits(Block &b, uint32_t from);
 	bool same_code(Block &b);
 	void guard_code(const Block &b);
 	bool wrote_code(const uint8_t *p, size_t size);
@@ -267,7 +275,7 @@ private:
 	bool bad_slot(Kind kind, uint32_t at) const;
 	uint16_t fetch(uint32_t pc);
 	void drop_blocks();
-	void run_block(const Block &b);
+	void run_block(const Block &b, uint32_t from = 0);
 	void wait_mark();
 	void wait_check();
 	void take_irq();
@@ -339,6 +347,7 @@ private:
 		}
 		m_r.pc = pc_of(op) + 2;
 		m_remaining += m_blk->count - op->idx - 1;
+		m_resumed = true;
 	}
 
 	/* At the end of a block that nothing disturbed: straight into the
@@ -416,6 +425,11 @@ private:
 	int32_t m_over;
 
 	const Block *m_blk;	/* the running block */
+	/* The program goes on where something cut a block short: the end
+	 * of a slice, an instruction that had the block left, the return
+	 * from an interrupt. No branch leads there: no block is kept for
+	 * that place when one that holds it is. */
+	bool m_resumed;
 
 	/* Counts what may have written code: a slice, a use of the bus, a
 	 * store on a guarded page. A block compared in this epoch is still
@@ -481,7 +495,7 @@ private:
 	bool m_pm_running[2];
 	uint64_t m_pm_counter[2];
 
-	uint64_t m_instructions, m_skipped;
+	uint64_t m_instructions, m_skipped, m_decoded;
 };
 
 } /* namespace odin */

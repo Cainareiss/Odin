@@ -30,6 +30,7 @@
 
 #include "odin/sh4.hpp"
 
+#include <algorithm>
 #include <bit>
 #include <cstdio>
 #include <cstring>
@@ -87,6 +88,7 @@ public:
 	std::vector<uint8_t> ram;
 	std::vector<uint8_t> onchip;
 	std::vector<Access> device, unanswered_log;
+	std::vector<uint32_t> seen;	/* what a test notes */
 	uint64_t device_value = 0;
 	uint16_t pins_in = 0, pins_out = 0;
 	unsigned hooks = 0;
@@ -1213,6 +1215,34 @@ void test_blocks()
 		check(m.cpu.instructions() + m.cpu.skipped() >= 10000, "and every cycle is accounted for");
 	}
 	{
+		/* Slices that end at every place of a loop: the program resumes
+		 * in the block that is kept, and no other is. 40 add #1, rn /
+		 * bra / nop */
+		Machine m;
+		for (uint32_t i = 0; i < 40; i++) {
+			m.put16(CODE + 2 * i, static_cast<uint16_t>(0x7001 | ((1 + i % 7) << 8)));
+		}
+		m.code(CODE + 80, {0xAFD6, NOP});
+		for (uint32_t i = 0; i < 2000; i++) {
+			m.cpu.run(static_cast<int32_t>(65 + i % 97));
+		}
+		eq("one block for the loop", m.cpu.blocks(), 1);
+	}
+	{
+		/* A place a branch leads to has a block of its own, though the
+		 * block before it runs through that place: 5 add #1, r2 / then
+		 * the loop, 5 add #1, r3 / add #-1, r1 / cmp/pl r1 / bt loop /
+		 * mov #9, r1 / bra start / nop */
+		Machine m;
+		m.code(CODE, {0x7201, 0x7201, 0x7201, 0x7201, 0x7201,
+		              0x7301, 0x7301, 0x7301, 0x7301, 0x7301, 0x71FF, 0x4115, 0x89F8,
+		              0xE109, 0xAFF0, NOP});
+		for (uint32_t i = 0; i < 2000; i++) {
+			m.cpu.run(static_cast<int32_t>(65 + i % 97));
+		}
+		eq("one block from the start, one from the loop", m.cpu.blocks(), 2);
+	}
+	{
 		/* A loop that reads a device is run in full. */
 		Machine m;
 		m.put32(DATA, DEVICE);
@@ -1220,6 +1250,209 @@ void test_blocks()
 		run(m, {0x6182, 0x6012, 0x2008, 0x89FC, NOP, NOP}, 301, [](Sh4State &s) { s.r[8] = DATA; });
 		eq("every turn read the device", m.device.size(), 100);
 	}
+}
+
+/* The device raises IRL1 on one read in five and drops it on a write at
+ * its second word; the handler, at VBR + 0x600, writes there and returns.
+ * R12 holds the device, R14 the data, R13 the code. */
+void with_device(Machine &m)
+{
+	Machine *self = &m;
+
+	m.irlm();
+	m.on_device = [self] {
+		const Machine::Access &last = self->device.back();
+
+		self->seen.push_back(self->cpu.pc());
+		if (last.write && last.addr == DEVICE + 4) {
+			self->cpu.set_irq(Source::IRL1, false);
+		} else if (!last.write && self->device.size() % 5 == 0) {
+			self->cpu.set_irq(Source::IRL1, true);
+		}
+	};
+	m.code(RAM + 0x7000, { 0x1C01, 0x002B, 0x0009 });	/* mov.l r0, @(4, r12) / rte / nop */
+	Sh4State st = m.state();
+	st.vbr = RAM + 0x7000 - 0x600;
+	st.r[12] = DEVICE;
+	st.r[13] = CODE;
+	st.r[14] = DATA;
+	m.cpu.load(st);
+}
+
+/* A program of `slots` instructions picked from a fixed series: sums and
+ * moves, memory, the device, every kind of branch within the program and
+ * delay loops, then back to its start. */
+void random_program(Machine &m, uint32_t slots, uint32_t seed)
+{
+	auto next = [&seed]() {
+		seed = seed * 1664525u + 1013904223u;
+		return seed >> 8;
+	};
+	auto plain = [&]() -> uint16_t {
+		const uint32_t n = next() % 8, r = next() % 8, d = next() % 16;
+
+		switch (next() % 24) {
+		case 0: return static_cast<uint16_t>(0xE000 | (n << 8) | (next() & 0xFF));	/* mov #imm, rn */
+		case 1: case 2: return static_cast<uint16_t>(0x7000 | (n << 8) | (next() & 0xFF));	/* add #imm, rn */
+		case 3: return static_cast<uint16_t>(0x300C | (n << 8) | (r << 4));	/* add rm, rn */
+		case 4: return static_cast<uint16_t>(0x6003 | (n << 8) | (r << 4));	/* mov rm, rn */
+		case 5: return static_cast<uint16_t>(0x3000 | (n << 8) | (r << 4));	/* cmp/eq rm, rn */
+		case 6: return static_cast<uint16_t>(0x3006 | (n << 8) | (r << 4));	/* cmp/hi rm, rn */
+		case 7: return static_cast<uint16_t>(0x2008 | (n << 8) | (r << 4));	/* tst rm, rn */
+		case 8: return static_cast<uint16_t>(0x200A | (n << 8) | (r << 4));	/* xor rm, rn */
+		case 9: return static_cast<uint16_t>(0x3008 | (n << 8) | (r << 4));	/* sub rm, rn */
+		case 10: return static_cast<uint16_t>(0x4000 | (n << 8));		/* shll rn */
+		case 11: return static_cast<uint16_t>(0x4001 | (n << 8));		/* shlr rn */
+		case 12: return static_cast<uint16_t>(0x300E | (n << 8) | (r << 4));	/* addc rm, rn */
+		case 13: case 14: return static_cast<uint16_t>(0x1E00 | (r << 4) | d);	/* mov.l rm, @(d, r14) */
+		case 15: case 16: return static_cast<uint16_t>(0x50E0 | (n << 8) | d);	/* mov.l @(d, r14), rn */
+		case 17: return static_cast<uint16_t>(0x0007 | (n << 8) | (r << 4));	/* mul.l rm, rn */
+		case 18: return static_cast<uint16_t>(0x001A | (n << 8));		/* sts macl, rn */
+		case 19: return static_cast<uint16_t>(0x60C2 | (n << 8));		/* mov.l @r12, rn: the device */
+		case 20: return static_cast<uint16_t>(0x2C02 | (r << 4));		/* mov.l rm, @r12 */
+		case 21: return static_cast<uint16_t>(0x0002 | (n << 8));		/* stc sr, rn */
+		case 22: return static_cast<uint16_t>(0x600E | (n << 8) | (r << 4));	/* exts.b rm, rn */
+		default: return static_cast<uint16_t>(0x6007 | (n << 8) | (r << 4));	/* not rm, rn */
+		}
+	};
+	auto reach = [&](uint32_t from, uint32_t span) {	/* a slot near `from`, as a displacement */
+		const int32_t to = static_cast<int32_t>(from) - static_cast<int32_t>(span) + static_cast<int32_t>(next() % (2 * span));
+		const int32_t slot = to < 0 ? 0 : (to >= static_cast<int32_t>(slots) ? static_cast<int32_t>(slots) - 1 : to);
+
+		return slot - static_cast<int32_t>(from) - 2;
+	};
+
+	for (uint32_t i = 0; i < slots; i++) {
+		const uint32_t at = CODE + 2 * i, kind = next() % 100;
+
+		if (kind < 70 || i + 3 >= slots) {
+			m.put16(at, plain());
+		} else if (kind < 78) {		/* bt, bf */
+			m.put16(at, static_cast<uint16_t>(((next() & 1) ? 0x8900 : 0x8B00) | (reach(i, 30) & 0xFF)));
+		} else if (kind < 88) {		/* bt/s, bf/s and the slot */
+			m.put16(at, static_cast<uint16_t>(((next() & 1) ? 0x8D00 : 0x8F00) | (reach(i, 30) & 0xFF)));
+			m.put16(at + 2, plain());
+			i++;
+		} else if (kind < 93) {		/* bra and the slot */
+			m.put16(at, static_cast<uint16_t>(0xA000 | (reach(i, 200) & 0xFFF)));
+			m.put16(at + 2, plain());
+			i++;
+		} else if (kind < 96) {		/* bsr and the slot */
+			m.put16(at, static_cast<uint16_t>(0xB000 | (reach(i, 200) & 0xFFF)));
+			m.put16(at + 2, plain());
+			i++;
+		} else {			/* a delay loop: mov #imm, rn / dt rn / bf back */
+			const uint32_t n = next() % 8;
+
+			m.put16(at, static_cast<uint16_t>(0xE000 | (n << 8) | (1 + next() % 100)));
+			m.put16(at + 2, static_cast<uint16_t>(0x4010 | (n << 8)));
+			m.put16(at + 4, 0x8BFD);
+			i += 2;
+		}
+	}
+	/* Back to the start: bra / nop */
+	m.put16(CODE + 2 * slots, static_cast<uint16_t>(0xA000 | ((0u - slots - 2u) & 0xFFF)));
+	m.put16(CODE + 2 * slots + 2, 0x0009);
+}
+
+/* A program is at the same place after the same cycles however they are cut
+ * in slices: what a slice ends on, and where the next one resumes, change
+ * nothing. */
+void test_slices()
+{
+	g_test = "slices";
+	const auto same = [](const Machine &a, const Machine &b) {
+		const Sh4State x = a.state(), y = b.state();
+
+		if (std::memcmp(&x, &y, sizeof(x)) != 0 || a.ram != b.ram || a.onchip != b.onchip ||
+		    a.seen != b.seen || a.device.size() != b.device.size()) {
+			return false;
+		}
+		for (size_t i = 0; i < a.device.size(); i++) {
+			if (a.device[i].write != b.device[i].write || a.device[i].addr != b.device[i].addr ||
+			    a.device[i].value != b.device[i].value) {
+				return false;
+			}
+		}
+		return true;
+	};
+
+	for (uint32_t seed = 1; seed <= 24; seed++) {
+		const uint32_t total = 3000 + 97 * seed, slots = 300 + 40 * (seed % 8);
+		const auto set = [seed, slots](Machine &m) {
+			with_device(m);
+			random_program(m, slots, seed * 7919u);
+		};
+		Machine whole;
+		unsigned ways = 0, differ = 0;
+
+		set(whole);
+		whole.cpu.run(static_cast<int32_t>(total));
+		/* In two slices, cut at many places */
+		for (uint32_t cut = 1; cut < total; cut += 1 + (cut * 7 + seed) % 23) {
+			Machine m;
+
+			set(m);
+			m.cpu.run(static_cast<int32_t>(cut));
+			m.cpu.run(static_cast<int32_t>(total - cut));
+			ways++;
+			differ += same(whole, m) ? 0 : 1;
+		}
+		/* In many slices of every length */
+		for (uint32_t longest : { 3u, 70u, 200u }) {
+			Machine m;
+			uint32_t series = seed;
+
+			set(m);
+			for (uint32_t done = 0; done < total;) {
+				series = series * 1664525u + 1013904223u;
+				const uint32_t cycles = std::min(total - done, 1 + (series >> 8) % longest);
+				m.cpu.run(static_cast<int32_t>(cycles));
+				done += cycles;
+			}
+			ways++;
+			differ += same(whole, m) ? 0 : 1;
+		}
+		check(ways > 100 && differ == 0, "program " + std::to_string(seed) + ": the same however it is cut");
+	}
+}
+
+/* What cuts a block short keeps no block either: the device read, the
+ * interrupt it raises one time in five, the write of the handler and its
+ * return. 5 add #1, r1 / mov.l @r12, r0 / 5 add #1, r2 / bra / nop */
+void test_blocks_resumed()
+{
+	g_test = "blocks";
+	Machine m;
+
+	with_device(m);
+	m.code(CODE, {0x7101, 0x7101, 0x7101, 0x7101, 0x7101, 0x60C2,
+	              0x7201, 0x7201, 0x7201, 0x7201, 0x7201, 0xAFF3, NOP});
+	for (uint32_t i = 0; i < 2000; i++) {
+		m.cpu.run(static_cast<int32_t>(65 + i % 97));
+	}
+	check(m.device.size() > 5000, "the loop read the device and was interrupted");
+	eq("one block for the loop, one for the handler", m.cpu.blocks(), 2);
+}
+
+/* Two places a branch leads to, 128 KB apart, take turns in the table of
+ * the blocks last found: each is looked for in the pages again, where the
+ * block that starts there comes before the one that runs through it.
+ * 3 add #1, r1 / there: 3 add #1, r2 / jmp far; far: 2 add #1, r3 / jmp
+ * there */
+void test_blocks_found_again()
+{
+	g_test = "blocks";
+	const uint32_t there = CODE + 6, far = there + 0x20000;
+	Machine m;
+
+	m.code(CODE, {0x7101, 0x7101, 0x7101, 0x7201, 0x7201, 0x7201, 0xD001, 0x402B, NOP, NOP});
+	m.put32(CODE + 20, far);
+	m.code(far, {0x7301, 0x7301, 0xD001, 0x402B, NOP});
+	m.put32(far + 10, there);
+	m.cpu.run(20000);
+	check(m.state().r[3] > 3000, "the program went round");
+	eq("the start, the place in it a branch leads to, and the far one", m.cpu.blocks(), 3);
 }
 
 void test_hook()
@@ -1276,6 +1509,9 @@ int main(int argc, char **argv)
 	test_interrupts();
 	test_on_chip();
 	test_blocks();
+	test_slices();
+	test_blocks_resumed();
+	test_blocks_found_again();
 	test_hook();
 	test_save_load();
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);

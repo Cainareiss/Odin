@@ -73,7 +73,7 @@ Sh4::Sh4(Sh4Bus &bus, std::span<uint8_t> onchip, bool master, bool little_endian
          uint32_t clock_mode)
 	: m_bus(bus), m_onchip(onchip), m_master(master), m_little_endian(little_endian),
 	  m_r{}, m_run(Sh4Run::Stopped), m_remaining(0), m_over(0),
-	  m_blk(nullptr), m_epoch(1), m_code_epoch(PHYSICAL_PAGES, 0),
+	  m_blk(nullptr), m_resumed(false), m_epoch(1), m_code_epoch(PHYSICAL_PAGES, 0),
 	  m_rd(1u << (32 - PAGE_BITS), nullptr), m_wr(1u << (32 - PAGE_BITS), nullptr),
 	  m_page_of(1u << (32 - PAGE_BITS), 0),
 	  m_near(NEAR_SIZE, Block{1, 0, 0, nullptr, nullptr, nullptr, 0}),
@@ -82,7 +82,7 @@ Sh4::Sh4(Sh4Bus &bus, std::span<uint8_t> onchip, bool master, bool little_endian
 	  m_intc{}, m_dmac_running{}, m_tmu_running{}, m_tmu_counter{},
 	  m_cycles(0), m_at(0), m_tmu_time(0), m_slice(0), m_retime(false), m_clock_mode(clock_mode),
 	  m_pm_running{}, m_pm_counter{},
-	  m_instructions(0), m_skipped(0)
+	  m_instructions(0), m_skipped(0), m_decoded(0)
 {
 	if (m_onchip.size() != 0x10000) {
 		fatal("on-chip register image of the wrong size", static_cast<uint32_t>(m_onchip.size()));
@@ -642,24 +642,26 @@ void Sh4::decode_once(uint32_t pc)
 	run_block(b);
 }
 
-void Sh4::run_block(const Block &b)
+/* Runs the block from its instruction `from` on. */
+void Sh4::run_block(const Block &b, uint32_t from)
 {
-	const Sh4Op *ops = b.ops;
+	const Sh4Op *ops = b.ops + from;
 
 	m_blk = &b;
-	/* The cycles of the whole block; an instruction that leaves it gives
-	 * back those of the instructions not run. */
-	m_remaining -= b.count;
+	/* The cycles of all that is left of the block; an instruction that
+	 * leaves it gives back those of the instructions not run. */
+	m_remaining -= static_cast<int32_t>(b.count - from);
 	ops->run(*this, ops);
 }
 
-/* A kept block serves when the slice has the cycles for all of it and the
- * code is still what was decoded. A slice ends after the first instruction
- * that leaves no cycle: a block decoded to BLOCK_MAX never runs past that
- * while BLOCK_MAX cycles are left. */
-bool Sh4::fits(Block &b)
+/* A kept block serves, from its instruction `from` on, when the slice has
+ * the cycles for all that is left of it and the code is still what was
+ * decoded. A slice ends after the first instruction that leaves no cycle:
+ * a block decoded to BLOCK_MAX never runs past that while BLOCK_MAX cycles
+ * are left. */
+bool Sh4::fits(Block &b, uint32_t from)
 {
-	if (b.count > m_remaining && m_remaining < static_cast<int32_t>(BLOCK_MAX)) {
+	if (static_cast<int32_t>(b.count - from) > m_remaining && m_remaining < static_cast<int32_t>(BLOCK_MAX)) {
 		return false;
 	}
 	return b.checked == m_epoch || same_code(b);
@@ -669,16 +671,20 @@ bool Sh4::fits(Block &b)
 void Sh4::run_at(uint32_t pc)
 {
 	Block &b = m_near[(pc >> 1) & (NEAR_SIZE - 1)];
+	const bool resumed = m_resumed;
 
-	if (b.pc == pc && fits(b)) [[likely]] {
+	m_resumed = false;
+	if (b.pc == pc && fits(b, 0)) [[likely]] {
 		return run_block(b);
 	}
-	run_far(pc);
+	run_far(pc, resumed);
 }
 
 /* The block is looked for in the tables, or decoded now: kept when it is
- * whole, and just as long as the slice when the slice ends in it. */
-void Sh4::run_far(uint32_t pc)
+ * whole, and just as long as the slice when the slice ends in it. Where
+ * the program only resumes, the kept block that holds the place serves from
+ * there on; a place a branch leads to has a block of its own. */
+void Sh4::run_far(uint32_t pc, bool resumed)
 {
 	uint32_t page = m_page_of[pc >> PAGE_BITS];
 	Block &near = m_near[(pc >> 1) & (NEAR_SIZE - 1)];
@@ -686,12 +692,14 @@ void Sh4::run_far(uint32_t pc)
 	Block b;
 
 	if (page && !(pc & 1)) {
-		uint32_t rank = m_code_pages[page - 1].block[(pc & (PAGE_SIZE - 1)) >> 1];
-		if (rank && fits(m_blocks[rank - 1])) {
-			/* A hooked address is only found here: chain() never
-			 * runs over the hook. */
-			if (m_hook_on && (pc & PHYSICAL) == m_hook_addr) {
-				return run_block(m_blocks[rank - 1]);
+		const uint32_t found = m_code_pages[page - 1].block[(pc & (PAGE_SIZE - 1)) >> 1];
+		const uint32_t rank = found & ((1u << PLACE_BITS) - 1), from = found >> PLACE_BITS;
+
+		if (rank && (from == 0 || resumed) && fits(m_blocks[rank - 1], from)) {
+			/* A hooked address, or the middle of a block, is only
+			 * found here: chain() never runs over the hook. */
+			if (from || (m_hook_on && (pc & PHYSICAL) == m_hook_addr)) {
+				return run_block(m_blocks[rank - 1], from);
 			}
 			near = m_blocks[rank - 1];
 			return run_block(near);
@@ -704,6 +712,8 @@ void Sh4::run_far(uint32_t pc)
 			return decode_once(pc);
 		}
 		guard_code(b);
+		/* The slice ends in it: the next one resumes. */
+		m_resumed = true;
 		return run_block(b);
 	}
 
@@ -727,7 +737,18 @@ void Sh4::run_far(uint32_t pc)
 		slot = static_cast<uint32_t>(m_code_pages.size());
 	}
 	m_blocks.push_back(b);
-	m_code_pages[slot - 1].block[(pc & (PAGE_SIZE - 1)) >> 1] = static_cast<uint32_t>(m_blocks.size());
+	m_decoded++;
+	/* The block is found at each of its instructions, where no other
+	 * was before, but at the delay slot of its last jump, which nothing
+	 * resumes at: the jump has gone by then. */
+	CodePage &code = m_code_pages[slot - 1];
+	const uint32_t rank = static_cast<uint32_t>(m_blocks.size()), first = (pc & (PAGE_SIZE - 1)) >> 1;
+	code.block[first] = rank;
+	for (uint32_t i = 1; i < b.count; i++) {
+		if (!(b.ops[i].flags & OP_SLOT) && code.block[first + i] == 0) {
+			code.block[first + i] = rank | (i << PLACE_BITS);
+		}
+	}
 	if (!(m_hook_on && (pc & PHYSICAL) == m_hook_addr)) {
 		near = b;
 	}
