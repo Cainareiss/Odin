@@ -1502,6 +1502,63 @@ void test_blocks_found_again()
 	eq("the start, the place in it a branch leads to, and the far one", m.cpu.blocks(), 3);
 }
 
+/* A page of the bus the machine answers without writing the memory: the
+ * blocks stay compared and the block that reads it goes on, with nothing
+ * else changed. The same programs on two machines, the device quiet on one
+ * of them, are the same after each slice; the interrupt the device raises
+ * comes at the same instruction. */
+void test_quiet_page()
+{
+	g_test = "quiet page";
+	size_t accesses = 0;
+	for (uint32_t seed = 1; seed <= 16; seed++) {
+		Machine plain, quiet;
+		unsigned differ = 0;
+
+		for (Machine *m : { &plain, &quiet }) {
+			with_device(*m);
+			random_program(*m, 300 + 40 * (seed % 8), seed * 7919u);
+		}
+		quiet.cpu.map_quiet(DEVICE >> Sh4::PAGE_BITS);
+		for (uint32_t done = 0, series = seed; done < 40000 && differ == 0;) {
+			series = series * 1664525u + 1013904223u;
+			const uint32_t cycles = 1 + (series >> 8) % 900;
+			const int32_t over_plain = plain.cpu.run(static_cast<int32_t>(cycles));
+			const int32_t over_quiet = quiet.cpu.run(static_cast<int32_t>(cycles));
+			const Sh4State a = plain.state(), b = quiet.state();
+
+			done += cycles;
+			if (over_plain != over_quiet || std::memcmp(&a, &b, sizeof(a)) != 0 || plain.ram != quiet.ram ||
+			    plain.onchip != quiet.onchip || plain.seen != quiet.seen ||
+			    plain.device.size() != quiet.device.size()) {
+				differ++;
+			}
+		}
+		accesses += quiet.device.size();
+		check(differ == 0, "program " + std::to_string(seed) + ": the same with the device quiet");
+	}
+	check(accesses > 5000, "the programs did use the device");
+	{
+		/* A loop that waits for a quiet device is run in full: mov.l
+		 * @r12, r0 / tst r0, r0 / bt the read; then mov #7, r1. The
+		 * device answers 1 from its 51st read on. */
+		Machine m;
+		Machine *self = &m;
+
+		with_device(m);
+		m.cpu.map_quiet(DEVICE >> Sh4::PAGE_BITS);
+		m.on_device = [self] {
+			if (self->device.size() == 50) {
+				self->device_value = 1;
+			}
+		};
+		m.code(CODE, {0x60C2, 0x2008, 0x89FC, 0xE107, 0xAFFE, NOP});
+		m.cpu.run(2000);
+		eq("the loop ended at the read that answered", m.device.size(), 51);
+		eq("and the program went on", m.state().r[1], 7);
+	}
+}
+
 void test_hook()
 {
 	g_test = "hook";
@@ -1820,6 +1877,7 @@ int main(int argc, char **argv)
 	test_slices();
 	test_blocks_resumed();
 	test_blocks_found_again();
+	test_quiet_page();
 	test_hook();
 	test_save_load();
 	test_host_code();

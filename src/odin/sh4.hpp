@@ -146,6 +146,12 @@ public:
 	 * PAGE_SIZE is read at `read` and written at `write`. nullptr sends
 	 * the access to the bus. */
 	void map_page(uint32_t page, const uint8_t *read, uint8_t *write);
+	/* The machine answers the accesses to that page of the bus without
+	 * writing the plain memory of this CPU: its code stays what was
+	 * compared, and the block that makes the access goes on, unless the
+	 * machine raised something meanwhile. Until the page is mapped
+	 * again. */
+	void map_quiet(uint32_t page);
 
 	/* Runs whole instructions for `cycles` cycles; a branch and its
 	 * delay slot are never split. Returns the cycles run past the end. */
@@ -511,6 +517,7 @@ private:
 	/* Plain memory, one entry per page of the 4 GB */
 	std::vector<const uint8_t *> m_rd;
 	std::vector<uint8_t *> m_wr;
+	std::vector<uint8_t> m_quiet;	/* by physical page, see map_quiet() */
 
 	/* The blocks: page of the entry address, then its rank in the page.
 	 * m_ops and m_words never move: they are dropped before they would

@@ -75,6 +75,7 @@ Sh4::Sh4(Sh4Bus &bus, std::span<uint8_t> onchip, bool master, bool little_endian
 	  m_r{}, m_run(Sh4Run::Stopped), m_remaining(0), m_over(0),
 	  m_blk(nullptr), m_resumed(false), m_epoch(1), m_code_epoch(PHYSICAL_PAGES, 0),
 	  m_rd(1u << (32 - PAGE_BITS), nullptr), m_wr(1u << (32 - PAGE_BITS), nullptr),
+	  m_quiet(PHYSICAL_PAGES, 0),
 	  m_page_of(1u << (32 - PAGE_BITS), 0),
 	  m_near(NEAR_SIZE, Block{1, 0, 0, nullptr, nullptr, nullptr, 0, 0}),
 	  m_translate(false), m_hook_on(false), m_hook_addr(0),
@@ -149,6 +150,7 @@ void Sh4::map_page(uint32_t page, const uint8_t *read, uint8_t *write)
 		m_rd[mirror * PHYSICAL_PAGES + page] = read;
 		m_wr[mirror * PHYSICAL_PAGES + page] = write;
 	}
+	m_quiet[page] = 0;
 	if (read) {
 		share_page(read, page);
 	}
@@ -156,6 +158,13 @@ void Sh4::map_page(uint32_t page, const uint8_t *read, uint8_t *write)
 		share_page(write, page);
 	}
 	drop_blocks();
+}
+
+void Sh4::map_quiet(uint32_t page)
+{
+	if (page < PHYSICAL_PAGES) {
+		m_quiet[page] = 1;
+	}
 }
 
 void Sh4::set_hook(uint32_t addr)
@@ -314,7 +323,8 @@ void Sh4::take_irq()
 /* Accesses outside plain memory */
 
 /* The machine is about to be called: it may raise an interrupt, write the
- * memory, stop the CPU. */
+ * memory, stop the CPU. Where it promised not to write the memory, see
+ * map_quiet(), what it raises or stops is told by what it calls. */
 void Sh4::outside()
 {
 	m_event = true;
@@ -344,7 +354,9 @@ bool Sh4::read_any(uint32_t addr, uint32_t size, uint64_t &value)
 			return true;
 		}
 	}
-	outside();
+	if (!m_quiet[(addr & PHYSICAL) >> PAGE_BITS]) {
+		outside();
+	}
 	return m_bus.read(addr & PHYSICAL, size, value);
 }
 
@@ -371,7 +383,9 @@ bool Sh4::write_any(uint32_t addr, uint32_t size, uint64_t value)
 			return ok;
 		}
 	}
-	outside();
+	if (!m_quiet[(addr & PHYSICAL) >> PAGE_BITS]) {
+		outside();
+	}
 	return m_bus.write(addr & PHYSICAL, size, value);
 }
 
