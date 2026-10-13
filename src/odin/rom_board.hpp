@@ -78,6 +78,8 @@ public:
 	/* The page 0A of the bus. A read that nothing answers gives zero. */
 	uint64_t read_guard(uint32_t offs, unsigned size);
 	void write_guard(uint32_t offs, unsigned size, uint64_t value);
+	/* A chip of the board answers at that offset of the page. */
+	bool guarded(uint32_t offs) const;
 	/* The pages 10 to 3F: the EEPROM in its page, the ROMs in theirs,
 	 * and what a page without anything reads. */
 	uint64_t read(uint32_t bus_addr, unsigned size);

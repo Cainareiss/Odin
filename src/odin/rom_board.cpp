@@ -389,6 +389,12 @@ RomBoard::read_guard(uint32_t offs, unsigned size)
 	return 0;
 }
 
+bool
+RomBoard::guarded(uint32_t offs) const
+{
+	return (m_crypt && (offs <= 0xFFFF || (offs >= 0x10000 && offs <= 0x1000F))) || (m_fpga && offs <= 0x13);
+}
+
 void
 RomBoard::write_guard(uint32_t offs, unsigned size, uint64_t value)
 {

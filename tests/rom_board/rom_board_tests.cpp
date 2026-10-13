@@ -141,6 +141,11 @@ void test_eeprom_and_guards()
 	check(airtrix.read_guard(0x10000, 2) == 0, "the registers of the chip at 0A010000: ready");
 	airtrix.reset();
 	check(airtrix.read_guard(0x100, 4) == 0, "a reset empties the RAM");
+
+	check(airtrix.guarded(0x100) && airtrix.guarded(0x1000F) && !airtrix.guarded(0x10010),
+	      "the chip answers over its RAM and its registers, not above");
+	check(nascar.guarded(0x13) && !nascar.guarded(0x14) && !plain.guarded(0x8),
+	      "the FPGA over its 20 bytes; nothing answers on a board without a chip");
 }
 
 } /* namespace */
