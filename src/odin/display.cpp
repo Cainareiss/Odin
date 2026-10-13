@@ -25,8 +25,6 @@
 #include <cstdlib>
 #include <filesystem>
 
-#include <unistd.h>
-
 #include "odin/env.hpp"
 #include "odin/keyboard.hpp"
 #include "odin/renderer.hpp"
@@ -44,21 +42,22 @@ namespace {
 void
 find_program_lists(const std::string &game, std::string &seed, std::string &kept)
 {
-	const char *const home = std::getenv("HOME"), *const cache = std::getenv("XDG_CACHE_HOME");
+	const std::string home = home_dir();
+	const char *const cache = std::getenv("XDG_CACHE_HOME");
 	std::error_code error;
 	std::string dir;
 
 	kept.clear();
 	seed = "shaders/" + game + ".txt";
-	if (access(seed.c_str(), R_OK) && home)
-		seed = std::string(home) + "/.local/share/odin/shaders/" + game + ".txt";
-	if (access(seed.c_str(), R_OK))
+	if (!std::filesystem::exists(seed, error) && !home.empty())
+		seed = home + "/.local/share/odin/shaders/" + game + ".txt";
+	if (!std::filesystem::exists(seed, error))
 		seed.clear();
 
 	if (cache && cache[0])
 		dir = cache;
-	else if (home)
-		dir = std::string(home) + "/.cache";
+	else if (!home.empty())
+		dir = home + "/.cache";
 	else
 		return;
 	dir += "/odin/shaders";

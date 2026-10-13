@@ -141,7 +141,7 @@
 #include <cstdarg>
 #include <cstdlib>
 #include <cstring>
-#include <ctime>
+#include <chrono>
 
 #include "odin/env.hpp"
 
@@ -178,10 +178,9 @@ sh4_clock()
 uint64_t
 now_ns()
 {
-	struct timespec now;
+	const auto now = std::chrono::steady_clock::now().time_since_epoch();
 
-	clock_gettime(CLOCK_MONOTONIC, &now);
-	return static_cast<uint64_t>(now.tv_sec) * 1000000000ull + static_cast<uint64_t>(now.tv_nsec);
+	return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(now).count());
 }
 
 [[noreturn]] void

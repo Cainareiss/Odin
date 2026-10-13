@@ -19,21 +19,23 @@
  * along with Valkyrie.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <ctime>
+#include <filesystem>
 #include <memory>
 #include <optional>
 #include <string>
+#include <thread>
 #include <vector>
 
-#include <pwd.h>
 #include <unistd.h>
 
 #include <SDL.h>
 
 #include "odin/display.hpp"
+#include "odin/env.hpp"
 #include "odin/games.hpp"
 #include "odin/hikaru.hpp"
 #include "odin/keyboard.hpp"
@@ -128,13 +130,9 @@ parse_options(int argc, char **argv, Options &options)
 bool
 load_game_list(odin::GameList &games)
 {
-	const char *home = std::getenv("HOME");
-
-	if (!home)
-		if (const struct passwd *const user = getpwuid(getuid()))
-			home = user->pw_dir;
-
-	const std::string base = home ? home : ".";
+	const std::string home = odin::home_dir();
+	const std::string base = home.empty() ? "." : home;
+	std::error_code error;
 	const std::string paths[3] = {
 		"./vk-games.json",
 		base + "/vk-games.json",
@@ -142,7 +140,7 @@ load_game_list(odin::GameList &games)
 	};
 
 	for (const std::string &path : paths) {
-		if (access(path.c_str(), R_OK))
+		if (!std::filesystem::exists(path, error))
 			continue;
 		if (!games.load(path))
 			return false;
@@ -160,7 +158,7 @@ class Session {
 public:
 	Session(const Options &options, odin::Hikaru &board, odin::Display &display, odin::Keyboard &keys)
 		: m_options(options), m_board(board), m_display(display), m_keys(keys),
-		  m_paused(false), m_next{}
+		  m_paused(false), m_next()
 	{
 	}
 
@@ -179,7 +177,7 @@ private:
 	odin::Display &m_display;
 	odin::Keyboard &m_keys;
 	bool m_paused;
-	struct timespec m_next;	/* when the next frame is due */
+	std::chrono::steady_clock::time_point m_next;	/* when the next frame is due */
 };
 
 /* F1 and F4: <game>.vkstate */
@@ -266,22 +264,14 @@ Session::save_state_at_frame()
 void
 Session::limit_frame_rate()
 {
-	const long period = 1000000000L / 60;
-	struct timespec now;
+	const std::chrono::nanoseconds period(1000000000 / 60);
+	const auto now = std::chrono::steady_clock::now();
 
-	clock_gettime(CLOCK_MONOTONIC, &now);
-	m_next.tv_nsec += period;
-	if (m_next.tv_nsec >= 1000000000L) {
-		m_next.tv_sec++;
-		m_next.tv_nsec -= 1000000000L;
-	}
-
-	const long long late = (now.tv_sec - m_next.tv_sec) * 1000000000LL + (now.tv_nsec - m_next.tv_nsec);
-
-	if (late > 2 * period)
+	m_next += period;
+	if (now - m_next > 2 * period)
 		m_next = now;
-	else if (late < 0)
-		clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &m_next, nullptr);
+	else if (now < m_next)
+		std::this_thread::sleep_until(m_next);
 }
 
 void

@@ -21,6 +21,7 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <string>
 #include <strings.h>
 
 namespace odin {
@@ -47,6 +48,17 @@ env_int(const char *name, int fallback)
 	const char *const value = std::getenv(name);
 
 	return value ? std::atoi(value) : fallback;
+}
+
+/* The folder of the user, HOME, or USERPROFILE where there is no HOME; empty
+ * when neither is set. */
+inline std::string
+home_dir()
+{
+	for (const char *name : { "HOME", "USERPROFILE" })
+		if (const char *const value = std::getenv(name); value && value[0])
+			return value;
+	return {};
 }
 
 } /* namespace odin */
