@@ -424,6 +424,9 @@ Hikaru::build_sound(unsigned which)
 {
 	m_sound[which] = std::make_unique<SoundBoard>(m_sound_ram[which], m_clock, [this](bool) { update_irqs(); });
 	m_sound[which]->set_log(stderr);
+	/* ODIN_TURNS=0, a test: the programs of the sound boards run every
+	 * turn of their waits. The memory and the states must be the same. */
+	m_sound[which]->set_turn_replay(env_flag("ODIN_TURNS", true));
 
 	/* VK_ARM7_TRACE=<prefix> writes <prefix>-m.txt / <prefix>-s.txt */
 	if (const char *prefix = std::getenv("VK_ARM7_TRACE")) {

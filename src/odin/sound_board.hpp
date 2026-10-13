@@ -66,6 +66,10 @@ public:
 	SoundBoard(std::span<uint8_t> ram, uint32_t clock_hz, std::function<void(bool)> main_irq);
 
 	void reset();
+	/* The turns of a program that waits are counted without being run
+	 * (Arm7::set_turn_replay): on at first. Off is for a test: the
+	 * memory and the states must come out the same. */
+	void set_turn_replay(bool on) { m_arm.set_turn_replay(on); }
 	/* The reset pin of the board: as reset, but the clock keeps its
 	 * time. */
 	void reset_pin();
