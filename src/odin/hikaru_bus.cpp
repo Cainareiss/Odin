@@ -107,9 +107,8 @@ twiddle(uint32_t offs)
 /* The plain memory the cores read and write in place, page by page, without
  * the bus. A page is plain when the whole of it is: the first page of the
  * command RAM, which starts with the master and slave box, is not. The
- * mirrors of the command RAM go through the bus for the master (a page a
- * core sees twice is no longer written in place); the slave reads the
- * command RAM in place, mirrors and all, and writes it through the bus. */
+ * mirrors of the command RAM go through the bus (a page a core sees twice
+ * is no longer written in place). */
 void
 Hikaru::map_pages()
 {
@@ -136,7 +135,7 @@ Hikaru::map_pages()
 	map(*m_sh[MASTER], 0x00C00000, 0x00C10000, m_bram, 0x0000FFFF, true, true);
 	map(*m_sh[MASTER], 0x14001000, 0x14400000, m_cmdram, 0x003FFFFF, true, true);
 	map(*m_sh[MASTER], 0x1B000000, 0x1B800000, m_fb, 0x007FFFFF, true, true);
-	map(*m_sh[SLAVE], 0x10001000, 0x11000000, m_cmdram, 0x003FFFFF, true, false);
+	map(*m_sh[SLAVE], 0x10001000, 0x10400000, m_cmdram, 0x003FFFFF, true, true);
 }
 
 /*
