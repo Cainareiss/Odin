@@ -74,10 +74,10 @@ Antarctic::List::clear()
 }
 
 odin_display_list_t *
-Antarctic::begin_list(bool keep_last)
+Antarctic::begin_list()
 {
-	if (keep_last)
-		std::swap(m_list, m_other);
+	m_building = (m_building + 1) % static_cast<unsigned>(m_lists.size());
+	m_list = m_lists[m_building].get();
 	m_list->clear();
 	return &m_list->view;
 }

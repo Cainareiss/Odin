@@ -36,7 +36,8 @@ namespace odin {
 Antarctic::Antarctic(std::span<uint8_t> cmdram, std::span<uint8_t> ram_s,
                      std::span<uint8_t> texram0, std::span<uint8_t> texram1)
 	: m_cmdram(cmdram), m_ram_s(ram_s), m_texram{texram0, texram1},
-	  m_list(std::make_unique<List>()), m_other(std::make_unique<List>()),
+	  m_lists{std::make_unique<List>(), std::make_unique<List>(), std::make_unique<List>()},
+	  m_building(0), m_list(m_lists[0].get()),
 	  m_texture_written(nullptr), m_texture_written_ctx(nullptr),
 	  m_disasm(nullptr), m_log(stderr), m_transfer_log(nullptr),
 	  m_types_told(0)
@@ -58,8 +59,8 @@ Antarctic::reset()
 	m_push.num_tris = 0;
 	std::memset(m_push.tmp, 0, sizeof(m_push.tmp));
 	m_mesh = nullptr;
+	/* The other lists are the renderer's until their turn comes. */
 	m_list->clear();
-	m_other->clear();
 }
 
 void

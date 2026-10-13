@@ -185,8 +185,8 @@ void
 Renderer::begin_frame(unsigned frame)
 {
 	/* The list drawn last is kept until its translucent fragments are
-	 * counted, see check_last_list: this one is built aside. */
-	m_list = m_gpu->antarctic().begin_list(m_list && m_last.list == m_list);
+	 * counted, see check_last_list: the command processor leaves it. */
+	m_list = m_gpu->antarctic().begin_list();
 	std::fill(tex_ids().begin(), tex_ids().end(), 0);
 
 	forget_held();

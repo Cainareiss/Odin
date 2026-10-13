@@ -85,7 +85,7 @@ struct Machine {
 	{
 		write(LIST, words);
 		cp->set_log(nullptr);
-		list = cp->begin_list(false);
+		list = cp->begin_list();
 		cp->start(LIST, STACK, 0);
 		ended = cp->run(budget);
 		cp->end_open_mesh();
@@ -138,7 +138,7 @@ void test_invalid()
 
 	Machine n;
 	n.cp->set_log(nullptr);
-	n.list = n.cp->begin_list(false);
+	n.list = n.cp->begin_list();
 	n.cp->start(0x20000000, STACK, 0);
 	check(n.cp->run(10), "a program counter out of the two memories ends the list");
 }
@@ -189,6 +189,33 @@ void test_strip()
 	      m.vertex(mesh, 0).diffuse[2] == 0x30, "the vertices take the 091 colour");
 	check(m.vertex(mesh, 0).alpha == 0xFF, "vertex alpha FF times polygon alpha FF");
 	check(m.vertex(mesh, 0).second_mv == 0, "header E: the modelview, whole");
+}
+
+void test_three_lists()
+{
+	Machine m;
+	const odin_display_list_t *lists[4];
+
+	for (unsigned i = 0; i < 3; i++) {
+		m.run({ OPAQUE,
+		        VERTEX(0.0f, 0.0f), VERTEX(0.0f, 1.0f),
+		        VERTEX_CLOSING(1.0f, static_cast<float>(i)),
+		        END });
+		lists[i] = m.list;
+	}
+	check(lists[0] != lists[1] && lists[1] != lists[2] && lists[2] != lists[0],
+	      "three frames in a row are built in three lists");
+	check(lists[0]->total_meshes == 1 && lists[0]->verts.all[2].position[1] == 0.0f &&
+	      lists[1]->total_meshes == 1 && lists[1]->verts.all[2].position[1] == 1.0f,
+	      "the lists of the last two frames stay as they are");
+
+	m.cp->reset();
+	check(lists[2]->total_meshes == 0, "a reset empties the list being built");
+	check(lists[0]->total_meshes == 1 && lists[1]->total_meshes == 1, "and leaves the two others");
+
+	m.run({ END });
+	lists[3] = m.list;
+	check(lists[3] == lists[0] && lists[3]->total_meshes == 0, "the fourth frame takes the first list again, empty");
 }
 
 void test_degenerate_and_both_faces()
@@ -314,7 +341,7 @@ void test_registers()
 	      "15000058 = 3 asks for a list");
 	m.write(LIST, { END });
 	m.cp->set_log(nullptr);
-	m.cp->begin_list(false);
+	m.cp->begin_list();
 	m.cp->start_list();
 	check(m.cp->pc() == LIST && m.cp->run(10), "the list starts where 15000070 tells");
 	m.cp->list_ended();
@@ -462,6 +489,7 @@ int main()
 	test_jump_to_itself();
 	test_call_and_return();
 	test_strip();
+	test_three_lists();
 	test_degenerate_and_both_faces();
 	test_strip_through_recall();
 	test_blending_mode_in_two_words();

@@ -203,9 +203,9 @@ public:
 	 * it. */
 	void end_open_mesh();
 
-	/* The list of the frame that begins. keep_last: the renderer still
-	 * needs the list of the last frame, this one is built aside. */
-	odin_display_list_t *begin_list(bool keep_last);
+	/* The list of the frame that begins. The lists of the last two
+	 * frames stay as they are: the renderer may still draw them. */
+	odin_display_list_t *begin_list();
 	const odin_fb_config_t &fb_config() const { return m_s.fb; }
 	uint32_t pc() const { return m_s.pc; }
 
@@ -400,7 +400,10 @@ private:
 	} m_push;
 	odin_mesh_t *m_mesh;	/* being built, or nullptr */
 
-	std::unique_ptr<List> m_list, m_other;
+	/* The list being built is one of three, taken in turn */
+	std::array<std::unique_ptr<List>, 3> m_lists;
+	unsigned m_building;
+	List *m_list;
 
 	void (*m_texture_written)(void *ctx, unsigned bank);
 	void *m_texture_written_ctx;

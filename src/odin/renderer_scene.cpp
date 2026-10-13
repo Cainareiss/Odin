@@ -85,7 +85,7 @@ Renderer::tex_ids()
 		if (textures.list == m_list)
 			return textures.ids;
 	}
-	fatal("a third display list");
+	fatal("a fourth display list");
 }
 
 /* A depth queue without a colour (621 bit 17) fades the polygons that do not

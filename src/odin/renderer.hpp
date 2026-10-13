@@ -253,8 +253,8 @@ private:
 
 	/* The list of the frame, built by the command processor */
 	odin_display_list_t *m_list;
-	/* The command processor builds its lists in two buffers. */
-	ListTextures m_list_textures[2];
+	/* The command processor builds its lists in three buffers. */
+	ListTextures m_list_textures[3];
 
 	TextureCache m_textures;
 	MeshPrograms m_programs;
