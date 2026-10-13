@@ -79,6 +79,12 @@ public:
 	void write(uint32_t offset, uint32_t value);
 	uint8_t next_byte();
 
+	/* An access of the bus, of 1, 2 or 4 bytes at any byte of a
+	 * register. A read of the data register takes that many bytes of
+	 * the stream, the first one lowest. */
+	uint32_t bus_read(uint32_t offset, unsigned size);
+	void bus_write(uint32_t offset, unsigned size, uint32_t value);
+
 	void save(ActelM1State &out) const;
 	void load(const ActelM1State &in);
 

@@ -168,6 +168,31 @@ uint8_t ActelM1::next_byte()
 	return byte;
 }
 
+uint32_t ActelM1::bus_read(uint32_t offset, unsigned size)
+{
+	const uint32_t reg = offset & ~3u;
+	const uint32_t shift = (offset & 3) * 8;
+	uint32_t value = 0;
+
+	if (reg == REG_DATA) {
+		for (unsigned i = 0; i < size && i < 4; i++) {
+			value |= static_cast<uint32_t>(next_byte()) << (i * 8);
+		}
+		return value;
+	}
+	value = read(reg) >> shift;
+	return (size >= 4) ? value : (value & ((1u << (size * 8)) - 1));
+}
+
+void ActelM1::bus_write(uint32_t offset, unsigned size, uint32_t value)
+{
+	const uint32_t reg = offset & ~3u;
+	const uint32_t shift = (offset & 3) * 8;
+	const uint32_t mask = (size >= 4) ? 0xFFFFFFFFu : (((1u << (size * 8)) - 1) << shift);
+
+	write(reg, (read(reg) & ~mask) | ((value << shift) & mask));
+}
+
 void ActelM1::save(ActelM1State &out) const
 {
 	out.dict = m_dict;

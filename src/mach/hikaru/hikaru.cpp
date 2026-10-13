@@ -609,7 +609,7 @@ hikaru_reset (vk_machine_t *mach, vk_reset_type_t type)
 	hikaru->unk1B000100_s = 0xFEFF;
 
 	if (hikaru->actel)
-		odin_actel_m1_reset (hikaru->actel);
+		hikaru->actel->reset ();
 
 	hikaru->sched->reset ();
 	hikaru->line_rest = 0;
@@ -716,7 +716,7 @@ hikaru_load_state (vk_machine_t *mach, vk_state_t *state)
 	if (hikaru->crypt)
 		LOAD_CHIP (odin_crypt5881, hikaru->crypt);
 	if (hikaru->actel)
-		LOAD_CHIP (odin_actel_m1, hikaru->actel);
+		ret |= load_chip<odin::ActelM1State> (state, *hikaru->actel);
 
 	ret |= hikaru_renderer_load_state (mach->renderer, state);
 
@@ -757,7 +757,7 @@ hikaru_save_state (vk_machine_t *mach, vk_state_t *state)
 	if (hikaru->crypt)
 		SAVE_CHIP (odin_crypt5881, hikaru->crypt);
 	if (hikaru->actel)
-		SAVE_CHIP (odin_actel_m1, hikaru->actel);
+		ret |= save_chip<odin::ActelM1State> (state, *hikaru->actel);
 
 	ret |= hikaru_renderer_save_state (mach->renderer, state);
 
@@ -1236,11 +1236,13 @@ hikaru_init (hikaru_t *hikaru)
 	 * key as in MAME hikaru.cpp. The key is proven by the game: the chip
 	 * then gives the text SGNASCAR compares it with. */
 	if (!strcmp (game->name, "sgnascar") && hikaru->maskrom) {
-		hikaru->actel = odin_actel_m1_new (0x56DEDF33, 0x4252,
-		                                   (const uint8_t *) vk_buffer_get_ptr (hikaru->maskrom, 0),
-		                                   vk_buffer_get_size (hikaru->maskrom));
-		if (!hikaru->actel)
-			return -1;
+		const uint8_t *const rom = (const uint8_t *) vk_buffer_get_ptr (hikaru->maskrom, 0);
+		const size_t rom_size = vk_buffer_get_size (hikaru->maskrom);
+
+		hikaru->actel = new odin::ActelM1 (0x56DEDF33, 0x4252);
+		hikaru->actel->set_read ([rom, rom_size] (uint32_t addr) -> uint8_t {
+			return (addr < rom_size) ? rom[addr] : 0;
+		});
 		VK_PRINT ("ROM board security FPGA: 317-0283-COM, ID 4252");
 	}
 

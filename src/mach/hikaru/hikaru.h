@@ -23,7 +23,7 @@
 #include "odin/eeprom_93c46.hpp"
 #include "odin/x76f100.hpp"
 #include "odin/crypt_315_5881_bridge.hpp"
-#include "odin/actel_m1_bridge.hpp"
+#include "odin/actel_m1.hpp"
 #include "odin/scheduler.hpp"
 #include "vk/cpu.h"
 #include "vk/machine.h"
@@ -84,7 +84,7 @@ typedef struct {
 	vk_buffer_t *protram;
 	odin_crypt5881_t *crypt;
 	/* Security FPGA of the SGNASCAR ROM board, local bus 0x0A000000 */
-	odin_actel_m1_t *actel;
+	odin::ActelM1 *actel;
 	unsigned porta_m_bit0_buffer;
 
 	uint16_t porta_s;
