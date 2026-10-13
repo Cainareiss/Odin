@@ -465,9 +465,7 @@ unsigned waits(const char *name, const std::vector<uint8_t> &program, unsigned r
 		odin::MieBoard::State a{}, b{};
 		counted.save(a);
 		run.save(b);
-		same = same && a.mie.cpu == b.mie.cpu && a.cycle_acc == b.cycle_acc && ram_a == ram_b &&
-		       std::memcmp(&a.mie.uart, &b.mie.uart, sizeof(a.mie.uart)) == 0 &&
-		       std::memcmp(&a.jvs, &b.jvs, sizeof(a.jvs)) == 0;
+		same = same && std::memcmp(&a, &b, sizeof(a)) == 0 && ram_a == ram_b;
 	}
 	check(same, name);
 	check(run.waits_counted() == 0, "nothing is counted when every turn is run");
@@ -529,6 +527,15 @@ void test_waits()
 		0x3E, 0x10, 0xD3, 0x10,		/* ld a, 10 / out (10), a */
 		0xAF, 0xD3, 0x13,		/* xor a / out (13), a */
 		0x3E, 0x55, 0xD3, 0x10, 0xD3, 0x10, 0xD3, 0x10,
+		0x3A, 0x00, 0xC0, 0xB7, 0x28, 0xFA, 0x76,
+	}, 40);
+	check(share >= 80, "its turns are counted");
+
+	/* A byte given to the serial link, 640 clocks, then the loop of the
+	 * first test: the link gets the clocks of the counted turns too. */
+	share = waits("a loop that waits while the serial link sends", {
+		0x3E, 0x55, 0xD3, 0x0A,		/* ld a, 55 / out (0A), a: the data */
+		0x3E, 0x01, 0xD3, 0x09,		/* ld a, 01 / out (09), a: send */
 		0x3A, 0x00, 0xC0, 0xB7, 0x28, 0xFA, 0x76,
 	}, 40);
 	check(share >= 80, "its turns are counted");
