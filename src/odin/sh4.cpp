@@ -681,6 +681,29 @@ void Sh4::run_block(const Block &b, uint32_t from)
 	ops->run(*this, ops);
 }
 
+/* The block the program is chained to was not compared in this epoch: it is
+ * now, and taken as chain() or link() would have, when its code is still
+ * what was decoded and the slice has the cycles for it. */
+void Sh4::chain_stale(uint32_t pc)
+{
+	Block &b = m_near[(pc >> 1) & (NEAR_SIZE - 1)];
+
+	if (b.count > m_remaining || !same_code(b)) {
+		return;
+	}
+	return chain(pc);
+}
+
+uintptr_t Sh4::link_stale(uint32_t pc)
+{
+	Block &b = m_near[(pc >> 1) & (NEAR_SIZE - 1)];
+
+	if (b.count > m_remaining || !same_code(b)) {
+		return 1;
+	}
+	return link(pc);
+}
+
 /* Host code */
 
 void Sh4::set_translate(bool on)

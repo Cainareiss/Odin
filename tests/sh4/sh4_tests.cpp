@@ -1741,6 +1741,23 @@ void test_host_code()
 		p.verdict("stores over the code of another block and of the running one");
 	}
 
+	/* The same store over the first instruction of a block the loop
+	 * branches to at once: nothing stops the program between the store
+	 * and the block, which was run a turn before. */
+	{
+		Pair p;
+
+		p.each([](Machine &m) {
+			with_device(m);
+			m.code(CODE, {0x7401, 0x6043, 0xC907, 0x6503, 0x9004, 0x305C, 0xD102, 0x2101, 0xA00A, 0x0009,
+			              0x7200, 0x0009, 0x0009, 0x0009, 0x0009, 0x0009, 0x0009, 0x0009, 0x0009, 0x0009,
+			              0x7201, 0xAFE9, 0x0009});
+			m.put32(CODE + 24, CODE + 40);
+		});
+		p.slices_of(20000, 300, 5);
+		p.verdict("a store over the block branched to at once");
+	}
+
 	/* An interrupt raised while another is served: RTE lets it in at
 	 * once, before the instruction it returns to. */
 	{

@@ -303,6 +303,8 @@ private:
 	uint16_t fetch(uint32_t pc);
 	void drop_blocks();
 	void run_block(const Block &b, uint32_t from = 0);
+	void chain_stale(uint32_t pc);
+	uintptr_t link_stale(uint32_t pc);
 	void translate(Block &b);
 	void wait_mark();
 	void wait_check();
@@ -394,18 +396,14 @@ private:
 	}
 
 	/* At the end of a block that nothing disturbed: the block at `pc`,
-	 * entered, when it is kept, fits in the slice and its code is still
-	 * what was decoded, compared now if it was not in this epoch, unless
-	 * the search for waits has something to do here. Otherwise nullptr,
-	 * and the program is where it was. */
+	 * entered, when it is kept, was compared in this epoch and fits in
+	 * the slice, unless the search for waits has something to do here.
+	 * Otherwise nullptr, and the program is where it was. */
 	const Block *enter(uint32_t pc)
 	{
 		Block &b = m_near[(pc >> 1) & (NEAR_SIZE - 1)];
 
-		if (b.pc != pc || b.count > m_remaining) [[unlikely]] {
-			return nullptr;
-		}
-		if (b.checked != m_epoch && !same_code(b)) [[unlikely]] {
+		if (b.pc != pc || b.checked != m_epoch || b.count > m_remaining) [[unlikely]] {
 			return nullptr;
 		}
 		if (pc == m_wait.regs.pc) {
@@ -424,28 +422,39 @@ private:
 		m_remaining -= b.count;
 		return &b;
 	}
-	/* Straight into that block, or back to the run loop. The calls only
-	 * nest when the compiler does not turn them into jumps, to the
-	 * length of a slice. */
+	/* Straight into that block, or back to the run loop. A block that
+	 * was not compared in this epoch is, apart from this path, which
+	 * every end of a block holds. The calls only nest when the compiler
+	 * does not turn them into jumps, to the length of a slice. */
 	void chain(uint32_t pc)
 	{
+		const Block &near = m_near[(pc >> 1) & (NEAR_SIZE - 1)];
+
 		/* Host code is for the run loop to enter. */
-		if (m_near[(pc >> 1) & (NEAR_SIZE - 1)].host) [[unlikely]] {
+		if (near.host) [[unlikely]] {
 			return;
 		}
 		if (const Block *b = enter(pc)) [[likely]] {
 			return b->ops->run(*this, b->ops);
+		}
+		if (near.pc == pc && near.checked != m_epoch) {
+			return chain_stale(pc);
 		}
 	}
 	/* The same for host code: the host code of that block, or 1 for the
 	 * run loop, which a block without host code is left to. */
 	uintptr_t link(uint32_t pc)
 	{
-		if (m_near[(pc >> 1) & (NEAR_SIZE - 1)].host == 0) [[unlikely]] {
+		const Block &near = m_near[(pc >> 1) & (NEAR_SIZE - 1)];
+
+		if (near.host == 0) [[unlikely]] {
 			return 1;
 		}
 		if (const Block *b = enter(pc)) [[likely]] {
 			return m_host->address(b->host);
+		}
+		if (near.pc == pc && near.checked != m_epoch) {
+			return link_stale(pc);
 		}
 		return 1;
 	}
