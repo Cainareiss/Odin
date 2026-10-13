@@ -120,25 +120,34 @@ vk_renderer_print_fingerprint (vk_renderer_t *renderer)
 }
 
 /* ODIN_SPEED=1: one line every 60 frames with the frames a second over
- * them, to find the slow scenes of a run. */
+ * them and the longest of them in milliseconds, to find the slow scenes
+ * and the stutters of a run. */
 static void
 vk_renderer_print_speed (vk_renderer_t *renderer)
 {
 	static int wanted = -1;
-	static Uint64 since;
+	static Uint64 since, last, longest;
+	const double second = (double) SDL_GetPerformanceFrequency ();
 	Uint64 now;
 
 	if (wanted < 0)
 		wanted = vk_util_get_bool_option ("ODIN_SPEED", false) ? 1 : 0;
-	if (!wanted || (renderer->frame % 60) != 0)
+	if (!wanted)
 		return;
 
 	now = SDL_GetPerformanceCounter ();
+	if (last && now - last > longest)
+		longest = now - last;
+	last = now;
+	if ((renderer->frame % 60) != 0)
+		return;
+
 	if (since)
-		fprintf (stderr, "SPEED frame=%u fps=%.1f\n", renderer->frame,
-		         60.0 * (double) SDL_GetPerformanceFrequency () /
-		         (double) (now - since));
+		fprintf (stderr, "SPEED frame=%u fps=%.1f longest=%.1f\n", renderer->frame,
+		         60.0 * second / (double) (now - since),
+		         1000.0 * (double) longest / second);
 	since = now;
+	longest = 0;
 }
 
 /* The title of the window tells the frames shown in the last second: the
