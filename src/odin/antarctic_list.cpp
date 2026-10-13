@@ -22,7 +22,7 @@
 /* The display list as text and as a fingerprint, to look at what the
  * command processor made and to compare two builds. */
 
-#include "odin/antarctic_list.h"
+#include "odin/antarctic_list.hpp"
 
 #include <cstdio>
 
@@ -100,8 +100,6 @@ hash_lightset(const odin_lightset_t &ls, const uint16_t table[4][16])
 }
 
 } /* namespace */
-
-extern "C" {
 
 uint64_t
 odin_display_list_fingerprint(const odin_display_list_t *list,
@@ -288,5 +286,3 @@ odin_lightset_str(const odin_lightset_t *ls)
 	}
 	return out;
 }
-
-} /* extern "C" */

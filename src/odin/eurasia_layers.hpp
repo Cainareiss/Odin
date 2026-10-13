@@ -20,16 +20,12 @@
  */
 
 /* The 2D layers as the display chip of the Hikaru (315-6087, "Eurasia")
- * is set to show them. Plain data, read by the renderer; C and C++. */
+ * is set to show them. Plain data, read by the renderer. */
 
-#ifndef ODIN_EURASIA_LAYERS_H
-#define ODIN_EURASIA_LAYERS_H
+#ifndef ODIN_EURASIA_LAYERS_HPP
+#define ODIN_EURASIA_LAYERS_HPP
 
-#include <stdint.h>
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include <cstdint>
 
 /* A rectangle of the framebuffer RAM shown as a layer */
 typedef struct {
@@ -46,8 +42,4 @@ typedef struct {
 	uint32_t fb_keyed;		/* unit 0 register 3C bit 0 */
 } odin_layers_t;
 
-#ifdef __cplusplus
-}
-#endif
-
-#endif /* ODIN_EURASIA_LAYERS_H */
+#endif /* ODIN_EURASIA_LAYERS_HPP */

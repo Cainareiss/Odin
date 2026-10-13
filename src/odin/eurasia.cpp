@@ -24,7 +24,7 @@
 #include <cstdlib>
 #include <cstring>
 
-#include "odin/antarctic_list.h"
+#include "odin/antarctic_list.hpp"
 
 namespace odin {
 

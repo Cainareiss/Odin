@@ -30,8 +30,8 @@
 
 #include <GL/glew.h>
 
-#include "odin/antarctic_list.h"
-#include "odin/eurasia_layers.h"
+#include "odin/antarctic_list.hpp"
+#include "odin/eurasia_layers.hpp"
 #include "odin/renderer_programs.hpp"
 #include "odin/renderer_textures.hpp"
 

@@ -29,7 +29,7 @@
 
 #include <GL/glew.h>
 
-#include "odin/antarctic_list.h"
+#include "odin/antarctic_list.hpp"
 
 namespace odin {
 

@@ -21,16 +21,12 @@
 
 /* What the command processor of the Hikaru (315-6083, "Antarctic") hands
  * over for a frame: the objects its instructions set and the triangles it
- * assembled. Plain data, read by the renderer; C and C++. */
+ * assembled. Plain data, read by the renderer. */
 
-#ifndef ODIN_ANTARCTIC_LIST_H
-#define ODIN_ANTARCTIC_LIST_H
+#ifndef ODIN_ANTARCTIC_LIST_HPP
+#define ODIN_ANTARCTIC_LIST_HPP
 
-#include <stdint.h>
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include <cstdint>
 
 /* Used for both texheads and layers */
 enum {
@@ -322,8 +318,4 @@ uint64_t odin_display_list_fingerprint(const odin_display_list_t *list,
                                        uint32_t *meshes, uint32_t *tris,
                                        void *dump);
 
-#ifdef __cplusplus
-}
-#endif
-
-#endif /* ODIN_ANTARCTIC_LIST_H */
+#endif /* ODIN_ANTARCTIC_LIST_HPP */
