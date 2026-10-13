@@ -91,7 +91,6 @@ ODIN_OBJ := \
 	src/odin/sh4_onchip.o \
 	src/odin/sh4_bridge.o \
 	src/odin/scheduler.o \
-	src/odin/scheduler_bridge.o \
 	src/odin/worker.o
 
 MACH_OBJ := \

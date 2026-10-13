@@ -18,16 +18,15 @@
  * 02110-1301, USA.
  */
 
-/* Unit tests for the Odin scheduler: the dates of the events, the order
- * in which those of one date are taken, and the C entry points.
+/* Unit tests for the Odin scheduler: the dates of the events and the
+ * order in which those of one date are taken.
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
  *            -I src tests/scheduler/scheduler_tests.cpp src/odin/scheduler.cpp \
- *            src/odin/scheduler_bridge.cpp -o scheduler_tests
+ *            -o scheduler_tests
  * Exit status is 0 when every check passes. */
 
 #include "odin/scheduler.hpp"
-#include "odin/scheduler_bridge.hpp"
 
 #include <cstdio>
 #include <vector>
@@ -161,30 +160,6 @@ void test_save_load()
 	check(a.take(source) && source == 2 && a.next() == 90, "saving changes nothing");
 }
 
-void test_bridge()
-{
-	odin_scheduler_t *s = odin_scheduler_new();
-
-	odin_scheduler_set(s, 2, 70);
-	odin_scheduler_set(s, 1, 70);
-	check(odin_scheduler_next(s) == 70, "bridge: the earliest date");
-	odin_scheduler_advance(s, 70);
-	check(odin_scheduler_now(s) == 70, "bridge: the time");
-	check(odin_scheduler_take(s) == 1 && odin_scheduler_take(s) == 2 &&
-	      odin_scheduler_take(s) == -1, "bridge: the events due, then none");
-	odin_scheduler_reset(s);
-	check(odin_scheduler_now(s) == 0 && odin_scheduler_next(s) == UINT64_MAX, "bridge: reset");
-
-	odin_scheduler_t *t = odin_scheduler_new();
-	std::vector<uint8_t> block(odin_scheduler_state_size());
-	odin_scheduler_set(s, 3, 12);
-	odin_scheduler_save_state(s, block.data());
-	odin_scheduler_load_state(t, block.data());
-	check(odin_scheduler_next(t) == 12, "bridge: a state saved and loaded");
-	odin_scheduler_delete(t);
-	odin_scheduler_delete(s);
-}
-
 } /* namespace */
 
 int main()
@@ -193,7 +168,6 @@ int main()
 	test_same_date();
 	test_frame();
 	test_save_load();
-	test_bridge();
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures == 0 ? 0 : 1;
 }

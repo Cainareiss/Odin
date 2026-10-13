@@ -543,8 +543,7 @@ hikaru_begin_frame (hikaru_t *hikaru)
 		          hikaru->lines_per_frame, hikaru->lines_shown);
 
 	hikaru->line = 0;
-	odin_scheduler_set (hikaru->sched, EVENT_LINE,
-	                    odin_scheduler_now (hikaru->sched) + hikaru_line_cycles (hikaru));
+	hikaru->sched->set (EVENT_LINE, hikaru->sched->now () + hikaru_line_cycles (hikaru));
 }
 
 static int
@@ -558,13 +557,13 @@ hikaru_run_frame (vk_machine_t *mach)
 	/* The chips run up to the next event, then the events due are
 	 * taken. */
 	while (!done) {
-		const uint64_t next = odin_scheduler_next (hikaru->sched);
-		int event;
+		const uint64_t next = hikaru->sched->next ();
+		uint32_t event;
 
-		hikaru_run_cycles (mach, (int) (next - odin_scheduler_now (hikaru->sched)));
-		odin_scheduler_advance (hikaru->sched, next);
+		hikaru_run_cycles (mach, (int) (next - hikaru->sched->now ()));
+		hikaru->sched->advance (next);
 
-		while ((event = odin_scheduler_take (hikaru->sched)) >= 0) {
+		while (hikaru->sched->take (event)) {
 			VK_ASSERT (event == EVENT_LINE);
 
 			hikaru_gpu_hblank_in (hikaru->gpu, hikaru->line++);
@@ -573,8 +572,7 @@ hikaru_run_frame (vk_machine_t *mach)
 				hikaru_gpu_vblank_in (hikaru->gpu);
 			}
 			if (hikaru->line < hikaru->lines_per_frame) {
-				odin_scheduler_set (hikaru->sched, EVENT_LINE,
-				                    next + hikaru_line_cycles (hikaru));
+				hikaru->sched->set (EVENT_LINE, next + hikaru_line_cycles (hikaru));
 				continue;
 			}
 
@@ -613,7 +611,7 @@ hikaru_reset (vk_machine_t *mach, vk_reset_type_t type)
 	if (hikaru->actel)
 		odin_actel_m1_reset (hikaru->actel);
 
-	odin_scheduler_reset (hikaru->sched);
+	hikaru->sched->reset ();
 	hikaru->line_rest = 0;
 	hikaru_begin_frame (hikaru);
 
@@ -722,9 +720,9 @@ hikaru_load_state (vk_machine_t *mach, vk_state_t *state)
 
 	ret |= hikaru_renderer_load_state (mach->renderer, state);
 
-	LOAD_CHIP (odin_scheduler, hikaru->sched);
-	sh4_set_time (hikaru->sh_m, odin_scheduler_now (hikaru->sched));
-	sh4_set_time (hikaru->sh_s, odin_scheduler_now (hikaru->sched));
+	ret |= load_chip<odin::SchedulerState> (state, *hikaru->sched);
+	sh4_set_time (hikaru->sh_m, hikaru->sched->now ());
+	sh4_set_time (hikaru->sh_s, hikaru->sched->now ());
 	LOAD (hikaru->line);
 	LOAD (hikaru->dots_per_line);
 	LOAD (hikaru->lines_per_frame);
@@ -763,7 +761,7 @@ hikaru_save_state (vk_machine_t *mach, vk_state_t *state)
 
 	ret |= hikaru_renderer_save_state (mach->renderer, state);
 
-	SAVE_CHIP (odin_scheduler, hikaru->sched);
+	ret |= save_chip<odin::SchedulerState> (state, *hikaru->sched);
 	SAVE (hikaru->line);
 	SAVE (hikaru->dots_per_line);
 	SAVE (hikaru->lines_per_frame);
@@ -1124,7 +1122,7 @@ hikaru_destroy (vk_machine_t **mach_)
 		if (hikaru) {
 			/* dump everything we got before quitting */
 			hikaru_dump ((vk_machine_t *) hikaru);
-			odin_scheduler_delete (hikaru->sched);
+			delete hikaru->sched;
 		}
 	}
 }
@@ -1198,9 +1196,7 @@ hikaru_init (hikaru_t *hikaru)
 
 	hikaru->eeprom_main = new odin::Eeprom93c46 (HIKARU_SH4_CLOCK);
 
-	hikaru->sched = odin_scheduler_new ();
-	if (!hikaru->sched)
-		return -1;
+	hikaru->sched = new odin::Scheduler;
 	if (game) {
 		vk_buffer_t *image = vk_game_get_section_data (game, "eeprom");
 		if (image) {

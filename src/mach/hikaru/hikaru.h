@@ -24,7 +24,7 @@
 #include "odin/x76f100.hpp"
 #include "odin/crypt_315_5881_bridge.hpp"
 #include "odin/actel_m1_bridge.hpp"
-#include "odin/scheduler_bridge.hpp"
+#include "odin/scheduler.hpp"
 #include "vk/cpu.h"
 #include "vk/machine.h"
 
@@ -58,7 +58,7 @@ typedef struct {
 
 	/* The time of the machine, in SH-4 cycles, and the frame being
 	 * drawn, see hikaru_begin_frame */
-	odin_scheduler_t *sched;
+	odin::Scheduler *sched;
 	unsigned line;
 	unsigned dots_per_line, lines_per_frame, lines_shown;
 	uint32_t line_rest;	/* of a cycle, in dot clocks */
