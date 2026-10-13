@@ -34,7 +34,8 @@
 namespace odin {
 
 Arm7::Arm7(Arm7Bus &bus)
-	: m_bus(bus), m_ram{nullptr, 0, 0}, m_trace(nullptr), m_turn(Turn::Off), m_turn_limit(TURN_MAX)
+	: m_bus(bus), m_ram{nullptr, 0, 0}, m_trace(nullptr), m_turn(Turn::Off), m_turn_limit(TURN_MAX),
+	  m_turn_counter(TURN_NO_COUNTER), m_turn_delta(0), m_turn_laps(0)
 {
 	m_irq_line = m_fiq_line = false;
 	reset();
@@ -109,7 +110,14 @@ uint32_t Arm7::run(uint32_t cycles)
  * can be counted from then on if it took no exception, wrote nothing
  * outside the memory and left the memory as it found it: with the same
  * memory, the same answers of the bus and the same interrupt lines, the
- * next turn does the same again. */
+ * next turn does the same again.
+ *
+ * A turn may also leave one word of the memory changed, if that word is a
+ * count of the turns: what the turn loads from it only goes back to it,
+ * with a constant added, and nothing else the turn does looks at it (see
+ * turn_counts). The next turn then does the same again with the word that
+ * much further, and the turns counted are owed to the word: settle() gives
+ * them. */
 
 void Arm7::set_turn_replay(bool on)
 {
@@ -133,6 +141,8 @@ void Arm7::turn_begin()
 	m_turn_num_reads = 0;
 	m_turn_num_stores = 0;
 	m_turn_bad = false;
+	m_turn_counter = TURN_NO_COUNTER;
+	m_turn_laps = 0;
 	m_turn = Turn::Record;
 }
 
@@ -172,9 +182,18 @@ void Arm7::turn_step(uint32_t cycles, uint32_t passed)
 		Arm7State now;
 		save(now);
 		if (now == m_turn_start) {
+			/* The bytes left changed must be those of one word. */
 			bool same = turn_reads_hold();
+			uint32_t counter = TURN_NO_COUNTER;
 			for (uint32_t i = 0; same && i < m_turn_num_stores; i++) {
-				same = m_ram.base[m_turn_stores[i].offset] == m_turn_stores[i].old;
+				const uint32_t offset = m_turn_stores[i].offset;
+				if (m_ram.base[offset] != m_turn_stores[i].old) {
+					same = counter == TURN_NO_COUNTER || counter == (offset & ~3u);
+					counter = offset & ~3u;
+				}
+			}
+			if (same && counter != TURN_NO_COUNTER) {
+				same = turn_counts(counter);
 			}
 			if (same) {
 				m_turn = Turn::Replay;
@@ -209,6 +228,138 @@ bool Arm7::turn_reads_hold()
 	return true;
 }
 
+/* Whether the turn just recorded only counts in the word at `counter`: the
+ * instructions are gone through again, with a mark on each register that
+ * holds the word plus a constant. Such a register may be moved, have a
+ * constant added and be stored back to the word; any other use of it, or of
+ * flags it set, is the turn looking at its count, and the turn is not
+ * counted. At the end no register may still hold it, and what the turn
+ * added to the word is kept. */
+bool Arm7::turn_counts(uint32_t counter)
+{
+	uint32_t marked = 0;	/* a bit for each register */
+	const auto is = [&marked](uint32_t r) { return ((marked >> r) & 1) != 0; };
+	const auto clear = [&marked](uint32_t r) { marked &= ~(1u << r); };
+	const auto touches = [counter](uint32_t lo, uint32_t hi) { return hi != 0 && lo < counter + 4 && hi > counter; };
+	const auto is_word = [counter](uint32_t lo, uint32_t hi) { return lo == counter && hi == counter + 4; };
+
+	for (uint32_t i = 0; i < m_turn_count; i++) {
+		const TurnOp &o = m_turn_ops[i];
+		const uint32_t op = o.op;
+		const uint32_t rn = (op >> 16) & 15, rd = (op >> 12) & 15, rs = (op >> 8) & 15, rm = op & 15;
+
+		if (!o.ran) {
+			continue;
+		}
+		if ((op & 0x0E000000) == 0x0A000000) {
+			/* B, BL */
+			if (op & 0x01000000) {
+				clear(14);
+			}
+		} else if ((op & 0x0FBF0FFF) == 0x010F0000) {
+			/* MRS */
+			clear(rd);
+		} else if ((op & 0x0FB0FFF0) == 0x0120F000) {
+			/* MSR from a register */
+			if (is(rm)) {
+				return false;
+			}
+		} else if ((op & 0x0FB0F000) == 0x0320F000) {
+			/* MSR from a constant */
+		} else if ((op & 0x0C000000) == 0x00000000 && (op & 0x02000090) != 0x00000090) {
+			/* Data processing; what has bits 4 and 7 set without a
+			 * constant is a multiply, a swap or a short transfer. */
+			const uint32_t code = (op >> 21) & 15;
+			const bool constant = (op & 0x02000000) != 0, flags = (op & 0x00100000) != 0;
+			const bool test = code >= 8 && code <= 11, one = code == 13 || code == 15;
+			const bool by_register = !constant && (op & 0x10) != 0;
+
+			if (test && !flags) {
+				return false;	/* not a data processing instruction */
+			}
+			const bool from = (!one && is(rn)) || (!constant && is(rm)) || (by_register && is(rs));
+			if (!from) {
+				if (!test) {
+					clear(rd);
+				}
+			} else if (!flags && rd != 15 && constant && (code == 2 || code == 4) && is(rn)) {
+				/* SUB, ADD of a constant */
+				marked |= 1u << rd;
+			} else if (!flags && rd != 15 && code == 13 && (op & 0x00000FF0) == 0) {
+				/* MOV of the register as it is */
+				marked |= 1u << rd;
+			} else {
+				return false;
+			}
+		} else if ((op & 0x0C000000) == 0x04000000) {
+			/* LDR, STR, LDRB, STRB */
+			const bool load = (op & 0x00100000) != 0, byte = (op & 0x00400000) != 0;
+
+			if (is(rn) || ((op & 0x02000000) && is(rm))) {
+				return false;
+			}
+			if (load) {
+				if (touches(o.load_lo, o.load_hi)) {
+					if (byte || rd == 15 || !is_word(o.load_lo, o.load_hi)) {
+						return false;
+					}
+					marked |= 1u << rd;
+				} else {
+					clear(rd);
+				}
+			} else if (is(rd)) {
+				if (byte || !is_word(o.store_lo, o.store_hi)) {
+					return false;
+				}
+			} else if (touches(o.store_lo, o.store_hi)) {
+				return false;	/* the word set to something else */
+			}
+		} else if ((op & 0x0E000000) == 0x08000000) {
+			/* LDM, STM */
+			const bool load = (op & 0x00100000) != 0;
+
+			if (is(rn) || (op & 0x00400000) || touches(o.load_lo, o.load_hi) || touches(o.store_lo, o.store_hi)) {
+				return false;
+			}
+			for (uint32_t r = 0; r < 16; r++) {
+				if ((op >> r) & 1) {
+					if (load) {
+						clear(r);
+					} else if (is(r)) {
+						return false;
+					}
+				}
+			}
+		} else {
+			/* A multiply, a swap, a short transfer, BX, SWI and the
+			 * rest: with nothing marked, and away from the word,
+			 * they cannot look at it. What they set is not known
+			 * here: only the registers they could set are named. */
+			if (marked || touches(o.load_lo, o.load_hi) || touches(o.store_lo, o.store_hi)) {
+				return false;
+			}
+		}
+	}
+	if (marked) {
+		return false;
+	}
+
+	uint32_t before = 0, after = 0;
+	for (uint32_t b = 0; b < 4; b++) {
+		uint8_t old = m_ram.base[counter + b];
+		for (uint32_t k = 0; k < m_turn_num_stores; k++) {
+			if (m_turn_stores[k].offset == counter + b) {
+				old = m_turn_stores[k].old;
+			}
+		}
+		before |= static_cast<uint32_t>(old) << (8 * b);
+		after |= static_cast<uint32_t>(m_ram.base[counter + b]) << (8 * b);
+	}
+	m_turn_counter = counter;
+	m_turn_delta = after - before;
+	return true;
+}
+
 /* Stops where run() would: at the first instruction boundary at or past
  * the budget. */
 uint32_t Arm7::turn_replay(uint32_t budget)
@@ -222,6 +373,9 @@ uint32_t Arm7::turn_replay(uint32_t budget)
 		uint32_t to = it == last ? m_turn_count : static_cast<uint32_t>(it - m_turn_cycles.begin());
 		done += m_turn_cycles[to] - base;
 		m_instructions += static_cast<uint32_t>(m_turn_passed[to] - m_turn_passed[m_turn_at]);
+		if (to == m_turn_count) {
+			m_turn_laps++;
+		}
 		m_turn_at = to == m_turn_count ? 0 : to;
 	}
 	return done;
@@ -236,6 +390,17 @@ void Arm7::settle()
 	if (m_turn != Turn::Replay) {
 		return;
 	}
+	/* The count of the turns gets those that were only counted. */
+	if (m_turn_counter != TURN_NO_COUNTER && m_turn_laps) {
+		uint8_t *p = m_ram.base + m_turn_counter;
+		uint32_t count = p[0] | (p[1] << 8) | (p[2] << 16) | (static_cast<uint32_t>(p[3]) << 24);
+		count += m_turn_laps * m_turn_delta;
+		p[0] = u8(count);
+		p[1] = u8(count >> 8);
+		p[2] = u8(count >> 16);
+		p[3] = u8(count >> 24);
+	}
+	m_turn_laps = 0;
 	/* The bus answers what it did when the turn was recorded: it may
 	 * have changed since the part to run was counted. */
 	uint64_t instructions = m_instructions;
@@ -256,8 +421,26 @@ bool Arm7::turn_page(const std::array<uint8_t, 256> &pages, uint32_t addr) const
 	return (pages[page >> 3] >> (page & 7)) & 1;
 }
 
+/* The instruction itself, which step() then notes with its data. */
+void Arm7::turn_note_fetch(uint32_t addr, uint32_t op)
+{
+	if (addr < m_ram.size) {
+		uint32_t page = (addr & m_ram.mask) >> TURN_PAGE;
+		m_turn_pages[page >> 3] |= u8(1u << (page & 7));
+	} else if (m_turn_num_reads < TURN_READS) {
+		m_turn_reads[m_turn_num_reads++] = {m_turn_count, addr, 4, op};
+	} else {
+		m_turn_bad = true;
+	}
+}
+
 void Arm7::turn_note_read(uint32_t addr, uint32_t size, uint32_t value)
 {
+	/* Where in the memory, for turn_counts(); the bus is elsewhere. */
+	const uint32_t at = addr < m_ram.size ? addr & m_ram.mask : addr;
+	TurnOp &o = m_turn_ops[m_turn_count];
+	o.load_lo = o.load_hi ? std::min(o.load_lo, at) : at;
+	o.load_hi = std::max(o.load_hi, at + size);
 	if (addr < m_ram.size) {
 		uint32_t page = (addr & m_ram.mask) >> TURN_PAGE;
 		m_turn_pages[page >> 3] |= u8(1u << (page & 7));
@@ -275,6 +458,9 @@ void Arm7::turn_note_store(uint32_t addr, uint32_t size, uint32_t value)
 		m_turn_bad = true;
 		return;
 	}
+	TurnOp &o = m_turn_ops[m_turn_count];
+	o.store_lo = o.store_hi ? std::min(o.store_lo, addr & m_ram.mask) : addr & m_ram.mask;
+	o.store_hi = std::max(o.store_hi, (addr & m_ram.mask) + size);
 	for (uint32_t i = 0; i < size; i++) {
 		uint32_t offset = (addr + i) & m_ram.mask;
 		if (m_ram.base[offset] == u8(value >> (8 * i))) {
@@ -372,7 +558,11 @@ uint32_t Arm7::step()
 	m_op_pc = m_pc;
 	uint32_t op = fetch();
 	m_pc += 4;
-	if (cond(op >> 28)) {
+	const bool ran = cond(op >> 28);
+	if (m_turn == Turn::Record) {
+		m_turn_ops[m_turn_count] = {op, 0, 0, 0, 0, ran};
+	}
+	if (ran) {
 		m_instructions++;
 		exec(op);
 	} else {
@@ -494,7 +684,7 @@ uint32_t Arm7::fetch()
 		op = m_bus.read32(addr);
 	}
 	if (m_turn == Turn::Record) {
-		turn_note_read(addr, 4, op);
+		turn_note_fetch(addr, op);
 	}
 	if (m_trace) {
 		trace('f', addr, 4, op);

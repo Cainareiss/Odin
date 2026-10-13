@@ -98,9 +98,10 @@ public:
 	void set_fiq(bool level);
 
 	/* A program that waits goes round a loop, and every turn reads the
-	 * same things and leaves the registers and the memory as they were.
-	 * With this on, such a turn is run once, then only counted for as long
-	 * as what it read stays the same. The machine must then call
+	 * same things and leaves the registers and the memory as they were,
+	 * but for one word it may count its turns in. With this on, such a
+	 * turn is run once, then only counted for as long as what it read
+	 * stays the same. The machine must then call
 	 * ram_write() before it changes the plain memory itself, ram_read()
 	 * before it reads it, settle() before it saves the state, and its bus
 	 * must read without side effects. */
@@ -222,13 +223,24 @@ private:
 		uint32_t offset;
 		uint8_t old;
 	};
+	/* An instruction of the turn being recorded: whether its condition
+	 * held, and the addresses of the data it loaded and stored, from
+	 * `lo` up to `hi`; none when hi is 0. */
+	struct TurnOp {
+		uint32_t op;
+		uint32_t load_lo, load_hi, store_lo, store_hi;
+		bool ran;
+	};
+	static constexpr uint32_t TURN_NO_COUNTER = 0xFFFFFFFF;
 
 	void turn_begin();
 	void turn_step(uint32_t cycles, uint32_t passed);
 	void turn_abort();
 	void turn_break();
 	bool turn_reads_hold();
+	bool turn_counts(uint32_t counter);
 	uint32_t turn_replay(uint32_t budget);
+	void turn_note_fetch(uint32_t addr, uint32_t op);
 	void turn_note_read(uint32_t addr, uint32_t size, uint32_t value);
 	void turn_note_store(uint32_t addr, uint32_t size, uint32_t value);
 	uint32_t bus_read(uint32_t addr, uint32_t size);
@@ -248,6 +260,10 @@ private:
 	std::array<uint8_t, 256> m_turn_changed;          /* memory changed */
 	std::array<TurnRead, TURN_READS> m_turn_reads;
 	std::array<TurnStore, TURN_STORES> m_turn_stores;
+	std::array<TurnOp, TURN_MAX> m_turn_ops;
+	/* The word the turn counts in, or TURN_NO_COUNTER: what a turn adds
+	 * to it, and the turns counted that it has not been given yet */
+	uint32_t m_turn_counter, m_turn_delta, m_turn_laps;
 };
 
 } /* namespace odin */

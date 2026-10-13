@@ -1390,6 +1390,239 @@ void test_trace()
 	g_checks++;
 }
 
+/* Turns counted without being run: the same program run with the turns
+ * counted and with every turn run must leave the same registers, the same
+ * memory and the same count of cycles, whatever the machine does meanwhile.
+ * The bus tells whether the turns were counted: a turn that is only counted
+ * does not read it. */
+
+class CountingBus : public RamBus {
+public:
+	uint32_t reads = 0;
+
+	uint32_t read32(uint32_t addr) override
+	{
+		reads++;
+		return RamBus::read32(addr);
+	}
+};
+
+struct TurnsRun {
+	odin::Arm7State state;
+	std::vector<uint8_t> ram;
+	uint32_t bus_reads;
+	uint32_t seen;	/* the count as the machine read it on the way */
+	uint64_t instructions;
+};
+
+constexpr uint32_t TURN_CODE = 0x1000, TURN_COUNT = 0x8000, TURN_FLAG = 0x8010;
+
+/* 300 calls of 512 cycles, as a sound board runs its ARM7. The machine
+ * reads the count at call 100, sets the flag the loop waits for at call
+ * `flag_at` and, if asked, writes the count at call 150. */
+TurnsRun run_turns(bool counted, const std::vector<uint32_t> &code, uint32_t count, uint32_t flag_at, bool write_count = false,
+                   uint32_t set_byte = 0)
+{
+	CountingBus bus;
+	Arm7 cpu(bus);
+	TurnsRun out{};
+	out.ram.assign(0x10000, 0);
+
+	for (size_t i = 0; i < code.size(); i++) {
+		for (uint32_t b = 0; b < 4; b++) {
+			out.ram[TURN_CODE + i * 4 + b] = static_cast<uint8_t>(code[i] >> (8 * b));
+		}
+	}
+	for (uint32_t b = 0; b < 4; b++) {
+		out.ram[TURN_COUNT + b] = static_cast<uint8_t>(count >> (8 * b));
+	}
+	if (set_byte) {
+		out.ram[set_byte] = 1;
+	}
+	cpu.set_ram({out.ram.data(), 0x10000, 0xFFFF});
+
+	odin::Arm7State st{};
+	cpu.save(st);
+	st.pc = TURN_CODE;
+	st.cpsr = Arm7::MODE_SVC | Arm7::FLAG_I | Arm7::FLAG_F;
+	cpu.load(st);
+	cpu.set_reg(1, TURN_FLAG);
+	cpu.set_reg(4, 0x00800000);
+	cpu.set_reg(7, TURN_COUNT);
+	cpu.set_turn_replay(counted);
+
+	for (uint32_t call = 0; call < 300; call++) {
+		if (call == 100) {
+			cpu.ram_read(TURN_COUNT, 4);
+			out.seen = static_cast<uint32_t>(out.ram[TURN_COUNT]) | (static_cast<uint32_t>(out.ram[TURN_COUNT + 1]) << 8)
+				| (static_cast<uint32_t>(out.ram[TURN_COUNT + 2]) << 16) | (static_cast<uint32_t>(out.ram[TURN_COUNT + 3]) << 24);
+		}
+		if (call == 150 && write_count) {
+			cpu.ram_write(TURN_COUNT, 4);
+			out.ram[TURN_COUNT] = 0x10;
+			out.ram[TURN_COUNT + 1] = 0x27;
+			out.ram[TURN_COUNT + 2] = 0;
+			out.ram[TURN_COUNT + 3] = 0;
+		}
+		if (call == flag_at) {
+			cpu.ram_write(TURN_FLAG, 1);
+			out.ram[TURN_FLAG] = 1;
+		}
+		cpu.run(512);
+	}
+	cpu.settle();
+	cpu.save(out.state);
+	out.bus_reads = bus.reads;
+	out.instructions = cpu.instructions();
+	return out;
+}
+
+/* Both ways; returns how many times fewer the bus was read with the turns
+ * counted, in tenths. */
+uint32_t check_turns(const char *name, const std::vector<uint32_t> &code, uint32_t count, uint32_t flag_at, bool write_count = false)
+{
+	const TurnsRun counted = run_turns(true, code, count, flag_at, write_count);
+	const TurnsRun run = run_turns(false, code, count, flag_at, write_count);
+
+	g_current = name;
+	g_checks += 4;
+	if (!(counted.state == run.state)) {
+		fail("the registers differ");
+	}
+	if (counted.ram != run.ram) {
+		fail("the memory differs");
+	}
+	if (counted.seen != run.seen) {
+		fail("the machine read another count on the way");
+	}
+	if (counted.instructions != run.instructions) {
+		fail("another number of instructions");
+	}
+	return run.bus_reads * 10 / (counted.bus_reads ? counted.bus_reads : 1);
+}
+
+void test_turns()
+{
+	const uint32_t EQ = 0, CS = 2;
+	/* What every loop here ends with: a read of the bus, then back to the
+	 * start while the flag is clear, else a jump onto itself. */
+	const auto wait = [EQ](int32_t back) {
+		return std::vector<uint32_t>{
+			ldst_imm(true, false, true, true, false, 4, 3, 0),	/* ldr r3, [r4] */
+			ldst_imm(true, true, true, true, false, 1, 2, 0),	/* ldrb r2, [r1] */
+			dp_imm(CMP, true, 2, 0, 0, 0),				/* cmp r2, #0 */
+			branch(false, back, EQ),				/* beq start */
+			branch(false, -2),					/* b . */
+		};
+	};
+	const auto with_wait = [&wait](std::vector<uint32_t> code) {
+		const std::vector<uint32_t> tail = wait(-static_cast<int32_t>(code.size()) - 5);
+		code.insert(code.end(), tail.begin(), tail.end());
+		return code;
+	};
+	const uint32_t load = ldst_imm(true, false, true, true, false, 7, 0, 0);	/* ldr r0, [r7] */
+	const uint32_t add1 = dp_imm(ADD, false, 0, 0, 1, 0);				/* add r0, r0, #1 */
+	const uint32_t store = ldst_imm(false, false, true, true, false, 7, 0, 0);	/* str r0, [r7] */
+	const uint32_t drop = dp_imm(MOV, false, 0, 0, 0, 0);				/* mov r0, #0 */
+
+	uint32_t fewer = check_turns("a turn that only waits", with_wait({}), 0, 250);
+	g_checks++;
+	if (fewer < 100) {
+		fail("the turns were not counted");
+	}
+
+	fewer = check_turns("a turn that counts itself", with_wait({load, add1, store, drop}), 5, 250);
+	g_checks++;
+	if (fewer < 100) {
+		fail("the turns were not counted");
+	}
+	check_turns("a count the machine writes on the way", with_wait({load, add1, store, drop}), 5, 250, true);
+	check_turns("a count that wraps", with_wait({load, add1, store, drop}), 0xFFFFFFF0, 250);
+	check_turns("a count carried through a move", with_wait({load, dp_reg(MOV, false, 0, 6, 0, LSL, 0),
+	            dp_imm(SUB, false, 6, 6, 3, 0), ldst_imm(false, false, true, true, false, 7, 6, 0), drop,
+	            dp_imm(MOV, false, 0, 6, 0, 0)}), 1000, 250);
+
+	/* Turns that look at their count: they must not be counted, or
+	 * the end below would be missed. */
+	check_turns("a turn that leaves at a count", {
+		load, add1, store,
+		dp_imm(CMP, true, 0, 0, 200, 0),			/* cmp r0, #200 */
+		drop,
+		branch(false, 4, EQ),					/* beq out */
+		ldst_imm(true, false, true, true, false, 4, 3, 0),
+		ldst_imm(true, true, true, true, false, 1, 2, 0),
+		dp_imm(CMP, true, 2, 0, 0, 0),
+		branch(false, -11, EQ),
+		branch(false, -2),					/* out: b . */
+	}, 0, 400);
+	check_turns("a turn that notes its carry", with_wait({load, dp_imm(ADD, true, 0, 0, 1, 0), store, drop,
+	            dp_imm(MOV, false, 0, 5, 1, 0, CS)}), 0xFFFFFF80, 250);	/* adds; movcs r5, #1 */
+	check_turns("a count kept twice", with_wait({load, add1, store, ldst_imm(false, false, true, true, false, 7, 0, 8), drop}), 0, 250);
+	check_turns("a count of one byte", with_wait({ldst_imm(true, true, true, true, false, 7, 0, 0), add1,
+	            ldst_imm(false, true, true, true, false, 7, 0, 0), drop}), 250, 250);
+	/* Read as a byte and written as a word, the count starts again at 1
+	 * after 256. */
+	check_turns("a count read as a byte", with_wait({ldst_imm(true, true, true, true, false, 7, 0, 0), add1, store, drop}), 250, 250);
+	/* Two words that count: only one may be owed its turns. */
+	check_turns("two counts", with_wait({load, add1, store, ldst_imm(true, false, true, true, false, 7, 0, 8),
+	            dp_imm(ADD, false, 0, 0, 2, 0), ldst_imm(false, false, true, true, false, 7, 0, 8), drop}), 0, 250);
+	/* The count picks the byte the loop waits for: it ends at 2000, long
+	 * after a turn was recorded. The MOVNE does not run, the flags being
+	 * those of the CMP that found the byte clear: the register keeps the
+	 * count. */
+	for (const bool with_movne : { false, true }) {
+		std::vector<uint32_t> code = {load, add1, store};
+		if (with_movne) {
+			code.push_back(dp_imm(MOV, false, 0, 0, 0, 0, 1));	/* movne r0, #0 */
+		}
+		code.push_back(ldst_reg(true, true, true, true, false, 1, 2, 0, LSL, 0));	/* ldrb r2, [r1, r0] */
+		code.push_back(drop);
+		code.push_back(ldst_imm(true, false, true, true, false, 4, 3, 0));
+		code.push_back(dp_imm(CMP, true, 2, 0, 0, 0));
+		code.push_back(branch(false, -static_cast<int32_t>(code.size()) - 2, EQ));
+		code.push_back(branch(false, -2));
+		const TurnsRun counted = run_turns(true, code, 0, 1000, false, TURN_FLAG + 2000);
+		const TurnsRun run = run_turns(false, code, 0, 1000, false, TURN_FLAG + 2000);
+		g_current = with_movne ? "a count behind an instruction that does not run" : "a count used as an index";
+		g_checks += 2;
+		if (!(counted.state == run.state) || counted.ram != run.ram) {
+			fail("differs from every turn run");
+		}
+		if ((run.ram[TURN_COUNT] | (run.ram[TURN_COUNT + 1] << 8)) != 2000) {
+			fail("the loop did not end at a count of 2000");
+		}
+	}
+
+	/* The low byte of the count picks the byte the loop waits for. */
+	const std::vector<uint32_t> picks = {
+		load, add1, store,
+		dp_imm(AND, false, 0, 6, 0xFF, 0),			/* and r6, r0, #0xFF */
+		drop,
+		ldst_imm(true, false, true, true, false, 4, 3, 0),
+		ldst_reg(true, true, true, true, false, 1, 2, 6, LSL, 0),	/* ldrb r2, [r1, r6] */
+		dp_imm(MOV, false, 0, 6, 0, 0),				/* mov r6, #0 */
+		dp_imm(CMP, true, 2, 0, 0, 0),
+		branch(false, -11, EQ),
+		branch(false, -2),
+	};
+	{
+		/* The flag is at +77 from the start: the loop ends at a
+		 * count of 77 and no sooner. */
+		const TurnsRun counted = run_turns(true, picks, 0, 1000, false, TURN_FLAG + 77);
+		const TurnsRun run = run_turns(false, picks, 0, 1000, false, TURN_FLAG + 77);
+		g_current = "a count used as an address";
+		g_checks += 3;
+		if (!(counted.state == run.state) || counted.ram != run.ram) {
+			fail("differs from every turn run");
+		}
+		if (run.ram[TURN_COUNT] != 77 || run.state.pc != TURN_CODE + 10 * 4) {
+			char buf[96];
+			std::snprintf(buf, sizeof buf, "the loop ended at a count of %u, pc %08x", run.ram[TURN_COUNT], run.state.pc);
+			fail(buf);
+		}
+	}
+}
+
 } /* namespace */
 
 int main(int argc, char **argv)
@@ -1412,6 +1645,7 @@ int main(int argc, char **argv)
 	test_exceptions();
 	test_save_load();
 	test_trace();
+	test_turns();
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures == 0 ? 0 : 1;
 }
