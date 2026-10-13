@@ -1167,10 +1167,11 @@ texhead_index(const uint32_t *inst)
  *
  *	----BBBB AAAA--MM -------o oooooooo
  *
- * A, B = One byte of the texture record of the game (von4 0C716B60), which
- *        the X360 port decodes and never reads. With the filter 1 the
- *        games send 0, E0, D0, F0, D8, B0, F8...: a level bias by its
- *        look; its unit is not known and it is not applied.
+ * A, B = Level bias, signed: a byte of the texture record of the game
+ *        (von4 0C716B60), 0, E0, D0, F0, D8, B0, F8... with the filter 1,
+ *        10, 20 and 7F too in PHARRIER. The X360 port decodes it and never
+ *        reads it. Taken in eighths of a level (HEURISTIC, see the
+ *        renderer).
  * M = Filter: 0 nearest, 1 trilinear, 2 bilinear without mipmaps, 3 left
  *     at the sampler defaults (X360 825C6650).
  *

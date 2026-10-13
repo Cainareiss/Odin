@@ -145,6 +145,8 @@ typedef struct {
 
 /* 0C1: bits 17:16, X360 825C6650 */
 static inline unsigned odin_tex_filter (const odin_texhead_t *t) { return (t->w0C1 >> 16) & 3; }
+/* 0C1: bits 27:20, signed */
+static inline int odin_tex_bias (const odin_texhead_t *t) { return (int) (int8_t) ((t->w0C1 >> 20) & 0xFF); }
 /* 2C1: bit 14, UVs in whole texels, else 12.4 (X360 8252D710) */
 static inline unsigned odin_tex_uvtexels (const odin_texhead_t *t) { return (t->w2C1 >> 14) & 1; }
 static inline unsigned odin_tex_logw (const odin_texhead_t *t) { return (t->w2C1 >> 16) & 7; }

@@ -118,6 +118,16 @@ TextureCache::set_sampling(const odin_texhead_t &th)
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
 		break;
 	}
+
+	/* The byte of the 0C1 moves the level. HEURISTIC: eighths of a level,
+	 * signed, on top of the -0.5 of the X360 port (825C6650), which
+	 * ignores the byte and filters with an anisotropy of 8 instead. The
+	 * floor of the VON4 arena sends D0 and its cabinet shows the finest
+	 * level where a pixel is 25 texels long: sixteenths do not reach it.
+	 * How the board picks the level is not known; the one of OpenGL
+	 * stands here. */
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_LOD_BIAS,
+	                -0.5f + static_cast<float>(odin_tex_bias(&th)) * 0.125f);
 }
 
 /* A word holds a block of two by two texels: a texhead of w x h words is a
@@ -202,11 +212,8 @@ TextureCache::decode(const odin_texhead_t &th) const
 	glBindTexture(GL_TEXTURE_2D, id);
 	set_sampling(th);
 
-	/* LOD bias of the X360 port (825C6650), which also filters with an
-	 * anisotropy of 8. The board does not: its patents have trilinear
-	 * filtering alone. HEURISTIC: the 0C1 has a byte per texture that
-	 * looks like a level bias; its unit is not known. */
-	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_LOD_BIAS, -0.5f);
+	/* The board has trilinear filtering alone (its patents); the
+	 * anisotropy is an option of ours. */
 	if (m_anisotropy > 1 && GLEW_EXT_texture_filter_anisotropic)
 		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT,
 		                static_cast<float>(m_anisotropy));
