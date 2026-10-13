@@ -152,8 +152,12 @@ HikaruGpu::list_control_written()
 	if (m_antarctic.list_asked()) {
 		m_antarctic.start_list();
 		m_hooks.list_started(m_hooks.ctx);
-	} else
-		m_eurasia.set_busy(0); /* XXX really? */
+	} else {
+		/* 1A000024 written with no list asked: nothing to wait for.
+		 * The libraries write it before 15000058, so it does not read
+		 * busy during their lists (HEURISTIC, as Valkyrie had it). */
+		m_eurasia.set_busy(0);
+	}
 }
 
 /* The list has ended: the busy bits go off and the two chips tell that

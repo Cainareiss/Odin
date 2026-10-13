@@ -243,8 +243,8 @@ Eurasia::read(uint32_t addr, uint32_t &value) const
 		switch (addr & 0x1FF) {
 		case 0x18: /* IRQ status */
 		case 0x1C:
-		case 0x20: /* XXX ^= 1 */
-		case 0x24: /* XXX = 2 */
+		case 0x20: /* read once at start (@0C0080E0); stays 0 (HEURISTIC) */
+		case 0x24: /* busy, bit 0 */
 		case 0x100:
 			value = reg(addr);
 			break;
@@ -277,7 +277,7 @@ Eurasia::write(uint32_t addr, uint32_t value)
 		switch (offs) {
 		case 0x00:
 		case 0x04:
-			/* XXX update FIFO/layer status? */
+			/* 1 before each launch; kept, and nothing here reads them */
 			break;
 		case 0x08:
 		case 0x0C:
@@ -584,9 +584,8 @@ Eurasia::read_layers()
  *
  */
 
-/* XXX convert to begin/step/end; according to PHARRIER, the DMA operation
- * should take more or less C cycles for each texel, where C is a small
- * constant. */
+/* The copy is done at once (HEURISTIC): PHARRIER waits for it as if each
+ * texel took a few cycles. */
 void
 Eurasia::blit()
 {
