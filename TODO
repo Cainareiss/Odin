@@ -50,9 +50,9 @@ memory still there, it is counted again without being run (Arm7::
 turn_rejoin; the sound boards cost 1.2 to 1.8 times less again).
 The program of the MIE waits in a loop that reads a byte of its memory,
 three instructions out of four: once a turn has left every register as it
-was, with nothing written and no port used, the turns left before the end of
-the line are counted without being run (Mie::wait_check; the MIE costs 1.5
-to 1.8 times less).
+was, R aside, with nothing written, no port used and R not read, the turns
+left before the end of the line are counted without being run
+(Mie::wait_check; the MIE costs 1.5 to 1.8 times less).
 ODIN_TURNS=0 runs every turn: the memory, the states and the pictures must
 be the same. What is left of the sound boards is mostly what each of the
 1 470 samples of a frame costs by itself, turns counted or not.
@@ -465,13 +465,20 @@ time once the scenes are compared again:
 - FTRC gives 0x80000000 out of range, the SH-4 saturates; FSCA, FSRRA, FIPR
   and FTRV are computed by the host, the SH-4 has its own tables and error
   bounds; a NaN comes out as the host makes it, the SH-4 gives 0x7FBFFFFF;
+  the sine and the cosine of FSCA come from the C library of the host:
+  those of glibc and of MinGW differ by their last bit for 870 angles of
+  the 65 536, so a Windows build and a Linux build do not give the same
+  display lists (they do once given the same sines: 1 800 lists of three
+  games);
 - no FPU exception is raised (the slave of PHARRIER enables the division
   by zero);
 - the divider of the timers is taken to start with the reset, the
   hardware manual does not say (they count on the peripheral clock, a
   quarter of the CPU clock in clock mode 5, as PHARRIER expects: it takes
   a count for 0.08 microseconds); every mode of a performance counter
-  counts cycles, at the end of a slice;
+  counts cycles, at the end of a slice; a write to FRQCR neither counts the
+  timers up to it nor cuts the slice again (no game writes it in its first
+  4 000 frames);
 - a store queue write goes to its target at once, PREF sends nothing;
 - RFCR and WTCSR read as port A; BCR1 resets to 0x80000000 on both CPUs;
 - IRQ10 has the code of IRQ11;
