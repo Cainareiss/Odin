@@ -619,7 +619,10 @@ of AIRTRIX covers the skater; the lettering of the wall and the painted
 lines of the SGNASCAR track, on layers of -1024 to -256, show as on the
 cabinet; the shadow of the AIRTRIX skater, opaque, comes out of the floor;
 the stars of PHARRIER, at -1024, stay behind its asteroids). The unit of
-the hardware is not known.
+the hardware is not known. Where it is wrong: the shadows under the cars of
+SGNASCAR, black translucent meshes at -256, show on the parts of the track
+that are at -768 or -1024 and are hidden on those at 0, in the banked turn
+as in the last shot of the attract; the cabinet shows them everywhere.
 
 The 161 with bit 18 loads a second modelview and a vertex with bit 12 of
 its header follows it (the AIRTRIX trails and skater joints). Bits 13 and
