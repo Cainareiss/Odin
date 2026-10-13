@@ -79,9 +79,9 @@ odin_renderer_delete(odin_renderer_t *renderer)
 }
 
 void
-odin_renderer_set_gpu(odin_renderer_t *renderer, odin_hikaru_gpu_t *gpu)
+odin_renderer_set_gpu(odin_renderer_t *renderer, odin::HikaruGpu *gpu)
 {
-	renderer->renderer.set_gpu(&odin_hikaru_gpu_chips(gpu));
+	renderer->renderer.set_gpu(gpu);
 }
 
 void

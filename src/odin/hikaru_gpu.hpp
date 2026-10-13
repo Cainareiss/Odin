@@ -24,6 +24,7 @@
 
 #include <cstdint>
 #include <span>
+#include <string>
 
 #include "odin/antarctic.hpp"
 #include "odin/eurasia.hpp"
@@ -112,9 +113,18 @@ public:
 	Eurasia &eurasia() { return m_eurasia; }
 	const Eurasia &eurasia() const { return m_eurasia; }
 
-	/* The word at 00400000 */
-	uint16_t unknown_00400000() const { return m_00400000; }
-	void set_unknown_00400000(uint16_t value) { m_00400000 = value; }
+	/* Everything the chips keep, the word at 00400000 with them. Plain
+	 * data. */
+	struct State {
+		AntarcticState antarctic;
+		EurasiaState eurasia;
+		uint32_t unknown_00400000;
+	};
+	void save(State &out) const;
+	void load(const State &in);
+
+	/* Where the command processor is, in a line, for the logs */
+	std::string debug_string() const;
 
 private:
 	bool display_held() const { return m_gp_res || m_pci1_res; }

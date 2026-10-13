@@ -16,6 +16,9 @@
  * along with Valkyrie.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <memory>
+#include <string>
+
 #include "mach/hikaru/hikaru-gpu.h"
 #include "mach/hikaru/hikaru-renderer.h"
 
@@ -25,9 +28,17 @@
 typedef struct {
 	vk_device_t base;
 
-	odin_hikaru_gpu_t *chips;
+	odin::HikaruGpu *chips;
 	vk_renderer_t *renderer;
 } hikaru_gpu_t;
+
+/* The bytes of a memory of the machine */
+static std::span<uint8_t>
+bytes_of (vk_buffer_t *buffer)
+{
+	return std::span<uint8_t> ((uint8_t *) vk_buffer_get_ptr (buffer, 0),
+	                           vk_buffer_get_size (buffer));
+}
 
 /****************************************************************************
  What the chips tell the board
@@ -67,7 +78,12 @@ hikaru_gpu_get_frame_size (vk_device_t *dev, unsigned *dots, unsigned *lines,
 {
 	hikaru_gpu_t *gpu = (hikaru_gpu_t *) dev;
 
-	odin_hikaru_gpu_frame_size (gpu->chips, dots, lines, shown);
+	uint32_t d, l, s;
+
+	gpu->chips->eurasia ().frame_size (d, l, s);
+	*dots = d;
+	*lines = l;
+	*shown = s;
 }
 
 void
@@ -75,7 +91,7 @@ hikaru_gpu_hblank_in (vk_device_t *dev, unsigned line)
 {
 	hikaru_gpu_t *gpu = (hikaru_gpu_t *) dev;
 
-	odin_hikaru_gpu_end_of_line (gpu->chips, line);
+	gpu->chips->end_of_line (line);
 }
 
 void
@@ -83,7 +99,7 @@ hikaru_gpu_vblank_in (vk_device_t *dev)
 {
 	hikaru_gpu_t *gpu = (hikaru_gpu_t *) dev;
 
-	odin_hikaru_gpu_vblank_in (gpu->chips);
+	gpu->chips->vblank_in ();
 }
 
 void
@@ -91,7 +107,7 @@ hikaru_gpu_vblank_out (vk_device_t *dev)
 {
 	hikaru_gpu_t *gpu = (hikaru_gpu_t *) dev;
 
-	odin_hikaru_gpu_vblank_out (gpu->chips);
+	gpu->chips->vblank_out ();
 }
 
 bool
@@ -99,7 +115,7 @@ hikaru_gpu_irq_line (vk_device_t *dev)
 {
 	hikaru_gpu_t *gpu = (hikaru_gpu_t *) dev;
 
-	return odin_hikaru_gpu_irq_line (gpu->chips) != 0;
+	return gpu->chips->irq_line ();
 }
 
 void
@@ -107,7 +123,7 @@ hikaru_gpu_set_reset_lines (vk_device_t *dev, bool gp_res, bool pci1_res)
 {
 	hikaru_gpu_t *gpu = (hikaru_gpu_t *) dev;
 
-	odin_hikaru_gpu_set_reset_lines (gpu->chips, gp_res, pci1_res);
+	gpu->chips->set_reset_lines (gp_res, pci1_res);
 }
 
 bool
@@ -115,7 +131,7 @@ hikaru_gpu_is_texram_twiddled (vk_device_t *dev)
 {
 	hikaru_gpu_t *gpu = (hikaru_gpu_t *) dev;
 
-	return odin_hikaru_gpu_texture_ram_twiddled (gpu->chips) != 0;
+	return gpu->chips->antarctic ().texture_ram_twiddled ();
 }
 
 /* The bus is about to write the texture RAM itself. */
@@ -125,7 +141,7 @@ hikaru_gpu_before_texram_write (vk_device_t *dev, unsigned bank)
 	on_before_texture_write ((void *) dev, bank);
 }
 
-odin_hikaru_gpu_t *
+odin::HikaruGpu *
 hikaru_gpu_get_chips (vk_device_t *dev)
 {
 	hikaru_gpu_t *gpu = (hikaru_gpu_t *) dev;
@@ -137,8 +153,10 @@ const char *
 hikaru_gpu_get_debug_str (vk_device_t *dev)
 {
 	hikaru_gpu_t *gpu = (hikaru_gpu_t *) dev;
+	static std::string out;
 
-	return odin_hikaru_gpu_debug_str (gpu->chips);
+	out = gpu->chips->debug_string ();
+	return out.c_str ();
 }
 
 /****************************************************************************
@@ -150,7 +168,7 @@ hikaru_gpu_exec (vk_device_t *dev, int cycles)
 {
 	hikaru_gpu_t *gpu = (hikaru_gpu_t *) dev;
 
-	odin_hikaru_gpu_run (gpu->chips, (uint32_t) cycles);
+	gpu->chips->run ((uint32_t) cycles);
 	return 0;
 }
 
@@ -164,7 +182,7 @@ hikaru_gpu_get (vk_device_t *dev, unsigned size, uint32_t addr, void *val)
 	VK_ASSERT (size == 4 ||
 	           (size == 2 && (addr == 0x15000010 || addr == 0x00400000)));
 
-	ret = odin_hikaru_gpu_read (gpu->chips, addr, size, &value);
+	ret = gpu->chips->read (addr, size, value) ? 0 : -1;
 	set_ptr (val, size, value);
 	return ret;
 }
@@ -177,7 +195,7 @@ hikaru_gpu_put (vk_device_t *dev, unsigned size, uint32_t addr, uint64_t val)
 	VK_ASSERT (size == 4 ||
 	           (size == 2 && addr == 0x00400000));
 
-	return odin_hikaru_gpu_write (gpu->chips, addr, size, (uint32_t) val);
+	return gpu->chips->write (addr, size, (uint32_t) val) ? 0 : -1;
 }
 
 static void
@@ -185,41 +203,29 @@ hikaru_gpu_reset (vk_device_t *dev, vk_reset_type_t type)
 {
 	hikaru_gpu_t *gpu = (hikaru_gpu_t *) dev;
 
-	odin_hikaru_gpu_reset (gpu->chips);
+	gpu->chips->reset ();
 }
 
 static int
 hikaru_gpu_save_state (vk_device_t *dev, vk_state_t *state)
 {
 	hikaru_gpu_t *gpu = (hikaru_gpu_t *) dev;
-	const size_t size = odin_hikaru_gpu_state_size ();
-	void *block = malloc (size);
-	int ret;
+	auto block = std::make_unique<odin::HikaruGpu::State> ();
 
-	if (!block)
-		return -1;
-	odin_hikaru_gpu_save_state (gpu->chips, block);
-	ret = vk_state_put (state, block, (uint32_t) size);
-	free (block);
-
-	return ret;
+	memset (block.get (), 0, sizeof (*block));
+	gpu->chips->save (*block);
+	return vk_state_put (state, block.get (), sizeof (*block));
 }
 
 static int
 hikaru_gpu_load_state (vk_device_t *dev, vk_state_t *state)
 {
 	hikaru_gpu_t *gpu = (hikaru_gpu_t *) dev;
-	const size_t size = odin_hikaru_gpu_state_size ();
-	void *block = malloc (size);
-	int ret;
+	auto block = std::make_unique<odin::HikaruGpu::State> ();
+	const int ret = vk_state_get (state, block.get (), sizeof (*block));
 
-	if (!block)
-		return -1;
-	ret = vk_state_get (state, block, (uint32_t) size);
 	if (!ret)
-		odin_hikaru_gpu_load_state (gpu->chips, block);
-	free (block);
-
+		gpu->chips->load (*block);
 	return ret;
 }
 
@@ -231,8 +237,8 @@ hikaru_gpu_new (vk_machine_t *mach,
                 vk_renderer_t *renderer)
 {
 	hikaru_t *hikaru = (hikaru_t *) mach;
-	odin_hikaru_gpu_memory_t memory;
-	odin_hikaru_gpu_hooks_t hooks;
+	odin::HikaruGpu::Memory memory;
+	odin::HikaruGpu::Hooks hooks;
 	hikaru_gpu_t *gpu;
 	vk_device_t *dev;
 
@@ -251,28 +257,24 @@ hikaru_gpu_new (vk_machine_t *mach,
 
 	gpu->renderer	= renderer;
 
-	memory.cmdram		= (uint8_t *) vk_buffer_get_ptr (cmdram, 0);
-	memory.cmdram_size	= vk_buffer_get_size (cmdram);
-	memory.ram_s		= (uint8_t *) vk_buffer_get_ptr (hikaru->ram_s, 0);
-	memory.ram_s_size	= vk_buffer_get_size (hikaru->ram_s);
-	memory.fb		= (uint8_t *) vk_buffer_get_ptr (fb, 0);
-	memory.fb_size		= vk_buffer_get_size (fb);
-	memory.texram[0]	= (uint8_t *) vk_buffer_get_ptr (texram[0], 0);
-	memory.texram[1]	= (uint8_t *) vk_buffer_get_ptr (texram[1], 0);
-	memory.texram_size	= vk_buffer_get_size (texram[0]);
+	memory.cmdram		= bytes_of (cmdram);
+	memory.ram_s		= bytes_of (hikaru->ram_s);
+	memory.fb		= bytes_of (fb);
+	memory.texram[0]	= bytes_of (texram[0]);
+	memory.texram[1]	= bytes_of (texram[1]);
 
 	hooks.ctx		= (void *) gpu;
 	hooks.irq_changed	= on_irq_changed;
 	hooks.list_started	= on_list_started;
 	hooks.before_texture_write = on_before_texture_write;
 
-	gpu->chips = odin_hikaru_gpu_new (&memory, &hooks);
-	if (!gpu->chips)
-		return NULL;
+	gpu->chips = new odin::HikaruGpu (memory, hooks);
 
-	odin_hikaru_gpu_set_traces (gpu->chips,
-		vk_util_get_bool_option ("GPU_LOG_CP", false) ? stdout : NULL,
-		vk_util_get_bool_option ("GPU_LOG_IDMA", false) ? stdout : NULL,
+	gpu->chips->antarctic ().set_disasm (
+		vk_util_get_bool_option ("GPU_LOG_CP", false) ? stdout : NULL);
+	gpu->chips->antarctic ().set_transfer_log (
+		vk_util_get_bool_option ("GPU_LOG_IDMA", false) ? stdout : NULL);
+	gpu->chips->eurasia ().set_log (
 		vk_util_get_bool_option ("GPU_LOG_DMA", false) ? stdout : NULL);
 
 	return dev;

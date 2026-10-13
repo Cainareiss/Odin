@@ -24,7 +24,7 @@
 #include "vk/renderer.h"
 
 #include "mach/hikaru/hikaru.h"
-#include "odin/hikaru_gpu_bridge.hpp"
+#include "odin/hikaru_gpu.hpp"
 
 vk_device_t	*hikaru_gpu_new (vk_machine_t *mach,
 		                 vk_buffer_t *cmdram,
@@ -44,6 +44,6 @@ const char	*hikaru_gpu_get_debug_str (vk_device_t *dev);
 bool		 hikaru_gpu_is_texram_twiddled (vk_device_t *dev);
 void		 hikaru_gpu_before_texram_write (vk_device_t *dev, unsigned bank);
 /* The chips, for the renderer */
-odin_hikaru_gpu_t *hikaru_gpu_get_chips (vk_device_t *dev);
+odin::HikaruGpu *hikaru_gpu_get_chips (vk_device_t *dev);
 
 #endif /* __VK_HKGPU_H__ */

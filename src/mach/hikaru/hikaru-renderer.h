@@ -25,11 +25,11 @@
 #include "vk/buffer.h"
 #include "vk/renderer.h"
 #include "vk/state.h"
-#include "odin/hikaru_gpu_bridge.hpp"
+#include "odin/hikaru_gpu.hpp"
 
 /* game: its name in the list of the games */
 vk_renderer_t	*hikaru_renderer_new (vk_buffer_t *fb, vk_buffer_t *texram[2], const char *game);
-void		 hikaru_renderer_set_gpu (vk_renderer_t *, odin_hikaru_gpu_t *chips);
+void		 hikaru_renderer_set_gpu (vk_renderer_t *, odin::HikaruGpu *chips);
 /* A display list was launched */
 void		 hikaru_renderer_launch (vk_renderer_t *);
 /* The texture RAM of a bank is about to be written */

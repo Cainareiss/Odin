@@ -288,7 +288,7 @@ hikaru_renderer_new (vk_buffer_t *fb, vk_buffer_t *texram[2], const char *game)
 }
 
 void
-hikaru_renderer_set_gpu (vk_renderer_t *renderer, odin_hikaru_gpu_t *chips)
+hikaru_renderer_set_gpu (vk_renderer_t *renderer, odin::HikaruGpu *chips)
 {
 	hikaru_renderer_t *hr = (hikaru_renderer_t *) renderer;
 

@@ -21,6 +21,8 @@
 
 #include "odin/hikaru_gpu.hpp"
 
+#include <cstdio>
+
 namespace odin {
 
 HikaruGpu::HikaruGpu(const Memory &memory, const Hooks &hooks)
@@ -32,6 +34,40 @@ HikaruGpu::HikaruGpu(const Memory &memory, const Hooks &hooks)
 	  m_pci1_res(false)
 {
 	m_antarctic.set_before_texture_write(m_hooks.before_texture_write, m_hooks.ctx);
+}
+
+void
+HikaruGpu::save(State &out) const
+{
+	out.antarctic = m_antarctic.state();
+	out.eurasia = m_eurasia.state();
+	out.unknown_00400000 = m_00400000;
+}
+
+void
+HikaruGpu::load(const State &in)
+{
+	m_antarctic.load(in.antarctic);
+	m_eurasia.load(in.eurasia);
+	m_00400000 = static_cast<uint16_t>(in.unknown_00400000);
+}
+
+std::string
+HikaruGpu::debug_string() const
+{
+	char out[256];
+	uint32_t status = 0, busy = 0, causes = 0;
+	/* 15000058 and 15000084 are not readable on the bus */
+	const uint32_t control = m_antarctic.state().regs[0x58 / 4];
+	const uint32_t mask = m_antarctic.state().regs[0x84 / 4];
+
+	m_antarctic.read_register(0x15000088, status);
+	m_eurasia.read(0x1A000024, busy);
+	m_eurasia.read(0x1A000018, causes);
+
+	std::snprintf(out, sizeof(out), "@%08X %u 15:58=%u 1A:24=%u 15:84=%X 15:88=%X 1A:18=%X",
+	              m_antarctic.pc(), m_antarctic.running() ? 1u : 0u, control, busy, mask, status, causes);
+	return out;
 }
 
 void

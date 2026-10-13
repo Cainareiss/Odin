@@ -56,7 +56,6 @@ ODIN_OBJ := \
 	src/odin/antarctic_io.o \
 	src/odin/eurasia.o \
 	src/odin/hikaru_gpu.o \
-	src/odin/hikaru_gpu_bridge.o \
 	src/odin/renderer.o \
 	src/odin/renderer_buffers.o \
 	src/odin/renderer_scene.o \

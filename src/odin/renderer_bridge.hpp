@@ -29,7 +29,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "odin/hikaru_gpu_bridge.hpp"
+#include "odin/hikaru_gpu.hpp"
 
 #ifdef __cplusplus
 extern "C" {
@@ -72,7 +72,7 @@ void odin_renderer_screen_size(unsigned *width, unsigned *height);
 odin_renderer_t *odin_renderer_new(const odin_renderer_memory_t *memory,
                                    const odin_renderer_options_t *options);
 void odin_renderer_delete(odin_renderer_t *renderer);
-void odin_renderer_set_gpu(odin_renderer_t *renderer, odin_hikaru_gpu_t *gpu);
+void odin_renderer_set_gpu(odin_renderer_t *renderer, odin::HikaruGpu *gpu);
 /* Makes ready the mesh programs the lists of the options name; on the
  * thread the frames are drawn on. */
 void odin_renderer_prepare_programs(odin_renderer_t *renderer);
