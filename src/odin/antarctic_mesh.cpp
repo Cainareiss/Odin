@@ -24,12 +24,29 @@
  * objects that are current when its first vertex comes. */
 
 #include "odin/antarctic.hpp"
+#include "odin/bytes.hpp"
 
 #include <cstring>
 
 namespace odin {
 
 static constexpr float INV255 = 1.0f / 255.0f;
+
+namespace {
+
+/* Lists an object, unless it is the one listed last: the meshes that follow
+ * one another with the same object point to the same one, and the renderer
+ * sends it once. Returns where it is. */
+template <typename T>
+uint32_t
+list_object(T *list, uint32_t &num, const T &object)
+{
+	if (num == 0 || !same_bytes(list[num - 1], object))
+		std::memcpy(&list[num++], &object, sizeof(T));
+	return num - 1;
+}
+
+} /* namespace */
 
 Antarctic::List::List()
 	: vps(new odin_viewport_t[ODIN_LIST_MAX_VIEWPORTS]),
@@ -98,23 +115,30 @@ Antarctic::list_state(odin_mesh_t &mesh)
 	    l.num_mvs + 2 >= ODIN_LIST_MAX_MODELVIEWS)
 		fatal("too many objects in a frame", l.total_meshes);
 
-	l.vp_list[l.num_vps++] = m_s.vp.current;
-	l.mat_list[l.num_mats++] = m_s.mat.scratch;
-	l.tex_list[l.num_texs++] = m_s.tex.scratch;
+	mesh.vp_index = list_object(l.vp_list, l.num_vps, m_s.vp.current);
+	mesh.mat_index = list_object(l.mat_list, l.num_mats, m_s.mat.scratch);
+	mesh.tex_index = list_object(l.tex_list, l.num_texs, m_s.tex.scratch);
 
-	/* The 194 table of each light: a word has two points, the even one
-	 * in its upper half; the first of the four tables of a light is
-	 * taken (HEURISTIC: what picks one is not known, the games load
-	 * the same ramp in all of them). */
-	for (unsigned i = 0; i < 4; i++) {
-		for (unsigned j = 0; j < 8; j++) {
-			const uint32_t word = m_s.light_table[i][j];
+	/* A lightset is its lights and the 194 table of each. A word of a
+	 * table has two points, the even one in its upper half; the first
+	 * of the four tables of a light is taken (HEURISTIC: what picks one
+	 * is not known, the games load the same ramp in all of them). */
+	uint32_t tables[4][8];
 
-			l.ls_tables[l.num_lss][i][j * 2] = static_cast<uint16_t>(word >> 16);
-			l.ls_tables[l.num_lss][i][j * 2 + 1] = static_cast<uint16_t>(word);
+	for (unsigned i = 0; i < 4; i++)
+		std::memcpy(tables[i], m_s.light_table[i], sizeof(tables[i]));
+	if (l.num_lss == 0 || !same_bytes(l.ls_list[l.num_lss - 1], m_s.lit.scratchset) ||
+	    !same_bytes(m_list->tables, tables)) {
+		for (unsigned i = 0; i < 4; i++) {
+			for (unsigned j = 0; j < 8; j++) {
+				l.ls_tables[l.num_lss][i][j * 2] = static_cast<uint16_t>(tables[i][j] >> 16);
+				l.ls_tables[l.num_lss][i][j * 2 + 1] = static_cast<uint16_t>(tables[i][j]);
+			}
 		}
+		std::memcpy(m_list->tables, tables, sizeof(tables));
+		std::memcpy(&l.ls_list[l.num_lss++], &m_s.lit.scratchset, sizeof(odin_lightset_t));
 	}
-	l.ls_list[l.num_lss++] = m_s.lit.scratchset;
+	mesh.ls_index = l.num_lss - 1;
 
 	mesh.mv_index = l.num_mvs;
 	mesh.num_instances = 1;
@@ -123,8 +147,7 @@ Antarctic::list_state(odin_mesh_t &mesh)
 
 	/* The second modelview (161 with bit 18) is listed when it changes. */
 	if (l.mv2_index >= ODIN_LIST_MAX_MODELVIEWS ||
-	    std::memcmp(&l.mv_list[l.mv2_index], &m_s.mv.second,
-	                sizeof(odin_modelview_t)) != 0) {
+	    !same_bytes(l.mv_list[l.mv2_index], m_s.mv.second)) {
 		l.mv2_index = l.num_mvs;
 		l.mv_list[l.num_mvs++] = m_s.mv.second;
 	}
@@ -132,11 +155,6 @@ Antarctic::list_state(odin_mesh_t &mesh)
 
 	mesh.depth_bias = m_s.depth_bias;
 	mesh.pattern = m_s.pattern;
-
-	mesh.vp_index = l.num_vps - 1;
-	mesh.mat_index = l.num_mats - 1;
-	mesh.tex_index = l.num_texs - 1;
-	mesh.ls_index = l.num_lss - 1;
 
 	mesh.num = l.total_meshes++;
 }

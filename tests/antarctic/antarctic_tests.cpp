@@ -262,6 +262,53 @@ void test_strip_through_recall()
 	check(m.list->mat_list[second.mat_index].diffuse[1] == 0xFF, "the second mesh points to the new material");
 }
 
+/* The meshes that follow one another with the same object point to the
+ * same one; an object that comes back after another one is listed again. */
+void test_objects_listed_once()
+{
+	Machine m;
+
+	m.run({ OPAQUE,
+	        0x00000083,
+	        0x00000091, 0x000000FF, 0x00011084,	/* material 1: red */
+	        0x00000091, 0x0000FF00, 0x00021084,	/* material 2: green */
+	        0x00011083,
+	        VERTEX(0.0f, 0.0f), VERTEX(1.0f, 0.0f),
+	        VERTEX_CLOSING(0.0f, -1.0f), VERTEX_CLOSING(1.0f, -1.0f),
+	        0x00021083,
+	        VERTEX_CLOSING(0.0f, -2.0f), VERTEX_CLOSING(1.0f, -2.0f),
+	        0x00011083,
+	        VERTEX_CLOSING(0.0f, -3.0f), VERTEX_CLOSING(1.0f, -3.0f),
+	        0x00030194, 0x04000200,		/* two points of the table of the light 0 */
+	        0x00021083,
+	        VERTEX_CLOSING(0.0f, -4.0f), VERTEX_CLOSING(1.0f, -4.0f),
+	        0x00000051, 0x000000FF,		/* a red light, the first of the set 5 */
+	        0x00010104,
+	        0x00051064, 0x00000001, 0x00000000, 0x00000000,
+	        0x00051043,
+	        0x00011083,
+	        VERTEX_CLOSING(0.0f, -5.0f), VERTEX_CLOSING(1.0f, -5.0f),
+	        END });
+	check(m.ended && m.list->num_meshes[0][1] == 5, "five bars make five meshes");
+
+	const odin_mesh_t &first = m.mesh(1, 0), &second = m.mesh(1, 1), &third = m.mesh(1, 2), &fourth = m.mesh(1, 3);
+	const odin_mesh_t &fifth = m.mesh(1, 4);
+
+	check(m.list->num_vps == 1 && m.list->num_texs == 1 && first.vp_index == fifth.vp_index &&
+	      first.tex_index == fifth.tex_index, "the viewport and the texhead of the five meshes are listed once");
+	check(m.list->num_mats == 5 && first.mat_index != second.mat_index && third.mat_index != first.mat_index &&
+	      m.list->mat_list[third.mat_index].diffuse[0] == 0xFF,
+	      "a material that comes back after another one is listed again");
+	check(first.ls_index == third.ls_index && fourth.ls_index != third.ls_index,
+	      "a table that changes makes another lightset");
+	check(m.list->num_lss == 3 && fifth.ls_index != fourth.ls_index &&
+	      m.list->ls_list[fifth.ls_index].lights[0].diffuse[0] == 0xFF &&
+	      m.list->ls_list[fourth.ls_index].lights[0].diffuse[0] == 0,
+	      "and so does a light that changes");
+	check(m.list->ls_tables[fourth.ls_index][0][6] == 0x0400 && m.list->ls_tables[fourth.ls_index][0][7] == 0x0200 &&
+	      m.list->ls_tables[first.ls_index][0][6] == 0, "with its points, the even one from the upper half");
+}
+
 /* The grid of the BOOTROM C.R.T. test: the 0E8 names its texhead, and its
  * vertices follow the second modelview without its 3x3. */
 /* BRAVEFF sends the blending mode as A91, a C91 behind it. */
@@ -503,6 +550,7 @@ int main()
 	test_three_lists();
 	test_degenerate_and_both_faces();
 	test_strip_through_recall();
+	test_objects_listed_once();
 	test_blending_mode_in_two_words();
 	test_texhead_of_0E8_and_second_modelview();
 	test_viewport_and_state();

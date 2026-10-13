@@ -367,6 +367,8 @@ private:
 		std::unique_ptr<odin_texhead_t[]> texs;
 		std::unique_ptr<odin_lightset_t[]> lss;
 		std::unique_ptr<uint16_t[][4][16]> ls_tables;
+		/* The 194 words of the lightset listed last */
+		uint32_t tables[4][8];
 		std::array<std::array<std::unique_ptr<odin_mesh_t[]>, 8>, 8> meshes;
 		std::vector<odin_vertex_body_t> verts;
 	};
