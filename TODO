@@ -48,6 +48,11 @@ through the interrupts: when the program is back at its start with the
 registers it can see as they were, what it read and what it leaves in the
 memory still there, it is counted again without being run (Arm7::
 turn_rejoin; the sound boards cost 1.2 to 1.8 times less again).
+The program of the MIE waits in a loop that reads a byte of its memory,
+three instructions out of four: once a turn has left every register as it
+was, with nothing written and no port used, the turns left before the end of
+the line are counted without being run (Mie::wait_check; the MIE costs 1.5
+to 1.8 times less).
 ODIN_TURNS=0 runs every turn: the memory, the states and the pictures must
 be the same. What is left of the sound boards is mostly what each of the
 1 470 samples of a frame costs by itself, turns counted or not.
