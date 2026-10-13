@@ -19,6 +19,8 @@
 #ifndef ODIN_ENV_HPP
 #define ODIN_ENV_HPP
 
+#include <chrono>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -59,6 +61,16 @@ home_dir()
 		if (const char *const value = std::getenv(name); value && value[0])
 			return value;
 	return {};
+}
+
+/* The clock of the host in nanoseconds, for what is measured of Odin
+ * itself: never for what the board does. */
+inline uint64_t
+host_ns()
+{
+	const auto now = std::chrono::steady_clock::now().time_since_epoch();
+
+	return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(now).count());
 }
 
 } /* namespace odin */

@@ -60,6 +60,10 @@ class Worker;
  *  ODIN_SPEED=1		a line every 60 frames on stderr: the frames
  *				a second over them and the longest of them
  *				in milliseconds
+ *  ODIN_STATS=1		at the end, on stderr: the host time of the
+ *				drawings and what the board waited for them
+ *				(and the time of each part of the board, see
+ *				hikaru.cpp)
  *  ODIN_LATE_DRAW=1		a test of the thread: the drawing of a frame
  *				starts when the board has run the next one,
  *				or has to wait for it. The pictures must be
@@ -150,6 +154,12 @@ private:
 	std::vector<uint8_t> m_pixels;
 	bool m_speed;
 	uint64_t m_speed_since, m_speed_last, m_speed_longest;
+	/* ODIN_STATS: the host time of the drawings on their thread, and what
+	 * the board waited for them: at the end of a frame, and before it
+	 * changed what a drawing reads */
+	bool m_stats;
+	uint64_t m_draw_ns, m_wait_frame_ns, m_wait_write_ns;
+	unsigned m_drawn;
 	/* The frames shown in the title */
 	uint64_t m_title_since;
 	unsigned m_title_frames;

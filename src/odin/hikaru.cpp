@@ -141,7 +141,6 @@
 #include <cstdarg>
 #include <cstdlib>
 #include <cstring>
-#include <chrono>
 
 #include "odin/env.hpp"
 
@@ -173,14 +172,6 @@ sh4_clock()
 	const int mhz = env_int("VK_SH4_MHZ", 200);
 
 	return static_cast<uint32_t>((mhz < 1 || mhz > 200) ? 200 : mhz) * 1000000u;
-}
-
-uint64_t
-now_ns()
-{
-	const auto now = std::chrono::steady_clock::now().time_since_epoch();
-
-	return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(now).count());
 }
 
 [[noreturn]] void
@@ -248,8 +239,8 @@ Hikaru::Hikaru(const Game &game, const RomBoard::Config &rombd, bool verbose)
 	  m_bus{Bus(*this, MASTER), Bus(*this, SLAVE)}, m_hooked{false, false},
 	  m_porta{0, 0}, m_irq_lines(0), m_mie_port_d(0), m_unk1A800008_s(0), m_unk1B000100_s(0),
 	  m_line(0), m_dots_per_line(0), m_lines_per_frame(0), m_lines_shown(0), m_line_rest(0),
-	  m_mie_trace(nullptr), m_sh_trace{nullptr, nullptr}, m_stats(std::getenv("ODIN_SH4_STATS") != nullptr),
-	  m_stats_ns{0, 0}, m_stats_slices{0, 0}
+	  m_mie_trace(nullptr), m_sh_trace{nullptr, nullptr}, m_stats(env_flag("ODIN_STATS")),
+	  m_stats_ns{}, m_stats_slices(0)
 {
 	std::printf("%s\n", text_at(m_bootrom, 0xD4).c_str());
 
@@ -329,8 +320,9 @@ Hikaru::~Hikaru()
 	if (m_mie_trace)
 		std::fclose(m_mie_trace);
 
-	/* ODIN_SH4_STATS=1: what each SH-4 ran, and the host time it took in
-	 * its slices. */
+	/* ODIN_STATS=1: what each SH-4 ran, and the host time each part of
+	 * the board took. A part that waits for the screen before it writes
+	 * the texture RAM has that wait in its time. */
 	for (unsigned which : { MASTER, SLAVE }) {
 		if (m_sh_trace[which])
 			std::fclose(m_sh_trace[which]);
@@ -338,10 +330,13 @@ Hikaru::~Hikaru()
 			std::fprintf(stderr, "sh4 %c: %" PRIu64 " instructions run, %" PRIu64 " cycles skipped\n",
 			             which == MASTER ? 'M' : 'S', m_sh[which]->instructions(), m_sh[which]->skipped());
 	}
-	if (m_stats)
-		for (unsigned which : { MASTER, SLAVE })
-			std::fprintf(stderr, "sh4 %c: %.3f s in %" PRIu64 " slices\n", which == MASTER ? 'M' : 'S',
-			             static_cast<double>(m_stats_ns[which]) / 1e9, m_stats_slices[which]);
+	if (m_stats) {
+		const auto seconds = [this](unsigned part) { return static_cast<double>(m_stats_ns[part]) / 1e9; };
+
+		std::fprintf(stderr, "board: %" PRIu64 " slices: master SH-4 %.3f s, slave SH-4 %.3f s, "
+		             "graphics chips %.3f s, MIE %.3f s, sound boards %.3f s\n", m_stats_slices,
+		             seconds(MASTER), seconds(SLAVE), seconds(PART_GPU), seconds(PART_MIE), seconds(PART_SOUND));
+	}
 }
 
 /* The MIE: the chip and its board if its ROM is there, else the stand-in.
@@ -691,13 +686,7 @@ Hikaru::run_cpu(unsigned which, int cycles)
 			m_sh[which]->set_hook(0x0C00BC9A);
 	}
 
-	const uint64_t begin = m_stats ? now_ns() : 0;
-
 	m_sh[which]->run(cycles);
-	if (m_stats) {
-		m_stats_ns[which] += now_ns() - begin;
-		m_stats_slices[which]++;
-	}
 	if (m_sh_trace[which])
 		trace_slice(which);
 }
@@ -705,25 +694,42 @@ Hikaru::run_cpu(unsigned which, int cycles)
 void
 Hikaru::run_cycles(int cycles)
 {
+	/* ODIN_STATS: the host time since the part before goes to this one. */
+	uint64_t mark = m_stats ? host_ns() : 0;
+	const auto took = [this, &mark](unsigned part) {
+		if (m_stats) {
+			const uint64_t now = host_ns();
+
+			m_stats_ns[part] += now - mark;
+			mark = now;
+		}
+	};
+
 	run_cpu(MASTER, cycles);
+	took(MASTER);
 	run_cpu(SLAVE, cycles);
+	took(SLAVE);
 
 	m_eeprom.tick(static_cast<uint32_t>(cycles));
 
 	/* The memory controllers have nothing to run: a transfer is done at
 	 * once. */
 	m_gpu->run(static_cast<uint32_t>(cycles));
+	took(PART_GPU);
 
 	if (m_mie)
 		m_mie->run(static_cast<uint32_t>(cycles));
 	/* Its program may have written the mask of the interrupts. */
 	update_irqs();
+	took(PART_MIE);
 
 	/* The two sound boards, unless their reset line is low */
 	if (m_mie_port_d & 0x20) {
 		m_sound[MASTER]->run(static_cast<uint32_t>(cycles));
 		m_sound[SLAVE]->run(static_cast<uint32_t>(cycles));
 	}
+	took(PART_SOUND);
+	m_stats_slices++;
 }
 
 /* The cycles of the next line. A line is not a whole number of cycles: the

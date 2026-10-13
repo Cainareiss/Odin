@@ -161,7 +161,9 @@ Display::Display(Hikaru &board, const Keyboard &keys, const Options &options, SD
 	  m_late(env_flag("ODIN_LATE_DRAW")), m_held(false), m_late_draw(0),
 	  m_shot_prefix(std::getenv("VK_SCREENSHOT")), m_shot_every(60),
 	  m_fingerprint(env_flag("ODIN_PICTURE_FP")), m_speed(env_flag("ODIN_SPEED")),
-	  m_speed_since(0), m_speed_last(0), m_speed_longest(0), m_title_since(0), m_title_frames(0)
+	  m_speed_since(0), m_speed_last(0), m_speed_longest(0),
+	  m_stats(env_flag("ODIN_STATS")), m_draw_ns(0), m_wait_frame_ns(0), m_wait_write_ns(0), m_drawn(0),
+	  m_title_since(0), m_title_frames(0)
 {
 	Renderer::Memory memory;
 	Renderer::Options looks;
@@ -213,6 +215,12 @@ Display::~Display()
 	SDL_GL_MakeCurrent(m_window, m_context);
 	m_renderer.reset();
 
+	if (m_stats)
+		std::fprintf(stderr, "screen: %u frames drawn in %.3f s on their thread; the board waited for them "
+		             "%.3f s at the end of its frames and %.3f s before it wrote what they read\n", m_drawn,
+		             static_cast<double>(m_draw_ns) / 1e9, static_cast<double>(m_wait_frame_ns) / 1e9,
+		             static_cast<double>(m_wait_write_ns) / 1e9);
+
 	SDL_GL_DeleteContext(m_context);
 	SDL_DestroyWindow(m_window);
 	SDL_Quit();
@@ -221,11 +229,15 @@ Display::~Display()
 void
 Display::finish()
 {
+	const uint64_t begin = m_stats ? host_ns() : 0;
+
 	if (m_held) {
 		m_held = false;
 		m_late_draw.release();
 	}
 	m_drawing->wait();
+	if (m_stats)
+		m_wait_write_ns += host_ns() - begin;
 }
 
 void
@@ -246,9 +258,13 @@ Display::begin_frame()
 void
 Display::end_frame(unsigned frame)
 {
+	const uint64_t waited = m_wait_write_ns;
 	int w, h;
 
 	finish();
+	/* That wait was for the end of the frame. */
+	m_wait_frame_ns += m_wait_write_ns - waited;
+	m_wait_write_ns = waited;
 	m_frame = frame;
 	SDL_GL_GetDrawableSize(m_window, &w, &h);
 	m_renderer->take_frame(frame, static_cast<unsigned>(w), static_cast<unsigned>(h));
@@ -270,6 +286,9 @@ Display::draw()
 {
 	if (m_late)
 		m_late_draw.acquire();
+
+	const uint64_t begin = m_stats ? host_ns() : 0;
+
 	m_renderer->set_scale(m_scale);
 	m_renderer->set_anisotropy(m_anisotropy);
 	m_renderer->draw_frame();
@@ -278,6 +297,10 @@ Display::draw()
 	screenshot();
 	print_fingerprint();
 	SDL_GL_SwapWindow(m_window);
+	if (m_stats) {
+		m_draw_ns += host_ns() - begin;
+		m_drawn++;
+	}
 }
 
 /* The picture of the frame as bytes of red, green and blue, the bottom line

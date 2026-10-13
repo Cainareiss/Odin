@@ -432,7 +432,8 @@ The two SH-4 run on the Odin core (src/odin/sh4.cpp, sh4_ops.cpp,
 sh4_onchip.cpp). It gave the
 registers and the memory of the Valkyrie interpreter it replaced at every
 slice of the six games. ODIN_SH4_TRACE=<prefix> writes the PC and a hash of
-the registers at every slice, ODIN_SH4_STATS=1 the host time of the slices.
+the registers at every slice, ODIN_STATS=1 the host time of each part of the board
+and of the drawings.
 Tests: tests/sh4.
 
 Speed: 2.3 to 3.6 times the interpreter. What is left is the host missing
