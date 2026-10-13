@@ -96,6 +96,9 @@ public:
 };
 
 class Sh4;
+struct Sh4Threaded;
+template <class Way>
+struct Sh4OpsT;
 
 /* One decoded instruction. It runs, then runs the next one of the block
  * unless it leaves the block. */
@@ -187,7 +190,9 @@ public:
 	uint64_t skipped() const { return m_skipped; }
 
 private:
-	friend struct Sh4Ops;
+	friend struct Sh4Threaded;
+	template <class Way>
+	friend struct Sh4OpsT;
 
 	static constexpr uint32_t SR_T = 1u << 0, SR_S = 1u << 1, SR_Q = 1u << 8, SR_M = 1u << 9,
 		SR_FD = 1u << 15, SR_BL = 1u << 28, SR_RB = 1u << 29, SR_MD = 1u << 30;

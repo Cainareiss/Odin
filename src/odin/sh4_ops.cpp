@@ -36,8 +36,35 @@
 
 namespace odin {
 
-struct Sh4Ops {
+/* How an instruction hands over to what comes next. The reader does it by
+ * a tail call: the instructions of a block follow one another without
+ * coming back. */
+struct Sh4Threaded {
+	using Ret = void;
+
+	/* The next instruction of the block. */
+	static void go(Sh4 &c, const Sh4Op *op) { return op[1].run(c, op + 1); }
+	/* The block is left after this instruction. */
+	static void stop(Sh4 &c, const Sh4Op *op) { return c.stop_after(op); }
+	/* The delay slot of a branch that goes, `m` further, then the end
+	 * that follows it. */
+	static void slot(Sh4 &c, const Sh4Op *op)
+	{
+		const Sh4Op *s = op + op->m;
+
+		return s->run(c, s);
+	}
+	/* At the end of a block: the block at `pc`, or the run loop. */
+	static void follow(Sh4 &c, uint32_t pc) { return c.chain(pc); }
+	/* Back to the run loop. */
+	static void loop(Sh4 &) {}
+};
+
+/* The instructions, written once for every way to hand over. */
+template <class Way>
+struct Sh4OpsT {
 	using Op = Sh4Op;
+	using Ret = typename Way::Ret;
 
 	static int32_t s8(uint32_t v) { return static_cast<int8_t>(v); }
 	static int32_t s16(uint32_t v) { return static_cast<int16_t>(v); }
@@ -46,14 +73,14 @@ struct Sh4Ops {
 	static uint32_t bits(float v) { return std::bit_cast<uint32_t>(v); }
 
 	/* On to the next instruction of the block. */
-	static void go(Sh4 &c, const Op *op) { op[1].run(c, op + 1); }
+	static Ret go(Sh4 &c, const Op *op) { return Way::go(c, op); }
 	/* The same after a memory access, unless the block must be left. */
-	static void next(Sh4 &c, const Op *op, bool plain)
+	static Ret next(Sh4 &c, const Op *op, bool plain)
 	{
 		if (plain) [[likely]] {
 			return go(c, op);
 		}
-		c.stop_after(op);
+		return Way::stop(c, op);
 	}
 
 	[[noreturn]] static void fail(Sh4 &c, const Op *op, const char *what)
@@ -104,103 +131,120 @@ struct Sh4Ops {
 	}
 
 	/* A branch with a delay slot. PC takes the target at once, as on the
-	 * chip; then the slot runs, `m` further, and the end that follows it
-	 * leaves the block. */
-	static void jump(Sh4 &c, const Op *op, uint32_t target)
+	 * chip; then the slot runs, and the end that follows it leaves the
+	 * block. */
+	static Ret jump(Sh4 &c, const Op *op, uint32_t target)
 	{
-		const Op *slot = op + op->m;
-
 		need(c, op, !(op->flags & Sh4::OP_BAD_SLOT), "instruction not allowed in a delay slot");
 		c.m_r.pc = target;
-		return slot->run(c, slot);
+		return Way::slot(c, op);
 	}
-	static void branch(Sh4 &c, const Op *op)
+	static Ret branch(Sh4 &c, const Op *op)
 	{
 		c.m_r.pc = op->imm;
 		c.m_remaining += c.m_blk->count - op->idx - 1;
-		return c.chain(op->imm);
+		return Way::follow(c, op->imm);
+	}
+	/* Ends a block that stops for its length: the program goes on at
+	 * `imm`. */
+	static Ret end_next(Sh4 &c, const Op *op)
+	{
+		c.m_r.pc = op->imm;
+		return Way::follow(c, op->imm);
+	}
+	/* Ends the delay slot of a taken branch: `imm` cycles are given back
+	 * for the instructions of the block that did not run, and the program
+	 * goes on at PC, through the run loop if the slot disturbed
+	 * something. */
+	static Ret end_leave(Sh4 &c, const Op *op)
+	{
+		c.m_remaining += static_cast<int32_t>(op->imm);
+		if (!c.m_event) [[likely]] {
+			return Way::follow(c, c.m_r.pc);
+		}
+		return Way::loop(c);
 	}
 
-	static void invalid(Sh4 &c, const Op *op) { fail(c, op, "invalid instruction"); }
+	static Ret invalid(Sh4 &c, const Op *op) { fail(c, op, "invalid instruction"); }
 
 	/* Data transfer */
 
-	static void mov(Sh4 &c, const Op *op)
+	static Ret mov(Sh4 &c, const Op *op)
 	{
 		c.m_r.r[op->n] = c.m_r.r[op->m];
 		return go(c, op);
 	}
-	static void movi(Sh4 &c, const Op *op)
+	static Ret movi(Sh4 &c, const Op *op)
 	{
 		c.m_r.r[op->n] = op->imm;
 		return go(c, op);
 	}
-	static void movwi(Sh4 &c, const Op *op)
+	static Ret movwi(Sh4 &c, const Op *op)
 	{
 		uint16_t v;
 		bool plain = c.read(op, op->imm, v);
 		c.m_r.r[op->n] = u32(s16(v));
 		return next(c, op, plain);
 	}
-	static void movli(Sh4 &c, const Op *op)
+	static Ret movli(Sh4 &c, const Op *op)
 	{
 		uint32_t v;
 		bool plain = c.read(op, op->imm, v);
 		c.m_r.r[op->n] = v;
 		return next(c, op, plain);
 	}
-	static void movbs(Sh4 &c, const Op *op)
+	static Ret movbs(Sh4 &c, const Op *op)
 	{
 		return next(c, op, c.write(op, c.m_r.r[op->n], static_cast<uint8_t>(c.m_r.r[op->m])));
 	}
-	static void movws(Sh4 &c, const Op *op)
+	static Ret movws(Sh4 &c, const Op *op)
 	{
 		return next(c, op, c.write(op, c.m_r.r[op->n], static_cast<uint16_t>(c.m_r.r[op->m])));
 	}
-	static void movls(Sh4 &c, const Op *op)
+	static Ret movls(Sh4 &c, const Op *op)
 	{
 		return next(c, op, c.write(op, c.m_r.r[op->n], c.m_r.r[op->m]));
 	}
-	static void movbl(Sh4 &c, const Op *op)
+	static Ret movbl(Sh4 &c, const Op *op)
 	{
 		uint8_t v;
 		bool plain = c.read(op, c.m_r.r[op->m], v);
 		c.m_r.r[op->n] = u32(s8(v));
 		return next(c, op, plain);
 	}
-	static void movwl(Sh4 &c, const Op *op)
+	static Ret movwl(Sh4 &c, const Op *op)
 	{
 		uint16_t v;
 		bool plain = c.read(op, c.m_r.r[op->m], v);
 		c.m_r.r[op->n] = u32(s16(v));
 		return next(c, op, plain);
 	}
-	static void movll(Sh4 &c, const Op *op)
+	static Ret movll(Sh4 &c, const Op *op)
 	{
 		uint32_t v;
 		bool plain = c.read(op, c.m_r.r[op->m], v);
 		c.m_r.r[op->n] = v;
 		return next(c, op, plain);
 	}
-	static void movbm(Sh4 &c, const Op *op)
+	static Ret movbm(Sh4 &c, const Op *op)
 	{
 		bool plain = c.write(op, c.m_r.r[op->n] - 1, static_cast<uint8_t>(c.m_r.r[op->m]));
 		c.m_r.r[op->n] -= 1;
 		return next(c, op, plain);
 	}
-	static void movwm(Sh4 &c, const Op *op)
+	static Ret movwm(Sh4 &c, const Op *op)
 	{
 		bool plain = c.write(op, c.m_r.r[op->n] - 2, static_cast<uint16_t>(c.m_r.r[op->m]));
 		c.m_r.r[op->n] -= 2;
 		return next(c, op, plain);
 	}
-	static void movlm(Sh4 &c, const Op *op)
+	static Ret movlm(Sh4 &c, const Op *op)
 	{
 		bool plain = c.write(op, c.m_r.r[op->n] - 4, c.m_r.r[op->m]);
 		c.m_r.r[op->n] -= 4;
 		return next(c, op, plain);
 	}
-	static void movbp(Sh4 &c, const Op *op)
+	static Ret movbp(Sh4 &c, const Op *op)
 	{
 		uint8_t v;
 		bool plain = c.read(op, c.m_r.r[op->m], v);
@@ -210,7 +254,7 @@ struct Sh4Ops {
 		}
 		return next(c, op, plain);
 	}
-	static void movwp(Sh4 &c, const Op *op)
+	static Ret movwp(Sh4 &c, const Op *op)
 	{
 		uint16_t v;
 		bool plain = c.read(op, c.m_r.r[op->m], v);
@@ -220,7 +264,7 @@ struct Sh4Ops {
 		}
 		return next(c, op, plain);
 	}
-	static void movlp(Sh4 &c, const Op *op)
+	static Ret movlp(Sh4 &c, const Op *op)
 	{
 		uint32_t v;
 		bool plain = c.read(op, c.m_r.r[op->m], v);
@@ -230,129 +274,129 @@ struct Sh4Ops {
 		}
 		return next(c, op, plain);
 	}
-	static void movbs0(Sh4 &c, const Op *op)
+	static Ret movbs0(Sh4 &c, const Op *op)
 	{
 		return next(c, op, c.write(op, c.m_r.r[op->n] + c.m_r.r[0], static_cast<uint8_t>(c.m_r.r[op->m])));
 	}
-	static void movws0(Sh4 &c, const Op *op)
+	static Ret movws0(Sh4 &c, const Op *op)
 	{
 		return next(c, op, c.write(op, c.m_r.r[op->n] + c.m_r.r[0], static_cast<uint16_t>(c.m_r.r[op->m])));
 	}
-	static void movls0(Sh4 &c, const Op *op)
+	static Ret movls0(Sh4 &c, const Op *op)
 	{
 		return next(c, op, c.write(op, c.m_r.r[op->n] + c.m_r.r[0], c.m_r.r[op->m]));
 	}
-	static void movbl0(Sh4 &c, const Op *op)
+	static Ret movbl0(Sh4 &c, const Op *op)
 	{
 		uint8_t v;
 		bool plain = c.read(op, c.m_r.r[op->m] + c.m_r.r[0], v);
 		c.m_r.r[op->n] = u32(s8(v));
 		return next(c, op, plain);
 	}
-	static void movwl0(Sh4 &c, const Op *op)
+	static Ret movwl0(Sh4 &c, const Op *op)
 	{
 		uint16_t v;
 		bool plain = c.read(op, c.m_r.r[op->m] + c.m_r.r[0], v);
 		c.m_r.r[op->n] = u32(s16(v));
 		return next(c, op, plain);
 	}
-	static void movll0(Sh4 &c, const Op *op)
+	static Ret movll0(Sh4 &c, const Op *op)
 	{
 		uint32_t v;
 		bool plain = c.read(op, c.m_r.r[op->m] + c.m_r.r[0], v);
 		c.m_r.r[op->n] = v;
 		return next(c, op, plain);
 	}
-	static void movblg(Sh4 &c, const Op *op)
+	static Ret movblg(Sh4 &c, const Op *op)
 	{
 		uint8_t v;
 		bool plain = c.read(op, c.m_r.gbr + op->imm, v);
 		c.m_r.r[0] = u32(s8(v));
 		return next(c, op, plain);
 	}
-	static void movwlg(Sh4 &c, const Op *op)
+	static Ret movwlg(Sh4 &c, const Op *op)
 	{
 		uint16_t v;
 		bool plain = c.read(op, c.m_r.gbr + op->imm, v);
 		c.m_r.r[0] = u32(s16(v));
 		return next(c, op, plain);
 	}
-	static void movllg(Sh4 &c, const Op *op)
+	static Ret movllg(Sh4 &c, const Op *op)
 	{
 		uint32_t v;
 		bool plain = c.read(op, c.m_r.gbr + op->imm, v);
 		c.m_r.r[0] = v;
 		return next(c, op, plain);
 	}
-	static void movbsg(Sh4 &c, const Op *op)
+	static Ret movbsg(Sh4 &c, const Op *op)
 	{
 		return next(c, op, c.write(op, c.m_r.gbr + op->imm, static_cast<uint8_t>(c.m_r.r[0])));
 	}
-	static void movwsg(Sh4 &c, const Op *op)
+	static Ret movwsg(Sh4 &c, const Op *op)
 	{
 		return next(c, op, c.write(op, c.m_r.gbr + op->imm, static_cast<uint16_t>(c.m_r.r[0])));
 	}
-	static void movlsg(Sh4 &c, const Op *op)
+	static Ret movlsg(Sh4 &c, const Op *op)
 	{
 		return next(c, op, c.write(op, c.m_r.gbr + op->imm, c.m_r.r[0]));
 	}
 	/* @(disp,Rm) with R0 */
-	static void movbl4(Sh4 &c, const Op *op)
+	static Ret movbl4(Sh4 &c, const Op *op)
 	{
 		uint8_t v;
 		bool plain = c.read(op, c.m_r.r[op->m] + op->imm, v);
 		c.m_r.r[0] = u32(s8(v));
 		return next(c, op, plain);
 	}
-	static void movwl4(Sh4 &c, const Op *op)
+	static Ret movwl4(Sh4 &c, const Op *op)
 	{
 		uint16_t v;
 		bool plain = c.read(op, c.m_r.r[op->m] + op->imm, v);
 		c.m_r.r[0] = u32(s16(v));
 		return next(c, op, plain);
 	}
-	static void movll4(Sh4 &c, const Op *op)
+	static Ret movll4(Sh4 &c, const Op *op)
 	{
 		uint32_t v;
 		bool plain = c.read(op, c.m_r.r[op->m] + op->imm, v);
 		c.m_r.r[op->n] = v;
 		return next(c, op, plain);
 	}
-	static void movbs4(Sh4 &c, const Op *op)
+	static Ret movbs4(Sh4 &c, const Op *op)
 	{
 		return next(c, op, c.write(op, c.m_r.r[op->m] + op->imm, static_cast<uint8_t>(c.m_r.r[0])));
 	}
-	static void movws4(Sh4 &c, const Op *op)
+	static Ret movws4(Sh4 &c, const Op *op)
 	{
 		return next(c, op, c.write(op, c.m_r.r[op->m] + op->imm, static_cast<uint16_t>(c.m_r.r[0])));
 	}
-	static void movls4(Sh4 &c, const Op *op)
+	static Ret movls4(Sh4 &c, const Op *op)
 	{
 		return next(c, op, c.write(op, c.m_r.r[op->n] + op->imm, c.m_r.r[op->m]));
 	}
-	static void mova(Sh4 &c, const Op *op)
+	static Ret mova(Sh4 &c, const Op *op)
 	{
 		c.m_r.r[0] = op->imm;
 		return go(c, op);
 	}
-	static void movt(Sh4 &c, const Op *op)
+	static Ret movt(Sh4 &c, const Op *op)
 	{
 		c.m_r.r[op->n] = c.m_r.t;
 		return go(c, op);
 	}
-	static void swapb(Sh4 &c, const Op *op)
+	static Ret swapb(Sh4 &c, const Op *op)
 	{
 		uint32_t m = c.m_r.r[op->m];
 		c.m_r.r[op->n] = (m & 0xFFFF0000) | ((m << 8) & 0xFF00) | ((m >> 8) & 0xFF);
 		return go(c, op);
 	}
-	static void swapw(Sh4 &c, const Op *op)
+	static Ret swapw(Sh4 &c, const Op *op)
 	{
 		uint32_t m = c.m_r.r[op->m];
 		c.m_r.r[op->n] = (m >> 16) | (m << 16);
 		return go(c, op);
 	}
-	static void xtrct(Sh4 &c, const Op *op)
+	static Ret xtrct(Sh4 &c, const Op *op)
 	{
 		c.m_r.r[op->n] = (c.m_r.r[op->m] << 16) | (c.m_r.r[op->n] >> 16);
 		return go(c, op);
@@ -360,17 +404,17 @@ struct Sh4Ops {
 
 	/* Arithmetic */
 
-	static void add(Sh4 &c, const Op *op)
+	static Ret add(Sh4 &c, const Op *op)
 	{
 		c.m_r.r[op->n] += c.m_r.r[op->m];
 		return go(c, op);
 	}
-	static void addi(Sh4 &c, const Op *op)
+	static Ret addi(Sh4 &c, const Op *op)
 	{
 		c.m_r.r[op->n] += op->imm;
 		return go(c, op);
 	}
-	static void addc(Sh4 &c, const Op *op)
+	static Ret addc(Sh4 &c, const Op *op)
 	{
 		uint32_t tmp0 = c.m_r.r[op->n];
 		uint32_t tmp1 = tmp0 + c.m_r.r[op->m];
@@ -379,7 +423,7 @@ struct Sh4Ops {
 		c.m_r.t = (tmp0 > tmp1) || (tmp1 > res);
 		return go(c, op);
 	}
-	static void addv(Sh4 &c, const Op *op)
+	static Ret addv(Sh4 &c, const Op *op)
 	{
 		bool d = static_cast<int32_t>(c.m_r.r[op->n]) < 0;
 		bool s = static_cast<int32_t>(c.m_r.r[op->m]) < 0;
@@ -388,12 +432,12 @@ struct Sh4Ops {
 		c.m_r.t = (d == s) && (d != a);
 		return go(c, op);
 	}
-	static void neg(Sh4 &c, const Op *op)
+	static Ret neg(Sh4 &c, const Op *op)
 	{
 		c.m_r.r[op->n] = 0u - c.m_r.r[op->m];
 		return go(c, op);
 	}
-	static void negc(Sh4 &c, const Op *op)
+	static Ret negc(Sh4 &c, const Op *op)
 	{
 		uint32_t tmp = 0u - c.m_r.r[op->m];
 		uint32_t res = tmp - c.m_r.t;
@@ -401,12 +445,12 @@ struct Sh4Ops {
 		c.m_r.t = (0 < tmp) || (tmp < res);
 		return go(c, op);
 	}
-	static void sub(Sh4 &c, const Op *op)
+	static Ret sub(Sh4 &c, const Op *op)
 	{
 		c.m_r.r[op->n] -= c.m_r.r[op->m];
 		return go(c, op);
 	}
-	static void subc(Sh4 &c, const Op *op)
+	static Ret subc(Sh4 &c, const Op *op)
 	{
 		uint32_t tmp0 = c.m_r.r[op->n];
 		uint32_t tmp1 = tmp0 - c.m_r.r[op->m];
@@ -415,7 +459,7 @@ struct Sh4Ops {
 		c.m_r.t = (tmp0 < tmp1) || (tmp1 < res);
 		return go(c, op);
 	}
-	static void subv(Sh4 &c, const Op *op)
+	static Ret subv(Sh4 &c, const Op *op)
 	{
 		bool d = static_cast<int32_t>(c.m_r.r[op->n]) < 0;
 		bool s = static_cast<int32_t>(c.m_r.r[op->m]) < 0;
@@ -424,67 +468,67 @@ struct Sh4Ops {
 		c.m_r.t = (s != d) && (d != a);
 		return go(c, op);
 	}
-	static void cmpeq(Sh4 &c, const Op *op)
+	static Ret cmpeq(Sh4 &c, const Op *op)
 	{
 		c.m_r.t = c.m_r.r[op->n] == c.m_r.r[op->m];
 		return go(c, op);
 	}
-	static void cmpge(Sh4 &c, const Op *op)
+	static Ret cmpge(Sh4 &c, const Op *op)
 	{
 		c.m_r.t = static_cast<int32_t>(c.m_r.r[op->n]) >= static_cast<int32_t>(c.m_r.r[op->m]);
 		return go(c, op);
 	}
-	static void cmpgt(Sh4 &c, const Op *op)
+	static Ret cmpgt(Sh4 &c, const Op *op)
 	{
 		c.m_r.t = static_cast<int32_t>(c.m_r.r[op->n]) > static_cast<int32_t>(c.m_r.r[op->m]);
 		return go(c, op);
 	}
-	static void cmphi(Sh4 &c, const Op *op)
+	static Ret cmphi(Sh4 &c, const Op *op)
 	{
 		c.m_r.t = c.m_r.r[op->n] > c.m_r.r[op->m];
 		return go(c, op);
 	}
-	static void cmphs(Sh4 &c, const Op *op)
+	static Ret cmphs(Sh4 &c, const Op *op)
 	{
 		c.m_r.t = c.m_r.r[op->n] >= c.m_r.r[op->m];
 		return go(c, op);
 	}
-	static void cmppz(Sh4 &c, const Op *op)
+	static Ret cmppz(Sh4 &c, const Op *op)
 	{
 		c.m_r.t = static_cast<int32_t>(c.m_r.r[op->n]) >= 0;
 		return go(c, op);
 	}
-	static void cmppl(Sh4 &c, const Op *op)
+	static Ret cmppl(Sh4 &c, const Op *op)
 	{
 		c.m_r.t = static_cast<int32_t>(c.m_r.r[op->n]) > 0;
 		return go(c, op);
 	}
-	static void cmpim(Sh4 &c, const Op *op)
+	static Ret cmpim(Sh4 &c, const Op *op)
 	{
 		c.m_r.t = c.m_r.r[0] == op->imm;
 		return go(c, op);
 	}
-	static void cmpstr(Sh4 &c, const Op *op)
+	static Ret cmpstr(Sh4 &c, const Op *op)
 	{
 		uint32_t tmp = c.m_r.r[op->n] ^ c.m_r.r[op->m];
 		c.m_r.t = !(tmp & 0xFF000000) || !(tmp & 0x00FF0000) || !(tmp & 0x0000FF00) || !(tmp & 0x000000FF);
 		return go(c, op);
 	}
-	static void div0s(Sh4 &c, const Op *op)
+	static Ret div0s(Sh4 &c, const Op *op)
 	{
 		uint32_t q = c.m_r.r[op->n] >> 31, m = c.m_r.r[op->m] >> 31;
 		c.m_r.sr = (c.m_r.sr & ~(Sh4::SR_Q | Sh4::SR_M)) | (q ? Sh4::SR_Q : 0) | (m ? Sh4::SR_M : 0);
 		c.m_r.t = q ^ m;
 		return go(c, op);
 	}
-	static void div0u(Sh4 &c, const Op *op)
+	static Ret div0u(Sh4 &c, const Op *op)
 	{
 		c.m_r.sr &= ~(Sh4::SR_Q | Sh4::SR_M);
 		c.m_r.t = 0;
 		return go(c, op);
 	}
 	/* One step of a division (software manual, DIV1). */
-	static void div1(Sh4 &c, const Op *op)
+	static Ret div1(Sh4 &c, const Op *op)
 	{
 		uint32_t old_q = (c.m_r.sr & Sh4::SR_Q) ? 1 : 0;
 		uint32_t m = (c.m_r.sr & Sh4::SR_M) ? 1 : 0;
@@ -507,7 +551,7 @@ struct Sh4Ops {
 		c.m_r.t = q == m;
 		return go(c, op);
 	}
-	static void dmuls(Sh4 &c, const Op *op)
+	static Ret dmuls(Sh4 &c, const Op *op)
 	{
 		int64_t res = static_cast<int64_t>(static_cast<int32_t>(c.m_r.r[op->n]))
 			* static_cast<int64_t>(static_cast<int32_t>(c.m_r.r[op->m]));
@@ -515,40 +559,40 @@ struct Sh4Ops {
 		c.m_r.mach = static_cast<uint32_t>(static_cast<uint64_t>(res) >> 32);
 		return go(c, op);
 	}
-	static void dmulu(Sh4 &c, const Op *op)
+	static Ret dmulu(Sh4 &c, const Op *op)
 	{
 		uint64_t res = static_cast<uint64_t>(c.m_r.r[op->n]) * c.m_r.r[op->m];
 		c.m_r.macl = static_cast<uint32_t>(res);
 		c.m_r.mach = static_cast<uint32_t>(res >> 32);
 		return go(c, op);
 	}
-	static void dt(Sh4 &c, const Op *op)
+	static Ret dt(Sh4 &c, const Op *op)
 	{
 		c.m_r.t = --c.m_r.r[op->n] == 0;
 		return go(c, op);
 	}
-	static void extsb(Sh4 &c, const Op *op)
+	static Ret extsb(Sh4 &c, const Op *op)
 	{
 		c.m_r.r[op->n] = u32(s8(c.m_r.r[op->m]));
 		return go(c, op);
 	}
-	static void extsw(Sh4 &c, const Op *op)
+	static Ret extsw(Sh4 &c, const Op *op)
 	{
 		c.m_r.r[op->n] = u32(s16(c.m_r.r[op->m]));
 		return go(c, op);
 	}
-	static void extub(Sh4 &c, const Op *op)
+	static Ret extub(Sh4 &c, const Op *op)
 	{
 		c.m_r.r[op->n] = c.m_r.r[op->m] & 0xFF;
 		return go(c, op);
 	}
-	static void extuw(Sh4 &c, const Op *op)
+	static Ret extuw(Sh4 &c, const Op *op)
 	{
 		c.m_r.r[op->n] = c.m_r.r[op->m] & 0xFFFF;
 		return go(c, op);
 	}
 	/* MAC.L with S clear: MAC += (Rn) * (Rm), signed, 64 bits. */
-	static void macl(Sh4 &c, const Op *op)
+	static Ret macl(Sh4 &c, const Op *op)
 	{
 		uint32_t vn, vm;
 		bool plain = c.read(op, c.m_r.r[op->n], vn);
@@ -563,7 +607,7 @@ struct Sh4Ops {
 		c.m_r.mach = static_cast<uint32_t>(mac >> 32);
 		return next(c, op, plain);
 	}
-	static void macw(Sh4 &c, const Op *op)
+	static Ret macw(Sh4 &c, const Op *op)
 	{
 		uint16_t vn, vm;
 		bool plain = c.read(op, c.m_r.r[op->n], vn);
@@ -594,17 +638,17 @@ struct Sh4Ops {
 		}
 		return next(c, op, plain);
 	}
-	static void mull(Sh4 &c, const Op *op)
+	static Ret mull(Sh4 &c, const Op *op)
 	{
 		c.m_r.macl = c.m_r.r[op->n] * c.m_r.r[op->m];
 		return go(c, op);
 	}
-	static void mulsw(Sh4 &c, const Op *op)
+	static Ret mulsw(Sh4 &c, const Op *op)
 	{
 		c.m_r.macl = u32(s16(c.m_r.r[op->n]) * s16(c.m_r.r[op->m]));
 		return go(c, op);
 	}
-	static void muluw(Sh4 &c, const Op *op)
+	static Ret muluw(Sh4 &c, const Op *op)
 	{
 		c.m_r.macl = (c.m_r.r[op->n] & 0xFFFF) * (c.m_r.r[op->m] & 0xFFFF);
 		return go(c, op);
@@ -612,46 +656,46 @@ struct Sh4Ops {
 
 	/* Logic */
 
-	static void and_(Sh4 &c, const Op *op)
+	static Ret and_(Sh4 &c, const Op *op)
 	{
 		c.m_r.r[op->n] &= c.m_r.r[op->m];
 		return go(c, op);
 	}
-	static void andi(Sh4 &c, const Op *op)
+	static Ret andi(Sh4 &c, const Op *op)
 	{
 		c.m_r.r[0] &= op->imm;
 		return go(c, op);
 	}
-	static void andm(Sh4 &c, const Op *op)
+	static Ret andm(Sh4 &c, const Op *op)
 	{
 		uint8_t v;
 		bool plain = c.read(op, c.m_r.gbr + c.m_r.r[0], v);
 		plain &= c.write(op, c.m_r.gbr + c.m_r.r[0], static_cast<uint8_t>(v & op->imm));
 		return next(c, op, plain);
 	}
-	static void not_(Sh4 &c, const Op *op)
+	static Ret not_(Sh4 &c, const Op *op)
 	{
 		c.m_r.r[op->n] = ~c.m_r.r[op->m];
 		return go(c, op);
 	}
-	static void or_(Sh4 &c, const Op *op)
+	static Ret or_(Sh4 &c, const Op *op)
 	{
 		c.m_r.r[op->n] |= c.m_r.r[op->m];
 		return go(c, op);
 	}
-	static void ori(Sh4 &c, const Op *op)
+	static Ret ori(Sh4 &c, const Op *op)
 	{
 		c.m_r.r[0] |= op->imm;
 		return go(c, op);
 	}
-	static void orm(Sh4 &c, const Op *op)
+	static Ret orm(Sh4 &c, const Op *op)
 	{
 		uint8_t v;
 		bool plain = c.read(op, c.m_r.gbr + c.m_r.r[0], v);
 		plain &= c.write(op, c.m_r.gbr + c.m_r.r[0], static_cast<uint8_t>(v | op->imm));
 		return next(c, op, plain);
 	}
-	static void tas(Sh4 &c, const Op *op)
+	static Ret tas(Sh4 &c, const Op *op)
 	{
 		uint8_t v;
 		bool plain = c.read(op, c.m_r.r[op->n], v);
@@ -659,34 +703,34 @@ struct Sh4Ops {
 		plain &= c.write(op, c.m_r.r[op->n], static_cast<uint8_t>(v | 0x80));
 		return next(c, op, plain);
 	}
-	static void tst(Sh4 &c, const Op *op)
+	static Ret tst(Sh4 &c, const Op *op)
 	{
 		c.m_r.t = (c.m_r.r[op->n] & c.m_r.r[op->m]) == 0;
 		return go(c, op);
 	}
-	static void tsti(Sh4 &c, const Op *op)
+	static Ret tsti(Sh4 &c, const Op *op)
 	{
 		c.m_r.t = (c.m_r.r[0] & op->imm) == 0;
 		return go(c, op);
 	}
-	static void tstm(Sh4 &c, const Op *op)
+	static Ret tstm(Sh4 &c, const Op *op)
 	{
 		uint8_t v;
 		bool plain = c.read(op, c.m_r.gbr + c.m_r.r[0], v);
 		c.m_r.t = (v & op->imm) == 0;
 		return next(c, op, plain);
 	}
-	static void xor_(Sh4 &c, const Op *op)
+	static Ret xor_(Sh4 &c, const Op *op)
 	{
 		c.m_r.r[op->n] ^= c.m_r.r[op->m];
 		return go(c, op);
 	}
-	static void xori(Sh4 &c, const Op *op)
+	static Ret xori(Sh4 &c, const Op *op)
 	{
 		c.m_r.r[0] ^= op->imm;
 		return go(c, op);
 	}
-	static void xorm(Sh4 &c, const Op *op)
+	static Ret xorm(Sh4 &c, const Op *op)
 	{
 		uint8_t v;
 		bool plain = c.read(op, c.m_r.gbr + c.m_r.r[0], v);
@@ -696,83 +740,83 @@ struct Sh4Ops {
 
 	/* Shifts */
 
-	static void rotl(Sh4 &c, const Op *op)
+	static Ret rotl(Sh4 &c, const Op *op)
 	{
 		uint32_t v = c.m_r.r[op->n];
 		c.m_r.t = v >> 31;
 		c.m_r.r[op->n] = (v << 1) | c.m_r.t;
 		return go(c, op);
 	}
-	static void rotr(Sh4 &c, const Op *op)
+	static Ret rotr(Sh4 &c, const Op *op)
 	{
 		uint32_t v = c.m_r.r[op->n];
 		c.m_r.t = v & 1;
 		c.m_r.r[op->n] = (v >> 1) | (c.m_r.t << 31);
 		return go(c, op);
 	}
-	static void rotcl(Sh4 &c, const Op *op)
+	static Ret rotcl(Sh4 &c, const Op *op)
 	{
 		uint32_t v = c.m_r.r[op->n];
 		c.m_r.r[op->n] = (v << 1) | c.m_r.t;
 		c.m_r.t = v >> 31;
 		return go(c, op);
 	}
-	static void rotcr(Sh4 &c, const Op *op)
+	static Ret rotcr(Sh4 &c, const Op *op)
 	{
 		uint32_t v = c.m_r.r[op->n];
 		c.m_r.r[op->n] = (v >> 1) | (c.m_r.t << 31);
 		c.m_r.t = v & 1;
 		return go(c, op);
 	}
-	static void shll(Sh4 &c, const Op *op)
+	static Ret shll(Sh4 &c, const Op *op)
 	{
 		c.m_r.t = c.m_r.r[op->n] >> 31;
 		c.m_r.r[op->n] <<= 1;
 		return go(c, op);
 	}
-	static void shar(Sh4 &c, const Op *op)
+	static Ret shar(Sh4 &c, const Op *op)
 	{
 		c.m_r.t = c.m_r.r[op->n] & 1;
 		c.m_r.r[op->n] = u32(static_cast<int32_t>(c.m_r.r[op->n]) >> 1);
 		return go(c, op);
 	}
-	static void shlr(Sh4 &c, const Op *op)
+	static Ret shlr(Sh4 &c, const Op *op)
 	{
 		c.m_r.t = c.m_r.r[op->n] & 1;
 		c.m_r.r[op->n] >>= 1;
 		return go(c, op);
 	}
-	static void shll2(Sh4 &c, const Op *op)
+	static Ret shll2(Sh4 &c, const Op *op)
 	{
 		c.m_r.r[op->n] <<= 2;
 		return go(c, op);
 	}
-	static void shll8(Sh4 &c, const Op *op)
+	static Ret shll8(Sh4 &c, const Op *op)
 	{
 		c.m_r.r[op->n] <<= 8;
 		return go(c, op);
 	}
-	static void shll16(Sh4 &c, const Op *op)
+	static Ret shll16(Sh4 &c, const Op *op)
 	{
 		c.m_r.r[op->n] <<= 16;
 		return go(c, op);
 	}
-	static void shlr2(Sh4 &c, const Op *op)
+	static Ret shlr2(Sh4 &c, const Op *op)
 	{
 		c.m_r.r[op->n] >>= 2;
 		return go(c, op);
 	}
-	static void shlr8(Sh4 &c, const Op *op)
+	static Ret shlr8(Sh4 &c, const Op *op)
 	{
 		c.m_r.r[op->n] >>= 8;
 		return go(c, op);
 	}
-	static void shlr16(Sh4 &c, const Op *op)
+	static Ret shlr16(Sh4 &c, const Op *op)
 	{
 		c.m_r.r[op->n] >>= 16;
 		return go(c, op);
 	}
-	static void shad(Sh4 &c, const Op *op)
+	static Ret shad(Sh4 &c, const Op *op)
 	{
 		uint32_t m = c.m_r.r[op->m], n = c.m_r.r[op->n];
 		if (!(m >> 31)) {
@@ -785,7 +829,7 @@ struct Sh4Ops {
 		c.m_r.r[op->n] = n;
 		return go(c, op);
 	}
-	static void shld(Sh4 &c, const Op *op)
+	static Ret shld(Sh4 &c, const Op *op)
 	{
 		uint32_t m = c.m_r.r[op->m], n = c.m_r.r[op->n];
 		if (!(m >> 31)) {
@@ -801,12 +845,12 @@ struct Sh4Ops {
 
 	/* Branches */
 
-	static void bt(Sh4 &c, const Op *op) { return c.m_r.t ? branch(c, op) : go(c, op); }
-	static void bf(Sh4 &c, const Op *op) { return c.m_r.t ? go(c, op) : branch(c, op); }
+	static Ret bt(Sh4 &c, const Op *op) { return c.m_r.t ? branch(c, op) : go(c, op); }
+	static Ret bf(Sh4 &c, const Op *op) { return c.m_r.t ? go(c, op) : branch(c, op); }
 	/* BF back to the DT Rn just before it, a delay loop: the turns left
 	 * are counted without being run, up to the last of the count or of
 	 * the slice. */
-	static void bf_dt(Sh4 &c, const Op *op)
+	static Ret bf_dt(Sh4 &c, const Op *op)
 	{
 		if (c.m_r.t) {
 			return go(c, op);
@@ -818,34 +862,34 @@ struct Sh4Ops {
 		c.m_skipped += turns * 2;
 		return branch(c, op);
 	}
-	static void bts(Sh4 &c, const Op *op) { return c.m_r.t ? jump(c, op, op->imm) : go(c, op); }
-	static void bfs(Sh4 &c, const Op *op) { return c.m_r.t ? go(c, op) : jump(c, op, op->imm); }
-	static void bra(Sh4 &c, const Op *op) { return jump(c, op, op->imm); }
-	static void braf(Sh4 &c, const Op *op) { return jump(c, op, c.pc_of(op) + c.m_r.r[op->n] + 4); }
-	static void bsr(Sh4 &c, const Op *op)
+	static Ret bts(Sh4 &c, const Op *op) { return c.m_r.t ? jump(c, op, op->imm) : go(c, op); }
+	static Ret bfs(Sh4 &c, const Op *op) { return c.m_r.t ? go(c, op) : jump(c, op, op->imm); }
+	static Ret bra(Sh4 &c, const Op *op) { return jump(c, op, op->imm); }
+	static Ret braf(Sh4 &c, const Op *op) { return jump(c, op, c.pc_of(op) + c.m_r.r[op->n] + 4); }
+	static Ret bsr(Sh4 &c, const Op *op)
 	{
 		c.m_r.pr = c.pc_of(op) + 4;
 		return jump(c, op, op->imm);
 	}
-	static void bsrf(Sh4 &c, const Op *op)
+	static Ret bsrf(Sh4 &c, const Op *op)
 	{
 		uint32_t pc = c.pc_of(op);
 		c.m_r.pr = pc + 4;
 		return jump(c, op, pc + c.m_r.r[op->n] + 4);
 	}
-	static void jmp(Sh4 &c, const Op *op)
+	static Ret jmp(Sh4 &c, const Op *op)
 	{
 		need(c, op, !(c.m_r.r[op->n] & 1), "JMP to an odd address");
 		return jump(c, op, c.m_r.r[op->n]);
 	}
-	static void jsr(Sh4 &c, const Op *op)
+	static Ret jsr(Sh4 &c, const Op *op)
 	{
 		uint32_t target = c.m_r.r[op->n];
 		c.m_r.pr = c.pc_of(op) + 4;
 		return jump(c, op, target);
 	}
-	static void rts(Sh4 &c, const Op *op) { return jump(c, op, c.m_r.pr); }
-	static void rte(Sh4 &c, const Op *op)
+	static Ret rts(Sh4 &c, const Op *op) { return jump(c, op, c.m_r.pr); }
+	static Ret rte(Sh4 &c, const Op *op)
 	{
 		uint32_t target = c.m_r.spc;
 		need(c, op, !(op->flags & Sh4::OP_BAD_SLOT), "instruction not allowed in a delay slot");
@@ -856,67 +900,67 @@ struct Sh4Ops {
 
 	/* System control */
 
-	static void clrt(Sh4 &c, const Op *op)
+	static Ret clrt(Sh4 &c, const Op *op)
 	{
 		c.m_r.t = 0;
 		return go(c, op);
 	}
-	static void sett(Sh4 &c, const Op *op)
+	static Ret sett(Sh4 &c, const Op *op)
 	{
 		c.m_r.t = 1;
 		return go(c, op);
 	}
-	static void clrs(Sh4 &c, const Op *op)
+	static Ret clrs(Sh4 &c, const Op *op)
 	{
 		c.m_r.sr &= ~Sh4::SR_S;
 		return go(c, op);
 	}
-	static void sets(Sh4 &c, const Op *op)
+	static Ret sets(Sh4 &c, const Op *op)
 	{
 		c.m_r.sr |= Sh4::SR_S;
 		return go(c, op);
 	}
-	static void clrmac(Sh4 &c, const Op *op)
+	static Ret clrmac(Sh4 &c, const Op *op)
 	{
 		c.m_r.mach = 0;
 		c.m_r.macl = 0;
 		return go(c, op);
 	}
-	static void nop(Sh4 &c, const Op *op) { return go(c, op); }
-	static void ldcsr(Sh4 &c, const Op *op)
+	static Ret nop(Sh4 &c, const Op *op) { return go(c, op); }
+	static Ret ldcsr(Sh4 &c, const Op *op)
 	{
 		c.set_sr(c.m_r.r[op->n]);
-		return c.stop_after(op);
+		return Way::stop(c, op);
 	}
-	static void ldcgbr(Sh4 &c, const Op *op)
+	static Ret ldcgbr(Sh4 &c, const Op *op)
 	{
 		c.m_r.gbr = c.m_r.r[op->n];
 		return go(c, op);
 	}
-	static void ldcvbr(Sh4 &c, const Op *op)
+	static Ret ldcvbr(Sh4 &c, const Op *op)
 	{
 		c.m_r.vbr = c.m_r.r[op->n];
 		return go(c, op);
 	}
-	static void ldcssr(Sh4 &c, const Op *op)
+	static Ret ldcssr(Sh4 &c, const Op *op)
 	{
 		need_privileged(c, op);
 		c.m_r.ssr = c.m_r.r[op->n];
 		return go(c, op);
 	}
-	static void ldcspc(Sh4 &c, const Op *op)
+	static Ret ldcspc(Sh4 &c, const Op *op)
 	{
 		need_privileged(c, op);
 		c.m_r.spc = c.m_r.r[op->n];
 		return go(c, op);
 	}
-	static void ldcdbr(Sh4 &c, const Op *op)
+	static Ret ldcdbr(Sh4 &c, const Op *op)
 	{
 		need_privileged(c, op);
 		c.m_r.dbr = c.m_r.r[op->n];
 		return go(c, op);
 	}
-	static void ldcrbank(Sh4 &c, const Op *op)
+	static Ret ldcrbank(Sh4 &c, const Op *op)
 	{
 		need_privileged(c, op);
 		c.m_r.rbank[op->m] = c.m_r.r[op->n];
@@ -924,204 +968,204 @@ struct Sh4Ops {
 	}
 	/* The bank of R0-R7 may change under the register that is then
 	 * incremented, as SR is loaded first. */
-	static void ldcmsr(Sh4 &c, const Op *op)
+	static Ret ldcmsr(Sh4 &c, const Op *op)
 	{
 		uint32_t v;
 		c.read(op, c.m_r.r[op->n], v);
 		c.set_sr(v);
 		c.m_r.r[op->n] += 4;
-		return c.stop_after(op);
+		return Way::stop(c, op);
 	}
-	static void ldcmgbr(Sh4 &c, const Op *op)
+	static Ret ldcmgbr(Sh4 &c, const Op *op)
 	{
 		bool plain = c.read(op, c.m_r.r[op->n], c.m_r.gbr);
 		c.m_r.r[op->n] += 4;
 		return next(c, op, plain);
 	}
-	static void ldcmvbr(Sh4 &c, const Op *op)
+	static Ret ldcmvbr(Sh4 &c, const Op *op)
 	{
 		bool plain = c.read(op, c.m_r.r[op->n], c.m_r.vbr);
 		c.m_r.r[op->n] += 4;
 		return next(c, op, plain);
 	}
-	static void ldcmssr(Sh4 &c, const Op *op)
+	static Ret ldcmssr(Sh4 &c, const Op *op)
 	{
 		need_privileged(c, op);
 		bool plain = c.read(op, c.m_r.r[op->n], c.m_r.ssr);
 		c.m_r.r[op->n] += 4;
 		return next(c, op, plain);
 	}
-	static void ldcmspc(Sh4 &c, const Op *op)
+	static Ret ldcmspc(Sh4 &c, const Op *op)
 	{
 		need_privileged(c, op);
 		bool plain = c.read(op, c.m_r.r[op->n], c.m_r.spc);
 		c.m_r.r[op->n] += 4;
 		return next(c, op, plain);
 	}
-	static void ldcmdbr(Sh4 &c, const Op *op)
+	static Ret ldcmdbr(Sh4 &c, const Op *op)
 	{
 		need_privileged(c, op);
 		bool plain = c.read(op, c.m_r.r[op->n], c.m_r.dbr);
 		c.m_r.r[op->n] += 4;
 		return next(c, op, plain);
 	}
-	static void ldcmrbank(Sh4 &c, const Op *op)
+	static Ret ldcmrbank(Sh4 &c, const Op *op)
 	{
 		need_privileged(c, op);
 		bool plain = c.read(op, c.m_r.r[op->n], c.m_r.rbank[op->m]);
 		c.m_r.r[op->n] += 4;
 		return next(c, op, plain);
 	}
-	static void ldsmach(Sh4 &c, const Op *op)
+	static Ret ldsmach(Sh4 &c, const Op *op)
 	{
 		c.m_r.mach = c.m_r.r[op->n];
 		return go(c, op);
 	}
-	static void ldsmacl(Sh4 &c, const Op *op)
+	static Ret ldsmacl(Sh4 &c, const Op *op)
 	{
 		c.m_r.macl = c.m_r.r[op->n];
 		return go(c, op);
 	}
-	static void ldspr(Sh4 &c, const Op *op)
+	static Ret ldspr(Sh4 &c, const Op *op)
 	{
 		c.m_r.pr = c.m_r.r[op->n];
 		return go(c, op);
 	}
-	static void ldsmmach(Sh4 &c, const Op *op)
+	static Ret ldsmmach(Sh4 &c, const Op *op)
 	{
 		bool plain = c.read(op, c.m_r.r[op->n], c.m_r.mach);
 		c.m_r.r[op->n] += 4;
 		return next(c, op, plain);
 	}
-	static void ldsmmacl(Sh4 &c, const Op *op)
+	static Ret ldsmmacl(Sh4 &c, const Op *op)
 	{
 		bool plain = c.read(op, c.m_r.r[op->n], c.m_r.macl);
 		c.m_r.r[op->n] += 4;
 		return next(c, op, plain);
 	}
-	static void ldsmpr(Sh4 &c, const Op *op)
+	static Ret ldsmpr(Sh4 &c, const Op *op)
 	{
 		bool plain = c.read(op, c.m_r.r[op->n], c.m_r.pr);
 		c.m_r.r[op->n] += 4;
 		return next(c, op, plain);
 	}
-	static void sleep(Sh4 &c, const Op *op)
+	static Ret sleep(Sh4 &c, const Op *op)
 	{
 		c.set_run(Sh4Run::Sleeping);
-		return c.stop_after(op);
+		return Way::stop(c, op);
 	}
-	static void stcsr(Sh4 &c, const Op *op)
+	static Ret stcsr(Sh4 &c, const Op *op)
 	{
 		c.m_r.r[op->n] = c.m_r.sr | c.m_r.t;
 		return go(c, op);
 	}
-	static void stcgbr(Sh4 &c, const Op *op)
+	static Ret stcgbr(Sh4 &c, const Op *op)
 	{
 		c.m_r.r[op->n] = c.m_r.gbr;
 		return go(c, op);
 	}
-	static void stcvbr(Sh4 &c, const Op *op)
+	static Ret stcvbr(Sh4 &c, const Op *op)
 	{
 		c.m_r.r[op->n] = c.m_r.vbr;
 		return go(c, op);
 	}
-	static void stcssr(Sh4 &c, const Op *op)
+	static Ret stcssr(Sh4 &c, const Op *op)
 	{
 		need_privileged(c, op);
 		c.m_r.r[op->n] = c.m_r.ssr;
 		return go(c, op);
 	}
-	static void stcspc(Sh4 &c, const Op *op)
+	static Ret stcspc(Sh4 &c, const Op *op)
 	{
 		need_privileged(c, op);
 		c.m_r.r[op->n] = c.m_r.spc;
 		return go(c, op);
 	}
-	static void stcsgr(Sh4 &c, const Op *op)
+	static Ret stcsgr(Sh4 &c, const Op *op)
 	{
 		need_privileged(c, op);
 		c.m_r.r[op->n] = c.m_r.sgr;
 		return go(c, op);
 	}
-	static void stcdbr(Sh4 &c, const Op *op)
+	static Ret stcdbr(Sh4 &c, const Op *op)
 	{
 		need_privileged(c, op);
 		c.m_r.r[op->n] = c.m_r.dbr;
 		return go(c, op);
 	}
-	static void stcrbank(Sh4 &c, const Op *op)
+	static Ret stcrbank(Sh4 &c, const Op *op)
 	{
 		need_privileged(c, op);
 		c.m_r.r[op->n] = c.m_r.rbank[op->m];
 		return go(c, op);
 	}
 	/* Rn - 4 -> Rn, then the value to (Rn) */
-	static void push(Sh4 &c, const Op *op, uint32_t value)
+	static Ret push(Sh4 &c, const Op *op, uint32_t value)
 	{
 		c.m_r.r[op->n] -= 4;
 		return next(c, op, c.write(op, c.m_r.r[op->n], value));
 	}
-	static void stcmsr(Sh4 &c, const Op *op) { return push(c, op, c.m_r.sr | c.m_r.t); }
-	static void stcmgbr(Sh4 &c, const Op *op) { return push(c, op, c.m_r.gbr); }
-	static void stcmvbr(Sh4 &c, const Op *op) { return push(c, op, c.m_r.vbr); }
-	static void stcmssr(Sh4 &c, const Op *op)
+	static Ret stcmsr(Sh4 &c, const Op *op) { return push(c, op, c.m_r.sr | c.m_r.t); }
+	static Ret stcmgbr(Sh4 &c, const Op *op) { return push(c, op, c.m_r.gbr); }
+	static Ret stcmvbr(Sh4 &c, const Op *op) { return push(c, op, c.m_r.vbr); }
+	static Ret stcmssr(Sh4 &c, const Op *op)
 	{
 		need_privileged(c, op);
 		return push(c, op, c.m_r.ssr);
 	}
-	static void stcmspc(Sh4 &c, const Op *op)
+	static Ret stcmspc(Sh4 &c, const Op *op)
 	{
 		need_privileged(c, op);
 		return push(c, op, c.m_r.spc);
 	}
-	static void stcmsgr(Sh4 &c, const Op *op)
+	static Ret stcmsgr(Sh4 &c, const Op *op)
 	{
 		need_privileged(c, op);
 		return push(c, op, c.m_r.sgr);
 	}
-	static void stcmdbr(Sh4 &c, const Op *op)
+	static Ret stcmdbr(Sh4 &c, const Op *op)
 	{
 		need_privileged(c, op);
 		return push(c, op, c.m_r.dbr);
 	}
-	static void stcmrbank(Sh4 &c, const Op *op)
+	static Ret stcmrbank(Sh4 &c, const Op *op)
 	{
 		need_privileged(c, op);
 		return push(c, op, c.m_r.rbank[op->m]);
 	}
-	static void stsmach(Sh4 &c, const Op *op)
+	static Ret stsmach(Sh4 &c, const Op *op)
 	{
 		c.m_r.r[op->n] = c.m_r.mach;
 		return go(c, op);
 	}
-	static void stsmacl(Sh4 &c, const Op *op)
+	static Ret stsmacl(Sh4 &c, const Op *op)
 	{
 		c.m_r.r[op->n] = c.m_r.macl;
 		return go(c, op);
 	}
-	static void stspr(Sh4 &c, const Op *op)
+	static Ret stspr(Sh4 &c, const Op *op)
 	{
 		c.m_r.r[op->n] = c.m_r.pr;
 		return go(c, op);
 	}
-	static void stsmmach(Sh4 &c, const Op *op) { return push(c, op, c.m_r.mach); }
-	static void stsmmacl(Sh4 &c, const Op *op) { return push(c, op, c.m_r.macl); }
-	static void stsmpr(Sh4 &c, const Op *op) { return push(c, op, c.m_r.pr); }
-	static void trapa(Sh4 &c, const Op *op) { fail(c, op, "TRAPA is not implemented"); }
+	static Ret stsmmach(Sh4 &c, const Op *op) { return push(c, op, c.m_r.mach); }
+	static Ret stsmmacl(Sh4 &c, const Op *op) { return push(c, op, c.m_r.macl); }
+	static Ret stsmpr(Sh4 &c, const Op *op) { return push(c, op, c.m_r.pr); }
+	static Ret trapa(Sh4 &c, const Op *op) { fail(c, op, "TRAPA is not implemented"); }
 
 	/* Cache and store queues: there is no cache, and a store queue write
 	 * goes to its target at once, so PREF has nothing left to send. */
-	static void movca(Sh4 &c, const Op *op) { return next(c, op, c.write(op, c.m_r.r[op->n], c.m_r.r[0])); }
+	static Ret movca(Sh4 &c, const Op *op) { return next(c, op, c.write(op, c.m_r.r[op->n], c.m_r.r[0])); }
 
 	/* FPU registers */
 
-	static void ldsfpscr(Sh4 &c, const Op *op)
+	static Ret ldsfpscr(Sh4 &c, const Op *op)
 	{
 		need_fpu(c, op);
 		c.set_fpscr(c.m_r.r[op->n]);
 		return go(c, op);
 	}
-	static void ldsmfpscr(Sh4 &c, const Op *op)
+	static Ret ldsmfpscr(Sh4 &c, const Op *op)
 	{
 		uint32_t v;
 		need_fpu(c, op);
@@ -1130,69 +1174,69 @@ struct Sh4Ops {
 		c.m_r.r[op->n] += 4;
 		return next(c, op, plain);
 	}
-	static void stsfpscr(Sh4 &c, const Op *op)
+	static Ret stsfpscr(Sh4 &c, const Op *op)
 	{
 		need_fpu(c, op);
 		c.m_r.r[op->n] = c.m_r.fpscr;
 		return go(c, op);
 	}
-	static void stsmfpscr(Sh4 &c, const Op *op)
+	static Ret stsmfpscr(Sh4 &c, const Op *op)
 	{
 		need_fpu(c, op);
 		return push(c, op, c.m_r.fpscr);
 	}
-	static void ldsfpul(Sh4 &c, const Op *op)
+	static Ret ldsfpul(Sh4 &c, const Op *op)
 	{
 		need_fpu(c, op);
 		c.m_r.fpul = c.m_r.r[op->n];
 		return go(c, op);
 	}
-	static void ldsmfpul(Sh4 &c, const Op *op)
+	static Ret ldsmfpul(Sh4 &c, const Op *op)
 	{
 		need_fpu(c, op);
 		bool plain = c.read(op, c.m_r.r[op->n], c.m_r.fpul);
 		c.m_r.r[op->n] += 4;
 		return next(c, op, plain);
 	}
-	static void stsfpul(Sh4 &c, const Op *op)
+	static Ret stsfpul(Sh4 &c, const Op *op)
 	{
 		need_fpu(c, op);
 		c.m_r.r[op->n] = c.m_r.fpul;
 		return go(c, op);
 	}
-	static void stsmfpul(Sh4 &c, const Op *op)
+	static Ret stsmfpul(Sh4 &c, const Op *op)
 	{
 		need_fpu(c, op);
 		return push(c, op, c.m_r.fpul);
 	}
-	static void fschg(Sh4 &c, const Op *op)
+	static Ret fschg(Sh4 &c, const Op *op)
 	{
 		c.set_fpscr(c.m_r.fpscr ^ Sh4::FPSCR_SZ);
 		return go(c, op);
 	}
-	static void frchg(Sh4 &c, const Op *op)
+	static Ret frchg(Sh4 &c, const Op *op)
 	{
 		c.set_fpscr(c.m_r.fpscr ^ Sh4::FPSCR_FR);
 		return go(c, op);
 	}
-	static void fldi0(Sh4 &c, const Op *op)
+	static Ret fldi0(Sh4 &c, const Op *op)
 	{
 		need(c, op, !(c.m_r.fpscr & Sh4::FPSCR_PR), "FLDI0 in double precision");
 		c.m_r.fr[op->n] = 0x00000000;
 		return go(c, op);
 	}
-	static void fldi1(Sh4 &c, const Op *op)
+	static Ret fldi1(Sh4 &c, const Op *op)
 	{
 		need(c, op, !(c.m_r.fpscr & Sh4::FPSCR_PR), "FLDI1 in double precision");
 		c.m_r.fr[op->n] = 0x3F800000;
 		return go(c, op);
 	}
-	static void fsts(Sh4 &c, const Op *op)
+	static Ret fsts(Sh4 &c, const Op *op)
 	{
 		c.m_r.fr[op->n] = c.m_r.fpul;
 		return go(c, op);
 	}
-	static void flds(Sh4 &c, const Op *op)
+	static Ret flds(Sh4 &c, const Op *op)
 	{
 		c.m_r.fpul = c.m_r.fr[op->n];
 		return go(c, op);
@@ -1200,7 +1244,7 @@ struct Sh4Ops {
 
 	/* FMOV: one register, or a pair when FPSCR.SZ is set */
 
-	static void fmov(Sh4 &c, const Op *op)
+	static Ret fmov(Sh4 &c, const Op *op)
 	{
 		if (c.m_r.fpscr & Sh4::FPSCR_SZ) {
 			set_pair(c, op->n, get_pair(c, op->m));
@@ -1209,7 +1253,7 @@ struct Sh4Ops {
 		}
 		return go(c, op);
 	}
-	static void fmov_from(Sh4 &c, const Op *op, uint32_t addr)
+	static Ret fmov_from(Sh4 &c, const Op *op, uint32_t addr)
 	{
 		bool plain;
 		if (c.m_r.fpscr & Sh4::FPSCR_SZ) {
@@ -1221,7 +1265,7 @@ struct Sh4Ops {
 		}
 		return next(c, op, plain);
 	}
-	static void fmov_to(Sh4 &c, const Op *op, uint32_t addr)
+	static Ret fmov_to(Sh4 &c, const Op *op, uint32_t addr)
 	{
 		bool plain;
 		if (c.m_r.fpscr & Sh4::FPSCR_SZ) {
@@ -1231,17 +1275,17 @@ struct Sh4Ops {
 		}
 		return next(c, op, plain);
 	}
-	static void fmov_load(Sh4 &c, const Op *op) { return fmov_from(c, op, c.m_r.r[op->m]); }
-	static void fmov_store(Sh4 &c, const Op *op) { return fmov_to(c, op, c.m_r.r[op->n]); }
-	static void fmov_index_load(Sh4 &c, const Op *op) { return fmov_from(c, op, c.m_r.r[0] + c.m_r.r[op->m]); }
-	static void fmov_index_store(Sh4 &c, const Op *op) { return fmov_to(c, op, c.m_r.r[0] + c.m_r.r[op->n]); }
-	static void fmov_restore(Sh4 &c, const Op *op)
+	static Ret fmov_load(Sh4 &c, const Op *op) { return fmov_from(c, op, c.m_r.r[op->m]); }
+	static Ret fmov_store(Sh4 &c, const Op *op) { return fmov_to(c, op, c.m_r.r[op->n]); }
+	static Ret fmov_index_load(Sh4 &c, const Op *op) { return fmov_from(c, op, c.m_r.r[0] + c.m_r.r[op->m]); }
+	static Ret fmov_index_store(Sh4 &c, const Op *op) { return fmov_to(c, op, c.m_r.r[0] + c.m_r.r[op->n]); }
+	static Ret fmov_restore(Sh4 &c, const Op *op)
 	{
 		uint32_t addr = c.m_r.r[op->m];
 		c.m_r.r[op->m] += (c.m_r.fpscr & Sh4::FPSCR_SZ) ? 8 : 4;
 		return fmov_from(c, op, addr);
 	}
-	static void fmov_save(Sh4 &c, const Op *op)
+	static Ret fmov_save(Sh4 &c, const Op *op)
 	{
 		c.m_r.r[op->n] -= (c.m_r.fpscr & Sh4::FPSCR_SZ) ? 8 : 4;
 		return fmov_to(c, op, c.m_r.r[op->n]);
@@ -1251,7 +1295,7 @@ struct Sh4Ops {
 	 * nearest whatever FPSCR.RM and FPSCR.DN say; a NaN comes out as the
 	 * host makes it; no FPU exception is raised. */
 
-	static void flt(Sh4 &c, const Op *op)
+	static Ret flt(Sh4 &c, const Op *op)
 	{
 		int32_t v = static_cast<int32_t>(c.m_r.fpul);
 		if (!(c.m_r.fpscr & Sh4::FPSCR_PR)) {
@@ -1264,7 +1308,7 @@ struct Sh4Ops {
 	}
 	/* HEURISTIC: what the host gives out of range, 0x80000000; the SH-4
 	 * saturates. */
-	static void ftrc(Sh4 &c, const Op *op)
+	static Ret ftrc(Sh4 &c, const Op *op)
 	{
 		if (!(c.m_r.fpscr & Sh4::FPSCR_PR)) {
 			float v = f32(c.m_r.fr[op->n]);
@@ -1276,26 +1320,26 @@ struct Sh4Ops {
 		}
 		return go(c, op);
 	}
-	static void fcnvsd(Sh4 &c, const Op *op)
+	static Ret fcnvsd(Sh4 &c, const Op *op)
 	{
 		need(c, op, !(op->n & 1), "double precision with an odd register");
 		set_dr(c, op->n, static_cast<double>(f32(c.m_r.fpul)));
 		return go(c, op);
 	}
-	static void fcnvds(Sh4 &c, const Op *op)
+	static Ret fcnvds(Sh4 &c, const Op *op)
 	{
 		need(c, op, !(op->n & 1), "double precision with an odd register");
 		c.m_r.fpul = bits(static_cast<float>(get_dr(c, op->n)));
 		return go(c, op);
 	}
 	/* The sign of a double is in FRn. */
-	static void fneg(Sh4 &c, const Op *op)
+	static Ret fneg(Sh4 &c, const Op *op)
 	{
 		need(c, op, !(c.m_r.fpscr & Sh4::FPSCR_PR) || !(op->n & 1), "double precision with an odd register");
 		c.m_r.fr[op->n] ^= 0x80000000;
 		return go(c, op);
 	}
-	static void fabs_(Sh4 &c, const Op *op)
+	static Ret fabs_(Sh4 &c, const Op *op)
 	{
 		need(c, op, !(c.m_r.fpscr & Sh4::FPSCR_PR) || !(op->n & 1), "double precision with an odd register");
 		c.m_r.fr[op->n] &= 0x7FFFFFFF;
@@ -1305,7 +1349,7 @@ struct Sh4Ops {
 	{
 		need(c, op, !((op->n | op->m) & 1), "double precision with an odd register");
 	}
-	static void fadd(Sh4 &c, const Op *op)
+	static Ret fadd(Sh4 &c, const Op *op)
 	{
 		if (!(c.m_r.fpscr & Sh4::FPSCR_PR)) {
 			c.m_r.fr[op->n] = bits(f32(c.m_r.fr[op->n]) + f32(c.m_r.fr[op->m]));
@@ -1315,7 +1359,7 @@ struct Sh4Ops {
 		}
 		return go(c, op);
 	}
-	static void fsub(Sh4 &c, const Op *op)
+	static Ret fsub(Sh4 &c, const Op *op)
 	{
 		if (!(c.m_r.fpscr & Sh4::FPSCR_PR)) {
 			c.m_r.fr[op->n] = bits(f32(c.m_r.fr[op->n]) - f32(c.m_r.fr[op->m]));
@@ -1325,7 +1369,7 @@ struct Sh4Ops {
 		}
 		return go(c, op);
 	}
-	static void fmul(Sh4 &c, const Op *op)
+	static Ret fmul(Sh4 &c, const Op *op)
 	{
 		if (!(c.m_r.fpscr & Sh4::FPSCR_PR)) {
 			c.m_r.fr[op->n] = bits(f32(c.m_r.fr[op->n]) * f32(c.m_r.fr[op->m]));
@@ -1335,7 +1379,7 @@ struct Sh4Ops {
 		}
 		return go(c, op);
 	}
-	static void fdiv(Sh4 &c, const Op *op)
+	static Ret fdiv(Sh4 &c, const Op *op)
 	{
 		if (!(c.m_r.fpscr & Sh4::FPSCR_PR)) {
 			c.m_r.fr[op->n] = bits(f32(c.m_r.fr[op->n]) / f32(c.m_r.fr[op->m]));
@@ -1346,13 +1390,13 @@ struct Sh4Ops {
 		return go(c, op);
 	}
 	/* FR0 * FRm + FRn, rounded once (software manual, 6.3.1). */
-	static void fmac(Sh4 &c, const Op *op)
+	static Ret fmac(Sh4 &c, const Op *op)
 	{
 		need(c, op, !(c.m_r.fpscr & Sh4::FPSCR_PR), "FMAC in double precision");
 		c.m_r.fr[op->n] = bits(std::fma(f32(c.m_r.fr[op->m]), f32(c.m_r.fr[0]), f32(c.m_r.fr[op->n])));
 		return go(c, op);
 	}
-	static void fsqrt(Sh4 &c, const Op *op)
+	static Ret fsqrt(Sh4 &c, const Op *op)
 	{
 		need_fpu(c, op);
 		if (!(c.m_r.fpscr & Sh4::FPSCR_PR)) {
@@ -1365,7 +1409,7 @@ struct Sh4Ops {
 	}
 	/* HEURISTIC: the four below are computed by the host, where the
 	 * SH-4 has its own tables and error bounds. */
-	static void fsrra(Sh4 &c, const Op *op)
+	static Ret fsrra(Sh4 &c, const Op *op)
 	{
 		float v = f32(c.m_r.fr[op->n]);
 		if (!(v < 0)) {
@@ -1374,7 +1418,7 @@ struct Sh4Ops {
 		return go(c, op);
 	}
 	/* The angle is the low 16 bits of FPUL, a full turn in 65536. */
-	static void fsca(Sh4 &c, const Op *op)
+	static Ret fsca(Sh4 &c, const Op *op)
 	{
 		constexpr float turn = (2.0f * static_cast<float>(std::numbers::pi)) / 65536.0f;
 		float angle = static_cast<float>(c.m_r.fpul & 0xFFFF) * turn;
@@ -1382,7 +1426,7 @@ struct Sh4Ops {
 		c.m_r.fr[op->n + 1] = bits(std::cos(angle));
 		return go(c, op);
 	}
-	static void fipr(Sh4 &c, const Op *op)
+	static Ret fipr(Sh4 &c, const Op *op)
 	{
 		const uint32_t *a = &c.m_r.fr[op->n], *b = &c.m_r.fr[op->m];
 		need_fpu(c, op);
@@ -1395,7 +1439,7 @@ struct Sh4Ops {
 	}
 	/* The vector FRn..FRn+3 by the matrix in XF0..XF15, one column of the
 	 * matrix per component of the vector. */
-	static void ftrv(Sh4 &c, const Op *op)
+	static Ret ftrv(Sh4 &c, const Op *op)
 	{
 		uint32_t *v = &c.m_r.fr[op->n];
 		const uint32_t *x = c.m_r.xf;
@@ -1410,7 +1454,7 @@ struct Sh4Ops {
 		}
 		return go(c, op);
 	}
-	static void fcmpeq(Sh4 &c, const Op *op)
+	static Ret fcmpeq(Sh4 &c, const Op *op)
 	{
 		if (!(c.m_r.fpscr & Sh4::FPSCR_PR)) {
 			c.m_r.t = f32(c.m_r.fr[op->n]) == f32(c.m_r.fr[op->m]);
@@ -1420,7 +1464,7 @@ struct Sh4Ops {
 		}
 		return go(c, op);
 	}
-	static void fcmpgt(Sh4 &c, const Op *op)
+	static Ret fcmpgt(Sh4 &c, const Op *op)
 	{
 		if (!(c.m_r.fpscr & Sh4::FPSCR_PR)) {
 			c.m_r.t = f32(c.m_r.fr[op->n]) > f32(c.m_r.fr[op->m]);
@@ -1454,7 +1498,7 @@ struct Sh4Ops {
 	using K = Sh4::Kind;
 	struct Entry {
 		uint16_t mask, match;
-		void (*run)(Sh4 &, const Op *);
+		Ret (*run)(Sh4 &, const Op *);
 		Form form;
 		Sh4::Kind kind;
 	};
@@ -1465,7 +1509,8 @@ struct Sh4Ops {
 
 /* Software manual, section 9, and tables 7.3 to 7.12 for the codes. FSCA
  * and FSRRA are in the SH7091 only (MAME sh4.cpp). */
-const Sh4Ops::Entry Sh4Ops::table[] = {
+template <class Way>
+const typename Sh4OpsT<Way>::Entry Sh4OpsT<Way>::table[] = {
 	{0xF00F, 0x6003, mov, F::NM, K::Plain},
 	{0xF00F, 0x2000, movbs, F::NM, K::Plain},
 	{0xF00F, 0x2001, movws, F::NM, K::Plain},
@@ -1684,11 +1729,13 @@ const Sh4Ops::Entry Sh4Ops::table[] = {
 	{0xF00F, 0xF00C, fmov, F::NM, K::Plain},
 	{0xF00F, 0xF00E, fmac, F::NM, K::Plain},
 };
-const uint32_t Sh4Ops::table_size = sizeof(Sh4Ops::table) / sizeof(Sh4Ops::table[0]);
+template <class Way>
+const uint32_t Sh4OpsT<Way>::table_size = sizeof(Sh4OpsT<Way>::table) / sizeof(Sh4OpsT<Way>::table[0]);
 
 /* The rank + 1 in the table for each of the 65536 codes, 0 for a code that
  * is no instruction. */
-const std::array<uint8_t, 65536> &Sh4Ops::index()
+template <class Way>
+const std::array<uint8_t, 65536> &Sh4OpsT<Way>::index()
 {
 	static const std::array<uint8_t, 65536> built = [] {
 		std::array<uint8_t, 65536> t{};
@@ -1704,6 +1751,8 @@ const std::array<uint8_t, 65536> &Sh4Ops::index()
 	}();
 	return built;
 }
+
+using Sh4Ops = Sh4OpsT<Sh4Threaded>;
 
 Sh4::Kind Sh4::decode(uint16_t inst, uint32_t pc, Sh4Op &op)
 {
@@ -1799,22 +1848,15 @@ Sh4::Kind Sh4::decode(uint16_t inst, uint32_t pc, Sh4Op &op)
 	return e.kind;
 }
 
-/* Ends a block that stops for its length: the program goes on at `imm`. */
+/* The two ends of a block, see Sh4OpsT. */
 void Sh4::op_next(Sh4 &c, const Sh4Op *op)
 {
-	c.m_r.pc = op->imm;
-	return c.chain(op->imm);
+	return Sh4Ops::end_next(c, op);
 }
 
-/* Ends the delay slot of a taken branch: `imm` cycles are given back for
- * the instructions of the block that did not run, and the program goes on
- * at PC, through the run loop if the slot disturbed something. */
 void Sh4::op_leave(Sh4 &c, const Sh4Op *op)
 {
-	c.m_remaining += static_cast<int32_t>(op->imm);
-	if (!c.m_event) [[likely]] {
-		return c.chain(c.m_r.pc);
-	}
+	return Sh4Ops::end_leave(c, op);
 }
 
 /* Whether a conditional branch with a delay slot goes, for this T. */
