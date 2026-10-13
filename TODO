@@ -45,8 +45,11 @@ them). Not run under a race detector: -fsanitize=thread falls over in the
 NVIDIA driver (a thread of the driver it does not know) and in llvmpipe
 (in LLVM). No frame is skipped: each list feeds the 3D buffers of the
 next, so a graphics card slower than the machine slows the machine down.
-The debug keys, the pause and the state keys were not tried with the
-thread (no keyboard in the test runs); -s, -l, -w, -f and -x were.
+The debug keys (ODIN_DEBUG_KEYS) were not tried with the thread; the
+pause, F11, F4, F1 and Escape were, with keys sent to the window, and -s,
+-l, -w, -f and -x. F1 used to abort while the machine ran ("IRL pin held
+while ICR.IRLM is clear"): the reset before the load cleared the registers
+of the SH-4 and raised its pins from chips not reset yet.
 
 
 HIKARU
