@@ -153,30 +153,6 @@ odin_hikaru_gpu_texture_ram_twiddled(const odin_hikaru_gpu_t *gpu)
 	return gpu->chips.antarctic().texture_ram_twiddled() ? 1 : 0;
 }
 
-odin_display_list_t *
-odin_hikaru_gpu_begin_list(odin_hikaru_gpu_t *gpu, int keep_last)
-{
-	return gpu->chips.antarctic().begin_list(keep_last != 0);
-}
-
-void
-odin_hikaru_gpu_end_open_mesh(odin_hikaru_gpu_t *gpu)
-{
-	gpu->chips.antarctic().end_open_mesh();
-}
-
-const odin_fb_config_t *
-odin_hikaru_gpu_fb_config(const odin_hikaru_gpu_t *gpu)
-{
-	return &gpu->chips.antarctic().fb_config();
-}
-
-const odin_layers_t *
-odin_hikaru_gpu_layers(const odin_hikaru_gpu_t *gpu)
-{
-	return &gpu->chips.eurasia().layers();
-}
-
 void
 odin_hikaru_gpu_set_traces(odin_hikaru_gpu_t *gpu, FILE *lists, FILE *transfers, FILE *blits)
 {

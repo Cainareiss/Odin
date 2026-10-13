@@ -30,9 +30,6 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#include "odin/antarctic_list.h"
-#include "odin/eurasia_layers.h"
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -78,15 +75,6 @@ void odin_hikaru_gpu_frame_size(const odin_hikaru_gpu_t *gpu, unsigned *dots,
                                 unsigned *lines, unsigned *shown);
 /* 1500008C: the texture RAM twiddles what the bus writes to it. */
 int odin_hikaru_gpu_texture_ram_twiddled(const odin_hikaru_gpu_t *gpu);
-
-/* For the renderer: the list of the frame that begins (keep_last: the
- * list of the last frame is still needed, this one is built aside), the
- * mesh left open at the end of a frame, the framebuffer words and the
- * layers. */
-odin_display_list_t *odin_hikaru_gpu_begin_list(odin_hikaru_gpu_t *gpu, int keep_last);
-void odin_hikaru_gpu_end_open_mesh(odin_hikaru_gpu_t *gpu);
-const odin_fb_config_t *odin_hikaru_gpu_fb_config(const odin_hikaru_gpu_t *gpu);
-const odin_layers_t *odin_hikaru_gpu_layers(const odin_hikaru_gpu_t *gpu);
 
 /* Traces, NULL for none: each instruction of the lists, each texture
  * transfer, each blit. */
