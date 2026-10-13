@@ -22,7 +22,7 @@
 #include "vk/input.h"
 
 #include "mach/hikaru/hikaru-renderer.h"
-#include "odin/renderer_bridge.hpp"
+#include "odin/renderer.hpp"
 
 /* The renderer of the Hikaru as the renderer of the machine: the drawing
  * itself is in src/odin (renderer.hpp). Here are the window, the options of
@@ -31,7 +31,7 @@
 typedef struct {
 	vk_renderer_t base;
 
-	odin_renderer_t *odin;
+	odin::Renderer *odin;
 } hikaru_renderer_t;
 
 static bool
@@ -45,7 +45,7 @@ hikaru_renderer_launch (vk_renderer_t *renderer)
 {
 	hikaru_renderer_t *hr = (hikaru_renderer_t *) renderer;
 
-	odin_renderer_launch (hr->odin);
+	hr->odin->launch ();
 }
 
 /* The frame being drawn reads the texture RAM as its own frame left it;
@@ -56,7 +56,7 @@ hikaru_renderer_before_texram_write (vk_renderer_t *renderer, unsigned bank)
 	hikaru_renderer_t *hr = (hikaru_renderer_t *) renderer;
 
 	vk_renderer_finish (renderer);
-	odin_renderer_invalidate_textures (hr->odin, (int) bank);
+	hr->odin->invalidate_textures ((int) bank);
 }
 
 static void
@@ -64,7 +64,7 @@ hikaru_renderer_begin_frame (vk_renderer_t *renderer)
 {
 	hikaru_renderer_t *hr = (hikaru_renderer_t *) renderer;
 
-	odin_renderer_begin_frame (hr->odin);
+	hr->odin->begin_frame ();
 }
 
 static void
@@ -74,10 +74,9 @@ hikaru_renderer_take_frame (vk_renderer_t *renderer)
 	int w, h;
 
 	SDL_GL_GetDrawableSize (renderer->window, &w, &h);
-	odin_renderer_take_frame (hr->odin, renderer->frame, (unsigned) w, (unsigned) h);
-	renderer->logged = odin_renderer_frame_is_logged (hr->odin);
-	snprintf (renderer->message, sizeof (renderer->message), "%s",
-	          odin_renderer_message (hr->odin));
+	hr->odin->take_frame (renderer->frame, (unsigned) w, (unsigned) h);
+	renderer->logged = hr->odin->frame_is_logged ();
+	snprintf (renderer->message, sizeof (renderer->message), "%s", hr->odin->message ());
 }
 
 /* On the drawing thread */
@@ -86,12 +85,11 @@ hikaru_renderer_draw_frame (vk_renderer_t *renderer)
 {
 	hikaru_renderer_t *hr = (hikaru_renderer_t *) renderer;
 
-	odin_renderer_set_scale (hr->odin, renderer->scale);
-	odin_renderer_set_anisotropy (hr->odin, renderer->anisotropy);
-	odin_renderer_draw_frame (hr->odin);
-	renderer->picture_fb = odin_renderer_frame_picture (hr->odin,
-	                                                    &renderer->picture_width,
-	                                                    &renderer->picture_height);
+	hr->odin->set_scale (renderer->scale);
+	hr->odin->set_anisotropy (renderer->anisotropy);
+	hr->odin->draw_frame ();
+	renderer->picture_fb = hr->odin->frame_picture (renderer->picture_width,
+	                                                renderer->picture_height);
 }
 
 static void
@@ -100,16 +98,18 @@ hikaru_renderer_reset (vk_renderer_t *renderer)
 	hikaru_renderer_t *hr = (hikaru_renderer_t *) renderer;
 
 	vk_renderer_finish (renderer);
-	odin_renderer_invalidate_textures (hr->odin, -1);
+	hr->odin->invalidate_textures (-1);
 }
 
 /* The pictures the renderer keeps, one item each, then its four counters.
  * They are read and written on the drawing thread. */
 
+static const size_t PICTURES_SIZE = odin::Renderer::PICTURES * odin::Renderer::PICTURE_SIZE;
+
 typedef struct {
-	odin_renderer_t *odin;
+	odin::Renderer *odin;
 	uint8_t *pictures;
-	odin_renderer_counters_t counters;
+	odin::Renderer::Counters counters;
 } kept_t;
 
 static void
@@ -117,7 +117,7 @@ save_kept (void *ctx)
 {
 	kept_t *kept = (kept_t *) ctx;
 
-	odin_renderer_save_state (kept->odin, kept->pictures, &kept->counters);
+	kept->odin->save (std::span<uint8_t> (kept->pictures, PICTURES_SIZE), kept->counters);
 }
 
 static void
@@ -125,15 +125,15 @@ load_kept (void *ctx)
 {
 	kept_t *kept = (kept_t *) ctx;
 
-	odin_renderer_load_state (kept->odin, kept->pictures, &kept->counters);
+	kept->odin->load (std::span<const uint8_t> (kept->pictures, PICTURES_SIZE), kept->counters);
 }
 
 int
 hikaru_renderer_save_state (vk_renderer_t *renderer, vk_state_t *state)
 {
 	hikaru_renderer_t *hr = (hikaru_renderer_t *) renderer;
-	const uint32_t size = (uint32_t) odin_renderer_picture_size ();
-	kept_t kept = { hr->odin, (uint8_t *) malloc ((size_t) size * ODIN_RENDERER_PICTURES) };
+	const uint32_t size = (uint32_t) odin::Renderer::PICTURE_SIZE;
+	kept_t kept = { hr->odin, (uint8_t *) malloc (PICTURES_SIZE) };
 	int ret = 0;
 	unsigned i;
 
@@ -141,7 +141,7 @@ hikaru_renderer_save_state (vk_renderer_t *renderer, vk_state_t *state)
 		return -1;
 
 	vk_renderer_run (renderer, save_kept, &kept);
-	for (i = 0; i < ODIN_RENDERER_PICTURES; i++)
+	for (i = 0; i < odin::Renderer::PICTURES; i++)
 		ret |= vk_state_put (state, kept.pictures + (size_t) i * size, size);
 	ret |= vk_state_put (state, &kept.counters.num_lists, sizeof (kept.counters.num_lists));
 	ret |= vk_state_put (state, &kept.counters.shown, sizeof (kept.counters.shown));
@@ -156,15 +156,15 @@ int
 hikaru_renderer_load_state (vk_renderer_t *renderer, vk_state_t *state)
 {
 	hikaru_renderer_t *hr = (hikaru_renderer_t *) renderer;
-	const uint32_t size = (uint32_t) odin_renderer_picture_size ();
-	kept_t kept = { hr->odin, (uint8_t *) malloc ((size_t) size * ODIN_RENDERER_PICTURES) };
+	const uint32_t size = (uint32_t) odin::Renderer::PICTURE_SIZE;
+	kept_t kept = { hr->odin, (uint8_t *) malloc (PICTURES_SIZE) };
 	int ret = 0;
 	unsigned i;
 
 	if (!kept.pictures)
 		return -1;
 
-	for (i = 0; i < ODIN_RENDERER_PICTURES && !ret; i++)
+	for (i = 0; i < odin::Renderer::PICTURES && !ret; i++)
 		ret |= vk_state_get (state, kept.pictures + (size_t) i * size, size);
 	ret |= vk_state_get (state, &kept.counters.num_lists, sizeof (kept.counters.num_lists));
 	ret |= vk_state_get (state, &kept.counters.shown, sizeof (kept.counters.shown));
@@ -185,9 +185,17 @@ hikaru_renderer_destroy (vk_renderer_t **renderer_)
 
 		vk_renderer_stop (*renderer_);
 		if (hr->odin)
-			odin_renderer_delete (hr->odin);
+			delete hr->odin;
 		hr->odin = NULL;
 	}
+}
+
+/* The bytes of a memory of the machine */
+static std::span<const uint8_t>
+bytes_of (vk_buffer_t *buffer)
+{
+	return std::span<const uint8_t> ((const uint8_t *) vk_buffer_get_ptr (buffer, 0),
+	                                 vk_buffer_get_size (buffer));
 }
 
 /* The lists of the mesh programs of a game (odin::MeshPrograms): the one
@@ -227,14 +235,14 @@ prepare_programs (void *ctx)
 {
 	hikaru_renderer_t *hr = (hikaru_renderer_t *) ctx;
 
-	odin_renderer_prepare_programs (hr->odin);
+	hr->odin->prepare_programs ();
 }
 
 vk_renderer_t *
 hikaru_renderer_new (vk_buffer_t *fb, vk_buffer_t *texram[2], const char *game)
 {
-	odin_renderer_memory_t memory;
-	odin_renderer_options_t options;
+	odin::Renderer::Memory memory;
+	odin::Renderer::Options options;
 	hikaru_renderer_t *hr;
 	char seed[640], kept[640];
 
@@ -242,7 +250,8 @@ hikaru_renderer_new (vk_buffer_t *fb, vk_buffer_t *texram[2], const char *game)
 	if (!hr)
 		return NULL;
 
-	odin_renderer_screen_size (&hr->base.width, &hr->base.height);
+	hr->base.width = odin::Renderer::WIDTH;
+	hr->base.height = odin::Renderer::HEIGHT;
 
 	hr->base.destroy = hikaru_renderer_destroy;
 	hr->base.reset = hikaru_renderer_reset;
@@ -256,11 +265,9 @@ hikaru_renderer_new (vk_buffer_t *fb, vk_buffer_t *texram[2], const char *game)
 		return NULL;
 	}
 
-	memory.fb		= (const uint8_t *) vk_buffer_get_ptr (fb, 0);
-	memory.fb_size		= vk_buffer_get_size (fb);
-	memory.texram[0]	= (const uint8_t *) vk_buffer_get_ptr (texram[0], 0);
-	memory.texram[1]	= (const uint8_t *) vk_buffer_get_ptr (texram[1], 0);
-	memory.texram_size	= vk_buffer_get_size (texram[0]);
+	memory.fb		= bytes_of (fb);
+	memory.texram[0]	= bytes_of (texram[0]);
+	memory.texram[1]	= bytes_of (texram[1]);
 
 	options.log		= vk_util_get_bool_option ("HR_LOG", false);
 	options.log_frame	= vk_util_get_int_option ("HR_LOG_FRAME", 0);
@@ -272,14 +279,10 @@ hikaru_renderer_new (vk_buffer_t *fb, vk_buffer_t *texram[2], const char *game)
 	options.ctx		= NULL;
 
 	find_program_lists (game, seed, kept, sizeof (seed));
-	options.programs_seed	= seed[0] ? seed : NULL;
-	options.programs_kept	= kept[0] ? kept : NULL;
+	options.programs_seed	= seed;
+	options.programs_kept	= kept;
 
-	hr->odin = odin_renderer_new (&memory, &options);
-	if (!hr->odin) {
-		free (hr);
-		return NULL;
-	}
+	hr->odin = new odin::Renderer (memory, options);
 
 	vk_renderer_start ((vk_renderer_t *) hr);
 	vk_renderer_run ((vk_renderer_t *) hr, prepare_programs, hr);
@@ -292,5 +295,5 @@ hikaru_renderer_set_gpu (vk_renderer_t *renderer, odin::HikaruGpu *chips)
 {
 	hikaru_renderer_t *hr = (hikaru_renderer_t *) renderer;
 
-	odin_renderer_set_gpu (hr->odin, chips);
+	hr->odin->set_gpu (chips);
 }

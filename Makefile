@@ -67,7 +67,6 @@ ODIN_OBJ := \
 	src/odin/renderer_state.o \
 	src/odin/renderer_debug.o \
 	src/odin/renderer_gl.o \
-	src/odin/renderer_bridge.o \
 	src/odin/aica.o \
 	src/odin/sound_board.o \
 	src/odin/arm7.o \
