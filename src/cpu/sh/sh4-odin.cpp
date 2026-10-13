@@ -29,16 +29,16 @@
 #include <time.h>
 
 #include "sh4.h"
-#include "odin/sh4_bridge.hpp"
+static_assert ((unsigned) SH4_NUM_IESOURCES == (unsigned) odin::Sh4Source::COUNT);
 
 /* The state of the core, in the fields of the interpreter. */
 void
 sh4_odin_pull (sh4_t *ctx)
 {
-	odin_sh4_state_t st;
+	odin::Sh4State st;
 	unsigned i;
 
-	odin_sh4_save_state (ctx->odin, &st);
+	ctx->odin->save (st);
 
 	ctx->base.state = (vk_cpu_state_t) st.run;
 	ctx->in_slot = false;
@@ -89,12 +89,12 @@ sh4_odin_pull (sh4_t *ctx)
 void
 sh4_odin_push (sh4_t *ctx)
 {
-	odin_sh4_state_t st;
+	odin::Sh4State st;
 	unsigned i;
 
 	memset (&st, 0, sizeof (st));
 
-	st.run = (uint32_t) ctx->base.state;
+	st.run = (odin::Sh4Run) ctx->base.state;
 
 	memcpy (st.r, ctx->regs.r, sizeof (st.r));
 	st.pc = ctx->regs.pc;
@@ -136,15 +136,14 @@ sh4_odin_push (sh4_t *ctx)
 	}
 	st.over = ctx->over;
 
-	odin_sh4_load_state (ctx->odin, &st);
+	ctx->odin->load (st);
 }
 
 /* Bus */
 
 static int
-bus_read (void *opaque, uint32_t addr, unsigned size, uint64_t *value)
+bus_read (sh4_t *ctx, uint32_t addr, unsigned size, uint64_t *value)
 {
-	sh4_t *ctx = (sh4_t *) opaque;
 	uint64_t tmp = 0;
 	int ret;
 
@@ -154,17 +153,14 @@ bus_read (void *opaque, uint32_t addr, unsigned size, uint64_t *value)
 }
 
 static int
-bus_write (void *opaque, uint32_t addr, unsigned size, uint64_t value)
+bus_write (sh4_t *ctx, uint32_t addr, unsigned size, uint64_t value)
 {
-	sh4_t *ctx = (sh4_t *) opaque;
-
 	return vk_mmap_put (ctx->base.mmap, size, addr, value);
 }
 
 static uint16_t
-bus_port_a_read (void *opaque)
+bus_port_a_read (sh4_t *ctx)
 {
-	sh4_t *ctx = (sh4_t *) opaque;
 	uint16_t pins = 0;
 
 	VK_ASSERT (ctx->porta.get);
@@ -174,20 +170,16 @@ bus_port_a_read (void *opaque)
 }
 
 static void
-bus_port_a_write (void *opaque, uint16_t pins)
+bus_port_a_write (sh4_t *ctx, uint16_t pins)
 {
-	sh4_t *ctx = (sh4_t *) opaque;
-
 	VK_ASSERT (ctx->porta.put);
 	if (ctx->porta.put (ctx, pins))
 		VK_ASSERT (0);
 }
 
 static void
-bus_unanswered (void *opaque, int is_write, uint32_t addr, unsigned size, uint64_t value)
+bus_unanswered (sh4_t *ctx, int is_write, uint32_t addr, unsigned size, uint64_t value)
 {
-	sh4_t *ctx = (sh4_t *) opaque;
-
 	if (is_write) {
 		VK_CPU_ERROR (ctx, "unhandled W%d @%08X = %lX", 8*size, addr, value);
 	} else {
@@ -198,30 +190,54 @@ bus_unanswered (void *opaque, int is_write, uint32_t addr, unsigned size, uint64
 /* The patch of the machine, at its PC: it may change R0-R15 and count
  * cycles as run. */
 static void
-bus_hook (void *opaque)
+bus_hook (sh4_t *ctx)
 {
-	sh4_t *ctx = (sh4_t *) opaque;
 	vk_cpu_t *cpu = &ctx->base;
-	uint32_t pc = odin_sh4_pc (ctx->odin);
-	int left = odin_sh4_remaining (ctx->odin);
+	uint32_t pc = ctx->odin->pc ();
+	int left = ctx->odin->remaining ();
 	unsigned i;
 
 	for (i = 0; i < 16; i++)
-		ctx->regs.r[i] = odin_sh4_reg (ctx->odin, i);
+		ctx->regs.r[i] = ctx->odin->reg (i);
 	ctx->regs.pc = pc;
-	ctx->regs.pr = odin_sh4_pr (ctx->odin);
-	ctx->regs.gbr = odin_sh4_gbr (ctx->odin);
-	ctx->regs.sr.full = odin_sh4_sr (ctx->odin);
+	ctx->regs.pr = ctx->odin->pr ();
+	ctx->regs.gbr = ctx->odin->gbr ();
+	ctx->regs.sr.full = ctx->odin->sr ();
 	ctx->in_slot = false;
 	cpu->remaining = left;
 
 	cpu->patch (cpu, pc & 0x1FFFFFFF, 0);
 
 	for (i = 0; i < 16; i++)
-		odin_sh4_set_reg (ctx->odin, i, ctx->regs.r[i]);
+		ctx->odin->set_reg (i, ctx->regs.r[i]);
 	if (cpu->remaining < left)
-		odin_sh4_skip (ctx->odin, (uint32_t) (left - cpu->remaining));
+		ctx->odin->skip ((uint32_t) (left - cpu->remaining));
 }
+
+/* What the core asks of the machine */
+class MachineBus : public odin::Sh4Bus {
+public:
+	explicit MachineBus (sh4_t *ctx) : m_ctx (ctx) {}
+
+	bool read (uint32_t addr, uint32_t size, uint64_t &value) override
+	{
+		return bus_read (m_ctx, addr, size, &value) == 0;
+	}
+	bool write (uint32_t addr, uint32_t size, uint64_t value) override
+	{
+		return bus_write (m_ctx, addr, size, value) == 0;
+	}
+	uint16_t port_a_read () override { return bus_port_a_read (m_ctx); }
+	void port_a_write (uint16_t pins) override { bus_port_a_write (m_ctx, pins); }
+	void unanswered (bool is_write, uint32_t addr, uint32_t size, uint64_t value) override
+	{
+		bus_unanswered (m_ctx, is_write, addr, size, value);
+	}
+	void hook () override { bus_hook (m_ctx); }
+
+private:
+	sh4_t *m_ctx;
+};
 
 /* ODIN_SH4_STATS=1: at the end, the host time each CPU took in its
  * slices. */
@@ -338,15 +354,15 @@ sh4o_run (vk_cpu_t *cpu, int cycles)
 	int over;
 
 	if (cpu->patch && ctx->hooked_pc != cpu->patch_pc) {
-		odin_sh4_set_hook (ctx->odin, cpu->patch_pc);
+		ctx->odin->set_hook (cpu->patch_pc);
 		ctx->hooked_pc = cpu->patch_pc;
 	}
 
 	begin = stats_begin ();
-	over = odin_sh4_run (ctx->odin, cycles);
+	over = ctx->odin->run (cycles);
 	stats_end (ctx, begin);
 
-	cpu->state = (vk_cpu_state_t) odin_sh4_get_run (ctx->odin);
+	cpu->state = (vk_cpu_state_t) ctx->odin->run_state ();
 	cpu->remaining = -over;
 	if (ctx->trace) {
 		sh4_odin_pull (ctx);
@@ -361,7 +377,7 @@ sh4o_set_state (vk_cpu_t *cpu, vk_cpu_state_t state)
 	sh4_t *ctx = (sh4_t *) cpu;
 
 	cpu->state = state;
-	odin_sh4_set_run (ctx->odin, (unsigned) state);
+	ctx->odin->set_run ((odin::Sh4Run) state);
 }
 
 static int
@@ -372,7 +388,7 @@ sh4o_set_irq_state (vk_cpu_t *cpu, unsigned num, vk_irq_state_t state)
 	/* NMI is a pin, see sh4_set_nmi_pin */
 	if (num >= SH4_NUM_IESOURCES || num == SH4_IESOURCE_NMI)
 		return -1;
-	odin_sh4_set_irq (ctx->odin, num, state == VK_IRQ_STATE_RAISED);
+	ctx->odin->set_irq (num, state == VK_IRQ_STATE_RAISED);
 	return 0;
 }
 
@@ -383,8 +399,8 @@ sh4o_get_debug_string (vk_cpu_t *cpu)
 	static char str[256];
 
 	sprintf (str, "%c @%08X @%08X %08X",
-	         ctx->config.master ? 'M' : 'S', odin_sh4_pc (ctx->odin),
-	         odin_sh4_pr (ctx->odin), odin_sh4_sr (ctx->odin));
+	         ctx->config.master ? 'M' : 'S', ctx->odin->pc (),
+	         ctx->odin->pr (), ctx->odin->sr ());
 	return str;
 }
 
@@ -396,11 +412,11 @@ map_pages (sh4_t *ctx)
 	vk_mmap_t *mmap = ctx->base.mmap;
 	uint32_t page;
 
-	for (page = 0; page < 0x20000000 / ODIN_SH4_PAGE_SIZE; page++) {
-		uint32_t addr = page * ODIN_SH4_PAGE_SIZE;
-		odin_sh4_map_page (ctx->odin, page,
-		                   vk_mmap_get_page (mmap, addr, ODIN_SH4_PAGE_SIZE, false),
-		                   vk_mmap_get_page (mmap, addr, ODIN_SH4_PAGE_SIZE, true));
+	for (page = 0; page < 0x20000000 / odin::Sh4::PAGE_SIZE; page++) {
+		uint32_t addr = page * odin::Sh4::PAGE_SIZE;
+		ctx->odin->map_page (page,
+		                     vk_mmap_get_page (mmap, addr, odin::Sh4::PAGE_SIZE, false),
+		                     vk_mmap_get_page (mmap, addr, odin::Sh4::PAGE_SIZE, true));
 	}
 }
 
@@ -410,7 +426,7 @@ sh4o_reset (vk_device_t *dev, vk_reset_type_t type)
 	sh4_t *ctx = (sh4_t *) dev;
 
 	map_pages (ctx);
-	odin_sh4_reset (ctx->odin, type == VK_RESET_TYPE_HARD);
+	ctx->odin->reset (type == VK_RESET_TYPE_HARD);
 	sh4_odin_pull (ctx);
 }
 
@@ -478,10 +494,12 @@ sh4o_destroy (vk_device_t **dev_)
 	if (getenv ("ODIN_SH4_STATS"))
 		fprintf (stderr, "sh4 %c: %lu instructions run, %lu cycles skipped\n",
 		         ctx->config.master ? 'M' : 'S',
-		         odin_sh4_instructions (ctx->odin),
-		         odin_sh4_skipped (ctx->odin));
-	odin_sh4_delete (ctx->odin);
+		         ctx->odin->instructions (),
+		         ctx->odin->skipped ());
+	delete ctx->odin;
+	delete ctx->bus;
 	ctx->odin = NULL;
+	ctx->bus = NULL;
 }
 
 void
@@ -498,20 +516,19 @@ sh4_set_porta_handlers (vk_cpu_t *cpu,
 void
 sh4_set_time (vk_cpu_t *cpu, uint64_t now)
 {
-	odin_sh4_set_time (((sh4_t *) cpu)->odin, now);
+	((sh4_t *) cpu)->odin->set_time (now);
 }
 
 void
 sh4_set_nmi_pin (vk_cpu_t *cpu, bool high)
 {
-	odin_sh4_set_nmi (((sh4_t *) cpu)->odin, high);
+	((sh4_t *) cpu)->odin->set_nmi (high);
 }
 
 vk_cpu_t *
 sh4_new (vk_machine_t *mach, vk_mmap_t *mmap, bool master, bool le,
          unsigned clock_mode)
 {
-	odin_sh4_bus_t bus;
 	vk_device_t *dev;
 	vk_cpu_t *cpu;
 	sh4_t *ctx;
@@ -542,18 +559,10 @@ sh4_new (vk_machine_t *mach, vk_mmap_t *mmap, bool master, bool le,
 
 	vk_machine_register_buffer (mach, ctx->iregs);
 
-	bus.ctx = ctx;
-	bus.read = bus_read;
-	bus.write = bus_write;
-	bus.port_a_read = bus_port_a_read;
-	bus.port_a_write = bus_port_a_write;
-	bus.unanswered = bus_unanswered;
-	bus.hook = bus_hook;
-
-	ctx->odin = odin_sh4_new (&bus, (uint8_t *) vk_buffer_get_ptr (ctx->iregs, 0),
-	                          master, le, clock_mode);
-	if (!ctx->odin)
-		goto fail;
+	ctx->bus = new MachineBus (ctx);
+	ctx->odin = new odin::Sh4 (*ctx->bus,
+	                           std::span<uint8_t> ((uint8_t *) vk_buffer_get_ptr (ctx->iregs, 0), 0x10000),
+	                           master, le, clock_mode);
 
 	trace_open (ctx);
 	stats_open ();

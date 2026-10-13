@@ -85,7 +85,6 @@ ODIN_OBJ := \
 	src/odin/sh4.o \
 	src/odin/sh4_ops.o \
 	src/odin/sh4_onchip.o \
-	src/odin/sh4_bridge.o \
 	src/odin/scheduler.o \
 	src/odin/worker.o
 

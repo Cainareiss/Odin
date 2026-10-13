@@ -22,6 +22,7 @@
 #include "vk/core.h"
 #include "vk/buffer.h"
 #include "vk/cpu.h"
+#include "odin/sh4.hpp"
 
 typedef union {
 	struct {
@@ -211,7 +212,8 @@ struct sh4_t {
 
 	/* The Odin core (src/odin/sh4.hpp) runs this CPU: the fields above
 	 * only carry its state to the save files and to the patches. */
-	struct odin_sh4 *odin;
+	odin::Sh4	*odin;
+	odin::Sh4Bus	*bus;
 	uint32_t	hooked_pc;
 
 	FILE		*trace;	/* see ODIN_SH4_TRACE */
