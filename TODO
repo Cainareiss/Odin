@@ -1,7 +1,8 @@
 TODO
 ====
 
-There are loads of TODO/XXX items in the source, grep them!
+What is not done, not known or only guessed. The source marks its guesses
+HEURISTIC and its stand-ins HACK: each one has its lines here.
 
 
 GENERAL
@@ -9,9 +10,12 @@ GENERAL
 
 Add support for "required" field in the JSON file.
 
-For later, write an event-driven scheduler.
-
-I'm seriously thinking about slowling "porting" valkyrie to C++... Mmm.
+One language: every file is C++ and the chips are used through their
+classes. What Valkyrie left is still to be written again as plain C++20:
+its machine, device, CPU, buffer and memory map frames (src/vk), the board
+that wires the chips (src/mach/hikaru), the face of the SH-4 that the save
+states are laid out on (src/cpu/sh). Those files are built without the
+warnings the others are held to (OLD_CXXFLAGS in the Makefile).
 
 Speed: the frames are held at 60 per second (-u lifts the limit). On a
 Ryzen 5 5600X with a GeForce RTX 3080 the whole demo loops, from power-on
@@ -31,7 +35,7 @@ loop of the sound driver turns 312 times a frame and an interrupt comes every
 of the wave memory (VON4, BRAVEFF, PHARRIER), whose turns are never the same.
 
 The frames are drawn on a thread of their own (src/odin/worker.hpp,
-src/vk/renderer.c) while the machine runs the next one: without the limit
+src/vk/renderer.cpp) while the machine runs the next one: without the limit
 the slowest second of a heavy scene goes from 72 to 90 frames per second in
 PHARRIER, 78 to 98 in VON4, 91 to 109 in BRAVEFF, 98 to 139 in AIRTRIX. The
 drawing reads the texture RAM and the display lists of the last two frames;
@@ -78,13 +82,13 @@ HIKARU
 Move the slave GPU access to src/odin/hikaru_gpu.cpp. Proper support may require the
 introduction of a new vk_device_accessors_t class.
 
-MIE LLE (src/odin/mie.cpp, ODIN_MIE=lle): HACK in src/odin/mie_bridge.cpp,
+MIE LLE (src/odin/mie.cpp, ODIN_MIE=lle): HACK in src/odin/mie_board.cpp,
 port E bits 0-3 read high while the port is an output; the BOOTROM waits
 for that at 0x0C00B860 and MAME reads 0xFF there. Measure the pins. The
-LLE path is the default; drop the HLE stand-in in hikaru-mie.c once the
+LLE path is the default; drop the HLE stand-in in hikaru-mie.cpp once the
 JVS inputs (players, coins, analog) are wired to the real board.
 The slave reaches the MIE through a window of its own (1A800008 among its
-ports, 1B000100 for its bus) and checks it at start: HACK in hikaru.c, a
+ports, 1B000100 for its bus) and checks it at start: HACK in hikaru.cpp, a
 stand-in gives the bus at once and keeps the port as written. The MEMCTL
 of the slave is not run (as Valkyrie had it: no game is known to start a
 transfer there).
@@ -103,7 +107,7 @@ Status byte st1 'V' that von4 tests on command 0x33 is not understood.
 AICA (src/odin/aica.cpp + arm7.cpp): control block, timers, interrupts,
 DMA, RTC and the ARM7 are in; still missing: the 64 slots and the DSP
 (sound output), the nested-FIQ question (does reading 0x2D00 drop the
-line?), and the HACK in hikaru-aica.c (page offset 0 reads 4 for
+line?), and the HACK in hikaru-aica.cpp (page offset 0 reads 4 for
 Pharrier). The ARM7 runs on the 22.5792 MHz bus clock, eight times MAME's
 figure: the SGNASCAR cabinet shows its sound driver ready within a frame
 of each reload, 20 MHz at least (HEURISTIC: no wait state). It costs a
@@ -115,7 +119,7 @@ on the real self-test of Planet Harriers and 19.7 M words against MAME's
 code): RAM at local bus 0x0A000000, registers at 0x0A010000, keys from
 MAME (airtrix, pharrier, swracer). Its ready bit is never busy (MAME).
 The BOOTROM board probe answers a constant for the boards without the
-chip, braveff and von4 (hikaru-memctl.c, HACK until those boards are
+chip, braveff and von4 (hikaru-memctl.cpp, HACK until those boards are
 measured).
 
 SGNASCAR ROM board security FPGA (src/odin/actel_m1.cpp, the stream
@@ -272,7 +276,7 @@ processor says once when a type never met comes in. The patents (US
 drawn and switch the lights off on what they cover: nothing here does it.
 The types 0 and 7 are not drawn.
 
-EEPROMs: the main board 93C46 (SH-4 port A, src/odin/eeprom_bridge.cpp)
+EEPROMs: the main board 93C46 (SH-4 port A, src/odin/eeprom_93c46.cpp)
 and the ROM board X76F100 (bus page 0x14, src/odin/x76f100.cpp) are
 real and read by the BOOTROM; the MIE 93C46 is in the LLE MIE. It holds
 the system settings of the BOOTROM (two copies of 62 bytes and a CRC,
@@ -293,7 +297,7 @@ of the build that wrote it: every item carries its size and another build
 refuses the state when one differs. The MIE 93C46 comes back from the
 state, not from ODIN_MIE_EEPROM.
 
-Game patches (hikaru.c, hikaru_install_game_patches) are all off, kept
+Game patches (hikaru.cpp, hikaru_install_game_patches) are all off, kept
 as comments: airtrix 0x0C010F9A (660-frame I/O board wait shortened),
 braveff 0x0C0407D0/0x0C0D522A/0x0C05B53E (forced results, purpose
 unknown), pharrier 0x0C01C322 (AICA loop), sgnascar 0x0C00BC9A (EEPROM
@@ -303,12 +307,12 @@ seen running without it. Kept as a HACK: sgnascar 0x0C00BC9A, because
 the X76F100 image is the Air Trix one (MAME has no NASCAR dump) and the
 BOOTROM region check answers "ERROR 7" with it.
 
-Bridge DMA (hikaru-memctl.c): the transfer completes at the start
+Bridge DMA (hikaru-memctl.cpp): the transfer completes at the start
 write, like MAME. HEURISTIC: the real 315-6154 takes time, but games
 refill the source buffer right after starting a transfer (von4 model
 loader at 0x0C055FD4), so it must at least run ahead of the SH-4.
 
-Frame (hikaru.c): the machine keeps its time in SH-4 cycles
+Frame (hikaru.cpp): the machine keeps its time in SH-4 cycles
 (src/odin/scheduler.cpp) and cuts the frame in the lines the game sets:
 818 dots a line, 528 lines, 480 of them shown (1A000080, 1A000084,
 1A00008C). HEURISTIC: the dot clock is the value of MAME, 25.94729 MHz,
@@ -319,10 +323,10 @@ the game sets it, some thirty frames after power-on. Any other screen (the
 24 kHz one) stops the emulator. As Valkyrie had them: the chips run a line
 each in turn, and the line counter is written at the end of its line.
 
-Interrupts (hikaru.c, hikaru_update_irqs): the lines of the chips are
+Interrupts (hikaru.cpp, hikaru_update_irqs): the lines of the chips are
 levels, held until the handler of the game has acknowledged the chip.
 IRL1 of the master is the bridge; IRL2 is what the interrupt controller on
-ports B, C and F of the MIE lets through (src/odin/mie_bridge.cpp; the
+ports B, C and F of the MIE lets through (src/odin/mie_board.cpp; the
 lines have the names MAME's hikaru.cpp takes from the schematics), and
 port A of the master reads the same lines. The master sets the mask of the
 MIE to 0xE1: the sound boards do not interrupt the SH-4. The mask of the
@@ -349,7 +353,7 @@ Not implemented, the emulator stops with a message: the slave pulling its
 line to the master (IRL3 of the master for MAME), a DMA of the bridge of
 the slave.
 
-Resets (hikaru.c, hikaru_set_resets): the master drives port D of the MIE
+Resets (hikaru.cpp, hikaru_set_resets): the master drives port D of the MIE
 through its window. The system library pulses bit 5 and the sound boards
 are reset, their clock aside. The BOOTROM pulses bit 2, the reset of the
 slave SH-4, as soon as the MIE gives its bus (frame 27): that one is NOT
@@ -420,7 +424,7 @@ SH-4
 ----
 
 The two SH-4 run on the Odin core (src/odin/sh4.cpp, sh4_ops.cpp,
-sh4_onchip.cpp; src/cpu/sh/sh4-odin.c puts it in the machine). It gave the
+sh4_onchip.cpp; src/cpu/sh/sh4-odin.cpp puts it in the machine). It gave the
 registers and the memory of the Valkyrie interpreter it replaced at every
 slice of the six games. ODIN_SH4_TRACE=<prefix> writes the PC and a hash of
 the registers at every slice, ODIN_SH4_STATS=1 the host time of the slices.
