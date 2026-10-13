@@ -28,6 +28,7 @@
 #include <memory>
 #include <span>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include "odin/eeprom_93c46.hpp"
@@ -160,6 +161,7 @@ private:
 	void slave_idle_loop();
 	std::string cpu_string(unsigned which) const;
 	std::string board_string() const;
+	void tell_error(const std::string &where, const char *what);
 	void cpu_error(const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 	void board_error(const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 	void log_access(const char *name, char rw, unsigned size, uint32_t addr, uint64_t value);
@@ -244,6 +246,9 @@ private:
 	unsigned m_line;
 	unsigned m_dots_per_line, m_lines_per_frame, m_lines_shown;
 	uint32_t m_line_rest;	/* of a cycle, in dot clocks */
+
+	/* The accesses nothing answered that were told, see Bus::unanswered */
+	std::unordered_set<uint64_t> m_unanswered_told;
 
 	/* Traces and counts asked by the environment */
 	FILE *m_mie_trace;

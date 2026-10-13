@@ -928,9 +928,19 @@ Hikaru::board_string() const
 	return text;
 }
 
+/* A message goes out whole, in one write: the drawing thread writes to
+ * stderr too, and a formatted print to a stream without a buffer is a
+ * system call for each of its pieces on some hosts. */
+void
+Hikaru::tell_error(const std::string &where, const char *what)
+{
+	const std::string line = "ERROR: " + where + " : " + what + "\n";
+
+	std::fputs(line.c_str(), stderr);
+}
+
 /* What a program did that has no answer here, with where the SH-4 that runs
- * is, or with where the whole board is. A message goes out in one piece: the
- * drawing thread writes to stderr too. */
+ * is, or with where the whole board is. */
 void
 Hikaru::cpu_error(const char *fmt, ...)
 {
@@ -940,7 +950,7 @@ Hikaru::cpu_error(const char *fmt, ...)
 	va_start(args, fmt);
 	std::vsnprintf(what, sizeof(what), fmt, args);
 	va_end(args);
-	std::fprintf(stderr, "ERROR: %s : %s\n", cpu_string(m_current).c_str(), what);
+	tell_error(cpu_string(m_current), what);
 }
 
 void
@@ -952,7 +962,7 @@ Hikaru::board_error(const char *fmt, ...)
 	va_start(args, fmt);
 	std::vsnprintf(what, sizeof(what), fmt, args);
 	va_end(args);
-	std::fprintf(stderr, "ERROR: %s : %s\n", board_string().c_str(), what);
+	tell_error(board_string(), what);
 }
 
 /* With -v: an access to what is worth watching */

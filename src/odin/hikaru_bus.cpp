@@ -877,16 +877,22 @@ Hikaru::Bus::port_a_write(uint16_t pins)
 	m_board.m_sh[SLAVE]->set_nmi(pins & 1);
 }
 
+/* An access nothing answers is told the first time: a program that makes
+ * one makes it again at every frame. */
 void
 Hikaru::Bus::unanswered(bool is_write, uint32_t addr, uint32_t size, uint64_t value)
 {
-	char text[64];
+	const uint64_t access = addr | (static_cast<uint64_t>(size) << 32) | (static_cast<uint64_t>(is_write) << 40) |
+	                        (static_cast<uint64_t>(m_which) << 41);
+	char text[80];
 
+	if (!m_board.m_unanswered_told.insert(access).second)
+		return;
 	if (is_write)
-		std::snprintf(text, sizeof(text), "unhandled W%u @%08X = %" PRIX64, 8 * size, addr, value);
+		std::snprintf(text, sizeof(text), "unhandled W%u @%08X = %" PRIX64 " (told once)", 8 * size, addr, value);
 	else
-		std::snprintf(text, sizeof(text), "unhandled R%u @%08X", 8 * size, addr);
-	std::fprintf(stderr, "ERROR: %s : %s\n", m_board.cpu_string(m_which).c_str(), text);
+		std::snprintf(text, sizeof(text), "unhandled R%u @%08X (told once)", 8 * size, addr);
+	m_board.tell_error(m_board.cpu_string(m_which), text);
 }
 
 /* The instruction at the address the board looks at is about to run. For the
