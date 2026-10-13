@@ -37,8 +37,17 @@ another matter: on an Intel HD 520 the translucent fragments of a picture
 like the worst of BRAVEFF take 59 ms, against 0.8 ms on the RTX 3080. The main
 loop of the sound driver turns 312 times a frame and an interrupt comes every
 22 samples: the turns in between are counted without being run
-(src/odin/arm7.cpp), except with the drivers that count their turns at 0x40
-of the wave memory (VON4, BRAVEFF, PHARRIER), whose turns are never the same.
+(src/odin/arm7.cpp). The drivers of VON4 and PHARRIER count their turns in
+the word at 0x40 of the wave memory: a turn that only adds a constant to one
+word, and looks at it nowhere else, is counted too, and the word is given
+the turns it is owed before anything reads it (Arm7::turn_counts; their
+sound boards cost 2.4 times less). ODIN_TURNS=0 runs every turn: the
+memory, the states and the pictures must be the same. Not counted: the
+driver of BRAVEFF, whose turn serves one of eight slots in turn (the byte at
+0x9312 goes from 0 to 7): the eight turns that bring it back do not fit
+between two interrupts, and the try costs more than it saves there. A
+recorded turn is forgotten at each interrupt: keeping it, to be checked
+against what it read, would count more turns in every game.
 
 The frames are drawn on a thread of their own (src/odin/worker.hpp,
 src/odin/display.cpp) while the machine runs the next one: without the limit
