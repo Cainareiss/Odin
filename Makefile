@@ -131,8 +131,9 @@ src/odin/sh4_ops.o: CXXFLAGS += -ffp-contract=off
 install:
 	@( mkdir -pv $(HOME)/.local/bin )
 	@( cp -v bin/odin $(HOME)/.local/bin )
-	@( mkdir -pv $(HOME)/.local/share/odin )
+	@( mkdir -pv $(HOME)/.local/share/odin/shaders )
 	@( cp -v vk-games.json $(HOME)/.local/share/odin )
+	@( cp -v shaders/*.txt $(HOME)/.local/share/odin/shaders )
 
 clean:
 	find . -name '*.o' -o -name '*.d' | xargs rm -vf
