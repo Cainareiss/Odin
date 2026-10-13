@@ -30,6 +30,24 @@ loop of the sound driver turns 312 times a frame and an interrupt comes every
 (src/odin/arm7.cpp), except with the drivers that count their turns at 0x40
 of the wave memory (VON4, BRAVEFF, PHARRIER), whose turns are never the same.
 
+The frames are drawn on a thread of their own (src/odin/worker.hpp,
+src/vk/renderer.c) while the machine runs the next one: without the limit
+the slowest second of a heavy scene goes from 72 to 90 frames per second in
+PHARRIER, 78 to 98 in VON4, 91 to 109 in BRAVEFF, 98 to 139 in AIRTRIX. The
+drawing reads the texture RAM and the display lists of the last two frames;
+all the rest is taken from the machine when its frame ends
+(Renderer::take_frame), and the machine waits for the drawing before it
+writes the texture RAM. ODIN_LATE_DRAW=1 is the test of it: each drawing is
+held until the machine has run the whole next frame, and the pictures must
+come out the same (the six demo loops, 108600 pictures; reading the layers
+at the drawing instead, or building the lists in two buffers, changes
+them). Not run under a race detector: -fsanitize=thread falls over in the
+NVIDIA driver (a thread of the driver it does not know) and in llvmpipe
+(in LLVM). No frame is skipped: each list feeds the 3D buffers of the
+next, so a graphics card slower than the machine slows the machine down.
+The debug keys, the pause and the state keys were not tried with the
+thread (no keyboard in the test runs); -s, -l, -w, -f and -x were.
+
 
 HIKARU
 ------
