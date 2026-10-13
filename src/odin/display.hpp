@@ -1,0 +1,160 @@
+/*
+ * Odin
+ * Copyright (C) 2026 Réda Chérif-Touil
+ *
+ * Valkyrie
+ * Copyright (C) 2011-2013, Stefano Teso
+ *
+ * Valkyrie is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Valkyrie is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Valkyrie.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#ifndef ODIN_DISPLAY_HPP
+#define ODIN_DISPLAY_HPP
+
+#include <cstdint>
+#include <cstdio>
+#include <functional>
+#include <memory>
+#include <semaphore>
+#include <string>
+#include <vector>
+
+#include <GL/glew.h>
+#include <SDL.h>
+
+#include "odin/hikaru.hpp"
+
+namespace odin {
+
+class Keyboard;
+class Renderer;
+class Worker;
+
+/* The screen of the cabinet: a window, and in it the pictures the renderer
+ * (renderer.hpp) draws from what the graphics chips leave.
+ *
+ * The frames are drawn on a thread of their own, which holds the OpenGL
+ * context: the board runs a frame while the one before is drawn. What a
+ * drawing reads of the board is told in renderer.hpp; the board waits for
+ * the drawing before it changes any of it (Hikaru::Screen). Everything else
+ * here is called from the thread that runs the board.
+ *
+ * The environment asks for what is measured on the pictures:
+ *
+ *  VK_SCREENSHOT=<prefix>	<prefix>-<frame>.ppm every 60 frames, or
+ *				every VK_SCREENSHOT_EVERY frames
+ *  ODIN_PICTURE_FP=1		a line for the picture of each frame on
+ *				stderr, FNV-1a 64 of its pixels, to compare
+ *				two builds
+ *  ODIN_SPEED=1		a line every 60 frames on stderr: the frames
+ *				a second over them and the longest of them
+ *				in milliseconds
+ *  ODIN_LATE_DRAW=1		a test of the thread: the drawing of a frame
+ *				starts when the board has run the next one,
+ *				or has to wait for it. The pictures must be
+ *				the same.
+ *
+ * and for the looks at what is drawn, see Renderer::Options: HR_LOG,
+ * HR_LOG_FRAME, ODIN_LIST_FP, ODIN_LIST_DUMP, ODIN_LISTS_TEST,
+ * ODIN_DEBUG_KEYS. */
+class Display : public Hikaru::Screen {
+public:
+	struct Options {
+		unsigned scale;		/* the 3D that many times finer than the screen, 1 to 6 */
+		unsigned anisotropy;	/* of the texture filter, 1 for none as on the board */
+		unsigned window;	/* the window that many times the screen */
+		bool fullscreen;
+	};
+
+	/* The window of a board, which it becomes the screen of; nothing,
+	 * with the reason on stderr, if it cannot be opened. The board and
+	 * the keyboard outlive it. */
+	static std::unique_ptr<Display> make(Hikaru &board, const Keyboard &keys, const Options &options);
+	~Display();
+	Display(const Display &) = delete;
+	Display &operator=(const Display &) = delete;
+
+	/* A frame of the board: begin_frame before the board runs it,
+	 * end_frame once it has, with its number. */
+	void begin_frame();
+	void end_frame(unsigned frame);
+
+	/* Between the window and the whole display */
+	void toggle_fullscreen();
+
+	/* Hikaru::Screen */
+	void list_launched() override;
+	void before_texture_write(unsigned bank) override;
+	void before_memory_changes() override { finish(); }
+	void memory_changed() override;
+	bool save_pictures(StateFile &state) override;
+	bool load_pictures(StateFile &state) override;
+
+private:
+	Display(Hikaru &board, const Keyboard &keys, const Options &options, SDL_Window *window,
+	        SDL_GLContext context);
+
+	void set_window(unsigned times, bool fullscreen);
+	/* Waits for the frame being drawn. */
+	void finish();
+	/* Has the drawing thread do a job, and waits for it. */
+	void run(std::function<void()> job);
+	/* On the drawing thread */
+	void draw();
+	void read_picture(uint8_t *pixels);
+	void screenshot();
+	void print_fingerprint();
+	/* After a frame */
+	void show_speed();
+	void print_speed();
+
+	Hikaru &m_board;
+	const Keyboard &m_keys;
+	SDL_Window *m_window;
+	SDL_GLContext m_context;
+	std::unique_ptr<Renderer> m_renderer;
+	std::unique_ptr<Worker> m_drawing;
+
+	/* The frame given to the drawing thread: its number, the options it
+	 * is drawn with, whether its drawing writes a log, and the picture
+	 * the drawing leaves: the framebuffer it can be read from and its
+	 * size. */
+	unsigned m_frame;
+	unsigned m_scale, m_anisotropy;
+	bool m_logged;
+	GLuint m_picture_fb;
+	unsigned m_picture_width, m_picture_height;
+	/* The debug switches as text, for the title */
+	std::string m_message;
+
+	/* ODIN_LATE_DRAW: the drawing given last waits for the semaphore */
+	bool m_late;
+	bool m_held;
+	std::binary_semaphore m_late_draw;
+
+	/* What the environment asks for */
+	const char *m_shot_prefix;
+	unsigned m_shot_every;
+	bool m_fingerprint;
+	std::vector<uint8_t> m_pixels;
+	bool m_speed;
+	uint64_t m_speed_since, m_speed_last, m_speed_longest;
+	/* The frames shown in the title */
+	uint64_t m_title_since;
+	unsigned m_title_frames;
+};
+
+} /* namespace odin */
+
+#endif /* ODIN_DISPLAY_HPP */
