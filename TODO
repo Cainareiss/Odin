@@ -57,8 +57,13 @@ longest frame of that scene is then 21 ms, the driver cache empty or not; a
 program met for the first time still costs its 30 ms once. The lists start
 with a line that names their format (LIST_HEADER in renderer_programs.cpp):
 its number goes up when MeshVariant::key changes, and shaders/ is then made
-again (the six loops with an empty XDG_CACHE_HOME). A few frames of that
-scene still come 4 to 7 ms late; what holds them was not looked for.
+again (the six loops with an empty XDG_CACHE_HOME). What is left, in a
+heavy scene of each game at 60 frames per second: no frame late in
+PHARRIER, PODRACE and VON4, one or two in 30 s in AIRTRIX, BRAVEFF and
+SGNASCAR, 4 to 8 ms late. In BRAVEFF (frame 3407) and SGNASCAR (8843,
+9701) they are the same frames at each run and the drawing is not waited
+for: frames the machine itself takes 20 to 24 ms to run. Which chip of it
+was not measured.
 
 The debug keys (ODIN_DEBUG_KEYS) were not tried with the thread; the
 pause, F11, F4, F1 and Escape were, with keys sent to the window, and -s,
