@@ -45,6 +45,21 @@ them). Not run under a race detector: -fsanitize=thread falls over in the
 NVIDIA driver (a thread of the driver it does not know) and in llvmpipe
 (in LLVM). No frame is skipped: each list feeds the 3D buffers of the
 next, so a graphics card slower than the machine slows the machine down.
+Stutters: ODIN_SPEED=1 tells the longest frame of each second. With the
+limit at 60 a game stuttered each time it drew with a mesh program for the
+first time on a computer: the NVIDIA driver 595 takes some 20 ms to compile
+one, and 10 more when it first draws, on the thread that draws (a scene
+change of PHARRIER: 21 programs, a frame of 449 ms). The programs a game
+draws with are now listed (shaders/<game>.txt beside vk-games.json for the
+demo loops, then ~/.cache/odin/shaders/<game>.txt for what a player meets)
+and made ready when the game starts: compiled, and drawn with once. The
+longest frame of that scene is then 21 ms, the driver cache empty or not; a
+program met for the first time still costs its 30 ms once. The lists start
+with a line that names their format (LIST_HEADER in renderer_programs.cpp):
+its number goes up when MeshVariant::key changes, and shaders/ is then made
+again (the six loops with an empty XDG_CACHE_HOME). A few frames of that
+scene still come 4 to 7 ms late; what holds them was not looked for.
+
 The debug keys (ODIN_DEBUG_KEYS) were not tried with the thread; the
 pause, F11, F4, F1 and Escape were, with keys sent to the window, and -s,
 -l, -w, -f and -x. F1 used to abort while the machine ran ("IRL pin held
