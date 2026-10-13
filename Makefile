@@ -78,7 +78,6 @@ ODIN_OBJ := \
 	src/odin/eeprom_93c46.o \
 	src/odin/x76f100.o \
 	src/odin/crypt_315_5881.o \
-	src/odin/crypt_315_5881_bridge.o \
 	src/odin/actel_m1.o \
 	src/odin/jvs_host.o \
 	src/odin/jvs_io_13551.o \

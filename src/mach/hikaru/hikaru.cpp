@@ -177,9 +177,8 @@
 /* The 315-5881 reads its input from the ROM board RAM, one byte-swapped
  * word at a time (MAME hikaru.cpp prot_ram_r). */
 static uint16_t
-crypt_read_protram (void *ctx, uint32_t addr)
+crypt_read_protram (hikaru_t *hikaru, uint32_t addr)
 {
-	hikaru_t *hikaru = (hikaru_t *) ctx;
 	uint16_t w = vk_buffer_get (hikaru->protram, 2, (addr & 0x7FFF) * 2);
 	return (uint16_t) ((w >> 8) | (w << 8));
 }
@@ -671,30 +670,6 @@ load_chip (vk_state_t *state, Chip &chip)
 	return 0;
 }
 
-
-#define SAVE_CHIP(name_, dev_) \
-	do { \
-		size_t size_ = name_##_state_size (); \
-		void *block_ = malloc (size_); \
-		if (block_) { \
-			name_##_save_state (dev_, block_); \
-			ret |= vk_state_put (state, block_, size_); \
-			free (block_); \
-		} else \
-			ret = -1; \
-	} while (0)
-
-#define LOAD_CHIP(name_, dev_) \
-	do { \
-		size_t size_ = name_##_state_size (); \
-		void *block_ = malloc (size_); \
-		if (block_ && !vk_state_get (state, block_, size_)) \
-			name_##_load_state (dev_, block_); \
-		else \
-			ret = -1; \
-		free (block_); \
-	} while (0)
-
 static int
 hikaru_load_state (vk_machine_t *mach, vk_state_t *state)
 {
@@ -714,7 +689,7 @@ hikaru_load_state (vk_machine_t *mach, vk_state_t *state)
 	ret |= load_chip<odin::Eeprom93c46State> (state, *hikaru->eeprom_main);
 	ret |= load_chip<odin::X76f100State> (state, *hikaru->eeprom_rombd);
 	if (hikaru->crypt)
-		LOAD_CHIP (odin_crypt5881, hikaru->crypt);
+		ret |= load_chip<odin::Crypt315_5881State> (state, *hikaru->crypt);
 	if (hikaru->actel)
 		ret |= load_chip<odin::ActelM1State> (state, *hikaru->actel);
 
@@ -755,7 +730,7 @@ hikaru_save_state (vk_machine_t *mach, vk_state_t *state)
 	ret |= save_chip<odin::Eeprom93c46State> (state, *hikaru->eeprom_main);
 	ret |= save_chip<odin::X76f100State> (state, *hikaru->eeprom_rombd);
 	if (hikaru->crypt)
-		SAVE_CHIP (odin_crypt5881, hikaru->crypt);
+		ret |= save_chip<odin::Crypt315_5881State> (state, *hikaru->crypt);
 	if (hikaru->actel)
 		ret |= save_chip<odin::ActelM1State> (state, *hikaru->actel);
 
@@ -1225,10 +1200,10 @@ hikaru_init (hikaru_t *hikaru)
 		if (!hikaru->protram)
 			return -1;
 		vk_machine_register_buffer (mach, (void *) hikaru->protram);
-		hikaru->crypt = odin_crypt5881_new (hikaru->rombd_config.crypt_key,
-		                                    crypt_read_protram, hikaru);
-		if (!hikaru->crypt)
-			return -1;
+		hikaru->crypt = new odin::Crypt315_5881 (hikaru->rombd_config.crypt_key);
+		hikaru->crypt->set_read ([hikaru] (uint32_t addr) {
+			return crypt_read_protram (hikaru, addr);
+		});
 		VK_PRINT ("ROM board 315-5881: key %08X, 64 KB RAM", hikaru->rombd_config.crypt_key);
 	}
 

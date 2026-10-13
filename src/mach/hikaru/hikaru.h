@@ -22,7 +22,7 @@
 #include "vk/mmap.h"
 #include "odin/eeprom_93c46.hpp"
 #include "odin/x76f100.hpp"
-#include "odin/crypt_315_5881_bridge.hpp"
+#include "odin/crypt_315_5881.hpp"
 #include "odin/actel_m1.hpp"
 #include "odin/scheduler.hpp"
 #include "vk/cpu.h"
@@ -82,7 +82,7 @@ typedef struct {
 	odin::X76f100 *eeprom_rombd;
 	/* RAM of the 315-5881, local bus 0x0A000000, boards with the chip only */
 	vk_buffer_t *protram;
-	odin_crypt5881_t *crypt;
+	odin::Crypt315_5881 *crypt;
 	/* Security FPGA of the SGNASCAR ROM board, local bus 0x0A000000 */
 	odin::ActelM1 *actel;
 	unsigned porta_m_bit0_buffer;

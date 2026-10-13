@@ -79,6 +79,19 @@ public:
 	void write_subkey(uint16_t data);
 	uint16_t read_decrypt();
 
+	/* The registers on the bus of the ROM board, 16 bits each. An
+	 * access of another width or at another offset does nothing and is
+	 * told once. */
+	enum : uint32_t {
+		REG_READY = 0x0,
+		REG_ADDR_LO = 0x8,
+		REG_ADDR_HI = 0xA,
+		REG_SUBKEY = 0xC,
+		REG_DECRYPT = 0xE
+	};
+	uint32_t bus_read(uint32_t offset, unsigned size);
+	void bus_write(uint32_t offset, unsigned size, uint32_t value);
+
 	void set_log(FILE *out) { m_log = out; }
 
 	void save(Crypt315_5881State &out) const;
@@ -89,6 +102,8 @@ private:
 	static constexpr uint32_t BUFFER_SIZE = 2;
 	static constexpr uint32_t LINE_SIZE = 512;
 	static constexpr uint32_t FLAG_COMPRESSED = 0x20000;
+
+	void tell_unknown(char rw, uint32_t offset, unsigned size, uint32_t value);
 
 	void set_addr_low(uint16_t data);
 	void set_addr_high(uint16_t data);
@@ -104,6 +119,7 @@ private:
 	uint32_t m_key;
 	ReadFn m_read;
 	FILE *m_log;
+	bool m_unknown_told;
 
 	bool m_first_read;
 	bool m_enc_ready;

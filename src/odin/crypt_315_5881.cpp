@@ -505,7 +505,7 @@ uint16_t block_decrypt(uint32_t game_key, uint16_t sequence_key, uint16_t counte
 } /* namespace */
 
 Crypt315_5881::Crypt315_5881(uint32_t key)
-	: m_key(key), m_log(nullptr), m_buffer_bit2(0), m_buffer2a(0), m_block_size(0), m_block_pos(0),
+	: m_key(key), m_log(nullptr), m_unknown_told(false), m_buffer_bit2(0), m_buffer2a(0), m_block_size(0), m_block_pos(0),
 	  m_block_numlines(0), m_done_compression(false)
 {
 	m_buffer2.fill(0);
@@ -535,6 +535,54 @@ void Crypt315_5881::reset()
 }
 
 /* Bit 0 busy; MAME never reports it. */
+uint32_t Crypt315_5881::bus_read(uint32_t offset, unsigned size)
+{
+	if (size == 2) {
+		switch (offset) {
+		case REG_READY:
+			return ready();
+		case REG_DECRYPT:
+			return read_decrypt();
+		default:
+			break;
+		}
+	}
+	tell_unknown('R', offset, size, 0);
+	return 0;
+}
+
+void Crypt315_5881::bus_write(uint32_t offset, unsigned size, uint32_t value)
+{
+	if (size == 2) {
+		const uint16_t data = static_cast<uint16_t>(value);
+
+		switch (offset) {
+		case REG_ADDR_LO:
+			write_addr_lo(data);
+			return;
+		case REG_ADDR_HI:
+			write_addr_hi(data);
+			return;
+		case REG_SUBKEY:
+			write_subkey(data);
+			return;
+		default:
+			break;
+		}
+	}
+	tell_unknown('W', offset, size, value);
+}
+
+void Crypt315_5881::tell_unknown(char rw, uint32_t offset, unsigned size, uint32_t value)
+{
+	if (m_unknown_told) {
+		return;
+	}
+	m_unknown_told = true;
+	std::fprintf(m_log ? m_log : stderr, "315-5881: unknown register %c offset %X size %u value %04X\n",
+	             rw, offset, size, value);
+}
+
 uint16_t Crypt315_5881::ready() const
 {
 	return 0;

@@ -29,17 +29,15 @@
  * plaintext (315-5881_crypt.cpp decrypt_be_r); one read is thrown
  * away before the 0x139C words, and that is the convention the
  * vectors match. Then: a second run after a new address low write
- * restarts the stream, and the C entry points through the register
- * offsets of the local bus window.
+ * restarts the stream, and the registers at their offsets in the
+ * window of the local bus.
  *
  * Build: g++ -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
  *            -O2 -I src tests/crypt_315_5881/crypt_test.cpp \
- *            src/odin/crypt_315_5881.cpp src/odin/crypt_315_5881_bridge.cpp \
- *            -o crypt_test
+ *            src/odin/crypt_315_5881.cpp -o crypt_test
  * Exit status is 0 when every check passes. */
 
 #include "odin/crypt_315_5881.hpp"
-#include "odin/crypt_315_5881_bridge.hpp"
 
 #include <array>
 #include <cstdio>
@@ -269,38 +267,33 @@ int main()
 		      "no address write: the stream continues where it was");
 	}
 
-	/* C entry points through the register offsets. */
+	/* The registers at their offsets on the bus. */
 	{
 		ProtRam ram;
 		fill_ram(ram, input, true);
-		odin_crypt5881_t *c = odin_crypt5881_new(
-			PHARRIER_KEY,
-			[](void *ctx, uint32_t addr) -> uint16_t {
-				return static_cast<const ProtRam *>(ctx)->chip_read(addr);
-			},
-			&ram);
-		odin_crypt5881_reset(c);
-		odin_crypt5881_write(c, REG_ADDR_HI, 2, 0);
-		odin_crypt5881_write(c, REG_ADDR_LO, 2, 0);
-		odin_crypt5881_write(c, REG_SUBKEY, 2, PHARRIER_SUBKEY);
-		check((odin_crypt5881_read(c, REG_READY, 2) & 1) == 0, "bridge: ready");
-		check(odin_crypt5881_read(c, REG_DECRYPT, 2) == 0, "bridge: dummy word first");
-		std::vector<uint8_t> bridge_out(EXPECTED_SIZE);
+		Crypt315_5881 chip(PHARRIER_KEY);
+		chip.set_read([&ram](uint32_t addr) { return ram.chip_read(addr); });
+		chip.reset();
+		chip.bus_write(REG_ADDR_HI, 2, 0);
+		chip.bus_write(REG_ADDR_LO, 2, 0);
+		chip.bus_write(REG_SUBKEY, 2, PHARRIER_SUBKEY);
+		check((chip.bus_read(REG_READY, 2) & 1) == 0, "registers: ready");
+		check(chip.bus_read(REG_DECRYPT, 2) == 0, "registers: dummy word first");
+		std::vector<uint8_t> words(EXPECTED_SIZE);
 		for (uint32_t i = 0; i < OUTPUT_WORDS; i++) {
-			const uint16_t w = static_cast<uint16_t>(odin_crypt5881_read(c, REG_DECRYPT, 2));
-			put_le16(bridge_out, static_cast<size_t>(i) * 2, swap16(w));
+			const uint16_t w = static_cast<uint16_t>(chip.bus_read(REG_DECRYPT, 2));
+			put_le16(words, static_cast<size_t>(i) * 2, swap16(w));
 		}
-		check(first_difference(bridge_out, expected) == OUTPUT_WORDS,
-		      "bridge: Planet Harriers self-test through the register offsets");
+		check(first_difference(words, expected) == OUTPUT_WORDS,
+		      "registers: Planet Harriers self-test through the register offsets");
 		FILE *devnull = std::fopen("/dev/null", "w");
-		odin_crypt5881_set_log(c, devnull);
-		check(odin_crypt5881_read(c, 0x4, 2) == 0, "bridge: unmapped offset reads 0");
-		check(odin_crypt5881_read(c, REG_DECRYPT, 4) == 0, "bridge: 32-bit access reads 0");
-		odin_crypt5881_write(c, 0x6, 2, 0x1234);
+		chip.set_log(devnull);
+		check(chip.bus_read(0x4, 2) == 0, "registers: unmapped offset reads 0");
+		check(chip.bus_read(REG_DECRYPT, 4) == 0, "registers: 32-bit access reads 0");
+		chip.bus_write(0x6, 2, 0x1234);
 		if (devnull) {
 			std::fclose(devnull);
 		}
-		odin_crypt5881_delete(c);
 	}
 
 	std::printf("%u/%u checks passed\n", g_passed, g_passed + g_failed);

@@ -481,7 +481,7 @@ memctl_bus_get (hikaru_memctl_t *memctl, unsigned size, uint32_t bus_addr, void 
 		set_ptr (val, size, vk_buffer_get (hikaru->protram, size, offs));
 	} else if (hikaru->crypt && bus_addr >= 0x0A010000 && bus_addr <= 0x0A01000F) {
 		/* 315-5881 registers */
-		set_ptr (val, size, odin_crypt5881_read (hikaru->crypt, offs & 0xF, size));
+		set_ptr (val, size, hikaru->crypt->bus_read (offs & 0xF, size));
 	} else if (hikaru->actel && bus_addr >= 0x0A000000 && bus_addr <= 0x0A000013) {
 		/* Security FPGA of the SGNASCAR board */
 		set_ptr (val, size, hikaru->actel->bus_read (offs, size));
@@ -621,7 +621,7 @@ memctl_bus_put (hikaru_memctl_t *memctl, unsigned size, uint32_t bus_addr, uint6
 		vk_buffer_put (hikaru->protram, size, offs, val);
 	} else if (hikaru->crypt && bus_addr >= 0x0A010000 && bus_addr <= 0x0A01000F) {
 		/* 315-5881 registers */
-		odin_crypt5881_write (hikaru->crypt, offs & 0xF, size, (uint32_t) val);
+		hikaru->crypt->bus_write (offs & 0xF, size, (uint32_t) val);
 	} else if (hikaru->actel && bus_addr >= 0x0A000000 && bus_addr <= 0x0A000013) {
 		/* Security FPGA of the SGNASCAR board */
 		hikaru->actel->bus_write (offs, size, (uint32_t) val);
