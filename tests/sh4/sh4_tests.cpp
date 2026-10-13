@@ -1195,6 +1195,52 @@ void test_blocks()
 		eq("the new instruction runs", st.r[2], 3);
 	}
 	{
+		/* A loop that stores an instruction, add #k, r2 with k the low
+		 * three bits of its count of turns, over one of the block it
+		 * then branches to, which stores it over the instruction after
+		 * its own store: each turn adds k twice, whatever was decoded
+		 * before. */
+		Machine m;
+		m.code(CODE, {0x7401, 0x6043, 0xC907, 0x6503, 0x9004, 0x305C, 0xD102, 0x2101, 0xA00A, NOP,
+		              0x7200, NOP, NOP, NOP, NOP, NOP, NOP, NOP, NOP, NOP,
+		              0xD102, 0x2101, 0x7201, 0x7303, 0xAFE6, NOP});
+		m.put32(CODE + 24, CODE + 46);
+		m.put32(CODE + 52, CODE + 44);
+		for (uint32_t i = 0; i < 40; i++) {
+			m.cpu.run(static_cast<int32_t>(70 + 13 * i));
+		}
+		const Sh4State st = m.state();
+		uint32_t done = 0;
+		for (uint32_t turn = 1; turn < st.r[4]; turn++) {
+			done += 2 * (turn & 7);
+		}
+		const uint32_t k = st.r[4] & 7;
+		check(st.r[4] > 500, "the loop went round");
+		check(st.r[2] == done || st.r[2] == done + k || st.r[2] == done + 2 * k,
+		      "the instructions stored are the ones that ran");
+		eq("and the one stored over did not", st.r[3], 0);
+	}
+	{
+		/* The same store over the first instruction of a block that the
+		 * loop branches to at once, and that was run a turn before:
+		 * nothing stops the program between the store and the block. */
+		Machine m;
+		m.code(CODE, {0x7401, 0x6043, 0xC907, 0x6503, 0x9004, 0x305C, 0xD102, 0x2101, 0xA00A, NOP,
+		              0x7200, NOP, NOP, NOP, NOP, NOP, NOP, NOP, NOP, NOP,
+		              0x7201, 0xAFE9, NOP});
+		m.put32(CODE + 24, CODE + 40);
+		for (uint32_t i = 0; i < 40; i++) {
+			m.cpu.run(static_cast<int32_t>(70 + 13 * i));
+		}
+		const Sh4State st = m.state();
+		uint32_t done = 0;
+		for (uint32_t turn = 1; turn < st.r[4]; turn++) {
+			done += turn & 7;
+		}
+		check(st.r[4] > 500, "the loop went round");
+		check(st.r[2] == done || st.r[2] == done + (st.r[4] & 7), "each turn ran the instruction it stored");
+	}
+	{
 		/* A delay loop is counted, not run, with the same result. */
 		Machine m;
 		/* mov #0x40,r1; shll8 r1; dt r1; bf -3; mov #9,r2 */

@@ -388,14 +388,18 @@ private:
 	}
 
 	/* At the end of a block that nothing disturbed: the block at `pc`,
-	 * entered, when it is kept, was compared in this epoch and fits in
-	 * the slice, unless the search for waits has something to do here.
-	 * Otherwise nullptr, and nothing has changed. */
+	 * entered, when it is kept, fits in the slice and its code is still
+	 * what was decoded, compared now if it was not in this epoch, unless
+	 * the search for waits has something to do here. Otherwise nullptr,
+	 * and the program is where it was. */
 	const Block *enter(uint32_t pc)
 	{
 		Block &b = m_near[(pc >> 1) & (NEAR_SIZE - 1)];
 
-		if (b.pc != pc || b.checked != m_epoch || b.count > m_remaining) [[unlikely]] {
+		if (b.pc != pc || b.count > m_remaining) [[unlikely]] {
+			return nullptr;
+		}
+		if (b.checked != m_epoch && !same_code(b)) [[unlikely]] {
 			return nullptr;
 		}
 		if (pc == m_wait.regs.pc) {
