@@ -28,11 +28,11 @@
  * a product is fused with a sum only where std::fma says so. */
 
 #include "odin/sh4.hpp"
+#include "odin/sh4_fsca.hpp"
 
 #include <algorithm>
 #include <bit>
 #include <cmath>
-#include <numbers>
 
 namespace odin {
 
@@ -1423,7 +1423,7 @@ struct Sh4OpsT {
 		}
 		return go(c, op);
 	}
-	/* HEURISTIC: the four below are computed by the host, where the
+	/* HEURISTIC: FSRRA, FIPR and FTRV are computed by the host, where the
 	 * SH-4 has its own tables and error bounds. */
 	static Ret fsrra(Sh4 &c, const Op *op)
 	{
@@ -1433,13 +1433,15 @@ struct Sh4OpsT {
 		}
 		return go(c, op);
 	}
-	/* The angle is the low 16 bits of FPUL, a full turn in 65536. */
+	/* The angle is the low 16 bits of FPUL, a full turn in 65536. The
+	 * sine and the cosine come from a table that no host decides, frozen
+	 * for now: see sh4_fsca.cpp. */
 	static Ret fsca(Sh4 &c, const Op *op)
 	{
-		constexpr float turn = (2.0f * static_cast<float>(std::numbers::pi)) / 65536.0f;
-		float angle = static_cast<float>(c.m_r.fpul & 0xFFFF) * turn;
-		c.m_r.fr[op->n] = bits(std::sin(angle));
-		c.m_r.fr[op->n + 1] = bits(std::cos(angle));
+		const uint32_t *const pair = sh4_fsca_table() + 2 * (c.m_r.fpul & 0xFFFF);
+
+		c.m_r.fr[op->n] = pair[0];
+		c.m_r.fr[op->n + 1] = pair[1];
 		return go(c, op);
 	}
 	static Ret fipr(Sh4 &c, const Op *op)

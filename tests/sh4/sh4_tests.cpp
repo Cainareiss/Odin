@@ -25,11 +25,12 @@
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
  *            -ffp-contract=off -I src tests/sh4/sh4_tests.cpp src/odin/sh4.cpp \
  *            src/odin/sh4_ops.cpp src/odin/sh4_onchip.cpp src/odin/sh4_host.cpp \
- *            -o sh4_tests
+ *            src/odin/sh4_fsca.cpp -o sh4_tests
  * Use:   sh4_tests [-v]
  * Exit status is 0 when every check passes. */
 
 #include "odin/sh4.hpp"
+#include "odin/sh4_fsca.hpp"
 
 #include <algorithm>
 #include <bit>
@@ -865,6 +866,25 @@ void test_fpu()
 		check(std::bit_cast<float>(st.fr[3]) < 1e-6f && std::bit_cast<float>(st.fr[3]) > -1e-6f,
 		      "fsca cosine of a quarter turn is about zero");
 		eq("fsrra", st.fr[4], bits(0.25f));
+	}
+	{
+		/* What FSCA gives is frozen, the same on every host: the whole
+		 * table, 65 536 sines and cosines, by its checksum; and FSCA
+		 * takes it from there, at an angle whose sine is one of those
+		 * listed apart and at one whose sine is not. */
+		const uint32_t *table = odin::sh4_fsca_table();
+		uint64_t sum = 0xCBF29CE484222325ull;
+		for (uint32_t i = 0; i < 2 * 65536; i++) {
+			sum = (sum ^ table[i]) * 0x100000001B3ull;
+		}
+		eq("the frozen sines and cosines", sum, 0xD9F9980CD44C1D40ull);
+		eq("sine of 723 / 65536 of a turn, listed apart", table[2 * 723], 0x3D8DD8DA);
+		for (uint32_t angle : { 723u, 724u, 0x4000u, 0xC001u }) {
+			Machine m;
+			Sh4State st = run(m, {0xF2FD}, 1, [angle](Sh4State &s) { s.fpul = 0xABCD0000 | angle; });
+			eq("fsca sine from the table", st.fr[2], table[2 * angle]);
+			eq("fsca cosine from the table", st.fr[3], table[2 * angle + 1]);
+		}
 	}
 }
 
