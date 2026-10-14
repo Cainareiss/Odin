@@ -111,11 +111,11 @@ public:
 	 * after the other, and make one. With this on, such a
 	 * turn is run once, then only counted for as long as what it read
 	 * stays the same; and once the program has left it, for an interrupt
-	 * say, it is counted again as soon as the program is back at its
-	 * start with everything it read as it was. The machine must then call
-	 * ram_write() before it changes the plain memory itself, ram_read()
-	 * before it reads it, settle() before it saves the state, and its bus
-	 * must peek() without side effects. */
+	 * say, it is counted again as soon as the program is back where it
+	 * left it, or at its start, with everything it read as it was. The
+	 * machine must then call ram_write() before it changes the plain
+	 * memory itself, ram_read() before it reads it, settle() before it
+	 * saves the state, and its bus must peek() without side effects. */
 	void set_turn_replay(bool on);
 	void ram_read(uint32_t addr, uint32_t size);
 	void ram_write(uint32_t addr, uint32_t size);
@@ -271,6 +271,10 @@ private:
 		uint32_t offset;
 		uint8_t value;
 	};
+	/* Bytes of the memory, one after the other */
+	struct TurnSpan {
+		uint32_t offset, size;
+	};
 	static constexpr uint32_t TURN_NO_COUNTER = 0xFFFFFFFF;
 
 	void turn_begin();
@@ -282,7 +286,10 @@ private:
 	uint32_t turn_replay(uint32_t budget);
 	bool turn_keep();
 	bool turn_rejoin();
-	bool turn_registers_same() const;
+	bool turn_resume();
+	void turn_leave();
+	uint32_t turn_settle_read();
+	bool turn_registers_same(const Arm7State &as) const;
 	void turn_trail(uint32_t offset, uint32_t value, uint32_t size, bool store);
 	void turn_note_fetch(uint32_t addr, uint32_t op);
 	void turn_note_read(uint32_t addr, uint32_t size, uint32_t value);
@@ -317,6 +324,16 @@ private:
 	bool m_turn_kept, m_turn_trail_full;
 	bool m_turn_one_mode;	/* the turn stays in its mode, with its registers */
 	uint32_t m_turn_try, m_turn_misses;
+	/* Where the turns counted start: at the start of the turn, or where
+	 * the program left it and took it again. Where the program left it:
+	 * the instruction, the state and every byte the turn reads or writes,
+	 * as they were there; and whether to note it. See turn_resume(). */
+	uint32_t m_turn_origin;
+	bool m_turn_left, m_turn_resumable;
+	uint32_t m_turn_left_at;
+	Arm7State m_turn_left_state;
+	std::vector<TurnSpan> m_turn_footprint;
+	std::vector<uint8_t> m_turn_left_bytes;
 	std::vector<TurnAccess> m_turn_trail, m_turn_inputs;
 	std::vector<TurnByte> m_turn_outputs;
 	uint64_t m_turn_recorded, m_turn_counted;

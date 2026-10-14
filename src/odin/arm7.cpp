@@ -29,6 +29,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <cstring>
 #include <format>
 #include <unordered_map>
 
@@ -37,7 +38,8 @@ namespace odin {
 Arm7::Arm7(Arm7Bus &bus)
 	: m_bus(bus), m_ram{nullptr, 0, 0}, m_trace(nullptr), m_turn(Turn::Off), m_turn_limit(TURN_MAX),
 	  m_turn_counter(TURN_NO_COUNTER), m_turn_delta(0), m_turn_laps(0), m_turn_kept(false),
-	  m_turn_trail_full(false), m_turn_one_mode(false), m_turn_try(0), m_turn_misses(0), m_turn_recorded(0),
+	  m_turn_trail_full(false), m_turn_one_mode(false), m_turn_try(0), m_turn_misses(0), m_turn_origin(0),
+	  m_turn_left(false), m_turn_resumable(false), m_turn_left_at(0), m_turn_left_state{}, m_turn_recorded(0),
 	  m_turn_counted(0)
 {
 	m_irq_line = m_fiq_line = false;
@@ -105,13 +107,16 @@ uint32_t Arm7::run(uint32_t cycles)
 		} else {
 			/* The program may come back to the turn that was
 			 * counted, for some time. */
+			if (m_turn_kept && m_turn_left && m_pc == m_turn_left_state.pc && turn_resume()) {
+				continue;
+			}
 			if (m_turn_kept) {
 				/* At its start as the program, not as the
 				 * handler of an interrupt that returns
 				 * there. */
 				if (m_pc == m_turn_start.pc && m_cpsr == m_turn_start.cpsr &&
 				    m_irq_line == (m_turn_start.irq_line != 0) && m_fiq_line == (m_turn_start.fiq_line != 0)) {
-					if (turn_registers_same() && turn_rejoin()) {
+					if (turn_registers_same(m_turn_start) && turn_rejoin()) {
 						continue;
 					}
 					m_turn_misses++;
@@ -145,11 +150,14 @@ uint32_t Arm7::run(uint32_t cycles)
  * past a turn that leaves the memory changed, for some turns.
  *
  * A turn that was counted is kept when the program leaves it, as it does
- * for an interrupt. It is not run again to be recorded if the program comes
- * back to its start with every register as it was, everything it read still
- * there and what it leaves in the memory already there (see turn_rejoin):
- * it is counted from there. A program that stays away, or is at that start
- * a few times without being in the turn, has another turn recorded. */
+ * for an interrupt. It is counted again from where the program left it if
+ * the program is back there with every register, every byte the turn reads
+ * or writes and the answers of the bus as they were (see turn_resume). It
+ * is not run again to be recorded if the program comes back to its start
+ * with every register as it was, everything it read still there and what it
+ * leaves in the memory already there (see turn_rejoin): it is counted from
+ * there. A program that stays away, or is at that start a few times without
+ * being in the turn, has another turn recorded. */
 
 void Arm7::set_turn_replay(bool on)
 {
@@ -244,6 +252,7 @@ void Arm7::turn_step(uint32_t cycles, uint32_t passed)
 				m_turn = Turn::Replay;
 				m_turn_kept = turn_keep();
 				m_turn_at = 0;
+				m_turn_origin = 0;
 				m_turn_backoff = 0;
 				/* The next turn should not be much longer. */
 				m_turn_limit = std::min(n * 2, TURN_MAX);
@@ -450,9 +459,12 @@ void Arm7::settle()
 	/* The bus answers what it did when the turn was recorded: it may
 	 * have changed since the part to run was counted. */
 	uint64_t instructions = m_instructions;
-	uint32_t count = m_turn_at;
+	uint32_t count = (m_turn_at + m_turn_count - m_turn_origin) % m_turn_count;
 	m_turn = Turn::Settle;
 	m_turn_next_read = 0;
+	while (m_turn_next_read < m_turn_num_reads && m_turn_reads[m_turn_next_read].index < m_turn_origin) {
+		m_turn_next_read++;
+	}
 	for (uint32_t i = 0; i < count; i++) {
 		step();
 	}
@@ -461,6 +473,55 @@ void Arm7::settle()
 	m_turn_wait = 0;
 	m_turn_try = TURN_AWAY;
 	m_turn_misses = 0;
+	turn_leave();
+}
+
+/* What the bus answered when the turn was recorded, from the origin of the
+ * turns counted on, past its end to its start */
+uint32_t Arm7::turn_settle_read()
+{
+	if (m_turn_next_read == m_turn_num_reads) {
+		m_turn_next_read = 0;
+	}
+	return m_turn_reads[m_turn_next_read++].value;
+}
+
+/* Where the program leaves the turn kept. A turn that counts in a word is
+ * only taken again at its start: there, no register holds the count. So is
+ * a turn the program once did not come back to as it left it: what made it
+ * leave may do so each time. Every byte the turn reads or writes, from its
+ * trail, the first time. */
+void Arm7::turn_leave()
+{
+	m_turn_left = m_turn_kept && m_turn_resumable && m_turn_counter == TURN_NO_COUNTER;
+	if (!m_turn_left) {
+		return;
+	}
+	if (m_turn_footprint.empty()) {
+		std::vector<uint32_t> bytes;
+		for (const TurnAccess &a : m_turn_trail) {
+			for (uint32_t i = 0; i < a.size; i++) {
+				bytes.push_back((a.offset + i) & m_ram.mask);
+			}
+		}
+		std::sort(bytes.begin(), bytes.end());
+		bytes.erase(std::unique(bytes.begin(), bytes.end()), bytes.end());
+		for (uint32_t b : bytes) {
+			if (!m_turn_footprint.empty() && m_turn_footprint.back().offset + m_turn_footprint.back().size == b) {
+				m_turn_footprint.back().size++;
+			} else {
+				m_turn_footprint.push_back({b, 1});
+			}
+		}
+		m_turn_left_bytes.resize(bytes.size());
+	}
+	m_turn_left_at = m_turn_at;
+	save(m_turn_left_state);
+	uint8_t *to = m_turn_left_bytes.data();
+	for (const TurnSpan &s : m_turn_footprint) {
+		std::memcpy(to, m_ram.base + s.offset, s.size);
+		to += s.size;
+	}
 }
 
 void Arm7::turn_trail(uint32_t offset, uint32_t value, uint32_t size, bool store)
@@ -486,6 +547,8 @@ bool Arm7::turn_keep()
 
 	m_turn_inputs.clear();
 	m_turn_outputs.clear();
+	m_turn_footprint.clear();
+	m_turn_resumable = true;
 	if (m_turn_trail_full) {
 		return false;
 	}
@@ -547,6 +610,40 @@ bool Arm7::turn_rejoin()
 	}
 	m_turn = Turn::Replay;
 	m_turn_at = 0;
+	m_turn_origin = 0;
+	return true;
+}
+
+/* The program is at the instruction where it left the turn kept. With the
+ * same registers and lines, every byte the turn reads or writes as it was
+ * there and the same answers of the bus, it goes on as the turn was
+ * recorded from there: the turn is counted from there. It is looked at
+ * once, the first time the program is there in its mode with the lines as
+ * they were: then it is back as it left the turn, or does something else. */
+bool Arm7::turn_resume()
+{
+	if (mode() != (m_turn_left_state.cpsr & 0x1F) || m_irq_line != (m_turn_left_state.irq_line != 0) ||
+	    m_fiq_line != (m_turn_left_state.fiq_line != 0)) {
+		return false;
+	}
+	m_turn_left = false;
+	m_turn_resumable = false;
+	if (!turn_registers_same(m_turn_left_state)) {
+		return false;
+	}
+	const uint8_t *was = m_turn_left_bytes.data();
+	for (const TurnSpan &s : m_turn_footprint) {
+		if (std::memcmp(m_ram.base + s.offset, was, s.size) != 0) {
+			return false;
+		}
+		was += s.size;
+	}
+	if (!turn_reads_hold()) {
+		return false;
+	}
+	m_turn_resumable = true;
+	m_turn = Turn::Replay;
+	m_turn_at = m_turn_origin = m_turn_left_at;
 	return true;
 }
 
@@ -802,12 +899,12 @@ void Arm7::load(const Arm7State &in)
 	m_turn_kept = false;
 }
 
-/* Whether the registers are those the turn kept started with: every one, or
- * those of its mode when the turn stays in it. It does not see the others
- * then, which an interrupt taken meanwhile has changed. */
-bool Arm7::turn_registers_same() const
+/* Whether the registers are those of `as`, the turn kept being there: every
+ * one, or those of its mode when the turn stays in it. It does not see the
+ * others then, which an interrupt taken meanwhile has changed. */
+bool Arm7::turn_registers_same(const Arm7State &as) const
 {
-	Arm7State now, start = m_turn_start;
+	Arm7State now, start = as;
 	const uint32_t rank = mode() == MODE_FIQ ? 0 : mode() == MODE_IRQ ? 1 : mode() == MODE_SVC ? 2 :
 	                      mode() == MODE_ABT ? 3 : mode() == MODE_UND ? 4 : 5;
 
@@ -850,7 +947,7 @@ uint32_t Arm7::fetch()
 		const uint8_t *p = m_ram.base + (addr & m_ram.mask);
 		op = p[0] | (p[1] << 8) | (p[2] << 16) | (static_cast<uint32_t>(p[3]) << 24);
 	} else if (m_turn == Turn::Settle) {
-		op = m_turn_reads[m_turn_next_read++].value;
+		op = turn_settle_read();
 	} else {
 		op = m_bus.read32(addr);
 	}
@@ -869,7 +966,7 @@ uint8_t Arm7::rd8(uint32_t addr)
 	if (addr < m_ram.size) {
 		v = m_ram.base[addr & m_ram.mask];
 	} else if (m_turn == Turn::Settle) {
-		v = u8(m_turn_reads[m_turn_next_read++].value);
+		v = u8(turn_settle_read());
 	} else {
 		v = m_bus.read8(addr);
 	}
@@ -890,7 +987,7 @@ uint16_t Arm7::rd16(uint32_t addr)
 		const uint8_t *p = m_ram.base + (addr & m_ram.mask);
 		v = static_cast<uint16_t>(p[0] | (p[1] << 8));
 	} else if (m_turn == Turn::Settle) {
-		v = u16(m_turn_reads[m_turn_next_read++].value);
+		v = u16(turn_settle_read());
 	} else {
 		v = m_bus.read16(addr);
 	}
@@ -911,7 +1008,7 @@ uint32_t Arm7::rd32(uint32_t addr)
 		const uint8_t *p = m_ram.base + (addr & m_ram.mask);
 		v = p[0] | (p[1] << 8) | (p[2] << 16) | (static_cast<uint32_t>(p[3]) << 24);
 	} else if (m_turn == Turn::Settle) {
-		v = m_turn_reads[m_turn_next_read++].value;
+		v = turn_settle_read();
 	} else {
 		v = m_bus.read32(addr);
 	}

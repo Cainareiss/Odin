@@ -1851,6 +1851,76 @@ void test_turns()
 		 * the machine reading there would have it run. */
 		kept("a round longer than 4 096 instructions", with_wait(code), {0, 0, 0, 0, 0, 0, Handler::Own, 0, 0, 0, 0x9000}, 3, 8 * 709);
 	}
+	{
+		/* Eight laps make the round of a byte; each lap goes through a
+		 * table of 64 entries, its index and address in r9 and r10, as
+		 * a sound driver looks for a voice. A turn recorded from inside
+		 * the table is at its start 512 times a round, with those
+		 * registers once only: after an interrupt, the program has to
+		 * take the turn again where it left it. */
+		const std::vector<uint32_t> table = {
+			dp_imm(MOV, false, 0, 9, 0, 0),				/* mov r9, #0 */
+			dp_imm(ADD, false, 7, 10, 0x40, 0),			/* add r10, r7, #0x40 */
+			ldst_imm(true, true, true, true, false, 10, 0, 0),	/* scan: ldrb r0, [r10] */
+			dp_imm(TST, true, 0, 0, 0x80, 0),			/* tst r0, #0x80 */
+			branch(false, 3, 1),					/* bne out */
+			dp_imm(ADD, false, 10, 10, 0x20, 0),			/* add r10, r10, #0x20 */
+			dp_imm(ADD, false, 9, 9, 1, 0),				/* add r9, r9, #1 */
+			dp_imm(CMP, true, 9, 0, 0x40, 0),			/* cmp r9, #64 */
+			branch(false, -8, 1),					/* bne scan */
+			drop,							/* out: */
+		};
+		std::vector<uint32_t> code = round;
+		code.insert(code.end(), table.begin(), table.end());
+		kept("a turn from inside a table", with_wait(code), {50, 0, 0, 0, 0, 0, Handler::Own, 0, 0, 0, 0, 1000}, 4, 8 * 460);
+
+		/* A word of the bus, the table, another word of the bus, the
+		 * table again: the watched word holds one, then the other. The
+		 * part of the turn run where it was left gets them in their
+		 * order, past the end of the turn to its start. */
+		code = { ldst_imm(true, false, true, true, false, 4, 3, 0) };		/* ldr r3, [r4] */
+		const std::vector<uint32_t> keep = {
+			ldst_imm(false, false, true, true, false, 7, 3, 20),	/* str r3, [r7, #20] */
+			dp_imm(MOV, false, 0, 3, 0, 0),				/* mov r3, #0 */
+		};
+		code.insert(code.end(), keep.begin(), keep.end());
+		code.insert(code.end(), table.begin(), table.end());
+		code.push_back(ldst_imm(true, false, true, true, false, 4, 3, 4));	/* ldr r3, [r4, #4] */
+		code.insert(code.end(), keep.begin(), keep.end());
+		code.insert(code.end(), table.begin(), table.end());
+		code.push_back(ldst_imm(true, true, true, true, false, 1, 2, 0));	/* ldrb r2, [r1] */
+		code.push_back(dp_imm(CMP, true, 2, 0, 0, 0));				/* cmp r2, #0 */
+		code.push_back(branch(false, -static_cast<int32_t>(code.size()) - 2, EQ));	/* beq start */
+		code.push_back(branch(false, -2));					/* b . */
+		kept("a turn that reads two words of the bus", code, {50, 0, 0, 0, 1, 0x33, Handler::Own, 0, 0, 0, 0, 1000}, 6, 911);
+
+		/* The table until the flag is set, then a word copied to the
+		 * watched one and the table: a turn of each. The machine changes
+		 * the word, which only the second turn reads: where the program
+		 * left that turn, the word is no longer the same. */
+		code = table;
+		code.push_back(ldst_imm(true, true, true, true, false, 1, 2, 0));	/* ldrb r2, [r1] */
+		code.push_back(dp_imm(CMP, true, 2, 0, 0, 0));				/* cmp r2, #0 */
+		code.push_back(branch(false, -static_cast<int32_t>(code.size()) - 2, EQ));	/* beq start */
+		const size_t second = code.size();
+		code.insert(code.end(), { copy_in, copy_out, no_r5 });
+		code.insert(code.end(), table.begin(), table.end());
+		code.push_back(branch(false, -static_cast<int32_t>(code.size() - second) - 2));	/* b second */
+		/* The first turn kept is only dropped 65 536 instructions after
+		 * the program left it for good: the second is recorded near
+		 * call 500. */
+		const TurnsEvents events{50, 800, TURN_COUNT + 32, 0x55, 0, 0, Handler::Own, 0, 0, 0, TURN_COUNT + 20, 1000};
+		const TurnsRun counted = run_turns(true, code, 0, 300, false, 0, events);
+		const TurnsRun run = run_turns(false, code, 0, 300, false, 0, events);
+		g_current = "a second turn that reads a word the first does not";
+		g_checks += 2;
+		if (!(counted.state == run.state) || counted.ram != run.ram || counted.instructions != run.instructions) {
+			fail("differs from every turn run");
+		}
+		if (counted.watched != run.watched) {
+			fail("the machine read something else on the way");
+		}
+	}
 }
 
 } /* namespace */
