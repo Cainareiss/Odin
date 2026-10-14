@@ -121,8 +121,8 @@ uint8_t *take_near(uint32_t size)
 } /* namespace */
 
 Sh4Host::Sh4Host(uint32_t *words, const Memory &memory, const Places &places)
-	: m_code(take_near(SIZE)), m_words(words), m_memory(memory), m_places(places), m_size(SIZE), m_used(0),
-	  m_leave(0), m_far_calls(0), m_enter(nullptr)
+	: m_code(take_near(SIZE)), m_words(words), m_memory(memory), m_places(places),
+	  m_fused(__builtin_cpu_supports("fma")), m_size(SIZE), m_used(0), m_leave(0), m_far_calls(0), m_enter(nullptr)
 {
 	if (m_code) {
 		clear();
@@ -340,6 +340,49 @@ Sh4Host::Jump Sh4Host::jump_if_bits(uint32_t rank, uint32_t mask, bool set)
 	return jump_if(set ? 0x85 : 0x84);		/* jnz, jz */
 }
 
+void Sh4Host::float_load(uint32_t f, uint32_t rank)
+{
+	bytes({0xF3, 0x0F, 0x10});			/* movss xmm<f>, [the word] */
+	operand(static_cast<uint8_t>(f), rank);
+}
+
+void Sh4Host::float_store(uint32_t rank, uint32_t f)
+{
+	bytes({0xF3, 0x0F, 0x11});			/* movss [the word], xmm<f> */
+	operand(static_cast<uint8_t>(f), rank);
+}
+
+void Sh4Host::float_op(Float op, uint32_t f, uint32_t rank)
+{
+	static constexpr uint8_t CODE[] = { 0x58, 0x5C, 0x59 };	/* addss, subss, mulss */
+
+	bytes({0xF3, 0x0F, CODE[static_cast<uint8_t>(op)]});
+	operand(static_cast<uint8_t>(f), rank);
+}
+
+void Sh4Host::float_compare(uint32_t f, uint32_t rank)
+{
+	bytes({0x0F, 0x2E});				/* ucomiss xmm<f>, [the word] */
+	operand(static_cast<uint8_t>(f), rank);
+}
+
+void Sh4Host::float_from(uint32_t f, uint32_t rank)
+{
+	bytes({0xF3, 0x0F, 0x2A});			/* cvtsi2ss xmm<f>, [the word] */
+	operand(static_cast<uint8_t>(f), rank);
+}
+
+void Sh4Host::float_to(uint32_t rank)
+{
+	bytes({0xF3, 0x0F, 0x2C});			/* cvttss2si eax, [the word] */
+	operand(0, rank);
+}
+
+void Sh4Host::float_fused()
+{
+	bytes({0xC4, 0xE2, 0x71, 0x99, 0xC2});		/* vfmadd132ss xmm0, xmm1, xmm2 */
+}
+
 void Sh4Host::load_pair(uint32_t rank)
 {
 	bytes({0x48, 0x8B});				/* mov rax, [the words] */
@@ -475,8 +518,8 @@ void Sh4Host::read_at(const uint8_t *at, uint32_t size)
 #else /* a host this file does not write code for */
 
 Sh4Host::Sh4Host(uint32_t *words, const Memory &memory, const Places &places)
-	: m_code(nullptr), m_words(words), m_memory(memory), m_places(places), m_size(0), m_used(0), m_leave(0),
-	  m_far_calls(0), m_enter(nullptr)
+	: m_code(nullptr), m_words(words), m_memory(memory), m_places(places), m_fused(false), m_size(0), m_used(0),
+	  m_leave(0), m_far_calls(0), m_enter(nullptr)
 {
 }
 
@@ -494,6 +537,13 @@ Sh4Host::Jump Sh4Host::jump_if_word(uint32_t, bool) { return Jump{0}; }
 Sh4Host::Jump Sh4Host::jump_if_odd() { return Jump{0}; }
 Sh4Host::Jump Sh4Host::jump_if_bits(uint32_t, uint32_t, bool) { return Jump{0}; }
 void Sh4Host::load_pair(uint32_t) {}
+void Sh4Host::float_load(uint32_t, uint32_t) {}
+void Sh4Host::float_store(uint32_t, uint32_t) {}
+void Sh4Host::float_op(Float, uint32_t, uint32_t) {}
+void Sh4Host::float_compare(uint32_t, uint32_t) {}
+void Sh4Host::float_from(uint32_t, uint32_t) {}
+void Sh4Host::float_to(uint32_t) {}
+void Sh4Host::float_fused() {}
 void Sh4Host::store_pair(uint32_t) {}
 void Sh4Host::add_remaining(int32_t) {}
 void Sh4Host::loop_if_told() {}

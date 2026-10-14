@@ -481,9 +481,11 @@ in place, a branch sets PC and PR in place; the block that follows is still
 looked for by a call (Sh4::linked): done in place it made the host code 80 %
 bigger and slower on the i3-6100U. The moves of the FPU are written for the
 FPSCR.SZ the block is seen to have (FSCHG followed), with a guard that calls
-the instruction when SZ is the other.
-To do next: blocks chained directly, the arithmetic of the FPU, host code
-entered in the middle of a block; the sound boards cost as much.
+the instruction when SZ is the other; its single-precision arithmetic (but
+FDIV, FSQRT, FCMP/EQ, FIPR, FTRV, FSCA, FSRRA) is done in place while
+FPSCR.PR is clear.
+To do next: blocks chained directly, FTRV and FIPR, host code entered in
+the middle of a block; the sound boards cost as much.
 
 Kept as the interpreter did, each one HEURISTIC, to make right one at a
 time once the scenes are compared again:
@@ -492,7 +494,9 @@ time once the scenes are compared again:
   (FPSCR.DN), which is ignored too;
 - FTRC gives 0x80000000 out of range, the SH-4 saturates; FSRRA, FIPR and
   FTRV are computed by the host, the SH-4 has its own tables and error
-  bounds; a NaN comes out as the host makes it, the SH-4 gives 0x7FBFFFFF;
+  bounds; a NaN comes out as the host makes it, the SH-4 gives 0x7FBFFFFF
+  (of two NaN, the one the order of the operands picks: host code takes
+  them in the order the compiler gave the instruction, test_host_float);
 - FROZEN FOR NOW, to be replaced by the table of a real SH-4 when a source
   that can be trusted gives it: the sines and cosines of FSCA
   (src/odin/sh4_fsca.cpp). They are the values the references were made

@@ -307,7 +307,9 @@ private:
 		/* the moves of the FPU, for the FPSCR.SZ the block is seen to
 		 * have where they are, the long way otherwise */
 		FMov, FMovLoad, FMovStore, FMovIndexLoad, FMovIndexStore, FMovRestore, FMovSave,
-		FSChg		/* called; turns SZ over for what follows */
+		FSChg,		/* called; turns SZ over for what follows */
+		/* single precision, the long way when FPSCR.PR is set */
+		FSts, FLds, FLt, FTrc, FNeg, FAbs, FLdi0, FLdi1, FAdd, FSub, FMul, FCmpGt, FMac
 	};
 	/* The long way of an access to the memory in host code: the call of
 	 * the instruction `op`, back at `back`. */
@@ -356,6 +358,7 @@ private:
 	bool translate_inline(Inline form, const Sh4Op &op);
 	bool translate_access(Inline form, const Sh4Op &op, uint32_t i, std::vector<LongWay> &ways);
 	bool translate_condition(const Sh4Op &op, Sh4Host::Jump &taken);
+	bool translate_float(Inline form, const Sh4Op &op, uint32_t i, std::vector<LongWay> &ways);
 	bool translate_jump(const Block &b, const Sh4Op &op, uint32_t i, std::vector<LongWay> &ways);
 	static uintptr_t linked(Sh4 &c, uint32_t pc);
 	void pairs_through(const Block &b, std::array<bool, BLOCK_MAX + 3> &pairs) const;

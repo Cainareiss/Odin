@@ -2350,6 +2350,86 @@ void test_host_fpu_moves()
 	}
 }
 
+/* The arithmetic of the FPU host code does itself in single precision:
+ * each instruction at the four places of test_host_in_place(), for pairs of
+ * registers, values at the edges of the floats (zeros, infinities, NaN,
+ * denormals, the limits of the integers) and of FPUL, FPSCR.PR clear, and
+ * set where the instruction allows it (the long way): read and as host
+ * code, the same registers after. */
+void test_host_float()
+{
+	g_test = "host code, floats";
+	struct Form {
+		uint16_t code;
+		char operands;	/* M: FRn and FRm; N: FRn */
+		bool doubles;	/* may run with PR set */
+		const char *name;
+	};
+	static const Form forms[] = {
+		{0xF00D, 'N', true, "fsts"}, {0xF01D, 'N', true, "flds"}, {0xF02D, 'N', true, "float"},
+		{0xF03D, 'N', true, "ftrc"}, {0xF04D, 'N', true, "fneg"}, {0xF05D, 'N', true, "fabs"},
+		{0xF08D, 'N', false, "fldi0"}, {0xF09D, 'N', false, "fldi1"}, {0xF000, 'M', true, "fadd"},
+		{0xF001, 'M', true, "fsub"}, {0xF002, 'M', true, "fmul"}, {0xF005, 'M', true, "fcmp/gt"},
+		{0xF00E, 'M', false, "fmac"},
+	};
+	static const uint8_t pairs[][2] = {{1, 2}, {2, 1}, {3, 3}, {0, 4}, {4, 0}, {2, 4}};
+	static const uint32_t floats[] = {0x00000000, 0x80000000, 0x3F800000, 0xBF800000, 0x7F800000, 0xFF800000,
+	                                  0x7FC00000, 0x7F800001, 0x00000001, 0x807FFFFF, 0x4F000000, 0xCF000000,
+	                                  0x4EFFFFFF, 0x3EAAAAAB, 0x7F7FFFFF, 0x4B800001, 0x3FC00000, 0xBFD9999A};
+	constexpr uint32_t COUNT = sizeof(floats) / sizeof(floats[0]);
+	static const uint32_t integers[] = {0, 1, 0xFFFFFFFF, 0x7FFFFFFF, 0x80000000, 16777217};
+	{
+		Pair probe;
+		if (!probe.host.cpu.translates()) {
+			std::printf("host code: none on this machine, not tested\n");
+			return;
+		}
+	}
+	for (const Form &form : forms) {
+		unsigned runs = 0, differ = 0;
+
+		for (uint32_t pr = 0; pr < (form.doubles ? 2u : 1u); pr++) {
+			Pair p;
+			const Sh4State start = p.read.state();
+
+			for (const auto &pair : pairs) {
+				const uint32_t n = pair[0], m = form.operands == 'M' ? pair[1] : 0;
+				const uint16_t code = static_cast<uint16_t>(form.code | (n << 8) | (m << 4));
+
+				/* double precision wants even registers */
+				if (pr && ((n | m) & 1)) {
+					continue;
+				}
+				/* FRn moved to FR8-FR11 after each of the four */
+				const auto keep = [n](uint32_t to) { return static_cast<uint16_t>(0xF00C | (to << 8) | (n << 4)); };
+
+				p.each([&](Machine &mc) {
+					mc.code(CODE, {code, keep(8), 0xA000, code, keep(9), 0x0018, 0x8D00, code, keep(10), 0x0008,
+					               0x8D00, code, keep(11), 0xAFFE, NOP});
+				});
+				for (uint32_t a = 0; a < COUNT; a++) {
+					for (uint32_t b = 0; b < COUNT; b++) {
+						Sh4State st = start;
+
+						for (uint32_t i = 0; i < 16; i++) {
+							st.fr[i] = floats[(a + 3 * i + 5) % COUNT];
+						}
+						st.fr[n] = floats[a];
+						st.fr[m] = form.operands == 'M' ? floats[b] : st.fr[m];
+						st.fpul = (b < 6) ? integers[b] : floats[b];
+						st.fpscr = 0x00040001 | (pr ? 0x00080000 : 0);
+						p.each([&st](Machine &mc) { mc.cpu.load(st); });
+						p.slice(200);
+						runs++;
+					}
+				}
+			}
+			differ += p.differ;
+		}
+		check(runs > 0 && differ == 0, std::string(form.name) + ": the same read and in place");
+	}
+}
+
 /* The branches host code makes itself: each of them in a loop whose turns
  * take it or not as a register turned bit by bit says, its delay slot an
  * instruction in place, an access to the memory or a call; then what the
@@ -2617,6 +2697,7 @@ int main(int argc, char **argv)
 	test_host_memory();
 	test_host_branches();
 	test_host_fpu_moves();
+	test_host_float();
 	test_store_queues();
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures == 0 ? 0 : 1;

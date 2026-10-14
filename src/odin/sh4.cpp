@@ -1235,6 +1235,100 @@ bool Sh4::translate_jump(const Block &b, const Sh4Op &op, uint32_t i, std::vecto
 	return true;
 }
 
+/* The arithmetic of the FPU in single precision, the instruction `i` of
+ * the block: the long way, a call of the instruction, when FPSCR.PR is set.
+ * The host computes as the instruction does (see Sh4OpsT). False, and
+ * nothing written, for another instruction, or FMAC on a host that cannot
+ * round a product and a sum once. */
+bool Sh4::translate_float(Inline form, const Sh4Op &op, uint32_t i, std::vector<LongWay> &ways)
+{
+	using Alu = Sh4Host::Alu;
+	using Float = Sh4Host::Float;
+	constexpr uint32_t FR = offsetof(Regs, fr) / 4, FPUL = offsetof(Regs, fpul) / 4, FPSCR = offsetof(Regs, fpscr) / 4;
+	constexpr uint32_t T = offsetof(Regs, t) / 4;
+	constexpr Sh4Host::Reg A = Sh4Host::Reg::A;
+	Sh4Host &host = *m_host;
+	const uint32_t n = FR + op.n, m = FR + op.m;
+	Sh4Host::Slow slow{};
+
+	switch (form) {
+	case Inline::FSts:
+		host.load(A, FPUL);
+		host.store(n, A);
+		return true;
+	case Inline::FLds:
+		host.load(A, n);
+		host.store(FPUL, A);
+		return true;
+	case Inline::FLt: case Inline::FTrc: case Inline::FNeg: case Inline::FAbs: case Inline::FLdi0:
+	case Inline::FLdi1: case Inline::FAdd: case Inline::FSub: case Inline::FMul: case Inline::FCmpGt:
+		break;
+	case Inline::FMac:
+		if (host.fused()) {
+			break;
+		}
+		return false;
+	default:
+		return false;
+	}
+	slow.jumps[slow.count++] = host.jump_if_bits(FPSCR, FPSCR_PR, true);
+	switch (form) {
+	case Inline::FLt:
+		host.float_from(0, FPUL);
+		host.float_store(n, 0);
+		break;
+	case Inline::FTrc:
+		host.float_to(n);
+		host.store(FPUL, A);
+		break;
+	case Inline::FNeg:
+		host.load(A, n);
+		host.alu_value(Alu::Xor, A, 0x80000000);
+		host.store(n, A);
+		break;
+	case Inline::FAbs:
+		host.load(A, n);
+		host.alu_value(Alu::And, A, 0x7FFFFFFF);
+		host.store(n, A);
+		break;
+	case Inline::FLdi0:
+		host.store_value(n, 0x00000000);
+		break;
+	case Inline::FLdi1:
+		host.store_value(n, 0x3F800000);
+		break;
+	/* Which NaN comes out of two depends on the order of the operands:
+	 * the one the compiler gives the instruction (FRm + FRn, FRm * FRn,
+	 * FR0 * FRm + FRn), which test_host_float() holds to. */
+	case Inline::FAdd:
+	case Inline::FMul:
+		host.float_load(0, m);
+		host.float_op(form == Inline::FAdd ? Float::Add : Float::Mul, 0, n);
+		host.float_store(n, 0);
+		break;
+	case Inline::FSub:
+		host.float_load(0, n);
+		host.float_op(Float::Sub, 0, m);
+		host.float_store(n, 0);
+		break;
+	case Inline::FCmpGt:
+		host.float_load(0, n);
+		host.float_compare(0, m);
+		host.flag(Sh4Host::If::Above, T);
+		break;
+	default:
+		/* FMAC: FRn = FR0 * FRm + FRn */
+		host.float_load(0, FR);
+		host.float_load(1, n);
+		host.float_load(2, m);
+		host.float_fused();
+		host.float_store(n, 0);
+		break;
+	}
+	ways.push_back(LongWay{slow, i, host.here()});
+	return true;
+}
+
 /* The instruction `i` of a block as host code: its steps in place when it
  * has some, and true; else a call, and false: what the call returns is for
  * the block to look at. */
@@ -1242,7 +1336,8 @@ bool Sh4::translate_op(const Sh4Op *ops, uint32_t i, std::vector<LongWay> &ways)
 {
 	const Inline form = inlined(ops[i].run);
 
-	if (translate_inline(form, ops[i]) || translate_access(form, ops[i], i, ways)) {
+	if (translate_inline(form, ops[i]) || translate_access(form, ops[i], i, ways) ||
+	    translate_float(form, ops[i], i, ways)) {
 		return true;
 	}
 	m_host->call(called(ops[i].run), i);

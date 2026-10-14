@@ -118,6 +118,25 @@ public:
 	/* A jump bound later when the bits `mask` of the word are not all
 	 * clear, or when they are. */
 	Jump jump_if_bits(uint32_t rank, uint32_t mask, bool set);
+	/* Floats of single precision, in the float registers 0 to 2 of the
+	 * host, which nothing keeps either */
+	enum class Float : uint8_t { Add, Sub, Mul };
+	void float_load(uint32_t f, uint32_t rank);
+	void float_store(uint32_t rank, uint32_t f);
+	/* f = f <op> the word */
+	void float_op(Float op, uint32_t f, uint32_t rank);
+	/* Then flag(If::Above) tells f > the word, false when either is not
+	 * a number. */
+	void float_compare(uint32_t f, uint32_t rank);
+	/* f = the integer of the word */
+	void float_from(uint32_t f, uint32_t rank);
+	/* A = the float of the word cut to an integer, 0x80000000 out of
+	 * range or for what is not a number */
+	void float_to(uint32_t rank);
+	/* Float 0 = float 0 * float 2 + float 1, rounded once: only on a host
+	 * that can, see fused(). */
+	bool fused() const { return m_fused; }
+	void float_fused();
 	/* Two words that follow each other, the first one the low half of A */
 	void load_pair(uint32_t rank);
 	void store_pair(uint32_t rank);
@@ -175,6 +194,7 @@ private:
 	uint32_t *m_words;
 	Memory m_memory;
 	Places m_places;
+	bool m_fused;
 	uint32_t m_size, m_used;
 	uint32_t m_leave;	/* place of the way back to the run loop */
 	uint64_t m_far_calls;
