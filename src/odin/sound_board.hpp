@@ -56,6 +56,7 @@ public:
 	/* The whole board. Plain data. */
 	struct State {
 		uint64_t sample_acc;
+		uint32_t arm_ahead;
 		Arm7State arm;
 		AicaState aica;
 		uint8_t arm_held;
@@ -152,6 +153,9 @@ private:
 	uint64_t m_sample_acc;
 	uint64_t m_silence_acc;
 	bool m_arm_held;
+	/* The cycles the last instruction of the ARM7 ran past the end of the
+	 * last sample period: they come off the next one */
+	uint32_t m_arm_ahead;
 	uint8_t *m_ram;
 	Arm7 m_arm;
 	ArmWatcher m_watcher;

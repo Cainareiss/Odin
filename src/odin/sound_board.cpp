@@ -43,7 +43,7 @@ static_assert(WaveMemory::PAGE_BITS == Arm7::WATCH_PAGE, "the chip and the ARM7 
 
 SoundBoard::SoundBoard(std::span<uint8_t> ram, uint32_t clock_hz, std::function<void(bool)> main_irq)
 	: m_main_irq(std::move(main_irq)), m_clock_hz(clock_hz), m_sample_acc(0), m_silence_acc(0),
-	  m_arm_held(true), m_ram(ram.data()), m_arm(*this), m_watcher(m_arm), m_aica(*this, ram), m_source(nullptr)
+	  m_arm_held(true), m_arm_ahead(0), m_ram(ram.data()), m_arm(*this), m_watcher(m_arm), m_aica(*this, ram), m_source(nullptr)
 {
 	map_ram();
 	/* The core looks at the registers again through peek(), which changes
@@ -72,6 +72,7 @@ SoundBoard::arm_reset(bool level)
 		m_arm_held = true;
 	} else if (m_arm_held) {
 		m_arm_held = false;
+		m_arm_ahead = 0;
 		m_arm.reset();
 	}
 }
@@ -139,8 +140,10 @@ SoundBoard::run(uint32_t cycles)
 		m_samples.push_back(m_aica.left());
 		m_samples.push_back(m_aica.right());
 		if (!m_arm_held) {
+			const uint32_t slice = ARM_CYCLES_PER_SAMPLE - m_arm_ahead;
+
 			map_ram();
-			m_arm.run(ARM_CYCLES_PER_SAMPLE);
+			m_arm_ahead = m_arm.run(slice) - slice;
 		}
 	}
 }
@@ -161,6 +164,7 @@ SoundBoard::save(State &out)
 {
 	m_arm.settle();
 	out.sample_acc = m_sample_acc;
+	out.arm_ahead = m_arm_ahead;
 	m_arm.save(out.arm);
 	m_aica.save(out.aica);
 	out.arm_held = m_arm_held ? 1 : 0;
@@ -173,6 +177,7 @@ SoundBoard::load(const State &in)
 {
 	m_aica.load(in.aica);
 	m_sample_acc = in.sample_acc;
+	m_arm_ahead = in.arm_ahead;
 	m_arm_held = in.arm_held != 0;
 	m_arm.load(in.arm);
 }

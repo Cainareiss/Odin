@@ -31,6 +31,7 @@
 
 #include "odin/sound_board.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <initializer_list>
@@ -312,6 +313,72 @@ test_dsp_reads()
 	compare(boards[0], boards[1], "dsp reads");
 }
 
+/* The ARM7 runs 512 cycles a sample period: what its last instruction runs
+ * past the end of a period comes off the next one */
+void
+test_arm_clock()
+{
+	/* 5 cycles a turn, counted in r0:
+	 *	mov r0, #0
+	 * 1:	add r0, r0, #1		1
+	 *	mov r1, r1		1
+	 *	b 1b			3	*/
+	Board loop(false);
+	loop.program({ 0xE3A00000, 0xE2800001, 0xE1A01001, 0xEAFFFFFC });
+	loop.start();
+	loop.run(1000);
+	odin::SoundBoard::State state;
+	loop.board->save(state);
+	check(std::llabs(static_cast<int64_t>(state.arm.r[0]) - 1000 * 512 / 5) <= 1, "arm clock: 512 cycles a period");
+
+	/* Saved halfway, with cycles run past a period, and loaded: the same */
+	Board half(false), rest(false);
+	half.program({ 0xE3A00000, 0xE2800001, 0xE1A01001, 0xEAFFFFFC });
+	half.start();
+	half.run(502);
+	odin::SoundBoard::State middle, end;
+	half.board->save(middle);
+	std::copy(half.ram.begin(), half.ram.end(), rest.ram.begin());
+	rest.board->load(middle);
+	rest.run(498);
+	rest.board->save(end);
+	check(middle.arm_ahead != 0 && end.arm == state.arm, "arm clock: a state keeps the cycles run past a period");
+
+	/* Held in reset with cycles run past a period, then let go: as a new start */
+	Board again(false), fresh(false);
+	for (Board *b : { &again, &fresh }) {
+		b->program({ 0xE3A00000, 0xE2800001, 0xE1A01001, 0xEAFFFFFC });
+		b->start();
+	}
+	again.run(502);
+	again.reg(0x2C00, 1);
+	again.run(3);
+	again.reg(0x2C00, 0);
+	again.run(100);
+	fresh.run(100);
+	odin::SoundBoard::State after_reset, new_start;
+	again.board->save(after_reset);
+	fresh.board->save(new_start);
+	check(after_reset.arm == new_start.arm, "arm clock: an ARM7 let go of its reset starts a period anew");
+
+	/* 10 cycles a turn, counted in the memory, the turns counted or run:
+	 *	mov r6, #0x10000
+	 * 1:	ldr r5, [r6]		3
+	 *	add r5, r5, #1		1
+	 *	str r5, [r6]		2
+	 *	mov r5, #0		1
+	 *	b 1b			3	*/
+	Board boards[2] = { Board(true), Board(false) };
+	for (Board &b : boards) {
+		b.program({ 0xE3A06801, 0xE5965000, 0xE2855001, 0xE5865000, 0xE3A05000, 0xEAFFFFFA });
+		b.start();
+		b.run(1000);
+	}
+	check(std::llabs(static_cast<int64_t>(boards[0].word(0x10000)) - 1000 * 512 / 10) <= 1,
+	      "arm clock: 512 cycles a period, the turns counted");
+	compare(boards[0], boards[1], "arm clock");
+}
+
 } /* namespace */
 
 int
@@ -323,6 +390,7 @@ main()
 	test_monitor_reads();
 	test_dsp_reads();
 	test_host_writes();
+	test_arm_clock();
 	if (failures) {
 		printf("%u failure(s)\n", failures);
 		return EXIT_FAILURE;

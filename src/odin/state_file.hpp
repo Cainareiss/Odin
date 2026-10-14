@@ -34,8 +34,9 @@ public:
 	/* 3: the command processor keeps its own state (antarctic.hpp);
 	 * 4: the light numbers are kept in a light set;
 	 * 5: the sound chips keep their voices (aica_voice.hpp);
-	 * 6: the effect processor no longer keeps the length of its program */
-	static constexpr unsigned VERSION = 6;
+	 * 6: the effect processor no longer keeps the length of its program;
+	 * 7: a sound board keeps the cycles its ARM7 ran past a period */
+	static constexpr unsigned VERSION = 7;
 
 	enum class Mode {
 		SAVE,

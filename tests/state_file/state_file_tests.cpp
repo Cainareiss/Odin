@@ -78,7 +78,7 @@ void test_save_and_load(const std::string &dir)
 
 	const std::vector<uint8_t> file = bytes_of(path);
 	check(file.size() == 32 + 4 + 4 + 4 + 5, "the file: 32 bytes of name, then each item after its size");
-	check(std::string(file.begin(), file.begin() + 20) == "odin state 00000006\n" && file[20] == 0 && file[31] == 0,
+	check(std::string(file.begin(), file.begin() + 20) == "odin state 00000007\n" && file[20] == 0 && file[31] == 0,
 	      "the name of the format, padded with zeros");
 	check(file[32] == 4 && file[33] == 0 && file[36] == 0x78 && file[39] == 0x12,
 	      "a size and its item, least significant byte first");
@@ -118,7 +118,7 @@ void test_refused(const std::string &dir)
 	}
 	{
 		std::FILE *file = std::fopen(path.c_str(), "wb");
-		char name[32] = "odin state 00000005\n";
+		char name[32] = "odin state 00000006\n";
 
 		std::fwrite(name, 1, sizeof(name), file);
 		std::fclose(file);
