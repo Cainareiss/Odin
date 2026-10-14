@@ -29,6 +29,7 @@
 
 #include "odin/aica.hpp"
 #include "odin/arm7.hpp"
+#include "odin/wave_memory.hpp"
 
 namespace odin {
 
@@ -131,6 +132,17 @@ public:
 	uint32_t peek(uint32_t addr, uint32_t size) override;
 
 private:
+	/* The voices and the DSP tell the ARM7 they use the memory */
+	class ArmWatcher : public WaveMemory::Watcher {
+	public:
+		explicit ArmWatcher(Arm7 &arm) : m_arm(arm) {}
+		void reading(uint32_t addr, uint32_t size) override { m_arm.ram_read(addr, size); }
+		void writing(uint32_t addr, uint32_t size) override { m_arm.ram_write(addr, size); }
+
+	private:
+		Arm7 &m_arm;
+	};
+
 	uint32_t read(uint32_t addr, uint32_t size);
 	void write(uint32_t addr, uint32_t size, uint32_t value);
 	void map_ram();
@@ -142,6 +154,7 @@ private:
 	bool m_arm_held;
 	uint8_t *m_ram;
 	Arm7 m_arm;
+	ArmWatcher m_watcher;
 	Aica m_aica;
 	std::vector<int16_t> m_samples;
 	const SoundBoard *m_source;

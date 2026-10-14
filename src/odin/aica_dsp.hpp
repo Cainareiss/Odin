@@ -24,6 +24,8 @@
 #include <array>
 #include <cstdint>
 
+#include "odin/wave_memory.hpp"
+
 namespace odin {
 
 /* The effect processor of the AICA: a program of 128 steps run once a
@@ -63,7 +65,7 @@ public:
 	void send(uint32_t mix, int32_t sample) { m_state.mixs[mix & 15] += sample; }
 	void set_external(int16_t left, int16_t right) { m_state.exts = { left, right }; }
 	/* One sample period. `regs`: the register file. */
-	void run(const uint8_t *regs, uint8_t *ram, uint32_t ram_mask);
+	void run(const uint8_t *regs, const WaveMemory &memory);
 	int16_t effect(uint32_t n) const { return m_state.efreg[n & 15]; }
 	int16_t external(uint32_t n) const { return m_state.exts[n & 1]; }
 

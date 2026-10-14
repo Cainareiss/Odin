@@ -37,11 +37,13 @@ constexpr uint32_t PAGE_RTC = 0x710000;
 constexpr uint32_t PAGE_RTC_END = 0x710010;
 constexpr uint32_t PAGE_RAM = 0x800000;
 
+static_assert(WaveMemory::PAGE_BITS == Arm7::WATCH_PAGE, "the chip and the ARM7 watch the same pages");
+
 } /* namespace */
 
 SoundBoard::SoundBoard(std::span<uint8_t> ram, uint32_t clock_hz, std::function<void(bool)> main_irq)
 	: m_main_irq(std::move(main_irq)), m_clock_hz(clock_hz), m_sample_acc(0), m_silence_acc(0),
-	  m_arm_held(true), m_ram(ram.data()), m_arm(*this), m_aica(*this, ram), m_source(nullptr)
+	  m_arm_held(true), m_ram(ram.data()), m_arm(*this), m_watcher(m_arm), m_aica(*this, ram), m_source(nullptr)
 {
 	map_ram();
 	/* The core looks at the registers again through peek(), which changes
@@ -132,6 +134,7 @@ SoundBoard::run(uint32_t cycles)
 			else
 				m_aica.set_external(0, 0);
 		}
+		m_aica.watch({ &m_watcher, m_arm.watched_reads(), m_arm.watched_writes() });
 		m_aica.tick(1);
 		m_samples.push_back(m_aica.left());
 		m_samples.push_back(m_aica.right());

@@ -23,6 +23,8 @@
 
 #include <cstdint>
 
+#include "odin/wave_memory.hpp"
+
 namespace odin {
 
 /* One of the 64 slots of the AICA: the sampler that reads a sound from
@@ -76,13 +78,12 @@ public:
 	 * it is already sounding; with it clear: the release. `slot` is the
 	 * 0x80 bytes of the slot in the register file, `noise` the generator
 	 * the slots share. */
-	void key_on(const uint8_t *slot, const uint8_t *ram, uint32_t ram_mask, uint32_t &noise);
+	void key_on(const uint8_t *slot, const WaveMemory &memory, uint32_t &noise);
 	void key_off();
 
 	/* One sample period: the envelope, then the sampler. `odometer`: the
 	 * sample periods the chip has counted. */
-	void step(const uint8_t *slot, const uint8_t *ram, uint32_t ram_mask, uint32_t odometer,
-	          uint32_t &noise);
+	void step(const uint8_t *slot, const WaveMemory &memory, uint32_t odometer, uint32_t &noise);
 
 	/* The sample of this period, past the filter, the envelope, TL and the
 	 * amplitude LFO: 20 bits. To be taken once a period, before step(). */
@@ -109,7 +110,7 @@ private:
 	/* To the next sample; false when the voice stopped there. */
 	bool advance(const uint8_t *slot);
 	/* The samples at CA and after it */
-	void fetch(const uint8_t *slot, const uint8_t *ram, uint32_t ram_mask, uint32_t &noise);
+	void fetch(const uint8_t *slot, const WaveMemory &memory, uint32_t &noise);
 	void stop();
 
 	State m_state;

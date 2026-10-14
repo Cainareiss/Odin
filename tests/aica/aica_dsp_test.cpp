@@ -69,7 +69,7 @@ struct Dsp {
 		set(0x3400 + i * 16 + 12, w3);
 		dsp.program_written(regs.data());
 	}
-	void run() { dsp.run(regs.data(), ram.data(), 0xFFFF); }
+	void run() { dsp.run(regs.data(), odin::WaveMemory(ram.data(), 0xFFFF, {})); }
 	uint32_t word(uint32_t byte) const { return static_cast<uint32_t>(ram[byte] | (ram[byte + 1] << 8)); }
 	void put(uint32_t byte, uint32_t value)
 	{

@@ -180,12 +180,6 @@ noise_sample(uint32_t &noise)
 	return static_cast<int16_t>(noise_word(noise));
 }
 
-int32_t
-pcm16(const uint8_t *ram, uint32_t mask, uint32_t addr)
-{
-	return static_cast<int16_t>(ram[addr & mask] | (ram[(addr + 1) & mask] << 8));
-}
-
 } /* namespace */
 
 void
@@ -197,7 +191,7 @@ AicaVoice::reset()
 }
 
 void
-AicaVoice::key_on(const uint8_t *slot, const uint8_t *ram, uint32_t ram_mask, uint32_t &noise)
+AicaVoice::key_on(const uint8_t *slot, const WaveMemory &memory, uint32_t &noise)
 {
 	if (m_state.segment != RELEASE)
 		return;
@@ -208,7 +202,7 @@ AicaVoice::key_on(const uint8_t *slot, const uint8_t *ram, uint32_t ram_mask, ui
 	m_state.playing = 1;
 	m_state.cutoff = reg(slot, REG_FLV0) & 0x1FFF;
 	m_state.cutoff_segment = ATTACK;
-	fetch(slot, ram, ram_mask, noise);
+	fetch(slot, memory, noise);
 }
 
 int32_t
@@ -299,8 +293,7 @@ AicaVoice::key_off()
 }
 
 void
-AicaVoice::step(const uint8_t *slot, const uint8_t *ram, uint32_t ram_mask, uint32_t odometer,
-                uint32_t &noise)
+AicaVoice::step(const uint8_t *slot, const WaveMemory &memory, uint32_t odometer, uint32_t &noise)
 {
 	if (silent())
 		return;
@@ -318,7 +311,7 @@ AicaVoice::step(const uint8_t *slot, const uint8_t *ram, uint32_t ram_mask, uint
 		m_state.phase -= ONE;
 		if (!advance(slot))
 			return;
-		fetch(slot, ram, ram_mask, noise);
+		fetch(slot, memory, noise);
 	}
 }
 
@@ -506,7 +499,7 @@ AicaVoice::advance(const uint8_t *slot)
 }
 
 void
-AicaVoice::fetch(const uint8_t *slot, const uint8_t *ram, uint32_t ram_mask, uint32_t &noise)
+AicaVoice::fetch(const uint8_t *slot, const WaveMemory &memory, uint32_t &noise)
 {
 	const uint32_t play = reg(slot, REG_PLAY);
 	const uint32_t format = (play >> 7) & 3;
@@ -524,19 +517,19 @@ AicaVoice::fetch(const uint8_t *slot, const uint8_t *ram, uint32_t ram_mask, uin
 	}
 	switch (format) {
 	case PCM16:
-		m_state.sample = pcm16(ram, ram_mask, (sa & ~1u) + ca * 2);
-		m_state.next = pcm16(ram, ram_mask, (sa & ~1u) + after * 2);
+		m_state.sample = static_cast<int16_t>(memory.read16((sa & ~1u) + ca * 2));
+		m_state.next = static_cast<int16_t>(memory.read16((sa & ~1u) + after * 2));
 		return;
 	case PCM8:
-		m_state.sample = static_cast<int8_t>(ram[(sa + ca) & ram_mask]) * 256;
-		m_state.next = static_cast<int8_t>(ram[(sa + after) & ram_mask]) * 256;
+		m_state.sample = static_cast<int8_t>(memory.read8(sa + ca)) * 256;
+		m_state.next = static_cast<int8_t>(memory.read8(sa + after)) * 256;
 		return;
 	default:
 		break;
 	}
 
 	const auto code = [&](uint32_t n) {
-		return static_cast<uint32_t>(ram[(sa + (n >> 1)) & ram_mask] >> ((n & 1) * 4)) & 0xF;
+		return static_cast<uint32_t>(memory.read8(sa + (n >> 1)) >> ((n & 1) * 4)) & 0xF;
 	};
 
 	/* The decoder is kept as it was at LSA the first time, and plain ADPCM

@@ -102,11 +102,12 @@ struct Voice {
 	{
 		set(0x18, ((static_cast<uint32_t>(octave) & 0xF) << 11) | fns);
 	}
-	void key_on() { voice.key_on(slot.data(), ram.data(), 0xFFFF, noise); }
+	odin::WaveMemory memory() { return odin::WaveMemory(ram.data(), 0xFFFF, {}); }
+	void key_on() { voice.key_on(slot.data(), memory(), noise); }
 	void step(uint32_t n = 1)
 	{
 		for (uint32_t i = 0; i < n; i++)
-			voice.step(slot.data(), ram.data(), 0xFFFF, odometer++, noise);
+			voice.step(slot.data(), memory(), odometer++, noise);
 	}
 	/* Sample periods until the condition holds, or `limit` */
 	template <typename F>

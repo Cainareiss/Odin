@@ -172,6 +172,7 @@ void Arm7::turn_begin()
 	m_turn_passed[0] = 0;
 	m_turn_pages.fill(0);
 	m_turn_changed.fill(0);
+	m_turn_watched.fill(0);
 	m_turn_num_reads = 0;
 	m_turn_num_stores = 0;
 	m_turn_bad = false;
@@ -561,6 +562,7 @@ void Arm7::turn_note_fetch(uint32_t addr, uint32_t op)
 	if (addr < m_ram.size) {
 		uint32_t page = (addr & m_ram.mask) >> TURN_PAGE;
 		m_turn_pages[page >> 3] |= u8(1u << (page & 7));
+		m_turn_watched[page >> 3] |= u8(1u << (page & 7));
 		turn_trail(addr & m_ram.mask, op, 4, false);
 	} else if (m_turn_num_reads < TURN_READS) {
 		m_turn_reads[m_turn_num_reads++] = {m_turn_count, addr, 4, op};
@@ -579,6 +581,7 @@ void Arm7::turn_note_read(uint32_t addr, uint32_t size, uint32_t value)
 	if (addr < m_ram.size) {
 		uint32_t page = (addr & m_ram.mask) >> TURN_PAGE;
 		m_turn_pages[page >> 3] |= u8(1u << (page & 7));
+		m_turn_watched[page >> 3] |= u8(1u << (page & 7));
 		turn_trail(addr & m_ram.mask, value, size, false);
 	} else if (m_turn_num_reads < TURN_READS) {
 		m_turn_reads[m_turn_num_reads++] = {m_turn_count, addr, size, value};
@@ -617,6 +620,7 @@ void Arm7::turn_note_store(uint32_t addr, uint32_t size, uint32_t value)
 		m_turn_stores[m_turn_num_stores++] = {offset, m_ram.base[offset]};
 		uint32_t page = offset >> TURN_PAGE;
 		m_turn_changed[page >> 3] |= u8(1u << (page & 7));
+		m_turn_watched[page >> 3] |= u8(1u << (page & 7));
 	}
 }
 

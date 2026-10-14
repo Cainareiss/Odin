@@ -122,6 +122,9 @@ public:
 	/* The interrupt line to the host CPU. */
 	bool main_irq() const { return m_main_irq; }
 	uint32_t ram_mask() const { return m_mem8mb ? 0x7FFFFF : 0x1FFFFF; }
+	/* The pages of the wave memory the board watches, for the reads and
+	 * the writes of the voices and the DSP (WaveMemory) */
+	void watch(const WaveMemory::Watch &watch) { m_watch = watch; }
 
 	void save(AicaState &out) const;
 	void load(const AicaState &in);
@@ -180,6 +183,7 @@ private:
 	};
 
 	uint16_t rd16(uint32_t offset) const;
+	WaveMemory wave() const { return WaveMemory(m_ram.data(), ram_mask(), m_watch); }
 	void wr16(uint32_t offset, uint16_t value);
 	uint32_t reg_value(uint32_t offset, uint32_t size, bool effects);
 	uint16_t read_common(uint32_t offset, bool effects);
@@ -219,6 +223,7 @@ private:
 	uint32_t m_unknown_logged;
 	std::array<AicaVoice, SLOTS> m_voices;
 	AicaDsp m_dsp;
+	WaveMemory::Watch m_watch;
 	uint32_t m_odometer;
 	uint32_t m_noise;
 	int16_t m_left;

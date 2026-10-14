@@ -19,9 +19,9 @@
  */
 
 /* A sound board with the turns of its ARM7 counted (SoundBoard default)
- * must end as one that runs every turn: each case runs the same small
- * program on two boards, one of each kind, and compares the memory, the
- * ARM7 and the output.
+ * must end as one that runs every turn, also when the chip uses the wave
+ * memory: each case runs the same small program on two boards, one of each
+ * kind, and compares the memory, the ARM7 and the output.
  *
  * Build: g++ -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
  *            -O2 -I src tests/sound_board/sound_board_tests.cpp src/odin/sound_board.cpp \
@@ -105,6 +105,117 @@ compare(Board &counted, Board &run, const char *what)
 	check(counted.board->samples() == run.board->samples(), line);
 }
 
+/* The wave memory tells its watcher of a watched page before it reads or
+ * writes there, and of no other */
+void
+test_wave_memory()
+{
+	struct Settler : odin::WaveMemory::Watcher {
+		std::vector<uint8_t> &ram;
+		uint32_t reads = 0, writes = 0;
+		uint8_t found = 0;
+
+		explicit Settler(std::vector<uint8_t> &memory) : ram(memory) {}
+		/* As settle() would: what a counted turn left is put there */
+		void reading(uint32_t addr, uint32_t) override
+		{
+			reads++;
+			ram[addr] = 0x5A;
+		}
+		void writing(uint32_t addr, uint32_t) override
+		{
+			writes++;
+			found = ram[addr];
+		}
+	};
+	std::vector<uint8_t> ram(0x10000);
+	Settler settler(ram);
+	/* Pages of 4 KB: page 1 watched for the reads, page 2 for the writes */
+	const uint8_t reads[2] = { 0x02, 0 }, writes[2] = { 0x04, 0 };
+	const odin::WaveMemory memory(ram.data(), 0xFFFF, { &settler, reads, writes });
+
+	ram[0x1010] = 0x11;
+	check(memory.read8(0x1010) == 0x5A && settler.reads == 1, "wave memory: a watched read is told first");
+	ram[0x1021] = 0x11;
+	check(memory.read16(0x1020) == 0x115A && settler.reads == 2, "wave memory: a watched word is told first");
+	ram[0x3010] = 0x11;
+	ram[0x3011] = 0x22;
+	check(memory.read8(0x3010) == 0x11 && memory.read16(0x3011) == 0x2211 && settler.reads == 2,
+	      "wave memory: other reads are not told; a word at an odd address is the even one");
+	ram[0x2010] = 0x22;
+	memory.write16(0x2011, 0x3344);
+	check(settler.writes == 1 && settler.found == 0x22 && ram[0x2010] == 0x44 && ram[0x2011] == 0x33,
+	      "wave memory: a watched write is told first");
+	memory.write16(0x1010, 0x3344);
+	check(settler.writes == 1, "wave memory: another write is not told");
+}
+
+/* The ARM7 waits for a word the DSP writes: 0x1234 for one sample period
+ * in 128, 0 at the others. */
+void
+test_dsp_writes()
+{
+	Board boards[2] = { Board(true), Board(false) };
+
+	for (Board &b : boards) {
+		/*	mov r0, #0x10000	the word
+		 *	mov r2, #0x20000	FLAG
+		 * 1:	ldr r1, [r0]
+		 *	cmp r1, #0
+		 *	beq 1b
+		 *	str r1, [r2]
+		 *	b .				*/
+		b.program({ 0xE3A00801, 0xE3A02802, 0xE5901000, 0xE3510000, 0x0AFFFFFC, 0xE5821000, 0xEAFFFFFE });
+		/* Ring buffer at 0x10000 (RBP 0x20). Step 0, empty, takes
+		 * TEMP[MDEC] into ACC; step 1 writes it (MWT, a table, no
+		 * float) at MADRS 0. TEMP 64 only is 0x1234 << 8: MDEC comes
+		 * to 64 at the 64th period. */
+		b.reg(0x2804, 0x0020);
+		b.reg(0x4000 + 64 * 8 + 4, 0x1234);
+		b.reg(0x3410 + 8, 0xC000);
+		b.reg(0x3410 + 12, 0x8000);
+		b.start();
+		b.run(300);
+	}
+	check(boards[1].word(FLAG) == 0x1234, "dsp writes: every turn run, the ARM7 sees the word");
+	check(boards[0].word(FLAG) == 0x1234, "dsp writes: turns counted, the ARM7 sees the word");
+	compare(boards[0], boards[1], "dsp writes");
+}
+
+/* The ARM7 counts in a word that a voice plays as its sound: a counted
+ * turn leaves its count there only when it is settled. */
+void
+test_voice_reads()
+{
+	Board boards[2] = { Board(true), Board(false) };
+
+	for (Board &b : boards) {
+		/*	mov r0, #0x10000	the count
+		 * 1:	ldr r1, [r0]
+		 *	add r1, r1, #1
+		 *	str r1, [r0]
+		 *	mov r1, #0
+		 *	b 1b				*/
+		b.program({ 0xE3A00801, 0xE5901000, 0xE2811001, 0xE5801000, 0xE3A01000, 0xEAFFFFFA });
+		b.start();
+		b.run(20);
+		/* Slot 9 plays 16-bit samples from 0x10000 in a loop of two,
+		 * full level, centred */
+		const uint32_t slot = 9 * odin::Aica::SLOT_SIZE;
+		b.reg(slot + 0x04, 0x0000);
+		b.reg(slot + 0x0C, 2);
+		b.reg(slot + 0x10, 0x001F);
+		b.reg(slot + 0x14, 0x3C00);
+		b.reg(slot + 0x24, 0x0F00);
+		b.reg(slot + 0x28, 0x0060);
+		b.reg(slot, 0xC201);
+		b.run(300);
+	}
+	check(boards[1].board->samples() != std::vector<int16_t>(boards[1].board->samples().size()),
+	      "voice reads: every turn run, the voice sounds");
+	compare(boards[0], boards[1], "voice reads");
+}
+
 /* The ARM7 waits for LP in 0x2810, which a read clears: whether a counted
  * turn may go on must not be asked by reading it. */
 void
@@ -143,12 +254,45 @@ test_monitor_reads()
 	compare(boards[0], boards[1], "monitor reads");
 }
 
+/* The ARM7 counts in a word the DSP reads and sends out */
+void
+test_dsp_reads()
+{
+	Board boards[2] = { Board(true), Board(false) };
+
+	for (Board &b : boards) {
+		/* The count at 0x10000, as in test_voice_reads */
+		b.program({ 0xE3A00801, 0xE5901000, 0xE2811001, 0xE5801000, 0xE3A01000, 0xEAFFFFFA });
+		/* Ring buffer at 0x10000. Step 1 reads MADRS 0 (MRD, a table,
+		 * no float), step 3 puts it in MEMS 0, step 4 takes it times
+		 * COEF 4 (almost one), step 5 to EFREG 0, sent out by EFSDL 0. */
+		b.reg(0x2804, 0x0020);
+		b.reg(0x3010, 0x7FF8);
+		b.reg(0x3410 + 8, 0xA000);
+		b.reg(0x3410 + 12, 0x8000);
+		b.reg(0x3430 + 4, 0x0040);
+		b.reg(0x3440 + 4, 0xA000);
+		b.reg(0x3440 + 8, 0x0002);
+		b.reg(0x3450 + 8, 0x1000);
+		b.reg(0x2000, 0x0F00);
+		b.start();
+		b.run(300);
+	}
+	check(boards[1].board->samples() != std::vector<int16_t>(boards[1].board->samples().size()),
+	      "dsp reads: every turn run, the effect sounds");
+	compare(boards[0], boards[1], "dsp reads");
+}
+
 } /* namespace */
 
 int
 main()
 {
+	test_wave_memory();
+	test_dsp_writes();
+	test_voice_reads();
 	test_monitor_reads();
+	test_dsp_reads();
 	if (failures) {
 		printf("%u failure(s)\n", failures);
 		return EXIT_FAILURE;

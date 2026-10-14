@@ -119,6 +119,17 @@ public:
 	void set_turn_replay(bool on);
 	void ram_read(uint32_t addr, uint32_t size);
 	void ram_write(uint32_t addr, uint32_t size);
+	/* The pages of the plain memory the machine must tell of: a bit for
+	 * each page of 1 << WATCH_PAGE bytes, page n in bit n & 7 of byte
+	 * n >> 3, or nullptr for none. Those of ram_read(), while turns are
+	 * counted, and those of ram_write(), while a turn is recorded or
+	 * counted; the machine may skip the call for any other page. */
+	static constexpr uint32_t WATCH_PAGE = 12;
+	const uint8_t *watched_reads() const { return m_turn == Turn::Replay ? m_turn_changed.data() : nullptr; }
+	const uint8_t *watched_writes() const
+	{
+		return m_turn == Turn::Record || m_turn == Turn::Replay ? m_turn_watched.data() : nullptr;
+	}
 	/* Runs the part of a turn that was only counted. */
 	void settle();
 	/* Turns run to be recorded and turns counted so far, for measuring. */
@@ -232,7 +243,7 @@ private:
 	static constexpr uint32_t TURN_AWAY = 1u << 16; /* instructions away from one kept */
 	static constexpr uint32_t TURN_READS = 16;   /* outside the memory */
 	static constexpr uint32_t TURN_STORES = 256; /* bytes changed */
-	static constexpr uint32_t TURN_PAGE = 12;    /* 4 KB */
+	static constexpr uint32_t TURN_PAGE = WATCH_PAGE; /* 4 KB */
 	struct TurnRead {
 		uint32_t index, addr, size, value;
 	};
@@ -290,6 +301,7 @@ private:
 	std::array<uint16_t, TURN_MAX + 1> m_turn_passed; /* summed */
 	std::array<uint8_t, 256> m_turn_pages;            /* memory read */
 	std::array<uint8_t, 256> m_turn_changed;          /* memory changed */
+	std::array<uint8_t, 256> m_turn_watched;          /* either */
 	std::array<TurnRead, TURN_READS> m_turn_reads;
 	std::array<TurnStore, TURN_STORES> m_turn_stores;
 	std::array<TurnOp, TURN_MAX> m_turn_ops;

@@ -49,7 +49,7 @@ rtc_of_host_clock()
 } /* namespace */
 
 Aica::Aica(AicaHost &host, std::span<uint8_t> ram)
-	: m_host(host), m_ram(ram), m_log(nullptr)
+	: m_host(host), m_ram(ram), m_log(nullptr), m_watch{}
 {
 	assert(ram.size() == RAM_SIZE);
 	reset();
@@ -295,9 +295,11 @@ Aica::write_common(uint32_t word, uint16_t value)
 void
 Aica::key_slots()
 {
+	const WaveMemory memory = wave();
+
 	for (uint32_t slot = 0; slot < SLOTS; slot++) {
 		if (rd16(slot * SLOT_SIZE) & 0x4000)
-			m_voices[slot].key_on(&m_regs[slot * SLOT_SIZE], m_ram.data(), ram_mask(), m_noise);
+			m_voices[slot].key_on(&m_regs[slot * SLOT_SIZE], memory, m_noise);
 		else
 			m_voices[slot].key_off();
 	}
@@ -333,6 +335,7 @@ void
 Aica::mix()
 {
 	const uint16_t control = rd16(REG_CONTROL);
+	const WaveMemory memory = wave();
 	int32_t left = 0, right = 0;
 
 	for (uint32_t slot = 0; slot < SLOTS; slot++) {
@@ -357,12 +360,12 @@ Aica::mix()
 		/* IMXL to the MIXS ISEL names */
 		if (effect & 0xF0)
 			m_dsp.send(effect & 0xF, sent(sample, ((effect >> 4) & 0xF) ^ 0xF));
-		voice.step(regs, m_ram.data(), ram_mask(), m_odometer, m_noise);
+		voice.step(regs, memory, m_odometer, m_noise);
 	}
 
 	/* The 16 outputs of the DSP, then the 2 external inputs, through EFSDL
 	 * and EFPAN */
-	m_dsp.run(m_regs.data(), m_ram.data(), ram_mask());
+	m_dsp.run(m_regs.data(), memory);
 	for (uint32_t n = 0; n < 18; n++) {
 		const uint16_t send = rd16(REG_EFFECT_SEND + n * 4);
 		const uint32_t level = (send >> 8) & 0xF;

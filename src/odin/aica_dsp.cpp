@@ -128,7 +128,7 @@ AicaDsp::program_written(const uint8_t *regs)
 }
 
 void
-AicaDsp::run(const uint8_t *regs, uint8_t *ram, uint32_t ram_mask)
+AicaDsp::run(const uint8_t *regs, const WaveMemory &memory)
 {
 	State &s = m_state;
 
@@ -203,15 +203,14 @@ AicaDsp::run(const uint8_t *regs, uint8_t *ram, uint32_t ram_mask)
 					addr++;
 				addr = (w2 & 0x8000) ? addr & 0xFFFF : (addr + s.mdec) & length;
 
-				const uint32_t byte = (base + addr * 2) & ram_mask;
+				const uint32_t byte = base + addr * 2;
 				if (w2 & 0x2000) {
-					const int32_t word = static_cast<int16_t>(ram[byte] | (ram[(byte + 1) & ram_mask] << 8));
+					const int32_t word = static_cast<int16_t>(memory.read16(byte));
 					s.reads[(i + 2) & 3] = (w3 & 0x8000) ? word * 256 : unpack(static_cast<uint16_t>(word));
 				}
 				if (w2 & 0x4000) {
 					const uint32_t word = (w3 & 0x8000) ? static_cast<uint32_t>(shifted >> 8) : pack(shifted);
-					ram[byte] = static_cast<uint8_t>(word);
-					ram[(byte + 1) & ram_mask] = static_cast<uint8_t>(word >> 8);
+					memory.write16(byte, static_cast<uint16_t>(word));
 				}
 			}
 			if (w2 & 0x80)

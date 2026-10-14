@@ -1855,6 +1855,80 @@ void test_turns()
 
 } /* namespace */
 
+/* The pages a machine must tell the core of (watched_reads, watched_writes):
+ * none outside a turn; while one is recorded, those it has read so far, for
+ * a write; while one is counted, those it changes, for a read, and those it
+ * reads or changes, for a write. */
+void test_watched_pages()
+{
+	TEST("pages the machine must tell of");
+	CountingBus bus;
+	Arm7 cpu(bus);
+	std::vector<uint8_t> ram(0x10000, 0);
+	/* 1:	ldr r5, [r6]		a count, in page 8
+	 *	add r5, r5, #1
+	 *	str r5, [r6]
+	 *	mov r5, #0
+	 *	strb r9, [r10]		a byte of page 12 changed
+	 *	strb r11, [r10]		and put back
+	 *	ldr r1, [r0]		a word of page 4, read only
+	 *	cmp r1, #0
+	 *	beq 1b
+	 *	b .			*/
+	const uint32_t code[] = { 0xE5965000, 0xE2855001, 0xE5865000, 0xE3A05000, 0xE5CA9000,
+	                          0xE5CAB000, 0xE5901000, 0xE3510000, 0x0AFFFFF6, 0xEAFFFFFE };
+	for (uint32_t i = 0; i < std::size(code); i++) {
+		for (uint32_t b = 0; b < 4; b++) {
+			ram[0x1000 + i * 4 + b] = static_cast<uint8_t>(code[i] >> (8 * b));
+		}
+	}
+	cpu.set_ram({ram.data(), 0x10000, 0xFFFF});
+	odin::Arm7State st{};
+	cpu.save(st);
+	st.pc = 0x1000;
+	/* Z and C as cmp r1, #0 leaves them: the turn is back as it began */
+	st.cpsr = Arm7::MODE_SVC | Arm7::FLAG_I | Arm7::FLAG_F | Arm7::FLAG_Z | Arm7::FLAG_C;
+	cpu.load(st);
+	cpu.set_reg(0, 0x4000);
+	cpu.set_reg(6, 0x8000);
+	cpu.set_reg(9, 1);
+	cpu.set_reg(10, 0xC000);
+	cpu.set_turn_replay(true);
+
+	const auto watched = [](const uint8_t *pages, uint32_t addr) {
+		const uint32_t page = addr >> Arm7::WATCH_PAGE;
+		return pages && ((pages[page >> 3] >> (page & 7)) & 1);
+	};
+	check_eq("reads watched before a turn", cpu.watched_reads() != nullptr, 0);
+	check_eq("writes watched before a turn", cpu.watched_writes() != nullptr, 0);
+
+	cpu.run(1);
+	check_eq("reads watched while a turn is recorded", cpu.watched_reads() != nullptr, 0);
+	check_eq("write watched: the code read", watched(cpu.watched_writes(), 0x1000), 1);
+	check_eq("write watched: the count read", watched(cpu.watched_writes(), 0x8000), 1);
+	check_eq("write watched: the word not read yet", watched(cpu.watched_writes(), 0x4000), 0);
+
+	for (uint32_t i = 0; i < 20 && cpu.turns_counted() == 0; i++) {
+		cpu.run(512);
+	}
+	check_eq("the turn is counted", cpu.turns_counted() != 0, 1);
+	const uint8_t *reads = cpu.watched_reads();
+	const uint8_t *writes = cpu.watched_writes();
+	check_eq("read watched: the count", watched(reads, 0x8000), 1);
+	check_eq("read watched: the byte changed and put back", watched(reads, 0xC000), 1);
+	check_eq("read watched: the word only read", watched(reads, 0x4000), 0);
+	check_eq("read watched: the code", watched(reads, 0x1000), 0);
+	check_eq("write watched: the code", watched(writes, 0x1000), 1);
+	check_eq("write watched: the word", watched(writes, 0x4000), 1);
+	check_eq("write watched: the count", watched(writes, 0x8000), 1);
+	check_eq("write watched: the byte changed and put back", watched(writes, 0xC000), 1);
+	check_eq("write watched: a page the turn does not use", watched(writes, 0x2000), 0);
+
+	cpu.set_turn_replay(false);
+	check_eq("reads watched with every turn run", cpu.watched_reads() != nullptr, 0);
+	check_eq("writes watched with every turn run", cpu.watched_writes() != nullptr, 0);
+}
+
 int main(int argc, char **argv)
 {
 	for (int i = 1; i < argc; i++) {
@@ -1876,6 +1950,7 @@ int main(int argc, char **argv)
 	test_save_load();
 	test_trace();
 	test_turns();
+	test_watched_pages();
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures == 0 ? 0 : 1;
 }
