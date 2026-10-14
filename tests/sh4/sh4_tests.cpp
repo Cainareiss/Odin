@@ -1113,6 +1113,22 @@ void test_on_chip()
 		eq("TCNT0 one count later", m.state().r[4], 48);
 	}
 	{
+		/* A peripheral clock at a third of the CPU's: a count of Pck/4
+		 * is 12 cycles, and a hundred go by in 1200. mov.w r0, @r6
+		 * (FRQCR) / mov.b r7, @r1 (TSTR) / mov.l @(8,r1), r2 (TCNT0) /
+		 * nop / 599 turns of dt r5, bf / mov.l @(8,r1), r3 */
+		Machine m;
+		m.cpu.set_time(1000);
+		Sh4State st = run(m, {0x2601, 0x2170, 0x5212, NOP, 0x4510, 0x8BFD, 0x5312, NOP}, 1210, [](Sh4State &s) {
+			s.r[0] = 0x0E09;
+			s.r[6] = 0xFFC00000;
+			s.r[1] = 0xFFD80004;
+			s.r[7] = 1;
+			s.r[5] = 599;
+		});
+		eq("counts in 1200 cycles, 12 cycles each", st.r[2] - st.r[3], 100);
+	}
+	{
 		/* Port A: pins 0-7 outputs, 8-15 inputs. */
 		Machine m;
 		m.pins_in = 0xA5FF;

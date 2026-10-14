@@ -28,6 +28,8 @@
 
 #include "odin/sh4.hpp"
 
+#include <bit>
+
 namespace odin {
 
 namespace {
@@ -51,6 +53,14 @@ constexpr uint32_t TMU_TOCR = 0xD80000, TMU_TSTR = 0xD80004, TMU_TCOR0 = 0xD8000
 constexpr uint32_t SCI_SCBRR1 = 0xE00004, SCI_SCTDR1 = 0xE0000C, SCI_SCSSR1 = 0xE00010;
 constexpr uint32_t SCIF_SCBRR2 = 0xE80004, SCIF_SCFSR2 = 0xE80010;
 constexpr uint32_t UDI_SDIR = 0xF00000;
+
+/* time / period, for a timer. No division where the period is a power of
+ * two, as it is unless the peripheral clock is a third or a sixth of the
+ * CPU's: a game may read a timer thousands of times in a frame. */
+uint64_t periods(uint64_t time, uint64_t period)
+{
+	return std::has_single_bit(period) ? time >> std::countr_zero(period) : time / period;
+}
 
 /* The three timer channels are 12 bytes apart. */
 constexpr uint32_t tcor(uint32_t ch) { return TMU_TCOR0 + ch * 12; }
@@ -360,13 +370,26 @@ uint32_t Sh4::pck_cycles() const
 {
 	static constexpr uint8_t IFC[8] = { 1, 2, 3, 4, 6, 8, 0, 0 };
 	static constexpr uint8_t PFC[8] = { 2, 3, 4, 6, 8, 0, 0, 0 };
-	const uint32_t frqcr = static_cast<uint32_t>(reg_get(2, CPG_FRQCR));
-	const uint32_t cpu = IFC[(frqcr >> 6) & 7], peripheral = PFC[frqcr & 7];
+	/* The peripheral divider over the CPU's, 0 where it is not whole */
+	static constexpr auto RATIO = [] {
+		std::array<std::array<uint8_t, 8>, 8> ratio{};
 
-	if (cpu == 0 || peripheral == 0 || peripheral % cpu != 0) {
+		for (uint32_t i = 0; i < 8; i++) {
+			for (uint32_t p = 0; p < 8; p++) {
+				if (IFC[i] && PFC[p] && PFC[p] % IFC[i] == 0) {
+					ratio[i][p] = static_cast<uint8_t>(PFC[p] / IFC[i]);
+				}
+			}
+		}
+		return ratio;
+	}();
+	const uint32_t frqcr = static_cast<uint32_t>(reg_get(2, CPG_FRQCR));
+	const uint32_t ratio = RATIO[(frqcr >> 6) & 7][frqcr & 7];
+
+	if (ratio == 0) {
 		fatal("FRQCR with clock ratios that are not implemented", frqcr);
 	}
-	return peripheral / cpu;
+	return ratio;
 }
 
 /* The cycles of one count of a channel. */
@@ -414,7 +437,7 @@ void Sh4::tmu_sync(uint64_t now)
 	for (uint32_t ch = 0; ch < 3; ch++) {
 		if (m_tmu_running[ch]) {
 			const uint64_t period = tmu_period(ch);
-			const uint64_t counts = now / period - m_tmu_time / period;
+			const uint64_t counts = periods(now, period) - periods(m_tmu_time, period);
 			if (counts) {
 				tmu_count(ch, counts);
 			}
@@ -432,7 +455,7 @@ int32_t Sh4::tmu_next_irq() const
 	for (uint32_t ch = 0; ch < 3; ch++) {
 		if (m_tmu_running[ch] && (reg_get(2, tcr(ch)) & 0x20)) {
 			const uint64_t period = tmu_period(ch);
-			const uint64_t date = (m_tmu_time / period + m_tmu_counter[ch] + 1) * period;
+			const uint64_t date = (periods(m_tmu_time, period) + m_tmu_counter[ch] + 1) * period;
 			soonest = std::min(soonest, std::max<uint64_t>(date - std::min(date, m_cycles), 1));
 		}
 	}
