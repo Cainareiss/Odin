@@ -26,6 +26,7 @@
 #include <cstdio>
 #include <span>
 
+#include "odin/aica_dsp.hpp"
 #include "odin/aica_voice.hpp"
 
 namespace odin {
@@ -33,8 +34,8 @@ namespace odin {
 /* Yamaha AICA: the control side of the chip. Register file, the three
  * timers, the two interrupt controllers (one towards the ARM7 inside the
  * chip, one towards the host CPU), the internal DMA, the ARM reset bit and
- * the RTC; and the 64 voices (aica_voice.hpp) and their direct mix. The
- * DSP is not here yet: its registers are stored and read back only.
+ * the RTC; the 64 voices (aica_voice.hpp), the effect processor
+ * (aica_dsp.hpp) and the mix of both.
  *
  * Register layout: 32-bit words, 16 significant bits each, byte offsets
  * 0x0000-0x7FFF. Sources: MAME src/devices/sound/aica.cpp (r16/w16 and
@@ -65,6 +66,7 @@ struct AicaState {
 	uint32_t rtc_seconds;
 	uint32_t rtc_samples;
 	std::array<AicaVoice::State, 64> voices;
+	AicaDsp::State dsp;
 	uint32_t odometer;
 	uint32_t noise;
 };
@@ -107,6 +109,8 @@ public:
 
 	/* Advances the chip by `n` sample periods (1/44100 s each). */
 	void tick(uint32_t n);
+	/* EXTS, the two external inputs, for the sample periods to come */
+	void set_external(int16_t left, int16_t right) { m_dsp.set_external(left, right); }
 	/* The output of the last sample period, left and right, 16 bits */
 	int16_t left() const { return m_left; }
 	int16_t right() const { return m_right; }
@@ -149,6 +153,10 @@ private:
 		REG_ARM_RESET = 0x2C00,
 		REG_INT_LEVEL = 0x2D00,
 		REG_INT_CLEAR = 0x2D04,
+		REG_EFFECT_SEND = 0x2000,	/* EFSDL, EFPAN: 16 for EFREG, 2 for EXTS */
+		REG_DSP_PROGRAM = 0x3400,
+		REG_DSP_PROGRAM_END = 0x3C00,
+		REG_DSP_WORK = 0x4000,		/* TEMP, MEMS, MIXS, EFREG, EXTS */
 		REG_DSP_END = 0x45C8
 	};
 
@@ -176,7 +184,7 @@ private:
 	void key_slots();
 	/* The slot MSLC names for the monitors */
 	AicaVoice &monitored();
-	/* The direct outputs of the voices, to the 16 bits of the DAC */
+	/* The voices, direct and through the DSP, to the 16 bits of the DAC */
 	void mix();
 	void timer_write(uint32_t index);
 	void timer_tick(uint32_t index);
@@ -206,6 +214,7 @@ private:
 	uint32_t m_rtc_samples;
 	uint32_t m_unknown_logged;
 	std::array<AicaVoice, SLOTS> m_voices;
+	AicaDsp m_dsp;
 	uint32_t m_odometer;
 	uint32_t m_noise;
 	int16_t m_left;

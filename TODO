@@ -129,9 +129,10 @@ Status byte st1 'V' that von4 tests on command 0x33 is not understood.
 
 AICA (src/odin/aica.cpp + arm7.cpp): control block, timers, interrupts,
 DMA, RTC and the ARM7 are in, and the voices (aica_voice.cpp: sampler,
-loops, envelope, levels, LFO, the monitors the sound driver reads) and the
-direct mix of a chip (ODIN_WAV writes that of the main board); still
-missing: the filter, the DSP and the sound output, the nested-FIQ
+loops, envelope, levels, LFO, the monitors the sound driver reads), the
+effect processor (aica_dsp.cpp) and the mix of a chip (ODIN_WAV writes that
+of the main board); still missing: the filter and the sound output, the
+nested-FIQ
 question (does reading 0x2D00 drop the line?), and the HACK in
 hikaru_bus.cpp (page offset 0 reads 4 for Pharrier). Voices, HEURISTIC
 (one source, notes MARKDOWN/30 section 5): the rate of an envelope step
@@ -144,7 +145,13 @@ millisecond or less) falls from 0.73 to 1.04 of the table of the manual.
 Levels and LFO, HEURISTIC: the steps of -3 dB of DISDL, DIPAN and MVOL are
 a factor 3/4 or a shift (Corlett), not exact decibels; the pitch LFO moves
 by up to 1/2^(10 - PLFOS) of the step (Corlett, Flycast), half the cents of
-the table of the Saturn manual if those are read as plus or minus. The ARM7 runs on the 22.5792 MHz bus clock, eight times MAME's
+the table of the Saturn manual if those are read as plus or minus.
+DSP, HEURISTIC: its registers (ACC, FRC, Y, ADRS, the reads in flight)
+keep their values from one sample period to the next (Corlett; Flycast and
+MAME clear some), the memory is reached at the odd steps only (Flycast,
+MAME), TEMP and MEMS show their low byte at +0 and bits 23:8 at +4
+(Corlett; MAME the other way); an empty program is not run, only its
+counter moves (it would write nothing). The ARM7 runs on the 22.5792 MHz bus clock, eight times MAME's
 figure: the SGNASCAR cabinet shows its sound driver ready within a frame
 of each reload, 20 MHz at least (HEURISTIC: no wait state). It costs a
 quarter of the speed: the driver sleeps most of the time, its wait could

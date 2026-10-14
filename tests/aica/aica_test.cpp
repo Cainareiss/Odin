@@ -25,7 +25,7 @@
  *
  * Build: g++ -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
  *            -O2 -I src tests/aica/aica_test.cpp src/odin/aica.cpp \
- *            src/odin/aica_voice.cpp -o aica_test
+ *            src/odin/aica_voice.cpp src/odin/aica_dsp.cpp -o aica_test
  */
 
 #include "odin/aica.hpp"

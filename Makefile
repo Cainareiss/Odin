@@ -61,6 +61,7 @@ OBJ := \
 	src/odin/card_reader.o \
 	src/odin/sound_board.o \
 	src/odin/aica.o \
+	src/odin/aica_dsp.o \
 	src/odin/aica_voice.o \
 	src/odin/wav_file.o \
 	src/odin/arm7.o \

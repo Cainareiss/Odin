@@ -75,6 +75,7 @@ Aica::reset(bool power_on)
 	m_unknown_logged = 0;
 	for (AicaVoice &voice : m_voices)
 		voice.reset();
+	m_dsp.reset();
 	m_odometer = 0;
 	m_noise = 0;
 	m_left = 0;
@@ -121,6 +122,8 @@ Aica::read_reg(uint32_t offset, uint32_t size)
 		value = monitored().position();
 	else if (word >= REG_CONTROL && word < 0x3000)
 		value = read_common(word);
+	else if (word >= REG_DSP_WORK && word < REG_DSP_END)
+		value = m_dsp.read(word);
 	else
 		value = rd16(word);
 
@@ -138,7 +141,8 @@ Aica::write_reg(uint32_t offset, uint32_t size, uint32_t value)
 	offset &= REG_SIZE - 1;
 	const uint32_t word = offset & ~3u;
 	const uint32_t shift = (offset & 3) * 8;
-	uint16_t merged = rd16(word);
+	const bool work = word >= REG_DSP_WORK && word < REG_DSP_END;
+	uint16_t merged = work ? m_dsp.read(word) : rd16(word);
 
 	if (shift >= 16)
 		return;
@@ -162,9 +166,13 @@ Aica::write_reg(uint32_t offset, uint32_t size, uint32_t value)
 		wr16(word, merged);
 	} else if (word >= REG_CONTROL && word < 0x3000) {
 		write_common(word, merged);
+	} else if (work) {
+		m_dsp.write(word, merged);
 	} else if (word < REG_DSP_END) {
-		/* DSP coefficients, addresses, program, work areas. */
+		/* DSP coefficients, addresses and program */
 		wr16(word, merged);
+		if (word >= REG_DSP_PROGRAM && word < REG_DSP_PROGRAM_END)
+			m_dsp.program_written(m_regs.data());
 	} else {
 		log_unknown('W', offset, size, value);
 	}
@@ -333,6 +341,7 @@ Aica::mix()
 		/* 20 bits from here to MVOL */
 		const int32_t sample = voice.output(regs, m_noise) * 16;
 		const uint16_t direct = rd16(slot * SLOT_SIZE + 0x24);
+		const uint16_t effect = rd16(slot * SLOT_SIZE + 0x20);
 		const uint32_t level = (direct >> 8) & 0xF;
 		/* MONO centres every pan */
 		const uint32_t pan = (control & 0x8000) ? 0 : direct & 0x1F;
@@ -341,7 +350,27 @@ Aica::mix()
 			left += sent(sample, (level ^ 0xF) + PAN_LEFT[pan]);
 			right += sent(sample, (level ^ 0xF) + PAN_RIGHT[pan]);
 		}
+		/* IMXL to the MIXS ISEL names */
+		if (effect & 0xF0)
+			m_dsp.send(effect & 0xF, sent(sample, ((effect >> 4) & 0xF) ^ 0xF));
 		voice.step(regs, m_ram.data(), ram_mask(), m_odometer, m_noise);
+	}
+
+	/* The 16 outputs of the DSP, then the 2 external inputs, through EFSDL
+	 * and EFPAN */
+	m_dsp.run(m_regs.data(), m_ram.data(), ram_mask());
+	for (uint32_t n = 0; n < 18; n++) {
+		const uint16_t send = rd16(REG_EFFECT_SEND + n * 4);
+		const uint32_t level = (send >> 8) & 0xF;
+
+		if (!level)
+			continue;
+
+		const int32_t sample = (n < 16 ? m_dsp.effect(n) : m_dsp.external(n - 16)) * 16;
+		const uint32_t pan = (control & 0x8000) ? 0 : send & 0x1F;
+
+		left += sent(sample, (level ^ 0xF) + PAN_LEFT[pan]);
+		right += sent(sample, (level ^ 0xF) + PAN_RIGHT[pan]);
 	}
 
 	/* MVOL, then the 16 bits of the DAC */
@@ -589,6 +618,7 @@ Aica::save(AicaState &out) const
 	out.rtc_samples = m_rtc_samples;
 	for (uint32_t slot = 0; slot < SLOTS; slot++)
 		out.voices[slot] = m_voices[slot].state();
+	out.dsp = m_dsp.state();
 	out.odometer = m_odometer;
 	out.noise = m_noise;
 }
@@ -610,6 +640,7 @@ Aica::load(const AicaState &in)
 	m_rtc_samples = in.rtc_samples;
 	for (uint32_t slot = 0; slot < SLOTS; slot++)
 		m_voices[slot].load(in.voices[slot]);
+	m_dsp.load(in.dsp);
 	m_odometer = in.odometer;
 	m_noise = in.noise;
 	m_host.arm_reset(m_arm_reset);
