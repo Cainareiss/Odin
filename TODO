@@ -129,8 +129,8 @@ Status byte st1 'V' that von4 tests on command 0x33 is not understood.
 
 AICA (src/odin/aica.cpp + arm7.cpp): control block, timers, interrupts,
 DMA, RTC and the ARM7 are in, and the voices (aica_voice.cpp: sampler,
-loops, envelope, the monitors the sound driver reads); still missing: the
-levels, the filter, the LFO, the DSP and the sound output, the nested-FIQ
+loops, envelope, levels, LFO, the monitors the sound driver reads) and the
+direct mix of a chip; still missing: the filter, the DSP and the sound output, the nested-FIQ
 question (does reading 0x2D00 drop the line?), and the HACK in
 hikaru_bus.cpp (page offset 0 reads 4 for Pharrier). Voices, HEURISTIC
 (one source, notes MARKDOWN/30 section 5): the rate of an envelope step
@@ -139,7 +139,11 @@ and Corlett count it once); LSA past LEA plays on up to LSA and stops
 (Flycast, tested on the hardware); the samples at CA and after it are read
 at once, without a pipeline (Flycast); the noise generator is shared by
 the slots (Corlett). The fast end of the envelope (rates 49 to 60, a
-millisecond or less) falls from 0.73 to 1.04 of the table of the manual. The ARM7 runs on the 22.5792 MHz bus clock, eight times MAME's
+millisecond or less) falls from 0.73 to 1.04 of the table of the manual.
+Levels and LFO, HEURISTIC: the steps of -3 dB of DISDL, DIPAN and MVOL are
+a factor 3/4 or a shift (Corlett), not exact decibels; the pitch LFO moves
+by up to 1/2^(10 - PLFOS) of the step (Corlett, Flycast), half the cents of
+the table of the Saturn manual if those are read as plus or minus. The ARM7 runs on the 22.5792 MHz bus clock, eight times MAME's
 figure: the SGNASCAR cabinet shows its sound driver ready within a frame
 of each reload, 20 MHz at least (HEURISTIC: no wait state). It costs a
 quarter of the speed: the driver sleeps most of the time, its wait could

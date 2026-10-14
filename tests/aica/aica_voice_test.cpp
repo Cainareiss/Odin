@@ -20,8 +20,8 @@
 
 /* The voices of the AICA against known results: the pitch, the formats,
  * ADPCM against values from MAME's decoder, the loops and the ends of a
- * sound, the envelope against the table of times of the manual, and what
- * the sound driver reads of a voice.
+ * sound, the envelope against the table of times of the manual, what the
+ * sound driver reads of a voice, the levels, the LFO and the mix.
  *
  * Build: g++ -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
  *            -O2 -I src tests/aica/aica_voice_test.cpp src/odin/aica.cpp \
@@ -92,6 +92,10 @@ struct Voice {
 		set(0x10, (d2r << 11) | (d1r << 6) | ar);
 		set(0x14, (link ? 0x4000u : 0) | (krs << 10) | (dl << 5) | rr);
 	}
+	/* TL, VOFF; the LFO */
+	void level(uint32_t tl, bool off) { set(0x28, (tl << 8) | (off ? 0x40u : 0)); }
+	void lfo(uint32_t reg) { set(0x1C, reg); }
+	int32_t output() { return voice.output(slot.data(), noise); }
 	/* OCT from -8 to 7 */
 	void pitch(int32_t octave, uint32_t fns)
 	{
@@ -398,6 +402,114 @@ test_envelope_rules()
 	check(krs_ok, "KRS: twice KRS plus the octave, not below the rate");
 }
 
+/* A constant PCM16 sample, looping, at the top of its envelope */
+Voice
+steady(int16_t value, uint32_t tl, bool off)
+{
+	Voice v;
+	for (uint32_t i = 0; i < 64; i++) {
+		v.ram[0x800 + i * 2] = static_cast<uint8_t>(value);
+		v.ram[0x800 + i * 2 + 1] = static_cast<uint8_t>(static_cast<uint16_t>(value) >> 8);
+	}
+	v.sound(0, true, 0x800, 0, 64);
+	v.rates(31, 0, 0, 0);
+	v.pitch(0, 0);
+	v.level(tl, off);
+	v.key_on();
+	v.until([&] { return v.state().level == 0; }, 1000);
+	return v;
+}
+
+void
+test_levels()
+{
+	/* Halfway between 0 and 16384 at half speed */
+	Voice v;
+	v.ram[0x900] = 0;
+	v.ram[0x901] = 0;
+	v.ram[0x902] = 0x00;
+	v.ram[0x903] = 0x40;
+	v.sound(0, true, 0x900, 0, 2);
+	v.rates(31, 0, 0, 0);
+	v.pitch(-1, 0);
+	v.level(0, true);
+	v.key_on();
+	v.step();
+	check(v.output() == 8192, "interpolation: halfway between two samples");
+	Voice q;
+	q.ram = v.ram;
+	q.sound(0, true, 0x900, 0, 2);
+	q.rates(31, 0, 0, 0);
+	q.pitch(-2, 0);
+	q.level(0, true);
+	q.key_on();
+	q.step();
+	check(q.output() == 4096, "interpolation: a quarter of the way");
+
+	check(steady(16384, 0, false).output() == 16384, "TL 0 at the top: as read");
+	check(steady(16384, 0x10, false).output() == 8192, "TL 0x10: -6 dB");
+	check(steady(16384, 0x20, false).output() == 4096, "TL 0x20: -12 dB");
+	check(steady(16384, 0xF0, false).output() == 0, "TL 0xF0: silent");
+	check(steady(16384, 0xF0, true).output() == 16384, "VOFF: no attenuation");
+
+	/* The envelope adds to TL: 0x280 at the key on is 60 dB down */
+	Voice k;
+	for (uint32_t i = 0; i < 64; i++)
+		k.ram[0x801 + i * 2] = 0x40;
+	k.sound(0, true, 0x800, 0, 64);
+	k.rates(0, 0, 0, 0);
+	k.pitch(0, 0);
+	k.level(0, false);
+	k.key_on();
+	check(k.output() == 16, "envelope: 0x280 at the key on");
+}
+
+void
+test_lfo()
+{
+	/* One step of the phase: 2^32 / (256 O) with O from LFOF, the periods
+	 * of the manual (LFOF 9: 0.78 Hz, 10: 0.92 Hz; 31: 172.3 Hz) */
+	struct Case {
+		uint32_t lfof, step;
+	};
+	bool steps_ok = true;
+	for (const Case c : { Case{ 0, 16448 }, Case{ 9, 76260 }, Case{ 10, 89240 }, Case{ 31, 1u << 24 } }) {
+		Voice v = steady(16384, 0, true);
+		v.lfo(c.lfof << 10);
+		const uint32_t before = v.state().lfo_phase;
+		v.step();
+		steps_ok = steps_ok && v.state().lfo_phase - before == c.step;
+	}
+	check(steps_ok, "LFO: periods of the manual, LFOF 9 slower than 10");
+
+	Voice r = steady(16384, 0, true);
+	r.lfo(0x8000 | (31 << 10));
+	r.step(10);
+	check(r.state().lfo_phase == 0, "LFORE: the LFO held at its start");
+
+	/* Square wave, ALFOS 7: full level in the first half, 255 steps
+	 * (24 dB) down in the second */
+	Voice a = steady(16384, 0, false);
+	a.lfo(0x8000 | (31 << 10) | (1 << 3) | 7);
+	a.step();
+	a.lfo((31 << 10) | (1 << 3) | 7);
+	a.step(10);
+	const int32_t high = a.output();
+	a.step(128);
+	const int32_t low = a.output();
+	check(high == 16384 && low == (16384 * 65) >> 10, "amplitude LFO: square, 24 dB at ALFOS 7");
+
+	/* Square wave, PLFOS 7: the step one eighth faster in the first half */
+	Voice p = steady(16384, 0, true);
+	p.lfo(0x8000 | (31 << 10) | (1 << 8) | (7 << 5));
+	p.step();
+	p.lfo((31 << 10) | (1 << 8) | (7 << 5));
+	const uint32_t from = p.state().position;
+	p.step(64);
+	check((p.state().position + 64 - from) % 64 == 72 % 64 && p.state().phase != 0,
+	      "pitch LFO: square, an eighth faster at PLFOS 7");
+}
+
 /* What the sound driver does: KYONEX through the registers, MSLC, the
  * monitors, and the state */
 void
@@ -445,6 +557,72 @@ test_chip()
 	check((aica.read_reg(0x2811, 1) & 0x80) == 0, "LP: cleared by the read of the high byte");
 }
 
+/* The mix of a chip: one voice of a constant 16384, VOFF, through DISDL,
+ * DIPAN and MVOL */
+void
+test_mix()
+{
+	struct Host : odin::AicaHost {
+		void arm_fiq(bool) override {}
+		void arm_reset(bool) override {}
+		void main_irq(bool) override {}
+	} host;
+	struct Case {
+		uint32_t direct, master;
+		int16_t left, right;
+		const char *what;
+	};
+	static const Case cases[] = {
+		{ 0x0F00, 0xF, 16384, 16384, "mix: DISDL 15, centre, MVOL 15: as the voice" },
+		{ 0x0F1F, 0xF, 16384, 0, "mix: DIPAN 0x1F, left only" },
+		{ 0x0F0F, 0xF, 0, 16384, "mix: DIPAN 0x0F, right only" },
+		{ 0x0F01, 0xF, 12288, 16384, "mix: DIPAN 1, the left 3 dB down (factor 3/4)" },
+		{ 0x0D00, 0xF, 8192, 8192, "mix: DISDL 13, 6 dB down" },
+		{ 0x0F00, 0xD, 8192, 8192, "mix: MVOL 13, 6 dB down" },
+		{ 0x0000, 0xF, 0, 0, "mix: DISDL 0, nothing" },
+		{ 0x0F1F, 0x800F, 16384, 16384, "mix: MONO centres DIPAN 0x1F" },
+	};
+
+	for (const Case &c : cases) {
+		std::vector<uint8_t> ram(odin::Aica::RAM_SIZE);
+		for (uint32_t i = 0; i < 64; i++)
+			ram[0x1001 + i * 2] = 0x40;
+		odin::Aica aica(host, ram);
+		const uint32_t base = 9 * odin::Aica::SLOT_SIZE;
+
+		aica.write_reg(0x2800, 2, 0x0200u | c.master);
+		aica.write_reg(base + 0x04, 2, 0x1000);
+		aica.write_reg(base + 0x0C, 2, 64);
+		aica.write_reg(base + 0x10, 2, 0x001F);
+		aica.write_reg(base + 0x14, 2, 0x3C00);
+		aica.write_reg(base + 0x24, 2, c.direct);
+		aica.write_reg(base + 0x28, 2, 0x0040);
+		aica.write_reg(base, 2, 0xC200);
+		aica.tick(10);
+		check(aica.left() == c.left && aica.right() == c.right, c.what);
+	}
+
+	/* Two voices of 24576: the sum stops at 16 bits */
+	std::vector<uint8_t> ram(odin::Aica::RAM_SIZE);
+	for (uint32_t i = 0; i < 64; i++)
+		ram[0x1001 + i * 2] = 0x60;
+	odin::Aica aica(host, ram);
+	aica.write_reg(0x2800, 2, 0x020F);
+	for (const uint32_t slot : { 3u, 4u }) {
+		const uint32_t base = slot * odin::Aica::SLOT_SIZE;
+		aica.write_reg(base + 0x04, 2, 0x1000);
+		aica.write_reg(base + 0x0C, 2, 64);
+		aica.write_reg(base + 0x10, 2, 0x001F);
+		aica.write_reg(base + 0x14, 2, 0x3C00);
+		aica.write_reg(base + 0x24, 2, 0x0F00);
+		aica.write_reg(base + 0x28, 2, 0x0040);
+		aica.write_reg(base, 2, 0x4200);
+	}
+	aica.write_reg(3 * odin::Aica::SLOT_SIZE, 2, 0xC200);
+	aica.tick(10);
+	check(aica.left() == 0x7FFF && aica.right() == 0x7FFF, "mix: the sum held at 0x7FFF");
+}
+
 } /* namespace */
 
 int
@@ -456,7 +634,10 @@ main()
 	test_ends();
 	test_envelope_times();
 	test_envelope_rules();
+	test_levels();
+	test_lfo();
 	test_chip();
+	test_mix();
 	if (failures) {
 		printf("%u failure(s)\n", failures);
 		return EXIT_FAILURE;

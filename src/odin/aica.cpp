@@ -20,6 +20,7 @@
 
 #include "odin/aica.hpp"
 
+#include <algorithm>
 #include <cassert>
 #include <ctime>
 
@@ -76,6 +77,8 @@ Aica::reset(bool power_on)
 		voice.reset();
 	m_odometer = 0;
 	m_noise = 0;
+	m_left = 0;
+	m_right = 0;
 
 	if (power_on) {
 		m_rtc_seconds = rtc_of_host_clock();
@@ -294,6 +297,62 @@ Aica::monitored()
 	return m_voices[(rd16(REG_MONITOR_SELECT) >> 8) & 0x3F];
 }
 
+namespace {
+
+/* A send level (0: none, then -3 dB a step from 15) and a pan, as the
+ * tables of the manual (4.2.7) give them, in a factor of 4 or 3 and a
+ * shift for each side (yam.c convert_stereo_send_level); 0x0F and 0x1F
+ * silence one side. */
+constexpr uint8_t PAN_LEFT[32] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 32 };
+constexpr uint8_t PAN_RIGHT[32] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 32 };
+
+int32_t
+sent(int32_t sample, uint32_t attenuation)
+{
+	const uint32_t shift = (attenuation >> 1) + 2;
+
+	return shift >= 16 ? 0 : (sample * (4 - static_cast<int32_t>(attenuation & 1))) >> shift;
+}
+
+} /* namespace */
+
+void
+Aica::mix()
+{
+	const uint16_t control = rd16(REG_CONTROL);
+	int32_t left = 0, right = 0;
+
+	for (uint32_t slot = 0; slot < SLOTS; slot++) {
+		AicaVoice &voice = m_voices[slot];
+
+		if (voice.silent())
+			continue;
+
+		const uint8_t *const regs = &m_regs[slot * SLOT_SIZE];
+		/* 20 bits from here to MVOL */
+		const int32_t sample = voice.output(regs, m_noise) * 16;
+		const uint16_t direct = rd16(slot * SLOT_SIZE + 0x24);
+		const uint32_t level = (direct >> 8) & 0xF;
+		/* MONO centres every pan */
+		const uint32_t pan = (control & 0x8000) ? 0 : direct & 0x1F;
+
+		if (level) {
+			left += sent(sample, (level ^ 0xF) + PAN_LEFT[pan]);
+			right += sent(sample, (level ^ 0xF) + PAN_RIGHT[pan]);
+		}
+		voice.step(regs, m_ram.data(), ram_mask(), m_odometer, m_noise);
+	}
+
+	/* MVOL, then the 16 bits of the DAC */
+	const uint32_t master = (control & 0xF) ^ 0xF;
+	const int32_t factor = 4 - static_cast<int32_t>(master & 1);
+	const uint32_t shift = (master >> 1) + 6;
+
+	m_left = static_cast<int16_t>(std::clamp((left * factor) >> shift, -0x8000, 0x7FFF));
+	m_right = static_cast<int16_t>(std::clamp((right * factor) >> shift, -0x8000, 0x7FFF));
+}
+
 /* -- wave memory --------------------------------------------------------- */
 
 uint64_t
@@ -463,11 +522,7 @@ void
 Aica::tick(uint32_t n)
 {
 	for (uint32_t s = 0; s < n; s++) {
-		for (uint32_t slot = 0; slot < SLOTS; slot++) {
-			if (!m_voices[slot].silent())
-				m_voices[slot].step(&m_regs[slot * SLOT_SIZE], m_ram.data(), ram_mask(), m_odometer,
-				                    m_noise);
-		}
+		mix();
 		m_odometer++;
 		for (uint32_t t = 0; t < 3; t++) {
 			if (--m_timer_step[t] == 0) {

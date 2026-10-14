@@ -21,6 +21,7 @@
 #include "odin/aica_voice.hpp"
 
 #include <algorithm>
+#include <array>
 
 namespace odin {
 
@@ -34,13 +35,17 @@ enum : uint32_t {
 	REG_LEA = 0x0C,
 	REG_RATES = 0x10,	/* D2R, D1R, AR */
 	REG_DECAY = 0x14,	/* LPSLNK, KRS, DL, RR */
-	REG_PITCH = 0x18	/* OCT, FNS */
+	REG_PITCH = 0x18,	/* OCT, FNS */
+	REG_LFO = 0x1C,		/* LFORE, LFOF, PLFOWS, PLFOS, ALFOWS, ALFOS */
+	REG_LEVEL = 0x28	/* TL, VOFF, LPOFF, Q */
 };
 
 enum : uint32_t {
 	PLAY_NOISE = 0x0400,	/* SSCTL */
 	PLAY_LOOP = 0x0200,	/* LPCTL */
-	DECAY_LINK = 0x4000	/* LPSLNK */
+	DECAY_LINK = 0x4000,	/* LPSLNK */
+	LFO_RESET = 0x8000,	/* LFORE */
+	LEVEL_OFF = 0x0040	/* VOFF: no TL, envelope or amplitude LFO */
 };
 
 enum : uint32_t { PCM16, PCM8, ADPCM, ADPCM_STREAM };
@@ -71,6 +76,24 @@ constexpr uint8_t FAST_DECAY[FASTEST - 0x30 + 1][4] = {
  * by a multiple of the step, and the step grows or shrinks with it. */
 constexpr int32_t ADPCM_SIZE[8] = { 1, 3, 5, 7, 9, 11, 13, 15 };
 constexpr uint32_t ADPCM_SCALE[8] = { 0xE6, 0xE6, 0xE6, 0xE6, 0x133, 0x199, 0x200, 0x266 };
+
+/* The LFO steps through 256 values, one every O(LFOF) sample periods
+ * (Flycast; the frequencies of the manual, 0.17 to 172.3 Hz): its phase
+ * moves by 2^32 / (256 O) a period. */
+constexpr uint32_t lfo_step(uint32_t lfof)
+{
+	const uint32_t g = 128u >> (lfof >> 2);
+	const uint32_t o = ((g - 1) << 2) + g * (((~lfof) & 3) + 1);
+
+	return static_cast<uint32_t>((1ull << 32) / (256ull * o));
+}
+
+constexpr auto LFO_STEP = [] {
+	std::array<uint32_t, 32> steps{};
+	for (uint32_t lfof = 0; lfof < 32; lfof++)
+		steps[lfof] = lfo_step(lfof);
+	return steps;
+}();
 
 uint32_t
 reg(const uint8_t *slot, uint32_t offset)
@@ -134,11 +157,17 @@ loop_end(uint32_t play, const uint8_t *slot)
 	return ((play >> 7) & 3) == ADPCM_STREAM ? (lea + 3) & ~3u : lea;
 }
 
+uint32_t
+noise_word(uint32_t &noise)
+{
+	noise = noise * 0x41C64E6Du + 0x3039u;
+	return noise >> 16;
+}
+
 int32_t
 noise_sample(uint32_t &noise)
 {
-	noise = noise * 0x41C64E6Du + 0x3039u;
-	return static_cast<int16_t>(noise >> 16);
+	return static_cast<int16_t>(noise_word(noise));
 }
 
 int32_t
@@ -170,6 +199,46 @@ AicaVoice::key_on(const uint8_t *slot, const uint8_t *ram, uint32_t ram_mask, ui
 	fetch(slot, ram, ram_mask, noise);
 }
 
+int32_t
+AicaVoice::output(const uint8_t *slot, uint32_t &noise) const
+{
+	const int32_t f = static_cast<int32_t>((m_state.phase >> 4) & 0x3FFF);
+	const int32_t s = (m_state.next * f + m_state.sample * (0x4000 - f)) >> 14;
+	const uint32_t level = reg(slot, REG_LEVEL);
+	const uint32_t lfo = reg(slot, REG_LFO);
+
+	if (level & LEVEL_OFF)
+		return s;
+
+	/* The attenuation: TL, the envelope and the amplitude LFO, all in
+	 * steps of 6 dB / 64 */
+	uint32_t attenuation = ((level >> 8) << 2) + m_state.level;
+
+	if (lfo & 7) {
+		const uint32_t phase = m_state.lfo_phase;
+		uint32_t wave;
+
+		switch ((lfo >> 3) & 3) {
+		case 0:		/* sawtooth, down from the top */
+			wave = phase >> 24;
+			break;
+		case 1:		/* square */
+			wave = (phase & 0x80000000u) ? 0xFF : 0;
+			break;
+		case 2:		/* triangle */
+			wave = ((phase >> 23) & 0xFF) ^ ((phase & 0x80000000u) ? 0xFF : 0);
+			break;
+		default:
+			wave = noise_word(noise) & 0xFF;
+			break;
+		}
+		attenuation += wave >> (7 - (lfo & 7));
+	}
+	if (attenuation >= SILENT)
+		return 0;
+	return (s * static_cast<int32_t>(((attenuation & 0x3F) ^ 0x7F) + 1)) >> (7 + (attenuation >> 6));
+}
+
 void
 AicaVoice::key_off()
 {
@@ -186,9 +255,11 @@ AicaVoice::step(const uint8_t *slot, const uint8_t *ram, uint32_t ram_mask, uint
 	if (!m_state.playing)
 		return;
 
-	const uint32_t pitch = reg(slot, REG_PITCH);
+	const uint32_t lfo = reg(slot, REG_LFO);
 
-	m_state.phase += ((pitch & 0x3FF) | 0x400) << (((pitch >> 11) & 0xF) ^ 8);
+	m_state.phase += increment(slot, noise);
+	/* LFORE holds the LFO at its start (manual, 4.2.6) */
+	m_state.lfo_phase = (lfo & LFO_RESET) ? 0 : m_state.lfo_phase + LFO_STEP[(lfo >> 10) & 0x1F];
 	while (m_state.phase >= ONE) {
 		m_state.phase -= ONE;
 		if (!advance(slot))
@@ -206,6 +277,44 @@ AicaVoice::monitor(bool clear)
 	if (clear)
 		m_state.looped = 0;
 	return value;
+}
+
+uint32_t
+AicaVoice::increment(const uint8_t *slot, uint32_t &noise) const
+{
+	const uint32_t pitch = reg(slot, REG_PITCH);
+	const uint32_t lfo = reg(slot, REG_LFO);
+	const uint32_t base = ((pitch & 0x3FF) | 0x400) << (((pitch >> 11) & 0xF) ^ 8);
+	const uint32_t depth = (lfo >> 5) & 7;
+
+	if (depth == 0)
+		return base;
+
+	/* The pitch LFO moves the step by up to base / 2^(10 - PLFOS) either
+	 * way, along a wave from 0 to 2^32 */
+	const uint32_t phase = m_state.lfo_phase;
+	uint32_t wave;
+
+	switch ((lfo >> 8) & 3) {
+	case 0:
+		wave = phase ^ 0x80000000u;
+		break;
+	case 1:
+		wave = (phase & 0x80000000u) ? 0 : 0xFFFFFFFFu;
+		break;
+	case 2:
+		wave = (phase << 1) + 0x80000000u;
+		if (phase >= 0x40000000u && phase < 0xC0000000u)
+			wave = ~wave;
+		break;
+	default:
+		wave = noise_word(noise) << 16;
+		break;
+	}
+
+	const uint32_t vary = base >> (10 - depth);
+
+	return base + static_cast<uint32_t>((static_cast<uint64_t>(vary) * 2 * wave) >> 32) - vary;
 }
 
 void

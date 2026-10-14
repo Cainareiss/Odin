@@ -36,7 +36,9 @@ namespace odin {
  * (Highly Theoretical, yam.c), whose attack and decay times fall on the
  * table of the official manual; the rate of a step as Flycast computes it
  * (HEURISTIC: MAME and Corlett add the octave once, not twice); no change
- * at a rate of 0 (Saturn SCSP manual, 4.2.2). */
+ * at a rate of 0 (Saturn SCSP manual, 4.2.2). The levels and the LFO as
+ * Corlett has them, in steps of 0.094 dB, with the LFO periods of Flycast,
+ * which fall on the table of the manual (4.2.6). */
 class AicaVoice {
 public:
 	enum Segment : uint8_t { ATTACK, DECAY1, DECAY2, RELEASE };
@@ -55,6 +57,7 @@ public:
 		uint8_t playing;
 		uint8_t looped;		/* LP: an end was reached since the monitor was read */
 		uint8_t in_loop;	/* LSA was reached once */
+		uint32_t lfo_phase;	/* 0x100000000 = one period */
 	};
 
 	/* What the envelope reads once the voice is silent */
@@ -75,6 +78,10 @@ public:
 	void step(const uint8_t *slot, const uint8_t *ram, uint32_t ram_mask, uint32_t odometer,
 	          uint32_t &noise);
 
+	/* The sample of this period, past the envelope, TL and the amplitude
+	 * LFO: 16 bits. To be taken before step(). */
+	int32_t output(const uint8_t *slot, uint32_t &noise) const;
+
 	bool silent() const { return m_state.level == OFF; }
 	/* 0x2810 for this slot: LP in bit 15, the segment in bits 14-13, the
 	 * level in the bits below; LP is cleared when `clear`. */
@@ -87,6 +94,8 @@ public:
 
 private:
 	void envelope(const uint8_t *slot, uint32_t odometer);
+	/* The phase step of the sound, with the pitch LFO */
+	uint32_t increment(const uint8_t *slot, uint32_t &noise) const;
 	/* To the next sample; false when the voice stopped there. */
 	bool advance(const uint8_t *slot);
 	/* The samples at CA and after it */
