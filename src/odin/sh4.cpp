@@ -787,7 +787,9 @@ void Sh4::set_translate(bool on)
 		const Sh4Host::Memory memory{m_rd.data(), m_wr.data(), m_code_epoch.data(), PAGE_BITS, PHYSICAL_PAGES,
 		                             from_cpu(&m_epoch), from_cpu(&m_touched)};
 
-		m_host = std::make_unique<Sh4Host>(m_r.r, memory);
+		const Sh4Host::Places places{from_cpu(&m_remaining)};
+
+		m_host = std::make_unique<Sh4Host>(m_r.r, memory, places);
 	}
 	m_translate = on && m_host->usable();
 	drop_blocks();
@@ -1120,6 +1122,87 @@ bool Sh4::translate_access(Inline form, const Sh4Op &op, uint32_t i, std::vector
 	return true;
 }
 
+/* The block at `pc` for host code, see link(). */
+uintptr_t Sh4::linked(Sh4 &c, uint32_t pc)
+{
+	return c.link(pc);
+}
+
+/* The test of a conditional branch in place: a jump, bound later, to where
+ * the branch goes. False, and nothing written, for any other instruction or
+ * a branch whose delay slot holds what it may not: that one is called. */
+bool Sh4::translate_condition(const Sh4Op &op, Sh4Host::Jump &taken)
+{
+	constexpr uint32_t T = offsetof(Regs, t) / 4;
+	const Inline form = inlined(op.run);
+
+	if ((form != Inline::Bt && form != Inline::Bf && form != Inline::BtS && form != Inline::BfS) ||
+	    (op.flags & OP_BAD_SLOT)) {
+		return false;
+	}
+	taken = m_host->jump_if_word(T, form == Inline::Bt || form == Inline::BtS);
+	return true;
+}
+
+/* A branch that always goes, the instruction `i` of the block, in place: PC
+ * takes where it goes, PR where it returns to; its delay slot and the end
+ * that follows are written after it. False, and nothing written, when the
+ * slot holds what it may not or the branch is another one: it is called. */
+bool Sh4::translate_jump(const Block &b, const Sh4Op &op, uint32_t i, std::vector<LongWay> &ways)
+{
+	using Alu = Sh4Host::Alu;
+	constexpr uint32_t PC = offsetof(Regs, pc) / 4, PR = offsetof(Regs, pr) / 4;
+	constexpr Sh4Host::Reg A = Sh4Host::Reg::A;
+	Sh4Host &host = *m_host;
+	const uint32_t here = b.pc + 2 * op.idx;
+
+	if (op.flags & OP_BAD_SLOT) {
+		return false;
+	}
+	switch (inlined(op.run)) {
+	case Inline::Bra:
+		host.store_value(PC, op.imm);
+		break;
+	case Inline::Bsr:
+		host.store_value(PR, here + 4);
+		host.store_value(PC, op.imm);
+		break;
+	case Inline::Rts:
+		host.load(A, PR);
+		host.store(PC, A);
+		break;
+	case Inline::Jsr:
+		host.load(A, op.n);
+		host.store(PC, A);
+		host.store_value(PR, here + 4);
+		break;
+	case Inline::Jmp: {
+		/* An odd address: the instruction itself stops the program. */
+		Sh4Host::Slow slow{};
+
+		host.load(A, op.n);
+		slow.jumps[slow.count++] = host.jump_if_odd();
+		host.store(PC, A);
+		ways.push_back(LongWay{slow, i, host.here()});
+		break;
+	}
+	case Inline::BraF:
+		host.load(A, op.n);
+		host.alu_value(Alu::Add, A, here + 4);
+		host.store(PC, A);
+		break;
+	case Inline::BsrF:
+		host.load(A, op.n);
+		host.alu_value(Alu::Add, A, here + 4);
+		host.store(PC, A);
+		host.store_value(PR, here + 4);
+		break;
+	default:
+		return false;
+	}
+	return true;
+}
+
 /* The instruction `i` of a block as host code: its steps in place when it
  * has some, and true; else a call, and false: what the call returns is for
  * the block to look at. */
@@ -1144,7 +1227,9 @@ void Sh4::translate(Block &b)
 	struct Taken {
 		Sh4Host::Jump jump;
 		uint32_t op;
+		bool in_place;	/* the branch was not called: what it does is left to do */
 	};
+	constexpr uint32_t PC = offsetof(Regs, pc) / 4;
 	std::array<Taken, BLOCK_MAX + 1> taken;
 	uint32_t num_taken = 0;
 	const Sh4Op *ops = b.ops;
@@ -1155,33 +1240,49 @@ void Sh4::translate(Block &b)
 	ways.clear();
 	b.host = host.begin(ops);
 	for (uint32_t i = 0; i < b.count && !jumped; i++) {
-		if (translate_op(ops, i, ways)) {
-			continue;
-		}
-		if (ops[i].flags & OP_JUMP) {
+		if (ops[i].flags & (OP_BRANCH | OP_DELAYED)) {
+			Sh4Host::Jump jump;
+
+			if (translate_condition(ops[i], jump)) {
+				taken[num_taken++] = Taken{jump, i, true};
+			} else {
+				host.call(called(ops[i].run), i);
+				taken[num_taken++] = Taken{host.jump_if_told(), i, false};
+			}
+		} else if (ops[i].flags & OP_JUMP) {
+			if (!translate_jump(b, ops[i], i, ways)) {
+				host.call(called(ops[i].run), i);
+			}
 			translate_op(ops, i + 1, ways);
 			host.call(called(ops[i + 2].run), i + 2);
 			host.go_where_told();
 			jumped = true;
-		} else if (ops[i].flags & (OP_BRANCH | OP_DELAYED)) {
-			taken[num_taken++] = Taken{host.jump_if_told(), i};
-		} else {
+		} else if (!translate_op(ops, i, ways)) {
 			host.loop_if_told();
 		}
 	}
+	/* The end of a block cut for its length, see end_next. */
 	if (!jumped) {
-		host.call(called(ops[b.count].run), b.count);
+		host.store_value(PC, ops[b.count].imm);
+		host.call_link(linked, ops[b.count].imm);
 		host.go_where_told();
 	}
+	/* A branch that goes, see branch() and jump(). */
 	for (uint32_t k = 0; k < num_taken; k++) {
 		const uint32_t i = taken[k].op;
 
 		host.bind(taken[k].jump);
+		if (taken[k].in_place) {
+			host.store_value(PC, ops[i].imm);
+		}
 		if (ops[i].flags & OP_DELAYED) {
 			const uint32_t slot = i + ops[i].m;
 
 			translate_op(ops, slot, ways);
 			host.call(called(ops[slot + 1].run), slot + 1);
+		} else if (taken[k].in_place) {
+			host.add_remaining(static_cast<int32_t>(b.count - i - 1));
+			host.call_link(linked, ops[i].imm);
 		}
 		host.go_where_told();
 	}

@@ -46,12 +46,14 @@ constexpr uint8_t ARG0_FROM_RBX = 0xD9;		/* mov rcx, rbx */
 constexpr uint8_t ARG1_LEA = 0x14;		/* lea rdx, [r12 + ...] */
 constexpr uint8_t RBX_FROM_ARG0 = 0xCB;		/* mov rbx, rcx */
 constexpr uint8_t JUMP_ARG1 = 0xE2;		/* jmp rdx */
+constexpr uint8_t ARG1_VALUE = 0xBA;		/* mov edx, ... */
 constexpr uint8_t FRAME = 40;
 #else
 constexpr uint8_t ARG0_FROM_RBX = 0xDF;		/* mov rdi, rbx */
 constexpr uint8_t ARG1_LEA = 0x34;		/* lea rsi, [r12 + ...] */
 constexpr uint8_t RBX_FROM_ARG0 = 0xFB;		/* mov rbx, rdi */
 constexpr uint8_t JUMP_ARG1 = 0xE6;		/* jmp rsi */
+constexpr uint8_t ARG1_VALUE = 0xBE;		/* mov esi, ... */
 constexpr uint8_t FRAME = 8;
 #endif
 
@@ -118,9 +120,9 @@ uint8_t *take_near(uint32_t size)
 
 } /* namespace */
 
-Sh4Host::Sh4Host(uint32_t *words, const Memory &memory)
-	: m_code(take_near(SIZE)), m_words(words), m_memory(memory), m_size(SIZE), m_used(0), m_leave(0), m_far_calls(0),
-	  m_enter(nullptr)
+Sh4Host::Sh4Host(uint32_t *words, const Memory &memory, const Places &places)
+	: m_code(take_near(SIZE)), m_words(words), m_memory(memory), m_places(places), m_size(SIZE), m_used(0),
+	  m_leave(0), m_far_calls(0), m_enter(nullptr)
 {
 	if (m_code) {
 		clear();
@@ -205,8 +207,19 @@ void Sh4Host::call(Call fn, uint32_t op)
 		bytes({0x49, 0x8D, static_cast<uint8_t>(0x80 | ARG1_LEA), 0x24});
 		word(offset);
 	}
+	call_to(reinterpret_cast<uintptr_t>(fn));
+}
 
-	const uintptr_t target = reinterpret_cast<uintptr_t>(fn);
+void Sh4Host::call_link(Link fn, uint32_t pc)
+{
+	bytes({0x48, 0x89, ARG0_FROM_RBX});
+	byte(ARG1_VALUE);				/* mov the second argument, pc */
+	word(pc);
+	call_to(reinterpret_cast<uintptr_t>(fn));
+}
+
+void Sh4Host::call_to(uintptr_t target)
+{
 	const int64_t distance = static_cast<int64_t>(target - (reinterpret_cast<uintptr_t>(m_code) + m_used + 5));
 
 	if (distance == static_cast<int32_t>(distance)) {
@@ -311,6 +324,27 @@ void Sh4Host::flag(If found, uint32_t rank)
 	store(rank, Reg::A);
 }
 
+Sh4Host::Jump Sh4Host::jump_if_word(uint32_t rank, bool set)
+{
+	byte(0x83);					/* cmp dword [the word], 0 */
+	operand(7, rank);
+	byte(0);
+	return jump_if(set ? 0x85 : 0x84);		/* jne, je */
+}
+
+Sh4Host::Jump Sh4Host::jump_if_odd()
+{
+	bytes({0xA8, 0x01});				/* test al, 1 */
+	return jump_if(0x85);				/* jnz */
+}
+
+void Sh4Host::add_remaining(int32_t value)
+{
+	bytes({0x81, 0x83});				/* add dword [rbx + remaining], value */
+	word(static_cast<uint32_t>(m_places.remaining));
+	word(static_cast<uint32_t>(value));
+}
+
 Sh4Host::Jump Sh4Host::jump_if(uint8_t condition)
 {
 	bytes({0x0F, condition});			/* j<condition> ... */
@@ -411,9 +445,9 @@ void Sh4Host::read_at(const uint8_t *at, uint32_t size)
 
 #else /* a host this file does not write code for */
 
-Sh4Host::Sh4Host(uint32_t *words, const Memory &memory)
-	: m_code(nullptr), m_words(words), m_memory(memory), m_size(0), m_used(0), m_leave(0), m_far_calls(0),
-	  m_enter(nullptr)
+Sh4Host::Sh4Host(uint32_t *words, const Memory &memory, const Places &places)
+	: m_code(nullptr), m_words(words), m_memory(memory), m_places(places), m_size(0), m_used(0), m_leave(0),
+	  m_far_calls(0), m_enter(nullptr)
 {
 }
 
@@ -425,6 +459,11 @@ void Sh4Host::jump_to(uint32_t) {}
 void Sh4Host::clear() {}
 uint32_t Sh4Host::begin(const Sh4Op *) { return 0; }
 void Sh4Host::call(Call, uint32_t) {}
+void Sh4Host::call_link(Link, uint32_t) {}
+void Sh4Host::call_to(uintptr_t) {}
+Sh4Host::Jump Sh4Host::jump_if_word(uint32_t, bool) { return Jump{0}; }
+Sh4Host::Jump Sh4Host::jump_if_odd() { return Jump{0}; }
+void Sh4Host::add_remaining(int32_t) {}
 void Sh4Host::loop_if_told() {}
 Sh4Host::Jump Sh4Host::jump_if_told() { return Jump{0}; }
 void Sh4Host::bind(Jump) {}

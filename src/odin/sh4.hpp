@@ -300,7 +300,10 @@ private:
 		MovLM, MovWM, MovBM,		/* Rm to @-Rn */
 		MovLSG, MovWSG, MovBSG,		/* R0 to @(disp,GBR) */
 		StsMPr,				/* PR to @-Rn */
-		MovCA				/* R0 to @Rn */
+		MovCA,				/* R0 to @Rn */
+		/* the branches: the test of T and where they lead to */
+		Bt, Bf, BtS, BfS,
+		Bra, Bsr, Rts, Jsr, Jmp, BraF, BsrF
 	};
 	/* The long way of an access to the memory in host code: the call of
 	 * the instruction `op`, back at `back`. */
@@ -348,6 +351,9 @@ private:
 	bool translate_op(const Sh4Op *ops, uint32_t i, std::vector<LongWay> &ways);
 	bool translate_inline(Inline form, const Sh4Op &op);
 	bool translate_access(Inline form, const Sh4Op &op, uint32_t i, std::vector<LongWay> &ways);
+	bool translate_condition(const Sh4Op &op, Sh4Host::Jump &taken);
+	bool translate_jump(const Block &b, const Sh4Op &op, uint32_t i, std::vector<LongWay> &ways);
+	static uintptr_t linked(Sh4 &c, uint32_t pc);
 	void wait_mark();
 	void wait_check();
 	void take_irq();

@@ -61,6 +61,11 @@ public:
 		uint32_t page_bits, physical_pages;
 		int32_t epoch, touched;
 	};
+	/* Where the end of a block finds what it changes, from the CPU */
+	struct Places {
+		int32_t remaining;
+	};
+	using Link = uintptr_t (*)(Sh4 &, uint32_t);
 	/* The jumps of an access to the call that makes it the long way */
 	struct Slow {
 		Jump jumps[3];
@@ -75,7 +80,7 @@ public:
 
 	/* `words`: the registers of the CPU, 32 bits each, which the steps
 	 * below name by their rank. */
-	Sh4Host(uint32_t *words, const Memory &memory);
+	Sh4Host(uint32_t *words, const Memory &memory, const Places &places);
 	~Sh4Host();
 	Sh4Host(const Sh4Host &) = delete;
 	Sh4Host &operator=(const Sh4Host &) = delete;
@@ -102,6 +107,15 @@ public:
 	void bind(Jump jump);
 	/* What the call returned: 1, back to the run loop; else there. */
 	void go_where_told();
+	/* Calls fn(cpu, pc), for the host code of the block at `pc` or 1. */
+	void call_link(Link fn, uint32_t pc);
+	/* A jump to a place bound later when the word is not 0, or when it
+	 * is 0. */
+	Jump jump_if_word(uint32_t rank, bool set);
+	/* A jump bound later when the low bit of A is set. */
+	Jump jump_if_odd();
+	/* Adds to the cycles left in the slice. */
+	void add_remaining(int32_t value);
 
 	/* The steps of an instruction written in place. */
 	void load(Reg reg, uint32_t rank);
@@ -146,11 +160,13 @@ private:
 	void jump_to(uint32_t place);
 	void operand(uint8_t reg, uint32_t rank);
 	void page(uint8_t table, uint32_t size, Slow &slow);
+	void call_to(uintptr_t target);
 	Jump jump_if(uint8_t condition);
 
 	uint8_t *m_code;
 	uint32_t *m_words;
 	Memory m_memory;
+	Places m_places;
 	uint32_t m_size, m_used;
 	uint32_t m_leave;	/* place of the way back to the run loop */
 	uint64_t m_far_calls;

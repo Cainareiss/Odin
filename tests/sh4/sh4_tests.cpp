@@ -2258,6 +2258,61 @@ void test_host_memory()
 	}
 }
 
+/* The branches host code makes itself: each of them in a loop whose turns
+ * take it or not as a register turned bit by bit says, its delay slot an
+ * instruction in place, an access to the memory or a call; then what the
+ * branch leads to, a subroutine that returns where it is one. Read and as
+ * host code, in slices of every length, the same after each. */
+void test_host_branches()
+{
+	g_test = "host code, branches";
+	struct Form {
+		uint16_t code;
+		bool delayed, subroutine;
+		const char *name;
+	};
+	/* the branch is at CODE + 4 and leads to CODE + 16 */
+	static const Form forms[] = {
+		{0x8904, false, false, "bt"}, {0x8B04, false, false, "bf"}, {0x8D04, true, false, "bt/s"},
+		{0x8F04, true, false, "bf/s"}, {0xA004, true, false, "bra"}, {0xB004, true, true, "bsr"},
+		{0x000B, true, false, "rts"}, {0x490B, true, true, "jsr"}, {0x492B, true, false, "jmp"},
+		{0x0A23, true, false, "braf"}, {0x0A03, true, true, "bsrf"},
+	};
+	/* add #3, r3 / mov.l r3, @r12 / mul.l r3, r4 */
+	static const uint16_t slots[] = {0x7303, 0x2C32, 0x0437};
+	Pair probe;
+
+	if (!probe.host.cpu.translates()) {
+		std::printf("host code: none on this machine, not tested\n");
+		return;
+	}
+	for (const Form &form : forms) {
+		unsigned differ = 0;
+
+		for (uint32_t k = 0; k < 3; k++) {
+			Pair p;
+
+			/* add #1, r1 / rotr r7 / the branch / the slot / add #4, r4 / add #5, r5 / bra the start /
+			 * nop; there: add #8, r6 / rts or bra the start / nop */
+			p.each([&form, k](Machine &m) {
+				m.code(CODE, {0x7101, 0x4705, form.code, slots[k], 0x7404, 0x7505, 0xAFF8, NOP,
+				              0x7608, static_cast<uint16_t>(form.subroutine ? 0x000B : 0xAFF4), NOP});
+				Sh4State st = m.state();
+				st.r[7] = 0x5A3C96E1;
+				st.r[9] = CODE + 16;
+				st.r[10] = 8;
+				st.r[12] = DATA;
+				st.pr = CODE + 16;
+				m.cpu.load(st);
+			});
+			p.slices_of(20000, k == 1 ? 6313 : 300, 11 + k);
+			differ += p.differ;
+			check(p.host.cpu.instructions() > 5000, std::string(form.name) + ": the loop went round");
+		}
+		check(differ == 0, std::string(form.name) + ": the same read and in place, with every kind of slot");
+	}
+}
+
 /* Store queues, QACR0 and QACR1 on the area of the RAM: a store there lands
  * in the RAM at once. Where the RAM is plain it is written in place and the
  * block goes on; over code compared since, the store goes the way of the
@@ -2468,6 +2523,7 @@ int main(int argc, char **argv)
 	test_host_code();
 	test_host_in_place();
 	test_host_memory();
+	test_host_branches();
 	test_store_queues();
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures == 0 ? 0 : 1;
