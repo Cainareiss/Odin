@@ -31,6 +31,7 @@
 #include "odin/aica.hpp"
 #include "odin/aica_voice.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstdio>
 #include <cstdlib>
@@ -92,8 +93,8 @@ struct Voice {
 		set(0x10, (d2r << 11) | (d1r << 6) | ar);
 		set(0x14, (link ? 0x4000u : 0) | (krs << 10) | (dl << 5) | rr);
 	}
-	/* TL, VOFF; the LFO */
-	void level(uint32_t tl, bool off) { set(0x28, (tl << 8) | (off ? 0x40u : 0)); }
+	/* TL, VOFF, no filter; the LFO */
+	void level(uint32_t tl, bool off) { set(0x28, (tl << 8) | (off ? 0x40u : 0) | 0x20); }
 	void lfo(uint32_t reg) { set(0x1C, reg); }
 	int32_t output() { return voice.output(slot.data(), noise); }
 	/* OCT from -8 to 7 */
@@ -435,7 +436,7 @@ test_levels()
 	v.level(0, true);
 	v.key_on();
 	v.step();
-	check(v.output() == 8192, "interpolation: halfway between two samples");
+	check(v.output() == 8192 * 16, "interpolation: halfway between two samples");
 	Voice q;
 	q.ram = v.ram;
 	q.sound(0, true, 0x900, 0, 2);
@@ -444,13 +445,13 @@ test_levels()
 	q.level(0, true);
 	q.key_on();
 	q.step();
-	check(q.output() == 4096, "interpolation: a quarter of the way");
+	check(q.output() == 4096 * 16, "interpolation: a quarter of the way");
 
-	check(steady(16384, 0, false).output() == 16384, "TL 0 at the top: as read");
-	check(steady(16384, 0x10, false).output() == 8192, "TL 0x10: -6 dB");
-	check(steady(16384, 0x20, false).output() == 4096, "TL 0x20: -12 dB");
+	check(steady(16384, 0, false).output() == 16384 * 16, "TL 0 at the top: as read, on 20 bits");
+	check(steady(16384, 0x10, false).output() == 8192 * 16, "TL 0x10: -6 dB");
+	check(steady(16384, 0x20, false).output() == 4096 * 16, "TL 0x20: -12 dB");
 	check(steady(16384, 0xF0, false).output() == 0, "TL 0xF0: silent");
-	check(steady(16384, 0xF0, true).output() == 16384, "VOFF: no attenuation");
+	check(steady(16384, 0xF0, true).output() == 16384 * 16, "VOFF: no attenuation");
 
 	/* The envelope adds to TL: 0x280 at the key on is 60 dB down */
 	Voice k;
@@ -461,7 +462,7 @@ test_levels()
 	k.pitch(0, 0);
 	k.level(0, false);
 	k.key_on();
-	check(k.output() == 16, "envelope: 0x280 at the key on");
+	check(k.output() == 256, "envelope: 0x280 at the key on");
 }
 
 void
@@ -497,7 +498,7 @@ test_lfo()
 	const int32_t high = a.output();
 	a.step(128);
 	const int32_t low = a.output();
-	check(high == 16384 && low == (16384 * 65) >> 10, "amplitude LFO: square, 24 dB at ALFOS 7");
+	check(high == 16384 * 16 && low == (16384 * 16 * 65) >> 10, "amplitude LFO: square, 24 dB at ALFOS 7");
 
 	/* Square wave, PLFOS 7: the step one eighth faster in the first half */
 	Voice p = steady(16384, 0, true);
@@ -508,6 +509,93 @@ test_lfo()
 	p.step(64);
 	check((p.state().position + 64 - from) % 64 == 72 % 64 && p.state().phase != 0,
 	      "pitch LFO: square, an eighth faster at PLFOS 7");
+}
+
+/* The low-pass filter on a constant 16384 (20 bits: 262144): the values of
+ * Flycast's formula, which settle on the input with its sign turned */
+void
+test_filter()
+{
+	struct Case {
+		uint32_t flv, q;
+		int32_t first[4];
+		int32_t at_2000;
+		const char *what;
+	};
+	static const Case cases[] = {
+		{ 0x1800, 4, { -1008, -2958, -5782, -9416 }, -262144, "filter: FLV 0x1800, Q 4" },
+		{ 0x1F00, 0, { -145920, -192375, -225405, -241727 }, -262144, "filter: FLV 0x1F00, Q 0" },
+		{ 0x1000, 4, { -4, -12, -24, -40 }, -256125, "filter: FLV 0x1000, Q 4" },
+	};
+
+	for (const Case &c : cases) {
+		Voice v;
+		for (uint32_t i = 0; i < 64; i++)
+			v.ram[0x801 + i * 2] = 0x40;
+		v.sound(0, true, 0x800, 0, 64);
+		v.rates(31, 0, 0, 0);
+		v.pitch(0, 0);
+		v.set(0x28, 0x0040 | c.q);
+		for (uint32_t n = 0; n < 5; n++)
+			v.set(0x2C + n * 4, c.flv);
+		v.key_on();
+		bool same = true;
+		int32_t last = 0;
+		for (uint32_t i = 0; i < 2000; i++) {
+			last = v.output();
+			if (i < 4)
+				same = same && last == c.first[i];
+			v.step();
+		}
+		check(same && last == c.at_2000, c.what);
+	}
+
+	/* The most resonant Q on the loudest sample: held to 20 bits */
+	Voice m;
+	for (uint32_t i = 0; i < 64; i++) {
+		m.ram[0x800 + i * 2] = 0xFF;
+		m.ram[0x801 + i * 2] = 0x7F;
+	}
+	m.sound(0, true, 0x800, 0, 64);
+	m.rates(31, 0, 0, 0);
+	m.pitch(0, 0);
+	m.set(0x28, 0x0040 | 31);
+	for (uint32_t n = 0; n < 5; n++)
+		m.set(0x2C + n * 4, 0x1C00);
+	m.key_on();
+	int32_t lowest = 0, last = 0;
+	for (uint32_t i = 0; i < 2000; i++) {
+		last = m.output();
+		lowest = std::min(lowest, last);
+		m.step();
+	}
+	check(lowest == -0x80000 && last == -524273, "filter: held to 20 bits at Q 31");
+
+	Voice o = steady(16384, 0, true);
+	o.set(0x28, 0x0044);
+	for (uint32_t n = 0; n < 5; n++)
+		o.set(0x2C + n * 4, 0x1FF8);
+	check(o.output() == 16384 * 16, "filter: left out while wide open");
+
+	/* The cutoff rises by the steps of a decay: 960 at rate 20 in the
+	 * time of the table, then the next segment */
+	Voice e = steady(16384, 0, true);
+	e.set(0x2C, 0);
+	e.set(0x30, 0x3C0);
+	e.set(0x34, 0x3C0);
+	e.set(0x40, 10 << 8);
+	e.voice.key_off();
+	e.step(4);
+	e.key_on();
+	const uint32_t n = e.until([&] { return e.state().cutoff == 0x3C0; }, 1u << 30);
+	const double ratio = n / (DECAY_MS[20] * 44.1);
+	check(ratio > 0.98 && ratio < 1.07, "filter envelope: the times of the decay");
+	e.until([&] { return e.state().cutoff_segment != odin::AicaVoice::ATTACK; }, 1u << 20);
+	check(e.state().cutoff_segment == odin::AicaVoice::DECAY1, "filter envelope: decay 1 at FLV1");
+	e.voice.key_off();
+	check(e.state().cutoff_segment == odin::AicaVoice::RELEASE, "filter envelope: release at the key off");
+	check((e.voice.filter_monitor(false) & 0x1FFF) == 0x3C0 && ((e.voice.filter_monitor(false) >> 13) & 3) == 3,
+	      "filter monitor: the cutoff and its segment");
 }
 
 /* What the sound driver does: KYONEX through the registers, MSLC, the
@@ -529,8 +617,11 @@ test_chip()
 	aica.write_reg(base + 0x10, 2, 0x001F);
 	aica.write_reg(base + 0x14, 2, 0x3C00);
 	aica.write_reg(base + 0x18, 2, 0);
+	aica.write_reg(base + 0x2C, 2, 0x0123);
 	aica.write_reg(base, 2, 0xC200);
 	check(aica.read_reg(base, 2) == 0x4200, "KYONEX: not kept, KYONB kept");
+	aica.write_reg(0x280C, 2, 0x4000 | (5 << 8));
+	check((aica.read_reg(0x2810, 2) & 0x1FFF) == 0x0123, "AFSEL: the monitor shows the cutoff");
 	aica.write_reg(0x280C, 2, 5 << 8);
 	aica.tick(3);
 	check(aica.read_reg(0x2814, 2) == 3, "CA: the position of the slot MSLC names");
@@ -596,7 +687,7 @@ test_mix()
 		aica.write_reg(base + 0x10, 2, 0x001F);
 		aica.write_reg(base + 0x14, 2, 0x3C00);
 		aica.write_reg(base + 0x24, 2, c.direct);
-		aica.write_reg(base + 0x28, 2, 0x0040);
+		aica.write_reg(base + 0x28, 2, 0x0060);
 		aica.write_reg(base, 2, 0xC200);
 		aica.tick(10);
 		check(aica.left() == c.left && aica.right() == c.right, c.what);
@@ -615,7 +706,7 @@ test_mix()
 		aica.write_reg(base + 0x10, 2, 0x001F);
 		aica.write_reg(base + 0x14, 2, 0x3C00);
 		aica.write_reg(base + 0x24, 2, 0x0F00);
-		aica.write_reg(base + 0x28, 2, 0x0040);
+		aica.write_reg(base + 0x28, 2, 0x0060);
 		aica.write_reg(base, 2, 0x4200);
 	}
 	aica.write_reg(3 * odin::Aica::SLOT_SIZE, 2, 0xC200);
@@ -636,6 +727,7 @@ main()
 	test_envelope_rules();
 	test_levels();
 	test_lfo();
+	test_filter();
 	test_chip();
 	test_mix();
 	if (failures) {

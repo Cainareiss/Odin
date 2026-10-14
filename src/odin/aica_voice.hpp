@@ -38,7 +38,9 @@ namespace odin {
  * (HEURISTIC: MAME and Corlett add the octave once, not twice); no change
  * at a rate of 0 (Saturn SCSP manual, 4.2.2). The levels and the LFO as
  * Corlett has them, in steps of 0.094 dB, with the LFO periods of Flycast,
- * which fall on the table of the manual (4.2.6). */
+ * which fall on the table of the manual (4.2.6). The low-pass filter as
+ * Flycast has it from the hardware (HEURISTIC, one source: Corlett splits
+ * FLV otherwise), its envelope stepped as that of the level. */
 class AicaVoice {
 public:
 	enum Segment : uint8_t { ATTACK, DECAY1, DECAY2, RELEASE };
@@ -58,6 +60,10 @@ public:
 		uint8_t looped;		/* LP: an end was reached since the monitor was read */
 		uint8_t in_loop;	/* LSA was reached once */
 		uint32_t lfo_phase;	/* 0x100000000 = one period */
+		uint32_t cutoff;	/* the filter envelope, as FLV: 13 bits */
+		uint8_t cutoff_segment;
+		int32_t filtered[2];	/* the last two outputs of the filter */
+		int32_t rest;		/* what the last one left out below its bits */
 	};
 
 	/* What the envelope reads once the voice is silent */
@@ -78,14 +84,16 @@ public:
 	void step(const uint8_t *slot, const uint8_t *ram, uint32_t ram_mask, uint32_t odometer,
 	          uint32_t &noise);
 
-	/* The sample of this period, past the envelope, TL and the amplitude
-	 * LFO: 16 bits. To be taken before step(). */
-	int32_t output(const uint8_t *slot, uint32_t &noise) const;
+	/* The sample of this period, past the filter, the envelope, TL and the
+	 * amplitude LFO: 20 bits. To be taken once a period, before step(). */
+	int32_t output(const uint8_t *slot, uint32_t &noise);
 
 	bool silent() const { return m_state.level == OFF; }
 	/* 0x2810 for this slot: LP in bit 15, the segment in bits 14-13, the
 	 * level in the bits below; LP is cleared when `clear`. */
 	uint16_t monitor(bool clear);
+	/* The same with the filter envelope (AFSEL) */
+	uint16_t filter_monitor(bool clear);
 	/* CA, 0x2814 */
 	uint16_t position() const { return static_cast<uint16_t>(m_state.position); }
 
@@ -94,6 +102,8 @@ public:
 
 private:
 	void envelope(const uint8_t *slot, uint32_t odometer);
+	void cutoff_envelope(const uint8_t *slot, uint32_t odometer);
+	int32_t filter(const uint8_t *slot, int32_t sample);
 	/* The phase step of the sound, with the pitch LFO */
 	uint32_t increment(const uint8_t *slot, uint32_t &noise) const;
 	/* To the next sample; false when the voice stopped there. */

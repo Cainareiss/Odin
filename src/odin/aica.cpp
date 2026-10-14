@@ -115,9 +115,12 @@ Aica::read_reg(uint32_t offset, uint32_t size)
 	const uint32_t shift = (offset & 3) * 8;
 	uint32_t value;
 
-	if (word == REG_EG_MONITOR)
-		/* Reading the high byte clears LP, as a whole read does (Flycast) */
-		value = monitored().monitor(size != 1 || (offset & 1) != 0);
+	if (word == REG_EG_MONITOR) {
+		/* Reading the high byte clears LP, as a whole read does (Flycast);
+		 * AFSEL shows the filter envelope (Corlett) */
+		const bool clear = size != 1 || (offset & 1) != 0;
+		value = (rd16(REG_MONITOR_SELECT) & 0x4000) ? monitored().filter_monitor(clear) : monitored().monitor(clear);
+	}
 	else if (word == REG_CA_MONITOR)
 		value = monitored().position();
 	else if (word >= REG_CONTROL && word < 0x3000)
@@ -339,7 +342,7 @@ Aica::mix()
 
 		const uint8_t *const regs = &m_regs[slot * SLOT_SIZE];
 		/* 20 bits from here to MVOL */
-		const int32_t sample = voice.output(regs, m_noise) * 16;
+		const int32_t sample = voice.output(regs, m_noise);
 		const uint16_t direct = rd16(slot * SLOT_SIZE + 0x24);
 		const uint16_t effect = rd16(slot * SLOT_SIZE + 0x20);
 		const uint32_t level = (direct >> 8) & 0xF;

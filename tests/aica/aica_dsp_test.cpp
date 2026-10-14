@@ -233,7 +233,7 @@ test_mix()
 	aica.write_reg(base + 0x14, 2, 0x3C00);
 	aica.write_reg(base + 0x20, 2, 0x00D3);
 	aica.write_reg(base + 0x24, 2, 0x0000);
-	aica.write_reg(base + 0x28, 2, 0x0040);
+	aica.write_reg(base + 0x28, 2, 0x0060);
 	aica.write_reg(base, 2, 0xC200);
 	aica.tick(10);
 	check(aica.left() == 4096 && aica.right() == 4096, "a voice through IMXL, MIXS, the program and EFSDL");

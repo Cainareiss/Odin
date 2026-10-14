@@ -37,7 +37,10 @@ enum : uint32_t {
 	REG_DECAY = 0x14,	/* LPSLNK, KRS, DL, RR */
 	REG_PITCH = 0x18,	/* OCT, FNS */
 	REG_LFO = 0x1C,		/* LFORE, LFOF, PLFOWS, PLFOS, ALFOWS, ALFOS */
-	REG_LEVEL = 0x28	/* TL, VOFF, LPOFF, Q */
+	REG_LEVEL = 0x28,	/* TL, VOFF, LPOFF, Q */
+	REG_FLV0 = 0x2C,	/* FLV0 to FLV4, a word apart */
+	REG_CUTOFF_RATES = 0x40,	/* FAR, FD1R */
+	REG_CUTOFF_RELEASE = 0x44	/* FD2R, FRR */
 };
 
 enum : uint32_t {
@@ -45,7 +48,14 @@ enum : uint32_t {
 	PLAY_LOOP = 0x0200,	/* LPCTL */
 	DECAY_LINK = 0x4000,	/* LPSLNK */
 	LFO_RESET = 0x8000,	/* LFORE */
-	LEVEL_OFF = 0x0040	/* VOFF: no TL, envelope or amplitude LFO */
+	LEVEL_OFF = 0x0040,	/* VOFF: no TL, envelope or amplitude LFO */
+	LEVEL_NO_FILTER = 0x0020	/* LPOFF */
+};
+
+/* Q, the resonance: what it adds to the cutoff, in 4096ths (Flycast) */
+constexpr int64_t Q_TABLE[32] = {
+	2048, 1536, 1024, 512, 0, -256, -512, -768, -1024, -1280, -1536, -1792, -2048, -2176, -2304, -2432,
+	-2560, -2688, -2816, -2944, -3072, -3136, -3200, -3264, -3328, -3392, -3456, -3520, -3584, -3648, -3712, -3776
 };
 
 enum : uint32_t { PCM16, PCM8, ADPCM, ADPCM_STREAM };
@@ -196,14 +206,16 @@ AicaVoice::key_on(const uint8_t *slot, const uint8_t *ram, uint32_t ram_mask, ui
 	m_state.level = ATTACK_START;
 	m_state.segment = ATTACK;
 	m_state.playing = 1;
+	m_state.cutoff = reg(slot, REG_FLV0) & 0x1FFF;
+	m_state.cutoff_segment = ATTACK;
 	fetch(slot, ram, ram_mask, noise);
 }
 
 int32_t
-AicaVoice::output(const uint8_t *slot, uint32_t &noise) const
+AicaVoice::output(const uint8_t *slot, uint32_t &noise)
 {
 	const int32_t f = static_cast<int32_t>((m_state.phase >> 4) & 0x3FFF);
-	const int32_t s = (m_state.next * f + m_state.sample * (0x4000 - f)) >> 14;
+	const int32_t s = filter(slot, ((m_state.next * f + m_state.sample * (0x4000 - f)) >> 14) * 16);
 	const uint32_t level = reg(slot, REG_LEVEL);
 	const uint32_t lfo = reg(slot, REG_LFO);
 
@@ -239,10 +251,51 @@ AicaVoice::output(const uint8_t *slot, uint32_t &noise) const
 	return (s * static_cast<int32_t>(((attenuation & 0x3F) ^ 0x7F) + 1)) >> (7 + (attenuation >> 6));
 }
 
+/* A two-pole low-pass on 20 bits: y = -a0 x + b1 y1 - b2 y2, its
+ * coefficients from the cutoff (4 bits of exponent, 9 of mantissa) and Q
+ * (Flycast lowPassFilter, 2025). Left out while it is wide open. */
+int32_t
+AicaVoice::filter(const uint8_t *slot, int32_t sample)
+{
+	const uint32_t level = reg(slot, REG_LEVEL);
+	const uint32_t q = level & 0x1F;
+
+	if (level & LEVEL_NO_FILTER)
+		return sample;
+
+	bool open = q == 4;
+	for (uint32_t n = 0; n < 5 && open; n++)
+		open = (reg(slot, REG_FLV0 + n * 4) & 0x1FFF) >= 0x1FF8;
+	if (open)
+		return sample;
+
+	const uint32_t exponent = m_state.cutoff >> 9;
+	const uint64_t mantissa = (m_state.cutoff & 0x1FF) | 0x200;
+	const int64_t a0 = static_cast<int64_t>(((mantissa << 30) >> ((15 - exponent) * 2)) * ((mantissa - 1) / 8) >> 17);
+	int64_t f = static_cast<int64_t>(mantissa << exponent) << 5;
+
+	f += Q_TABLE[q] * f / 4096;
+
+	const int64_t b1 = (1ll << 31) - (f + a0);
+	const int64_t b2 = (1ll << 30) - f;
+
+	if (exponent == 0)
+		m_state.rest = 0;
+
+	const int64_t sum = -a0 * sample + b1 * m_state.filtered[0] - b2 * m_state.filtered[1] - m_state.rest;
+	const int32_t out = static_cast<int32_t>(sum >> 30);
+
+	m_state.rest = static_cast<int32_t>((static_cast<int64_t>(out) << 30) - sum);
+	m_state.filtered[1] = m_state.filtered[0];
+	m_state.filtered[0] = std::clamp(out, -0x80000, 0x7FFFF);
+	return m_state.filtered[0];
+}
+
 void
 AicaVoice::key_off()
 {
 	m_state.segment = RELEASE;
+	m_state.cutoff_segment = RELEASE;
 }
 
 void
@@ -252,6 +305,7 @@ AicaVoice::step(const uint8_t *slot, const uint8_t *ram, uint32_t ram_mask, uint
 	if (silent())
 		return;
 	envelope(slot, odometer);
+	cutoff_envelope(slot, odometer);
 	if (!m_state.playing)
 		return;
 
@@ -266,6 +320,17 @@ AicaVoice::step(const uint8_t *slot, const uint8_t *ram, uint32_t ram_mask, uint
 			return;
 		fetch(slot, ram, ram_mask, noise);
 	}
+}
+
+uint16_t
+AicaVoice::filter_monitor(bool clear)
+{
+	const uint16_t value = static_cast<uint16_t>((m_state.looped ? 0x8000 : 0) |
+	                                             (m_state.cutoff_segment << 13) | m_state.cutoff);
+
+	if (clear)
+		m_state.looped = 0;
+	return value;
 }
 
 uint16_t
@@ -362,6 +427,51 @@ AicaVoice::envelope(const uint8_t *slot, uint32_t odometer)
 		m_state.segment = DECAY2;
 	if (m_state.level >= SILENT)
 		stop();
+}
+
+/* The cutoff moves to FLV1 in the attack, to FLV2, FLV3, then to FLV4
+ * from the key off, by the steps of the level at the rates FAR, FD1R,
+ * FD2R and FRR (Corlett; Flycast the same speed) */
+void
+AicaVoice::cutoff_envelope(const uint8_t *slot, uint32_t odometer)
+{
+	const uint32_t rates = reg(slot, REG_CUTOFF_RATES);
+	const uint32_t release = reg(slot, REG_CUTOFF_RELEASE);
+	static constexpr uint32_t TARGET[4] = { 1, 2, 3, 4 };
+	uint32_t rate;
+
+	switch (m_state.cutoff_segment) {
+	case ATTACK:
+		rate = (rates >> 8) & 0x1F;
+		break;
+	case DECAY1:
+		rate = rates & 0x1F;
+		break;
+	case DECAY2:
+		rate = (release >> 8) & 0x1F;
+		break;
+	default:
+		rate = release & 0x1F;
+		break;
+	}
+	if (rate == 0)
+		return;
+
+	const uint32_t effective = effective_rate(rate, slot);
+
+	if (!steps(effective, odometer))
+		return;
+
+	const uint32_t size = effective >= 0x30 ? FAST_DECAY[effective - 0x30][odometer & 3] : 1;
+	const uint32_t target = reg(slot, REG_FLV0 + TARGET[m_state.cutoff_segment] * 4) & 0x1FFF;
+	uint32_t &cutoff = m_state.cutoff;
+
+	if (cutoff < target)
+		cutoff += std::min(size, target - cutoff);
+	else if (cutoff > target)
+		cutoff -= std::min(size, cutoff - target);
+	else if (m_state.cutoff_segment < DECAY2)
+		m_state.cutoff_segment++;
 }
 
 bool

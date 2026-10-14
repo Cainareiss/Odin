@@ -129,10 +129,9 @@ Status byte st1 'V' that von4 tests on command 0x33 is not understood.
 
 AICA (src/odin/aica.cpp + arm7.cpp): control block, timers, interrupts,
 DMA, RTC and the ARM7 are in, and the voices (aica_voice.cpp: sampler,
-loops, envelope, levels, LFO, the monitors the sound driver reads), the
+loops, envelope, filter, levels, LFO, the monitors the sound driver reads), the
 effect processor (aica_dsp.cpp) and the mix of a chip (ODIN_WAV writes that
-of the main board); still missing: the filter and the sound output, the
-nested-FIQ
+of the main board); still missing: the sound output, the nested-FIQ
 question (does reading 0x2D00 drop the line?), and the HACK in
 hikaru_bus.cpp (page offset 0 reads 4 for Pharrier). Voices, HEURISTIC
 (one source, notes MARKDOWN/30 section 5): the rate of an envelope step
@@ -146,6 +145,12 @@ Levels and LFO, HEURISTIC: the steps of -3 dB of DISDL, DIPAN and MVOL are
 a factor 3/4 or a shift (Corlett), not exact decibels; the pitch LFO moves
 by up to 1/2^(10 - PLFOS) of the step (Corlett, Flycast), half the cents of
 the table of the Saturn manual if those are read as plus or minus.
+Filter, HEURISTIC (one source): the formula of Flycast (2025, "closer to
+original hardware"): FLV read as 4 bits of exponent and 9 of mantissa
+(Corlett: 5 and 8), the output of the opposite sign, left out while all
+of FLV is at 0x1FF8 or more and Q is 4; its envelope steps as that of the
+level (Corlett) and stays in its third segment until the key off
+(Flycast; Corlett goes on to the release).
 DSP, HEURISTIC: its registers (ACC, FRC, Y, ADRS, the reads in flight)
 keep their values from one sample period to the next (Corlett; Flycast and
 MAME clear some), the memory is reached at the odd steps only (Flycast,
