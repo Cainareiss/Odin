@@ -41,6 +41,7 @@
 #include "odin/scheduler.hpp"
 #include "odin/sh4.hpp"
 #include "odin/sound_board.hpp"
+#include "odin/wav_file.hpp"
 
 namespace odin {
 
@@ -229,6 +230,7 @@ private:
 	MieStandIn m_mie_stand_in;
 	std::unique_ptr<HikaruGpu> m_gpu;
 	std::unique_ptr<SoundBoard> m_sound[2];
+	std::unique_ptr<WavFile> m_wav;	/* ODIN_WAV: the sound of the main board */
 	Bus m_bus[2];
 	std::unique_ptr<Sh4> m_sh[2];
 	bool m_hooked[2];

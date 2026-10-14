@@ -25,6 +25,7 @@
 #include <cstdio>
 #include <functional>
 #include <span>
+#include <vector>
 
 #include "odin/aica.hpp"
 #include "odin/arm7.hpp"
@@ -90,6 +91,13 @@ public:
 
 	/* Advances the board by that many cycles of the main processor. */
 	void run(uint32_t cycles);
+	/* The same while the reset pin of the board is low: no sample period
+	 * passes for the chip, the output stays at 0 for that time. */
+	void silence(uint32_t cycles);
+	/* The output since the last clear: left and right, 16 bits each,
+	 * 44 100 pairs a second */
+	const std::vector<int16_t> &samples() const { return m_samples; }
+	void clear_samples() { m_samples.clear(); }
 
 	/* The ARM7 only counts the turns of a program that waits: this puts
 	 * in the wave memory what it has not written yet. To be called
@@ -126,10 +134,12 @@ private:
 	std::function<void(bool)> m_main_irq;
 	uint32_t m_clock_hz;
 	uint64_t m_sample_acc;
+	uint64_t m_silence_acc;
 	bool m_arm_held;
 	uint8_t *m_ram;
 	Arm7 m_arm;
 	Aica m_aica;
+	std::vector<int16_t> m_samples;
 };
 
 } /* namespace odin */

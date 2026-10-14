@@ -40,7 +40,7 @@ constexpr uint32_t PAGE_RAM = 0x800000;
 } /* namespace */
 
 SoundBoard::SoundBoard(std::span<uint8_t> ram, uint32_t clock_hz, std::function<void(bool)> main_irq)
-	: m_main_irq(std::move(main_irq)), m_clock_hz(clock_hz), m_sample_acc(0),
+	: m_main_irq(std::move(main_irq)), m_clock_hz(clock_hz), m_sample_acc(0), m_silence_acc(0),
 	  m_arm_held(true), m_ram(ram.data()), m_arm(*this), m_aica(*this, ram)
 {
 	map_ram();
@@ -123,11 +123,24 @@ SoundBoard::run(uint32_t cycles)
 	m_sample_acc -= samples * m_clock_hz;
 	for (uint64_t s = 0; s < samples; s++) {
 		m_aica.tick(1);
+		m_samples.push_back(m_aica.left());
+		m_samples.push_back(m_aica.right());
 		if (!m_arm_held) {
 			map_ram();
 			m_arm.run(ARM_CYCLES_PER_SAMPLE);
 		}
 	}
+}
+
+/* Its own count of the time, so that the sample periods of the chip fall
+ * where they would without it. */
+void
+SoundBoard::silence(uint32_t cycles)
+{
+	m_silence_acc += static_cast<uint64_t>(cycles) * Aica::SAMPLE_RATE;
+	const uint64_t samples = m_silence_acc / m_clock_hz;
+	m_silence_acc -= samples * m_clock_hz;
+	m_samples.insert(m_samples.end(), 2 * samples, 0);
 }
 
 void

@@ -292,6 +292,11 @@ Hikaru::Hikaru(const Game &game, const RomBoard::Config &rombd, bool verbose)
 
 	build_sound(MASTER);
 	build_sound(SLAVE);
+	if (const char *path = std::getenv("ODIN_WAV")) {
+		m_wav = std::make_unique<WavFile>(path, Aica::SAMPLE_RATE, 2);
+		if (!m_wav->ok())
+			std::fprintf(stderr, "ERROR: ODIN_WAV: cannot write '%s'\n", path);
+	}
 
 	/* Clock operating mode 5: a 33.3333 MHz crystal, the CPU at six times
 	 * that and the peripheral clock at 50 MHz. The timers of PHARRIER
@@ -746,6 +751,9 @@ Hikaru::run_cycles(int cycles)
 	if (m_mie_port_d & 0x20) {
 		m_sound[MASTER]->run(static_cast<uint32_t>(cycles));
 		m_sound[SLAVE]->run(static_cast<uint32_t>(cycles));
+	} else {
+		m_sound[MASTER]->silence(static_cast<uint32_t>(cycles));
+		m_sound[SLAVE]->silence(static_cast<uint32_t>(cycles));
 	}
 	took(PART_SOUND);
 	m_stats_slices++;
@@ -820,6 +828,11 @@ Hikaru::run_frame()
 	}
 	begin_frame();
 	m_frame++;
+
+	if (m_wav)
+		m_wav->write(m_sound[MASTER]->samples());
+	m_sound[MASTER]->clear_samples();
+	m_sound[SLAVE]->clear_samples();
 
 	/* ODIN_STATS: every 60 frames, the host time of a frame in all and
 	 * that of each part, in ms. What is not in the parts went to the rest
