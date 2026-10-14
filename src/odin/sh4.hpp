@@ -324,6 +324,7 @@ private:
 	bool write_slow(const Sh4Op *op, uint32_t addr, uint32_t size, uint64_t value);
 	bool read_any(uint32_t addr, uint32_t size, uint64_t &value);
 	bool write_any(uint32_t addr, uint32_t size, uint64_t value);
+	bool write_plain(uint32_t addr, uint32_t size, uint64_t value);
 	void outside();
 
 	/* sh4_ops.cpp */

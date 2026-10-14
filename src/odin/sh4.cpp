@@ -360,6 +360,37 @@ bool Sh4::read_any(uint32_t addr, uint32_t size, uint64_t &value)
 	return m_bus.read(addr & PHYSICAL, size, value);
 }
 
+/* A store that reaches plain memory by another address than its own, as
+ * through a store queue: in place, as write() does it. False, and nothing
+ * stored, when the page is not written in place or holds code compared in
+ * this epoch: the store then goes the way of the bus, and the block is
+ * left. */
+bool Sh4::write_plain(uint32_t addr, uint32_t size, uint64_t value)
+{
+	uint8_t *p = m_wr[addr >> PAGE_BITS];
+
+	if (!p || (addr & (size - 1)) || m_code_epoch[(addr >> PAGE_BITS) & (PHYSICAL_PAGES - 1)] == m_epoch) {
+		return false;
+	}
+	p += addr & (PAGE_SIZE - 1);
+	const auto put = [p](auto v) { std::memcpy(p, &v, sizeof(v)); };
+	switch (size) {
+	case 1:
+		put(static_cast<uint8_t>(value));
+		break;
+	case 2:
+		put(static_cast<uint16_t>(value));
+		break;
+	case 4:
+		put(static_cast<uint32_t>(value));
+		break;
+	default:
+		put(value);
+		break;
+	}
+	return true;
+}
+
 bool Sh4::write_any(uint32_t addr, uint32_t size, uint64_t value)
 {
 	uint32_t top = addr >> 24;
@@ -375,6 +406,9 @@ bool Sh4::write_any(uint32_t addr, uint32_t size, uint64_t value)
 		 * the chip sends the 32 bytes of the queue on PREF. */
 		if (addr <= 0xE3FFFFFF) {
 			uint32_t target = store_queue_addr(addr) | (addr & 0x1F);
+			if (write_plain(target, size, value)) {
+				return true;
+			}
 			bool ok = write_any(target, size, value);
 			if (!ok) {
 				outside();

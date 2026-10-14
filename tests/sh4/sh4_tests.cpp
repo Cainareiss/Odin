@@ -91,6 +91,7 @@ public:
 	std::vector<uint8_t> onchip;
 	std::vector<Access> device, unanswered_log;
 	std::vector<uint32_t> seen;	/* what a test notes */
+	unsigned ram_by_bus = 0;	/* accesses to the RAM the bus took */
 	uint64_t device_value = 0;
 	uint16_t pins_in = 0, pins_out = 0;
 	unsigned hooks = 0;
@@ -121,6 +122,7 @@ public:
 		if (addr >= (RAM & 0x1FFFFFFF) && addr + size <= (RAM & 0x1FFFFFFF) + ram.size()) {
 			value = 0;
 			std::memcpy(&value, &ram[addr - (RAM & 0x1FFFFFFF)], size);
+			ram_by_bus++;
 			return true;
 		}
 		if ((addr & ~0xFFFu) != DEVICE) {
@@ -137,6 +139,7 @@ public:
 	{
 		if (addr >= (RAM & 0x1FFFFFFF) && addr + size <= (RAM & 0x1FFFFFFF) + ram.size()) {
 			std::memcpy(&ram[addr - (RAM & 0x1FFFFFFF)], &value, size);
+			ram_by_bus++;
 			return true;
 		}
 		if ((addr & ~0xFFFu) != DEVICE) {
@@ -199,6 +202,10 @@ public:
 		uint32_t at = ((addr >> 8) & 0xFF00) | (addr & 0xFF), v;
 		std::memcpy(&v, &onchip[at], 4);
 		return v;
+	}
+	void set_reg32(uint32_t addr, uint32_t v)
+	{
+		std::memcpy(&onchip[((addr >> 8) & 0xFF00) | (addr & 0xFF)], &v, 4);
 	}
 };
 
@@ -1895,6 +1902,191 @@ void test_host_code()
 	}
 }
 
+/* Store queues, QACR0 and QACR1 on the area of the RAM: a store there lands
+ * in the RAM at once. Where the RAM is plain it is written in place and the
+ * block goes on; over code compared since, the store goes the way of the
+ * bus, and the program runs what was stored. */
+constexpr uint32_t queue(uint32_t addr) { return 0xE0000000 | (addr & 0x03FFFFFF); }
+
+void with_queues(Machine &m)
+{
+	m.set_reg32(0xFF000038, 0x0C);
+	m.set_reg32(0xFF00003C, 0x0C);
+}
+
+/* A loop that reads the device, stores through a queue and reads plain
+ * memory: mov.l @r12, r0 / add r0, r3 / mov.l r3, @r4 / add #4, r4 /
+ * mov.l @(4, r14), r1 / add r1, r3 / dt r5 / bf the read / mov r6, r4 /
+ * mov r7, r5 / bra the read */
+void queue_loop(Machine &m, uint32_t seed)
+{
+	with_device(m);
+	with_queues(m);
+	m.code(CODE, {0x60C2, 0x330C, 0x2432, 0x7404, 0x51E1, 0x331C, 0x4510, 0x8BF7, 0x6463, 0x6573, 0xAFF4, NOP});
+	m.put32(DATA + 4, 0x01010101 * seed);
+	Sh4State st = m.state();
+	st.r[4] = st.r[6] = queue(DATA + 0x100);
+	st.r[5] = st.r[7] = 40 + seed;
+	m.cpu.load(st);
+}
+
+void test_store_queues()
+{
+	g_test = "store queues";
+	{
+		/* 64 words in a row: mov.l r3, @r4 / add #4, r4 / add #1, r3 /
+		 * dt r5 / bf the store / bra itself */
+		Machine m;
+		with_queues(m);
+		run(m, {0x2432, 0x7404, 0x7301, 0x4510, 0x8BFA, 0xAFFE, NOP}, 400, [](Sh4State &s) {
+			s.r[3] = 0x51510000;
+			s.r[4] = queue(DATA + 0x100);
+			s.r[5] = 64;
+		});
+		unsigned wrong = 0;
+		for (uint32_t i = 0; i < 64; i++) {
+			wrong += m.get32(DATA + 0x100 + 4 * i) != 0x51510000 + i;
+		}
+		eq("words that are not what was stored", wrong, 0);
+		eq("stores the bus took", m.ram_by_bus, 0);
+	}
+	{
+		/* Every size, and nothing beside: mov.b r1, @r8 / mov.w r1, @r9 /
+		 * mov.l r1, @r10 / fmov dr0, @r11 */
+		Machine m;
+		with_queues(m);
+		std::fill(m.ram.begin() + (DATA + 0x300 - RAM), m.ram.begin() + (DATA + 0x348 - RAM), 0xEE);
+		run(m, {0x2810, 0x2911, 0x2A12, 0xFB0A}, 4, [](Sh4State &s) {
+			s.r[1] = 0x11223344;
+			s.r[8] = queue(DATA + 0x301);
+			s.r[9] = queue(DATA + 0x312);
+			s.r[10] = queue(DATA + 0x324);
+			s.r[11] = queue(DATA + 0x338);
+			s.fr[0] = 0xAAAAAAAA;
+			s.fr[1] = 0xBBBBBBBB;
+			s.fpscr = 0x00140001;
+		});
+		eq("a byte, between two left alone", m.get32(DATA + 0x300) & 0xFFFFFF, 0xEE44EE);
+		eq("a word", m.get32(DATA + 0x311), 0xEE3344EE);
+		eq("a long", m.get32(DATA + 0x324), 0x11223344);
+		eq("with nothing before, nothing after", m.get8(DATA + 0x323) + m.get8(DATA + 0x328), 2 * 0xEE);
+		eq("a pair, its first half", m.get32(DATA + 0x338), 0xAAAAAAAA);
+		eq("its second half", m.get32(DATA + 0x33C), 0xBBBBBBBB);
+		eq("with nothing before, nothing after", m.get8(DATA + 0x337) + m.get8(DATA + 0x340), 2 * 0xEE);
+		eq("stores the bus took", m.ram_by_bus, 0);
+	}
+	{
+		/* A store that is not aligned goes the way of the bus. */
+		Machine m;
+		with_queues(m);
+		run(m, {0x2432, NOP}, 2, [](Sh4State &s) {
+			s.r[3] = 0x51515151;
+			s.r[4] = queue(DATA + 0x202);
+		});
+		eq("the long stored", m.get32(DATA + 0x202), 0x51515151);
+		eq("stores the bus took", m.ram_by_bus, 1);
+	}
+	{
+		/* A store that changes an instruction further in its own block:
+		 * mov.w @(8,pc), r0 [E203] / mov.w r0, @r8 / nop / nop /
+		 * mov #1, r2 / nop / .word E203 */
+		Machine m;
+		with_queues(m);
+		Sh4State st = run(m, {0x9004, 0x2801, NOP, NOP, 0xE201, NOP, 0xE203, NOP}, 6,
+		                  [](Sh4State &s) { s.r[8] = queue(CODE + 8); });
+		eq("the new instruction runs", st.r[2], 3);
+	}
+	{
+		/* The loop of test_blocks() that stores add #k, r2 over the
+		 * first instruction of the block it branches to at once, the
+		 * store through a queue. */
+		Machine m;
+		with_queues(m);
+		m.code(CODE, {0x7401, 0x6043, 0xC907, 0x6503, 0x9004, 0x305C, 0xD102, 0x2101, 0xA00A, NOP,
+		              0x7200, NOP, NOP, NOP, NOP, NOP, NOP, NOP, NOP, NOP,
+		              0x7201, 0xAFE9, NOP});
+		m.put32(CODE + 24, queue(CODE + 40));
+		for (uint32_t i = 0; i < 40; i++) {
+			m.cpu.run(static_cast<int32_t>(70 + 13 * i));
+		}
+		const Sh4State st = m.state();
+		uint32_t done = 0;
+		for (uint32_t turn = 1; turn < st.r[4]; turn++) {
+			done += turn & 7;
+		}
+		check(st.r[4] > 500, "the loop went round");
+		check(st.r[2] == done || st.r[2] == done + (st.r[4] & 7), "each turn ran the instruction it stored");
+	}
+	{
+		/* The same with the block on another page, jumped to: add #1, r4 /
+		 * mov r4, r0 / and #7, r0 / mov r0, r5 / mov.w @(8,pc), r0 [7200] /
+		 * add r5, r0 / mov.w r0, @r7 / jmp @r6; there: add #k, r2 /
+		 * jmp @r13 */
+		const uint32_t there = CODE + 0x2000;
+		Machine m;
+		with_queues(m);
+		m.code(CODE, {0x7401, 0x6043, 0xC907, 0x6503, 0x9004, 0x305C, 0x2701, 0x462B, NOP, NOP, 0x7200});
+		m.code(there, {0x7201, 0x4D2B, NOP});
+		Sh4State set = m.state();
+		set.r[6] = there;
+		set.r[7] = queue(there);
+		set.r[13] = CODE;
+		m.cpu.load(set);
+		for (uint32_t i = 0; i < 40; i++) {
+			m.cpu.run(static_cast<int32_t>(70 + 13 * i));
+		}
+		const Sh4State st = m.state();
+		uint32_t done = 0;
+		for (uint32_t turn = 1; turn < st.r[4]; turn++) {
+			done += turn & 7;
+		}
+		check(st.r[4] > 500, "the loop went round");
+		check(st.r[2] == done || st.r[2] == done + (st.r[4] & 7),
+		      "on another page, each turn ran the instruction it stored");
+	}
+	/* The same loop on two machines, one whose page of data is written
+	 * through the bus: the same after each slice, and the interrupt of
+	 * the device comes at the same instruction. */
+	for (uint32_t seed = 1; seed <= 8; seed++) {
+		Machine place, bus;
+		unsigned differ = 0;
+
+		queue_loop(place, seed);
+		queue_loop(bus, seed);
+		bus.cpu.map_page((DATA & 0x1FFFFFFF) >> Sh4::PAGE_BITS, &bus.ram[DATA - RAM], nullptr);
+		for (uint32_t done = 0, series = seed; done < 30000 && differ == 0;) {
+			series = series * 1664525u + 1013904223u;
+			const uint32_t cycles = 1 + (series >> 8) % 900;
+			const int32_t over_place = place.cpu.run(static_cast<int32_t>(cycles));
+			const int32_t over_bus = bus.cpu.run(static_cast<int32_t>(cycles));
+			const Sh4State a = place.state(), b = bus.state();
+
+			done += cycles;
+			if (over_place != over_bus || std::memcmp(&a, &b, sizeof(a)) != 0 || place.ram != bus.ram ||
+			    place.onchip != bus.onchip || place.seen != bus.seen ||
+			    place.device.size() != bus.device.size()) {
+				differ++;
+			}
+		}
+		check(differ == 0, "loop " + std::to_string(seed) + ": the same in place and through the bus");
+		check(place.device.size() > 500 && place.ram_by_bus == 0, "the stores were made in place");
+		check(bus.ram_by_bus > 500, "and through the bus on the other machine");
+	}
+	{
+		Pair probe;
+		if (!probe.host.cpu.translates()) {
+			return;
+		}
+	}
+	for (uint32_t seed = 1; seed <= 4; seed++) {
+		Pair p;
+
+		p.each([seed](Machine &m) { queue_loop(m, seed); });
+		p.slices_of(30000, seed % 2 ? 400 : 6313, seed);
+		p.verdict("stores through a queue, loop " + std::to_string(seed));
+	}
+}
+
 int main(int argc, char **argv)
 {
 	for (int i = 1; i < argc; i++) {
@@ -1918,6 +2110,7 @@ int main(int argc, char **argv)
 	test_hook();
 	test_save_load();
 	test_host_code();
+	test_store_queues();
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures == 0 ? 0 : 1;
 }
