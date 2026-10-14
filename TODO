@@ -454,8 +454,27 @@ and of the drawings.
 Tests: tests/sh4.
 
 Speed: 2.3 to 3.6 times the interpreter. What is left is the host missing
-its branch predictions, one emulated instruction in three in VON4: a
-translator to host code is the next step for the slower machines.
+its branch predictions, one emulated instruction in three in VON4.
+
+A block is kept for each place a branch leads to; where the program only
+resumes (a slice ended, an instruction had its block left, an interrupt
+returns) it goes on in the middle of the kept block that holds the place,
+and a slice that ends in a kept block runs it with an end put where it
+stops. The machine names the pages of the bus whose accesses do not write
+the memory of the CPU (Sh4::map_quiet; the MIE for the master): they leave
+the blocks as they were compared and the block that makes them goes on.
+
+ODIN_SH4_TRANSLATE=1, a test for now: the kept blocks run as host code
+(src/odin/sh4_host.cpp, x86-64 with the calling convention of Linux or of
+Windows; elsewhere the blocks are read). Each instruction is written once
+(Sh4OpsT) and handed over in two ways: the reader runs the next one by a
+tail call, the host code of a block calls its instructions in turn, all by
+direct calls. The two give the same registers, memories, cycles and
+pictures (tests/sh4, the six whole loops). On an i3-6100U the two SH-4 take
+a fifth to a third less time that way; on a Ryzen 5600X next to nothing.
+To do next: the instructions that come most written as host code
+themselves, the ends of blocks that lead to a known place jumped to
+directly, host code entered in the middle of a block.
 
 Kept as the interpreter did, each one HEURISTIC, to make right one at a
 time once the scenes are compared again:
