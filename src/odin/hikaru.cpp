@@ -240,7 +240,7 @@ Hikaru::Hikaru(const Game &game, const RomBoard::Config &rombd, bool verbose)
 	  m_porta{0, 0}, m_irq_lines(0), m_mie_port_d(0), m_unk1A800008_s(0), m_unk1B000100_s(0),
 	  m_line(0), m_dots_per_line(0), m_lines_per_frame(0), m_lines_shown(0), m_line_rest(0),
 	  m_mie_trace(nullptr), m_sh_trace{nullptr, nullptr}, m_stats(env_flag("ODIN_STATS")),
-	  m_stats_ns{}, m_stats_slices(0)
+	  m_stats_ns{}, m_stats_slices(0), m_stats_told{}, m_stats_told_at(0)
 {
 	std::printf("%s\n", text_at(m_bootrom, 0xD4).c_str());
 
@@ -820,6 +820,24 @@ Hikaru::run_frame()
 	}
 	begin_frame();
 	m_frame++;
+
+	/* ODIN_STATS: every 60 frames, the host time of a frame in all and
+	 * that of each part, in ms. What is not in the parts went to the rest
+	 * of the frame: the screen, the wait for the drawing. */
+	if (m_stats && m_frame % 60 == 0) {
+		const uint64_t now = host_ns();
+		const auto ms = [](uint64_t ns) { return static_cast<double>(ns) / 60e6; };
+
+		if (m_stats_told_at)
+			std::fprintf(stderr, "PARTS frame=%u all %.2f master %.2f slave %.2f chips %.2f mie %.2f sound %.2f\n",
+			             m_frame, ms(now - m_stats_told_at), ms(m_stats_ns[MASTER] - m_stats_told[MASTER]),
+			             ms(m_stats_ns[SLAVE] - m_stats_told[SLAVE]),
+			             ms(m_stats_ns[PART_GPU] - m_stats_told[PART_GPU]),
+			             ms(m_stats_ns[PART_MIE] - m_stats_told[PART_MIE]),
+			             ms(m_stats_ns[PART_SOUND] - m_stats_told[PART_SOUND]));
+		std::copy(std::begin(m_stats_ns), std::end(m_stats_ns), std::begin(m_stats_told));
+		m_stats_told_at = now;
+	}
 }
 
 /* The idle loop of the slave, in the BOOTROM, counts in R7 while the byte

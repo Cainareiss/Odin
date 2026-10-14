@@ -254,7 +254,8 @@ private:
 	FILE *m_mie_trace;
 	FILE *m_sh_trace[2];
 	/* ODIN_STATS=1: the host time each part of the board took in its
-	 * slices, told at the end. The first two are the SH-4. */
+	 * slices, told at the end and for every 60 frames. The first two are
+	 * the SH-4. */
 	enum : unsigned {
 		PART_GPU = 2,
 		PART_MIE,
@@ -263,6 +264,7 @@ private:
 	};
 	bool m_stats;
 	uint64_t m_stats_ns[NUM_PARTS], m_stats_slices;
+	uint64_t m_stats_told[NUM_PARTS], m_stats_told_at;	/* at the last 60 frames told */
 };
 
 } /* namespace odin */
