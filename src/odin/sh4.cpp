@@ -1018,20 +1018,25 @@ bool Sh4::translate_access(Inline form, const Sh4Op &op, uint32_t i, std::vector
 {
 	using Alu = Sh4Host::Alu;
 	constexpr uint32_t PR = offsetof(Regs, pr) / 4, GBR = offsetof(Regs, gbr) / 4, NONE = ~0u;
+	constexpr uint32_t FR = offsetof(Regs, fr) / 4, XF = offsetof(Regs, xf) / 4, FPSCR = offsetof(Regs, fpscr) / 4;
 	constexpr Sh4Host::Reg A = Sh4Host::Reg::A;
 	Sh4Host &host = *m_host;
 	const uint32_t n = op.n, m = op.m;
 	/* The address, the word `base` + `disp` + the word `index`; `step`
-	 * added to `base` after a read into another word or after a write. */
+	 * added to `base` after a read into another word or after a write. A
+	 * move of the FPU is written for the FPSCR.SZ the block is seen to
+	 * have there, and goes the long way when it has the other. */
 	struct Access {
 		uint32_t size;
 		uint32_t base, disp, index;
 		uint32_t reg;
 		int32_t step;
+		bool fpu;
 	};
-	const auto read = [&](const Access &a) {
-		Sh4Host::Slow slow{};
-
+	const auto address = [&](const Access &a, Sh4Host::Slow &slow) {
+		if (a.fpu) {
+			slow.jumps[slow.count++] = host.jump_if_bits(FPSCR, FPSCR_SZ, !m_pairs);
+		}
 		host.load(A, a.base);
 		if (a.index != NONE) {
 			host.alu(Alu::Add, A, a.index);
@@ -1039,8 +1044,17 @@ bool Sh4::translate_access(Inline form, const Sh4Op &op, uint32_t i, std::vector
 		if (a.disp) {
 			host.alu_value(Alu::Add, A, a.disp);
 		}
+	};
+	const auto read = [&](const Access &a) {
+		Sh4Host::Slow slow{};
+
+		address(a, slow);
 		host.read(a.size, slow);
-		host.store(a.reg, A);
+		if (a.size == 8) {
+			host.store_pair(a.reg);
+		} else {
+			host.store(a.reg, A);
+		}
 		if (a.step && a.reg != a.base) {
 			host.load(A, a.base);
 			host.alu_value(Alu::Add, A, static_cast<uint32_t>(a.step));
@@ -1051,13 +1065,7 @@ bool Sh4::translate_access(Inline form, const Sh4Op &op, uint32_t i, std::vector
 	const auto write = [&](const Access &a) {
 		Sh4Host::Slow slow{};
 
-		host.load(A, a.base);
-		if (a.index != NONE) {
-			host.alu(Alu::Add, A, a.index);
-		}
-		if (a.disp) {
-			host.alu_value(Alu::Add, A, a.disp);
-		}
+		address(a, slow);
 		host.write(a.size, a.reg, slow);
 		if (a.step) {
 			host.load(A, a.base);
@@ -1079,43 +1087,67 @@ bool Sh4::translate_access(Inline form, const Sh4Op &op, uint32_t i, std::vector
 		return true;
 	};
 	const auto pre = [](uint32_t size) { return static_cast<uint32_t>(-static_cast<int32_t>(size)); };
+	/* FRn, or with SZ the pair: DRn, or XDn for an odd n */
+	const uint32_t size = m_pairs ? 8 : 4;
+	const auto fpu = [this](uint32_t k) { return !m_pairs ? FR + k : (k & 1) ? XF + (k & 14) : FR + (k & 14); };
 
 	switch (form) {
-	case Inline::MovLL: read({4, m, 0, NONE, n, 0}); break;
-	case Inline::MovWL: read({2, m, 0, NONE, n, 0}); break;
-	case Inline::MovBL: read({1, m, 0, NONE, n, 0}); break;
-	case Inline::MovLL4: read({4, m, op.imm, NONE, n, 0}); break;
-	case Inline::MovWL4: read({2, m, op.imm, NONE, 0, 0}); break;
-	case Inline::MovBL4: read({1, m, op.imm, NONE, 0, 0}); break;
-	case Inline::MovLL0: read({4, m, 0, 0, n, 0}); break;
-	case Inline::MovWL0: read({2, m, 0, 0, n, 0}); break;
-	case Inline::MovBL0: read({1, m, 0, 0, n, 0}); break;
-	case Inline::MovLP: read({4, m, 0, NONE, n, 4}); break;
-	case Inline::MovWP: read({2, m, 0, NONE, n, 2}); break;
-	case Inline::MovBP: read({1, m, 0, NONE, n, 1}); break;
-	case Inline::MovLLG: read({4, GBR, op.imm, NONE, 0, 0}); break;
-	case Inline::MovWLG: read({2, GBR, op.imm, NONE, 0, 0}); break;
-	case Inline::MovBLG: read({1, GBR, op.imm, NONE, 0, 0}); break;
+	case Inline::MovLL: read({4, m, 0, NONE, n, 0, false}); break;
+	case Inline::MovWL: read({2, m, 0, NONE, n, 0, false}); break;
+	case Inline::MovBL: read({1, m, 0, NONE, n, 0, false}); break;
+	case Inline::MovLL4: read({4, m, op.imm, NONE, n, 0, false}); break;
+	case Inline::MovWL4: read({2, m, op.imm, NONE, 0, 0, false}); break;
+	case Inline::MovBL4: read({1, m, op.imm, NONE, 0, 0, false}); break;
+	case Inline::MovLL0: read({4, m, 0, 0, n, 0, false}); break;
+	case Inline::MovWL0: read({2, m, 0, 0, n, 0, false}); break;
+	case Inline::MovBL0: read({1, m, 0, 0, n, 0, false}); break;
+	case Inline::MovLP: read({4, m, 0, NONE, n, 4, false}); break;
+	case Inline::MovWP: read({2, m, 0, NONE, n, 2, false}); break;
+	case Inline::MovBP: read({1, m, 0, NONE, n, 1, false}); break;
+	case Inline::MovLLG: read({4, GBR, op.imm, NONE, 0, 0, false}); break;
+	case Inline::MovWLG: read({2, GBR, op.imm, NONE, 0, 0, false}); break;
+	case Inline::MovBLG: read({1, GBR, op.imm, NONE, 0, 0, false}); break;
 	case Inline::MovLI: return read_pc(4);
 	case Inline::MovWI: return read_pc(2);
-	case Inline::LdsMPr: read({4, n, 0, NONE, PR, 4}); break;
-	case Inline::MovLS: write({4, n, 0, NONE, m, 0}); break;
-	case Inline::MovWS: write({2, n, 0, NONE, m, 0}); break;
-	case Inline::MovBS: write({1, n, 0, NONE, m, 0}); break;
-	case Inline::MovLS4: write({4, n, op.imm, NONE, m, 0}); break;
-	case Inline::MovWS4: write({2, m, op.imm, NONE, 0, 0}); break;
-	case Inline::MovBS4: write({1, m, op.imm, NONE, 0, 0}); break;
-	case Inline::MovLS0: write({4, n, 0, 0, m, 0}); break;
-	case Inline::MovWS0: write({2, n, 0, 0, m, 0}); break;
-	case Inline::MovBS0: write({1, n, 0, 0, m, 0}); break;
-	case Inline::MovLM: write({4, n, pre(4), NONE, m, -4}); break;
-	case Inline::MovWM: write({2, n, pre(2), NONE, m, -2}); break;
-	case Inline::MovBM: write({1, n, pre(1), NONE, m, -1}); break;
-	case Inline::MovLSG: write({4, GBR, op.imm, NONE, 0, 0}); break;
-	case Inline::MovWSG: write({2, GBR, op.imm, NONE, 0, 0}); break;
-	case Inline::MovBSG: write({1, GBR, op.imm, NONE, 0, 0}); break;
-	case Inline::StsMPr: write({4, n, pre(4), NONE, PR, -4}); break;
-	case Inline::MovCA: write({4, n, 0, NONE, 0, 0}); break;
+	case Inline::LdsMPr: read({4, n, 0, NONE, PR, 4, false}); break;
+	case Inline::MovLS: write({4, n, 0, NONE, m, 0, false}); break;
+	case Inline::MovWS: write({2, n, 0, NONE, m, 0, false}); break;
+	case Inline::MovBS: write({1, n, 0, NONE, m, 0, false}); break;
+	case Inline::MovLS4: write({4, n, op.imm, NONE, m, 0, false}); break;
+	case Inline::MovWS4: write({2, m, op.imm, NONE, 0, 0, false}); break;
+	case Inline::MovBS4: write({1, m, op.imm, NONE, 0, 0, false}); break;
+	case Inline::MovLS0: write({4, n, 0, 0, m, 0, false}); break;
+	case Inline::MovWS0: write({2, n, 0, 0, m, 0, false}); break;
+	case Inline::MovBS0: write({1, n, 0, 0, m, 0, false}); break;
+	case Inline::MovLM: write({4, n, pre(4), NONE, m, -4, false}); break;
+	case Inline::MovWM: write({2, n, pre(2), NONE, m, -2, false}); break;
+	case Inline::MovBM: write({1, n, pre(1), NONE, m, -1, false}); break;
+	case Inline::MovLSG: write({4, GBR, op.imm, NONE, 0, 0, false}); break;
+	case Inline::MovWSG: write({2, GBR, op.imm, NONE, 0, 0, false}); break;
+	case Inline::MovBSG: write({1, GBR, op.imm, NONE, 0, 0, false}); break;
+	case Inline::StsMPr: write({4, n, pre(4), NONE, PR, -4, false}); break;
+	case Inline::MovCA: write({4, n, 0, NONE, 0, 0, false}); break;
+	case Inline::FMovLoad: read({size, m, 0, NONE, fpu(n), 0, true}); break;
+	case Inline::FMovStore: write({size, n, 0, NONE, fpu(m), 0, true}); break;
+	case Inline::FMovIndexLoad: read({size, m, 0, 0, fpu(n), 0, true}); break;
+	case Inline::FMovIndexStore: write({size, n, 0, 0, fpu(m), 0, true}); break;
+	case Inline::FMovRestore: read({size, m, 0, NONE, fpu(n), static_cast<int32_t>(size), true}); break;
+	case Inline::FMovSave: write({size, n, pre(size), NONE, fpu(m), -static_cast<int32_t>(size), true}); break;
+	case Inline::FMov: {
+		/* no access: only the guard and a copy */
+		Sh4Host::Slow slow{};
+
+		slow.jumps[slow.count++] = host.jump_if_bits(FPSCR, FPSCR_SZ, !m_pairs);
+		if (m_pairs) {
+			host.load_pair(fpu(m));
+			host.store_pair(fpu(n));
+		} else {
+			host.load(A, fpu(m));
+			host.store(fpu(n), A);
+		}
+		ways.push_back(LongWay{slow, i, host.here()});
+		break;
+	}
 	default:
 		return false;
 	}
@@ -1217,6 +1249,17 @@ bool Sh4::translate_op(const Sh4Op *ops, uint32_t i, std::vector<LongWay> &ways)
 	return false;
 }
 
+/* FPSCR.SZ where each instruction of the block is, from what it holds at
+ * the start: FSCHG turns it over. Any other change (LDS to FPSCR) is left
+ * to the guard of each move. */
+void Sh4::pairs_through(const Block &b, std::array<bool, BLOCK_MAX + 3> &pairs) const
+{
+	pairs[0] = (m_r.fpscr & FPSCR_SZ) != 0;
+	for (uint32_t i = 0; i < b.count; i++) {
+		pairs[i + 1] = pairs[i] != (inlined(b.ops[i].run) == Inline::FSChg);
+	}
+}
+
 /* Writes the host code of a kept block: its instructions in turn, each in
  * place or called, the block left as soon as a call says so. A conditional
  * branch that goes says where to; one with a delay slot has the copy of its
@@ -1235,11 +1278,14 @@ void Sh4::translate(Block &b)
 	const Sh4Op *ops = b.ops;
 	Sh4Host &host = *m_host;
 	std::vector<LongWay> &ways = m_long_ways;
+	std::array<bool, BLOCK_MAX + 3> pairs;
 	bool jumped = false;
 
 	ways.clear();
+	pairs_through(b, pairs);
 	b.host = host.begin(ops);
 	for (uint32_t i = 0; i < b.count && !jumped; i++) {
+		m_pairs = pairs[i];
 		if (ops[i].flags & (OP_BRANCH | OP_DELAYED)) {
 			Sh4Host::Jump jump;
 
@@ -1253,6 +1299,7 @@ void Sh4::translate(Block &b)
 			if (!translate_jump(b, ops[i], i, ways)) {
 				host.call(called(ops[i].run), i);
 			}
+			m_pairs = pairs[i + 1];
 			translate_op(ops, i + 1, ways);
 			host.call(called(ops[i + 2].run), i + 2);
 			host.go_where_told();
@@ -1278,6 +1325,7 @@ void Sh4::translate(Block &b)
 		if (ops[i].flags & OP_DELAYED) {
 			const uint32_t slot = i + ops[i].m;
 
+			m_pairs = pairs[i + 1];
 			translate_op(ops, slot, ways);
 			host.call(called(ops[slot + 1].run), slot + 1);
 		} else if (taken[k].in_place) {

@@ -2258,6 +2258,98 @@ void test_host_memory()
 	}
 }
 
+/* The moves of the FPU host code makes itself, for the FPSCR.SZ it sees in
+ * the block: each of them, SZ clear and set when the block starts, turned
+ * over by an FSCHG or not, at the four places of test_host_in_place(), at
+ * plain memory, at an address aligned on 4 only, at the device: read and as
+ * host code, the same registers, memory and accesses after. */
+void test_host_fpu_moves()
+{
+	g_test = "host code, moves of the FPU";
+	struct Form {
+		uint16_t code;
+		bool memory, index, write;
+		int32_t step;	/* to the register of the address: +1 after, -1 before, times the size */
+		const char *name;
+	};
+	static const Form forms[] = {
+		{0xF008, true, false, false, 0, "fmov @Rm,FRn"}, {0xF00A, true, false, true, 0, "fmov FRm,@Rn"},
+		{0xF006, true, true, false, 0, "fmov @(R0,Rm),FRn"}, {0xF007, true, true, true, 0, "fmov FRm,@(R0,Rn)"},
+		{0xF009, true, false, false, 1, "fmov @Rm+,FRn"}, {0xF00B, true, false, true, -1, "fmov FRm,@-Rn"},
+		{0xF00C, false, false, false, 0, "fmov FRm,FRn"},
+	};
+	static const uint8_t pairs[][2] = {{1, 2}, {2, 1}, {4, 5}, {3, 3}};
+	static const uint32_t targets[] = {DATA + 0x100, DATA + 0x104, DEVICE + 0x40};
+	{
+		Pair probe;
+		if (!probe.host.cpu.translates()) {
+			std::printf("host code: none on this machine, not tested\n");
+			return;
+		}
+	}
+	for (const Form &form : forms) {
+		unsigned runs = 0, differ = 0;
+
+		/* A machine for each SZ: a block is written for the SZ it is first run with. */
+		for (uint32_t sz = 0; sz < 2; sz++) {
+			Pair p;
+			const Sh4State start = p.read.state();
+
+			for (const auto &pair : pairs) {
+				const uint16_t code = static_cast<uint16_t>(form.code | (pair[0] << 8) | (pair[1] << 4));
+				/* the register of the address */
+				const uint32_t base = form.write ? pair[0] : pair[1];
+
+				for (uint32_t turn = 0; turn < 2; turn++) {
+					/* turned over or not at the start: fschg / nop; then as in test_host_in_place() */
+					const uint16_t first = turn ? 0xF3FD : NOP;
+					const uint32_t size = (sz != turn) ? 8 : 4;
+
+					p.each([&](Machine &mc) {
+						mc.code(CODE, {first, code, 0xA000, code, NOP, 0x0018, 0x8D00, code, NOP, 0x0008,
+						               0x8D00, code, NOP, 0xAFFE, NOP});
+						for (uint32_t i = 0; i < 0x200; i++) {
+							mc.ram[DATA - RAM + 0xF0 + i] = static_cast<uint8_t>(0x80 + 5 * i);
+						}
+						mc.device.clear();
+						mc.device_value = 0xC0C1C2C3;
+					});
+					for (uint32_t target : targets) {
+						if (!form.memory && target != targets[0]) {
+							continue;
+						}
+						Sh4State st = start;
+
+						for (uint32_t i = 0; i < 16; i++) {
+							st.r[i] = 0x5EED0000 + 0x1111 * i;
+							st.fr[i] = 0x3F800000 + 0x10000 * i;
+							st.xf[i] = 0x40000000 + 0x10000 * i;
+						}
+						st.fpscr = 0x00040001 | (sz ? 0x00100000 : 0);
+						if (form.memory) {
+							uint32_t at = target;
+
+							if (form.step < 0) {
+								at += 4 * size;
+							}
+							if (form.index) {
+								st.r[0] = 0x40;
+								at -= 0x40;
+							}
+							st.r[base] = at;
+						}
+						p.each([&st](Machine &mc) { mc.cpu.load(st); });
+						p.slice(200);
+						runs++;
+					}
+				}
+			}
+			differ += p.differ;
+		}
+		check(runs > 0 && differ == 0, std::string(form.name) + ": the same read and in place");
+	}
+}
+
 /* The branches host code makes itself: each of them in a loop whose turns
  * take it or not as a register turned bit by bit says, its delay slot an
  * instruction in place, an access to the memory or a call; then what the
@@ -2524,6 +2616,7 @@ int main(int argc, char **argv)
 	test_host_in_place();
 	test_host_memory();
 	test_host_branches();
+	test_host_fpu_moves();
 	test_store_queues();
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures == 0 ? 0 : 1;

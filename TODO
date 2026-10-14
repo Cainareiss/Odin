@@ -478,9 +478,12 @@ few steps on the registers of the CPU, which stay where they are. So are
 the accesses to plain memory, aligned, where no code compared in the epoch
 is; any other access calls its instruction. A conditional branch tests T
 in place, a branch sets PC and PR in place; the block that follows is still
-looked for by a call (Sh4::linked).
-To do next: that search in place, the floating point, host code entered in
-the middle of a block.
+looked for by a call (Sh4::linked): done in place it made the host code 80 %
+bigger and slower on the i3-6100U. The moves of the FPU are written for the
+FPSCR.SZ the block is seen to have (FSCHG followed), with a guard that calls
+the instruction when SZ is the other.
+To do next: blocks chained directly, the arithmetic of the FPU, host code
+entered in the middle of a block; the sound boards cost as much.
 
 Kept as the interpreter did, each one HEURISTIC, to make right one at a
 time once the scenes are compared again:

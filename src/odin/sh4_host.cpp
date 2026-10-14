@@ -332,6 +332,26 @@ Sh4Host::Jump Sh4Host::jump_if_word(uint32_t rank, bool set)
 	return jump_if(set ? 0x85 : 0x84);		/* jne, je */
 }
 
+Sh4Host::Jump Sh4Host::jump_if_bits(uint32_t rank, uint32_t mask, bool set)
+{
+	byte(0xF7);					/* test dword [the word], mask */
+	operand(0, rank);
+	word(mask);
+	return jump_if(set ? 0x85 : 0x84);		/* jnz, jz */
+}
+
+void Sh4Host::load_pair(uint32_t rank)
+{
+	bytes({0x48, 0x8B});				/* mov rax, [the words] */
+	operand(0, rank);
+}
+
+void Sh4Host::store_pair(uint32_t rank)
+{
+	bytes({0x48, 0x89});				/* mov [the words], rax */
+	operand(0, rank);
+}
+
 Sh4Host::Jump Sh4Host::jump_if_odd()
 {
 	bytes({0xA8, 0x01});				/* test al, 1 */
@@ -393,8 +413,11 @@ void Sh4Host::read(uint32_t size, Slow &slow)
 	case 2:
 		bytes({0x0F, 0xBF, 0x04, 0x02});	/* movsx eax, word [rdx + rax] */
 		break;
-	default:
+	case 4:
 		bytes({0x8B, 0x04, 0x02});		/* mov eax, [rdx + rax] */
+		break;
+	default:
+		bytes({0x48, 0x8B, 0x04, 0x02});	/* mov rax, [rdx + rax] */
 		break;
 	}
 }
@@ -411,6 +434,9 @@ void Sh4Host::write(uint32_t size, uint32_t rank, Slow &slow)
 	bytes({0xC6, 0x83});				/* mov byte [rbx + touched], 1 */
 	word(static_cast<uint32_t>(m_memory.touched));
 	byte(1);
+	if (size == 8) {
+		byte(0x48);				/* mov rcx, [the words] */
+	}
 	byte(0x8B);					/* mov ecx, [the word] */
 	operand(1, rank);
 	switch (size) {
@@ -420,8 +446,11 @@ void Sh4Host::write(uint32_t size, uint32_t rank, Slow &slow)
 	case 2:
 		bytes({0x66, 0x89, 0x0C, 0x02});	/* mov [rdx + rax], cx */
 		break;
-	default:
+	case 4:
 		bytes({0x89, 0x0C, 0x02});		/* mov [rdx + rax], ecx */
+		break;
+	default:
+		bytes({0x48, 0x89, 0x0C, 0x02});	/* mov [rdx + rax], rcx */
 		break;
 	}
 }
@@ -463,6 +492,9 @@ void Sh4Host::call_link(Link, uint32_t) {}
 void Sh4Host::call_to(uintptr_t) {}
 Sh4Host::Jump Sh4Host::jump_if_word(uint32_t, bool) { return Jump{0}; }
 Sh4Host::Jump Sh4Host::jump_if_odd() { return Jump{0}; }
+Sh4Host::Jump Sh4Host::jump_if_bits(uint32_t, uint32_t, bool) { return Jump{0}; }
+void Sh4Host::load_pair(uint32_t) {}
+void Sh4Host::store_pair(uint32_t) {}
 void Sh4Host::add_remaining(int32_t) {}
 void Sh4Host::loop_if_told() {}
 Sh4Host::Jump Sh4Host::jump_if_told() { return Jump{0}; }

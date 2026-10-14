@@ -303,7 +303,11 @@ private:
 		MovCA,				/* R0 to @Rn */
 		/* the branches: the test of T and where they lead to */
 		Bt, Bf, BtS, BfS,
-		Bra, Bsr, Rts, Jsr, Jmp, BraF, BsrF
+		Bra, Bsr, Rts, Jsr, Jmp, BraF, BsrF,
+		/* the moves of the FPU, for the FPSCR.SZ the block is seen to
+		 * have where they are, the long way otherwise */
+		FMov, FMovLoad, FMovStore, FMovIndexLoad, FMovIndexStore, FMovRestore, FMovSave,
+		FSChg		/* called; turns SZ over for what follows */
 	};
 	/* The long way of an access to the memory in host code: the call of
 	 * the instruction `op`, back at `back`. */
@@ -354,6 +358,7 @@ private:
 	bool translate_condition(const Sh4Op &op, Sh4Host::Jump &taken);
 	bool translate_jump(const Block &b, const Sh4Op &op, uint32_t i, std::vector<LongWay> &ways);
 	static uintptr_t linked(Sh4 &c, uint32_t pc);
+	void pairs_through(const Block &b, std::array<bool, BLOCK_MAX + 3> &pairs) const;
 	void wait_mark();
 	void wait_check();
 	void take_irq();
@@ -593,6 +598,7 @@ private:
 	std::unique_ptr<Sh4Host> m_host;
 	bool m_translate;
 	std::vector<LongWay> m_long_ways;	/* of the block being translated */
+	bool m_pairs;		/* FPSCR.SZ where the instruction being translated is */
 
 	bool m_hook_on;
 	uint32_t m_hook_addr;

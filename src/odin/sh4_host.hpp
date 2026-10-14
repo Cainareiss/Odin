@@ -66,9 +66,10 @@ public:
 		int32_t remaining;
 	};
 	using Link = uintptr_t (*)(Sh4 &, uint32_t);
-	/* The jumps of an access to the call that makes it the long way */
+	/* The jumps of an access to the call that makes it the long way: the
+	 * guard of a move of the FPU, no page, not aligned, code there */
 	struct Slow {
-		Jump jumps[3];
+		Jump jumps[4];
 		uint32_t count;
 	};
 	enum class Alu : uint8_t { Add, Sub, And, Or, Xor, Compare };
@@ -114,6 +115,12 @@ public:
 	Jump jump_if_word(uint32_t rank, bool set);
 	/* A jump bound later when the low bit of A is set. */
 	Jump jump_if_odd();
+	/* A jump bound later when the bits `mask` of the word are not all
+	 * clear, or when they are. */
+	Jump jump_if_bits(uint32_t rank, uint32_t mask, bool set);
+	/* Two words that follow each other, the first one the low half of A */
+	void load_pair(uint32_t rank);
+	void store_pair(uint32_t rank);
 	/* Adds to the cycles left in the slice. */
 	void add_remaining(int32_t value);
 
@@ -130,10 +137,11 @@ public:
 	void flag(If found, uint32_t rank);
 	/* A = `size` bytes at the address in A, extended by their sign, when
 	 * the memory there is plain and the address aligned; else on to the
-	 * long way. */
+	 * long way. Eight bytes fill A on 64 bits. */
 	void read(uint32_t size, Slow &slow);
 	/* The low `size` bytes of the word to the address in A, the same way;
-	 * the long way too where code compared in this epoch is. */
+	 * the long way too where code compared in this epoch is. Eight bytes
+	 * are that word and the next one. */
 	void write(uint32_t size, uint32_t rank, Slow &slow);
 	/* A = `size` bytes at that address of the host, with their sign. */
 	void read_at(const uint8_t *at, uint32_t size);
