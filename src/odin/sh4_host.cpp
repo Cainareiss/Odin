@@ -61,8 +61,14 @@ constexpr uint8_t FRAME = 8;
  * words are a byte of displacement away. */
 constexpr uint32_t MIDDLE = 128;
 
-/* The number of a register of the host (eax), and what x86 calls the steps. */
-constexpr uint8_t number(Sh4Host::Reg) { return 0; }
+/* x86: the registers a step names by number, the second byte of a jump on
+ * a condition (0F 8x), and the registers that hold the tables of pages. */
+constexpr uint8_t EAX = 0, ECX = 1;
+constexpr uint8_t JZ = 0x84, JNZ = 0x85;
+constexpr uint8_t READS = 5, WRITES = 6;	/* r13, r14 */
+
+/* The register of the host a step works in, and what x86 calls the steps. */
+constexpr uint8_t number(Sh4Host::Reg) { return EAX; }
 constexpr uint8_t ALU[] = { 0, 5, 4, 1, 6, 7 };			/* add, sub, and, or, xor, cmp */
 constexpr uint8_t SHIFT[] = { 4, 5, 7 };			/* shl, shr, sar */
 constexpr uint8_t SET[] = { 0x94, 0x93, 0x97, 0x9D, 0x9F };	/* sete, setae, seta, setge, setg */
@@ -329,7 +335,7 @@ Sh4Host::Jump Sh4Host::jump_if_word(uint32_t rank, bool set)
 	byte(0x83);					/* cmp dword [the word], 0 */
 	operand(7, rank);
 	byte(0);
-	return jump_if(set ? 0x85 : 0x84);		/* jne, je */
+	return jump_if(set ? JNZ : JZ);
 }
 
 Sh4Host::Jump Sh4Host::jump_if_bits(uint32_t rank, uint32_t mask, bool set)
@@ -337,7 +343,7 @@ Sh4Host::Jump Sh4Host::jump_if_bits(uint32_t rank, uint32_t mask, bool set)
 	byte(0xF7);					/* test dword [the word], mask */
 	operand(0, rank);
 	word(mask);
-	return jump_if(set ? 0x85 : 0x84);		/* jnz, jz */
+	return jump_if(set ? JNZ : JZ);
 }
 
 void Sh4Host::float_load(uint32_t f, uint32_t rank)
@@ -375,7 +381,7 @@ void Sh4Host::float_from(uint32_t f, uint32_t rank)
 void Sh4Host::float_to(uint32_t rank)
 {
 	bytes({0xF3, 0x0F, 0x2C});			/* cvttss2si eax, [the word] */
-	operand(0, rank);
+	operand(EAX, rank);
 }
 
 void Sh4Host::float_fused()
@@ -386,19 +392,19 @@ void Sh4Host::float_fused()
 void Sh4Host::load_pair(uint32_t rank)
 {
 	bytes({0x48, 0x8B});				/* mov rax, [the words] */
-	operand(0, rank);
+	operand(EAX, rank);
 }
 
 void Sh4Host::store_pair(uint32_t rank)
 {
 	bytes({0x48, 0x89});				/* mov [the words], rax */
-	operand(0, rank);
+	operand(EAX, rank);
 }
 
 Sh4Host::Jump Sh4Host::jump_if_odd()
 {
 	bytes({0xA8, 0x01});				/* test al, 1 */
-	return jump_if(0x85);				/* jnz */
+	return jump_if(JNZ);
 }
 
 void Sh4Host::add_remaining(int32_t value)
@@ -437,10 +443,10 @@ void Sh4Host::page(uint8_t table, uint32_t size, Slow &slow)
 	bytes({0xC1, 0xE9, static_cast<uint8_t>(m_memory.page_bits)});	/* shr ecx, page_bits */
 	bytes({0x49, 0x8B, 0x54, static_cast<uint8_t>(0xC8 | table), 0x00});	/* mov rdx, [table + rcx * 8] */
 	bytes({0x48, 0x85, 0xD2});			/* test rdx, rdx */
-	slow.jumps[slow.count++] = jump_if(0x84);	/* jz */
+	slow.jumps[slow.count++] = jump_if(JZ);
 	if (size > 1) {
 		bytes({0xA8, static_cast<uint8_t>(size - 1)});	/* test al, size - 1 */
-		slow.jumps[slow.count++] = jump_if(0x85);	/* jnz */
+		slow.jumps[slow.count++] = jump_if(JNZ);
 	}
 	byte(0x25);					/* and eax, the offset in the page */
 	word((1u << m_memory.page_bits) - 1);
@@ -448,7 +454,7 @@ void Sh4Host::page(uint8_t table, uint32_t size, Slow &slow)
 
 void Sh4Host::read(uint32_t size, Slow &slow)
 {
-	page(5, size, slow);				/* r13 */
+	page(READS, size, slow);
 	switch (size) {
 	case 1:
 		bytes({0x0F, 0xBE, 0x04, 0x02});	/* movsx eax, byte [rdx + rax] */
@@ -467,13 +473,13 @@ void Sh4Host::read(uint32_t size, Slow &slow)
 
 void Sh4Host::write(uint32_t size, uint32_t rank, Slow &slow)
 {
-	page(6, size, slow);				/* r14 */
+	page(WRITES, size, slow);
 	bytes({0x81, 0xE1});				/* and ecx, the physical pages */
 	word(m_memory.physical_pages - 1);
 	bytes({0x45, 0x8B, 0x44, 0x8F, 0x00});		/* mov r8d, [r15 + rcx * 4] */
 	bytes({0x44, 0x3B, 0x83});			/* cmp r8d, [rbx + epoch] */
 	word(static_cast<uint32_t>(m_memory.epoch));
-	slow.jumps[slow.count++] = jump_if(0x84);	/* je */
+	slow.jumps[slow.count++] = jump_if(JZ);
 	bytes({0xC6, 0x83});				/* mov byte [rbx + touched], 1 */
 	word(static_cast<uint32_t>(m_memory.touched));
 	byte(1);
@@ -481,7 +487,7 @@ void Sh4Host::write(uint32_t size, uint32_t rank, Slow &slow)
 		byte(0x48);				/* mov rcx, [the words] */
 	}
 	byte(0x8B);					/* mov ecx, [the word] */
-	operand(1, rank);
+	operand(ECX, rank);
 	switch (size) {
 	case 1:
 		bytes({0x88, 0x0C, 0x02});		/* mov [rdx + rax], cl */
