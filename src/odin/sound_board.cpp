@@ -41,7 +41,7 @@ constexpr uint32_t PAGE_RAM = 0x800000;
 
 SoundBoard::SoundBoard(std::span<uint8_t> ram, uint32_t clock_hz, std::function<void(bool)> main_irq)
 	: m_main_irq(std::move(main_irq)), m_clock_hz(clock_hz), m_sample_acc(0), m_silence_acc(0),
-	  m_arm_held(true), m_ram(ram.data()), m_arm(*this), m_aica(*this, ram)
+	  m_arm_held(true), m_ram(ram.data()), m_arm(*this), m_aica(*this, ram), m_source(nullptr)
 {
 	map_ram();
 	/* The registers read without side effects. */
@@ -122,6 +122,15 @@ SoundBoard::run(uint32_t cycles)
 	const uint64_t samples = m_sample_acc / m_clock_hz;
 	m_sample_acc -= samples * m_clock_hz;
 	for (uint64_t s = 0; s < samples; s++) {
+		if (m_source) {
+			const std::vector<int16_t> &in = m_source->m_samples;
+			const size_t at = m_samples.size();
+
+			if (at + 1 < in.size())
+				m_aica.set_external(in[at], in[at + 1]);
+			else
+				m_aica.set_external(0, 0);
+		}
 		m_aica.tick(1);
 		m_samples.push_back(m_aica.left());
 		m_samples.push_back(m_aica.right());

@@ -97,6 +97,9 @@ public:
 	/* The output since the last clear: left and right, 16 bits each,
 	 * 44 100 pairs a second */
 	const std::vector<int16_t> &samples() const { return m_samples; }
+	/* The board whose output comes to the external inputs (EXTS) of this
+	 * one, sample period for sample period: to be run first. */
+	void set_source(const SoundBoard *source) { m_source = source; }
 	void clear_samples() { m_samples.clear(); }
 
 	/* The ARM7 only counts the turns of a program that waits: this puts
@@ -140,6 +143,7 @@ private:
 	Arm7 m_arm;
 	Aica m_aica;
 	std::vector<int16_t> m_samples;
+	const SoundBoard *m_source;
 };
 
 } /* namespace odin */

@@ -292,6 +292,12 @@ Hikaru::Hikaru(const Game &game, const RomBoard::Config &rombd, bool verbose)
 
 	build_sound(MASTER);
 	build_sound(SLAVE);
+	/* HEURISTIC (notes MARKDOWN/30, section 3): the optional board also
+	 * feeds the external inputs of the AICA of the main board. Air Trix
+	 * and Virtual-On play their music on it and open EXTS on the main
+	 * board, and the Air Trix cabinet has the board but main speakers
+	 * only. */
+	m_sound[MASTER]->set_source(m_sound[SLAVE].get());
 	if (const char *path = std::getenv("ODIN_WAV")) {
 		m_wav = std::make_unique<WavFile>(path, Aica::SAMPLE_RATE, 2);
 		if (!m_wav->ok())
@@ -749,8 +755,8 @@ Hikaru::run_cycles(int cycles)
 
 	/* The two sound boards, unless their reset line is low */
 	if (m_mie_port_d & 0x20) {
-		m_sound[MASTER]->run(static_cast<uint32_t>(cycles));
 		m_sound[SLAVE]->run(static_cast<uint32_t>(cycles));
+		m_sound[MASTER]->run(static_cast<uint32_t>(cycles));
 	} else {
 		m_sound[MASTER]->silence(static_cast<uint32_t>(cycles));
 		m_sound[SLAVE]->silence(static_cast<uint32_t>(cycles));

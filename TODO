@@ -151,7 +151,12 @@ keep their values from one sample period to the next (Corlett; Flycast and
 MAME clear some), the memory is reached at the odd steps only (Flycast,
 MAME), TEMP and MEMS show their low byte at +0 and bits 23:8 at +4
 (Corlett; MAME the other way); an empty program is not run, only its
-counter moves (it would write nothing). The ARM7 runs on the 22.5792 MHz bus clock, eight times MAME's
+counter moves (it would write nothing).
+The optional sound board feeds the external inputs (EXTS) of the AICA of
+the main board, sample period for sample period (hikaru.cpp, HEURISTIC:
+Air Trix and Virtual-On open EXTS on the main board and play their music
+on the optional one, and the Air Trix cabinet has that board but main
+speakers only; no schematic says it). The ARM7 runs on the 22.5792 MHz bus clock, eight times MAME's
 figure: the SGNASCAR cabinet shows its sound driver ready within a frame
 of each reload, 20 MHz at least (HEURISTIC: no wait state). It costs a
 quarter of the speed: the driver sleeps most of the time, its wait could
