@@ -481,14 +481,17 @@ time once the scenes are compared again:
 - the FPU rounds to the nearest; the six games ask for rounding to zero
   (FPSCR.RM = 1) for nearly every instruction, and treat denormals as zero
   (FPSCR.DN), which is ignored too;
-- FTRC gives 0x80000000 out of range, the SH-4 saturates; FSCA, FSRRA, FIPR
-  and FTRV are computed by the host, the SH-4 has its own tables and error
+- FTRC gives 0x80000000 out of range, the SH-4 saturates; FSRRA, FIPR and
+  FTRV are computed by the host, the SH-4 has its own tables and error
   bounds; a NaN comes out as the host makes it, the SH-4 gives 0x7FBFFFFF;
-  the sine and the cosine of FSCA come from the C library of the host:
-  those of glibc and of MinGW differ by their last bit for 870 angles of
-  the 65 536, so a Windows build and a Linux build do not give the same
-  display lists (they do once given the same sines: 1 800 lists of three
-  games);
+- FROZEN FOR NOW, to be replaced by the table of a real SH-4 when a source
+  that can be trusted gives it: the sines and cosines of FSCA
+  (src/odin/sh4_fsca.cpp). They are the values the references were made
+  with, the single-precision sin and cos of glibc, written so that no host
+  library decides. Before that a Windows build and a Linux build did not
+  draw the same display lists (the library of MinGW differs by a last bit
+  for 1 724 of the 131 072 values); they now do, memories included (three
+  games, 900 frames each);
 - no FPU exception is raised (the slave of PHARRIER enables the division
   by zero);
 - the divider of the timers is taken to start with the reset, the
