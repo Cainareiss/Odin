@@ -681,6 +681,43 @@ void Sh4::run_block(const Block &b, uint32_t from)
 	ops->run(*this, ops);
 }
 
+/* The end put in a kept block where a slice ends, see run_cut(): the
+ * instructions from there on did not run, and the program resumes there. */
+void Sh4::op_cut(Sh4 &c, const Sh4Op *op)
+{
+	c.m_r.pc = op->imm;
+	c.m_remaining += c.m_blk->count - op->idx;
+}
+
+/* Runs the `limit` instructions the slice has cycles for of a kept block,
+ * from its instruction `from`, read: an end takes the place of the next
+ * one for the time of the run. A jump is not cut from its delay slot: the
+ * block then runs to its end, a cycle over. False, and nothing run, when
+ * the code is no longer what was decoded. */
+bool Sh4::run_cut(Block &b, uint32_t from, uint32_t limit)
+{
+	const uint32_t last = from + limit;
+	Sh4Op *const ops = m_ops.data() + (b.ops - m_ops.data());
+
+	if (b.checked != m_epoch && !same_code(b)) {
+		return false;
+	}
+	m_resumed = true;
+	m_blk = &b;
+	m_remaining -= static_cast<int32_t>(b.count - from);
+	if (last >= b.count || (ops[last].flags & OP_SLOT)) {
+		ops[from].run(*this, ops + from);
+		return true;
+	}
+
+	const Sh4Op kept = ops[last];
+
+	ops[last] = Sh4Op{op_cut, b.pc + 2 * last, 0, 0, static_cast<uint8_t>(last), 0};
+	ops[from].run(*this, ops + from);
+	ops[last] = kept;
+	return true;
+}
+
 /* The block the program is chained to was not compared in this epoch: it is
  * now, and taken as chain() or link() would have, when its code is still
  * what was decoded and the slice has the cycles for it. */
@@ -812,6 +849,10 @@ void Sh4::run_far(uint32_t pc, bool resumed)
 			}
 			near = m_blocks[rank - 1];
 			return run_block(near);
+		}
+		/* The slice ends in a kept block: it serves up to there. */
+		if (rank && limit < BLOCK_MAX && run_cut(m_blocks[rank - 1], from, limit)) {
+			return;
 		}
 	}
 

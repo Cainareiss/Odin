@@ -303,6 +303,7 @@ private:
 	uint16_t fetch(uint32_t pc);
 	void drop_blocks();
 	void run_block(const Block &b, uint32_t from = 0);
+	bool run_cut(Block &b, uint32_t from, uint32_t limit);
 	void chain_stale(uint32_t pc);
 	uintptr_t link_stale(uint32_t pc);
 	void translate(Block &b);
@@ -327,6 +328,7 @@ private:
 	static Kind decode(uint16_t inst, uint32_t pc, Sh4Op &op);
 	static Sh4Host::Call called(void (*run)(Sh4 &, const Sh4Op *));
 	static void op_next(Sh4 &c, const Sh4Op *op);
+	static void op_cut(Sh4 &c, const Sh4Op *op);
 	static void op_leave(Sh4 &c, const Sh4Op *op);
 	static void pair_delay_loop(const Sh4Op &before, uint32_t before_pc, Sh4Op &op);
 	static bool taken(const Sh4Op &op, uint32_t t);
