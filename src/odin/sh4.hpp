@@ -354,9 +354,10 @@ private:
 	void chain_stale(uint32_t pc);
 	uintptr_t link_stale(uint32_t pc);
 	void translate(Block &b);
-	bool translate_op(const Sh4Op *ops, uint32_t i, std::vector<LongWay> &ways);
+	/* `pairs`: FPSCR.SZ where the instruction is, as the block is seen to have it */
+	bool translate_op(const Sh4Op *ops, uint32_t i, std::vector<LongWay> &ways, bool pairs);
 	bool translate_inline(Inline form, const Sh4Op &op);
-	bool translate_access(Inline form, const Sh4Op &op, uint32_t i, std::vector<LongWay> &ways);
+	bool translate_access(Inline form, const Sh4Op &op, uint32_t i, std::vector<LongWay> &ways, bool pairs);
 	bool translate_condition(const Sh4Op &op, Sh4Host::Jump &taken);
 	bool translate_float(Inline form, const Sh4Op &op, uint32_t i, std::vector<LongWay> &ways);
 	bool translate_jump(const Block &b, const Sh4Op &op, uint32_t i, std::vector<LongWay> &ways);
@@ -601,7 +602,6 @@ private:
 	std::unique_ptr<Sh4Host> m_host;
 	bool m_translate;
 	std::vector<LongWay> m_long_ways;	/* of the block being translated */
-	bool m_pairs;		/* FPSCR.SZ where the instruction being translated is */
 
 	bool m_hook_on;
 	uint32_t m_hook_addr;
