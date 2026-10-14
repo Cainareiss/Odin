@@ -128,10 +128,18 @@ core running the dumped firmware (MAME wangmid, crp1231lr10_ver0110.ic2).
 Status byte st1 'V' that von4 tests on command 0x33 is not understood.
 
 AICA (src/odin/aica.cpp + arm7.cpp): control block, timers, interrupts,
-DMA, RTC and the ARM7 are in; still missing: the 64 slots and the DSP
-(sound output), the nested-FIQ question (does reading 0x2D00 drop the
-line?), and the HACK in hikaru_bus.cpp (page offset 0 reads 4 for
-Pharrier). The ARM7 runs on the 22.5792 MHz bus clock, eight times MAME's
+DMA, RTC and the ARM7 are in, and the voices (aica_voice.cpp: sampler,
+loops, envelope, the monitors the sound driver reads); still missing: the
+levels, the filter, the LFO, the DSP and the sound output, the nested-FIQ
+question (does reading 0x2D00 drop the line?), and the HACK in
+hikaru_bus.cpp (page offset 0 reads 4 for Pharrier). Voices, HEURISTIC
+(one source, notes MARKDOWN/30 section 5): the rate of an envelope step
+with KRS counts the octave twice and never lowers the rate (Flycast; MAME
+and Corlett count it once); LSA past LEA plays on up to LSA and stops
+(Flycast, tested on the hardware); the samples at CA and after it are read
+at once, without a pipeline (Flycast); the noise generator is shared by
+the slots (Corlett). The fast end of the envelope (rates 49 to 60, a
+millisecond or less) falls from 0.73 to 1.04 of the table of the manual. The ARM7 runs on the 22.5792 MHz bus clock, eight times MAME's
 figure: the SGNASCAR cabinet shows its sound driver ready within a frame
 of each reload, 20 MHz at least (HEURISTIC: no wait state). It costs a
 quarter of the speed: the driver sleeps most of the time, its wait could

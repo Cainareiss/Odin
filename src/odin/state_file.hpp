@@ -31,8 +31,10 @@ namespace odin {
  * out otherwise is refused instead of misread. */
 class StateFile {
 public:
-	/* 3: the command processor keeps its own state (antarctic.hpp) */
-	static constexpr unsigned VERSION = 4;
+	/* 3: the command processor keeps its own state (antarctic.hpp);
+	 * 4: the light numbers are kept in a light set;
+	 * 5: the sound chips keep their voices (aica_voice.hpp) */
+	static constexpr unsigned VERSION = 5;
 
 	enum class Mode {
 		SAVE,

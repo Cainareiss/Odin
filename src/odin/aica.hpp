@@ -26,13 +26,15 @@
 #include <cstdio>
 #include <span>
 
+#include "odin/aica_voice.hpp"
+
 namespace odin {
 
 /* Yamaha AICA: the control side of the chip. Register file, the three
  * timers, the two interrupt controllers (one towards the ARM7 inside the
  * chip, one towards the host CPU), the internal DMA, the ARM reset bit and
- * the RTC. Sound synthesis (64 slots, the DSP) is not here yet: the slot
- * and DSP registers are stored and read back only.
+ * the RTC; and the 64 voices (aica_voice.hpp). Their levels, the mix and
+ * the DSP are not here yet: those registers are stored and read back only.
  *
  * Register layout: 32-bit words, 16 significant bits each, byte offsets
  * 0x0000-0x7FFF. Sources: MAME src/devices/sound/aica.cpp (r16/w16 and
@@ -62,6 +64,9 @@ struct AicaState {
 	uint8_t rtc_we;
 	uint32_t rtc_seconds;
 	uint32_t rtc_samples;
+	std::array<AicaVoice::State, 64> voices;
+	uint32_t odometer;
+	uint32_t noise;
 };
 
 class Aica {
@@ -69,6 +74,8 @@ public:
 	static constexpr uint32_t RAM_SIZE = 8u << 20;
 	static constexpr uint32_t REG_SIZE = 0x8000;
 	static constexpr uint32_t SAMPLE_RATE = 44100;
+	static constexpr uint32_t SLOTS = 64;
+	static constexpr uint32_t SLOT_SIZE = 0x80;
 
 	Aica(AicaHost &host, std::span<uint8_t> ram);
 
@@ -162,6 +169,10 @@ private:
 	void wr16(uint32_t offset, uint16_t value);
 	uint16_t read_common(uint32_t offset);
 	void write_common(uint32_t offset, uint16_t value);
+	/* KYONEX: each slot starts or releases as its KYONB bit says */
+	void key_slots();
+	/* The slot MSLC names for the monitors */
+	AicaVoice &monitored();
 	void timer_write(uint32_t index);
 	void timer_tick(uint32_t index);
 	void raise(uint16_t sources);
@@ -189,6 +200,9 @@ private:
 	uint32_t m_rtc_seconds;
 	uint32_t m_rtc_samples;
 	uint32_t m_unknown_logged;
+	std::array<AicaVoice, SLOTS> m_voices;
+	uint32_t m_odometer;
+	uint32_t m_noise;
 };
 
 } /* namespace odin */

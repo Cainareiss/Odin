@@ -72,6 +72,10 @@ Aica::reset(bool power_on)
 	m_rtc_we = false;
 	m_rtc_set = false;
 	m_unknown_logged = 0;
+	for (AicaVoice &voice : m_voices)
+		voice.reset();
+	m_odometer = 0;
+	m_noise = 0;
 
 	if (power_on) {
 		m_rtc_seconds = rtc_of_host_clock();
@@ -107,7 +111,12 @@ Aica::read_reg(uint32_t offset, uint32_t size)
 	const uint32_t shift = (offset & 3) * 8;
 	uint32_t value;
 
-	if (word >= REG_CONTROL && word < 0x3000)
+	if (word == REG_EG_MONITOR)
+		/* Reading the high byte clears LP, as a whole read does (Flycast) */
+		value = monitored().monitor(size != 1 || (offset & 1) != 0);
+	else if (word == REG_CA_MONITOR)
+		value = monitored().position();
+	else if (word >= REG_CONTROL && word < 0x3000)
 		value = read_common(word);
 	else
 		value = rd16(word);
@@ -138,8 +147,13 @@ Aica::write_reg(uint32_t offset, uint32_t size, uint32_t value)
 	}
 
 	if (word < 0x2000) {
-		/* Slot registers: stored for the synthesis to come. */
-		wr16(word, merged);
+		/* KYONEX acts and is not kept (MAME, Flycast) */
+		if ((word & (SLOT_SIZE - 1)) == 0 && (merged & 0x8000)) {
+			wr16(word, static_cast<uint16_t>(merged & 0x7FFF));
+			key_slots();
+		} else {
+			wr16(word, merged);
+		}
 	} else if (word < 0x2048) {
 		/* EFSDL/EFPAN, 18 words. */
 		wr16(word, merged);
@@ -157,12 +171,6 @@ uint16_t
 Aica::read_common(uint32_t word)
 {
 	switch (word) {
-	case REG_EG_MONITOR:
-		/* No slot plays yet: envelope at the floor, release state,
-		 * no loop end (MAME UpdateRegR 0x10 with an inactive slot). */
-		return 0x7FF8;
-	case REG_CA_MONITOR:
-		return 0;
 	case REG_MCIPD:
 		return m_mcipd;
 	case REG_INT_LEVEL:
@@ -265,6 +273,25 @@ Aica::write_common(uint32_t word, uint16_t value)
 			wr16(word, value);
 		break;
 	}
+}
+
+/* -- voices -------------------------------------------------------------- */
+
+void
+Aica::key_slots()
+{
+	for (uint32_t slot = 0; slot < SLOTS; slot++) {
+		if (rd16(slot * SLOT_SIZE) & 0x4000)
+			m_voices[slot].key_on(&m_regs[slot * SLOT_SIZE], m_ram.data(), ram_mask(), m_noise);
+		else
+			m_voices[slot].key_off();
+	}
+}
+
+AicaVoice &
+Aica::monitored()
+{
+	return m_voices[(rd16(REG_MONITOR_SELECT) >> 8) & 0x3F];
 }
 
 /* -- wave memory --------------------------------------------------------- */
@@ -436,6 +463,12 @@ void
 Aica::tick(uint32_t n)
 {
 	for (uint32_t s = 0; s < n; s++) {
+		for (uint32_t slot = 0; slot < SLOTS; slot++) {
+			if (!m_voices[slot].silent())
+				m_voices[slot].step(&m_regs[slot * SLOT_SIZE], m_ram.data(), ram_mask(), m_odometer,
+				                    m_noise);
+		}
+		m_odometer++;
 		for (uint32_t t = 0; t < 3; t++) {
 			if (--m_timer_step[t] == 0) {
 				m_timer_step[t] = 1u << ((rd16(REG_TIMA + t * 4) >> 8) & 7);
@@ -499,6 +532,10 @@ Aica::save(AicaState &out) const
 	out.rtc_we = m_rtc_we;
 	out.rtc_seconds = m_rtc_seconds;
 	out.rtc_samples = m_rtc_samples;
+	for (uint32_t slot = 0; slot < SLOTS; slot++)
+		out.voices[slot] = m_voices[slot].state();
+	out.odometer = m_odometer;
+	out.noise = m_noise;
 }
 
 void
@@ -516,6 +553,10 @@ Aica::load(const AicaState &in)
 	m_rtc_we = in.rtc_we != 0;
 	m_rtc_seconds = in.rtc_seconds;
 	m_rtc_samples = in.rtc_samples;
+	for (uint32_t slot = 0; slot < SLOTS; slot++)
+		m_voices[slot].load(in.voices[slot]);
+	m_odometer = in.odometer;
+	m_noise = in.noise;
 	m_host.arm_reset(m_arm_reset);
 	m_host.arm_fiq(m_fiq);
 	m_host.main_irq(m_main_irq);

@@ -21,7 +21,12 @@
 /* Register-level checks of the AICA control block against documented
  * sequences: the KallistiOS ARM driver init (timers, SCILV, SCIEB), the
  * NetBSD ARM driver CPU-to-CPU interrupt, the MAME DMA and RTC models,
- * and the ARM reset bit as the AM2 driver upload uses it. */
+ * and the ARM reset bit as the AM2 driver upload uses it.
+ *
+ * Build: g++ -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
+ *            -O2 -I src tests/aica/aica_test.cpp src/odin/aica.cpp \
+ *            src/odin/aica_voice.cpp -o aica_test
+ */
 
 #include "odin/aica.hpp"
 
