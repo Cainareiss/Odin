@@ -83,7 +83,7 @@ Sh4::Sh4(Sh4Bus &bus, std::span<uint8_t> onchip, bool master, bool little_endian
 	  m_intc{}, m_dmac_running{}, m_tmu_running{}, m_tmu_counter{},
 	  m_cycles(0), m_at(0), m_tmu_time(0), m_slice(0), m_retime(false), m_clock_mode(clock_mode),
 	  m_pm_running{}, m_pm_counter{},
-	  m_instructions(0), m_skipped(0), m_decoded(0)
+	  m_instructions(0), m_skipped(0), m_decoded(0), m_dropped(0)
 {
 	if (m_onchip.size() != 0x10000) {
 		fatal("on-chip register image of the wrong size", static_cast<uint32_t>(m_onchip.size()));
@@ -869,6 +869,7 @@ void Sh4::run_far(uint32_t pc, bool resumed)
 
 	/* A block takes less than 4 * BLOCK_MAX places: m_ops never moves. */
 	if (m_ops.size() + 4 * BLOCK_MAX > OPS_MAX || (m_translate && !m_host->room())) {
+		m_dropped++;
 		drop_blocks();
 	}
 	if (!decode_block(pc, limit, b, m_ops)) {

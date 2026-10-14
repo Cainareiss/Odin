@@ -335,9 +335,9 @@ Hikaru::~Hikaru()
 			std::fclose(m_sh_trace[which]);
 		if (m_stats)
 			std::fprintf(stderr, "sh4 %c: %" PRIu64 " instructions run, %" PRIu64 " cycles skipped, %zu blocks"
-			             " kept of %" PRIu64 " decoded\n", which == MASTER ? 'M' : 'S',
-			             m_sh[which]->instructions(), m_sh[which]->skipped(), m_sh[which]->blocks(),
-			             m_sh[which]->blocks_decoded());
+			             " kept of %" PRIu64 " decoded, all dropped %" PRIu64 " times\n",
+			             which == MASTER ? 'M' : 'S', m_sh[which]->instructions(), m_sh[which]->skipped(),
+			             m_sh[which]->blocks(), m_sh[which]->blocks_decoded(), m_sh[which]->blocks_dropped());
 		if (m_stats && m_sh[which]->translates())
 			std::fprintf(stderr, "sh4 %c: host code of %u KB, %" PRIu64 " calls out of direct reach\n",
 			             which == MASTER ? 'M' : 'S', m_sh[which]->host_bytes() / 1024,

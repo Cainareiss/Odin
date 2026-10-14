@@ -207,9 +207,11 @@ public:
 	/* Counts since the reset, for the measurements. */
 	uint64_t instructions() const { return m_instructions; }
 	uint64_t skipped() const { return m_skipped; }
-	/* The blocks kept now, and all those decoded to be kept. */
+	/* The blocks kept now, all those decoded to be kept, and the times
+	 * they were all dropped for lack of room. */
 	size_t blocks() const { return m_blocks.size(); }
 	uint64_t blocks_decoded() const { return m_decoded; }
+	uint64_t blocks_dropped() const { return m_dropped; }
 	uint32_t host_bytes() const { return m_host ? m_host->used() : 0; }
 	uint64_t host_far_calls() const { return m_host ? m_host->far_calls() : 0; }
 
@@ -581,7 +583,7 @@ private:
 	bool m_pm_running[2];
 	uint64_t m_pm_counter[2];
 
-	uint64_t m_instructions, m_skipped, m_decoded;
+	uint64_t m_instructions, m_skipped, m_decoded, m_dropped;
 };
 
 } /* namespace odin */
