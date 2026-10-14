@@ -49,6 +49,23 @@ public:
 	/* The register of the host a step works in. Nothing stays in it
 	 * from one instruction of the CPU to the next. */
 	enum class Reg : uint8_t { A };
+	/* Where host code finds the plain memory of the CPU, see Sh4::read()
+	 * and Sh4::write(): the page of an address to read and to write
+	 * (nullptr: not plain), the epoch each physical page of code was last
+	 * compared in, and, from the CPU, where its epoch and the flag of a
+	 * store are. */
+	struct Memory {
+		const uint8_t *const *reads;
+		uint8_t *const *writes;
+		const uint32_t *code_epochs;
+		uint32_t page_bits, physical_pages;
+		int32_t epoch, touched;
+	};
+	/* The jumps of an access to the call that makes it the long way */
+	struct Slow {
+		Jump jumps[3];
+		uint32_t count;
+	};
 	enum class Alu : uint8_t { Add, Sub, And, Or, Xor, Compare };
 	enum class Shift : uint8_t { Left, Right, RightSigned };
 	/* What the last Sub, And or Compare found of its register against
@@ -58,7 +75,7 @@ public:
 
 	/* `words`: the registers of the CPU, 32 bits each, which the steps
 	 * below name by their rank. */
-	explicit Sh4Host(uint32_t *words);
+	Sh4Host(uint32_t *words, const Memory &memory);
 	~Sh4Host();
 	Sh4Host(const Sh4Host &) = delete;
 	Sh4Host &operator=(const Sh4Host &) = delete;
@@ -97,6 +114,19 @@ public:
 	/* The word takes 1 or 0. Nothing but load() and store() may come
 	 * between the step that found it and this one. Uses the register A. */
 	void flag(If found, uint32_t rank);
+	/* A = `size` bytes at the address in A, extended by their sign, when
+	 * the memory there is plain and the address aligned; else on to the
+	 * long way. */
+	void read(uint32_t size, Slow &slow);
+	/* The low `size` bytes of the word to the address in A, the same way;
+	 * the long way too where code compared in this epoch is. */
+	void write(uint32_t size, uint32_t rank, Slow &slow);
+	/* A = `size` bytes at that address of the host, with their sign. */
+	void read_at(const uint8_t *at, uint32_t size);
+	/* Where the block is, and a jump back there. */
+	uint32_t here() const { return m_used; }
+	void jump_back(uint32_t place);
+	void bind(const Slow &slow);
 
 	/* The host code of a block, for an instruction to return it. */
 	uintptr_t address(uint32_t place) const { return reinterpret_cast<uintptr_t>(m_code) + place; }
@@ -104,10 +134,10 @@ public:
 	void run(Sh4 &cpu, uint32_t place) const { m_enter(&cpu, m_code + place); }
 
 private:
-	/* Bytes of the longest block: BLOCK_MAX instructions and a delay
-	 * slot, each a call and a test or fewer bytes in place, and as many
-	 * ends as branches. */
-	static constexpr uint32_t LONGEST = 8192;
+	/* Bytes of the longest block: BLOCK_MAX instructions and as many
+	 * delay slots, each a call and a test or an access to the memory
+	 * with its long way, and as many ends as branches. */
+	static constexpr uint32_t LONGEST = 16384;
 
 	void byte(uint8_t value) { m_code[m_used++] = value; }
 	void bytes(std::initializer_list<uint8_t> values);
@@ -115,9 +145,12 @@ private:
 	void quad(uint64_t value);
 	void jump_to(uint32_t place);
 	void operand(uint8_t reg, uint32_t rank);
+	void page(uint8_t table, uint32_t size, Slow &slow);
+	Jump jump_if(uint8_t condition);
 
 	uint8_t *m_code;
 	uint32_t *m_words;
+	Memory m_memory;
 	uint32_t m_size, m_used;
 	uint32_t m_leave;	/* place of the way back to the run loop */
 	uint64_t m_far_calls;

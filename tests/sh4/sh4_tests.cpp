@@ -92,6 +92,7 @@ public:
 	std::vector<Access> device, unanswered_log;
 	std::vector<uint32_t> seen;	/* what a test notes */
 	unsigned ram_by_bus = 0;	/* accesses to the RAM the bus took */
+	uint32_t rom = 0;		/* a page of the RAM whose writes the bus drops */
 	uint64_t device_value = 0;
 	uint16_t pins_in = 0, pins_out = 0;
 	unsigned hooks = 0;
@@ -137,6 +138,9 @@ public:
 	}
 	bool write(uint32_t addr, uint32_t size, uint64_t value) override
 	{
+		if (rom && (addr & ~0xFFFu) == (rom & 0x1FFFFFFF)) {
+			return true;
+		}
 		if (addr >= (RAM & 0x1FFFFFFF) && addr + size <= (RAM & 0x1FFFFFFF) + ram.size()) {
 			std::memcpy(&ram[addr - (RAM & 0x1FFFFFFF)], &value, size);
 			ram_by_bus++;
@@ -2028,6 +2032,232 @@ void test_host_in_place()
 	}
 }
 
+/* The accesses to the memory host code makes itself: each of them at the
+ * four places of test_host_in_place(), at an address of plain memory, at
+ * one that is not aligned, at the device, where nothing answers and, for a
+ * store, over the next instruction of its own block: read and as host
+ * code, the same registers, memory and accesses after. */
+void test_host_memory()
+{
+	g_test = "host code, memory";
+	struct Form {
+		uint16_t code;
+		char operands;	/* M: Rn and Rm; D: Rn, Rm and a displacement; d: Rm and a displacement; N: Rn; G and P: a byte */
+		uint32_t size;
+		bool write;
+		char base;	/* the register of the address: n, m, 0 for R0, G for GBR, P for PC */
+		bool index;	/* plus R0 */
+		int32_t step;	/* to the base: before a write, after a read */
+		const char *name;
+	};
+	static const Form forms[] = {
+		{0x6002, 'M', 4, false, 'm', false, 0, "mov.l @Rm,Rn"}, {0x6001, 'M', 2, false, 'm', false, 0, "mov.w @Rm,Rn"},
+		{0x6000, 'M', 1, false, 'm', false, 0, "mov.b @Rm,Rn"},
+		{0x5000, 'D', 4, false, 'm', false, 0, "mov.l @(disp,Rm),Rn"},
+		{0x8500, 'd', 2, false, 'm', false, 0, "mov.w @(disp,Rm),R0"}, {0x8400, 'd', 1, false, 'm', false, 0, "mov.b @(disp,Rm),R0"},
+		{0x000E, 'M', 4, false, 'm', true, 0, "mov.l @(R0,Rm),Rn"}, {0x000D, 'M', 2, false, 'm', true, 0, "mov.w @(R0,Rm),Rn"},
+		{0x000C, 'M', 1, false, 'm', true, 0, "mov.b @(R0,Rm),Rn"},
+		{0x6006, 'M', 4, false, 'm', false, 4, "mov.l @Rm+,Rn"}, {0x6005, 'M', 2, false, 'm', false, 2, "mov.w @Rm+,Rn"},
+		{0x6004, 'M', 1, false, 'm', false, 1, "mov.b @Rm+,Rn"},
+		{0xC600, 'G', 4, false, 'G', false, 0, "mov.l @(disp,GBR),R0"}, {0xC500, 'G', 2, false, 'G', false, 0, "mov.w @(disp,GBR),R0"},
+		{0xC400, 'G', 1, false, 'G', false, 0, "mov.b @(disp,GBR),R0"},
+		{0xD010, 'P', 4, false, 'P', false, 0, "mov.l @(disp,PC),Rn"}, {0x9028, 'P', 2, false, 'P', false, 0, "mov.w @(disp,PC),Rn"},
+		{0x4026, 'N', 4, false, 'n', false, 4, "lds.l @Rn+,PR"},
+		{0x2002, 'M', 4, true, 'n', false, 0, "mov.l Rm,@Rn"}, {0x2001, 'M', 2, true, 'n', false, 0, "mov.w Rm,@Rn"},
+		{0x2000, 'M', 1, true, 'n', false, 0, "mov.b Rm,@Rn"},
+		{0x1000, 'D', 4, true, 'n', false, 0, "mov.l Rm,@(disp,Rn)"},
+		{0x8100, 'd', 2, true, 'm', false, 0, "mov.w R0,@(disp,Rm)"}, {0x8000, 'd', 1, true, 'm', false, 0, "mov.b R0,@(disp,Rm)"},
+		{0x0006, 'M', 4, true, 'n', true, 0, "mov.l Rm,@(R0,Rn)"}, {0x0005, 'M', 2, true, 'n', true, 0, "mov.w Rm,@(R0,Rn)"},
+		{0x0004, 'M', 1, true, 'n', true, 0, "mov.b Rm,@(R0,Rn)"},
+		{0x2006, 'M', 4, true, 'n', false, -4, "mov.l Rm,@-Rn"}, {0x2005, 'M', 2, true, 'n', false, -2, "mov.w Rm,@-Rn"},
+		{0x2004, 'M', 1, true, 'n', false, -1, "mov.b Rm,@-Rn"},
+		{0xC200, 'G', 4, true, 'G', false, 0, "mov.l R0,@(disp,GBR)"}, {0xC100, 'G', 2, true, 'G', false, 0, "mov.w R0,@(disp,GBR)"},
+		{0xC000, 'G', 1, true, 'G', false, 0, "mov.b R0,@(disp,GBR)"},
+		{0x4022, 'N', 4, true, 'n', false, -4, "sts.l PR,@-Rn"},
+		{0x00C3, 'N', 4, true, 'n', false, 0, "movca.l R0,@Rn"},
+	};
+	static const uint8_t pairs[][2] = {{1, 2}, {2, 1}, {1, 1}, {0, 2}, {2, 0}, {0, 0}};
+	static const uint8_t displacements[] = {0, 1, 15}, singles[] = {1, 0, 2}, gbr[] = {0, 1, 255};
+	/* where: plain memory, not aligned, the device, nothing, plain memory
+	 * through P2, over the code, over the code through P1 (a byte or a
+	 * word that makes a NOP or MOVT R9, a long two NOP) */
+	static const uint32_t targets[] = {DATA + 0x100, DATA + 0x101, DEVICE + 0x40, 0x08000000,
+	                                   (DATA + 0x100) | 0xA0000000, CODE, CODE | 0x80000000};
+	Pair p;
+
+	if (!p.host.cpu.translates()) {
+		std::printf("host code: none on this machine, not tested\n");
+		return;
+	}
+	const Sh4State start = p.read.state();
+	for (const Form &form : forms) {
+		struct Code {
+			uint16_t code;
+			uint32_t n, m, disp;
+		};
+		std::vector<Code> codes;
+		unsigned runs = 0;
+
+		p.differ = 0;
+		switch (form.operands) {
+		case 'M':
+			for (const auto &pair : pairs) {
+				codes.push_back({static_cast<uint16_t>(form.code | (pair[0] << 8) | (pair[1] << 4)), pair[0], pair[1], 0});
+			}
+			break;
+		case 'D':
+			for (const auto &pair : pairs) {
+				for (uint8_t d : displacements) {
+					codes.push_back({static_cast<uint16_t>(form.code | (pair[0] << 8) | (pair[1] << 4) | d),
+					                 pair[0], pair[1], d * form.size});
+				}
+			}
+			break;
+		case 'd':
+			for (uint8_t m : singles) {
+				for (uint8_t d : displacements) {
+					codes.push_back({static_cast<uint16_t>(form.code | (m << 4) | d), 0, m, d * form.size});
+				}
+			}
+			break;
+		case 'N':
+			for (uint8_t n : singles) {
+				codes.push_back({static_cast<uint16_t>(form.code | (n << 8)), n, 0, 0});
+			}
+			break;
+		case 'G':
+			for (uint8_t d : gbr) {
+				codes.push_back({static_cast<uint16_t>(form.code | d), 0, 0, d * form.size});
+			}
+			break;
+		default:
+			for (uint8_t n : singles) {
+				codes.push_back({static_cast<uint16_t>(form.code | (n << 8)), n, 0, 0});
+			}
+			break;
+		}
+		for (const Code &c : codes) {
+			/* A read relative to PC is not allowed in a delay slot. */
+			const uint16_t slot = form.base == 'P' ? NOP : c.code;
+			const uint32_t dest = form.operands == 'd' || form.operands == 'G' ? 0 : c.n;
+			const auto keep = [dest](uint32_t to) { return static_cast<uint16_t>(0x6003 | (to << 8) | (dest << 4)); };
+			const uint32_t base = form.base == 'n' ? c.n : form.base == 'm' ? c.m : 0;
+			const uint32_t data = form.operands == 'M' || form.operands == 'D' ? (form.write ? c.m : c.n) : 0;
+
+			for (uint32_t target : targets) {
+				const bool code = (target & 0x1FFFFFFF) == (CODE & 0x1FFFFFFF);
+
+				if (code) {
+					target += form.size == 1 ? 3 : form.size == 2 ? 2 : 4;
+				}
+				uint32_t at = target - c.disp - (form.step < 0 ? static_cast<uint32_t>(form.step) : 0);
+
+				if (form.base == 'P' && target != targets[0]) {
+					continue;
+				}
+				if ((code && (!form.write || data == base || (form.index && data == 0))) ||
+				    (target == DATA + 0x101 && form.size == 1)) {
+					continue;
+				}
+				if (form.index) {
+					if (base == 0) {
+						if (at & 1) {
+							continue;
+						}
+						at /= 2;
+					} else {
+						at -= 0x40;
+					}
+				}
+				/* What a write stores: an address of plain memory of its own,
+				 * for an access made at the wrong register, or over the code
+				 * words that make valid instructions. */
+				for (uint32_t value : {DATA + 0x1C0, 0x00090009u}) {
+					if (code != (value == 0x00090009)) {
+						continue;
+					}
+					/* the access / movt r8 / mov rn, r4 / bra / its slot / movt r9 / mov rn, r5 /
+					 * sett / bt/s / its slot / movt r10 / mov rn, r6 / clrt / bt/s / the access /
+					 * movt r11 / mov rn, r7 / bra itself; then words of every sign for PC */
+					p.each([&](Machine &mc) {
+						mc.code(CODE, {c.code, 0x0829, keep(4), 0xA000, slot, 0x0929, keep(5), 0x0018, 0x8D00,
+						               slot, 0x0A29, keep(6), 0x0008, 0x8D00, c.code, 0x0B29, keep(7), 0xAFFE, NOP});
+						for (uint32_t i = 0; i < 0x200; i++) {
+							mc.ram[CODE - RAM + 0x40 + i] = static_cast<uint8_t>(0x70 + 3 * i);
+							mc.ram[DATA - RAM + 0xF0 + i] = static_cast<uint8_t>(0x80 + 5 * i);
+						}
+						mc.device.clear();
+						mc.unanswered_log.clear();
+						mc.device_value = 0xC0C1C2C3;
+					});
+					Sh4State st = start;
+
+					for (uint32_t i = 0; i < 16; i++) {
+						st.r[i] = 0x5EED0000 + 0x1111 * i;
+					}
+					/* What a read is to replace: the same, from the wrong register. */
+					st.r[data] = form.write ? value : DATA + 0x180;
+					if (form.index) {
+						st.r[0] = base == 0 ? at : 0x40;
+					}
+					if (form.base == 'G') {
+						st.gbr = at;
+					} else if (form.base != 'P') {
+						st.r[base] = at;
+					}
+					st.pr = value;
+					p.each([&st](Machine &mc) { mc.cpu.load(st); });
+					p.slice(200);
+					runs++;
+				}
+				if (p.differ) {
+					break;
+				}
+			}
+			if (p.differ) {
+				break;
+			}
+		}
+		check(runs > 0 && p.differ == 0, std::string(form.name) + ": the same read and in place");
+	}
+	{
+		/* A loop that stores the same word over and over is run in
+		 * full, not counted as a wait: mov.l r1, @r2 / bra / nop */
+		Pair loop;
+
+		loop.each([](Machine &mc) {
+			mc.code(CODE, {0x2212, 0xAFFD, NOP});
+			Sh4State st = mc.state();
+			st.r[1] = 0x1234;
+			st.r[2] = DATA + 0x10;
+			mc.cpu.load(st);
+		});
+		loop.slices_of(20000, 500, 9);
+		loop.verdict("a loop that only stores");
+		eq("turns counted without being run", loop.host.cpu.skipped(), 0);
+	}
+	{
+		/* A page read in place whose writes go to the bus, which drops
+		 * them: mov.l r1, @r2 / mov.l @r2, r3 / bra / nop */
+		Pair rom;
+
+		rom.each([](Machine &mc) {
+			mc.rom = DATA + 0x2000;
+			mc.cpu.map_page((DATA + 0x2000) >> Sh4::PAGE_BITS & 0x1FFFF, &mc.ram[DATA + 0x2000 - RAM], nullptr);
+			mc.put32(DATA + 0x2010, 0x0BADF00D);
+			mc.code(CODE, {0x2212, 0x6322, 0xAFFC, NOP});
+			Sh4State st = mc.state();
+			st.r[1] = 0x1234;
+			st.r[2] = DATA + 0x2010;
+			mc.cpu.load(st);
+		});
+		rom.slices_of(2000, 300, 5);
+		rom.verdict("a page written through the bus");
+		eq("what the page holds", rom.host.get32(DATA + 0x2010), 0x0BADF00D);
+		eq("what was read from it", rom.host.state().r[3], 0x0BADF00D);
+	}
+}
+
 /* Store queues, QACR0 and QACR1 on the area of the RAM: a store there lands
  * in the RAM at once. Where the RAM is plain it is written in place and the
  * block goes on; over code compared since, the store goes the way of the
@@ -2237,6 +2467,7 @@ int main(int argc, char **argv)
 	test_save_load();
 	test_host_code();
 	test_host_in_place();
+	test_host_memory();
 	test_store_queues();
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures == 0 ? 0 : 1;

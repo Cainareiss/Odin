@@ -781,7 +781,13 @@ uintptr_t Sh4::link_stale(uint32_t pc)
 void Sh4::set_translate(bool on)
 {
 	if (on && !m_host) {
-		m_host = std::make_unique<Sh4Host>(m_r.r);
+		const auto from_cpu = [this](const void *at) {
+			return static_cast<int32_t>(static_cast<const uint8_t *>(at) - reinterpret_cast<const uint8_t *>(this));
+		};
+		const Sh4Host::Memory memory{m_rd.data(), m_wr.data(), m_code_epoch.data(), PAGE_BITS, PHYSICAL_PAGES,
+		                             from_cpu(&m_epoch), from_cpu(&m_touched)};
+
+		m_host = std::make_unique<Sh4Host>(m_r.r, memory);
 	}
 	m_translate = on && m_host->usable();
 	drop_blocks();
@@ -995,6 +1001,121 @@ bool Sh4::translate_inline(Inline form, const Sh4Op &op)
 		break;
 	case Inline::Nop:
 		break;
+	default:
+		return false;
+	}
+	return true;
+}
+
+/* An access to the memory, the instruction `i` of the block: in place when
+ * the memory is plain, else the long way, a call of the instruction written
+ * behind the block. False, and nothing written, for an instruction that is
+ * not such an access, or a read relative to PC from memory that is not
+ * plain: that one is called. */
+bool Sh4::translate_access(Inline form, const Sh4Op &op, uint32_t i, std::vector<LongWay> &ways)
+{
+	using Alu = Sh4Host::Alu;
+	constexpr uint32_t PR = offsetof(Regs, pr) / 4, GBR = offsetof(Regs, gbr) / 4, NONE = ~0u;
+	constexpr Sh4Host::Reg A = Sh4Host::Reg::A;
+	Sh4Host &host = *m_host;
+	const uint32_t n = op.n, m = op.m;
+	/* The address, the word `base` + `disp` + the word `index`; `step`
+	 * added to `base` after a read into another word or after a write. */
+	struct Access {
+		uint32_t size;
+		uint32_t base, disp, index;
+		uint32_t reg;
+		int32_t step;
+	};
+	const auto read = [&](const Access &a) {
+		Sh4Host::Slow slow{};
+
+		host.load(A, a.base);
+		if (a.index != NONE) {
+			host.alu(Alu::Add, A, a.index);
+		}
+		if (a.disp) {
+			host.alu_value(Alu::Add, A, a.disp);
+		}
+		host.read(a.size, slow);
+		host.store(a.reg, A);
+		if (a.step && a.reg != a.base) {
+			host.load(A, a.base);
+			host.alu_value(Alu::Add, A, static_cast<uint32_t>(a.step));
+			host.store(a.base, A);
+		}
+		ways.push_back(LongWay{slow, i, host.here()});
+	};
+	const auto write = [&](const Access &a) {
+		Sh4Host::Slow slow{};
+
+		host.load(A, a.base);
+		if (a.index != NONE) {
+			host.alu(Alu::Add, A, a.index);
+		}
+		if (a.disp) {
+			host.alu_value(Alu::Add, A, a.disp);
+		}
+		host.write(a.size, a.reg, slow);
+		if (a.step) {
+			host.load(A, a.base);
+			host.alu_value(Alu::Add, A, static_cast<uint32_t>(a.step));
+			host.store(a.base, A);
+		}
+		ways.push_back(LongWay{slow, i, host.here()});
+	};
+	/* A read relative to PC: the page is known now, the value is read
+	 * when the block runs. */
+	const auto read_pc = [&](uint32_t size) {
+		const uint8_t *page = m_rd[op.imm >> PAGE_BITS];
+
+		if (!page || (op.imm & (size - 1))) {
+			return false;
+		}
+		host.read_at(page + (op.imm & (PAGE_SIZE - 1)), size);
+		host.store(n, A);
+		return true;
+	};
+	const auto pre = [](uint32_t size) { return static_cast<uint32_t>(-static_cast<int32_t>(size)); };
+
+	switch (form) {
+	case Inline::MovLL: read({4, m, 0, NONE, n, 0}); break;
+	case Inline::MovWL: read({2, m, 0, NONE, n, 0}); break;
+	case Inline::MovBL: read({1, m, 0, NONE, n, 0}); break;
+	case Inline::MovLL4: read({4, m, op.imm, NONE, n, 0}); break;
+	case Inline::MovWL4: read({2, m, op.imm, NONE, 0, 0}); break;
+	case Inline::MovBL4: read({1, m, op.imm, NONE, 0, 0}); break;
+	case Inline::MovLL0: read({4, m, 0, 0, n, 0}); break;
+	case Inline::MovWL0: read({2, m, 0, 0, n, 0}); break;
+	case Inline::MovBL0: read({1, m, 0, 0, n, 0}); break;
+	case Inline::MovLP: read({4, m, 0, NONE, n, 4}); break;
+	case Inline::MovWP: read({2, m, 0, NONE, n, 2}); break;
+	case Inline::MovBP: read({1, m, 0, NONE, n, 1}); break;
+	case Inline::MovLLG: read({4, GBR, op.imm, NONE, 0, 0}); break;
+	case Inline::MovWLG: read({2, GBR, op.imm, NONE, 0, 0}); break;
+	case Inline::MovBLG: read({1, GBR, op.imm, NONE, 0, 0}); break;
+	case Inline::MovLI: return read_pc(4);
+	case Inline::MovWI: return read_pc(2);
+	case Inline::LdsMPr: read({4, n, 0, NONE, PR, 4}); break;
+	case Inline::MovLS: write({4, n, 0, NONE, m, 0}); break;
+	case Inline::MovWS: write({2, n, 0, NONE, m, 0}); break;
+	case Inline::MovBS: write({1, n, 0, NONE, m, 0}); break;
+	case Inline::MovLS4: write({4, n, op.imm, NONE, m, 0}); break;
+	case Inline::MovWS4: write({2, m, op.imm, NONE, 0, 0}); break;
+	case Inline::MovBS4: write({1, m, op.imm, NONE, 0, 0}); break;
+	case Inline::MovLS0: write({4, n, 0, 0, m, 0}); break;
+	case Inline::MovWS0: write({2, n, 0, 0, m, 0}); break;
+	case Inline::MovBS0: write({1, n, 0, 0, m, 0}); break;
+	case Inline::MovLM: write({4, n, pre(4), NONE, m, -4}); break;
+	case Inline::MovWM: write({2, n, pre(2), NONE, m, -2}); break;
+	case Inline::MovBM: write({1, n, pre(1), NONE, m, -1}); break;
+	case Inline::MovLSG: write({4, GBR, op.imm, NONE, 0, 0}); break;
+	case Inline::MovWSG: write({2, GBR, op.imm, NONE, 0, 0}); break;
+	case Inline::MovBSG: write({1, GBR, op.imm, NONE, 0, 0}); break;
+	case Inline::StsMPr: write({4, n, pre(4), NONE, PR, -4}); break;
+	case Inline::MovCA: write({4, n, 0, NONE, 0, 0}); break;
+	default:
+		return false;
 	}
 	return true;
 }
@@ -1002,9 +1123,11 @@ bool Sh4::translate_inline(Inline form, const Sh4Op &op)
 /* The instruction `i` of a block as host code: its steps in place when it
  * has some, and true; else a call, and false: what the call returns is for
  * the block to look at. */
-bool Sh4::translate_op(const Sh4Op *ops, uint32_t i)
+bool Sh4::translate_op(const Sh4Op *ops, uint32_t i, std::vector<LongWay> &ways)
 {
-	if (translate_inline(inlined(ops[i].run), ops[i])) {
+	const Inline form = inlined(ops[i].run);
+
+	if (translate_inline(form, ops[i]) || translate_access(form, ops[i], i, ways)) {
 		return true;
 	}
 	m_host->call(called(ops[i].run), i);
@@ -1026,15 +1149,17 @@ void Sh4::translate(Block &b)
 	uint32_t num_taken = 0;
 	const Sh4Op *ops = b.ops;
 	Sh4Host &host = *m_host;
+	std::vector<LongWay> &ways = m_long_ways;
 	bool jumped = false;
 
+	ways.clear();
 	b.host = host.begin(ops);
 	for (uint32_t i = 0; i < b.count && !jumped; i++) {
-		if (translate_op(ops, i)) {
+		if (translate_op(ops, i, ways)) {
 			continue;
 		}
 		if (ops[i].flags & OP_JUMP) {
-			translate_op(ops, i + 1);
+			translate_op(ops, i + 1, ways);
 			host.call(called(ops[i + 2].run), i + 2);
 			host.go_where_told();
 			jumped = true;
@@ -1055,10 +1180,20 @@ void Sh4::translate(Block &b)
 		if (ops[i].flags & OP_DELAYED) {
 			const uint32_t slot = i + ops[i].m;
 
-			translate_op(ops, slot);
+			translate_op(ops, slot, ways);
 			host.call(called(ops[slot + 1].run), slot + 1);
 		}
 		host.go_where_told();
+	}
+	/* The long ways: the instruction called, the block left if it says
+	 * so, but in a delay slot, where the end that follows sees to it. */
+	for (const LongWay &way : ways) {
+		host.bind(way.slow);
+		host.call(called(ops[way.op].run), way.op);
+		if (!(ops[way.op].flags & OP_SLOT)) {
+			host.loop_if_told();
+		}
+		host.jump_back(way.back);
 	}
 }
 

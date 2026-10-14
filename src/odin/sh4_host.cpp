@@ -46,13 +46,13 @@ constexpr uint8_t ARG0_FROM_RBX = 0xD9;		/* mov rcx, rbx */
 constexpr uint8_t ARG1_LEA = 0x14;		/* lea rdx, [r12 + ...] */
 constexpr uint8_t RBX_FROM_ARG0 = 0xCB;		/* mov rbx, rcx */
 constexpr uint8_t JUMP_ARG1 = 0xE2;		/* jmp rdx */
-constexpr uint8_t FRAME = 32;
+constexpr uint8_t FRAME = 40;
 #else
 constexpr uint8_t ARG0_FROM_RBX = 0xDF;		/* mov rdi, rbx */
 constexpr uint8_t ARG1_LEA = 0x34;		/* lea rsi, [r12 + ...] */
 constexpr uint8_t RBX_FROM_ARG0 = 0xFB;		/* mov rbx, rdi */
 constexpr uint8_t JUMP_ARG1 = 0xE6;		/* jmp rsi */
-constexpr uint8_t FRAME = 0;
+constexpr uint8_t FRAME = 8;
 #endif
 
 /* rbp points this many bytes into the registers of the CPU: the first 64
@@ -118,8 +118,9 @@ uint8_t *take_near(uint32_t size)
 
 } /* namespace */
 
-Sh4Host::Sh4Host(uint32_t *words)
-	: m_code(take_near(SIZE)), m_words(words), m_size(SIZE), m_used(0), m_leave(0), m_far_calls(0), m_enter(nullptr)
+Sh4Host::Sh4Host(uint32_t *words, const Memory &memory)
+	: m_code(take_near(SIZE)), m_words(words), m_memory(memory), m_size(SIZE), m_used(0), m_leave(0), m_far_calls(0),
+	  m_enter(nullptr)
 {
 	if (m_code) {
 		clear();
@@ -158,24 +159,28 @@ void Sh4Host::jump_to(uint32_t place)
 	word(place - (m_used + 4));
 }
 
-/* The way in keeps the CPU in rbx and its registers in rbp, which a call
- * leaves alone as it does r12, and jumps to the block; the way back to the
- * run loop undoes it. Three registers pushed keep the stack aligned. */
+/* The way in keeps the CPU in rbx, its registers in rbp and the tables of
+ * its memory in r13, r14 and r15, all of which a call leaves alone as it
+ * does r12, and jumps to the block; the way back to the run loop undoes it. */
 void Sh4Host::clear()
 {
 	m_used = 0;
 	bytes({0x53, 0x41, 0x54, 0x55});		/* push rbx / push r12 / push rbp */
-	if (FRAME) {
-		bytes({0x48, 0x83, 0xEC, FRAME});	/* sub rsp, FRAME */
-	}
+	bytes({0x41, 0x55, 0x41, 0x56, 0x41, 0x57});	/* push r13 / push r14 / push r15 */
+	bytes({0x48, 0x83, 0xEC, FRAME});		/* sub rsp, FRAME */
 	bytes({0x48, 0x89, RBX_FROM_ARG0});
 	bytes({0x48, 0xBD});				/* mov rbp, the registers */
 	quad(reinterpret_cast<uintptr_t>(m_words) + MIDDLE);
+	bytes({0x49, 0xBD});				/* mov r13, the pages to read */
+	quad(reinterpret_cast<uintptr_t>(m_memory.reads));
+	bytes({0x49, 0xBE});				/* mov r14, the pages to write */
+	quad(reinterpret_cast<uintptr_t>(m_memory.writes));
+	bytes({0x49, 0xBF});				/* mov r15, the epochs of the code */
+	quad(reinterpret_cast<uintptr_t>(m_memory.code_epochs));
 	bytes({0xFF, JUMP_ARG1});
 	m_leave = m_used;
-	if (FRAME) {
-		bytes({0x48, 0x83, 0xC4, FRAME});	/* add rsp, FRAME */
-	}
+	bytes({0x48, 0x83, 0xC4, FRAME});		/* add rsp, FRAME */
+	bytes({0x41, 0x5F, 0x41, 0x5E, 0x41, 0x5D});	/* pop r15 / pop r14 / pop r13 */
 	bytes({0x5D, 0x41, 0x5C, 0x5B, 0xC3});		/* pop rbp / pop r12 / pop rbx / ret */
 	m_enter = reinterpret_cast<void (*)(Sh4 *, const uint8_t *)>(m_code);
 }
@@ -306,10 +311,109 @@ void Sh4Host::flag(If found, uint32_t rank)
 	store(rank, Reg::A);
 }
 
+Sh4Host::Jump Sh4Host::jump_if(uint8_t condition)
+{
+	bytes({0x0F, condition});			/* j<condition> ... */
+	m_used += 4;
+	return Jump{m_used - 4};
+}
+
+void Sh4Host::bind(const Slow &slow)
+{
+	for (uint32_t k = 0; k < slow.count; k++) {
+		bind(slow.jumps[k]);
+	}
+}
+
+void Sh4Host::jump_back(uint32_t place)
+{
+	byte(0xE9);					/* jmp place */
+	jump_to(place);
+}
+
+/* rdx = the page of the address in A in the table of r13 or r14; the long
+ * way when there is none or the address is not aligned. ecx keeps the
+ * address over the bits of the page. */
+void Sh4Host::page(uint8_t table, uint32_t size, Slow &slow)
+{
+	bytes({0x89, 0xC1});				/* mov ecx, eax */
+	bytes({0xC1, 0xE9, static_cast<uint8_t>(m_memory.page_bits)});	/* shr ecx, page_bits */
+	bytes({0x49, 0x8B, 0x54, static_cast<uint8_t>(0xC8 | table), 0x00});	/* mov rdx, [table + rcx * 8] */
+	bytes({0x48, 0x85, 0xD2});			/* test rdx, rdx */
+	slow.jumps[slow.count++] = jump_if(0x84);	/* jz */
+	if (size > 1) {
+		bytes({0xA8, static_cast<uint8_t>(size - 1)});	/* test al, size - 1 */
+		slow.jumps[slow.count++] = jump_if(0x85);	/* jnz */
+	}
+	byte(0x25);					/* and eax, the offset in the page */
+	word((1u << m_memory.page_bits) - 1);
+}
+
+void Sh4Host::read(uint32_t size, Slow &slow)
+{
+	page(5, size, slow);				/* r13 */
+	switch (size) {
+	case 1:
+		bytes({0x0F, 0xBE, 0x04, 0x02});	/* movsx eax, byte [rdx + rax] */
+		break;
+	case 2:
+		bytes({0x0F, 0xBF, 0x04, 0x02});	/* movsx eax, word [rdx + rax] */
+		break;
+	default:
+		bytes({0x8B, 0x04, 0x02});		/* mov eax, [rdx + rax] */
+		break;
+	}
+}
+
+void Sh4Host::write(uint32_t size, uint32_t rank, Slow &slow)
+{
+	page(6, size, slow);				/* r14 */
+	bytes({0x81, 0xE1});				/* and ecx, the physical pages */
+	word(m_memory.physical_pages - 1);
+	bytes({0x45, 0x8B, 0x44, 0x8F, 0x00});		/* mov r8d, [r15 + rcx * 4] */
+	bytes({0x44, 0x3B, 0x83});			/* cmp r8d, [rbx + epoch] */
+	word(static_cast<uint32_t>(m_memory.epoch));
+	slow.jumps[slow.count++] = jump_if(0x84);	/* je */
+	bytes({0xC6, 0x83});				/* mov byte [rbx + touched], 1 */
+	word(static_cast<uint32_t>(m_memory.touched));
+	byte(1);
+	byte(0x8B);					/* mov ecx, [the word] */
+	operand(1, rank);
+	switch (size) {
+	case 1:
+		bytes({0x88, 0x0C, 0x02});		/* mov [rdx + rax], cl */
+		break;
+	case 2:
+		bytes({0x66, 0x89, 0x0C, 0x02});	/* mov [rdx + rax], cx */
+		break;
+	default:
+		bytes({0x89, 0x0C, 0x02});		/* mov [rdx + rax], ecx */
+		break;
+	}
+}
+
+void Sh4Host::read_at(const uint8_t *at, uint32_t size)
+{
+	bytes({0x48, 0xB8});				/* mov rax, at */
+	quad(reinterpret_cast<uintptr_t>(at));
+	switch (size) {
+	case 1:
+		bytes({0x0F, 0xBE, 0x00});		/* movsx eax, byte [rax] */
+		break;
+	case 2:
+		bytes({0x0F, 0xBF, 0x00});		/* movsx eax, word [rax] */
+		break;
+	default:
+		bytes({0x8B, 0x00});			/* mov eax, [rax] */
+		break;
+	}
+}
+
 #else /* a host this file does not write code for */
 
-Sh4Host::Sh4Host(uint32_t *words)
-	: m_code(nullptr), m_words(words), m_size(0), m_used(0), m_leave(0), m_far_calls(0), m_enter(nullptr)
+Sh4Host::Sh4Host(uint32_t *words, const Memory &memory)
+	: m_code(nullptr), m_words(words), m_memory(memory), m_size(0), m_used(0), m_leave(0), m_far_calls(0),
+	  m_enter(nullptr)
 {
 }
 
@@ -333,6 +437,13 @@ void Sh4Host::alu(Alu, Reg, uint32_t) {}
 void Sh4Host::alu_value(Alu, Reg, uint32_t) {}
 void Sh4Host::shift(Shift, Reg, uint32_t) {}
 void Sh4Host::flag(If, uint32_t) {}
+Sh4Host::Jump Sh4Host::jump_if(uint8_t) { return Jump{0}; }
+void Sh4Host::bind(const Slow &) {}
+void Sh4Host::jump_back(uint32_t) {}
+void Sh4Host::page(uint8_t, uint32_t, Slow &) {}
+void Sh4Host::read(uint32_t, Slow &) {}
+void Sh4Host::write(uint32_t, uint32_t, Slow &) {}
+void Sh4Host::read_at(const uint8_t *, uint32_t) {}
 
 #endif
 

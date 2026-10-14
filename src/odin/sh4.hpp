@@ -283,7 +283,30 @@ private:
 		Tst, TstI, CmpEq, CmpIm, CmpHs, CmpGe, CmpHi, CmpGt, CmpPz, CmpPl,
 		ExtSB, ExtSW, ExtUB, ExtUW,
 		ShLL, ShLR, ShAR, ShLL2, ShLL8, ShLL16, ShLR2, ShLR8, ShLR16,
-		Dt, ClrT, SetT, Nop
+		Dt, ClrT, SetT, Nop,
+		/* the memory, plain memory in place and the long way through
+		 * the instruction: what is read, then from where */
+		MovLL, MovWL, MovBL,		/* Rn = @Rm */
+		MovLL4, MovWL4, MovBL4,		/* Rn or R0 = @(disp,Rm) */
+		MovLL0, MovWL0, MovBL0,		/* Rn = @(R0,Rm) */
+		MovLP, MovWP, MovBP,		/* Rn = @Rm+ */
+		MovLLG, MovWLG, MovBLG,		/* R0 = @(disp,GBR) */
+		MovLI, MovWI,			/* Rn = @(disp,PC) */
+		LdsMPr,				/* PR = @Rn+ */
+		/* what is written, then where */
+		MovLS, MovWS, MovBS,		/* Rm to @Rn */
+		MovLS4, MovWS4, MovBS4,		/* Rm or R0 to @(disp,Rn or Rm) */
+		MovLS0, MovWS0, MovBS0,		/* Rm to @(R0,Rn) */
+		MovLM, MovWM, MovBM,		/* Rm to @-Rn */
+		MovLSG, MovWSG, MovBSG,		/* R0 to @(disp,GBR) */
+		StsMPr,				/* PR to @-Rn */
+		MovCA				/* R0 to @Rn */
+	};
+	/* The long way of an access to the memory in host code: the call of
+	 * the instruction `op`, back at `back`. */
+	struct LongWay {
+		Sh4Host::Slow slow;
+		uint32_t op, back;
 	};
 
 	enum class Kind : uint8_t {
@@ -322,8 +345,9 @@ private:
 	void chain_stale(uint32_t pc);
 	uintptr_t link_stale(uint32_t pc);
 	void translate(Block &b);
-	bool translate_op(const Sh4Op *ops, uint32_t i);
+	bool translate_op(const Sh4Op *ops, uint32_t i, std::vector<LongWay> &ways);
 	bool translate_inline(Inline form, const Sh4Op &op);
+	bool translate_access(Inline form, const Sh4Op &op, uint32_t i, std::vector<LongWay> &ways);
 	void wait_mark();
 	void wait_check();
 	void take_irq();
@@ -562,6 +586,7 @@ private:
 	/* The host code of the kept blocks, once asked for */
 	std::unique_ptr<Sh4Host> m_host;
 	bool m_translate;
+	std::vector<LongWay> m_long_ways;	/* of the block being translated */
 
 	bool m_hook_on;
 	uint32_t m_hook_addr;
