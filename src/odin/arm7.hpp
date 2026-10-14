@@ -60,6 +60,13 @@ public:
 	virtual void write8(uint32_t addr, uint8_t value) = 0;
 	virtual void write16(uint32_t addr, uint16_t value) = 0;
 	virtual void write32(uint32_t addr, uint32_t value) = 0;
+	/* What a read of 1, 2 or 4 bytes would give, without what it does
+	 * besides: how the core looks again at what a counted turn read (see
+	 * Arm7::set_turn_replay). By default, the read itself. */
+	virtual uint32_t peek(uint32_t addr, uint32_t size)
+	{
+		return size == 1 ? read8(addr) : size == 2 ? read16(addr) : read32(addr);
+	}
 };
 
 /* Plain memory at the bottom of the address space, which the core reads and
@@ -108,7 +115,7 @@ public:
 	 * start with everything it read as it was. The machine must then call
 	 * ram_write() before it changes the plain memory itself, ram_read()
 	 * before it reads it, settle() before it saves the state, and its bus
-	 * must read without side effects. */
+	 * must peek() without side effects. */
 	void set_turn_replay(bool on);
 	void ram_read(uint32_t addr, uint32_t size);
 	void ram_write(uint32_t addr, uint32_t size);
@@ -268,7 +275,6 @@ private:
 	void turn_note_fetch(uint32_t addr, uint32_t op);
 	void turn_note_read(uint32_t addr, uint32_t size, uint32_t value);
 	void turn_note_store(uint32_t addr, uint32_t size, uint32_t value);
-	uint32_t bus_read(uint32_t addr, uint32_t size);
 	bool turn_page(const std::array<uint8_t, 256> &pages, uint32_t addr) const;
 
 	Turn m_turn;

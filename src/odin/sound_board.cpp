@@ -44,7 +44,8 @@ SoundBoard::SoundBoard(std::span<uint8_t> ram, uint32_t clock_hz, std::function<
 	  m_arm_held(true), m_ram(ram.data()), m_arm(*this), m_aica(*this, ram), m_source(nullptr)
 {
 	map_ram();
-	/* The registers read without side effects. */
+	/* The core looks at the registers again through peek(), which changes
+	 * nothing there. */
 	m_arm.set_turn_replay(true);
 }
 
@@ -180,6 +181,16 @@ SoundBoard::read(uint32_t addr, uint32_t size)
 		return static_cast<uint32_t>(m_aica.read_ram(addr, size));
 	if (addr < ARM_REGS_END)
 		return m_aica.read_reg(addr - ARM_REGS, size);
+	return 0xFFFFFFFFu;
+}
+
+uint32_t
+SoundBoard::peek(uint32_t addr, uint32_t size)
+{
+	if (addr < ARM_REGS)
+		return static_cast<uint32_t>(m_aica.read_ram(addr, size));
+	if (addr < ARM_REGS_END)
+		return m_aica.peek_reg(addr - ARM_REGS, size);
 	return 0xFFFFFFFFu;
 }
 

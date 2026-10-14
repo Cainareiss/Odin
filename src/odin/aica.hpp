@@ -87,8 +87,11 @@ public:
 
 	/* Register file, byte offset 0x0000-0x7FFF, size 1, 2 or 4. The same
 	 * window is seen by the ARM7 at 0x00800000 and by the host CPU. */
-	uint32_t read_reg(uint32_t offset, uint32_t size);
+	uint32_t read_reg(uint32_t offset, uint32_t size) { return reg_value(offset, size, true); }
 	void write_reg(uint32_t offset, uint32_t size, uint32_t value);
+	/* What a read would give, without what it does besides: LP of 0x2810
+	 * stays, an unknown register is not logged */
+	uint32_t peek_reg(uint32_t offset, uint32_t size) { return reg_value(offset, size, false); }
 
 	/* Wave memory, byte address inside the 8 MB; size 1, 2, 4 or 8 (the
 	 * SH-4 DMAC moves 64-bit units through the bridge). */
@@ -178,7 +181,8 @@ private:
 
 	uint16_t rd16(uint32_t offset) const;
 	void wr16(uint32_t offset, uint16_t value);
-	uint16_t read_common(uint32_t offset);
+	uint32_t reg_value(uint32_t offset, uint32_t size, bool effects);
+	uint16_t read_common(uint32_t offset, bool effects);
 	void write_common(uint32_t offset, uint16_t value);
 	/* KYONEX: each slot starts or releases as its KYONB bit says */
 	void key_slots();

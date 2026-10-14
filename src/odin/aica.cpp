@@ -107,7 +107,7 @@ Aica::wr16(uint32_t offset, uint16_t value)
 }
 
 uint32_t
-Aica::read_reg(uint32_t offset, uint32_t size)
+Aica::reg_value(uint32_t offset, uint32_t size, bool effects)
 {
 	offset &= REG_SIZE - 1;
 	/* Only the low 16 bits of every 32-bit word exist. */
@@ -118,13 +118,13 @@ Aica::read_reg(uint32_t offset, uint32_t size)
 	if (word == REG_EG_MONITOR) {
 		/* Reading the high byte clears LP, as a whole read does (Flycast);
 		 * AFSEL shows the filter envelope (Corlett) */
-		const bool clear = size != 1 || (offset & 1) != 0;
+		const bool clear = effects && (size != 1 || (offset & 1) != 0);
 		value = (rd16(REG_MONITOR_SELECT) & 0x4000) ? monitored().filter_monitor(clear) : monitored().monitor(clear);
 	}
 	else if (word == REG_CA_MONITOR)
 		value = monitored().position();
 	else if (word >= REG_CONTROL && word < 0x3000)
-		value = read_common(word);
+		value = read_common(word, effects);
 	else if (word >= REG_DSP_WORK && word < REG_DSP_END)
 		value = m_dsp.read(word);
 	else
@@ -182,7 +182,7 @@ Aica::write_reg(uint32_t offset, uint32_t size, uint32_t value)
 }
 
 uint16_t
-Aica::read_common(uint32_t word)
+Aica::read_common(uint32_t word, bool effects)
 {
 	switch (word) {
 	case REG_MCIPD:
@@ -196,7 +196,8 @@ Aica::read_common(uint32_t word)
 	default:
 		if (word < 0x28C0 || word == REG_ARM_RESET)
 			return rd16(word);
-		log_unknown('R', word, 2, 0);
+		if (effects)
+			log_unknown('R', word, 2, 0);
 		return 0;
 	}
 }

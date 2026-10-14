@@ -128,6 +128,7 @@ public:
 	void write8(uint32_t addr, uint8_t value) override { write(addr, 1, value); }
 	void write16(uint32_t addr, uint16_t value) override { write(addr, 2, value); }
 	void write32(uint32_t addr, uint32_t value) override { write(addr, 4, value); }
+	uint32_t peek(uint32_t addr, uint32_t size) override;
 
 private:
 	uint32_t read(uint32_t addr, uint32_t size);

@@ -261,16 +261,11 @@ void Arm7::turn_step(uint32_t cycles, uint32_t passed)
 	}
 }
 
-uint32_t Arm7::bus_read(uint32_t addr, uint32_t size)
-{
-	return size == 1 ? m_bus.read8(addr) : size == 2 ? m_bus.read16(addr) : m_bus.read32(addr);
-}
-
 bool Arm7::turn_reads_hold()
 {
 	for (uint32_t i = 0; i < m_turn_num_reads; i++) {
 		const TurnRead &r = m_turn_reads[i];
-		if (bus_read(r.addr, r.size) != r.value) {
+		if (m_bus.peek(r.addr, r.size) != r.value) {
 			return false;
 		}
 	}
