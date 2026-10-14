@@ -24,6 +24,7 @@
 #include "odin/sh4.hpp"
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdio>
 #include <cstdlib>
 
@@ -780,16 +781,241 @@ uintptr_t Sh4::link_stale(uint32_t pc)
 void Sh4::set_translate(bool on)
 {
 	if (on && !m_host) {
-		m_host = std::make_unique<Sh4Host>();
+		m_host = std::make_unique<Sh4Host>(m_r.r);
 	}
 	m_translate = on && m_host->usable();
 	drop_blocks();
 }
 
-/* Writes the host code of a kept block: its instructions called in turn,
- * the block left as soon as one says so. A conditional branch that goes
- * says where to; one with a delay slot has the copy of its slot and the end
- * that follows it called behind the block, as a jump has its own in line. */
+/* The steps of host code that do what the instruction does, on the
+ * registers of the CPU, which stay where they are: no step leaves a value
+ * of the program in a register of the host. False, and nothing written,
+ * for an instruction that has no such steps. */
+bool Sh4::translate_inline(Inline form, const Sh4Op &op)
+{
+	using Alu = Sh4Host::Alu;
+	using Shift = Sh4Host::Shift;
+	using If = Sh4Host::If;
+	static_assert(offsetof(Regs, r) == 0);
+	constexpr uint32_t T = offsetof(Regs, t) / 4;
+	constexpr Sh4Host::Reg A = Sh4Host::Reg::A;
+	Sh4Host &host = *m_host;
+	const uint32_t n = op.n, m = op.m;
+	/* Rn = Rn <alu> Rm */
+	const auto both = [&](Alu alu) {
+		host.load(A, n);
+		host.alu(alu, A, m);
+		host.store(n, A);
+	};
+	/* The register = itself <alu> the immediate */
+	const auto with_value = [&](Alu alu, uint32_t reg) {
+		host.load(A, reg);
+		host.alu_value(alu, A, op.imm);
+		host.store(reg, A);
+	};
+	/* Rn = Rm <alu> a value */
+	const auto from = [&](Alu alu, uint32_t value) {
+		host.load(A, m);
+		host.alu_value(alu, A, value);
+		host.store(n, A);
+	};
+	/* T = Rn <found> Rm, or <found> a value */
+	const auto compare = [&](If found) {
+		host.load(A, n);
+		host.alu(Alu::Compare, A, m);
+		host.flag(found, T);
+	};
+	const auto compare_value = [&](uint32_t reg, If found, uint32_t value) {
+		host.load(A, reg);
+		host.alu_value(Alu::Compare, A, value);
+		host.flag(found, T);
+	};
+	/* Rn = Rm with its low bits extended by their sign */
+	const auto extend = [&](uint32_t bits) {
+		host.load(A, m);
+		host.shift(Shift::Left, A, 32 - bits);
+		host.shift(Shift::RightSigned, A, 32 - bits);
+		host.store(n, A);
+	};
+	const auto shift = [&](Shift kind, uint32_t count) {
+		host.load(A, n);
+		host.shift(kind, A, count);
+		host.store(n, A);
+	};
+	/* The same by one bit, T taking the bit that leaves. */
+	const auto shift_out = [&](Shift kind) {
+		host.load(A, n);
+		if (kind == Shift::Left) {
+			host.shift(Shift::Right, A, 31);
+		} else {
+			host.alu_value(Alu::And, A, 1);
+		}
+		host.store(T, A);
+		shift(kind, 1);
+	};
+
+	switch (form) {
+	case Inline::No:
+		return false;
+	case Inline::Mov:
+		host.load(A, m);
+		host.store(n, A);
+		break;
+	case Inline::MovI:
+		host.store_value(n, op.imm);
+		break;
+	case Inline::MovA:
+		host.store_value(0, op.imm);
+		break;
+	case Inline::MovT:
+		host.load(A, T);
+		host.store(n, A);
+		break;
+	case Inline::Add:
+		both(Alu::Add);
+		break;
+	case Inline::AddI:
+		with_value(Alu::Add, n);
+		break;
+	case Inline::Sub:
+		both(Alu::Sub);
+		break;
+	case Inline::Neg:
+		/* 0 - Rm: every bit turned over, plus one */
+		host.load(A, m);
+		host.alu_value(Alu::Xor, A, 0xFFFFFFFF);
+		host.alu_value(Alu::Add, A, 1);
+		host.store(n, A);
+		break;
+	case Inline::And:
+		both(Alu::And);
+		break;
+	case Inline::AndI:
+		with_value(Alu::And, 0);
+		break;
+	case Inline::Or:
+		both(Alu::Or);
+		break;
+	case Inline::OrI:
+		with_value(Alu::Or, 0);
+		break;
+	case Inline::Xor:
+		both(Alu::Xor);
+		break;
+	case Inline::XorI:
+		with_value(Alu::Xor, 0);
+		break;
+	case Inline::Not:
+		from(Alu::Xor, 0xFFFFFFFF);
+		break;
+	case Inline::Tst:
+		host.load(A, n);
+		host.alu(Alu::And, A, m);
+		host.flag(If::Equal, T);
+		break;
+	case Inline::TstI:
+		host.load(A, 0);
+		host.alu_value(Alu::And, A, op.imm);
+		host.flag(If::Equal, T);
+		break;
+	case Inline::CmpEq:
+		compare(If::Equal);
+		break;
+	case Inline::CmpIm:
+		compare_value(0, If::Equal, op.imm);
+		break;
+	case Inline::CmpHs:
+		compare(If::AtLeast);
+		break;
+	case Inline::CmpGe:
+		compare(If::AtLeastSigned);
+		break;
+	case Inline::CmpHi:
+		compare(If::Above);
+		break;
+	case Inline::CmpGt:
+		compare(If::AboveSigned);
+		break;
+	case Inline::CmpPz:
+		compare_value(n, If::AtLeastSigned, 0);
+		break;
+	case Inline::CmpPl:
+		compare_value(n, If::AboveSigned, 0);
+		break;
+	case Inline::ExtSB:
+		extend(8);
+		break;
+	case Inline::ExtSW:
+		extend(16);
+		break;
+	case Inline::ExtUB:
+		from(Alu::And, 0xFF);
+		break;
+	case Inline::ExtUW:
+		from(Alu::And, 0xFFFF);
+		break;
+	case Inline::ShLL:
+		shift_out(Shift::Left);
+		break;
+	case Inline::ShLR:
+		shift_out(Shift::Right);
+		break;
+	case Inline::ShAR:
+		shift_out(Shift::RightSigned);
+		break;
+	case Inline::ShLL2:
+		shift(Shift::Left, 2);
+		break;
+	case Inline::ShLL8:
+		shift(Shift::Left, 8);
+		break;
+	case Inline::ShLL16:
+		shift(Shift::Left, 16);
+		break;
+	case Inline::ShLR2:
+		shift(Shift::Right, 2);
+		break;
+	case Inline::ShLR8:
+		shift(Shift::Right, 8);
+		break;
+	case Inline::ShLR16:
+		shift(Shift::Right, 16);
+		break;
+	case Inline::Dt:
+		host.load(A, n);
+		host.alu_value(Alu::Sub, A, 1);
+		host.store(n, A);
+		host.flag(If::Equal, T);
+		break;
+	case Inline::ClrT:
+		host.store_value(T, 0);
+		break;
+	case Inline::SetT:
+		host.store_value(T, 1);
+		break;
+	case Inline::Nop:
+		break;
+	}
+	return true;
+}
+
+/* The instruction `i` of a block as host code: its steps in place when it
+ * has some, and true; else a call, and false: what the call returns is for
+ * the block to look at. */
+bool Sh4::translate_op(const Sh4Op *ops, uint32_t i)
+{
+	if (translate_inline(inlined(ops[i].run), ops[i])) {
+		return true;
+	}
+	m_host->call(called(ops[i].run), i);
+	return false;
+}
+
+/* Writes the host code of a kept block: its instructions in turn, each in
+ * place or called, the block left as soon as a call says so. A conditional
+ * branch that goes says where to; one with a delay slot has the copy of its
+ * slot and the end that follows it behind the block, as a jump has its own
+ * in line. */
 void Sh4::translate(Block &b)
 {
 	struct Taken {
@@ -804,9 +1030,11 @@ void Sh4::translate(Block &b)
 
 	b.host = host.begin(ops);
 	for (uint32_t i = 0; i < b.count && !jumped; i++) {
-		host.call(called(ops[i].run), i);
+		if (translate_op(ops, i)) {
+			continue;
+		}
 		if (ops[i].flags & OP_JUMP) {
-			host.call(called(ops[i + 1].run), i + 1);
+			translate_op(ops, i + 1);
 			host.call(called(ops[i + 2].run), i + 2);
 			host.go_where_told();
 			jumped = true;
@@ -827,7 +1055,7 @@ void Sh4::translate(Block &b)
 		if (ops[i].flags & OP_DELAYED) {
 			const uint32_t slot = i + ops[i].m;
 
-			host.call(called(ops[slot].run), slot);
+			translate_op(ops, slot);
 			host.call(called(ops[slot + 1].run), slot + 1);
 		}
 		host.go_where_told();

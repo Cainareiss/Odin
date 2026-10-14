@@ -1918,6 +1918,116 @@ void test_host_code()
 	}
 }
 
+/* The instructions host code does itself, in place of a call: each of them
+ * at the four places an instruction runs at (in a block, in the delay slot
+ * of a jump, in the slot of a conditional branch that goes, after one that
+ * does not), for registers of every kind and values at the edges, T clear
+ * and set, the other registers holding values of their own: read and as
+ * host code, the same registers after, and the same Rn and T after each of
+ * the four (moved to R4-R7, R8-R11). */
+void test_host_in_place()
+{
+	g_test = "host code, in place";
+	struct Form {
+		uint16_t code;
+		char operands;	/* M: Rn and Rm; N: Rn; I: Rn and a byte; B: a byte; P: a byte, no delay slot; 0: none */
+		const char *name;
+	};
+	static const Form forms[] = {
+		{0x6003, 'M', "mov"}, {0xE000, 'I', "mov #imm"}, {0xC700, 'P', "mova"}, {0x0029, 'N', "movt"},
+		{0x300C, 'M', "add"}, {0x7000, 'I', "add #imm"}, {0x3008, 'M', "sub"}, {0x600B, 'M', "neg"},
+		{0x2009, 'M', "and"}, {0xC900, 'B', "and #imm"}, {0x200B, 'M', "or"}, {0xCB00, 'B', "or #imm"},
+		{0x200A, 'M', "xor"}, {0xCA00, 'B', "xor #imm"}, {0x6007, 'M', "not"},
+		{0x2008, 'M', "tst"}, {0xC800, 'B', "tst #imm"}, {0x3000, 'M', "cmp/eq"}, {0x8800, 'B', "cmp/eq #imm"},
+		{0x3002, 'M', "cmp/hs"}, {0x3003, 'M', "cmp/ge"}, {0x3006, 'M', "cmp/hi"}, {0x3007, 'M', "cmp/gt"},
+		{0x4011, 'N', "cmp/pz"}, {0x4015, 'N', "cmp/pl"},
+		{0x600E, 'M', "exts.b"}, {0x600F, 'M', "exts.w"}, {0x600C, 'M', "extu.b"}, {0x600D, 'M', "extu.w"},
+		{0x4000, 'N', "shll"}, {0x4020, 'N', "shal"}, {0x4001, 'N', "shlr"}, {0x4021, 'N', "shar"},
+		{0x4008, 'N', "shll2"}, {0x4018, 'N', "shll8"}, {0x4028, 'N', "shll16"},
+		{0x4009, 'N', "shlr2"}, {0x4019, 'N', "shlr8"}, {0x4029, 'N', "shlr16"},
+		{0x4010, 'N', "dt"}, {0x0008, '0', "clrt"}, {0x0018, '0', "sett"}, {0x0009, '0', "nop"},
+	};
+	static const uint8_t pairs[][2] = {{1, 2}, {2, 1}, {1, 1}, {0, 3}, {3, 0}, {0, 0}, {15, 1}, {1, 15}};
+	static const uint8_t singles[] = {0, 1, 15}, bytes[] = {0x00, 0x01, 0x7F, 0x80, 0xFF};
+	static const uint32_t edges[] = {0, 1, 2, 0x7F, 0x80, 0xFF, 0x7FFF, 0x8000, 0xFFFF,
+	                                 0x7FFFFFFF, 0x80000000, 0xFFFFFFFF, 0x12345678};
+	Pair p;
+
+	if (!p.host.cpu.translates()) {
+		std::printf("host code: none on this machine, not tested\n");
+		return;
+	}
+	const Sh4State start = p.read.state();
+	for (const Form &form : forms) {
+		std::vector<uint16_t> codes;
+		unsigned runs = 0;
+
+		p.differ = 0;
+
+		switch (form.operands) {
+		case 'M':
+			for (const auto &pair : pairs) {
+				codes.push_back(static_cast<uint16_t>(form.code | (pair[0] << 8) | (pair[1] << 4)));
+			}
+			break;
+		case 'N':
+			for (uint8_t n : singles) {
+				codes.push_back(static_cast<uint16_t>(form.code | (n << 8)));
+			}
+			break;
+		case 'I':
+			for (uint8_t n : singles) {
+				for (uint8_t byte : bytes) {
+					codes.push_back(static_cast<uint16_t>(form.code | (n << 8) | byte));
+				}
+			}
+			break;
+		case 'B':
+		case 'P':
+			for (uint8_t byte : bytes) {
+				codes.push_back(static_cast<uint16_t>(form.code | byte));
+			}
+			break;
+		default:
+			codes.push_back(form.code);
+			break;
+		}
+		for (uint16_t code : codes) {
+			/* MOVA is not allowed in a delay slot. */
+			const uint16_t slot = form.operands == 'P' ? NOP : code;
+			const bool has_n = form.operands == 'M' || form.operands == 'N' || form.operands == 'I';
+			const uint32_t n = has_n ? (code >> 8) & 15 : 0, m = form.operands == 'M' ? (code >> 4) & 15 : 1;
+			const auto keep = [n](uint32_t to) { return static_cast<uint16_t>(0x6003 | (to << 8) | (n << 4)); };
+
+			/* the instruction / movt r8 / mov rn, r4 / bra / its slot / movt r9 / mov rn, r5 /
+			 * sett / bt/s / its slot / movt r10 / mov rn, r6 / clrt / bt/s / the instruction /
+			 * movt r11 / mov rn, r7 / bra itself */
+			p.each([&](Machine &mc) {
+				mc.code(CODE, {code, 0x0829, keep(4), 0xA000, slot, 0x0929, keep(5), 0x0018, 0x8D00, slot,
+				               0x0A29, keep(6), 0x0008, 0x8D00, code, 0x0B29, keep(7), 0xAFFE, NOP});
+			});
+			for (uint32_t a : edges) {
+				for (uint32_t b : edges) {
+					for (uint32_t t = 0; t < 2 && p.differ == 0; t++) {
+						Sh4State st = start;
+
+						st.sr |= t;
+						for (uint32_t i = 0; i < 16; i++) {
+							st.r[i] = 0x5EED0000 + 0x1111 * i;
+						}
+						st.r[m] = b;
+						st.r[n] = a;
+						p.each([&st](Machine &mc) { mc.cpu.load(st); });
+						p.slice(200);
+						runs++;
+					}
+				}
+			}
+		}
+		check(runs > 0 && p.differ == 0, std::string(form.name) + ": the same read and in place");
+	}
+}
+
 /* Store queues, QACR0 and QACR1 on the area of the RAM: a store there lands
  * in the RAM at once. Where the RAM is plain it is written in place and the
  * block goes on; over code compared since, the store goes the way of the
@@ -2126,6 +2236,7 @@ int main(int argc, char **argv)
 	test_hook();
 	test_save_load();
 	test_host_code();
+	test_host_in_place();
 	test_store_queues();
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures == 0 ? 0 : 1;

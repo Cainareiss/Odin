@@ -273,6 +273,19 @@ private:
 	};
 	static constexpr uint32_t PLACE_BITS = 25;
 
+	/* An instruction host code does itself, with a few steps of its
+	 * own on the registers, in place of a call. None of these can have
+	 * the block left. */
+	enum class Inline : uint8_t {
+		No,
+		Mov, MovI, MovA, MovT,
+		Add, AddI, Sub, Neg, And, AndI, Or, OrI, Xor, XorI, Not,
+		Tst, TstI, CmpEq, CmpIm, CmpHs, CmpGe, CmpHi, CmpGt, CmpPz, CmpPl,
+		ExtSB, ExtSW, ExtUB, ExtUW,
+		ShLL, ShLR, ShAR, ShLL2, ShLL8, ShLL16, ShLR2, ShLR8, ShLR16,
+		Dt, ClrT, SetT, Nop
+	};
+
 	enum class Kind : uint8_t {
 		Plain,
 		PcRelative,	/* plain, but not allowed in a delay slot */
@@ -309,6 +322,8 @@ private:
 	void chain_stale(uint32_t pc);
 	uintptr_t link_stale(uint32_t pc);
 	void translate(Block &b);
+	bool translate_op(const Sh4Op *ops, uint32_t i);
+	bool translate_inline(Inline form, const Sh4Op &op);
 	void wait_mark();
 	void wait_check();
 	void take_irq();
@@ -330,6 +345,7 @@ private:
 	/* sh4_ops.cpp */
 	static Kind decode(uint16_t inst, uint32_t pc, Sh4Op &op);
 	static Sh4Host::Call called(void (*run)(Sh4 &, const Sh4Op *));
+	static Inline inlined(void (*run)(Sh4 &, const Sh4Op *));
 	static void op_next(Sh4 &c, const Sh4Op *op);
 	static void op_cut(Sh4 &c, const Sh4Op *op);
 	static void op_leave(Sh4 &c, const Sh4Op *op);

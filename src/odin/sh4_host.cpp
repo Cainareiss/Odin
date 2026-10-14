@@ -46,14 +46,24 @@ constexpr uint8_t ARG0_FROM_RBX = 0xD9;		/* mov rcx, rbx */
 constexpr uint8_t ARG1_LEA = 0x14;		/* lea rdx, [r12 + ...] */
 constexpr uint8_t RBX_FROM_ARG0 = 0xCB;		/* mov rbx, rcx */
 constexpr uint8_t JUMP_ARG1 = 0xE2;		/* jmp rdx */
-constexpr uint8_t FRAME = 40;
+constexpr uint8_t FRAME = 32;
 #else
 constexpr uint8_t ARG0_FROM_RBX = 0xDF;		/* mov rdi, rbx */
 constexpr uint8_t ARG1_LEA = 0x34;		/* lea rsi, [r12 + ...] */
 constexpr uint8_t RBX_FROM_ARG0 = 0xFB;		/* mov rbx, rdi */
 constexpr uint8_t JUMP_ARG1 = 0xE6;		/* jmp rsi */
-constexpr uint8_t FRAME = 8;
+constexpr uint8_t FRAME = 0;
 #endif
+
+/* rbp points this many bytes into the registers of the CPU: the first 64
+ * words are a byte of displacement away. */
+constexpr uint32_t MIDDLE = 128;
+
+/* The number of a register of the host (eax), and what x86 calls the steps. */
+constexpr uint8_t number(Sh4Host::Reg) { return 0; }
+constexpr uint8_t ALU[] = { 0, 5, 4, 1, 6, 7 };			/* add, sub, and, or, xor, cmp */
+constexpr uint8_t SHIFT[] = { 4, 5, 7 };			/* shl, shr, sar */
+constexpr uint8_t SET[] = { 0x94, 0x93, 0x97, 0x9D, 0x9F };	/* sete, setae, seta, setge, setg */
 
 uint8_t *take(uintptr_t at, uint32_t size)
 {
@@ -108,8 +118,8 @@ uint8_t *take_near(uint32_t size)
 
 } /* namespace */
 
-Sh4Host::Sh4Host()
-	: m_code(take_near(SIZE)), m_size(SIZE), m_used(0), m_leave(0), m_far_calls(0), m_enter(nullptr)
+Sh4Host::Sh4Host(uint32_t *words)
+	: m_code(take_near(SIZE)), m_words(words), m_size(SIZE), m_used(0), m_leave(0), m_far_calls(0), m_enter(nullptr)
 {
 	if (m_code) {
 		clear();
@@ -148,18 +158,25 @@ void Sh4Host::jump_to(uint32_t place)
 	word(place - (m_used + 4));
 }
 
-/* The way in keeps the CPU in rbx, which a call leaves alone as it does
- * r12, and jumps to the block; the way back to the run loop undoes it. */
+/* The way in keeps the CPU in rbx and its registers in rbp, which a call
+ * leaves alone as it does r12, and jumps to the block; the way back to the
+ * run loop undoes it. Three registers pushed keep the stack aligned. */
 void Sh4Host::clear()
 {
 	m_used = 0;
-	bytes({0x53, 0x41, 0x54});			/* push rbx / push r12 */
-	bytes({0x48, 0x83, 0xEC, FRAME});		/* sub rsp, FRAME */
+	bytes({0x53, 0x41, 0x54, 0x55});		/* push rbx / push r12 / push rbp */
+	if (FRAME) {
+		bytes({0x48, 0x83, 0xEC, FRAME});	/* sub rsp, FRAME */
+	}
 	bytes({0x48, 0x89, RBX_FROM_ARG0});
+	bytes({0x48, 0xBD});				/* mov rbp, the registers */
+	quad(reinterpret_cast<uintptr_t>(m_words) + MIDDLE);
 	bytes({0xFF, JUMP_ARG1});
 	m_leave = m_used;
-	bytes({0x48, 0x83, 0xC4, FRAME});		/* add rsp, FRAME */
-	bytes({0x41, 0x5C, 0x5B, 0xC3});		/* pop r12 / pop rbx / ret */
+	if (FRAME) {
+		bytes({0x48, 0x83, 0xC4, FRAME});	/* add rsp, FRAME */
+	}
+	bytes({0x5D, 0x41, 0x5C, 0x5B, 0xC3});		/* pop rbp / pop r12 / pop rbx / ret */
 	m_enter = reinterpret_cast<void (*)(Sh4 *, const uint8_t *)>(m_code);
 }
 
@@ -225,10 +242,74 @@ void Sh4Host::go_where_told()
 	bytes({0xFF, 0xE0});				/* jmp rax */
 }
 
+/* The word of the registers of the CPU as the operand of an instruction
+ * that names `reg` too: [rbp + displacement]. */
+void Sh4Host::operand(uint8_t reg, uint32_t rank)
+{
+	const int32_t away = static_cast<int32_t>(4 * rank) - static_cast<int32_t>(MIDDLE);
+
+	if (away == static_cast<int8_t>(away)) {
+		bytes({static_cast<uint8_t>(0x45 | (reg << 3)), static_cast<uint8_t>(away)});
+	} else {
+		byte(static_cast<uint8_t>(0x85 | (reg << 3)));
+		word(static_cast<uint32_t>(away));
+	}
+}
+
+void Sh4Host::load(Reg reg, uint32_t rank)
+{
+	byte(0x8B);					/* mov reg, [the word] */
+	operand(number(reg), rank);
+}
+
+void Sh4Host::store(uint32_t rank, Reg reg)
+{
+	byte(0x89);					/* mov [the word], reg */
+	operand(number(reg), rank);
+}
+
+void Sh4Host::store_value(uint32_t rank, uint32_t value)
+{
+	byte(0xC7);					/* mov dword [the word], value */
+	operand(0, rank);
+	word(value);
+}
+
+void Sh4Host::alu(Alu op, Reg reg, uint32_t rank)
+{
+	byte(static_cast<uint8_t>(ALU[static_cast<uint8_t>(op)] * 8 + 3));	/* op reg, [the word] */
+	operand(number(reg), rank);
+}
+
+void Sh4Host::alu_value(Alu op, Reg reg, uint32_t value)
+{
+	const uint8_t which = static_cast<uint8_t>(0xC0 | (ALU[static_cast<uint8_t>(op)] << 3) | number(reg));
+
+	if (static_cast<int32_t>(value) == static_cast<int8_t>(value)) {
+		bytes({0x83, which, static_cast<uint8_t>(value)});	/* op reg, a byte with its sign */
+	} else {
+		bytes({0x81, which});					/* op reg, value */
+		word(value);
+	}
+}
+
+void Sh4Host::shift(Shift kind, Reg reg, uint32_t count)
+{
+	bytes({0xC1, static_cast<uint8_t>(0xC0 | (SHIFT[static_cast<uint8_t>(kind)] << 3) | number(reg)),
+	       static_cast<uint8_t>(count)});
+}
+
+void Sh4Host::flag(If found, uint32_t rank)
+{
+	bytes({0x0F, SET[static_cast<uint8_t>(found)], 0xC0});	/* set<found> al */
+	bytes({0x0F, 0xB6, 0xC0});				/* movzx eax, al */
+	store(rank, Reg::A);
+}
+
 #else /* a host this file does not write code for */
 
-Sh4Host::Sh4Host()
-	: m_code(nullptr), m_size(0), m_used(0), m_leave(0), m_far_calls(0), m_enter(nullptr)
+Sh4Host::Sh4Host(uint32_t *words)
+	: m_code(nullptr), m_words(words), m_size(0), m_used(0), m_leave(0), m_far_calls(0), m_enter(nullptr)
 {
 }
 
@@ -244,6 +325,14 @@ void Sh4Host::loop_if_told() {}
 Sh4Host::Jump Sh4Host::jump_if_told() { return Jump{0}; }
 void Sh4Host::bind(Jump) {}
 void Sh4Host::go_where_told() {}
+void Sh4Host::operand(uint8_t, uint32_t) {}
+void Sh4Host::load(Reg, uint32_t) {}
+void Sh4Host::store(uint32_t, Reg) {}
+void Sh4Host::store_value(uint32_t, uint32_t) {}
+void Sh4Host::alu(Alu, Reg, uint32_t) {}
+void Sh4Host::alu_value(Alu, Reg, uint32_t) {}
+void Sh4Host::shift(Shift, Reg, uint32_t) {}
+void Sh4Host::flag(If, uint32_t) {}
 
 #endif
 

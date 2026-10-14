@@ -472,9 +472,12 @@ tail call, the host code of a block calls its instructions in turn, all by
 direct calls. The two give the same registers, memories, cycles and
 pictures (tests/sh4, the six whole loops). On an i3-6100U the two SH-4 take
 a fifth to a third less time that way; on a Ryzen 5600X next to nothing.
-To do next: the instructions that come most written as host code
-themselves, the ends of blocks that lead to a known place jumped to
-directly, host code entered in the middle of a block.
+The simple instructions on integers (copies, sums, logic, comparisons,
+shifts: Sh4::Inline) are not called: the host code does them itself, with a
+few steps on the registers of the CPU, which stay where they are.
+To do next: the accesses to plain memory done the same way, the ends of
+blocks that lead to a known place jumped to directly, the floating point,
+host code entered in the middle of a block.
 
 Kept as the interpreter did, each one HEURISTIC, to make right one at a
 time once the scenes are compared again:

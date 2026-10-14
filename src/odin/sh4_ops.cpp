@@ -1514,11 +1514,13 @@ struct Sh4OpsT {
 	};
 	using F = Form;
 	using K = Sh4::Kind;
+	using H = Sh4::Inline;
 	struct Entry {
 		uint16_t mask, match;
 		Ret (*run)(Sh4 &, const Op *);
 		Form form;
 		Sh4::Kind kind;
+		Sh4::Inline host = Sh4::Inline::No;	/* what host code does in place of a call */
 	};
 	static const Entry table[];
 	static const uint32_t table_size;
@@ -1529,7 +1531,7 @@ struct Sh4OpsT {
  * and FSRRA are in the SH7091 only (MAME sh4.cpp). */
 template <class Way>
 const typename Sh4OpsT<Way>::Entry Sh4OpsT<Way>::table[] = {
-	{0xF00F, 0x6003, mov, F::NM, K::Plain},
+	{0xF00F, 0x6003, mov, F::NM, K::Plain, H::Mov},
 	{0xF00F, 0x2000, movbs, F::NM, K::Plain},
 	{0xF00F, 0x2001, movws, F::NM, K::Plain},
 	{0xF00F, 0x2002, movls, F::NM, K::Plain},
@@ -1548,7 +1550,7 @@ const typename Sh4OpsT<Way>::Entry Sh4OpsT<Way>::table[] = {
 	{0xF00F, 0x000C, movbl0, F::NM, K::Plain},
 	{0xF00F, 0x000D, movwl0, F::NM, K::Plain},
 	{0xF00F, 0x000E, movll0, F::NM, K::Plain},
-	{0xF000, 0xE000, movi, F::NImm, K::Plain},
+	{0xF000, 0xE000, movi, F::NImm, K::Plain, H::MovI},
 	{0xF000, 0x9000, movwi, F::PcWord, K::PcRelative},
 	{0xF000, 0xD000, movli, F::PcLong, K::PcRelative},
 	{0xFF00, 0xC400, movblg, F::Gbr0, K::Plain},
@@ -1563,75 +1565,75 @@ const typename Sh4OpsT<Way>::Entry Sh4OpsT<Way>::table[] = {
 	{0xFF00, 0x8400, movbl4, F::MDisp0, K::Plain},
 	{0xFF00, 0x8500, movwl4, F::MDisp1, K::Plain},
 	{0xF000, 0x5000, movll4, F::NMDisp2, K::Plain},
-	{0xFF00, 0xC700, mova, F::PcAddr, K::PcRelative},
-	{0xF0FF, 0x0029, movt, F::N, K::Plain},
+	{0xFF00, 0xC700, mova, F::PcAddr, K::PcRelative, H::MovA},
+	{0xF0FF, 0x0029, movt, F::N, K::Plain, H::MovT},
 	{0xF00F, 0x6008, swapb, F::NM, K::Plain},
 	{0xF00F, 0x6009, swapw, F::NM, K::Plain},
 	{0xF00F, 0x200D, xtrct, F::NM, K::Plain},
 
-	{0xF00F, 0x300C, add, F::NM, K::Plain},
-	{0xF000, 0x7000, addi, F::NImm, K::Plain},
+	{0xF00F, 0x300C, add, F::NM, K::Plain, H::Add},
+	{0xF000, 0x7000, addi, F::NImm, K::Plain, H::AddI},
 	{0xF00F, 0x300E, addc, F::NM, K::Plain},
 	{0xF00F, 0x300F, addv, F::NM, K::Plain},
-	{0xFF00, 0x8800, cmpim, F::ImmSigned, K::Plain},
-	{0xF00F, 0x3000, cmpeq, F::NM, K::Plain},
-	{0xF00F, 0x3002, cmphs, F::NM, K::Plain},
-	{0xF00F, 0x3003, cmpge, F::NM, K::Plain},
-	{0xF00F, 0x3006, cmphi, F::NM, K::Plain},
-	{0xF00F, 0x3007, cmpgt, F::NM, K::Plain},
-	{0xF0FF, 0x4011, cmppz, F::N, K::Plain},
-	{0xF0FF, 0x4015, cmppl, F::N, K::Plain},
+	{0xFF00, 0x8800, cmpim, F::ImmSigned, K::Plain, H::CmpIm},
+	{0xF00F, 0x3000, cmpeq, F::NM, K::Plain, H::CmpEq},
+	{0xF00F, 0x3002, cmphs, F::NM, K::Plain, H::CmpHs},
+	{0xF00F, 0x3003, cmpge, F::NM, K::Plain, H::CmpGe},
+	{0xF00F, 0x3006, cmphi, F::NM, K::Plain, H::CmpHi},
+	{0xF00F, 0x3007, cmpgt, F::NM, K::Plain, H::CmpGt},
+	{0xF0FF, 0x4011, cmppz, F::N, K::Plain, H::CmpPz},
+	{0xF0FF, 0x4015, cmppl, F::N, K::Plain, H::CmpPl},
 	{0xF00F, 0x200C, cmpstr, F::NM, K::Plain},
 	{0xF00F, 0x3004, div1, F::NM, K::Plain},
 	{0xF00F, 0x2007, div0s, F::NM, K::Plain},
 	{0xFFFF, 0x0019, div0u, F::None, K::Plain},
 	{0xF00F, 0x300D, dmuls, F::NM, K::Plain},
 	{0xF00F, 0x3005, dmulu, F::NM, K::Plain},
-	{0xF0FF, 0x4010, dt, F::N, K::Plain},
-	{0xF00F, 0x600E, extsb, F::NM, K::Plain},
-	{0xF00F, 0x600F, extsw, F::NM, K::Plain},
-	{0xF00F, 0x600C, extub, F::NM, K::Plain},
-	{0xF00F, 0x600D, extuw, F::NM, K::Plain},
+	{0xF0FF, 0x4010, dt, F::N, K::Plain, H::Dt},
+	{0xF00F, 0x600E, extsb, F::NM, K::Plain, H::ExtSB},
+	{0xF00F, 0x600F, extsw, F::NM, K::Plain, H::ExtSW},
+	{0xF00F, 0x600C, extub, F::NM, K::Plain, H::ExtUB},
+	{0xF00F, 0x600D, extuw, F::NM, K::Plain, H::ExtUW},
 	{0xF00F, 0x000F, macl, F::NM, K::Plain},
 	{0xF00F, 0x400F, macw, F::NM, K::Plain},
 	{0xF00F, 0x0007, mull, F::NM, K::Plain},
 	{0xF00F, 0x200F, mulsw, F::NM, K::Plain},
 	{0xF00F, 0x200E, muluw, F::NM, K::Plain},
-	{0xF00F, 0x600B, neg, F::NM, K::Plain},
+	{0xF00F, 0x600B, neg, F::NM, K::Plain, H::Neg},
 	{0xF00F, 0x600A, negc, F::NM, K::Plain},
-	{0xF00F, 0x3008, sub, F::NM, K::Plain},
+	{0xF00F, 0x3008, sub, F::NM, K::Plain, H::Sub},
 	{0xF00F, 0x300A, subc, F::NM, K::Plain},
 	{0xF00F, 0x300B, subv, F::NM, K::Plain},
 
-	{0xF00F, 0x2009, and_, F::NM, K::Plain},
-	{0xFF00, 0xC900, andi, F::Imm, K::Plain},
+	{0xF00F, 0x2009, and_, F::NM, K::Plain, H::And},
+	{0xFF00, 0xC900, andi, F::Imm, K::Plain, H::AndI},
 	{0xFF00, 0xCD00, andm, F::Imm, K::Plain},
-	{0xF00F, 0x6007, not_, F::NM, K::Plain},
-	{0xF00F, 0x200B, or_, F::NM, K::Plain},
-	{0xFF00, 0xCB00, ori, F::Imm, K::Plain},
+	{0xF00F, 0x6007, not_, F::NM, K::Plain, H::Not},
+	{0xF00F, 0x200B, or_, F::NM, K::Plain, H::Or},
+	{0xFF00, 0xCB00, ori, F::Imm, K::Plain, H::OrI},
 	{0xFF00, 0xCF00, orm, F::Imm, K::Plain},
 	{0xF0FF, 0x401B, tas, F::N, K::Plain},
-	{0xF00F, 0x2008, tst, F::NM, K::Plain},
-	{0xFF00, 0xC800, tsti, F::Imm, K::Plain},
+	{0xF00F, 0x2008, tst, F::NM, K::Plain, H::Tst},
+	{0xFF00, 0xC800, tsti, F::Imm, K::Plain, H::TstI},
 	{0xFF00, 0xCC00, tstm, F::Imm, K::Plain},
-	{0xF00F, 0x200A, xor_, F::NM, K::Plain},
-	{0xFF00, 0xCA00, xori, F::Imm, K::Plain},
+	{0xF00F, 0x200A, xor_, F::NM, K::Plain, H::Xor},
+	{0xFF00, 0xCA00, xori, F::Imm, K::Plain, H::XorI},
 	{0xFF00, 0xCE00, xorm, F::Imm, K::Plain},
 
 	{0xF0FF, 0x4004, rotl, F::N, K::Plain},
 	{0xF0FF, 0x4005, rotr, F::N, K::Plain},
 	{0xF0FF, 0x4024, rotcl, F::N, K::Plain},
 	{0xF0FF, 0x4025, rotcr, F::N, K::Plain},
-	{0xF0FF, 0x4020, shll, F::N, K::Plain},	/* SHAL: the same result */
-	{0xF0FF, 0x4021, shar, F::N, K::Plain},
-	{0xF0FF, 0x4000, shll, F::N, K::Plain},
-	{0xF0FF, 0x4001, shlr, F::N, K::Plain},
-	{0xF0FF, 0x4008, shll2, F::N, K::Plain},
-	{0xF0FF, 0x4009, shlr2, F::N, K::Plain},
-	{0xF0FF, 0x4018, shll8, F::N, K::Plain},
-	{0xF0FF, 0x4019, shlr8, F::N, K::Plain},
-	{0xF0FF, 0x4028, shll16, F::N, K::Plain},
-	{0xF0FF, 0x4029, shlr16, F::N, K::Plain},
+	{0xF0FF, 0x4020, shll, F::N, K::Plain, H::ShLL},	/* SHAL: the same result */
+	{0xF0FF, 0x4021, shar, F::N, K::Plain, H::ShAR},
+	{0xF0FF, 0x4000, shll, F::N, K::Plain, H::ShLL},
+	{0xF0FF, 0x4001, shlr, F::N, K::Plain, H::ShLR},
+	{0xF0FF, 0x4008, shll2, F::N, K::Plain, H::ShLL2},
+	{0xF0FF, 0x4009, shlr2, F::N, K::Plain, H::ShLR2},
+	{0xF0FF, 0x4018, shll8, F::N, K::Plain, H::ShLL8},
+	{0xF0FF, 0x4019, shlr8, F::N, K::Plain, H::ShLR8},
+	{0xF0FF, 0x4028, shll16, F::N, K::Plain, H::ShLL16},
+	{0xF0FF, 0x4029, shlr16, F::N, K::Plain, H::ShLR16},
 	{0xF00F, 0x400C, shad, F::NM, K::Plain},
 	{0xF00F, 0x400D, shld, F::NM, K::Plain},
 
@@ -1648,12 +1650,12 @@ const typename Sh4OpsT<Way>::Entry Sh4OpsT<Way>::table[] = {
 	{0xFFFF, 0x000B, rts, F::None, K::Jump},
 	{0xFFFF, 0x002B, rte, F::None, K::Jump},
 
-	{0xFFFF, 0x0008, clrt, F::None, K::Plain},
-	{0xFFFF, 0x0018, sett, F::None, K::Plain},
+	{0xFFFF, 0x0008, clrt, F::None, K::Plain, H::ClrT},
+	{0xFFFF, 0x0018, sett, F::None, K::Plain, H::SetT},
 	{0xFFFF, 0x0048, clrs, F::None, K::Plain},
 	{0xFFFF, 0x0058, sets, F::None, K::Plain},
 	{0xFFFF, 0x0028, clrmac, F::None, K::Plain},
-	{0xFFFF, 0x0009, nop, F::None, K::Plain},
+	{0xFFFF, 0x0009, nop, F::None, K::Plain, H::Nop},
 	{0xFFFF, 0x001B, sleep, F::None, K::End},
 	{0xFF00, 0xC300, trapa, F::Imm, K::End},
 	{0xF0FF, 0x400E, ldcsr, F::N, K::End},
@@ -1700,11 +1702,11 @@ const typename Sh4OpsT<Way>::Entry Sh4OpsT<Way>::table[] = {
 	{0xF0FF, 0x4022, stsmpr, F::N, K::Plain},
 
 	/* No TLB and no cache: LDTLB, PREF, OCBI, OCBP and OCBWB do nothing. */
-	{0xFFFF, 0x0038, nop, F::None, K::Plain},
-	{0xF0FF, 0x0083, nop, F::N, K::Plain},
-	{0xF0FF, 0x0093, nop, F::N, K::Plain},
-	{0xF0FF, 0x00A3, nop, F::N, K::Plain},
-	{0xF0FF, 0x00B3, nop, F::N, K::Plain},
+	{0xFFFF, 0x0038, nop, F::None, K::Plain, H::Nop},
+	{0xF0FF, 0x0083, nop, F::N, K::Plain, H::Nop},
+	{0xF0FF, 0x0093, nop, F::N, K::Plain, H::Nop},
+	{0xF0FF, 0x00A3, nop, F::N, K::Plain, H::Nop},
+	{0xF0FF, 0x00B3, nop, F::N, K::Plain, H::Nop},
 	{0xF0FF, 0x00C3, movca, F::N, K::Plain},
 
 	{0xF0FF, 0x405A, ldsfpul, F::N, K::Plain},
@@ -1884,6 +1886,22 @@ Sh4Host::Call Sh4::called(void (*run)(Sh4 &, const Sh4Op *))
 	}();
 
 	return both.at(run);
+}
+
+/* What host code does itself in place of a call to the instruction. */
+Sh4::Inline Sh4::inlined(void (*run)(Sh4 &, const Sh4Op *))
+{
+	static const std::unordered_map<void (*)(Sh4 &, const Sh4Op *), Inline> forms = [] {
+		std::unordered_map<void (*)(Sh4 &, const Sh4Op *), Inline> m;
+
+		for (uint32_t i = 0; i < Sh4Ops::table_size; i++) {
+			m.emplace(Sh4Ops::table[i].run, Sh4Ops::table[i].host);
+		}
+		return m;
+	}();
+	const auto found = forms.find(run);
+
+	return found == forms.end() ? Inline::No : found->second;
 }
 
 /* The two ends of a block, see Sh4OpsT. */
