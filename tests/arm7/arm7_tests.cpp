@@ -1858,7 +1858,7 @@ void test_turns()
 /* The pages a machine must tell the core of (watched_reads, watched_writes):
  * none outside a turn; while one is recorded, those it has read so far, for
  * a write; while one is counted, those it changes, for a read, and those it
- * reads or changes, for a write. */
+ * reads or writes, for a write. */
 void test_watched_pages()
 {
 	TEST("pages the machine must tell of");
@@ -1871,12 +1871,13 @@ void test_watched_pages()
 	 *	mov r5, #0
 	 *	strb r9, [r10]		a byte of page 12 changed
 	 *	strb r11, [r10]		and put back
+	 *	strb r11, [r12]		a byte of page 14 written as it is
 	 *	ldr r1, [r0]		a word of page 4, read only
 	 *	cmp r1, #0
 	 *	beq 1b
 	 *	b .			*/
 	const uint32_t code[] = { 0xE5965000, 0xE2855001, 0xE5865000, 0xE3A05000, 0xE5CA9000,
-	                          0xE5CAB000, 0xE5901000, 0xE3510000, 0x0AFFFFF6, 0xEAFFFFFE };
+	                          0xE5CAB000, 0xE5CCB000, 0xE5901000, 0xE3510000, 0x0AFFFFF5, 0xEAFFFFFE };
 	for (uint32_t i = 0; i < std::size(code); i++) {
 		for (uint32_t b = 0; b < 4; b++) {
 			ram[0x1000 + i * 4 + b] = static_cast<uint8_t>(code[i] >> (8 * b));
@@ -1893,6 +1894,7 @@ void test_watched_pages()
 	cpu.set_reg(6, 0x8000);
 	cpu.set_reg(9, 1);
 	cpu.set_reg(10, 0xC000);
+	cpu.set_reg(12, 0xE000);
 	cpu.set_turn_replay(true);
 
 	const auto watched = [](const uint8_t *pages, uint32_t addr) {
@@ -1922,6 +1924,8 @@ void test_watched_pages()
 	check_eq("write watched: the word", watched(writes, 0x4000), 1);
 	check_eq("write watched: the count", watched(writes, 0x8000), 1);
 	check_eq("write watched: the byte changed and put back", watched(writes, 0xC000), 1);
+	check_eq("write watched: a byte written as it is", watched(writes, 0xE000), 1);
+	check_eq("read watched: a byte written as it is", watched(reads, 0xE000), 0);
 	check_eq("write watched: a page the turn does not use", watched(writes, 0x2000), 0);
 
 	cpu.set_turn_replay(false);

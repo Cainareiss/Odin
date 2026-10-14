@@ -122,8 +122,9 @@ public:
 	/* The pages of the plain memory the machine must tell of: a bit for
 	 * each page of 1 << WATCH_PAGE bytes, page n in bit n & 7 of byte
 	 * n >> 3, or nullptr for none. Those of ram_read(), while turns are
-	 * counted, and those of ram_write(), while a turn is recorded or
-	 * counted; the machine may skip the call for any other page. */
+	 * counted: those they change; and those of ram_write(), while a turn
+	 * is recorded or counted: those it reads or writes. The machine may
+	 * skip the call for any other page. */
 	static constexpr uint32_t WATCH_PAGE = 12;
 	const uint8_t *watched_reads() const { return m_turn == Turn::Replay ? m_turn_changed.data() : nullptr; }
 	const uint8_t *watched_writes() const
@@ -301,7 +302,7 @@ private:
 	std::array<uint16_t, TURN_MAX + 1> m_turn_passed; /* summed */
 	std::array<uint8_t, 256> m_turn_pages;            /* memory read */
 	std::array<uint8_t, 256> m_turn_changed;          /* memory changed */
-	std::array<uint8_t, 256> m_turn_watched;          /* either */
+	std::array<uint8_t, 256> m_turn_watched;          /* memory read or written */
 	std::array<TurnRead, TURN_READS> m_turn_reads;
 	std::array<TurnStore, TURN_STORES> m_turn_stores;
 	std::array<TurnOp, TURN_MAX> m_turn_ops;

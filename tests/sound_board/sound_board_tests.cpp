@@ -254,6 +254,35 @@ test_monitor_reads()
 	compare(boards[0], boards[1], "monitor reads");
 }
 
+/* The ARM7 writes a byte again and again with the value already there;
+ * the main processor writes another one there: the next turn writes it
+ * back. */
+void
+test_host_writes()
+{
+	Board boards[2] = { Board(true), Board(false) };
+	uint32_t seen[2];
+
+	for (uint32_t k = 0; k < 2; k++) {
+		Board &b = boards[k];
+		/*	mov r0, #0x10000
+		 *	mov r1, #0x55
+		 * 1:	strb r1, [r0]
+		 *	b 1b				*/
+		b.program({ 0xE3A00801, 0xE3A01055, 0xE5C01000, 0xEAFFFFFD });
+		b.start();
+		/* Long enough for the turn to be counted */
+		b.run(100);
+		b.board->host_write(RAM + 0x10000, 1, 0x77);
+		b.run(2);
+		/* As the main processor reads it, before a state is saved */
+		seen[k] = b.word(0x10000) & 0xFF;
+	}
+	check(seen[1] == 0x55, "host writes: every turn run, the ARM7 writes its byte back");
+	check(seen[0] == seen[1], "host writes: turns counted, the same byte read");
+	compare(boards[0], boards[1], "host writes");
+}
+
 /* The ARM7 counts in a word the DSP reads and sends out */
 void
 test_dsp_reads()
@@ -293,6 +322,7 @@ main()
 	test_voice_reads();
 	test_monitor_reads();
 	test_dsp_reads();
+	test_host_writes();
 	if (failures) {
 		printf("%u failure(s)\n", failures);
 		return EXIT_FAILURE;
