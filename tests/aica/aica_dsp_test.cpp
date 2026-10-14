@@ -21,8 +21,8 @@
 /* The effect processor of the AICA on small programs of known results:
  * a send through a coefficient, an empty step, the memory read two steps
  * later, the odd steps, EFREG set twice, the 16-bit floats of the ring
- * buffer (values of yam.c's pair), the ring counter, and the mix of the
- * outputs and of the external inputs.
+ * buffer (values of yam.c's pair), the runs of empty steps, the ring
+ * counter, and the mix of the outputs and of the external inputs.
  *
  * Build: g++ -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
  *            -O2 -I src tests/aica/aica_dsp_test.cpp src/odin/aica.cpp \
@@ -175,6 +175,38 @@ test_floats()
 	check(n.word(0x80) == 0x1234, "NOFL: the high 16 bits as they are");
 }
 
+/* Only the steps that do something run, with one of each run of empty
+ * steps: a step keeps its number, and the ACC of the empty steps at the
+ * end reaches the first step of the next period */
+void
+test_empty_runs()
+{
+	/* COEF 9 for step 9, after nine empty steps */
+	Dsp c;
+	c.set(0x3000 + 9 * 4, 0x4000);
+	c.step(9, 0, XSEL | YSEL_COEF | ira(0x20), ZERO, 0);
+	c.step(10, 0, 0, EWT | ewa(0), 0);
+	c.dsp.send(0, 262144);
+	c.run();
+	check(c.dsp.effect(0) == 8192, "a step after empty ones keeps its number");
+
+	/* Step 0 writes the ACC of the period before, that of its empty steps */
+	Dsp e;
+	e.dsp.write(0x4004, 0x1234);
+	e.step(0, 0, 0, EWT | ewa(2) | ZERO, 0);
+	e.run();
+	e.run();
+	check(e.dsp.effect(2) == 0x1234, "the empty steps at the end set ACC for the next period");
+
+	/* A state goes with the program of its registers */
+	Dsp l;
+	l.regs = c.regs;
+	l.dsp.load(c.dsp.state(), l.regs.data());
+	l.dsp.send(0, 131072);
+	l.run();
+	check(l.dsp.effect(0) == 4096, "a loaded state runs the program of its registers");
+}
+
 /* The ring counter goes down one a period: the ring buffer and TEMP are
  * reached through it, a table is not */
 void
@@ -246,6 +278,7 @@ main()
 {
 	test_steps();
 	test_floats();
+	test_empty_runs();
 	test_counter();
 	test_mix();
 	if (failures) {

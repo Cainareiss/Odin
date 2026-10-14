@@ -104,17 +104,27 @@ void
 AicaDsp::reset()
 {
 	m_state = {};
+	m_order = {};
+	m_size = 0;
 }
 
 void
 AicaDsp::program_written(const uint8_t *regs)
 {
-	m_state.steps = 0;
+	bool busy = false, after_empty = false;
+
+	m_size = 0;
 	for (uint32_t i = 0; i < 128; i++) {
 		const uint32_t at = REG_MPRO + i * 16;
-		if (reg(regs, at) | reg(regs, at + 4) | reg(regs, at + 8) | reg(regs, at + 12))
-			m_state.steps = i + 1;
+		const bool empty = !(reg(regs, at) | reg(regs, at + 4) | reg(regs, at + 8) | reg(regs, at + 12));
+
+		if (!empty || !after_empty)
+			m_order[m_size++] = static_cast<uint8_t>(i);
+		after_empty = empty;
+		busy |= !empty;
 	}
+	if (!busy)
+		m_size = 0;
 }
 
 void
@@ -127,12 +137,13 @@ AicaDsp::run(const uint8_t *regs, uint8_t *ram, uint32_t ram_mask)
 		s.mixs[j] = 0;
 	}
 	/* An empty program writes nothing: only the counter moves */
-	if (s.steps) {
+	if (m_size) {
 		const uint32_t ring = reg(regs, REG_RING);
 		const uint32_t base = (ring & 0xFFF) << 11;
 		const uint32_t length = (8192u << ((ring >> 13) & 3)) - 1;
 
-		for (uint32_t i = 0; i < 128; i++) {
+		for (uint32_t n = 0; n < m_size; n++) {
+			const uint32_t i = m_order[n];
 			const uint32_t at = REG_MPRO + i * 16;
 			const uint32_t w0 = reg(regs, at), w1 = reg(regs, at + 4);
 			const uint32_t w2 = reg(regs, at + 8), w3 = reg(regs, at + 12);

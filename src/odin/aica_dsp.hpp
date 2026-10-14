@@ -52,7 +52,6 @@ public:
 		std::array<int32_t, 4> reads;	/* the memory read two steps ago */
 		int32_t acc, frc, y, adrs;
 		uint32_t mdec;
-		uint32_t steps;			/* 0: the program is empty */
 	};
 
 	AicaDsp() { reset(); }
@@ -73,10 +72,21 @@ public:
 	void write(uint32_t offset, uint16_t value);
 
 	const State &state() const { return m_state; }
-	void load(const State &in) { m_state = in; }
+	/* `regs`: the register file that goes with the state */
+	void load(const State &in, const uint8_t *regs)
+	{
+		m_state = in;
+		program_written(regs);
+	}
 
 private:
 	State m_state;
+	/* The steps run() runs, in order: each step of the program that does
+	 * something, and the first of each run of empty steps. An empty step
+	 * sets ACC from TEMP[MDEC] and FRC alone and writes nothing, so a run
+	 * of them ends as one of them does. None: the program is empty. */
+	std::array<uint8_t, 128> m_order;
+	uint32_t m_size;
 };
 
 } /* namespace odin */

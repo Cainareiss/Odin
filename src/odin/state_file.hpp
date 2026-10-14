@@ -33,8 +33,9 @@ class StateFile {
 public:
 	/* 3: the command processor keeps its own state (antarctic.hpp);
 	 * 4: the light numbers are kept in a light set;
-	 * 5: the sound chips keep their voices (aica_voice.hpp) */
-	static constexpr unsigned VERSION = 5;
+	 * 5: the sound chips keep their voices (aica_voice.hpp);
+	 * 6: the effect processor no longer keeps the length of its program */
+	static constexpr unsigned VERSION = 6;
 
 	enum class Mode {
 		SAVE,

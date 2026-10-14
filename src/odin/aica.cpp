@@ -643,7 +643,7 @@ Aica::load(const AicaState &in)
 	m_rtc_samples = in.rtc_samples;
 	for (uint32_t slot = 0; slot < SLOTS; slot++)
 		m_voices[slot].load(in.voices[slot]);
-	m_dsp.load(in.dsp);
+	m_dsp.load(in.dsp, m_regs.data());
 	m_odometer = in.odometer;
 	m_noise = in.noise;
 	m_host.arm_reset(m_arm_reset);
