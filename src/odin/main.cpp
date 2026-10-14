@@ -26,6 +26,7 @@
 #include <filesystem>
 #include <memory>
 #include <optional>
+#include <utility>
 #include <string>
 #include <thread>
 #include <vector>
@@ -37,6 +38,7 @@
 #include "odin/display.hpp"
 #include "odin/env.hpp"
 #include "odin/games.hpp"
+#include "odin/audio_out.hpp"
 #include "odin/hikaru.hpp"
 #include "odin/keyboard.hpp"
 
@@ -50,6 +52,7 @@ struct Options {
 	std::vector<unsigned> save_frames;
 	bool unthrottled = false;
 	bool verbose = false;
+	std::optional<odin::AudioOut::Mode> sound;
 	odin::Display::Options display = { 1, 1, 0, false };
 };
 
@@ -64,6 +67,8 @@ const char HELP[] = "Usage: %s [options]\n"
 "	-a <num>	Filter the textures with an anisotropy of num (2 to 16); the board has none\n"
 "	-w <num>	Make the window num times 640 by 480, as far as the display has room\n"
 "	-f		Take the whole display (F11 or Alt+Enter goes back and forth)\n"
+"	-o <mode>	Play the sound: main (the speakers of the main board), option (those\n"
+"			of the optional board), mix (both on two channels) or quad (four)\n"
 "	-v		Set verbosity (affects debug messages)\n"
 "	-h              Show this help\n";
 
@@ -73,7 +78,7 @@ parse_options(int argc, char **argv, Options &options)
 {
 	int opt = (argc < 2) ? 'h' : 0;
 
-	while (opt != 'h' && (opt = getopt(argc, argv, "R:r:n:l:s:ux:a:w:fvh?")) != -1) {
+	while (opt != 'h' && (opt = getopt(argc, argv, "R:r:n:l:s:ux:a:w:fo:vh?")) != -1) {
 		switch (opt) {
 		case 'R':
 			options.rom_path = optarg;
@@ -95,6 +100,19 @@ parse_options(int argc, char **argv, Options &options)
 					s++;
 			}
 			break;
+		case 'o': {
+			static const std::pair<const char *, odin::AudioOut::Mode> modes[] = {
+				{ "main", odin::AudioOut::Mode::MAIN }, { "option", odin::AudioOut::Mode::OPTION },
+				{ "mix", odin::AudioOut::Mode::MIX }, { "quad", odin::AudioOut::Mode::QUAD } };
+			opt = 'h';
+			for (const auto &[name, mode] : modes) {
+				if (std::string(optarg) == name) {
+					options.sound = mode;
+					opt = 'o';
+				}
+			}
+			break;
+		}
 		case 'u':
 			options.unthrottled = true;
 			break;
@@ -156,8 +174,9 @@ load_game_list(odin::GameList &games)
  * it. */
 class Session {
 public:
-	Session(const Options &options, odin::Hikaru &board, odin::Display &display, odin::Keyboard &keys)
-		: m_options(options), m_board(board), m_display(display), m_keys(keys),
+	Session(const Options &options, odin::Hikaru &board, odin::Display &display, odin::Keyboard &keys,
+	        odin::AudioOut *audio)
+		: m_options(options), m_board(board), m_display(display), m_keys(keys), m_audio(audio),
 		  m_paused(false), m_next()
 	{
 	}
@@ -176,6 +195,7 @@ private:
 	odin::Hikaru &m_board;
 	odin::Display &m_display;
 	odin::Keyboard &m_keys;
+	odin::AudioOut *m_audio;	/* nullptr: no sound */
 	bool m_paused;
 	std::chrono::steady_clock::time_point m_next;	/* when the next frame is due */
 };
@@ -284,6 +304,8 @@ Session::run()
 			continue;
 		m_display.begin_frame();
 		m_board.run_frame();
+		if (m_audio)
+			m_audio->play(m_board.sound(false), m_board.sound(true));
 		m_display.end_frame(m_board.frame());
 		save_state_at_frame();
 		if (!m_options.unthrottled)
@@ -337,6 +359,13 @@ main(int argc, char **argv)
 		return 0;
 	board->set_panel(&keys);
 
+	/* Unthrottled frames do not keep time: no sound with -u */
+	std::unique_ptr<odin::AudioOut> audio;
+	if (options.sound && options.unthrottled)
+		std::fprintf(stderr, "sound: not with -u\n");
+	else if (options.sound)
+		audio = odin::AudioOut::make(*options.sound);
+
 	bool started = true;
 
 	board->reset();
@@ -349,7 +378,7 @@ main(int argc, char **argv)
 	}
 	if (started) {
 		std::printf("Running");
-		Session(options, *board, *display, keys).run();
+		Session(options, *board, *display, keys, audio.get()).run();
 	}
 
 	std::printf("Finalizing");

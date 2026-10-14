@@ -802,6 +802,8 @@ Hikaru::begin_frame()
 void
 Hikaru::run_frame()
 {
+	m_sound[MASTER]->clear_samples();
+	m_sound[SLAVE]->clear_samples();
 	bool done = false;
 
 	if (m_verbose)
@@ -837,8 +839,6 @@ Hikaru::run_frame()
 
 	if (m_wav)
 		m_wav->write(m_sound[MASTER]->samples());
-	m_sound[MASTER]->clear_samples();
-	m_sound[SLAVE]->clear_samples();
 
 	/* ODIN_STATS: every 60 frames, the host time of a frame in all and
 	 * that of each part, in ms. What is not in the parts went to the rest

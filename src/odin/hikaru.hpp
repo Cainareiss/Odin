@@ -105,6 +105,9 @@ public:
 	const std::string &game_name() const { return m_game.name; }
 	/* Frames run since power-on */
 	unsigned frame() const { return m_frame; }
+	/* The sound of the last frame of the main board, or of the optional
+	 * one: left and right, 44 100 pairs a second */
+	const std::vector<int16_t> &sound(bool optional) const { return m_sound[optional ? SLAVE : MASTER]->samples(); }
 
 	/* Power-on */
 	void reset();

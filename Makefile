@@ -62,6 +62,7 @@ OBJ := \
 	src/odin/sound_board.o \
 	src/odin/aica.o \
 	src/odin/aica_dsp.o \
+	src/odin/audio_out.o \
 	src/odin/aica_voice.o \
 	src/odin/wav_file.o \
 	src/odin/arm7.o \

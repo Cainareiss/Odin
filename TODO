@@ -131,7 +131,8 @@ AICA (src/odin/aica.cpp + arm7.cpp): control block, timers, interrupts,
 DMA, RTC and the ARM7 are in, and the voices (aica_voice.cpp: sampler,
 loops, envelope, filter, levels, LFO, the monitors the sound driver reads), the
 effect processor (aica_dsp.cpp) and the mix of a chip (ODIN_WAV writes that
-of the main board); still missing: the sound output, the nested-FIQ
+of the main board; -o plays the boards, audio_out.cpp); still missing: the
+nested-FIQ
 question (does reading 0x2D00 drop the line?), and the HACK in
 hikaru_bus.cpp (page offset 0 reads 4 for Pharrier). Voices, HEURISTIC
 (one source, notes MARKDOWN/30 section 5): the rate of an envelope step
