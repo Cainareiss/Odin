@@ -1447,11 +1447,12 @@ constexpr uint32_t TURN_CODE = 0x1000, TURN_COUNT = 0x8000, TURN_FLAG = 0x8010;
 /* 300 calls of 512 cycles, unless told, as a sound board runs its ARM7. The machine
  * reads the count at call 100, sets the flag the loop waits for at call
  * `flag_at` and, if asked, writes the count at call 150. */
-TurnsRun run_turns(bool counted, const std::vector<uint32_t> &code, uint32_t count, uint32_t flag_at, bool write_count = false,
-                   uint32_t set_byte = 0, const TurnsEvents &events = {})
+TurnsRun run_turns_with(bool decoded, bool counted, const std::vector<uint32_t> &code, uint32_t count, uint32_t flag_at,
+                        bool write_count, uint32_t set_byte, const TurnsEvents &events)
 {
 	CountingBus bus;
 	Arm7 cpu(bus);
+	cpu.set_decoded(decoded);
 	TurnsRun out{};
 	out.ram.assign(0x10000, 0);
 
@@ -1561,6 +1562,22 @@ TurnsRun run_turns(bool counted, const std::vector<uint32_t> &code, uint32_t cou
 	out.recorded = cpu.turns_recorded();
 	out.counted = cpu.turns_counted();
 	return out;
+}
+
+/* The same with what was decoded and with step() alone: the same in all. */
+TurnsRun run_turns(bool counted, const std::vector<uint32_t> &code, uint32_t count, uint32_t flag_at, bool write_count = false,
+                   uint32_t set_byte = 0, const TurnsEvents &events = {})
+{
+	const TurnsRun fast = run_turns_with(true, counted, code, count, flag_at, write_count, set_byte, events);
+	const TurnsRun slow = run_turns_with(false, counted, code, count, flag_at, write_count, set_byte, events);
+
+	g_checks++;
+	if (!(fast.state == slow.state) || fast.ram != slow.ram || fast.bus_reads != slow.bus_reads || fast.seen != slow.seen ||
+	    fast.instructions != slow.instructions || fast.recorded != slow.recorded || fast.counted != slow.counted ||
+	    fast.watched != slow.watched) {
+		fail("from what was decoded, not as step()");
+	}
+	return fast;
 }
 
 /* Both ways; returns how many times fewer the bus was read with the turns
@@ -2127,6 +2144,89 @@ void test_decoded()
 	}
 }
 
+/* run() from what was decoded does what it does with step() alone: a loop
+ * across two pages that writes another instruction over its first one and
+ * raises its interrupt through the bus every other turn, the handler lowering it,
+ * run by calls of a few cycles to a few hundred. The same cycles from each
+ * call, registers, memory, bus accesses in order and instructions. */
+class IrqBus : public LogBus {
+public:
+	Arm7 *cpu = nullptr;
+
+	void write32(uint32_t addr, uint32_t v) override
+	{
+		LogBus::write32(addr, v);
+		if (addr == 0x30000) {
+			cpu->set_irq((v & 1) != 0);
+		}
+	}
+};
+
+void test_run_decoded()
+{
+	g_current = "run decoded";
+	constexpr uint32_t NE = 1;
+	const uint32_t add = dp_imm(ADD, false, 5, 5, 3, 0), sub = dp_imm(SUB, false, 5, 5, 1, 0);
+	const std::vector<std::pair<uint32_t, std::vector<uint32_t>>> code = {
+		{ 0x0FF0, { add,
+			    dp_imm(ADD, false, 6, 6, 3, 0),
+			    ldst_imm(false, false, true, true, false, 8, 7, 0),		/* str r7, [r8] */
+			    dp_reg(EOR, false, 7, 7, 9, LSL, 0),			/* eor r7, r7, r9 */
+			    dp_imm(SUB, true, 10, 10, 1, 0),				/* subs r10, r10, #1 */
+			    ldst_imm(false, false, true, true, false, 11, 10, 0),	/* str r10, [r11] */
+			    ldst_imm(true, false, true, true, false, 11, 1, 4),		/* ldr r1, [r11, #4] */
+			    branch(false, -9, NE),					/* bne 0ff0 */
+			    branch(false, -2) } },					/* b . */
+		{ 0x18, { branch(false, 0x78) } },					/* b 200 */
+		{ 0x200, { dp_imm(MOV, false, 0, 0, 0, 0),
+			   ldst_imm(false, false, true, true, false, 11, 0, 0),		/* str r0, [r11] */
+			   dp_imm(ADD, false, 12, 12, 1, 0),
+			   dp_imm(SUB, true, 14, 15, 4, 0) } },				/* subs pc, lr, #4 */
+	};
+	const uint32_t calls[] = { 1, 2, 5, 13, 64, 512, 3 };
+	std::vector<uint8_t> ram[2];
+	std::vector<uint32_t> spent[2];
+	IrqBus bus[2];
+	odin::Arm7State after[2];
+	uint64_t instructions[2];
+
+	for (uint32_t k = 0; k < 2; k++) {
+		Arm7 cpu(bus[k]);
+		bus[k].cpu = &cpu;
+		cpu.set_decoded(k == 1);
+		ram[k].assign(0x10000, 0);
+		for (const auto &[at, words] : code) {
+			std::memcpy(&ram[k][at], words.data(), words.size() * 4);
+		}
+		cpu.set_ram({ram[k].data(), 0x10000, 0xFFFF});
+		odin::Arm7State st{};
+		cpu.save(st);
+		st.pc = 0x0FF0;
+		st.cpsr = Arm7::MODE_SVC | Arm7::FLAG_F;
+		cpu.load(st);
+		cpu.set_reg(7, sub);
+		cpu.set_reg(8, 0x0FF0);
+		cpu.set_reg(9, add ^ sub);
+		cpu.set_reg(10, 200);
+		cpu.set_reg(11, 0x30000);
+		for (uint32_t total = 0, i = 0; total < 20000; i++) {
+			spent[k].push_back(cpu.run(calls[i % 7]));
+			total += spent[k].back();
+		}
+		cpu.save(after[k]);
+		instructions[k] = cpu.instructions();
+	}
+	check_eq("run decoded: cycles of each call", spent[0] == spent[1], 1);
+	check_eq("run decoded: registers", after[0] == after[1], 1);
+	check_eq("run decoded: memory", ram[0] == ram[1], 1);
+	check_eq("run decoded: bus accesses", bus[0].log == bus[1].log, 1);
+	check_eq("run decoded: instructions", instructions[0], instructions[1]);
+	/* The program did what it was written for. */
+	check_eq("run decoded: turns of the loop", after[1].r[6], 600);
+	check_eq("run decoded: up 3, down 1", after[1].r[5], 200);
+	check_eq("run decoded: interrupts", after[1].usr[4], 100);
+}
+
 int main(int argc, char **argv)
 {
 	for (int i = 1; i < argc; i++) {
@@ -2150,6 +2250,7 @@ int main(int argc, char **argv)
 	test_turns();
 	test_watched_pages();
 	test_decoded();
+	test_run_decoded();
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures == 0 ? 0 : 1;
 }

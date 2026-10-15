@@ -148,8 +148,69 @@ uint32_t Arm7::run(uint32_t cycles)
 					m_turn_kept = false;
 				}
 			}
-			done += (m_decoded_on && !m_trace) ? step_decoded() : step();
+			if (m_decoded_on && !m_trace) {
+				done = run_decoded(done + step_decoded(), cycles);
+			} else {
+				done += step();
+			}
 		}
+	}
+	return done;
+}
+
+/* The loop above and step_decoded(), instruction for instruction, for as
+ * long as neither has more to do: back to the loop when the cycles are
+ * spent, an interrupt is to be taken, the code is outside the memory or
+ * the turn kept is to be looked at. */
+uint32_t Arm7::run_decoded(uint32_t done, uint32_t cycles)
+{
+	uint32_t at_page = DECODED_PAGES;
+	Decoded *page = nullptr;
+
+	while (done < cycles) {
+		if ((m_fiq_line && (m_cpsr & FLAG_F) == 0) || (m_irq_line && (m_cpsr & FLAG_I) == 0)) {
+			break;
+		}
+		const uint32_t addr = m_pc & ~3u;
+		const uint32_t at = addr & m_ram.mask;
+		if (addr >= m_ram.size || at >= (DECODED_PAGES << DECODED_PAGE)) {
+			break;
+		}
+		if (m_turn_kept) {
+			if (m_pc == m_turn_start.pc || (m_turn_left && m_pc == m_turn_left_state.pc)) {
+				break;
+			}
+			if (--m_turn_try == 0 || m_turn_misses == TURN_ROUND) {
+				m_turn_kept = false;
+			}
+		}
+		if ((at >> DECODED_PAGE) != at_page) {
+			at_page = at >> DECODED_PAGE;
+			page = m_decoded[at_page].get();
+			if (!page) {
+				page = decoded_page(at_page);
+			}
+		}
+
+		const uint8_t *p = m_ram.base + at;
+		Decoded &d = page[(at >> 2) & ((1u << (DECODED_PAGE - 2)) - 1)];
+		const uint32_t op = p[0] | (p[1] << 8) | (p[2] << 16) | (static_cast<uint32_t>(p[3]) << 24);
+		if (d.op != op || !d.run) {
+			d.op = op;
+			d.run = decode(op);
+		}
+		const Run does = d.run;
+
+		m_cycles = 0;
+		m_op_pc = m_pc;
+		m_pc += 4;
+		if ((COND_PASS[op >> 28] >> (m_cpsr >> 28)) & 1) {
+			m_instructions++;
+			does(*this, op);
+		} else {
+			m_cycles += 1;
+		}
+		done += m_cycles;
 	}
 	return done;
 }

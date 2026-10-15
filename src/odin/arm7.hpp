@@ -236,6 +236,7 @@ private:
 	friend struct Arm7Ops;
 	static Run decode(uint32_t op);
 	Decoded *decoded_page(uint32_t page);
+	uint32_t run_decoded(uint32_t done, uint32_t cycles);
 
 	Arm7Bus &m_bus;
 	Arm7Ram m_ram;
