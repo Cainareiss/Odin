@@ -70,6 +70,8 @@ public:
 		}
 		/* The interrupt line of the controller may have moved. */
 		virtual void memctl_irq_changed() = 0;
+		/* A register of the windows was written. */
+		virtual void memctl_windows_changed() {}
 		/* Something the program did that has no answer here. */
 		virtual void memctl_error(const char *what) = 0;
 	};
@@ -89,6 +91,8 @@ public:
 	 * and bus_write_span(), within the window. */
 	std::span<const uint8_t> read_span(uint32_t addr);
 	std::span<uint8_t> write_span(uint32_t addr);
+	/* The page of the external bus a window is open on */
+	uint32_t window_page(uint32_t addr) const { return window_bank(addr) & 0x7F; }
 
 	/* IRL1 of the master SH-4, held while bit 12 of +04 is set: the
 	 * handler of the games (PHARRIER @0C0102A0) tests the bit and writes
@@ -102,6 +106,7 @@ private:
 	uint32_t reg(uint32_t offs, unsigned size) const;
 	void set_reg(uint32_t offs, unsigned size, uint64_t value);
 	uint32_t window_bank(uint32_t addr) const;
+	static bool writes_window(uint32_t offs, unsigned size);
 	void run_transfer();
 	void tell_bridge_page(char rw, unsigned size, uint32_t addr, uint64_t value);
 

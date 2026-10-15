@@ -167,6 +167,13 @@ void Sh4::map_quiet(uint32_t page)
 	}
 }
 
+void Sh4::set_quiet(uint32_t first, uint32_t count, bool quiet)
+{
+	if (first < PHYSICAL_PAGES) {
+		std::fill_n(m_quiet.begin() + first, std::min(count, PHYSICAL_PAGES - first), quiet ? 1 : 0);
+	}
+}
+
 void Sh4::set_hook(uint32_t addr)
 {
 	m_hook_on = true;

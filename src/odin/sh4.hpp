@@ -167,6 +167,9 @@ public:
 	 * machine raised something meanwhile. Until the page is mapped
 	 * again. */
 	void map_quiet(uint32_t page);
+	/* The same for `count` pages from `first`, or, quiet false, those
+	 * pages no longer quiet. */
+	void set_quiet(uint32_t first, uint32_t count, bool quiet);
 
 	/* Runs whole instructions for `cycles` cycles; a branch and its
 	 * delay slot are never split. Returns the cycles run past the end. */

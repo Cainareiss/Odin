@@ -201,6 +201,8 @@ private:
 	std::span<const uint8_t> bus_read_span(uint32_t bus_addr) override;
 	std::span<uint8_t> bus_write_span(uint32_t bus_addr) override;
 	void memctl_irq_changed() override { update_irqs(); }
+	void memctl_windows_changed() override { quiet_windows(); }
+	void quiet_windows();
 	void memctl_error(const char *what) override { cpu_error("%s", what); }
 
 	/* hikaru_state.cpp */

@@ -236,6 +236,15 @@ MemCtl::set_reg(uint32_t offs, unsigned size, uint64_t value)
 	store_bytes(&m_regs[offs], size, value);
 }
 
+/* Whether a write of the registers reaches a byte of the windows */
+bool
+MemCtl::writes_window(uint32_t offs, unsigned size)
+{
+	const auto reaches = [offs, size](uint32_t first, uint32_t end) { return offs < end && offs + size > first; };
+
+	return reaches(0x12, 0x14) || reaches(0x1A, 0x1D);
+}
+
 /* The page of the external bus a window is open on: a byte of the registers
  * for each window. */
 uint32_t
@@ -329,6 +338,8 @@ MemCtl::write(uint32_t addr, unsigned size, uint64_t value)
 			break;
 		}
 		set_reg(addr & 0x3F, size, value);
+		if (writes_window(addr & 0x3F, size))
+			m_host.memctl_windows_changed();
 		if ((addr & 0xFF) == 0x38)
 			run_transfer();
 		return true;
@@ -350,7 +361,7 @@ MemCtl::read_span(uint32_t addr)
 		return {};
 
 	const uint32_t offs = addr & 0xFFFFFF;
-	const std::span<const uint8_t> span = m_host.bus_read_span(((window_bank(addr) & 0x7F) << 24) | offs);
+	const std::span<const uint8_t> span = m_host.bus_read_span((window_page(addr) << 24) | offs);
 
 	return span.first(std::min<size_t>(span.size(), 0x1000000 - offs));
 }
@@ -362,7 +373,7 @@ MemCtl::write_span(uint32_t addr)
 		return {};
 
 	const uint32_t offs = addr & 0xFFFFFF;
-	const std::span<uint8_t> span = m_host.bus_write_span(((window_bank(addr) & 0x7F) << 24) | offs);
+	const std::span<uint8_t> span = m_host.bus_write_span((window_page(addr) << 24) | offs);
 
 	return span.first(std::min<size_t>(span.size(), 0x1000000 - offs));
 }

@@ -1259,6 +1259,27 @@ void test_blocks_found_again()
 void test_quiet_page()
 {
 	g_test = "quiet page";
+	for (int k = 0; k < 3; k++) {
+		/* The device writes the instruction after its read, which a
+		 * quiet page promises not to do: quiet, the block goes on as it
+		 * was decoded; loud (never quiet, or quiet then no longer), it
+		 * is left and the new code found. mov.l @r12,r0 / mov #1,r1 /
+		 * bra itself / nop; the device puts mov #2,r1. */
+		Machine m;
+		Machine *self = &m;
+		const uint32_t page = DEVICE >> Sh4::PAGE_BITS;
+
+		m.on_device = [self] { self->put16(CODE + 2, 0xE102); };
+		if (k > 0) {
+			m.cpu.set_quiet(page - 1, 3, true);
+		}
+		if (k > 1) {
+			m.cpu.set_quiet(page, 1, false);
+		}
+		const Sh4State st = run(m, {0x60C2, 0xE101, 0xAFFE, NOP}, 8, [](Sh4State &s) { s.r[12] = DEVICE; });
+		eq(k == 0 ? "loud: the new code" : k == 1 ? "quiet: the block as decoded" : "no longer quiet: the new code",
+		   st.r[1], k == 1 ? 1 : 2);
+	}
 	size_t accesses = 0;
 	for (uint32_t seed = 1; seed <= 16; seed++) {
 		Machine plain, quiet;

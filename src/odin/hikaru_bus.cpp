@@ -152,6 +152,20 @@ Hikaru::map_pages()
 	for (uint32_t addr = 0x00800000; addr < 0x00840000; addr += page_size)
 		m_sh[MASTER]->map_quiet(addr / page_size);
 	m_sh[MASTER]->map_quiet(0x01000000 / page_size);
+	quiet_windows();
+}
+
+/* The windows of the master open on the ROM board (pages 10 to 3F of the
+ * external bus): the board answers there without writing the memory of a
+ * CPU or raising anything. */
+void
+Hikaru::quiet_windows()
+{
+	for (uint32_t window : { 0x02000000u, 0x03000000u, 0x16000000u, 0x17000000u }) {
+		const uint32_t page = m_memctl[MASTER].window_page(window);
+
+		m_sh[MASTER]->set_quiet(window / Sh4::PAGE_SIZE, 0x1000000 / Sh4::PAGE_SIZE, page >= 0x10 && page <= 0x3F);
+	}
 }
 
 /*

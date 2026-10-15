@@ -54,6 +54,7 @@ struct Bus : MemCtl::Host {
 	uint32_t last_read = 0, last_written = 0;
 	unsigned last_size = 0;
 	int irq_changes = 0;
+	int window_changes = 0;
 	std::string error;
 
 	bool bus_read(uint32_t bus_addr, unsigned size, uint64_t &value) override
@@ -75,6 +76,7 @@ struct Bus : MemCtl::Host {
 		return true;
 	}
 	void memctl_irq_changed() override { irq_changes++; }
+	void memctl_windows_changed() override { window_changes++; }
 	void memctl_error(const char *what) override { error = what; }
 };
 
@@ -270,6 +272,37 @@ void test_window_spans()
 	      "none in the page of the registers, and the bus not asked");
 }
 
+/* The host is told when a byte of the windows is written (12, 13 for 16
+ * and 17; 1A, 1B, 1C for 02, 03 and 18), and only then. */
+void test_window_changes()
+{
+	Bus bus;
+	MemCtl memctl(bus, true);
+
+	memctl.reset();
+	bus.window_changes = 0;
+	memctl.write(0x04000010, 2, 0x1111);
+	memctl.write(0x04000014, 4, 0x22222222);
+	memctl.write(0x04000004, 2, 0);
+	memctl.write(0x04000030, 4, 0x10000000);
+	memctl.write(0x04000018, 2, 0x3333);
+	memctl.write(0x0400001D, 1, 0x44);
+	check(bus.window_changes == 0, "not told of the other registers");
+	memctl.write(0x04000010, 4, 0x41400000);
+	check(bus.window_changes == 1 && memctl.window_page(0x16000000) == 0x40 && memctl.window_page(0x17FFFFFF) == 0x41,
+	      "told of 12 and 13, the pages of 16 and 17");
+	memctl.write(0x0400001B, 1, 0xA4);
+	check(bus.window_changes == 2 && memctl.window_page(0x03000000) == 0x24, "told of 1B, the page of 03 less its top bit");
+	memctl.write(0x04000018, 8, 0x0000000C00C00000ull);
+	check(bus.window_changes == 3 && memctl.window_page(0x02000000) == 0x40, "told of an 8-byte write over 1A to 1C");
+	memctl.write(0x0400001C, 1, 0x05);
+	check(bus.window_changes == 4, "told of 1C");
+	memctl.write(0x04000013, 1, 0x42);
+	check(bus.window_changes == 5 && memctl.window_page(0x17000000) == 0x42, "told of 13 alone");
+	memctl.write(0x04000019, 2, 0x2600);
+	check(bus.window_changes == 6 && memctl.window_page(0x02000000) == 0x26, "told of a write that ends on 1A");
+}
+
 } /* namespace */
 
 int main()
@@ -279,6 +312,7 @@ int main()
 	test_status_and_transfer();
 	test_transfer_in_blocks();
 	test_window_spans();
+	test_window_changes();
 
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures ? 1 : 0;
