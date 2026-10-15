@@ -47,6 +47,7 @@ OBJ := \
 	src/odin/actel_m1.o \
 	src/odin/sh4.o \
 	src/odin/sh4_fsca.o \
+	src/odin/host_code.o \
 	src/odin/sh4_host.o \
 	src/odin/sh4_translate.o \
 	src/odin/sh4_ops.o \

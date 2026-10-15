@@ -24,11 +24,6 @@
 
 #if defined(__x86_64__) || defined(_M_X64)
 #define ODIN_SH4_HOST_X86_64 1
-#if defined(_WIN32)
-#include <windows.h>
-#else
-#include <sys/mman.h>
-#endif
 #endif
 
 namespace odin {
@@ -39,32 +34,13 @@ namespace {
 
 constexpr uint32_t SIZE = 32u << 20;
 
-/* The registers of the first two arguments of a call, and the bytes a call
- * needs above it on the stack, with what keeps the stack aligned on 16. */
-#if defined(_WIN32)
-constexpr uint8_t ARG0_FROM_RBX = 0xD9;		/* mov rcx, rbx */
-constexpr uint8_t ARG1_LEA = 0x14;		/* lea rdx, [r12 + ...] */
-constexpr uint8_t RBX_FROM_ARG0 = 0xCB;		/* mov rbx, rcx */
-constexpr uint8_t JUMP_ARG1 = 0xE2;		/* jmp rdx */
-constexpr uint8_t ARG1_VALUE = 0xBA;		/* mov edx, ... */
-constexpr uint8_t FRAME = 40;
-#else
-constexpr uint8_t ARG0_FROM_RBX = 0xDF;		/* mov rdi, rbx */
-constexpr uint8_t ARG1_LEA = 0x34;		/* lea rsi, [r12 + ...] */
-constexpr uint8_t RBX_FROM_ARG0 = 0xFB;		/* mov rbx, rdi */
-constexpr uint8_t JUMP_ARG1 = 0xE6;		/* jmp rsi */
-constexpr uint8_t ARG1_VALUE = 0xBE;		/* mov esi, ... */
-constexpr uint8_t FRAME = 8;
-#endif
-
 /* rbp points this many bytes into the registers of the CPU: the first 64
  * words are a byte of displacement away. */
 constexpr uint32_t MIDDLE = 128;
 
-/* x86: the registers a step names by number, the second byte of a jump on
- * a condition (0F 8x), and the registers that hold the tables of pages. */
+/* x86: the registers a step names by number, and the registers that hold
+ * the tables of pages. */
 constexpr uint8_t EAX = 0, ECX = 1;
-constexpr uint8_t JZ = 0x84, JNZ = 0x85;
 constexpr uint8_t READS = 5, WRITES = 6;	/* r13, r14 */
 
 /* The register of the host a step works in, and what x86 calls the steps. */
@@ -73,98 +49,15 @@ constexpr uint8_t ALU[] = { 0, 5, 4, 1, 6, 7 };			/* add, sub, and, or, xor, cmp
 constexpr uint8_t SHIFT[] = { 4, 5, 7 };			/* shl, shr, sar */
 constexpr uint8_t SET[] = { 0x94, 0x93, 0x97, 0x9D, 0x9F };	/* sete, setae, seta, setge, setg */
 
-uint8_t *take(uintptr_t at, uint32_t size)
-{
-#if defined(_WIN32)
-	return static_cast<uint8_t *>(VirtualAlloc(reinterpret_cast<void *>(at), size, MEM_RESERVE | MEM_COMMIT,
-	                                           PAGE_EXECUTE_READWRITE));
-#else
-	void *want = reinterpret_cast<void *>(at);
-	void *got = mmap(want, size, PROT_READ | PROT_WRITE | PROT_EXEC,
-	                 MAP_PRIVATE | MAP_ANONYMOUS | (at ? MAP_FIXED_NOREPLACE : 0), -1, 0);
-
-	if (got == MAP_FAILED) {
-		return nullptr;
-	}
-	if (at && got != want) {
-		munmap(got, size);
-		return nullptr;
-	}
-	return static_cast<uint8_t *>(got);
-#endif
-}
-
-void give_back(uint8_t *code, uint32_t size)
-{
-#if defined(_WIN32)
-	(void)size;
-	VirtualFree(code, 0, MEM_RELEASE);
-#else
-	munmap(code, size);
-#endif
-}
-
-/* Memory the host may run, within 2 GB of the code of the program when
- * there is some free, for a call to reach an instruction directly. */
-uint8_t *take_near(uint32_t size)
-{
-	const uintptr_t step = 64u << 20;
-	const uintptr_t here = reinterpret_cast<uintptr_t>(&take) & ~(step - 1);
-
-	for (uintptr_t n = 1; n < 24; n++) {
-		if (uint8_t *code = take(here + n * step, size)) {
-			return code;
-		}
-		if (here > n * step) {
-			if (uint8_t *code = take(here - n * step, size)) {
-				return code;
-			}
-		}
-	}
-	return take(0, size);
-}
-
 } /* namespace */
 
 Sh4Host::Sh4Host(uint32_t *words, const Memory &memory, const Places &places)
-	: m_code(take_near(SIZE)), m_words(words), m_memory(memory), m_places(places),
-	  m_fused(__builtin_cpu_supports("fma")), m_size(SIZE), m_used(0), m_leave(0), m_far_calls(0), m_enter(nullptr)
+	: HostCode(SIZE), m_words(words), m_memory(memory), m_places(places), m_fused(__builtin_cpu_supports("fma")),
+	  m_enter(nullptr)
 {
-	if (m_code) {
+	if (usable()) {
 		clear();
 	}
-}
-
-Sh4Host::~Sh4Host()
-{
-	if (m_code) {
-		give_back(m_code, m_size);
-	}
-}
-
-void Sh4Host::bytes(std::initializer_list<uint8_t> values)
-{
-	for (uint8_t value : values) {
-		byte(value);
-	}
-}
-
-void Sh4Host::word(uint32_t value)
-{
-	std::memcpy(m_code + m_used, &value, 4);
-	m_used += 4;
-}
-
-void Sh4Host::quad(uint64_t value)
-{
-	std::memcpy(m_code + m_used, &value, 8);
-	m_used += 8;
-}
-
-/* The displacement of a jump that ends at the place being written. */
-void Sh4Host::jump_to(uint32_t place)
-{
-	word(place - (m_used + 4));
 }
 
 /* The way in keeps the CPU in rbx, its registers in rbp and the tables of
@@ -172,11 +65,7 @@ void Sh4Host::jump_to(uint32_t place)
  * does r12, and jumps to the block; the way back to the run loop undoes it. */
 void Sh4Host::clear()
 {
-	m_used = 0;
-	bytes({0x53, 0x41, 0x54, 0x55});		/* push rbx / push r12 / push rbp */
-	bytes({0x41, 0x55, 0x41, 0x56, 0x41, 0x57});	/* push r13 / push r14 / push r15 */
-	bytes({0x48, 0x83, 0xEC, FRAME});		/* sub rsp, FRAME */
-	bytes({0x48, 0x89, RBX_FROM_ARG0});
+	way_in();
 	bytes({0x48, 0xBD});				/* mov rbp, the registers */
 	quad(reinterpret_cast<uintptr_t>(m_words) + MIDDLE);
 	bytes({0x49, 0xBD});				/* mov r13, the pages to read */
@@ -185,11 +74,8 @@ void Sh4Host::clear()
 	quad(reinterpret_cast<uintptr_t>(m_memory.writes));
 	bytes({0x49, 0xBF});				/* mov r15, the epochs of the code */
 	quad(reinterpret_cast<uintptr_t>(m_memory.code_epochs));
-	bytes({0xFF, JUMP_ARG1});
-	m_leave = m_used;
-	bytes({0x48, 0x83, 0xC4, FRAME});		/* add rsp, FRAME */
-	bytes({0x41, 0x5F, 0x41, 0x5E, 0x41, 0x5D});	/* pop r15 / pop r14 / pop r13 */
-	bytes({0x5D, 0x41, 0x5C, 0x5B, 0xC3});		/* pop rbp / pop r12 / pop rbx / ret */
+	way_in_end();
+	way_out();
 	m_enter = reinterpret_cast<void (*)(Sh4 *, const uint8_t *)>(m_code);
 }
 
@@ -205,12 +91,13 @@ uint32_t Sh4Host::begin(const Sh4Op *ops)
 void Sh4Host::call(Call fn, uint32_t op)
 {
 	const uint32_t offset = op * static_cast<uint32_t>(sizeof(Sh4Op));
+	const uint8_t lea = static_cast<uint8_t>((ARG[1] << 3) | 4);	/* lea the second argument, [r12 + ...] */
 
-	bytes({0x48, 0x89, ARG0_FROM_RBX});
+	bytes({0x48, 0x89, static_cast<uint8_t>(0xC0 | (RBX << 3) | ARG[0])});	/* mov the first argument, rbx */
 	if (offset < 128) {
-		bytes({0x49, 0x8D, static_cast<uint8_t>(0x40 | ARG1_LEA), 0x24, static_cast<uint8_t>(offset)});
+		bytes({0x49, 0x8D, static_cast<uint8_t>(0x40 | lea), 0x24, static_cast<uint8_t>(offset)});
 	} else {
-		bytes({0x49, 0x8D, static_cast<uint8_t>(0x80 | ARG1_LEA), 0x24});
+		bytes({0x49, 0x8D, static_cast<uint8_t>(0x80 | lea), 0x24});
 		word(offset);
 	}
 	call_to(reinterpret_cast<uintptr_t>(fn));
@@ -218,25 +105,10 @@ void Sh4Host::call(Call fn, uint32_t op)
 
 void Sh4Host::call_link(Link fn, uint32_t pc)
 {
-	bytes({0x48, 0x89, ARG0_FROM_RBX});
-	byte(ARG1_VALUE);				/* mov the second argument, pc */
+	bytes({0x48, 0x89, static_cast<uint8_t>(0xC0 | (RBX << 3) | ARG[0])});	/* mov the first argument, rbx */
+	byte(static_cast<uint8_t>(0xB8 | ARG[1]));	/* mov the second argument, pc */
 	word(pc);
 	call_to(reinterpret_cast<uintptr_t>(fn));
-}
-
-void Sh4Host::call_to(uintptr_t target)
-{
-	const int64_t distance = static_cast<int64_t>(target - (reinterpret_cast<uintptr_t>(m_code) + m_used + 5));
-
-	if (distance == static_cast<int32_t>(distance)) {
-		byte(0xE8);				/* call fn */
-		word(static_cast<uint32_t>(distance));
-	} else {
-		bytes({0x48, 0xB8});			/* mov rax, fn / call rax */
-		quad(target);
-		bytes({0xFF, 0xD0});
-		m_far_calls++;
-	}
 }
 
 void Sh4Host::loop_if_told()
@@ -250,13 +122,6 @@ Sh4Host::Jump Sh4Host::jump_if_told()
 	bytes({0x48, 0x85, 0xC0, 0x0F, 0x85});		/* test rax, rax / jnz ... */
 	m_used += 4;
 	return Jump{m_used - 4};
-}
-
-void Sh4Host::bind(Jump jump)
-{
-	const uint32_t distance = m_used - (jump.from + 4);
-
-	std::memcpy(m_code + jump.from, &distance, 4);
 }
 
 void Sh4Host::go_where_told()
@@ -414,24 +279,11 @@ void Sh4Host::add_remaining(int32_t value)
 	word(static_cast<uint32_t>(value));
 }
 
-Sh4Host::Jump Sh4Host::jump_if(uint8_t condition)
-{
-	bytes({0x0F, condition});			/* j<condition> ... */
-	m_used += 4;
-	return Jump{m_used - 4};
-}
-
 void Sh4Host::bind(const Slow &slow)
 {
 	for (uint32_t k = 0; k < slow.count; k++) {
 		bind(slow.jumps[k]);
 	}
-}
-
-void Sh4Host::jump_back(uint32_t place)
-{
-	byte(0xE9);					/* jmp place */
-	jump_to(place);
 }
 
 /* rdx = the page of the address in A in the table of r13 or r14; the long
@@ -524,21 +376,14 @@ void Sh4Host::read_at(const uint8_t *at, uint32_t size)
 #else /* a host this file does not write code for */
 
 Sh4Host::Sh4Host(uint32_t *words, const Memory &memory, const Places &places)
-	: m_code(nullptr), m_words(words), m_memory(memory), m_places(places), m_fused(false), m_size(0), m_used(0),
-	  m_leave(0), m_far_calls(0), m_enter(nullptr)
+	: HostCode(0), m_words(words), m_memory(memory), m_places(places), m_fused(false), m_enter(nullptr)
 {
 }
 
-Sh4Host::~Sh4Host() = default;
-void Sh4Host::bytes(std::initializer_list<uint8_t>) {}
-void Sh4Host::word(uint32_t) {}
-void Sh4Host::quad(uint64_t) {}
-void Sh4Host::jump_to(uint32_t) {}
 void Sh4Host::clear() {}
 uint32_t Sh4Host::begin(const Sh4Op *) { return 0; }
 void Sh4Host::call(Call, uint32_t) {}
 void Sh4Host::call_link(Link, uint32_t) {}
-void Sh4Host::call_to(uintptr_t) {}
 Sh4Host::Jump Sh4Host::jump_if_word(uint32_t, bool) { return Jump{0}; }
 Sh4Host::Jump Sh4Host::jump_if_odd() { return Jump{0}; }
 Sh4Host::Jump Sh4Host::jump_if_bits(uint32_t, uint32_t, bool) { return Jump{0}; }
@@ -554,7 +399,6 @@ void Sh4Host::store_pair(uint32_t) {}
 void Sh4Host::add_remaining(int32_t) {}
 void Sh4Host::loop_if_told() {}
 Sh4Host::Jump Sh4Host::jump_if_told() { return Jump{0}; }
-void Sh4Host::bind(Jump) {}
 void Sh4Host::go_where_told() {}
 void Sh4Host::operand(uint8_t, uint32_t) {}
 void Sh4Host::load(Reg, uint32_t) {}
@@ -564,9 +408,7 @@ void Sh4Host::alu(Alu, Reg, uint32_t) {}
 void Sh4Host::alu_value(Alu, Reg, uint32_t) {}
 void Sh4Host::shift(Shift, Reg, uint32_t) {}
 void Sh4Host::flag(If, uint32_t) {}
-Sh4Host::Jump Sh4Host::jump_if(uint8_t) { return Jump{0}; }
 void Sh4Host::bind(const Slow &) {}
-void Sh4Host::jump_back(uint32_t) {}
 void Sh4Host::page(uint8_t, uint32_t, Slow &) {}
 void Sh4Host::read(uint32_t, Slow &) {}
 void Sh4Host::write(uint32_t, uint32_t, Slow &) {}

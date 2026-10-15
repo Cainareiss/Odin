@@ -21,7 +21,8 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <initializer_list>
+
+#include "odin/host_code.hpp"
 
 namespace odin {
 
@@ -38,14 +39,11 @@ struct Sh4Op;
  * Only this class knows the host: sh4.cpp says what a block does, with the
  * functions below. On a host it does not write for, or that refuses the
  * memory, usable() is false and the SH-4 keeps to its reader. Written for
- * x86-64, with the calling convention of the system. */
-class Sh4Host {
+ * x86-64 (HostCode). */
+class Sh4Host : public HostCode {
 public:
 	using Call = uintptr_t (*)(Sh4 &, const Sh4Op *);
-	/* A jump forward whose landing is not written yet. */
-	struct Jump {
-		uint32_t from;
-	};
+	using HostCode::bind;
 	/* The register of the host a step works in. Nothing stays in it
 	 * from one instruction of the CPU to the next. */
 	enum class Reg : uint8_t { A };
@@ -82,19 +80,11 @@ public:
 	/* `words`: the registers of the CPU, 32 bits each, which the steps
 	 * below name by their rank. */
 	Sh4Host(uint32_t *words, const Memory &memory, const Places &places);
-	~Sh4Host();
-	Sh4Host(const Sh4Host &) = delete;
-	Sh4Host &operator=(const Sh4Host &) = delete;
 
-	bool usable() const { return m_code != nullptr; }
 	/* Forgets every block. */
 	void clear();
 	/* Room left for the longest block there is? */
 	bool room() const { return m_used + LONGEST <= m_size; }
-	/* For the measurements: the bytes written, and the calls that could
-	 * not reach their instruction directly. */
-	uint32_t used() const { return m_used; }
-	uint64_t far_calls() const { return m_far_calls; }
 
 	/* Starts the block of the instructions at `ops`. Returns its place,
 	 * never 0. */
@@ -105,7 +95,6 @@ public:
 	void loop_if_told();
 	/* The same, to a place of the block bound later. */
 	Jump jump_if_told();
-	void bind(Jump jump);
 	/* What the call returned: 1, back to the run loop; else there. */
 	void go_where_told();
 	/* Calls fn(cpu, pc), for the host code of the block at `pc` or 1. */
@@ -164,13 +153,9 @@ public:
 	void write(uint32_t size, uint32_t rank, Slow &slow);
 	/* A = `size` bytes at that address of the host, with their sign. */
 	void read_at(const uint8_t *at, uint32_t size);
-	/* Where the block is, and a jump back there. */
-	uint32_t here() const { return m_used; }
-	void jump_back(uint32_t place);
+	/* The jumps of an access to its long way, bound here */
 	void bind(const Slow &slow);
 
-	/* The host code of a block, for an instruction to return it. */
-	uintptr_t address(uint32_t place) const { return reinterpret_cast<uintptr_t>(m_code) + place; }
 	/* Runs the blocks from that place until one asks for the run loop. */
 	void run(Sh4 &cpu, uint32_t place) const { m_enter(&cpu, m_code + place); }
 
@@ -180,24 +165,13 @@ private:
 	 * with its long way, and as many ends as branches. */
 	static constexpr uint32_t LONGEST = 16384;
 
-	void byte(uint8_t value) { m_code[m_used++] = value; }
-	void bytes(std::initializer_list<uint8_t> values);
-	void word(uint32_t value);
-	void quad(uint64_t value);
-	void jump_to(uint32_t place);
 	void operand(uint8_t reg, uint32_t rank);
 	void page(uint8_t table, uint32_t size, Slow &slow);
-	void call_to(uintptr_t target);
-	Jump jump_if(uint8_t condition);
 
-	uint8_t *m_code;
 	uint32_t *m_words;
 	Memory m_memory;
 	Places m_places;
 	bool m_fused;
-	uint32_t m_size, m_used;
-	uint32_t m_leave;	/* place of the way back to the run loop */
-	uint64_t m_far_calls;
 	void (*m_enter)(Sh4 *, const uint8_t *);
 };
 
