@@ -24,8 +24,10 @@
 
 #include "odin/hikaru.hpp"
 
+#include <algorithm>
 #include <cinttypes>
 #include <cstdlib>
+#include <cstring>
 
 #include "odin/bytes.hpp"
 
@@ -714,8 +716,13 @@ Hikaru::texram_write(unsigned bank, uint32_t offs, unsigned size, uint64_t value
 {
 	if (m_screen)
 		m_screen->before_texture_write(bank);
+	texram_store(bank, offs, size, value, m_gpu->antarctic().texture_ram_twiddled());
+}
 
-	if (m_gpu->antarctic().texture_ram_twiddled()) {
+void
+Hikaru::texram_store(unsigned bank, uint32_t offs, unsigned size, uint64_t value, bool twiddled)
+{
+	if (twiddled) {
 		store(m_texram[bank], offs, size, value);
 		return;
 	}
@@ -761,6 +768,70 @@ Hikaru::bus_read(uint32_t bus_addr, unsigned size, uint64_t &value)
 	if (log && m_verbose)
 		std::printf("%s : MEMCTL R%u %08X\n", cpu_string(m_current).c_str(), size * 8, bus_addr);
 	return true;
+}
+
+/* The bytes bus_read() gives from bus_addr on as they are in a memory, up
+ * to the end of it; nothing where a read does more. */
+std::span<const uint8_t>
+Hikaru::bus_span(uint32_t bus_addr) const
+{
+	const std::span<const uint8_t> texram0 = m_texram[0], texram1 = m_texram[1];
+	const std::span<const uint8_t> slave = m_ram[SLAVE], master = m_ram[MASTER];
+
+	if (bus_addr >= 0x04000000 && bus_addr <= 0x043FFFFF)
+		return texram0.subspan(bus_addr & 0xFFFFFF);
+	if (bus_addr >= 0x06000000 && bus_addr <= 0x063FFFFF)
+		return texram1.subspan(bus_addr & 0xFFFFFF);
+	if (bus_addr >= 0x10000000 && bus_addr <= 0x3FFFFFFF)
+		return m_rombd.plain(bus_addr);
+	if (bus_addr >= 0x40000000 && bus_addr <= 0x41FFFFFF)
+		return slave.subspan(bus_addr & 0x01FFFFFF);
+	if (bus_addr >= 0x70000000 && bus_addr <= 0x71FFFFFF)
+		return master.subspan(bus_addr & 0x01FFFFFF);
+	return {};
+}
+
+/* MemCtl::Host: from a memory of the bus to the RAM of a SH-4, the command
+ * RAM or a bank of the texture RAM, word after word as bus_read() and
+ * bus_write() would; the texture RAM is told once, which is what each
+ * write would do again. */
+uint32_t
+Hikaru::bus_copy(uint32_t src, uint32_t dst, uint32_t words)
+{
+	const std::span<const uint8_t> from = bus_span(src);
+	uint32_t n = static_cast<uint32_t>(std::min<size_t>(words, from.size() / 4));
+	std::span<uint8_t> to;
+
+	if (n == 0)
+		return 0;
+	if ((dst >= 0x04000000 && dst <= 0x043FFFFF) || (dst >= 0x06000000 && dst <= 0x063FFFFF)) {
+		const unsigned bank = (dst >> 25) & 1;
+		const uint32_t offs = dst & 0xFFFFFF;
+		const bool twiddled = m_gpu->antarctic().texture_ram_twiddled();
+
+		n = std::min(n, (static_cast<uint32_t>(m_texram[bank].size()) - offs) / 4);
+		if (m_screen)
+			m_screen->before_texture_write(bank);
+		for (uint32_t i = 0; i < n; i++)
+			texram_store(bank, offs + 4 * i, 4, load_bytes(&from[4 * i], 4), twiddled);
+		return n;
+	}
+	if (dst >= 0x40000000 && dst <= 0x41FFFFFF)
+		to = std::span<uint8_t>(m_ram[SLAVE]).subspan(dst & 0x01FFFFFF);
+	else if (dst >= 0x48000000 && dst <= 0x483FFFFF)
+		to = std::span<uint8_t>(m_cmdram).subspan(dst & 0x003FFFFF);
+	else if (dst >= 0x70000000 && dst <= 0x71FFFFFF)
+		to = std::span<uint8_t>(m_ram[MASTER]).subspan(dst & 0x01FFFFFF);
+	n = std::min(n, static_cast<uint32_t>(to.size() / 4));
+	/* One word after the other: a copy onto itself does what the bus
+	 * would. */
+	for (uint32_t i = 0; i < n; i++) {
+		uint32_t word;
+
+		std::memcpy(&word, &from[4 * i], 4);
+		std::memcpy(&to[4 * i], &word, 4);
+	}
+	return n;
 }
 
 bool

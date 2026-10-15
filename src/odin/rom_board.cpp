@@ -21,6 +21,7 @@
 
 #include "odin/rom_board.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <utility>
@@ -467,6 +468,32 @@ RomBoard::read(uint32_t bus_addr, unsigned size)
 		return read_rom(m_maskrom, offs + num * 16 * MB, size, bus_addr);
 	}
 	return low_bytes(NOTHING, size);
+}
+
+std::span<const uint8_t>
+RomBoard::plain(uint32_t bus_addr) const
+{
+	const uint32_t bank = bus_addr >> 24;
+	const uint32_t offs = bus_addr & 0xFFFFFF;
+	std::span<const uint8_t> rom;
+	uint32_t page_size = 0, at = 0;
+
+	if (bank == m_config.eeprom_bank || !m_config.has_rom)
+		return {};
+	if (bank >= m_config.eprom_bank[0] && bank <= m_config.eprom_bank[1]) {
+		page_size = (m_config.eprom_bank_size == 2) ? 4 * MB : 8 * MB;
+		at = (offs & (page_size - 1)) + (bank - m_config.eprom_bank[0]) * page_size;
+		rom = m_eprom;
+	} else if (bank >= m_config.maskrom_bank[0] && bank <= m_config.maskrom_bank[1]) {
+		page_size = 16 * MB;
+		at = offs + (bank - m_config.maskrom_bank[0]) * page_size;
+		rom = m_maskrom;
+	} else {
+		return {};
+	}
+	const size_t end = std::min<size_t>(at - at % page_size + page_size, rom.size());
+
+	return at < end ? rom.subspan(at, end - at) : std::span<const uint8_t>();
 }
 
 bool

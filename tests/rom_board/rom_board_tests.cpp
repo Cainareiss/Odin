@@ -112,6 +112,36 @@ void test_roms()
 	check(bare.read(0x10000000, 4) == 0xDEADBEEF, "without a ROM board nothing reads zero");
 }
 
+/* What plain() gives is what read() gives, byte for byte, up to where read()
+ * would answer from elsewhere: the next mirror of an EPROM page, the end of
+ * a mask ROM page or of the ROM, an empty socket, the EEPROM. */
+void test_plain()
+{
+	const std::vector<uint8_t> eprom = numbered(12 * MB), maskrom = numbered(40 * MB);
+	RomBoard board(*RomBoard::config_of("pharrier"), eprom, maskrom, false, nullptr);
+	const auto same = [&board](uint32_t at, size_t size) {
+		const std::span<const uint8_t> bytes = board.plain(at);
+		const uint32_t last = at + static_cast<uint32_t>(bytes.size()) - 1;
+
+		return bytes.size() == size && bytes.front() == board.read(at, 1) && bytes.back() == board.read(last, 1);
+	};
+
+	check(same(0x10000100, 8 * MB - 0x100) && same(0x10800100, 8 * MB - 0x100),
+	      "an EPROM page up to its end, in each of its two places");
+	check(same(0x11000100, 4 * MB - 0x100) && board.plain(0x11400000).empty() && board.plain(0x12000000).empty(),
+	      "up to the end of the EPROMs; nothing past it");
+	check(same(0x21000004, 16 * MB - 4) && same(0x227FFFFE, 2) && board.plain(0x22800000).empty(),
+	      "a mask ROM page up to its end or to the end of the ROMs");
+	check(board.plain(0x14000000).empty() && board.plain(0x15000000).empty() && board.plain(0x0C000000).empty(),
+	      "nothing for the EEPROM, a page without a socket, a page not of the board");
+
+	RomBoard::Config none = *RomBoard::config_of("pharrier");
+	none.has_rom = false;
+	RomBoard bare(none, eprom, maskrom, false, nullptr);
+	check(bare.read(0x10000000, 4) == 0xDEADBEEF && bare.plain(0x10000000).empty() && bare.plain(0x20000000).empty(),
+	      "nothing without a ROM board, whatever ROMs are given");
+}
+
 void test_eeprom_and_guards()
 {
 	const std::vector<uint8_t> eprom = numbered(8 * MB), maskrom = numbered(32 * MB);
@@ -154,6 +184,7 @@ int main()
 {
 	test_layouts();
 	test_roms();
+	test_plain();
 	test_eeprom_and_guards();
 
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);

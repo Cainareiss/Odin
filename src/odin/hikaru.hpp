@@ -188,9 +188,12 @@ private:
 	bool sound_read(unsigned which, uint32_t addr, unsigned size, uint64_t &value);
 	bool sound_write(unsigned which, uint32_t addr, unsigned size, uint64_t value);
 	void texram_write(unsigned bank, uint32_t offs, unsigned size, uint64_t value);
+	void texram_store(unsigned bank, uint32_t offs, unsigned size, uint64_t value, bool twiddled);
+	std::span<const uint8_t> bus_span(uint32_t bus_addr) const;
 	/* MemCtl::Host: the external bus */
 	bool bus_read(uint32_t bus_addr, unsigned size, uint64_t &value) override;
 	bool bus_write(uint32_t bus_addr, unsigned size, uint64_t value) override;
+	uint32_t bus_copy(uint32_t src, uint32_t dst, uint32_t words) override;
 	void memctl_irq_changed() override { update_irqs(); }
 	void memctl_error(const char *what) override { cpu_error("%s", what); }
 

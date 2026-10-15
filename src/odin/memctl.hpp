@@ -43,6 +43,17 @@ public:
 		 * when nothing answers. */
 		virtual bool bus_read(uint32_t bus_addr, unsigned size, uint64_t &value) = 0;
 		virtual bool bus_write(uint32_t bus_addr, unsigned size, uint64_t value) = 0;
+		/* Moves up to `words` 32-bit words from src to dst at once, as
+		 * that many reads and writes of the bus, one word after the
+		 * other, would. Returns how many it moved: 0 has the controller
+		 * move the next word by bus_read() and bus_write(). */
+		virtual uint32_t bus_copy(uint32_t src, uint32_t dst, uint32_t words)
+		{
+			(void)src;
+			(void)dst;
+			(void)words;
+			return 0;
+		}
 		/* The interrupt line of the controller may have moved. */
 		virtual void memctl_irq_changed() = 0;
 		/* Something the program did that has no answer here. */

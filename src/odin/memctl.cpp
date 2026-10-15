@@ -357,13 +357,19 @@ MemCtl::run_transfer()
 	uint32_t src = reg(0x30, 4), dst = reg(0x34, 4);
 
 	length &= 0xFFFFFF;
-	while (length--) {
-		uint64_t word = 0;
+	while (length) {
+		uint32_t moved = m_host.bus_copy(src & 0x7FFFFFFF, dst & 0x7FFFFFFF, length);
 
-		m_host.bus_read(src & 0x7FFFFFFF, 4, word);
-		m_host.bus_write(dst & 0x7FFFFFFF, 4, static_cast<uint32_t>(word));
-		src += 4;
-		dst += 4;
+		if (moved == 0) {
+			uint64_t word = 0;
+
+			m_host.bus_read(src & 0x7FFFFFFF, 4, word);
+			m_host.bus_write(dst & 0x7FFFFFFF, 4, static_cast<uint32_t>(word));
+			moved = 1;
+		}
+		src += 4 * moved;
+		dst += 4 * moved;
+		length -= moved;
 	}
 
 	/* Done: the addresses stay where the transfer ended, the status

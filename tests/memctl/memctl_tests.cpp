@@ -30,6 +30,7 @@
 #include <cstdio>
 #include <map>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -158,6 +159,69 @@ void test_status_and_transfer()
 	      "writing bit 12 back does");
 }
 
+/* A board that moves up to three words at a time by itself, and leaves to
+ * the controller the words read from or written to its page 55 */
+struct BlockBus : Bus {
+	std::vector<uint32_t> asked;	/* the first source of each call */
+
+	uint32_t bus_copy(uint32_t src, uint32_t dst, uint32_t count) override
+	{
+		uint32_t n = 0;
+
+		asked.push_back(src);
+		while (n < count && n < 3 && ((src + 4 * n) >> 24) != 0x55 && ((dst + 4 * n) >> 24) != 0x55) {
+			uint64_t value = 0;
+
+			Bus::bus_read(src + 4 * n, 4, value);
+			Bus::bus_write(dst + 4 * n, 4, value);
+			n++;
+		}
+		return n;
+	}
+};
+
+/* What the board moves itself and what it leaves: the same words, the same
+ * registers, the same interrupt as a transfer word by word. The source
+ * runs into page 55, which does not answer. */
+void test_transfer_in_blocks()
+{
+	Bus single;
+	BlockBus blocks;
+	MemCtl one(single, true), many(blocks, true);
+
+	for (MemCtl *memctl : { &one, &many }) {
+		Bus &bus = memctl == &one ? single : blocks;
+
+		memctl->reset();
+		for (uint32_t i = 0; i < 16; i++)
+			bus.words[0x54FFFFE0 + i * 4] = 0x2000 + i;
+		memctl->write(0x04000030, 4, 0xD4FFFFE0);	/* the top bit is not on the bus */
+		memctl->write(0x04000034, 4, 0x70000200);
+		memctl->write(0x04000038, 4, 0x0100000B);	/* 11 words, 3 of them in page 55 */
+	}
+	check(single.words == blocks.words, "the same words as a transfer word by word");
+	check(blocks.words[0x70000200] == 0x2000 && blocks.words[0x7000021C] == 0x2007 &&
+	      blocks.words.count(0x70000220) && blocks.words[0x70000220] == 0, "the words of page 55 read as zero");
+	for (uint32_t reg : { 0x04000030u, 0x04000034u, 0x04000038u, 0x04000004u })
+		check(read(one, reg, 4) == read(many, reg, 4), "the same registers at the end");
+	check(single.irq_changes == blocks.irq_changes && many.irq_line(), "the same interrupt");
+	check(!blocks.asked.empty() && blocks.asked.front() == 0x54FFFFE0, "the board is asked without the top bit");
+	check(blocks.asked.size() > 1 && blocks.asked[1] == 0x54FFFFEC, "and again where it stopped");
+
+	/* Four words the board moves all of: three, then the last one */
+	BlockBus all;
+	MemCtl memctl(all, true);
+
+	memctl.reset();
+	for (uint32_t i = 0; i < 6; i++)
+		all.words[0x10000000 + i * 4] = 0x3000 + i;
+	memctl.write(0x04000030, 4, 0x10000000);
+	memctl.write(0x04000034, 4, 0x70000300);
+	memctl.write(0x04000038, 4, 0x01000004);
+	check(all.words[0x7000030C] == 0x3003 && all.words.count(0x70000310) == 0 && read(memctl, 0x04000034, 4) == 0x70000310,
+	      "no word past the length");
+}
+
 } /* namespace */
 
 int main()
@@ -165,6 +229,7 @@ int main()
 	test_registers();
 	test_windows();
 	test_status_and_transfer();
+	test_transfer_in_blocks();
 
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures ? 1 : 0;

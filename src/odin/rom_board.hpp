@@ -83,6 +83,9 @@ public:
 	/* The pages 10 to 3F: the EEPROM in its page, the ROMs in theirs,
 	 * and what a page without anything reads. */
 	uint64_t read(uint32_t bus_addr, unsigned size);
+	/* The bytes read() gives from bus_addr on as they are, up to the end
+	 * of the ROM or of its page; nothing where read() does more. */
+	std::span<const uint8_t> plain(uint32_t bus_addr) const;
 	/* True if the write was to the EEPROM: nothing else is written. */
 	bool write(uint32_t bus_addr, unsigned size, uint64_t value);
 
