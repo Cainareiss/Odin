@@ -21,6 +21,7 @@
 
 #include "odin/memctl.hpp"
 
+#include <algorithm>
 #include <cinttypes>
 #include <cstdio>
 #include <cstdlib>
@@ -340,6 +341,30 @@ MemCtl::write(uint32_t addr, unsigned size, uint64_t value)
 	const uint32_t bank = window_bank(addr) & 0x7F;
 
 	return m_host.bus_write((bank << 24) | (addr & 0xFFFFFF), size, value);
+}
+
+std::span<const uint8_t>
+MemCtl::read_span(uint32_t addr)
+{
+	if (addr >= 0x04000000 && addr <= 0x04FFFFFF)
+		return {};
+
+	const uint32_t offs = addr & 0xFFFFFF;
+	const std::span<const uint8_t> span = m_host.bus_read_span(((window_bank(addr) & 0x7F) << 24) | offs);
+
+	return span.first(std::min<size_t>(span.size(), 0x1000000 - offs));
+}
+
+std::span<uint8_t>
+MemCtl::write_span(uint32_t addr)
+{
+	if (addr >= 0x04000000 && addr <= 0x04FFFFFF)
+		return {};
+
+	const uint32_t offs = addr & 0xFFFFFF;
+	const std::span<uint8_t> span = m_host.bus_write_span(((window_bank(addr) & 0x7F) << 24) | offs);
+
+	return span.first(std::min<size_t>(span.size(), 0x1000000 - offs));
 }
 
 /* The transfer copies the whole block as soon as it is started, like the

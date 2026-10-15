@@ -35,6 +35,7 @@
 #include <cstring>
 #include <functional>
 #include <initializer_list>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -72,11 +73,12 @@ constexpr uint32_t RAM = 0x0C000000;	/* 1 MB of plain memory */
 constexpr uint32_t CODE = RAM + 0x1000;
 constexpr uint32_t DATA = RAM + 0x8000;
 constexpr uint32_t DEVICE = 0x04000000;	/* 4 KB the bus answers */
+constexpr uint32_t WINDOW = 0x02000000;	/* 64 KB the bus answers, and gives in spans */
 constexpr uint32_t SR_MD = 0x40000000, SR_RB = 0x20000000, SR_BL = 0x10000000;
 
 inline uint32_t bits(float v) { return std::bit_cast<uint32_t>(v); }
 
-/* A RAM, one device and port A around the CPU. */
+/* A RAM, one device, a window and port A around the CPU. */
 class Machine : public odin::Sh4Bus {
 public:
 	struct Access {
@@ -88,6 +90,10 @@ public:
 	std::vector<uint8_t> ram;
 	std::vector<uint8_t> onchip;
 	std::vector<Access> device, unanswered_log;
+	std::vector<uint8_t> window = std::vector<uint8_t>(0x10000, 0);
+	unsigned window_by_bus = 0;	/* accesses to the window the bus took */
+	size_t span_limit = 0;		/* the longest span of the window, 0 for none */
+	std::vector<Access> spans;	/* the spans asked for: write, address */
 	std::vector<uint32_t> seen;	/* what a test notes */
 	unsigned ram_by_bus = 0;	/* accesses to the RAM the bus took */
 	uint32_t rom = 0;		/* a page of the RAM whose writes the bus drops */
@@ -124,6 +130,12 @@ public:
 			ram_by_bus++;
 			return true;
 		}
+		if (addr >= WINDOW && addr + size <= WINDOW + window.size()) {
+			value = 0;
+			std::memcpy(&value, &window[addr - WINDOW], size);
+			window_by_bus++;
+			return true;
+		}
 		if ((addr & ~0xFFFu) != DEVICE) {
 			return false;
 		}
@@ -144,6 +156,11 @@ public:
 			ram_by_bus++;
 			return true;
 		}
+		if (addr >= WINDOW && addr + size <= WINDOW + window.size()) {
+			std::memcpy(&window[addr - WINDOW], &value, size);
+			window_by_bus++;
+			return true;
+		}
 		if ((addr & ~0xFFFu) != DEVICE) {
 			return false;
 		}
@@ -152,6 +169,18 @@ public:
 			on_device();
 		}
 		return true;
+	}
+	std::span<const uint8_t> read_span(uint32_t addr) override { return window_span(false, addr); }
+	std::span<uint8_t> write_span(uint32_t addr) override { return window_span(true, addr); }
+	std::span<uint8_t> window_span(bool is_write, uint32_t addr)
+	{
+		if (!span_limit || addr < WINDOW || addr >= WINDOW + window.size()) {
+			return {};
+		}
+		spans.push_back({is_write, addr, 0, 0});
+		const size_t at = addr - WINDOW;
+
+		return std::span<uint8_t>(window).subspan(at, std::min(span_limit, window.size() - at));
 	}
 	uint16_t port_a_read() override { return pins_in; }
 	void port_a_write(uint16_t pins) override { pins_out = pins; }

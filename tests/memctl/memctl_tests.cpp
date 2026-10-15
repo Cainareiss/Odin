@@ -29,6 +29,7 @@
 
 #include <cstdio>
 #include <map>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -222,6 +223,53 @@ void test_transfer_in_blocks()
 	      "no word past the length");
 }
 
+/* A bus whose pages 40 and 41 are one memory, given in spans to its end */
+struct SpanBus : Bus {
+	std::vector<uint8_t> memory = std::vector<uint8_t>(0x2000000);
+	std::vector<uint32_t> asked;	/* bus addresses; bit 0 set for a write */
+
+	std::span<const uint8_t> bus_read_span(uint32_t bus_addr) override { return span(bus_addr, false); }
+	std::span<uint8_t> bus_write_span(uint32_t bus_addr) override { return span(bus_addr, true); }
+	std::span<uint8_t> span(uint32_t bus_addr, bool write)
+	{
+		asked.push_back(bus_addr | (write ? 1u : 0u));
+		if ((bus_addr >> 25) != 0x20)
+			return {};
+		return std::span<uint8_t>(memory).subspan(bus_addr & 0x1FFFFFF);
+	}
+};
+
+/* A span through a window: the page of its byte, to the end of the window
+ * at most; none in the page of the registers, and the bus not asked. */
+void test_window_spans()
+{
+	SpanBus bus;
+	MemCtl memctl(bus, true);
+
+	memctl.reset();
+	memctl.write(0x04000018, 4, 0x70C01211);	/* 03: 70, 02: C0 */
+	memctl.write(0x04000010, 4, 0x41400000);	/* 17: 41, 16: 40 */
+
+	std::span<const uint8_t> from = memctl.read_span(0x02FFFF00);
+	check(bus.asked.size() == 1 && bus.asked[0] == 0x40FFFF00, "the window at 02 asks for its page, less its top bit");
+	check(from.data() == &bus.memory[0xFFFF00] && from.size() == 0x100, "to the end of the window");
+
+	std::span<uint8_t> to = memctl.write_span(0x02000010);
+	check(bus.asked.size() == 2 && bus.asked[1] == 0x40000011, "a span to write");
+	check(to.data() == &bus.memory[0x10] && to.size() == 0xFFFFF0, "to the end of that window too");
+
+	to = memctl.write_span(0x17000000);
+	check(bus.asked.size() == 3 && bus.asked[2] == 0x41000001 && to.data() == &bus.memory[0x1000000] &&
+	      to.size() == 0x1000000, "the window at 17");
+	check(memctl.read_span(0x03000040).empty() && bus.asked.size() == 4 && bus.asked[3] == 0x70000040,
+	      "none where the bus gives none");
+
+	bus.asked.clear();
+	check(memctl.read_span(0x04000000).empty() && memctl.write_span(0x04000034).empty() &&
+	      memctl.read_span(0x04000040).empty() && memctl.write_span(0x04FFFFF0).empty() && bus.asked.empty(),
+	      "none in the page of the registers, and the bus not asked");
+}
+
 } /* namespace */
 
 int main()
@@ -230,6 +278,7 @@ int main()
 	test_windows();
 	test_status_and_transfer();
 	test_transfer_in_blocks();
+	test_window_spans();
 
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures ? 1 : 0;

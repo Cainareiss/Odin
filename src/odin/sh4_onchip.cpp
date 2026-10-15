@@ -28,7 +28,9 @@
 
 #include "odin/sh4.hpp"
 
+#include <algorithm>
 #include <bit>
+#include <cstring>
 
 namespace odin {
 
@@ -244,6 +246,64 @@ void Sh4::dmac_put(uint32_t addr, uint32_t size, uint64_t value)
 	}
 }
 
+/* Up to count units from sar to dar, both going up, where each side is a
+ * memory read or written in place: a page of the CPU, or, for one side at
+ * most, what the bus gives. The bytes go in the order of dmac_get() and
+ * dmac_put(), unit after unit; the bus is told of its side before the
+ * first of them, which is what each access there would tell it again.
+ * Both addresses are on a whole unit (dmac_update_channel): no unit
+ * straddles two pages. Returns how many units it moved, 0 for none. */
+uint32_t Sh4::dmac_copy(uint32_t sar, uint32_t dar, uint32_t unit, uint32_t count)
+{
+	const uint8_t *rp = m_rd[sar >> PAGE_BITS];
+	uint8_t *wp = m_wr[dar >> PAGE_BITS];
+	std::span<const uint8_t> from;
+	std::span<uint8_t> to;
+
+	/* Spans of the bus on both sides would tell of the writes before
+	 * the first unit is read. */
+	if (!rp && !wp) {
+		return 0;
+	}
+	if (rp) {
+		from = {rp + (sar & (PAGE_SIZE - 1)), PAGE_SIZE - (sar & (PAGE_SIZE - 1))};
+	} else if (sar < 0xE0000000 && (sar >> 24) != 0x1F) {
+		from = m_bus.read_span(sar & PHYSICAL);
+	}
+	uint32_t n = static_cast<uint32_t>(std::min<size_t>(count, from.size() / unit));
+	if (n == 0) {
+		return 0;
+	}
+	if (wp) {
+		to = {wp + (dar & (PAGE_SIZE - 1)), PAGE_SIZE - (dar & (PAGE_SIZE - 1))};
+	} else if (dar < 0xE0000000 && (dar >> 24) != 0x1F) {
+		to = m_bus.write_span(dar & PHYSICAL);
+	}
+	n = static_cast<uint32_t>(std::min<size_t>(n, to.size() / unit));
+	if (n == 0) {
+		return 0;
+	}
+
+	const size_t bytes = static_cast<size_t>(n) * unit;
+	const uintptr_t a = reinterpret_cast<uintptr_t>(from.data()), b = reinterpret_cast<uintptr_t>(to.data());
+
+	m_touched = true;
+	if (a + bytes <= b || b + bytes <= a) {
+		std::memcpy(to.data(), from.data(), bytes);
+	} else {
+		/* Over itself: a piece at a time, as dmac_get() and dmac_put() */
+		const size_t piece = unit < 8 ? unit : 8;
+
+		for (size_t i = 0; i < bytes; i += piece) {
+			uint64_t value;
+
+			std::memcpy(&value, from.data() + i, piece);
+			std::memcpy(to.data() + i, &value, piece);
+		}
+	}
+	return n;
+}
+
 void Sh4::dmac_run_channel(uint32_t ch)
 {
 	uint32_t offs = ch * 0x10;
@@ -261,7 +321,16 @@ void Sh4::dmac_run_channel(uint32_t ch)
 	if (unit == 0) {
 		fatal("DMAC transfer size", chcr);
 	}
-	for (uint32_t budget = 0x7FFFFFFF; budget > 0 && tcr > 0; budget--, tcr--) {
+	for (uint32_t budget = 0x7FFFFFFF; budget > 0 && tcr > 0;) {
+		uint32_t n = (sm == 1 && dm == 1) ? dmac_copy(sar, dar, unit, std::min(budget, tcr)) : 0;
+
+		if (n > 0) {
+			sar += n * unit;
+			dar += n * unit;
+			budget -= n;
+			tcr -= n;
+			continue;
+		}
 		if (sm == 2) {
 			sar -= unit;
 		}
@@ -281,6 +350,8 @@ void Sh4::dmac_run_channel(uint32_t ch)
 		if (dm == 1) {
 			dar += unit;
 		}
+		budget--;
+		tcr--;
 	}
 
 	reg_put(4, DMAC_SAR0 + offs, sar);

@@ -89,6 +89,21 @@ public:
 	/* False when nothing answers. */
 	virtual bool read(uint32_t addr, uint32_t size, uint64_t &value) = 0;
 	virtual bool write(uint32_t addr, uint32_t size, uint64_t value) = 0;
+	/* For accesses in a row from addr on, by the DMA controller: the bytes
+	 * reads give, or writes store, as they are in a memory, up to where
+	 * an access would do more. What the accesses would tell the machine
+	 * there, it is told now; that writes nothing the CPU has in its
+	 * pages. Empty where an access does more. */
+	virtual std::span<const uint8_t> read_span(uint32_t addr)
+	{
+		(void)addr;
+		return {};
+	}
+	virtual std::span<uint8_t> write_span(uint32_t addr)
+	{
+		(void)addr;
+		return {};
+	}
 	/* The 16 pins of port A. */
 	virtual uint16_t port_a_read() = 0;
 	virtual void port_a_write(uint16_t pins) = 0;
@@ -230,6 +245,7 @@ private:
 	static constexpr uint32_t BLOCK_MAX = 64;	/* instructions */
 	static constexpr uint32_t OPS_MAX = 4u << 20;	/* kept before the blocks are dropped */
 	static constexpr uint32_t NEAR_SIZE = 1u << 16;	/* blocks found without the tables */
+	static constexpr uint32_t PHYSICAL = 0x1FFFFFFF;	/* the 29 address lines */
 	static constexpr uint32_t PHYSICAL_PAGES = 1u << (29 - PAGE_BITS);
 	static constexpr uint8_t OP_BAD_SLOT = 1;	/* the delay slot holds what it may not */
 	static constexpr uint8_t OP_SLOT = 2;		/* runs as a delay slot */
@@ -405,6 +421,7 @@ private:
 	void dmac_run();
 	uint64_t dmac_get(uint32_t addr, uint32_t size);
 	void dmac_put(uint32_t addr, uint32_t size, uint64_t value);
+	uint32_t dmac_copy(uint32_t sar, uint32_t dar, uint32_t unit, uint32_t count);
 	void dmac_run_channel(uint32_t ch);
 	void dmac_update_channel(uint32_t ch, uint32_t request);
 	void dmac_update(uint32_t request);

@@ -34,8 +34,10 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <initializer_list>
 #include <memory>
+#include <span>
 #include <vector>
 
 namespace {
@@ -284,6 +286,71 @@ test_host_writes()
 	compare(boards[0], boards[1], "host writes");
 }
 
+/* The main processor reaches the wave memory a span at a time: the ARM7
+ * is told as by an access there, so a counted turn ends as it would. */
+void
+test_host_spans()
+{
+	/* The ARM7 waits for a word the main processor writes: by a span
+	 * (turns counted), word by word (turns counted, every turn run). */
+	Board writes[3] = { Board(true), Board(true), Board(false) };
+
+	for (uint32_t k = 0; k < 3; k++) {
+		Board &b = writes[k];
+		/* As in test_dsp_writes */
+		b.program({ 0xE3A00801, 0xE3A02802, 0xE5901000, 0xE3510000, 0x0AFFFFFC, 0xE5821000, 0xEAFFFFFE });
+		b.start();
+		b.run(100);
+		if (k == 0) {
+			const std::span<uint8_t> span = b.board->host_ram_write(RAM + 0x10000);
+			const uint32_t word = 0x1234;
+
+			check(span.size() == 0x1000 && span.data() == &b.ram[0x10000], "host spans: to the end of the page");
+			std::memcpy(span.data(), &word, 4);
+		} else {
+			b.board->host_write(RAM + 0x10000, 4, 0x1234);
+		}
+		b.run(10);
+	}
+	check(writes[0].word(FLAG) == 0x1234, "host spans: a write told, the ARM7 sees the word");
+	compare(writes[0], writes[1], "host spans, a write against word by word");
+	compare(writes[0], writes[2], "host spans, a write against every turn run");
+
+	/* The ARM7 counts in a word the main processor reads */
+	Board reads[2] = { Board(true), Board(false) };
+	uint32_t seen[2];
+
+	for (uint32_t k = 0; k < 2; k++) {
+		Board &b = reads[k];
+		/* As in test_voice_reads; long enough for the turn to be
+		 * counted */
+		b.program({ 0xE3A00801, 0xE5901000, 0xE2811001, 0xE5801000, 0xE3A01000, 0xEAFFFFFA });
+		b.start();
+		b.run(100);
+		if (k == 0) {
+			const std::span<const uint8_t> span = b.board->host_ram_read(RAM + 0x10000);
+
+			std::memcpy(&seen[k], span.data(), 4);
+		} else {
+			seen[k] = b.word(0x10000);
+		}
+	}
+	check(seen[1] != 0 && seen[0] == seen[1], "host spans: a read told, the count as every turn run");
+	compare(reads[0], reads[1], "host spans, a read");
+
+	/* Where a span is: the end of a page, the memory of 2 MB seen four
+	 * times, none below the wave memory */
+	Board b(false);
+	b.reg(0x2800, 0x000F);
+	const std::span<const uint8_t> rest = b.board->host_ram_read(RAM + 0x10FF4);
+	check(rest.size() == 12 && rest.data() == &b.ram[0x10FF4], "host spans: the rest of the page");
+	const std::span<uint8_t> mirror = b.board->host_ram_write(RAM + 0x610020);
+	check(mirror.size() == 0xFE0 && mirror.data() == &b.ram[0x10020], "host spans: the memory of 2 MB, a mirror");
+	check(b.board->host_ram_read(RAM + 0x7FF000).data() == &b.ram[0x1FF000], "host spans: a mirror to read");
+	check(b.board->host_ram_read(REGS).empty() && b.board->host_ram_write(RAM - 4).empty(),
+	      "host spans: none below the wave memory");
+}
+
 /* The ARM7 counts in a word the DSP reads and sends out */
 void
 test_dsp_reads()
@@ -390,6 +457,7 @@ main()
 	test_monitor_reads();
 	test_dsp_reads();
 	test_host_writes();
+	test_host_spans();
 	test_arm_clock();
 	if (failures) {
 		printf("%u failure(s)\n", failures);

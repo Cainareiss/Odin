@@ -32,7 +32,6 @@ namespace odin {
 
 namespace {
 
-constexpr uint32_t PHYSICAL = 0x1FFFFFFF;	/* the 29 address lines */
 constexpr uint32_t CCN_INTEVT = 0x000028;
 constexpr uint32_t INTC_ICR = 0xD00000;
 constexpr uint32_t DMAC_DMAOR = 0xA00040;

@@ -1529,6 +1529,156 @@ void test_store_queues()
 	}
 }
 
+/* Channel 2 on auto-request, started by a program from a table at RAM +
+ * 0xE000: SAR2, DAR2, TCR2, DMAOR, then CHCR2. */
+void dma(Machine &m, uint32_t sar, uint32_t dar, uint32_t tcr, uint32_t chcr)
+{
+	const uint32_t table = RAM + 0xE000;
+
+	m.put32(table, 0xFFA00020);
+	m.put32(table + 4, sar);
+	m.put32(table + 8, dar);
+	m.put32(table + 12, chcr);
+	m.put32(table + 16, tcr);
+	/* mov.l @r8,r1; mov.l @(4,r8),r0; mov.l r0,@r1; mov.l @(8,r8),r0; mov.l r0,@(4,r1); mov.l @(16,r8),r0;
+	 * mov.l r0,@(8,r1); mov #1,r0; mov.l r0,@(32,r1) (DMAOR); mov.l @(12,r8),r0; mov.l r0,@(12,r1) (CHCR2) */
+	run(m, {0x5180, 0x5081, 0x2102, 0x5082, 0x1101, 0x5084, 0x1102, 0xE001, 0x1108, 0x5083, 0x1103}, 11,
+	    [table](Sh4State &s) {
+		s.r[8] = table;
+		s.sr |= SR_BL;
+	});
+}
+
+uint8_t pattern(uint32_t i)
+{
+	return static_cast<uint8_t>(i * 7 + (i >> 8) * 13 + 1);
+}
+
+/* The DMA controller moves runs of units at once where both sides are
+ * memories in place: the same bytes as unit after unit, a span of the bus
+ * asked for where each run starts, and never for both sides. */
+void test_dmac_blocks()
+{
+	g_test = "DMAC blocks";
+	{
+		/* RAM to the window, 4 bytes a unit: runs end with the pages of
+		 * the RAM and the spans of 0x300 bytes. */
+		Machine m;
+		const uint32_t src = RAM + 0x10040, dst = WINDOW + 0x100, longs = 0x500, bytes = 4 * longs;
+
+		for (uint32_t i = 0; i < bytes; i++) {
+			m.ram[src - RAM + i] = pattern(i);
+		}
+		m.span_limit = 0x300;
+		dma(m, src, dst, longs, 0x5435);
+		check(std::equal(m.window.begin() + 0x100, m.window.begin() + 0x100 + bytes, m.ram.begin() + (src - RAM)),
+		      "RAM to the window: the same bytes");
+		check(m.window[0xFF] == 0 && m.window[0x100 + bytes] == 0, "RAM to the window: nothing around them");
+		eq("RAM to the window: accesses by the bus", m.window_by_bus, 0);
+
+		std::vector<uint32_t> starts;
+		for (uint32_t at = 0; at < bytes;) {
+			starts.push_back(dst + at);
+			at += std::min({Sh4::PAGE_SIZE - ((src + at) & (Sh4::PAGE_SIZE - 1)), 0x300u, bytes - at});
+		}
+		bool same = m.spans.size() == starts.size();
+		for (size_t i = 0; same && i < starts.size(); i++) {
+			same = m.spans[i].write && m.spans[i].addr == starts[i];
+		}
+		check(same, "RAM to the window: a span of the window asked for where each run starts");
+		eq("RAM to the window: SAR2", m.reg32(0xFFA00020), src + bytes);
+		eq("RAM to the window: DAR2", m.reg32(0xFFA00024), dst + bytes);
+		eq("RAM to the window: TCR2", m.reg32(0xFFA00028), 0);
+		eq("RAM to the window: TE", m.reg32(0xFFA0002C) & 2, 2);
+		eq("RAM to the window: DMTE2", m.state().irq[Source::DMTE2].raised, 1);
+	}
+	for (size_t limit : {size_t(100), size_t(16)}) {
+		/* The window to RAM, 32 bytes a unit, from its address in P2:
+		 * spans of three units and a bit, then spans shorter than a
+		 * unit, whose units go by the bus. */
+		Machine m;
+		const uint32_t src = 0xA0000000 | (WINDOW + 0x40), dst = RAM + 0x20000, units = 64, bytes = 32 * units;
+		const std::string what = "the window to RAM in spans of " + std::to_string(limit) + ": ";
+
+		for (uint32_t i = 0; i < bytes; i++) {
+			m.window[0x40 + i] = pattern(i);
+		}
+		m.span_limit = limit;
+		dma(m, src, dst, units, 0x5445);
+		check(std::equal(m.ram.begin() + 0x20000, m.ram.begin() + 0x20000 + bytes, m.window.begin() + 0x40),
+		      what + "the same bytes");
+		eq((what + "accesses by the bus").c_str(), m.window_by_bus, limit == 100 ? 0 : 4 * units);
+
+		const uint32_t run = limit == 100 ? 96 : 32;
+		bool same = m.spans.size() == (bytes + run - 1) / run;
+		for (size_t i = 0; same && i < m.spans.size(); i++) {
+			same = !m.spans[i].write && m.spans[i].addr == WINDOW + 0x40 + run * i;
+		}
+		check(same, what + "a span asked for where each run starts");
+		eq((what + "TCR2").c_str(), m.reg32(0xFFA00028), 0);
+	}
+	{
+		/* Over itself, forward and back: as unit after unit, eight
+		 * bytes at most at a time. */
+		struct Over {
+			uint32_t chcr, unit;
+			int32_t shift;
+		};
+		for (const Over &o : {Over{0x5435, 4, 4}, Over{0x5435, 4, -4}, Over{0x5405, 8, 8}, Over{0x5445, 32, 32},
+		                      Over{0x5445, 32, -32}}) {
+			Machine m;
+			const uint32_t units = 16, src = RAM + 0x30040, dst = src + static_cast<uint32_t>(o.shift);
+
+			for (uint32_t i = 0; i < 0x400; i++) {
+				m.ram[0x30000 + i] = pattern(i);
+			}
+			std::vector<uint8_t> want(m.ram.begin() + 0x30000, m.ram.begin() + 0x30400);
+			const uint32_t piece = std::min(o.unit, 8u);
+			for (uint32_t at = 0; at < units * o.unit; at += piece) {
+				std::memmove(&want[dst - RAM - 0x30000 + at], &want[src - RAM - 0x30000 + at], piece);
+			}
+			dma(m, src, dst, units, o.chcr);
+			check(std::equal(want.begin(), want.end(), m.ram.begin() + 0x30000),
+			      "over itself, " + std::to_string(o.unit) + " bytes a unit, " + std::to_string(o.shift) +
+			              " bytes away: as unit after unit");
+		}
+	}
+	{
+		/* Both sides in the window: no span asked for, each unit by the
+		 * bus. */
+		Machine m;
+
+		for (uint32_t i = 0; i < 0x100; i++) {
+			m.window[i] = pattern(i);
+		}
+		m.span_limit = 0x1000;
+		dma(m, WINDOW, WINDOW + 0x8000, 0x40, 0x5435);
+		check(std::equal(m.window.begin(), m.window.begin() + 0x100, m.window.begin() + 0x8000),
+		      "the window to itself: the same bytes");
+		eq("the window to itself: spans asked for", m.spans.size(), 0);
+		eq("the window to itself: accesses by the bus", m.window_by_bus, 2 * 0x40);
+	}
+	{
+		/* The source going down: unit after unit by the bus. */
+		Machine m;
+		const uint32_t src = RAM + 0x40100, longs = 0x40;
+
+		for (uint32_t i = 0; i < 0x100; i++) {
+			m.ram[0x40000 + i] = pattern(i);
+		}
+		m.span_limit = 0x1000;
+		dma(m, src, WINDOW, longs, 0x6435);
+		bool same = true;
+		for (uint32_t i = 0; i < longs; i++) {
+			same = same && std::equal(m.window.begin() + 4 * i, m.window.begin() + 4 * i + 4,
+			                          m.ram.begin() + (src - RAM) - 4 * (i + 1));
+		}
+		check(same, "a source going down: the longs from the last down");
+		eq("a source going down: spans asked for", m.spans.size(), 0);
+		eq("a source going down: SAR2", m.reg32(0xFFA00020), src - 4 * longs);
+	}
+}
+
 } /* namespace */
 
 int main(int argc, char **argv)
@@ -1554,6 +1704,7 @@ int main(int argc, char **argv)
 	test_hook();
 	test_save_load();
 	test_store_queues();
+	test_dmac_blocks();
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures == 0 ? 0 : 1;
 }

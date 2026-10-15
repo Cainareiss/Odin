@@ -54,6 +54,20 @@ public:
 			(void)words;
 			return 0;
 		}
+		/* For accesses in a row from bus_addr on: the bytes reads give,
+		 * or writes store, as they are in a memory, up to where an
+		 * access would do more. Whatever the accesses tell the board
+		 * there, it is told now. Empty where an access does more. */
+		virtual std::span<const uint8_t> bus_read_span(uint32_t bus_addr)
+		{
+			(void)bus_addr;
+			return {};
+		}
+		virtual std::span<uint8_t> bus_write_span(uint32_t bus_addr)
+		{
+			(void)bus_addr;
+			return {};
+		}
 		/* The interrupt line of the controller may have moved. */
 		virtual void memctl_irq_changed() = 0;
 		/* Something the program did that has no answer here. */
@@ -71,6 +85,10 @@ public:
 	 * million-pages. False when nothing answers on the external bus. */
 	bool read(uint32_t addr, unsigned size, uint64_t &value);
 	bool write(uint32_t addr, unsigned size, uint64_t value);
+	/* The same for accesses in a row from addr on, as Host::bus_read_span()
+	 * and bus_write_span(), within the window. */
+	std::span<const uint8_t> read_span(uint32_t addr);
+	std::span<uint8_t> write_span(uint32_t addr);
 
 	/* IRL1 of the master SH-4, held while bit 12 of +04 is set: the
 	 * handler of the games (PHARRIER @0C0102A0) tests the bit and writes

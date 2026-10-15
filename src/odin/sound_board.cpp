@@ -36,6 +36,8 @@ constexpr uint32_t PAGE_REGS_END = 0x708000;
 constexpr uint32_t PAGE_RTC = 0x710000;
 constexpr uint32_t PAGE_RTC_END = 0x710010;
 constexpr uint32_t PAGE_RAM = 0x800000;
+/* The pages of the wave memory the ARM7 watches */
+constexpr uint32_t WATCH_PAGE_SIZE = 1u << Arm7::WATCH_PAGE;
 
 static_assert(WaveMemory::PAGE_BITS == Arm7::WATCH_PAGE, "the chip and the ARM7 watch the same pages");
 
@@ -117,6 +119,30 @@ SoundBoard::host_write(uint32_t offset, unsigned size, uint64_t value)
 		return Written::NOWHERE;
 	}
 	return Written::DONE;
+}
+
+std::span<const uint8_t>
+SoundBoard::host_ram_read(uint32_t offset)
+{
+	if (offset < PAGE_RAM)
+		return {};
+
+	const uint32_t addr = offset - PAGE_RAM, size = WATCH_PAGE_SIZE - (addr & (WATCH_PAGE_SIZE - 1));
+
+	m_arm.ram_read(addr, size);
+	return std::span<const uint8_t>(m_ram + (addr & m_aica.ram_mask()), size);
+}
+
+std::span<uint8_t>
+SoundBoard::host_ram_write(uint32_t offset)
+{
+	if (offset < PAGE_RAM)
+		return {};
+
+	const uint32_t addr = offset - PAGE_RAM, size = WATCH_PAGE_SIZE - (addr & (WATCH_PAGE_SIZE - 1));
+
+	m_arm.ram_write(addr, size);
+	return std::span<uint8_t>(m_ram + (addr & m_aica.ram_mask()), size);
 }
 
 void

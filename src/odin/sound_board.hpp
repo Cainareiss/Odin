@@ -90,6 +90,12 @@ public:
 	 * decodes that offset. */
 	bool host_read(uint32_t offset, unsigned size, uint64_t &value);
 	Written host_write(uint32_t offset, unsigned size, uint64_t value);
+	/* The wave memory from offset on, as host_read() or host_write() of
+	 * the page sees it, to the end of a page the ARM7 watches; the ARM7
+	 * is told of a read, or of a write, there. Empty below the wave
+	 * memory. */
+	std::span<const uint8_t> host_ram_read(uint32_t offset);
+	std::span<uint8_t> host_ram_write(uint32_t offset);
 
 	/* Advances the board by that many cycles of the main processor. */
 	void run(uint32_t cycles);

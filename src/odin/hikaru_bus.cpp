@@ -59,6 +59,13 @@ store(std::span<uint8_t> memory, uint32_t offs, unsigned size, uint64_t value)
 	store_bytes(&memory[offs], size, value);
 }
 
+/* Where the master sees the external bus through its memory controller */
+bool
+master_window(uint32_t addr)
+{
+	return (addr >= 0x02000000 && addr <= 0x03FFFFFF) || (addr >= 0x16000000 && addr <= 0x17FFFFFF);
+}
+
 uint16_t
 swap16(uint64_t value)
 {
@@ -791,6 +798,51 @@ Hikaru::bus_span(uint32_t bus_addr) const
 	return {};
 }
 
+/* The RAMs a write of the bus stores into as they are, from bus_addr on */
+std::span<uint8_t>
+Hikaru::bus_ram(uint32_t bus_addr)
+{
+	if (bus_addr >= 0x40000000 && bus_addr <= 0x41FFFFFF)
+		return std::span<uint8_t>(m_ram[SLAVE]).subspan(bus_addr & 0x01FFFFFF);
+	if (bus_addr >= 0x48000000 && bus_addr <= 0x483FFFFF)
+		return std::span<uint8_t>(m_cmdram).subspan(bus_addr & 0x003FFFFF);
+	if (bus_addr >= 0x70000000 && bus_addr <= 0x71FFFFFF)
+		return std::span<uint8_t>(m_ram[MASTER]).subspan(bus_addr & 0x01FFFFFF);
+	return {};
+}
+
+/* The sound board of a page of the bus, for spans of its wave memory;
+ * none when each access is printed. */
+SoundBoard *
+Hikaru::wave_board(uint32_t bus_addr)
+{
+	return m_verbose ? nullptr : m_sound[(bus_addr >> 24) == 0x0C ? MASTER : SLAVE].get();
+}
+
+/* MemCtl::Host: as bus_span(), and the wave memories */
+std::span<const uint8_t>
+Hikaru::bus_read_span(uint32_t bus_addr)
+{
+	if (bus_addr >= 0x0C000000 && bus_addr <= 0x0DFFFFFF) {
+		SoundBoard *board = wave_board(bus_addr);
+
+		return board ? board->host_ram_read(bus_addr & 0xFFFFFF) : std::span<const uint8_t>();
+	}
+	return bus_span(bus_addr);
+}
+
+/* MemCtl::Host: the RAMs and the wave memories */
+std::span<uint8_t>
+Hikaru::bus_write_span(uint32_t bus_addr)
+{
+	if (bus_addr >= 0x0C000000 && bus_addr <= 0x0DFFFFFF) {
+		SoundBoard *board = wave_board(bus_addr);
+
+		return board ? board->host_ram_write(bus_addr & 0xFFFFFF) : std::span<uint8_t>();
+	}
+	return bus_ram(bus_addr);
+}
+
 /* MemCtl::Host: from a memory of the bus to the RAM of a SH-4, the command
  * RAM or a bank of the texture RAM, word after word as bus_read() and
  * bus_write() would; the texture RAM is told once, which is what each
@@ -816,12 +868,7 @@ Hikaru::bus_copy(uint32_t src, uint32_t dst, uint32_t words)
 			texram_store(bank, offs + 4 * i, 4, load_bytes(&from[4 * i], 4), twiddled);
 		return n;
 	}
-	if (dst >= 0x40000000 && dst <= 0x41FFFFFF)
-		to = std::span<uint8_t>(m_ram[SLAVE]).subspan(dst & 0x01FFFFFF);
-	else if (dst >= 0x48000000 && dst <= 0x483FFFFF)
-		to = std::span<uint8_t>(m_cmdram).subspan(dst & 0x003FFFFF);
-	else if (dst >= 0x70000000 && dst <= 0x71FFFFFF)
-		to = std::span<uint8_t>(m_ram[MASTER]).subspan(dst & 0x01FFFFFF);
+	to = bus_ram(dst);
 	n = std::min(n, static_cast<uint32_t>(to.size() / 4));
 	/* One word after the other: a copy onto itself does what the bus
 	 * would. */
@@ -883,6 +930,24 @@ Hikaru::Bus::write(uint32_t addr, uint32_t size, uint64_t value)
 {
 	return (m_which == MASTER) ? m_board.master_write(addr, size, value) :
 	                             m_board.slave_write(addr, size, value);
+}
+
+/* The windows of the master on the external bus; what else is plain, the
+ * CPUs have in their pages. */
+std::span<const uint8_t>
+Hikaru::Bus::read_span(uint32_t addr)
+{
+	if (m_which == MASTER && master_window(addr))
+		return m_board.m_memctl[MASTER].read_span(addr);
+	return {};
+}
+
+std::span<uint8_t>
+Hikaru::Bus::write_span(uint32_t addr)
+{
+	if (m_which == MASTER && master_window(addr))
+		return m_board.m_memctl[MASTER].write_span(addr);
+	return {};
 }
 
 /*
