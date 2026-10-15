@@ -495,10 +495,10 @@ stops. The machine names the pages of the bus whose accesses do not write
 the memory of the CPU (Sh4::map_quiet; the MIE for the master): they leave
 the blocks as they were compared and the block that makes them goes on.
 
-ODIN_SH4_TRANSLATE=1, a test for now: the kept blocks run as host code
-(src/odin/sh4_translate.cpp says what a block does, src/odin/sh4_host.cpp
-writes it for x86-64 with the calling convention of Linux or of
-Windows; elsewhere the blocks are read). Each instruction is written once
+By default the kept blocks run as host code (ODIN_SH4_TRANSLATE=0: they
+are read; src/odin/sh4_translate.cpp says what a block does,
+src/odin/sh4_host.cpp writes it for x86-64 with the calling convention of
+Linux or of Windows; elsewhere the blocks are read). Each instruction is written once
 (Sh4OpsT) and handed over in two ways: the reader runs the next one by a
 tail call, the host code of a block calls its instructions in turn, all by
 direct calls. The two give the same registers, memories, cycles and

@@ -311,9 +311,10 @@ Hikaru::Hikaru(const Game &game, const RomBoard::Config &rombd, bool verbose)
 	for (unsigned which : { MASTER, SLAVE }) {
 		m_sh[which] = std::make_unique<Sh4>(m_bus[which], std::span<uint8_t>(m_iregs[which]),
 		                                    which == MASTER, true, 5);
-		/* ODIN_SH4_TRANSLATE=1, a test for now: the kept blocks run as
-		 * host code. The memory and the states must be the same. */
-		if (env_flag("ODIN_SH4_TRANSLATE", false)) {
+		/* The kept blocks run as host code where the host allows it;
+		 * ODIN_SH4_TRANSLATE=0 has them read, for comparing. The memory
+		 * and the states are the same either way. */
+		if (env_flag("ODIN_SH4_TRANSLATE", true)) {
 			m_sh[which]->set_translate(true);
 			if (!m_sh[which]->translates())
 				std::fprintf(stderr, "sh4: no host code on this machine, the blocks are read\n");
