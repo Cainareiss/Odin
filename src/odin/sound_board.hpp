@@ -73,6 +73,9 @@ public:
 	 * (Arm7::set_turn_replay): on at first. Off is for a test: the
 	 * memory and the states must come out the same. */
 	void set_turn_replay(bool on) { m_arm.set_turn_replay(on); }
+	/* The ARM7 runs what it decoded once (Arm7::set_decoded): on at
+	 * first. */
+	void set_arm_decoded(bool on) { m_arm.set_decoded(on); }
 	/* The reset pin of the board: as reset, but the clock keeps its
 	 * time. */
 	void reset_pin();

@@ -24,6 +24,7 @@
 #include <array>
 #include <cstdint>
 #include <cstdio>
+#include <memory>
 #include <vector>
 
 namespace odin {
@@ -96,6 +97,13 @@ public:
 	uint32_t run(uint32_t cycles);
 	/* Services a pending FIQ or IRQ, then runs one instruction. */
 	uint32_t step();
+	/* The same, the instruction taken from what its word was decoded to
+	 * the last time it ran, decoded again when the word changed; not to
+	 * be used while a turn is recorded or settled, or with the trace. */
+	uint32_t step_decoded();
+	/* run() uses step_decoded() where it may (on by default); off is
+	 * for comparing with step(). */
+	void set_decoded(bool on) { m_decoded_on = on; }
 	/* Takes a pending FIQ or IRQ without running an instruction.
 	 * Returns the cycles spent, 0 when nothing was pending. */
 	uint32_t poll_interrupts();
@@ -215,6 +223,20 @@ private:
 	uint32_t single_transfer_offset(uint32_t op);
 	void load_pc(uint32_t v);
 
+	/* Instructions decoded once (arm7_ops.cpp): for each word of a page of
+	 * the plain memory run as code, the word and the function that runs
+	 * it, without the switches of exec(). */
+	using Run = void (*)(Arm7 &, uint32_t op);
+	struct Decoded {
+		uint32_t op;
+		Run run;
+	};
+	static constexpr uint32_t DECODED_PAGE = 12;
+	static constexpr uint32_t DECODED_PAGES = (8u << 20) >> DECODED_PAGE;
+	friend struct Arm7Ops;
+	static Run decode(uint32_t op);
+	Decoded *decoded_page(uint32_t page);
+
 	Arm7Bus &m_bus;
 	Arm7Ram m_ram;
 	FILE *m_trace;
@@ -235,6 +257,9 @@ private:
 	uint32_t m_op_pc;
 	uint32_t m_cycles;
 	uint64_t m_instructions;
+
+	bool m_decoded_on;
+	std::array<std::unique_ptr<Decoded[]>, DECODED_PAGES> m_decoded;
 
 	/* Turns counted without being run, see set_turn_replay(). */
 	enum class Turn : uint8_t { Off, Idle, Record, Replay, Settle };

@@ -25,7 +25,9 @@
 
 #include "odin/arm7.hpp"
 
+#include <array>
 #include <bit>
+#include <utility>
 
 namespace odin {
 
@@ -552,6 +554,271 @@ void Arm7::undefined(uint32_t op)
 {
 	trace_note("undefined", op);
 	take_undefined();
+}
+
+/* Instructions decoded once (Arm7::step_decoded): a function per form, the
+ * choices exec() and the functions above make at each instruction made by
+ * templates instead. Each does what those functions do, step for step
+ * (tests/arm7 runs both on the same instructions); the rare forms and those
+ * that write r15 run exec() itself. */
+struct Arm7Ops {
+	/* The second operand of data processing, and the offset of LDR / STR */
+	enum : uint32_t { SHIFT_LSL, SHIFT_LSR, SHIFT_ASR, SHIFT_ROR, SHIFT_REG, IMMEDIATE };
+
+	/* shift_by() of an amount in the instruction (0 to 31) */
+	template <uint32_t TYPE>
+	static uint32_t shift_imm(uint32_t v, uint32_t amount, uint32_t &carry_out)
+	{
+		if constexpr (TYPE == SHIFT_LSL) {
+			if (amount == 0) {
+				return v;
+			}
+			carry_out = Arm7::bit(v, 32 - amount);
+			return v << amount;
+		} else if constexpr (TYPE == SHIFT_LSR) {
+			if (amount == 0) {
+				carry_out = v >> 31;
+				return 0;
+			}
+			carry_out = Arm7::bit(v, amount - 1);
+			return v >> amount;
+		} else if constexpr (TYPE == SHIFT_ASR) {
+			if (amount == 0) {
+				carry_out = v >> 31;
+				return (v & 0x80000000u) ? 0xFFFFFFFFu : 0;
+			}
+			carry_out = Arm7::bit(v, amount - 1);
+			return static_cast<uint32_t>(static_cast<int32_t>(v) >> amount);
+		} else {
+			if (amount == 0) {
+				const uint32_t old_c = carry_out;
+				carry_out = v & 1;
+				return (v >> 1) | (old_c << 31);
+			}
+			carry_out = Arm7::bit(v, amount - 1);
+			return Arm7::ror(v, amount);
+		}
+	}
+
+	/* data_processing() with Rd other than r15 */
+	template <uint32_t OPCODE, bool S, uint32_t FORM>
+	static void data_processing(Arm7 &a, uint32_t op)
+	{
+		constexpr bool logical = OPCODE == 0x0 || OPCODE == 0x1 || OPCODE == 0x8 || OPCODE == 0x9 || OPCODE >= 0xC;
+		const uint32_t rn_idx = (op >> 16) & 0xF;
+		[[maybe_unused]] const uint32_t rd = (op >> 12) & 0xF;
+		[[maybe_unused]] uint32_t carry = (a.m_cpsr & Arm7::FLAG_C) ? 1 : 0;
+		uint32_t op2;
+
+		if constexpr (FORM == IMMEDIATE) {
+			const uint32_t rot = ((op >> 8) & 0xF) * 2;
+
+			op2 = Arm7::ror(op & 0xFF, rot);
+			if (S && rot != 0) {
+				carry = op2 >> 31;
+			}
+		} else if constexpr (FORM == SHIFT_REG) {
+			op2 = a.shifter(op, S, carry);
+		} else {
+			op2 = shift_imm<FORM>(a.get_r(op & 0xF), (op >> 7) & 0x1F, carry);
+		}
+		uint32_t rn = a.get_r(rn_idx);
+		if constexpr (FORM == SHIFT_REG) {
+			if (rn_idx == 15) {
+				rn += 4;
+			}
+			a.m_cycles += 1;
+		}
+		[[maybe_unused]] const uint32_t c_in = (a.m_cpsr & Arm7::FLAG_C) ? 1 : 0;
+		uint32_t res;
+		if constexpr (OPCODE == 0x0 || OPCODE == 0x8) {
+			res = rn & op2;
+		} else if constexpr (OPCODE == 0x1 || OPCODE == 0x9) {
+			res = rn ^ op2;
+		} else if constexpr (OPCODE == 0x2 || OPCODE == 0xA) {
+			res = S ? a.sub_flags(rn, op2, 1) : rn - op2;
+		} else if constexpr (OPCODE == 0x3) {
+			res = S ? a.sub_flags(op2, rn, 1) : op2 - rn;
+		} else if constexpr (OPCODE == 0x4 || OPCODE == 0xB) {
+			res = S ? a.add_flags(rn, op2, 0) : rn + op2;
+		} else if constexpr (OPCODE == 0x5) {
+			res = S ? a.add_flags(rn, op2, c_in) : rn + op2 + c_in;
+		} else if constexpr (OPCODE == 0x6) {
+			res = S ? a.sub_flags(rn, op2, c_in) : rn - op2 - (1 - c_in);
+		} else if constexpr (OPCODE == 0x7) {
+			res = S ? a.sub_flags(op2, rn, c_in) : op2 - rn - (1 - c_in);
+		} else if constexpr (OPCODE == 0xC) {
+			res = rn | op2;
+		} else if constexpr (OPCODE == 0xD) {
+			res = op2;
+		} else if constexpr (OPCODE == 0xE) {
+			res = rn & ~op2;
+		} else {
+			res = ~op2;
+		}
+		if constexpr (S && logical) {
+			a.set_nz(res);
+			a.set_flag(Arm7::FLAG_C, carry != 0);
+		}
+		if constexpr ((OPCODE & 0xC) == 0x8) {
+			a.m_cycles += 1;
+		} else {
+			a.m_r[rd] = res;
+			a.m_cycles += 1;
+		}
+	}
+
+	/* single_transfer() */
+	template <bool PRE, bool UP, bool BYTE, bool WRITEBACK, bool LOAD, uint32_t FORM>
+	static void single_transfer(Arm7 &a, uint32_t op)
+	{
+		const uint32_t rn = (op >> 16) & 0xF;
+		const uint32_t rd = (op >> 12) & 0xF;
+		uint32_t offset;
+
+		if constexpr (FORM == IMMEDIATE) {
+			offset = op & 0xFFF;
+		} else {
+			uint32_t unused_carry = 0;
+			offset = shift_imm<FORM>(a.get_r(op & 0xF), (op >> 7) & 0x1F, unused_carry);
+		}
+		const uint32_t base = a.get_r(rn);
+		const uint32_t indexed = UP ? base + offset : base - offset;
+		const uint32_t addr = PRE ? indexed : base;
+		const bool update_base = (!PRE || WRITEBACK) && rn != 15;
+		if constexpr (LOAD) {
+			uint32_t v;
+			if constexpr (BYTE) {
+				v = a.rd8(addr);
+			} else {
+				v = Arm7::ror(a.rd32(addr), (addr & 3) * 8);
+			}
+			if (update_base) {
+				a.m_r[rn] = indexed;
+			}
+			if (rd == 15) {
+				a.load_pc(v);
+			} else {
+				a.m_r[rd] = v;
+			}
+			a.m_cycles += 3;
+		} else {
+			const uint32_t v = rd == 15 ? a.m_op_pc + 12 : a.m_r[rd];
+			if constexpr (BYTE) {
+				a.wr8(addr, Arm7::u8(v));
+			} else {
+				a.wr32(addr, v);
+			}
+			if (update_base) {
+				a.m_r[rn] = indexed;
+			}
+			a.m_cycles += 2;
+		}
+	}
+
+	/* branch() */
+	template <bool LINK>
+	static void branch(Arm7 &a, uint32_t op)
+	{
+		uint32_t offset = (op & 0x00FFFFFF) << 2;
+		if (offset & 0x02000000) {
+			offset |= 0xFC000000;
+		}
+		if constexpr (LINK) {
+			a.m_r[14] = a.m_op_pc + 4;
+		}
+		a.m_pc = a.m_op_pc + 8 + offset;
+		a.m_cycles += 3;
+	}
+
+	static void exec(Arm7 &a, uint32_t op) { a.exec(op); }
+	static void halfword_transfer(Arm7 &a, uint32_t op) { a.halfword_transfer(op); }
+	static void multiply(Arm7 &a, uint32_t op) { a.multiply(op); }
+	static void multiply_long(Arm7 &a, uint32_t op) { a.multiply_long(op); }
+	static void swap(Arm7 &a, uint32_t op) { a.swap(op); }
+	static void branch_exchange(Arm7 &a, uint32_t op) { a.branch_exchange(op); }
+	static void block_transfer(Arm7 &a, uint32_t op) { a.block_transfer(op); }
+
+	/* data_processing<opcode, S, form> at (opcode * 2 + S) * 6 + form */
+	template <uint32_t... I>
+	static constexpr std::array<Arm7::Run, sizeof...(I)> data_table(std::integer_sequence<uint32_t, I...>)
+	{
+		return { &data_processing<I / 12, ((I / 6) & 1) != 0, I % 6>... };
+	}
+	/* single_transfer<P, U, B, W, L, form> at bits 24 to 20 * 5 + form,
+	 * the form 4 being the immediate offset */
+	template <uint32_t... I>
+	static constexpr std::array<Arm7::Run, sizeof...(I)> transfer_table(std::integer_sequence<uint32_t, I...>)
+	{
+		return { &single_transfer<((I / 5) & 16) != 0, ((I / 5) & 8) != 0, ((I / 5) & 4) != 0, ((I / 5) & 2) != 0,
+		                          ((I / 5) & 1) != 0, I % 5 == 4 ? IMMEDIATE : I % 5>... };
+	}
+	static const std::array<Arm7::Run, 192> DATA;
+	static const std::array<Arm7::Run, 160> TRANSFER;
+};
+
+const std::array<Arm7::Run, 192> Arm7Ops::DATA = Arm7Ops::data_table(std::make_integer_sequence<uint32_t, 192>{});
+const std::array<Arm7::Run, 160> Arm7Ops::TRANSFER = Arm7Ops::transfer_table(std::make_integer_sequence<uint32_t, 160>{});
+
+namespace {
+
+uint32_t data_index(uint32_t op, uint32_t form)
+{
+	return (((op >> 21) & 0xF) * 2 + ((op >> 20) & 1)) * 6 + form;
+}
+
+uint32_t transfer_index(uint32_t op, uint32_t form)
+{
+	return ((op >> 20) & 0x1F) * 5 + form;
+}
+
+} /* namespace */
+
+/* The choices of exec(), exec_group0() and exec_group1(), in their order. */
+Arm7::Run Arm7::decode(uint32_t op)
+{
+	const bool to_pc = ((op >> 12) & 0xF) == 15;
+
+	switch ((op >> 25) & 7) {
+	case 0:
+		if ((op & 0x90) == 0x90) {
+			if (op & 0x60) {
+				return &Arm7Ops::halfword_transfer;
+			}
+			if ((op & 0x0FC00000) == 0) {
+				return &Arm7Ops::multiply;
+			}
+			if ((op & 0x0F800000) == 0x00800000) {
+				return &Arm7Ops::multiply_long;
+			}
+			if ((op & 0x0FB00FF0) == 0x01000090) {
+				return &Arm7Ops::swap;
+			}
+			return &Arm7Ops::exec;
+		}
+		if ((op & 0x0FFFFFF0) == 0x012FFF10) {
+			return &Arm7Ops::branch_exchange;
+		}
+		if ((op & 0x01900000) == 0x01000000 || to_pc) {
+			return &Arm7Ops::exec;
+		}
+		return Arm7Ops::DATA[data_index(op, (op & 0x10) ? Arm7Ops::SHIFT_REG : (op >> 5) & 3)];
+	case 1:
+		if ((op & 0x01900000) == 0x01000000 || to_pc) {
+			return &Arm7Ops::exec;
+		}
+		return Arm7Ops::DATA[data_index(op, Arm7Ops::IMMEDIATE)];
+	case 2:
+		return Arm7Ops::TRANSFER[transfer_index(op, 4)];
+	case 3:
+		return (op & 0x10) ? &Arm7Ops::exec : Arm7Ops::TRANSFER[transfer_index(op, (op >> 5) & 3)];
+	case 4:
+		return &Arm7Ops::block_transfer;
+	case 5:
+		return (op & (1u << 24)) ? &Arm7Ops::branch<true> : &Arm7Ops::branch<false>;
+	default:
+		return &Arm7Ops::exec;
+	}
 }
 
 } /* namespace odin */

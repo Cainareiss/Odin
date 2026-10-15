@@ -35,8 +35,31 @@
 
 namespace odin {
 
+namespace {
+
+/* For each condition, a bit for each value of NZCV (CPSR bits 31 to 28)
+ * it passes with: what cond() answers, without its switch. */
+constexpr std::array<uint16_t, 16> COND_PASS = [] {
+	std::array<uint16_t, 16> pass{};
+	for (uint32_t cc = 0; cc < 16; cc++) {
+		for (uint32_t f = 0; f < 16; f++) {
+			const bool n = f & 8, z = f & 4, c = f & 2, v = f & 1;
+			const bool yes = cc == 0x0 ? z : cc == 0x1 ? !z : cc == 0x2 ? c : cc == 0x3 ? !c : cc == 0x4 ? n :
+			                 cc == 0x5 ? !n : cc == 0x6 ? v : cc == 0x7 ? !v : cc == 0x8 ? c && !z :
+			                 cc == 0x9 ? !c || z : cc == 0xA ? n == v : cc == 0xB ? n != v :
+			                 cc == 0xC ? !z && n == v : cc == 0xD ? z || n != v : cc == 0xE;
+			if (yes) {
+				pass[cc] = static_cast<uint16_t>(pass[cc] | (1u << f));
+			}
+		}
+	}
+	return pass;
+}();
+
+} /* namespace */
+
 Arm7::Arm7(Arm7Bus &bus)
-	: m_bus(bus), m_ram{nullptr, 0, 0}, m_trace(nullptr), m_turn(Turn::Off), m_turn_limit(TURN_MAX),
+	: m_bus(bus), m_ram{nullptr, 0, 0}, m_trace(nullptr), m_decoded_on(true), m_turn(Turn::Off), m_turn_limit(TURN_MAX),
 	  m_turn_counter(TURN_NO_COUNTER), m_turn_delta(0), m_turn_laps(0), m_turn_kept(false),
 	  m_turn_trail_full(false), m_turn_one_mode(false), m_turn_try(0), m_turn_misses(0), m_turn_origin(0),
 	  m_turn_left(false), m_turn_resumable(false), m_turn_left_at(0), m_turn_left_state{}, m_turn_recorded(0),
@@ -125,7 +148,7 @@ uint32_t Arm7::run(uint32_t cycles)
 					m_turn_kept = false;
 				}
 			}
-			done += step();
+			done += (m_decoded_on && !m_trace) ? step_decoded() : step();
 		}
 	}
 	return done;
@@ -813,6 +836,50 @@ uint32_t Arm7::step()
 		m_cycles += 1;
 	}
 	return m_cycles;
+}
+
+uint32_t Arm7::step_decoded()
+{
+	m_cycles = poll_interrupts();
+	m_op_pc = m_pc;
+
+	const uint32_t addr = m_pc & ~3u;
+	const uint32_t at = addr & m_ram.mask;
+	uint32_t op;
+	Run does;
+
+	if (addr < m_ram.size && at < (DECODED_PAGES << DECODED_PAGE)) {
+		const uint8_t *p = m_ram.base + at;
+		Decoded *page = m_decoded[at >> DECODED_PAGE].get();
+
+		if (!page) {
+			page = decoded_page(at >> DECODED_PAGE);
+		}
+		Decoded &d = page[(at >> 2) & ((1u << (DECODED_PAGE - 2)) - 1)];
+		op = p[0] | (p[1] << 8) | (p[2] << 16) | (static_cast<uint32_t>(p[3]) << 24);
+		if (d.op != op || !d.run) {
+			d.op = op;
+			d.run = decode(op);
+		}
+		does = d.run;
+	} else {
+		op = m_bus.read32(addr);
+		does = decode(op);
+	}
+	m_pc += 4;
+	if ((COND_PASS[op >> 28] >> (m_cpsr >> 28)) & 1) {
+		m_instructions++;
+		does(*this, op);
+	} else {
+		m_cycles += 1;
+	}
+	return m_cycles;
+}
+
+Arm7::Decoded *Arm7::decoded_page(uint32_t page)
+{
+	m_decoded[page] = std::make_unique<Decoded[]>(1u << (DECODED_PAGE - 2));
+	return m_decoded[page].get();
 }
 
 /* Save and load fold the active bank into the mode banks so that the

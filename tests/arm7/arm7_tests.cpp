@@ -2003,6 +2003,130 @@ void test_watched_pages()
 	check_eq("writes watched with every turn run", cpu.watched_writes() != nullptr, 0);
 }
 
+/* A bus that answers each read with a value made from its address and keeps
+ * every access in order: two cores fed alike are compared on it. */
+class LogBus : public odin::Arm7Bus {
+public:
+	struct Access {
+		char rw;
+		uint32_t size, addr, value;
+		bool operator==(const Access &) const = default;
+	};
+	std::vector<Access> log;
+
+	static uint32_t answer(uint32_t addr) { return (addr * 0x9E3779B1u) ^ 0x5A5A1234u; }
+	uint8_t read8(uint32_t addr) override { return static_cast<uint8_t>(note('r', 1, addr, answer(addr))); }
+	uint16_t read16(uint32_t addr) override { return static_cast<uint16_t>(note('r', 2, addr, answer(addr))); }
+	uint32_t read32(uint32_t addr) override { return note('r', 4, addr, answer(addr)); }
+	void write8(uint32_t addr, uint8_t v) override { note('w', 1, addr, v); }
+	void write16(uint32_t addr, uint16_t v) override { note('w', 2, addr, v); }
+	void write32(uint32_t addr, uint32_t v) override { note('w', 4, addr, v); }
+	uint32_t note(char rw, uint32_t size, uint32_t addr, uint32_t v)
+	{
+		log.push_back({rw, size, addr, v});
+		return v;
+	}
+};
+
+/* Instructions decoded once (step_decoded) do what step() does: words drawn
+ * at random, most of them always run, from random registers of every mode
+ * and random flags, half of the addresses in the plain memory; each one run
+ * twice, the second time from what was decoded. The same registers, PSRs,
+ * cycles, memory and bus accesses in the same order. */
+void test_decoded()
+{
+	g_current = "decoded";
+	constexpr uint32_t RAM = 0x2000;
+	const uint32_t modes[] = { Arm7::MODE_USR, Arm7::MODE_FIQ, Arm7::MODE_IRQ, Arm7::MODE_SVC, Arm7::MODE_ABT,
+	                           Arm7::MODE_UND, Arm7::MODE_SYS };
+	uint64_t seed = 0x243F6A8885A308D3ull;
+	const auto next = [&seed] {
+		seed ^= seed << 13;
+		seed ^= seed >> 7;
+		seed ^= seed << 17;
+		return static_cast<uint32_t>(seed >> 16);
+	};
+	std::vector<uint8_t> pattern(RAM), ram[2];
+	for (uint8_t &b : pattern) {
+		b = static_cast<uint8_t>(next());
+	}
+	LogBus bus[2];
+	Arm7 old_core(bus[0]), new_core(bus[1]);
+	unsigned differ = 0, decoded_runs = 0;
+
+	for (uint32_t trial = 0; trial < 200000 && differ < 5; trial++) {
+		odin::Arm7State st{};
+		const auto reg = [&next] { return (next() & 1) ? next() % RAM : next(); };
+		for (uint32_t &r : st.r) {
+			r = reg();
+		}
+		for (uint32_t i = 0; i < 7; i++) {
+			st.usr[i] = reg();
+			st.fiq[i] = reg();
+		}
+		for (uint32_t i = 0; i < 2; i++) {
+			st.irq[i] = reg();
+			st.svc[i] = reg();
+			st.abt[i] = reg();
+			st.und[i] = reg();
+		}
+		for (uint32_t &v : st.spsr) {
+			v = (next() & 0xF0000000u) | modes[next() % 7];
+		}
+		st.cpsr = (next() & 0xF00000C0u) | modes[next() % 7];
+		st.pc = (next() % RAM) & ~3u;
+		st.fiq_line = (next() % 16) == 0;
+		uint32_t op = next() ^ (next() << 16);
+		if (next() & 1) {
+			op = (op & 0x0FFFFFFF) | 0xE0000000u;
+		}
+		for (uint32_t pass = 0; pass < 2; pass++) {
+			uint32_t cycles[2];
+			odin::Arm7State after[2];
+			for (uint32_t k = 0; k < 2; k++) {
+				Arm7 &cpu = k == 0 ? old_core : new_core;
+				ram[k] = pattern;
+				for (uint32_t i = 0; i < 4; i++) {
+					ram[k][st.pc + i] = static_cast<uint8_t>(op >> (8 * i));
+				}
+				cpu.set_ram({ram[k].data(), RAM, RAM - 1});
+				cpu.load(st);
+				bus[k].log.clear();
+				cycles[k] = k == 0 ? cpu.step() : cpu.step_decoded();
+				cpu.save(after[k]);
+			}
+			decoded_runs += pass;
+			g_checks++;
+			if (cycles[0] != cycles[1] || !(after[0] == after[1]) || ram[0] != ram[1] || bus[0].log != bus[1].log ||
+			    old_core.instructions() != new_core.instructions()) {
+				char line[96];
+				std::snprintf(line, sizeof line, "%08x at %08x, cpsr %08x, run %u: not as step()", op, st.pc,
+				              st.cpsr, pass + 1);
+				fail(line);
+				differ++;
+				break;
+			}
+		}
+	}
+	check_eq("words run twice from what was decoded", decoded_runs, 200000);
+
+	/* A word decoded, then written over: the new one runs. */
+	std::vector<uint8_t> mem(RAM);
+	LogBus quiet;
+	Arm7 cpu(quiet);
+	odin::Arm7State st{};
+	st.cpsr = Arm7::MODE_SVC;
+	st.pc = 0x100;
+	cpu.set_ram({mem.data(), RAM, RAM - 1});
+	for (uint32_t value = 1; value <= 2; value++) {
+		const uint32_t mov = 0xE3A00000u | value; /* mov r0, #value */
+		std::memcpy(&mem[0x100], &mov, 4);
+		cpu.load(st);
+		cpu.step_decoded();
+		check_eq(value == 1 ? "decoded: mov r0, #1" : "decoded: the word written over runs", cpu.reg(0), value);
+	}
+}
+
 int main(int argc, char **argv)
 {
 	for (int i = 1; i < argc; i++) {
@@ -2025,6 +2149,7 @@ int main(int argc, char **argv)
 	test_trace();
 	test_turns();
 	test_watched_pages();
+	test_decoded();
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures == 0 ? 0 : 1;
 }
