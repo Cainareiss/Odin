@@ -120,6 +120,96 @@ load_section(const json_t *section, const std::string &dir)
 	return std::nullopt;
 }
 
+/* "1P START", "2P PUSH3"...: the bits of the word of a player, START
+ * SERVICE UP DOWN LEFT RIGHT PUSH1 PUSH2 from bit 15 down, then PUSH3 to
+ * PUSH10 from bit 7 down. */
+std::optional<JvsSwitch>
+parse_switch(const json_t *value)
+{
+	static const char *const NAMES[] = { "START", "SERVICE", "UP", "DOWN", "LEFT", "RIGHT", "PUSH1", "PUSH2",
+	                                      "PUSH3", "PUSH4", "PUSH5", "PUSH6", "PUSH7", "PUSH8", "PUSH9", "PUSH10" };
+	const char *const text = json_string_value(value);
+
+	if (!text || (std::strncmp(text, "1P ", 3) && std::strncmp(text, "2P ", 3)))
+		return std::nullopt;
+	for (unsigned i = 0; i < 16; i++)
+		if (!std::strcmp(text + 3, NAMES[i]))
+			return JvsSwitch{ static_cast<uint8_t>(text[0] - '1'), static_cast<uint16_t>(0x8000 >> i) };
+	return std::nullopt;
+}
+
+std::optional<GameControl::Low>
+parse_low(const json_t *value)
+{
+	static const std::pair<const char *, GameControl::Low> WAYS[] = {
+		{ "left", GameControl::Low::LEFT }, { "right", GameControl::Low::RIGHT },
+		{ "up", GameControl::Low::UP }, { "down", GameControl::Low::DOWN },
+		{ "released", GameControl::Low::RELEASED }, { "pressed", GameControl::Low::PRESSED }
+	};
+	const char *const text = json_string_value(value);
+
+	for (const auto &[name, low] : WAYS)
+		if (text && !std::strcmp(text, name))
+			return low;
+	return std::nullopt;
+}
+
+/* A control: {"name": ..., then "switch", "analog" with "low", or
+ * "positions"}. */
+std::optional<GameControl>
+parse_control(const json_t *control)
+{
+	const char *const name = json_string_value(json_object_get(control, "name"));
+	const json_t *const button = json_object_get(control, "switch");
+	const json_t *const analog = json_object_get(control, "analog");
+	const json_t *const positions = json_object_get(control, "positions");
+	GameControl out{};
+
+	if (!name || !name[0] || (button != nullptr) + (analog != nullptr) + (positions != nullptr) != 1)
+		return std::nullopt;
+	out.name = name;
+	if (button) {
+		const auto sw = parse_switch(button);
+
+		if (!sw)
+			return std::nullopt;
+		out.type = GameControl::Type::BUTTON;
+		out.button = *sw;
+		return out;
+	}
+	if (analog) {
+		const auto low = parse_low(json_object_get(control, "low"));
+
+		if (!json_is_integer(analog) || json_integer_value(analog) < 0 || json_integer_value(analog) > 7 || !low)
+			return std::nullopt;
+		out.type = GameControl::Type::ANALOG;
+		out.analog = static_cast<uint8_t>(json_integer_value(analog));
+		out.low = *low;
+		return out;
+	}
+	if (!json_array_size(positions))
+		return std::nullopt;
+	out.type = GameControl::Type::POSITIONS;
+	for (size_t i = 0; i < json_array_size(positions); i++) {
+		const json_t *const position = json_array_get(positions, i);
+		const char *const position_name = json_string_value(json_object_get(position, "name"));
+		const json_t *const switches = json_object_get(position, "switches");
+		GameControl::Position kept{ position_name ? position_name : "", {} };
+
+		if (kept.name.empty() || !json_is_array(switches))
+			return std::nullopt;
+		for (size_t j = 0; j < json_array_size(switches); j++) {
+			const auto sw = parse_switch(json_array_get(switches, j));
+
+			if (!sw)
+				return std::nullopt;
+			kept.switches.push_back(*sw);
+		}
+		out.positions.push_back(std::move(kept));
+	}
+	return out;
+}
+
 } /* namespace */
 
 std::span<const uint8_t>
@@ -230,6 +320,20 @@ GameList::load_game(const std::string &rom_dir, const std::string &name) const
 	game.machine = json_string_value(json_object_get(rom, "mach"));
 	const char *const io = json_string_value(json_object_get(rom, "io"));
 	game.io_board = io ? io : "837-13551";
+	const json_t *const controls = json_object_get(rom, "controls");
+	if (controls && !json_is_array(controls)) {
+		std::fprintf(stderr, "ERROR: game '%s': \"controls\" is not a list\n", name.c_str());
+		return std::nullopt;
+	}
+	for (size_t i = 0; i < json_array_size(controls); i++) {
+		auto control = parse_control(json_array_get(controls, i));
+
+		if (!control) {
+			std::fprintf(stderr, "ERROR: game '%s': control %zu is not one\n", name.c_str(), i + 1);
+			return std::nullopt;
+		}
+		game.controls.push_back(std::move(*control));
+	}
 	for (size_t i = 0; i < num; i++) {
 		const json_t *const section = json_array_get(sections, i);
 		auto bytes = load_section(section, rom_dir + "/" + name);

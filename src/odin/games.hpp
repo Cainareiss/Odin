@@ -30,6 +30,38 @@ struct json_t;
 
 namespace odin {
 
+/* A switch of a player on the JVS I/O board: the player, 0 or 1, and its
+ * bit in the word of that player (see MieBoard::Inputs). */
+struct JvsSwitch {
+	uint8_t player;
+	uint16_t mask;
+};
+
+/* A control of the cabinet of a game, with the name its INPUT TEST gives
+ * it, and what it drives on the JVS I/O board:
+ *
+ *  - BUTTON: one switch ("switch" : "1P PUSH1" in the list);
+ *  - ANALOG: an analog channel, 0 to 7, and the way of the control that
+ *    gives its low values ("analog" : 0, "low" : "left"); up is away from
+ *    the player, down towards;
+ *  - POSITIONS: a lever whose each position closes some switches, none
+ *    for some ("positions" : [ { "name" : "1", "switches" : [...] }, ...]). */
+struct GameControl {
+	enum class Type { BUTTON, ANALOG, POSITIONS };
+	enum class Low { LEFT, RIGHT, UP, DOWN, RELEASED, PRESSED };
+	struct Position {
+		std::string name;
+		std::vector<JvsSwitch> switches;
+	};
+
+	std::string name;
+	Type type;
+	JvsSwitch button;
+	uint8_t analog;
+	Low low;
+	std::vector<Position> positions;
+};
+
 /* A game and what its ROMs hold, section by section ("bootrom", "eprom",
  * "maskrom", "mie", "eeprom", "rombd_eeprom"). */
 struct Game {
@@ -38,6 +70,9 @@ struct Game {
 	/* The JVS I/O board of its cabinet: "io" in the list, 837-13551 when
 	 * the list does not say. */
 	std::string io_board;
+	/* The controls of its cabinet: "controls" in the list, none when the
+	 * list does not say. */
+	std::vector<GameControl> controls;
 	std::vector<std::pair<std::string, std::vector<uint8_t>>> sections;
 
 	/* The bytes of a section; empty when the game has no such section. */

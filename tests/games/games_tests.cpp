@@ -17,7 +17,7 @@
  */
 
 /* Unit tests for the list of the games: the three ways a section is made of
- * its files, and what is refused.
+ * its files, the controls of a cabinet, and what is refused.
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
  *            -I src tests/games/games_tests.cpp src/odin/games.cpp -ljansson \
@@ -83,10 +83,41 @@ const char LIST[] = R"({
     { "name": "stepless", "mach": "hikaru", "sections": [
         { "name": "eprom", "type": "interleave", "data": [
             { "name": "a.bin", "size": 4 }, { "name": "b.bin", "size": 4 } ] } ] },
-    { "name": "wheel", "mach": "hikaru", "io": "837-13741", "sections": [
+    { "name": "wheel", "mach": "hikaru", "io": "837-13741", "controls": [
+        { "name": "WHEEL", "analog": 0, "low": "left" },
+        { "name": "GAS", "analog": 7, "low": "released" },
+        { "name": "LEVER", "analog": 3, "low": "up" },
+        { "name": "VIEW", "switch": "1P DOWN" },
+        { "name": "FIRE", "switch": "2P PUSH3" },
+        { "name": "SHIFT", "switch": "1P PUSH10" },
+        { "name": "GEAR", "positions": [
+            { "name": "N", "switches": [] },
+            { "name": "1", "switches": [ "2P LEFT", "2P UP" ] } ] } ],
+      "sections": [
         { "name": "bootrom", "type": "alternative", "data": [ { "name": "boot.bin", "size": 4 } ] } ] }
   ]
 })";
+
+/* Games whose one control is not right, each refused */
+const char *const BAD_CONTROLS[] = {
+	R"("controls": { "name": "A", "switch": "1P START" })",
+	R"("controls": [ { "switch": "1P START" } ])",
+	R"("controls": [ { "name": "", "switch": "1P START" } ])",
+	R"("controls": [ { "name": "A" } ])",
+	R"("controls": [ { "name": "A", "switch": "1P START", "analog": 0, "low": "left" } ])",
+	R"("controls": [ { "name": "A", "switch": "3P START" } ])",
+	R"("controls": [ { "name": "A", "switch": "1P PUSH11" } ])",
+	R"("controls": [ { "name": "A", "switch": "1P" } ])",
+	R"("controls": [ { "name": "A", "analog": 8, "low": "left" } ])",
+	R"("controls": [ { "name": "A", "analog": -1, "low": "left" } ])",
+	R"("controls": [ { "name": "A", "analog": "0", "low": "left" } ])",
+	R"("controls": [ { "name": "A", "analog": 0 } ])",
+	R"("controls": [ { "name": "A", "analog": 0, "low": "sideways" } ])",
+	R"("controls": [ { "name": "A", "positions": [] } ])",
+	R"("controls": [ { "name": "A", "positions": [ { "switches": [] } ] } ])",
+	R"("controls": [ { "name": "A", "positions": [ { "name": "1" } ] } ])",
+	R"("controls": [ { "name": "A", "positions": [ { "name": "1", "switches": [ "1P NOWHERE" ] } ] } ])",
+};
 
 void test_games(const std::string &dir)
 {
@@ -127,6 +158,28 @@ void test_games(const std::string &dir)
 
 	const std::optional<Game> wheel = list.load_game(roms, "wheel");
 	check(wheel && wheel->io_board == "837-13741", "the I/O board the list tells");
+	if (toy)
+		check(toy->controls.empty(), "without \"controls\", no control");
+	if (wheel && wheel->controls.size() == 7) {
+		using odin::GameControl;
+		const auto &c = wheel->controls;
+
+		check(c[0].name == "WHEEL" && c[0].type == GameControl::Type::ANALOG && c[0].analog == 0 &&
+		      c[0].low == GameControl::Low::LEFT, "an analog channel and the way of its low values");
+		check(c[1].analog == 7 && c[1].low == GameControl::Low::RELEASED, "channel 7, low when released");
+		check(c[2].analog == 3 && c[2].low == GameControl::Low::UP, "low when up");
+		check(c[3].type == GameControl::Type::BUTTON && c[3].button.player == 0 && c[3].button.mask == 0x1000,
+		      "1P DOWN: player 1, bit 12");
+		check(c[4].button.player == 1 && c[4].button.mask == 0x0080, "2P PUSH3: player 2, bit 7");
+		check(c[5].button.player == 0 && c[5].button.mask == 0x0001, "1P PUSH10: bit 0");
+		check(c[6].type == GameControl::Type::POSITIONS && c[6].positions.size() == 2 &&
+		      c[6].positions[0].name == "N" && c[6].positions[0].switches.empty() &&
+		      c[6].positions[1].name == "1" && c[6].positions[1].switches.size() == 2 &&
+		      c[6].positions[1].switches[0].player == 1 && c[6].positions[1].switches[0].mask == 0x0800 &&
+		      c[6].positions[1].switches[1].mask == 0x2000, "a lever: each position with its switches");
+	} else {
+		check(false, "the seven controls of the list");
+	}
 
 	check(!list.load_game(roms, "other"), "a game that is not in the list does not load");
 	check(!list.load_game(roms, "short"), "nor one whose file has another size than told");
@@ -134,6 +187,33 @@ void test_games(const std::string &dir)
 	check(!list.load_game(roms, "unequal"), "nor one whose alternative files have different sizes");
 	check(!list.load_game(roms, "stepless"), "nor one that interleaves without telling by how many bytes");
 	check(!list.load_game(dir + "/no_such_folder", "toy"), "nor one whose files are not there");
+}
+
+/* Each bad control refuses its game, a good one beside it loads */
+void test_bad_controls(const std::string &dir)
+{
+	const std::string roms = dir + "/games_test_roms";
+	const std::string path = dir + "/games_test_bad.json";
+	const std::string files = R"("sections": [ { "name": "bootrom", "type": "alternative",
+	    "data": [ { "name": "boot.bin", "size": 4 } ] } ])";
+	int refused = 0;
+
+	std::filesystem::create_directories(roms + "/good");
+	std::filesystem::create_directories(roms + "/bad");
+	write(roms + "/good/boot.bin", "BOOT");
+	write(roms + "/bad/boot.bin", "BOOT");
+	for (const char *bad : BAD_CONTROLS) {
+		GameList list;
+
+		write(path, std::string(R"({ "version": 1, "roms": [ { "name": "good", "mach": "hikaru",)") +
+		      R"( "controls": [ { "name": "A", "switch": "1P START" } ], )" + files +
+		      R"( }, { "name": "bad", "mach": "hikaru", )" + bad + ", " + files + " } ] }");
+		if (list.load(path) && list.load_game(roms, "good") && !list.load_game(roms, "bad"))
+			refused++;
+		else
+			std::printf("not refused: %s\n", bad);
+	}
+	check(refused == static_cast<int>(std::size(BAD_CONTROLS)), "a game with a control that is not one is refused");
 }
 
 void test_lists(const std::string &dir)
@@ -162,6 +242,7 @@ int main(int argc, char **argv)
 	const std::string dir = (argc > 1) ? argv[1] : ".";
 
 	test_games(dir);
+	test_bad_controls(dir);
 	test_lists(dir);
 	std::filesystem::remove_all(dir + "/games_test_roms");
 	std::filesystem::remove(dir + "/games_test.json");

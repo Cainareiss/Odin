@@ -19,6 +19,15 @@
 		{
 			"name" : "airtrix",
 			"mach" : "hikaru",
+			"controls" : [
+				{ "name" : "START", "switch" : "1P START" },
+				{ "name" : "LEFT", "switch" : "1P PUSH1" },
+				{ "name" : "RIGHT", "switch" : "1P PUSH2" },
+				{ "name" : "UP", "switch" : "1P UP" },
+				{ "name" : "DOWN", "switch" : "1P DOWN" },
+				{ "name" : "YAW", "analog" : 0, "low" : "left" },
+				{ "name" : "ROLL", "analog" : 1, "low" : "left" }
+			],
 			"sections" : [
 				{
 					"name" : "mie",
@@ -79,6 +88,20 @@
 		{
 			"name" : "braveff",
 			"mach" : "hikaru",
+			"controls" : [
+				{ "name" : "1P WATER", "switch" : "1P PUSH1" },
+				{ "name" : "1P FOG", "switch" : "1P PUSH3" },
+				{ "name" : "1P START", "switch" : "1P START" },
+				{ "name" : "1P SIGHT LOCATION X", "analog" : 0, "low" : "left" },
+				{ "name" : "1P SIGHT LOCATION Y", "analog" : 1, "low" : "up" },
+				{ "name" : "1P OUT OF SCREEN", "switch" : "1P PUSH2" },
+				{ "name" : "2P WATER", "switch" : "2P PUSH1" },
+				{ "name" : "2P FOG", "switch" : "2P PUSH3" },
+				{ "name" : "2P START", "switch" : "2P START" },
+				{ "name" : "2P SIGHT LOCATION X", "analog" : 2, "low" : "left" },
+				{ "name" : "2P SIGHT LOCATION Y", "analog" : 3, "low" : "up" },
+				{ "name" : "2P OUT OF SCREEN", "switch" : "2P PUSH2" }
+			],
 			"sections" : [
 				{
 					"name" : "mie",
@@ -159,6 +182,16 @@
 		{
 			"name" : "pharrier",
 			"mach" : "hikaru",
+			"controls" : [
+				{ "name" : "BULLET", "switch" : "1P PUSH1" },
+				{ "name" : "MISSILE", "switch" : "1P PUSH2" },
+				{ "name" : "BOMB", "switch" : "1P PUSH3" },
+				{ "name" : "VR L", "switch" : "1P LEFT" },
+				{ "name" : "VR R", "switch" : "1P RIGHT" },
+				{ "name" : "START", "switch" : "1P START" },
+				{ "name" : "STICK H", "analog" : 1, "low" : "left" },
+				{ "name" : "STICK V", "analog" : 0, "low" : "down" }
+			],
 			"sections" : [
 				{
 					"name" : "mie",
@@ -233,6 +266,15 @@
 		{
 			"name" : "podrace",
 			"mach" : "hikaru",
+			"controls" : [
+				{ "name" : "BOOST", "switch" : "1P PUSH1" },
+				{ "name" : "BRAKE", "switch" : "1P PUSH2" },
+				{ "name" : "LEFT BUTTON", "switch" : "1P RIGHT" },
+				{ "name" : "RIGHT BUTTON", "switch" : "1P LEFT" },
+				{ "name" : "START", "switch" : "1P START" },
+				{ "name" : "LEFT LEVER", "analog" : 0, "low" : "up" },
+				{ "name" : "RIGHT LEVER", "analog" : 1, "low" : "up" }
+			],
 			"sections" : [
 				{
 					"name" : "mie",
@@ -320,6 +362,19 @@
 			"name" : "sgnascar",
 			"mach" : "hikaru",
 			"io" : "837-13741",
+			"controls" : [
+				{ "name" : "STEERING WHEEL", "analog" : 0, "low" : "left" },
+				{ "name" : "GAS PEDAL", "analog" : 1, "low" : "released" },
+				{ "name" : "BRAKE PEDAL", "analog" : 2, "low" : "released" },
+				{ "name" : "GEAR POSITION", "positions" : [
+					{ "name" : "N", "switches" : [] },
+					{ "name" : "1", "switches" : [ "2P LEFT", "2P UP" ] },
+					{ "name" : "2", "switches" : [ "2P LEFT", "2P DOWN" ] },
+					{ "name" : "3", "switches" : [ "2P UP" ] },
+					{ "name" : "4", "switches" : [ "2P DOWN" ] } ] },
+				{ "name" : "START BUTTON", "switch" : "1P START" },
+				{ "name" : "VIEW CHANGE BUTTON", "switch" : "1P DOWN" }
+			],
 			"sections" : [
 				{
 					"name" : "mie",
@@ -388,6 +443,22 @@
 		{
 			"name" : "von4",
 			"mach" : "hikaru",
+			"controls" : [
+				{ "name" : "LEFT-LEVER UP", "switch" : "1P UP" },
+				{ "name" : "LEFT-LEVER DOWN", "switch" : "1P DOWN" },
+				{ "name" : "LEFT-LEVER LEFT", "switch" : "1P LEFT" },
+				{ "name" : "LEFT-LEVER RIGHT", "switch" : "1P RIGHT" },
+				{ "name" : "LEFT-LEVER TRIGGER", "switch" : "1P PUSH1" },
+				{ "name" : "LEFT-LEVER TURBO", "switch" : "1P PUSH2" },
+				{ "name" : "RIGHT-LEVER UP", "switch" : "2P UP" },
+				{ "name" : "RIGHT-LEVER DOWN", "switch" : "2P DOWN" },
+				{ "name" : "RIGHT-LEVER LEFT", "switch" : "2P LEFT" },
+				{ "name" : "RIGHT-LEVER RIGHT", "switch" : "2P RIGHT" },
+				{ "name" : "RIGHT-LEVER TRIGGER", "switch" : "2P PUSH1" },
+				{ "name" : "RIGHT-LEVER TURBO", "switch" : "2P PUSH2" },
+				{ "name" : "START", "switch" : "1P START" },
+				{ "name" : "P.I.B.", "switch" : "1P PUSH3" }
+			],
 			"sections" : [
 				{
 					"name" : "bootrom",
