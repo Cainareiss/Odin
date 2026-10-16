@@ -210,7 +210,6 @@ protected:
 	virtual bool coin_add(uint8_t, int32_t) { return false; }
 	virtual int32_t analogs(std::span<uint8_t>, uint8_t) { return -1; }
 	virtual bool swoutputs(std::span<const uint8_t>) { return false; }
-	virtual bool swoutput(uint8_t, uint8_t) { return false; }
 	virtual void device_reset() {}
 
 private:

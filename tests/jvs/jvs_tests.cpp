@@ -182,7 +182,7 @@ void test_jvs()
 	check(d.size() >= 29 && d[12] == 0x01 && d[13] == 0x80 && d[14] == 0x00 && d[19] == 0x12 && d[20] == 0x34, "analog channels");
 
 	/* Escapes both ways: a D0/E0 data byte in the reply, an escaped
-	 * count in the request (coin add, 0x31). */
+	 * count in the request (coin counter increase, 0x35). */
 	inputs.p[0] = 0xE0D0;
 	r = send(host, frame(0x01, { 0x20, 0x01, 0x02 }));
 	bool escaped = false;
@@ -193,7 +193,7 @@ void test_jvs()
 	}
 	d = decode(r, ok);
 	check(ok && escaped && d.size() == 5 && d[3] == 0xE0 && d[4] == 0xD0, "escaped reply");
-	std::vector<uint8_t> add = frame(0x01, { 0x31, 0x01, 0x00, 0xE0 });
+	std::vector<uint8_t> add = frame(0x01, { 0x35, 0x01, 0x00, 0xE0 });
 	check(add.size() == 9 && add[6] == 0xD0 && add[7] == 0xDF, "escaped request bytes");
 	r = send(host, add);
 	d = decode(r, ok);
@@ -208,9 +208,17 @@ void test_jvs()
 	r = send(host, bad);
 	check(r == std::vector<uint8_t>({ 0xE0, 0x00, 0x02, 0x03, 0x05 }), "checksum error reply");
 
-	/* Unknown command: status 2. */
+	/* Unknown command: status 2. The boards know neither the payout
+	 * counter (31) nor the single outputs (38). */
 	r = send(host, frame(0x01, { 0x99 }));
 	check(r == std::vector<uint8_t>({ 0xE0, 0x00, 0x02, 0x02, 0x04 }), "unknown command reply");
+	r = send(host, frame(0x01, { 0x31, 0x01, 0x00, 0x01 }));
+	check(r == std::vector<uint8_t>({ 0xE0, 0x00, 0x02, 0x02, 0x04 }), "31 is unknown");
+	r = send(host, frame(0x01, { 0x38, 0x01, 0x01 }));
+	check(r == std::vector<uint8_t>({ 0xE0, 0x00, 0x02, 0x02, 0x04 }), "38 is unknown");
+	r = send(host, frame(0x01, { 0x21, 0x01 }));
+	d = decode(r, ok);
+	check(ok && d.size() == 4 && d[2] == 0x00 && d[3] == 0xE0, "neither changed the coins");
 
 	/* Frames for another node stay unanswered. */
 	r = send(host, frame(0x02, { 0x10 }));

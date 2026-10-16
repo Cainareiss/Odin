@@ -116,28 +116,6 @@ bool Jvs837_13551::swoutputs(std::span<const uint8_t> values)
 	return true;
 }
 
-bool Jvs837_13551::swoutput(uint8_t id, uint8_t value)
-{
-	if (id > 6) {
-		return false;
-	}
-	const uint8_t mask = static_cast<uint8_t>(1u << id);
-	switch (value) {
-	case 0:
-		m_outputs = static_cast<uint8_t>(m_outputs & ~mask);
-		break;
-	case 1:
-		m_outputs = static_cast<uint8_t>(m_outputs | mask);
-		break;
-	case 2:
-		m_outputs = static_cast<uint8_t>(m_outputs ^ mask);
-		break;
-	default:
-		break;
-	}
-	return true;
-}
-
 void Jvs837_13551::save(Jvs837_13551State &out) const
 {
 	JvsDevice::save(out.node);

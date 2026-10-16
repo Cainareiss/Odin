@@ -334,9 +334,7 @@ int32_t JvsDevice::handle_message(std::span<const uint8_t> in, std::span<uint8_t
 		used = 1;
 		return coin_add(in[1], -static_cast<int32_t>((in[2] << 8) | in[3])) ? 4 : 0;
 
-	/* Taken as a coin increase, as MAME does (jvsdev.cpp); the standard
-	 * has COIN_COUNTER_INCREASE for that. TODO: what the boards do. */
-	case PAYOUT_COUNTER_INCREASE:
+	case COIN_COUNTER_INCREASE:
 		if (in.size() < 4) {
 			return 0;
 		}
@@ -352,14 +350,9 @@ int32_t JvsDevice::handle_message(std::span<const uint8_t> in, std::span<uint8_t
 		used = 1;
 		return swoutputs(in.subspan(2, in[1])) ? static_cast<int32_t>(2 + in[1]) : 0;
 
-	case GENERIC_OUTPUT_3:
-		if (in.size() < 3) {
-			return 0;
-		}
-		out[0] = REPORT_NORMAL;
-		used = 1;
-		return swoutput(in[1], in[2]) ? 3 : 0;
-
+	/* The programs of the 837-13551 (315-6215, jump table at 3000) and of
+	 * the 837-13741 (epr-21868, 058B) take no other command: 31, 33, 34,
+	 * 36, 37 and 38 are unknown to both. */
 	default:
 		return -1;
 	}

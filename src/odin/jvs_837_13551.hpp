@@ -56,7 +56,6 @@ protected:
 	bool coin_add(uint8_t slot, int32_t count) override;
 	int32_t analogs(std::span<uint8_t> out, uint8_t channels) override;
 	bool swoutputs(std::span<const uint8_t> values) override;
-	bool swoutput(uint8_t id, uint8_t value) override;
 	void device_reset() override;
 
 private:
