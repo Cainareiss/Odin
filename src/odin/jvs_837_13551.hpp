@@ -20,7 +20,7 @@ namespace odin {
 
 /* The board's TMP90PH44 firmware (315-6215) is not run; the node answers
  * the JVS protocol as the firmware does: 2 players x 13 switch bits, 2
- * coin slots, 8 analog channels, 6 driver outputs. */
+ * coin slots, 8 analog channels of 8 bits, 6 driver outputs. */
 /* The node, its coin counters and its output latch. Plain data. */
 struct Jvs837_13551State {
 	JvsDeviceState node;

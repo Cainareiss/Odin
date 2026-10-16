@@ -42,7 +42,7 @@ int32_t Jvs837_13551::function_list(std::span<uint8_t> out)
 	static constexpr std::array<uint8_t, 16> list = {
 		jvs::FUNC_SWITCH_INPUT, PLAYERS, 13, 0,	/* 13 switches per player */
 		jvs::FUNC_COIN_INPUT, COIN_SLOTS, 0, 0,
-		jvs::FUNC_ANALOG_INPUT, ANALOG_CHANNELS, 16, 0,	/* 16 bits each */
+		jvs::FUNC_ANALOG_INPUT, ANALOG_CHANNELS, 0, 0,	/* bits not told (block at 3079) */
 		jvs::FUNC_GENERAL_OUTPUT, 6, 0, 0		/* 6 driver outputs */
 	};
 	for (size_t i = 0; i < list.size(); i++) {
@@ -106,8 +106,10 @@ int32_t Jvs837_13551::analogs(std::span<uint8_t> out, uint8_t channels)
 	uint32_t pos = 0;
 	for (uint8_t i = 0; i < channels; i++) {
 		const uint16_t value = m_inputs.analog(i);
+		/* The converter of the TMP90PH44 gives 8 bits; the low byte
+		 * goes out as 0 (315-6215 at 0A46). */
 		out[pos++] = static_cast<uint8_t>(value >> 8);
-		out[pos++] = static_cast<uint8_t>(value);
+		out[pos++] = 0;
 	}
 	return static_cast<int32_t>(pos);
 }
