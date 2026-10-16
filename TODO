@@ -152,6 +152,12 @@ the reply delay (JVS_TURNAROUND_BYTES in mie.cpp); the coin condition
 bits (always 0); the debounce of the switches and the coins; what the
 837-13551 answers for 0 players. The outputs of the boards go nowhere
 yet: lamps, the nozzle vibration of Brave, the drive board of NASCAR.
+The drive board of NASCAR (838-13366, on outputs 15-22 of the 837-13741
+and answering on switches 2-5 of both players) is to come in two ways:
+an imitation of its program by default, and, as an option of the user
+(an option of the interface once there is one), its program run when its
+ROM is given (the drive board of Sega Rally 2, epr-20512 in MAME, if that
+is the program of this board: to be proved).
 
 AICA (src/odin/aica.cpp + arm7.cpp): control block, timers, interrupts,
 DMA, RTC and the ARM7 are in, and the voices (aica_voice.cpp: sampler,
