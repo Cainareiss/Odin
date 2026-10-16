@@ -15,7 +15,8 @@ written so that everyone knows what to do.
 
 - One source pair per real chip or board: `src/odin/<chip>.hpp` and
   `src/odin/<chip>.cpp`. Examples: `mie.cpp` (315-6146), `z80.cpp`,
-  `memctl.cpp` (315-6154), `jvs_io_13551.cpp`, `aica.cpp`.
+  `memctl.cpp` (315-6154), `jvs_837_13551.cpp`, `aica.cpp`. The JVS
+  cable and protocol shared by the I/O boards: `jvs.cpp`.
 - Every device implements the same small interface: `reset()`,
   `read(addr, size)`, `write(addr, size, value)`, `run(cycles)` or
   `tick()`, interrupt lines in and out, `save(state&)` / `load(state&)`,

@@ -21,7 +21,7 @@
 #ifndef ODIN_MIE_HPP
 #define ODIN_MIE_HPP
 
-#include "odin/jvs_host.hpp"
+#include "odin/jvs.hpp"
 #include "odin/z80.hpp"
 
 #include <array>
@@ -152,7 +152,9 @@ public:
 	bool gpio_is_output(uint8_t port) const { return !(m_gpio_dir & (1u << port)); }
 	uint8_t gpio_latch(uint8_t port) const { return m_gpio_val[port]; }
 
-	JvsHost &jvs() { return m_jvs; }
+	/* The JVS cable on UART 1, which the board owns. Without one the sense
+	 * input tells that no I/O board is wired. */
+	void attach_jvs(JvsHost *cable) { m_jvs = cable; }
 	const Z80 &cpu() const { return m_cpu; }
 	/* Device on the serial adapter line; nullptr leaves the line open. */
 	void set_serial_device(MieSerialDevice *dev) { m_serial_device = dev; }
@@ -200,7 +202,7 @@ private:
 
 	MieHost &m_host;
 	Z80 m_cpu;
-	JvsHost m_jvs;
+	JvsHost *m_jvs;
 	std::span<const uint8_t> m_rom;
 	std::span<uint8_t> m_ram;
 	std::array<uint8_t, 0x800> m_ram_low;

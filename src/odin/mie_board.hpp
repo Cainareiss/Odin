@@ -30,7 +30,8 @@
 
 #include "odin/card_reader.hpp"
 #include "odin/eeprom_93c46.hpp"
-#include "odin/jvs_io_13551.hpp"
+#include "odin/jvs.hpp"
+#include "odin/jvs_837_13551.hpp"
 #include "odin/mie.hpp"
 
 namespace odin {
@@ -65,7 +66,7 @@ public:
 	struct State {
 		uint64_t cycle_acc;
 		Eeprom93c46State eeprom;
-		JvsIo13551State io;
+		Jvs837_13551State io;
 		JvsHostState jvs;
 		MieState mie;
 		CardReaderState card;
@@ -161,7 +162,8 @@ private:
 	std::array<uint8_t, Mie::ROM_SIZE> m_rom;
 	Inputs m_inputs;
 	Eeprom93c46 m_eeprom;
-	JvsIo13551 m_io;
+	JvsHost m_jvs;		/* the JVS cable, from UART 1 of the MIE */
+	Jvs837_13551 m_io;
 	Mie m_mie;
 	std::unique_ptr<CardReader> m_card;
 	FILE *m_log;

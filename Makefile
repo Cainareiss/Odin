@@ -58,8 +58,8 @@ OBJ := \
 	src/odin/mie_stand_in.o \
 	src/odin/z80.o \
 	src/odin/z80_ops.o \
-	src/odin/jvs_host.o \
-	src/odin/jvs_io_13551.o \
+	src/odin/jvs.o \
+	src/odin/jvs_837_13551.o \
 	src/odin/card_reader.o \
 	src/odin/sound_board.o \
 	src/odin/aica.o \

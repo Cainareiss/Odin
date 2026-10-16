@@ -4,19 +4,20 @@
  * Sega 837-13551 JVS I/O board, from MAME src/mame/sega/jvs13551,
  * rewritten for Odin. Odin is GPL-3.0; this file keeps its BSD-3-Clause
  * licence and copyright holder.
+ * Odin changes: Copyright (C) 2026 Réda Chérif-Touil
  */
 
-#include "odin/jvs_io_13551.hpp"
+#include "odin/jvs_837_13551.hpp"
 
 namespace odin {
 
-JvsIo13551::JvsIo13551(JvsInputs &inputs)
+Jvs837_13551::Jvs837_13551(JvsInputs &inputs)
 	: m_inputs(inputs), m_outputs(0)
 {
 	m_coin_counter.fill(0);
 }
 
-void JvsIo13551::device_reset()
+void Jvs837_13551::device_reset()
 {
 	m_coin_counter.fill(0);
 	m_outputs = 0;
@@ -24,25 +25,25 @@ void JvsIo13551::device_reset()
 
 /* Identification string reported by the 315-6215 firmware of the Type 1
  * board (MAME jvs13551.cpp ROM list). */
-const char *JvsIo13551::device_id() const
+const char *Jvs837_13551::device_id() const
 {
 	return "SEGA ENTERPRISES,LTD.;I/O BD JVS;837-13551 ;Ver1.00;98/10";
 }
 
-void JvsIo13551::inc_coin(uint8_t slot)
+void Jvs837_13551::inc_coin(uint8_t slot)
 {
 	if (slot < COIN_SLOTS) {
 		m_coin_counter[slot] = static_cast<uint16_t>((m_coin_counter[slot] + 1) & 0x3FFF);
 	}
 }
 
-int32_t JvsIo13551::function_list(std::span<uint8_t> out)
+int32_t Jvs837_13551::function_list(std::span<uint8_t> out)
 {
 	static constexpr std::array<uint8_t, 16> list = {
-		0x01, PLAYERS, 13, 0,		/* switch inputs, 13 bits per player */
-		0x02, COIN_SLOTS, 0, 0,		/* coin inputs */
-		0x03, ANALOG_CHANNELS, 16, 0,	/* analog inputs, 16 bits */
-		0x12, 6, 0, 0			/* driver outputs */
+		jvs::FUNC_SWITCH_INPUT, PLAYERS, 13, 0,	/* 13 switches per player */
+		jvs::FUNC_COIN_INPUT, COIN_SLOTS, 0, 0,
+		jvs::FUNC_ANALOG_INPUT, ANALOG_CHANNELS, 16, 0,	/* 16 bits each */
+		jvs::FUNC_GENERAL_OUTPUT, 6, 0, 0		/* 6 driver outputs */
 	};
 	for (size_t i = 0; i < list.size(); i++) {
 		out[i] = list[i];
@@ -50,7 +51,7 @@ int32_t JvsIo13551::function_list(std::span<uint8_t> out)
 	return static_cast<int32_t>(list.size());
 }
 
-int32_t JvsIo13551::switches(std::span<uint8_t> out, uint8_t players, uint8_t bytes_per_player)
+int32_t Jvs837_13551::switches(std::span<uint8_t> out, uint8_t players, uint8_t bytes_per_player)
 {
 	if (players > PLAYERS || bytes_per_player > 2) {
 		return -1;
@@ -67,7 +68,7 @@ int32_t JvsIo13551::switches(std::span<uint8_t> out, uint8_t players, uint8_t by
 }
 
 /* Two bytes per slot: bits 15-14 condition (0 normal), 14-bit count. */
-int32_t JvsIo13551::coin_counters(std::span<uint8_t> out, uint8_t slots)
+int32_t Jvs837_13551::coin_counters(std::span<uint8_t> out, uint8_t slots)
 {
 	if (slots > COIN_SLOTS) {
 		return -1;
@@ -80,7 +81,7 @@ int32_t JvsIo13551::coin_counters(std::span<uint8_t> out, uint8_t slots)
 	return static_cast<int32_t>(pos);
 }
 
-bool JvsIo13551::coin_add(uint8_t slot, int32_t count)
+bool Jvs837_13551::coin_add(uint8_t slot, int32_t count)
 {
 	if (slot < 1 || slot > COIN_SLOTS) {
 		return false;
@@ -90,7 +91,7 @@ bool JvsIo13551::coin_add(uint8_t slot, int32_t count)
 	return true;
 }
 
-int32_t JvsIo13551::analogs(std::span<uint8_t> out, uint8_t channels)
+int32_t Jvs837_13551::analogs(std::span<uint8_t> out, uint8_t channels)
 {
 	if (channels > ANALOG_CHANNELS) {
 		return -1;
@@ -106,7 +107,7 @@ int32_t JvsIo13551::analogs(std::span<uint8_t> out, uint8_t channels)
 
 /* JVS counts output bits from the most significant end: six outputs
  * live in bits 7..2 of the first byte. */
-bool JvsIo13551::swoutputs(std::span<const uint8_t> values)
+bool Jvs837_13551::swoutputs(std::span<const uint8_t> values)
 {
 	if (values.size() != 1) {
 		return false;
@@ -115,7 +116,7 @@ bool JvsIo13551::swoutputs(std::span<const uint8_t> values)
 	return true;
 }
 
-bool JvsIo13551::swoutput(uint8_t id, uint8_t value)
+bool Jvs837_13551::swoutput(uint8_t id, uint8_t value)
 {
 	if (id > 6) {
 		return false;
@@ -137,14 +138,14 @@ bool JvsIo13551::swoutput(uint8_t id, uint8_t value)
 	return true;
 }
 
-void JvsIo13551::save(JvsIo13551State &out) const
+void Jvs837_13551::save(Jvs837_13551State &out) const
 {
 	JvsDevice::save(out.node);
 	out.coin_counter = m_coin_counter;
 	out.outputs = m_outputs;
 }
 
-void JvsIo13551::load(const JvsIo13551State &in)
+void Jvs837_13551::load(const Jvs837_13551State &in)
 {
 	JvsDevice::load(in.node);
 	m_coin_counter = in.coin_counter;

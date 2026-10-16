@@ -29,7 +29,7 @@
  * Build: g++ -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
  *            -O2 -I src tests/mie/card_test.cpp src/odin/card_reader.cpp \
  *            src/odin/mie.cpp src/odin/z80.cpp src/odin/z80_ops.cpp \
- *            src/odin/jvs_host.cpp -o card_test
+ *            src/odin/jvs.cpp -o card_test
  * An optional argument names a scratch file for the card image check.
  * Exit status is 0 when every check passes. */
 

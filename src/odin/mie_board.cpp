@@ -50,7 +50,8 @@ MieBoard::MieBoard(std::span<const uint8_t> rom, std::span<uint8_t> ram, uint32_
 	  m_eeprom(Mie::CLOCK_HZ), m_io(*this), m_mie(*this, m_rom, ram), m_log(nullptr),
 	  m_irq_lines(0)
 {
-	m_mie.jvs().add_device(&m_io);
+	m_jvs.add_device(&m_io);
+	m_mie.attach_jvs(&m_jvs);
 }
 
 uint8_t
@@ -127,6 +128,7 @@ MieBoard::reset()
 	m_cycle_acc = 0;
 	m_eeprom.reset();
 	m_io.reset();
+	m_jvs.reset();
 	m_mie.reset();
 	if (m_card)
 		m_card->reset();
@@ -240,7 +242,7 @@ MieBoard::save(State &out)
 	out.cycle_acc = m_cycle_acc;
 	m_eeprom.save(out.eeprom);
 	m_io.save(out.io);
-	m_mie.jvs().save(out.jvs);
+	m_jvs.save(out.jvs);
 	m_mie.save(out.mie);
 	out.has_card = m_card ? 1 : 0;
 	if (m_card)
@@ -255,7 +257,7 @@ MieBoard::load(const State &in)
 	m_cycle_acc = in.cycle_acc;
 	m_eeprom.load(in.eeprom);
 	m_io.load(in.io);
-	m_mie.jvs().load(in.jvs);
+	m_jvs.load(in.jvs);
 	m_mie.load(in.mie);
 	if (m_card)
 		m_card->load(in.card);

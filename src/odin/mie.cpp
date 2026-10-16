@@ -118,7 +118,7 @@ constexpr uint32_t SERIAL_REQUEST_CYCLES = 160;
 } /* namespace */
 
 Mie::Mie(MieHost &host, std::span<const uint8_t> rom, std::span<uint8_t> ram)
-	: m_host(host), m_cpu(*this), m_rom(rom), m_ram(ram),
+	: m_host(host), m_cpu(*this), m_jvs(nullptr), m_rom(rom), m_ram(ram),
 	  /* Zeroed with the gaps between their fields, which the states copy */
 	  m_uart{}, m_serial{}, m_serial_device(nullptr), m_wait{},
 	  m_waits_counted(true), m_wait_cycles(0), m_log(nullptr), m_trace(nullptr),
@@ -143,7 +143,6 @@ void Mie::reset()
 	m_busrq = false;
 	uart_reset();
 	serial_reset();
-	m_jvs.reset();
 	m_cpu.reset();
 }
 
@@ -397,7 +396,10 @@ void Mie::gpio_dir_write(uint8_t value)
  * is wired, bit 1 set when every board has its address. */
 uint8_t Mie::jvs_sense() const
 {
-	return static_cast<uint8_t>(0x8C | (m_jvs.address_set_line() ? 2 : 0) | (m_jvs.presence_line() ? 0 : 1));
+	const bool present = m_jvs && m_jvs->presence_line();
+	const bool addressed = m_jvs && m_jvs->address_set_line();
+
+	return static_cast<uint8_t>(0x8C | (addressed ? 2 : 0) | (present ? 0 : 1));
 }
 
 /* UART 1, the JVS link. Characters take their time on the wire; the
@@ -527,8 +529,15 @@ void Mie::uart_write(uint8_t reg, uint8_t value)
 void Mie::uart_commit_frame()
 {
 	MieUartState &u = m_uart;
-	m_jvs.commit_encoded();
-	const std::span<const uint8_t> reply = m_jvs.reply();
+
+	if (!m_jvs) {
+		u.wire_count = 0;
+		u.wire_pos = 0;
+		u.wire_cycles = 0;
+		return;
+	}
+	m_jvs->commit_encoded();
+	const std::span<const uint8_t> reply = m_jvs->reply();
 	u.wire_count = static_cast<uint32_t>(reply.size());
 	u.wire_pos = 0;
 	for (uint32_t i = 0; i < u.wire_count; i++) {
@@ -549,8 +558,8 @@ void Mie::uart_tick(uint32_t cycles)
 			const uint32_t step = u.tx_cycles < left ? u.tx_cycles : left;
 			u.tx_cycles -= step;
 			left -= step;
-			if (u.tx_cycles == 0) {
-				m_jvs.push(u.tx_byte);
+			if (u.tx_cycles == 0 && m_jvs) {
+				m_jvs->push(u.tx_byte);
 			}
 		} else if (u.tx_count) {
 			u.tx_byte = u.tx_fifo[0];

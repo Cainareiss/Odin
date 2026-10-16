@@ -4,12 +4,13 @@
  * Sega 837-13551 JVS I/O board, from MAME src/mame/sega/jvs13551,
  * rewritten for Odin. Odin is GPL-3.0; this file keeps its BSD-3-Clause
  * licence and copyright holder.
+ * Odin changes: Copyright (C) 2026 Réda Chérif-Touil
  */
 
-#ifndef ODIN_JVS_IO_13551_HPP
-#define ODIN_JVS_IO_13551_HPP
+#ifndef ODIN_JVS_837_13551_HPP
+#define ODIN_JVS_837_13551_HPP
 
-#include "odin/jvs_host.hpp"
+#include "odin/jvs.hpp"
 
 #include <array>
 #include <cstdint>
@@ -17,42 +18,30 @@
 
 namespace odin {
 
-/* What the board reads on its connectors. JVS bit order: system byte
- * bit 7 TEST, 6 TILT1, 5 TILT2, 4 TILT3; player word high byte bit 7
- * START, 6 SERVICE, 5 UP, 4 DOWN, 3 LEFT, 2 RIGHT, 1 PUSH1, 0 PUSH2, low
- * byte bits 7..2 PUSH3..PUSH8; analog channels 16-bit, 0x8000 centre. */
-class JvsInputs {
-public:
-	virtual ~JvsInputs() = default;
-	virtual uint8_t system() = 0;
-	virtual uint16_t player(uint8_t index) = 0;
-	virtual uint16_t analog(uint8_t channel) = 0;
-};
-
-/* The board's TMP90PH44 firmware is not run; the node answers the JVS
- * protocol as the firmware does: 2 players x 13 switch bits, 2 coin
- * slots, 8 analog channels, 6 driver outputs. */
+/* The board's TMP90PH44 firmware (315-6215) is not run; the node answers
+ * the JVS protocol as the firmware does: 2 players x 13 switch bits, 2
+ * coin slots, 8 analog channels, 6 driver outputs. */
 /* The node, its coin counters and its output latch. Plain data. */
-struct JvsIo13551State {
+struct Jvs837_13551State {
 	JvsDeviceState node;
 	std::array<uint16_t, 2> coin_counter;
 	uint8_t outputs;
 };
 
-class JvsIo13551 : public JvsDevice {
+class Jvs837_13551 : public JvsDevice {
 public:
 	static constexpr uint8_t PLAYERS = 2;
 	static constexpr uint8_t COIN_SLOTS = 2;
 	static constexpr uint8_t ANALOG_CHANNELS = 8;
 
-	explicit JvsIo13551(JvsInputs &inputs);
+	explicit Jvs837_13551(JvsInputs &inputs);
 
 	/* One coin through slot 0 or 1. */
 	void inc_coin(uint8_t slot);
 	uint8_t outputs() const { return m_outputs; }
 
-	void save(JvsIo13551State &out) const;
-	void load(const JvsIo13551State &in);
+	void save(Jvs837_13551State &out) const;
+	void load(const Jvs837_13551State &in);
 
 protected:
 	const char *device_id() const override;
@@ -78,4 +67,4 @@ private:
 
 } /* namespace odin */
 
-#endif /* ODIN_JVS_IO_13551_HPP */
+#endif /* ODIN_JVS_837_13551_HPP */

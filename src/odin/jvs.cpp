@@ -4,28 +4,16 @@
  * JVS host side and device base, from MAME src/devices/machine/jvshost
  * and jvsdev, rewritten for Odin. Odin is GPL-3.0; this file keeps its
  * BSD-3-Clause licence and copyright holder.
+ * Odin changes: Copyright (C) 2026 Réda Chérif-Touil
  */
 
-#include "odin/jvs_host.hpp"
+#include "odin/jvs.hpp"
 
 #include <cstring>
 
 namespace odin {
 
-namespace {
-
-enum : uint8_t {
-	SYNC = 0xE0,
-	ESCAPE = 0xD0,
-	BROADCAST = 0xFF,
-	STATUS_OK = 0x01,
-	STATUS_UNKNOWN_COMMAND = 0x02,
-	STATUS_SUM_ERROR = 0x03,
-	REPORT_OK = 0x01,
-	REPORT_BAD_PARAMETER = 0x02
-};
-
-} /* namespace */
+using namespace jvs;
 
 /* Host */
 
@@ -86,18 +74,18 @@ void JvsHost::commit_raw(std::span<const uint8_t> frame, bool sum_ok)
 {
 	const uint32_t size = static_cast<uint32_t>(frame.size());
 	m_recv_size = 0;
-	if (size < 3 || frame[0] == 0x00 || frame[1] != size - 1 || !sum_ok) {
+	if (size < 3 || frame[0] == HOST || frame[1] != size - 1 || !sum_ok) {
 		/* Malformed or bad checksum: sum error. */
-		m_recv[0] = 0x00;
-		m_recv[1] = 0x02;
-		m_recv[2] = STATUS_SUM_ERROR;
+		m_recv[0] = HOST;
+		m_recv[1] = 0x02;	/* the status and the sum */
+		m_recv[2] = STATUS_CHECKSUM_ERROR;
 		m_recv_size = 3;
 	} else if (m_first) {
 		const uint32_t n = m_first->message(frame[0], frame.subspan(2),
 		                                    std::span<uint8_t>(m_recv.data() + 2, BUFFER_SIZE - 3));
 		if (n) {
 			/* Reply header: the host is always destination 0. */
-			m_recv[0] = 0x00;
+			m_recv[0] = HOST;
 			m_recv[1] = static_cast<uint8_t>(n + 1);
 			m_recv_size = n + 2;
 		}
@@ -118,7 +106,7 @@ uint32_t JvsHost::decode(std::span<uint8_t> buffer, uint32_t size)
 		if (i == 0 && t == SYNC) {
 			continue;
 		}
-		if (t == ESCAPE) {
+		if (t == MARK) {
 			i++;
 			if (i >= size) {
 				break;
@@ -146,7 +134,7 @@ uint32_t JvsHost::encode(std::span<uint8_t> buffer, uint32_t size)
 	buffer[size++] = sum;
 	uint32_t add = 1;
 	for (uint32_t i = 0; i < size; i++) {
-		if (buffer[i] == ESCAPE || buffer[i] == SYNC) {
+		if (buffer[i] == MARK || buffer[i] == SYNC) {
 			add++;
 		}
 	}
@@ -155,9 +143,9 @@ uint32_t JvsHost::encode(std::span<uint8_t> buffer, uint32_t size)
 	}
 	for (uint32_t i = size, j = add; i; i--) {
 		const uint8_t t = buffer[i - 1];
-		if (t == ESCAPE || t == SYNC) {
+		if (t == MARK || t == SYNC) {
 			buffer[i + j - 1] = static_cast<uint8_t>(t - 1);
-			buffer[i + j - 2] = ESCAPE;
+			buffer[i + j - 2] = MARK;
 			j--;
 		} else {
 			buffer[i + j - 1] = t;
@@ -203,20 +191,20 @@ uint32_t JvsDevice::message(uint8_t dest, std::span<const uint8_t> in, std::span
 	uint32_t size = 0;
 
 	/* Set address: taken by the farthest node that has none yet. */
-	if (in.size() == 2 && in[0] == 0xF1) {
+	if (in.size() == 2 && in[0] == SET_ADDRESS) {
 		if (m_next && !m_next->address_set_line()) {
 			return m_next->message(dest, in, out);
 		}
 		m_address = in[1];
-		out[0] = STATUS_OK;
-		out[1] = REPORT_OK;
+		out[0] = STATUS_NORMAL;
+		out[1] = REPORT_NORMAL;
 		return 2;
 	}
 
 	if (dest == BROADCAST || dest == m_address) {
 		uint32_t pos = 0;
 		uint32_t used = 0;
-		out[pos++] = STATUS_OK;
+		out[pos++] = STATUS_NORMAL;
 		size_t s = 0;
 		while (s < in.size()) {
 			const int32_t len = handle_message(in.subspan(s), out.subspan(pos), used);
@@ -225,7 +213,7 @@ uint32_t JvsDevice::message(uint8_t dest, std::span<const uint8_t> in, std::span
 				return 1;
 			}
 			if (len == 0) {
-				out[pos++] = REPORT_BAD_PARAMETER;
+				out[pos++] = REPORT_PARAMETER_COUNT;
 				break;
 			}
 			pos += used;
@@ -251,9 +239,9 @@ int32_t JvsDevice::handle_message(std::span<const uint8_t> in, std::span<uint8_t
 	used = 0;
 
 	switch (in[0]) {
-	case 0xF0:
-		/* Reset, must be sent twice. */
-		if (in.size() < 2 || in[1] != 0xD9) {
+	case RESET:
+		/* Sent twice. */
+		if (in.size() < 2 || in[1] != RESET_CHECK) {
 			return 0;
 		}
 		m_reset_counter = old_reset_counter + 1;
@@ -264,46 +252,46 @@ int32_t JvsDevice::handle_message(std::span<const uint8_t> in, std::span<uint8_t
 		}
 		return 2;
 
-	case 0x10: {
+	case IO_IDENTIFY: {
 		const char *id = device_id();
 		const size_t len = std::strlen(id) + 1;
-		out[0] = REPORT_OK;
+		out[0] = REPORT_NORMAL;
 		std::memcpy(out.data() + 1, id, len);
 		used = static_cast<uint32_t>(1 + len);
 		return 1;
 	}
 
-	case 0x11:
-		out[0] = REPORT_OK;
+	case COMMAND_REVISION:
+		out[0] = REPORT_NORMAL;
 		out[1] = command_format_version();
 		used = 2;
 		return 1;
 
-	case 0x12:
-		out[0] = REPORT_OK;
+	case JVS_REVISION:
+		out[0] = REPORT_NORMAL;
 		out[1] = jvs_standard_version();
 		used = 2;
 		return 1;
 
-	case 0x13:
-		out[0] = REPORT_OK;
+	case COMM_VERSION:
+		out[0] = REPORT_NORMAL;
 		out[1] = comm_method_version();
 		used = 2;
 		return 1;
 
-	case 0x14: {
-		out[0] = REPORT_OK;
+	case FEATURE_CHECK: {
+		out[0] = REPORT_NORMAL;
 		const int32_t n = function_list(out.subspan(1));
-		out[1 + static_cast<uint32_t>(n)] = 0x00;
+		out[1 + static_cast<uint32_t>(n)] = FUNC_END;
 		used = static_cast<uint32_t>(2 + n);
 		return 1;
 	}
 
-	case 0x20: {
+	case SWITCH_INPUTS: {
 		if (in.size() < 3) {
 			return 0;
 		}
-		out[0] = REPORT_OK;
+		out[0] = REPORT_NORMAL;
 		const int32_t n = switches(out.subspan(1), in[1], in[2]);
 		if (n < 0) {
 			return 0;
@@ -312,11 +300,11 @@ int32_t JvsDevice::handle_message(std::span<const uint8_t> in, std::span<uint8_t
 		return 3;
 	}
 
-	case 0x21: {
+	case COIN_INPUTS: {
 		if (in.size() < 2) {
 			return 0;
 		}
-		out[0] = REPORT_OK;
+		out[0] = REPORT_NORMAL;
 		const int32_t n = coin_counters(out.subspan(1), in[1]);
 		if (n < 0) {
 			return 0;
@@ -325,11 +313,11 @@ int32_t JvsDevice::handle_message(std::span<const uint8_t> in, std::span<uint8_t
 		return 2;
 	}
 
-	case 0x22: {
+	case ANALOG_INPUTS: {
 		if (in.size() < 2) {
 			return 0;
 		}
-		out[0] = REPORT_OK;
+		out[0] = REPORT_NORMAL;
 		const int32_t n = analogs(out.subspan(1), in[1]);
 		if (n < 0) {
 			return 0;
@@ -338,35 +326,37 @@ int32_t JvsDevice::handle_message(std::span<const uint8_t> in, std::span<uint8_t
 		return 2;
 	}
 
-	case 0x30:
+	case COIN_COUNTER_DECREASE:
 		if (in.size() < 4) {
 			return 0;
 		}
-		out[0] = REPORT_OK;
+		out[0] = REPORT_NORMAL;
 		used = 1;
 		return coin_add(in[1], -static_cast<int32_t>((in[2] << 8) | in[3])) ? 4 : 0;
 
-	case 0x31:
+	/* Taken as a coin increase, as MAME does (jvsdev.cpp); the standard
+	 * has COIN_COUNTER_INCREASE for that. TODO: what the boards do. */
+	case PAYOUT_COUNTER_INCREASE:
 		if (in.size() < 4) {
 			return 0;
 		}
-		out[0] = REPORT_OK;
+		out[0] = REPORT_NORMAL;
 		used = 1;
 		return coin_add(in[1], static_cast<int32_t>((in[2] << 8) | in[3])) ? 4 : 0;
 
-	case 0x32:
+	case GENERIC_OUTPUT_1:
 		if (in.size() < 2 || in.size() < 2u + in[1]) {
 			return 0;
 		}
-		out[0] = REPORT_OK;
+		out[0] = REPORT_NORMAL;
 		used = 1;
 		return swoutputs(in.subspan(2, in[1])) ? static_cast<int32_t>(2 + in[1]) : 0;
 
-	case 0x38:
+	case GENERIC_OUTPUT_3:
 		if (in.size() < 3) {
 			return 0;
 		}
-		out[0] = REPORT_OK;
+		out[0] = REPORT_NORMAL;
 		used = 1;
 		return swoutput(in[1], in[2]) ? 3 : 0;
 
