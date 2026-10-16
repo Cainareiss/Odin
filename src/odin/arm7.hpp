@@ -251,7 +251,7 @@ private:
 	/* What host code may do in place: data processing with a value or a
 	 * register shifted by a value, LDR and STR of a word or a byte with
 	 * such an offset, B and BL (arm7_ops.cpp) */
-	enum class Form : uint8_t { Other, Data, Transfer, Branch };
+	enum class Form : uint8_t { Other, Data, Transfer, Block, Branch };
 	static Form form_of(uint32_t op, Run run);
 
 	/* arm7_translate.cpp: the blocks of host code */
@@ -262,6 +262,7 @@ private:
 	uint32_t translate(uint32_t addr);
 	void data_in_place(uint32_t pc, uint32_t op);
 	bool transfer_in_place(uint32_t pc, uint32_t op, Run does);
+	bool block_in_place(uint32_t pc, uint32_t op, Run does);
 	void drop_block(uint32_t addr);
 	void drop_blocks();
 	static uintptr_t linked(Arm7 &cpu);

@@ -21,6 +21,8 @@
 
 #include "odin/arm7.hpp"
 
+#include <bit>
+
 namespace odin {
 
 namespace {
@@ -180,6 +182,11 @@ uint32_t Arm7::translate(uint32_t addr)
 			break;
 		case Form::Transfer:
 			if (!transfer_in_place(pc, op, does)) {
+				host.call(pc, op, does);
+			}
+			break;
+		case Form::Block:
+			if (!block_in_place(pc, op, does)) {
 				host.call(pc, op, does);
 			}
 			break;
@@ -472,6 +479,61 @@ bool Arm7::transfer_in_place(uint32_t pc, uint32_t op, Run does)
 		}
 		host.spent(pc, 2);
 	}
+	const HostCode::Jump on = host.skip_ahead();
+	host.bind(outside);
+	host.call(pc, op, does);
+	host.bind(on);
+	return true;
+}
+
+/* Arm7::block_transfer() for this word in place, its words all in the memory
+ * of the ARM7, else it is called: LDM and STM without S, the base not PC
+ * and not in the list, PC not loaded, the list not empty. False, nothing
+ * written, for any other. */
+bool Arm7::block_in_place(uint32_t pc, uint32_t op, Run does)
+{
+	using Reg = Arm7Host::Reg;
+	Arm7Host &host = *m_host;
+	const bool pre = (op >> 24) & 1, up = (op >> 23) & 1, s = (op >> 22) & 1;
+	const bool writeback = (op >> 21) & 1, load = (op >> 20) & 1;
+	const uint32_t rn = (op >> 16) & 0xF, list = op & 0xFFFF;
+	const uint32_t span = 4 * static_cast<uint32_t>(std::popcount(list));
+
+	if (s || rn == 15 || list == 0 || (list & (1u << rn)) || (load && (list & 0x8000)) || (m_ram.size & 3) ||
+	    span > m_ram.size) {
+		return false;
+	}
+	/* A = the first address, D = the base after the transfer */
+	host.load(Reg::A, rn);
+	host.copy(Reg::D, Reg::A);
+	host.add_value(Reg::A, up ? (pre ? 4 : 0) : (pre ? 0u - span : 4 - span));
+	host.add_value(Reg::D, up ? span : 0u - span);
+	host.mask(Reg::A, ~3u);
+
+	const HostCode::Jump outside = host.unless_below(Reg::A, m_ram.size - span + 1);
+	host.copy(Reg::E, Reg::A);
+	host.mask(Reg::E, m_ram.mask & ~3u);
+	for (uint32_t i = 0; i < 16; i++) {
+		if (!(list & (1u << i))) {
+			continue;
+		}
+		if (load) {
+			host.ram_load(Reg::B, false);
+			host.store(i, Reg::B);
+		} else {
+			if (i == 15) {
+				host.load_value(Reg::B, pc + 12);
+			} else {
+				host.load(Reg::B, i);
+			}
+			host.ram_store(Reg::B, false);
+		}
+		host.add_value(Reg::E, 4);
+	}
+	if (writeback) {
+		host.store(rn, Reg::D);
+	}
+	host.spent(pc, span / 4 + (load ? 2 : 1));
 	const HostCode::Jump on = host.skip_ahead();
 	host.bind(outside);
 	host.call(pc, op, does);

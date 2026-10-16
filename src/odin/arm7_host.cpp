@@ -344,6 +344,11 @@ void Arm7Host::mask(Reg reg, uint32_t value)
 	op_ri(4, host(reg), value);
 }
 
+void Arm7Host::add_value(Reg reg, uint32_t value)
+{
+	op_ri(0, host(reg), value);
+}
+
 HostCode::Jump Arm7Host::unless_below(Reg reg, uint32_t limit)
 {
 	op_ri(7, host(reg), limit);			/* cmp reg, limit / jae */
@@ -423,6 +428,7 @@ void Arm7Host::flags_arithmetic(Reg, bool) {}
 void Arm7Host::flags_logical(Reg, const Reg *) {}
 void Arm7Host::flags_logical_value(Reg, bool) {}
 void Arm7Host::mask(Reg, uint32_t) {}
+void Arm7Host::add_value(Reg, uint32_t) {}
 HostCode::Jump Arm7Host::unless_below(Reg, uint32_t) { return Jump{0}; }
 void Arm7Host::ram_load(Reg, bool) {}
 void Arm7Host::ram_store(Reg, bool) {}

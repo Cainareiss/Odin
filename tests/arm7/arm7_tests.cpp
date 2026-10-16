@@ -2533,6 +2533,94 @@ void test_translated_transfer()
 	}
 }
 
+/* LDM and STM done in place by host code do what step() does, one at a
+ * time after a MOV r0, r0: every P, U, W and L, lists with and without the
+ * base or PC, empty ones, S, bases not aligned, at the ends of the memory
+ * and past it on the bus. */
+void test_translated_block()
+{
+	g_current = "translated block";
+	constexpr uint32_t RAM = 0x1000;
+	uint64_t seed = 0x5D3B1C2A9E7F4061ull;
+	const auto next = [&seed] {
+		seed ^= seed << 13;
+		seed ^= seed >> 7;
+		seed ^= seed << 17;
+		return static_cast<uint32_t>(seed >> 16);
+	};
+	const auto address = [&next] {
+		switch (next() % 4) {
+		case 0: return next() % RAM;
+		case 1: return RAM - 0x48 + next() % 0x90;
+		case 2: return next() % 0x48;
+		default: return next() ^ (next() << 16);
+		}
+	};
+	unsigned differ = 0;
+	std::vector<uint8_t> pattern(RAM), ram[2] = { std::vector<uint8_t>(RAM), std::vector<uint8_t>(RAM) };
+	for (uint8_t &b : pattern) {
+		b = static_cast<uint8_t>(next());
+	}
+	LogBus bus[2];
+	Arm7 cores[2] = { Arm7(bus[0]), Arm7(bus[1]) };
+
+	set_way(cores[0], Way::Read);
+	set_way(cores[1], Way::Host);
+	for (uint32_t k = 0; k < 2; k++) {
+		cores[k].set_ram({ram[k].data(), RAM, RAM - 1});
+	}
+	for (uint32_t trial = 0; trial < 40000 && differ < 5; trial++) {
+		const uint32_t p = next() & 1, u = next() & 1, s = (next() % 8) == 0, w = next() & 1, l = next() & 1;
+		const uint32_t rn = (next() % 16) ? next() % 15 : 15;
+		uint32_t list = (next() % 2) ? next() & 0xFFFF : (next() & 0x7FFF) & ~(1u << rn);
+		if (next() % 32 == 0) {
+			list = 0;
+		}
+		const uint32_t cc = (next() % 4) ? 0xE : next() % 15;
+		const uint32_t op = (cc << 28) | (4u << 25) | (p << 24) | (u << 23) | (s << 22) | (w << 21) | (l << 20) |
+		                    (rn << 16) | list;
+		odin::Arm7State st{};
+		cores[0].save(st);
+		for (uint32_t &r : st.r) {
+			r = (next() % 3) ? address() : next();
+		}
+		for (uint32_t i = 0; i < 7; i++) {
+			st.usr[i] = (next() % 3) ? address() : next();
+		}
+		for (uint32_t &r : st.svc) {
+			r = address();
+		}
+		st.cpsr = (next() & 0xF0000000u) | Arm7::MODE_SVC | Arm7::FLAG_I | Arm7::FLAG_F;
+		st.pc = 0xFC;
+		st.irq_line = st.fiq_line = 0;
+		uint32_t spent[2];
+		odin::Arm7State after[2];
+		cores[1].set_translate(true);
+		const uint32_t ways = cores[1].host_bytes();
+		for (uint32_t k = 0; k < 2; k++) {
+			ram[k] = pattern;
+			std::memcpy(&ram[k][0xFC], &NOP, 4);
+			std::memcpy(&ram[k][0x100], &op, 4);
+			bus[k].log.clear();
+			cores[k].load(st);
+			spent[k] = cores[k].run(2);
+			cores[k].save(after[k]);
+		}
+		g_checks += 2;
+		if (cores[1].host_bytes() <= ways) {
+			fail("not run as host code");
+			differ++;
+		}
+		if (spent[0] != spent[1] || !(after[0] == after[1]) || ram[0] != ram[1] || bus[0].log != bus[1].log ||
+		    cores[0].instructions() != cores[1].instructions()) {
+			char line[96];
+			std::snprintf(line, sizeof line, "%08x, r%u %08x: not as step()", op, rn, rn < 8 ? st.r[rn] : 0);
+			fail(line);
+			differ++;
+		}
+	}
+}
+
 int main(int argc, char **argv)
 {
 	for (int i = 1; i < argc; i++) {
@@ -2560,6 +2648,7 @@ int main(int argc, char **argv)
 	test_translated();
 	test_translated_data();
 	test_translated_transfer();
+	test_translated_block();
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures == 0 ? 0 : 1;
 }

@@ -790,6 +790,8 @@ Arm7::Form Arm7::form_of(uint32_t op, Run run)
 	case 3:
 		return !(op & 0x10) && run == Arm7Ops::TRANSFER[transfer_index(op, (op >> 5) & 3)] ? Form::Transfer
 		                                                                                 : Form::Other;
+	case 4:
+		return run == &Arm7Ops::block_transfer ? Form::Block : Form::Other;
 	case 5:
 		return run == &Arm7Ops::branch<true> || run == &Arm7Ops::branch<false> ? Form::Branch : Form::Other;
 	default:

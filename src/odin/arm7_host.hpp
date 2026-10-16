@@ -116,6 +116,8 @@ public:
 	void flags_logical_value(Reg result, bool carry);
 	/* reg = reg & value */
 	void mask(Reg reg, uint32_t value);
+	/* reg = reg + value */
+	void add_value(Reg reg, uint32_t value);
 	/* A jump when reg >= limit, as unsigned numbers */
 	Jump unless_below(Reg reg, uint32_t limit);
 	/* The memory of the ARM7 at the offset in E: dst = its word or its
