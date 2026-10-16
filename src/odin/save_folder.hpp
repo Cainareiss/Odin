@@ -29,6 +29,11 @@
 
 namespace odin {
 
+/* Where the user keeps the data of programs: %APPDATA% on Windows,
+ * ~/Library/Application Support on macOS, XDG_DATA_HOME or ~/.local/share
+ * elsewhere. Empty when it cannot be told. */
+std::string user_data_dir();
+
 /* The folder where a game keeps what its board holds without power, one
  * file for each memory. Nothing is read or written when there is none. */
 class SaveFolder {

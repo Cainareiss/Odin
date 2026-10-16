@@ -40,7 +40,9 @@
 #include "odin/games.hpp"
 #include "odin/audio_out.hpp"
 #include "odin/hikaru.hpp"
+#include "odin/controls.hpp"
 #include "odin/keyboard.hpp"
+#include "odin/settings.hpp"
 
 namespace {
 
@@ -179,13 +181,13 @@ load_game_list(odin::GameList &games)
 	return false;
 }
 
-/* A game being run: its board, with the window and the keyboard around
- * it. */
+/* A game being run: its board, with the window, the keyboard and the
+ * gamepads around it. */
 class Session {
 public:
 	Session(const Options &options, odin::Hikaru &board, odin::Display &display, odin::Keyboard &keys,
-	        odin::AudioOut *audio)
-		: m_options(options), m_board(board), m_display(display), m_keys(keys), m_audio(audio),
+	        odin::Controls &controls, odin::AudioOut *audio)
+		: m_options(options), m_board(board), m_display(display), m_keys(keys), m_controls(controls), m_audio(audio),
 		  m_paused(false), m_next()
 	{
 	}
@@ -204,6 +206,7 @@ private:
 	odin::Hikaru &m_board;
 	odin::Display &m_display;
 	odin::Keyboard &m_keys;
+	odin::Controls &m_controls;
 	odin::AudioOut *m_audio;	/* nullptr: no sound */
 	bool m_paused;
 	std::chrono::steady_clock::time_point m_next;	/* when the next frame is due */
@@ -231,6 +234,8 @@ Session::process_events()
 	bool quit = false;
 
 	while (SDL_PollEvent(&event)) {
+		if (m_controls.event(event))
+			continue;
 		switch (event.type) {
 		case SDL_KEYDOWN:
 			m_keys.set(event.key.keysym.sym, true);
@@ -312,6 +317,7 @@ Session::run()
 		if (m_paused)
 			continue;
 		m_display.begin_frame();
+		m_controls.update();
 		m_board.run_frame();
 		if (m_audio)
 			m_audio->play(m_board.sound(false), m_board.sound(true));
@@ -366,7 +372,12 @@ main(int argc, char **argv)
 	const std::unique_ptr<odin::Display> display = odin::Display::make(*board, keys, options.display);
 	if (!display)
 		return 0;
-	board->set_panel(&keys);
+	odin::Settings settings;
+	const std::string settings_file = odin::Settings::user_file();
+	if (!settings_file.empty() && settings.load(settings_file))
+		std::printf("settings: '%s'\n", settings_file.c_str());
+	odin::Controls controls(keys, game->controls, odin::Bindings(settings, game->name));
+	board->set_panel(&controls);
 
 	/* Unthrottled frames do not keep time: no sound with -u */
 	std::unique_ptr<odin::AudioOut> audio;
@@ -388,7 +399,7 @@ main(int argc, char **argv)
 	}
 	if (started) {
 		std::printf("Running");
-		Session(options, *board, *display, keys, audio.get()).run();
+		Session(options, *board, *display, keys, controls, audio.get()).run();
 	}
 
 	std::printf("Finalizing");

@@ -26,32 +26,25 @@
 
 #include <SDL.h>
 
-#include "odin/hikaru.hpp"
-
 namespace odin {
 
-/* The keyboard as the control panel of the cabinet.
- *
- * Switches of the main board: F5 Test, F6 Service. JVS I/O board: F2 Test,
- * 9 and 0 Service, 5 and 6 the coins. Player 1: 1 Start, the arrows,
- * LCtrl LAlt LShift Z X C. Player 2: 2 Start, R F D G, A S Q W E T. The
- * analog channels stay centred: no stick yet. */
-class Keyboard : public Hikaru::Panel {
+/* The keys held. A key pressed and released before a frame saw it stays
+ * held until that frame has run (settle), so that no press is lost. What
+ * each key does on the cabinet is in bindings.cpp. */
+class Keyboard {
 public:
-	Keyboard() : m_coin_was{false, false} {}
-
 	/* A key went down or up. */
 	void set(SDL_Keycode key, bool down);
 	bool down(SDL_Keycode key) const;
+	const std::vector<SDL_Keycode> &held() const { return m_held; }
 
-	void read_inputs(MieBoard::Inputs &inputs) override;
+	/* A frame has seen the keys. */
+	void settle();
 
 private:
-	uint16_t player_word(SDL_Keycode start, SDL_Keycode service, SDL_Keycode up, SDL_Keycode down_,
-	                     SDL_Keycode left, SDL_Keycode right, const SDL_Keycode push[6]) const;
-
 	std::vector<SDL_Keycode> m_held;
-	bool m_coin_was[2];
+	std::vector<SDL_Keycode> m_fresh;	/* down since the last frame */
+	std::vector<SDL_Keycode> m_release;	/* up before a frame saw them */
 };
 
 } /* namespace odin */

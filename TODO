@@ -158,6 +158,20 @@ an imitation of its program by default, and, as an option of the user
 (an option of the interface once there is one), its program run when its
 ROM is given (the drive board of Sega Rally 2, epr-20512 in MAME, if that
 is the program of this board: to be proved).
+Controls (src/odin/roles.cpp, bindings.cpp, control_panel.cpp,
+controls.cpp): each control of a cabinet takes a role in odin-games.json,
+and keys and gamepads are bound to the roles: the defaults of bindings.cpp,
+then the lines of [controls] and of [controls.<game>] in odin.ini
+(<data>/odin/odin.ini; ODIN_CONFIG=<file>, or none: the tests use none).
+A gamepad for each player, in the order they are plugged in
+(ODIN_CONTROLLERS=none: none). Half a stick or a trigger counts as pressed
+from half its way: a choice of the emulator. To come: the mouse and the
+light guns (evdev.cpp, rawinput.cpp), wheels and their pedals, the drive
+board and its force (drive_board_838_13366.cpp), the outputs to other
+programs (outputs_network.cpp), keys for the analog channels, gamepads
+known again from one run to the next, the interface that writes odin.ini.
+Without a gamepad an analog channel stays at 8000, the pedals too, where a
+pedal at rest reads released.
 
 AICA (src/odin/aica.cpp + arm7.cpp): control block, timers, interrupts,
 DMA, RTC and the ARM7 are in, and the voices (aica_voice.cpp: sampler,

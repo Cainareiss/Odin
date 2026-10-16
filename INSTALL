@@ -45,12 +45,26 @@ of the I/O board, 9 and 0 its Service switches, 5 and 6 the coins. Player 1
 has 1 for Start, the arrows, and Left Ctrl, Left Alt, Left Shift, Z, X, C;
 player 2 has 2 for Start, R F D G, and A, S, Q, W, E, T.
 
+Gamepads: one for each player, in the order they are plugged in. Start,
+the D-pad, A, B, X, Y, LB, RB, LT and RT are the buttons 1 to 8, and the
+sticks and the triggers the analog controls of the cabinet (the wheel, the
+pedals, the levers). Each control of a game does what its role does
+(odin-games.json): for NASCAR, the view change is button 4, Z or Y. Keys and
+gamepads are changed in odin.ini, beside the saves (see below): [controls]
+for every game, [controls.<game>] for one, with lines such as
+
+ p1.button4 = key:Space, pad:b
+ coin1 = key:5
+
+(the roles and the defaults are in src/odin/bindings.cpp).
+
 What the board keeps without power (the settings of the BIOS, the records
 and settings of the game, the clock) is read at start and written on exit,
 in a folder for each game: ~/.local/share/odin/saves/<game> (under
 XDG_DATA_HOME when it is set), %APPDATA%\odin\saves\<game> on Windows,
 ~/Library/Application Support/odin/saves/<game> on macOS. ODIN_SAVES=<folder>
-takes another folder, ODIN_SAVES=none keeps nothing.
+takes another folder, ODIN_SAVES=none keeps nothing. The settings are in
+odin.ini in the same odin folder; ODIN_CONFIG=<file> reads another one.
 
 The comments at the top of the source files tell the other variables of the
 environment; they are for debugging.

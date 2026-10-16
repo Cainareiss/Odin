@@ -28,11 +28,6 @@
 
 namespace odin {
 
-namespace {
-
-/* Where the user keeps the data of programs: %APPDATA% on Windows,
- * ~/Library/Application Support on macOS, XDG_DATA_HOME or ~/.local/share
- * elsewhere. Empty when it cannot be told. */
 std::string
 user_data_dir()
 {
@@ -53,8 +48,6 @@ user_data_dir()
 	return home.empty() ? home : home + "/.local/share";
 #endif
 }
-
-} /* namespace */
 
 SaveFolder
 SaveFolder::of_game(const std::string &game)

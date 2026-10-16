@@ -1,0 +1,204 @@
+/*
+ * Odin
+ * Copyright (C) 2026 Réda Chérif-Touil
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#include "odin/control_panel.hpp"
+
+#include <algorithm>
+#include <cstdlib>
+
+namespace odin {
+
+namespace {
+
+GameControl
+button(const char *name, uint8_t player, uint16_t mask, Role role)
+{
+	GameControl control{};
+
+	control.name = name;
+	control.type = GameControl::Type::BUTTON;
+	control.button = JvsSwitch{ player, mask };
+	control.role = role;
+	control.player = player;
+	return control;
+}
+
+/* START, the directions and PUSH1 to PUSH6 of both players, in the words
+ * of MieBoard::Inputs */
+std::vector<GameControl>
+standard_panel()
+{
+	static const char *const NAMES[2][11] = {
+		{ "1P START", "1P UP", "1P DOWN", "1P LEFT", "1P RIGHT", "1P PUSH1", "1P PUSH2", "1P PUSH3", "1P PUSH4",
+		  "1P PUSH5", "1P PUSH6" },
+		{ "2P START", "2P UP", "2P DOWN", "2P LEFT", "2P RIGHT", "2P PUSH1", "2P PUSH2", "2P PUSH3", "2P PUSH4",
+		  "2P PUSH5", "2P PUSH6" },
+	};
+	static const uint16_t MASKS[11] = { 0x8000, 0x2000, 0x1000, 0x0800, 0x0400, 0x0200, 0x0100, 0x0080, 0x0040,
+	                                    0x0020, 0x0010 };
+	static const Role ROLES[11] = { Role::START, Role::UP, Role::DOWN, Role::LEFT, Role::RIGHT, Role::BUTTON1,
+	                                Role::BUTTON2, Role::BUTTON3, Role::BUTTON4, Role::BUTTON5, Role::BUTTON6 };
+	std::vector<GameControl> panel;
+
+	for (uint8_t player = 0; player < 2; player++)
+		for (unsigned i = 0; i < 11; i++)
+			panel.push_back(button(NAMES[player][i], player, MASKS[i], ROLES[i]));
+	return panel;
+}
+
+MieBoard::Inputs
+idle_inputs()
+{
+	MieBoard::Inputs inputs = {};
+
+	for (uint16_t &channel : inputs.jvs_analog)
+		channel = 0x8000;
+	return inputs;
+}
+
+} /* namespace */
+
+ControlPanel::ControlPanel(const std::vector<GameControl> &controls, const Bindings &bindings)
+	: m_controls(controls.empty() ? standard_panel() : controls), m_bindings(bindings), m_inputs(idle_inputs()),
+	  m_coins_were{}, m_coins{}
+{
+	m_controls.push_back(button("1P SERVICE", 0, 0x4000, Role::SERVICE));
+	m_controls.push_back(button("2P SERVICE", 1, 0x4000, Role::SERVICE));
+	m_positions.assign(m_controls.size(), 0);
+	m_levers_were.assign(m_controls.size(), { false, false });
+}
+
+/* A stick turned over keeps its centre at 8000. */
+uint16_t
+ControlPanel::channel(const PadInput &input, GameControl::Low low, int16_t value)
+{
+	const bool over = low == GameControl::Low::RIGHT || low == GameControl::Low::DOWN || low == GameControl::Low::PRESSED;
+
+	if (input.is_trigger()) {
+		const int word = std::max<int>(value, 0) * 0xFFFF / 0x7FFF;
+
+		return static_cast<uint16_t>(over ? 0xFFFF - word : word);
+	}
+	return static_cast<uint16_t>(std::clamp(over ? 0x8000 - value : 0x8000 + value, 0, 0xFFFF));
+}
+
+bool
+ControlPanel::held(const HostState &host, const HostInput &input, unsigned player) const
+{
+	if (input.kind == HostInput::Kind::KEY)
+		return host.keys && std::find(host.keys->begin(), host.keys->end(), input.key) != host.keys->end();
+
+	const PadState *const pad = host.pads[player & 1];
+
+	if (!pad)
+		return false;
+	switch (input.pad.type) {
+	case PadInput::Type::BUTTON:
+		return pad->buttons[input.pad.index];
+	case PadInput::Type::AXIS_NEGATIVE:
+		return pad->axes[input.pad.index] <= -PRESSED;
+	case PadInput::Type::AXIS_POSITIVE:
+		return pad->axes[input.pad.index] >= PRESSED;
+	case PadInput::Type::AXIS:
+		/* A trigger: the bindings give no whole stick to what is pressed */
+		return pad->axes[input.pad.index] >= PRESSED;
+	}
+	return false;
+}
+
+bool
+ControlPanel::pressed(const HostState &host, Role role, unsigned player) const
+{
+	const unsigned whose = role_of_cabinet(role) ? 0 : player;
+
+	for (const HostInput &input : m_bindings.of(role, whose))
+		if (held(host, input, whose))
+			return true;
+	return false;
+}
+
+void
+ControlPanel::update(const HostState &host)
+{
+	MieBoard::Inputs inputs = idle_inputs();
+
+	inputs.mainboard_test = pressed(host, Role::BOARD_TEST, 0);
+	inputs.mainboard_service = pressed(host, Role::BOARD_SERVICE, 0);
+	inputs.jvs_system = pressed(host, Role::TEST, 0) ? 0x80 : 0;
+
+	for (size_t c = 0; c < m_controls.size(); c++) {
+		const GameControl &control = m_controls[c];
+
+		switch (control.type) {
+		case GameControl::Type::BUTTON:
+			if (pressed(host, control.role, control.player))
+				inputs.jvs_player[control.button.player] |= control.button.mask;
+			break;
+		case GameControl::Type::POSITIONS: {
+			const bool down = pressed(host, Role::GEAR_DOWN, control.player);
+			const bool up = pressed(host, Role::GEAR_UP, control.player);
+
+			if (down && !m_levers_were[c][0] && m_positions[c] > 0)
+				m_positions[c]--;
+			if (up && !m_levers_were[c][1] && m_positions[c] + 1 < control.positions.size())
+				m_positions[c]++;
+			m_levers_were[c] = { down, up };
+			for (const JvsSwitch &sw : control.positions[m_positions[c]].switches)
+				inputs.jvs_player[sw.player] |= sw.mask;
+			break;
+		}
+		case GameControl::Type::ANALOG: {
+			/* Of the axes bound, the one furthest from where it rests */
+			const PadState *const pad = host.pads[control.player];
+			int furthest = -1;
+
+			for (const HostInput &input : m_bindings.of(control.role, control.player)) {
+				if (input.kind != HostInput::Kind::PAD || !pad)
+					continue;
+				const int16_t value = pad->axes[input.pad.index];
+				const int away = input.pad.is_trigger() ? std::max<int>(value, 0) : std::abs(value);
+
+				if (away > furthest) {
+					furthest = away;
+					inputs.jvs_analog[control.analog] = channel(input.pad, control.low, value);
+				}
+			}
+			break;
+		}
+		}
+	}
+	for (unsigned slot = 0; slot < 2; slot++) {
+		const bool now = pressed(host, slot ? Role::COIN2 : Role::COIN1, 0);
+
+		m_coins[slot] = m_coins[slot] || (now && !m_coins_were[slot]);
+		m_coins_were[slot] = now;
+	}
+	m_inputs = inputs;
+}
+
+void
+ControlPanel::fill(MieBoard::Inputs &inputs)
+{
+	inputs = m_inputs;
+	for (unsigned slot = 0; slot < 2; slot++) {
+		inputs.jvs_coin[slot] = m_coins[slot];
+		m_coins[slot] = false;
+	}
+}
+
+} /* namespace odin */

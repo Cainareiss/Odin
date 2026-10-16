@@ -32,6 +32,10 @@ OBJ := \
 	src/odin/main.o \
 	src/odin/display.o \
 	src/odin/keyboard.o \
+	src/odin/controls.o \
+	src/odin/control_panel.o \
+	src/odin/bindings.o \
+	src/odin/settings.o \
 	src/odin/games.o \
 	src/odin/roles.o \
 	src/odin/state_file.o \
