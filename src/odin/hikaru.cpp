@@ -279,11 +279,11 @@ Hikaru::Hikaru(const Game &game, const RomBoard::Config &rombd, bool verbose)
 		if (board->m_screen)
 			board->m_screen->list_launched();
 	};
-	hooks.before_texture_write = [](void *ctx, unsigned bank) {
+	hooks.before_texture_write = [](void *ctx, unsigned bank, uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
 		Hikaru *const board = static_cast<Hikaru *>(ctx);
 
 		if (board->m_screen)
-			board->m_screen->before_texture_write(bank);
+			board->m_screen->before_texture_write(bank, x, y, w, h);
 	};
 	m_gpu = std::make_unique<HikaruGpu>(memory, hooks);
 	m_gpu->antarctic().set_disasm(env_flag("GPU_LOG_CP") ? stdout : nullptr);

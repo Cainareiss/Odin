@@ -214,8 +214,10 @@ public:
 	bool step_texture_transfer();
 	/* 1500008C: the texture RAM twiddles what the bus writes to it */
 	bool texture_ram_twiddled() const { return reg(0x8C) == 0x02020202; }
-	/* Called with the bank a transfer is about to write. */
-	void set_before_texture_write(void (*fn)(void *ctx, unsigned bank), void *ctx)
+	/* Called with each rectangle of texels of a bank a transfer is about
+	 * to write. */
+	using TexelsWritten = void (*)(void *ctx, unsigned bank, uint32_t x, uint32_t y, uint32_t w, uint32_t h);
+	void set_before_texture_write(TexelsWritten fn, void *ctx)
 	{
 		m_before_texture_write = fn;
 		m_before_texture_write_ctx = ctx;
@@ -407,7 +409,7 @@ private:
 	unsigned m_building;
 	List *m_list;
 
-	void (*m_before_texture_write)(void *ctx, unsigned bank);
+	TexelsWritten m_before_texture_write;
 	void *m_before_texture_write_ctx;
 
 	FILE *m_disasm, *m_log, *m_transfer_log;

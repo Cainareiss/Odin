@@ -736,7 +736,7 @@ void
 Hikaru::texram_write(unsigned bank, uint32_t offs, unsigned size, uint64_t value)
 {
 	if (m_screen)
-		m_screen->before_texture_write(bank);
+		m_screen->before_texture_write(bank, 0, 0, 2048, 1024);
 	texram_store(bank, offs, size, value, m_gpu->antarctic().texture_ram_twiddled());
 }
 
@@ -877,7 +877,7 @@ Hikaru::bus_copy(uint32_t src, uint32_t dst, uint32_t words)
 
 		n = std::min(n, (static_cast<uint32_t>(m_texram[bank].size()) - offs) / 4);
 		if (m_screen)
-			m_screen->before_texture_write(bank);
+			m_screen->before_texture_write(bank, 0, 0, 2048, 1024);
 		for (uint32_t i = 0; i < n; i++)
 			texram_store(bank, offs + 4 * i, 4, load_bytes(&from[4 * i], 4), twiddled);
 		return n;

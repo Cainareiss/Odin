@@ -75,8 +75,8 @@ public:
 		void *ctx;
 		void (*irq_changed)(void *ctx);		/* the interrupt line may have moved */
 		void (*list_started)(void *ctx);	/* a display list was launched */
-		/* the texture RAM of a bank is about to be written */
-		void (*before_texture_write)(void *ctx, unsigned bank);
+		/* a rectangle of texels of a bank is about to be written */
+		Antarctic::TexelsWritten before_texture_write;
 	};
 
 	HikaruGpu(const Memory &memory, const Hooks &hooks);

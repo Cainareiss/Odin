@@ -102,7 +102,7 @@ public:
 
 	/* Hikaru::Screen */
 	void list_launched() override;
-	void before_texture_write(unsigned bank) override;
+	void before_texture_write(unsigned bank, uint32_t x, uint32_t y, uint32_t w, uint32_t h) override;
 	void before_memory_changes() override { finish(); }
 	void memory_changed() override;
 	bool save_pictures(StateFile &state) override;

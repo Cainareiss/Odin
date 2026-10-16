@@ -433,7 +433,7 @@ void test_texture_transfer()
 	}
 	m.write(table, { texels, 512, 0x0000C080, 1 });
 	m.cp->set_log(nullptr);
-	m.cp->set_before_texture_write([](void *ctx, unsigned bank) {
+	m.cp->set_before_texture_write([](void *ctx, unsigned bank, uint32_t, uint32_t, uint32_t, uint32_t) {
 		Told *t = static_cast<Told *>(ctx);
 
 		t->bank = static_cast<int>(bank);
@@ -460,6 +460,65 @@ void test_texture_transfer()
 	uint16_t next_row;
 	std::memcpy(&next_row, &m.texram[1][4096 + 2], 2);
 	check(next_row == 0x8010, "a row of the texture RAM is 2048 texels long");
+}
+
+/* A 16x16 texture and its four smaller levels, 682 bytes, at a slot (the
+ * third word of the entry): each texel the transfer changes lies in a
+ * rectangle of its bank the board was told of before it landed. */
+void test_texture_levels_told(uint32_t slot)
+{
+	Machine m;
+	const uint32_t table = 0x483FC000, texels = 0x48100000;
+	struct Rect {
+		unsigned bank;
+		uint32_t x, y, w, h;
+	};
+	struct Told {
+		const Machine *machine;
+		std::vector<Rect> rects{};
+		bool before = true;
+	} told = { &m };
+
+	for (uint32_t i = 0; i < 341; i++) {
+		const uint16_t texel = static_cast<uint16_t>(0x8000 | i);
+
+		std::memcpy(&m.cmdram[(texels & 0x3FFFFF) + i * 2], &texel, 2);
+	}
+	m.write(table, { texels, 682, slot, 1 });
+	m.cp->set_log(nullptr);
+	m.cp->set_before_texture_write([](void *ctx, unsigned bank, uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
+		Told *t = static_cast<Told *>(ctx);
+
+		t->rects.push_back({ bank, x, y, w, h });
+		for (uint32_t ty = y; ty < y + h; ty++)
+			for (uint32_t tx = x; tx < x + w; tx++)
+				if (t->machine->texram[bank][ty * 4096 + tx * 2] | t->machine->texram[bank][ty * 4096 + tx * 2 + 1])
+					t->before = false;
+	}, &told);
+
+	m.cp->write_register(0x1500000C, table);
+	m.cp->write_register(0x15000010, 1);
+	m.cp->write_register(0x15000014, 1);
+	check(m.cp->step_texture_transfer(), "the transfer of five levels ends at the first step");
+	check(told.rects.size() == 5, "the board is told of each level");
+	check(told.before, "before its texels land");
+
+	unsigned changed = 0, outside = 0;
+	for (unsigned bank = 0; bank < 2; bank++) {
+		for (uint32_t y = 0; y < 1024; y++) {
+			for (uint32_t x = 0; x < 2048; x++) {
+				if (!(m.texram[bank][y * 4096 + x * 2] | m.texram[bank][y * 4096 + x * 2 + 1]))
+					continue;
+				changed++;
+				bool in = false;
+				for (const Rect &r : told.rects)
+					in |= r.bank == bank && x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
+				outside += !in;
+			}
+		}
+	}
+	check(changed == 341, "the five levels land, 341 texels");
+	check(outside == 0, "every texel written was told, in its bank");
 }
 
 /* The lights of the first mesh of the list */
@@ -556,6 +615,10 @@ int main()
 	test_viewport_and_state();
 	test_registers();
 	test_texture_transfer();
+	/* The last level, 1x1, starts on an odd texel, then on an even one:
+	 * the two texels of a word are swapped. */
+	test_texture_levels_told(0x0000C391);
+	test_texture_levels_told(0x0000C380);
 	test_lightsets();
 	test_light_position_with_w();
 	test_disassembler();

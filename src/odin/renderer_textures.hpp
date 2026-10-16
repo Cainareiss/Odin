@@ -53,6 +53,9 @@ public:
 	bool holds(const odin_texhead_t &th) const;
 	/* The texture RAM of a bank has changed; every bank if negative. */
 	void invalidate(int bank);
+	/* A rectangle of texels of a bank changes: the textures that read
+	 * any of them are dropped. */
+	void invalidate(unsigned bank, uint32_t x, uint32_t y, uint32_t w, uint32_t h);
 
 	/* Wrap and filter of the texture bound on the active unit. */
 	static void set_sampling(const odin_texhead_t &th);
@@ -79,16 +82,24 @@ private:
 	};
 	/* The textures read at one slot */
 	using Slot = std::vector<Texture>;
+	/* Where a level of a texture lies */
+	struct Level {
+		uint32_t bank, x, y, w, h;
+	};
 
 	enum : uint32_t {
 		FIRST_SLOT_X = 0x80,
 		FIRST_SLOT_Y = 0xC0,
 		SLOTS_X = 0x80,
-		SLOTS_Y = 0x40
+		SLOTS_Y = 0x40,
+		/* 16 << 7 texels a side at most: 7 + 5 levels */
+		MAX_LEVELS = 12
 	};
 
 	/* The slot a texhead reads, if it reads one */
 	static bool slot_of(const odin_texhead_t &th, uint32_t &bank, size_t &index);
+	static unsigned levels_of(const odin_texhead_t &th, Level (&levels)[MAX_LEVELS]);
+	static bool reads(const odin_texhead_t &th, unsigned bank, uint32_t x, uint32_t y, uint32_t w, uint32_t h);
 	GLuint decode(const odin_texhead_t &th) const;
 	std::vector<uint16_t> decode_i4(uint32_t bank, uint32_t w, uint32_t h,
 	                                uint32_t x0, uint32_t y0) const;

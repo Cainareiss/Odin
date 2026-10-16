@@ -156,24 +156,57 @@ TextureCache::decode_i4(uint32_t bank, uint32_t w, uint32_t h, uint32_t x0, uint
 	return data;
 }
 
+/* Where each level of a texhead lies, as many as it has with mipmaps. The
+ * levels alternate between the two banks (see Antarctic::copy_texture),
+ * down to the level where the smaller side reaches one texel: the games
+ * upload no further (the sky dome of von4, 256x128, has a zero 1x1 level
+ * that the port would read, 825C6A00; HEURISTIC). */
+unsigned
+TextureCache::levels_of(const odin_texhead_t &th, Level (&levels)[MAX_LEVELS])
+{
+	const unsigned n = std::min(odin_tex_logw(&th), odin_tex_logh(&th)) + 5;
+	Level level = { odin_tex_bank(&th), 0, 0, 16u << odin_tex_logw(&th), 16u << odin_tex_logh(&th) };
+
+	odin_tex_coords(&th, &level.x, &level.y);
+	for (unsigned i = 0; i < n; i++) {
+		levels[i] = level;
+		level.x += (BANK_WIDTH - level.x) / 2;
+		level.y += (BANK_HEIGHT - level.y) / 2;
+		level.w = std::max(level.w >> 1, 1u);
+		level.h = std::max(level.h >> 1, 1u);
+		level.bank ^= 1;
+	}
+	return n;
+}
+
+/* A texture decoded from a texhead reads that texel. Every level counts,
+ * whether the texture was decoded with mipmaps or not. */
+bool
+TextureCache::reads(const odin_texhead_t &th, unsigned bank, uint32_t x, uint32_t y, uint32_t w, uint32_t h)
+{
+	Level levels[MAX_LEVELS];
+	const unsigned n = levels_of(th, levels);
+
+	for (unsigned i = 0; i < n; i++) {
+		const Level &l = levels[i];
+
+		if (l.bank == bank && l.x < x + w && x < l.x + l.w && l.y < y + h && y < l.y + l.h)
+			return true;
+	}
+	return false;
+}
+
 GLuint
 TextureCache::decode(const odin_texhead_t &th) const
 {
 	static const GLint la8_swizzle[4] = { GL_RED, GL_RED, GL_RED, GL_GREEN };
 	const uint32_t format = odin_tex_format(&th);
-	uint32_t w = 16u << odin_tex_logw(&th);
-	uint32_t h = 16u << odin_tex_logh(&th);
-	uint32_t x0, y0, bank = odin_tex_bank(&th), scale = 1;
+	Level levels[MAX_LEVELS];
+	const uint32_t all_levels = levels_of(th, levels);
+	const uint32_t num_levels = m_no_mipmaps ? 1 : all_levels;
+	uint32_t scale = 1;
 	GLenum internal, layout = GL_RGBA, type;
 	GLuint id;
-
-	/* The levels alternate between the two banks (see
-	 * Antarctic::copy_texture), down to the level where the smaller side
-	 * reaches one texel: the games upload no further (the sky dome of
-	 * von4, 256x128, has a zero 1x1 level that the port would read,
-	 * 825C6A00; HEURISTIC). */
-	const uint32_t num_levels = m_no_mipmaps ? 1 :
-		std::min(odin_tex_logw(&th), odin_tex_logh(&th)) + 5;
 
 	switch (format) {
 	case ODIN_FORMAT_ABGR1555:
@@ -199,9 +232,10 @@ TextureCache::decode(const odin_texhead_t &th) const
 		return 0;
 	}
 
-	odin_tex_coords(&th, &x0, &y0);
+	const uint32_t w = levels[0].w, h = levels[0].h;
+
 	/* Each level then lies in its bank too. */
-	if (x0 + w > BANK_WIDTH || y0 + h > BANK_HEIGHT) {
+	if (levels[0].x + w > BANK_WIDTH || levels[0].y + h > BANK_HEIGHT) {
 		std::fprintf(stderr, "renderer: a texture outside its bank: %s\n",
 		             odin_texhead_str(&th));
 		std::abort();
@@ -228,27 +262,23 @@ TextureCache::decode(const odin_texhead_t &th) const
 
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 	for (uint32_t level = 0; level < num_levels; level++) {
+		const Level &l = levels[level];
+
 		if (format == ODIN_FORMAT_I4) {
-			const std::vector<uint16_t> data = decode_i4(bank, w, h, x0, y0);
+			const std::vector<uint16_t> data = decode_i4(l.bank, l.w, l.h, l.x, l.y);
 
 			glTexSubImage2D(GL_TEXTURE_2D, static_cast<GLint>(level), 0, 0,
-			                static_cast<GLsizei>(w * 2), static_cast<GLsizei>(h * 2),
+			                static_cast<GLsizei>(l.w * 2), static_cast<GLsizei>(l.h * 2),
 			                layout, type, data.data());
 		} else {
 			/* Read where it lies in the bank */
 			glPixelStorei(GL_UNPACK_ROW_LENGTH, BANK_WIDTH);
-			glPixelStorei(GL_UNPACK_SKIP_ROWS, static_cast<GLint>(y0));
-			glPixelStorei(GL_UNPACK_SKIP_PIXELS, static_cast<GLint>(x0));
+			glPixelStorei(GL_UNPACK_SKIP_ROWS, static_cast<GLint>(l.y));
+			glPixelStorei(GL_UNPACK_SKIP_PIXELS, static_cast<GLint>(l.x));
 			glTexSubImage2D(GL_TEXTURE_2D, static_cast<GLint>(level), 0, 0,
-			                static_cast<GLsizei>(w), static_cast<GLsizei>(h),
-			                layout, type, m_texram[bank].data());
+			                static_cast<GLsizei>(l.w), static_cast<GLsizei>(l.h),
+			                layout, type, m_texram[l.bank].data());
 		}
-
-		w = std::max(w >> 1, 1u);
-		h = std::max(h >> 1, 1u);
-		x0 += (BANK_WIDTH - x0) / 2;
-		y0 += (BANK_HEIGHT - y0) / 2;
-		bank ^= 1;
 	}
 
 	glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
@@ -342,6 +372,27 @@ TextureCache::invalidate(int bank)
 		clear_bank(1);
 	} else {
 		clear_bank(static_cast<unsigned>(bank));
+	}
+}
+
+void
+TextureCache::invalidate(unsigned bank, uint32_t x, uint32_t y, uint32_t w, uint32_t h)
+{
+	if (x == 0 && y == 0 && w >= BANK_WIDTH && h >= BANK_HEIGHT) {
+		clear_bank(bank);
+		return;
+	}
+	/* A texture of either bank may read this one at some level. */
+	for (unsigned b = 0; b < 2; b++) {
+		if (m_is_clear[b])
+			continue;
+		for (Slot &slot : m_slots[b])
+			std::erase_if(slot, [&](const Texture &held) {
+				if (!reads(held.th, bank, x, y, w, h))
+					return false;
+				bury(held.id);
+				return true;
+			});
 	}
 }
 

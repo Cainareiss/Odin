@@ -74,7 +74,7 @@ struct Board {
 		hooks.ctx = this;
 		hooks.irq_changed = [](void *ctx) { static_cast<Board *>(ctx)->irq_changes++; };
 		hooks.list_started = [](void *ctx) { static_cast<Board *>(ctx)->lists++; };
-		hooks.before_texture_write = [](void *, unsigned) {};
+		hooks.before_texture_write = [](void *, unsigned, uint32_t, uint32_t, uint32_t, uint32_t) {};
 		gpu = std::make_unique<HikaruGpu>(memory, hooks);
 	}
 	uint32_t read(uint32_t addr, unsigned size = 4)

@@ -469,9 +469,6 @@ Antarctic::transfer_texture(const uint32_t entry[4])
 		return;
 	}
 
-	if (m_before_texture_write)
-		m_before_texture_write(m_before_texture_write_ctx, odin_tex_bank(&texhead));
-
 	/* An entry may ask for more bytes than its levels hold: BRAVEFF gives
 	 * 39 of its 64x32 textures the bytes of 64x64 (its files keep 0x2AC0
 	 * bytes a texture) and draws them as 64x32. HEURISTIC: the levels of
@@ -509,6 +506,13 @@ Antarctic::copy_texture(uint32_t bus_addr, uint32_t size, const odin_texhead_t &
 			break;
 		}
 
+		/* copy_level swaps the two texels of each word: whole pairs */
+		if (m_before_texture_write) {
+			const uint32_t x = dstx & ~1u;
+
+			m_before_texture_write(m_before_texture_write_ctx, bank, x, dsty,
+			                       ((dstx + level_w - 1) | 1u) + 1 - x, level_h);
+		}
 		copy_level(src, m_texram[bank], bus_addr + size_copied,
 		           dstx, dsty, level_w, level_h);
 

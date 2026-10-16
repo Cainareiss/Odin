@@ -115,6 +115,11 @@ public:
 	/* The texture RAM of a bank is about to be written; every bank if
 	 * negative. */
 	void invalidate_textures(int bank) { m_textures.invalidate(bank); }
+	/* A rectangle of texels of a bank is about to be written. */
+	void invalidate_textures(unsigned bank, uint32_t x, uint32_t y, uint32_t w, uint32_t h)
+	{
+		m_textures.invalidate(bank, x, y, w, h);
+	}
 
 	/* A frame of the machine, in three calls:
 	 *  - begin_frame, before the machine runs it;

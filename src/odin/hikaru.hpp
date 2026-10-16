@@ -62,8 +62,9 @@ public:
 		virtual ~Screen() = default;
 		/* A display list was launched. */
 		virtual void list_launched() = 0;
-		/* The texture RAM of a bank is about to be written. */
-		virtual void before_texture_write(unsigned bank) = 0;
+		/* A rectangle of texels of a bank of the texture RAM, 2048 x 1024
+		 * texels, is about to be written. */
+		virtual void before_texture_write(unsigned bank, uint32_t x, uint32_t y, uint32_t w, uint32_t h) = 0;
 		/* The memories of the board are about to change as a whole, on
 		 * a reset or for a state: what is being drawn from them must
 		 * be over. */

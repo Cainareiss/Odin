@@ -456,12 +456,12 @@ Display::list_launched()
 }
 
 /* The frame being drawn reads the texture RAM as its own frame left it;
- * the decoded textures of that bank are stale then. */
+ * the decoded textures that read those texels are stale then. */
 void
-Display::before_texture_write(unsigned bank)
+Display::before_texture_write(unsigned bank, uint32_t x, uint32_t y, uint32_t w, uint32_t h)
 {
 	finish();
-	m_renderer->invalidate_textures(static_cast<int>(bank));
+	m_renderer->invalidate_textures(bank, x, y, w, h);
 }
 
 void
