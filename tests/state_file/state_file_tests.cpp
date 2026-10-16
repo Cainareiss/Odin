@@ -62,7 +62,7 @@ std::vector<uint8_t> bytes_of(const std::string &path)
 
 void test_save_and_load(const std::string &dir)
 {
-	const std::string path = dir + "/state_file_test.vkstate";
+	const std::string path = dir + "/state_file_test.odinstate";
 	const uint32_t word = 0x12345678;
 	const uint8_t five[5] = { 1, 2, 3, 4, 5 };
 
@@ -107,10 +107,10 @@ void test_save_and_load(const std::string &dir)
 
 void test_refused(const std::string &dir)
 {
-	const std::string path = dir + "/state_file_test_other.vkstate";
+	const std::string path = dir + "/state_file_test_other.odinstate";
 
 	{
-		StateFile missing(dir + "/state_file_test_missing.vkstate", StateFile::Mode::LOAD);
+		StateFile missing(dir + "/state_file_test_missing.odinstate", StateFile::Mode::LOAD);
 		uint32_t word;
 
 		check(!missing.ok(), "a file that is not there does not open");
@@ -134,7 +134,7 @@ void test_refused(const std::string &dir)
 		check(!cut.ok(), "a file cut short is refused");
 	}
 	{
-		StateFile nowhere(dir + "/no/such/folder/state.vkstate", StateFile::Mode::SAVE);
+		StateFile nowhere(dir + "/no/such/folder/state.odinstate", StateFile::Mode::SAVE);
 		check(!nowhere.ok(), "a state that cannot be created does not open");
 	}
 	std::remove(path.c_str());

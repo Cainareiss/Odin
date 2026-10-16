@@ -165,12 +165,12 @@ enum : uint32_t {
 };
 
 /* SH7091 at 200 MHz (2 x SH-4 @ 200 MHz, see the top of this file).
- * VK_SH4_MHZ lowers it for debugging only: every phase of a game then takes
+ * ODIN_SH4_MHZ lowers it for debugging only: every phase of a game then takes
  * fewer host seconds. */
 uint32_t
 sh4_clock()
 {
-	const int mhz = env_int("VK_SH4_MHZ", 200);
+	const int mhz = env_int("ODIN_SH4_MHZ", 200);
 
 	return static_cast<uint32_t>((mhz < 1 || mhz > 200) ? 200 : mhz) * 1000000u;
 }
@@ -460,8 +460,8 @@ Hikaru::build_sound(unsigned which)
 	 * the sound are the same either way. */
 	m_sound[which]->set_arm_translate(env_flag("ODIN_ARM7_TRANSLATE", true));
 
-	/* VK_ARM7_TRACE=<prefix> writes <prefix>-m.txt / <prefix>-s.txt */
-	if (const char *prefix = std::getenv("VK_ARM7_TRACE")) {
+	/* ODIN_ARM7_TRACE=<prefix> writes <prefix>-m.txt / <prefix>-s.txt */
+	if (const char *prefix = std::getenv("ODIN_ARM7_TRACE")) {
 		const std::string path = std::string(prefix) + (which == MASTER ? "-m.txt" : "-s.txt");
 
 		m_sound[which]->set_arm_trace(std::fopen(path.c_str(), "w"));

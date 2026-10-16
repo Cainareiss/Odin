@@ -10,7 +10,7 @@ driver that offers OpenGL 4.3.
 
 This makes bin/odin. An object is built again when a header it includes
 changes. "make install" copies the binary to ~/.local/bin, and to
-~/.local/share/odin the list of the games, vk-games.json, with the lists of
+~/.local/share/odin the list of the games, odin-games.json, with the lists of
 the mesh programs of each game (shaders/).
 
 
@@ -19,16 +19,16 @@ RUNNING
 
  $ bin/odin -R <ROM directory> -r <game>
 
-The games are those of vk-games.json: airtrix, braveff, pharrier, podrace,
+The games are those of odin-games.json: airtrix, braveff, pharrier, podrace,
 sgnascar and von4. The file is looked for in the current directory, then in
 $HOME, then in ~/.local/share/odin. The ROM directory holds one directory
-for each game, of the name of the game, with the files vk-games.json lists
+for each game, of the name of the game, with the files odin-games.json lists
 for it.
 
 Options:
 
  -n <frame>		stops after that frame
- -s <frame>[,...]	saves <game>-<frame>.vkstate after these frames
+ -s <frame>[,...]	saves <game>-<frame>.odinstate after these frames
  -l <file>		loads a state at startup
  -u			lifts the limit of 60 frames per second
  -x <num>		draws the 3D num times finer than 640 by 480 (1 to 6)
@@ -39,7 +39,7 @@ Options:
 			and forth)
  -v			more messages
 
-Keys: Escape quits, Space pauses, F4 saves <game>.vkstate and F1 loads it.
+Keys: Escape quits, Space pauses, F4 saves <game>.odinstate and F1 loads it.
 F5 and F6 are the Test and Service switches of the main board, F2 the Test
 of the I/O board, 9 and 0 its Service switches, 5 and 6 the coins. Player 1
 has 1 for Start, the arrows, and Left Ctrl, Left Alt, Left Shift, Z, X, C;

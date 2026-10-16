@@ -64,7 +64,7 @@ const char HELP[] = "Usage: %s [options]\n"
 "	-r <string>	Name of the game to run\n"
 "	-n <num>	Stop after the frame num\n"
 "	-l <path>	Load a state at startup\n"
-"	-s <num>[,...]	Save <game>-<num>.vkstate after these frames\n"
+"	-s <num>[,...]	Save <game>-<num>.odinstate after these frames\n"
 "	-u		Run as fast as the host can, not at 60 frames per second\n"
 "	-x <num>	Draw the 3D num times finer than 640 by 480 (1 to 6)\n"
 "	-a <num>	Filter the textures with an anisotropy of num (2 to 16); the board has none\n"
@@ -161,9 +161,9 @@ load_game_list(odin::GameList &games)
 	const std::string base = home.empty() ? "." : home;
 	std::error_code error;
 	const std::string paths[3] = {
-		"./vk-games.json",
-		base + "/vk-games.json",
-		base + "/.local/share/odin/vk-games.json",
+		"./odin-games.json",
+		base + "/odin-games.json",
+		base + "/.local/share/odin/odin-games.json",
 	};
 
 	for (const std::string &path : paths) {
@@ -209,11 +209,11 @@ private:
 	std::chrono::steady_clock::time_point m_next;	/* when the next frame is due */
 };
 
-/* F1 and F4: <game>.vkstate */
+/* F1 and F4: <game>.odinstate */
 void
 Session::load_or_save_state(bool load)
 {
-	const std::string path = m_board.game_name() + ".vkstate";
+	const std::string path = m_board.game_name() + ".odinstate";
 
 	if (load ? m_board.load_state(path) : m_board.save_state(path))
 		std::printf("%s state '%s'", load ? "loaded" : "saved", path.c_str());
@@ -271,7 +271,7 @@ Session::process_events()
 	return quit;
 }
 
-/* -s: <game>-<frame>.vkstate, written once the frame is drawn */
+/* -s: <game>-<frame>.odinstate, written once the frame is drawn */
 void
 Session::save_state_at_frame()
 {
@@ -280,7 +280,7 @@ Session::save_state_at_frame()
 	for (const unsigned frame : m_options.save_frames) {
 		if (frame != m_board.frame())
 			continue;
-		std::snprintf(path, sizeof(path), "%s-%06u.vkstate", m_board.game_name().c_str(), frame);
+		std::snprintf(path, sizeof(path), "%s-%06u.odinstate", m_board.game_name().c_str(), frame);
 		if (m_board.save_state(path))
 			std::printf("saved state '%s'\n", path);
 		else

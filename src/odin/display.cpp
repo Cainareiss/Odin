@@ -159,7 +159,7 @@ Display::Display(Hikaru &board, const Keyboard &keys, const Options &options, SD
 	  m_frame(0), m_scale(options.scale), m_anisotropy(options.anisotropy), m_logged(false),
 	  m_picture_fb(0), m_picture_width(Renderer::WIDTH), m_picture_height(Renderer::HEIGHT),
 	  m_late(env_flag("ODIN_LATE_DRAW")), m_held(false), m_late_draw(0),
-	  m_shot_prefix(std::getenv("VK_SCREENSHOT")), m_shot_every(60),
+	  m_shot_prefix(std::getenv("ODIN_SCREENSHOT")), m_shot_every(60),
 	  m_fingerprint(env_flag("ODIN_PICTURE_FP")), m_speed(env_flag("ODIN_SPEED")),
 	  m_speed_since(0), m_speed_last(0), m_speed_longest(0),
 	  m_stats(env_flag("ODIN_STATS")), m_draw_ns(0), m_wait_frame_ns(0), m_wait_write_ns(0), m_drawn(0),
@@ -168,7 +168,7 @@ Display::Display(Hikaru &board, const Keyboard &keys, const Options &options, SD
 	Renderer::Memory memory;
 	Renderer::Options looks;
 
-	if (const int every = env_int("VK_SCREENSHOT_EVERY", 0); every > 0)
+	if (const int every = env_int("ODIN_SCREENSHOT_EVERY", 0); every > 0)
 		m_shot_every = static_cast<unsigned>(every);
 
 	memory.fb = board.framebuffer_ram();

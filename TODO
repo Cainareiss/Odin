@@ -88,7 +88,7 @@ limit at 60 a game stuttered each time it drew with a mesh program for the
 first time on a computer: the NVIDIA driver 595 takes some 20 ms to compile
 one, and 10 more when it first draws, on the thread that draws (a scene
 change of PHARRIER: 21 programs, a frame of 449 ms). The programs a game
-draws with are now listed (shaders/<game>.txt beside vk-games.json for the
+draws with are now listed (shaders/<game>.txt beside odin-games.json for the
 demo loops, then ~/.cache/odin/shaders/<game>.txt for what a player meets)
 and made ready when the game starts: compiled, and drawn with once. The
 longest frame of that scene is then 21 ms, the driver cache empty or not; a
@@ -142,7 +142,7 @@ JVS (src/odin/jvs.cpp: the cable and the protocol of the standard). The
 I/O boards are imitations made from their programs, which are not run:
 jvs_837_13551.cpp from 315-6215 (a TMP90PH44: no TLCS-90 core here), and
 jvs_837_13741.cpp from epr-21868 (a 315-6146; the I/O board of NASCAR,
-"io" in vk-games.json; the program is in the 18wheelr set of MAME). Both
+"io" in odin-games.json; the program is in the 18wheelr set of MAME). Both
 programs take the same commands, answer an unknown one with the reports
 before it, read on after a refused one, give analog channels of 8 bits
 and hold the coin counters at 3FFF. Not copied yet, HEURISTIC: a RESET
@@ -387,9 +387,9 @@ writes nothing: the tests use it. ODIN_MIE_EEPROM=<file> and
 ODIN_CLOCK_FILE=<file> keep these two elsewhere. Nothing is written
 while the game runs: a crash loses what the session changed.
 
-Save states: -s <frame>[,...] writes <game>-<frame>.vkstate once that
+Save states: -s <frame>[,...] writes <game>-<frame>.odinstate once that
 frame is on screen and -l <file> resumes from it; F4 and F1 do the same
-with <game>.vkstate. A state holds the RAMs, every chip, the two 3D
+with <game>.odinstate. A state holds the RAMs, every chip, the two 3D
 buffers that the blender feeds back and the pictures on their way to the
 screen: a resumed run gives the pictures and the memory of a straight one
 (checked on the six games, three states each, and on three states saved

@@ -87,7 +87,7 @@ struct Game {
 	std::span<const uint8_t> section(const std::string &name) const;
 };
 
-/* The list of the games, a JSON file (vk-games.json). A game has sections
+/* The list of the games, a JSON file (odin-games.json). A game has sections
  * and a section the files that make it up, each with its size, put together
  * as its type tells:
  *

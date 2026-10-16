@@ -52,8 +52,8 @@ class Worker;
  *
  * The environment asks for what is measured on the pictures:
  *
- *  VK_SCREENSHOT=<prefix>	<prefix>-<frame>.ppm every 60 frames, or
- *				every VK_SCREENSHOT_EVERY frames
+ *  ODIN_SCREENSHOT=<prefix>	<prefix>-<frame>.ppm every 60 frames, or
+ *				every ODIN_SCREENSHOT_EVERY frames
  *  ODIN_PICTURE_FP=1		a line for the picture of each frame on
  *				stderr, FNV-1a 64 of its pixels, to compare
  *				two builds
