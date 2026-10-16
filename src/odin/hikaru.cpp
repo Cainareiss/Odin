@@ -518,9 +518,9 @@ Hikaru::save_clock()
 	std::fclose(file);
 }
 
-/* Power-on. The memories are emptied, then the chips are reset, in an order
- * that matters to nothing: what one tells another meanwhile waits for the
- * end (m_resetting). */
+/* Power-on. The memories are emptied, but the backup RAM on its battery,
+ * then the chips are reset, in an order that matters to nothing: what one
+ * tells another meanwhile waits for the end (m_resetting). */
 void
 Hikaru::reset()
 {
@@ -538,7 +538,6 @@ Hikaru::reset()
 	std::fill(m_cmdram.begin(), m_cmdram.end(), 0);
 	std::fill(m_fb.begin(), m_fb.end(), 0);
 	std::fill(m_mie_ram.begin(), m_mie_ram.end(), 0);
-	std::fill(m_bram.begin(), m_bram.end(), 0);
 
 	m_memctl[MASTER].reset();
 	m_memctl[SLAVE].reset();
