@@ -351,11 +351,19 @@ EEPROMs: the main board 93C46 (SH-4 port A, src/odin/eeprom_93c46.cpp)
 and the ROM board X76F100 (bus page 0x14, src/odin/x76f100.cpp) are
 real and read by the BOOTROM; the MIE 93C46 is in the LLE MIE. It holds
 the system settings of the BOOTROM (two copies of 62 bytes and a CRC,
-the country in byte 5): ODIN_MIE_EEPROM=<file> loads it and writes it
-back on exit. Blank, the BOOTROM falls back on Japan. The other two are
-not written back to disk yet. The COUNTRY SETTING page of the BOOTROM
-menu is the second routine of its EXIT line: how to reach it is not
-found.
+the country in byte 5). Blank, the BOOTROM falls back on Japan. The
+COUNTRY SETTING page of the BOOTROM menu is the second routine of its
+EXIT line: how to reach it is not found.
+
+Saves: what the board keeps without power (the three EEPROMs, the 64 KB
+backup RAM, the clock) is read at start and written on exit in a folder
+of the game, a file for each, named as MAME names them (main_eeprom,
+mie_eeprom, rombd_eeprom, nvram; and clock): ~/.local/share/odin/saves/
+<game>, or $XDG_DATA_HOME/odin/saves/<game> (src/odin/save_folder.cpp).
+ODIN_SAVES=<folder> takes <folder>/<game>, ODIN_SAVES=none reads and
+writes nothing: the tests use it. ODIN_MIE_EEPROM=<file> and
+ODIN_CLOCK_FILE=<file> keep these two elsewhere. Nothing is written
+while the game runs: a crash loses what the session changed.
 
 Save states: -s <frame>[,...] writes <game>-<frame>.vkstate once that
 frame is on screen and -l <file> resumes from it; F4 and F1 do the same
@@ -365,8 +373,8 @@ screen: a resumed run gives the pictures and the memory of a straight one
 (checked on the six games, three states each, and on three states saved
 while a game loads). It is a raw dump of about 115 MB, tied to the layouts
 of the build that wrote it: every item carries its size and another build
-refuses the state when one differs. The MIE 93C46 comes back from the
-state, not from ODIN_MIE_EEPROM.
+refuses the state when one differs. What the board keeps without power
+comes back from the state too, not from the save folder.
 
 Game patches: those of Valkyrie are gone, the six demo loops run without
 them: airtrix 0x0C010F9A (660-frame I/O board wait shortened), braveff
@@ -604,11 +612,10 @@ AIRTRIX. The chip counts seconds, and the software of the Hikaru counts
 them from 1964-01-01 (the date routine of the BOOTROM, 0x0C008464, and its
 copies in the games), not from 1950 as the Dreamcast does: the CLOCK
 SETTING screen showed the right day 14 years late.
-ODIN_CLOCK_FILE=<path> is the battery of that clock: the file keeps, in
-seconds, how far the clock set in CLOCK SETTING is ahead of the time of the
-host, and the board starts from it; without it the board has the time of
-the host at every start. Like the settings of the BOOTROM
-(ODIN_MIE_EEPROM), it waits for a place of its own on the disk.
+The file "clock" of the save folder is the battery of that clock: it
+keeps, in seconds, how far the clock set in CLOCK SETTING is ahead of the
+time of the host, and the board starts from it; without it the board has
+the time of the host at every start.
 
 
 GPU / RENDERING

@@ -141,6 +141,7 @@
 #include <cstdarg>
 #include <cstdlib>
 #include <cstring>
+#include <optional>
 
 #include "odin/env.hpp"
 
@@ -434,19 +435,6 @@ Hikaru::build_mie()
 			std::printf("MIE: card reader CRP-1231 (HLE), no card file\n");
 	}
 
-	if (const char *path = std::getenv("ODIN_MIE_EEPROM")) {
-		uint8_t data[128];
-		std::FILE *const file = std::fopen(path, "rb");
-
-		if (file && std::fread(data, 1, sizeof(data), file) == sizeof(data)) {
-			m_mie->eeprom().load(std::span<const uint8_t>(data, sizeof(data)));
-			std::printf("MIE: EEPROM file '%s' loaded\n", path);
-		} else {
-			std::printf("MIE: EEPROM file '%s' not found: blank\n", path);
-		}
-		if (file)
-			std::fclose(file);
-	}
 	std::printf("MIE: LLE (315-6146 ROM + uploaded Z80 program)\n");
 }
 
@@ -477,26 +465,27 @@ Hikaru::build_sound(unsigned which)
 /* The battery of the clock: the RTC of the first sound board keeps counting
  * when the cabinet is off. The count it starts with here is the local time
  * of the host, as on a board whose clock was set once and whose battery
- * never died. With ODIN_CLOCK_FILE=<path> the board keeps the clock it was
- * set to (CLOCK SETTING in the SYSTEM MENU): the file holds, in seconds, how
- * far that clock is ahead of the time of the host. */
+ * never died. The board keeps the clock it was set to (CLOCK SETTING in the
+ * SYSTEM MENU) in the file "clock" of the save folder, or ODIN_CLOCK_FILE
+ * =<path>: it holds, in seconds, how far that clock is ahead of the time of
+ * the host. */
 void
 Hikaru::reset_sound(unsigned which)
 {
-	const char *const path = std::getenv("ODIN_CLOCK_FILE");
+	const std::string path = kept_path("clock");
 
 	m_sound[which]->reset();
-	if (!path || which != MASTER)
+	if (path.empty() || which != MASTER)
 		return;
 
-	std::FILE *const file = std::fopen(path, "r");
+	std::FILE *const file = std::fopen(path.c_str(), "r");
 	int ahead = 0;
 
 	if (file && std::fscanf(file, "%d", &ahead) == 1) {
 		m_sound[which]->set_rtc_ahead(ahead);
-		std::printf("AICA: clock file '%s': %d s ahead of the host\n", path, ahead);
+		std::printf("AICA: clock file '%s': %d s ahead of the host\n", path.c_str(), ahead);
 	} else {
-		std::printf("AICA: clock file '%s' not found: the time of the host\n", path);
+		std::printf("AICA: clock file '%s' not found: the time of the host\n", path.c_str());
 	}
 	if (file)
 		std::fclose(file);
@@ -505,17 +494,11 @@ Hikaru::reset_sound(unsigned which)
 void
 Hikaru::save_clock()
 {
-	const char *const path = std::getenv("ODIN_CLOCK_FILE");
+	const std::string path = kept_path("clock");
+	const std::string ahead = std::to_string(m_sound[MASTER]->rtc_ahead()) + "\n";
 
-	if (!path)
-		return;
-	std::FILE *const file = std::fopen(path, "w");
-	if (!file) {
-		std::fprintf(stderr, "ERROR: AICA: can't write the clock file '%s'\n", path);
-		return;
-	}
-	std::fprintf(file, "%d\n", static_cast<int>(m_sound[MASTER]->rtc_ahead()));
-	std::fclose(file);
+	if (!path.empty())
+		write_kept(path, std::span(reinterpret_cast<const uint8_t *>(ahead.data()), ahead.size()));
 }
 
 /* Power-on. The memories are emptied, but the backup RAM on its battery,
@@ -932,6 +915,59 @@ Hikaru::settle()
 	m_sound[SLAVE]->settle();
 }
 
+/* What the board keeps without power, by the names MAME gives them: the
+ * 93C46 of the main board, the 93C46 of the MIE (the SYSTEM MENU of the
+ * BOOTROM: country, coin chutes...), the X76F100 of the ROM board and the
+ * backup RAM (the records and settings of the game). */
+std::vector<std::pair<const char *, std::span<uint8_t>>>
+Hikaru::kept_memories()
+{
+	std::vector<std::pair<const char *, std::span<uint8_t>>> memories = {
+		{ "main_eeprom", m_eeprom.data() },
+		{ "rombd_eeprom", m_rombd.eeprom().data() },
+		{ "nvram", m_bram },
+	};
+
+	if (m_mie)
+		memories.emplace_back("mie_eeprom", m_mie->eeprom().data());
+	return memories;
+}
+
+/* The file of a memory kept, or of the clock, in the save folder. For the
+ * tests, ODIN_MIE_EEPROM=<path> keeps the EEPROM of the MIE elsewhere (the
+ * settings of a cabinet) and ODIN_CLOCK_FILE=<path> the clock. Empty when
+ * there is no place for it. */
+std::string
+Hikaru::kept_path(const std::string &name) const
+{
+	const char *const variable = name == "mie_eeprom" ? "ODIN_MIE_EEPROM" : name == "clock" ? "ODIN_CLOCK_FILE" : nullptr;
+
+	if (const char *const path = variable ? std::getenv(variable) : nullptr; path && path[0])
+		return path;
+	return m_saves.path(name);
+}
+
+void
+Hikaru::keep_in(const SaveFolder &saves)
+{
+	m_saves = saves;
+	if (saves.none())
+		std::printf("saves: none\n");
+	else
+		std::printf("saves: '%s'\n", saves.dir().c_str());
+
+	for (const auto &[name, bytes] : kept_memories()) {
+		const std::string path = kept_path(name);
+
+		if (path.empty())
+			continue;
+		if (const std::optional<std::vector<uint8_t>> kept = read_kept(path, bytes.size())) {
+			std::copy(kept->begin(), kept->end(), bytes.begin());
+			std::printf("%s: '%s' loaded\n", name, path.c_str());
+		}
+	}
+}
+
 void
 Hikaru::power_off()
 {
@@ -956,17 +992,9 @@ Hikaru::power_off()
 		std::fclose(file);
 	}
 
-	/* The 93C46 of the MIE holds the system settings the BOOTROM keeps
-	 * (its test menu: country, coin chutes, ...). */
-	if (const char *path = std::getenv("ODIN_MIE_EEPROM"); m_mie && path) {
-		const std::span<uint8_t> cells = m_mie->eeprom().data();
-		std::FILE *const file = std::fopen(path, "wb");
-
-		if (!file || std::fwrite(cells.data(), 1, cells.size(), file) != cells.size())
-			std::fprintf(stderr, "ERROR: MIE: cannot write the EEPROM file '%s'\n", path);
-		if (file)
-			std::fclose(file);
-	}
+	for (const auto &[name, bytes] : kept_memories())
+		if (const std::string path = kept_path(name); !path.empty())
+			write_kept(path, bytes);
 }
 
 std::string

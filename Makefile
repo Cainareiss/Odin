@@ -34,6 +34,7 @@ OBJ := \
 	src/odin/keyboard.o \
 	src/odin/games.o \
 	src/odin/state_file.o \
+	src/odin/save_folder.o \
 	src/odin/worker.o \
 	src/odin/hikaru.o \
 	src/odin/hikaru_bus.o \

@@ -29,6 +29,7 @@
 #include <span>
 #include <string>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "odin/eeprom_93c46.hpp"
@@ -38,6 +39,7 @@
 #include "odin/mie_board.hpp"
 #include "odin/mie_stand_in.hpp"
 #include "odin/rom_board.hpp"
+#include "odin/save_folder.hpp"
 #include "odin/scheduler.hpp"
 #include "odin/sh4.hpp"
 #include "odin/sound_board.hpp"
@@ -110,12 +112,16 @@ public:
 	 * one: left and right, 44 100 pairs a second */
 	const std::vector<int16_t> &sound(bool optional) const { return m_sound[optional ? SLAVE : MASTER]->samples(); }
 
+	/* Before the power-on: what the board keeps without power comes from
+	 * the files of this folder, over the images that come with the game,
+	 * and goes back to them at the power-off. */
+	void keep_in(const SaveFolder &saves);
 	/* Power-on */
 	void reset();
 	void run_frame();
-	/* Power-off: what a board keeps without power goes to the disk, the
-	 * EEPROM of the MIE to its file (ODIN_MIE_EEPROM); and for looking at
-	 * them, the memories to <game>-<memory>.bin in the current folder. */
+	/* Power-off: what the board keeps without power goes to the disk; and
+	 * for looking at them, the memories to <game>-<memory>.bin in the
+	 * current folder. */
 	void power_off();
 
 	/* False, with the reason on stderr, if the state could not be written
@@ -164,6 +170,8 @@ private:
 	uint64_t line_cycles();
 	void begin_frame();
 	void settle();
+	std::vector<std::pair<const char *, std::span<uint8_t>>> kept_memories();
+	std::string kept_path(const std::string &name) const;
 	void save_clock();
 	void slave_idle_loop();
 	std::string cpu_string(unsigned which) const;
@@ -234,6 +242,7 @@ private:
 	std::array<uint8_t, 0x40> m_mscomm;	/* the master and slave box */
 	std::vector<uint8_t> m_iregs[2];	/* on-chip registers of the SH-4 */
 	std::span<const uint8_t> m_bootrom;
+	SaveFolder m_saves;
 
 	/* Chips and boards */
 	MemCtl m_memctl[2];

@@ -377,6 +377,7 @@ main(int argc, char **argv)
 
 	bool started = true;
 
+	board->keep_in(odin::SaveFolder::of_game(game->name));
 	board->reset();
 	if (!options.state_path.empty()) {
 		started = board->load_state(options.state_path);
