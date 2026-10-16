@@ -255,6 +255,10 @@ void test_jvs()
 	r = send(host, frame(0x01, { 0x21, 0x01 }));
 	d = decode(r, ok);
 	check(ok && d.size() == 4 && d[2] == 0x3F && d[3] == 0xFF, "counter at 3FFF");
+	board.inc_coin(0);
+	r = send(host, frame(0x01, { 0x21, 0x01 }));
+	d = decode(r, ok);
+	check(ok && d.size() == 4 && d[2] == 0x3F && d[3] == 0xFF, "a coin at 3FFF leaves it there");
 	r = send(host, frame(0x01, { 0x30, 0x01, 0x3F, 0xFF }));
 	d = decode(r, ok);
 	check(ok && d == std::vector<uint8_t>({ 0x01, 0x01 }), "decrease down to 0 taken");

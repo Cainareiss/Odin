@@ -32,8 +32,9 @@ const char *Jvs837_13551::device_id() const
 
 void Jvs837_13551::inc_coin(uint8_t slot)
 {
-	if (slot < COIN_SLOTS) {
-		m_coin_counter[slot] = static_cast<uint16_t>((m_coin_counter[slot] + 1) & 0x3FFF);
+	/* Held at 3FFF (315-6215 at 0804) */
+	if (slot < COIN_SLOTS && m_coin_counter[slot] < 0x3FFF) {
+		m_coin_counter[slot]++;
 	}
 }
 
