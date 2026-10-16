@@ -220,6 +220,23 @@ void test_jvs()
 	d = decode(r, ok);
 	check(ok && d.size() == 4 && d[2] == 0x00 && d[3] == 0xE0, "neither changed the coins");
 
+	/* A counter that would leave 0..3FFF: report 2, counter kept. */
+	r = send(host, frame(0x01, { 0x30, 0x01, 0x00, 0xE1 }));
+	d = decode(r, ok);
+	check(ok && d == std::vector<uint8_t>({ 0x01, 0x02 }), "decrease below 0 refused");
+	r = send(host, frame(0x01, { 0x35, 0x01, 0x3F, 0x20 }));
+	d = decode(r, ok);
+	check(ok && d == std::vector<uint8_t>({ 0x01, 0x02 }), "increase above 3FFF refused");
+	r = send(host, frame(0x01, { 0x35, 0x01, 0x3F, 0x1F }));
+	d = decode(r, ok);
+	check(ok && d == std::vector<uint8_t>({ 0x01, 0x01 }), "increase up to 3FFF taken");
+	r = send(host, frame(0x01, { 0x21, 0x01 }));
+	d = decode(r, ok);
+	check(ok && d.size() == 4 && d[2] == 0x3F && d[3] == 0xFF, "counter at 3FFF");
+	r = send(host, frame(0x01, { 0x30, 0x01, 0x3F, 0xFF }));
+	d = decode(r, ok);
+	check(ok && d == std::vector<uint8_t>({ 0x01, 0x01 }), "decrease down to 0 taken");
+
 	/* Frames for another node stay unanswered. */
 	r = send(host, frame(0x02, { 0x10 }));
 	check(r.empty(), "other node silent");
