@@ -17,10 +17,10 @@
  */
 
 /* Unit tests for the list of the games: the three ways a section is made of
- * its files, the controls of a cabinet, and what is refused.
+ * its files, the controls of a cabinet and their roles, and what is refused.
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
- *            -I src tests/games/games_tests.cpp src/odin/games.cpp -ljansson \
+ *            -I src tests/games/games_tests.cpp src/odin/games.cpp src/odin/roles.cpp -ljansson \
  *            -o games_tests
  * It writes its files in the folder given as its argument, or the current
  * one. Exit status is 0 when every check passes. */
@@ -84,13 +84,13 @@ const char LIST[] = R"({
         { "name": "eprom", "type": "interleave", "data": [
             { "name": "a.bin", "size": 4 }, { "name": "b.bin", "size": 4 } ] } ] },
     { "name": "wheel", "mach": "hikaru", "io": "837-13741", "controls": [
-        { "name": "WHEEL", "analog": 0, "low": "left" },
-        { "name": "GAS", "analog": 7, "low": "released" },
-        { "name": "LEVER", "analog": 3, "low": "up" },
-        { "name": "VIEW", "switch": "1P DOWN" },
-        { "name": "FIRE", "switch": "2P PUSH3" },
-        { "name": "SHIFT", "switch": "1P PUSH10" },
-        { "name": "GEAR", "positions": [
+        { "name": "WHEEL", "analog": 0, "low": "left", "role": "steer" },
+        { "name": "GAS", "analog": 7, "low": "released", "role": "accel" },
+        { "name": "LEVER", "analog": 3, "low": "up", "role": "stick2_y", "player": 2 },
+        { "name": "VIEW", "switch": "1P DOWN", "role": "button4", "player": 1 },
+        { "name": "FIRE", "switch": "2P PUSH3", "role": "gun_offscreen" },
+        { "name": "SHIFT", "switch": "1P PUSH10", "role": "stick2_left" },
+        { "name": "GEAR", "role": "gear", "positions": [
             { "name": "N", "switches": [] },
             { "name": "1", "switches": [ "2P LEFT", "2P UP" ] } ] } ],
       "sections": [
@@ -100,23 +100,36 @@ const char LIST[] = R"({
 
 /* Games whose one control is not right, each refused */
 const char *const BAD_CONTROLS[] = {
-	R"("controls": { "name": "A", "switch": "1P START" })",
-	R"("controls": [ { "switch": "1P START" } ])",
-	R"("controls": [ { "name": "", "switch": "1P START" } ])",
-	R"("controls": [ { "name": "A" } ])",
-	R"("controls": [ { "name": "A", "switch": "1P START", "analog": 0, "low": "left" } ])",
-	R"("controls": [ { "name": "A", "switch": "3P START" } ])",
-	R"("controls": [ { "name": "A", "switch": "1P PUSH11" } ])",
-	R"("controls": [ { "name": "A", "switch": "1P" } ])",
-	R"("controls": [ { "name": "A", "analog": 8, "low": "left" } ])",
-	R"("controls": [ { "name": "A", "analog": -1, "low": "left" } ])",
-	R"("controls": [ { "name": "A", "analog": "0", "low": "left" } ])",
-	R"("controls": [ { "name": "A", "analog": 0 } ])",
-	R"("controls": [ { "name": "A", "analog": 0, "low": "sideways" } ])",
-	R"("controls": [ { "name": "A", "positions": [] } ])",
-	R"("controls": [ { "name": "A", "positions": [ { "switches": [] } ] } ])",
-	R"("controls": [ { "name": "A", "positions": [ { "name": "1" } ] } ])",
-	R"("controls": [ { "name": "A", "positions": [ { "name": "1", "switches": [ "1P NOWHERE" ] } ] } ])",
+	R"("controls": { "name": "A", "switch": "1P START", "role": "start" })",
+	R"("controls": [ { "switch": "1P START", "role": "start" } ])",
+	R"("controls": [ { "name": "", "switch": "1P START", "role": "start" } ])",
+	R"("controls": [ { "name": "A", "role": "start" } ])",
+	R"("controls": [ { "name": "A", "switch": "1P START", "analog": 0, "low": "left", "role": "start" } ])",
+	R"("controls": [ { "name": "A", "switch": "3P START", "role": "start" } ])",
+	R"("controls": [ { "name": "A", "switch": "1P PUSH11", "role": "start" } ])",
+	R"("controls": [ { "name": "A", "switch": "1P", "role": "start" } ])",
+	R"("controls": [ { "name": "A", "analog": 8, "low": "left", "role": "steer" } ])",
+	R"("controls": [ { "name": "A", "analog": -1, "low": "left", "role": "steer" } ])",
+	R"("controls": [ { "name": "A", "analog": "0", "low": "left", "role": "steer" } ])",
+	R"("controls": [ { "name": "A", "analog": 0, "role": "steer" } ])",
+	R"("controls": [ { "name": "A", "analog": 0, "low": "sideways", "role": "steer" } ])",
+	R"("controls": [ { "name": "A", "positions": [], "role": "gear" } ])",
+	R"("controls": [ { "name": "A", "positions": [ { "switches": [] } ], "role": "gear" } ])",
+	R"("controls": [ { "name": "A", "positions": [ { "name": "1" } ], "role": "gear" } ])",
+	R"("controls": [ { "name": "A", "positions": [ { "name": "1", "switches": [ "1P NOWHERE" ] } ], "role": "gear" } ])",
+	R"("controls": [ { "name": "A", "switch": "1P START" } ])",
+	R"("controls": [ { "name": "A", "switch": "1P START", "role": "nowhere" } ])",
+	R"("controls": [ { "name": "A", "switch": "1P START", "role": 3 } ])",
+	R"("controls": [ { "name": "A", "switch": "1P START", "role": "steer" } ])",
+	R"("controls": [ { "name": "A", "switch": "1P START", "role": "gear" } ])",
+	R"("controls": [ { "name": "A", "switch": "1P START", "role": "coin1" } ])",
+	R"("controls": [ { "name": "A", "analog": 0, "low": "left", "role": "button1" } ])",
+	R"("controls": [ { "name": "A", "analog": 0, "low": "left", "role": "gear" } ])",
+	R"("controls": [ { "name": "A", "analog": 0, "low": "left", "role": "test" } ])",
+	R"("controls": [ { "name": "A", "positions": [ { "name": "1", "switches": [] } ], "role": "gear_up" } ])",
+	R"("controls": [ { "name": "A", "switch": "1P START", "role": "start", "player": 3 } ])",
+	R"("controls": [ { "name": "A", "switch": "1P START", "role": "start", "player": 0 } ])",
+	R"("controls": [ { "name": "A", "switch": "1P START", "role": "start", "player": "2" } ])",
 };
 
 void test_games(const std::string &dir)
@@ -166,6 +179,11 @@ void test_games(const std::string &dir)
 
 		check(c[0].name == "WHEEL" && c[0].type == GameControl::Type::ANALOG && c[0].analog == 0 &&
 		      c[0].low == GameControl::Low::LEFT, "an analog channel and the way of its low values");
+		check(c[0].role == odin::Role::STEER && c[1].role == odin::Role::ACCEL && c[3].role == odin::Role::BUTTON4 &&
+		      c[4].role == odin::Role::GUN_OFFSCREEN && c[5].role == odin::Role::STICK2_LEFT &&
+		      c[6].role == odin::Role::GEAR, "the role of each control");
+		check(c[0].player == 0 && c[3].player == 0, "player 1 when the list does not say, or says 1");
+		check(c[2].player == 1 && c[2].role == odin::Role::STICK2_Y, "player 2 when it says 2");
 		check(c[1].analog == 7 && c[1].low == GameControl::Low::RELEASED, "channel 7, low when released");
 		check(c[2].analog == 3 && c[2].low == GameControl::Low::UP, "low when up");
 		check(c[3].type == GameControl::Type::BUTTON && c[3].button.player == 0 && c[3].button.mask == 0x1000,
@@ -189,6 +207,30 @@ void test_games(const std::string &dir)
 	check(!list.load_game(dir + "/no_such_folder", "toy"), "nor one whose files are not there");
 }
 
+void test_roles()
+{
+	using odin::Role;
+	bool round = true;
+	unsigned switches = 0, analogs = 0, cabinet = 0;
+
+	for (unsigned i = 0; i < static_cast<unsigned>(Role::COUNT); i++) {
+		const Role role = static_cast<Role>(i);
+		const auto parsed = odin::parse_role(odin::role_name(role));
+
+		round = round && parsed && *parsed == role;
+		switches += odin::role_is_switch(role);
+		analogs += odin::role_is_analog(role);
+		cabinet += odin::role_of_cabinet(role);
+		check(odin::role_is_switch(role) + odin::role_is_analog(role) + odin::role_of_cabinet(role) +
+		      (role == Role::GEAR) == 1, odin::role_name(role));
+	}
+	check(round, "each role read back from its name");
+	check(switches == 25 && analogs == 9 && cabinet == 5, "25 switches, 9 analog roles, 5 of the cabinet");
+	check(!odin::parse_role("Start") && !odin::parse_role("button9") && !odin::parse_role(""), "what is not a role");
+	check(std::string(odin::role_name(Role::STICK2_UP)) == "stick2_up" &&
+	      std::string(odin::role_name(Role::BOARD_SERVICE)) == "board_service", "the names of the list");
+}
+
 /* Each bad control refuses its game, a good one beside it loads */
 void test_bad_controls(const std::string &dir)
 {
@@ -206,7 +248,7 @@ void test_bad_controls(const std::string &dir)
 		GameList list;
 
 		write(path, std::string(R"({ "version": 1, "roms": [ { "name": "good", "mach": "hikaru",)") +
-		      R"( "controls": [ { "name": "A", "switch": "1P START" } ], )" + files +
+		      R"( "controls": [ { "name": "A", "switch": "1P START", "role": "start" } ], )" + files +
 		      R"( }, { "name": "bad", "mach": "hikaru", )" + bad + ", " + files + " } ] }");
 		if (list.load(path) && list.load_game(roms, "good") && !list.load_game(roms, "bad"))
 			refused++;
@@ -242,6 +284,7 @@ int main(int argc, char **argv)
 	const std::string dir = (argc > 1) ? argv[1] : ".";
 
 	test_games(dir);
+	test_roles();
 	test_bad_controls(dir);
 	test_lists(dir);
 	std::filesystem::remove_all(dir + "/games_test_roms");

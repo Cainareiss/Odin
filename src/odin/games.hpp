@@ -26,6 +26,8 @@
 #include <utility>
 #include <vector>
 
+#include "odin/roles.hpp"
+
 struct json_t;
 
 namespace odin {
@@ -45,7 +47,11 @@ struct JvsSwitch {
  *    gives its low values ("analog" : 0, "low" : "left"); up is away from
  *    the player, down towards;
  *  - POSITIONS: a lever whose each position closes some switches, none
- *    for some ("positions" : [ { "name" : "1", "switches" : [...] }, ...]). */
+ *    for some ("positions" : [ { "name" : "1", "switches" : [...] }, ...]).
+ *
+ * "role" is what the control does (roles.hpp): a role that is pressed or
+ * not for a button, one that has a position for an analog channel, "gear"
+ * for a lever. "player" : 2 for a control of player 2, player 1 else. */
 struct GameControl {
 	enum class Type { BUTTON, ANALOG, POSITIONS };
 	enum class Low { LEFT, RIGHT, UP, DOWN, RELEASED, PRESSED };
@@ -60,6 +66,8 @@ struct GameControl {
 	uint8_t analog;
 	Low low;
 	std::vector<Position> positions;
+	Role role;
+	uint8_t player;		/* 0 or 1 */
 };
 
 /* A game and what its ROMs hold, section by section ("bootrom", "eprom",

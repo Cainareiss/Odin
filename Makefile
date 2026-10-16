@@ -33,6 +33,7 @@ OBJ := \
 	src/odin/display.o \
 	src/odin/keyboard.o \
 	src/odin/games.o \
+	src/odin/roles.o \
 	src/odin/state_file.o \
 	src/odin/save_folder.o \
 	src/odin/worker.o \

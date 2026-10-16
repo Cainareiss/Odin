@@ -155,7 +155,7 @@ parse_low(const json_t *value)
 }
 
 /* A control: {"name": ..., then "switch", "analog" with "low", or
- * "positions"}. */
+ * "positions"; "role", and "player" when it is 2}. */
 std::optional<GameControl>
 parse_control(const json_t *control)
 {
@@ -165,13 +165,20 @@ parse_control(const json_t *control)
 	const json_t *const positions = json_object_get(control, "positions");
 	GameControl out{};
 
-	if (!name || !name[0] || (button != nullptr) + (analog != nullptr) + (positions != nullptr) != 1)
+	const char *const role = json_string_value(json_object_get(control, "role"));
+	const json_t *const player = json_object_get(control, "player");
+	const auto parsed_role = role ? parse_role(role) : std::nullopt;
+
+	if (!name || !name[0] || (button != nullptr) + (analog != nullptr) + (positions != nullptr) != 1 ||
+	    !parsed_role || (player && json_integer_value(player) != 1 && json_integer_value(player) != 2))
 		return std::nullopt;
 	out.name = name;
+	out.role = *parsed_role;
+	out.player = player ? static_cast<uint8_t>(json_integer_value(player) - 1) : 0;
 	if (button) {
 		const auto sw = parse_switch(button);
 
-		if (!sw)
+		if (!sw || !role_is_switch(out.role))
 			return std::nullopt;
 		out.type = GameControl::Type::BUTTON;
 		out.button = *sw;
@@ -182,12 +189,14 @@ parse_control(const json_t *control)
 
 		if (!json_is_integer(analog) || json_integer_value(analog) < 0 || json_integer_value(analog) > 7 || !low)
 			return std::nullopt;
+		if (!role_is_analog(out.role))
+			return std::nullopt;
 		out.type = GameControl::Type::ANALOG;
 		out.analog = static_cast<uint8_t>(json_integer_value(analog));
 		out.low = *low;
 		return out;
 	}
-	if (!json_array_size(positions))
+	if (!json_array_size(positions) || out.role != Role::GEAR)
 		return std::nullopt;
 	out.type = GameControl::Type::POSITIONS;
 	for (size_t i = 0; i < json_array_size(positions); i++) {
