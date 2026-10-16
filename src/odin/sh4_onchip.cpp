@@ -463,6 +463,41 @@ uint32_t Sh4::pck_cycles() const
 	return ratio;
 }
 
+/* The CPU cycles a read or write of the CPU at addr takes at least on the
+ * MPX bus (BCR1: A0MPX for area 0, MEMMPX for areas 1 to 6 that are not
+ * DRAM, SDRAM or PCMCIA by DRAMTP and A56PCM); 0 for any other area. An
+ * address phase, the waits of WCR2 (table 13.6: a read has one more at
+ * AnW 0 and 4), one data phase (section 13.3.8, figures 13.58 and 13.60),
+ * in bus clocks (FRQCR, section 10.2).
+ * HEURISTIC: the waits the device adds by RDY are not known and taken as
+ * none, and a 64-bit access as one data phase (BCR2 sets a bus width the
+ * manual calls reserved). */
+uint32_t Sh4::mpx_cycles(uint32_t addr, bool write) const
+{
+	static constexpr uint8_t DIVIDER[8] = { 1, 2, 3, 4, 6, 8, 0, 0 };
+	static constexpr uint8_t READ_WAITS[8] = { 1, 1, 2, 3, 1, 1, 2, 3 };
+	static constexpr uint8_t WRITE_WAITS[8] = { 0, 1, 2, 3, 0, 1, 2, 3 };
+	static constexpr uint8_t ANW_SHIFT[7] = { 3, 7, 10, 0, 17, 23, 29 };
+	const uint32_t area = (addr & PHYSICAL) >> 26;
+	const uint32_t bcr1 = static_cast<uint32_t>(reg_get(4, BSC_BCR1));
+	const uint32_t dramtp = (bcr1 >> 2) & 7;
+	const bool memory = (area == 2 && (dramtp == 3 || dramtp == 6)) || area == 3 ||
+	                    ((area == 5 || area == 6) && (bcr1 & 1));
+	const bool mpx = area == 0 ? (bcr1 & (1u << 29)) != 0 : area < 7 && !memory && (bcr1 & (1u << 17)) != 0;
+
+	if (!mpx) {
+		return 0;
+	}
+	const uint32_t anw = (static_cast<uint32_t>(reg_get(4, BSC_WCR2)) >> ANW_SHIFT[area]) & 7;
+	const uint32_t frqcr = static_cast<uint32_t>(reg_get(2, CPG_FRQCR));
+	const uint32_t cpu = DIVIDER[(frqcr >> 6) & 7], bus = DIVIDER[(frqcr >> 3) & 7];
+
+	if (cpu == 0 || bus == 0 || bus % cpu != 0) {
+		fatal("FRQCR with clock ratios that are not implemented", frqcr);
+	}
+	return (2u + (write ? WRITE_WAITS[anw] : READ_WAITS[anw])) * (bus / cpu);
+}
+
 /* The cycles of one count of a channel. */
 uint32_t Sh4::tmu_period(uint32_t ch) const
 {

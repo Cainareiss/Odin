@@ -495,6 +495,16 @@ the registers at every slice, ODIN_STATS=1 the host time of each part of the boa
 and of the drawings.
 Tests: tests/sh4, and tests/sh4_host for the host code.
 
+Bus time (Sh4::mpx_cycles): a read or write of the CPU that goes out on
+the MPX bus takes its address phase, the waits of WCR2 and one data
+phase, in bus clocks (manual 13.3.8, table 13.6); BRAVEFF loads its
+first sound bank only so (it waits 0x400000 turns for the driver).
+HEURISTIC: the waits the memory controller and each device add by RDY
+are not known and taken as none; a 64-bit access is one data phase (BCR2
+0001 sets a bus width the manual calls reserved); the memories read and
+written in place (command RAM, framebuffer, BRAM, boot ROM) and the DMAC
+take no bus time; a store queue takes none either.
+
 Speed: 2.3 to 3.6 times the interpreter. What is left is the host missing
 its branch predictions, one emulated instruction in three in VON4.
 

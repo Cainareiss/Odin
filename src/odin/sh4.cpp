@@ -442,6 +442,9 @@ bool Sh4::read_slow(const Sh4Op *op, uint32_t addr, uint32_t size, uint64_t &val
 	}
 	m_touched = true;
 	m_at = time_at(op);
+	if (addr < 0xE0000000 && !m_rd[addr >> PAGE_BITS]) {
+		m_remaining -= static_cast<int32_t>(mpx_cycles(addr, false));
+	}
 	if (!read_any(addr, size, value)) {
 		value = 0;
 		outside();
@@ -457,6 +460,9 @@ bool Sh4::write_slow(const Sh4Op *op, uint32_t addr, uint32_t size, uint64_t val
 	}
 	m_touched = true;
 	m_at = time_at(op);
+	if (addr < 0xE0000000 && !m_wr[addr >> PAGE_BITS]) {
+		m_remaining -= static_cast<int32_t>(mpx_cycles(addr, true));
+	}
 	if (!write_any(addr, size, value)) {
 		outside();
 		m_bus.unanswered(true, addr, size, value);

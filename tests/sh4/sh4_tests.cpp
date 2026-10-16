@@ -1393,6 +1393,47 @@ void queue_loop(Machine &m, uint32_t seed)
 	m.cpu.load(st);
 }
 
+/* A read of the CPU on the MPX bus takes an address phase, the waits of
+ * WCR2 and a data phase, in bus clocks of two CPU clocks (FRQCR of mode 5):
+ * at AnW 0, as the games set it, 6 CPU cycles on top of the instruction for
+ * a read and 4 for a write; at AnW 2, 8 for both; at AnW 7, the reset
+ * value, 10 for both (manual, 13.3.8 and table 13.6); none while BCR1
+ * leaves the area as SRAM. mov.l
+ * r2,@r3 sets BCR1, mov.l r4,@r5 WCR2, then turns of mov.l @r12,r0 (or
+ * mov.l r0,@r12) / add #1,r1 / bra / nop: 4 cycles each and the bus. */
+void test_mpx_time()
+{
+	g_test = "MPX bus time";
+	struct Case {
+		const char *name;
+		uint32_t bcr1, wcr2;
+		uint16_t access;
+		uint32_t turn;
+	};
+	static constexpr Case CASES[] = {
+		{ "SRAM: no bus time", 0x80000000, 0x00006000, 0x60C2, 4 },
+		{ "MPX read, AnW 0: 6 cycles more", 0xA3020008, 0x00006000, 0x60C2, 10 },
+		{ "MPX write, AnW 0: 4 cycles more", 0xA3020008, 0x00006000, 0x2C02, 8 },
+		{ "MPX read, AnW 7: 10 cycles more", 0xA3020008, 0xFFFEEFFF, 0x60C2, 14 },
+		{ "MPX write, AnW 7: 10 cycles more", 0xA3020008, 0xFFFEEFFF, 0x2C02, 14 },
+		{ "MPX read, AnW 2 for area 1 alone: 8 cycles more", 0xA3020008, 0x00000100, 0x60C2, 12 },
+		{ "MPX write, AnW 2 for area 1 alone: 8 cycles more", 0xA3020008, 0x00000100, 0x2C02, 12 },
+	};
+	for (const Case &c : CASES) {
+		Machine m;
+		const Sh4State st = run(m, {0x2322, 0x2542, c.access, 0x7101, 0xAFFC, NOP}, 2 + 70 * c.turn + 1,
+		                        [&c](Sh4State &s) {
+			s.r[1] = 0;
+			s.r[2] = c.bcr1;
+			s.r[3] = 0xFF800000;
+			s.r[4] = c.wcr2;
+			s.r[5] = 0xFF80000C;
+			s.r[12] = DEVICE;
+		});
+		eq(c.name, st.r[1], 70);
+	}
+}
+
 void test_store_queues()
 {
 	g_test = "store queues";
@@ -1725,6 +1766,7 @@ int main(int argc, char **argv)
 	test_hook();
 	test_save_load();
 	test_store_queues();
+	test_mpx_time();
 	test_dmac_blocks();
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures == 0 ? 0 : 1;

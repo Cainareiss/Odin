@@ -430,6 +430,7 @@ private:
 	void dmac_update(uint32_t request);
 	void dmac_update_irqs();
 	uint32_t pck_cycles() const;
+	uint32_t mpx_cycles(uint32_t addr, bool write) const;
 	uint32_t tmu_period(uint32_t ch) const;
 	void tmu_count(uint32_t ch, uint64_t counts);
 	void tmu_sync(uint64_t now);
