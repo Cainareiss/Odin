@@ -26,11 +26,12 @@ namespace odin {
 namespace {
 
 GameControl
-button(const char *name, uint8_t player, uint16_t mask, Role role)
+button(const char *name, const char *id, uint8_t player, uint16_t mask, Role role)
 {
 	GameControl control{};
 
 	control.name = name;
+	control.id = id;
 	control.type = GameControl::Type::BUTTON;
 	control.button = JvsSwitch{ player, mask };
 	control.role = role;
@@ -43,6 +44,12 @@ button(const char *name, uint8_t player, uint16_t mask, Role role)
 std::vector<GameControl>
 standard_panel()
 {
+	static const char *const IDS[2][11] = {
+		{ "1p_start", "1p_up", "1p_down", "1p_left", "1p_right", "1p_push1", "1p_push2", "1p_push3", "1p_push4",
+		  "1p_push5", "1p_push6" },
+		{ "2p_start", "2p_up", "2p_down", "2p_left", "2p_right", "2p_push1", "2p_push2", "2p_push3", "2p_push4",
+		  "2p_push5", "2p_push6" },
+	};
 	static const char *const NAMES[2][11] = {
 		{ "1P START", "1P UP", "1P DOWN", "1P LEFT", "1P RIGHT", "1P PUSH1", "1P PUSH2", "1P PUSH3", "1P PUSH4",
 		  "1P PUSH5", "1P PUSH6" },
@@ -57,7 +64,7 @@ standard_panel()
 
 	for (uint8_t player = 0; player < 2; player++)
 		for (unsigned i = 0; i < 11; i++)
-			panel.push_back(button(NAMES[player][i], player, MASKS[i], ROLES[i]));
+			panel.push_back(button(NAMES[player][i], IDS[player][i], player, MASKS[i], ROLES[i]));
 	return panel;
 }
 
@@ -71,14 +78,24 @@ idle_inputs()
 	return inputs;
 }
 
+/* The controls of the game, or the standard panel, and the SERVICE switch
+ * of each player */
+std::vector<GameControl>
+panel_of(const std::vector<GameControl> &controls)
+{
+	std::vector<GameControl> panel = controls.empty() ? standard_panel() : controls;
+
+	panel.push_back(button("1P SERVICE", GameControl::CABINET_IDS[0], 0, 0x4000, Role::SERVICE));
+	panel.push_back(button("2P SERVICE", GameControl::CABINET_IDS[1], 1, 0x4000, Role::SERVICE));
+	return panel;
+}
+
 } /* namespace */
 
-ControlPanel::ControlPanel(const std::vector<GameControl> &controls, const Bindings &bindings)
-	: m_controls(controls.empty() ? standard_panel() : controls), m_bindings(bindings), m_inputs(idle_inputs()),
+ControlPanel::ControlPanel(const std::vector<GameControl> &controls, const Settings &settings, const std::string &game)
+	: m_controls(panel_of(controls)), m_bindings(m_controls, settings, game), m_inputs(idle_inputs()),
 	  m_coins_were{}, m_coins{}
 {
-	m_controls.push_back(button("1P SERVICE", 0, 0x4000, Role::SERVICE));
-	m_controls.push_back(button("2P SERVICE", 1, 0x4000, Role::SERVICE));
 	m_positions.assign(m_controls.size(), 0);
 	m_levers_were.assign(m_controls.size(), { false, false });
 }
@@ -122,12 +139,10 @@ ControlPanel::held(const HostState &host, const HostInput &input, unsigned playe
 }
 
 bool
-ControlPanel::pressed(const HostState &host, Role role, unsigned player) const
+ControlPanel::pressed(const HostState &host, const std::vector<HostInput> &inputs, unsigned player) const
 {
-	const unsigned whose = role_of_cabinet(role) ? 0 : player;
-
-	for (const HostInput &input : m_bindings.of(role, whose))
-		if (held(host, input, whose))
+	for (const HostInput &input : inputs)
+		if (held(host, input, player))
 			return true;
 	return false;
 }
@@ -137,21 +152,21 @@ ControlPanel::update(const HostState &host)
 {
 	MieBoard::Inputs inputs = idle_inputs();
 
-	inputs.mainboard_test = pressed(host, Role::BOARD_TEST, 0);
-	inputs.mainboard_service = pressed(host, Role::BOARD_SERVICE, 0);
-	inputs.jvs_system = pressed(host, Role::TEST, 0) ? 0x80 : 0;
+	inputs.mainboard_test = pressed(host, m_bindings.cabinet(Role::BOARD_TEST), 0);
+	inputs.mainboard_service = pressed(host, m_bindings.cabinet(Role::BOARD_SERVICE), 0);
+	inputs.jvs_system = pressed(host, m_bindings.cabinet(Role::TEST), 0) ? 0x80 : 0;
 
 	for (size_t c = 0; c < m_controls.size(); c++) {
 		const GameControl &control = m_controls[c];
 
 		switch (control.type) {
 		case GameControl::Type::BUTTON:
-			if (pressed(host, control.role, control.player))
+			if (pressed(host, m_bindings.of(c), control.player))
 				inputs.jvs_player[control.button.player] |= control.button.mask;
 			break;
 		case GameControl::Type::POSITIONS: {
-			const bool down = pressed(host, Role::GEAR_DOWN, control.player);
-			const bool up = pressed(host, Role::GEAR_UP, control.player);
+			const bool down = pressed(host, m_bindings.lever(c, false), control.player);
+			const bool up = pressed(host, m_bindings.lever(c, true), control.player);
 
 			if (down && !m_levers_were[c][0] && m_positions[c] > 0)
 				m_positions[c]--;
@@ -167,7 +182,7 @@ ControlPanel::update(const HostState &host)
 			const PadState *const pad = host.pads[control.player];
 			int furthest = -1;
 
-			for (const HostInput &input : m_bindings.of(control.role, control.player)) {
+			for (const HostInput &input : m_bindings.of(c)) {
 				if (input.kind != HostInput::Kind::PAD || !pad)
 					continue;
 				const int16_t value = pad->axes[input.pad.index];
@@ -183,7 +198,7 @@ ControlPanel::update(const HostState &host)
 		}
 	}
 	for (unsigned slot = 0; slot < 2; slot++) {
-		const bool now = pressed(host, slot ? Role::COIN2 : Role::COIN1, 0);
+		const bool now = pressed(host, m_bindings.cabinet(slot ? Role::COIN2 : Role::COIN1), 0);
 
 		m_coins[slot] = m_coins[slot] || (now && !m_coins_were[slot]);
 		m_coins_were[slot] = now;

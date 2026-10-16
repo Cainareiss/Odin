@@ -82,17 +82,31 @@ trimmed(std::string_view text)
 	return text;
 }
 
-/* The line of a default: "key:<key>, pad:<pad>" */
-std::string
-default_value(const char *key, const char *pad)
+/* A list of inputs, "key:A, pad:b"; nothing when one is not an input, or
+ * not of the kind the control takes: a channel the axis of a pad, any
+ * other what is pressed or not. */
+std::optional<std::vector<HostInput>>
+parse_list(std::string_view value, bool analog)
 {
-	std::string value;
+	std::vector<HostInput> inputs;
 
-	if (key)
-		value = std::string("key:") + key;
-	if (pad)
-		value += (value.empty() ? "pad:" : ", pad:") + std::string(pad);
-	return value;
+	while (!trimmed(value).empty()) {
+		const size_t comma = value.find(',');
+		const auto input = HostInput::parse(trimmed(value.substr(0, comma)));
+
+		if (!input || (analog ? input->kind != HostInput::Kind::PAD || input->pad.type != PadInput::Type::AXIS
+		                      : input->kind == HostInput::Kind::PAD && !input->pad.is_digital()))
+			return std::nullopt;
+		inputs.push_back(*input);
+		value.remove_prefix(comma == std::string_view::npos ? value.size() : comma + 1);
+	}
+	return inputs;
+}
+
+Role
+cabinet_role(size_t index)
+{
+	return static_cast<Role>(static_cast<size_t>(Role::COIN1) + index);
 }
 
 } /* namespace */
@@ -146,64 +160,76 @@ HostInput::parse(std::string_view text)
 	return out;
 }
 
-Bindings::Bindings()
+std::vector<HostInput>
+Bindings::defaults(Role role, unsigned player)
 {
-	Settings::Lines lines;
+	std::vector<HostInput> out;
 
 	for (const Default &entry : DEFAULTS) {
-		if (role_of_cabinet(entry.role)) {
-			lines.emplace_back(role_name(entry.role), default_value(entry.key1, entry.pad));
+		if (entry.role != role)
 			continue;
-		}
-		lines.emplace_back(std::string("p1.") + role_name(entry.role), default_value(entry.key1, entry.pad));
-		lines.emplace_back(std::string("p2.") + role_name(entry.role), default_value(entry.key2, entry.pad));
+		const char *const key = (player && !role_of_cabinet(role)) ? entry.key2 : entry.key1;
+
+		if (const auto input = key ? HostInput::parse(std::string("key:") + key) : std::nullopt)
+			out.push_back(*input);
+		if (const auto input = entry.pad ? HostInput::parse(std::string("pad:") + entry.pad) : std::nullopt)
+			out.push_back(*input);
 	}
-	apply(lines, "the defaults");
+	return out;
 }
 
-Bindings::Bindings(const Settings &settings, const std::string &game)
-	: Bindings()
+Bindings::Bindings(const std::vector<GameControl> &panel, const Settings &settings, const std::string &game)
+	: m_controls(panel.size())
 {
-	apply(settings.section("controls"), "[controls]");
-	apply(settings.section("controls." + game), "[controls." + game + "]");
+	for (size_t c = 0; c < panel.size(); c++) {
+		const GameControl &control = panel[c];
+
+		if (control.type == GameControl::Type::POSITIONS) {
+			m_controls[c][0] = defaults(Role::GEAR_DOWN, control.player);
+			m_controls[c][1] = defaults(Role::GEAR_UP, control.player);
+		} else {
+			m_controls[c][0] = defaults(control.role, control.player);
+		}
+	}
+	for (size_t r = 0; r < m_cabinet.size(); r++)
+		m_cabinet[r] = defaults(cabinet_role(r), 0);
+
+	for (const auto &[key, value] : settings.section("controls." + game)) {
+		std::vector<HostInput> *target = nullptr;
+		bool analog = false;
+
+		for (size_t c = 0; c < panel.size() && !target; c++) {
+			const GameControl &control = panel[c];
+
+			if (control.type == GameControl::Type::POSITIONS) {
+				if (key == control.id + "_down")
+					target = &m_controls[c][0];
+				else if (key == control.id + "_up")
+					target = &m_controls[c][1];
+			} else if (key == control.id) {
+				target = &m_controls[c][0];
+				analog = control.type == GameControl::Type::ANALOG;
+			}
+		}
+		for (size_t r = 0; r < m_cabinet.size() && !target; r++)
+			if (key == role_name(cabinet_role(r)))
+				target = &m_cabinet[r];
+
+		const auto inputs = target ? parse_list(value, analog) : std::nullopt;
+
+		if (!inputs) {
+			std::fprintf(stderr, "ERROR: controls: [controls.%s]: not right: %s = %s\n", game.c_str(),
+			             key.c_str(), value.c_str());
+			continue;
+		}
+		*target = *inputs;
+	}
 }
 
 const std::vector<HostInput> &
-Bindings::of(Role role, unsigned player) const
+Bindings::cabinet(Role role) const
 {
-	return m_inputs[role_of_cabinet(role) ? 0 : player & 1][static_cast<size_t>(role)];
-}
-
-void
-Bindings::apply(const Settings::Lines &lines, const std::string &where)
-{
-	for (const auto &[key, value] : lines) {
-		const std::string_view name(key);
-		const bool player = name.size() > 3 && (name.substr(0, 3) == "p1." || name.substr(0, 3) == "p2.");
-		const auto role = parse_role(player ? name.substr(3) : name);
-		std::vector<HostInput> inputs;
-		bool right = role && *role != Role::GEAR && player != role_of_cabinet(*role);
-		std::string_view rest(value);
-
-		while (right && !trimmed(rest).empty()) {
-			const size_t comma = rest.find(',');
-			const auto input = HostInput::parse(trimmed(rest.substr(0, comma)));
-
-			/* A channel takes the axis of a pad; anything else, what is pressed or not */
-			right = input && (role_is_analog(*role) ? input->kind == HostInput::Kind::PAD &&
-			                                          input->pad.type == PadInput::Type::AXIS
-			                                        : input->kind == HostInput::Kind::KEY || input->pad.is_digital());
-			if (right)
-				inputs.push_back(*input);
-			rest.remove_prefix(comma == std::string_view::npos ? rest.size() : comma + 1);
-		}
-		if (!right) {
-			std::fprintf(stderr, "ERROR: controls: %s: not right: %s = %s\n", where.c_str(), key.c_str(),
-			             value.c_str());
-			continue;
-		}
-		m_inputs[player && name[1] == '2' ? 1 : 0][static_cast<size_t>(*role)] = std::move(inputs);
-	}
+	return m_cabinet[static_cast<size_t>(role) - static_cast<size_t>(Role::COIN1)];
 }
 
 } /* namespace odin */

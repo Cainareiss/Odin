@@ -46,17 +46,23 @@ has 1 for Start, the arrows, and Left Ctrl, Left Alt, Left Shift, Z, X, C;
 player 2 has 2 for Start, R F D G, and A, S, Q, W, E, T.
 
 Gamepads: one for each player, in the order they are plugged in. Start,
-the D-pad, A, B, X, Y, LB, RB, LT and RT are the buttons 1 to 8, and the
-sticks and the triggers the analog controls of the cabinet (the wheel, the
-pedals, the levers). Each control of a game does what its role does
-(odin-games.json): for NASCAR, the view change is button 4, Z or Y. Keys and
-gamepads are changed in odin.ini, beside the saves (see below): [controls]
-for every game, [controls.<game>] for one, with lines such as
+the D-pad, A, B, X, Y, LB, RB, LT, RT, the sticks and the triggers work the
+controls of each game as their roles tell (odin-games.json): for NASCAR,
+the wheel on the left stick, the pedals on the triggers, the gears on LB
+and RB, the view change on Y (or Z). Every control of a game can take other
+keys and pad inputs in odin.ini, beside the saves (see below), in the
+section of that game, under the id odin-games.json gives it:
 
- p1.button4 = key:Space, pad:b
+ [controls.sgnascar]
+ view_change = key:Space, pad:b
+ gear_up = pad:a
  coin1 = key:5
 
-(the roles and the defaults are in src/odin/bindings.cpp).
+The cabinet has 1p_service and 2p_service, coin1 and coin2, test (of the
+I/O board), board_test and board_service; a game without controls in the
+list has 1p_start, 1p_up, 1p_down, 1p_left, 1p_right, 1p_push1 to 1p_push6,
+and the same for 2p. The keys and pad inputs it starts with are in
+src/odin/bindings.cpp.
 
 What the board keeps without power (the settings of the BIOS, the records
 and settings of the game, the clock) is read at start and written on exit,

@@ -20,13 +20,13 @@
 			"name" : "airtrix",
 			"mach" : "hikaru",
 			"controls" : [
-				{ "name" : "START", "switch" : "1P START", "role" : "start" },
-				{ "name" : "LEFT", "switch" : "1P PUSH1", "role" : "button5" },
-				{ "name" : "RIGHT", "switch" : "1P PUSH2", "role" : "button6" },
-				{ "name" : "UP", "switch" : "1P UP", "role" : "up" },
-				{ "name" : "DOWN", "switch" : "1P DOWN", "role" : "down" },
-				{ "name" : "YAW", "analog" : 0, "low" : "left", "role" : "stick_x" },
-				{ "name" : "ROLL", "analog" : 1, "low" : "left", "role" : "stick2_x" }
+				{ "name" : "START", "id" : "start", "switch" : "1P START", "role" : "start" },
+				{ "name" : "LEFT", "id" : "left", "switch" : "1P PUSH1", "role" : "button5" },
+				{ "name" : "RIGHT", "id" : "right", "switch" : "1P PUSH2", "role" : "button6" },
+				{ "name" : "UP", "id" : "up", "switch" : "1P UP", "role" : "up" },
+				{ "name" : "DOWN", "id" : "down", "switch" : "1P DOWN", "role" : "down" },
+				{ "name" : "YAW", "id" : "yaw", "analog" : 0, "low" : "left", "role" : "stick_x" },
+				{ "name" : "ROLL", "id" : "roll", "analog" : 1, "low" : "left", "role" : "stick2_x" }
 			],
 			"sections" : [
 				{
@@ -89,18 +89,18 @@
 			"name" : "braveff",
 			"mach" : "hikaru",
 			"controls" : [
-				{ "name" : "1P WATER", "switch" : "1P PUSH1", "role" : "button1" },
-				{ "name" : "1P FOG", "switch" : "1P PUSH3", "role" : "button2" },
-				{ "name" : "1P START", "switch" : "1P START", "role" : "start" },
-				{ "name" : "1P SIGHT LOCATION X", "analog" : 0, "low" : "left", "role" : "gun_x" },
-				{ "name" : "1P SIGHT LOCATION Y", "analog" : 1, "low" : "up", "role" : "gun_y" },
-				{ "name" : "1P OUT OF SCREEN", "switch" : "1P PUSH2", "role" : "gun_offscreen" },
-				{ "name" : "2P WATER", "switch" : "2P PUSH1", "role" : "button1", "player" : 2 },
-				{ "name" : "2P FOG", "switch" : "2P PUSH3", "role" : "button2", "player" : 2 },
-				{ "name" : "2P START", "switch" : "2P START", "role" : "start", "player" : 2 },
-				{ "name" : "2P SIGHT LOCATION X", "analog" : 2, "low" : "left", "role" : "gun_x", "player" : 2 },
-				{ "name" : "2P SIGHT LOCATION Y", "analog" : 3, "low" : "up", "role" : "gun_y", "player" : 2 },
-				{ "name" : "2P OUT OF SCREEN", "switch" : "2P PUSH2", "role" : "gun_offscreen", "player" : 2 }
+				{ "name" : "1P WATER", "id" : "1p_water", "switch" : "1P PUSH1", "role" : "button1" },
+				{ "name" : "1P FOG", "id" : "1p_fog", "switch" : "1P PUSH3", "role" : "button2" },
+				{ "name" : "1P START", "id" : "1p_start", "switch" : "1P START", "role" : "start" },
+				{ "name" : "1P SIGHT LOCATION X", "id" : "1p_sight_x", "analog" : 0, "low" : "left", "role" : "gun_x" },
+				{ "name" : "1P SIGHT LOCATION Y", "id" : "1p_sight_y", "analog" : 1, "low" : "up", "role" : "gun_y" },
+				{ "name" : "1P OUT OF SCREEN", "id" : "1p_out_of_screen", "switch" : "1P PUSH2", "role" : "gun_offscreen" },
+				{ "name" : "2P WATER", "id" : "2p_water", "switch" : "2P PUSH1", "role" : "button1", "player" : 2 },
+				{ "name" : "2P FOG", "id" : "2p_fog", "switch" : "2P PUSH3", "role" : "button2", "player" : 2 },
+				{ "name" : "2P START", "id" : "2p_start", "switch" : "2P START", "role" : "start", "player" : 2 },
+				{ "name" : "2P SIGHT LOCATION X", "id" : "2p_sight_x", "analog" : 2, "low" : "left", "role" : "gun_x", "player" : 2 },
+				{ "name" : "2P SIGHT LOCATION Y", "id" : "2p_sight_y", "analog" : 3, "low" : "up", "role" : "gun_y", "player" : 2 },
+				{ "name" : "2P OUT OF SCREEN", "id" : "2p_out_of_screen", "switch" : "2P PUSH2", "role" : "gun_offscreen", "player" : 2 }
 			],
 			"sections" : [
 				{
@@ -183,14 +183,14 @@
 			"name" : "pharrier",
 			"mach" : "hikaru",
 			"controls" : [
-				{ "name" : "BULLET", "switch" : "1P PUSH1", "role" : "button1" },
-				{ "name" : "MISSILE", "switch" : "1P PUSH2", "role" : "button2" },
-				{ "name" : "BOMB", "switch" : "1P PUSH3", "role" : "button3" },
-				{ "name" : "VR L", "switch" : "1P LEFT", "role" : "button5" },
-				{ "name" : "VR R", "switch" : "1P RIGHT", "role" : "button6" },
-				{ "name" : "START", "switch" : "1P START", "role" : "start" },
-				{ "name" : "STICK H", "analog" : 1, "low" : "left", "role" : "stick_x" },
-				{ "name" : "STICK V", "analog" : 0, "low" : "down", "role" : "stick_y" }
+				{ "name" : "BULLET", "id" : "bullet", "switch" : "1P PUSH1", "role" : "button1" },
+				{ "name" : "MISSILE", "id" : "missile", "switch" : "1P PUSH2", "role" : "button2" },
+				{ "name" : "BOMB", "id" : "bomb", "switch" : "1P PUSH3", "role" : "button3" },
+				{ "name" : "VR L", "id" : "vr_l", "switch" : "1P LEFT", "role" : "button5" },
+				{ "name" : "VR R", "id" : "vr_r", "switch" : "1P RIGHT", "role" : "button6" },
+				{ "name" : "START", "id" : "start", "switch" : "1P START", "role" : "start" },
+				{ "name" : "STICK H", "id" : "stick_h", "analog" : 1, "low" : "left", "role" : "stick_x" },
+				{ "name" : "STICK V", "id" : "stick_v", "analog" : 0, "low" : "down", "role" : "stick_y" }
 			],
 			"sections" : [
 				{
@@ -267,13 +267,13 @@
 			"name" : "podrace",
 			"mach" : "hikaru",
 			"controls" : [
-				{ "name" : "BOOST", "switch" : "1P PUSH1", "role" : "button1" },
-				{ "name" : "BRAKE", "switch" : "1P PUSH2", "role" : "button2" },
-				{ "name" : "LEFT BUTTON", "switch" : "1P RIGHT", "role" : "button5" },
-				{ "name" : "RIGHT BUTTON", "switch" : "1P LEFT", "role" : "button6" },
-				{ "name" : "START", "switch" : "1P START", "role" : "start" },
-				{ "name" : "LEFT LEVER", "analog" : 0, "low" : "up", "role" : "stick_y" },
-				{ "name" : "RIGHT LEVER", "analog" : 1, "low" : "up", "role" : "stick2_y" }
+				{ "name" : "BOOST", "id" : "boost", "switch" : "1P PUSH1", "role" : "button1" },
+				{ "name" : "BRAKE", "id" : "brake", "switch" : "1P PUSH2", "role" : "button2" },
+				{ "name" : "LEFT BUTTON", "id" : "left_button", "switch" : "1P RIGHT", "role" : "button5" },
+				{ "name" : "RIGHT BUTTON", "id" : "right_button", "switch" : "1P LEFT", "role" : "button6" },
+				{ "name" : "START", "id" : "start", "switch" : "1P START", "role" : "start" },
+				{ "name" : "LEFT LEVER", "id" : "left_lever", "analog" : 0, "low" : "up", "role" : "stick_y" },
+				{ "name" : "RIGHT LEVER", "id" : "right_lever", "analog" : 1, "low" : "up", "role" : "stick2_y" }
 			],
 			"sections" : [
 				{
@@ -363,18 +363,18 @@
 			"mach" : "hikaru",
 			"io" : "837-13741",
 			"controls" : [
-				{ "name" : "STEERING WHEEL", "analog" : 0, "low" : "left", "role" : "steer" },
-				{ "name" : "GAS PEDAL", "analog" : 1, "low" : "released", "role" : "accel" },
-				{ "name" : "BRAKE PEDAL", "analog" : 2, "low" : "released", "role" : "brake" },
-				{ "name" : "GEAR POSITION", "positions" : [
+				{ "name" : "STEERING WHEEL", "id" : "steering_wheel", "analog" : 0, "low" : "left", "role" : "steer" },
+				{ "name" : "GAS PEDAL", "id" : "gas_pedal", "analog" : 1, "low" : "released", "role" : "accel" },
+				{ "name" : "BRAKE PEDAL", "id" : "brake_pedal", "analog" : 2, "low" : "released", "role" : "brake" },
+				{ "name" : "GEAR POSITION", "id" : "gear", "positions" : [
 					{ "name" : "N", "switches" : [] },
 					{ "name" : "1", "switches" : [ "2P LEFT", "2P UP" ] },
 					{ "name" : "2", "switches" : [ "2P LEFT", "2P DOWN" ] },
 					{ "name" : "3", "switches" : [ "2P UP" ] },
 					{ "name" : "4", "switches" : [ "2P DOWN" ] } ],
 					"role" : "gear" },
-				{ "name" : "START BUTTON", "switch" : "1P START", "role" : "start" },
-				{ "name" : "VIEW CHANGE BUTTON", "switch" : "1P DOWN", "role" : "button4" }
+				{ "name" : "START BUTTON", "id" : "start", "switch" : "1P START", "role" : "start" },
+				{ "name" : "VIEW CHANGE BUTTON", "id" : "view_change", "switch" : "1P DOWN", "role" : "button4" }
 			],
 			"sections" : [
 				{
@@ -445,20 +445,20 @@
 			"name" : "von4",
 			"mach" : "hikaru",
 			"controls" : [
-				{ "name" : "LEFT-LEVER UP", "switch" : "1P UP", "role" : "stick_up" },
-				{ "name" : "LEFT-LEVER DOWN", "switch" : "1P DOWN", "role" : "stick_down" },
-				{ "name" : "LEFT-LEVER LEFT", "switch" : "1P LEFT", "role" : "stick_left" },
-				{ "name" : "LEFT-LEVER RIGHT", "switch" : "1P RIGHT", "role" : "stick_right" },
-				{ "name" : "LEFT-LEVER TRIGGER", "switch" : "1P PUSH1", "role" : "button7" },
-				{ "name" : "LEFT-LEVER TURBO", "switch" : "1P PUSH2", "role" : "button5" },
-				{ "name" : "RIGHT-LEVER UP", "switch" : "2P UP", "role" : "stick2_up" },
-				{ "name" : "RIGHT-LEVER DOWN", "switch" : "2P DOWN", "role" : "stick2_down" },
-				{ "name" : "RIGHT-LEVER LEFT", "switch" : "2P LEFT", "role" : "stick2_left" },
-				{ "name" : "RIGHT-LEVER RIGHT", "switch" : "2P RIGHT", "role" : "stick2_right" },
-				{ "name" : "RIGHT-LEVER TRIGGER", "switch" : "2P PUSH1", "role" : "button8" },
-				{ "name" : "RIGHT-LEVER TURBO", "switch" : "2P PUSH2", "role" : "button6" },
-				{ "name" : "START", "switch" : "1P START", "role" : "start" },
-				{ "name" : "P.I.B.", "switch" : "1P PUSH3", "role" : "button4" }
+				{ "name" : "LEFT-LEVER UP", "id" : "left_lever_up", "switch" : "1P UP", "role" : "stick_up" },
+				{ "name" : "LEFT-LEVER DOWN", "id" : "left_lever_down", "switch" : "1P DOWN", "role" : "stick_down" },
+				{ "name" : "LEFT-LEVER LEFT", "id" : "left_lever_left", "switch" : "1P LEFT", "role" : "stick_left" },
+				{ "name" : "LEFT-LEVER RIGHT", "id" : "left_lever_right", "switch" : "1P RIGHT", "role" : "stick_right" },
+				{ "name" : "LEFT-LEVER TRIGGER", "id" : "left_trigger", "switch" : "1P PUSH1", "role" : "button7" },
+				{ "name" : "LEFT-LEVER TURBO", "id" : "left_turbo", "switch" : "1P PUSH2", "role" : "button5" },
+				{ "name" : "RIGHT-LEVER UP", "id" : "right_lever_up", "switch" : "2P UP", "role" : "stick2_up" },
+				{ "name" : "RIGHT-LEVER DOWN", "id" : "right_lever_down", "switch" : "2P DOWN", "role" : "stick2_down" },
+				{ "name" : "RIGHT-LEVER LEFT", "id" : "right_lever_left", "switch" : "2P LEFT", "role" : "stick2_left" },
+				{ "name" : "RIGHT-LEVER RIGHT", "id" : "right_lever_right", "switch" : "2P RIGHT", "role" : "stick2_right" },
+				{ "name" : "RIGHT-LEVER TRIGGER", "id" : "right_trigger", "switch" : "2P PUSH1", "role" : "button8" },
+				{ "name" : "RIGHT-LEVER TURBO", "id" : "right_turbo", "switch" : "2P PUSH2", "role" : "button6" },
+				{ "name" : "START", "id" : "start", "switch" : "1P START", "role" : "start" },
+				{ "name" : "P.I.B.", "id" : "pib", "switch" : "1P PUSH3", "role" : "button4" }
 			],
 			"sections" : [
 				{

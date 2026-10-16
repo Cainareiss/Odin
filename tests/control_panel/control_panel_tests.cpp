@@ -28,12 +28,12 @@
 
 #include "odin/control_panel.hpp"
 
+#include <cctype>
 #include <cstdio>
 #include <initializer_list>
 
 namespace {
 
-using odin::Bindings;
 using odin::ControlPanel;
 using odin::GameControl;
 using odin::HostState;
@@ -72,16 +72,19 @@ MieBoard::Inputs after(ControlPanel &panel, const std::vector<SDL_Keycode> &keys
 /* The standard panel with these keys held */
 MieBoard::Inputs held(std::initializer_list<SDL_Keycode> keys)
 {
-	ControlPanel panel({}, Bindings());
+	ControlPanel panel({}, Settings(), "bootrom");
 
 	return after(panel, std::vector<SDL_Keycode>(keys));
 }
 
+/* Its id: its name in small letters, _ for a space */
 GameControl control(const char *name, Role role, uint8_t player)
 {
 	GameControl c{};
 
 	c.name = name;
+	for (const char *n = name; *n; n++)
+		c.id += (*n == ' ' || *n == '-') ? '_' : static_cast<char>(std::tolower(static_cast<unsigned char>(*n)));
 	c.role = role;
 	c.player = player;
 	return c;
@@ -158,7 +161,7 @@ void test_standard_panel()
 	check(held({SDLK_1, SDLK_UP, SDLK_z}).jvs_player[0] == 0xA040 && held({SDLK_1, SDLK_UP, SDLK_z}).jvs_player[1] == 0,
 	      "the keys held together add up, each player its own word");
 
-	ControlPanel panel({}, Bindings());
+	ControlPanel panel({}, Settings(), "bootrom");
 	MieBoard::Inputs before = {};
 	panel.fill(before);
 	check(before.jvs_analog[5] == 0x8000 && before.jvs_player[0] == 0, "before any update: nothing pressed");
@@ -166,7 +169,7 @@ void test_standard_panel()
 
 void test_coins()
 {
-	ControlPanel panel({}, Bindings());
+	ControlPanel panel({}, Settings(), "bootrom");
 	MieBoard::Inputs inputs = {};
 
 	inputs = after(panel, {SDLK_5});
@@ -181,7 +184,7 @@ void test_coins()
 
 void test_game()
 {
-	ControlPanel panel(cabinet(), Bindings());
+	ControlPanel panel(cabinet(), Settings(), "sgnascar");
 	PadState pad, pad2;
 
 	check(after(panel, {SDLK_z}).jvs_player[0] == 0x1000, "button4 (Z) works VIEW, wired on 1P DOWN");
@@ -228,7 +231,7 @@ void test_game()
 
 void test_lever()
 {
-	ControlPanel panel(cabinet(), Bindings());
+	ControlPanel panel(cabinet(), Settings(), "sgnascar");
 	PadState pad;
 
 	check(after(panel, {}, &pad).jvs_player[1] == 0, "the lever starts on N");
@@ -265,8 +268,8 @@ void test_bindings_from_settings()
 	Settings settings;
 	PadState pad;
 
-	settings.parse("[controls]\np1.steer = pad:leftx, pad:rightx\np1.button4 = key:Space\n", "test");
-	ControlPanel panel(cabinet(), Bindings(settings, "sgnascar"));
+	settings.parse("[controls.sgnascar]\nwheel = pad:leftx, pad:rightx\nview = key:Space\n", "test");
+	ControlPanel panel(cabinet(), settings, "sgnascar");
 
 	pad.axes[SDL_CONTROLLER_AXIS_LEFTX] = 1000;
 	pad.axes[SDL_CONTROLLER_AXIS_RIGHTX] = -20000;
@@ -302,9 +305,9 @@ void test_pressed()
 	Settings settings;
 	PadState pad;
 
-	settings.parse("[controls]\np1.button1 = pad:-lefty\np1.button2 = pad:lefttrigger\n"
-	               "p1.button3 = pad:+rightx\n", "test");
-	ControlPanel panel({}, Bindings(settings, "x"));
+	settings.parse("[controls.x]\n1p_push1 = pad:-lefty\n1p_push2 = pad:lefttrigger\n"
+	               "1p_push3 = pad:+rightx\n", "test");
+	ControlPanel panel({}, settings, "x");
 
 	pad.axes[SDL_CONTROLLER_AXIS_LEFTY] = -16383;
 	check(after(panel, {}, &pad).jvs_player[0] == 0, "the stick up less than half way: not pressed");

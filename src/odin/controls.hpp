@@ -38,7 +38,8 @@ namespace odin {
  * gamepads out. */
 class Controls : public Hikaru::Panel {
 public:
-	Controls(Keyboard &keys, const std::vector<GameControl> &controls, const Bindings &bindings);
+	Controls(Keyboard &keys, const std::vector<GameControl> &controls, const Settings &settings,
+	         const std::string &game);
 	~Controls();
 	Controls(const Controls &) = delete;
 	Controls &operator=(const Controls &) = delete;

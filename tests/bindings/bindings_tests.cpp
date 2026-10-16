@@ -17,8 +17,8 @@
  */
 
 /* Unit tests for the settings file and the bindings: the lines read, the
- * names of keys and pad inputs, the defaults, the lines of [controls] and
- * of a game, and what is refused.
+ * names of keys and pad inputs, the defaults of the roles, the lines of a
+ * game by the ids of its controls, and what is refused.
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
  *            -I src $(sdl2-config --cflags) tests/bindings/bindings_tests.cpp src/odin/bindings.cpp \
@@ -37,6 +37,7 @@
 namespace {
 
 using odin::Bindings;
+using odin::GameControl;
 using odin::HostInput;
 using odin::PadInput;
 using odin::Role;
@@ -142,81 +143,106 @@ void test_inputs()
 	      "pressed or not: buttons, halves, triggers; not a whole stick");
 }
 
-void test_defaults()
+GameControl control(const char *id, GameControl::Type type, Role role, uint8_t player)
 {
-	const Bindings bindings;
-	const auto &b1 = bindings.of(Role::BUTTON1, 0);
-	const auto &b1p2 = bindings.of(Role::BUTTON1, 1);
+	GameControl c{};
 
-	check(b1.size() == 2 && is_key(b1[0], SDLK_LCTRL) && is_pad(b1[1], PadInput::Type::BUTTON, 0),
-	      "p1.button1: Left Ctrl and A");
-	check(b1p2.size() == 2 && is_key(b1p2[0], SDLK_a) && is_pad(b1p2[1], PadInput::Type::BUTTON, 0),
-	      "p2.button1: the key A and A of its pad");
-	check(bindings.of(Role::START, 1).size() == 2 && is_key(bindings.of(Role::START, 1)[0], SDLK_2),
-	      "p2.start: 2 and Start");
-	check(bindings.of(Role::SERVICE, 0).size() == 1 && is_key(bindings.of(Role::SERVICE, 0)[0], SDLK_9) &&
-	      is_key(bindings.of(Role::SERVICE, 1)[0], SDLK_0), "Service: 9 and 0, no pad");
-	check(is_key(bindings.of(Role::COIN1, 0)[0], SDLK_5) && is_key(bindings.of(Role::COIN2, 1)[0], SDLK_6) &&
-	      is_key(bindings.of(Role::TEST, 0)[0], SDLK_F2) && is_key(bindings.of(Role::BOARD_TEST, 0)[0], SDLK_F5) &&
-	      is_key(bindings.of(Role::BOARD_SERVICE, 0)[0], SDLK_F6), "the cabinet: 5, 6, F2, F5, F6, whatever player");
-	check(is_key(bindings.of(Role::UP, 1)[0], SDLK_r) && is_key(bindings.of(Role::BUTTON6, 1)[0], SDLK_t) &&
-	      is_key(bindings.of(Role::BUTTON4, 0)[0], SDLK_z), "the other keys as INSTALL tells them");
-	check(bindings.of(Role::STEER, 0).size() == 1 &&
-	      is_pad(bindings.of(Role::STEER, 0)[0], PadInput::Type::AXIS, SDL_CONTROLLER_AXIS_LEFTX) &&
-	      is_pad(bindings.of(Role::ACCEL, 0)[0], PadInput::Type::AXIS, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) &&
-	      is_pad(bindings.of(Role::STICK2_Y, 1)[0], PadInput::Type::AXIS, SDL_CONTROLLER_AXIS_RIGHTY),
-	      "the axes: steering on the left stick, gas on the right trigger");
-	check(is_pad(bindings.of(Role::GEAR_UP, 0)[0], PadInput::Type::BUTTON, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER) &&
-	      is_pad(bindings.of(Role::BUTTON7, 0)[0], PadInput::Type::AXIS, SDL_CONTROLLER_AXIS_TRIGGERLEFT) &&
-	      is_pad(bindings.of(Role::STICK_UP, 0)[0], PadInput::Type::AXIS_NEGATIVE, SDL_CONTROLLER_AXIS_LEFTY),
-	      "gears on RB, button 7 on LT, the left stick up");
-	check(bindings.of(Role::GUN_X, 0).empty() && bindings.of(Role::GEAR, 0).empty(), "the gun and the lever: none");
+	c.name = id;
+	c.id = id;
+	c.type = type;
+	c.role = role;
+	c.player = player;
+	return c;
 }
 
-void test_settings_lines()
+void test_defaults()
 {
+	const auto b1 = Bindings::defaults(Role::BUTTON1, 0);
+	const auto b1p2 = Bindings::defaults(Role::BUTTON1, 1);
+
+	check(b1.size() == 2 && is_key(b1[0], SDLK_LCTRL) && is_pad(b1[1], PadInput::Type::BUTTON, 0),
+	      "button1 of player 1: Left Ctrl and A");
+	check(b1p2.size() == 2 && is_key(b1p2[0], SDLK_a) && is_pad(b1p2[1], PadInput::Type::BUTTON, 0),
+	      "button1 of player 2: the key A and A of its pad");
+	check(Bindings::defaults(Role::START, 1).size() == 2 && is_key(Bindings::defaults(Role::START, 1)[0], SDLK_2),
+	      "start of player 2: 2 and Start");
+	check(Bindings::defaults(Role::SERVICE, 0).size() == 1 && is_key(Bindings::defaults(Role::SERVICE, 0)[0], SDLK_9) &&
+	      is_key(Bindings::defaults(Role::SERVICE, 1)[0], SDLK_0), "Service: 9 and 0, no pad");
+	check(is_key(Bindings::defaults(Role::COIN1, 0)[0], SDLK_5) && is_key(Bindings::defaults(Role::COIN2, 1)[0], SDLK_6) &&
+	      is_key(Bindings::defaults(Role::TEST, 0)[0], SDLK_F2) &&
+	      is_key(Bindings::defaults(Role::BOARD_TEST, 0)[0], SDLK_F5) &&
+	      is_key(Bindings::defaults(Role::BOARD_SERVICE, 0)[0], SDLK_F6), "the cabinet: 5, 6, F2, F5, F6, whatever player");
+	check(is_key(Bindings::defaults(Role::UP, 1)[0], SDLK_r) && is_key(Bindings::defaults(Role::BUTTON6, 1)[0], SDLK_t) &&
+	      is_key(Bindings::defaults(Role::BUTTON4, 0)[0], SDLK_z), "the other keys as INSTALL tells them");
+	check(Bindings::defaults(Role::STEER, 0).size() == 1 &&
+	      is_pad(Bindings::defaults(Role::STEER, 0)[0], PadInput::Type::AXIS, SDL_CONTROLLER_AXIS_LEFTX) &&
+	      is_pad(Bindings::defaults(Role::ACCEL, 0)[0], PadInput::Type::AXIS, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) &&
+	      is_pad(Bindings::defaults(Role::STICK2_Y, 1)[0], PadInput::Type::AXIS, SDL_CONTROLLER_AXIS_RIGHTY),
+	      "the axes: steering on the left stick, gas on the right trigger");
+	check(is_pad(Bindings::defaults(Role::GEAR_UP, 0)[0], PadInput::Type::BUTTON, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER) &&
+	      is_pad(Bindings::defaults(Role::BUTTON7, 0)[0], PadInput::Type::AXIS, SDL_CONTROLLER_AXIS_TRIGGERLEFT) &&
+	      is_pad(Bindings::defaults(Role::STICK_UP, 0)[0], PadInput::Type::AXIS_NEGATIVE, SDL_CONTROLLER_AXIS_LEFTY),
+	      "gears on RB, button 7 on LT, the left stick up");
+	check(Bindings::defaults(Role::GUN_X, 0).empty() && Bindings::defaults(Role::GEAR, 0).empty(),
+	      "the gun and the lever: none");
+}
+
+void test_game_lines()
+{
+	const std::vector<GameControl> panel = {
+		control("view", GameControl::Type::BUTTON, Role::BUTTON4, 0),
+		control("gear", GameControl::Type::POSITIONS, Role::GEAR, 0),
+		control("wheel", GameControl::Type::ANALOG, Role::STEER, 0),
+		control("fog", GameControl::Type::BUTTON, Role::BUTTON2, 1),
+		control("1p_service", GameControl::Type::BUTTON, Role::SERVICE, 0),
+	};
 	Settings settings;
 
-	settings.parse("[controls]\n"
-	               "p1.button1 = key:Space, pad:b,\n"
-	               "p1.button2 =\n"
+	settings.parse("[controls.sgnascar]\n"
+	               "view = key:Space, pad:b,\n"
+	               "gear_up = pad:a\n"
+	               "wheel = pad:rightx\n"
+	               "fog =\n"
 	               "coin1 = key:7, pad:back\n"
-	               "p3.button1 = key:A\n"
-	               "button3 = key:A\n"
-	               "p1.coin2 = key:A\n"
-	               "p1.gear = pad:a\n"
-	               "p1.steer = key:Left\n"
-	               "p1.accel = pad:-leftx\n"
-	               "p1.button4 = pad:leftx\n"
-	               "p1.button5 = key:nope\n"
-	               "p1.button6 = key:A, nope\n"
-	               "p1.nothing = key:A\n"
-	               "[controls.sgnascar]\n"
-	               "p2.button4 = pad:b\n", "test");
-	const Bindings nascar(settings, "sgnascar");
-	const Bindings airtrix(settings, "airtrix");
-	const auto &b1 = airtrix.of(Role::BUTTON1, 0);
+	               "1p_service = key:F12\n"
+	               "nothing = key:A\n"
+	               "p1.button1 = key:A\n"
+	               "gear = pad:a\n"
+	               "gear_down = pad:leftx\n"
+	               "wheel = key:Left\n"
+	               "wheel = pad:-leftx\n"
+	               "coin2 = pad:leftx\n"
+	               "1p_service = key:nope\n"
+	               "[controls]\n"
+	               "view = key:X\n", "test");
+	const Bindings nascar(panel, settings, "sgnascar");
+	const Bindings other(panel, settings, "airtrix");
 
-	check(b1.size() == 2 && is_key(b1[0], SDLK_SPACE) && is_pad(b1[1], PadInput::Type::BUTTON, 1),
-	      "a line of [controls] takes the place of the default");
-	check(airtrix.of(Role::BUTTON2, 0).empty(), "an empty value: none");
-	check(airtrix.of(Role::COIN1, 0).size() == 2 && is_key(airtrix.of(Role::COIN1, 0)[0], SDLK_7),
-	      "a role of the cabinet");
-	check(nascar.of(Role::BUTTON4, 1).size() == 1 && is_pad(nascar.of(Role::BUTTON4, 1)[0], PadInput::Type::BUTTON, 1),
-	      "a line of [controls.<game>] for that game");
-	check(airtrix.of(Role::BUTTON4, 1).size() == 2 && is_key(airtrix.of(Role::BUTTON4, 1)[0], SDLK_w),
-	      "not for another one");
-	check(is_key(nascar.of(Role::BUTTON1, 0)[0], SDLK_SPACE), "[controls] for every game");
-	check(is_key(airtrix.of(Role::BUTTON3, 0)[0], SDLK_LSHIFT) && is_key(airtrix.of(Role::COIN2, 0)[0], SDLK_6) &&
-	      airtrix.of(Role::STEER, 0).size() == 1 &&
-	      is_pad(airtrix.of(Role::STEER, 0)[0], PadInput::Type::AXIS, SDL_CONTROLLER_AXIS_LEFTX) &&
-	      airtrix.of(Role::ACCEL, 0).size() == 1 &&
-	      is_pad(airtrix.of(Role::ACCEL, 0)[0], PadInput::Type::AXIS, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) &&
-	      is_pad(airtrix.of(Role::BUTTON4, 0)[1], PadInput::Type::BUTTON, 3) &&
-	      is_key(airtrix.of(Role::BUTTON5, 0)[0], SDLK_x) && is_key(airtrix.of(Role::BUTTON6, 0)[0], SDLK_c) &&
-	      airtrix.of(Role::GEAR, 0).empty(),
-	      "a line not right leaves the role as it was: player 3, no player, a player for the cabinet, the lever, "
-	      "a key or half a stick for a channel, a whole stick for a button, a key that is not one");
+	check(nascar.of(0).size() == 2 && is_key(nascar.of(0)[0], SDLK_SPACE) &&
+	      is_pad(nascar.of(0)[1], PadInput::Type::BUTTON, SDL_CONTROLLER_BUTTON_B), "a control by its id");
+	check(nascar.lever(1, true).size() == 1 && is_pad(nascar.lever(1, true)[0], PadInput::Type::BUTTON, 0),
+	      "a lever: <id>_up");
+	check(nascar.lever(1, false).size() == 1 &&
+	      is_pad(nascar.lever(1, false)[0], PadInput::Type::BUTTON, SDL_CONTROLLER_BUTTON_LEFTSHOULDER),
+	      "<id>_down as it was: the line for it was not right");
+	check(nascar.of(2).size() == 1 && is_pad(nascar.of(2)[0], PadInput::Type::AXIS, SDL_CONTROLLER_AXIS_RIGHTX),
+	      "a channel on another axis; the key and half a stick refused");
+	check(nascar.of(3).empty(), "an empty value: none");
+	check(nascar.cabinet(Role::COIN1).size() == 2 && is_key(nascar.cabinet(Role::COIN1)[0], SDLK_7),
+	      "a control of the cabinet");
+	check(nascar.cabinet(Role::COIN2).size() == 1 && is_key(nascar.cabinet(Role::COIN2)[0], SDLK_6),
+	      "the other one as it was");
+	check(nascar.of(4).size() == 1 && is_key(nascar.of(4)[0], SDLK_F12), "the SERVICE switch by its id");
+
+	check(other.of(0).size() == 2 && is_key(other.of(0)[0], SDLK_z) &&
+	      is_pad(other.of(0)[1], PadInput::Type::BUTTON, SDL_CONTROLLER_BUTTON_Y),
+	      "another game keeps the defaults of the role: neither [controls.sgnascar] nor [controls] count");
+	check(other.of(3).size() == 2 && is_key(other.of(3)[0], SDLK_s) &&
+	      is_pad(other.of(3)[1], PadInput::Type::BUTTON, SDL_CONTROLLER_BUTTON_B),
+	      "a control of player 2: the keys of player 2");
+	check(other.lever(1, true).size() == 1 &&
+	      is_pad(other.lever(1, true)[0], PadInput::Type::BUTTON, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER),
+	      "a lever: GEAR_UP and GEAR_DOWN");
 }
 
 } /* namespace */
@@ -228,7 +254,7 @@ int main(int argc, char **argv)
 	test_settings(dir);
 	test_inputs();
 	test_defaults();
-	test_settings_lines();
+	test_game_lines();
 
 	std::printf("\n%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures ? 1 : 0;

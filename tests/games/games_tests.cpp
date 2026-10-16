@@ -84,13 +84,13 @@ const char LIST[] = R"({
         { "name": "eprom", "type": "interleave", "data": [
             { "name": "a.bin", "size": 4 }, { "name": "b.bin", "size": 4 } ] } ] },
     { "name": "wheel", "mach": "hikaru", "io": "837-13741", "controls": [
-        { "name": "WHEEL", "analog": 0, "low": "left", "role": "steer" },
-        { "name": "GAS", "analog": 7, "low": "released", "role": "accel" },
-        { "name": "LEVER", "analog": 3, "low": "up", "role": "stick2_y", "player": 2 },
-        { "name": "VIEW", "switch": "1P DOWN", "role": "button4", "player": 1 },
-        { "name": "FIRE", "switch": "2P PUSH3", "role": "gun_offscreen" },
-        { "name": "SHIFT", "switch": "1P PUSH10", "role": "stick2_left" },
-        { "name": "GEAR", "role": "gear", "positions": [
+        { "name": "WHEEL", "id": "wheel", "analog": 0, "low": "left", "role": "steer" },
+        { "name": "GAS", "id": "gas_2", "analog": 7, "low": "released", "role": "accel" },
+        { "name": "LEVER", "id": "lever", "analog": 3, "low": "up", "role": "stick2_y", "player": 2 },
+        { "name": "VIEW", "id": "view", "switch": "1P DOWN", "role": "button4", "player": 1 },
+        { "name": "FIRE", "id": "fire", "switch": "2P PUSH3", "role": "gun_offscreen" },
+        { "name": "SHIFT", "id": "shift", "switch": "1P PUSH10", "role": "stick2_left" },
+        { "name": "GEAR", "id": "gear", "role": "gear", "positions": [
             { "name": "N", "switches": [] },
             { "name": "1", "switches": [ "2P LEFT", "2P UP" ] } ] } ],
       "sections": [
@@ -100,36 +100,47 @@ const char LIST[] = R"({
 
 /* Games whose one control is not right, each refused */
 const char *const BAD_CONTROLS[] = {
-	R"("controls": { "name": "A", "switch": "1P START", "role": "start" })",
-	R"("controls": [ { "switch": "1P START", "role": "start" } ])",
+	R"("controls": { "name": "A", "id": "a", "switch": "1P START", "role": "start" })",
+	R"("controls": [ { "id": "a", "switch": "1P START", "role": "start" } ])",
 	R"("controls": [ { "name": "", "switch": "1P START", "role": "start" } ])",
-	R"("controls": [ { "name": "A", "role": "start" } ])",
-	R"("controls": [ { "name": "A", "switch": "1P START", "analog": 0, "low": "left", "role": "start" } ])",
-	R"("controls": [ { "name": "A", "switch": "3P START", "role": "start" } ])",
-	R"("controls": [ { "name": "A", "switch": "1P PUSH11", "role": "start" } ])",
-	R"("controls": [ { "name": "A", "switch": "1P", "role": "start" } ])",
-	R"("controls": [ { "name": "A", "analog": 8, "low": "left", "role": "steer" } ])",
-	R"("controls": [ { "name": "A", "analog": -1, "low": "left", "role": "steer" } ])",
-	R"("controls": [ { "name": "A", "analog": "0", "low": "left", "role": "steer" } ])",
-	R"("controls": [ { "name": "A", "analog": 0, "role": "steer" } ])",
-	R"("controls": [ { "name": "A", "analog": 0, "low": "sideways", "role": "steer" } ])",
-	R"("controls": [ { "name": "A", "positions": [], "role": "gear" } ])",
-	R"("controls": [ { "name": "A", "positions": [ { "switches": [] } ], "role": "gear" } ])",
-	R"("controls": [ { "name": "A", "positions": [ { "name": "1" } ], "role": "gear" } ])",
-	R"("controls": [ { "name": "A", "positions": [ { "name": "1", "switches": [ "1P NOWHERE" ] } ], "role": "gear" } ])",
-	R"("controls": [ { "name": "A", "switch": "1P START" } ])",
-	R"("controls": [ { "name": "A", "switch": "1P START", "role": "nowhere" } ])",
-	R"("controls": [ { "name": "A", "switch": "1P START", "role": 3 } ])",
-	R"("controls": [ { "name": "A", "switch": "1P START", "role": "steer" } ])",
-	R"("controls": [ { "name": "A", "switch": "1P START", "role": "gear" } ])",
-	R"("controls": [ { "name": "A", "switch": "1P START", "role": "coin1" } ])",
-	R"("controls": [ { "name": "A", "analog": 0, "low": "left", "role": "button1" } ])",
-	R"("controls": [ { "name": "A", "analog": 0, "low": "left", "role": "gear" } ])",
-	R"("controls": [ { "name": "A", "analog": 0, "low": "left", "role": "test" } ])",
-	R"("controls": [ { "name": "A", "positions": [ { "name": "1", "switches": [] } ], "role": "gear_up" } ])",
-	R"("controls": [ { "name": "A", "switch": "1P START", "role": "start", "player": 3 } ])",
-	R"("controls": [ { "name": "A", "switch": "1P START", "role": "start", "player": 0 } ])",
-	R"("controls": [ { "name": "A", "switch": "1P START", "role": "start", "player": "2" } ])",
+	R"("controls": [ { "name": "A", "id": "a", "role": "start" } ])",
+	R"("controls": [ { "name": "A", "id": "a", "switch": "1P START", "analog": 0, "low": "left", "role": "start" } ])",
+	R"("controls": [ { "name": "A", "id": "a", "switch": "3P START", "role": "start" } ])",
+	R"("controls": [ { "name": "A", "id": "a", "switch": "1P PUSH11", "role": "start" } ])",
+	R"("controls": [ { "name": "A", "id": "a", "switch": "1P", "role": "start" } ])",
+	R"("controls": [ { "name": "A", "id": "a", "analog": 8, "low": "left", "role": "steer" } ])",
+	R"("controls": [ { "name": "A", "id": "a", "analog": -1, "low": "left", "role": "steer" } ])",
+	R"("controls": [ { "name": "A", "id": "a", "analog": "0", "low": "left", "role": "steer" } ])",
+	R"("controls": [ { "name": "A", "id": "a", "analog": 0, "role": "steer" } ])",
+	R"("controls": [ { "name": "A", "id": "a", "analog": 0, "low": "sideways", "role": "steer" } ])",
+	R"("controls": [ { "name": "A", "id": "a", "positions": [], "role": "gear" } ])",
+	R"("controls": [ { "name": "A", "id": "a", "positions": [ { "switches": [] } ], "role": "gear" } ])",
+	R"("controls": [ { "name": "A", "id": "a", "positions": [ { "name": "1" } ], "role": "gear" } ])",
+	R"("controls": [ { "name": "A", "id": "a", "positions": [ { "name": "1", "switches": [ "1P NOWHERE" ] } ], "role": "gear" } ])",
+	R"("controls": [ { "name": "A", "id": "a", "switch": "1P START" } ])",
+	R"("controls": [ { "name": "A", "id": "a", "switch": "1P START", "role": "nowhere" } ])",
+	R"("controls": [ { "name": "A", "id": "a", "switch": "1P START", "role": 3 } ])",
+	R"("controls": [ { "name": "A", "id": "a", "switch": "1P START", "role": "steer" } ])",
+	R"("controls": [ { "name": "A", "id": "a", "switch": "1P START", "role": "gear" } ])",
+	R"("controls": [ { "name": "A", "id": "a", "switch": "1P START", "role": "coin1" } ])",
+	R"("controls": [ { "name": "A", "id": "a", "analog": 0, "low": "left", "role": "button1" } ])",
+	R"("controls": [ { "name": "A", "id": "a", "analog": 0, "low": "left", "role": "gear" } ])",
+	R"("controls": [ { "name": "A", "id": "a", "analog": 0, "low": "left", "role": "test" } ])",
+	R"("controls": [ { "name": "A", "id": "a", "positions": [ { "name": "1", "switches": [] } ], "role": "gear_up" } ])",
+	R"("controls": [ { "name": "A", "id": "a", "switch": "1P START", "role": "start", "player": 3 } ])",
+	R"("controls": [ { "name": "A", "id": "a", "switch": "1P START", "role": "start", "player": 0 } ])",
+	R"("controls": [ { "name": "A", "id": "a", "switch": "1P START", "role": "start", "player": "2" } ])",
+	R"("controls": [ { "name": "A", "switch": "1P START", "role": "start" } ])",
+	R"("controls": [ { "name": "A", "id": "", "switch": "1P START", "role": "start" } ])",
+	R"("controls": [ { "name": "A", "id": "View", "switch": "1P START", "role": "start" } ])",
+	R"("controls": [ { "name": "A", "id": "a b", "switch": "1P START", "role": "start" } ])",
+	R"("controls": [ { "name": "A", "id": 3, "switch": "1P START", "role": "start" } ])",
+	R"("controls": [ { "name": "A", "id": "a", "switch": "1P START", "role": "start" },
+	                 { "name": "B", "id": "a", "switch": "1P UP", "role": "up" } ])",
+	R"("controls": [ { "name": "A", "id": "coin1", "switch": "1P START", "role": "start" } ])",
+	R"("controls": [ { "name": "A", "id": "1p_service", "switch": "1P START", "role": "start" } ])",
+	R"("controls": [ { "name": "A", "id": "gear_up", "switch": "1P START", "role": "start" },
+	                 { "name": "B", "id": "gear", "positions": [ { "name": "N", "switches": [] } ], "role": "gear" } ])",
 };
 
 void test_games(const std::string &dir)
@@ -183,6 +194,7 @@ void test_games(const std::string &dir)
 		      c[4].role == odin::Role::GUN_OFFSCREEN && c[5].role == odin::Role::STICK2_LEFT &&
 		      c[6].role == odin::Role::GEAR, "the role of each control");
 		check(c[0].player == 0 && c[3].player == 0, "player 1 when the list does not say, or says 1");
+		check(c[0].id == "wheel" && c[1].id == "gas_2" && c[6].id == "gear", "the id of each control");
 		check(c[2].player == 1 && c[2].role == odin::Role::STICK2_Y, "player 2 when it says 2");
 		check(c[1].analog == 7 && c[1].low == GameControl::Low::RELEASED, "channel 7, low when released");
 		check(c[2].analog == 3 && c[2].low == GameControl::Low::UP, "low when up");
@@ -248,7 +260,7 @@ void test_bad_controls(const std::string &dir)
 		GameList list;
 
 		write(path, std::string(R"({ "version": 1, "roms": [ { "name": "good", "mach": "hikaru",)") +
-		      R"( "controls": [ { "name": "A", "switch": "1P START", "role": "start" } ], )" + files +
+		      R"( "controls": [ { "name": "A", "id": "a", "switch": "1P START", "role": "start" } ], )" + files +
 		      R"( }, { "name": "bad", "mach": "hikaru", )" + bad + ", " + files + " } ] }");
 		if (list.load(path) && list.load_game(roms, "good") && !list.load_game(roms, "bad"))
 			refused++;

@@ -21,6 +21,7 @@
 
 #include <array>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 #include <SDL.h>
@@ -44,19 +45,21 @@ struct HostState {
 	std::array<const PadState *, 2> pads{};
 };
 
-/* The control panel of a cabinet, worked through the roles: from what the
- * host holds, the switches and the channels the board reads. A game
- * without controls in the list has the standard panel of the JVS (START,
- * the directions, PUSH1 to PUSH6, of both players). Every game also has
- * the SERVICE switch of each player and the roles of the cabinet: TEST of
- * the I/O board, the two coins, Test and Service of the main board. */
+/* The control panel of a cabinet: from what the host holds, the switches
+ * and the channels the board reads, each control worked by its own inputs
+ * (bindings.hpp). A game without controls in the list has the standard
+ * panel of the JVS: START, the directions and PUSH1 to PUSH6 of both
+ * players ("1p_start", "1p_up"... "2p_push6"). Every game also has the
+ * SERVICE switch of each player ("1p_service", "2p_service") and the
+ * controls of the cabinet: TEST of the I/O board, the two coins, Test and
+ * Service of the main board. */
 class ControlPanel {
 public:
 	/* Half a stick or a trigger is pressed from half its way on: a choice
 	 * of the emulator, not of the cabinet. */
 	static constexpr int PRESSED = 16384;
 
-	ControlPanel(const std::vector<GameControl> &controls, const Bindings &bindings);
+	ControlPanel(const std::vector<GameControl> &controls, const Settings &settings, const std::string &game);
 
 	/* What the host holds now, once a frame before it runs: a lever moves
 	 * and a coin goes in on a press. */
@@ -71,7 +74,7 @@ public:
 
 private:
 	bool held(const HostState &host, const HostInput &input, unsigned player) const;
-	bool pressed(const HostState &host, Role role, unsigned player) const;
+	bool pressed(const HostState &host, const std::vector<HostInput> &inputs, unsigned player) const;
 
 	std::vector<GameControl> m_controls;
 	Bindings m_bindings;

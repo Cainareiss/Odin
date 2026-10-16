@@ -24,8 +24,9 @@
 
 namespace odin {
 
-Controls::Controls(Keyboard &keys, const std::vector<GameControl> &controls, const Bindings &bindings)
-	: m_keys(keys), m_panel(controls, bindings), m_on(false)
+Controls::Controls(Keyboard &keys, const std::vector<GameControl> &controls, const Settings &settings,
+                   const std::string &game)
+	: m_keys(keys), m_panel(controls, settings, game), m_on(false)
 {
 	const char *const chosen = std::getenv("ODIN_CONTROLLERS");
 

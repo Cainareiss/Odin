@@ -49,9 +49,13 @@ struct JvsSwitch {
  *  - POSITIONS: a lever whose each position closes some switches, none
  *    for some ("positions" : [ { "name" : "1", "switches" : [...] }, ...]).
  *
- * "role" is what the control does (roles.hpp): a role that is pressed or
- * not for a button, one that has a position for an analog channel, "gear"
- * for a lever. "player" : 2 for a control of player 2, player 1 else. */
+ * "id" is the name the settings give it (odin.ini: [controls.<game>],
+ * "<id> = ..."; a lever has "<id>_down" and "<id>_up"): small letters,
+ * figures and _, its own in the game. "role" is what the control does
+ * (roles.hpp), which gives its keys and pad inputs until the player
+ * changes them: a role that is pressed or not for a button, one that has a
+ * position for an analog channel, "gear" for a lever. "player" : 2 for a
+ * control of player 2, player 1 else. */
 struct GameControl {
 	enum class Type { BUTTON, ANALOG, POSITIONS };
 	enum class Low { LEFT, RIGHT, UP, DOWN, RELEASED, PRESSED };
@@ -60,7 +64,14 @@ struct GameControl {
 		std::vector<JvsSwitch> switches;
 	};
 
+	/* The ids of what every cabinet has, which no control of a game takes:
+	 * the SERVICE switch of each player, the coins, TEST of the I/O board,
+	 * Test and Service of the main board. */
+	static constexpr const char *CABINET_IDS[] = { "1p_service", "2p_service", "coin1", "coin2", "test",
+	                                               "board_test", "board_service" };
+
 	std::string name;
+	std::string id;
 	Type type;
 	JvsSwitch button;
 	uint8_t analog;

@@ -18,6 +18,7 @@
 
 #include "odin/games.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 
@@ -154,8 +155,20 @@ parse_low(const json_t *value)
 	return std::nullopt;
 }
 
-/* A control: {"name": ..., then "switch", "analog" with "low", or
- * "positions"; "role", and "player" when it is 2}. */
+/* small letters, figures and _ */
+bool
+is_id(const char *text)
+{
+	if (!text || !text[0])
+		return false;
+	for (const char *c = text; *c; c++)
+		if (!((*c >= 'a' && *c <= 'z') || (*c >= '0' && *c <= '9') || *c == '_'))
+			return false;
+	return true;
+}
+
+/* A control: {"name": ..., "id": ..., then "switch", "analog" with "low",
+ * or "positions"; "role", and "player" when it is 2}. */
 std::optional<GameControl>
 parse_control(const json_t *control)
 {
@@ -165,14 +178,16 @@ parse_control(const json_t *control)
 	const json_t *const positions = json_object_get(control, "positions");
 	GameControl out{};
 
+	const char *const id = json_string_value(json_object_get(control, "id"));
 	const char *const role = json_string_value(json_object_get(control, "role"));
 	const json_t *const player = json_object_get(control, "player");
 	const auto parsed_role = role ? parse_role(role) : std::nullopt;
 
-	if (!name || !name[0] || (button != nullptr) + (analog != nullptr) + (positions != nullptr) != 1 ||
+	if (!name || !name[0] || !is_id(id) || (button != nullptr) + (analog != nullptr) + (positions != nullptr) != 1 ||
 	    !parsed_role || (player && json_integer_value(player) != 1 && json_integer_value(player) != 2))
 		return std::nullopt;
 	out.name = name;
+	out.id = id;
 	out.role = *parsed_role;
 	out.player = player ? static_cast<uint8_t>(json_integer_value(player) - 1) : 0;
 	if (button) {
@@ -342,6 +357,21 @@ GameList::load_game(const std::string &rom_dir, const std::string &name) const
 			return std::nullopt;
 		}
 		game.controls.push_back(std::move(*control));
+	}
+	/* Each id names one thing in the settings of the game */
+	std::vector<std::string> ids(std::begin(GameControl::CABINET_IDS), std::end(GameControl::CABINET_IDS));
+	for (const GameControl &control : game.controls) {
+		const std::vector<std::string> names = control.type == GameControl::Type::POSITIONS
+			? std::vector<std::string>{ control.id + "_down", control.id + "_up" }
+			: std::vector<std::string>{ control.id };
+
+		for (const std::string &id : names) {
+			if (std::find(ids.begin(), ids.end(), id) != ids.end()) {
+				std::fprintf(stderr, "ERROR: game '%s': the id '%s' is taken twice\n", name.c_str(), id.c_str());
+				return std::nullopt;
+			}
+			ids.push_back(id);
+		}
 	}
 	for (size_t i = 0; i < num; i++) {
 		const json_t *const section = json_array_get(sections, i);

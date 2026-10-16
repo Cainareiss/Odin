@@ -28,6 +28,7 @@
 
 #include <SDL.h>
 
+#include "odin/games.hpp"
 #include "odin/roles.hpp"
 #include "odin/settings.hpp"
 
@@ -62,25 +63,32 @@ struct HostInput {
 	static std::optional<HostInput> parse(std::string_view text);
 };
 
-/* For each role of each player, and each role of the cabinet, the inputs
- * that work it, any one of them: the defaults, then the lines of
- * [controls] in the settings, then those of [controls.<game>]. A line is
- * "p1.button1 = key:Left Ctrl, pad:a" (a role of player 1 or 2) or
- * "coin1 = key:5" (a role of the cabinet), and takes the place of the
- * inputs of its role; an empty value leaves the role without any. */
+/* The inputs that work each control of a panel (any one of them) and each
+ * control of the cabinet: the defaults of their roles (the keys as INSTALL
+ * tells them, the gamepad of the player), then the lines of
+ * [controls.<game>] in the settings, "<id> = key:Left Ctrl, pad:a" (a lever
+ * has "<id>_down" and "<id>_up"; the cabinet "coin1", "coin2", "test",
+ * "board_test", "board_service"). A line takes the place of the inputs of
+ * its control, an empty value leaves it without any; a line that is not
+ * right is said on stderr and skipped. */
 class Bindings {
 public:
-	Bindings();
-	Bindings(const Settings &settings, const std::string &game);
+	Bindings(const std::vector<GameControl> &panel, const Settings &settings, const std::string &game);
 
-	/* The player does not count for a role of the cabinet. */
-	const std::vector<HostInput> &of(Role role, unsigned player) const;
+	/* The inputs of a control of the panel, by its place in the panel */
+	const std::vector<HostInput> &of(size_t control) const { return m_controls[control][0]; }
+	/* Those that move a lever down or up */
+	const std::vector<HostInput> &lever(size_t control, bool up) const { return m_controls[control][up]; }
+	/* Those of a role of the cabinet */
+	const std::vector<HostInput> &cabinet(Role role) const;
 
-	/* A line that is not right is said on stderr and skipped. */
-	void apply(const Settings::Lines &lines, const std::string &where);
+	/* The defaults of a role of a player; for a role of the cabinet the
+	 * player does not count. */
+	static std::vector<HostInput> defaults(Role role, unsigned player);
 
 private:
-	std::array<std::array<std::vector<HostInput>, static_cast<size_t>(Role::COUNT)>, 2> m_inputs;
+	std::vector<std::array<std::vector<HostInput>, 2>> m_controls;
+	std::array<std::vector<HostInput>, 5> m_cabinet;
 };
 
 } /* namespace odin */
