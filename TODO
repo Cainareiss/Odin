@@ -152,9 +152,10 @@ down after 0x2D04 until a register of the interrupts changes; Flycast
 holds the level from the rise and raises the line again at once if a
 source is still pending. Voices, HEURISTIC
 (one source, notes MARKDOWN/30 section 5): the rate of an envelope step
-with KRS counts the octave twice and never lowers the rate (Flycast; MAME
-and Corlett count it once); LSA past LEA plays on up to LSA and stops
-(Flycast, tested on the hardware); the samples at CA and after it are read
+with KRS counts the octave twice and never lowers the rate (Flycast, which
+says the formula of the documentation held on the hardware, its commit
+265c5c6 of 2025-10-27; MAME and Corlett count it once); LSA past LEA plays
+on up to LSA and stops (Flycast, same test); the samples at CA and after it are read
 at once, without a pipeline (Flycast); the noise generator is shared by
 the slots (Corlett). The fast end of the envelope (rates 49 to 60, a
 millisecond or less) falls from 0.73 to 1.04 of the table of the manual.
