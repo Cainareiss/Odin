@@ -138,6 +138,21 @@ ODIN_CARD=none|reader) is an HLE stand-in: the LLE path is an H8/300H
 core running the dumped firmware (MAME wangmid, crp1231lr10_ver0110.ic2).
 Status byte st1 'V' that von4 tests on command 0x33 is not understood.
 
+JVS (src/odin/jvs.cpp: the cable and the protocol of the standard). The
+I/O boards are imitations made from their programs, which are not run:
+jvs_837_13551.cpp from 315-6215 (a TMP90PH44: no TLCS-90 core here), and
+jvs_837_13741.cpp from epr-21868 (a 315-6146; the I/O board of NASCAR,
+"io" in vk-games.json; the program is in the 18wheelr set of MAME). Both
+programs take the same commands, answer an unknown one with the reports
+before it, read on after a refused one, give analog channels of 8 bits
+and hold the coin counters at 3FFF. Not copied yet, HEURISTIC: a RESET
+restarts both boards (they jump to 0000; the 837-13741 does not check
+D9), here the node forgets its address after two and answers at once;
+the reply delay (JVS_TURNAROUND_BYTES in mie.cpp); the coin condition
+bits (always 0); the debounce of the switches and the coins; what the
+837-13551 answers for 0 players. The outputs of the boards go nowhere
+yet: lamps, the nozzle vibration of Brave, the drive board of NASCAR.
+
 AICA (src/odin/aica.cpp + arm7.cpp): control block, timers, interrupts,
 DMA, RTC and the ARM7 are in, and the voices (aica_voice.cpp: sampler,
 loops, envelope, filter, levels, LFO, the monitors the sound driver reads), the

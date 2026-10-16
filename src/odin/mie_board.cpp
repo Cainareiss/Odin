@@ -43,14 +43,24 @@ copy_rom(std::span<const uint8_t> rom)
 
 } /* namespace */
 
+bool
+MieBoard::knows_io_board(const std::string &name)
+{
+	return name == "837-13551" || name == "837-13741";
+}
+
 MieBoard::MieBoard(std::span<const uint8_t> rom, std::span<uint8_t> ram, uint32_t clock_hz,
-                   std::function<void(Inputs &)> read_inputs)
+                   std::function<void(Inputs &)> read_inputs, const std::string &io_board)
 	: m_read_inputs(std::move(read_inputs)), m_clock_hz(clock_hz), m_cycle_acc(0),
 	  m_rom(copy_rom(rom)), m_inputs{},
-	  m_eeprom(Mie::CLOCK_HZ), m_io(*this), m_mie(*this, m_rom, ram), m_log(nullptr),
+	  m_eeprom(Mie::CLOCK_HZ), m_mie(*this, m_rom, ram), m_log(nullptr),
 	  m_irq_lines(0)
 {
-	m_jvs.add_device(&m_io);
+	if (io_board == "837-13741")
+		m_io = std::make_unique<Jvs837_13741>(*this);
+	else
+		m_io = std::make_unique<Jvs837_13551>(*this);
+	m_jvs.add_device(m_io.get());
 	m_mie.attach_jvs(&m_jvs);
 }
 
@@ -127,7 +137,7 @@ MieBoard::reset()
 {
 	m_cycle_acc = 0;
 	m_eeprom.reset();
-	m_io.reset();
+	m_io->reset();
 	m_jvs.reset();
 	m_mie.reset();
 	if (m_card)
@@ -241,7 +251,7 @@ MieBoard::save(State &out)
 {
 	out.cycle_acc = m_cycle_acc;
 	m_eeprom.save(out.eeprom);
-	m_io.save(out.io);
+	m_io->save(out.io);
 	m_jvs.save(out.jvs);
 	m_mie.save(out.mie);
 	out.has_card = m_card ? 1 : 0;
@@ -256,7 +266,7 @@ MieBoard::load(const State &in)
 		return false;
 	m_cycle_acc = in.cycle_acc;
 	m_eeprom.load(in.eeprom);
-	m_io.load(in.io);
+	m_io->load(in.io);
 	m_jvs.load(in.jvs);
 	m_mie.load(in.mie);
 	if (m_card)
@@ -272,7 +282,7 @@ MieBoard::poll_inputs()
 	m_read_inputs(m_inputs);
 	for (uint8_t slot = 0; slot < 2; slot++) {
 		if (m_inputs.jvs_coin[slot])
-			m_io.inc_coin(slot);
+			m_io->inc_coin(slot);
 	}
 }
 

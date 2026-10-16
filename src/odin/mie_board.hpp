@@ -28,10 +28,13 @@
 #include <memory>
 #include <span>
 
+#include <string>
+
 #include "odin/card_reader.hpp"
 #include "odin/eeprom_93c46.hpp"
 #include "odin/jvs.hpp"
 #include "odin/jvs_837_13551.hpp"
+#include "odin/jvs_837_13741.hpp"
 #include "odin/mie.hpp"
 
 namespace odin {
@@ -77,9 +80,13 @@ public:
 	 * ram: the 32 KB half of the Z80 memory at 8000-FFFF, Mie::RAM_SIZE
 	 * bytes, owned by the caller and shared with the window of the host.
 	 * clock_hz: the clock of the cycles given to run. read_inputs: called
-	 * when the board looks at its switches. */
+	 * when the board looks at its switches. io_board: the I/O board on the
+	 * JVS cable, one that knows_io_board. */
 	MieBoard(std::span<const uint8_t> rom, std::span<uint8_t> ram, uint32_t clock_hz,
-	         std::function<void(Inputs &)> read_inputs);
+	         std::function<void(Inputs &)> read_inputs, const std::string &io_board = "837-13551");
+
+	/* The I/O boards there is a node for: 837-13551, 837-13741. */
+	static bool knows_io_board(const std::string &name);
 
 	void reset();
 	/* Advances the board by that many cycles of the main processor. */
@@ -163,7 +170,7 @@ private:
 	Inputs m_inputs;
 	Eeprom93c46 m_eeprom;
 	JvsHost m_jvs;		/* the JVS cable, from UART 1 of the MIE */
-	Jvs837_13551 m_io;
+	std::unique_ptr<JvsIoBoard> m_io;
 	Mie m_mie;
 	std::unique_ptr<CardReader> m_card;
 	FILE *m_log;

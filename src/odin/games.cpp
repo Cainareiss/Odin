@@ -228,6 +228,8 @@ GameList::load_game(const std::string &rom_dir, const std::string &name) const
 		return std::nullopt;
 	game.name = name;
 	game.machine = json_string_value(json_object_get(rom, "mach"));
+	const char *const io = json_string_value(json_object_get(rom, "io"));
+	game.io_board = io ? io : "837-13551";
 	for (size_t i = 0; i < num; i++) {
 		const json_t *const section = json_array_get(sections, i);
 		auto bytes = load_section(section, rom_dir + "/" + name);

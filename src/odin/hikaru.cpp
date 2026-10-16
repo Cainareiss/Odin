@@ -219,6 +219,11 @@ Hikaru::make(const Game &game, bool verbose)
 		std::fprintf(stderr, "ERROR: the ROM of the MIE of '%s' has %zu bytes\n", game.name.c_str(), mie);
 		return nullptr;
 	}
+	if (!MieBoard::knows_io_board(game.io_board)) {
+		std::fprintf(stderr, "ERROR: the I/O board %s of '%s' is not known\n", game.io_board.c_str(),
+		             game.name.c_str());
+		return nullptr;
+	}
 	return std::unique_ptr<Hikaru>(new Hikaru(game, *rombd, verbose));
 }
 
@@ -394,7 +399,7 @@ Hikaru::build_mie()
 	m_mie = std::make_unique<MieBoard>(rom, m_mie_ram, m_clock, [this](MieBoard::Inputs &inputs) {
 		if (m_panel)
 			m_panel->read_inputs(inputs);
-	});
+	}, m_game.io_board);
 	m_mie->set_port_d([this](uint8_t pins) { set_resets(pins); });
 	m_mie->set_log(stderr);
 	/* ODIN_TURNS=0, a test: the program of the MIE runs every turn of its
@@ -436,6 +441,7 @@ Hikaru::build_mie()
 	}
 
 	std::printf("MIE: LLE (315-6146 ROM + uploaded Z80 program)\n");
+	std::printf("JVS: I/O board %s\n", m_game.io_board.c_str());
 }
 
 void

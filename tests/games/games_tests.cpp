@@ -82,7 +82,9 @@ const char LIST[] = R"({
             { "name": "boot.bin", "size": 4 }, { "name": "c.bin", "size": 2 } ] } ] },
     { "name": "stepless", "mach": "hikaru", "sections": [
         { "name": "eprom", "type": "interleave", "data": [
-            { "name": "a.bin", "size": 4 }, { "name": "b.bin", "size": 4 } ] } ] }
+            { "name": "a.bin", "size": 4 }, { "name": "b.bin", "size": 4 } ] } ] },
+    { "name": "wheel", "mach": "hikaru", "io": "837-13741", "sections": [
+        { "name": "bootrom", "type": "alternative", "data": [ { "name": "boot.bin", "size": 4 } ] } ] }
   ]
 })";
 
@@ -91,10 +93,10 @@ void test_games(const std::string &dir)
 	const std::string roms = dir + "/games_test_roms";
 
 	std::filesystem::create_directories(roms + "/toy");
-	for (const char *game : { "short", "odd", "unequal", "stepless" })
+	for (const char *game : { "short", "odd", "unequal", "stepless", "wheel" })
 		std::filesystem::create_directories(roms + "/" + game);
 	write(dir + "/games_test.json", LIST);
-	for (const char *game : { "toy", "short", "odd", "unequal", "stepless" }) {
+	for (const char *game : { "toy", "short", "odd", "unequal", "stepless", "wheel" }) {
 		const std::string folder = roms + "/" + game;
 
 		write(folder + "/boot.bin", "BOOT");
@@ -120,7 +122,11 @@ void test_games(const std::string &dir)
 		check(is(toy->section("bytes"), "CD00"), "interleave, a byte at a time");
 		check(is(toy->section("maskrom"), "C0A0A1"), "concatenate: one file after the other");
 		check(toy->section("eeprom").empty(), "a section the game does not have is empty");
+		check(toy->io_board == "837-13551", "without \"io\", the I/O board is the 837-13551");
 	}
+
+	const std::optional<Game> wheel = list.load_game(roms, "wheel");
+	check(wheel && wheel->io_board == "837-13741", "the I/O board the list tells");
 
 	check(!list.load_game(roms, "other"), "a game that is not in the list does not load");
 	check(!list.load_game(roms, "short"), "nor one whose file has another size than told");

@@ -319,6 +319,7 @@
 		{
 			"name" : "sgnascar",
 			"mach" : "hikaru",
+			"io" : "837-13741",
 			"sections" : [
 				{
 					"name" : "mie",

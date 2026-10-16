@@ -35,6 +35,9 @@ namespace odin {
 struct Game {
 	std::string name;
 	std::string machine;
+	/* The JVS I/O board of its cabinet: "io" in the list, 837-13551 when
+	 * the list does not say. */
+	std::string io_board;
 	std::vector<std::pair<std::string, std::vector<uint8_t>>> sections;
 
 	/* The bytes of a section; empty when the game has no such section. */

@@ -26,7 +26,8 @@
  *
  * Build: g++ -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
  *            -O2 -I src tests/mie/mie_test.cpp src/odin/eeprom_93c46.cpp \
- *            src/odin/jvs.cpp src/odin/jvs_837_13551.cpp src/odin/mie.cpp \
+ *            src/odin/jvs.cpp src/odin/jvs_837_13551.cpp src/odin/jvs_837_13741.cpp \
+ *            src/odin/mie.cpp \
  *            src/odin/mie_board.cpp src/odin/card_reader.cpp src/odin/z80.cpp \
  *            src/odin/z80_ops.cpp -o mie_test
  * Exit status is 0 when every check passes. */
