@@ -204,13 +204,17 @@ uint32_t JvsDevice::message(uint8_t dest, std::span<const uint8_t> in, std::span
 	if (dest == BROADCAST || dest == m_address) {
 		uint32_t pos = 0;
 		uint32_t used = 0;
+		bool unknown = false;
 		out[pos++] = STATUS_NORMAL;
 		size_t s = 0;
 		while (s < in.size()) {
 			const int32_t len = handle_message(in.subspan(s), out.subspan(pos), used);
 			if (len < 0) {
+				/* The commands before it keep their reports (§ 4.2;
+				 * 315-6215 at 0547, epr-21868 at 072F). */
 				out[0] = STATUS_UNKNOWN_COMMAND;
-				return 1;
+				unknown = true;
+				break;
 			}
 			if (len == 0) {
 				out[pos++] = REPORT_PARAMETER_COUNT;
@@ -221,7 +225,7 @@ uint32_t JvsDevice::message(uint8_t dest, std::span<const uint8_t> in, std::span
 		}
 		/* The status byte alone is not a reply when a node behind us
 		 * may still answer a broadcast (a reset, for instance). */
-		if (!m_next || pos > 1) {
+		if (!m_next || pos > 1 || unknown) {
 			size = pos;
 		}
 	}

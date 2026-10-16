@@ -212,6 +212,10 @@ void test_jvs()
 	 * counter (31) nor the single outputs (38). */
 	r = send(host, frame(0x01, { 0x99 }));
 	check(r == std::vector<uint8_t>({ 0xE0, 0x00, 0x02, 0x02, 0x04 }), "unknown command reply");
+	r = send(host, frame(0x01, { 0x11, 0x13, 0x99, 0x12 }));
+	d = decode(r, ok);
+	check(ok && d == std::vector<uint8_t>({ 0x02, 0x01, 0x11, 0x01, 0x10 }),
+	      "the commands before an unknown one keep their reports, those after it are not run");
 	r = send(host, frame(0x01, { 0x31, 0x01, 0x00, 0x01 }));
 	check(r == std::vector<uint8_t>({ 0xE0, 0x00, 0x02, 0x02, 0x04 }), "31 is unknown");
 	r = send(host, frame(0x01, { 0x38, 0x01, 0x01 }));
