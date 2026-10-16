@@ -270,7 +270,7 @@ void test_jvs()
 	/* Outputs. */
 	r = send(host, frame(0x01, { 0x32, 0x01, 0xA8 }));
 	d = decode(r, ok);
-	check(ok && d == std::vector<uint8_t>({ 0x01, 0x01 }) && board.outputs() == 0xA8, "driver outputs");
+	check(ok && d == std::vector<uint8_t>({ 0x01, 0x01 }) && board.outputs()[0] == 0xA8, "driver outputs");
 }
 
 } /* namespace */

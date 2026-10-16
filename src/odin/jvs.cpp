@@ -345,6 +345,90 @@ int32_t JvsDevice::handle_message(std::span<const uint8_t> in, std::span<uint8_t
 	}
 }
 
+/* Sega I/O boards */
+
+JvsIoBoard::JvsIoBoard(JvsInputs &inputs)
+	: m_inputs(inputs)
+{
+	m_coin_counter.fill(0);
+	m_outputs.fill(0);
+}
+
+void JvsIoBoard::device_reset()
+{
+	m_coin_counter.fill(0);
+	m_outputs.fill(0);
+}
+
+void JvsIoBoard::inc_coin(uint8_t slot)
+{
+	/* Held at 3FFF (315-6215 at 0804, epr-21868 at 1286) */
+	if (slot < COIN_SLOTS && m_coin_counter[slot] < 0x3FFF) {
+		m_coin_counter[slot]++;
+	}
+}
+
+/* Two bytes per slot: bits 15-14 condition (0 normal), 14-bit count. */
+int32_t JvsIoBoard::coin_counters(std::span<uint8_t> out, uint8_t slots)
+{
+	/* 0 slots is refused too (315-6215 at 0E4D, epr-21868 at 1A2F) */
+	if (slots == 0 || slots > COIN_SLOTS) {
+		return -1;
+	}
+	uint32_t pos = 0;
+	for (uint8_t i = 0; i < slots; i++) {
+		out[pos++] = static_cast<uint8_t>(m_coin_counter[i] >> 8);
+		out[pos++] = static_cast<uint8_t>(m_coin_counter[i]);
+	}
+	return static_cast<int32_t>(pos);
+}
+
+/* A counter that would go below 0 or above 3FFF is refused and kept as it
+ * is (315-6215 at 1141; epr-21868 at 1D6F and 1EB8). */
+bool JvsIoBoard::coin_add(uint8_t slot, int32_t count)
+{
+	if (slot < 1 || slot > COIN_SLOTS) {
+		return false;
+	}
+	const int32_t value = static_cast<int32_t>(m_coin_counter[slot - 1]) + count;
+	if (value < 0 || value > 0x3FFF) {
+		return false;
+	}
+	m_coin_counter[slot - 1] = static_cast<uint16_t>(value);
+	return true;
+}
+
+int32_t JvsIoBoard::analogs(std::span<uint8_t> out, uint8_t channels)
+{
+	/* 0 channels is refused too (315-6215 at 0A0F, epr-21868 at 1B15) */
+	if (channels == 0 || channels > ANALOG_CHANNELS) {
+		return -1;
+	}
+	uint32_t pos = 0;
+	for (uint8_t i = 0; i < channels; i++) {
+		const uint16_t value = m_inputs.analog(i);
+		/* The converters give 8 bits; the low byte goes out as 0
+		 * (315-6215 at 0A46, epr-21868 at 1B1F). */
+		out[pos++] = static_cast<uint8_t>(value >> 8);
+		out[pos++] = 0;
+	}
+	return static_cast<int32_t>(pos);
+}
+
+void JvsIoBoard::save(JvsIoBoardState &out) const
+{
+	JvsDevice::save(out.node);
+	out.coin_counter = m_coin_counter;
+	out.outputs = m_outputs;
+}
+
+void JvsIoBoard::load(const JvsIoBoardState &in)
+{
+	JvsDevice::load(in.node);
+	m_coin_counter = in.coin_counter;
+	m_outputs = in.outputs;
+}
+
 void JvsHost::save(JvsHostState &out) const
 {
 	out.send = m_send;

@@ -225,6 +225,45 @@ private:
 	uint32_t m_reset_counter;
 };
 
+/* What a Sega I/O board keeps: its node, its two coin counters, the
+ * latches of its driver outputs. Plain data. */
+struct JvsIoBoardState {
+	JvsDeviceState node;
+	std::array<uint16_t, 2> coin_counter;
+	std::array<uint8_t, 4> outputs;
+};
+
+/* What the Sega I/O boards read so far do the same way (the 837-13551,
+ * program 315-6215, and the 837-13741, program epr-21868): two coin slots
+ * whose counters hold at 3FFF, analog channels of 8 bits. A board tells
+ * the rest: its name, its features, its switches, its outputs. */
+class JvsIoBoard : public JvsDevice {
+public:
+	static constexpr uint8_t COIN_SLOTS = 2;
+	static constexpr uint8_t ANALOG_CHANNELS = 8;
+
+	/* One coin through slot 0 or 1. */
+	void inc_coin(uint8_t slot);
+	/* The output latches as the host wrote them: output 1 is bit 7 of
+	 * the first byte (§ 4.3.21). */
+	std::span<const uint8_t> outputs() const { return m_outputs; }
+
+	void save(JvsIoBoardState &out) const;
+	void load(const JvsIoBoardState &in);
+
+protected:
+	explicit JvsIoBoard(JvsInputs &inputs);
+
+	int32_t coin_counters(std::span<uint8_t> out, uint8_t slots) override;
+	bool coin_add(uint8_t slot, int32_t count) override;
+	int32_t analogs(std::span<uint8_t> out, uint8_t channels) override;
+	void device_reset() override;
+
+	JvsInputs &m_inputs;
+	std::array<uint16_t, COIN_SLOTS> m_coin_counter;
+	std::array<uint8_t, 4> m_outputs;
+};
+
 } /* namespace odin */
 
 #endif /* ODIN_JVS_HPP */

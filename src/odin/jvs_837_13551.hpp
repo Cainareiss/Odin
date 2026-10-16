@@ -18,30 +18,15 @@
 
 namespace odin {
 
-/* The board's TMP90PH44 firmware (315-6215) is not run; the node answers
- * the JVS protocol as the firmware does: 2 players x 13 switch bits, 2
- * coin slots, 8 analog channels of 8 bits, 6 driver outputs. */
-/* The node, its coin counters and its output latch. Plain data. */
-struct Jvs837_13551State {
-	JvsDeviceState node;
-	std::array<uint16_t, 2> coin_counter;
-	uint8_t outputs;
-};
-
-class Jvs837_13551 : public JvsDevice {
+/* The 837-13551, the I/O board of most Hikaru games. Its TMP90PH44 runs
+ * the program 315-6215, which is not run here: the node answers as that
+ * program does, 2 players x 13 switches, 2 coin slots, 8 analog channels
+ * of 8 bits, 6 driver outputs. */
+class Jvs837_13551 : public JvsIoBoard {
 public:
 	static constexpr uint8_t PLAYERS = 2;
-	static constexpr uint8_t COIN_SLOTS = 2;
-	static constexpr uint8_t ANALOG_CHANNELS = 8;
 
-	explicit Jvs837_13551(JvsInputs &inputs);
-
-	/* One coin through slot 0 or 1. */
-	void inc_coin(uint8_t slot);
-	uint8_t outputs() const { return m_outputs; }
-
-	void save(Jvs837_13551State &out) const;
-	void load(const Jvs837_13551State &in);
+	explicit Jvs837_13551(JvsInputs &inputs) : JvsIoBoard(inputs) {}
 
 protected:
 	const char *device_id() const override;
@@ -52,18 +37,9 @@ protected:
 	uint8_t comm_method_version() const override { return 0x10; }
 	int32_t function_list(std::span<uint8_t> out) override;
 	int32_t switches(std::span<uint8_t> out, uint8_t players, uint8_t bytes_per_player) override;
-	int32_t coin_counters(std::span<uint8_t> out, uint8_t slots) override;
-	bool coin_add(uint8_t slot, int32_t count) override;
-	int32_t analogs(std::span<uint8_t> out, uint8_t channels) override;
 	bool swoutputs(std::span<const uint8_t> values) override;
 	/* 315-6215 at 122F: past the count, the data of a refused 32 */
 	bool refused_outputs_skip_data() const override { return true; }
-	void device_reset() override;
-
-private:
-	JvsInputs &m_inputs;
-	std::array<uint16_t, COIN_SLOTS> m_coin_counter;
-	uint8_t m_outputs;
 };
 
 } /* namespace odin */

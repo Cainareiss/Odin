@@ -66,7 +66,7 @@ public:
 	struct State {
 		uint64_t cycle_acc;
 		Eeprom93c46State eeprom;
-		Jvs837_13551State io;
+		JvsIoBoardState io;
 		JvsHostState jvs;
 		MieState mie;
 		CardReaderState card;
