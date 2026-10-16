@@ -43,7 +43,8 @@ Renderer::Renderer(const Memory &memory, const Options &options)
 	  m_scale(1), m_num_lists(0), m_shown(2), m_next(-1), m_launched(0), m_last{},
 	  m_layer_ram{std::vector<uint8_t>(size_t{WIDTH} * HEIGHT * 4),
 	              std::vector<uint8_t>(size_t{WIDTH} * HEIGHT * 4)},
-	  m_layer_pixels(size_t{WIDTH} * HEIGHT), m_message{}
+	  m_layer_changed{true, true}, m_layer_pixels(size_t{WIDTH} * HEIGHT), m_layer_tex{0, 0},
+	  m_layer_format{~0u, ~0u}, m_message{}
 {
 	for (ListTextures &textures : m_list_textures) {
 		textures.list = nullptr;
@@ -80,6 +81,7 @@ Renderer::~Renderer()
 	destroy_lists();
 	glDeleteFramebuffers(2, m_copy_fb);
 	glDeleteTextures(1, &m_state_picture);
+	glDeleteTextures(2, m_layer_tex);
 
 	glUseProgram(0);
 	glDeleteProgram(m_blender);
@@ -488,9 +490,6 @@ Renderer::compose()
 	glBindVertexArray(0);
 	glUseProgram(0);
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-	m_textures.bury(layer1);
-	m_textures.bury(layer2);
 }
 
 /* The picture of the frame in the window: the largest rectangle of the

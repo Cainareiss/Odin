@@ -56,37 +56,57 @@ Renderer::take_layer(unsigned i)
 
 	if (offs + (HEIGHT - 1) * FB_PITCH + LAYER_PITCH > m_fb.size())
 		fatal("a layer outside the framebuffer RAM");
-	for (unsigned y = 0; y < HEIGHT; y++)
-		std::memcpy(&m_layer_ram[i][y * LAYER_PITCH], &m_fb[offs + y * FB_PITCH], LAYER_PITCH);
+	for (unsigned y = 0; y < HEIGHT; y++) {
+		uint8_t *const kept = &m_layer_ram[i][y * LAYER_PITCH];
+		const uint8_t *const line = &m_fb[offs + y * FB_PITCH];
+
+		if (std::memcmp(kept, line, LAYER_PITCH) != 0) {
+			std::memcpy(kept, line, LAYER_PITCH);
+			m_layer_changed[i] = true;
+		}
+	}
 }
 
-/* A 2D layer as a new texture, bound on the unit 0. `mult` is what its
- * colours are multiplied by on the screen. */
+/* A 2D layer as its texture, bound on the unit 0. The texture is kept and
+ * sent again only when the RAM of the layer or its format changed. `mult` is
+ * what its colours are multiplied by on the screen. */
 GLuint
 Renderer::upload_layer(unsigned i, float &mult)
 {
 	const odin_layer_t &layer = m_frame.layers.layer[0][i];
 	const uint8_t *const data = m_layer_ram[i].data();
-	GLuint id;
+	const bool same_format = m_layer_format[i] == layer.format;
 
 	if (logging())
 		log("uploading LAYER ena=%u keyed=%u above=%u (%u,%u) (%u,%u) fmt=%u",
 		    layer.enabled, layer.keyed, layer.above,
 		    layer.x0, layer.y0, layer.x1, layer.y1, layer.format);
 
-	glGenTextures(1, &id);
+	if (layer.format != ODIN_FORMAT_ABGR1555 && layer.format != ODIN_FORMAT_A2BGR10)
+		fatal("a layer of a format that is not known");
+	/* A2BGR10 colours are shown four times as bright (as Valkyrie had
+	 * it; HEURISTIC). */
+	mult = (layer.format == ODIN_FORMAT_A2BGR10) ? 4.0f : 1.0f;
+
 	glActiveTexture(GL_TEXTURE0 + 0);
-	glBindTexture(GL_TEXTURE_2D, id);
-
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
-
+	if (m_layer_tex[i] == 0) {
+		glGenTextures(1, &m_layer_tex[i]);
+		glBindTexture(GL_TEXTURE_2D, m_layer_tex[i]);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+	}
+	glBindTexture(GL_TEXTURE_2D, m_layer_tex[i]);
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-	switch (layer.format) {
-	case ODIN_FORMAT_ABGR1555:
+	glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+	if (same_format && !m_layer_changed[i])
+		return m_layer_tex[i];
+	m_layer_changed[i] = false;
+	m_layer_format[i] = layer.format;
+
+	if (layer.format == ODIN_FORMAT_ABGR1555) {
 		/* The two 16-bit pixels of each 32-bit word are stored
 		 * swapped, as the texture transfer does for the texture RAM
 		 * (MEASURED on the von4 title text, GPU-RE/16 § 9). */
@@ -102,27 +122,22 @@ Renderer::upload_layer(unsigned i, float &mult)
 				dst[x * 2 + 1] = static_cast<uint16_t>(word);
 			}
 		}
-
-		glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB5_A1, WIDTH, HEIGHT, 0,
-		             GL_RGBA, GL_UNSIGNED_SHORT_1_5_5_5_REV, m_layer_pixels.data());
-		mult = 1.0f;
-		break;
-	case ODIN_FORMAT_A2BGR10:
-		/* Its colours are shown four times as bright (as Valkyrie
-		 * had it; HEURISTIC). */
-		glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+		if (same_format)
+			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, WIDTH, HEIGHT,
+			                GL_RGBA, GL_UNSIGNED_SHORT_1_5_5_5_REV, m_layer_pixels.data());
+		else
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB5_A1, WIDTH, HEIGHT, 0,
+			             GL_RGBA, GL_UNSIGNED_SHORT_1_5_5_5_REV, m_layer_pixels.data());
+	} else if (same_format) {
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, WIDTH, HEIGHT,
+		                GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, data);
+	} else {
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB10_A2, WIDTH, HEIGHT, 0,
 		             GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, data);
-		mult = 4.0f;
-		break;
-	default:
-		fatal("a layer of a format that is not known");
 	}
-	glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
 	gl::check("a layer");
 
-	return id;
+	return m_layer_tex[i];
 }
 
 } /* namespace odin */

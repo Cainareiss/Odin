@@ -358,10 +358,15 @@ private:
 		GLint clear;
 	} m_compose_locs;
 	/* The framebuffer RAM of the two layers as the frame left it,
-	 * WIDTH words a line, and the pixels of a layer on their way to
-	 * its texture */
+	 * WIDTH words a line, whether it changed since it was last sent to
+	 * its texture, and the pixels of a layer on their way there */
 	std::vector<uint8_t> m_layer_ram[2];
+	bool m_layer_changed[2];
 	std::vector<uint16_t> m_layer_pixels;
+	/* The texture of each layer, kept from frame to frame, and the
+	 * format it holds (~0u before the first) */
+	GLuint m_layer_tex[2];
+	uint32_t m_layer_format[2];
 
 	/* The translucent fragments, see renderer_translucent.cpp */
 	struct {
