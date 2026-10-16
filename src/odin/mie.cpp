@@ -118,7 +118,9 @@ constexpr uint32_t SERIAL_REQUEST_CYCLES = 160;
 } /* namespace */
 
 Mie::Mie(MieHost &host, std::span<const uint8_t> rom, std::span<uint8_t> ram)
-	: m_host(host), m_cpu(*this), m_rom(rom), m_ram(ram), m_serial_device(nullptr), m_wait{},
+	: m_host(host), m_cpu(*this), m_rom(rom), m_ram(ram),
+	  /* Zeroed with the gaps between their fields, which the states copy */
+	  m_uart{}, m_serial{}, m_serial_device(nullptr), m_wait{},
 	  m_waits_counted(true), m_wait_cycles(0), m_log(nullptr), m_trace(nullptr),
 	  m_trace_left(0), m_trace_start(0), m_trace_armed(false), m_busak_traced(false)
 {
