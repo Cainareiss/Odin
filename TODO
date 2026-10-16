@@ -56,6 +56,17 @@ left before the end of the line are counted without being run
 ODIN_TURNS=0 runs every turn: the memory, the states and the pictures must
 be the same. What is left of the sound boards is mostly what each of the
 1 470 samples of a frame costs by itself, turns counted or not.
+The ARM7 runs each instruction from what it decoded the last time, the
+word checked first (Arm7::run_decoded). ODIN_ARM7_TRANSLATE=1, a test for
+now: its blocks run as host code (src/odin/arm7_host.cpp says how,
+arm7_translate.cpp what), each word still checked before it runs. Data
+processing with a value or a register shifted by a value, LDR and STR in
+the sound memory, B and BL are done in place, flags and cycles as the
+functions give them; the other instructions, and an access outside the
+memory, call those functions. The memory, the sound and the states are the
+same (tests/arm7, the six whole loops, the six attracts); the sound boards
+cost a quarter less on the PC, PHARRIER and VON4 2 to 4 ms less a frame on
+the i3-6100U.
 
 The frames are drawn on a thread of their own (src/odin/worker.hpp,
 src/odin/display.cpp) while the machine runs the next one: without the limit

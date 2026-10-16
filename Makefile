@@ -68,6 +68,8 @@ OBJ := \
 	src/odin/wav_file.o \
 	src/odin/arm7.o \
 	src/odin/arm7_ops.o \
+	src/odin/arm7_host.o \
+	src/odin/arm7_translate.o \
 	src/odin/hikaru_gpu.o \
 	src/odin/antarctic.o \
 	src/odin/antarctic_ops.o \

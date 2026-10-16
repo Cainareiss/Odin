@@ -23,7 +23,8 @@
  * taken from the ARM7TDMI data sheet and the ARMv4 reference manual.
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
- *            -I src tests/arm7/arm7_tests.cpp src/odin/arm7.cpp src/odin/arm7_ops.cpp -o arm7_tests
+ *            -I src tests/arm7/arm7_tests.cpp src/odin/arm7.cpp src/odin/arm7_ops.cpp \
+ *            src/odin/arm7_host.cpp src/odin/arm7_translate.cpp src/odin/host_code.cpp -o arm7_tests
  * Use:   arm7_tests [-v]
  * Exit status is 0 when every check passes. */
 
@@ -1447,12 +1448,21 @@ constexpr uint32_t TURN_CODE = 0x1000, TURN_COUNT = 0x8000, TURN_FLAG = 0x8010;
 /* 300 calls of 512 cycles, unless told, as a sound board runs its ARM7. The machine
  * reads the count at call 100, sets the flag the loop waits for at call
  * `flag_at` and, if asked, writes the count at call 150. */
-TurnsRun run_turns_with(bool decoded, bool counted, const std::vector<uint32_t> &code, uint32_t count, uint32_t flag_at,
+/* The ways an ARM7 runs: step() alone, what was decoded, blocks of host code */
+enum class Way { Read, Decoded, Host };
+
+void set_way(Arm7 &cpu, Way way)
+{
+	cpu.set_decoded(way != Way::Read);
+	cpu.set_translate(way == Way::Host);
+}
+
+TurnsRun run_turns_with(Way way, bool counted, const std::vector<uint32_t> &code, uint32_t count, uint32_t flag_at,
                         bool write_count, uint32_t set_byte, const TurnsEvents &events)
 {
 	CountingBus bus;
 	Arm7 cpu(bus);
-	cpu.set_decoded(decoded);
+	set_way(cpu, way);
 	TurnsRun out{};
 	out.ram.assign(0x10000, 0);
 
@@ -1564,18 +1574,26 @@ TurnsRun run_turns_with(bool decoded, bool counted, const std::vector<uint32_t> 
 	return out;
 }
 
-/* The same with what was decoded and with step() alone: the same in all. */
+/* The same with what was decoded, with host code and with step() alone:
+ * the same in all. */
 TurnsRun run_turns(bool counted, const std::vector<uint32_t> &code, uint32_t count, uint32_t flag_at, bool write_count = false,
                    uint32_t set_byte = 0, const TurnsEvents &events = {})
 {
-	const TurnsRun fast = run_turns_with(true, counted, code, count, flag_at, write_count, set_byte, events);
-	const TurnsRun slow = run_turns_with(false, counted, code, count, flag_at, write_count, set_byte, events);
+	const TurnsRun slow = run_turns_with(Way::Read, counted, code, count, flag_at, write_count, set_byte, events);
+	const auto same = [&slow](const TurnsRun &other) {
+		return other.state == slow.state && other.ram == slow.ram && other.bus_reads == slow.bus_reads &&
+		       other.seen == slow.seen && other.instructions == slow.instructions && other.recorded == slow.recorded &&
+		       other.counted == slow.counted && other.watched == slow.watched;
+	};
+	const TurnsRun fast = run_turns_with(Way::Decoded, counted, code, count, flag_at, write_count, set_byte, events);
+	const TurnsRun host = run_turns_with(Way::Host, counted, code, count, flag_at, write_count, set_byte, events);
 
-	g_checks++;
-	if (!(fast.state == slow.state) || fast.ram != slow.ram || fast.bus_reads != slow.bus_reads || fast.seen != slow.seen ||
-	    fast.instructions != slow.instructions || fast.recorded != slow.recorded || fast.counted != slow.counted ||
-	    fast.watched != slow.watched) {
+	g_checks += 2;
+	if (!same(fast)) {
 		fail("from what was decoded, not as step()");
+	}
+	if (!same(host)) {
+		fail("as host code, not as step()");
 	}
 	return fast;
 }
@@ -2152,19 +2170,23 @@ void test_decoded()
 class IrqBus : public LogBus {
 public:
 	Arm7 *cpu = nullptr;
+	bool fiq = false;
 
 	void write32(uint32_t addr, uint32_t v) override
 	{
 		LogBus::write32(addr, v);
 		if (addr == 0x30000) {
-			cpu->set_irq((v & 1) != 0);
+			if (fiq) {
+				cpu->set_fiq((v & 1) != 0);
+			} else {
+				cpu->set_irq((v & 1) != 0);
+			}
 		}
 	}
 };
 
 void test_run_decoded()
 {
-	g_current = "run decoded";
 	constexpr uint32_t NE = 1;
 	const uint32_t add = dp_imm(ADD, false, 5, 5, 3, 0), sub = dp_imm(SUB, false, 5, 5, 1, 0);
 	const std::vector<std::pair<uint32_t, std::vector<uint32_t>>> code = {
@@ -2177,54 +2199,338 @@ void test_run_decoded()
 			    ldst_imm(true, false, true, true, false, 11, 1, 4),		/* ldr r1, [r11, #4] */
 			    branch(false, -9, NE),					/* bne 0ff0 */
 			    branch(false, -2) } },					/* b . */
-		{ 0x18, { branch(false, 0x78) } },					/* b 200 */
+		{ 0x18, { branch(false, 0x78),						/* b 200 */
+			  branch(false, 0xB7) } },					/* b 300 */
 		{ 0x200, { dp_imm(MOV, false, 0, 0, 0, 0),
 			   ldst_imm(false, false, true, true, false, 11, 0, 0),		/* str r0, [r11] */
 			   dp_imm(ADD, false, 12, 12, 1, 0),
 			   dp_imm(SUB, true, 14, 15, 4, 0) } },				/* subs pc, lr, #4 */
+		/* FIQ has r8 to r14 of its own */
+		{ 0x300, { dp_imm(MOV, false, 0, 0, 0, 0),
+			   ldst_imm(false, false, true, true, false, 3, 0, 0),		/* str r0, [r3] */
+			   dp_imm(ADD, false, 4, 4, 1, 0),
+			   dp_imm(SUB, true, 14, 15, 4, 0) } },				/* subs pc, lr, #4 */
 	};
 	const uint32_t calls[] = { 1, 2, 5, 13, 64, 512, 3 };
-	std::vector<uint8_t> ram[2];
-	std::vector<uint32_t> spent[2];
-	IrqBus bus[2];
-	odin::Arm7State after[2];
-	uint64_t instructions[2];
 
-	for (uint32_t k = 0; k < 2; k++) {
-		Arm7 cpu(bus[k]);
-		bus[k].cpu = &cpu;
-		cpu.set_decoded(k == 1);
-		ram[k].assign(0x10000, 0);
-		for (const auto &[at, words] : code) {
-			std::memcpy(&ram[k][at], words.data(), words.size() * 4);
+	for (const bool fiq : { false, true }) {
+		g_current = fiq ? "run decoded, FIQ" : "run decoded, IRQ";
+		std::vector<uint8_t> ram[3];
+		std::vector<uint32_t> spent[3];
+		IrqBus bus[3];
+		odin::Arm7State after[3];
+		uint64_t instructions[3];
+
+		for (uint32_t k = 0; k < 3; k++) {
+			Arm7 cpu(bus[k]);
+			bus[k].cpu = &cpu;
+			bus[k].fiq = fiq;
+			set_way(cpu, static_cast<Way>(k));
+			ram[k].assign(0x10000, 0);
+			for (const auto &[at, words] : code) {
+				std::memcpy(&ram[k][at], words.data(), words.size() * 4);
+			}
+			cpu.set_ram({ram[k].data(), 0x10000, 0xFFFF});
+			odin::Arm7State st{};
+			cpu.save(st);
+			st.pc = 0x0FF0;
+			st.cpsr = Arm7::MODE_SVC | (fiq ? Arm7::FLAG_I : Arm7::FLAG_F);
+			cpu.load(st);
+			cpu.set_reg(3, 0x30000);
+			cpu.set_reg(7, sub);
+			cpu.set_reg(8, 0x0FF0);
+			cpu.set_reg(9, add ^ sub);
+			cpu.set_reg(10, 200);
+			cpu.set_reg(11, 0x30000);
+			for (uint32_t total = 0, i = 0; total < 20000; i++) {
+				spent[k].push_back(cpu.run(calls[i % 7]));
+				total += spent[k].back();
+			}
+			cpu.save(after[k]);
+			instructions[k] = cpu.instructions();
 		}
-		cpu.set_ram({ram[k].data(), 0x10000, 0xFFFF});
-		odin::Arm7State st{};
-		cpu.save(st);
-		st.pc = 0x0FF0;
-		st.cpsr = Arm7::MODE_SVC | Arm7::FLAG_F;
-		cpu.load(st);
-		cpu.set_reg(7, sub);
-		cpu.set_reg(8, 0x0FF0);
-		cpu.set_reg(9, add ^ sub);
-		cpu.set_reg(10, 200);
-		cpu.set_reg(11, 0x30000);
-		for (uint32_t total = 0, i = 0; total < 20000; i++) {
-			spent[k].push_back(cpu.run(calls[i % 7]));
-			total += spent[k].back();
+		for (uint32_t k = 1; k < 3; k++) {
+			const std::string way = std::string(k == 1 ? "run decoded" : "run as host code") + (fiq ? ", FIQ" : ", IRQ");
+			check_eq((way + ": cycles of each call").c_str(), spent[0] == spent[k], 1);
+			check_eq((way + ": registers").c_str(), after[0] == after[k], 1);
+			check_eq((way + ": memory").c_str(), ram[0] == ram[k], 1);
+			check_eq((way + ": bus accesses").c_str(), bus[0].log == bus[k].log, 1);
+			check_eq((way + ": instructions").c_str(), instructions[0], instructions[k]);
 		}
-		cpu.save(after[k]);
-		instructions[k] = cpu.instructions();
+		/* The program did what it was written for. */
+		check_eq("run decoded: turns of the loop", after[1].r[6], 600);
+		check_eq("run decoded: up 3, down 1", after[1].r[5], 200);
+		check_eq("run decoded: interrupts", fiq ? after[1].r[4] : after[1].usr[4], 100);
 	}
-	check_eq("run decoded: cycles of each call", spent[0] == spent[1], 1);
-	check_eq("run decoded: registers", after[0] == after[1], 1);
-	check_eq("run decoded: memory", ram[0] == ram[1], 1);
-	check_eq("run decoded: bus accesses", bus[0].log == bus[1].log, 1);
-	check_eq("run decoded: instructions", instructions[0], instructions[1]);
-	/* The program did what it was written for. */
-	check_eq("run decoded: turns of the loop", after[1].r[6], 600);
-	check_eq("run decoded: up 3, down 1", after[1].r[5], 200);
-	check_eq("run decoded: interrupts", after[1].usr[4], 100);
+}
+
+/* Blocks of host code do what step() does, in whole runs: memories of
+ * words drawn at random, most of them always run, branches kept near,
+ * registers that point into the memory, every mode and random flags, the
+ * interrupt lines changed between calls of a few cycles to a few hundred.
+ * The code writes over itself, takes exceptions and reads the bus as it
+ * goes; each trial writes a new program over the last one in the same
+ * memory, until the host code is full and written again. The same cycles
+ * from each call, registers, PSRs, memory, bus accesses in order and
+ * instructions. */
+void test_translated()
+{
+	g_current = "translated";
+	constexpr uint32_t RAM = 0x4000;
+	const uint32_t modes[] = { Arm7::MODE_USR, Arm7::MODE_FIQ, Arm7::MODE_IRQ, Arm7::MODE_SVC, Arm7::MODE_ABT,
+	                           Arm7::MODE_UND, Arm7::MODE_SYS };
+	uint64_t seed = 0x13198A2E03707344ull;
+	const auto next = [&seed] {
+		seed ^= seed << 13;
+		seed ^= seed >> 7;
+		seed ^= seed << 17;
+		return static_cast<uint32_t>(seed >> 16);
+	};
+	unsigned differ = 0;
+	uint32_t written = 0, cleared = 0, last = 0;
+	std::vector<uint8_t> ram[2] = { std::vector<uint8_t>(RAM), std::vector<uint8_t>(RAM) };
+	LogBus bus[2];
+	Arm7 cores[2] = { Arm7(bus[0]), Arm7(bus[1]) };
+
+	set_way(cores[0], Way::Read);
+	set_way(cores[1], Way::Host);
+	const uint32_t ways = cores[1].host_bytes();
+	for (uint32_t k = 0; k < 2; k++) {
+		cores[k].set_ram({ram[k].data(), RAM, RAM - 1});
+	}
+	for (uint32_t trial = 0; trial < 1000 && differ < 3; trial++) {
+		std::vector<uint8_t> program(RAM);
+		for (uint32_t at = 0; at < RAM; at += 4) {
+			uint32_t op = next() ^ (next() << 16);
+			if (next() % 4) {
+				op = (op & 0x0FFFFFFF) | 0xE0000000u;
+			}
+			/* A branch goes a few words away */
+			if ((op & 0x0E000000) == 0x0A000000) {
+				op = (op & 0xFF000000) | ((next() % 64 - 32) & 0x00FFFFFF);
+			}
+			std::memcpy(&program[at], &op, 4);
+		}
+		odin::Arm7State st{};
+		const auto reg = [&next] { return (next() % 4) ? next() % RAM : next(); };
+		for (uint32_t &r : st.r) {
+			r = reg();
+		}
+		for (uint32_t i = 0; i < 7; i++) {
+			st.usr[i] = reg();
+			st.fiq[i] = reg();
+		}
+		for (uint32_t i = 0; i < 2; i++) {
+			st.irq[i] = reg();
+			st.svc[i] = reg();
+			st.abt[i] = reg();
+			st.und[i] = reg();
+		}
+		for (uint32_t &v : st.spsr) {
+			v = (next() & 0xF00000C0u) | modes[next() % 7];
+		}
+		st.cpsr = (next() & 0xF00000C0u) | modes[next() % 7];
+		st.pc = (next() % RAM) & ~3u;
+
+		std::vector<uint32_t> calls, lines;
+		for (uint32_t c = 0; c < 80; c++) {
+			calls.push_back(1 + next() % 300);
+			lines.push_back(next() % 8);
+		}
+		std::vector<uint32_t> spent[2];
+		odin::Arm7State after[2];
+		uint64_t instructions[2];
+		for (uint32_t k = 0; k < 2; k++) {
+			Arm7 &cpu = cores[k];
+			const uint64_t before = cpu.instructions();
+			std::copy(program.begin(), program.end(), ram[k].begin());
+			bus[k].log.clear();
+			cpu.load(st);
+			for (uint32_t c = 0; c < calls.size(); c++) {
+				cpu.set_irq(lines[c] == 1);
+				cpu.set_fiq(lines[c] == 2);
+				spent[k].push_back(cpu.run(calls[c]));
+			}
+			cpu.save(after[k]);
+			instructions[k] = cpu.instructions() - before;
+		}
+		written += cores[1].host_bytes() > ways;
+		cleared += cores[1].host_bytes() < last;
+		last = cores[1].host_bytes();
+		g_checks++;
+		if (spent[0] != spent[1] || !(after[0] == after[1]) || ram[0] != ram[1] || bus[0].log != bus[1].log ||
+		    instructions[0] != instructions[1]) {
+			char line[96];
+			std::snprintf(line, sizeof line, "trial %u from %08x, cpsr %08x: not as step()", trial, st.pc, st.cpsr);
+			fail(line);
+			differ++;
+		}
+	}
+	check_eq("translated: runs with host code written", written, 1000);
+	check_eq("translated: host code full, then written again", cleared > 0, 1);
+}
+
+/* Data processing done in place by host code does what step() does, one
+ * instruction at a time: every operation with and without S, every form
+ * of operand 2, the values around the edges of 32 bits, random flags and
+ * conditions. A call of run() takes its first instruction from what was
+ * decoded: a MOV r0, r0 comes first, then the one tried, as host code. */
+void test_translated_data()
+{
+	g_current = "translated data";
+	static constexpr uint32_t EDGES[] = { 0, 1, 2, 0x7FFFFFFF, 0x80000000, 0x80000001, 0xFFFFFFFF, 0xFFFFFFFE,
+	                                      0x40000000, 0x12345678 };
+	uint64_t seed = 0xA4093822299F31D0ull;
+	const auto next = [&seed] {
+		seed ^= seed << 13;
+		seed ^= seed >> 7;
+		seed ^= seed << 17;
+		return static_cast<uint32_t>(seed >> 16);
+	};
+	const auto value = [&next] { return (next() % 3) ? EDGES[next() % 10] : next() ^ (next() << 16); };
+	unsigned differ = 0;
+	std::vector<uint8_t> ram[2] = { std::vector<uint8_t>(0x1000), std::vector<uint8_t>(0x1000) };
+	LogBus bus[2];
+	Arm7 cores[2] = { Arm7(bus[0]), Arm7(bus[1]) };
+
+	set_way(cores[0], Way::Read);
+	set_way(cores[1], Way::Host);
+	for (uint32_t k = 0; k < 2; k++) {
+		cores[k].set_ram({ram[k].data(), 0x1000, 0xFFF});
+	}
+	for (uint32_t trial = 0; trial < 40000 && differ < 5; trial++) {
+		const uint32_t opcode = trial % 16, s = (trial / 16) % 2;
+		const uint32_t rn = next() % 16, rd = next() % 15, rm = next() % 16;
+		const uint32_t cc = (next() % 4) ? 0xE : next() % 15;
+		uint32_t op;
+		if (next() % 3 == 0) {
+			op = dp_imm(opcode, s != 0, rn, rd, next() & 0xFF, (next() % 2) ? next() % 16 : 0, cc);
+		} else {
+			const uint32_t amount = (next() % 3) ? next() % 32 : 0;
+			op = dp_reg(opcode, s != 0, rn, rd, rm, next() % 4, amount, cc);
+		}
+		odin::Arm7State st{};
+		cores[0].save(st);
+		for (uint32_t &r : st.r) {
+			r = value();
+		}
+		for (uint32_t i = 0; i < 7; i++) {
+			st.usr[i] = value();
+		}
+		for (uint32_t &r : st.svc) {
+			r = value();
+		}
+		st.cpsr = (next() & 0xF0000000u) | Arm7::MODE_SVC | Arm7::FLAG_I | Arm7::FLAG_F;
+		st.pc = 0xFC;
+		st.irq_line = st.fiq_line = 0;
+		uint32_t spent[2];
+		odin::Arm7State after[2];
+		/* Written again: run as host code, not as a word that changed */
+		cores[1].set_translate(true);
+		const uint32_t ways = cores[1].host_bytes();
+		for (uint32_t k = 0; k < 2; k++) {
+			std::memcpy(&ram[k][0xFC], &NOP, 4);
+			std::memcpy(&ram[k][0x100], &op, 4);
+			cores[k].load(st);
+			spent[k] = cores[k].run(2);
+			cores[k].save(after[k]);
+		}
+		g_checks += 2;
+		if (cores[1].host_bytes() <= ways) {
+			fail("not run as host code");
+			differ++;
+		}
+		if (spent[0] != spent[1] || !(after[0] == after[1]) || cores[0].instructions() != cores[1].instructions()) {
+			char line[96];
+			std::snprintf(line, sizeof line, "%08x, cpsr %08x: not as step()", op, st.cpsr);
+			fail(line);
+			differ++;
+		}
+	}
+}
+
+/* LDR and STR done in place by host code do what step() does, one at a
+ * time after a MOV r0, r0: every P, U, B, W and L, every form of offset,
+ * addresses not aligned, at the ends of the memory and past it on the bus. */
+void test_translated_transfer()
+{
+	g_current = "translated transfer";
+	constexpr uint32_t RAM = 0x1000;
+	uint64_t seed = 0x082EFA98EC4E6C89ull;
+	const auto next = [&seed] {
+		seed ^= seed << 13;
+		seed ^= seed >> 7;
+		seed ^= seed << 17;
+		return static_cast<uint32_t>(seed >> 16);
+	};
+	const auto address = [&next] {
+		switch (next() % 4) {
+		case 0: return next() % RAM;
+		case 1: return RAM - 8 + next() % 16;
+		case 2: return next() % 0x20;
+		default: return next() ^ (next() << 16);
+		}
+	};
+	unsigned differ = 0;
+	std::vector<uint8_t> pattern(RAM), ram[2] = { std::vector<uint8_t>(RAM), std::vector<uint8_t>(RAM) };
+	for (uint8_t &b : pattern) {
+		b = static_cast<uint8_t>(next());
+	}
+	LogBus bus[2];
+	Arm7 cores[2] = { Arm7(bus[0]), Arm7(bus[1]) };
+
+	set_way(cores[0], Way::Read);
+	set_way(cores[1], Way::Host);
+	for (uint32_t k = 0; k < 2; k++) {
+		cores[k].set_ram({ram[k].data(), RAM, RAM - 1});
+	}
+	for (uint32_t trial = 0; trial < 40000 && differ < 5; trial++) {
+		const bool p = next() & 1, u = next() & 1, b = next() & 1, w = next() & 1, l = next() & 1;
+		const uint32_t rn = (next() % 8) ? next() % 15 : 15, rd = next() % 16, rm = next() % 15;
+		const uint32_t cc = (next() % 4) ? 0xE : next() % 15;
+		uint32_t op = (next() % 2) ? ldst_imm(l, b, p, u, w, rn, rd, next() % 0x1000)
+		                           : ldst_reg(l, b, p, u, w, rn, rd, rm, next() % 4, (next() % 3) ? next() % 32 : 0);
+		op = (op & 0x0FFFFFFF) | (cc << 28);
+		odin::Arm7State st{};
+		cores[0].save(st);
+		for (uint32_t &r : st.r) {
+			r = (next() % 3) ? address() : next() % 64;
+		}
+		for (uint32_t i = 0; i < 7; i++) {
+			st.usr[i] = (next() % 3) ? address() : next() % 64;
+		}
+		for (uint32_t &r : st.svc) {
+			r = address();
+		}
+		st.cpsr = (next() & 0xF0000000u) | Arm7::MODE_SVC | Arm7::FLAG_I | Arm7::FLAG_F;
+		st.pc = 0xFC;
+		st.irq_line = st.fiq_line = 0;
+		uint32_t spent[2];
+		odin::Arm7State after[2];
+		cores[1].set_translate(true);
+		const uint32_t ways = cores[1].host_bytes();
+		for (uint32_t k = 0; k < 2; k++) {
+			ram[k] = pattern;
+			std::memcpy(&ram[k][0xFC], &NOP, 4);
+			std::memcpy(&ram[k][0x100], &op, 4);
+			bus[k].log.clear();
+			cores[k].load(st);
+			spent[k] = cores[k].run(2);
+			cores[k].save(after[k]);
+		}
+		g_checks += 2;
+		if (cores[1].host_bytes() <= ways) {
+			fail("not run as host code");
+			differ++;
+		}
+		if (spent[0] != spent[1] || !(after[0] == after[1]) || ram[0] != ram[1] || bus[0].log != bus[1].log ||
+		    cores[0].instructions() != cores[1].instructions()) {
+			char line[96];
+			std::snprintf(line, sizeof line, "%08x, r%u %08x: not as step()", op, rn, rn < 8 ? st.r[rn] : 0);
+			fail(line);
+			differ++;
+		}
+	}
 }
 
 int main(int argc, char **argv)
@@ -2251,6 +2557,9 @@ int main(int argc, char **argv)
 	test_watched_pages();
 	test_decoded();
 	test_run_decoded();
+	test_translated();
+	test_translated_data();
+	test_translated_transfer();
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures == 0 ? 0 : 1;
 }

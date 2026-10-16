@@ -60,7 +60,7 @@ protected:
 	/* x86: the registers by number, and the second byte of a jump on a
 	 * condition (0F 8x) */
 	static constexpr uint8_t RAX = 0, RCX = 1, RDX = 2, RBX = 3, RSP = 4, RBP = 5, RSI = 6, RDI = 7,
-		R8 = 8, R9 = 9, R12 = 12, R13 = 13, R14 = 14, R15 = 15;
+		R8 = 8, R9 = 9, R10 = 10, R11 = 11, R12 = 12, R13 = 13, R14 = 14, R15 = 15;
 	static constexpr uint8_t JZ = 0x84, JNZ = 0x85, JC = 0x82, JNC = 0x83;
 	/* The registers of the first four arguments of a call */
 #if defined(_WIN32)
@@ -80,6 +80,19 @@ protected:
 	void call_to(uintptr_t target);
 	/* mov dst, src on 32 bits */
 	void move32(uint8_t dst, uint8_t src);
+	/* On 32 bits: `opcode` dst, src (01 add, 11 adc, 29 sub, 19 sbb, 21
+	 * and, 09 or, 31 xor, 39 cmp, 85 test, 89 mov); the group 1 step `ext`
+	 * of dst and a value (0 add, 1 or, 4 and, 5 sub, 6 xor, 7 cmp); the
+	 * group 2 step `ext` of dst by `count` (1 ror, 3 rcr, 4 shl, 5 shr,
+	 * 7 sar); not dst; mov dst, value. */
+	void op_rr(uint8_t opcode, uint8_t dst, uint8_t src);
+	void op_ri(uint8_t ext, uint8_t dst, uint32_t value);
+	void shift_ri(uint8_t ext, uint8_t dst, uint8_t count);
+	void not_r(uint8_t dst);
+	void mov_ri(uint8_t dst, uint32_t value);
+	/* The low byte of dst = 1 when condition `cc` holds (0 o, 2 c, 4 z,
+	 * 8 s), then dst = that byte. */
+	void flag_r(uint8_t cc, uint8_t dst);
 
 	/* The way in from C++: the registers a call leaves alone (rbx, rbp,
 	 * r12 to r15) are kept, the stack is made ready for calls and the

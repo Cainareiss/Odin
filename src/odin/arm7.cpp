@@ -59,7 +59,8 @@ constexpr std::array<uint16_t, 16> COND_PASS = [] {
 } /* namespace */
 
 Arm7::Arm7(Arm7Bus &bus)
-	: m_bus(bus), m_ram{nullptr, 0, 0}, m_trace(nullptr), m_decoded_on(true), m_turn(Turn::Off), m_turn_limit(TURN_MAX),
+	: m_bus(bus), m_ram{nullptr, 0, 0}, m_trace(nullptr), m_decoded_on(true), m_translate(false), m_host_stale(false),
+	  m_host_stale_block(0), m_turn(Turn::Off), m_turn_limit(TURN_MAX),
 	  m_turn_counter(TURN_NO_COUNTER), m_turn_delta(0), m_turn_laps(0), m_turn_kept(false),
 	  m_turn_trail_full(false), m_turn_one_mode(false), m_turn_try(0), m_turn_misses(0), m_turn_origin(0),
 	  m_turn_left(false), m_turn_resumable(false), m_turn_left_at(0), m_turn_left_state{}, m_turn_recorded(0),
@@ -149,7 +150,8 @@ uint32_t Arm7::run(uint32_t cycles)
 				}
 			}
 			if (m_decoded_on && !m_trace) {
-				done = run_decoded(done + step_decoded(), cycles);
+				done = m_translate ? run_translated(done + step_decoded(), cycles)
+				                   : run_decoded(done + step_decoded(), cycles);
 			} else {
 				done += step();
 			}
@@ -840,6 +842,7 @@ void Arm7::set_ram(const Arm7Ram &ram)
 		turn_break();
 		m_turn_kept = false;
 		m_ram = ram;
+		drop_blocks();
 	}
 }
 
@@ -935,6 +938,11 @@ uint32_t Arm7::step_decoded()
 		m_cycles += 1;
 	}
 	return m_cycles;
+}
+
+uint16_t Arm7::condition_pass(uint32_t cc)
+{
+	return COND_PASS[cc & 15];
 }
 
 Arm7::Decoded *Arm7::decoded_page(uint32_t page)

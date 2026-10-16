@@ -177,6 +177,78 @@ void HostCode::move32(uint8_t dst, uint8_t src)
 	bytes({0x89, static_cast<uint8_t>(0xC0 | ((src & 7) << 3) | (dst & 7))});	/* mov dst, src */
 }
 
+namespace {
+
+/* The REX prefix of a step naming `reg` in ModRM.reg and `rm` in ModRM.rm,
+ * 0x40 when none is needed */
+uint8_t rex(uint8_t reg, uint8_t rm)
+{
+	return static_cast<uint8_t>(0x40 | (reg >= 8 ? 4 : 0) | (rm >= 8 ? 1 : 0));
+}
+
+} /* namespace */
+
+void HostCode::op_rr(uint8_t opcode, uint8_t dst, uint8_t src)
+{
+	if (rex(src, dst) != 0x40) {
+		byte(rex(src, dst));
+	}
+	bytes({opcode, static_cast<uint8_t>(0xC0 | ((src & 7) << 3) | (dst & 7))});
+}
+
+void HostCode::op_ri(uint8_t ext, uint8_t dst, uint32_t value)
+{
+	if (dst >= 8) {
+		byte(0x41);
+	}
+	const uint8_t modrm = static_cast<uint8_t>(0xC0 | (ext << 3) | (dst & 7));
+	if (static_cast<int32_t>(value) == static_cast<int8_t>(value)) {
+		bytes({0x83, modrm, static_cast<uint8_t>(value)});
+	} else {
+		bytes({0x81, modrm});
+		word(value);
+	}
+}
+
+void HostCode::shift_ri(uint8_t ext, uint8_t dst, uint8_t count)
+{
+	if (dst >= 8) {
+		byte(0x41);
+	}
+	bytes({0xC1, static_cast<uint8_t>(0xC0 | (ext << 3) | (dst & 7)), count});
+}
+
+void HostCode::not_r(uint8_t dst)
+{
+	if (dst >= 8) {
+		byte(0x41);
+	}
+	bytes({0xF7, static_cast<uint8_t>(0xD0 | (dst & 7))});
+}
+
+void HostCode::mov_ri(uint8_t dst, uint32_t value)
+{
+	if (dst >= 8) {
+		byte(0x41);
+	}
+	byte(static_cast<uint8_t>(0xB8 | (dst & 7)));
+	word(value);
+}
+
+void HostCode::flag_r(uint8_t cc, uint8_t dst)
+{
+	/* set<cc> dst8: a register past the fourth needs a prefix */
+	if (dst >= 4) {
+		byte(dst >= 8 ? 0x41 : 0x40);
+	}
+	bytes({0x0F, static_cast<uint8_t>(0x90 | cc), static_cast<uint8_t>(0xC0 | (dst & 7))});
+	/* movzx dst, dst8 */
+	if (dst >= 4) {
+		byte(dst >= 8 ? 0x45 : 0x40);
+	}
+	bytes({0x0F, 0xB6, static_cast<uint8_t>(0xC0 | ((dst & 7) << 3) | (dst & 7))});
+}
+
 void HostCode::way_in()
 {
 	m_used = 0;
@@ -212,6 +284,12 @@ void HostCode::bind(Jump) {}
 void HostCode::jump_back(uint32_t) {}
 void HostCode::call_to(uintptr_t) {}
 void HostCode::move32(uint8_t, uint8_t) {}
+void HostCode::op_rr(uint8_t, uint8_t, uint8_t) {}
+void HostCode::op_ri(uint8_t, uint8_t, uint32_t) {}
+void HostCode::shift_ri(uint8_t, uint8_t, uint8_t) {}
+void HostCode::not_r(uint8_t) {}
+void HostCode::mov_ri(uint8_t, uint32_t) {}
+void HostCode::flag_r(uint8_t, uint8_t) {}
 void HostCode::way_in() {}
 void HostCode::way_in_end() {}
 void HostCode::way_out() {}

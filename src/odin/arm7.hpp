@@ -25,6 +25,8 @@
 #include <cstdint>
 #include <cstdio>
 #include <memory>
+
+#include "odin/arm7_host.hpp"
 #include <vector>
 
 namespace odin {
@@ -104,6 +106,13 @@ public:
 	/* run() uses step_decoded() where it may (on by default); off is
 	 * for comparing with step(). */
 	void set_decoded(bool on) { m_decoded_on = on; }
+	/* Where run() uses what was decoded, the blocks of the memory run as
+	 * host code instead (arm7_translate.cpp), when the host has it: the
+	 * same, instruction for instruction. Off by default. */
+	void set_translate(bool on);
+	bool translates() const { return m_translate; }
+	/* For the measurements: the bytes of host code written */
+	uint32_t host_bytes() const { return m_host ? m_host->used() : 0; }
 	/* Takes a pending FIQ or IRQ without running an instruction.
 	 * Returns the cycles spent, 0 when nothing was pending. */
 	uint32_t poll_interrupts();
@@ -237,6 +246,25 @@ private:
 	static Run decode(uint32_t op);
 	Decoded *decoded_page(uint32_t page);
 	uint32_t run_decoded(uint32_t done, uint32_t cycles);
+	/* The bit of each value of NZCV a condition passes with */
+	static uint16_t condition_pass(uint32_t cc);
+	/* What host code may do in place: data processing with a value or a
+	 * register shifted by a value, LDR and STR of a word or a byte with
+	 * such an offset, B and BL (arm7_ops.cpp) */
+	enum class Form : uint8_t { Other, Data, Transfer, Branch };
+	static Form form_of(uint32_t op, Run run);
+
+	/* arm7_translate.cpp: the blocks of host code */
+	static constexpr uint32_t BLOCK_MAX = 32;	/* instructions */
+	uint32_t run_translated(uint32_t done, uint32_t cycles);
+	uint32_t host_block(uint32_t addr, uint32_t at);
+	uint32_t block_at(uint32_t addr) const;
+	uint32_t translate(uint32_t addr);
+	void data_in_place(uint32_t pc, uint32_t op);
+	bool transfer_in_place(uint32_t pc, uint32_t op, Run does);
+	void drop_block(uint32_t addr);
+	void drop_blocks();
+	static uintptr_t linked(Arm7 &cpu);
 
 	Arm7Bus &m_bus;
 	Arm7Ram m_ram;
@@ -261,6 +289,14 @@ private:
 
 	bool m_decoded_on;
 	std::array<std::unique_ptr<Decoded[]>, DECODED_PAGES> m_decoded;
+
+	/* Host code, once asked for; for each instruction of the memory, the
+	 * place of the block that starts there, 0 for none. A block left
+	 * because a word changed sets m_host_stale and gives its address. */
+	std::unique_ptr<Arm7Host> m_host;
+	bool m_translate, m_host_stale;
+	uint32_t m_host_stale_block;
+	std::array<std::unique_ptr<uint32_t[]>, DECODED_PAGES> m_blocks;
 
 	/* Turns counted without being run, see set_turn_replay(). */
 	enum class Turn : uint8_t { Off, Idle, Record, Replay, Settle };

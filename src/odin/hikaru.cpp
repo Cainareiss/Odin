@@ -354,6 +354,9 @@ Hikaru::~Hikaru()
 			std::fprintf(stderr, "sh4 %c: host code of %u KB, %" PRIu64 " calls out of direct reach\n",
 			             which == MASTER ? 'M' : 'S', m_sh[which]->host_bytes() / 1024,
 			             m_sh[which]->host_far_calls());
+		if (m_stats && m_sound[which]->arm_host_bytes())
+			std::fprintf(stderr, "arm7 %c: host code of %u KB\n", which == MASTER ? 'M' : 'S',
+			             m_sound[which]->arm_host_bytes() / 1024);
 	}
 	if (m_stats) {
 		const auto seconds = [this](unsigned part) { return static_cast<double>(m_stats_ns[part]) / 1e9; };
@@ -458,6 +461,9 @@ Hikaru::build_sound(unsigned which)
 	/* ODIN_ARM7_DECODED=0: the ARM7 decodes every instruction it runs,
 	 * to compare with. */
 	m_sound[which]->set_arm_decoded(env_flag("ODIN_ARM7_DECODED", true));
+	/* ODIN_ARM7_TRANSLATE=1, a test for now: the blocks of the ARM7 run as
+	 * host code. The memory and the sound must be the same. */
+	m_sound[which]->set_arm_translate(env_flag("ODIN_ARM7_TRANSLATE", false));
 
 	/* VK_ARM7_TRACE=<prefix> writes <prefix>-m.txt / <prefix>-s.txt */
 	if (const char *prefix = std::getenv("VK_ARM7_TRACE")) {

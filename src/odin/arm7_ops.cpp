@@ -774,6 +774,29 @@ uint32_t transfer_index(uint32_t op, uint32_t form)
 
 } /* namespace */
 
+/* Host code does in place what these functions do, and calls the others:
+ * the function decode() gave is compared with them. */
+Arm7::Form Arm7::form_of(uint32_t op, Run run)
+{
+	switch ((op >> 25) & 7) {
+	case 0:
+		return run == Arm7Ops::DATA[data_index(op, (op & 0x10) ? Arm7Ops::SHIFT_REG : (op >> 5) & 3)] &&
+		               !(op & 0x10)
+		       ? Form::Data : Form::Other;
+	case 1:
+		return run == Arm7Ops::DATA[data_index(op, Arm7Ops::IMMEDIATE)] ? Form::Data : Form::Other;
+	case 2:
+		return run == Arm7Ops::TRANSFER[transfer_index(op, 4)] ? Form::Transfer : Form::Other;
+	case 3:
+		return !(op & 0x10) && run == Arm7Ops::TRANSFER[transfer_index(op, (op >> 5) & 3)] ? Form::Transfer
+		                                                                                 : Form::Other;
+	case 5:
+		return run == &Arm7Ops::branch<true> || run == &Arm7Ops::branch<false> ? Form::Branch : Form::Other;
+	default:
+		return Form::Other;
+	}
+}
+
 /* The choices of exec(), exec_group0() and exec_group1(), in their order. */
 Arm7::Run Arm7::decode(uint32_t op)
 {

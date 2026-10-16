@@ -28,7 +28,8 @@
  * area of RAM is logged in order.
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
- *            -I src tests/arm7/arm7_driver.cpp src/odin/arm7.cpp src/odin/arm7_ops.cpp -o arm7_driver
+ *            -I src tests/arm7/arm7_driver.cpp src/odin/arm7.cpp src/odin/arm7_ops.cpp \
+ *            src/odin/arm7_host.cpp src/odin/arm7_translate.cpp src/odin/host_code.cpp -o arm7_driver
  * Use:   arm7_driver --image von4-aica-m.bin [--instructions N] [--bank-load]
  *                    [--trace-out file] [--no-timers] [--reads-zero]
  * Exit status is 0 when the driver ran without undefined instructions

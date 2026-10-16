@@ -26,7 +26,8 @@
  * Build: g++ -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
  *            -O2 -I src tests/sound_board/sound_board_tests.cpp src/odin/sound_board.cpp \
  *            src/odin/aica.cpp src/odin/aica_voice.cpp src/odin/aica_dsp.cpp src/odin/arm7.cpp \
- *            src/odin/arm7_ops.cpp -o sound_board_tests
+ *            src/odin/arm7_ops.cpp \
+ *            src/odin/arm7_host.cpp src/odin/arm7_translate.cpp src/odin/host_code.cpp -o sound_board_tests
  */
 
 #include "odin/sound_board.hpp"
