@@ -70,7 +70,8 @@ int32_t Jvs837_13551::switches(std::span<uint8_t> out, uint8_t players, uint8_t 
 /* Two bytes per slot: bits 15-14 condition (0 normal), 14-bit count. */
 int32_t Jvs837_13551::coin_counters(std::span<uint8_t> out, uint8_t slots)
 {
-	if (slots > COIN_SLOTS) {
+	/* 0 slots is refused too (315-6215 at 0E4D) */
+	if (slots == 0 || slots > COIN_SLOTS) {
 		return -1;
 	}
 	uint32_t pos = 0;
@@ -98,7 +99,8 @@ bool Jvs837_13551::coin_add(uint8_t slot, int32_t count)
 
 int32_t Jvs837_13551::analogs(std::span<uint8_t> out, uint8_t channels)
 {
-	if (channels > ANALOG_CHANNELS) {
+	/* 0 channels is refused too (315-6215 at 0A0F) */
+	if (channels == 0 || channels > ANALOG_CHANNELS) {
 		return -1;
 	}
 	uint32_t pos = 0;

@@ -235,6 +235,9 @@ void test_jvs()
 	r = send(host, frame(0x01, { 0x32, 0x02, 0xAA, 0xBB, 0x13 }));
 	d = decode(r, ok);
 	check(ok && d == std::vector<uint8_t>({ 0x01, 0x02, 0x01, 0x10 }), "outputs refused with their data, then 13");
+	r = send(host, frame(0x01, { 0x21, 0x00, 0x22, 0x00, 0x11 }));
+	d = decode(r, ok);
+	check(ok && d == std::vector<uint8_t>({ 0x01, 0x02, 0x02, 0x01, 0x11 }), "0 coin slots, 0 channels refused");
 	r = send(host, frame(0x01, { 0x35, 0x03, 0x00, 0x01, 0x11 }));
 	d = decode(r, ok);
 	check(ok && d == std::vector<uint8_t>({ 0x01, 0x02, 0x01, 0x11 }), "coin slot refused with its count, then 11");
