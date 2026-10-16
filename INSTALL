@@ -45,9 +45,12 @@ of the I/O board, 9 and 0 its Service switches, 5 and 6 the coins. Player 1
 has 1 for Start, the arrows, and Left Ctrl, Left Alt, Left Shift, Z, X, C;
 player 2 has 2 for Start, R F D G, and A, S, Q, W, E, T.
 
-The settings of the BIOS live in the EEPROM of the I/O board, which is
-blank at every start unless ODIN_MIE_EEPROM=<file> names a file to load it
-from and to write it back to on exit.
+What the board keeps without power (the settings of the BIOS, the records
+and settings of the game, the clock) is read at start and written on exit,
+in a folder for each game: ~/.local/share/odin/saves/<game> (under
+XDG_DATA_HOME when it is set), %APPDATA%\odin\saves\<game> on Windows,
+~/Library/Application Support/odin/saves/<game> on macOS. ODIN_SAVES=<folder>
+takes another folder, ODIN_SAVES=none keeps nothing.
 
 The comments at the top of the source files tell the other variables of the
 environment; they are for debugging.
