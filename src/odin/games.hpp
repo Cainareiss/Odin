@@ -92,6 +92,10 @@ struct Game {
 	/* The controls of its cabinet: "controls" in the list, none when the
 	 * list does not say. */
 	std::vector<GameControl> controls;
+	/* The 93C46 of the MIE of a new cabinet, the settings of the SYSTEM
+	 * MENU as SEGA left them: "mie_eeprom" in the list, 128 bytes in
+	 * hexadecimal; empty when the list does not say (a blank chip). */
+	std::vector<uint8_t> mie_eeprom;
 	std::vector<std::pair<std::string, std::vector<uint8_t>>> sections;
 
 	/* The bytes of a section; empty when the game has no such section. */

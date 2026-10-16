@@ -69,8 +69,13 @@ and settings of the game, the clock) is read at start and written on exit,
 in a folder for each game: ~/.local/share/odin/saves/<game> (under
 XDG_DATA_HOME when it is set), %APPDATA%\odin\saves\<game> on Windows,
 ~/Library/Application Support/odin/saves/<game> on macOS. ODIN_SAVES=<folder>
-takes another folder, ODIN_SAVES=none keeps nothing. The settings are in
-odin.ini in the same odin folder; ODIN_CONFIG=<file> reads another one.
+takes another folder, ODIN_SAVES=none keeps nothing. The files have the names
+MAME gives them: mie_eeprom (the SYSTEM MENU of the BIOS: country, coins,
+cabinet type, sound of the attract), nvram (the game), main_eeprom and
+rombd_eeprom (the serial number of the main board, the security of the ROM
+board). A game without mie_eeprom starts as a new U.S.A. cabinet left the
+factory: the settings of its manual. The settings of Odin are in odin.ini in
+the same odin folder; ODIN_CONFIG=<file> reads another one.
 
 The comments at the top of the source files tell the other variables of the
 environment; they are for debugging.

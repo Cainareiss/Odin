@@ -17,7 +17,9 @@
  */
 
 /* Unit tests for the list of the games: the three ways a section is made of
- * its files, the controls of a cabinet and their roles, and what is refused.
+ * its files, the controls of a cabinet and their roles, the chip of a new
+ * cabinet, and what is refused. The chips of the list of the repo are checked
+ * too: run it from the repo.
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
  *            -I src tests/games/games_tests.cpp src/odin/games.cpp src/odin/roles.cpp -ljansson \
@@ -27,12 +29,15 @@
 
 #include "odin/games.hpp"
 
+#include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <string>
 #include <vector>
+
+#include <jansson.h>
 
 namespace {
 
@@ -83,7 +88,9 @@ const char LIST[] = R"({
     { "name": "stepless", "mach": "hikaru", "sections": [
         { "name": "eprom", "type": "interleave", "data": [
             { "name": "a.bin", "size": 4 }, { "name": "b.bin", "size": 4 } ] } ] },
-    { "name": "wheel", "mach": "hikaru", "io": "837-13741", "controls": [
+    { "name": "wheel", "mach": "hikaru", "io": "837-13741",
+      "mie_eeprom": "4242520001aBCDEF0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ff",
+      "controls": [
         { "name": "WHEEL", "id": "wheel", "analog": 0, "low": "left", "role": "steer" },
         { "name": "GAS", "id": "gas_2", "analog": 7, "low": "released", "role": "accel" },
         { "name": "LEVER", "id": "lever", "analog": 3, "low": "up", "role": "stick2_y", "player": 2 },
@@ -183,7 +190,10 @@ void test_games(const std::string &dir)
 	const std::optional<Game> wheel = list.load_game(roms, "wheel");
 	check(wheel && wheel->io_board == "837-13741", "the I/O board the list tells");
 	if (toy)
-		check(toy->controls.empty(), "without \"controls\", no control");
+		check(toy->controls.empty() && toy->mie_eeprom.empty(), "without \"controls\", no control, without \"mie_eeprom\", no chip");
+	check(wheel && wheel->mie_eeprom.size() == 128 && wheel->mie_eeprom[0] == 0x42 && wheel->mie_eeprom[4] == 0x01 &&
+	      wheel->mie_eeprom[5] == 0xAB && wheel->mie_eeprom[7] == 0xEF && wheel->mie_eeprom[127] == 0xFF,
+	      "the chip of a new cabinet, byte by byte, small or capital figures");
 	if (wheel && wheel->controls.size() == 7) {
 		using odin::GameControl;
 		const auto &c = wheel->controls;
@@ -251,23 +261,87 @@ void test_bad_controls(const std::string &dir)
 	const std::string files = R"("sections": [ { "name": "bootrom", "type": "alternative",
 	    "data": [ { "name": "boot.bin", "size": 4 } ] } ])";
 	int refused = 0;
-
-	std::filesystem::create_directories(roms + "/good");
-	std::filesystem::create_directories(roms + "/bad");
-	write(roms + "/good/boot.bin", "BOOT");
-	write(roms + "/bad/boot.bin", "BOOT");
-	for (const char *bad : BAD_CONTROLS) {
+	const auto refuses = [&](const std::string &bad) {
 		GameList list;
 
 		write(path, std::string(R"({ "version": 1, "roms": [ { "name": "good", "mach": "hikaru",)") +
 		      R"( "controls": [ { "name": "A", "id": "a", "switch": "1P START", "role": "start" } ], )" + files +
 		      R"( }, { "name": "bad", "mach": "hikaru", )" + bad + ", " + files + " } ] }");
 		if (list.load(path) && list.load_game(roms, "good") && !list.load_game(roms, "bad"))
-			refused++;
-		else
-			std::printf("not refused: %s\n", bad);
-	}
+			return true;
+		std::printf("not refused: %s\n", bad.c_str());
+		return false;
+	};
+
+	std::filesystem::create_directories(roms + "/good");
+	std::filesystem::create_directories(roms + "/bad");
+	write(roms + "/good/boot.bin", "BOOT");
+	write(roms + "/bad/boot.bin", "BOOT");
+	for (const char *bad : BAD_CONTROLS)
+		refused += refuses(bad);
 	check(refused == static_cast<int>(std::size(BAD_CONTROLS)), "a game with a control that is not one is refused");
+
+	const std::string chip = std::string(256, '0');
+	const std::string bad_chips[] = {
+		R"("mie_eeprom": 3)", "\"mie_eeprom\": \"" + chip.substr(2) + "\"", "\"mie_eeprom\": \"" + chip + "00\"",
+		"\"mie_eeprom\": \"" + chip.substr(1) + "\"", "\"mie_eeprom\": \"" + chip.substr(2) + "0g\"",
+	};
+	refused = 0;
+	for (const std::string &bad : bad_chips)
+		refused += refuses(bad);
+	check(refused == static_cast<int>(std::size(bad_chips)),
+	      "a game whose chip is not 128 bytes in hexadecimal is refused");
+}
+
+/* The CRC of the settings of the BOOTROM (@0C007504): a 32-bit register
+ * from 01A18104, each byte ORed in and shifted out, eight more shifts. */
+uint16_t bootrom_crc(const uint8_t *bytes, size_t size)
+{
+	uint32_t r = 0x01A18104;
+	const auto shift = [&r] {
+		const bool top = (r & 0x80000000u) != 0;
+
+		r <<= 1;
+		if (top)
+			r ^= 0x10210000u;
+	};
+
+	for (size_t i = 0; i < size; i++) {
+		r |= bytes[i];
+		for (int k = 0; k < 8; k++)
+			shift();
+	}
+	for (int k = 0; k < 8; k++)
+		shift();
+	return static_cast<uint16_t>(r >> 16);
+}
+
+/* The chips of new cabinets in the list of the repo (the tests run from the
+ * repo): written by the BOOTROM, each copy right for it, the country U.S.A. */
+void test_shipped_chips()
+{
+	json_error_t error;
+	json_t *const root = json_load_file("odin-games.json", 0, &error);
+	const json_t *const roms = json_object_get(root, "roms");
+	int chips = 0, right = 0;
+
+	for (size_t i = 0; i < json_array_size(roms); i++) {
+		const char *const text = json_string_value(json_object_get(json_array_get(roms, i), "mie_eeprom"));
+		std::vector<uint8_t> b;
+
+		if (!text)
+			continue;
+		chips++;
+		for (const char *c = text; c[0] && c[1]; c += 2)
+			b.push_back(static_cast<uint8_t>(std::stoul(std::string(c, 2), nullptr, 16)));
+		if (b.size() == 128 && std::equal(b.begin(), b.begin() + 64, b.begin() + 64) &&
+		    bootrom_crc(b.data(), 62) == (b[62] | b[63] << 8) && b[5] == 1)
+			right++;
+		else
+			std::printf("not right: %s\n", json_string_value(json_object_get(json_array_get(roms, i), "name")));
+	}
+	json_decref(root);
+	check(chips == 6 && right == 6, "the six games have the chip of a new U.S.A. cabinet, its CRC right");
 }
 
 void test_lists(const std::string &dir)
@@ -298,6 +372,7 @@ int main(int argc, char **argv)
 	test_games(dir);
 	test_roles();
 	test_bad_controls(dir);
+	test_shipped_chips();
 	test_lists(dir);
 	std::filesystem::remove_all(dir + "/games_test_roms");
 	std::filesystem::remove(dir + "/games_test.json");

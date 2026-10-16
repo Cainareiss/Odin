@@ -978,6 +978,8 @@ Hikaru::keep_in(const SaveFolder &saves)
 	else
 		std::printf("saves: '%s'\n", saves.dir().c_str());
 
+	bool settings_kept = false;
+
 	for (const auto &[name, bytes] : kept_memories()) {
 		const std::string path = kept_path(name);
 
@@ -986,7 +988,16 @@ Hikaru::keep_in(const SaveFolder &saves)
 		if (const std::optional<std::vector<uint8_t>> kept = read_kept(path, bytes.size())) {
 			std::copy(kept->begin(), kept->end(), bytes.begin());
 			std::printf("%s: '%s' loaded\n", name, path.c_str());
+			settings_kept = settings_kept || !std::strcmp(name, "mie_eeprom");
 		}
+	}
+	/* Without settings of its own, the chip of a new cabinet of the game
+	 * ("mie_eeprom" in the list): SEGA wrote the country of the market in
+	 * it at the factory, which the BOOTROM does not do (a blank chip is
+	 * JAPAN for it, and no page of its menu reaches the country). */
+	if (m_mie && !settings_kept && m_game.mie_eeprom.size() == m_mie->eeprom().data().size()) {
+		std::copy(m_game.mie_eeprom.begin(), m_game.mie_eeprom.end(), m_mie->eeprom().data().begin());
+		std::printf("mie_eeprom: the settings of a new cabinet\n");
 	}
 }
 

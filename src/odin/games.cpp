@@ -155,6 +155,31 @@ parse_low(const json_t *value)
 	return std::nullopt;
 }
 
+/* Bytes written two hexadecimal figures each */
+std::optional<std::vector<uint8_t>>
+parse_hex(const char *text)
+{
+	const auto figure = [](char c) {
+		if (c >= '0' && c <= '9')
+			return c - '0';
+		if (c >= 'a' && c <= 'f')
+			return c - 'a' + 10;
+		if (c >= 'A' && c <= 'F')
+			return c - 'A' + 10;
+		return -1;
+	};
+	std::vector<uint8_t> bytes;
+
+	if (!text)
+		return std::nullopt;
+	for (const char *c = text; *c; c += 2) {
+		if (!c[1] || figure(c[0]) < 0 || figure(c[1]) < 0)
+			return std::nullopt;
+		bytes.push_back(static_cast<uint8_t>(figure(c[0]) << 4 | figure(c[1])));
+	}
+	return bytes;
+}
+
 /* small letters, figures and _ */
 bool
 is_id(const char *text)
@@ -372,6 +397,15 @@ GameList::load_game(const std::string &rom_dir, const std::string &name) const
 			}
 			ids.push_back(id);
 		}
+	}
+	if (const json_t *const chip = json_object_get(rom, "mie_eeprom")) {
+		auto bytes = parse_hex(json_string_value(chip));
+
+		if (!bytes || bytes->size() != 128) {
+			std::fprintf(stderr, "ERROR: game '%s': \"mie_eeprom\" is not 128 bytes in hexadecimal\n", name.c_str());
+			return std::nullopt;
+		}
+		game.mie_eeprom = std::move(*bytes);
 	}
 	for (size_t i = 0; i < num; i++) {
 		const json_t *const section = json_array_get(sections, i);
