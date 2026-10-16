@@ -482,15 +482,15 @@ chip; PCI1_RES, the display chip): a chip goes back to its power-on state
 when its line falls and does nothing until it rises
 (src/odin/hikaru_gpu.cpp, set_reset_lines). VON4 pulses both when two
 lists in a row did not end (0x0C711C30), then has the slave run a program
-it leaves at 14FFF000, sets the chips again and starts over. Here it
-happens each time its SYSTEM MENU is left with EXIT (the five other games
-reboot through the BOOTROM): the game closes its interrupts 682
+it leaves at 14FFF000, sets the chips again and starts over. It did so
+each time its SYSTEM MENU was left with EXIT while the end of a list was
+told at the end of the line: the game closes its interrupts 682
 instructions after the launch of a last list of 36 instructions, starts
-again from its entry point and clears the causes, so the end of that list
-is never seen. HEURISTIC: a list ends here at the end of a line; on the
-board the end of the analysis may come before the interrupts are closed,
-and the game then starts again without the resets. It waits for the real
-time of a list. Three things come with the resets:
+again from its entry point and clears the causes. Told at its date (see
+the command processor below), the end comes before, and VON4 starts again
+without the resets, as the five other games do; nothing seen pulses the
+two lines since (the attract loops, EXIT, VON4 from power-on). Three things
+come with the resets:
 - HEURISTIC: the command RAM is mirrored up to 14FFFFFF (10FFFFFF for the
   slave), its two upper address lines taken as not wired; only the page at
   FFF000 is seen, and the 8 MB of RAM the RAM test does not reach (IC 33
@@ -524,10 +524,14 @@ send the same lists when the counters read 1000000. Read as 0 too, for
 want of a source: 1A000020 (once at start, 12 times in BRAVEFF) and
 1A08006C, which the frame swap of AIRTRIX and VON4 wants at 0 before it
 launches a list. Bit 0 of 1A000024, which the games read as busy, drops as
-soon as it is written when no list is asked: the libraries write it before
-15000058, so it never reads busy during their lists, and SGNASCAR and VON4,
-which read it thousands of times a loop, never wait on it (as Valkyrie had
-it; what the board answers while it plots is not known). Written and not
+soon as it is written when no list is asked: SGNASCAR writes it before
+15000058, so it never reads busy during its lists (BRAVEFF writes it the
+instruction after, @0C0D3FC8, and it reads busy until the end), and
+SGNASCAR and VON4, which read it thousands of times a loop, never wait on
+it (as Valkyrie had it; what the board answers while it plots is not
+known). HEURISTIC: written while a list is asked it does not launch it
+again; Valkyrie had it do so, and BRAVEFF ran its lists twice once they ran
+from their launch on. Written and not
 understood: 1A000000 and 1A000004 (1 before each launch), 1502C100,
 1502C104, 15040E00,
 1A0000C4, 1A0000D0, 1A0A1600 at start, and 1A0A1FFC, to which VON4 alone
@@ -702,10 +706,18 @@ Tests: tests/antarctic, tests/eurasia, tests/hikaru_gpu. As Valkyrie had it,
 and HEURISTIC: a list is run one instruction a cycle of the SH-4 from its
 launch on, the end of its analysis and the end of its plot are told together
 when it stops, a texture transfer copies one entry a line and a blit is done
-at once. A launch clears the stacks, the bases and the scratch objects
-(Valkyrie did at every vertical blanking; HEURISTIC either way, the six
-attract loops send the same lists). A jump to itself holds the processor
-until the next launch, as BRAVEFF does once at start.
+at once. The slice of the master ends at the launch and the end is told at
+its date (hikaru.cpp, run_cycles): the games leave their SYSTEM MENU by EXIT
+with a short list launched a few hundred instructions before they close
+their interrupts and start again from their entry point without the
+initialisation, and they wait there for the end of that list (SGNASCAR
+@0C075640, the wait @0C0705BC); told at the end of the line it came too late
+and AIRTRIX, BRAVEFF, PODRACE and SGNASCAR stayed black. A list the slave
+launches would start with the next slice (none seen). A launch clears the
+stacks, the bases and the scratch objects (Valkyrie did at every vertical
+blanking; HEURISTIC either way, the six attract loops send the same lists).
+A jump to itself holds the processor until the next launch, as BRAVEFF does
+once at start.
 
 The projection clipping planes are probably scaled by some value, because
 using the ones provided by the games as they are leads to a far too close

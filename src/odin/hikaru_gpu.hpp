@@ -94,12 +94,17 @@ public:
 	bool read(uint32_t addr, unsigned size, uint32_t &value) const;
 	bool write(uint32_t addr, unsigned size, uint32_t value);
 
-	/* Runs the chips for a slice of the frame, cycles of the SH-4 long:
-	 * one entry of the texture transfer, then the display list. */
-	void run(uint32_t cycles);
+	/* Runs the display list from now, one instruction a cycle of the
+	 * SH-4, for cycles at most. True when it ends in them: cycles is then
+	 * the time it took, at the end of which the board calls
+	 * list_ended(). */
+	bool run_list(uint32_t &cycles);
+	/* The list has ended: the busy bits go off and the two chips tell
+	 * that they are done. */
+	void list_ended();
 
-	/* The screen: the end of a line, the two ends of the vertical
-	 * blanking. */
+	/* The screen: the end of a line, which also moves the texture
+	 * transfer by one entry, the two ends of the vertical blanking. */
 	void end_of_line(uint32_t line);
 	void vblank_in();
 	void vblank_out();
@@ -129,8 +134,7 @@ public:
 private:
 	bool display_held() const { return m_gp_res || m_pci1_res; }
 	void update_irq();
-	void list_control_written();
-	void list_ended();
+	void list_control_written(bool launch);
 
 	Antarctic m_antarctic;
 	Eurasia m_eurasia;

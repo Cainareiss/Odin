@@ -70,6 +70,7 @@ struct Machine {
 	std::unique_ptr<Antarctic> cp = std::make_unique<Antarctic>(cmdram, ram_s, texram[0], texram[1]);
 	odin_display_list_t *list = nullptr;
 	bool ended = false;
+	uint32_t left = 0;	/* the budget the last run left */
 
 	void write(uint32_t addr, std::initializer_list<uint32_t> words)
 	{
@@ -88,6 +89,7 @@ struct Machine {
 		list = cp->begin_list();
 		cp->start(LIST, STACK, 0);
 		ended = cp->run(budget);
+		left = budget;
 		cp->end_open_mesh();
 	}
 	const odin_mesh_t &mesh(uint32_t type, uint32_t index) const
@@ -126,7 +128,8 @@ void test_sizes_and_end()
 	Machine n;
 	n.run({ 0x00000000, 0x00000000, 0x00000000, END }, 2);
 	check(!n.ended && n.cp->running(), "a list longer than the budget goes on");
-	check(n.cp->run(10), "and ends at a later call");
+	uint32_t budget = 10;
+	check(n.cp->run(budget) && budget == 8, "and ends at a later call, two instructions on");
 }
 
 void test_invalid()
@@ -134,13 +137,14 @@ void test_invalid()
 	Machine m;
 
 	m.run({ 0x000001FF, END });
-	check(m.ended, "an instruction that does not exist ends the list");
+	check(m.ended && m.left == 999, "an instruction that does not exist ends the list, in a cycle");
 
 	Machine n;
 	n.cp->set_log(nullptr);
 	n.list = n.cp->begin_list();
 	n.cp->start(0x20000000, STACK, 0);
-	check(n.cp->run(10), "a program counter out of the two memories ends the list");
+	uint32_t budget = 10;
+	check(n.cp->run(budget) && budget == 9, "a program counter out of the two memories ends the list, in a cycle");
 }
 
 void test_jump_to_itself()
@@ -150,7 +154,8 @@ void test_jump_to_itself()
 	m.run({ 0x00000012, LIST / 4 }, 100);
 	check(!m.ended && m.cp->running() && m.cp->pc() == LIST, "a jump to itself keeps the processor there");
 	m.write(LIST, { END });
-	check(m.cp->run(10), "until the word is changed");
+	uint32_t budget = 10;
+	check(m.cp->run(budget) && budget == 9, "until the word is changed");
 }
 
 void test_call_and_return()
@@ -390,7 +395,8 @@ void test_registers()
 	m.cp->set_log(nullptr);
 	m.cp->begin_list();
 	m.cp->start_list();
-	check(m.cp->pc() == LIST && m.cp->run(10), "the list starts where 15000070 tells");
+	uint32_t budget = 10;
+	check(m.cp->pc() == LIST && m.cp->run(budget), "the list starts where 15000070 tells");
 	m.cp->list_ended();
 	check(!m.cp->list_asked(), "the two bits go off when the list ends");
 

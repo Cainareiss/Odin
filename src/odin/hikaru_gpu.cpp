@@ -181,23 +181,26 @@ HikaruGpu::update_irq()
  * has displayed them on-screen.)
  */
 
-/* 15000058 or 1A000024 was written. */
+/* 15000058 or 1A000024 was written. 15000058 = 3 launches the list;
+ * 1A000024 does not launch it again (Valkyrie had it do so: BRAVEFF writes it
+ * the instruction after 15000058, and its list ran twice once the command
+ * processor ran from its launch on; SGNASCAR writes it the other way round). */
 void
-HikaruGpu::list_control_written()
+HikaruGpu::list_control_written(bool launch)
 {
 	if (m_antarctic.list_asked()) {
-		m_antarctic.start_list();
-		m_hooks.list_started(m_hooks.ctx);
+		if (launch) {
+			m_antarctic.start_list();
+			m_hooks.list_started(m_hooks.ctx);
+		}
 	} else {
 		/* 1A000024 written with no list asked: nothing to wait for.
-		 * The libraries write it before 15000058, so it does not read
-		 * busy during their lists (HEURISTIC, as Valkyrie had it). */
+		 * SGNASCAR writes it before 15000058, so it does not read busy
+		 * during its lists (HEURISTIC, as Valkyrie had it). */
 		m_eurasia.set_busy(0);
 	}
 }
 
-/* The list has ended: the busy bits go off and the two chips tell that
- * they are done and need feeding. */
 void
 HikaruGpu::list_ended()
 {
@@ -209,22 +212,23 @@ HikaruGpu::list_ended()
 	update_irq();
 }
 
-void
-HikaruGpu::run(uint32_t cycles)
+bool
+HikaruGpu::run_list(uint32_t &cycles)
 {
-	if (m_gp_res)
-		return;
+	uint32_t left = cycles;
 
-	if (m_antarctic.step_texture_transfer())
-		update_irq();
-
-	if (m_antarctic.list_asked() && m_antarctic.run(cycles))
-		list_ended();
+	if (m_gp_res || !m_antarctic.list_asked() || !m_antarctic.run(left))
+		return false;
+	cycles -= left;
+	return true;
 }
 
 void
 HikaruGpu::end_of_line(uint32_t line)
 {
+	if (!m_gp_res && m_antarctic.step_texture_transfer())
+		update_irq();
+
 	if (display_held())
 		return;
 
@@ -284,7 +288,7 @@ HikaruGpu::write(uint32_t addr, unsigned, uint32_t value)
 		case Antarctic::Written::UNKNOWN:
 			return false;
 		case Antarctic::Written::CONTROL:
-			list_control_written();
+			list_control_written(true);
 			break;
 		case Antarctic::Written::CAUSES:
 			update_irq();
@@ -299,7 +303,7 @@ HikaruGpu::write(uint32_t addr, unsigned, uint32_t value)
 	case Eurasia::Written::UNKNOWN:
 		return false;
 	case Eurasia::Written::BUSY:
-		list_control_written();
+		list_control_written(false);
 		break;
 	case Eurasia::Written::CAUSES:
 		update_irq();

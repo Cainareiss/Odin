@@ -196,9 +196,10 @@ public:
 	 * bases are cleared. */
 	void start(uint32_t pc, uint32_t sp0, uint32_t sp1);
 	bool running() const { return m_s.running != 0; }
-	/* Executes up to budget instructions. True when the list ended
-	 * during the call. */
-	bool run(uint32_t budget);
+	/* Executes one instruction a unit of budget while it lasts, an
+	 * instruction that cannot be read included. True when the list
+	 * ended during the call, budget then holding what was left. */
+	bool run(uint32_t &budget);
 	/* Closes the mesh left open when a frame ends in the middle of
 	 * it. */
 	void end_open_mesh();

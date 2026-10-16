@@ -213,7 +213,7 @@ Antarctic::fetch(uint32_t inst[8]) const
 }
 
 bool
-Antarctic::run(uint32_t budget)
+Antarctic::run(uint32_t &budget)
 {
 	const auto &table = insns();
 
@@ -227,6 +227,7 @@ Antarctic::run(uint32_t budget)
 			error("CP %08X: invalid PC, skipping CS", m_s.pc);
 			end_open_mesh();
 			m_s.running = 0;
+			budget--;
 			break;
 		}
 
@@ -235,6 +236,7 @@ Antarctic::run(uint32_t budget)
 			error("CP @%08X: invalid instruction [%08X]", m_s.pc, inst[0]);
 			end_open_mesh();
 			m_s.running = 0;
+			budget--;
 			break;
 		}
 

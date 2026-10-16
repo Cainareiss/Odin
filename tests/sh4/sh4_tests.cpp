@@ -1020,6 +1020,22 @@ void test_on_chip()
 		eq("the instruction after the write did not", st.r[2], 0);
 		eq("SPC", st.spc, CODE + 4);
 	}
+	{
+		/* A device that cuts the run ends it after the write; the next
+		 * run goes on from there. */
+		Machine m;
+		m.put32(DATA, DEVICE);
+		m.on_device = [&m] { m.cpu.cut(); };
+		Sh4State st = run(m, {0x6182, 0x2112, 0xE201, 0xE302, NOP, NOP, NOP, NOP}, 6, [](Sh4State &s) {
+			s.r[8] = DATA;
+		});
+		eq("a cut ends the run after the write", st.r[2], 0);
+		eq("ran() tells the cycles to there", static_cast<uint32_t>(m.cpu.ran()), 2);
+		m.cpu.run(2);
+		st = m.state();
+		eq("the next run goes on after the write", st.r[2] + st.r[3], 3);
+		eq("and runs whole", static_cast<uint32_t>(m.cpu.ran()), 2);
+	}
 }
 
 void test_blocks()

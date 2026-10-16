@@ -103,10 +103,13 @@ void test_list()
 	b.gpu->write(0x15000058, 4, 3);
 	check(b.lists == 1 && b.gpu->antarctic().running(), "15000058 = 3 starts the list");
 	b.gpu->write(0x1A000024, 4, 1);
-	check(b.lists == 2, "1A000024 starts it again while 15000058 = 3");
+	check(b.lists == 1, "1A000024 does not launch it again");
 
-	b.gpu->run(100);
-	check(!b.gpu->antarctic().running(), "the list runs to its end");
+	uint32_t cycles = 100;
+	check(b.gpu->run_list(cycles) && cycles == 1, "the list runs to its end, its one instruction in a cycle");
+	check(!b.gpu->antarctic().running() && b.read(0x15000088) == 0 && !b.gpu->irq_line(),
+	      "the end waits for the board to tell it");
+	b.gpu->list_ended();
 	check(b.read(0x15000088) == 0x84, "end of analysis, and a cause of the display chip");
 	check(b.read(0x1A000018) == 0x4, "which is the end of the plot");
 	check(b.read(0x1A000024) == 0, "the busy bit is clear");
@@ -117,8 +120,27 @@ void test_list()
 	b.gpu->write(0x15000088, 4, ~0x04u);
 	check(!b.gpu->irq_line(), "the line is let go when every cause is written back");
 
-	b.gpu->run(100);
-	check(b.read(0x15000088) == 0, "nothing runs once the list has ended");
+	cycles = 100;
+	check(!b.gpu->run_list(cycles) && b.read(0x15000088) == 0, "nothing runs once the list has ended");
+}
+
+/* A texture transfer moves by one entry a line, however the lines are cut. */
+void test_texture_lines()
+{
+	Board b;
+	const uint32_t table = 0x483FC000, texels = 0x48100000;
+	const uint32_t entries[8] = { texels, 512, 0x0000C080, 1, texels, 512, 0x0000C080, 1 };
+	uint32_t cycles = 1000;
+
+	std::memcpy(&b.cmdram[table & 0x3FFFFF], entries, sizeof(entries));
+	b.gpu->write(0x1500000C, 4, table);
+	b.gpu->write(0x15000010, 4, 2);
+	b.gpu->write(0x15000014, 4, 1);
+	b.gpu->run_list(cycles);
+	b.gpu->end_of_line(0);
+	check(b.read(0x15000014) == 1, "a line copies one entry of two, a slice none");
+	b.gpu->end_of_line(1);
+	check(b.read(0x15000014) == 0 && (b.read(0x15000088) & 1), "the next line the last, and the transfer ends");
 }
 
 void test_bus()
@@ -188,6 +210,7 @@ void test_resets()
 int main()
 {
 	test_list();
+	test_texture_lines();
 	test_bus();
 	test_resets();
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);

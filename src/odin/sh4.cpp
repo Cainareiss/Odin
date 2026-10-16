@@ -81,7 +81,8 @@ Sh4::Sh4(Sh4Bus &bus, std::span<uint8_t> onchip, bool master, bool little_endian
 	  m_translate(false), m_hook_on(false), m_hook_addr(0),
 	  m_wait{}, m_touched(false), m_event(false),
 	  m_intc{}, m_dmac_running{}, m_tmu_running{}, m_tmu_counter{},
-	  m_cycles(0), m_at(0), m_tmu_time(0), m_slice(0), m_retime(false), m_clock_mode(clock_mode),
+	  m_cycles(0), m_at(0), m_tmu_time(0), m_slice(0), m_retime(false), m_cut(false), m_ran(0),
+	  m_clock_mode(clock_mode),
 	  m_pm_running{}, m_pm_counter{},
 	  m_instructions(0), m_skipped(0), m_decoded(0), m_dropped(0)
 {
@@ -936,15 +937,19 @@ void Sh4::wait_check()
 }
 
 /* A slice is cut where a timer raises its interrupt, for the interrupt to
- * be taken at its date, and cut again when the program writes a timer. */
+ * be taken at its date, and cut again when the program writes a timer. The
+ * run ends early where the machine cuts it. */
 int32_t Sh4::run(int32_t cycles)
 {
 	int32_t over = 0;
 
-	while (cycles > 0) {
+	m_cut = false;
+	m_ran = 0;
+	while (cycles > 0 && !m_cut) {
 		int32_t used;
 		over = run_part(std::min(cycles, tmu_next_irq()), used);
 		cycles -= used;
+		m_ran += used;
 	}
 	return over;
 }

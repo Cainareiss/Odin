@@ -174,6 +174,11 @@ public:
 	/* Runs whole instructions for `cycles` cycles; a branch and its
 	 * delay slot are never split. Returns the cycles run past the end. */
 	int32_t run(int32_t cycles);
+	/* Ends the run after the instruction that runs, for the machine to
+	 * start something at that date; ran() then tells the cycles it
+	 * took. */
+	void cut() { m_event = m_retime = m_cut = true; }
+	int32_t ran() const { return m_ran; }
 
 	/* Any source but NMI. */
 	void set_irq(uint32_t source, bool raised);
@@ -656,6 +661,8 @@ private:
 	uint64_t m_cycles, m_at, m_tmu_time;
 	int32_t m_slice;
 	bool m_retime;	/* a timer was written: the slice is cut again */
+	bool m_cut;	/* the machine ends the run, see cut() */
+	int32_t m_ran;	/* the cycles of the last run */
 	uint32_t m_clock_mode;
 	/* Performance counters, 48 bits each */
 	bool m_pm_running[2];

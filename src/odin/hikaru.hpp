@@ -165,8 +165,8 @@ private:
 	void update_irqs();
 	void set_resets(uint8_t pins);
 	void set_gpu_reset_lines();
-	void run_cycles(int cycles);
-	void run_cpu(unsigned which, int cycles);
+	int run_cycles(int cycles);
+	int run_cpu(unsigned which, int cycles);
 	uint64_t line_cycles();
 	void begin_frame();
 	void settle();
@@ -229,7 +229,7 @@ private:
 	/* The memories and the chips are being reset one by one: what one of
 	 * them shows of another is half old, half new until all are. */
 	bool m_resetting;
-	unsigned m_current;	/* the SH-4 that runs, for the messages */
+	unsigned m_current;	/* the SH-4 that runs: for the messages, and the list it launches */
 
 	/* Memories */
 	std::vector<uint8_t> m_ram[2];		/* 32 MB each */

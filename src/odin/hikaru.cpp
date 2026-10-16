@@ -279,9 +279,13 @@ Hikaru::Hikaru(const Game &game, const RomBoard::Config &rombd, bool verbose)
 	memory.texram[1] = m_texram[1];
 	hooks.ctx = this;
 	hooks.irq_changed = [](void *ctx) { static_cast<Hikaru *>(ctx)->update_irqs(); };
+	/* A list the master launches starts at that date: its run ends there
+	 * (run_cycles). One the slave launches starts with the next slice. */
 	hooks.list_started = [](void *ctx) {
 		Hikaru *const board = static_cast<Hikaru *>(ctx);
 
+		if (board->m_current == MASTER)
+			board->m_sh[MASTER]->cut();
 		if (board->m_screen)
 			board->m_screen->list_launched();
 	};
@@ -701,7 +705,7 @@ Hikaru::set_resets(uint8_t pins)
 	}
 }
 
-void
+int
 Hikaru::run_cpu(unsigned which, int cycles)
 {
 	m_current = which;
@@ -718,9 +722,15 @@ Hikaru::run_cpu(unsigned which, int cycles)
 	m_sh[which]->run(cycles);
 	if (m_sh_trace[which])
 		trace_slice(which);
+	return m_sh[which]->ran();
 }
 
-void
+/* A slice of the frame, up to `cycles` long; returns the cycles it took.
+ * The display list goes first, one instruction a cycle of the SH-4
+ * (HEURISTIC): a list that ends in the slice ends it, and the end is told
+ * at its date, for the master to take the interrupt there. A list the
+ * master launches ends the slice too, see the hook list_started. */
+int
 Hikaru::run_cycles(int cycles)
 {
 	/* ODIN_STATS: the host time since the part before goes to this one. */
@@ -734,34 +744,40 @@ Hikaru::run_cycles(int cycles)
 		}
 	};
 
-	run_cpu(MASTER, cycles);
-	took(MASTER);
-	run_cpu(SLAVE, cycles);
-	took(SLAVE);
-
-	m_eeprom.tick(static_cast<uint32_t>(cycles));
-
-	/* The memory controllers have nothing to run: a transfer is done at
-	 * once. */
-	m_gpu->run(static_cast<uint32_t>(cycles));
+	uint32_t length = static_cast<uint32_t>(cycles);
+	const bool list_ends = m_gpu->run_list(length);
 	took(PART_GPU);
 
+	const int ran = run_cpu(MASTER, static_cast<int>(length));
+	took(MASTER);
+	run_cpu(SLAVE, ran);
+	took(SLAVE);
+
+	m_eeprom.tick(static_cast<uint32_t>(ran));
+
+	/* The memory controllers have nothing to run: a transfer is done at
+	 * once. The end of the list is told here, at its date, unless a list
+	 * launched in the slice has taken its place. */
+	if (list_ends && !m_gpu->antarctic().running())
+		m_gpu->list_ended();
+
 	if (m_mie)
-		m_mie->run(static_cast<uint32_t>(cycles));
+		m_mie->run(static_cast<uint32_t>(ran));
 	/* Its program may have written the mask of the interrupts. */
 	update_irqs();
 	took(PART_MIE);
 
 	/* The two sound boards, unless their reset line is low */
 	if (m_mie_port_d & 0x20) {
-		m_sound[SLAVE]->run(static_cast<uint32_t>(cycles));
-		m_sound[MASTER]->run(static_cast<uint32_t>(cycles));
+		m_sound[SLAVE]->run(static_cast<uint32_t>(ran));
+		m_sound[MASTER]->run(static_cast<uint32_t>(ran));
 	} else {
-		m_sound[MASTER]->silence(static_cast<uint32_t>(cycles));
-		m_sound[SLAVE]->silence(static_cast<uint32_t>(cycles));
+		m_sound[MASTER]->silence(static_cast<uint32_t>(ran));
+		m_sound[SLAVE]->silence(static_cast<uint32_t>(ran));
 	}
 	took(PART_SOUND);
 	m_stats_slices++;
+	return ran;
 }
 
 /* The cycles of the next line. A line is not a whole number of cycles: the
@@ -810,10 +826,10 @@ Hikaru::run_frame()
 
 	while (!done) {
 		const uint64_t next = m_sched.next();
+		const int ran = run_cycles(static_cast<int>(next - m_sched.now()));
 		uint32_t event;
 
-		run_cycles(static_cast<int>(next - m_sched.now()));
-		m_sched.advance(next);
+		m_sched.advance(m_sched.now() + static_cast<uint64_t>(ran));
 
 		while (m_sched.take(event)) {
 			m_gpu->end_of_line(m_line++);
