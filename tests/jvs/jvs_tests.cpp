@@ -224,6 +224,21 @@ void test_jvs()
 	d = decode(r, ok);
 	check(ok && d.size() == 4 && d[2] == 0x00 && d[3] == 0xE0, "neither changed the coins");
 
+	/* A refused command answers report 2 alone; the reading goes on past
+	 * the bytes it took, and for the outputs past their data. */
+	r = send(host, frame(0x01, { 0x22, 0x09, 0x11 }));
+	d = decode(r, ok);
+	check(ok && d == std::vector<uint8_t>({ 0x01, 0x02, 0x01, 0x11 }), "analog refused, then 11 answered");
+	r = send(host, frame(0x01, { 0x20, 0x03, 0x02, 0x12 }));
+	d = decode(r, ok);
+	check(ok && d == std::vector<uint8_t>({ 0x01, 0x02, 0x01, 0x20 }), "switches refused, then 12 answered");
+	r = send(host, frame(0x01, { 0x32, 0x02, 0xAA, 0xBB, 0x13 }));
+	d = decode(r, ok);
+	check(ok && d == std::vector<uint8_t>({ 0x01, 0x02, 0x01, 0x10 }), "outputs refused with their data, then 13");
+	r = send(host, frame(0x01, { 0x35, 0x03, 0x00, 0x01, 0x11 }));
+	d = decode(r, ok);
+	check(ok && d == std::vector<uint8_t>({ 0x01, 0x02, 0x01, 0x11 }), "coin slot refused with its count, then 11");
+
 	/* A counter that would leave 0..3FFF: report 2, counter kept. */
 	r = send(host, frame(0x01, { 0x30, 0x01, 0x00, 0xE1 }));
 	d = decode(r, ok);

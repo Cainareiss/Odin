@@ -210,11 +210,14 @@ protected:
 	virtual bool coin_add(uint8_t, int32_t) { return false; }
 	virtual int32_t analogs(std::span<uint8_t>, uint8_t) { return -1; }
 	virtual bool swoutputs(std::span<const uint8_t>) { return false; }
+	/* Whether a refused GENERIC_OUTPUT_1 skips its data bytes, or leaves
+	 * them to be read as the next commands. */
+	virtual bool refused_outputs_skip_data() const { return true; }
 	virtual void device_reset() {}
 
 private:
-	/* Returns the request bytes consumed, 0 for a bad parameter, -1
-	 * for an unknown command. `used` receives the reply bytes. */
+	/* Returns the request bytes consumed, the command refused or not, or
+	 * -1 for an unknown command. `used` receives the reply bytes. */
 	int32_t handle_message(std::span<const uint8_t> in, std::span<uint8_t> out, uint32_t &used);
 
 	JvsDevice *m_next;

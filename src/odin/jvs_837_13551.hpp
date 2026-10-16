@@ -56,6 +56,8 @@ protected:
 	bool coin_add(uint8_t slot, int32_t count) override;
 	int32_t analogs(std::span<uint8_t> out, uint8_t channels) override;
 	bool swoutputs(std::span<const uint8_t> values) override;
+	/* 315-6215 at 122F: past the count, the data of a refused 32 */
+	bool refused_outputs_skip_data() const override { return true; }
 	void device_reset() override;
 
 private:

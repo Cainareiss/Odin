@@ -15,6 +15,27 @@ namespace odin {
 
 using namespace jvs;
 
+namespace {
+
+/* A command done: its report, then the `n` bytes it wrote after it. */
+int32_t done(std::span<uint8_t> out, uint32_t &used, int32_t n, uint32_t request)
+{
+	out[0] = REPORT_NORMAL;
+	used = static_cast<uint32_t>(1 + n);
+	return static_cast<int32_t>(request);
+}
+
+/* A command refused: report 2 alone. The boards read on past the request
+ * bytes it took (315-6215 at 050B, epr-21868 at 06DF). */
+int32_t refused(std::span<uint8_t> out, uint32_t &used, size_t left, uint32_t request)
+{
+	out[0] = REPORT_PARAMETER_COUNT;
+	used = 1;
+	return static_cast<int32_t>(request < left ? request : left);
+}
+
+} /* namespace */
+
 /* Host */
 
 JvsHost::JvsHost()
@@ -216,10 +237,6 @@ uint32_t JvsDevice::message(uint8_t dest, std::span<const uint8_t> in, std::span
 				unknown = true;
 				break;
 			}
-			if (len == 0) {
-				out[pos++] = REPORT_PARAMETER_COUNT;
-				break;
-			}
 			pos += used;
 			s += static_cast<size_t>(len);
 		}
@@ -246,7 +263,7 @@ int32_t JvsDevice::handle_message(std::span<const uint8_t> in, std::span<uint8_t
 	case RESET:
 		/* Sent twice. */
 		if (in.size() < 2 || in[1] != RESET_CHECK) {
-			return 0;
+			return refused(out, used, in.size(), 2);
 		}
 		m_reset_counter = old_reset_counter + 1;
 		if (m_reset_counter == 2) {
@@ -292,67 +309,33 @@ int32_t JvsDevice::handle_message(std::span<const uint8_t> in, std::span<uint8_t
 	}
 
 	case SWITCH_INPUTS: {
-		if (in.size() < 3) {
-			return 0;
-		}
-		out[0] = REPORT_NORMAL;
-		const int32_t n = switches(out.subspan(1), in[1], in[2]);
-		if (n < 0) {
-			return 0;
-		}
-		used = static_cast<uint32_t>(1 + n);
-		return 3;
+		const int32_t n = in.size() < 3 ? -1 : switches(out.subspan(1), in[1], in[2]);
+		return n < 0 ? refused(out, used, in.size(), 3) : done(out, used, n, 3);
 	}
 
 	case COIN_INPUTS: {
-		if (in.size() < 2) {
-			return 0;
-		}
-		out[0] = REPORT_NORMAL;
-		const int32_t n = coin_counters(out.subspan(1), in[1]);
-		if (n < 0) {
-			return 0;
-		}
-		used = static_cast<uint32_t>(1 + n);
-		return 2;
+		const int32_t n = in.size() < 2 ? -1 : coin_counters(out.subspan(1), in[1]);
+		return n < 0 ? refused(out, used, in.size(), 2) : done(out, used, n, 2);
 	}
 
 	case ANALOG_INPUTS: {
-		if (in.size() < 2) {
-			return 0;
-		}
-		out[0] = REPORT_NORMAL;
-		const int32_t n = analogs(out.subspan(1), in[1]);
-		if (n < 0) {
-			return 0;
-		}
-		used = static_cast<uint32_t>(1 + n);
-		return 2;
+		const int32_t n = in.size() < 2 ? -1 : analogs(out.subspan(1), in[1]);
+		return n < 0 ? refused(out, used, in.size(), 2) : done(out, used, n, 2);
 	}
 
 	case COIN_COUNTER_DECREASE:
-		if (in.size() < 4) {
-			return 0;
-		}
-		out[0] = REPORT_NORMAL;
-		used = 1;
-		return coin_add(in[1], -static_cast<int32_t>((in[2] << 8) | in[3])) ? 4 : 0;
+	case COIN_COUNTER_INCREASE: {
+		const int32_t count = in.size() < 4 ? 0 : (in[2] << 8) | in[3];
+		const bool taken = in.size() >= 4 && coin_add(in[1], in[0] == COIN_COUNTER_DECREASE ? -count : count);
+		return taken ? done(out, used, 0, 4) : refused(out, used, in.size(), 4);
+	}
 
-	case COIN_COUNTER_INCREASE:
-		if (in.size() < 4) {
-			return 0;
-		}
-		out[0] = REPORT_NORMAL;
-		used = 1;
-		return coin_add(in[1], static_cast<int32_t>((in[2] << 8) | in[3])) ? 4 : 0;
-
-	case GENERIC_OUTPUT_1:
-		if (in.size() < 2 || in.size() < 2u + in[1]) {
-			return 0;
-		}
-		out[0] = REPORT_NORMAL;
-		used = 1;
-		return swoutputs(in.subspan(2, in[1])) ? static_cast<int32_t>(2 + in[1]) : 0;
+	case GENERIC_OUTPUT_1: {
+		const uint32_t bytes = in.size() < 2 ? 0 : in[1];
+		const bool taken = in.size() >= 2u + bytes && swoutputs(in.subspan(2, bytes));
+		return taken ? done(out, used, 0, 2 + bytes)
+		             : refused(out, used, in.size(), refused_outputs_skip_data() ? 2 + bytes : 2);
+	}
 
 	/* The programs of the 837-13551 (315-6215, jump table at 3000) and of
 	 * the 837-13741 (epr-21868, 058B) take no other command: 31, 33, 34,
