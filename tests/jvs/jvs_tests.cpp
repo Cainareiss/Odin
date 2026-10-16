@@ -20,15 +20,17 @@
 
 /* Checks of the JVS cable with the 837-13551 board behind it, frames
  * built and read the way the MIE program does: sync, marks, checksum,
- * reset, address, identification, feature list, polls, outputs.
+ * reset, address, identification, feature list, polls, outputs. Then the
+ * 837-13741 of NASCAR, against what its program epr-21868 answers.
  *
  * Build: g++ -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
  *            -O2 -I src tests/jvs/jvs_tests.cpp src/odin/jvs.cpp \
- *            src/odin/jvs_837_13551.cpp -o jvs_tests
+ *            src/odin/jvs_837_13551.cpp src/odin/jvs_837_13741.cpp -o jvs_tests
  * Exit status is 0 when every check passes. */
 
 #include "odin/jvs.hpp"
 #include "odin/jvs_837_13551.hpp"
+#include "odin/jvs_837_13741.hpp"
 
 #include <cstdio>
 #include <cstring>
@@ -273,11 +275,52 @@ void test_jvs()
 	check(ok && d == std::vector<uint8_t>({ 0x01, 0x01 }) && board.outputs()[0] == 0xA8, "driver outputs");
 }
 
+void test_837_13741()
+{
+	Inputs inputs;
+	odin::JvsHost host;
+	odin::Jvs837_13741 board(inputs);
+	host.add_device(&board);
+	bool ok = false;
+
+	send(host, frame(0xFF, { 0xF1, 0x01 }));
+	std::vector<uint8_t> d = decode(send(host, frame(0x01, { 0x10 })), ok);
+	const char *id = "SEGA ENTERPRISES,LTD.;837-13741  I/O CONTROL BD2;Ver0.15;99/06";
+	check(ok && d.size() == 2 + std::strlen(id) + 1 && std::memcmp(d.data() + 2, id, std::strlen(id) + 1) == 0,
+	      "13741: identification (block 44BC)");
+
+	d = decode(send(host, frame(0x01, { 0x11, 0x12, 0x13, 0x14 })), ok);
+	check(ok && d == std::vector<uint8_t>({
+		0x01, 0x01, 0x11, 0x01, 0x20, 0x01, 0x10,
+		0x01, 0x01, 0x02, 0x0C, 0x00, 0x02, 0x02, 0x00, 0x00, 0x03, 0x08, 0x00, 0x00, 0x12, 0x16, 0x00, 0x00, 0x00 }),
+	      "13741: versions and features (blocks 45A3 to 45AC)");
+
+	/* TEST and TILT only; 12 switches a player. */
+	inputs.sys = 0xFF;
+	inputs.p[0] = 0x8FFF;
+	inputs.p[1] = 0x0130;
+	d = decode(send(host, frame(0x01, { 0x20, 0x02, 0x02 })), ok);
+	check(ok && d == std::vector<uint8_t>({ 0x01, 0x01, 0xC0, 0x8F, 0xF0, 0x01, 0x30 }), "13741: switches, 12 bits");
+	d = decode(send(host, frame(0x01, { 0x20, 0x00, 0x00, 0x20, 0x00, 0x01, 0x20, 0x01, 0x00 })), ok);
+	check(ok && d == std::vector<uint8_t>({ 0x01, 0x01, 0xC0, 0x02, 0x02 }),
+	      "13741: no player gives the system byte, unless bytes are asked; a player needs bytes");
+
+	/* 22 outputs: up to 3 bytes; a refused 32 leaves its data to be read
+	 * as commands. */
+	d = decode(send(host, frame(0x01, { 0x32, 0x03, 0x12, 0x34, 0x56 })), ok);
+	check(ok && d == std::vector<uint8_t>({ 0x01, 0x01 }) && board.outputs()[0] == 0x12 && board.outputs()[1] == 0x34 &&
+	      board.outputs()[2] == 0x56, "13741: three bytes of outputs");
+	d = decode(send(host, frame(0x01, { 0x32, 0x04, 0x11, 0x12, 0x13, 0x99 })), ok);
+	check(ok && d == std::vector<uint8_t>({ 0x02, 0x02, 0x01, 0x11, 0x01, 0x20, 0x01, 0x10 }),
+	      "13741: four bytes refused, their data read as 11, 12, 13 and the unknown 99");
+}
+
 } /* namespace */
 
 int main()
 {
 	test_jvs();
+	test_837_13741();
 	std::printf("%u checks passed, %u failed\n", g_passed, g_failed);
 	return g_failed ? 1 : 0;
 }

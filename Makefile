@@ -60,6 +60,7 @@ OBJ := \
 	src/odin/z80_ops.o \
 	src/odin/jvs.o \
 	src/odin/jvs_837_13551.o \
+	src/odin/jvs_837_13741.o \
 	src/odin/card_reader.o \
 	src/odin/sound_board.o \
 	src/odin/aica.o \
