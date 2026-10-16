@@ -57,8 +57,8 @@ ODIN_TURNS=0 runs every turn: the memory, the states and the pictures must
 be the same. What is left of the sound boards is mostly what each of the
 1 470 samples of a frame costs by itself, turns counted or not.
 The ARM7 runs each instruction from what it decoded the last time, the
-word checked first (Arm7::run_decoded). ODIN_ARM7_TRANSLATE=1, a test for
-now: its blocks run as host code (src/odin/arm7_host.cpp says how,
+word checked first (Arm7::run_decoded). By default its blocks run as host
+code (ODIN_ARM7_TRANSLATE=0: read; src/odin/arm7_host.cpp says how,
 arm7_translate.cpp what), each word still checked before it runs. Data
 processing with a value or a register shifted by a value, LDR and STR in
 the sound memory, B and BL are done in place, flags and cycles as the

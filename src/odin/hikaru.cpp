@@ -461,9 +461,10 @@ Hikaru::build_sound(unsigned which)
 	/* ODIN_ARM7_DECODED=0: the ARM7 decodes every instruction it runs,
 	 * to compare with. */
 	m_sound[which]->set_arm_decoded(env_flag("ODIN_ARM7_DECODED", true));
-	/* ODIN_ARM7_TRANSLATE=1, a test for now: the blocks of the ARM7 run as
-	 * host code. The memory and the sound must be the same. */
-	m_sound[which]->set_arm_translate(env_flag("ODIN_ARM7_TRANSLATE", false));
+	/* The blocks of the ARM7 run as host code where the host allows it;
+	 * ODIN_ARM7_TRANSLATE=0 has them read, for comparing. The memory and
+	 * the sound are the same either way. */
+	m_sound[which]->set_arm_translate(env_flag("ODIN_ARM7_TRANSLATE", true));
 
 	/* VK_ARM7_TRACE=<prefix> writes <prefix>-m.txt / <prefix>-s.txt */
 	if (const char *prefix = std::getenv("VK_ARM7_TRACE")) {

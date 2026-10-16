@@ -76,7 +76,8 @@ public:
 	/* The ARM7 runs what it decoded once (Arm7::set_decoded): on at
 	 * first. */
 	void set_arm_decoded(bool on) { m_arm.set_decoded(on); }
-	/* Its blocks run as host code (Arm7::set_translate): off at first. */
+	/* Its blocks run as host code (Arm7::set_translate): off until the
+	 * machine says. */
 	void set_arm_translate(bool on) { m_arm.set_translate(on); }
 	uint32_t arm_host_bytes() const { return m_arm.host_bytes(); }
 	/* The reset pin of the board: as reset, but the clock keeps its
