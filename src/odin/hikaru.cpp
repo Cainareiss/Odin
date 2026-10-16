@@ -988,14 +988,16 @@ Hikaru::power_off()
 	};
 
 	settle();
-	for (const auto &memory : memories) {
-		const std::string path = m_game.name + "-" + memory.name + ".bin";
-		std::FILE *const file = std::fopen(path.c_str(), "wb");
+	if (env_flag("ODIN_DUMPS")) {
+		for (const auto &memory : memories) {
+			const std::string path = m_game.name + "-" + memory.name + ".bin";
+			std::FILE *const file = std::fopen(path.c_str(), "wb");
 
-		if (!file)
-			continue;
-		std::fwrite(memory.bytes.data(), 1, memory.bytes.size(), file);
-		std::fclose(file);
+			if (!file)
+				continue;
+			std::fwrite(memory.bytes.data(), 1, memory.bytes.size(), file);
+			std::fclose(file);
+		}
 	}
 
 	for (const auto &[name, bytes] : kept_memories())

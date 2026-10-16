@@ -128,7 +128,7 @@ of the slave is not run (as Valkyrie had it: no game is known to start a
 transfer there).
 The backup RAM of the main board (64 KB) is kept in the save folder of
 the game (see Saves below) and, for looking at it, written to
-<game>-bram.bin on exit with the other memories.
+<game>-bram.bin on exit with the other memories when ODIN_DUMPS=1.
 Ports 0x40/0x60/0x80/0x81, touched by the mask ROM init, are logged as
 unknown. The serial adapter block (ports 0x09-0x0E) is modelled from
 the Z80 code von4 uploads; its reply delays are HEURISTIC (mie.cpp

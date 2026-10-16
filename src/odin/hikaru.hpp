@@ -120,8 +120,8 @@ public:
 	void reset();
 	void run_frame();
 	/* Power-off: what the board keeps without power goes to the disk; and
-	 * for looking at them, the memories to <game>-<memory>.bin in the
-	 * current folder. */
+	 * with ODIN_DUMPS=1, for looking at them (the tests), the memories to
+	 * <game>-<memory>.bin in the current folder. */
 	void power_off();
 
 	/* False, with the reason on stderr, if the state could not be written
