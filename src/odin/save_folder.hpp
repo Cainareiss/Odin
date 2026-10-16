@@ -34,8 +34,9 @@ namespace odin {
 class SaveFolder {
 public:
 	/* <folder>/<game> with ODIN_SAVES=<folder>; else <data>/odin/saves/<game>,
-	 * <data> being XDG_DATA_HOME or the .local/share of the home of the
-	 * user. None with ODIN_SAVES=none, or without a home. */
+	 * <data> being %APPDATA% on Windows, ~/Library/Application Support on
+	 * macOS, XDG_DATA_HOME or ~/.local/share elsewhere. None with
+	 * ODIN_SAVES=none, or when there is no such place. */
 	static SaveFolder of_game(const std::string &game);
 
 	SaveFolder() = default;

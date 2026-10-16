@@ -28,19 +28,44 @@
 
 namespace odin {
 
+namespace {
+
+/* Where the user keeps the data of programs: %APPDATA% on Windows,
+ * ~/Library/Application Support on macOS, XDG_DATA_HOME or ~/.local/share
+ * elsewhere. Empty when it cannot be told. */
+std::string
+user_data_dir()
+{
+#if defined(_WIN32)
+	const char *const appdata = std::getenv("APPDATA");
+
+	return appdata && appdata[0] ? appdata : std::string();
+#elif defined(__APPLE__)
+	const std::string home = home_dir();
+
+	return home.empty() ? home : home + "/Library/Application Support";
+#else
+	const char *const data = std::getenv("XDG_DATA_HOME");
+	const std::string home = home_dir();
+
+	if (data && data[0])
+		return data;
+	return home.empty() ? home : home + "/.local/share";
+#endif
+}
+
+} /* namespace */
+
 SaveFolder
 SaveFolder::of_game(const std::string &game)
 {
 	const char *const chosen = std::getenv("ODIN_SAVES");
-	const char *const data = std::getenv("XDG_DATA_HOME");
-	const std::string home = home_dir();
+	const std::string data = user_data_dir();
 
 	if (chosen && chosen[0])
 		return std::strcmp(chosen, "none") ? SaveFolder(std::string(chosen) + "/" + game) : SaveFolder();
-	if (data && data[0])
-		return SaveFolder(std::string(data) + "/odin/saves/" + game);
-	if (!home.empty())
-		return SaveFolder(home + "/.local/share/odin/saves/" + game);
+	if (!data.empty())
+		return SaveFolder(data + "/odin/saves/" + game);
 	return SaveFolder();
 }
 

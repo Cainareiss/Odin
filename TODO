@@ -358,8 +358,9 @@ EXIT line: how to reach it is not found.
 Saves: what the board keeps without power (the three EEPROMs, the 64 KB
 backup RAM, the clock) is read at start and written on exit in a folder
 of the game, a file for each, named as MAME names them (main_eeprom,
-mie_eeprom, rombd_eeprom, nvram; and clock): ~/.local/share/odin/saves/
-<game>, or $XDG_DATA_HOME/odin/saves/<game> (src/odin/save_folder.cpp).
+mie_eeprom, rombd_eeprom, nvram; and clock): <data>/odin/saves/<game>,
+<data> being %APPDATA% on Windows, ~/Library/Application Support on macOS,
+$XDG_DATA_HOME or ~/.local/share elsewhere (src/odin/save_folder.cpp).
 ODIN_SAVES=<folder> takes <folder>/<game>, ODIN_SAVES=none reads and
 writes nothing: the tests use it. ODIN_MIE_EEPROM=<file> and
 ODIN_CLOCK_FILE=<file> keep these two elsewhere. Nothing is written
