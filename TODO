@@ -152,9 +152,21 @@ head of a frame to every node, which it reads for nothing else
 (SET_ADDRESS aside). HEURISTIC: the board is ready again at once, where
 the programs first test their memory (the MIE program waits 1.27 s
 before its next frame). Not copied yet, HEURISTIC: the reply delay
-(JVS_TURNAROUND_BYTES in mie.cpp); the coin condition bits (always 0);
-the debounce of the switches and the coins; what the
-837-13551 answers for 0 players. The outputs of the boards: each game
+(JVS_TURNAROUND_BYTES in mie.cpp); the coins and the switches, which the
+programs read at each tick of a timer whose period is not known
+(epr-21868 at 0828: neither the clock of its D71054 nor the counter that
+interrupts is known). There a coin counts when its switch opens after 3
+ticks closed and 3 open; closed over 1500 ticks it is a jam (condition 40)
+and does not count; a coin meter whose return pin reads 1 gives
+condition 80 and stops its slot (115C, 12F5); a byte of switches changes
+when 3 readings in a row agree (12BA). Here a coin counts when its key is
+pressed and the conditions stay 0. Not copied either, as no host sends
+them: DATA_RETRANSMIT (2F), which both programs answer with their last
+reply as it was (epr-21868 at 061F, 315-6215 at 04F6); more than 2 bytes
+a player in SWITCH_INPUTS, which the 837-13551 answers with nothing, not
+even a report (0D5C; here report 2). For 0 players or 0 bytes it gives
+report 1 and the system byte (0D1A), as here.
+The outputs of the boards: each game
 lists those the host uses ("outputs" in odin-games.json, read in its
 OUTPUT TEST); the nozzle vibration of BRAVEFF (outputs 2 and 5) shakes
 the pad of its player (both motors at C000 while it is on: a choice of
