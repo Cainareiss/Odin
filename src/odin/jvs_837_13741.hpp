@@ -39,6 +39,8 @@ public:
 
 	explicit Jvs837_13741(JvsInputs &inputs) : JvsIoBoard(inputs) {}
 
+	uint32_t sum_error_cycles(size_t request_bytes) const override;
+
 protected:
 	const char *device_id() const override;
 	/* Blocks 45A3, 45A6, 45A9 */
@@ -54,6 +56,8 @@ protected:
 	bool reset_in_any_frame() const override { return true; }
 	/* 1D52, 1E9A: 0 refused, 1 the first, any other the second */
 	int coin_slot(uint8_t slot) const override { return slot == 0 ? -1 : slot == 1 ? 0 : 1; }
+	uint32_t frame_cycles(size_t request_bytes, size_t reply_bytes) const override;
+	uint32_t command_cycles(std::span<const uint8_t> command, Outcome outcome) const override;
 };
 
 } /* namespace odin */

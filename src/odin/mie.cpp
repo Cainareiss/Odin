@@ -86,8 +86,9 @@ constexpr uint32_t UART_CLOCKS_PER_BIT = 16;
  * are counted in ticks of 1/9.216 GHz, in which both clocks are whole. */
 constexpr uint32_t TICKS_PER_Z80_CYCLE = 576;
 constexpr uint32_t TICKS_PER_UART_CLOCK = 625;
-/* Time the I/O board takes to start answering, in characters. JVS
- * boards answer within a few character times; not measured. */
+/* For an I/O board whose program was not timed (JvsHost::reply_cycles), the
+ * time from the end of the request to the end of the first byte of the
+ * reply, in characters. HEURISTIC: not measured. */
 constexpr uint32_t JVS_TURNAROUND_BYTES = 2;
 
 /* Serial adapter block, ports 0x09-0x0E (MAME mie.cpp: "315-5649-style
@@ -533,7 +534,10 @@ void Mie::uart_write(uint8_t reg, uint8_t value)
 }
 
 /* The driver was switched off: the frame is on the bus, the board
- * answers after its turnaround time. */
+ * answers after its turnaround time. A timed board starts its reply after
+ * the clocks its program takes, at the clock of the MIE (the 315-6146 of
+ * the 837-13741 sits beside the same two crystals); its first byte lands a
+ * character later. */
 void Mie::uart_commit_frame()
 {
 	MieUartState &u = m_uart;
@@ -551,7 +555,14 @@ void Mie::uart_commit_frame()
 	for (uint32_t i = 0; i < u.wire_count; i++) {
 		u.wire[i] = reply[i];
 	}
-	u.wire_ticks = u.wire_count ? uart_byte_ticks() * JVS_TURNAROUND_BYTES : 0;
+	const uint32_t cycles = m_jvs->reply_cycles();
+
+	if (!u.wire_count)
+		u.wire_ticks = 0;
+	else if (cycles)
+		u.wire_ticks = cycles * TICKS_PER_Z80_CYCLE + uart_byte_ticks();
+	else
+		u.wire_ticks = uart_byte_ticks() * JVS_TURNAROUND_BYTES;
 }
 
 void Mie::uart_tick(uint32_t cycles)

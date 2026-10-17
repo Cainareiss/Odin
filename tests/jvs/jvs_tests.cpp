@@ -186,6 +186,7 @@ void test_jvs()
 	r = send(host, frame(0x01, { 0x20, 0x02, 0x02, 0x21, 0x02, 0x22, 0x08 }));
 	d = decode(r, ok);
 	check(ok && d.size() == 1 + 6 + 5 + 17, "poll reply size");
+	check(host.reply_cycles() == 0, "the program of the 837-13551 is not timed");
 	check(d.size() >= 7 && d[0] == 0x01 && d[1] == 0x01 && d[2] == 0x80 && d[3] == 0x80 && d[4] == 0x40 &&
 	      d[5] == 0x00 && d[6] == 0x04, "switch bytes");
 	check(d.size() >= 12 && d[7] == 0x01 && d[8] == 0x00 && d[9] == 0x00 && d[10] == 0x00 && d[11] == 0x01, "coin counters");
@@ -292,6 +293,7 @@ void test_837_13741()
 	bool ok = false;
 
 	send(host, frame(0xFF, { 0xF1, 0x01 }));
+	check(host.reply_cycles() == 1740, "13741: its address answered after 1740 clocks");
 	std::vector<uint8_t> d = decode(send(host, frame(0x01, { 0x10 })), ok);
 	const char *id = "SEGA ENTERPRISES,LTD.;837-13741  I/O CONTROL BD2;Ver0.15;99/06";
 	check(ok && d.size() == 2 + std::strlen(id) + 1 && std::memcmp(d.data() + 2, id, std::strlen(id) + 1) == 0,
@@ -321,6 +323,25 @@ void test_837_13741()
 	d = decode(send(host, frame(0x01, { 0x32, 0x04, 0x11, 0x12, 0x13, 0x99 })), ok);
 	check(ok && d == std::vector<uint8_t>({ 0x02, 0x02, 0x01, 0x11, 0x01, 0x20, 0x01, 0x10 }),
 	      "13741: four bytes refused, their data read as 11, 12, 13 and the unknown 99");
+
+	/* The time to a reply, as its program takes it (epr21868_bench): the
+	 * poll of NASCAR, a checksum that does not match. */
+	d = decode(send(host, frame(0x01, { 0x20, 0x02, 0x02, 0x21, 0x02, 0x22, 0x08 })), ok);
+	check(ok && d.size() == 29 && host.reply_cycles() == 6206, "13741: the poll answers after 6206 clocks");
+	std::vector<uint8_t> wrong = frame(0x01, { 0x10 });
+	wrong.back() = static_cast<uint8_t>(wrong.back() + 1);
+	send(host, wrong);
+	check(host.reply_cycles() == 1149, "13741: a checksum that does not match, after 1149");
+	send(host, frame(0x01, { 0x11, 0x99 }));
+	check(host.reply_cycles() == 2140, "13741: an unknown command has its time");
+	send(host, frame(0x01, { 0x22, 0x09, 0x11 }));
+	check(host.reply_cycles() == 2394, "13741: a refused command has its own");
+	check(send(host, frame(0x02, { 0x10 })).empty() && host.reply_cycles() == 0, "13741: no reply, no time");
+	send(host, frame(0x01, { 0x30, 0x01, 0x3F, 0xFF }));
+	check(host.reply_cycles() == 2095, "13741: a count refused below 0 has the time of its refusal");
+	send(host, frame(0x01, { 0x10 }));
+	send(host, frame(0x00, { 0x10 }));
+	check(host.reply_cycles() == 0, "13741: a frame to the host is answered by none of its programs");
 
 	/* Coin slots: 0 refused, 1 the first, any other the second. */
 	d = decode(send(host, frame(0x01, { 0x35, 0x03, 0x00, 0x05, 0x35, 0xFF, 0x00, 0x02, 0x35, 0x00, 0x00, 0x01 })), ok);

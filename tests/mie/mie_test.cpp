@@ -38,6 +38,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <string>
 #include <vector>
 
 namespace {
@@ -400,6 +401,43 @@ void test_uart_speed()
 	check(turns >= 336 && turns <= 339, "nine characters at 115200 bauds");
 }
 
+/* The first byte of a reply: the program sends F1 01 to every node, waits
+ * for the end of its last character, switches the driver off, then counts
+ * turns of a loop of 37 clocks until a byte is there. The 837-13741 starts
+ * its reply 1740 clocks after the request (epr21868_bench) and the byte
+ * lands a character (1388.9 clocks) later: 84.6 turns. The 837-13551 is not
+ * timed: two characters, 75.1 turns. */
+unsigned first_byte_turns(const std::string &io_board)
+{
+	std::vector<uint8_t> rom(2048, 0), ram(32768, 0);
+	const std::vector<uint8_t> program = {
+		0x3E, 0x80, 0xD3, 0x13, 0x3E, 0x08, 0xD3, 0x10, 0xAF, 0xD3, 0x13,	/* the divisor at 8 */
+		0x3E, 0x01, 0xD3, 0x90,							/* the driver on */
+		0x3E, 0xE0, 0xD3, 0x10, 0x3E, 0xFF, 0xD3, 0x10, 0x3E, 0x03, 0xD3, 0x10,
+		0x3E, 0xF1, 0xD3, 0x10, 0x3E, 0x01, 0xD3, 0x10, 0x3E, 0xF4, 0xD3, 0x10,
+		0xDB, 0x15, 0xCB, 0x77, 0x28, 0xFA,					/* in a, (15) / bit 6, a / jr z */
+		0xAF, 0xD3, 0x90, 0x21, 0x00, 0x00,					/* the driver off / ld hl, 0 */
+		0x23, 0xDB, 0x15, 0xCB, 0x47, 0x28, 0xF9,				/* inc hl / in a, (15) / bit 0, a / jr z */
+		0x22, 0x00, 0xC1, 0x76,							/* ld (C100), hl / halt */
+	};
+
+	std::copy(program.begin(), program.end(), rom.begin());
+	odin::MieBoard mie(rom, ram, odin::Mie::CLOCK_HZ, nullptr, io_board);
+	mie.run(40000);
+	uint32_t low = 0, high = 0;
+	mie.host_read(0x20000 + 2 * 0xC100, 1, low);
+	mie.host_read(0x20000 + 2 * 0xC101, 1, high);
+	return (high << 8) | low;
+}
+
+void test_reply_time()
+{
+	const unsigned timed = first_byte_turns("837-13741"), untimed = first_byte_turns("837-13551");
+
+	check(timed >= 83 && timed <= 86, "the 837-13741 answers when its program does");
+	check(untimed >= 74 && untimed <= 77, "the 837-13551, two characters after the request");
+}
+
 int main()
 {
 	test_eeprom();
@@ -407,6 +445,7 @@ int main()
 	test_port_d();
 	test_waits();
 	test_uart_speed();
+	test_reply_time();
 	std::printf("%u checks passed, %u failed\n", g_passed, g_failed);
 	return g_failed ? 1 : 0;
 }

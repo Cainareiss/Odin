@@ -48,6 +48,7 @@ void JvsHost::reset()
 {
 	m_send_size = 0;
 	m_recv_size = 0;
+	m_reply_cycles = 0;
 	m_send.fill(0);
 	m_recv.fill(0);
 }
@@ -95,15 +96,19 @@ void JvsHost::commit_raw(std::span<const uint8_t> frame, bool sum_ok)
 {
 	const uint32_t size = static_cast<uint32_t>(frame.size());
 	m_recv_size = 0;
+	m_reply_cycles = 0;
 	if (size < 3 || frame[0] == HOST || frame[1] != size - 1 || !sum_ok) {
 		/* Malformed or bad checksum: sum error. */
 		m_recv[0] = HOST;
 		m_recv[1] = 0x02;	/* the status and the sum */
 		m_recv[2] = STATUS_CHECKSUM_ERROR;
 		m_recv_size = 3;
+		if (m_first && size >= 3 && !sum_ok)
+			m_reply_cycles = m_first->sum_error_cycles(size - 2);
 	} else if (m_first) {
 		const uint32_t n = m_first->message(frame[0], frame.subspan(2),
-		                                    std::span<uint8_t>(m_recv.data() + 2, BUFFER_SIZE - 3));
+		                                    std::span<uint8_t>(m_recv.data() + 2, BUFFER_SIZE - 3),
+		                                    m_reply_cycles);
 		if (n) {
 			/* Reply header: the host is always destination 0. */
 			m_recv[0] = HOST;
@@ -213,18 +218,25 @@ bool JvsDevice::address_set_line() const
 	return m_address != BROADCAST && (!m_next || m_next->address_set_line());
 }
 
-uint32_t JvsDevice::message(uint8_t dest, std::span<const uint8_t> in, std::span<uint8_t> out)
+uint32_t JvsDevice::message(uint8_t dest, std::span<const uint8_t> in, std::span<uint8_t> out, uint32_t &cycles)
 {
+	/* The time of a reply: nothing for a board whose program was not
+	 * timed */
+	const auto timed = [this, &in](uint32_t commands, uint32_t reply) {
+		return commands ? commands + frame_cycles(in.size(), reply) : 0;
+	};
 	uint32_t size = 0;
 
+	cycles = 0;
 	/* Set address: taken by the farthest node that has none yet. */
 	if (in.size() == 2 && in[0] == SET_ADDRESS) {
 		if (m_next && !m_next->address_set_line()) {
-			return m_next->message(dest, in, out);
+			return m_next->message(dest, in, out, cycles);
 		}
 		m_address = in[1];
 		out[0] = STATUS_NORMAL;
 		out[1] = REPORT_NORMAL;
+		cycles = timed(command_cycles(in, Outcome::DONE), 2);
 		return 2;
 	}
 
@@ -239,6 +251,7 @@ uint32_t JvsDevice::message(uint8_t dest, std::span<const uint8_t> in, std::span
 		uint32_t used = 0;
 		bool unknown = false;
 		bool restarted = false;
+		uint32_t commands = 0;
 		out[pos++] = STATUS_NORMAL;
 		size_t s = 0;
 		while (s < in.size()) {
@@ -254,8 +267,11 @@ uint32_t JvsDevice::message(uint8_t dest, std::span<const uint8_t> in, std::span
 				 * 315-6215 at 0547, epr-21868 at 072F). */
 				out[0] = STATUS_UNKNOWN_COMMAND;
 				unknown = true;
+				commands += command_cycles(in.subspan(s, 1), Outcome::UNKNOWN);
 				break;
 			}
+			commands += command_cycles(in.subspan(s, static_cast<size_t>(len)),
+			                           out[pos] == REPORT_NORMAL ? Outcome::DONE : Outcome::REFUSED);
 			pos += used;
 			s += static_cast<size_t>(len);
 		}
@@ -263,11 +279,12 @@ uint32_t JvsDevice::message(uint8_t dest, std::span<const uint8_t> in, std::span
 		 * may still answer a broadcast. */
 		if (!restarted && (!m_next || pos > 1 || unknown)) {
 			size = pos;
+			cycles = timed(commands, size);
 		}
 	}
 
 	if (m_next && (dest == BROADCAST || size == 0)) {
-		return m_next->message(dest, in, out);
+		return m_next->message(dest, in, out, cycles);
 	}
 	return size;
 }

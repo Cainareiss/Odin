@@ -150,7 +150,15 @@ it reads and does not look at its D9, the 837-13551 takes F0 D9 at the
 head of a frame to every node, which it reads for nothing else
 (SET_ADDRESS aside). HEURISTIC: the board is ready again at once, where
 the programs first test their memory (the MIE program waits 1.27 s
-before its next frame). Not copied yet, HEURISTIC: the reply delay
+before its next frame). The 837-13741 answers after the time its program
+takes (jvs_837_13741.cpp: a part for the frame, one for each command):
+tests/jvs/epr21868_bench.cpp runs epr-21868 on the Z80 of Odin, against
+the imitation (2946 replies the same, 2F aside; the times the imitation
+gives half the time within 3 clocks); it needs the EPROM, not in the
+sets of Hikaru. There, HEURISTIC: the 315-6146 of that board runs at the
+clock of the MIE (the same chip beside the same crystals); vector F8 is
+its UART, as its program tells; vector FE, the tick of its timer, comes
+every 1 ms. Not copied yet, HEURISTIC: the reply delay of the 837-13551
 (JVS_TURNAROUND_BYTES in mie.cpp); the coins and the switches, which the
 programs read at each tick of a timer whose period is not known
 (epr-21868 at 0828: neither the clock of its D71054 nor the counter that

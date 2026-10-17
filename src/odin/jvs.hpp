@@ -156,6 +156,10 @@ public:
 	void push(uint8_t value);
 	void commit_encoded();
 	std::span<const uint8_t> reply() const { return std::span<const uint8_t>(m_recv.data(), m_recv_size); }
+	/* The clocks of its Z80 the board that made the reply takes from the
+	 * end of the request to the start of the reply; 0 when its program
+	 * was not timed (JvsDevice::command_cycles). */
+	uint32_t reply_cycles() const { return m_reply_cycles; }
 
 	/* Sense line: a device is wired. */
 	bool presence_line() const { return m_first != nullptr; }
@@ -175,6 +179,7 @@ private:
 	std::array<uint8_t, BUFFER_SIZE> m_recv;
 	uint32_t m_send_size;
 	uint32_t m_recv_size;
+	uint32_t m_reply_cycles;
 };
 
 /* One node on the cable. The commands every board answers the same way
@@ -187,10 +192,14 @@ public:
 	void reset();
 	void chain(JvsDevice *dev);
 	/* Handles one frame for `dest` (BROADCAST for all). Returns the reply
-	 * size written to `out`, 0 when this node stays silent. */
-	uint32_t message(uint8_t dest, std::span<const uint8_t> in, std::span<uint8_t> out);
+	 * size written to `out`, 0 when this node stays silent; `cycles` the
+	 * time to it (JvsHost::reply_cycles). */
+	uint32_t message(uint8_t dest, std::span<const uint8_t> in, std::span<uint8_t> out, uint32_t &cycles);
 	bool address_set_line() const;
 	uint8_t address() const { return m_address; }
+	/* The time to the reply of a frame whose checksum is wrong, with
+	 * `request_bytes` of data */
+	virtual uint32_t sum_error_cycles(size_t) const { return 0; }
 
 	void save(JvsDeviceState &out) const;
 	void load(const JvsDeviceState &in);
@@ -219,6 +228,13 @@ protected:
 	 * SET_ADDRESS. */
 	virtual bool reset_in_any_frame() const { return false; }
 	virtual void device_reset() {}
+	/* The clocks of its Z80 the program of the board takes before it
+	 * answers, for a program that was timed: for the frame (its bytes of
+	 * data, the bytes of the reply from its status on) and for each
+	 * command (its bytes, how it went). 0 for one that was not. */
+	enum class Outcome { DONE, REFUSED, UNKNOWN };
+	virtual uint32_t frame_cycles(size_t, size_t) const { return 0; }
+	virtual uint32_t command_cycles(std::span<const uint8_t>, Outcome) const { return 0; }
 
 private:
 	static constexpr int32_t RESTART = -2;
