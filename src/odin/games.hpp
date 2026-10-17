@@ -99,7 +99,8 @@ struct GameControl {
  * gives it: "output", 1 to 32 as JVS counts them (output 1 is bit 7 of the
  * first byte), and "role", what the host does with it: "rumble", the
  * gamepad of the player shakes while it is on; "lamp" and "lock" (a
- * solenoid that holds a control), nothing yet.
+ * solenoid that holds a control), nothing but what every output does: go
+ * to other programs when the user asks (outputs_network.hpp).
  * "player" : 2 for one of player 2. "id" as for a control. */
 struct GameOutput {
 	enum class Role { LAMP, LOCK, RUMBLE };

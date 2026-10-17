@@ -388,13 +388,16 @@ main(int argc, char **argv)
 	odin::Controls controls(keys, game->controls, game->outputs, settings, game->name);
 	board->set_panel(&controls);
 
-	std::unique_ptr<odin::OutputsNetwork> outputs;
+	/* The last line says */
+	bool network = false;
 	for (const auto &[key, value] : settings.section("outputs")) {
 		if (key == "network" && (value == "on" || value == "off"))
-			outputs = value == "on" ? odin::OutputsNetwork::open(game->name, game->outputs) : nullptr;
+			network = value == "on";
 		else
 			std::fprintf(stderr, "ERROR: settings: [outputs]: not right: %s = %s\n", key.c_str(), value.c_str());
 	}
+	const std::unique_ptr<odin::OutputsNetwork> outputs =
+		network ? odin::OutputsNetwork::open(game->name, game->outputs) : nullptr;
 
 	if (!options.sound_asked && game->option_speakers)
 		options.sound = odin::AudioOut::Mode::MIX;
