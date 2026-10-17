@@ -26,7 +26,8 @@ namespace odin {
 namespace {
 
 /* The keys of the cabinet as INSTALL tells them, and the gamepad of each
- * player. */
+ * player: a stick on the keys of the directions, the second stick of
+ * player 1 on those of player 2, the gears on the keys of LB and RB. */
 struct Default {
 	Role role;
 	const char *key1;	/* the key of player 1, or of the cabinet */
@@ -47,18 +48,18 @@ const Default DEFAULTS[] = {
 	{ Role::BUTTON4, "Z", "W", "y" },
 	{ Role::BUTTON5, "X", "E", "leftshoulder" },
 	{ Role::BUTTON6, "C", "T", "rightshoulder" },
-	{ Role::BUTTON7, nullptr, nullptr, "lefttrigger" },
-	{ Role::BUTTON8, nullptr, nullptr, "righttrigger" },
-	{ Role::STICK_UP, nullptr, nullptr, "-lefty" },
-	{ Role::STICK_DOWN, nullptr, nullptr, "+lefty" },
-	{ Role::STICK_LEFT, nullptr, nullptr, "-leftx" },
-	{ Role::STICK_RIGHT, nullptr, nullptr, "+leftx" },
-	{ Role::STICK2_UP, nullptr, nullptr, "-righty" },
-	{ Role::STICK2_DOWN, nullptr, nullptr, "+righty" },
-	{ Role::STICK2_LEFT, nullptr, nullptr, "-rightx" },
-	{ Role::STICK2_RIGHT, nullptr, nullptr, "+rightx" },
-	{ Role::GEAR_UP, nullptr, nullptr, "rightshoulder" },
-	{ Role::GEAR_DOWN, nullptr, nullptr, "leftshoulder" },
+	{ Role::BUTTON7, "V", nullptr, "lefttrigger" },
+	{ Role::BUTTON8, "B", nullptr, "righttrigger" },
+	{ Role::STICK_UP, "Up", "R", "-lefty" },
+	{ Role::STICK_DOWN, "Down", "F", "+lefty" },
+	{ Role::STICK_LEFT, "Left", "D", "-leftx" },
+	{ Role::STICK_RIGHT, "Right", "G", "+leftx" },
+	{ Role::STICK2_UP, "R", nullptr, "-righty" },
+	{ Role::STICK2_DOWN, "F", nullptr, "+righty" },
+	{ Role::STICK2_LEFT, "D", nullptr, "-rightx" },
+	{ Role::STICK2_RIGHT, "G", nullptr, "+rightx" },
+	{ Role::GEAR_UP, "C", nullptr, "rightshoulder" },
+	{ Role::GEAR_DOWN, "X", nullptr, "leftshoulder" },
 	{ Role::STEER, nullptr, nullptr, "leftx" },
 	{ Role::ACCEL, nullptr, nullptr, "righttrigger" },
 	{ Role::BRAKE, nullptr, nullptr, "lefttrigger" },

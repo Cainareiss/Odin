@@ -328,6 +328,14 @@ void test_lever()
 	pad.buttons[SDL_CONTROLLER_BUTTON_RIGHTSHOULDER] = true;
 	after(panel, {}, &pad);
 	check(after(panel, {}).jvs_player[1] == 0x2800, "the lever stays where it is when the pad is gone");
+
+	ControlPanel keys(cabinet(), Settings(), "sgnascar");
+
+	check(after(keys, {SDLK_c}).jvs_player[1] == 0x2800, "C: 1, as RB");
+	after(keys, {});
+	check(after(keys, {SDLK_x}).jvs_player[1] == 0, "X: back to N, as LB");
+	check(after(keys, {SDLK_r}).jvs_player[1] == 0x2000 && after(keys, {SDLK_UP}).jvs_player[1] == 0,
+	      "the second stick of player 1 up on R, not on Up");
 }
 
 void test_bindings_from_settings()

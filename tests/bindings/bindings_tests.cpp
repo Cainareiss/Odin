@@ -186,10 +186,20 @@ void test_defaults()
 	      is_pad(Bindings::defaults(Role::ACCEL, 0)[0], PadInput::Type::AXIS, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) &&
 	      is_pad(Bindings::defaults(Role::STICK2_Y, 1)[0], PadInput::Type::AXIS, SDL_CONTROLLER_AXIS_RIGHTY),
 	      "the axes: steering on the left stick, gas on the right trigger");
-	check(is_pad(Bindings::defaults(Role::GEAR_UP, 0)[0], PadInput::Type::BUTTON, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER) &&
-	      is_pad(Bindings::defaults(Role::BUTTON7, 0)[0], PadInput::Type::AXIS, SDL_CONTROLLER_AXIS_TRIGGERLEFT) &&
-	      is_pad(Bindings::defaults(Role::STICK_UP, 0)[0], PadInput::Type::AXIS_NEGATIVE, SDL_CONTROLLER_AXIS_LEFTY),
+	check(is_pad(Bindings::defaults(Role::GEAR_UP, 0)[1], PadInput::Type::BUTTON, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER) &&
+	      is_pad(Bindings::defaults(Role::BUTTON7, 0)[1], PadInput::Type::AXIS, SDL_CONTROLLER_AXIS_TRIGGERLEFT) &&
+	      is_pad(Bindings::defaults(Role::STICK_UP, 0)[1], PadInput::Type::AXIS_NEGATIVE, SDL_CONTROLLER_AXIS_LEFTY),
 	      "gears on RB, button 7 on LT, the left stick up");
+	check(is_key(Bindings::defaults(Role::GEAR_UP, 0)[0], SDLK_c) &&
+	      is_key(Bindings::defaults(Role::GEAR_DOWN, 0)[0], SDLK_x) &&
+	      is_key(Bindings::defaults(Role::BUTTON7, 0)[0], SDLK_v) &&
+	      is_key(Bindings::defaults(Role::BUTTON8, 0)[0], SDLK_b), "gears on C and X (RB, LB), buttons 7 and 8 on V and B");
+	check(is_key(Bindings::defaults(Role::STICK_UP, 0)[0], SDLK_UP) &&
+	      is_key(Bindings::defaults(Role::STICK_RIGHT, 1)[0], SDLK_g) &&
+	      is_key(Bindings::defaults(Role::STICK2_LEFT, 0)[0], SDLK_d) &&
+	      is_key(Bindings::defaults(Role::STICK2_DOWN, 0)[0], SDLK_f) &&
+	      Bindings::defaults(Role::STICK2_UP, 1).size() == 1,
+	      "a stick on the directions of the player, the second of player 1 on those of player 2");
 	check(Bindings::defaults(Role::GUN_X, 0).size() == 1 &&
 	      is_pad(Bindings::defaults(Role::GUN_X, 0)[0], PadInput::Type::AXIS, SDL_CONTROLLER_AXIS_LEFTX) &&
 	      is_pad(Bindings::defaults(Role::GUN_Y, 1)[0], PadInput::Type::AXIS, SDL_CONTROLLER_AXIS_LEFTY),
@@ -297,8 +307,8 @@ void test_game_lines()
 	      is_pad(nascar.of(0)[1], PadInput::Type::BUTTON, SDL_CONTROLLER_BUTTON_B), "a control by its id");
 	check(nascar.lever(1, true).size() == 1 && is_pad(nascar.lever(1, true)[0], PadInput::Type::BUTTON, 0),
 	      "a lever: <id>_up");
-	check(nascar.lever(1, false).size() == 1 &&
-	      is_pad(nascar.lever(1, false)[0], PadInput::Type::BUTTON, SDL_CONTROLLER_BUTTON_LEFTSHOULDER),
+	check(nascar.lever(1, false).size() == 2 && is_key(nascar.lever(1, false)[0], SDLK_x) &&
+	      is_pad(nascar.lever(1, false)[1], PadInput::Type::BUTTON, SDL_CONTROLLER_BUTTON_LEFTSHOULDER),
 	      "<id>_down as it was: the line for it was not right");
 	check(nascar.of(2).size() == 1 && is_pad(nascar.of(2)[0], PadInput::Type::AXIS, SDL_CONTROLLER_AXIS_RIGHTX),
 	      "a channel on another axis; the key and half a stick refused");
@@ -315,8 +325,8 @@ void test_game_lines()
 	check(other.of(3).size() == 2 && is_key(other.of(3)[0], SDLK_s) &&
 	      is_pad(other.of(3)[1], PadInput::Type::BUTTON, SDL_CONTROLLER_BUTTON_B),
 	      "a control of player 2: the keys of player 2");
-	check(other.lever(1, true).size() == 1 &&
-	      is_pad(other.lever(1, true)[0], PadInput::Type::BUTTON, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER),
+	check(other.lever(1, true).size() == 2 && is_key(other.lever(1, true)[0], SDLK_c) &&
+	      is_pad(other.lever(1, true)[1], PadInput::Type::BUTTON, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER),
 	      "a lever: GEAR_UP and GEAR_DOWN");
 }
 

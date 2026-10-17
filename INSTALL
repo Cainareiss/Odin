@@ -46,7 +46,8 @@ has 1 for Start, the arrows, and Left Ctrl, Left Alt, Left Shift, Z, X, C;
 player 2 has 2 for Start, R F D G, and A, S, Q, W, E, T. The arrows also
 move a wheel, a stick or a sight, a step each frame, and back when let go;
 Up is the gas and Down the brake; the second stick of player 1 (ROLL of
-Air Trix, the right lever of Racer) is on R F D G.
+Air Trix, the right lever of Racer and of Virtual-On) is on R F D G. X and
+C shift the gears down and up, V and B are the triggers of Virtual-On.
 
 Gamepads: one for each player, in the order they are plugged in. Start,
 the D-pad, A, B, X, Y, LB, RB, LT, RT, the sticks and the triggers work the
