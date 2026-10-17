@@ -293,8 +293,7 @@
 		{
 			"name" : "podrace",
 			"mach" : "hikaru",
-			"option_speakers" : true,
-			"option_level" : -13,
+			"option_vibration" : true,
 			"mie_eeprom" : "4242502d02010100180004010101010010000000000000000000000006001b17000006080500ffffff1fffffffffffffffffffffffffffffffffffffffff18e84242502d02010100180004010101010010000000000000000000000006001b17000006080500ffffff1fffffffffffffffffffffffffffffffffffffffff18e8",
 			"controls" : [
 				{ "name" : "BOOST", "id" : "boost", "switch" : "1P PUSH1", "role" : "button6" },
