@@ -100,14 +100,16 @@ struct GameControl {
 };
 
 /* An output of the I/O board of a cabinet, with the name its OUTPUT TEST
- * gives it: "output", 1 to 32 as JVS counts them (output 1 is bit 7 of the
- * first byte), and "role", what the host does with it: "rumble", the
- * gamepad of the player shakes while it is on; "lamp" and "lock" (a
- * solenoid that holds a control), nothing but what every output does: go
- * to other programs when the user asks (outputs_network.hpp).
- * "player" : 2 for one of player 2. "id" as for a control. */
+ * or its wiring gives it: "output", 1 to 32 as JVS counts them (output 1
+ * is bit 7 of the first byte), and "role", what the host does with it:
+ * "rumble", the gamepad of the player shakes while it is on; "mute", the
+ * vibration device the optional sound board feeds is still while it is on;
+ * "lamp" and "lock" (a solenoid that holds a control), nothing but what
+ * every output does: go to other programs when the user asks
+ * (outputs_network.hpp). "player" : 2 for one of player 2. "id" as for a
+ * control. */
 struct GameOutput {
-	enum class Role { LAMP, LOCK, RUMBLE };
+	enum class Role { LAMP, LOCK, RUMBLE, MUTE };
 
 	std::string name;
 	std::string id;
@@ -123,6 +125,17 @@ struct GameOutput {
 		return bit / 8 < outputs.size() && (outputs[bit / 8] & (0x80 >> (bit % 8)));
 	}
 };
+
+/* Whether an output of the list with that role is on, of that player (0
+ * or 1) or of either (-1) */
+inline bool
+any_on(const std::vector<GameOutput> &list, GameOutput::Role role, std::span<const uint8_t> outputs, int player = -1)
+{
+	for (const GameOutput &output : list)
+		if (output.role == role && (player < 0 || output.player == player) && output.on(outputs))
+			return true;
+	return false;
+}
 
 /* A game and what its ROMs hold, section by section ("bootrom", "eprom",
  * "maskrom", "mie", "eeprom", "rombd_eeprom"). */

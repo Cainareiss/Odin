@@ -104,7 +104,8 @@ const char LIST[] = R"({
       "outputs": [
         { "name": "1P LAMP", "id": "1p_lamp", "output": 1, "role": "lamp" },
         { "name": "2P SHAKE", "id": "2p_shake", "output": 13, "role": "rumble", "player": 2 },
-        { "name": "LOCK", "id": "lock", "output": 32, "role": "lock" } ],
+        { "name": "LOCK", "id": "lock", "output": 32, "role": "lock" },
+        { "name": "MUTE", "id": "mute", "output": 14, "role": "mute" } ],
       "sections": [
         { "name": "bootrom", "type": "alternative", "data": [ { "name": "boot.bin", "size": 4 } ] } ] }
   ]
@@ -255,7 +256,7 @@ void test_games(const std::string &dir)
 	} else {
 		check(false, "the seven controls of the list");
 	}
-	if (wheel && wheel->outputs.size() == 3) {
+	if (wheel && wheel->outputs.size() == 4) {
 		using odin::GameOutput;
 		const auto &o = wheel->outputs;
 		const uint8_t bytes[] = { 0x80, 0x08 };
@@ -270,8 +271,17 @@ void test_games(const std::string &dir)
 		check(!o[1].on(std::span(bytes, 1)), "an output past the bytes of the board: off");
 		check(o[2].role == GameOutput::Role::LOCK && o[2].output == 32 && o[2].on(last) && !o[2].on(bytes),
 		      "a lock; output 32, bit 0 of the fourth byte");
+
+		const uint8_t muted[] = { 0x00, 0x04 };
+
+		check(o[3].role == GameOutput::Role::MUTE && o[3].output == 14 && o[3].on(muted),
+		      "a mute output; output 14, bit 2 of the second byte");
+		check(odin::any_on(o, GameOutput::Role::MUTE, muted) && !odin::any_on(o, GameOutput::Role::MUTE, bytes) &&
+		      !odin::any_on(o, GameOutput::Role::LAMP, muted), "an output of a role on, or none");
+		check(odin::any_on(o, GameOutput::Role::RUMBLE, bytes, 1) && !odin::any_on(o, GameOutput::Role::RUMBLE, bytes, 0) &&
+		      odin::any_on(o, GameOutput::Role::RUMBLE, bytes), "of a player, or of either");
 	} else {
-		check(false, "the three outputs of the list");
+		check(false, "the four outputs of the list");
 	}
 	if (toy)
 		check(toy->outputs.empty(), "without \"outputs\", none");

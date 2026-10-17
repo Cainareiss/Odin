@@ -58,7 +58,7 @@ public:
 	/* The outputs of the board after a frame: the pad of a player shakes
 	 * while a rumble output of that player is on; the pad of player 1 also
 	 * as hard as the vibration device the sound of the optional board
-	 * feeds, when it feels it. */
+	 * feeds, when it feels it and no mute output is on. */
 	void show(std::span<const uint8_t> outputs, std::span<const int16_t> option_sound);
 	/* No pad shakes (the emulation stops) */
 	void quiet();

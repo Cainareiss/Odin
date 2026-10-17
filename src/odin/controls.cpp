@@ -198,17 +198,16 @@ Controls::show(std::span<const uint8_t> outputs, std::span<const int16_t> option
 {
 	const Uint32 now = SDL_GetTicks();
 
-	m_felt_level = m_felt ? AudioOut::smoothed(m_felt_level, AudioOut::shake_of(option_sound)) : 0;
+	/* A mute output of the cabinet stills its vibration device at once */
+	const bool still = any_on(m_outputs, GameOutput::Role::MUTE, outputs);
+
+	m_felt_level = m_felt && !still ? AudioOut::smoothed(m_felt_level, AudioOut::shake_of(option_sound)) : 0;
 
 	const Uint16 felt = m_felt_level / FELT_STEP * FELT_STEP;
 
 	for (unsigned player = 0; player < 2; player++) {
 		Pad &pad = m_pads[player];
-		bool on = false;
-
-		for (const GameOutput &output : m_outputs)
-			on = on || (output.role == GameOutput::Role::RUMBLE && output.player == player && output.on(outputs));
-
+		const bool on = any_on(m_outputs, GameOutput::Role::RUMBLE, outputs, static_cast<int>(player));
 		const Uint16 strength = std::max<Uint16>(on ? RUMBLE : 0, player ? 0 : felt);
 
 		if (!pad.handle || (strength == pad.rumbling && (!strength || now - pad.rumbled < RUMBLE_AGAIN_MS)))

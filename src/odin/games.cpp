@@ -270,13 +270,13 @@ parse_control(const json_t *control)
 }
 
 /* An output: {"name": ..., "id": ..., "output": 1 to 32, "role":
- * "rumble", "lamp" or "lock", and "player" when it is 2}. */
+ * "rumble", "mute", "lamp" or "lock", and "player" when it is 2}. */
 std::optional<GameOutput>
 parse_output(const json_t *output)
 {
 	static const std::pair<const char *, GameOutput::Role> ROLES[] = {
 		{ "lamp", GameOutput::Role::LAMP }, { "lock", GameOutput::Role::LOCK },
-		{ "rumble", GameOutput::Role::RUMBLE },
+		{ "rumble", GameOutput::Role::RUMBLE }, { "mute", GameOutput::Role::MUTE },
 	};
 	const char *const name = json_string_value(json_object_get(output, "name"));
 	const char *const id = json_string_value(json_object_get(output, "id"));
