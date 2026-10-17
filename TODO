@@ -344,10 +344,13 @@ SGNASCAR ROM board security FPGA (src/odin/actel_m1.cpp, the stream
 decoder of MAME's Naomi M1 board): registers at local bus 0x0A000000, key
 and ID from MAME, in the list of the games. Proven by the game: it reads
 208 bytes at each change of scene, compares them with its own copy and,
-at each mismatch, adds 20 to the weight of the previous picture in the 181 blend. HEURISTIC: every start
-reads from the first byte of the mask ROMs (no address register is known),
-the ready flag is on bits 31 and 15 of the status, the other bits of the
-control and of the status are not known.
+at each mismatch, adds 20 to the weight of the previous picture in the
+181 blend. Its driver (0C012EF4) writes no address: every start reads
+from the first byte of the mask ROMs, which gives the text of the game.
+It waits for bit 31 of the status in 32 bits; a debug function
+(0C0342A4) for bit 15 in 16 bits: both are set. Not known, and read by
+no code of the game: the other bits of the status, what bits 30, 1 and 0
+of the control do (the game keeps them, 0C012F5A).
 
 GPU textures: the 0D1 UV offsets are added to the vertex UVs the way the
 X360 port's vertex shader is assumed to (the Xenos microcode of vo3d was

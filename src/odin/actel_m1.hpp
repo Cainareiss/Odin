@@ -35,9 +35,13 @@ namespace odin {
  *   +0x0C  r/w   keeps what is written
  *   +0x10  read  next four plain bytes, first byte lowest
  *
- * HEURISTIC: the stream starts at the first byte of the mask ROMs
- * (no address is ever written); the status also sets bit 15, tested
- * by the 16-bit reader at 0C0342A4; the other bits read 0. */
+ * The stream starts at the first byte of the mask ROMs: no address is
+ * ever written (0C012EF4 does not use the 0x114 its caller gives it), and
+ * from there the chip gives the text of the game. The status sets bit 15
+ * too, which the debug function at 0C0342A4 (table at 0C1AE18C) waits
+ * for in 16 bits. Not known, and read by no code of the game: the other
+ * bits of the status (0 here), what bits 30, 1 and 0 of the control do
+ * (the game keeps them, 0C012F5A). */
 
 /* Everything the chip keeps between two accesses. Plain data. */
 struct ActelM1State {
