@@ -215,7 +215,13 @@ The optional sound board feeds the external inputs (EXTS) of the AICA of
 the main board, sample period for sample period (hikaru.cpp, HEURISTIC:
 Air Trix and Virtual-On open EXTS on the main board and play their music
 on the optional one, and the Air Trix cabinet has that board but main
-speakers only; no schematic says it). The ARM7 runs on the 22.5792 MHz bus clock, eight times MAME's
+speakers only; no schematic says it). The other way round, SGNASCAR,
+PHARRIER and PODRACE leave EXTS shut and play on the optional board for
+speakers of its own (their US manuals, SOUND TEST: OPTION SPEAKER, the
+backrest speakers and the bass shaker of NASCAR, the backrest speakers and
+woofers of PHARRIER, the woofer and shaker of PODRACE): "option_speakers"
+in odin-games.json, and the default sound mixes the two boards for them
+(-o mix). The ARM7 runs on the 22.5792 MHz bus clock, eight times MAME's
 figure: the SGNASCAR cabinet shows its sound driver ready within a frame
 of each reload, 20 MHz at least (HEURISTIC: no wait state). It costs a
 quarter of the speed: the driver sleeps most of the time, its wait could

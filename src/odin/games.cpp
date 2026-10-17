@@ -398,6 +398,13 @@ GameList::load_game(const std::string &rom_dir, const std::string &name) const
 			ids.push_back(id);
 		}
 	}
+	if (const json_t *const speakers = json_object_get(rom, "option_speakers")) {
+		if (!json_is_boolean(speakers)) {
+			std::fprintf(stderr, "ERROR: game '%s': \"option_speakers\" is not true or false\n", name.c_str());
+			return std::nullopt;
+		}
+		game.option_speakers = json_is_true(speakers);
+	}
 	if (const json_t *const chip = json_object_get(rom, "mie_eeprom")) {
 		auto bytes = parse_hex(json_string_value(chip));
 

@@ -54,8 +54,10 @@ struct Options {
 	std::vector<unsigned> save_frames;
 	bool unthrottled = false;
 	bool verbose = false;
-	/* The speakers of the main board unless -o says otherwise: they get the
-	 * optional board too where the game opens its external inputs */
+	/* The speakers of the cabinet unless -o says otherwise: those of the
+	 * main board, which get the optional board too where the game opens its
+	 * external inputs, and those of the optional board where the cabinet has
+	 * them (the two boards on two channels) */
 	std::optional<odin::AudioOut::Mode> sound = odin::AudioOut::Mode::MAIN;
 	bool sound_asked = false;
 	odin::Display::Options display = { 1, 1, 0, false };
@@ -72,9 +74,9 @@ const char HELP[] = "Usage: %s [options]\n"
 "	-a <num>	Filter the textures with an anisotropy of num (2 to 16); the board has none\n"
 "	-w <num>	Make the window num times 640 by 480, as far as the display has room\n"
 "	-f		Take the whole display (F11 or Alt+Enter goes back and forth)\n"
-"	-o <mode>	Play the sound: main (the speakers of the main board, the default),\n"
-"			option (those of the optional board), mix (both on two channels),\n"
-"			quad (four) or off\n"
+"	-o <mode>	Play the sound: main (the speakers of the main board), option (those\n"
+"			of the optional board), mix (both on two channels), quad (four) or\n"
+"			off; by default those the cabinet has: main, or mix\n"
 "	-v		Set verbosity (affects debug messages)\n"
 "	-h              Show this help\n";
 
@@ -378,6 +380,9 @@ main(int argc, char **argv)
 		std::printf("settings: '%s'\n", settings_file.c_str());
 	odin::Controls controls(keys, game->controls, settings, game->name);
 	board->set_panel(&controls);
+
+	if (!options.sound_asked && game->option_speakers)
+		options.sound = odin::AudioOut::Mode::MIX;
 
 	/* Unthrottled frames do not keep time: no sound with -u */
 	std::unique_ptr<odin::AudioOut> audio;

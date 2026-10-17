@@ -96,6 +96,10 @@ struct Game {
 	 * MENU as SEGA left them: "mie_eeprom" in the list, 128 bytes in
 	 * hexadecimal; empty when the list does not say (a blank chip). */
 	std::vector<uint8_t> mie_eeprom;
+	/* The cabinet has speakers for the optional sound board as well as for
+	 * the main one: "option_speakers" in the list, false when it does not
+	 * say. */
+	bool option_speakers = false;
 	std::vector<std::pair<std::string, std::vector<uint8_t>>> sections;
 
 	/* The bytes of a section; empty when the game has no such section. */
