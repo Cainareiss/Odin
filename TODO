@@ -155,8 +155,10 @@ lists those the host uses ("outputs" in odin-games.json, read in its
 OUTPUT TEST); the nozzle vibration of BRAVEFF (outputs 2 and 5) shakes
 the pad of its player (both motors at C000 while it is on: a choice of
 the emulator); the lamps and the locks (the board of AIRTRIX, the boost
-lever of PODRACE) go nowhere yet (outputs_network.cpp), nor the drive
-board of NASCAR. AIRTRIX turns its output 4 off once after all six are
+lever of PODRACE) go to other programs as MAME's network output gives
+them ([outputs] network = on in odin.ini; outputs_network.cpp), on
+127.0.0.1 only where MAME takes every address; not yet the drive board of
+NASCAR. AIRTRIX turns its output 4 off once after all six are
 lit in its OUTPUT TEST, the screen still saying ON: not known why.
 The drive board of NASCAR (838-13366, on outputs 15-22 of the 837-13741
 and answering on switches 2-5 of both players) is to come in two ways:
@@ -185,8 +187,7 @@ reaches the edge of the screen before the mouse. The mouse counts once it
 has moved more than 2 pixels from where the system first put it (the
 system tells where it is when the window opens under it). To come: the
 light guns (evdev.cpp, rawinput.cpp), wheels and their pedals, the drive
-board and its force (drive_board_838_13366.cpp), the outputs to other
-programs (outputs_network.cpp), gamepads
+board and its force (drive_board_838_13366.cpp), gamepads
 known again from one run to the next, the interface that writes odin.ini.
 Without a gamepad a control rests: a stick or a lever centred, a pedal let
 go (the gas and brake of SGNASCAR read 00 in its INPUT TEST). A key moves

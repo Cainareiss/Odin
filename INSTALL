@@ -50,6 +50,16 @@ Air Trix, the right lever of Racer and of Virtual-On) is on R F D G. X and
 C shift the gears down and up, V and B are the triggers of Virtual-On.
 
 In Brave the pad of a player shakes while the nozzle of the cabinet does.
+The lamps and the other outputs of the cabinets go to other programs (a
+lamp or a force feedback program) as MAME gives them with its network
+output, when odin.ini says so:
+
+ [outputs]
+ network = on
+
+(port 8000 of this computer only: "mame_start = <game>", then "<id> = 1"
+or "<id> = 0" as each output of the game changes, its id in
+odin-games.json, and "mame_stop = 1" at the end.)
 
 The mouse aims for player 1 in Brave: the sight where it points on the
 picture, water on the left button, fog on the right one, Start on the

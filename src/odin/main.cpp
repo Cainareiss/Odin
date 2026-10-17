@@ -42,6 +42,7 @@
 #include "odin/hikaru.hpp"
 #include "odin/controls.hpp"
 #include "odin/keyboard.hpp"
+#include "odin/outputs_network.hpp"
 #include "odin/settings.hpp"
 
 namespace {
@@ -188,9 +189,9 @@ load_game_list(odin::GameList &games)
 class Session {
 public:
 	Session(const Options &options, odin::Hikaru &board, odin::Display &display, odin::Keyboard &keys,
-	        odin::Controls &controls, odin::AudioOut *audio)
+	        odin::Controls &controls, odin::AudioOut *audio, odin::OutputsNetwork *outputs)
 		: m_options(options), m_board(board), m_display(display), m_keys(keys), m_controls(controls), m_audio(audio),
-		  m_paused(false), m_next()
+		  m_outputs(outputs), m_paused(false), m_next()
 	{
 	}
 
@@ -210,6 +211,7 @@ private:
 	odin::Keyboard &m_keys;
 	odin::Controls &m_controls;
 	odin::AudioOut *m_audio;	/* nullptr: no sound */
+	odin::OutputsNetwork *m_outputs;	/* nullptr: none for other programs */
 	bool m_paused;
 	std::chrono::steady_clock::time_point m_next;	/* when the next frame is due */
 };
@@ -324,6 +326,8 @@ Session::run()
 		m_controls.update();
 		m_board.run_frame();
 		m_controls.show(m_board.io_outputs());
+		if (m_outputs)
+			m_outputs->show(m_board.io_outputs());
 		if (m_audio)
 			m_audio->play(m_board.sound(false), m_board.sound(true));
 		m_display.end_frame(m_board.frame());
@@ -384,6 +388,14 @@ main(int argc, char **argv)
 	odin::Controls controls(keys, game->controls, game->outputs, settings, game->name);
 	board->set_panel(&controls);
 
+	std::unique_ptr<odin::OutputsNetwork> outputs;
+	for (const auto &[key, value] : settings.section("outputs")) {
+		if (key == "network" && (value == "on" || value == "off"))
+			outputs = value == "on" ? odin::OutputsNetwork::open(game->name, game->outputs) : nullptr;
+		else
+			std::fprintf(stderr, "ERROR: settings: [outputs]: not right: %s = %s\n", key.c_str(), value.c_str());
+	}
+
 	if (!options.sound_asked && game->option_speakers)
 		options.sound = odin::AudioOut::Mode::MIX;
 
@@ -407,7 +419,7 @@ main(int argc, char **argv)
 	}
 	if (started) {
 		std::printf("Running");
-		Session(options, *board, *display, keys, controls, audio.get()).run();
+		Session(options, *board, *display, keys, controls, audio.get(), outputs.get()).run();
 	}
 
 	std::printf("Finalizing");
