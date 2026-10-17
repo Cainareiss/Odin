@@ -196,7 +196,10 @@ Renderer::upload_viewport(const odin_mesh_t &mesh)
 	float projection[4][4];
 
 	/* The clip window is cut by the scissor, whatever the program: whole
-	 * pixels of the screen of the hardware. */
+	 * pixels of the screen of the hardware. A view turned over by a
+	 * distance below 0 shows the faces it would show the right way: the
+	 * rear-view mirror of SGNASCAR is such a view, its meshes wound as
+	 * ahead and nothing else told (021). */
 	if (m_scissor_vp_index != mesh.vp_index) {
 		const GLint n = static_cast<GLint>(m_scale);
 
@@ -205,6 +208,7 @@ Renderer::upload_viewport(const odin_mesh_t &mesh)
 		          (static_cast<GLint>(HEIGHT) - static_cast<GLint>(vp.clip.t)) * n,
 		          static_cast<GLsizei>(vp.clip.r - vp.clip.l) * n,
 		          static_cast<GLsizei>(vp.clip.t - vp.clip.b) * n);
+		glFrontFace(kx * ky < 0.0f ? GL_CW : GL_CCW);
 	}
 
 	if (m_program->held.vp_index == mesh.vp_index)
@@ -213,9 +217,9 @@ Renderer::upload_viewport(const odin_mesh_t &mesh)
 
 	/* The window may leave the screen: VON4 sends some with a left edge
 	 * at -22 or a top one at -4; the scissor cuts them to the screen. */
-	if (!is_nonnegative(vp.clip.f) || !is_nonnegative(vp.clip.n))
+	if (!std::isfinite(vp.clip.f) || !is_nonnegative(vp.clip.n))
 		error("non-positive viewport clipping planes: %s", odin_viewport_str(&vp));
-	if (vp.clip.l >= vp.clip.r || vp.clip.b >= vp.clip.t || vp.clip.n >= vp.clip.f)
+	if (vp.clip.l >= vp.clip.r || vp.clip.b >= vp.clip.t || vp.clip.n >= std::fabs(vp.clip.f))
 		error("inverted viewport clipping planes: %s", odin_viewport_str(&vp));
 
 	if (logging())
@@ -676,6 +680,7 @@ Renderer::draw_scene()
 
 	glDepthMask(GL_TRUE);
 	glDisable(GL_SCISSOR_TEST);
+	glFrontFace(GL_CCW);
 	glViewport(0, 0, static_cast<GLsizei>(width()), static_cast<GLsizei>(height()));
 	gl::check("a scene");
 }

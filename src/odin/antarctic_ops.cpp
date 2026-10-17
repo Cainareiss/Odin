@@ -406,7 +406,9 @@ viewport_index(const uint32_t *inst)
  *
  *	The two distances are equal nearly everywhere. SGNASCAR sends
  *	735.958 and 755.566 for its main view: its cabinet shows the 3D
- *	picture 2.7% taller than with one distance for both.
+ *	picture 2.7% taller than with one distance for both. Its rear-view
+ *	mirror has F = -277.149 for f = 305.024: the view turned over left
+ *	to right, the word before it 00000021 as for any other view.
  *
  * See PH:@0C01587C, PH:@0C0158A4, PH:@0C0158E8.
  *
