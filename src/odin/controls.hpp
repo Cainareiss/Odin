@@ -32,10 +32,14 @@
 
 namespace odin {
 
-/* The control panel of the cabinet as the host works it: the keyboard and
- * a gamepad for each player, opened and closed as they are plugged in and
- * out, the first one for player 1. ODIN_CONTROLLERS=none leaves the
- * gamepads out. */
+/* The control panel of the cabinet as the host works it: the keyboard, a
+ * gamepad for each player, opened and closed as they are plugged in and
+ * out, the first one for player 1, and the mouse, once it has moved on the
+ * window more than MOUSE_MOVED pixels from where the system first put it
+ * (the system tells where it is when the window opens under it).
+ * ODIN_CONTROLLERS=none leaves the gamepads and the mouse out. In a
+ * game where player 1 has a sight, the pointer of the system is hidden on
+ * the window. */
 class Controls : public Hikaru::Panel {
 public:
 	Controls(Keyboard &keys, const std::vector<GameControl> &controls, const Settings &settings,
@@ -44,12 +48,14 @@ public:
 	Controls(const Controls &) = delete;
 	Controls &operator=(const Controls &) = delete;
 
-	/* An event of a gamepad; false for any other. */
+	/* An event of a gamepad or of the mouse; false for any other. */
 	bool event(const SDL_Event &event);
 	/* Once a frame, before it runs. */
 	void update();
 
 	void read_inputs(MieBoard::Inputs &inputs) override { m_panel.fill(inputs); }
+
+	static constexpr int MOUSE_MOVED = 2;
 
 private:
 	/* A pad and its buttons: a button pressed and released before a frame
@@ -70,6 +76,12 @@ private:
 	ControlPanel m_panel;
 	bool m_on;
 	std::array<Pad, 2> m_pads;	/* of each player */
+	MouseState m_mouse;
+	bool m_mouse_seen;		/* it has moved on the window */
+	bool m_mouse_placed;		/* the system has told where it is */
+	int m_mouse_from_x, m_mouse_from_y;	/* where */
+	std::array<bool, 3> m_mouse_fresh;
+	std::array<bool, 3> m_mouse_release;
 };
 
 } /* namespace odin */

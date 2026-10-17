@@ -164,12 +164,20 @@ odin-games.json; it is worked by the keys and pad inputs of its role
 (bindings.cpp), or by those the line of its id gives in [controls.<game>]
 of odin.ini (<data>/odin/odin.ini; ODIN_CONFIG=<file>, or none: the tests
 use none), each game on its own.
-A gamepad for each player, in the order they are plugged in
-(ODIN_CONTROLLERS=none: none). Half a stick or a trigger counts as pressed
-from half its way: a choice of the emulator. "pad:<axis>:invert" turns a
-whole axis of a stick over (odin.ini). The sight of a gun (BRAVEFF)
-is where the left stick points, the centre of the screen when it is let
-go (Reda's choice until the mouse). To come: the mouse and the
+A gamepad for each player, in the order they are plugged in, and the
+mouse (ODIN_CONTROLLERS=none: none). Half a stick or a trigger counts as
+pressed from half its way: a choice of the emulator. "pad:<axis>:invert"
+turns a whole axis of a stick over (odin.ini). The sight of a gun
+(BRAVEFF) is where the left stick points, the centre of the screen when it
+is let go (Reda's choice), or where the mouse points for player 1: the
+picture (picture.hpp, as the window shows it) covers the whole way of the
+channel, off the picture is OUT OF SCREEN while the mouse aims; the
+nozzle of the cabinet covers less (21 to CF across for player 1 as the
+game sets it at its first start, in the game area of the 93C46 of the
+MIE): until NOZZLE SENSOR SETTING is done once with the mouse, the sight
+reaches the edge of the screen before the mouse. The mouse counts once it
+has moved more than 2 pixels from where the system first put it (the
+system tells where it is when the window opens under it). To come: the
 light guns (evdev.cpp, rawinput.cpp), wheels and their pedals, the drive
 board and its force (drive_board_838_13366.cpp), the outputs to other
 programs (outputs_network.cpp), gamepads
@@ -178,7 +186,8 @@ Without a gamepad a control rests: a stick or a lever centred, a pedal let
 go (the gas and brake of SGNASCAR read 00 in its INPUT TEST). A key moves
 an analog control 1000 a frame toward the end it pushes to, and lets it
 back as fast (the step of xemu's Chihiro wheel: a choice of the emulator);
-of the keys and the axes bound, the last that moved 400 or more works it.
+of the keys, the axes and the mouse bound, the last that moved 400 or more
+works it.
 
 AICA (src/odin/aica.cpp + arm7.cpp): control block, timers, interrupts,
 DMA, RTC and the ARM7 are in, and the voices (aica_voice.cpp: sampler,

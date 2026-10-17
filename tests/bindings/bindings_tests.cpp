@@ -39,6 +39,7 @@ namespace {
 using odin::Bindings;
 using odin::GameControl;
 using odin::HostInput;
+using odin::MouseInput;
 using odin::PadInput;
 using odin::Role;
 using odin::Settings;
@@ -272,6 +273,68 @@ void test_analog_lines()
 	      "without settings, the keys of the roles");
 }
 
+bool is_mouse(const HostInput &input, MouseInput::Type type, unsigned button = 0)
+{
+	return input.kind == HostInput::Kind::MOUSE && input.mouse.type == type &&
+	       (type != MouseInput::Type::BUTTON || input.mouse.button == button);
+}
+
+void test_mouse()
+{
+	using Type = MouseInput::Type;
+	const auto parsed = [](const char *text, Type type, unsigned button = 0) {
+		const auto input = HostInput::parse(text);
+
+		return input && is_mouse(*input, type, button);
+	};
+
+	check(parsed("mouse:left", Type::BUTTON, 0) && parsed("mouse:middle", Type::BUTTON, 1) &&
+	      parsed("mouse:right", Type::BUTTON, 2), "the buttons of the mouse");
+	check(parsed("mouse:x", Type::X) && parsed("mouse:y", Type::Y) && parsed("mouse:off", Type::OFF) &&
+	      HostInput::parse("mouse:x")->is_axis() && !HostInput::parse("mouse:off")->is_axis() &&
+	      !HostInput::parse("mouse:left")->is_axis(), "where it points: x and y are axes, off is pressed or not");
+	check(!HostInput::parse("mouse:wheel") && !HostInput::parse("mouse:") && !HostInput::parse("mouse:Left"),
+	      "what is not of the mouse");
+
+	const std::vector<GameControl> brave = {
+		control("1p_sight_x", GameControl::Type::ANALOG, Role::GUN_X, 0),
+		control("1p_sight_y", GameControl::Type::ANALOG, Role::GUN_Y, 0),
+		control("1p_out_of_screen", GameControl::Type::BUTTON, Role::GUN_OFFSCREEN, 0),
+		control("1p_water", GameControl::Type::BUTTON, Role::BUTTON1, 0),
+		control("1p_fog", GameControl::Type::BUTTON, Role::BUTTON2, 0),
+		control("1p_start", GameControl::Type::BUTTON, Role::START, 0),
+		control("2p_water", GameControl::Type::BUTTON, Role::BUTTON1, 1),
+		control("2p_sight_x", GameControl::Type::ANALOG, Role::GUN_X, 1),
+	};
+	const Bindings aims(brave, Settings(), "braveff");
+
+	check(aims.of(0).size() == 2 && is_pad(aims.of(0)[0], PadInput::Type::AXIS, SDL_CONTROLLER_AXIS_LEFTX) &&
+	      is_mouse(aims.of(0)[1], Type::X) && is_mouse(aims.of(1).back(), Type::Y),
+	      "the sight of player 1: the left stick and the mouse");
+	check(aims.of(2).size() == 1 && is_mouse(aims.of(2)[0], Type::OFF), "OUT OF SCREEN: the mouse off the picture");
+	check(is_mouse(aims.of(3).back(), Type::BUTTON, 0) && is_mouse(aims.of(4).back(), Type::BUTTON, 2) &&
+	      is_mouse(aims.of(5).back(), Type::BUTTON, 1) && is_key(aims.of(3)[0], SDLK_LCTRL),
+	      "water on the left button, fog on the right, START on the middle, the keys kept");
+	check(!is_mouse(aims.of(6).back(), Type::BUTTON, 0) && aims.of(7).size() == 1,
+	      "player 2: no mouse");
+
+	const Bindings plain({ control("bullet", GameControl::Type::BUTTON, Role::BUTTON1, 0) }, Settings(), "pharrier");
+
+	check(plain.of(0).size() == 2 && plain.of(0)[1].kind == HostInput::Kind::PAD, "no sight, no mouse");
+
+	Settings settings;
+
+	settings.parse("[controls.braveff]\n1p_sight_x = mouse:left\n1p_water = mouse:x\n"
+	               "1p_fog = mouse:left, key:F\n1p_sight_y = mouse:x\n", "test");
+	const Bindings mine(brave, settings, "braveff");
+
+	check(mine.of(0).size() == 2, "a button of the mouse on a channel: refused");
+	check(mine.of(3).size() == 3, "where the mouse points on a button: refused");
+	check(mine.of(4).size() == 2 && is_mouse(mine.of(4)[0], Type::BUTTON, 0) && is_key(mine.of(4)[1], SDLK_f),
+	      "a button of the mouse on a button");
+	check(mine.of(1).size() == 1 && is_mouse(mine.of(1)[0], Type::X), "the sight Y on where the mouse points across");
+}
+
 void test_game_lines()
 {
 	const std::vector<GameControl> panel = {
@@ -341,6 +404,7 @@ int main(int argc, char **argv)
 	test_defaults();
 	test_keys_toward();
 	test_analog_lines();
+	test_mouse();
 	test_game_lines();
 
 	std::printf("\n%d checks, %d failures\n", g_checks, g_failures);

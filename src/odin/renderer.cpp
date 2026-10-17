@@ -21,6 +21,7 @@
 
 #include "odin/renderer.hpp"
 #include "odin/hikaru_gpu.hpp"
+#include "odin/picture.hpp"
 #include "odin/renderer_gl.hpp"
 #include "odin/renderer_shaders.hpp"
 
@@ -494,21 +495,19 @@ Renderer::compose()
 
 /* The picture of the frame in the window: the largest rectangle of the
  * shape of the screen of the hardware that fits, in the middle, black
- * around. A rectangle of the size of the picture takes it pixel for pixel;
+ * around (picture_rect, which the mouse reads too). A rectangle of the
+ * size of the picture takes it pixel for pixel;
  * any other takes for each of its pixels the mean of what it covers. */
 void
 Renderer::present(unsigned window_w, unsigned window_h)
 {
-	unsigned w = window_w, h = window_w * HEIGHT / WIDTH;
+	const PictureRect rect = picture_rect(window_w, window_h);
+	const unsigned w = rect.w, h = rect.h;
 
-	if (h > window_h) {
-		h = window_h;
-		w = window_h * WIDTH / HEIGHT;
-	}
 	if (w == 0 || h == 0)
 		return;
-	const GLint x = static_cast<GLint>((window_w - w) / 2);
-	const GLint y = static_cast<GLint>((window_h - h) / 2);
+	const GLint x = static_cast<GLint>(rect.x);
+	const GLint y = static_cast<GLint>(rect.y);
 	const GLint pw = static_cast<GLint>(width()), ph = static_cast<GLint>(height());
 
 	glDisable(GL_SCISSOR_TEST);

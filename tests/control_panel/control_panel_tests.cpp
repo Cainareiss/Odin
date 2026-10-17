@@ -27,6 +27,7 @@
  * Exit status is 0 when every check passes. */
 
 #include "odin/control_panel.hpp"
+#include "odin/picture.hpp"
 
 #include <cctype>
 #include <cstdio>
@@ -39,6 +40,7 @@ using odin::GameControl;
 using odin::HostState;
 using odin::JvsSwitch;
 using odin::MieBoard;
+using odin::MouseState;
 using odin::PadInput;
 using odin::PadState;
 using odin::Role;
@@ -57,13 +59,14 @@ void check(bool ok, const char *what)
 
 /* The inputs of a panel after one update */
 MieBoard::Inputs after(ControlPanel &panel, const std::vector<SDL_Keycode> &keys, const PadState *pad1 = nullptr,
-                       const PadState *pad2 = nullptr)
+                       const PadState *pad2 = nullptr, const MouseState *mouse = nullptr)
 {
 	HostState host;
 	MieBoard::Inputs inputs = {};
 
 	host.keys = &keys;
 	host.pads = { pad1, pad2 };
+	host.mouse = mouse;
 	panel.update(host);
 	panel.fill(inputs);
 	return inputs;
@@ -405,6 +408,73 @@ void test_channel()
 	      "a stick the settings turn over: the other way, the centre kept");
 }
 
+/* The sight of player 1 of Brave: X low on the left, Y low at the top;
+ * WATER on PUSH1, OUT OF SCREEN on PUSH2, FOG on PUSH3 */
+void test_mouse()
+{
+	ControlPanel panel({ analog("1P SIGHT X", 0, GameControl::Low::LEFT, Role::GUN_X),
+	                     analog("1P SIGHT Y", 1, GameControl::Low::UP, Role::GUN_Y),
+	                     button("1P OUT OF SCREEN", { 0, 0x0100 }, Role::GUN_OFFSCREEN),
+	                     button("1P WATER", { 0, 0x0200 }, Role::BUTTON1),
+	                     button("1P FOG", { 0, 0x0080 }, Role::BUTTON2),
+	                     button("1P START", { 0, 0x8000 }, Role::START) },
+	                   Settings(), "braveff");
+	MouseState mouse;
+	PadState pad;
+
+	check(after(panel, {}, nullptr, nullptr, &mouse).jvs_analog[0] == 0x8000, "the mouse in the middle: 8000");
+	mouse.x = 0.0;
+	mouse.y = 1.0;
+	MieBoard::Inputs inputs = after(panel, {}, nullptr, nullptr, &mouse);
+	check(inputs.jvs_analog[0] == 0x0000 && inputs.jvs_analog[1] == 0xFFFF,
+	      "the left and the bottom of the picture: 0000 and FFFF");
+	mouse.x = 1.0;
+	mouse.y = 0.25;
+	inputs = after(panel, {}, nullptr, nullptr, &mouse);
+	check(inputs.jvs_analog[0] == 0xFFFF && inputs.jvs_analog[1] == 0x4000, "the right, a quarter down");
+	mouse.x = 1.5;
+	check(after(panel, {}, nullptr, nullptr, &mouse).jvs_analog[0] == 0xFFFF, "beyond the picture: its edge");
+	mouse.x = 0.5;
+	mouse.buttons = { true, false, false };
+	check(after(panel, {}, nullptr, nullptr, &mouse).jvs_player[0] == 0x0200, "the left button: water");
+	mouse.buttons = { false, true, true };
+	check(after(panel, {}, nullptr, nullptr, &mouse).jvs_player[0] == 0x8080, "the right one fog, the middle one START");
+	mouse.buttons = {};
+	mouse.off = true;
+	check(after(panel, {}, nullptr, nullptr, &mouse).jvs_player[0] == 0x0100, "off the picture: OUT OF SCREEN");
+	pad.axes[SDL_CONTROLLER_AXIS_LEFTX] = 20000;
+	pad.axes[SDL_CONTROLLER_AXIS_LEFTY] = 20000;
+	inputs = after(panel, {}, &pad, nullptr, &mouse);
+	check(inputs.jvs_analog[0] == 0x8000 + 20000 && inputs.jvs_analog[1] == 0x8000 + 20000,
+	      "the stick moves: it takes the sight");
+	check(after(panel, {}, &pad, nullptr, &mouse).jvs_player[0] == 0, "the stick aims: the mouse off counts no more");
+	mouse.off = false;
+	mouse.x = 0.25;
+	check(after(panel, {}, &pad, nullptr, &mouse).jvs_analog[0] == 0x4000, "the mouse moves: it takes X back");
+	check(after(panel, {}, &pad).jvs_analog[0] == 0x8000 && after(panel, {}, &pad).jvs_player[0] == 0,
+	      "no mouse, as a pad unplugged: the keys at rest, its buttons up");
+}
+
+void test_picture()
+{
+	const odin::PictureRect whole = odin::picture_rect(640, 480);
+	const odin::PictureRect wide = odin::picture_rect(1280, 720);
+	const odin::PictureRect tall = odin::picture_rect(800, 1000);
+
+	check(whole.x == 0 && whole.y == 0 && whole.w == 640 && whole.h == 480, "640 by 480: the whole window");
+	check(wide.x == 160 && wide.y == 0 && wide.w == 960 && wide.h == 720, "a wide window: black on the sides");
+	check(tall.x == 0 && tall.y == 200 && tall.w == 800 && tall.h == 600, "a tall window: black above and below");
+
+	const odin::PicturePoint corner = odin::picture_point(160, 719, 1280, 720);
+	const odin::PicturePoint last = odin::picture_point(1119, 360, 1280, 720);
+
+	check(corner.x > 0.0 && corner.x < 0.001 && corner.y > 0.999 && corner.y < 1.0,
+	      "the bottom left pixel of the picture");
+	check(last.x > 0.999 && last.x < 1.0 && last.y > 0.5 && last.y < 0.501, "the last pixel of a line");
+	check(odin::picture_point(159, 0, 1280, 720).x < 0.0 && odin::picture_point(1120, 0, 1280, 720).x >= 1.0,
+	      "beside the picture: off it");
+}
+
 void test_pressed()
 {
 	Settings settings;
@@ -439,6 +509,8 @@ int main()
 	test_lever();
 	test_bindings_from_settings();
 	test_channel();
+	test_mouse();
+	test_picture();
 	test_pressed();
 
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);

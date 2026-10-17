@@ -38,11 +38,21 @@ struct PadState {
 	std::array<bool, SDL_CONTROLLER_BUTTON_MAX> buttons{};
 };
 
-/* What the host holds now: the keys down, and the pad of each player
- * (nullptr: none). */
+/* The mouse as the host sees it now: where it points on the picture, 0 to
+ * 1 each way from the top left corner, off when away from it (or from the
+ * window), and its buttons, left, middle, right. */
+struct MouseState {
+	double x = 0.5, y = 0.5;
+	bool off = false;
+	std::array<bool, 3> buttons{};
+};
+
+/* What the host holds now: the keys down, the pad of each player and the
+ * mouse (nullptr: none). */
 struct HostState {
 	const std::vector<SDL_Keycode> *keys = nullptr;
 	std::array<const PadState *, 2> pads{};
+	const MouseState *mouse = nullptr;
 };
 
 /* The control panel of a cabinet: from what the host holds, the switches
@@ -84,6 +94,9 @@ public:
 	/* The channel of a control at the end of its way: right or down
 	 * (positive), left or up; a pedal down (positive). */
 	static uint16_t end(GameControl::Low low, bool positive);
+	/* The channel where the mouse points, from 0 to 1 across the picture:
+	 * the whole way of the channel, the left or the top at 0. */
+	static uint16_t pointed(GameControl::Low low, double at);
 
 private:
 	bool held(const HostState &host, const HostInput &input, unsigned player) const;
@@ -100,6 +113,7 @@ private:
 	std::vector<std::array<bool, 2>> m_levers_were;	/* GEAR_DOWN, GEAR_UP at the last update */
 	std::array<bool, 2> m_coins_were;
 	std::array<bool, 2> m_coins;			/* gone in, not read yet */
+	bool m_mouse_aims;				/* the mouse worked a channel at the last update */
 };
 
 } /* namespace odin */

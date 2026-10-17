@@ -49,6 +49,13 @@ Up is the gas and Down the brake; the second stick of player 1 (ROLL of
 Air Trix, the right lever of Racer and of Virtual-On) is on R F D G. X and
 C shift the gears down and up, V and B are the triggers of Virtual-On.
 
+The mouse aims for player 1 in Brave: the sight where it points on the
+picture, water on the left button, fog on the right one, Start on the
+middle one; off the picture, the nozzle points away from the screen. Of
+the keys, a stick and the mouse, the last that moved works a control. The
+sight meets the pointer once NOZZLE SENSOR SETTING (in the test menu of
+the game) has been done with the mouse.
+
 Gamepads: one for each player, in the order they are plugged in. Start,
 the D-pad, A, B, X, Y, LB, RB, LT, RT, the sticks and the triggers work the
 controls of each game as their roles tell (odin-games.json): for NASCAR,
@@ -69,6 +76,8 @@ under the id odin-games.json gives it:
  stick_h_right = key:D
 
 (pad:-lefty is the left stick up, pad:+leftx the stick to the right,
+mouse:left, mouse:middle, mouse:right its buttons, mouse:x and mouse:y
+where it points, mouse:off away from the picture;
 pad:lefty:invert the whole axis turned over: Planet Harriers then goes up
 when the stick goes up, where its cabinet stick, a flight stick, goes up
 when pulled.) An analog control takes the axes of a pad on its line, and

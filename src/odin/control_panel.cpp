@@ -19,6 +19,7 @@
 #include "odin/control_panel.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 
 namespace odin {
@@ -99,7 +100,7 @@ panel_of(const std::vector<GameControl> &controls)
 
 ControlPanel::ControlPanel(const std::vector<GameControl> &controls, const Settings &settings, const std::string &game)
 	: m_controls(panel_of(controls)), m_bindings(m_controls, settings, game), m_inputs(idle_inputs(m_controls)),
-	  m_coins_were{}, m_coins{}
+	  m_coins_were{}, m_coins{}, m_mouse_aims(false)
 {
 	m_positions.assign(m_controls.size(), 0);
 	m_levers_were.assign(m_controls.size(), { false, false });
@@ -135,6 +136,15 @@ ControlPanel::rest(GameControl::Low low)
 }
 
 uint16_t
+ControlPanel::pointed(GameControl::Low low, double at)
+{
+	const PadInput axis{ PadInput::Type::AXIS, static_cast<uint8_t>(SDL_CONTROLLER_AXIS_LEFTX) };
+	const long value = std::lround(std::clamp(at, 0.0, 1.0) * 65535.0) - 32768;
+
+	return channel(axis, low, static_cast<int16_t>(value));
+}
+
+uint16_t
 ControlPanel::end(GameControl::Low low, bool positive)
 {
 	const bool pedal = !GameControl::half(low, positive);
@@ -149,6 +159,14 @@ ControlPanel::held(const HostState &host, const HostInput &input, unsigned playe
 {
 	if (input.kind == HostInput::Kind::KEY)
 		return host.keys && std::find(host.keys->begin(), host.keys->end(), input.key) != host.keys->end();
+	if (input.kind == HostInput::Kind::MOUSE) {
+		/* Away from the picture counts while the mouse aims */
+		if (!host.mouse)
+			return false;
+		if (input.mouse.type == MouseInput::Type::OFF)
+			return host.mouse->off && m_mouse_aims;
+		return input.mouse.type == MouseInput::Type::BUTTON && host.mouse->buttons[input.mouse.button];
+	}
 
 	const PadState *const pad = host.pads[player & 1];
 
@@ -205,10 +223,13 @@ ControlPanel::analog(const HostState &host, size_t c)
 	for (size_t s = 1; s < now.size(); s++) {
 		const HostInput &input = axes[s - 1];
 
-		if (input.kind != HostInput::Kind::PAD || !pad)
-			continue;
-		now[s] = channel(input.pad, control.low, pad->axes[input.pad.index]);
-		there[s] = true;
+		if (input.kind == HostInput::Kind::MOUSE && host.mouse) {
+			now[s] = pointed(control.low, input.mouse.type == MouseInput::Type::X ? host.mouse->x : host.mouse->y);
+			there[s] = true;
+		} else if (input.kind == HostInput::Kind::PAD && pad) {
+			now[s] = channel(input.pad, control.low, pad->axes[input.pad.index]);
+			there[s] = true;
+		}
 	}
 	if (!there[m_owner[c]])
 		m_owner[c] = 0;
@@ -256,6 +277,11 @@ ControlPanel::update(const HostState &host)
 			break;
 		}
 	}
+	m_mouse_aims = false;
+	for (size_t c = 0; c < m_controls.size(); c++)
+		if (m_controls[c].type == GameControl::Type::ANALOG && m_owner[c] > 0 &&
+		    m_bindings.of(c)[m_owner[c] - 1].kind == HostInput::Kind::MOUSE)
+			m_mouse_aims = true;
 	for (unsigned slot = 0; slot < 2; slot++) {
 		const bool now = pressed(host, m_bindings.cabinet(slot ? Role::COIN2 : Role::COIN1), 0);
 

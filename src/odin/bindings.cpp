@@ -18,8 +18,10 @@
 
 #include "odin/bindings.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <initializer_list>
+#include <utility>
 
 namespace odin {
 
@@ -97,6 +99,14 @@ const KeysToward KEYS_TOWARD[] = {
 	{ Role::GUN_Y, { { "Up", "Down" }, { "R", "F" } } },
 };
 
+/* The mouse, in a game where player 1 has a sight: it aims for player 1,
+ * the left button fires, the right one is the second button, the middle
+ * one Start. */
+const std::pair<Role, const char *> MOUSE_DEFAULTS[] = {
+	{ Role::GUN_X, "x" }, { Role::GUN_Y, "y" }, { Role::GUN_OFFSCREEN, "off" },
+	{ Role::BUTTON1, "left" }, { Role::BUTTON2, "right" }, { Role::START, "middle" },
+};
+
 std::string_view
 trimmed(std::string_view text)
 {
@@ -111,12 +121,6 @@ trimmed(std::string_view text)
  * stick, a trigger), the whole axis of a pad, or both (a pedal) */
 enum class Takes { PRESSED, AXIS, BOTH };
 
-bool
-is_axis(const HostInput &input)
-{
-	return input.kind == HostInput::Kind::PAD && input.pad.type == PadInput::Type::AXIS;
-}
-
 /* A list of inputs, "key:A, pad:b"; nothing when one is not an input, or
  * not of the kind the line takes. */
 std::optional<std::vector<HostInput>>
@@ -127,9 +131,10 @@ parse_list(std::string_view value, Takes takes)
 	while (!trimmed(value).empty()) {
 		const size_t comma = value.find(',');
 		const auto input = HostInput::parse(trimmed(value.substr(0, comma)));
-		const bool pressed = input && (input->kind == HostInput::Kind::KEY || input->pad.is_digital());
+		const bool pressed = input && (input->kind == HostInput::Kind::PAD ? input->pad.is_digital()
+		                                                                    : !input->is_axis());
 
-		if (!input || (takes == Takes::PRESSED && !pressed) || (takes == Takes::AXIS && !is_axis(*input)))
+		if (!input || (takes == Takes::PRESSED && !pressed) || (takes == Takes::AXIS && !input->is_axis()))
 			return std::nullopt;
 		inputs.push_back(*input);
 		value.remove_prefix(comma == std::string_view::npos ? value.size() : comma + 1);
@@ -164,6 +169,21 @@ HostInput::parse(std::string_view text)
 		if (out.key == SDLK_UNKNOWN)
 			return std::nullopt;
 		return out;
+	}
+	if (text.substr(0, 6) == "mouse:") {
+		static const std::pair<std::string_view, MouseInput> NAMES[] = {
+			{ "left", { MouseInput::Type::BUTTON, 0 } }, { "middle", { MouseInput::Type::BUTTON, 1 } },
+			{ "right", { MouseInput::Type::BUTTON, 2 } }, { "x", { MouseInput::Type::X, 0 } },
+			{ "y", { MouseInput::Type::Y, 0 } }, { "off", { MouseInput::Type::OFF, 0 } },
+		};
+
+		out.kind = Kind::MOUSE;
+		for (const auto &[name, mouse] : NAMES)
+			if (text.substr(6) == name) {
+				out.mouse = mouse;
+				return out;
+			}
+		return std::nullopt;
 	}
 	if (text.substr(0, 4) != "pad:")
 		return std::nullopt;
@@ -239,6 +259,10 @@ Bindings::keys_toward(Role role, unsigned player, bool positive)
 Bindings::Bindings(const std::vector<GameControl> &panel, const Settings &settings, const std::string &game)
 	: m_controls(panel.size())
 {
+	const bool aims = std::any_of(panel.begin(), panel.end(), [](const GameControl &control) {
+		return control.role == Role::GUN_X && control.player == 0;
+	});
+
 	for (size_t c = 0; c < panel.size(); c++) {
 		const GameControl &control = panel[c];
 
@@ -248,6 +272,9 @@ Bindings::Bindings(const std::vector<GameControl> &panel, const Settings &settin
 			continue;
 		}
 		m_controls[c][0] = defaults(control.role, control.player);
+		for (const auto &[role, name] : MOUSE_DEFAULTS)
+			if (aims && control.player == 0 && role == control.role)
+				m_controls[c][0].push_back(*HostInput::parse(std::string("mouse:") + name));
 		if (control.type == GameControl::Type::ANALOG) {
 			m_controls[c][1] = keys_toward(control.role, control.player, false);
 			m_controls[c][2] = keys_toward(control.role, control.player, true);
@@ -300,7 +327,7 @@ Bindings::Bindings(const std::vector<GameControl> &panel, const Settings &settin
 		target->clear();
 		pedal_down->clear();
 		for (const HostInput &input : *inputs)
-			(is_axis(input) ? target : pedal_down)->push_back(input);
+			(input.is_axis() ? target : pedal_down)->push_back(input);
 	}
 }
 

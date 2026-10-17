@@ -17,6 +17,7 @@
  */
 
 #include "odin/controls.hpp"
+#include "odin/picture.hpp"
 
 #include <cstdio>
 #include <cstdlib>
@@ -26,7 +27,8 @@ namespace odin {
 
 Controls::Controls(Keyboard &keys, const std::vector<GameControl> &controls, const Settings &settings,
                    const std::string &game)
-	: m_keys(keys), m_panel(controls, settings, game), m_on(false)
+	: m_keys(keys), m_panel(controls, settings, game), m_on(false), m_mouse_seen(false),
+	  m_mouse_placed(false), m_mouse_from_x(0), m_mouse_from_y(0), m_mouse_fresh{}, m_mouse_release{}
 {
 	const char *const chosen = std::getenv("ODIN_CONTROLLERS");
 
@@ -38,6 +40,9 @@ Controls::Controls(Keyboard &keys, const std::vector<GameControl> &controls, con
 		return;
 	}
 	m_on = true;
+	for (const GameControl &control : controls)
+		if (control.role == Role::GUN_X && control.player == 0)
+			SDL_ShowCursor(SDL_DISABLE);
 }
 
 Controls::~Controls()
@@ -103,12 +108,65 @@ Controls::close(SDL_JoystickID id)
 	*pad = Pad{};
 }
 
+namespace {
+
+/* A button down or up: one pressed and released before a frame saw it
+ * stays pressed until that frame has run. */
+void
+press(bool &held, bool &fresh, bool &release, bool down)
+{
+	if (down) {
+		fresh = !held || fresh;
+		held = true;
+		release = false;
+	} else if (fresh) {
+		release = true;
+	} else {
+		held = false;
+	}
+}
+
+} /* namespace */
+
 bool
 Controls::event(const SDL_Event &event)
 {
 	if (!m_on)
 		return false;
 	switch (event.type) {
+	case SDL_MOUSEMOTION: {
+		int w = 0, h = 0;
+
+		SDL_GetWindowSize(SDL_GetWindowFromID(event.motion.windowID), &w, &h);
+		const PicturePoint point =
+			picture_point(event.motion.x, event.motion.y, static_cast<unsigned>(w), static_cast<unsigned>(h));
+
+		m_mouse.x = point.x;
+		m_mouse.y = point.y;
+		m_mouse.off = point.x < 0.0 || point.x >= 1.0 || point.y < 0.0 || point.y >= 1.0;
+		if (!m_mouse_placed) {
+			m_mouse_placed = true;
+			m_mouse_from_x = event.motion.x;
+			m_mouse_from_y = event.motion.y;
+		}
+		m_mouse_seen = m_mouse_seen || std::abs(event.motion.x - m_mouse_from_x) > MOUSE_MOVED ||
+		               std::abs(event.motion.y - m_mouse_from_y) > MOUSE_MOVED;
+		return true;
+	}
+	case SDL_MOUSEBUTTONDOWN:
+	case SDL_MOUSEBUTTONUP: {
+		const int index = event.button.button == SDL_BUTTON_LEFT ? 0 : event.button.button == SDL_BUTTON_MIDDLE ? 1
+		                : event.button.button == SDL_BUTTON_RIGHT ? 2 : -1;
+
+		if (index >= 0)
+			press(m_mouse.buttons[index], m_mouse_fresh[index], m_mouse_release[index],
+			      event.button.state == SDL_PRESSED);
+		return true;
+	}
+	case SDL_WINDOWEVENT:
+		if (event.window.event == SDL_WINDOWEVENT_LEAVE)
+			m_mouse.off = true;
+		return false;
 	case SDL_CONTROLLERDEVICEADDED:
 		open(event.cdevice.which);
 		return true;
@@ -124,15 +182,8 @@ Controls::event(const SDL_Event &event)
 		if (Pad *const pad = find(event.cbutton.which); pad && event.cbutton.button < SDL_CONTROLLER_BUTTON_MAX) {
 			const unsigned button = event.cbutton.button;
 
-			if (event.cbutton.state == SDL_PRESSED) {
-				pad->fresh[button] = !pad->state.buttons[button] || pad->fresh[button];
-				pad->state.buttons[button] = true;
-				pad->release[button] = false;
-			} else if (pad->fresh[button]) {
-				pad->release[button] = true;
-			} else {
-				pad->state.buttons[button] = false;
-			}
+			press(pad->state.buttons[button], pad->fresh[button], pad->release[button],
+			      event.cbutton.state == SDL_PRESSED);
 		}
 		return true;
 	default:
@@ -148,6 +199,7 @@ Controls::update()
 	host.keys = &m_keys.held();
 	for (unsigned player = 0; player < 2; player++)
 		host.pads[player] = m_pads[player].handle ? &m_pads[player].state : nullptr;
+	host.mouse = m_mouse_seen ? &m_mouse : nullptr;
 	m_panel.update(host);
 
 	m_keys.settle();
@@ -158,6 +210,11 @@ Controls::update()
 		pad.fresh = {};
 		pad.release = {};
 	}
+	for (unsigned button = 0; button < 3; button++)
+		if (m_mouse_release[button])
+			m_mouse.buttons[button] = false;
+	m_mouse_fresh = {};
+	m_mouse_release = {};
 }
 
 } /* namespace odin */

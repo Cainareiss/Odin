@@ -52,18 +52,37 @@ struct PadInput {
 	bool is_digital() const { return type != Type::AXIS || is_trigger(); }
 };
 
+/* The mouse: a button, "left", "middle" or "right"; where it points on the
+ * picture, "x" or "y"; "off", pointing away from the picture while it
+ * aims. */
+struct MouseInput {
+	enum class Type { BUTTON, X, Y, OFF };
+
+	Type type;
+	uint8_t button;	/* 0 left, 1 middle, 2 right */
+
+	/* Where it points: an axis */
+	bool is_axis() const { return type == Type::X || type == Type::Y; }
+};
+
 /* What the host gives: a key, by the name SDL gives it ("Left Ctrl",
- * "Z", "F2"), or an input of the gamepad of the player. */
+ * "Z", "F2"), an input of the gamepad of the player, or of the mouse. */
 struct HostInput {
-	enum class Kind { KEY, PAD };
+	enum class Kind { KEY, PAD, MOUSE };
 
 	Kind kind;
 	SDL_Keycode key;
 	PadInput pad;
+	MouseInput mouse;
 
-	/* "key:Left Ctrl", "pad:a", "pad:-lefty", "pad:lefty:invert"; nothing
-	 * for what is not one */
+	/* "key:Left Ctrl", "pad:a", "pad:-lefty", "pad:lefty:invert",
+	 * "mouse:left", "mouse:x"; nothing for what is not one */
 	static std::optional<HostInput> parse(std::string_view text);
+	/* The axis of a pad or where the mouse points: a channel */
+	bool is_axis() const
+	{
+		return kind == Kind::PAD ? pad.type == PadInput::Type::AXIS : kind == Kind::MOUSE && mouse.is_axis();
+	}
 };
 
 /* The inputs that work each control of a panel (any one of them) and each
