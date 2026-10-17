@@ -266,6 +266,9 @@ protected:
 	bool coin_add(uint8_t slot, int32_t count) override;
 	int32_t analogs(std::span<uint8_t> out, uint8_t channels) override;
 	void device_reset() override;
+	/* The counter COIN_COUNTER_DECREASE and _INCREASE change for the slot
+	 * they name, -1 for one refused: 1 or 2 (315-6215 at 0FBD, 10F5) */
+	virtual int coin_slot(uint8_t slot) const { return slot >= 1 && slot <= COIN_SLOTS ? slot - 1 : -1; }
 
 	JvsInputs &m_inputs;
 	std::array<uint16_t, COIN_SLOTS> m_coin_counter;

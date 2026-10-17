@@ -396,14 +396,16 @@ int32_t JvsIoBoard::coin_counters(std::span<uint8_t> out, uint8_t slots)
  * is (315-6215 at 1141; epr-21868 at 1D6F and 1EB8). */
 bool JvsIoBoard::coin_add(uint8_t slot, int32_t count)
 {
-	if (slot < 1 || slot > COIN_SLOTS) {
+	const int index = coin_slot(slot);
+
+	if (index < 0) {
 		return false;
 	}
-	const int32_t value = static_cast<int32_t>(m_coin_counter[slot - 1]) + count;
+	const int32_t value = static_cast<int32_t>(m_coin_counter[static_cast<size_t>(index)]) + count;
 	if (value < 0 || value > 0x3FFF) {
 		return false;
 	}
-	m_coin_counter[slot - 1] = static_cast<uint16_t>(value);
+	m_coin_counter[static_cast<size_t>(index)] = static_cast<uint16_t>(value);
 	return true;
 }
 

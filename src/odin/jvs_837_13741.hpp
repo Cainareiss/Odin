@@ -52,6 +52,8 @@ protected:
 	bool refused_outputs_skip_data() const override { return false; }
 	/* 058B: F0 in any frame it reads (to every node or to its own) */
 	bool reset_in_any_frame() const override { return true; }
+	/* 1D52, 1E9A: 0 refused, 1 the first, any other the second */
+	int coin_slot(uint8_t slot) const override { return slot == 0 ? -1 : slot == 1 ? 0 : 1; }
 };
 
 } /* namespace odin */

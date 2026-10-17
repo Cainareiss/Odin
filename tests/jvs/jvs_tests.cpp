@@ -322,6 +322,12 @@ void test_837_13741()
 	check(ok && d == std::vector<uint8_t>({ 0x02, 0x02, 0x01, 0x11, 0x01, 0x20, 0x01, 0x10 }),
 	      "13741: four bytes refused, their data read as 11, 12, 13 and the unknown 99");
 
+	/* Coin slots: 0 refused, 1 the first, any other the second. */
+	d = decode(send(host, frame(0x01, { 0x35, 0x03, 0x00, 0x05, 0x35, 0xFF, 0x00, 0x02, 0x35, 0x00, 0x00, 0x01 })), ok);
+	check(ok && d == std::vector<uint8_t>({ 0x01, 0x01, 0x01, 0x02 }), "13741: slots 3 and FF taken, 0 refused");
+	d = decode(send(host, frame(0x01, { 0x21, 0x02 })), ok);
+	check(ok && d == std::vector<uint8_t>({ 0x01, 0x01, 0x00, 0x00, 0x00, 0x07 }), "13741: both went to slot 2");
+
 	/* F0 restarts it wherever it is, its second byte not read, and the
 	 * reports before it are lost. */
 	check(send(host, frame(0x01, { 0x11, 0xF0, 0x12 })).empty() && !host.address_set_line(),
