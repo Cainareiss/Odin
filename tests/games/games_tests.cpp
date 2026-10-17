@@ -88,8 +88,15 @@ const char LIST[] = R"({
     { "name": "stepless", "mach": "hikaru", "sections": [
         { "name": "eprom", "type": "interleave", "data": [
             { "name": "a.bin", "size": 4 }, { "name": "b.bin", "size": 4 } ] } ] },
+    { "name": "fit", "mach": "hikaru", "rom_board": { "eprom_mb": 2 }, "sections": [
+        { "name": "eprom", "type": "interleave", "amnt": 2, "data": [
+            { "name": "e.bin", "size": 2097152 }, { "name": "e.bin", "size": 2097152 } ] } ] },
+    { "name": "misfit", "mach": "hikaru", "rom_board": { "eprom_mb": 2 }, "sections": [
+        { "name": "eprom", "type": "interleave", "amnt": 2, "data": [
+            { "name": "a.bin", "size": 4 }, { "name": "b.bin", "size": 4 } ] } ] },
     { "name": "wheel", "mach": "hikaru", "io": "837-13741", "option_speakers": true, "option_level": -22.5,
       "option_vibration": true, "drive_board": { "first_output": 15 },
+      "rom_board": { "eprom_mb": 4, "315-5881": "291b02C7", "actel": { "key": "56DEDF33", "id": "4252" } },
       "mie_eeprom": "4242520001aBCDEF0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ff",
       "controls": [
         { "name": "WHEEL", "id": "wheel", "analog": 0, "low": "left", "role": "steer" },
@@ -177,6 +184,17 @@ const char *const BAD_CONTROLS[] = {
 	                { "name": "B", "id": "a", "output": 2, "role": "lamp" } ])",
 	R"("controls": [ { "name": "A", "id": "a", "switch": "1P START", "role": "start" } ],
 	   "outputs": [ { "name": "B", "id": "a", "output": 2, "role": "lamp" } ])",
+	R"("rom_board": 4)",
+	R"("rom_board": {})",
+	R"("rom_board": { "eprom_mb": 3 })",
+	R"("rom_board": { "eprom_mb": "4" })",
+	R"("rom_board": { "eprom_mb": 4, "315-5881": "291B02C" })",
+	R"("rom_board": { "eprom_mb": 4, "315-5881": "291B02C7FF" })",
+	R"("rom_board": { "eprom_mb": 4, "315-5881": 689636039 })",
+	R"("rom_board": { "eprom_mb": 4, "actel": { "key": "56DEDF33" } })",
+	R"("rom_board": { "eprom_mb": 4, "actel": { "key": "56DEDF33", "id": "425" } })",
+	R"("rom_board": { "eprom_mb": 4, "actel": { "key": "56DEDF33", "id": "4252", "chip": "A54SX32" } })",
+	R"("rom_board": { "eprom_mb": 4, "stretched": true })",
 };
 
 void test_games(const std::string &dir)
@@ -184,10 +202,11 @@ void test_games(const std::string &dir)
 	const std::string roms = dir + "/games_test_roms";
 
 	std::filesystem::create_directories(roms + "/toy");
-	for (const char *game : { "short", "odd", "unequal", "stepless", "wheel" })
+	for (const char *game : { "short", "odd", "unequal", "stepless", "fit", "misfit", "wheel" })
 		std::filesystem::create_directories(roms + "/" + game);
 	write(dir + "/games_test.json", LIST);
-	for (const char *game : { "toy", "short", "odd", "unequal", "stepless", "wheel" }) {
+	write(roms + "/fit/e.bin", std::string(2 << 20, 'E'));
+	for (const char *game : { "toy", "short", "odd", "unequal", "stepless", "misfit", "wheel" }) {
 		const std::string folder = roms + "/" + game;
 
 		write(folder + "/boot.bin", "BOOT");
@@ -222,9 +241,12 @@ void test_games(const std::string &dir)
 	check(wheel && wheel->option_level == -22.5, "the level of the optional board the list tells, in dB");
 	check(wheel && wheel->option_vibration, "the vibration device the optional board feeds, the list tells");
 	check(wheel && wheel->drive_first_output == 15, "the output of TX0 of the drive board, the list tells");
+	check(wheel && wheel->rom_board && wheel->rom_board->eprom_mb == 4 && wheel->rom_board->crypt_key == 0x291B02C7 &&
+	      wheel->rom_board->has_actel && wheel->rom_board->actel_key == 0x56DEDF33 &&
+	      wheel->rom_board->actel_id == 0x4252, "the ROM board the list tells, its keys in small or capital figures");
 	if (toy)
 		check(toy->controls.empty() && toy->mie_eeprom.empty() && !toy->option_speakers && toy->option_level == 0 &&
-		      !toy->option_vibration && !toy->drive_first_output,
+		      !toy->option_vibration && !toy->drive_first_output && !toy->rom_board,
 		      "without \"controls\", no control, without \"mie_eeprom\", no chip, without \"option_speakers\", none");
 	check(wheel && wheel->mie_eeprom.size() == 128 && wheel->mie_eeprom[0] == 0x42 && wheel->mie_eeprom[4] == 0x01 &&
 	      wheel->mie_eeprom[5] == 0xAB && wheel->mie_eeprom[7] == 0xEF && wheel->mie_eeprom[127] == 0xFF,
@@ -292,6 +314,11 @@ void test_games(const std::string &dir)
 	check(!list.load_game(roms, "odd"), "nor one with a section of a type that is not known");
 	check(!list.load_game(roms, "unequal"), "nor one whose alternative files have different sizes");
 	check(!list.load_game(roms, "stepless"), "nor one that interleaves without telling by how many bytes");
+	check(!list.load_game(roms, "misfit"), "nor one whose EPROMs are not of the size its ROM board takes");
+	const std::optional<Game> fit = list.load_game(roms, "fit");
+	check(fit && fit->rom_board && fit->rom_board->eprom_mb == 2 && !fit->rom_board->crypt_key &&
+	      !fit->rom_board->has_actel && fit->section("eprom").size() == 4 << 20,
+	      "EPROMs of 2 MB on a board that takes them, without a guard chip");
 	check(!list.load_game(dir + "/no_such_folder", "toy"), "nor one whose files are not there");
 }
 

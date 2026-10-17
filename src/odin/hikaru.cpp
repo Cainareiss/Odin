@@ -199,20 +199,33 @@ text_at(std::span<const uint8_t> rom, size_t offs)
 	return text;
 }
 
+/* The security FPGA of the ROM board of a game, when it has one */
+std::optional<RomBoard::Actel>
+actel_of(const Game &game)
+{
+	if (!game.rom_board || !game.rom_board->has_actel)
+		return std::nullopt;
+	return RomBoard::Actel{ game.rom_board->actel_key, game.rom_board->actel_id };
+}
+
 } /* namespace */
 
 std::unique_ptr<Hikaru>
 Hikaru::make(const Game &game, bool verbose)
 {
-	const std::optional<RomBoard::Config> rombd = RomBoard::config_of(game.name);
+	const std::optional<GameRomBoard> &board = game.rom_board;
 	const size_t mie = game.section("mie").size();
 
 	if (game.section("bootrom").size() != 2 * MB) {
 		std::fprintf(stderr, "ERROR: '%s' has no BOOTROM of 2 MB\n", game.name.c_str());
 		return nullptr;
 	}
-	if (!rombd) {
-		std::fprintf(stderr, "ERROR: the ROM board of '%s' is not known\n", game.name.c_str());
+	if (!game.section("eprom").empty() && !board) {
+		std::fprintf(stderr, "ERROR: the list does not tell the ROM board of '%s'\n", game.name.c_str());
+		return nullptr;
+	}
+	if (game.section("eprom").empty() && board) {
+		std::fprintf(stderr, "ERROR: '%s' has a ROM board and no EPROM\n", game.name.c_str());
 		return nullptr;
 	}
 	if (mie && mie != Mie::ROM_SIZE) {
@@ -224,7 +237,10 @@ Hikaru::make(const Game &game, bool verbose)
 		             game.name.c_str());
 		return nullptr;
 	}
-	return std::unique_ptr<Hikaru>(new Hikaru(game, *rombd, verbose));
+	const RomBoard::Config rombd = RomBoard::config_of(board ? board->eprom_mb : 0,
+	                                                   board ? board->crypt_key : std::nullopt);
+
+	return std::unique_ptr<Hikaru>(new Hikaru(game, rombd, verbose));
 }
 
 Hikaru::Hikaru(const Game &game, const RomBoard::Config &rombd, bool verbose)
@@ -239,7 +255,7 @@ Hikaru::Hikaru(const Game &game, const RomBoard::Config &rombd, bool verbose)
 	  m_bootrom(game.section("bootrom")),
 	  m_memctl{MemCtl(*this, true), MemCtl(*this, false)},
 	  m_rombd(rombd, game.section("eprom"), game.section("maskrom"),
-	          game.name == "sgnascar" && !game.section("maskrom").empty(),
+	          actel_of(game),
 	          [this](const char *what) { cpu_error("%s", what); }),
 	  m_eeprom(m_clock), m_mie_stand_in(m_mie_ram),
 	  m_bus{Bus(*this, MASTER), Bus(*this, SLAVE)}, m_hooked{false, false},

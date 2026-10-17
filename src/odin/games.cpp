@@ -302,6 +302,61 @@ parse_output(const json_t *output)
 	return std::nullopt;
 }
 
+/* A number of `bytes` bytes written in hexadecimal, most significant first */
+std::optional<uint32_t>
+parse_hex_number(const json_t *value, size_t bytes)
+{
+	const auto figures = parse_hex(json_string_value(value));
+	uint32_t number = 0;
+
+	if (!figures || figures->size() != bytes)
+		return std::nullopt;
+	for (uint8_t b : *figures)
+		number = number << 8 | b;
+	return number;
+}
+
+/* "rom_board" of a game (GameRomBoard) */
+std::optional<GameRomBoard>
+parse_rom_board(json_t *board)
+{
+	GameRomBoard out;
+	const char *key;
+	json_t *value;
+
+	if (!json_is_object(board))
+		return std::nullopt;
+	json_object_foreach(board, key, value) {
+		const std::string name = key;
+
+		if (name == "eprom_mb") {
+			const json_int_t mb = json_integer_value(value);
+
+			if (!json_is_integer(value) || (mb != 2 && mb != 4))
+				return std::nullopt;
+			out.eprom_mb = static_cast<unsigned>(mb);
+		} else if (name == "315-5881") {
+			out.crypt_key = parse_hex_number(value, 4);
+			if (!out.crypt_key)
+				return std::nullopt;
+		} else if (name == "actel") {
+			const auto actel_key = parse_hex_number(json_object_get(value, "key"), 4);
+			const auto actel_id = parse_hex_number(json_object_get(value, "id"), 2);
+
+			if (!actel_key || !actel_id || json_object_size(value) != 2)
+				return std::nullopt;
+			out.has_actel = true;
+			out.actel_key = *actel_key;
+			out.actel_id = static_cast<uint16_t>(*actel_id);
+		} else {
+			return std::nullopt;
+		}
+	}
+	if (!out.eprom_mb)
+		return std::nullopt;
+	return out;
+}
+
 } /* namespace */
 
 std::span<const uint8_t>
@@ -504,6 +559,13 @@ GameList::load_game(const std::string &rom_dir, const std::string &name) const
 		}
 		game.drive_first_output = static_cast<unsigned>(json_integer_value(first));
 	}
+	if (json_t *const board = json_object_get(rom, "rom_board")) {
+		game.rom_board = parse_rom_board(board);
+		if (!game.rom_board) {
+			std::fprintf(stderr, "ERROR: game '%s': \"rom_board\" is not one\n", name.c_str());
+			return std::nullopt;
+		}
+	}
 	if (const json_t *const chip = json_object_get(rom, "mie_eeprom")) {
 		auto bytes = parse_hex(json_string_value(chip));
 
@@ -515,6 +577,19 @@ GameList::load_game(const std::string &rom_dir, const std::string &name) const
 	}
 	for (size_t i = 0; i < num; i++) {
 		const json_t *const section = json_array_get(sections, i);
+		const char *const section_name = json_string_value(json_object_get(section, "name"));
+		const json_t *const data = json_object_get(section, "data");
+
+		/* EPROMs of the size the board takes */
+		for (size_t j = 0; game.rom_board && section_name && !std::strcmp(section_name, "eprom") &&
+		                   j < json_array_size(data); j++) {
+			if (json_integer_value(json_object_get(json_array_get(data, j), "size")) !=
+			    static_cast<json_int_t>(game.rom_board->eprom_mb) << 20) {
+				std::fprintf(stderr, "ERROR: game '%s': an EPROM is not of %u MB\n", name.c_str(),
+				             game.rom_board->eprom_mb);
+				return std::nullopt;
+			}
+		}
 		auto bytes = load_section(section, rom_dir + "/" + name);
 
 		if (!bytes)

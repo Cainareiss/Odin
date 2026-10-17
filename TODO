@@ -312,7 +312,9 @@ be billed without being run.
 ROM board 315-5881 (src/odin/crypt_315_5881.cpp, port of MAME, validated
 on the real self-test of Planet Harriers and 19.7 M words against MAME's
 code): RAM at local bus 0x0A000000, registers at 0x0A010000, keys from
-MAME (airtrix, pharrier, swracer). Its ready bit is never busy (MAME).
+MAME (airtrix, pharrier, swracer) in the list of the games ("rom_board",
+which tells the board of each game: games.hpp). Its ready bit is never
+busy (MAME).
 The BOOTROM probes the board (0x1F3A): with the window 02 on the local
 bus 0A, it writes 19620217 at +C with the control byte +0x26 of the bridge
 at FD, then at +8 with it back (F4), and keeps in GBR+0x1C bit 3 "+C
@@ -333,9 +335,9 @@ whole?).
 
 SGNASCAR ROM board security FPGA (src/odin/actel_m1.cpp, the stream
 decoder of MAME's Naomi M1 board): registers at local bus 0x0A000000, key
-from MAME. Proven by the game: it reads 208 bytes at each change of scene,
-compares them with its own copy and, at each mismatch, adds 20 to the
-weight of the previous picture in the 181 blend. HEURISTIC: every start
+and ID from MAME, in the list of the games. Proven by the game: it reads
+208 bytes at each change of scene, compares them with its own copy and,
+at each mismatch, adds 20 to the weight of the previous picture in the 181 blend. HEURISTIC: every start
 reads from the first byte of the mask ROMs (no address register is known),
 the ready flag is on bits 31 and 15 of the status, the other bits of the
 control and of the status are not known.

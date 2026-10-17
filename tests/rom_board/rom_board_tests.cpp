@@ -61,21 +61,18 @@ std::vector<uint8_t> numbered(uint32_t size)
 
 void test_layouts()
 {
-	const auto airtrix = RomBoard::config_of("airtrix");
-	const auto braveff = RomBoard::config_of("braveff");
-	const auto sgnascar = RomBoard::config_of("sgnascar");
-	const auto bootrom = RomBoard::config_of("bootrom");
+	const RomBoard::Config airtrix = RomBoard::config_of(4, 0x291B02C7);
+	const RomBoard::Config braveff = RomBoard::config_of(2, std::nullopt);
+	const RomBoard::Config bootrom = RomBoard::config_of(0, std::nullopt);
 
-	check(!RomBoard::config_of("pacman"), "a game that is not known has no layout");
-	check(airtrix && airtrix->has_rom && airtrix->eprom_bank[0] == 0x10 && airtrix->eprom_bank[1] == 0x13 &&
-	      airtrix->maskrom_bank[0] == 0x20 && airtrix->maskrom_bank[1] == 0x2F && airtrix->eeprom_bank == 0x14,
+	check(airtrix.has_rom && airtrix.eprom_bank[0] == 0x10 && airtrix.eprom_bank[1] == 0x13 &&
+	      airtrix.maskrom_bank[0] == 0x20 && airtrix.maskrom_bank[1] == 0x2F && airtrix.eeprom_bank == 0x14,
 	      "EPROMs in the pages 10 to 13, mask ROMs in 20 to 2F, the EEPROM in 14");
-	check(airtrix && airtrix->has_5881 && airtrix->crypt_key == 0x291B02C7 && airtrix->eprom_bank_size == 4,
-	      "AIRTRIX has the 315-5881, with its key");
-	check(braveff && !braveff->has_5881 && braveff->eprom_bank_size == 2 && !braveff->maskrom_is_stretched,
-	      "BRAVEFF has not, and EPROMs of 2 MB");
-	check(sgnascar && sgnascar->maskrom_is_stretched && !sgnascar->has_5881, "SGNASCAR has its mask ROMs stretched");
-	check(bootrom && !bootrom->has_rom && bootrom->eeprom_bank == 0x14, "the BOOTROM alone has no ROM board");
+	check(airtrix.has_5881 && airtrix.crypt_key == 0x291B02C7 && airtrix.eprom_bank_size == 4,
+	      "a board with the 315-5881 has its key");
+	check(!braveff.has_5881 && braveff.crypt_key == 0 && braveff.eprom_bank_size == 2,
+	      "one without it, and EPROMs of 2 MB");
+	check(!bootrom.has_rom && !bootrom.has_5881 && bootrom.eeprom_bank == 0x14, "the BOOTROM alone has no ROM board");
 	check(sizeof(RomBoard::Config) == 48, "the layout is 48 bytes in the save states");
 }
 
@@ -84,7 +81,7 @@ void test_roms()
 	const std::vector<uint8_t> eprom = numbered(12 * MB), maskrom = numbered(40 * MB);
 	std::string told;
 	int times = 0;
-	RomBoard board(*RomBoard::config_of("pharrier"), eprom, maskrom, false,
+	RomBoard board(RomBoard::config_of(4, 0x2912C68A), eprom, maskrom, std::nullopt,
 	               [&](const char *what) { told = what; times++; });
 
 	check(board.read(0x10000100, 4) == 0x100 && board.read(0x11000100, 4) == 8 * MB + 0x100,
@@ -105,10 +102,10 @@ void test_roms()
 	board.save(saved);
 	check(saved.unpopulated_logged == ((1ull << 2) | (1ull << 0x12)), "the sockets told are in the layout saved");
 
-	RomBoard braveff(*RomBoard::config_of("braveff"), eprom, maskrom, false, nullptr);
+	RomBoard braveff(RomBoard::config_of(2, std::nullopt), eprom, maskrom, std::nullopt, nullptr);
 	check(braveff.read(0x11000100, 4) == 4 * MB + 0x100, "a page of 4 MB for a pair of 2 MB EPROMs");
 
-	RomBoard bare(*RomBoard::config_of("bootrom"), {}, {}, false, nullptr);
+	RomBoard bare(RomBoard::config_of(0, std::nullopt), {}, {}, std::nullopt, nullptr);
 	check(bare.read(0x10000000, 4) == 0xDEADBEEF, "without a ROM board nothing reads zero");
 }
 
@@ -118,7 +115,7 @@ void test_roms()
 void test_plain()
 {
 	const std::vector<uint8_t> eprom = numbered(12 * MB), maskrom = numbered(40 * MB);
-	RomBoard board(*RomBoard::config_of("pharrier"), eprom, maskrom, false, nullptr);
+	RomBoard board(RomBoard::config_of(4, 0x2912C68A), eprom, maskrom, std::nullopt, nullptr);
 	const auto same = [&board](uint32_t at, size_t size) {
 		const std::span<const uint8_t> bytes = board.plain(at);
 		const uint32_t last = at + static_cast<uint32_t>(bytes.size()) - 1;
@@ -135,9 +132,9 @@ void test_plain()
 	check(board.plain(0x14000000).empty() && board.plain(0x15000000).empty() && board.plain(0x0C000000).empty(),
 	      "nothing for the EEPROM, a page without a socket, a page not of the board");
 
-	RomBoard::Config none = *RomBoard::config_of("pharrier");
+	RomBoard::Config none = RomBoard::config_of(4, 0x2912C68A);
 	none.has_rom = false;
-	RomBoard bare(none, eprom, maskrom, false, nullptr);
+	RomBoard bare(none, eprom, maskrom, std::nullopt, nullptr);
 	check(bare.read(0x10000000, 4) == 0xDEADBEEF && bare.plain(0x10000000).empty() && bare.plain(0x20000000).empty(),
 	      "nothing without a ROM board, whatever ROMs are given");
 }
@@ -145,9 +142,10 @@ void test_plain()
 void test_eeprom_and_guards()
 {
 	const std::vector<uint8_t> eprom = numbered(8 * MB), maskrom = numbered(32 * MB);
-	RomBoard plain(*RomBoard::config_of("von4"), eprom, maskrom, false, nullptr);
-	RomBoard nascar(*RomBoard::config_of("sgnascar"), eprom, maskrom, true, nullptr);
-	RomBoard airtrix(*RomBoard::config_of("airtrix"), eprom, maskrom, false, nullptr);
+	RomBoard plain(RomBoard::config_of(4, std::nullopt), eprom, maskrom, std::nullopt, nullptr);
+	RomBoard nascar(RomBoard::config_of(4, std::nullopt), eprom, maskrom, RomBoard::Actel{ 0x56DEDF33, 0x4252 },
+	                nullptr);
+	RomBoard airtrix(RomBoard::config_of(4, 0x291B02C7), eprom, maskrom, std::nullopt, nullptr);
 
 	check(plain.write(0x14000000, 4, 0x0D) && !plain.write(0x10000000, 4, 0),
 	      "only the page of the EEPROM is written");

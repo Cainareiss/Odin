@@ -137,6 +137,19 @@ any_on(const std::vector<GameOutput> &list, GameOutput::Role role, std::span<con
 	return false;
 }
 
+/* The ROM board of a game, what changes from one to another (MAME
+ * hikaru.cpp): "eprom_mb", the size of an EPROM, 2 or 4 MB; "315-5881",
+ * the key of that chip in 8 hexadecimal figures, when the board has it;
+ * "actel", {"key": 8, "id": 4 hexadecimal figures} of the security FPGA,
+ * when the board has it. */
+struct GameRomBoard {
+	unsigned eprom_mb = 0;
+	std::optional<uint32_t> crypt_key;
+	bool has_actel = false;
+	uint32_t actel_key = 0;
+	uint16_t actel_id = 0;
+};
+
 /* A game and what its ROMs hold, section by section ("bootrom", "eprom",
  * "maskrom", "mie", "eeprom", "rombd_eeprom"). */
 struct Game {
@@ -175,6 +188,9 @@ struct Game {
 	 * command on eight outputs from there (drive_board.hpp): "drive_board"
 	 * in the list, {"first_output": 1 to 25}; 0 when it does not say. */
 	unsigned drive_first_output = 0;
+	/* Its ROM board: "rom_board" in the list; none when it does not say,
+	 * as for the BOOTROM alone. */
+	std::optional<GameRomBoard> rom_board;
 	static constexpr double LOWEST_LEVEL = -60;
 	static constexpr double HIGHEST_LEVEL = 12;
 	std::vector<std::pair<std::string, std::vector<uint8_t>>> sections;

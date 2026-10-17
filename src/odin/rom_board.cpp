@@ -241,66 +241,29 @@ low_bytes(uint64_t value, unsigned size)
 
 } /* namespace */
 
-std::optional<RomBoard::Config>
-RomBoard::config_of(const std::string &game)
+RomBoard::Config
+RomBoard::config_of(unsigned eprom_mb, std::optional<uint32_t> crypt_key)
 {
-	uint32_t eprom_bank_size = 0, maskrom_bank_size = 0;
-	bool has_rom = true, maskrom_is_stretched = false;
 	Config config;
 
 	std::memset(&config, 0, sizeof(config));
-
-	if (game == "bootrom") {
-		has_rom = false;
-	} else if (game == "airtrix") {
-		eprom_bank_size = 4;
-		maskrom_bank_size = 16;
-		config.has_5881 = true;
-		config.crypt_key = 0x291B02C7;	/* MAME hikaru.cpp */
-	} else if (game == "braveff") {
-		eprom_bank_size = 2;
-		maskrom_bank_size = 8;
-	} else if (game == "pharrier") {
-		eprom_bank_size = 4;
-		maskrom_bank_size = 16;
-		config.has_5881 = true;
-		config.crypt_key = 0x2912C68A;
-	} else if (game == "von4") {
-		/* Same board layout as pharrier: 128M TSOP48 mask ROMs */
-		eprom_bank_size = 4;
-		maskrom_bank_size = 16;
-	} else if (game == "podrace") {
-		/* 32 x 64M SOP44 mask ROMs: each interleaved pair fills one 16 MB
-		 * bank (MAME hikaru.cpp swracer: pairs at 0x1000000 steps) */
-		eprom_bank_size = 4;
-		maskrom_bank_size = 16;
-		config.has_5881 = true;
-		config.crypt_key = 0x2903DAD5;
-	} else if (game == "sgnascar") {
-		eprom_bank_size = 4;
-		maskrom_bank_size = 16;
-		maskrom_is_stretched = true;
-	} else {
-		return std::nullopt;
-	}
-
-	config.has_rom = has_rom;
-	if (has_rom) {
+	config.has_rom = eprom_mb != 0;
+	if (config.has_rom) {
 		/* Four pages of EPROMs, sixteen of mask ROMs */
 		config.eprom_bank[0] = 0x10;
 		config.eprom_bank[1] = 0x13;
 		config.maskrom_bank[0] = 0x20;
 		config.maskrom_bank[1] = 0x2F;
-		config.eprom_bank_size = eprom_bank_size;
-		config.maskrom_bank_size = maskrom_bank_size;
-		config.maskrom_is_stretched = maskrom_is_stretched;
+		config.eprom_bank_size = eprom_mb;
+		config.has_5881 = crypt_key.has_value();
+		config.crypt_key = crypt_key.value_or(0);
 	}
 	config.eeprom_bank = 0x14;
 	return config;
 }
 
 RomBoard::RomBoard(const Config &config, std::span<const uint8_t> eprom, std::span<const uint8_t> maskrom,
-                   bool fpga, std::function<void(const char *)> error)
+                   std::optional<Actel> actel, std::function<void(const char *)> error)
 	: m_config(config), m_eprom(eprom), m_maskrom(maskrom), m_error(std::move(error))
 {
 	if (m_config.has_5881) {
@@ -315,11 +278,11 @@ RomBoard::RomBoard(const Config &config, std::span<const uint8_t> eprom, std::sp
 			return static_cast<uint16_t>((word >> 8) | (word << 8));
 		});
 	}
-	/* 834-14125 ROM board: Actel A54SX32 stamped 317-0283-COM, ID 0x4252,
-	 * key as in MAME hikaru.cpp. The key is proven by the game: the chip
-	 * then gives the text SGNASCAR compares it with. */
-	if (fpga) {
-		m_fpga = std::make_unique<ActelM1>(0x56DEDF33, 0x4252);
+	/* 834-14125 ROM board: Actel A54SX32 stamped 317-0283-COM. The key is
+	 * proven by the game: the chip then gives the text SGNASCAR compares
+	 * it with. */
+	if (actel) {
+		m_fpga = std::make_unique<ActelM1>(actel->key, actel->id);
 		m_fpga->set_read([this](uint32_t addr) -> uint8_t {
 			return (addr < m_maskrom.size()) ? m_maskrom[addr] : 0;
 		});
@@ -338,8 +301,8 @@ RomBoard::save(Config &out) const
 	out.maskrom_bank[1] = m_config.maskrom_bank[1];
 	out.eeprom_bank = m_config.eeprom_bank;
 	out.eprom_bank_size = m_config.eprom_bank_size;
-	out.maskrom_bank_size = m_config.maskrom_bank_size;
-	out.maskrom_is_stretched = m_config.maskrom_is_stretched;
+	out.unused_size = m_config.unused_size;
+	out.unused_flag = m_config.unused_flag;
 	out.has_5881 = m_config.has_5881;
 	out.crypt_key = m_config.crypt_key;
 	out.unpopulated_logged = m_config.unpopulated_logged;
@@ -376,11 +339,9 @@ RomBoard::read_guard(uint32_t offs, unsigned size)
 	 * GBR+0x1C. Only its ROM BOARD TEST page reads them: 4 numbers the
 	 * EPROMs from IC 29 (0x4B86), 8 puts the mask ROMs from IC 19 a page in
 	 * two (0x4D56, 0x4F96). The chips of the sets want 4 for these boards
-	 * (EPROMs IC29...) and 8 for SGNASCAR (EPROMs IC35, mask ROMs IC19...);
-	 * what these boards answer has not been measured. */
-	if (offs == 0x8 && !m_config.maskrom_is_stretched)
-		return low_bytes(0x19620217, size);
-	if (offs == 0xC && m_config.maskrom_is_stretched)
+	 * (EPROMs IC29...); SGNASCAR gets its 8 from its FPGA. What these
+	 * boards answer has not been measured. */
+	if (offs == 0x8)
 		return low_bytes(0x19620217, size);
 	return 0;
 }

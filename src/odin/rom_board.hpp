@@ -51,8 +51,9 @@ public:
 		unsigned maskrom_bank[2];
 		unsigned eeprom_bank;
 		uint32_t eprom_bank_size;	/* of a ROM, in MB */
-		uint32_t maskrom_bank_size;
-		bool maskrom_is_stretched;
+		/* Kept for the layout of the states */
+		uint32_t unused_size;
+		bool unused_flag;
 		/* 315-5881 decryption chip and its 64 KB RAM */
 		bool has_5881;
 		uint32_t crypt_key;
@@ -60,17 +61,24 @@ public:
 		uint64_t unpopulated_logged;
 	};
 
+	/* The security FPGA of the board of SGNASCAR */
+	struct Actel {
+		uint32_t key;
+		uint16_t id;
+	};
+
 	static constexpr size_t CRYPT_RAM_SIZE = 0x10000;
 
-	/* The layout of the board of a game, by the name of the game in the
-	 * list; nothing for a game that is not known. */
-	static std::optional<Config> config_of(const std::string &game);
+	/* The layout of a board whose EPROMs have `eprom_mb` MB (2 or 4), with
+	 * a 315-5881 when its key is told; for 0 MB, no board: the BOOTROM
+	 * alone. */
+	static Config config_of(unsigned eprom_mb, std::optional<uint32_t> crypt_key);
 
 	/* eprom, maskrom: the contents of the ROMs, owned by the caller.
-	 * fpga: the board has the security FPGA of SGNASCAR. error: called
-	 * with what a program did that has no answer here. */
+	 * actel: the board has that FPGA. error: called with what a program
+	 * did that has no answer here. */
 	RomBoard(const Config &config, std::span<const uint8_t> eprom, std::span<const uint8_t> maskrom,
-	         bool fpga, std::function<void(const char *)> error);
+	         std::optional<Actel> actel, std::function<void(const char *)> error);
 
 	/* The power-on state of what the board resets. */
 	void reset();
