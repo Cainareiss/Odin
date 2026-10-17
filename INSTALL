@@ -113,8 +113,11 @@ MAME gives them: mie_eeprom (the SYSTEM MENU of the BIOS: country, coins,
 cabinet type, sound of the attract), nvram (the game), main_eeprom and
 rombd_eeprom (the serial number of the main board, the security of the ROM
 board). A game without mie_eeprom starts as a new U.S.A. cabinet left the
-factory: the settings of its manual. The settings of Odin are in odin.ini in
-the same odin folder; ODIN_CONFIG=<file> reads another one.
+factory: the settings of its manual. Odin calibrates no control in
+advance: the board of Air Trix steers once it is calibrated in the test
+menu of the game (CALIBRATION), with the controller you play with, and
+the other games have their own pages for it. The settings of Odin are in
+odin.ini in the same odin folder; ODIN_CONFIG=<file> reads another one.
 
 The comments at the top of the source files tell the other variables of the
 environment; they are for debugging.

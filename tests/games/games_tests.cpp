@@ -388,18 +388,19 @@ void test_shipped_chips()
 		for (const char *c = text; c[0] && c[1]; c += 2)
 			b.push_back(static_cast<uint8_t>(std::stoul(std::string(c, 2), nullptr, 16)));
 		const char *const game = json_string_value(json_object_get(json_array_get(roms, i), "name"));
-		/* AIRTRIX keeps the calibration of its board there (0x26 YAW, 0x29 ROLL), made by its own menu */
-		const bool calibrated = std::string(game) != "airtrix" || (b.size() == 128 && b[0x26] && b[0x29]);
+		/* AIRTRIX keeps the calibration of its board there (0x26 - 0x2B): the player's to make, not Odin's */
+		const bool blank = std::string(game) != "airtrix" ||
+		                   (b.size() == 128 && std::all_of(b.begin() + 0x26, b.begin() + 0x2C, [](uint8_t v) { return !v; }));
 
 		if (b.size() == 128 && std::equal(b.begin(), b.begin() + 64, b.begin() + 64) &&
-		    bootrom_crc(b.data(), 62) == (b[62] | b[63] << 8) && b[5] == 1 && calibrated)
+		    bootrom_crc(b.data(), 62) == (b[62] | b[63] << 8) && b[5] == 1 && blank)
 			right++;
 		else
 			std::printf("not right: %s\n", json_string_value(json_object_get(json_array_get(roms, i), "name")));
 	}
 	json_decref(root);
 	check(chips == 6 && right == 6,
-	      "the six games have the chip of a new U.S.A. cabinet, its CRC right, the board of AIRTRIX calibrated");
+	      "the six games have the chip of a new U.S.A. cabinet, its CRC right, the board of AIRTRIX not calibrated");
 }
 
 /* The outputs of the list of the repo: the nozzles of BRAVEFF shake, read

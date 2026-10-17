@@ -430,11 +430,10 @@ manuals; AIRTRIX: the manual of SEGA Europe, 1 player). AIRTRIX keeps the
 calibration of its board in the part of the chip that is the game's
 ("AIRTRIX0" at 0x1E, the bounds at 0x26 - 0x2B); blank, its board does not
 steer (the library, @0C011B84, divides by the span of the bounds). Its
-chip has the calibration its own CALIBRATION page makes with the stick of
-a gamepad, from end to end (YAW and ROLL 00 <-> FE): its manual has the
-board calibrated again only "when the Volume is adjusted or replaced", so
-the cabinet left the factory calibrated. HEURISTIC: VON4,
-sold in Japan only and without a manual here, has 2 players (the BOOTROM)
+chip leaves them blank: a calibration belongs to the player, made with the
+controllers they play with, in the CALIBRATION page of the game; Odin
+calibrates nothing in advance, unless something breaks the page.
+HEURISTIC: VON4, sold in Japan only and without a manual here, has 2 players (the BOOTROM)
 and the sound of the attract on (as in every manual).
 
 Saves: what the board keeps without power (the three EEPROMs, the 64 KB
