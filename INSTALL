@@ -40,8 +40,9 @@ Options:
  -v			more messages
 
 Keys: Escape quits, Space pauses, F4 saves <game>.odinstate and F1 loads it.
-F5 and F6 are the Test and Service switches of the main board, F2 the Test
-of the I/O board, 9 and 0 its Service switches, 5 and 6 the coins. Player 1
+0 is TEST and 9 SERVICE, the buttons of the cabinet: they open and work
+the menu of the BOOTROM and the test menus of the games (both together
+leave INPUT TEST); 5 and 6 are the coins. Player 1
 has 1 for Start, the arrows, and Left Ctrl, Left Alt, Left Shift, Z, X, C;
 player 2 has 2 for Start, R F D G, and A, S, Q, W, E, T. The arrows also
 move a wheel, a stick or a sight, a step each frame, and back when let go;
@@ -68,8 +69,8 @@ the keys, a stick and the mouse, the last that moved works a control. The
 sight meets the pointer once NOZZLE SENSOR SETTING (in the test menu of
 the game) has been done with the mouse.
 
-Gamepads: one for each player, in the order they are plugged in. Start,
-the D-pad, A, B, X, Y, LB, RB, LT, RT, the sticks and the triggers work the
+Gamepads: one for each player, in the order they are plugged in. SELECT
+(SHARE) puts in a coin for the player of the pad. Start, the D-pad, A, B, X, Y, LB, RB, LT, RT, the sticks and the triggers work the
 controls of each game as their roles tell (odin-games.json): for NASCAR,
 the wheel on the left stick, the pedals on the triggers, the gears on LB
 and RB, the view change on Y (or Z); for Brave, the sight where the left

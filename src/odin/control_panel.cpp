@@ -323,7 +323,8 @@ ControlPanel::update(const HostState &host)
 	}
 	m_mouse_aims = works_one && works_all;
 	for (unsigned slot = 0; slot < 2; slot++) {
-		const bool now = pressed(host, m_bindings.cabinet(slot ? Role::COIN2 : Role::COIN1), 0);
+		/* A coin of player 2 from the pad of player 2 */
+		const bool now = pressed(host, m_bindings.cabinet(slot ? Role::COIN2 : Role::COIN1), slot);
 
 		m_coins[slot] = m_coins[slot] || (now && !m_coins_were[slot]);
 		m_coins_were[slot] = now;

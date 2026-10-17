@@ -29,7 +29,11 @@ namespace {
 
 /* The keys of the cabinet as INSTALL tells them, and the gamepad of each
  * player: a stick on the keys of the directions, the second stick of
- * player 1 on those of player 2, the gears on the keys of LB and RB. */
+ * player 1 on those of player 2, the gears on the keys of LB and RB.
+ * TEST and SERVICE are the buttons of the cabinet, on its I/O board,
+ * which the BOOTROM and the games all read; the switches of the main
+ * board have no key. The coin of a player is also the SELECT of their
+ * pad. */
 struct Default {
 	Role role;
 	const char *key1;	/* the key of player 1, or of the cabinet */
@@ -39,7 +43,7 @@ struct Default {
 
 const Default DEFAULTS[] = {
 	{ Role::START, "1", "2", "start" },
-	{ Role::SERVICE, "9", "0", nullptr },
+	{ Role::SERVICE, "9", nullptr, nullptr },
 	{ Role::UP, "Up", "R", "dpup" },
 	{ Role::DOWN, "Down", "F", "dpdown" },
 	{ Role::LEFT, "Left", "D", "dpleft" },
@@ -71,11 +75,11 @@ const Default DEFAULTS[] = {
 	{ Role::STICK2_Y, nullptr, nullptr, "righty" },
 	{ Role::GUN_X, nullptr, nullptr, "leftx" },
 	{ Role::GUN_Y, nullptr, nullptr, "lefty" },
-	{ Role::COIN1, "5", nullptr, nullptr },
-	{ Role::COIN2, "6", nullptr, nullptr },
-	{ Role::TEST, "F2", nullptr, nullptr },
-	{ Role::BOARD_TEST, "F5", nullptr, nullptr },
-	{ Role::BOARD_SERVICE, "F6", nullptr, nullptr },
+	{ Role::COIN1, "5", nullptr, "back" },
+	{ Role::COIN2, "6", nullptr, "back" },
+	{ Role::TEST, "0", nullptr, nullptr },
+	{ Role::BOARD_TEST, nullptr, nullptr, nullptr },
+	{ Role::BOARD_SERVICE, nullptr, nullptr, nullptr },
 };
 
 /* The keys that move an analog control: left or up, right or down, for

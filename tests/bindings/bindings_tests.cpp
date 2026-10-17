@@ -175,11 +175,13 @@ void test_defaults()
 	check(Bindings::defaults(Role::START, 1).size() == 2 && is_key(Bindings::defaults(Role::START, 1)[0], SDLK_2),
 	      "start of player 2: 2 and Start");
 	check(Bindings::defaults(Role::SERVICE, 0).size() == 1 && is_key(Bindings::defaults(Role::SERVICE, 0)[0], SDLK_9) &&
-	      is_key(Bindings::defaults(Role::SERVICE, 1)[0], SDLK_0), "Service: 9 and 0, no pad");
+	      Bindings::defaults(Role::SERVICE, 1).empty(), "Service: 9 for player 1, no pad; none for player 2");
 	check(is_key(Bindings::defaults(Role::COIN1, 0)[0], SDLK_5) && is_key(Bindings::defaults(Role::COIN2, 1)[0], SDLK_6) &&
-	      is_key(Bindings::defaults(Role::TEST, 0)[0], SDLK_F2) &&
-	      is_key(Bindings::defaults(Role::BOARD_TEST, 0)[0], SDLK_F5) &&
-	      is_key(Bindings::defaults(Role::BOARD_SERVICE, 0)[0], SDLK_F6), "the cabinet: 5, 6, F2, F5, F6, whatever player");
+	      is_pad(Bindings::defaults(Role::COIN1, 0)[1], PadInput::Type::BUTTON, SDL_CONTROLLER_BUTTON_BACK) &&
+	      is_pad(Bindings::defaults(Role::COIN2, 0)[1], PadInput::Type::BUTTON, SDL_CONTROLLER_BUTTON_BACK) &&
+	      Bindings::defaults(Role::TEST, 0).size() == 1 && is_key(Bindings::defaults(Role::TEST, 0)[0], SDLK_0) &&
+	      Bindings::defaults(Role::BOARD_TEST, 0).empty() && Bindings::defaults(Role::BOARD_SERVICE, 0).empty(),
+	      "the cabinet: coins 5, 6 and SELECT, Test 0; the switches of the main board without key");
 	check(is_key(Bindings::defaults(Role::UP, 1)[0], SDLK_r) && is_key(Bindings::defaults(Role::BUTTON6, 1)[0], SDLK_t) &&
 	      is_key(Bindings::defaults(Role::BUTTON4, 0)[0], SDLK_z), "the other keys as INSTALL tells them");
 	check(Bindings::defaults(Role::STEER, 0).size() == 1 &&
@@ -378,7 +380,7 @@ void test_game_lines()
 	check(nascar.of(3).empty(), "an empty value: none");
 	check(nascar.cabinet(Role::COIN1).size() == 2 && is_key(nascar.cabinet(Role::COIN1)[0], SDLK_7),
 	      "a control of the cabinet");
-	check(nascar.cabinet(Role::COIN2).size() == 1 && is_key(nascar.cabinet(Role::COIN2)[0], SDLK_6),
+	check(nascar.cabinet(Role::COIN2).size() == 2 && is_key(nascar.cabinet(Role::COIN2)[0], SDLK_6),
 	      "the other one as it was");
 	check(nascar.of(4).size() == 1 && is_key(nascar.of(4)[0], SDLK_F12), "the SERVICE switch by its id");
 

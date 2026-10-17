@@ -141,9 +141,9 @@ void test_standard_panel()
 	      "nothing is pressed without a key");
 	check(centred, "the eight analog channels are centred");
 
-	check(held({SDLK_F5}).mainboard_test && held({SDLK_F6}).mainboard_service,
-	      "F5 and F6 are Test and Service of the main board");
-	check(held({SDLK_F2}).jvs_system == 0x80, "F2 is Test of the I/O board");
+	check(!held({SDLK_F5}).mainboard_test && !held({SDLK_F6}).mainboard_service && held({SDLK_F2}).jvs_system == 0,
+	      "the switches of the main board have no key; F2 is nothing");
+	check(held({SDLK_0}).jvs_system == 0x80 && held({SDLK_0}).jvs_player[1] == 0, "0 is Test of the I/O board");
 	check(held({SDLK_1}).jvs_player[0] == 0x8000 && held({SDLK_9}).jvs_player[0] == 0x4000,
 	      "player 1: Start and Service");
 	check(held({SDLK_UP}).jvs_player[0] == 0x2000 && held({SDLK_DOWN}).jvs_player[0] == 0x1000 &&
@@ -153,10 +153,10 @@ void test_standard_panel()
 	      held({SDLK_LSHIFT}).jvs_player[0] == 0x0080 && held({SDLK_z}).jvs_player[0] == 0x0040 &&
 	      held({SDLK_x}).jvs_player[0] == 0x0020 && held({SDLK_c}).jvs_player[0] == 0x0010,
 	      "player 1: the six buttons, PUSH3 to PUSH6 in the low byte");
-	check(held({SDLK_2}).jvs_player[1] == 0x8000 && held({SDLK_0}).jvs_player[1] == 0x4000 &&
+	check(held({SDLK_2}).jvs_player[1] == 0x8000 &&
 	      held({SDLK_r}).jvs_player[1] == 0x2000 && held({SDLK_f}).jvs_player[1] == 0x1000 &&
 	      held({SDLK_d}).jvs_player[1] == 0x0800 && held({SDLK_g}).jvs_player[1] == 0x0400,
-	      "player 2: Start, Service and R F D G");
+	      "player 2: Start and R F D G (the SERVICE of player 2 has no key)");
 	check(held({SDLK_a}).jvs_player[1] == 0x0200 && held({SDLK_s}).jvs_player[1] == 0x0100 &&
 	      held({SDLK_q}).jvs_player[1] == 0x0080 && held({SDLK_w}).jvs_player[1] == 0x0040 &&
 	      held({SDLK_e}).jvs_player[1] == 0x0020 && held({SDLK_t}).jvs_player[1] == 0x0010,
@@ -183,6 +183,17 @@ void test_coins()
 	after(panel, {});
 	inputs = after(panel, {SDLK_5, SDLK_6});
 	check(inputs.jvs_coin[0] == 1 && inputs.jvs_coin[1] == 1, "again at the next press, and 6 is the second slot");
+
+	ControlPanel pads({}, Settings(), "bootrom");
+	PadState pad1, pad2;
+
+	pad1.buttons[SDL_CONTROLLER_BUTTON_BACK] = true;
+	inputs = after(pads, {}, &pad1, &pad2);
+	check(inputs.jvs_coin[0] == 1 && inputs.jvs_coin[1] == 0, "SELECT of pad 1: a coin in the first slot");
+	pad1 = PadState{};
+	pad2.buttons[SDL_CONTROLLER_BUTTON_BACK] = true;
+	inputs = after(pads, {}, &pad1, &pad2);
+	check(inputs.jvs_coin[0] == 0 && inputs.jvs_coin[1] == 1, "SELECT of pad 2: the second slot");
 }
 
 void test_game()
@@ -192,8 +203,8 @@ void test_game()
 
 	check(after(panel, {SDLK_z}).jvs_player[0] == 0x1000, "button4 (Z) works VIEW, wired on 1P DOWN");
 	check(after(panel, {SDLK_DOWN}).jvs_player[0] == 0, "the arrow closes no switch: no control of the game is down");
-	check(after(panel, {SDLK_9}).jvs_player[0] == 0x4000 && after(panel, {SDLK_F2}).jvs_system == 0x80 &&
-	      after(panel, {SDLK_F5}).mainboard_test, "Service, Test and the main board stay for every game");
+	check(after(panel, {SDLK_9}).jvs_player[0] == 0x4000 && after(panel, {SDLK_0}).jvs_system == 0x80,
+	      "Service and Test stay for every game");
 	check(after(panel, {SDLK_s}).jvs_player[1] == 0x0080 && after(panel, {SDLK_LALT}).jvs_player[1] == 0,
 	      "FOG belongs to player 2: his button2 (S), not that of player 1");
 
