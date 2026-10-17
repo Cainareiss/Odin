@@ -70,8 +70,9 @@ sight meets the pointer once NOZZLE SENSOR SETTING (in the test menu of
 the game) has been done with the mouse.
 
 Gamepads: one for each player, in the order they are plugged in. SELECT
-(SHARE) puts in a coin for the player of the pad. Start, the D-pad, A, B, X, Y, LB, RB, LT, RT, the sticks and the triggers work the
-controls of each game as their roles tell (odin-games.json): for NASCAR,
+(SHARE) puts in a coin for the player of the pad. Start, the D-pad, A, B,
+X, Y, LB, RB, LT, RT, the sticks and the triggers work the controls of
+each game as their roles tell (odin-games.json): for NASCAR,
 the wheel on the left stick, the pedals on the triggers, the gears on LB
 and RB, the view change on Y (or Z); for Brave, the sight where the left
 stick points. Every control of a game can take other keys and pad inputs
