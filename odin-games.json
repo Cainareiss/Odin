@@ -296,10 +296,10 @@
 			"option_speakers" : true,
 			"mie_eeprom" : "4242502d02010100180004010101010010000000000000000000000006001b17000006080500ffffff1fffffffffffffffffffffffffffffffffffffffff18e84242502d02010100180004010101010010000000000000000000000006001b17000006080500ffffff1fffffffffffffffffffffffffffffffffffffffff18e8",
 			"controls" : [
-				{ "name" : "BOOST", "id" : "boost", "switch" : "1P PUSH1", "role" : "button1" },
-				{ "name" : "BRAKE", "id" : "brake", "switch" : "1P PUSH2", "role" : "button2" },
-				{ "name" : "LEFT BUTTON", "id" : "left_button", "switch" : "1P RIGHT", "role" : "button5" },
-				{ "name" : "RIGHT BUTTON", "id" : "right_button", "switch" : "1P LEFT", "role" : "button6" },
+				{ "name" : "BOOST", "id" : "boost", "switch" : "1P PUSH1", "role" : "button6" },
+				{ "name" : "BRAKE", "id" : "brake", "switch" : "1P PUSH2", "role" : "button5" },
+				{ "name" : "LEFT BUTTON", "id" : "left_button", "switch" : "1P RIGHT", "role" : "left" },
+				{ "name" : "RIGHT BUTTON", "id" : "right_button", "switch" : "1P LEFT", "role" : "right" },
 				{ "name" : "START", "id" : "start", "switch" : "1P START", "role" : "start" },
 				{ "name" : "LEFT LEVER", "id" : "left_lever", "analog" : 0, "low" : "up", "role" : "stick_y" },
 				{ "name" : "RIGHT LEVER", "id" : "right_lever", "analog" : 1, "low" : "up", "role" : "stick2_y" }
