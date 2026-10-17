@@ -193,6 +193,10 @@ OutputsNetwork::show(std::span<const uint8_t> outputs)
 		}
 		setsockopt(static_cast<Socket>(client), IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<const char *>(&on),
 		           sizeof on);
+#ifdef SO_NOSIGPIPE
+		/* Where send has no MSG_NOSIGNAL: a client gone does not stop Odin */
+		setsockopt(static_cast<Socket>(client), SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof on);
+#endif
 		m_clients.push_back({ client, "mame_start = " + m_game + "\r" });
 	}
 
@@ -204,7 +208,8 @@ OutputsNetwork::show(std::span<const uint8_t> outputs)
 }
 
 /* What each client is owed goes as far as it takes it; what it sends is
- * dropped; a client gone, failing or too slow is closed. */
+ * dropped, a few reads a frame at most; a client gone, failing or too
+ * slow is closed. */
 void
 OutputsNetwork::send_all()
 {
@@ -223,7 +228,7 @@ OutputsNetwork::send_all()
 			}
 			client.queued.erase(0, static_cast<size_t>(sent));
 		}
-		while (!gone) {
+		for (int reads = 0; !gone && reads < MOST_READS; reads++) {
 			const long got = receive_some(client.socket, dropped, sizeof dropped);
 
 			if (got > 0)

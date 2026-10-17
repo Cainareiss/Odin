@@ -41,6 +41,9 @@ public:
 	static constexpr uint16_t PORT = 8000;
 	/* A client whose lines pile up beyond this is closed */
 	static constexpr size_t MOST_QUEUED = 16384;
+	/* What a client sends is read and dropped, this many reads a frame
+	 * at most */
+	static constexpr int MOST_READS = 16;
 
 	/* nullptr, said on stderr, when the port cannot be opened */
 	static std::unique_ptr<OutputsNetwork> open(const std::string &game, const std::vector<GameOutput> &outputs);
