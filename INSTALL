@@ -73,9 +73,10 @@ turns that knob, in the section of the game:
 
 (-60 to 12 dB; -o quad plays the four channels apart, -o main and
 -o option one board alone.) In Racer the second board feeds the vibration
-device of the control panel, not speakers: the pad of player 1 shakes as
-hard as its sound (experimental; "vibration = off" in [sound.podrace]
-stops it).
+device of the control panel, not speakers, and in NASCAR the bass shakers
+of the seat and of the control panel too, while the game lets them run:
+the pad of player 1 shakes as hard as its sound (experimental; "vibration
+= off" in [sound.podrace] or [sound.sgnascar] stops it).
 
 The mouse aims for player 1 in Brave: the sight where it points on the
 picture, water on the left button, fog on the right one, Start on the

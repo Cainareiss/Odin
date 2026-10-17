@@ -397,6 +397,7 @@
 			"mach" : "hikaru",
 			"option_speakers" : true,
 			"option_level" : -22,
+			"option_vibration" : true,
 			"mie_eeprom" : "424252000101010018000401010101001000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000031a5424252000101010018000401010101001000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000031a5",
 			"io" : "837-13741",
 			"controls" : [
@@ -412,6 +413,9 @@
 					"role" : "gear" },
 				{ "name" : "START BUTTON", "id" : "start", "switch" : "1P START", "role" : "start" },
 				{ "name" : "VIEW CHANGE BUTTON", "id" : "view_change", "switch" : "1P DOWN", "role" : "button4" }
+			],
+			"outputs" : [
+				{ "name" : "BASS SHAKER MUTE", "id" : "bass_shaker_mute", "output" : 14, "role" : "mute" }
 			],
 			"sections" : [
 				{

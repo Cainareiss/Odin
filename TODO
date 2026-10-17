@@ -255,8 +255,15 @@ LEFT and RIGHT function the same"; deluxe wiring; on the U.S. mini deluxe
 it is not wired), "option_vibration": EXPERIMENTAL, the pad of player 1
 shakes as hard as that sound (AudioOut::shake_of and smoothed, HEURISTIC:
 twice its level, none below 1/32, over about four frames; a pad is not a
-shaker). The bass shakers of the SGNASCAR deluxe take the same rear sound,
-switched on by its outputs BASS SHAKER (FRONT) and (FRONT+REAR): not yet.
+shaker). The bass shakers of SGNASCAR take its rear sound (deluxe wiring:
+838-13578 SE out to the 838-13142 BASS AMP, its MUTE on output 14 of the
+I/O board, "BASS SHAKER MUTE"; OUTPUT TEST, BASS SHAKER (FRONT) clears it;
+the game clears it in a race): "option_vibration" too, still while the
+"mute" output is on. Not known: why BASS SHAKER (FRONT+REAR) changes no
+output here, and the REAR ON output of the wiring. The deluxe harness ties
+"GND (FOR DX)" (CN8 pin 23 of the 837-13844), which the game reads as 1P
+PUSH1 and shows those two lines of its OUTPUT TEST for; the list does not
+tie it (standard cabinet).
 The ARM7 runs on the 22.5792 MHz bus clock, eight times MAME's
 figure: the SGNASCAR cabinet shows its sound driver ready within a frame
 of each reload, 20 MHz at least (HEURISTIC: no wait state). It costs a
