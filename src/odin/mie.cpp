@@ -20,6 +20,7 @@
 
 #include "odin/mie.hpp"
 
+#include <algorithm>
 #include <format>
 
 namespace odin {
@@ -76,11 +77,15 @@ enum : uint8_t {
 
 /* Bits on the wire per character: start, 8 data, stop. */
 constexpr uint32_t UART_BITS_PER_BYTE = 10;
-/* Reference clock per bit, as in a 16550: 16 x the baud rate. The UART
- * clock is taken as the Z80 clock, which is not measured; with the
- * divisor 8 the program sets this gives 125 kbaud, close to the 115200
- * of JVS. */
+/* Reference clock per bit, as in a 16550: 16 x the baud rate. */
 constexpr uint32_t UART_CLOCKS_PER_BIT = 16;
+/* The UART runs from the 14.7456 MHz crystal beside the chip (MAME
+ * hikaru.cpp, board layout; the same on the 837-13741), the Z80 at
+ * 16 MHz: with the divisor 8 the programs set (MIE program at 8677,
+ * epr-21868 at 01A1) that is the 115200 bauds of JVS. Times on the line
+ * are counted in ticks of 1/9.216 GHz, in which both clocks are whole. */
+constexpr uint32_t TICKS_PER_Z80_CYCLE = 576;
+constexpr uint32_t TICKS_PER_UART_CLOCK = 625;
 /* Time the I/O board takes to start answering, in characters. JVS
  * boards answer within a few character times; not measured. */
 constexpr uint32_t JVS_TURNAROUND_BYTES = 2;
@@ -416,7 +421,7 @@ void Mie::uart_reset()
 	m_uart.scr = 0;
 	m_uart.tx_fifo.fill(0);
 	m_uart.tx_count = 0;
-	m_uart.tx_cycles = 0;
+	m_uart.tx_ticks = 0;
 	m_uart.tx_byte = 0;
 	m_uart.rx_fifo.fill(0);
 	m_uart.rx_head = 0;
@@ -424,16 +429,19 @@ void Mie::uart_reset()
 	m_uart.wire.fill(0);
 	m_uart.wire_pos = 0;
 	m_uart.wire_count = 0;
-	m_uart.wire_cycles = 0;
+	m_uart.wire_ticks = 0;
 }
 
-uint32_t Mie::uart_byte_cycles() const
+/* A divisor above 21474 (under 6 bauds; no program sets one) is held
+ * there, for the turnaround to fit in 32 bits. */
+uint32_t Mie::uart_byte_ticks() const
 {
 	uint32_t divisor = static_cast<uint32_t>((m_uart.dlm << 8) | m_uart.dll);
 	if (divisor == 0) {
 		divisor = 1;
 	}
-	return UART_BITS_PER_BYTE * UART_CLOCKS_PER_BIT * divisor;
+	divisor = std::min<uint32_t>(divisor, 21474);
+	return UART_BITS_PER_BYTE * UART_CLOCKS_PER_BIT * TICKS_PER_UART_CLOCK * divisor;
 }
 
 uint8_t Mie::uart_read(uint8_t reg)
@@ -466,7 +474,7 @@ uint8_t Mie::uart_read(uint8_t reg)
 		}
 		if (u.tx_count == 0) {
 			v |= LSR_THRE;
-			if (u.tx_cycles == 0) {
+			if (u.tx_ticks == 0) {
 				v |= LSR_TEMT;
 			}
 		}
@@ -533,7 +541,7 @@ void Mie::uart_commit_frame()
 	if (!m_jvs) {
 		u.wire_count = 0;
 		u.wire_pos = 0;
-		u.wire_cycles = 0;
+		u.wire_ticks = 0;
 		return;
 	}
 	m_jvs->commit_encoded();
@@ -543,22 +551,23 @@ void Mie::uart_commit_frame()
 	for (uint32_t i = 0; i < u.wire_count; i++) {
 		u.wire[i] = reply[i];
 	}
-	u.wire_cycles = u.wire_count ? uart_byte_cycles() * JVS_TURNAROUND_BYTES : 0;
+	u.wire_ticks = u.wire_count ? uart_byte_ticks() * JVS_TURNAROUND_BYTES : 0;
 }
 
 void Mie::uart_tick(uint32_t cycles)
 {
 	MieUartState &u = m_uart;
-	const uint32_t byte_cycles = uart_byte_cycles();
+	const uint32_t byte_ticks = uart_byte_ticks();
+	const uint64_t ticks = static_cast<uint64_t>(cycles) * TICKS_PER_Z80_CYCLE;
 
 	/* Transmitter: shift register then FIFO. */
-	uint32_t left = cycles;
+	uint64_t left = ticks;
 	while (left) {
-		if (u.tx_cycles) {
-			const uint32_t step = u.tx_cycles < left ? u.tx_cycles : left;
-			u.tx_cycles -= step;
+		if (u.tx_ticks) {
+			const uint32_t step = u.tx_ticks < left ? u.tx_ticks : static_cast<uint32_t>(left);
+			u.tx_ticks -= step;
 			left -= step;
-			if (u.tx_cycles == 0 && m_jvs) {
+			if (u.tx_ticks == 0 && m_jvs) {
 				m_jvs->push(u.tx_byte);
 			}
 		} else if (u.tx_count) {
@@ -567,26 +576,26 @@ void Mie::uart_tick(uint32_t cycles)
 				u.tx_fifo[i - 1] = u.tx_fifo[i];
 			}
 			u.tx_count--;
-			u.tx_cycles = byte_cycles;
+			u.tx_ticks = byte_ticks;
 		} else {
 			break;
 		}
 	}
 
 	/* Receiver: bytes land one character time apart. */
-	left = cycles;
+	left = ticks;
 	while (left && u.wire_pos < u.wire_count) {
-		const uint32_t step = u.wire_cycles < left ? u.wire_cycles : left;
-		u.wire_cycles -= step;
+		const uint32_t step = u.wire_ticks < left ? u.wire_ticks : static_cast<uint32_t>(left);
+		u.wire_ticks -= step;
 		left -= step;
-		if (u.wire_cycles == 0) {
+		if (u.wire_ticks == 0) {
 			if (u.rx_count < u.rx_fifo.size()) {
 				const uint32_t tail = (u.rx_head + u.rx_count) % static_cast<uint32_t>(u.rx_fifo.size());
 				u.rx_fifo[tail] = u.wire[u.wire_pos];
 				u.rx_count++;
 			}
 			u.wire_pos++;
-			u.wire_cycles = byte_cycles;
+			u.wire_ticks = byte_ticks;
 		}
 	}
 }

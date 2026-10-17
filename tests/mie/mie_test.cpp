@@ -372,12 +372,41 @@ void test_waits()
 	check(share >= 80, "its turns are counted");
 }
 
+/* The speed of the JVS line: the divisor 8 of the programs, nine
+ * characters, then a loop of 37 clocks that counts its turns until the
+ * transmitter is empty. At 115200 bauds a character is 86.8 us, 1388.9
+ * clocks of the Z80 at 16 MHz: 12 500 for the nine, 337.8 turns. */
+void test_uart_speed()
+{
+	std::vector<uint8_t> rom(2048, 0), ram(32768, 0);
+	const std::vector<uint8_t> program = {
+		0x3E, 0x80, 0xD3, 0x13,		/* ld a, 80 / out (13), a: the divisor latch */
+		0x3E, 0x08, 0xD3, 0x10,		/* ld a, 08 / out (10), a */
+		0xAF, 0xD3, 0x13,		/* xor a / out (13), a */
+		0x21, 0x00, 0x00, 0x3E, 0x55,	/* ld hl, 0 / ld a, 55 */
+		0xD3, 0x10, 0xD3, 0x10, 0xD3, 0x10, 0xD3, 0x10, 0xD3, 0x10,
+		0xD3, 0x10, 0xD3, 0x10, 0xD3, 0x10, 0xD3, 0x10,
+		0x23, 0xDB, 0x15, 0xCB, 0x77, 0x28, 0xF9,	/* inc hl / in a, (15) / bit 6, a / jr z */
+		0x22, 0x00, 0xC1, 0x76,		/* ld (C100), hl / halt */
+	};
+
+	std::copy(program.begin(), program.end(), rom.begin());
+	odin::MieBoard mie(rom, ram, odin::Mie::CLOCK_HZ, nullptr);
+	mie.run(20000);
+	uint32_t low = 0, high = 0;
+	mie.host_read(0x20000 + 2 * 0xC100, 1, low);
+	mie.host_read(0x20000 + 2 * 0xC101, 1, high);
+	const uint32_t turns = (high << 8) | low;
+	check(turns >= 336 && turns <= 339, "nine characters at 115200 bauds");
+}
+
 int main()
 {
 	test_eeprom();
 	test_interrupts();
 	test_port_d();
 	test_waits();
+	test_uart_speed();
 	std::printf("%u checks passed, %u failed\n", g_passed, g_failed);
 	return g_failed ? 1 : 0;
 }

@@ -66,16 +66,17 @@ public:
 	virtual uint8_t take_byte() = 0;
 };
 
+/* Times in ticks of 1/9.216 GHz (mie.cpp). */
 struct MieUartState {
 	uint8_t dll, dlm, ier, fcr, lcr, mcr, scr;
 	std::array<uint8_t, 16> tx_fifo;
 	uint8_t tx_count;
-	uint32_t tx_cycles;
+	uint32_t tx_ticks;
 	uint8_t tx_byte;
 	std::array<uint8_t, 512> rx_fifo;
 	uint32_t rx_head, rx_count;
 	std::array<uint8_t, 512> wire;
-	uint32_t wire_pos, wire_count, wire_cycles;
+	uint32_t wire_pos, wire_count, wire_ticks;
 };
 
 struct MieSerialState {
@@ -186,7 +187,7 @@ private:
 	void uart_write(uint8_t reg, uint8_t value);
 	void uart_reset();
 	void uart_tick(uint32_t cycles);
-	uint32_t uart_byte_cycles() const;
+	uint32_t uart_byte_ticks() const;
 	void uart_commit_frame();
 	uint8_t serial_read(uint8_t port);
 	void serial_write(uint8_t port, uint8_t value);
