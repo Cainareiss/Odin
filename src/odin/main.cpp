@@ -404,9 +404,9 @@ main(int argc, char **argv)
 		options.sound = odin::AudioOut::Mode::MIX;
 
 	/* The optional board in the mix: the level of the list, or the last
-	 * line of [sound] */
+	 * line of [sound.<game>] */
 	double option_level = game->option_level;
-	for (const auto &[key, value] : settings.section("sound")) {
+	for (const auto &[key, value] : settings.section("sound." + game->name)) {
 		char *end = nullptr;
 		const double db = std::strtod(value.c_str(), &end);
 
@@ -414,7 +414,8 @@ main(int argc, char **argv)
 		    db <= odin::Game::HIGHEST_LEVEL)
 			option_level = db;
 		else
-			std::fprintf(stderr, "ERROR: settings: [sound]: not right: %s = %s\n", key.c_str(), value.c_str());
+			std::fprintf(stderr, "ERROR: settings: [sound.%s]: not right: %s = %s\n", game->name.c_str(),
+			             key.c_str(), value.c_str());
 	}
 
 	/* Unthrottled frames do not keep time: no sound with -u */
