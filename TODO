@@ -115,11 +115,10 @@ HIKARU
 
 Move the slave GPU access to src/odin/hikaru_gpu.cpp.
 
-MIE LLE (src/odin/mie.cpp, ODIN_MIE=lle): HACK in src/odin/mie_board.cpp,
+MIE (src/odin/mie.cpp, its ROM and the program the BOOTROM uploads, run
+by a Z80; every game needs its ROM): HACK in src/odin/mie_board.cpp,
 port E bits 0-3 read high while the port is an output; the BOOTROM waits
-for that at 0x0C00B860 and MAME reads 0xFF there. Measure the pins. The
-LLE path is the default; drop the HLE stand-in (mie_stand_in.cpp) once the
-JVS inputs (players, coins, analog) are wired to the real board.
+for that at 0x0C00B860 and MAME reads 0xFF there. Measure the pins.
 The slave reaches the MIE through a window of its own (1A800008 among its
 ports, 1B000100 for its bus) and checks it at start: HACK in
 hikaru_bus.cpp, a stand-in gives the bus at once and keeps the port as

@@ -37,7 +37,6 @@
 #include "odin/hikaru_gpu.hpp"
 #include "odin/memctl.hpp"
 #include "odin/mie_board.hpp"
-#include "odin/mie_stand_in.hpp"
 #include "odin/rom_board.hpp"
 #include "odin/save_folder.hpp"
 #include "odin/scheduler.hpp"
@@ -111,12 +110,8 @@ public:
 	/* The sound of the last frame of the main board, or of the optional
 	 * one: left and right, 44 100 pairs a second */
 	const std::vector<int16_t> &sound(bool optional) const { return m_sound[optional ? SLAVE : MASTER]->samples(); }
-	/* The outputs of the I/O board of the cabinet (MieBoard::io_outputs);
-	 * none without the MIE */
-	std::span<const uint8_t> io_outputs() const
-	{
-		return m_mie ? m_mie->io_outputs() : std::span<const uint8_t>{};
-	}
+	/* The outputs of the I/O board of the cabinet (MieBoard::io_outputs) */
+	std::span<const uint8_t> io_outputs() const { return m_mie->io_outputs(); }
 
 	/* Before the power-on: what the board keeps without power comes from
 	 * the files of this folder, over the images that come with the game,
@@ -256,8 +251,7 @@ private:
 	/* 93C46 of the main board, on port A of the master: bit 2 DI, 3 SK,
 	 * 4 CS, 5 DO */
 	Eeprom93c46 m_eeprom;
-	std::unique_ptr<MieBoard> m_mie;	/* nothing: the stand-in answers */
-	MieStandIn m_mie_stand_in;
+	std::unique_ptr<MieBoard> m_mie;
 	std::unique_ptr<HikaruGpu> m_gpu;
 	std::unique_ptr<SoundBoard> m_sound[2];
 	std::unique_ptr<WavFile> m_wav;	/* ODIN_WAV: the sound of the main board */

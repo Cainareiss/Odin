@@ -463,14 +463,6 @@ bool
 Hikaru::mie_read(uint32_t addr, unsigned size, uint64_t &value)
 {
 	value = 0;
-	if (!m_mie) {
-		MieBoard::Inputs inputs = {};
-
-		if (m_panel)
-			m_panel->read_inputs(inputs);
-		return m_mie_stand_in.read(addr, size, value, inputs.mainboard_test, inputs.mainboard_service);
-	}
-
 	if (addr >= 0x00800000 && addr <= 0x0083FFFF) {
 		/* The window is 16 bits wide: a 32-bit access is two words,
 		 * the low one first. */
@@ -498,14 +490,6 @@ Hikaru::mie_read(uint32_t addr, unsigned size, uint64_t &value)
 bool
 Hikaru::mie_write(uint32_t addr, unsigned size, uint64_t value)
 {
-	if (!m_mie) {
-		MieBoard::Inputs inputs = {};
-
-		if (m_panel)
-			m_panel->read_inputs(inputs);
-		return m_mie_stand_in.write(addr, size, value, inputs.mainboard_test, inputs.mainboard_service);
-	}
-
 	if (addr >= 0x00800000 && addr <= 0x0083FFFF) {
 		const unsigned part = (size == 4) ? 2 : size;
 

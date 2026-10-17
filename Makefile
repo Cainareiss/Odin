@@ -61,7 +61,6 @@ OBJ := \
 	src/odin/sh4_onchip.o \
 	src/odin/mie_board.o \
 	src/odin/mie.o \
-	src/odin/mie_stand_in.o \
 	src/odin/z80.o \
 	src/odin/z80_ops.o \
 	src/odin/jvs.o \

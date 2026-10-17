@@ -21,6 +21,7 @@
 
 #include "odin/hikaru.hpp"
 
+#include <array>
 #include <cstring>
 
 #include "odin/state_file.hpp"
@@ -252,6 +253,8 @@ Hikaru::save_items(StateFile &state)
 {
 	char name[32] = "";
 	const uint32_t unused = 0;
+	/* Where the states keep 32 bytes no chip uses now */
+	const std::array<uint8_t, 32> unused_regs = {};
 	RomBoard::Config rombd;
 	bool ok;
 
@@ -269,7 +272,7 @@ Hikaru::save_items(StateFile &state)
 	     put_bytes(state, m_mie_ram) && put_bytes(state, m_bram) &&
 	     put_bytes(state, m_memctl[MASTER].registers()) &&
 	     put_bytes(state, m_memctl[SLAVE].registers()) &&
-	     put_bytes(state, m_mscomm) && put_bytes(state, m_mie_stand_in.registers());
+	     put_bytes(state, m_mscomm) && put_bytes(state, unused_regs);
 	if (ok && m_rombd.crypt())
 		ok = put_bytes(state, m_rombd.crypt_ram());
 	ok = ok && put_bytes(state, m_iregs[MASTER]) && put_bytes(state, m_iregs[SLAVE]);
@@ -279,9 +282,7 @@ Hikaru::save_items(StateFile &state)
 	}
 
 	/* The chips */
-	ok = state.put(m_mie_stand_in.busrq());
-	if (ok && m_mie)
-		ok = put_chip<MieBoard::State>(state, *m_mie);
+	ok = state.put(unused) && put_chip<MieBoard::State>(state, *m_mie);
 	ok = ok && put_chip<HikaruGpu::State>(state, *m_gpu) &&
 	     put_chip<SoundBoard::State>(state, *m_sound[MASTER]) &&
 	     put_chip<SoundBoard::State>(state, *m_sound[SLAVE]) &&
@@ -318,6 +319,7 @@ Hikaru::load_items(StateFile &state)
 {
 	char name[32];
 	uint32_t unused;
+	std::array<uint8_t, 32> unused_regs;
 	RomBoard::Config rombd;
 	bool ok;
 
@@ -338,7 +340,7 @@ Hikaru::load_items(StateFile &state)
 	     get_bytes(state, m_mie_ram) && get_bytes(state, m_bram) &&
 	     get_bytes(state, m_memctl[MASTER].registers()) &&
 	     get_bytes(state, m_memctl[SLAVE].registers()) &&
-	     get_bytes(state, m_mscomm) && get_bytes(state, m_mie_stand_in.registers());
+	     get_bytes(state, m_mscomm) && get_bytes(state, unused_regs);
 	if (ok && m_rombd.crypt())
 		ok = get_bytes(state, m_rombd.crypt_ram());
 	ok = ok && get_bytes(state, m_iregs[MASTER]) && get_bytes(state, m_iregs[SLAVE]);
@@ -347,8 +349,8 @@ Hikaru::load_items(StateFile &state)
 		return false;
 	}
 
-	ok = state.get(m_mie_stand_in.busrq());
-	if (ok && m_mie) {
+	ok = state.get(unused);
+	if (ok) {
 		const auto block = std::make_unique<MieBoard::State>();
 
 		ok = state.get(*block) && m_mie->load(*block);

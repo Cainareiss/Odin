@@ -6,6 +6,13 @@
 			"mach" : "hikaru",
 			"sections" : [
 				{
+					"name" : "mie",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "315-6146.bin", "size" : 2048 }
+					]
+				},
+				{
 					"name" : "bootrom",
 					"type" : "alternative",
 					"data" : [

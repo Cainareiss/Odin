@@ -228,8 +228,9 @@ Hikaru::make(const Game &game, bool verbose)
 		std::fprintf(stderr, "ERROR: '%s' has a ROM board and no EPROM\n", game.name.c_str());
 		return nullptr;
 	}
-	if (mie && mie != Mie::ROM_SIZE) {
-		std::fprintf(stderr, "ERROR: the ROM of the MIE of '%s' has %zu bytes\n", game.name.c_str(), mie);
+	if (mie != Mie::ROM_SIZE) {
+		std::fprintf(stderr, "ERROR: the ROM of the MIE of '%s' has %zu bytes, not %u\n", game.name.c_str(), mie,
+		             Mie::ROM_SIZE);
 		return nullptr;
 	}
 	if (!MieBoard::knows_io_board(game.io_board)) {
@@ -257,7 +258,7 @@ Hikaru::Hikaru(const Game &game, const RomBoard::Config &rombd, bool verbose)
 	  m_rombd(rombd, game.section("eprom"), game.section("maskrom"),
 	          actel_of(game),
 	          [this](const char *what) { cpu_error("%s", what); }),
-	  m_eeprom(m_clock), m_mie_stand_in(m_mie_ram),
+	  m_eeprom(m_clock),
 	  m_bus{Bus(*this, MASTER), Bus(*this, SLAVE)}, m_hooked{false, false},
 	  m_porta{0, 0}, m_irq_lines(0), m_mie_port_d(0), m_unk1A800008_s(0), m_unk1B000100_s(0),
 	  m_line(0), m_dots_per_line(0), m_lines_per_frame(0), m_lines_shown(0), m_line_rest(0),
@@ -390,8 +391,7 @@ Hikaru::~Hikaru()
 	}
 }
 
-/* The MIE: the chip and its board if its ROM is there, else the stand-in.
- * ODIN_MIE=hle asks for the stand-in.
+/* The MIE: the chip, its ROM and its board.
  *
  * The CRP-1231 card reader (card_reader.hpp) goes on its serial block:
  * ODIN_CARD=none leaves the line open, ODIN_CARD=reader (default) attaches
@@ -400,20 +400,7 @@ Hikaru::~Hikaru()
 void
 Hikaru::build_mie()
 {
-	const char *const mode = std::getenv("ODIN_MIE");
-	const std::span<const uint8_t> rom = m_game.section("mie");
-	bool lle = !mode || std::strcmp(mode, "hle");
-
-	if (lle && rom.empty()) {
-		std::fprintf(stderr, "ERROR: MIE: no 315-6146.bin in the game list, using the HLE stand-in\n");
-		lle = false;
-	}
-	if (!lle) {
-		std::printf("MIE: HLE stand-in (ODIN_MIE=lle for the Z80)\n");
-		return;
-	}
-
-	m_mie = std::make_unique<MieBoard>(rom, m_mie_ram, m_clock, [this](MieBoard::Inputs &inputs) {
+	m_mie = std::make_unique<MieBoard>(m_game.section("mie"), m_mie_ram, m_clock, [this](MieBoard::Inputs &inputs) {
 		if (m_panel)
 			m_panel->read_inputs(inputs);
 	}, m_game.io_board);
@@ -548,11 +535,7 @@ Hikaru::reset()
 	m_memctl[MASTER].reset();
 	m_memctl[SLAVE].reset();
 	m_mscomm.fill(0);
-	std::fill(m_mie_stand_in.registers().begin(), m_mie_stand_in.registers().end(), 0);
-	if (m_mie)
-		m_mie->reset();
-	else
-		m_mie_stand_in.reset();
+	m_mie->reset();
 	m_gpu->reset();
 	reset_sound(MASTER);
 	reset_sound(SLAVE);
@@ -654,12 +637,10 @@ Hikaru::update_irqs()
 	if (m_sound[MASTER]->main_irq() || m_sound[SLAVE]->main_irq())
 		lines |= 0x10;
 	m_irq_lines = lines;
-	if (m_mie)
-		m_mie->set_irq_lines(lines);
+	m_mie->set_irq_lines(lines);
 
 	m_sh[MASTER]->set_irq(Sh4Source::IRL1, m_memctl[MASTER].irq_line());
-	/* The stand-in of the MIE has the mask its program writes, 0xE1. */
-	m_sh[MASTER]->set_irq(Sh4Source::IRL2, m_mie ? m_mie->irq_out() : (lines & 0xE1) != 0);
+	m_sh[MASTER]->set_irq(Sh4Source::IRL2, m_mie->irq_out());
 }
 
 /*
@@ -774,8 +755,7 @@ Hikaru::run_cycles(int cycles)
 	if (list_ends && !m_gpu->antarctic().running())
 		m_gpu->list_ended();
 
-	if (m_mie)
-		m_mie->run(static_cast<uint32_t>(ran));
+	m_mie->run(static_cast<uint32_t>(ran));
 	/* Its program may have written the mask of the interrupts. */
 	update_irqs();
 	took(PART_MIE);
@@ -961,10 +941,9 @@ Hikaru::kept_memories()
 		{ "main_eeprom", m_eeprom.data() },
 		{ "rombd_eeprom", m_rombd.eeprom().data() },
 		{ "nvram", m_bram },
+		{ "mie_eeprom", m_mie->eeprom().data() },
 	};
 
-	if (m_mie)
-		memories.emplace_back("mie_eeprom", m_mie->eeprom().data());
 	return memories;
 }
 
@@ -1008,7 +987,7 @@ Hikaru::keep_in(const SaveFolder &saves)
 	 * ("mie_eeprom" in the list): SEGA wrote the country of the market in
 	 * it at the factory, which the BOOTROM does not do (a blank chip is
 	 * JAPAN for it, and no page of its menu reaches the country). */
-	if (m_mie && !settings_kept && m_game.mie_eeprom.size() == m_mie->eeprom().data().size()) {
+	if (!settings_kept && m_game.mie_eeprom.size() == m_mie->eeprom().data().size()) {
 		std::copy(m_game.mie_eeprom.begin(), m_game.mie_eeprom.end(), m_mie->eeprom().data().begin());
 		std::printf("mie_eeprom: the settings of a new cabinet\n");
 	}
