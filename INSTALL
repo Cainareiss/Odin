@@ -62,18 +62,20 @@ output, when odin.ini says so:
 or "<id> = 0" as each output of the game changes, its id in
 odin-games.json, and "mame_stop = 1" at the end.)
 
-NASCAR, Planet Harriers and Racer have a second sound board for speakers
-of their own (the backrest of the seat, the woofer and the shaker). Odin
-plays the two boards on two speakers, the second one at the level
-odin-games.json gives it (option_level, in dB), as the volumes of the
-cabinet set it lower than the front; odin.ini turns that knob, in the
-section of the game:
+NASCAR and Planet Harriers have a second sound board for speakers of
+their own (the backrest of the seat). Odin plays the two boards on two
+speakers, the second one at the level odin-games.json gives it
+(option_level, in dB), as the volumes of the cabinet set it; odin.ini
+turns that knob, in the section of the game:
 
  [sound.sgnascar]
  option_level = -15
 
 (-60 to 12 dB; -o quad plays the four channels apart, -o main and
--o option one board alone.)
+-o option one board alone.) In Racer the second board feeds the vibration
+device of the control panel, not speakers: the pad of player 1 shakes as
+hard as its sound (experimental; "vibration = off" in [sound.podrace]
+stops it).
 
 The mouse aims for player 1 in Brave: the sight where it points on the
 picture, water on the left button, fog on the right one, Start on the

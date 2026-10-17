@@ -88,6 +88,35 @@ main()
 	odin::AudioOut::interleave(Mode::QUAD, main_board, option, half, out);
 	check(out == std::vector<int16_t>{ 1, 2, 10, 20, 30000, -30000, 10000, -10000 },
 	      "quad: each board as it is, whatever the level");
+
+	using odin::AudioOut;
+	const auto same = [](int16_t left, int16_t right, size_t frames) {
+		std::vector<int16_t> sound;
+
+		for (size_t i = 0; i < frames; i++)
+			sound.insert(sound.end(), { left, right });
+		return sound;
+	};
+
+	check(AudioOut::shake_of({}) == 0 && AudioOut::shake_of(same(0, 0, 735)) == 0, "no sound, no shake");
+	check(AudioOut::shake_of(same(8192, 8192, 735)) == 0x8000, "a quarter of the way shakes half");
+	check(AudioOut::shake_of(same(32767, 32767, 735)) == 0xFFFF && AudioOut::shake_of(same(-20000, -20000, 735)) == 0xFFFF,
+	      "half the way and more shake all, either sign");
+	check(AudioOut::shake_of(same(1023, 1023, 735)) == 0 && AudioOut::shake_of(same(1024, 1024, 735)) == 4096,
+	      "below 1/32 of the way no shake");
+	check(AudioOut::shake_of(same(16384, -16384, 735)) == 0 && AudioOut::shake_of(same(16384, 0, 735)) == 0x8000,
+	      "left and right together");
+	std::vector<int16_t> burst = same(0, 0, 736);
+	for (size_t i = 0; i < 736 / 4 * 2; i++)
+		burst[i] = 16384;
+	check(AudioOut::shake_of(burst) == 0x8000, "the level over the whole frame");
+	uint16_t shake = 0;
+	for (int frame = 0; frame < 4; frame++)
+		shake = AudioOut::smoothed(shake, 0xFFFF);
+	check(AudioOut::smoothed(0, 0xFFFF) == 0x3FFF && shake == 0xAEFF, "a shake grows over four frames");
+	for (int frame = 0; frame < 40; frame++)
+		shake = AudioOut::smoothed(shake, 0);
+	check(AudioOut::smoothed(0x8000, 0) == 0x6000 && shake == 0, "and dies away, down to nothing");
 	printf("%u checks, %u failures\n", checks, failures);
 	return failures ? EXIT_FAILURE : EXIT_SUCCESS;
 }

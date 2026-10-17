@@ -154,6 +154,10 @@ struct Game {
 	 * (the NASCAR manual draws REAR lower than FRONT at the factory); the
 	 * levels of the list come from levels measured in a race. */
 	double option_level = 0;
+	/* The sound of the optional board feeds a vibration device of player 1
+	 * (the control panel of PODRACE): "option_vibration" in the list,
+	 * false when it does not say. */
+	bool option_vibration = false;
 	static constexpr double LOWEST_LEVEL = -60;
 	static constexpr double HIGHEST_LEVEL = 12;
 	std::vector<std::pair<std::string, std::vector<uint8_t>>> sections;

@@ -56,10 +56,15 @@ public:
 
 	void read_inputs(MieBoard::Inputs &inputs) override { m_panel.fill(inputs); }
 	/* The outputs of the board after a frame: the pad of a player shakes
-	 * while a rumble output of that player is on. */
-	void show(std::span<const uint8_t> outputs);
+	 * while a rumble output of that player is on; the pad of player 1 also
+	 * as hard as the vibration device the sound of the optional board
+	 * feeds, when it feels it. */
+	void show(std::span<const uint8_t> outputs, std::span<const int16_t> option_sound);
 	/* No pad shakes (the emulation stops) */
 	void quiet();
+	/* EXPERIMENTAL: the pad of player 1 feels the sound of the optional
+	 * board, as the vibration device of the cabinet it feeds */
+	void feel_option_board(bool on) { m_felt = on; }
 
 	static constexpr int MOUSE_MOVED = 2;
 	/* The strength of both motors of a pad that shakes (the nozzle of
@@ -68,6 +73,10 @@ public:
 	static constexpr Uint16 RUMBLE = 0xC000;
 	static constexpr Uint32 RUMBLE_MS = 10000;
 	static constexpr Uint32 RUMBLE_AGAIN_MS = 5000;
+	/* The strength a felt sound changes the shake by, at the least, and
+	 * how long a shake lasts before it changes again */
+	static constexpr Uint16 FELT_STEP = 0x1000;
+	static constexpr Uint32 FELT_MS = 50;
 
 private:
 	/* A pad and its buttons: a button pressed and released before a frame
@@ -78,7 +87,7 @@ private:
 		PadState state;
 		std::array<bool, SDL_CONTROLLER_BUTTON_MAX> fresh{};
 		std::array<bool, SDL_CONTROLLER_BUTTON_MAX> release{};
-		bool rumbling = false;
+		Uint16 rumbling = 0;	/* how hard it shakes */
 		Uint32 rumbled = 0;	/* when it was last asked to */
 	};
 
@@ -90,6 +99,8 @@ private:
 	ControlPanel m_panel;
 	std::vector<GameOutput> m_outputs;
 	bool m_on;
+	bool m_felt = false;
+	Uint16 m_felt_level = 0;	/* how hard the felt sound shakes, smoothed */
 	std::array<Pad, 2> m_pads;	/* of each player */
 	MouseState m_mouse;
 	bool m_mouse_seen;		/* it has moved on the window */

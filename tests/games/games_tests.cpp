@@ -89,6 +89,7 @@ const char LIST[] = R"({
         { "name": "eprom", "type": "interleave", "data": [
             { "name": "a.bin", "size": 4 }, { "name": "b.bin", "size": 4 } ] } ] },
     { "name": "wheel", "mach": "hikaru", "io": "837-13741", "option_speakers": true, "option_level": -22.5,
+      "option_vibration": true,
       "mie_eeprom": "4242520001aBCDEF0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ff",
       "controls": [
         { "name": "WHEEL", "id": "wheel", "analog": 0, "low": "left", "role": "steer" },
@@ -218,8 +219,10 @@ void test_games(const std::string &dir)
 	check(wheel && wheel->io_board == "837-13741", "the I/O board the list tells");
 	check(wheel && wheel->option_speakers, "the speakers of the optional sound board the list tells");
 	check(wheel && wheel->option_level == -22.5, "the level of the optional board the list tells, in dB");
+	check(wheel && wheel->option_vibration, "the vibration device the optional board feeds, the list tells");
 	if (toy)
-		check(toy->controls.empty() && toy->mie_eeprom.empty() && !toy->option_speakers && toy->option_level == 0,
+		check(toy->controls.empty() && toy->mie_eeprom.empty() && !toy->option_speakers && toy->option_level == 0 &&
+		      !toy->option_vibration,
 		      "without \"controls\", no control, without \"mie_eeprom\", no chip, without \"option_speakers\", none");
 	check(wheel && wheel->mie_eeprom.size() == 128 && wheel->mie_eeprom[0] == 0x42 && wheel->mie_eeprom[4] == 0x01 &&
 	      wheel->mie_eeprom[5] == 0xAB && wheel->mie_eeprom[7] == 0xEF && wheel->mie_eeprom[127] == 0xFF,
@@ -352,6 +355,8 @@ void test_bad_controls(const std::string &dir)
 	      "a game whose chip is not 128 bytes in hexadecimal is refused");
 	check(refuses(R"("option_speakers": "yes")") && refuses(R"("option_speakers": 1)"),
 	      "and one whose \"option_speakers\" is not true or false");
+	check(refuses(R"("option_vibration": "yes")") && refuses(R"("option_vibration": 1)"),
+	      "and one whose \"option_vibration\" is not true or false");
 	check(refuses(R"("option_level": -3)") && refuses(R"("option_speakers": false, "option_level": -3)") &&
 	      refuses(R"("option_speakers": true, "option_level": "-3")") &&
 	      refuses(R"("option_speakers": true, "option_level": -60.5)") &&

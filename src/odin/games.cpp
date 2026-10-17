@@ -487,6 +487,13 @@ GameList::load_game(const std::string &rom_dir, const std::string &name) const
 		}
 		game.option_level = db;
 	}
+	if (const json_t *const shaken = json_object_get(rom, "option_vibration")) {
+		if (!json_is_boolean(shaken)) {
+			std::fprintf(stderr, "ERROR: game '%s': \"option_vibration\" is not true or false\n", name.c_str());
+			return std::nullopt;
+		}
+		game.option_vibration = json_is_true(shaken);
+	}
 	if (const json_t *const chip = json_object_get(rom, "mie_eeprom")) {
 		auto bytes = parse_hex(json_string_value(chip));
 

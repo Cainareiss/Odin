@@ -246,10 +246,17 @@ in odin-games.json, and the default sound mixes the two boards for them
 (-o mix), the optional one at its "option_level" (audio_out.hpp, HEURISTIC:
 the volumes of the switch unit of the cabinet set the balance, through an
 electronic volume whose chip no source names; the NASCAR manual draws REAR
-lower than FRONT at the factory, with no figure; the levels of the list put the optional
-board about 5 dB under the main one in a race, from what was measured
-there (notes MARKDOWN/69: SGNASCAR, its rear 17 dB above the front and
-clipped, PODRACE 8 dB above, PHARRIER 4 dB below), until an ear decides).
+lower than FRONT at the factory, with no figure; the level of SGNASCAR puts
+its rear about 5 dB under the front in a race, where it was measured 17 dB
+above and clipped, notes MARKDOWN/69, until an ear decides). PODRACE has
+no such speakers: its optional board feeds the vibration device of the
+control panel (deluxe manual, VIBRATION volume, SOUND TEST "OPTION SPEAKER
+LEFT and RIGHT function the same"; deluxe wiring; on the U.S. mini deluxe
+it is not wired), "option_vibration": EXPERIMENTAL, the pad of player 1
+shakes as hard as that sound (AudioOut::shake_of and smoothed, HEURISTIC:
+twice its level, none below 1/32, over about four frames; a pad is not a
+shaker). The bass shakers of the SGNASCAR deluxe take the same rear sound,
+switched on by its outputs BASS SHAKER (FRONT) and (FRONT+REAR): not yet.
 The ARM7 runs on the 22.5792 MHz bus clock, eight times MAME's
 figure: the SGNASCAR cabinet shows its sound driver ready within a frame
 of each reload, 20 MHz at least (HEURISTIC: no wait state). It costs a

@@ -17,6 +17,8 @@
  */
 
 #include "odin/controls.hpp"
+
+#include "odin/audio_out.hpp"
 #include "odin/picture.hpp"
 
 #include <cstdio>
@@ -192,9 +194,13 @@ Controls::event(const SDL_Event &event)
 }
 
 void
-Controls::show(std::span<const uint8_t> outputs)
+Controls::show(std::span<const uint8_t> outputs, std::span<const int16_t> option_sound)
 {
 	const Uint32 now = SDL_GetTicks();
+
+	m_felt_level = m_felt ? AudioOut::smoothed(m_felt_level, AudioOut::shake_of(option_sound)) : 0;
+
+	const Uint16 felt = m_felt_level / FELT_STEP * FELT_STEP;
 
 	for (unsigned player = 0; player < 2; player++) {
 		Pad &pad = m_pads[player];
@@ -202,10 +208,16 @@ Controls::show(std::span<const uint8_t> outputs)
 
 		for (const GameOutput &output : m_outputs)
 			on = on || (output.role == GameOutput::Role::RUMBLE && output.player == player && output.on(outputs));
-		if (!pad.handle || (on == pad.rumbling && (!on || now - pad.rumbled < RUMBLE_AGAIN_MS)))
+
+		const Uint16 strength = std::max<Uint16>(on ? RUMBLE : 0, player ? 0 : felt);
+
+		if (!pad.handle || (strength == pad.rumbling && (!strength || now - pad.rumbled < RUMBLE_AGAIN_MS)))
 			continue;
-		SDL_GameControllerRumble(pad.handle, on ? RUMBLE : 0, on ? RUMBLE : 0, on ? RUMBLE_MS : 0);
-		pad.rumbling = on;
+		/* A shake changes its strength a few times a second at most */
+		if (strength && pad.rumbling && strength != pad.rumbling && now - pad.rumbled < FELT_MS)
+			continue;
+		SDL_GameControllerRumble(pad.handle, strength, strength, strength ? RUMBLE_MS : 0);
+		pad.rumbling = strength;
 		pad.rumbled = now;
 	}
 }
@@ -216,7 +228,7 @@ Controls::quiet()
 	for (Pad &pad : m_pads)
 		if (pad.handle && pad.rumbling) {
 			SDL_GameControllerRumble(pad.handle, 0, 0, 0);
-			pad.rumbling = false;
+			pad.rumbling = 0;
 		}
 }
 

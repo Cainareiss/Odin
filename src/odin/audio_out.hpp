@@ -77,6 +77,30 @@ public:
 		}
 	}
 
+	/* How hard a vibration device fed by a sound shakes, 0 to 0xFFFF: the
+	 * level of left and right together, twice over, none below 1/32 of the
+	 * whole way. HEURISTIC: a pad is not a shaker, and the VIBRATION volume
+	 * of the cabinet has no figure. */
+	static uint16_t shake_of(std::span<const int16_t> stereo)
+	{
+		const size_t frames = stereo.size() / 2;
+		double sum = 0;
+
+		for (size_t i = 0; i < frames; i++) {
+			const double both = (stereo[2 * i] + stereo[2 * i + 1]) / 2.0;
+
+			sum += both * both;
+		}
+
+		const double level = frames ? std::sqrt(sum / static_cast<double>(frames)) / 32768.0 : 0;
+
+		return level < 1.0 / 32 ? 0 : static_cast<uint16_t>(std::lround(std::min(1.0, level * 2) * 0xFFFF));
+	}
+
+	/* A shake follows its sound over about four frames, as a motor speeds
+	 * up and slows down (HEURISTIC) */
+	static uint16_t smoothed(uint16_t was, uint16_t now) { return static_cast<uint16_t>((3 * was + now) / 4); }
+
 	/* nullptr when the host gives no sound device; the optional board at
 	 * option_db in the mix */
 	static std::unique_ptr<AudioOut> make(Mode mode, double option_db);

@@ -326,7 +326,7 @@ Session::run()
 		m_display.begin_frame();
 		m_controls.update();
 		m_board.run_frame();
-		m_controls.show(m_board.io_outputs());
+		m_controls.show(m_board.io_outputs(), m_board.sound(true));
 		if (m_outputs)
 			m_outputs->show(m_board.io_outputs());
 		if (m_audio)
@@ -403,9 +403,10 @@ main(int argc, char **argv)
 	if (!options.sound_asked && game->option_speakers)
 		options.sound = odin::AudioOut::Mode::MIX;
 
-	/* The optional board in the mix: the level of the list, or the last
-	 * line of [sound.<game>] */
+	/* The optional board in the mix and on the pad: the list, or the last
+	 * lines of [sound.<game>] */
 	double option_level = game->option_level;
+	bool vibration = game->option_vibration;
 	for (const auto &[key, value] : settings.section("sound." + game->name)) {
 		char *end = nullptr;
 		const double db = std::strtod(value.c_str(), &end);
@@ -413,6 +414,8 @@ main(int argc, char **argv)
 		if (key == "option_level" && !value.empty() && !*end && db >= odin::Game::LOWEST_LEVEL &&
 		    db <= odin::Game::HIGHEST_LEVEL)
 			option_level = db;
+		else if (key == "vibration" && (value == "on" || value == "off"))
+			vibration = value == "on";
 		else
 			std::fprintf(stderr, "ERROR: settings: [sound.%s]: not right: %s = %s\n", game->name.c_str(),
 			             key.c_str(), value.c_str());
@@ -426,6 +429,9 @@ main(int argc, char **argv)
 		audio = odin::AudioOut::make(*options.sound, option_level);
 	if (audio && options.sound == odin::AudioOut::Mode::MIX && option_level != 0)
 		std::printf("sound: the optional board at %+g dB in the mix\n", option_level);
+	controls.feel_option_board(vibration);
+	if (vibration)
+		std::printf("sound: the optional board shakes the pad of player 1 (experimental)\n");
 
 	bool started = true;
 
