@@ -22,10 +22,10 @@
 			"mie_eeprom" : "42434f30010101001800040101010100121200000000000000000000060041495254524958300000000000000100010100000000000000000000000000007e4442434f30010101001800040101010100121200000000000000000000060041495254524958300000000000000100010100000000000000000000000000007e44",
 			"controls" : [
 				{ "name" : "START", "id" : "start", "switch" : "1P START", "role" : "start" },
-				{ "name" : "LEFT", "id" : "left", "switch" : "1P PUSH1", "role" : "button5" },
-				{ "name" : "RIGHT", "id" : "right", "switch" : "1P PUSH2", "role" : "button6" },
-				{ "name" : "UP", "id" : "up", "switch" : "1P UP", "role" : "up" },
-				{ "name" : "DOWN", "id" : "down", "switch" : "1P DOWN", "role" : "down" },
+				{ "name" : "LEFT", "id" : "left", "switch" : "1P PUSH1", "role" : "left", "keys" : [ "X" ] },
+				{ "name" : "RIGHT", "id" : "right", "switch" : "1P PUSH2", "role" : "right", "keys" : [ "C" ] },
+				{ "name" : "UP", "id" : "up", "switch" : "1P UP", "role" : "button5", "keys" : [ "Up" ] },
+				{ "name" : "DOWN", "id" : "down", "switch" : "1P DOWN", "role" : "button6", "keys" : [ "Down" ] },
 				{ "name" : "YAW", "id" : "yaw", "analog" : 0, "low" : "left", "role" : "stick_x" },
 				{ "name" : "ROLL", "id" : "roll", "analog" : 1, "low" : "left", "role" : "stick2_x" }
 			],
