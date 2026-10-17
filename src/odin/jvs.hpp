@@ -136,7 +136,7 @@ struct JvsHostState {
 
 /* What the generic part of a node keeps. Plain data. */
 struct JvsDeviceState {
-	uint32_t reset_counter;
+	uint32_t unused;	/* kept for the layout of the states */
 	uint8_t address;
 };
 
@@ -213,16 +213,24 @@ protected:
 	/* Whether a refused GENERIC_OUTPUT_1 skips its data bytes, or leaves
 	 * them to be read as the next commands. */
 	virtual bool refused_outputs_skip_data() const { return true; }
+	/* Where a RESET is taken: as any command of a frame the node reads,
+	 * its second byte not looked at, or only as F0 D9 at the head of a
+	 * frame to every node, which is read for nothing else but
+	 * SET_ADDRESS. */
+	virtual bool reset_in_any_frame() const { return false; }
 	virtual void device_reset() {}
 
 private:
-	/* Returns the request bytes consumed, the command refused or not, or
-	 * -1 for an unknown command. `used` receives the reply bytes. */
+	static constexpr int32_t RESTART = -2;
+
+	/* Returns the request bytes consumed, the command refused or not,
+	 * -1 for an unknown command or RESTART for a RESET. `used` receives
+	 * the reply bytes. */
 	int32_t handle_message(std::span<const uint8_t> in, std::span<uint8_t> out, uint32_t &used);
+	void restart();
 
 	JvsDevice *m_next;
 	uint8_t m_address;
-	uint32_t m_reset_counter;
 };
 
 /* What a Sega I/O board keeps: its node, its two coin counters, the

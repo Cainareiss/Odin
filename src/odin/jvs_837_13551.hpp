@@ -40,6 +40,8 @@ protected:
 	bool swoutputs(std::span<const uint8_t> values) override;
 	/* 315-6215 at 122F: past the count, the data of a refused 32 */
 	bool refused_outputs_skip_data() const override { return true; }
+	/* 02F5, 0400: F0 D9 at the head of a frame to every node */
+	bool reset_in_any_frame() const override { return false; }
 };
 
 } /* namespace odin */

@@ -179,18 +179,24 @@ uint32_t JvsHost::encode(std::span<uint8_t> buffer, uint32_t size)
 /* Device */
 
 JvsDevice::JvsDevice()
-	: m_next(nullptr), m_address(BROADCAST), m_reset_counter(0)
+	: m_next(nullptr), m_address(BROADCAST)
 {
 }
 
 void JvsDevice::reset()
 {
-	m_address = BROADCAST;
-	m_reset_counter = 0;
-	device_reset();
+	restart();
 	if (m_next) {
 		m_next->reset();
 	}
+}
+
+/* The program runs again from 0000 (epr-21868 at 16F5, 315-6215 at 127B):
+ * no address, its memory cleared. */
+void JvsDevice::restart()
+{
+	m_address = BROADCAST;
+	device_reset();
 }
 
 void JvsDevice::chain(JvsDevice *dev)
@@ -222,14 +228,27 @@ uint32_t JvsDevice::message(uint8_t dest, std::span<const uint8_t> in, std::span
 		return 2;
 	}
 
-	if (dest == BROADCAST || dest == m_address) {
+	if (dest == BROADCAST && !reset_in_any_frame()) {
+		/* 315-6215 at 02F5 and 0400; any other frame to every node is
+		 * left unanswered (0613). */
+		if (in.size() >= 2 && in[0] == RESET && in[1] == RESET_CHECK) {
+			restart();
+		}
+	} else if (dest == BROADCAST || dest == m_address) {
 		uint32_t pos = 0;
 		uint32_t used = 0;
 		bool unknown = false;
+		bool restarted = false;
 		out[pos++] = STATUS_NORMAL;
 		size_t s = 0;
 		while (s < in.size()) {
 			const int32_t len = handle_message(in.subspan(s), out.subspan(pos), used);
+			if (len == RESTART) {
+				/* The reports built so far are lost. */
+				restart();
+				restarted = true;
+				break;
+			}
 			if (len < 0) {
 				/* The commands before it keep their reports (§ 4.2;
 				 * 315-6215 at 0547, epr-21868 at 072F). */
@@ -241,8 +260,8 @@ uint32_t JvsDevice::message(uint8_t dest, std::span<const uint8_t> in, std::span
 			s += static_cast<size_t>(len);
 		}
 		/* The status byte alone is not a reply when a node behind us
-		 * may still answer a broadcast (a reset, for instance). */
-		if (!m_next || pos > 1 || unknown) {
+		 * may still answer a broadcast. */
+		if (!restarted && (!m_next || pos > 1 || unknown)) {
 			size = pos;
 		}
 	}
@@ -255,23 +274,13 @@ uint32_t JvsDevice::message(uint8_t dest, std::span<const uint8_t> in, std::span
 
 int32_t JvsDevice::handle_message(std::span<const uint8_t> in, std::span<uint8_t> out, uint32_t &used)
 {
-	const uint32_t old_reset_counter = m_reset_counter;
-	m_reset_counter = 0;
 	used = 0;
 
 	switch (in[0]) {
 	case RESET:
-		/* Sent twice. */
-		if (in.size() < 2 || in[1] != RESET_CHECK) {
-			return refused(out, used, in.size(), 2);
-		}
-		m_reset_counter = old_reset_counter + 1;
-		if (m_reset_counter == 2) {
-			m_address = BROADCAST;
-			m_reset_counter = 0;
-			device_reset();
-		}
-		return 2;
+		/* One is enough and nothing answers (epr-21868 at 058B jumps to
+		 * 0000 whatever follows). The standard sends it twice. */
+		return reset_in_any_frame() ? RESTART : -1;
 
 	case IO_IDENTIFY: {
 		const char *id = device_id();
@@ -447,13 +456,12 @@ void JvsHost::load(const JvsHostState &in)
 
 void JvsDevice::save(JvsDeviceState &out) const
 {
-	out.reset_counter = m_reset_counter;
+	out.unused = 0;
 	out.address = m_address;
 }
 
 void JvsDevice::load(const JvsDeviceState &in)
 {
-	m_reset_counter = in.reset_counter;
 	m_address = in.address;
 }
 

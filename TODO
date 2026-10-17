@@ -145,11 +145,15 @@ jvs_837_13741.cpp from epr-21868 (a 315-6146; the I/O board of NASCAR,
 "io" in odin-games.json; the program is in the 18wheelr set of MAME). Both
 programs take the same commands, answer an unknown one with the reports
 before it, read on after a refused one, give analog channels of 8 bits
-and hold the coin counters at 3FFF. Not copied yet, HEURISTIC: a RESET
-restarts both boards (they jump to 0000; the 837-13741 does not check
-D9), here the node forgets its address after two and answers at once;
-the reply delay (JVS_TURNAROUND_BYTES in mie.cpp); the coin condition
-bits (always 0); the debounce of the switches and the coins; what the
+and hold the coin counters at 3FFF. One RESET restarts a board (both
+jump to 0000) and nothing answers: the 837-13741 takes F0 in any frame
+it reads and does not look at its D9, the 837-13551 takes F0 D9 at the
+head of a frame to every node, which it reads for nothing else
+(SET_ADDRESS aside). HEURISTIC: the board is ready again at once, where
+the programs first test their memory (the MIE program waits 1.27 s
+before its next frame). Not copied yet, HEURISTIC: the reply delay
+(JVS_TURNAROUND_BYTES in mie.cpp); the coin condition bits (always 0);
+the debounce of the switches and the coins; what the
 837-13551 answers for 0 players. The outputs of the boards: each game
 lists those the host uses ("outputs" in odin-games.json, read in its
 OUTPUT TEST); the nozzle vibration of BRAVEFF (outputs 2 and 5) shakes

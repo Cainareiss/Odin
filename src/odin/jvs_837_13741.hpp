@@ -50,6 +50,8 @@ protected:
 	bool swoutputs(std::span<const uint8_t> values) override;
 	/* 1E60: a refused 32 leaves its data to be read as commands */
 	bool refused_outputs_skip_data() const override { return false; }
+	/* 058B: F0 in any frame it reads (to every node or to its own) */
+	bool reset_in_any_frame() const override { return true; }
 };
 
 } /* namespace odin */

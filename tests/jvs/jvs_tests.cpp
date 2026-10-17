@@ -134,25 +134,33 @@ void test_jvs()
 	check(host.presence_line(), "presence line");
 	check(!host.address_set_line(), "no address after power-up");
 
-	/* Reset twice, broadcast; the node forgets its address. */
-	send(host, frame(0xFF, { 0xF0, 0xD9 }));
-	send(host, frame(0xFF, { 0xF0, 0xD9 }));
-	check(!host.address_set_line(), "address clear after reset");
-
 	/* Set address 1: reply status 1, report 1. */
 	std::vector<uint8_t> r = send(host, frame(0xFF, { 0xF1, 0x01 }));
 	check(r == std::vector<uint8_t>({ 0xE0, 0x00, 0x03, 0x01, 0x01, 0x05 }), "set address reply bytes");
 	check(host.address_set_line(), "address set line");
 	check(board.address() == 1, "node address 1");
 
-	/* A reset without its D9 is not one. */
-	send(host, frame(0xFF, { 0xF0, 0x00 }));
-	send(host, frame(0xFF, { 0xF0, 0x00 }));
-	check(host.address_set_line() && board.address() == 1, "reset without D9 ignored");
+	/* One reset to every node restarts the board, unanswered: no address,
+	 * no coins. */
+	board.inc_coin(0);
+	check(send(host, frame(0xFF, { 0xF0, 0xD9 })).empty() && !host.address_set_line(),
+	      "one reset, no reply, address clear");
+	send(host, frame(0xFF, { 0xF1, 0x01 }));
+	std::vector<uint8_t> d = decode(send(host, frame(0x01, { 0x21, 0x01 })), ok);
+	check(ok && d == std::vector<uint8_t>({ 0x01, 0x01, 0x00, 0x00 }), "the reset cleared the coins");
+
+	/* Without its D9, to the board alone, or in a frame to every node that
+	 * does not begin with it, a reset is not one; a frame to every node is
+	 * read for nothing else. */
+	check(send(host, frame(0xFF, { 0xF0, 0x00 })).empty(), "reset without D9 unanswered");
+	r = send(host, frame(0x01, { 0xF0, 0xD9 }));
+	check(r == std::vector<uint8_t>({ 0xE0, 0x00, 0x02, 0x02, 0x04 }), "reset to the board alone is unknown");
+	check(send(host, frame(0xFF, { 0x10, 0xF0, 0xD9 })).empty(), "frame to every node with no reset first");
+	check(host.address_set_line() && board.address() == 1, "none of them reset");
 
 	/* Identification. */
 	r = send(host, frame(0x01, { 0x10 }));
-	std::vector<uint8_t> d = decode(r, ok);
+	d = decode(r, ok);
 	const char *id = "SEGA ENTERPRISES,LTD.;I/O BD JVS;837-13551 ;Ver1.00;98/10";
 	check(ok && d.size() == 2 + std::strlen(id) + 1 && d[0] == 0x01 && d[1] == 0x01 &&
 	      std::memcmp(d.data() + 2, id, std::strlen(id) + 1) == 0, "ID request");
@@ -313,6 +321,14 @@ void test_837_13741()
 	d = decode(send(host, frame(0x01, { 0x32, 0x04, 0x11, 0x12, 0x13, 0x99 })), ok);
 	check(ok && d == std::vector<uint8_t>({ 0x02, 0x02, 0x01, 0x11, 0x01, 0x20, 0x01, 0x10 }),
 	      "13741: four bytes refused, their data read as 11, 12, 13 and the unknown 99");
+
+	/* F0 restarts it wherever it is, its second byte not read, and the
+	 * reports before it are lost. */
+	check(send(host, frame(0x01, { 0x11, 0xF0, 0x12 })).empty() && !host.address_set_line(),
+	      "13741: F0 inside a frame to the board restarts it, unanswered");
+	send(host, frame(0xFF, { 0xF1, 0x01 }));
+	check(send(host, frame(0xFF, { 0xF0, 0x00 })).empty() && !host.address_set_line(),
+	      "13741: F0 without D9 to every node restarts it");
 }
 
 } /* namespace */
