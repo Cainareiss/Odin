@@ -65,6 +65,8 @@ const Default DEFAULTS[] = {
 	{ Role::STICK_Y, nullptr, nullptr, "lefty" },
 	{ Role::STICK2_X, nullptr, nullptr, "rightx" },
 	{ Role::STICK2_Y, nullptr, nullptr, "righty" },
+	{ Role::GUN_X, nullptr, nullptr, "leftx" },
+	{ Role::GUN_Y, nullptr, nullptr, "lefty" },
 	{ Role::COIN1, "5", nullptr, nullptr },
 	{ Role::COIN2, "6", nullptr, nullptr },
 	{ Role::TEST, "F2", nullptr, nullptr },

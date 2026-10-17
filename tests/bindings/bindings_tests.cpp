@@ -183,8 +183,11 @@ void test_defaults()
 	      is_pad(Bindings::defaults(Role::BUTTON7, 0)[0], PadInput::Type::AXIS, SDL_CONTROLLER_AXIS_TRIGGERLEFT) &&
 	      is_pad(Bindings::defaults(Role::STICK_UP, 0)[0], PadInput::Type::AXIS_NEGATIVE, SDL_CONTROLLER_AXIS_LEFTY),
 	      "gears on RB, button 7 on LT, the left stick up");
-	check(Bindings::defaults(Role::GUN_X, 0).empty() && Bindings::defaults(Role::GEAR, 0).empty(),
-	      "the gun and the lever: none");
+	check(Bindings::defaults(Role::GUN_X, 0).size() == 1 &&
+	      is_pad(Bindings::defaults(Role::GUN_X, 0)[0], PadInput::Type::AXIS, SDL_CONTROLLER_AXIS_LEFTX) &&
+	      is_pad(Bindings::defaults(Role::GUN_Y, 1)[0], PadInput::Type::AXIS, SDL_CONTROLLER_AXIS_LEFTY),
+	      "the sight of a gun where the left stick points");
+	check(Bindings::defaults(Role::GEAR, 0).empty(), "the lever: none");
 }
 
 void test_game_lines()
