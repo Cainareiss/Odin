@@ -68,13 +68,18 @@ standard_panel()
 	return panel;
 }
 
+/* Every control of the panel where it rests; a channel no control takes
+ * at 8000 */
 MieBoard::Inputs
-idle_inputs()
+idle_inputs(const std::vector<GameControl> &panel)
 {
 	MieBoard::Inputs inputs = {};
 
 	for (uint16_t &channel : inputs.jvs_analog)
 		channel = 0x8000;
+	for (const GameControl &control : panel)
+		if (control.type == GameControl::Type::ANALOG)
+			inputs.jvs_analog[control.analog] = ControlPanel::rest(control.low);
 	return inputs;
 }
 
@@ -93,7 +98,7 @@ panel_of(const std::vector<GameControl> &controls)
 } /* namespace */
 
 ControlPanel::ControlPanel(const std::vector<GameControl> &controls, const Settings &settings, const std::string &game)
-	: m_controls(panel_of(controls)), m_bindings(m_controls, settings, game), m_inputs(idle_inputs()),
+	: m_controls(panel_of(controls)), m_bindings(m_controls, settings, game), m_inputs(idle_inputs(m_controls)),
 	  m_coins_were{}, m_coins{}
 {
 	m_positions.assign(m_controls.size(), 0);
@@ -114,6 +119,14 @@ ControlPanel::channel(const PadInput &input, GameControl::Low low, int16_t value
 	const int toward = input.inverted ? -value : value;
 
 	return static_cast<uint16_t>(std::clamp(over ? 0x8000 - toward : 0x8000 + toward, 0, 0xFFFF));
+}
+
+uint16_t
+ControlPanel::rest(GameControl::Low low)
+{
+	if (low == GameControl::Low::RELEASED)
+		return 0x0000;
+	return low == GameControl::Low::PRESSED ? 0xFFFF : 0x8000;
 }
 
 bool
@@ -152,7 +165,7 @@ ControlPanel::pressed(const HostState &host, const std::vector<HostInput> &input
 void
 ControlPanel::update(const HostState &host)
 {
-	MieBoard::Inputs inputs = idle_inputs();
+	MieBoard::Inputs inputs = idle_inputs(m_controls);
 
 	inputs.mainboard_test = pressed(host, m_bindings.cabinet(Role::BOARD_TEST), 0);
 	inputs.mainboard_service = pressed(host, m_bindings.cabinet(Role::BOARD_SERVICE), 0);

@@ -71,6 +71,9 @@ public:
 	 * game wants them: a stick from -32768 (left or up), a trigger from 0
 	 * (let go). */
 	static uint16_t channel(const PadInput &input, GameControl::Low low, int16_t value);
+	/* The channel of a control nothing moves: a stick or a lever centred,
+	 * a pedal let go. */
+	static uint16_t rest(GameControl::Low low);
 
 private:
 	bool held(const HostState &host, const HostInput &input, unsigned player) const;

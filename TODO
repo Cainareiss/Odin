@@ -174,8 +174,8 @@ light guns (evdev.cpp, rawinput.cpp), wheels and their pedals, the drive
 board and its force (drive_board_838_13366.cpp), the outputs to other
 programs (outputs_network.cpp), keys for the analog channels, gamepads
 known again from one run to the next, the interface that writes odin.ini.
-Without a gamepad an analog channel stays at 8000, the pedals too, where a
-pedal at rest reads released.
+Without a gamepad a control rests: a stick or a lever centred, a pedal let
+go (the gas and brake of SGNASCAR read 00 in its INPUT TEST).
 
 AICA (src/odin/aica.cpp + arm7.cpp): control block, timers, interrupts,
 DMA, RTC and the ARM7 are in, and the voices (aica_voice.cpp: sampler,

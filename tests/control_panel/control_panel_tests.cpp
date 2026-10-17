@@ -195,8 +195,9 @@ void test_game()
 	      "FOG belongs to player 2: his button2 (S), not that of player 1");
 
 	MieBoard::Inputs inputs = after(panel, {});
-	check(inputs.jvs_analog[0] == 0x8000 && inputs.jvs_analog[1] == 0x8000 && inputs.jvs_analog[3] == 0x8000 &&
-	      inputs.jvs_analog[4] == 0x8000, "no pad: the channels at 8000");
+	check(inputs.jvs_analog[0] == 0x8000 && inputs.jvs_analog[3] == 0x8000 && inputs.jvs_analog[4] == 0x8000 &&
+	      inputs.jvs_analog[2] == 0x8000, "no pad: wheel, lever and aim centred, a channel of no control at 8000");
+	check(inputs.jvs_analog[1] == 0x0000, "no pad: gas let go");
 	inputs = after(panel, {}, &pad);
 	check(inputs.jvs_analog[0] == 0x8000 && inputs.jvs_analog[1] == 0x0000 && inputs.jvs_analog[3] == 0x8000,
 	      "a pad at rest: wheel and lever centred, gas let go");
@@ -298,6 +299,9 @@ void test_channel()
 	      ControlPanel::channel(trigger, Low::RELEASED, 16384) == 0x8000 &&
 	      ControlPanel::channel(trigger, Low::RELEASED, -5) == 0x0000, "a trigger: 0000 to FFFF");
 	check(ControlPanel::channel(trigger, Low::PRESSED, 0) == 0xFFFF, "low pressed: turned over");
+	check(ControlPanel::rest(Low::RELEASED) == 0x0000 && ControlPanel::rest(Low::PRESSED) == 0xFFFF &&
+	      ControlPanel::rest(Low::LEFT) == 0x8000 && ControlPanel::rest(Low::DOWN) == 0x8000,
+	      "at rest: a pedal let go, a stick centred");
 
 	const PadInput inverted{ PadInput::Type::AXIS, SDL_CONTROLLER_AXIS_LEFTY, true };
 
