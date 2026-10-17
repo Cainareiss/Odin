@@ -17,8 +17,9 @@
  */
 
 /* Unit tests for the settings file and the bindings: the lines read, the
- * names of keys and pad inputs, the defaults of the roles, the lines of a
- * game by the ids of its controls, and what is refused.
+ * names of keys and pad inputs, the defaults of the roles, the keys the
+ * list of games gives a button, the lines of a game by the ids of its
+ * controls, and what is refused.
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
  *            -I src $(sdl2-config --cflags) tests/bindings/bindings_tests.cpp src/odin/bindings.cpp \
@@ -395,6 +396,33 @@ void test_game_lines()
 	      "a lever: GEAR_UP and GEAR_DOWN");
 }
 
+void test_own_keys()
+{
+	std::vector<GameControl> panel = {
+		control("left", GameControl::Type::BUTTON, Role::LEFT, 0),
+		control("up", GameControl::Type::BUTTON, Role::BUTTON5, 1),
+		control("boost", GameControl::Type::BUTTON, Role::BUTTON1, 0),
+	};
+	Settings settings;
+
+	panel[0].keys = { "X", "Space" };
+	panel[1].keys = { "Up" };
+	panel[2].keys = { "nope" };
+	settings.parse("[controls.airtrix]\nup = key:F1\n", "test");
+	const Bindings own(panel, Settings(), "airtrix");
+	const Bindings lined(panel, settings, "airtrix");
+
+	check(own.of(0).size() == 3 && is_key(own.of(0)[0], SDLK_x) && is_key(own.of(0)[1], SDLK_SPACE) &&
+	      is_pad(own.of(0)[2], PadInput::Type::BUTTON, SDL_CONTROLLER_BUTTON_DPAD_LEFT),
+	      "the keys the list gives a button take the place of those of its role; its pad input stays");
+	check(own.of(1).size() == 2 && is_key(own.of(1)[0], SDLK_UP) &&
+	      is_pad(own.of(1)[1], PadInput::Type::BUTTON, SDL_CONTROLLER_BUTTON_LEFTSHOULDER),
+	      "for player 2, in place of the keys of player 2");
+	check(own.of(2).size() == 1 && is_pad(own.of(2)[0], PadInput::Type::BUTTON, SDL_CONTROLLER_BUTTON_A),
+	      "a name that is no key: no key, the pad input stays");
+	check(lined.of(1).size() == 1 && is_key(lined.of(1)[0], SDLK_F1), "a line of the settings takes their place");
+}
+
 } /* namespace */
 
 int main(int argc, char **argv)
@@ -408,6 +436,7 @@ int main(int argc, char **argv)
 	test_analog_lines();
 	test_mouse();
 	test_game_lines();
+	test_own_keys();
 
 	std::printf("\n%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures ? 1 : 0;

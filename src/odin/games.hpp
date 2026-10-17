@@ -93,6 +93,10 @@ struct GameControl {
 	std::vector<Position> positions;
 	Role role;
 	uint8_t player;		/* 0 or 1 */
+	/* The keys of a button in place of those of its role (SDL names), as
+	 * the drivers of MAME give some controls their own keys; none: those
+	 * of the role */
+	std::vector<std::string> keys;
 };
 
 /* An output of the I/O board of a cabinet, with the name its OUTPUT TEST

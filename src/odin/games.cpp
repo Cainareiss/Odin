@@ -193,7 +193,8 @@ is_id(const char *text)
 }
 
 /* A control: {"name": ..., "id": ..., then "switch", "analog" with "low",
- * or "positions"; "role", and "player" when it is 2}. */
+ * or "positions"; "role", and "player" when it is 2; a switch may have
+ * "keys", a list of key names}. */
 std::optional<GameControl>
 parse_control(const json_t *control)
 {
@@ -206,15 +207,24 @@ parse_control(const json_t *control)
 	const char *const id = json_string_value(json_object_get(control, "id"));
 	const char *const role = json_string_value(json_object_get(control, "role"));
 	const json_t *const player = json_object_get(control, "player");
+	const json_t *const keys = json_object_get(control, "keys");
 	const auto parsed_role = role ? parse_role(role) : std::nullopt;
 
 	if (!name || !name[0] || !is_id(id) || (button != nullptr) + (analog != nullptr) + (positions != nullptr) != 1 ||
-	    !parsed_role || (player && json_integer_value(player) != 1 && json_integer_value(player) != 2))
+	    !parsed_role || (player && json_integer_value(player) != 1 && json_integer_value(player) != 2) ||
+	    (keys && (!button || !json_array_size(keys))))
 		return std::nullopt;
 	out.name = name;
 	out.id = id;
 	out.role = *parsed_role;
 	out.player = player ? static_cast<uint8_t>(json_integer_value(player) - 1) : 0;
+	for (size_t k = 0; k < json_array_size(keys); k++) {
+		const char *const key = json_string_value(json_array_get(keys, k));
+
+		if (!key || !key[0])
+			return std::nullopt;
+		out.keys.emplace_back(key);
+	}
 	if (button) {
 		const auto sw = parse_switch(button);
 

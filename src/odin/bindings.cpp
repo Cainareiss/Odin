@@ -276,6 +276,20 @@ Bindings::Bindings(const std::vector<GameControl> &panel, const Settings &settin
 			continue;
 		}
 		m_controls[c][0] = defaults(control.role, control.player);
+		if (!control.keys.empty()) {
+			std::vector<HostInput> own;
+
+			for (const std::string &key : control.keys)
+				if (const auto input = HostInput::parse("key:" + key))
+					own.push_back(*input);
+				else
+					std::fprintf(stderr, "ERROR: controls: %s: %s: not a key: %s\n", game.c_str(),
+					             control.id.c_str(), key.c_str());
+			for (const HostInput &input : m_controls[c][0])
+				if (input.kind != HostInput::Kind::KEY)
+					own.push_back(input);
+			m_controls[c][0] = std::move(own);
+		}
 		for (const auto &[role, name] : MOUSE_DEFAULTS)
 			if (aims && control.player == 0 && role == control.role)
 				m_controls[c][0].push_back(*HostInput::parse(std::string("mouse:") + name));
