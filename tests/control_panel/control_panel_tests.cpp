@@ -278,9 +278,27 @@ void test_keys()
 	after(both, {SDLK_LEFT});
 	after(both, {SDLK_LEFT});
 	pad.axes[SDL_CONTROLLER_AXIS_LEFTX] = 30000;
-	check(after(both, {SDLK_LEFT}, &pad).jvs_analog[0] == 0x8000 + 30000, "the stick further from rest: the stick");
-	pad.axes[SDL_CONTROLLER_AXIS_LEFTX] = 1000;
-	check(after(both, {SDLK_LEFT}, &pad).jvs_analog[0] == 0x4000, "the keys further: the keys");
+	check(after(both, {SDLK_LEFT}, &pad).jvs_analog[0] == 0x8000 + 30000,
+	      "the stick moved more than the keys this frame: the stick");
+	check(after(both, {SDLK_LEFT}, &pad).jvs_analog[0] == 0x4000, "the stick still, the keys still moving: the keys");
+	pad.axes[SDL_CONTROLLER_AXIS_LEFTX] = 30000 + 0x300;
+	check(after(both, {}, &pad).jvs_analog[0] == 0x5000,
+	      "let go, the keys on their way back, the stick moved less than 400: the keys keep the wheel");
+	for (int i = 0; i < 3; i++)
+		after(both, {}, &pad);
+	pad.axes[SDL_CONTROLLER_AXIS_LEFTX] = 30000 + 0x500;
+	check(after(both, {}, &pad).jvs_analog[0] == 0x8000 + 30000 + 0x500,
+	      "the keys at rest, the stick 500 from where it was kept, little by little: the stick takes it");
+	check(after(both, {}).jvs_analog[0] == 0x8000, "the pad gone: the keys again, at rest");
+	check(after(both, {}, &pad).jvs_analog[0] == 0x8000, "the pad back, its stick where it was: the keys keep it");
+
+	ControlPanel plugged(cabinet(), Settings(), "sgnascar");
+
+	for (int i = 0; i < 5; i++)
+		after(plugged, {SDLK_UP});
+	pad = PadState{};
+	check(after(plugged, {SDLK_UP}, &pad).jvs_analog[1] == 0x6000,
+	      "a pad plugged while Up presses the gas, its trigger let go: the gas goes on down");
 
 	Settings settings;
 
@@ -348,9 +366,10 @@ void test_bindings_from_settings()
 
 	pad.axes[SDL_CONTROLLER_AXIS_LEFTX] = 1000;
 	pad.axes[SDL_CONTROLLER_AXIS_RIGHTX] = -20000;
-	check(after(panel, {}, &pad).jvs_analog[0] == 0x8000 - 20000, "of two axes, the one furthest from rest");
+	check(after(panel, {}, &pad).jvs_analog[0] == 0x8000 - 20000, "of two axes that moved, the one that moved more");
 	pad.axes[SDL_CONTROLLER_AXIS_LEFTX] = 30000;
-	check(after(panel, {}, &pad).jvs_analog[0] == 0x8000 + 30000, "whichever it is");
+	check(after(panel, {}, &pad).jvs_analog[0] == 0x8000 + 30000, "then the other when it moves");
+	check(after(panel, {}, &pad).jvs_analog[0] == 0x8000 + 30000, "and it keeps the wheel while neither moves");
 	check(after(panel, {SDLK_SPACE}).jvs_player[0] == 0x1000 && after(panel, {SDLK_z}).jvs_player[0] == 0,
 	      "a key of the settings in the place of the default");
 }

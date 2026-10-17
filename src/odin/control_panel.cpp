@@ -103,8 +103,11 @@ ControlPanel::ControlPanel(const std::vector<GameControl> &controls, const Setti
 {
 	m_positions.assign(m_controls.size(), 0);
 	m_levers_were.assign(m_controls.size(), { false, false });
-	for (const GameControl &control : m_controls)
-		m_keyed.push_back(rest(control.low));
+	m_owner.assign(m_controls.size(), 0);
+	for (size_t c = 0; c < m_controls.size(); c++) {
+		m_keyed.push_back(rest(m_controls[c].low));
+		m_kept.emplace_back(m_bindings.of(c).size() + 1, rest(m_controls[c].low));
+	}
 }
 
 /* A stick turned over keeps its centre at 8000. */
@@ -174,6 +177,50 @@ ControlPanel::pressed(const HostState &host, const std::vector<HostInput> &input
 	return false;
 }
 
+/* The keys take an analog control a step a frame toward the end they push
+ * to, or back to rest. Of the keys and the axes bound, the last that moved
+ * works it: one that went further than MOVED from where it was last kept
+ * takes it, the one that went furthest if more than one did. */
+uint16_t
+ControlPanel::analog(const HostState &host, size_t c)
+{
+	const GameControl &control = m_controls[c];
+	const bool back = pressed(host, m_bindings.toward(c, false), control.player);
+	const bool on = pressed(host, m_bindings.toward(c, true), control.player);
+	const int target = back == on ? rest(control.low) : end(control.low, on);
+	int keyed = m_keyed[c];
+
+	keyed = std::abs(target - keyed) <= KEY_STEP ? target : keyed + (target > keyed ? KEY_STEP : -KEY_STEP);
+	m_keyed[c] = static_cast<uint16_t>(keyed);
+
+	const std::vector<HostInput> &axes = m_bindings.of(c);
+	const PadState *const pad = host.pads[control.player];
+	std::vector<uint16_t> &kept = m_kept[c];
+	std::vector<uint16_t> now(axes.size() + 1, 0);
+	std::vector<bool> there(axes.size() + 1, false);
+	int moved = MOVED;
+
+	now[0] = m_keyed[c];
+	there[0] = true;
+	for (size_t s = 1; s < now.size(); s++) {
+		const HostInput &input = axes[s - 1];
+
+		if (input.kind != HostInput::Kind::PAD || !pad)
+			continue;
+		now[s] = channel(input.pad, control.low, pad->axes[input.pad.index]);
+		there[s] = true;
+	}
+	if (!there[m_owner[c]])
+		m_owner[c] = 0;
+	for (size_t s = 0; s < now.size(); s++)
+		if (there[s] && std::abs(now[s] - kept[s]) > moved) {
+			moved = std::abs(now[s] - kept[s]);
+			m_owner[c] = s;
+		}
+	kept[m_owner[c]] = now[m_owner[c]];
+	return now[m_owner[c]];
+}
+
 void
 ControlPanel::update(const HostState &host)
 {
@@ -204,33 +251,9 @@ ControlPanel::update(const HostState &host)
 				inputs.jvs_player[sw.player] |= sw.mask;
 			break;
 		}
-		case GameControl::Type::ANALOG: {
-			/* The keys take it a step a frame toward the end they push
-			 * to, or back to rest; then of the keys and the axes
-			 * bound, the one furthest from where it rests */
-			const int at_rest = rest(control.low);
-			const bool back = pressed(host, m_bindings.toward(c, false), control.player);
-			const bool on = pressed(host, m_bindings.toward(c, true), control.player);
-			const int target = back == on ? at_rest : end(control.low, on);
-			int keyed = m_keyed[c];
-
-			keyed = std::abs(target - keyed) <= KEY_STEP ? target : keyed + (target > keyed ? KEY_STEP : -KEY_STEP);
-			m_keyed[c] = static_cast<uint16_t>(keyed);
-
-			const PadState *const pad = host.pads[control.player];
-			uint16_t value = m_keyed[c];
-
-			for (const HostInput &input : m_bindings.of(c)) {
-				if (input.kind != HostInput::Kind::PAD || !pad)
-					continue;
-				const uint16_t axis = channel(input.pad, control.low, pad->axes[input.pad.index]);
-
-				if (std::abs(axis - at_rest) > std::abs(value - at_rest))
-					value = axis;
-			}
-			inputs.jvs_analog[control.analog] = value;
+		case GameControl::Type::ANALOG:
+			inputs.jvs_analog[control.analog] = analog(host, c);
 			break;
-		}
 		}
 	}
 	for (unsigned slot = 0; slot < 2; slot++) {

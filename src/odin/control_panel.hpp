@@ -62,6 +62,9 @@ public:
 	 * as fast (the step of xemu's Chihiro wheel): a choice of the
 	 * emulator. */
 	static constexpr int KEY_STEP = 0x1000;
+	/* An input takes an analog control from another when it moves this
+	 * much: above the noise of a stick, a choice of the emulator. */
+	static constexpr int MOVED = 0x400;
 
 	ControlPanel(const std::vector<GameControl> &controls, const Settings &settings, const std::string &game);
 
@@ -85,12 +88,15 @@ public:
 private:
 	bool held(const HostState &host, const HostInput &input, unsigned player) const;
 	bool pressed(const HostState &host, const std::vector<HostInput> &inputs, unsigned player) const;
+	uint16_t analog(const HostState &host, size_t control);
 
 	std::vector<GameControl> m_controls;
 	Bindings m_bindings;
 	MieBoard::Inputs m_inputs;
 	std::vector<size_t> m_positions;		/* of each lever */
 	std::vector<uint16_t> m_keyed;			/* the channel where the keys have taken it */
+	std::vector<size_t> m_owner;			/* the input that works it: 0 the keys, then its axes */
+	std::vector<std::vector<uint16_t>> m_kept;	/* where each of them was last kept */
 	std::vector<std::array<bool, 2>> m_levers_were;	/* GEAR_DOWN, GEAR_UP at the last update */
 	std::array<bool, 2> m_coins_were;
 	std::array<bool, 2> m_coins;			/* gone in, not read yet */

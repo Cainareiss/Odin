@@ -178,7 +178,7 @@ Without a gamepad a control rests: a stick or a lever centred, a pedal let
 go (the gas and brake of SGNASCAR read 00 in its INPUT TEST). A key moves
 an analog control 1000 a frame toward the end it pushes to, and lets it
 back as fast (the step of xemu's Chihiro wheel: a choice of the emulator);
-of the keys and the axes bound, the furthest from rest wins.
+of the keys and the axes bound, the last that moved 400 or more works it.
 
 AICA (src/odin/aica.cpp + arm7.cpp): control block, timers, interrupts,
 DMA, RTC and the ARM7 are in, and the voices (aica_voice.cpp: sampler,
