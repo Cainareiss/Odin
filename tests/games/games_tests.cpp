@@ -338,14 +338,19 @@ void test_shipped_chips()
 		chips++;
 		for (const char *c = text; c[0] && c[1]; c += 2)
 			b.push_back(static_cast<uint8_t>(std::stoul(std::string(c, 2), nullptr, 16)));
+		const char *const game = json_string_value(json_object_get(json_array_get(roms, i), "name"));
+		/* AIRTRIX keeps the calibration of its board there (0x26 YAW, 0x29 ROLL), made by its own menu */
+		const bool calibrated = std::string(game) != "airtrix" || (b.size() == 128 && b[0x26] && b[0x29]);
+
 		if (b.size() == 128 && std::equal(b.begin(), b.begin() + 64, b.begin() + 64) &&
-		    bootrom_crc(b.data(), 62) == (b[62] | b[63] << 8) && b[5] == 1)
+		    bootrom_crc(b.data(), 62) == (b[62] | b[63] << 8) && b[5] == 1 && calibrated)
 			right++;
 		else
 			std::printf("not right: %s\n", json_string_value(json_object_get(json_array_get(roms, i), "name")));
 	}
 	json_decref(root);
-	check(chips == 6 && right == 6, "the six games have the chip of a new U.S.A. cabinet, its CRC right");
+	check(chips == 6 && right == 6,
+	      "the six games have the chip of a new U.S.A. cabinet, its CRC right, the board of AIRTRIX calibrated");
 }
 
 void test_lists(const std::string &dir)
