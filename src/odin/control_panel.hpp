@@ -83,6 +83,8 @@ public:
 	void update(const HostState &host);
 	/* The inputs of the last update; a coin goes in once. */
 	void fill(MieBoard::Inputs &inputs);
+	/* An analog channel as the last update left it */
+	uint16_t analog_channel(size_t channel) const { return m_inputs.jvs_analog[channel]; }
 
 	/* The channel for that value of an axis, the low values on the way the
 	 * game wants them: a stick from -32768 (left or up), a trigger from 0

@@ -19,6 +19,7 @@
 #ifndef ODIN_DRIVE_BOARD_HPP
 #define ODIN_DRIVE_BOARD_HPP
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <span>
@@ -52,17 +53,30 @@ struct DriveBoard {
 		return static_cast<uint8_t>(~set);
 	}
 
-	/* How hard the force of a command shakes a pad, 0 to 0xFFFF: its size
-	 * against the strongest, either way; none for the other commands.
-	 * HEURISTIC: a pad has no direction. */
-	static uint16_t shake_of(uint8_t command)
+	/* The force of a command, -MOST (all to the left) to MOST (all to the
+	 * right); none for the other commands */
+	static int force_of(uint8_t command)
 	{
 		if (command >= 0x80)
 			return 0;
+		return command < 0x40 ? -command : command - 0x40;
+	}
 
-		const unsigned force = command & MOST;
+	/* How hard a pad shakes for a jump of the force from one frame to the
+	 * next, 0 to 0xFFFF, the wheel having moved by wheel_moved (0 to 1 of
+	 * its way) over the last frames. NASCAR gives one torque of its physics
+	 * (0C03F34A: a float times 63, 40 added when it is below 0): the hold that
+	 * centres the wheel and the damping that follows its moves with the
+	 * shocks. What the wheel moves explains is no shock: a step of 9 % of
+	 * the way gives a jump of 18 at most, a stick thrown to the end up to
+	 * 39, a wall up to 51 with the wheel still (measured in Odin,
+	 * 17/10/2026). HEURISTIC: 4 of the jump and 200 times the move of the
+	 * wheel go, the rest twice over against MOST. */
+	static uint16_t jolt_of(int jump, double wheel_moved)
+	{
+		const double shock = std::abs(jump) - 4 - 200 * wheel_moved;
 
-		return static_cast<uint16_t>(std::lround(force * 65535.0 / MOST));
+		return shock <= 0 ? 0 : static_cast<uint16_t>(std::lround(std::min(1.0, 2 * shock / MOST) * 0xFFFF));
 	}
 };
 

@@ -58,16 +58,17 @@ public:
 	/* The outputs of the board after a frame: the pad of a player shakes
 	 * while a rumble output of that player is on; the pad of player 1 also
 	 * as hard as the vibration device the sound of the optional board
-	 * feeds, when it feels it and no mute output is on, or as the force
-	 * the drive board is told, when it feels it. */
+	 * feeds, when it feels it and no mute output is on, or as the shocks
+	 * the drive board is told, when it feels them. */
 	void show(std::span<const uint8_t> outputs, std::span<const int16_t> option_sound);
 	/* No pad shakes (the emulation stops) */
 	void quiet();
 	/* EXPERIMENTAL: the pad of player 1 feels the sound of the optional
 	 * board, as the vibration device of the cabinet it feeds */
 	void feel_option_board(bool on) { m_felt = on; }
-	/* EXPERIMENTAL: the pad of player 1 feels the forces the drive board
-	 * is told, TX0 on that output (0: none), the stronger of the two */
+	/* EXPERIMENTAL: the pad of player 1 feels the shocks among the forces
+	 * the drive board is told, TX0 on that output (0: none), not what the
+	 * moves of the wheel give; the stronger of the two */
 	void feel_drive_board(unsigned first_output) { m_drive_output = first_output; }
 
 	static constexpr int MOUSE_MOVED = 2;
@@ -106,7 +107,12 @@ private:
 	bool m_felt = false;
 	Uint16 m_felt_level = 0;	/* how hard the felt sound shakes, smoothed */
 	unsigned m_drive_output = 0;
-	Uint16 m_drive_level = 0;	/* how hard the felt force shakes */
+	Uint16 m_drive_level = 0;	/* how hard the felt shocks shake */
+	int m_force_was = 0;		/* the force of the last frame */
+	int m_wheel_channel = -1;	/* the steering wheel of player 1, if any */
+	uint16_t m_wheel_was = 0;
+	std::array<double, 6> m_wheel_moves{};	/* its moves over the last frames */
+	size_t m_wheel_move = 0;
 	std::array<Pad, 2> m_pads;	/* of each player */
 	MouseState m_mouse;
 	bool m_mouse_seen;		/* it has moved on the window */

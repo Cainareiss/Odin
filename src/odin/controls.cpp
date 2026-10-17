@@ -33,6 +33,9 @@ Controls::Controls(Keyboard &keys, const std::vector<GameControl> &controls, con
 	: m_keys(keys), m_panel(controls, settings, game), m_outputs(outputs), m_on(false), m_mouse_seen(false),
 	  m_mouse_placed(false), m_mouse_from_x(0), m_mouse_from_y(0), m_mouse_fresh{}, m_mouse_release{}
 {
+	for (const GameControl &control : controls)
+		if (control.type == GameControl::Type::ANALOG && control.role == Role::STEER && control.player == 0)
+			m_wheel_channel = control.analog;
 	const char *const chosen = std::getenv("ODIN_CONTROLLERS");
 
 	if (chosen && !std::strcmp(chosen, "none"))
@@ -204,10 +207,19 @@ Controls::show(std::span<const uint8_t> outputs, std::span<const int16_t> option
 
 	m_felt_level = m_felt && !still ? AudioOut::smoothed(m_felt_level, AudioOut::shake_of(option_sound)) : 0;
 
-	/* A force shakes at once and dies away as a shake does */
-	const Uint16 force = m_drive_output ? DriveBoard::shake_of(DriveBoard::command(outputs, m_drive_output)) : 0;
+	/* A shock shakes at once and dies away as a shake does; what the moves
+	 * of the wheel give is no shock */
+	const int force = m_drive_output ? DriveBoard::force_of(DriveBoard::command(outputs, m_drive_output)) : 0;
+	const uint16_t wheel = m_wheel_channel < 0 ? 0 : m_panel.analog_channel(static_cast<size_t>(m_wheel_channel));
 
-	m_drive_level = std::max(force, AudioOut::smoothed(m_drive_level, force));
+	m_wheel_moves[m_wheel_move++ % m_wheel_moves.size()] = std::abs(wheel - m_wheel_was) / 65535.0;
+	m_wheel_was = wheel;
+
+	const double moved = *std::max_element(m_wheel_moves.begin(), m_wheel_moves.end());
+	const Uint16 jolt = DriveBoard::jolt_of(force - m_force_was, moved);
+
+	m_force_was = force;
+	m_drive_level = std::max(jolt, AudioOut::smoothed(m_drive_level, jolt));
 
 	const Uint16 felt = std::max(m_felt_level, m_drive_level) / FELT_STEP * FELT_STEP;
 

@@ -260,17 +260,21 @@ twice its level, none below 1/32, over about four frames; a pad is not a
 shaker). The bass shakers of SGNASCAR take its rear sound (deluxe wiring:
 838-13578 SE out to the 838-13142 BASS AMP, its MUTE on output 14 of the
 I/O board, "BASS SHAKER MUTE"; OUTPUT TEST, BASS SHAKER (FRONT) clears it;
-the game clears it in a race): "option_vibration" too, still while the
-"mute" output is on; the game mutes them when it hits a wall, the wheel
-takes the shock: the pad also shakes as hard as the force told to the
-drive board (drive_board.hpp, the command on outputs 15-22, EXPERIMENTAL,
-HEURISTIC: its size against 3F, either way, at once and dying away over
-about four frames; the stronger of the two). Not known: why BASS SHAKER
-(FRONT+REAR) changes no output here, and the REAR ON output of the
-wiring. The deluxe harness ties
-"GND (FOR DX)" (CN8 pin 23 of the 837-13844), which the game reads as 1P
-PUSH1 and shows those two lines of its OUTPUT TEST for; the list does not
-tie it (standard cabinet).
+the game clears it in a race, and sets it again when it hits a wall): left
+off the pad, a constant hum there; its drive board has the shocks. Its
+force (0C03F34A, Ghidra): one torque of its physics, a float times 63, 40
+added when it is below 0, the sign turned over on the deluxe; the menus
+use a spring on the position of the wheel (0C03F2B8). The pad of player 1
+feels the jumps of that force from frame to frame (drive_board.hpp,
+EXPERIMENTAL, HEURISTIC: 4 of the jump and 200 times the move of the
+wheel over the last six frames go, the rest twice over against 3F; a
+step of 9 % of the wheel gives 18 at most, a stick thrown to the end 39,
+a wall 51 with the wheel still, measured 17/10/2026). Not known: why BASS
+SHAKER (FRONT+REAR) changes no output here, and the REAR ON output of the
+wiring. The deluxe harness ties "GND (FOR DX)" (CN8 pin 23 of the
+837-13844), which the game reads as 1P PUSH1 and shows those two lines of
+its OUTPUT TEST for, and turns its force over for; the list does not tie
+it (standard cabinet).
 The ARM7 runs on the 22.5792 MHz bus clock, eight times MAME's
 figure: the SGNASCAR cabinet shows its sound driver ready within a frame
 of each reload, 20 MHz at least (HEURISTIC: no wait state). It costs a
