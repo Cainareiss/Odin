@@ -338,9 +338,6 @@ Hikaru::Hikaru(const Game &game, const RomBoard::Config &rombd, bool verbose)
 		}
 	}
 
-	if (game.name == "sgnascar")
-		std::printf("Installed patches for '%s'\n", game.name.c_str());
-
 	m_resetting = false;
 }
 
@@ -715,8 +712,6 @@ Hikaru::run_cpu(unsigned which, int cycles)
 		m_hooked[which] = true;
 		if (which == SLAVE)
 			m_sh[which]->set_hook(0x0C002030);
-		else if (m_game.name == "sgnascar")
-			m_sh[which]->set_hook(0x0C00BC9A);
 	}
 
 	m_sh[which]->run(cycles);

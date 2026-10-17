@@ -506,10 +506,16 @@ Game patches: those of Valkyrie are gone, the six demo loops run without
 them: airtrix 0x0C010F9A (660-frame I/O board wait shortened), braveff
 0x0C0407D0/0x0C0D522A/0x0C05B53E (forced results, purpose unknown),
 pharrier 0x0C01C322 (AICA loop), sgnascar 0x0C0130CE (600-frame I/O board
-wait), the BOOTROM EEPROM patch (0x8E6). Kept as a HACK (hikaru_bus.cpp,
-Bus::hook): sgnascar 0x0C00BC9A, because the X76F100 image is the Air Trix
-one (MAME has no NASCAR dump) and the BOOTROM region check answers
-"ERROR 7" with it.
+wait), the BOOTROM EEPROM patch (0x8E6), and sgnascar 0x0C00BC9A. That
+last one gave the region check of the BIOS (0x0C00BC5C) the answer it
+wanted; it was put down to the X76F100 image, but the check reads the
+header of the game in the first EPROM (bytes 0x3F3 to 0x3F5 of bus page
+0x10, opened by 0x0C00B938) against bytes 4, 7 and 8 of the system
+settings of the MIE chip ("ERROR 7", 4 and 5): byte 4 is the cabinet type,
+and SGNASCAR allows type 1 alone (one player a cabinet, as its manual
+sets it), where AIRTRIX, PHARRIER and VON4 allow 1 and 2 and BRAVEFF any.
+A blank chip (the block of the BOOTROM: 2 players) or one set to 2
+players gives "ERROR 7", as the board would; the chip of the list passes.
 
 Bridge DMA (memctl.cpp): the transfer completes at the start
 write, like MAME. HEURISTIC: the real 315-6154 takes time, but games

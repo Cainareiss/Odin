@@ -1051,21 +1051,13 @@ Hikaru::Bus::unanswered(bool is_write, uint32_t addr, uint32_t size, uint64_t va
 	m_board.tell_error(m_board.cpu_string(m_which), text);
 }
 
-/* The instruction at the address the board looks at is about to run. For the
- * slave it is its idle loop. For the master of SGNASCAR, HACK: the region
- * check of the BIOS (0x0C00BC5C) reads the X76F100 of the ROM board, but
- * the only dump (x76f100.ic85, marked bad in MAME) comes from another board
- * and the check ends on "ERROR 7"; it is given the answer it wants. Needs
- * the dump of a NASCAR ROM board. */
+/* The instruction at the address the board looks at is about to run: the
+ * idle loop of the slave. */
 void
 Hikaru::Bus::hook()
 {
-	Sh4 &cpu = *m_board.m_sh[m_which];
-
 	if (m_which == SLAVE)
 		m_board.slave_idle_loop();
-	else if ((cpu.pc() & 0x1FFFFFFF) == 0x0C00BC9A)
-		cpu.set_reg(3, 0xFF);
 }
 
 } /* namespace odin */
