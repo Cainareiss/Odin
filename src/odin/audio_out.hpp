@@ -22,6 +22,7 @@
 #define ODIN_AUDIO_OUT_HPP
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <memory>
 #include <span>
@@ -36,13 +37,23 @@ class AudioOut {
 public:
 	enum class Mode : uint8_t { MAIN, OPTION, MIX, QUAD };
 
-	/* Left and right pairs of each board into the frames of the mode */
+	/* A gain of 1, the optional board as it is: gains count in 2^-15 */
+	static constexpr int32_t UNITY = 1 << 15;
+
+	/* The gain of a level in dB */
+	static int32_t gain_of(double db) { return static_cast<int32_t>(std::lround(UNITY * std::pow(10.0, db / 20.0))); }
+
+	/* Left and right pairs of each board into the frames of the mode; in
+	 * the mix the optional board at option_gain, as the volume of its
+	 * speakers on the cabinet */
 	static void interleave(Mode mode, std::span<const int16_t> main, std::span<const int16_t> option,
-	                       std::vector<int16_t> &out)
+	                       int32_t option_gain, std::vector<int16_t> &out)
 	{
 		const auto at = [](std::span<const int16_t> s, size_t i) { return i < s.size() ? s[i] : int16_t{ 0 }; };
-		const auto sum = [](int16_t a, int16_t b) {
-			return static_cast<int16_t>(std::clamp(a + b, -0x8000, 0x7FFF));
+		const auto sum = [option_gain](int16_t a, int16_t b) {
+			const int64_t lowered = (static_cast<int64_t>(b) * option_gain) >> 15;
+
+			return static_cast<int16_t>(std::clamp<int64_t>(a + lowered, -0x8000, 0x7FFF));
 		};
 
 		out.clear();
@@ -66,8 +77,9 @@ public:
 		}
 	}
 
-	/* nullptr when the host gives no sound device */
-	static std::unique_ptr<AudioOut> make(Mode mode);
+	/* nullptr when the host gives no sound device; the optional board at
+	 * option_db in the mix */
+	static std::unique_ptr<AudioOut> make(Mode mode, double option_db);
 	~AudioOut();
 	AudioOut(const AudioOut &) = delete;
 	AudioOut &operator=(const AudioOut &) = delete;
@@ -78,10 +90,14 @@ public:
 	void play(std::span<const int16_t> main, std::span<const int16_t> option);
 
 private:
-	AudioOut(uint32_t device, Mode mode) : m_device(device), m_mode(mode) {}
+	AudioOut(uint32_t device, Mode mode, int32_t option_gain)
+		: m_device(device), m_mode(mode), m_option_gain(option_gain)
+	{
+	}
 
 	uint32_t m_device;
 	Mode m_mode;
+	int32_t m_option_gain;
 	std::vector<int16_t> m_frames;
 };
 

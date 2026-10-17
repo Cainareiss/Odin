@@ -76,8 +76,9 @@ const char HELP[] = "Usage: %s [options]\n"
 "	-w <num>	Make the window num times 640 by 480, as far as the display has room\n"
 "	-f		Take the whole display (F11 or Alt+Enter goes back and forth)\n"
 "	-o <mode>	Play the sound: main (the speakers of the main board), option (those\n"
-"			of the optional board), mix (both on two channels), quad (four) or\n"
-"			off; by default those the cabinet has: main, or mix\n"
+"			of the optional board), mix (both on two channels, the optional one\n"
+"			at the level of the list or of odin.ini), quad (four) or off; by\n"
+"			default those the cabinet has: main, or mix\n"
 "	-v		Set verbosity (affects debug messages)\n"
 "	-h              Show this help\n";
 
@@ -402,12 +403,28 @@ main(int argc, char **argv)
 	if (!options.sound_asked && game->option_speakers)
 		options.sound = odin::AudioOut::Mode::MIX;
 
+	/* The optional board in the mix: the level of the list, or the last
+	 * line of [sound] */
+	double option_level = game->option_level;
+	for (const auto &[key, value] : settings.section("sound")) {
+		char *end = nullptr;
+		const double db = std::strtod(value.c_str(), &end);
+
+		if (key == "option_level" && !value.empty() && !*end && db >= odin::Game::LOWEST_LEVEL &&
+		    db <= odin::Game::HIGHEST_LEVEL)
+			option_level = db;
+		else
+			std::fprintf(stderr, "ERROR: settings: [sound]: not right: %s = %s\n", key.c_str(), value.c_str());
+	}
+
 	/* Unthrottled frames do not keep time: no sound with -u */
 	std::unique_ptr<odin::AudioOut> audio;
 	if (options.sound && options.unthrottled && options.sound_asked)
 		std::fprintf(stderr, "sound: not with -u\n");
 	else if (options.sound && !options.unthrottled)
-		audio = odin::AudioOut::make(*options.sound);
+		audio = odin::AudioOut::make(*options.sound, option_level);
+	if (audio && options.sound == odin::AudioOut::Mode::MIX && option_level != 0)
+		std::printf("sound: the optional board at %+g dB in the mix\n", option_level);
 
 	bool started = true;
 

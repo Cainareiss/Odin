@@ -243,7 +243,14 @@ speakers of its own (their US manuals, SOUND TEST: OPTION SPEAKER, the
 backrest speakers and the bass shaker of NASCAR, the backrest speakers and
 woofers of PHARRIER, the woofer and shaker of PODRACE): "option_speakers"
 in odin-games.json, and the default sound mixes the two boards for them
-(-o mix). The ARM7 runs on the 22.5792 MHz bus clock, eight times MAME's
+(-o mix), the optional one at its "option_level" (audio_out.hpp, HEURISTIC:
+the volumes of the switch unit of the cabinet set the balance, REAR and
+WOOFER lower than the front at the factory as the drawing of the NASCAR
+manual shows, with no figure; the levels of the list put the optional
+board about 5 dB under the main one in a race, from what was measured
+there (notes MARKDOWN/69: SGNASCAR, its rear 17 dB above the front and
+clipped, PODRACE 8 dB above, PHARRIER 4 dB below), until an ear decides).
+The ARM7 runs on the 22.5792 MHz bus clock, eight times MAME's
 figure: the SGNASCAR cabinet shows its sound driver ready within a frame
 of each reload, 20 MHz at least (HEURISTIC: no wait state). It costs a
 quarter of the speed: the driver sleeps most of the time, its wait could

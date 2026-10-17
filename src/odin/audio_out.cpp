@@ -39,7 +39,7 @@ channels(AudioOut::Mode mode)
 } /* namespace */
 
 std::unique_ptr<AudioOut>
-AudioOut::make(Mode mode)
+AudioOut::make(Mode mode, double option_db)
 {
 	if (SDL_InitSubSystem(SDL_INIT_AUDIO)) {
 		std::fprintf(stderr, "ERROR: sound: %s\n", SDL_GetError());
@@ -59,7 +59,7 @@ AudioOut::make(Mode mode)
 		return nullptr;
 	}
 	SDL_PauseAudioDevice(device, 0);
-	return std::unique_ptr<AudioOut>(new AudioOut(device, mode));
+	return std::unique_ptr<AudioOut>(new AudioOut(device, mode, gain_of(option_db)));
 }
 
 AudioOut::~AudioOut()
@@ -73,7 +73,7 @@ AudioOut::play(std::span<const int16_t> main, std::span<const int16_t> option)
 {
 	const uint32_t n = channels(m_mode);
 
-	interleave(m_mode, main, option, m_frames);
+	interleave(m_mode, main, option, m_option_gain, m_frames);
 	if (m_frames.size() < n)
 		return;
 

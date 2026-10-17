@@ -146,6 +146,16 @@ struct Game {
 	 * the main one: "option_speakers" in the list, false when it does not
 	 * say. */
 	bool option_speakers = false;
+	/* The level of the optional board against the main one when the two
+	 * share two speakers (-o mix), in dB: "option_level" in the list,
+	 * LOWEST_LEVEL to HIGHEST_LEVEL, with "option_speakers" only; 0 when
+	 * it does not say. HEURISTIC: on the cabinet the volumes of the switch
+	 * unit set it (REAR, WOOFER), lower than the front at the factory, but
+	 * no figure gives it; the levels of the list come from levels measured
+	 * in a race. */
+	double option_level = 0;
+	static constexpr double LOWEST_LEVEL = -60;
+	static constexpr double HIGHEST_LEVEL = 12;
 	std::vector<std::pair<std::string, std::vector<uint8_t>>> sections;
 
 	/* The bytes of a section; empty when the game has no such section. */

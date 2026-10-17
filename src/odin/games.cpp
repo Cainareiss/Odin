@@ -475,6 +475,18 @@ GameList::load_game(const std::string &rom_dir, const std::string &name) const
 		}
 		game.option_speakers = json_is_true(speakers);
 	}
+	if (const json_t *const level = json_object_get(rom, "option_level")) {
+		const double db = json_number_value(level);
+
+		if (!json_is_number(level) || !game.option_speakers ||
+		    !(db >= Game::LOWEST_LEVEL && db <= Game::HIGHEST_LEVEL)) {
+			std::fprintf(stderr,
+			             "ERROR: game '%s': \"option_level\" is not %g to %g dB for \"option_speakers\"\n",
+			             name.c_str(), Game::LOWEST_LEVEL, Game::HIGHEST_LEVEL);
+			return std::nullopt;
+		}
+		game.option_level = db;
+	}
 	if (const json_t *const chip = json_object_get(rom, "mie_eeprom")) {
 		auto bytes = parse_hex(json_string_value(chip));
 
