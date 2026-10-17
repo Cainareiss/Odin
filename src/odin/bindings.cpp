@@ -137,6 +137,12 @@ HostInput::parse(std::string_view text)
 		return std::nullopt;
 	text.remove_prefix(4);
 
+	constexpr std::string_view INVERT = ":invert";
+	const bool inverted = text.size() > INVERT.size() && text.substr(text.size() - INVERT.size()) == INVERT;
+
+	if (inverted)
+		text.remove_suffix(INVERT.size());
+
 	PadInput::Type half = PadInput::Type::AXIS;
 
 	if (!text.empty() && (text.front() == '-' || text.front() == '+')) {
@@ -150,13 +156,15 @@ HostInput::parse(std::string_view text)
 
 	out.kind = Kind::PAD;
 	if (axis != SDL_CONTROLLER_AXIS_INVALID) {
-		/* Half a trigger is no input */
+		/* Half a trigger is no input, a stick is turned over whole */
 		if (half != PadInput::Type::AXIS && axis >= SDL_CONTROLLER_AXIS_TRIGGERLEFT)
 			return std::nullopt;
-		out.pad = PadInput{ half, static_cast<uint8_t>(axis) };
+		if (inverted && (half != PadInput::Type::AXIS || axis >= SDL_CONTROLLER_AXIS_TRIGGERLEFT))
+			return std::nullopt;
+		out.pad = PadInput{ half, static_cast<uint8_t>(axis), inverted };
 		return out;
 	}
-	if (half != PadInput::Type::AXIS || button == SDL_CONTROLLER_BUTTON_INVALID)
+	if (inverted || half != PadInput::Type::AXIS || button == SDL_CONTROLLER_BUTTON_INVALID)
 		return std::nullopt;
 	out.pad = PadInput{ PadInput::Type::BUTTON, static_cast<uint8_t>(button) };
 	return out;

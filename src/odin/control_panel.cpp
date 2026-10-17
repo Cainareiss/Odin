@@ -111,7 +111,9 @@ ControlPanel::channel(const PadInput &input, GameControl::Low low, int16_t value
 
 		return static_cast<uint16_t>(over ? 0xFFFF - word : word);
 	}
-	return static_cast<uint16_t>(std::clamp(over ? 0x8000 - value : 0x8000 + value, 0, 0xFFFF));
+	const int toward = input.inverted ? -value : value;
+
+	return static_cast<uint16_t>(std::clamp(over ? 0x8000 - toward : 0x8000 + toward, 0, 0xFFFF));
 }
 
 bool

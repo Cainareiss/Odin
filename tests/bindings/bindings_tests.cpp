@@ -138,6 +138,13 @@ void test_inputs()
 	      "pad:+rightx, the right stick right");
 	check(!HostInput::parse("pad:+lefttrigger") && !HostInput::parse("pad:-a") && !HostInput::parse("pad:nope") &&
 	      !HostInput::parse("pad:") && !HostInput::parse("joy:a"), "what is not a pad input");
+	check(HostInput::parse("pad:lefty:invert") && HostInput::parse("pad:lefty:invert")->pad.inverted &&
+	      is_pad(*HostInput::parse("pad:lefty:invert"), PadInput::Type::AXIS, SDL_CONTROLLER_AXIS_LEFTY) &&
+	      !HostInput::parse("pad:lefty")->pad.inverted && !HostInput::parse("pad:lefty:invert")->pad.is_digital(),
+	      "pad:lefty:invert, the left stick turned over");
+	check(!HostInput::parse("pad:righttrigger:invert") && !HostInput::parse("pad:-lefty:invert") &&
+	      !HostInput::parse("pad:a:invert") && !HostInput::parse("pad::invert") && !HostInput::parse("pad:lefty:inv"),
+	      "only the whole axis of a stick is turned over");
 	check(HostInput::parse("pad:a")->pad.is_digital() && HostInput::parse("pad:-leftx")->pad.is_digital() &&
 	      HostInput::parse("pad:lefttrigger")->pad.is_digital() && !HostInput::parse("pad:leftx")->pad.is_digital(),
 	      "pressed or not: buttons, halves, triggers; not a whole stick");

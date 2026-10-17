@@ -166,7 +166,8 @@ of odin.ini (<data>/odin/odin.ini; ODIN_CONFIG=<file>, or none: the tests
 use none), each game on its own.
 A gamepad for each player, in the order they are plugged in
 (ODIN_CONTROLLERS=none: none). Half a stick or a trigger counts as pressed
-from half its way: a choice of the emulator. The sight of a gun (BRAVEFF)
+from half its way: a choice of the emulator. "pad:<axis>:invert" turns a
+whole axis of a stick over (odin.ini). The sight of a gun (BRAVEFF)
 is where the left stick points, the centre of the screen when it is let
 go (Reda's choice until the mouse). To come: the mouse and the
 light guns (evdev.cpp, rawinput.cpp), wheels and their pedals, the drive

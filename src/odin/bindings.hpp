@@ -35,14 +35,16 @@
 namespace odin {
 
 /* An input of a gamepad, by the name SDL's game controller gives it ("a",
- * "start", "leftshoulder", "leftx", "righttrigger"...), or half the axis
- * of a stick: "-lefty" is the left stick up, "+leftx" to the right. The
- * index is an SDL_GameControllerButton or an SDL_GameControllerAxis. */
+ * "start", "leftshoulder", "leftx", "righttrigger"...), half the axis of a
+ * stick: "-lefty" is the left stick up, "+leftx" to the right, or the axis
+ * of a stick turned over: "lefty:invert". The index is an
+ * SDL_GameControllerButton or an SDL_GameControllerAxis. */
 struct PadInput {
 	enum class Type { BUTTON, AXIS, AXIS_NEGATIVE, AXIS_POSITIVE };
 
 	Type type;
 	uint8_t index;
+	bool inverted = false;	/* a whole axis of a stick, turned over */
 
 	/* A trigger, from 0 when let go */
 	bool is_trigger() const;
@@ -59,7 +61,8 @@ struct HostInput {
 	SDL_Keycode key;
 	PadInput pad;
 
-	/* "key:Left Ctrl", "pad:a", "pad:-lefty"; nothing for what is not one */
+	/* "key:Left Ctrl", "pad:a", "pad:-lefty", "pad:lefty:invert"; nothing
+	 * for what is not one */
 	static std::optional<HostInput> parse(std::string_view text);
 };
 

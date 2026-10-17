@@ -298,6 +298,14 @@ void test_channel()
 	      ControlPanel::channel(trigger, Low::RELEASED, 16384) == 0x8000 &&
 	      ControlPanel::channel(trigger, Low::RELEASED, -5) == 0x0000, "a trigger: 0000 to FFFF");
 	check(ControlPanel::channel(trigger, Low::PRESSED, 0) == 0xFFFF, "low pressed: turned over");
+
+	const PadInput inverted{ PadInput::Type::AXIS, SDL_CONTROLLER_AXIS_LEFTY, true };
+
+	check(ControlPanel::channel(inverted, Low::DOWN, -32768) == 0x0000 &&
+	      ControlPanel::channel(inverted, Low::DOWN, 0) == 0x8000 &&
+	      ControlPanel::channel(inverted, Low::DOWN, 32767) == 0xFFFF &&
+	      ControlPanel::channel(inverted, Low::LEFT, 32767) == 0x0001,
+	      "a stick the settings turn over: the other way, the centre kept");
 }
 
 void test_pressed()
