@@ -297,9 +297,23 @@ ROM board 315-5881 (src/odin/crypt_315_5881.cpp, port of MAME, validated
 on the real self-test of Planet Harriers and 19.7 M words against MAME's
 code): RAM at local bus 0x0A000000, registers at 0x0A010000, keys from
 MAME (airtrix, pharrier, swracer). Its ready bit is never busy (MAME).
-The BOOTROM board probe answers a constant for the boards without the
-chip, braveff and von4 (rom_board.cpp, HACK until those boards are
-measured).
+The BOOTROM probes the board (0x1F3A): with the window 02 on the local
+bus 0A, it writes 19620217 at +C with the control byte +0x26 of the bridge
+at FD, then at +8 with it back (F4), and keeps in GBR+0x1C bit 3 "+C
+kept" and bit 2 "+8 kept". Only its ROM BOARD TEST page reads them: 04
+numbers the EPROMs from IC 29, else IC 35 (0x4B86); 08 puts the mask ROMs
+from IC 19, a page in two (0x4D56, 0x4F96). The names of the chips of the
+sets give the answer each board must get: 04 for AIRTRIX, BRAVEFF,
+PHARRIER, PODRACE and VON4 (EPROMs IC29...), 08 for SGNASCAR (EPROMs
+IC35, mask ROMs IC19...). SGNASCAR gets it (its FPGA keeps +C, gives its
+ID 4252 at +8). VON4 gets it from a constant at +8 (rom_board.cpp, HACK:
+what a board without a chip answers is not known); BRAVEFF never probes.
+AIRTRIX, PHARRIER and PODRACE get 0C here, the RAM of their 315-5881
+keeping +C as well, and their ROM BOARD TEST page numbers the EPROMs from
+IC 35: not known, what FD changes (its bit 3 is set where SGNASCAR reads
+its FPGA, FC, in 32 bits, and clear where the games reach the 315-5881,
+F4 or F6, in 16 bits: a bus of 32 bits that a board of 16 does not keep
+whole?).
 
 SGNASCAR ROM board security FPGA (src/odin/actel_m1.cpp, the stream
 decoder of MAME's Naomi M1 board): registers at local bus 0x0A000000, key
@@ -322,7 +336,13 @@ as Valkyrie had it, where the X360 port keeps them in the texhead bank:
 the pages BRAVEFF writes to the texture RAM itself hold the half-size
 copy of each bank 0 texture in bank 1, and PODRACE keeps the textures of
 the Watto shot of its intro where the level 1 of the same bank would
-land (they stay intact on the cabinet).
+land (they stay intact on the cabinet). The levels go down to the one
+whose smaller side is one texel (HEURISTIC: the games upload no further;
+the sky dome of VON4, 256x128, has a 1x1 level of zero that the port
+would read).
+The base and the index of a texhead recall (0C3) are added on 16 bits
+(HEURISTIC: the loops set bases up to 7AC3 and recall indices up to 16D;
+how many bits the board keeps is not known).
 The texture format 2 holds one 4-bit value a texel, a word being a block
 of 2 x 2 texels (the BOOTROM font, 64 x 64 words for 128 x 128 texels);
 the four channels get the value (HEURISTIC: the ramp of the PHARRIER
@@ -457,7 +477,9 @@ The types 0 and 7 are not drawn.
 
 EEPROMs: the main board 93C46 (SH-4 port A, src/odin/eeprom_93c46.cpp)
 and the ROM board X76F100 (bus page 0x14, src/odin/x76f100.cpp) are
-real and read by the BOOTROM; the MIE 93C46 is in the LLE MIE. It holds
+real and read by the BOOTROM (not known for the X76F100: whether SDA
+floats once the chip is deselected, it reads low as in MAME, and whether a
+read goes on past the end); the MIE 93C46 is in the LLE MIE. It holds
 the system settings of the BOOTROM (two copies of 62 bytes and a CRC,
 the cabinet type in byte 4, the country in byte 5, the sound of the
 attract in byte 6). Blank, the BOOTROM takes its own block (0x51C of the
@@ -567,11 +589,14 @@ Resets (hikaru.cpp, set_resets): the master drives port D of the MIE
 through its window. The system library pulses bit 5 and the sound boards
 are reset, their clock aside. The BOOTROM pulses bit 2, the reset of the
 slave SH-4, as soon as the MIE gives its bus (frame 27): that one is NOT
-done. The slave needs a frame and a half to start again, then clears the
-word where the master leaves its first job; the master writes that word
-without waiting, after it has copied the game from the ROM board, which
-takes no time here: BRAVEFF and PHARRIER write it a frame too early and
-never start. It waits for the transfers of the bridge to take their time.
+done (HACK in hikaru.cpp). The slave needs a frame and a half to start
+again, then clears the word where the master leaves its first job; the
+master writes that word without waiting, after the BOOTROM has copied the
+game from the ROM board with its own loop through a window (0x0C00B8E6, no
+DMA), 1.5 frames for BRAVEFF and 2.2 for PHARRIER here: with the reset,
+BRAVEFF and PHARRIER write it a frame too early and never start. The copy
+of the cabinet is slower by the waits the ROM board adds, which no code
+tells: it waits for a measure (the load of a cabinet from power-on).
 Bits 1 and 4 are the reset lines of the graphics chips (GP_RES, every
 chip; PCI1_RES, the display chip): a chip goes back to its power-on state
 when its line falls and does nothing until it rises

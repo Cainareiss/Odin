@@ -369,22 +369,15 @@ RomBoard::read_guard(uint32_t offs, unsigned size)
 	if (m_fpga && offs <= 0x13)
 		return low_bytes(m_fpga->bus_read(offs, size), size);
 
-	/* HACK for the boards without the 315-5881 nor the FPGA (braveff,
-	 * von4): the BOOTROM probe (ROM 0x1F3A) writes 0x19620217 at +0xC and
-	 * +0x8 and keeps "retained" in GBR+0x1C bits 3/2; what those boards
-	 * answer has not been measured.
-	 *
-	 * The value of bits 2 and 3 of 0C00F01C (which is GBR 28) depends on
-	 * whether these two ports retain the value 0x19620217. If the value
-	 * of the upper two bits is 4, then the EPROM start at IC 29; they
-	 * start at 35 otherwise. See @0C004BF8. If the value is 8, then the
-	 * MASKROM placement in the bus address space is non-linear. See
-	 * @0C004F82 for details.
-	 *
-	 * Judging by the ROM file extensions, we want these bits to be 4 for
-	 * everything except SGNASCAR, and 8 for SGNASCAR (?). PHARRIER should
-	 * be '4' type, but the ROM zip contains two IC35's, one EPROM and one
-	 * MASKROM. */
+	/* HACK for the boards without the 315-5881 nor the FPGA (von4; braveff
+	 * never probes): the BOOTROM probe (ROM 0x1F3A) writes 0x19620217 at
+	 * +0xC, the control byte +0x26 of the bridge at FD, then at +0x8 with
+	 * it at F4, and keeps "+C kept" in bit 3 and "+8 kept" in bit 2 of
+	 * GBR+0x1C. Only its ROM BOARD TEST page reads them: 4 numbers the
+	 * EPROMs from IC 29 (0x4B86), 8 puts the mask ROMs from IC 19 a page in
+	 * two (0x4D56, 0x4F96). The chips of the sets want 4 for these boards
+	 * (EPROMs IC29...) and 8 for SGNASCAR (EPROMs IC35, mask ROMs IC19...);
+	 * what these boards answer has not been measured. */
 	if (offs == 0x8 && !m_config.maskrom_is_stretched)
 		return low_bytes(0x19620217, size);
 	if (offs == 0xC && m_config.maskrom_is_stretched)

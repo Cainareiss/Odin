@@ -664,12 +664,14 @@ Hikaru::update_irqs()
  *    Here it does each time its SYSTEM MENU is left with EXIT, see the
  *    TODO.
  *
- * The reset of the slave is NOT done. The slave takes a frame and a half
- * to start again (it clears its memory) and then clears the word where
- * the master leaves its first job (14000000); the master writes that word
- * without waiting for anything (PHARRIER @0C010BC4), after a copy of the
- * game from the ROM board that takes no time here. With the reset done,
- * BRAVEFF and PHARRIER write the word a frame too early and never start.
+ * HACK: the reset of the slave is not done. The slave takes a frame and a
+ * half to start again (it clears its memory) and then clears the word
+ * where the master leaves its first job (14000000); the master writes that
+ * word without waiting for anything (PHARRIER @0C010BC4), after the BOOTROM
+ * has copied the game from the ROM board with its own loop (0x0C00B8E6),
+ * 1.5 frames for BRAVEFF and 2.2 for PHARRIER here: the waits the ROM board
+ * adds are not known. With the reset done, BRAVEFF and PHARRIER write the
+ * word a frame too early and never start.
  */
 
 /* Bits 1 and 4 of port D, to the graphics chips */
