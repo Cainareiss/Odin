@@ -264,12 +264,24 @@ the game clears it in a race, and sets it again when it hits a wall): left
 off the pad, a constant hum there; its drive board has the shocks. Its
 force (0C03F34A, Ghidra): one torque of its physics, a float times 63, 40
 added when it is below 0, the sign turned over on the deluxe; the menus
-use a spring on the position of the wheel (0C03F2B8). The pad of player 1
-feels the jumps of that force from frame to frame (drive_board.hpp,
-EXPERIMENTAL, HEURISTIC: 4 of the jump and 200 times the move of the
-wheel over the last six frames go, the rest twice over against 3F; a
-step of 9 % of the wheel gives 18 at most, a stick thrown to the end 39,
-a wall 51 with the wheel still, measured 17/10/2026). Not known: why BASS
+use a spring on the position of the wheel (0C03F2B8). The torque
+(FUN_0C038F32, rebuilt to 0.0014 of the game's own over three races) adds
+seven terms times the force of the settings (0C42C214, tenths): a hold of
+the wheel growing with the speed, the self-aligning of the front tyres
+(full at 3 degrees of slip), a damping of the moves of the wheel (car
++0x174, the step it took this frame), the two front suspensions, the
+walls, a buzz of 5 at most, and the draft (car +0x180, from the cars
+around, FUN_0C037028: lighter as it grows, a 22.5 Hz shake as it falls);
+the three of the wheel times the grip of the ground under the car (0.7 on
+the grass). The rolling start keeps a spring on the wheel only (bit 0 of
+0C7C0F48). Not seen yet: car +0xDC (3000 times, none in our races). The
+pad of player 1 feels the jumps of that force from frame to frame
+(drive_board.hpp, EXPERIMENTAL, HEURISTIC: 4 of the jump goes, and what
+the largest move of the wheel in a frame of the last six can give, 1600
+times the move, 50 at most, from the terms of the wheel at full force;
+the rest twice over against 3F; in a race a move of the wheel makes it
+jump by up to 52, 850 times the move at most, a wall by up to 51 with the
+wheel still, measured 17/10/2026). Not known: why BASS
 SHAKER (FRONT+REAR) changes no output here, and the REAR ON output of the
 wiring. The deluxe harness ties "GND (FOR DX)" (CN8 pin 23 of the
 837-13844), which the game reads as 1P PUSH1 and shows those two lines of

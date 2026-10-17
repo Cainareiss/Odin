@@ -62,19 +62,28 @@ struct DriveBoard {
 		return command < 0x40 ? -command : command - 0x40;
 	}
 
+	/* What a move of the wheel by 1 of its way in a frame can make the
+	 * force jump by, and the most it can: NASCAR at full force, its wheel
+	 * read in 80 steps each way (0C03F2B8), a step of 1/256 of the way:
+	 * its damping half of 600 times its steps, 960, its self-aligning 500,
+	 * its hold 100 (850 seen); 52 seen at most */
+	static constexpr double FROM_WHEEL = 1600;
+	static constexpr double MOST_FROM_WHEEL = 50;
+
 	/* How hard a pad shakes for a jump of the force from one frame to the
 	 * next, 0 to 0xFFFF, the wheel having moved by wheel_moved (0 to 1 of
-	 * its way) over the last frames. NASCAR gives one torque of its physics
-	 * (0C03F34A: a float times 63, 40 added when it is below 0): the hold that
-	 * centres the wheel and the damping that follows its moves with the
-	 * shocks. What the wheel moves explains is no shock: a step of 9 % of
-	 * the way gives a jump of 18 at most, a stick thrown to the end up to
-	 * 39, a wall up to 51 with the wheel still (measured in Odin,
-	 * 17/10/2026). HEURISTIC: 4 of the jump and 200 times the move of the
-	 * wheel go, the rest twice over against MOST. */
+	 * its way) in a frame of the last ones. NASCAR gives one torque of its
+	 * physics (0C03F34A: a float times 63, 40 added when it is below 0),
+	 * seven terms added (FUN_0C038F32): three follow the wheel (a hold that
+	 * grows with the speed, the self-aligning of the front tyres, a damping
+	 * that kicks at each step the wheel takes), four the car (its front
+	 * suspensions, the walls, a buzz of 5 at most, the draft). A wall makes
+	 * it jump by up to 51 with the wheel still (measured in Odin,
+	 * 17/10/2026). HEURISTIC: 4 of a jump goes, and what the move of the
+	 * wheel can give, the rest twice over against MOST. */
 	static uint16_t jolt_of(int jump, double wheel_moved)
 	{
-		const double shock = std::abs(jump) - 4 - 200 * wheel_moved;
+		const double shock = std::abs(jump) - 4 - std::min(MOST_FROM_WHEEL, FROM_WHEEL * wheel_moved);
 
 		return shock <= 0 ? 0 : static_cast<uint16_t>(std::lround(std::min(1.0, 2 * shock / MOST) * 0xFFFF));
 	}

@@ -79,9 +79,13 @@ main()
 	check(DriveBoard::jolt_of(5, 0) == 2080 && DriveBoard::jolt_of(-20, 0) == 33288,
 	      "the rest of a jump twice over, the wheel still, either way");
 	check(DriveBoard::jolt_of(51, 0) == 0xFFFF, "a wall, the wheel still: all");
-	check(DriveBoard::jolt_of(18, 3000 / 32767.0) == 0 && DriveBoard::jolt_of(39, 1.0) == 0,
-	      "what a move of the wheel gives is no shock: a step of 9 %, a stick thrown to the end");
-	check(DriveBoard::jolt_of(30, 0.05) == 33288, "a shock beyond what the wheel explains");
+	check(DriveBoard::jolt_of(18, 3000 / 32767.0) == 0 && DriveBoard::jolt_of(-54, 1.0) == 0 &&
+	      DriveBoard::jolt_of(10, 1.0 / 256) == 0,
+	      "what a move of the wheel gives is no shock: a step of 9 %, a stick thrown to the end, a step of the wheel");
+	check(DriveBoard::jolt_of(11, 1.0 / 256) == 1560 && DriveBoard::jolt_of(-20, 0.005) == 16644,
+	      "a small move of the wheel explains a small jump");
+	check(DriveBoard::jolt_of(55, 1.0) == 2080 && DriveBoard::jolt_of(60, 0.05) == 12483,
+	      "a shock beyond the most the wheel explains");
 	printf("%u checks, %u failures\n", checks, failures);
 	return failures ? EXIT_FAILURE : EXIT_SUCCESS;
 }
