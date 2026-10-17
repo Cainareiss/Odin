@@ -103,6 +103,8 @@ ControlPanel::ControlPanel(const std::vector<GameControl> &controls, const Setti
 {
 	m_positions.assign(m_controls.size(), 0);
 	m_levers_were.assign(m_controls.size(), { false, false });
+	for (const GameControl &control : m_controls)
+		m_keyed.push_back(rest(control.low));
 }
 
 /* A stick turned over keeps its centre at 8000. */
@@ -127,6 +129,16 @@ ControlPanel::rest(GameControl::Low low)
 	if (low == GameControl::Low::RELEASED)
 		return 0x0000;
 	return low == GameControl::Low::PRESSED ? 0xFFFF : 0x8000;
+}
+
+uint16_t
+ControlPanel::end(GameControl::Low low, bool positive)
+{
+	const bool pedal = !GameControl::half(low, positive);
+	const PadInput axis{ PadInput::Type::AXIS,
+	                     static_cast<uint8_t>(pedal ? SDL_CONTROLLER_AXIS_TRIGGERLEFT : SDL_CONTROLLER_AXIS_LEFTX) };
+
+	return channel(axis, low, positive ? 32767 : -32768);
 }
 
 bool
@@ -193,21 +205,30 @@ ControlPanel::update(const HostState &host)
 			break;
 		}
 		case GameControl::Type::ANALOG: {
-			/* Of the axes bound, the one furthest from where it rests */
+			/* The keys take it a step a frame toward the end they push
+			 * to, or back to rest; then of the keys and the axes
+			 * bound, the one furthest from where it rests */
+			const int at_rest = rest(control.low);
+			const bool back = pressed(host, m_bindings.toward(c, false), control.player);
+			const bool on = pressed(host, m_bindings.toward(c, true), control.player);
+			const int target = back == on ? at_rest : end(control.low, on);
+			int keyed = m_keyed[c];
+
+			keyed = std::abs(target - keyed) <= KEY_STEP ? target : keyed + (target > keyed ? KEY_STEP : -KEY_STEP);
+			m_keyed[c] = static_cast<uint16_t>(keyed);
+
 			const PadState *const pad = host.pads[control.player];
-			int furthest = -1;
+			uint16_t value = m_keyed[c];
 
 			for (const HostInput &input : m_bindings.of(c)) {
 				if (input.kind != HostInput::Kind::PAD || !pad)
 					continue;
-				const int16_t value = pad->axes[input.pad.index];
-				const int away = input.pad.is_trigger() ? std::max<int>(value, 0) : std::abs(value);
+				const uint16_t axis = channel(input.pad, control.low, pad->axes[input.pad.index]);
 
-				if (away > furthest) {
-					furthest = away;
-					inputs.jvs_analog[control.analog] = channel(input.pad, control.low, value);
-				}
+				if (std::abs(axis - at_rest) > std::abs(value - at_rest))
+					value = axis;
 			}
+			inputs.jvs_analog[control.analog] = value;
 			break;
 		}
 		}

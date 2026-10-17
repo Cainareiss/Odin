@@ -43,7 +43,10 @@ Keys: Escape quits, Space pauses, F4 saves <game>.odinstate and F1 loads it.
 F5 and F6 are the Test and Service switches of the main board, F2 the Test
 of the I/O board, 9 and 0 its Service switches, 5 and 6 the coins. Player 1
 has 1 for Start, the arrows, and Left Ctrl, Left Alt, Left Shift, Z, X, C;
-player 2 has 2 for Start, R F D G, and A, S, Q, W, E, T.
+player 2 has 2 for Start, R F D G, and A, S, Q, W, E, T. The arrows also
+move a wheel, a stick or a sight, a step each frame, and back when let go;
+Up is the gas and Down the brake; the second stick of player 1 (ROLL of
+Air Trix, the right lever of Racer) is on R F D G.
 
 Gamepads: one for each player, in the order they are plugged in. Start,
 the D-pad, A, B, X, Y, LB, RB, LT, RT, the sticks and the triggers work the
@@ -61,11 +64,16 @@ under the id odin-games.json gives it:
 
  [controls.pharrier]
  stick_v = pad:lefty:invert
+ stick_h_left = key:A
+ stick_h_right = key:D
 
 (pad:-lefty is the left stick up, pad:+leftx the stick to the right,
 pad:lefty:invert the whole axis turned over: Planet Harriers then goes up
 when the stick goes up, where its cabinet stick, a flight stick, goes up
-when pulled.)
+when pulled.) An analog control takes the axes of a pad on its line, and
+keys and buttons on the halves of its way: <id>_left and <id>_right, or
+<id>_up and <id>_down; a pedal takes them on its own line, with its axes
+(gas_pedal = pad:righttrigger, key:Up).
 
 The cabinet has 1p_service and 2p_service, coin1 and coin2, test (of the
 I/O board), board_test and board_service; a game without controls in the

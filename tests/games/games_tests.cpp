@@ -148,6 +148,10 @@ const char *const BAD_CONTROLS[] = {
 	R"("controls": [ { "name": "A", "id": "1p_service", "switch": "1P START", "role": "start" } ])",
 	R"("controls": [ { "name": "A", "id": "gear_up", "switch": "1P START", "role": "start" },
 	                 { "name": "B", "id": "gear", "positions": [ { "name": "N", "switches": [] } ], "role": "gear" } ])",
+	R"("controls": [ { "name": "A", "id": "wheel_left", "switch": "1P START", "role": "start" },
+	                 { "name": "B", "id": "wheel", "analog": 0, "low": "right", "role": "steer" } ])",
+	R"("controls": [ { "name": "B", "id": "lever", "analog": 0, "low": "down", "role": "stick_y" },
+	                 { "name": "A", "id": "lever_up", "switch": "1P START", "role": "start" } ])",
 };
 
 void test_games(const std::string &dir)
@@ -282,6 +286,13 @@ void test_bad_controls(const std::string &dir)
 	for (const char *bad : BAD_CONTROLS)
 		refused += refuses(bad);
 	check(refused == static_cast<int>(std::size(BAD_CONTROLS)), "a game with a control that is not one is refused");
+
+	GameList pedal;
+
+	write(path, std::string(R"({ "version": 1, "roms": [ { "name": "good", "mach": "hikaru", "controls": [)") +
+	      R"( { "name": "GAS", "id": "gas", "analog": 0, "low": "released", "role": "accel" },)" +
+	      R"( { "name": "A", "id": "gas_left", "switch": "1P START", "role": "start" } ], )" + files + " } ] }");
+	check(pedal.load(path) && pedal.load_game(roms, "good"), "a pedal has no halves: <id>_left is free");
 
 	const std::string chip = std::string(256, '0');
 	const std::string bad_chips[] = {

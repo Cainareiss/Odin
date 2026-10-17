@@ -70,27 +70,40 @@ struct HostInput {
  * control of the cabinet: the defaults of their roles (the keys as INSTALL
  * tells them, the gamepad of the player), then the lines of
  * [controls.<game>] in the settings, "<id> = key:Left Ctrl, pad:a" (a lever
- * has "<id>_down" and "<id>_up"; the cabinet "coin1", "coin2", "test",
- * "board_test", "board_service"). A line takes the place of the inputs of
- * its control, an empty value leaves it without any; a line that is not
- * right is said on stderr and skipped. */
+ * has "<id>_down" and "<id>_up"; an analog control the axes of a pad, and
+ * what moves it one way or the other on the halves of its way, "<id>_left"
+ * and "<id>_right" or "<id>_up" and "<id>_down", a pedal on its own line
+ * with its axes; the cabinet "coin1", "coin2", "test", "board_test",
+ * "board_service"). A line takes the place of the inputs of its control,
+ * an empty value leaves it without any; a line that is not right is said
+ * on stderr and skipped. */
 class Bindings {
 public:
 	Bindings(const std::vector<GameControl> &panel, const Settings &settings, const std::string &game);
 
-	/* The inputs of a control of the panel, by its place in the panel */
+	/* The inputs of a control of the panel, by its place in the panel: an
+	 * analog control the axes of a pad */
 	const std::vector<HostInput> &of(size_t control) const { return m_controls[control][0]; }
 	/* Those that move a lever down or up */
-	const std::vector<HostInput> &lever(size_t control, bool up) const { return m_controls[control][up]; }
+	const std::vector<HostInput> &lever(size_t control, bool up) const { return m_controls[control][1 + up]; }
+	/* Those that move an analog control left or up, right or down
+	 * (positive), a pedal down (positive) */
+	const std::vector<HostInput> &toward(size_t control, bool positive) const
+	{
+		return m_controls[control][1 + positive];
+	}
 	/* Those of a role of the cabinet */
 	const std::vector<HostInput> &cabinet(Role role) const;
 
 	/* The defaults of a role of a player; for a role of the cabinet the
 	 * player does not count. */
 	static std::vector<HostInput> defaults(Role role, unsigned player);
+	/* The keys that move an analog control of that role and player left
+	 * or up, right or down (positive), a pedal down (positive) */
+	static std::vector<HostInput> keys_toward(Role role, unsigned player, bool positive);
 
 private:
-	std::vector<std::array<std::vector<HostInput>, 2>> m_controls;
+	std::vector<std::array<std::vector<HostInput>, 3>> m_controls;
 	std::array<std::vector<HostInput>, 5> m_cabinet;
 };
 

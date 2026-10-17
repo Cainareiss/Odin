@@ -50,7 +50,9 @@ struct JvsSwitch {
  *    for some ("positions" : [ { "name" : "1", "switches" : [...] }, ...]).
  *
  * "id" is the name the settings give it (odin.ini: [controls.<game>],
- * "<id> = ..."; a lever has "<id>_down" and "<id>_up"): small letters,
+ * "<id> = ..."; a lever has "<id>_down" and "<id>_up", and an analog
+ * control that is not a pedal the halves of its way, "<id>_left" and
+ * "<id>_right" or "<id>_up" and "<id>_down"): small letters,
  * figures and _, its own in the game. "role" is what the control does
  * (roles.hpp), which gives its keys and pad inputs until the player
  * changes them: a role that is pressed or not for a button, one that has a
@@ -69,6 +71,18 @@ struct GameControl {
 	 * Test and Service of the main board. */
 	static constexpr const char *CABINET_IDS[] = { "1p_service", "2p_service", "coin1", "coin2", "test",
 	                                               "board_test", "board_service" };
+
+	/* The suffix of the half of an analog control that goes left or up,
+	 * or right or down (positive: the way the axis of a gamepad grows);
+	 * none for a pedal. */
+	static const char *half(Low low, bool positive)
+	{
+		if (low == Low::LEFT || low == Low::RIGHT)
+			return positive ? "_right" : "_left";
+		if (low == Low::UP || low == Low::DOWN)
+			return positive ? "_down" : "_up";
+		return nullptr;
+	}
 
 	std::string name;
 	std::string id;

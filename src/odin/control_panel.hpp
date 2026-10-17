@@ -58,6 +58,10 @@ public:
 	/* Half a stick or a trigger is pressed from half its way on: a choice
 	 * of the emulator, not of the cabinet. */
 	static constexpr int PRESSED = 16384;
+	/* A key moves an analog control this much a frame, and lets it back
+	 * as fast (the step of xemu's Chihiro wheel): a choice of the
+	 * emulator. */
+	static constexpr int KEY_STEP = 0x1000;
 
 	ControlPanel(const std::vector<GameControl> &controls, const Settings &settings, const std::string &game);
 
@@ -74,6 +78,9 @@ public:
 	/* The channel of a control nothing moves: a stick or a lever centred,
 	 * a pedal let go. */
 	static uint16_t rest(GameControl::Low low);
+	/* The channel of a control at the end of its way: right or down
+	 * (positive), left or up; a pedal down (positive). */
+	static uint16_t end(GameControl::Low low, bool positive);
 
 private:
 	bool held(const HostState &host, const HostInput &input, unsigned player) const;
@@ -83,6 +90,7 @@ private:
 	Bindings m_bindings;
 	MieBoard::Inputs m_inputs;
 	std::vector<size_t> m_positions;		/* of each lever */
+	std::vector<uint16_t> m_keyed;			/* the channel where the keys have taken it */
 	std::vector<std::array<bool, 2>> m_levers_were;	/* GEAR_DOWN, GEAR_UP at the last update */
 	std::array<bool, 2> m_coins_were;
 	std::array<bool, 2> m_coins;			/* gone in, not read yet */

@@ -19,6 +19,7 @@
 #include "odin/bindings.hpp"
 
 #include <cstdio>
+#include <initializer_list>
 
 namespace odin {
 
@@ -74,6 +75,27 @@ const Default DEFAULTS[] = {
 	{ Role::BOARD_SERVICE, "F6", nullptr, nullptr },
 };
 
+/* The keys that move an analog control: left or up, right or down, for
+ * player 1 then player 2; those of the directions of the player, the
+ * second stick of player 1 on those of player 2. The gas on Up and the
+ * brake on Down, as xemu's Chihiro has them. */
+struct KeysToward {
+	Role role;
+	const char *keys[2][2];	/* [player][positive] */
+};
+
+const KeysToward KEYS_TOWARD[] = {
+	{ Role::STEER, { { "Left", "Right" }, { "D", "G" } } },
+	{ Role::ACCEL, { { nullptr, "Up" }, { nullptr, "R" } } },
+	{ Role::BRAKE, { { nullptr, "Down" }, { nullptr, "F" } } },
+	{ Role::STICK_X, { { "Left", "Right" }, { "D", "G" } } },
+	{ Role::STICK_Y, { { "Up", "Down" }, { "R", "F" } } },
+	{ Role::STICK2_X, { { "D", "G" }, { nullptr, nullptr } } },
+	{ Role::STICK2_Y, { { "R", "F" }, { nullptr, nullptr } } },
+	{ Role::GUN_X, { { "Left", "Right" }, { "D", "G" } } },
+	{ Role::GUN_Y, { { "Up", "Down" }, { "R", "F" } } },
+};
+
 std::string_view
 trimmed(std::string_view text)
 {
@@ -84,20 +106,29 @@ trimmed(std::string_view text)
 	return text;
 }
 
+/* What a line takes: what is pressed or not (a key, a button, half a
+ * stick, a trigger), the whole axis of a pad, or both (a pedal) */
+enum class Takes { PRESSED, AXIS, BOTH };
+
+bool
+is_axis(const HostInput &input)
+{
+	return input.kind == HostInput::Kind::PAD && input.pad.type == PadInput::Type::AXIS;
+}
+
 /* A list of inputs, "key:A, pad:b"; nothing when one is not an input, or
- * not of the kind the control takes: a channel the axis of a pad, any
- * other what is pressed or not. */
+ * not of the kind the line takes. */
 std::optional<std::vector<HostInput>>
-parse_list(std::string_view value, bool analog)
+parse_list(std::string_view value, Takes takes)
 {
 	std::vector<HostInput> inputs;
 
 	while (!trimmed(value).empty()) {
 		const size_t comma = value.find(',');
 		const auto input = HostInput::parse(trimmed(value.substr(0, comma)));
+		const bool pressed = input && (input->kind == HostInput::Kind::KEY || input->pad.is_digital());
 
-		if (!input || (analog ? input->kind != HostInput::Kind::PAD || input->pad.type != PadInput::Type::AXIS
-		                      : input->kind == HostInput::Kind::PAD && !input->pad.is_digital()))
+		if (!input || (takes == Takes::PRESSED && !pressed) || (takes == Takes::AXIS && !is_axis(*input)))
 			return std::nullopt;
 		inputs.push_back(*input);
 		value.remove_prefix(comma == std::string_view::npos ? value.size() : comma + 1);
@@ -188,6 +219,22 @@ Bindings::defaults(Role role, unsigned player)
 	return out;
 }
 
+std::vector<HostInput>
+Bindings::keys_toward(Role role, unsigned player, bool positive)
+{
+	std::vector<HostInput> out;
+
+	for (const KeysToward &entry : KEYS_TOWARD) {
+		const char *const key = entry.keys[player & 1][positive];
+
+		if (entry.role != role || !key)
+			continue;
+		if (const auto input = HostInput::parse(std::string("key:") + key))
+			out.push_back(*input);
+	}
+	return out;
+}
+
 Bindings::Bindings(const std::vector<GameControl> &panel, const Settings &settings, const std::string &game)
 	: m_controls(panel.size())
 {
@@ -195,10 +242,14 @@ Bindings::Bindings(const std::vector<GameControl> &panel, const Settings &settin
 		const GameControl &control = panel[c];
 
 		if (control.type == GameControl::Type::POSITIONS) {
-			m_controls[c][0] = defaults(Role::GEAR_DOWN, control.player);
-			m_controls[c][1] = defaults(Role::GEAR_UP, control.player);
-		} else {
-			m_controls[c][0] = defaults(control.role, control.player);
+			m_controls[c][1] = defaults(Role::GEAR_DOWN, control.player);
+			m_controls[c][2] = defaults(Role::GEAR_UP, control.player);
+			continue;
+		}
+		m_controls[c][0] = defaults(control.role, control.player);
+		if (control.type == GameControl::Type::ANALOG) {
+			m_controls[c][1] = keys_toward(control.role, control.player, false);
+			m_controls[c][2] = keys_toward(control.role, control.player, true);
 		}
 	}
 	for (size_t r = 0; r < m_cabinet.size(); r++)
@@ -206,33 +257,49 @@ Bindings::Bindings(const std::vector<GameControl> &panel, const Settings &settin
 
 	for (const auto &[key, value] : settings.section("controls." + game)) {
 		std::vector<HostInput> *target = nullptr;
-		bool analog = false;
+		std::vector<HostInput> *pedal_down = nullptr;	/* a pedal: where what is pressed goes */
+		Takes takes = Takes::PRESSED;
 
 		for (size_t c = 0; c < panel.size() && !target; c++) {
 			const GameControl &control = panel[c];
+			const bool lever = control.type == GameControl::Type::POSITIONS;
+			const bool analog = control.type == GameControl::Type::ANALOG;
+			const bool pedal = analog && !GameControl::half(control.low, false);
 
-			if (control.type == GameControl::Type::POSITIONS) {
-				if (key == control.id + "_down")
-					target = &m_controls[c][0];
-				else if (key == control.id + "_up")
-					target = &m_controls[c][1];
-			} else if (key == control.id) {
-				target = &m_controls[c][0];
-				analog = control.type == GameControl::Type::ANALOG;
-			}
+			if (lever || (analog && !pedal))
+				for (const bool positive : { false, true }) {
+					const char *const half = lever ? (positive ? "_up" : "_down")
+					                               : GameControl::half(control.low, positive);
+
+					if (key == control.id + half)
+						target = &m_controls[c][1 + positive];
+				}
+			if (target || lever || key != control.id)
+				continue;
+			target = &m_controls[c][0];
+			takes = pedal ? Takes::BOTH : analog ? Takes::AXIS : Takes::PRESSED;
+			if (pedal)
+				pedal_down = &m_controls[c][2];
 		}
 		for (size_t r = 0; r < m_cabinet.size() && !target; r++)
 			if (key == role_name(cabinet_role(r)))
 				target = &m_cabinet[r];
 
-		const auto inputs = target ? parse_list(value, analog) : std::nullopt;
+		const auto inputs = target ? parse_list(value, takes) : std::nullopt;
 
 		if (!inputs) {
 			std::fprintf(stderr, "ERROR: controls: [controls.%s]: not right: %s = %s\n", game.c_str(),
 			             key.c_str(), value.c_str());
 			continue;
 		}
-		*target = *inputs;
+		if (!pedal_down) {
+			*target = *inputs;
+			continue;
+		}
+		target->clear();
+		pedal_down->clear();
+		for (const HostInput &input : *inputs)
+			(is_axis(input) ? target : pedal_down)->push_back(input);
 	}
 }
 

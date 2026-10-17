@@ -386,9 +386,14 @@ GameList::load_game(const std::string &rom_dir, const std::string &name) const
 	/* Each id names one thing in the settings of the game */
 	std::vector<std::string> ids(std::begin(GameControl::CABINET_IDS), std::end(GameControl::CABINET_IDS));
 	for (const GameControl &control : game.controls) {
-		const std::vector<std::string> names = control.type == GameControl::Type::POSITIONS
+		std::vector<std::string> names = control.type == GameControl::Type::POSITIONS
 			? std::vector<std::string>{ control.id + "_down", control.id + "_up" }
 			: std::vector<std::string>{ control.id };
+
+		if (control.type == GameControl::Type::ANALOG && GameControl::half(control.low, false)) {
+			names.push_back(control.id + GameControl::half(control.low, false));
+			names.push_back(control.id + GameControl::half(control.low, true));
+		}
 
 		for (const std::string &id : names) {
 			if (std::find(ids.begin(), ids.end(), id) != ids.end()) {

@@ -188,7 +188,7 @@ void test_game()
 	PadState pad, pad2;
 
 	check(after(panel, {SDLK_z}).jvs_player[0] == 0x1000, "button4 (Z) works VIEW, wired on 1P DOWN");
-	check(after(panel, {SDLK_DOWN}).jvs_player[0] == 0, "the arrow does nothing: no control of the game is down");
+	check(after(panel, {SDLK_DOWN}).jvs_player[0] == 0, "the arrow closes no switch: no control of the game is down");
 	check(after(panel, {SDLK_9}).jvs_player[0] == 0x4000 && after(panel, {SDLK_F2}).jvs_system == 0x80 &&
 	      after(panel, {SDLK_F5}).mainboard_test, "Service, Test and the main board stay for every game");
 	check(after(panel, {SDLK_s}).jvs_player[1] == 0x0080 && after(panel, {SDLK_LALT}).jvs_player[1] == 0,
@@ -228,6 +228,72 @@ void test_game()
 	      "the channel of player 2 does not follow pad 1");
 	pad2.axes[SDL_CONTROLLER_AXIS_LEFTX] = 32767;
 	check(after(panel, {}, &pad, &pad2).jvs_analog[4] == 0xFFFF, "it follows pad 2");
+}
+
+/* The keys on the analog controls of a cabinet like NASCAR's */
+void test_keys()
+{
+	ControlPanel panel(cabinet(), Settings(), "sgnascar");
+
+	check(after(panel, {SDLK_LEFT}).jvs_analog[0] == 0x7000, "Left: the wheel a step to the left");
+	for (int i = 0; i < 6; i++)
+		after(panel, {SDLK_LEFT});
+	check(after(panel, {SDLK_LEFT}).jvs_analog[0] == 0x0000, "eight frames: all the way");
+	check(after(panel, {SDLK_LEFT}).jvs_analog[0] == 0x0000, "and it stays there");
+	check(after(panel, {}).jvs_analog[0] == 0x1000, "let go: a step back");
+	for (int i = 0; i < 6; i++)
+		after(panel, {});
+	check(after(panel, {}).jvs_analog[0] == 0x8000, "eight frames: centred");
+	for (int i = 0; i < 7; i++)
+		after(panel, {SDLK_RIGHT});
+	check(after(panel, {SDLK_RIGHT}).jvs_analog[0] == 0xFFFF, "Right: all the way in eight frames");
+	check(after(panel, {SDLK_LEFT, SDLK_RIGHT}).jvs_analog[0] == 0xEFFF, "both: back toward the centre");
+
+	ControlPanel pedal(cabinet(), Settings(), "sgnascar");
+
+	check(after(pedal, {SDLK_UP}).jvs_analog[1] == 0x1000, "Up: the gas a step down");
+	for (int i = 0; i < 14; i++)
+		after(pedal, {SDLK_UP});
+	check(after(pedal, {SDLK_UP}).jvs_analog[1] == 0xFFFF, "sixteen frames: all the way down");
+	check(after(pedal, {}).jvs_analog[1] == 0xEFFF, "let go: a step up");
+
+	ControlPanel lever(cabinet(), Settings(), "sgnascar");
+
+	check(after(lever, {SDLK_UP}).jvs_analog[3] == 0x9000, "Up on a lever low when down: toward FFFF");
+	for (int i = 0; i < 8; i++)
+		after(lever, {});
+	for (int i = 0; i < 7; i++)
+		after(lever, {SDLK_DOWN});
+	check(after(lever, {SDLK_DOWN}).jvs_analog[3] == 0x0001, "Down, eight frames: 0001, as the stick gives it");
+
+	ControlPanel two(cabinet(), Settings(), "sgnascar");
+
+	check(after(two, {SDLK_g}).jvs_analog[4] == 0x9000 && after(two, {SDLK_g}).jvs_analog[0] == 0x8000,
+	      "the aim of player 2 on G, and not the wheel of player 1");
+	check(after(two, {SDLK_RIGHT}).jvs_analog[4] == 0x9000, "and not on the arrows: back a step");
+
+	ControlPanel both(cabinet(), Settings(), "sgnascar");
+	PadState pad;
+
+	after(both, {SDLK_LEFT});
+	after(both, {SDLK_LEFT});
+	pad.axes[SDL_CONTROLLER_AXIS_LEFTX] = 30000;
+	check(after(both, {SDLK_LEFT}, &pad).jvs_analog[0] == 0x8000 + 30000, "the stick further from rest: the stick");
+	pad.axes[SDL_CONTROLLER_AXIS_LEFTX] = 1000;
+	check(after(both, {SDLK_LEFT}, &pad).jvs_analog[0] == 0x4000, "the keys further: the keys");
+
+	Settings settings;
+
+	settings.parse("[controls.sgnascar]\nwheel_left = key:A\ngas = pad:righttrigger, key:Space\n", "test");
+	ControlPanel mine(cabinet(), settings, "sgnascar");
+
+	check(after(mine, {SDLK_a}).jvs_analog[0] == 0x7000, "a key of the settings moves the wheel");
+	check(after(mine, {SDLK_LEFT}).jvs_analog[0] == 0x8000, "Left no longer");
+	check(after(mine, {SDLK_UP}).jvs_analog[1] == 0x0000 && after(mine, {SDLK_SPACE}).jvs_analog[1] == 0x1000,
+	      "the gas on Space, no longer on Up");
+	pad = PadState{};
+	pad.axes[SDL_CONTROLLER_AXIS_TRIGGERRIGHT] = 32767;
+	check(after(mine, {}, &pad).jvs_analog[1] == 0xFFFF, "and on the trigger of its line");
 }
 
 void test_lever()
@@ -342,6 +408,7 @@ int main()
 	test_standard_panel();
 	test_coins();
 	test_game();
+	test_keys();
 	test_lever();
 	test_bindings_from_settings();
 	test_channel();

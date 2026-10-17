@@ -197,6 +197,71 @@ void test_defaults()
 	check(Bindings::defaults(Role::GEAR, 0).empty(), "the lever: none");
 }
 
+void test_keys_toward()
+{
+	const auto one = [](Role role, unsigned player, bool positive) {
+		const auto keys = Bindings::keys_toward(role, player, positive);
+
+		return keys.size() == 1 && keys[0].kind == HostInput::Kind::KEY ? keys[0].key : SDLK_UNKNOWN;
+	};
+
+	check(one(Role::STEER, 0, false) == SDLK_LEFT && one(Role::STEER, 0, true) == SDLK_RIGHT &&
+	      one(Role::STEER, 1, false) == SDLK_d && one(Role::STEER, 1, true) == SDLK_g,
+	      "the wheel: the arrows, D and G for player 2");
+	check(Bindings::keys_toward(Role::ACCEL, 0, false).empty() && one(Role::ACCEL, 0, true) == SDLK_UP &&
+	      one(Role::BRAKE, 0, true) == SDLK_DOWN && one(Role::BRAKE, 1, true) == SDLK_f,
+	      "the gas on Up, the brake on Down, as xemu's Chihiro has them");
+	check(one(Role::STICK_X, 0, true) == SDLK_RIGHT && one(Role::STICK_Y, 0, false) == SDLK_UP &&
+	      one(Role::STICK_Y, 1, true) == SDLK_f && one(Role::GUN_X, 1, true) == SDLK_g &&
+	      one(Role::GUN_Y, 0, true) == SDLK_DOWN, "a stick and a sight: the directions of the player");
+	check(one(Role::STICK2_X, 0, false) == SDLK_d && one(Role::STICK2_Y, 0, true) == SDLK_f &&
+	      Bindings::keys_toward(Role::STICK2_X, 1, true).empty(),
+	      "the second stick of player 1 on the keys of player 2; none for player 2");
+	check(Bindings::keys_toward(Role::BUTTON1, 0, true).empty() && Bindings::keys_toward(Role::GEAR, 0, false).empty(),
+	      "nothing for a button or a lever");
+}
+
+void test_analog_lines()
+{
+	GameControl gas = control("gas", GameControl::Type::ANALOG, Role::ACCEL, 0);
+	GameControl lever = control("lever", GameControl::Type::ANALOG, Role::STICK_Y, 0);
+
+	gas.low = GameControl::Low::RELEASED;
+	lever.low = GameControl::Low::DOWN;
+
+	const std::vector<GameControl> panel = { control("wheel", GameControl::Type::ANALOG, Role::STEER, 0), gas, lever };
+	Settings settings;
+
+	settings.parse("[controls.sgnascar]\n"
+	               "wheel_left = key:A, pad:dpleft\n"
+	               "wheel_right = pad:leftx\n"
+	               "gas = pad:lefttrigger, key:Space, pad:a\n"
+	               "lever_up = key:W\n"
+	               "lever_left = key:Q\n"
+	               "gas_left = key:Q\n", "test");
+	const Bindings mine(panel, settings, "sgnascar");
+	const Bindings plain(panel, Settings(), "sgnascar");
+
+	check(mine.toward(0, false).size() == 2 && is_key(mine.toward(0, false)[0], SDLK_a) &&
+	      is_pad(mine.toward(0, false)[1], PadInput::Type::BUTTON, SDL_CONTROLLER_BUTTON_DPAD_LEFT),
+	      "<id>_left: a key and a button");
+	check(mine.toward(0, true).size() == 1 && is_key(mine.toward(0, true)[0], SDLK_RIGHT),
+	      "<id>_right as it was: the whole axis of a stick is refused there");
+	check(mine.of(0).size() == 1 && is_pad(mine.of(0)[0], PadInput::Type::AXIS, SDL_CONTROLLER_AXIS_LEFTX),
+	      "the axis of the wheel kept");
+	check(mine.of(1).size() == 1 && is_pad(mine.of(1)[0], PadInput::Type::AXIS, SDL_CONTROLLER_AXIS_TRIGGERLEFT) &&
+	      mine.toward(1, true).size() == 2 && is_key(mine.toward(1, true)[0], SDLK_SPACE) &&
+	      is_pad(mine.toward(1, true)[1], PadInput::Type::BUTTON, SDL_CONTROLLER_BUTTON_A),
+	      "a pedal: its axes, and what presses it, on its own line");
+	check(mine.toward(2, false).size() == 1 && is_key(mine.toward(2, false)[0], SDLK_w) &&
+	      mine.toward(2, true).size() == 1 && is_key(mine.toward(2, true)[0], SDLK_DOWN),
+	      "a lever up and down: <id>_up; <id>_left is none of its halves");
+	check(plain.toward(0, false).size() == 1 && is_key(plain.toward(0, false)[0], SDLK_LEFT) &&
+	      plain.toward(1, false).empty() && plain.toward(1, true).size() == 1 &&
+	      is_key(plain.toward(1, true)[0], SDLK_UP) && is_key(plain.toward(2, false)[0], SDLK_UP),
+	      "without settings, the keys of the roles");
+}
+
 void test_game_lines()
 {
 	const std::vector<GameControl> panel = {
@@ -264,6 +329,8 @@ int main(int argc, char **argv)
 	test_settings(dir);
 	test_inputs();
 	test_defaults();
+	test_keys_toward();
+	test_analog_lines();
 	test_game_lines();
 
 	std::printf("\n%d checks, %d failures\n", g_checks, g_failures);
