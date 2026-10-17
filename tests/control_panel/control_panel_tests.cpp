@@ -295,6 +295,17 @@ void test_keys()
 	check(after(both, {}).jvs_analog[0] == 0x8000, "the pad gone: the keys again, at rest");
 	check(after(both, {}, &pad).jvs_analog[0] == 0x8000, "the pad back, its stick where it was: the keys keep it");
 
+	ControlPanel back(cabinet(), Settings(), "sgnascar");
+
+	pad = PadState{};
+	pad.axes[SDL_CONTROLLER_AXIS_LEFTX] = 30000;
+	after(back, {}, &pad);
+	after(back, {SDLK_LEFT});
+	after(back, {SDLK_LEFT});
+	pad.axes[SDL_CONTROLLER_AXIS_LEFTX] = 0;
+	check(after(back, {SDLK_LEFT}, &pad).jvs_analog[0] == 0x5000,
+	      "a pad back, at rest after it was held right: the keys keep the wheel");
+
 	ControlPanel plugged(cabinet(), Settings(), "sgnascar");
 
 	for (int i = 0; i < 5; i++)

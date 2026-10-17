@@ -103,6 +103,8 @@ private:
 	bool pressed(const HostState &host, const std::vector<HostInput> &inputs, unsigned player) const;
 	uint16_t analog(const HostState &host, size_t control);
 
+	enum : uint8_t { NEVER, THERE, GONE };	/* an input never seen, there, gone after it was there */
+
 	std::vector<GameControl> m_controls;
 	Bindings m_bindings;
 	MieBoard::Inputs m_inputs;
@@ -110,6 +112,7 @@ private:
 	std::vector<uint16_t> m_keyed;			/* the channel where the keys have taken it */
 	std::vector<size_t> m_owner;			/* the input that works it: 0 the keys, then its axes */
 	std::vector<std::vector<uint16_t>> m_kept;	/* where each of them was last kept */
+	std::vector<std::vector<uint8_t>> m_presence;	/* NEVER, THERE or GONE at the last update */
 	std::vector<std::array<bool, 2>> m_levers_were;	/* GEAR_DOWN, GEAR_UP at the last update */
 	std::array<bool, 2> m_coins_were;
 	std::array<bool, 2> m_coins;			/* gone in, not read yet */

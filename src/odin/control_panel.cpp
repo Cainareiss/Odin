@@ -109,6 +109,7 @@ ControlPanel::ControlPanel(const std::vector<GameControl> &controls, const Setti
 	for (size_t c = 0; c < m_controls.size(); c++) {
 		m_keyed.push_back(rest(m_controls[c].low));
 		m_kept.emplace_back(m_bindings.of(c).size() + 1, rest(m_controls[c].low));
+		m_presence.emplace_back(m_bindings.of(c).size() + 1, NEVER);
 	}
 }
 
@@ -231,6 +232,15 @@ ControlPanel::analog(const HostState &host, size_t c)
 			now[s] = channel(input.pad, control.low, pad->axes[input.pad.index]);
 			there[s] = true;
 		}
+	}
+	/* An input back after it was gone (a pad plugged in again) starts
+	 * from where it is; one seen for the first time, from rest */
+	for (size_t s = 0; s < now.size(); s++) {
+		uint8_t &presence = m_presence[c][s];
+
+		if (there[s] && presence == GONE)
+			kept[s] = now[s];
+		presence = there[s] ? THERE : presence == NEVER ? NEVER : GONE;
 	}
 	if (!there[m_owner[c]])
 		m_owner[c] = 0;
