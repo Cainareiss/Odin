@@ -100,7 +100,8 @@ panel_of(const std::vector<GameControl> &controls)
 
 ControlPanel::ControlPanel(const std::vector<GameControl> &controls, const Settings &settings, const std::string &game)
 	: m_controls(panel_of(controls)), m_bindings(m_controls, settings, game), m_inputs(idle_inputs(m_controls)),
-	  m_coins_were{}, m_coins{}, m_mouse_aims(false)
+	  m_coins_were{}, m_coins{}, m_mouse_aims(false), m_mouse_moved(false), m_mouse_seen(false), m_mouse_x(0.5),
+	  m_mouse_y(0.5)
 {
 	m_positions.assign(m_controls.size(), 0);
 	m_levers_were.assign(m_controls.size(), { false, false });
@@ -233,11 +234,18 @@ ControlPanel::analog(const HostState &host, size_t c)
 	}
 	if (!there[m_owner[c]])
 		m_owner[c] = 0;
-	for (size_t s = 0; s < now.size(); s++)
+	for (size_t s = 0; s < now.size(); s++) {
+		const bool mouse = s > 0 && axes[s - 1].kind == HostInput::Kind::MOUSE;
+
+		if (there[s] && mouse && m_mouse_moved) {
+			m_owner[c] = s;
+			break;
+		}
 		if (there[s] && std::abs(now[s] - kept[s]) > moved) {
 			moved = std::abs(now[s] - kept[s]);
 			m_owner[c] = s;
 		}
+	}
 	kept[m_owner[c]] = now[m_owner[c]];
 	return now[m_owner[c]];
 }
@@ -246,6 +254,16 @@ void
 ControlPanel::update(const HostState &host)
 {
 	MieBoard::Inputs inputs = idle_inputs(m_controls);
+
+	/* The mouse is one pointer: when it moves, it takes every channel it
+	 * is bound to */
+	m_mouse_moved = host.mouse && (!m_mouse_seen || std::abs(host.mouse->x - m_mouse_x) * 0x10000 > MOVED ||
+	                               std::abs(host.mouse->y - m_mouse_y) * 0x10000 > MOVED);
+	if (m_mouse_moved) {
+		m_mouse_x = host.mouse->x;
+		m_mouse_y = host.mouse->y;
+	}
+	m_mouse_seen = m_mouse_seen || host.mouse;
 
 	inputs.mainboard_test = pressed(host, m_bindings.cabinet(Role::BOARD_TEST), 0);
 	inputs.mainboard_service = pressed(host, m_bindings.cabinet(Role::BOARD_SERVICE), 0);
@@ -277,11 +295,23 @@ ControlPanel::update(const HostState &host)
 			break;
 		}
 	}
-	m_mouse_aims = false;
-	for (size_t c = 0; c < m_controls.size(); c++)
-		if (m_controls[c].type == GameControl::Type::ANALOG && m_owner[c] > 0 &&
-		    m_bindings.of(c)[m_owner[c] - 1].kind == HostInput::Kind::MOUSE)
-			m_mouse_aims = true;
+	/* The mouse aims while it works every channel it is bound to */
+	bool works_one = false, works_all = true;
+
+	for (size_t c = 0; c < m_controls.size(); c++) {
+		const std::vector<HostInput> &axes = m_bindings.of(c);
+		const bool bound = std::any_of(axes.begin(), axes.end(), [](const HostInput &input) {
+			return input.kind == HostInput::Kind::MOUSE;
+		});
+
+		if (m_controls[c].type != GameControl::Type::ANALOG || !bound)
+			continue;
+		const bool works = m_owner[c] > 0 && axes[m_owner[c] - 1].kind == HostInput::Kind::MOUSE;
+
+		works_one = works_one || works;
+		works_all = works_all && works;
+	}
+	m_mouse_aims = works_one && works_all;
 	for (unsigned slot = 0; slot < 2; slot++) {
 		const bool now = pressed(host, m_bindings.cabinet(slot ? Role::COIN2 : Role::COIN1), 0);
 

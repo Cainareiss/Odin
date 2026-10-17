@@ -113,7 +113,10 @@ private:
 	std::vector<std::array<bool, 2>> m_levers_were;	/* GEAR_DOWN, GEAR_UP at the last update */
 	std::array<bool, 2> m_coins_were;
 	std::array<bool, 2> m_coins;			/* gone in, not read yet */
-	bool m_mouse_aims;				/* the mouse worked a channel at the last update */
+	bool m_mouse_aims;				/* the mouse worked all its channels at the last update */
+	bool m_mouse_moved;				/* it has moved at this update */
+	bool m_mouse_seen;
+	double m_mouse_x, m_mouse_y;			/* where it was when it last moved */
 };
 
 } /* namespace odin */

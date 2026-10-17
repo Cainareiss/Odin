@@ -442,6 +442,9 @@ void test_mouse()
 	mouse.buttons = {};
 	mouse.off = true;
 	check(after(panel, {}, nullptr, nullptr, &mouse).jvs_player[0] == 0x0100, "off the picture: OUT OF SCREEN");
+	after(panel, {SDLK_RIGHT}, nullptr, nullptr, &mouse);
+	check(after(panel, {SDLK_RIGHT}, nullptr, nullptr, &mouse).jvs_player[0] == 0,
+	      "the keys take X, the mouse off still holds Y: it aims no more, no OUT OF SCREEN");
 	pad.axes[SDL_CONTROLLER_AXIS_LEFTX] = 20000;
 	pad.axes[SDL_CONTROLLER_AXIS_LEFTY] = 20000;
 	inputs = after(panel, {}, &pad, nullptr, &mouse);
@@ -453,6 +456,33 @@ void test_mouse()
 	check(after(panel, {}, &pad, nullptr, &mouse).jvs_analog[0] == 0x4000, "the mouse moves: it takes X back");
 	check(after(panel, {}, &pad).jvs_analog[0] == 0x8000 && after(panel, {}, &pad).jvs_player[0] == 0,
 	      "no mouse, as a pad unplugged: the keys at rest, its buttons up");
+}
+
+/* The mouse is one pointer: moving it across takes the Y of the sight too */
+void test_mouse_one_pointer()
+{
+	ControlPanel panel({ analog("1P SIGHT X", 0, GameControl::Low::LEFT, Role::GUN_X),
+	                     analog("1P SIGHT Y", 1, GameControl::Low::UP, Role::GUN_Y),
+	                     button("1P OUT OF SCREEN", { 0, 0x0100 }, Role::GUN_OFFSCREEN) },
+	                   Settings(), "braveff");
+	MouseState mouse;
+	PadState pad;
+
+	after(panel, {}, &pad, nullptr, &mouse);
+	pad.axes[SDL_CONTROLLER_AXIS_LEFTY] = 20000;
+	check(after(panel, {}, &pad, nullptr, &mouse).jvs_analog[1] == 0x8000 + 20000, "the stick takes Y");
+	mouse.x = 0.25;
+	MieBoard::Inputs inputs = after(panel, {}, &pad, nullptr, &mouse);
+	check(inputs.jvs_analog[0] == 0x4000 && inputs.jvs_analog[1] == 0x8000,
+	      "the mouse moved across only: it takes X and Y back");
+	mouse.off = true;
+	after(panel, {}, &pad, nullptr, &mouse);
+	check(after(panel, {}, &pad, nullptr, &mouse).jvs_player[0] == 0x0100, "then off the picture: OUT OF SCREEN");
+	pad.axes[SDL_CONTROLLER_AXIS_LEFTY] = -20000;
+	check(after(panel, {}, &pad, nullptr, &mouse).jvs_analog[1] == 0x8000 - 20000, "the stick takes Y again");
+	mouse.x = 0.25 + 0x200 / 65536.0;
+	check(after(panel, {}, &pad, nullptr, &mouse).jvs_analog[1] == 0x8000 - 20000,
+	      "a move of the mouse under 400: Y stays with the stick");
 }
 
 void test_picture()
@@ -510,6 +540,7 @@ int main()
 	test_bindings_from_settings();
 	test_channel();
 	test_mouse();
+	test_mouse_one_pointer();
 	test_picture();
 	test_pressed();
 
