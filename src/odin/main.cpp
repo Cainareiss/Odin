@@ -247,6 +247,8 @@ Session::process_events()
 				break;
 			case SDLK_SPACE:
 				m_paused = !m_paused;
+				if (m_paused)
+					m_controls.quiet();
 				break;
 			case SDLK_F1:
 				load_or_save_state(true);
@@ -321,6 +323,7 @@ Session::run()
 		m_display.begin_frame();
 		m_controls.update();
 		m_board.run_frame();
+		m_controls.show(m_board.io_outputs());
 		if (m_audio)
 			m_audio->play(m_board.sound(false), m_board.sound(true));
 		m_display.end_frame(m_board.frame());
@@ -378,7 +381,7 @@ main(int argc, char **argv)
 	const std::string settings_file = odin::Settings::user_file();
 	if (!settings_file.empty() && settings.load(settings_file))
 		std::printf("settings: '%s'\n", settings_file.c_str());
-	odin::Controls controls(keys, game->controls, settings, game->name);
+	odin::Controls controls(keys, game->controls, game->outputs, settings, game->name);
 	board->set_panel(&controls);
 
 	if (!options.sound_asked && game->option_speakers)

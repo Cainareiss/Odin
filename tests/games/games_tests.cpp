@@ -100,6 +100,9 @@ const char LIST[] = R"({
         { "name": "GEAR", "id": "gear", "role": "gear", "positions": [
             { "name": "N", "switches": [] },
             { "name": "1", "switches": [ "2P LEFT", "2P UP" ] } ] } ],
+      "outputs": [
+        { "name": "1P LAMP", "id": "1p_lamp", "output": 1, "role": "lamp" },
+        { "name": "2P SHAKE", "id": "2p_shake", "output": 13, "role": "rumble", "player": 2 } ],
       "sections": [
         { "name": "bootrom", "type": "alternative", "data": [ { "name": "boot.bin", "size": 4 } ] } ] }
   ]
@@ -152,6 +155,20 @@ const char *const BAD_CONTROLS[] = {
 	                 { "name": "B", "id": "wheel", "analog": 0, "low": "right", "role": "steer" } ])",
 	R"("controls": [ { "name": "B", "id": "lever", "analog": 0, "low": "down", "role": "stick_y" },
 	                 { "name": "A", "id": "lever_up", "switch": "1P START", "role": "start" } ])",
+	R"("outputs": { "name": "A", "id": "a", "output": 1, "role": "lamp" })",
+	R"("outputs": [ { "id": "a", "output": 1, "role": "lamp" } ])",
+	R"("outputs": [ { "name": "A", "output": 1, "role": "lamp" } ])",
+	R"("outputs": [ { "name": "A", "id": "a", "role": "lamp" } ])",
+	R"("outputs": [ { "name": "A", "id": "a", "output": 0, "role": "lamp" } ])",
+	R"("outputs": [ { "name": "A", "id": "a", "output": 33, "role": "lamp" } ])",
+	R"("outputs": [ { "name": "A", "id": "a", "output": "1", "role": "lamp" } ])",
+	R"("outputs": [ { "name": "A", "id": "a", "output": 1 } ])",
+	R"("outputs": [ { "name": "A", "id": "a", "output": 1, "role": "smoke" } ])",
+	R"("outputs": [ { "name": "A", "id": "a", "output": 1, "role": "lamp", "player": 3 } ])",
+	R"("outputs": [ { "name": "A", "id": "a", "output": 1, "role": "lamp" },
+	                { "name": "B", "id": "a", "output": 2, "role": "lamp" } ])",
+	R"("controls": [ { "name": "A", "id": "a", "switch": "1P START", "role": "start" } ],
+	   "outputs": [ { "name": "B", "id": "a", "output": 2, "role": "lamp" } ])",
 };
 
 void test_games(const std::string &dir)
@@ -226,6 +243,23 @@ void test_games(const std::string &dir)
 	} else {
 		check(false, "the seven controls of the list");
 	}
+	if (wheel && wheel->outputs.size() == 2) {
+		using odin::GameOutput;
+		const auto &o = wheel->outputs;
+		const uint8_t bytes[] = { 0x80, 0x08 };
+
+		check(o[0].name == "1P LAMP" && o[0].id == "1p_lamp" && o[0].output == 1 && o[0].role == GameOutput::Role::LAMP &&
+		      o[0].player == 0, "an output, a lamp of player 1 when the list does not say");
+		check(o[1].output == 13 && o[1].role == GameOutput::Role::RUMBLE && o[1].player == 1,
+		      "an output that shakes the pad of player 2");
+		check(o[0].on(bytes) && o[1].on(bytes) && !o[0].on(std::span(bytes + 1, 1)),
+		      "output 1 is bit 7 of the first byte, output 13 bit 3 of the second");
+		check(!o[1].on(std::span(bytes, 1)), "an output past the bytes of the board: off");
+	} else {
+		check(false, "the two outputs of the list");
+	}
+	if (toy)
+		check(toy->outputs.empty(), "without \"outputs\", none");
 
 	check(!list.load_game(roms, "other"), "a game that is not in the list does not load");
 	check(!list.load_game(roms, "short"), "nor one whose file has another size than told");
@@ -364,6 +398,32 @@ void test_shipped_chips()
 	      "the six games have the chip of a new U.S.A. cabinet, its CRC right, the board of AIRTRIX calibrated");
 }
 
+/* The outputs of the list of the repo: the nozzles of BRAVEFF shake, read
+ * in its OUTPUT TEST (output 2 player 1, output 5 player 2) */
+void test_shipped_outputs()
+{
+	json_error_t error;
+	json_t *const root = json_load_file("odin-games.json", 0, &error);
+	const json_t *const roms = json_object_get(root, "roms");
+	std::string rumbles;
+
+	for (size_t i = 0; i < json_array_size(roms); i++) {
+		const json_t *const outputs = json_object_get(json_array_get(roms, i), "outputs");
+
+		for (size_t o = 0; o < json_array_size(outputs); o++) {
+			const json_t *const output = json_array_get(outputs, o);
+			const char *const role = json_string_value(json_object_get(output, "role"));
+
+			if (role && std::string(role) == "rumble")
+				rumbles += std::string(json_string_value(json_object_get(json_array_get(roms, i), "name"))) + ":" +
+				           std::to_string(json_integer_value(json_object_get(output, "output"))) + ":" +
+				           std::to_string(json_integer_value(json_object_get(output, "player"))) + " ";
+		}
+	}
+	json_decref(root);
+	check(rumbles == "braveff:2:0 braveff:5:2 ", "the nozzles of BRAVEFF shake the pads: outputs 2 and 5");
+}
+
 void test_lists(const std::string &dir)
 {
 	GameList list;
@@ -393,6 +453,7 @@ int main(int argc, char **argv)
 	test_roles();
 	test_bad_controls(dir);
 	test_shipped_chips();
+	test_shipped_outputs();
 	test_lists(dir);
 	std::filesystem::remove_all(dir + "/games_test_roms");
 	std::filesystem::remove(dir + "/games_test.json");

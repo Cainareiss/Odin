@@ -137,6 +137,9 @@ public:
 
 	/* The 128 bytes of the EEPROM: blank (FF) until loaded. */
 	Eeprom93c46 &eeprom() { return m_eeprom; }
+	/* The outputs of the I/O board as the game set them: output 1 is
+	 * bit 7 of the first byte. */
+	std::span<const uint8_t> io_outputs() const { return m_io->outputs(); }
 
 	/* Puts a CRP-1231 card reader on the serial block of the MIE.
 	 * card_file (may be nullptr) holds the three tracks of the card and

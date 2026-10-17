@@ -25,9 +25,9 @@
 
 namespace odin {
 
-Controls::Controls(Keyboard &keys, const std::vector<GameControl> &controls, const Settings &settings,
-                   const std::string &game)
-	: m_keys(keys), m_panel(controls, settings, game), m_on(false), m_mouse_seen(false),
+Controls::Controls(Keyboard &keys, const std::vector<GameControl> &controls, const std::vector<GameOutput> &outputs,
+                   const Settings &settings, const std::string &game)
+	: m_keys(keys), m_panel(controls, settings, game), m_outputs(outputs), m_on(false), m_mouse_seen(false),
 	  m_mouse_placed(false), m_mouse_from_x(0), m_mouse_from_y(0), m_mouse_fresh{}, m_mouse_release{}
 {
 	const char *const chosen = std::getenv("ODIN_CONTROLLERS");
@@ -189,6 +189,35 @@ Controls::event(const SDL_Event &event)
 	default:
 		return false;
 	}
+}
+
+void
+Controls::show(std::span<const uint8_t> outputs)
+{
+	const Uint32 now = SDL_GetTicks();
+
+	for (unsigned player = 0; player < 2; player++) {
+		Pad &pad = m_pads[player];
+		bool on = false;
+
+		for (const GameOutput &output : m_outputs)
+			on = on || (output.role == GameOutput::Role::RUMBLE && output.player == player && output.on(outputs));
+		if (!pad.handle || (on == pad.rumbling && (!on || now - pad.rumbled < RUMBLE_AGAIN_MS)))
+			continue;
+		SDL_GameControllerRumble(pad.handle, on ? RUMBLE : 0, on ? RUMBLE : 0, on ? RUMBLE_MS : 0);
+		pad.rumbling = on;
+		pad.rumbled = now;
+	}
+}
+
+void
+Controls::quiet()
+{
+	for (Pad &pad : m_pads)
+		if (pad.handle && pad.rumbling) {
+			SDL_GameControllerRumble(pad.handle, 0, 0, 0);
+			pad.rumbling = false;
+		}
 }
 
 void

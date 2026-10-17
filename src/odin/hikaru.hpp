@@ -111,6 +111,12 @@ public:
 	/* The sound of the last frame of the main board, or of the optional
 	 * one: left and right, 44 100 pairs a second */
 	const std::vector<int16_t> &sound(bool optional) const { return m_sound[optional ? SLAVE : MASTER]->samples(); }
+	/* The outputs of the I/O board of the cabinet (MieBoard::io_outputs);
+	 * none without the MIE */
+	std::span<const uint8_t> io_outputs() const
+	{
+		return m_mie ? m_mie->io_outputs() : std::span<const uint8_t>{};
+	}
 
 	/* Before the power-on: what the board keeps without power comes from
 	 * the files of this folder, over the images that come with the game,

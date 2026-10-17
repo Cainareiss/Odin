@@ -95,6 +95,29 @@ struct GameControl {
 	uint8_t player;		/* 0 or 1 */
 };
 
+/* An output of the I/O board of a cabinet, with the name its OUTPUT TEST
+ * gives it: "output", 1 to 32 as JVS counts them (output 1 is bit 7 of the
+ * first byte), and "role", what the host does with it: "rumble", the
+ * gamepad of the player shakes while it is on; "lamp", nothing yet.
+ * "player" : 2 for one of player 2. "id" as for a control. */
+struct GameOutput {
+	enum class Role { LAMP, RUMBLE };
+
+	std::string name;
+	std::string id;
+	unsigned output;	/* 1 to 32 */
+	Role role;
+	uint8_t player;		/* 0 or 1 */
+
+	/* Whether it is on, among the outputs of the board */
+	bool on(std::span<const uint8_t> outputs) const
+	{
+		const unsigned bit = output - 1;
+
+		return bit / 8 < outputs.size() && (outputs[bit / 8] & (0x80 >> (bit % 8)));
+	}
+};
+
 /* A game and what its ROMs hold, section by section ("bootrom", "eprom",
  * "maskrom", "mie", "eeprom", "rombd_eeprom"). */
 struct Game {
@@ -106,6 +129,9 @@ struct Game {
 	/* The controls of its cabinet: "controls" in the list, none when the
 	 * list does not say. */
 	std::vector<GameControl> controls;
+	/* The outputs of its cabinet the host uses: "outputs" in the list,
+	 * none when the list does not say. */
+	std::vector<GameOutput> outputs;
 	/* The 93C46 of the MIE of a new cabinet, the settings of the SYSTEM
 	 * MENU as SEGA left them: "mie_eeprom" in the list, 128 bytes in
 	 * hexadecimal; empty when the list does not say (a blank chip). */

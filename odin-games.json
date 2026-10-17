@@ -104,6 +104,14 @@
 				{ "name" : "2P SIGHT LOCATION Y", "id" : "2p_sight_y", "analog" : 3, "low" : "up", "role" : "gun_y", "player" : 2 },
 				{ "name" : "2P OUT OF SCREEN", "id" : "2p_out_of_screen", "switch" : "2P PUSH2", "role" : "gun_offscreen", "player" : 2 }
 			],
+			"outputs" : [
+				{ "name" : "1P START LAMP", "id" : "1p_start_lamp", "output" : 1, "role" : "lamp" },
+				{ "name" : "1P NOZZLE VIBRATION", "id" : "1p_nozzle_vibration", "output" : 2, "role" : "rumble" },
+				{ "name" : "LEFT REVOLVING LIGHT", "id" : "left_revolving_light", "output" : 3, "role" : "lamp" },
+				{ "name" : "2P START LAMP", "id" : "2p_start_lamp", "output" : 4, "role" : "lamp", "player" : 2 },
+				{ "name" : "2P NOZZLE VIBRATION", "id" : "2p_nozzle_vibration", "output" : 5, "role" : "rumble", "player" : 2 },
+				{ "name" : "RIGHT REVOLVING LIGHT", "id" : "right_revolving_light", "output" : 6, "role" : "lamp" }
+			],
 			"sections" : [
 				{
 					"name" : "mie",

@@ -150,8 +150,12 @@ restarts both boards (they jump to 0000; the 837-13741 does not check
 D9), here the node forgets its address after two and answers at once;
 the reply delay (JVS_TURNAROUND_BYTES in mie.cpp); the coin condition
 bits (always 0); the debounce of the switches and the coins; what the
-837-13551 answers for 0 players. The outputs of the boards go nowhere
-yet: lamps, the nozzle vibration of Brave, the drive board of NASCAR.
+837-13551 answers for 0 players. The outputs of the boards: each game
+lists those the host uses ("outputs" in odin-games.json, read in its
+OUTPUT TEST); the nozzle vibration of BRAVEFF (outputs 2 and 5) shakes
+the pad of its player (both motors at C000 while it is on: a choice of
+the emulator); the lamps go nowhere yet (outputs_network.cpp), nor the
+drive board of NASCAR; the outputs of the other games are to be read.
 The drive board of NASCAR (838-13366, on outputs 15-22 of the 837-13741
 and answering on switches 2-5 of both players) is to come in two ways:
 an imitation of its program by default, and, as an option of the user

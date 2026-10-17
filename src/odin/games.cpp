@@ -259,6 +259,38 @@ parse_control(const json_t *control)
 	return out;
 }
 
+/* An output: {"name": ..., "id": ..., "output": 1 to 32, "role":
+ * "rumble" or "lamp", and "player" when it is 2}. */
+std::optional<GameOutput>
+parse_output(const json_t *output)
+{
+	static const std::pair<const char *, GameOutput::Role> ROLES[] = {
+		{ "lamp", GameOutput::Role::LAMP }, { "rumble", GameOutput::Role::RUMBLE },
+	};
+	const char *const name = json_string_value(json_object_get(output, "name"));
+	const char *const id = json_string_value(json_object_get(output, "id"));
+	const json_t *const number = json_object_get(output, "output");
+	const char *const role = json_string_value(json_object_get(output, "role"));
+	const json_t *const player = json_object_get(output, "player");
+	GameOutput out{};
+
+	if (!name || !name[0] || !is_id(id) || !json_is_integer(number) || json_integer_value(number) < 1 ||
+	    json_integer_value(number) > 32 || !role ||
+	    (player && json_integer_value(player) != 1 && json_integer_value(player) != 2))
+		return std::nullopt;
+	for (const auto &[role_name, value] : ROLES) {
+		if (std::strcmp(role, role_name))
+			continue;
+		out.name = name;
+		out.id = id;
+		out.output = static_cast<unsigned>(json_integer_value(number));
+		out.role = value;
+		out.player = player ? static_cast<uint8_t>(json_integer_value(player) - 1) : 0;
+		return out;
+	}
+	return std::nullopt;
+}
+
 } /* namespace */
 
 std::span<const uint8_t>
@@ -383,6 +415,20 @@ GameList::load_game(const std::string &rom_dir, const std::string &name) const
 		}
 		game.controls.push_back(std::move(*control));
 	}
+	const json_t *const outputs = json_object_get(rom, "outputs");
+	if (outputs && !json_is_array(outputs)) {
+		std::fprintf(stderr, "ERROR: game '%s': \"outputs\" is not a list\n", name.c_str());
+		return std::nullopt;
+	}
+	for (size_t i = 0; i < json_array_size(outputs); i++) {
+		auto output = parse_output(json_array_get(outputs, i));
+
+		if (!output) {
+			std::fprintf(stderr, "ERROR: game '%s': output %zu is not one\n", name.c_str(), i + 1);
+			return std::nullopt;
+		}
+		game.outputs.push_back(std::move(*output));
+	}
 	/* Each id names one thing in the settings of the game */
 	std::vector<std::string> ids(std::begin(GameControl::CABINET_IDS), std::end(GameControl::CABINET_IDS));
 	for (const GameControl &control : game.controls) {
@@ -402,6 +448,14 @@ GameList::load_game(const std::string &rom_dir, const std::string &name) const
 			}
 			ids.push_back(id);
 		}
+	}
+	for (const GameOutput &output : game.outputs) {
+		if (std::find(ids.begin(), ids.end(), output.id) != ids.end()) {
+			std::fprintf(stderr, "ERROR: game '%s': the id '%s' is taken twice\n", name.c_str(),
+			             output.id.c_str());
+			return std::nullopt;
+		}
+		ids.push_back(output.id);
 	}
 	if (const json_t *const speakers = json_object_get(rom, "option_speakers")) {
 		if (!json_is_boolean(speakers)) {

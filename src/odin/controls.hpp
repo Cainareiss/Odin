@@ -20,6 +20,7 @@
 #define ODIN_CONTROLS_HPP
 
 #include <array>
+#include <span>
 #include <vector>
 
 #include <SDL.h>
@@ -42,8 +43,8 @@ namespace odin {
  * the window. */
 class Controls : public Hikaru::Panel {
 public:
-	Controls(Keyboard &keys, const std::vector<GameControl> &controls, const Settings &settings,
-	         const std::string &game);
+	Controls(Keyboard &keys, const std::vector<GameControl> &controls, const std::vector<GameOutput> &outputs,
+	         const Settings &settings, const std::string &game);
 	~Controls();
 	Controls(const Controls &) = delete;
 	Controls &operator=(const Controls &) = delete;
@@ -54,8 +55,19 @@ public:
 	void update();
 
 	void read_inputs(MieBoard::Inputs &inputs) override { m_panel.fill(inputs); }
+	/* The outputs of the board after a frame: the pad of a player shakes
+	 * while a rumble output of that player is on. */
+	void show(std::span<const uint8_t> outputs);
+	/* No pad shakes (the emulation stops) */
+	void quiet();
 
 	static constexpr int MOUSE_MOVED = 2;
+	/* The strength of both motors of a pad that shakes (the nozzle of
+	 * Brave has one motor, on or off: a choice of the emulator), and how
+	 * often a shake is asked again while it lasts (an effect has an end). */
+	static constexpr Uint16 RUMBLE = 0xC000;
+	static constexpr Uint32 RUMBLE_MS = 10000;
+	static constexpr Uint32 RUMBLE_AGAIN_MS = 5000;
 
 private:
 	/* A pad and its buttons: a button pressed and released before a frame
@@ -66,6 +78,8 @@ private:
 		PadState state;
 		std::array<bool, SDL_CONTROLLER_BUTTON_MAX> fresh{};
 		std::array<bool, SDL_CONTROLLER_BUTTON_MAX> release{};
+		bool rumbling = false;
+		Uint32 rumbled = 0;	/* when it was last asked to */
 	};
 
 	void open(int device);
@@ -74,6 +88,7 @@ private:
 
 	Keyboard &m_keys;
 	ControlPanel m_panel;
+	std::vector<GameOutput> m_outputs;
 	bool m_on;
 	std::array<Pad, 2> m_pads;	/* of each player */
 	MouseState m_mouse;
