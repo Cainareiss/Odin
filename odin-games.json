@@ -29,6 +29,14 @@
 				{ "name" : "YAW", "id" : "yaw", "analog" : 0, "low" : "left", "role" : "stick_x" },
 				{ "name" : "ROLL", "id" : "roll", "analog" : 1, "low" : "left", "role" : "stick2_x" }
 			],
+			"outputs" : [
+				{ "name" : "LOCK MECHA.", "id" : "lock_mecha", "output" : 1, "role" : "lock" },
+				{ "name" : "LEFT LOWER LAMP", "id" : "left_lower_lamp", "output" : 2, "role" : "lamp" },
+				{ "name" : "START LAMP", "id" : "start_lamp", "output" : 3, "role" : "lamp" },
+				{ "name" : "LEFT UPPER LAMP", "id" : "left_upper_lamp", "output" : 4, "role" : "lamp" },
+				{ "name" : "RIGHT UPPER LAMP", "id" : "right_upper_lamp", "output" : 5, "role" : "lamp" },
+				{ "name" : "RIGHT LOWER LAMP", "id" : "right_lower_lamp", "output" : 6, "role" : "lamp" }
+			],
 			"sections" : [
 				{
 					"name" : "mie",
@@ -204,6 +212,13 @@
 				{ "name" : "STICK H", "id" : "stick_h", "analog" : 1, "low" : "left", "role" : "stick_x" },
 				{ "name" : "STICK V", "id" : "stick_v", "analog" : 0, "low" : "down", "role" : "stick_y" }
 			],
+			"outputs" : [
+				{ "name" : "START", "id" : "start_lamp", "output" : 1, "role" : "lamp" },
+				{ "name" : "VR R", "id" : "vr_r_lamp", "output" : 2, "role" : "lamp" },
+				{ "name" : "VR L", "id" : "vr_l_lamp", "output" : 3, "role" : "lamp" },
+				{ "name" : "BOMB", "id" : "bomb_lamp", "output" : 5, "role" : "lamp" },
+				{ "name" : "BILLBOARD", "id" : "billboard", "output" : 6, "role" : "lamp" }
+			],
 			"sections" : [
 				{
 					"name" : "mie",
@@ -288,6 +303,11 @@
 				{ "name" : "START", "id" : "start", "switch" : "1P START", "role" : "start" },
 				{ "name" : "LEFT LEVER", "id" : "left_lever", "analog" : 0, "low" : "up", "role" : "stick_y" },
 				{ "name" : "RIGHT LEVER", "id" : "right_lever", "analog" : 1, "low" : "up", "role" : "stick2_y" }
+			],
+			"outputs" : [
+				{ "name" : "START LAMP", "id" : "start_lamp", "output" : 1, "role" : "lamp" },
+				{ "name" : "BOOST LAMP", "id" : "boost_lamp", "output" : 4, "role" : "lamp" },
+				{ "name" : "BOOST LOCK", "id" : "boost_lock", "output" : 5, "role" : "lock" }
 			],
 			"sections" : [
 				{
@@ -476,6 +496,10 @@
 				{ "name" : "RIGHT-LEVER TURBO", "id" : "right_turbo", "switch" : "2P PUSH2", "role" : "button6" },
 				{ "name" : "START", "id" : "start", "switch" : "1P START", "role" : "start" },
 				{ "name" : "P.I.B.", "id" : "pib", "switch" : "1P PUSH3", "role" : "button4" }
+			],
+			"outputs" : [
+				{ "name" : "START LAMP", "id" : "start_lamp", "output" : 1, "role" : "lamp" },
+				{ "name" : "WINNER LAMP", "id" : "winner_lamp", "output" : 6, "role" : "lamp" }
 			],
 			"sections" : [
 				{

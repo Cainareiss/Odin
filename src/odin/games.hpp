@@ -98,10 +98,11 @@ struct GameControl {
 /* An output of the I/O board of a cabinet, with the name its OUTPUT TEST
  * gives it: "output", 1 to 32 as JVS counts them (output 1 is bit 7 of the
  * first byte), and "role", what the host does with it: "rumble", the
- * gamepad of the player shakes while it is on; "lamp", nothing yet.
+ * gamepad of the player shakes while it is on; "lamp" and "lock" (a
+ * solenoid that holds a control), nothing yet.
  * "player" : 2 for one of player 2. "id" as for a control. */
 struct GameOutput {
-	enum class Role { LAMP, RUMBLE };
+	enum class Role { LAMP, LOCK, RUMBLE };
 
 	std::string name;
 	std::string id;

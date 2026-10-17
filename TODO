@@ -154,8 +154,10 @@ bits (always 0); the debounce of the switches and the coins; what the
 lists those the host uses ("outputs" in odin-games.json, read in its
 OUTPUT TEST); the nozzle vibration of BRAVEFF (outputs 2 and 5) shakes
 the pad of its player (both motors at C000 while it is on: a choice of
-the emulator); the lamps go nowhere yet (outputs_network.cpp), nor the
-drive board of NASCAR; the outputs of the other games are to be read.
+the emulator); the lamps and the locks (the board of AIRTRIX, the boost
+lever of PODRACE) go nowhere yet (outputs_network.cpp), nor the drive
+board of NASCAR. AIRTRIX turns its output 4 off once after all six are
+lit in its OUTPUT TEST, the screen still saying ON: not known why.
 The drive board of NASCAR (838-13366, on outputs 15-22 of the 837-13741
 and answering on switches 2-5 of both players) is to come in two ways:
 an imitation of its program by default, and, as an option of the user

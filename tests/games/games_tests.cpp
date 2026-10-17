@@ -102,7 +102,8 @@ const char LIST[] = R"({
             { "name": "1", "switches": [ "2P LEFT", "2P UP" ] } ] } ],
       "outputs": [
         { "name": "1P LAMP", "id": "1p_lamp", "output": 1, "role": "lamp" },
-        { "name": "2P SHAKE", "id": "2p_shake", "output": 13, "role": "rumble", "player": 2 } ],
+        { "name": "2P SHAKE", "id": "2p_shake", "output": 13, "role": "rumble", "player": 2 },
+        { "name": "LOCK", "id": "lock", "output": 32, "role": "lock" } ],
       "sections": [
         { "name": "bootrom", "type": "alternative", "data": [ { "name": "boot.bin", "size": 4 } ] } ] }
   ]
@@ -243,10 +244,11 @@ void test_games(const std::string &dir)
 	} else {
 		check(false, "the seven controls of the list");
 	}
-	if (wheel && wheel->outputs.size() == 2) {
+	if (wheel && wheel->outputs.size() == 3) {
 		using odin::GameOutput;
 		const auto &o = wheel->outputs;
 		const uint8_t bytes[] = { 0x80, 0x08 };
+		const uint8_t last[] = { 0x00, 0x00, 0x00, 0x01 };
 
 		check(o[0].name == "1P LAMP" && o[0].id == "1p_lamp" && o[0].output == 1 && o[0].role == GameOutput::Role::LAMP &&
 		      o[0].player == 0, "an output, a lamp of player 1 when the list does not say");
@@ -255,8 +257,10 @@ void test_games(const std::string &dir)
 		check(o[0].on(bytes) && o[1].on(bytes) && !o[0].on(std::span(bytes + 1, 1)),
 		      "output 1 is bit 7 of the first byte, output 13 bit 3 of the second");
 		check(!o[1].on(std::span(bytes, 1)), "an output past the bytes of the board: off");
+		check(o[2].role == GameOutput::Role::LOCK && o[2].output == 32 && o[2].on(last) && !o[2].on(bytes),
+		      "a lock; output 32, bit 0 of the fourth byte");
 	} else {
-		check(false, "the two outputs of the list");
+		check(false, "the three outputs of the list");
 	}
 	if (toy)
 		check(toy->outputs.empty(), "without \"outputs\", none");
