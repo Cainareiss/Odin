@@ -260,8 +260,13 @@ shaker). The bass shakers of SGNASCAR take its rear sound (deluxe wiring:
 838-13578 SE out to the 838-13142 BASS AMP, its MUTE on output 14 of the
 I/O board, "BASS SHAKER MUTE"; OUTPUT TEST, BASS SHAKER (FRONT) clears it;
 the game clears it in a race): "option_vibration" too, still while the
-"mute" output is on. Not known: why BASS SHAKER (FRONT+REAR) changes no
-output here, and the REAR ON output of the wiring. The deluxe harness ties
+"mute" output is on; the game mutes them when it hits a wall, the wheel
+takes the shock: the pad also shakes as hard as the force told to the
+drive board (drive_board.hpp, the command on outputs 15-22, EXPERIMENTAL,
+HEURISTIC: its size against 3F, either way, at once and dying away over
+about four frames; the stronger of the two). Not known: why BASS SHAKER
+(FRONT+REAR) changes no output here, and the REAR ON output of the
+wiring. The deluxe harness ties
 "GND (FOR DX)" (CN8 pin 23 of the 837-13844), which the game reads as 1P
 PUSH1 and shows those two lines of its OUTPUT TEST for; the list does not
 tie it (standard cabinet).

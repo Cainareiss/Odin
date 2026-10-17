@@ -58,13 +58,17 @@ public:
 	/* The outputs of the board after a frame: the pad of a player shakes
 	 * while a rumble output of that player is on; the pad of player 1 also
 	 * as hard as the vibration device the sound of the optional board
-	 * feeds, when it feels it and no mute output is on. */
+	 * feeds, when it feels it and no mute output is on, or as the force
+	 * the drive board is told, when it feels it. */
 	void show(std::span<const uint8_t> outputs, std::span<const int16_t> option_sound);
 	/* No pad shakes (the emulation stops) */
 	void quiet();
 	/* EXPERIMENTAL: the pad of player 1 feels the sound of the optional
 	 * board, as the vibration device of the cabinet it feeds */
 	void feel_option_board(bool on) { m_felt = on; }
+	/* EXPERIMENTAL: the pad of player 1 feels the forces the drive board
+	 * is told, TX0 on that output (0: none), the stronger of the two */
+	void feel_drive_board(unsigned first_output) { m_drive_output = first_output; }
 
 	static constexpr int MOUSE_MOVED = 2;
 	/* The strength of both motors of a pad that shakes (the nozzle of
@@ -101,6 +105,8 @@ private:
 	bool m_on;
 	bool m_felt = false;
 	Uint16 m_felt_level = 0;	/* how hard the felt sound shakes, smoothed */
+	unsigned m_drive_output = 0;
+	Uint16 m_drive_level = 0;	/* how hard the felt force shakes */
 	std::array<Pad, 2> m_pads;	/* of each player */
 	MouseState m_mouse;
 	bool m_mouse_seen;		/* it has moved on the window */

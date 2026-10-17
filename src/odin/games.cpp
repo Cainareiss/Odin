@@ -494,6 +494,16 @@ GameList::load_game(const std::string &rom_dir, const std::string &name) const
 		}
 		game.option_vibration = json_is_true(shaken);
 	}
+	if (const json_t *const drive = json_object_get(rom, "drive_board")) {
+		const json_t *const first = json_object_get(drive, "first_output");
+
+		if (!json_is_integer(first) || json_integer_value(first) < 1 || json_integer_value(first) > 25) {
+			std::fprintf(stderr, "ERROR: game '%s': \"drive_board\" has no \"first_output\" of 1 to 25\n",
+			             name.c_str());
+			return std::nullopt;
+		}
+		game.drive_first_output = static_cast<unsigned>(json_integer_value(first));
+	}
 	if (const json_t *const chip = json_object_get(rom, "mie_eeprom")) {
 		auto bytes = parse_hex(json_string_value(chip));
 

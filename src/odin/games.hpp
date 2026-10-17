@@ -171,6 +171,10 @@ struct Game {
 	 * (the control panel of PODRACE): "option_vibration" in the list,
 	 * false when it does not say. */
 	bool option_vibration = false;
+	/* The output of TX0 of the drive board of its cabinet, which takes a
+	 * command on eight outputs from there (drive_board.hpp): "drive_board"
+	 * in the list, {"first_output": 1 to 25}; 0 when it does not say. */
+	unsigned drive_first_output = 0;
 	static constexpr double LOWEST_LEVEL = -60;
 	static constexpr double HIGHEST_LEVEL = 12;
 	std::vector<std::pair<std::string, std::vector<uint8_t>>> sections;

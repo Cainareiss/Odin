@@ -19,6 +19,7 @@
 #include "odin/controls.hpp"
 
 #include "odin/audio_out.hpp"
+#include "odin/drive_board.hpp"
 #include "odin/picture.hpp"
 
 #include <cstdio>
@@ -203,7 +204,12 @@ Controls::show(std::span<const uint8_t> outputs, std::span<const int16_t> option
 
 	m_felt_level = m_felt && !still ? AudioOut::smoothed(m_felt_level, AudioOut::shake_of(option_sound)) : 0;
 
-	const Uint16 felt = m_felt_level / FELT_STEP * FELT_STEP;
+	/* A force shakes at once and dies away as a shake does */
+	const Uint16 force = m_drive_output ? DriveBoard::shake_of(DriveBoard::command(outputs, m_drive_output)) : 0;
+
+	m_drive_level = std::max(force, AudioOut::smoothed(m_drive_level, force));
+
+	const Uint16 felt = std::max(m_felt_level, m_drive_level) / FELT_STEP * FELT_STEP;
 
 	for (unsigned player = 0; player < 2; player++) {
 		Pad &pad = m_pads[player];

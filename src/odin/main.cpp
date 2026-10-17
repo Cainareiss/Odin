@@ -406,7 +406,7 @@ main(int argc, char **argv)
 	/* The optional board in the mix and on the pad: the list, or the last
 	 * lines of [sound.<game>] */
 	double option_level = game->option_level;
-	bool vibration = game->option_vibration;
+	bool vibration = game->option_vibration || game->drive_first_output;
 	for (const auto &[key, value] : settings.section("sound." + game->name)) {
 		char *end = nullptr;
 		const double db = std::strtod(value.c_str(), &end);
@@ -429,9 +429,12 @@ main(int argc, char **argv)
 		audio = odin::AudioOut::make(*options.sound, option_level);
 	if (audio && options.sound == odin::AudioOut::Mode::MIX && option_level != 0)
 		std::printf("sound: the optional board at %+g dB in the mix\n", option_level);
-	controls.feel_option_board(vibration);
+	controls.feel_option_board(vibration && game->option_vibration);
+	controls.feel_drive_board(vibration ? game->drive_first_output : 0);
 	if (vibration)
-		std::printf("sound: the optional board shakes the pad of player 1 (experimental)\n");
+		std::printf("controls: the pad of player 1 shakes as the%s%s of the cabinet (experimental)\n",
+		            game->option_vibration ? " vibration device" : "",
+		            game->drive_first_output ? (game->option_vibration ? " and the wheel" : " wheel") : "");
 
 	bool started = true;
 
