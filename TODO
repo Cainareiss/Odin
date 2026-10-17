@@ -900,6 +900,9 @@ which is the same for von4 only. A view turned over by a distance below 0
 (021) keeps the faces of the view the right way: the rear-view mirror of
 SGNASCAR (F = -277.149, f = 305.024) sends its meshes wound as ahead, and
 nothing else; the faces turned over would leave it empty, as Odin did.
+Such a view sizes its models on the screen as the right way (095, jumps
+5, 9, D): with sizes below 0 the game left its track out of that mirror,
+which Demul shows (not seen on a cabinet).
 
 The framebuffer blender (instructions 781, 181). Between the 3D buffers it
 works as Sega draws it in US patent 6,549,209 (figures 6, 10 and 11): the

@@ -137,11 +137,14 @@ Antarctic::op_nop(const uint32_t *)
 /* Width of the bounding sphere on the screen, in 1/16 of a pixel
  * (HEURISTIC: diameter * projection distance / distance to the centre.
  * The PHARRIER cabinet shows the finest player model at 2.8 units; with
- * the radius, the SGNASCAR stands turn to their far model too early). */
+ * the radius, the SGNASCAR stands turn to their far model too early). A
+ * view turned over (021, F below 0) sizes them as the right way: sizes
+ * below 0 left the track out of the rear-view mirror of SGNASCAR, which
+ * Demul shows. */
 float
 Antarctic::get_lod_size() const
 {
-	return 32.0f * m_s.lod.radius * m_s.vp.current.clip.f / m_s.lod.value;
+	return 32.0f * m_s.lod.radius * std::fabs(m_s.vp.current.clip.f) / m_s.lod.value;
 }
 
 void

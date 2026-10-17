@@ -381,6 +381,32 @@ void test_viewport_and_state()
 	check(m.cp->state().vp.current.depth.func == 0 && m.cp->pc() == 0, "power-on clears everything");
 }
 
+/* The size of a model on the screen, for the jumps of condition 5: the
+ * same in a view turned over (021 with F below 0, the rear-view mirror of
+ * SGNASCAR) */
+void test_lod_size_in_a_view_turned_over()
+{
+	for (const float distance : { 1000.0f, -1000.0f }) {
+		Machine m;
+		const uint32_t large = LIST + 0x84;
+
+		m.write(large, { 0x00000991, 0x00000042, END });
+		m.run({ 0x00000021, f(distance), f(500.0f), f(0.1f),	/* the width from F */
+		        0x00030004, 0x00030003,				/* commit and recall viewport 3 */
+		        0x00000161, f(1.0f), f(0.0f), f(0.0f),	/* the modelview: none */
+		        0x00010161, f(0.0f), f(1.0f), f(0.0f),
+		        0x00020161, f(0.0f), f(0.0f), f(1.0f),
+		        0x00030161, f(0.0f), f(0.0f), f(0.0f),
+		        0x00000561, f(0.0f), f(0.0f), f(-100.0f),	/* a model 100 units ahead */
+		        0x00000055, f(1.0f),				/* of radius 1: 20 pixels wide */
+		        0x012C5012, large >> 2,				/* jump from 300/16 pixels on */
+		        0x00000991, 0x00000011,
+		        END });
+		check(m.ended && m.cp->fb_config().clear[0] == 0x42,
+		      distance > 0 ? "a model large enough on the screen" : "and in a view turned over");
+	}
+}
+
 void test_registers()
 {
 	Machine m;
@@ -619,6 +645,7 @@ int main()
 	test_blending_mode_in_two_words();
 	test_texhead_of_0E8_and_second_modelview();
 	test_viewport_and_state();
+	test_lod_size_in_a_view_turned_over();
 	test_registers();
 	test_texture_transfer();
 	/* The last level, 1x1, starts on an odd texel, then on an even one:
