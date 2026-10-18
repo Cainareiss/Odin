@@ -150,6 +150,36 @@ void test_serial()
 	check(chip.peek(0xFF05) == 0xA7, "a byte received: 0060, SCBUF");
 }
 
+void test_overrun()
+{
+	Rom rom;
+	Board board;
+
+	/* SCMOD 29, INTEL 0C, INTEH 48, EI; once P0 bit 0 reads 0, SCCR into
+	 * FF07 then FF08, SCBUF into FF09. The RX handler counts in FF04 and
+	 * does not read SCBUF. */
+	rom.put(0, { 0x3E, 0xBF, 0xFF, 0x37, 0xE6, 0x29, 0x37, 0xF4, 0x0C, 0x37, 0xF5, 0x48, 0x03 });
+	rom.put(0x10, { 0x27, 0xC0, 0x6C, 0x01, 0xCE, 0xFA, 0x27, 0xE7, 0x2F, 0x07, 0x27, 0xE7, 0x2F, 0x08, 0x27, 0xE8,
+	                0x2F, 0x09, LOOP[0], LOOP[1] });
+	rom.put(0x60, { 0x87, 0x04, 0x1F });
+	Tmp90ph44 chip(rom.bytes, board);
+
+	chip.run(100);
+	chip.serial_received(0xA7);
+	chip.run(100);
+	chip.serial_received(0xB5);
+	chip.run(100);
+	check(chip.peek(0xFF04) == 1, "a byte while SCBUF is not read: no INTRX");
+	board.pins[0] = 0xFE;
+	chip.run(200);
+	check(chip.peek(0xFF07) & 0x10, "OERR set");
+	check(!(chip.peek(0xFF08) & 0x10), "OERR cleared once read");
+	check(chip.peek(0xFF09) == 0xA7, "SCBUF keeps the first byte");
+	chip.serial_received(0xC3);
+	chip.run(100);
+	check(chip.peek(0xFF04) == 2, "SCBUF read: the next byte comes in");
+}
+
 void test_ports()
 {
 	Rom rom;
@@ -199,6 +229,7 @@ int main()
 	test_watchdog();
 	test_timer();
 	test_serial();
+	test_overrun();
 	test_ports();
 	test_analog();
 

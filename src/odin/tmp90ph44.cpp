@@ -66,6 +66,8 @@ Tmp90ph44::reset()
 	m_watchdog = 0;
 	m_requests = 0;
 	m_flags = 0;
+	m_rx_full = false;
+	m_rx_errors = 0;
 	m_tx_left = -1;
 	m_cpu.reset();
 }
@@ -84,12 +86,20 @@ Tmp90ph44::run(uint32_t states)
 	return done;
 }
 
+/* After the data book (TMP90C840, 3.8.2): the byte goes from the shift
+ * register into SCBUF with INTRX, unless SCBUF has not been read since the
+ * last one: then the new byte is lost and OERR set. */
 void
 Tmp90ph44::serial_received(uint8_t byte)
 {
 	if (!(m_sfr[SCMOD] & 0x20))
 		return;
+	if (m_rx_full) {
+		m_rx_errors |= 0x10;
+		return;
+	}
 	m_rx = byte;
+	m_rx_full = true;
 	request(VEC_RX);
 }
 
@@ -170,10 +180,16 @@ Tmp90ph44::sfr_read(uint8_t reg)
 		if (m_sfr[ADMOD] != 0xF7)
 			unknown("A/D mode", m_sfr[ADMOD]);
 		return m_board.analog_pin(reg - ADREG0);
-	case SCCR:
-		/* No error on the line: bits 2 to 4 clear (read at 143C) */
-		return m_sfr[SCCR] & 0xE3;
+	case SCCR: {
+		/* OERR, bit 4, as serial_received sets it; no parity nor framing
+		 * error on the line. The three are cleared when read. */
+		const uint8_t value = static_cast<uint8_t>((m_sfr[SCCR] & 0xE3) | m_rx_errors);
+
+		m_rx_errors = 0;
+		return value;
+	}
 	case SCBUF:
+		m_rx_full = false;
 		return m_rx;
 	case IRFH:
 		/* The request flags of the vectors 0018 to 0050, bit n for the

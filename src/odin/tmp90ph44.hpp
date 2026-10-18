@@ -63,7 +63,8 @@ public:
  *    WDTP) periods of fc; 4E in WDCR clears it, B1 with WDTE clear stops it.
  *  - Interrupts: a flag per vector, cleared when taken or when FFEA is
  *    written with the vector / 8.
- *  - Serial channel: 8-bit UART at the rate of the JVS line.
+ *  - Serial channel: 8-bit UART at the rate of the JVS line; a byte
+ *    received while SCBUF holds one not read is lost (OERR).
  *  - A/D converter: AN0 to AN3 (P50-P53) into FFF0-FFF3.
  *
  * Times are in states, two periods of fc. */
@@ -72,6 +73,9 @@ public:
 	static constexpr size_t ROM_SIZE = 0x4000;
 	/* States a byte takes on the line: 10 bits at fc / 128 a bit */
 	static constexpr uint32_t BYTE_STATES = 640;
+	/* States from the start of a byte on the line to its INTRX: the
+	 * middle of its last data bit, where the UART samples it */
+	static constexpr uint32_t RX_STATES = 544;
 
 	Tmp90ph44(std::span<const uint8_t> rom, Tmp90ph44Board &board);
 
@@ -79,7 +83,8 @@ public:
 	void reset();
 	/* Runs instructions and devices for at least `states`; the states it ran. */
 	uint32_t run(uint32_t states);
-	/* A byte has arrived on the serial line, its stop bit ended. */
+	/* The data bits of a byte on the serial line have been sampled:
+	 * RX_STATES after its start. */
 	void serial_received(uint8_t byte);
 
 	Tlcs90 &cpu() { return m_cpu; }
@@ -118,6 +123,8 @@ private:
 	uint32_t m_requests = 0;	/* to the CPU, a bit per vector / 8 */
 	uint32_t m_flags = 0;		/* as FFEB reads them, the same bits */
 	uint8_t m_rx = 0;
+	bool m_rx_full = false;		/* SCBUF not read since its byte came */
+	uint8_t m_rx_errors = 0;	/* SCCR bits 4-2 */
 	int32_t m_tx_left = -1;		/* states until the byte is sent */
 	uint8_t m_tx = 0;
 };
