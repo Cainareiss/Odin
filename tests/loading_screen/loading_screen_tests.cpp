@@ -27,8 +27,10 @@
 #include "odin/loading_screen.hpp"
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdio>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -88,12 +90,20 @@ void test_glyphs()
 	      "a space, and any other character than printable ASCII as one");
 }
 
+/* The rectangles after those of the title: the label and the bar */
+size_t after_title()
+{
+	return LoadingScreen::layout("", 0, 10).size();
+}
+
 void test_title()
 {
+	const size_t rest = after_title();
+
 	/* One letter: the largest scale, in the middle */
 	const auto one = LoadingScreen::layout("A", 0, 10);
 
-	check(one.size() == 12 + 1, "A: twelve runs of lit pixels, then the track of the bar");
+	check(one.size() == 12 + rest, "A: twelve runs of lit pixels, then the label and the bar");
 	check(!one.empty() && same(one[0], 310 + 4, 226, 12, 4, LoadingScreen::TITLE_SHADE),
 	      "its top row at four times its size, in the middle of the picture");
 	check(one.size() > 2 && same(one[1], 310, 230, 4, 4, LoadingScreen::TITLE_SHADE) &&
@@ -103,7 +113,7 @@ void test_title()
 	const auto air = LoadingScreen::layout("Air Trix", 0, 10);
 	unsigned left = LoadingScreen::WIDTH, right = 0, top = LoadingScreen::HEIGHT, bottom = 0;
 
-	for (size_t i = 0; i + 1 < air.size(); i++) {
+	for (size_t i = 0; i + rest < air.size(); i++) {
 		left = std::min(left, air[i].x);
 		right = std::max(right, air[i].x + air[i].w);
 		top = std::min(top, air[i].y);
@@ -116,7 +126,7 @@ void test_title()
 	const auto wide = LoadingScreen::layout(std::string(48, 'W'), 0, 10);
 	bool inside = true, halved = true;
 
-	for (size_t i = 0; i + 1 < wide.size(); i++) {
+	for (size_t i = 0; i + rest < wide.size(); i++) {
 		inside = inside && wide[i].x + wide[i].w <= LoadingScreen::WIDTH &&
 		         wide[i].y + wide[i].h <= LoadingScreen::HEIGHT;
 		halved = halved && wide[i].h == 2;
@@ -126,22 +136,53 @@ void test_title()
 	check(wide.size() > 1 && wide[0].x == (LoadingScreen::WIDTH - (48 * 6 - 1) * 2) / 2,
 	      "and in the middle across");
 
-	check(LoadingScreen::layout("", 0, 10).size() == 1 && LoadingScreen::layout("   ", 0, 10).size() == 1,
-	      "no title, or one of spaces: only the bar");
+	check(LoadingScreen::layout("   ", 0, 10).size() == rest, "a title of spaces: no rectangle");
+}
+
+void test_label()
+{
+	const auto none = LoadingScreen::layout("", 0, 10);
+	const size_t runs = LoadingScreen::layout(LoadingScreen::LABEL, 0, 10).size() - none.size();
+	const size_t label = none.size() - 1;
+	unsigned left = LoadingScreen::WIDTH, bottom = 0;
+	bool small = true, grey = true;
+
+	for (size_t i = 0; i < label; i++) {
+		left = std::min(left, none[i].x);
+		bottom = std::max(bottom, none[i].y + none[i].h);
+		small = small && none[i].h == LoadingScreen::LABEL_SCALE;
+		grey = grey && none[i].shade == LoadingScreen::LABEL_SHADE;
+	}
+	check(std::string_view(LoadingScreen::LABEL) == "NOW LOADING", "the label is NOW LOADING");
+	check(label == runs, "as many runs as when it is a title");
+	check(small && grey, "twice the size of the font, in grey");
+	check(left == LoadingScreen::BAR_X && bottom == LoadingScreen::BAR_Y - 6,
+	      "from the left end of the bar, six pixels above it");
+	check(LoadingScreen::TRACK_SHADE < LoadingScreen::LABEL_SHADE && LoadingScreen::LABEL_SHADE < LoadingScreen::TITLE_SHADE,
+	      "lighter than the track, darker than the title");
+}
+
+/* The rectangles of the bar of a layout: the last one or two */
+std::vector<LoadingRect> bar(unsigned done, unsigned total)
+{
+	const auto all = LoadingScreen::layout("", done, total);
+	const size_t label = after_title() - 1;
+
+	return std::vector<LoadingRect>(all.begin() + static_cast<std::ptrdiff_t>(label), all.end());
 }
 
 void test_bar()
 {
-	const auto empty = LoadingScreen::layout("", 0, 4);
-	const auto half = LoadingScreen::layout("", 2, 4);
-	const auto full = LoadingScreen::layout("", 4, 4);
+	const auto empty = bar(0, 4);
+	const auto half = bar(2, 4);
+	const auto full = bar(4, 4);
 
 	check(empty.size() == 1 && same(empty[0], 192, 432, 256, 4, LoadingScreen::TRACK_SHADE),
 	      "nothing done: the track of the bar alone, low down in the middle");
 	check(half.size() == 2 && same(half[1], 192, 432, 128, 4, LoadingScreen::FILL_SHADE), "half done: half filled");
 	check(full.size() == 2 && same(full[1], 192, 432, 256, 4, LoadingScreen::FILL_SHADE), "all done: filled");
-	check(LoadingScreen::layout("", 1, 3)[1].w == 85, "a third done: a third filled, rounded down");
-	check(LoadingScreen::layout("", 9, 4)[1].w == 256 && LoadingScreen::layout("", 0, 0)[1].w == 256,
+	check(bar(1, 3).size() == 2 && bar(1, 3)[1].w == 85, "a third done: a third filled, rounded down");
+	check(bar(9, 4).size() == 2 && bar(9, 4)[1].w == 256 && bar(0, 0).size() == 2 && bar(0, 0)[1].w == 256,
 	      "more than all, or nothing to do: filled");
 	check(LoadingScreen::TRACK_SHADE < LoadingScreen::FILL_SHADE, "the fill shows on its track");
 }
@@ -152,6 +193,7 @@ int main()
 {
 	test_glyphs();
 	test_title();
+	test_label();
 	test_bar();
 
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);

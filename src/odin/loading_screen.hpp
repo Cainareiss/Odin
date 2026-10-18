@@ -28,9 +28,9 @@ namespace odin {
 
 /* The screen shown while the programs of a game are compiled, before its
  * first frame: black, its title in the middle, and low down a bar that
- * fills as they are. It is laid out on a picture of the size of the screen
- * of the board, which the renderer places in the window as it does that
- * screen. */
+ * fills as they are, NOW LOADING above it. It is laid out on a picture of
+ * the size of the screen of the board, which the renderer places in the
+ * window as it does that screen. */
 struct LoadingRect {
 	unsigned x, y, w, h;	/* from the top left corner */
 	float shade;		/* 0 black to 1 white */
@@ -44,10 +44,14 @@ struct LoadingScreen {
 	static constexpr unsigned GLYPH_W = 5, GLYPH_H = 7, ADVANCE = 6;
 	static constexpr unsigned MAX_SCALE = 4, TITLE_WIDTH = 576;
 	static constexpr unsigned BAR_X = 192, BAR_Y = 432, BAR_W = 256, BAR_H = 4;
-	static constexpr float TITLE_SHADE = 1.0f, TRACK_SHADE = 0.25f, FILL_SHADE = 1.0f;
+	/* The label: twice the size of the font, its foot LABEL_GAP above
+	 * the bar, from its left end */
+	static constexpr char LABEL[] = "NOW LOADING";
+	static constexpr unsigned LABEL_SCALE = 2, LABEL_GAP = 6;
+	static constexpr float TITLE_SHADE = 1.0f, LABEL_SHADE = 0.6f, TRACK_SHADE = 0.25f, FILL_SHADE = 1.0f;
 
-	/* The rectangles to fill on black: the title, then the bar, its
-	 * track and what is done of it (none at 0). */
+	/* The rectangles to fill on black: the title, the label, then the
+	 * bar, its track and what is done of it (none at 0). */
 	static std::vector<LoadingRect> layout(std::string_view title, unsigned done, unsigned total);
 	/* The drawing of a character, a row of five bits from the top, the
 	 * high one on the left. Small letters are drawn as capitals, any

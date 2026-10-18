@@ -101,6 +101,33 @@ constexpr Glyph FONT[] = {
 
 static_assert(std::size(FONT) == '`' - ' ' + 1 + '~' - '{' + 1);
 
+/* A text from (left, top), `scale` times the size of the font: a run of lit
+ * pixels in a row of a character is one rectangle. */
+void
+add_text(std::vector<LoadingRect> &rects, std::string_view text, unsigned left, unsigned top, unsigned scale,
+         float shade)
+{
+	for (unsigned i = 0; i < text.size(); i++) {
+		const Glyph &rows = LoadingScreen::glyph(text[i]);
+
+		for (unsigned row = 0; row < LoadingScreen::GLYPH_H; row++) {
+			for (unsigned col = 0; col < LoadingScreen::GLYPH_W;) {
+				if (!(rows[row] & (0x10 >> col))) {
+					col++;
+					continue;
+				}
+				unsigned end = col;
+
+				while (end < LoadingScreen::GLYPH_W && (rows[row] & (0x10 >> end)))
+					end++;
+				rects.push_back({ left + (i * LoadingScreen::ADVANCE + col) * scale, top + row * scale,
+				                  (end - col) * scale, scale, shade });
+				col = end;
+			}
+		}
+	}
+}
+
 } /* namespace */
 
 const Glyph &
@@ -127,27 +154,9 @@ LoadingScreen::layout(std::string_view title, unsigned done, unsigned total)
 		const unsigned left = WIDTH > unscaled * scale ? (WIDTH - unscaled * scale) / 2 : 0;
 		const unsigned top = (HEIGHT - GLYPH_H * scale) / 2;
 
-		for (unsigned i = 0; i < length; i++) {
-			const Glyph &rows = glyph(title[i]);
-
-			for (unsigned row = 0; row < GLYPH_H; row++) {
-				/* A run of lit pixels is one rectangle. */
-				for (unsigned col = 0; col < GLYPH_W;) {
-					if (!(rows[row] & (0x10 >> col))) {
-						col++;
-						continue;
-					}
-					unsigned end = col;
-
-					while (end < GLYPH_W && (rows[row] & (0x10 >> end)))
-						end++;
-					rects.push_back({ left + (i * ADVANCE + col) * scale, top + row * scale,
-					                  (end - col) * scale, scale, TITLE_SHADE });
-					col = end;
-				}
-			}
-		}
+		add_text(rects, title, left, top, scale, TITLE_SHADE);
 	}
+	add_text(rects, LABEL, BAR_X, BAR_Y - LABEL_GAP - GLYPH_H * LABEL_SCALE, LABEL_SCALE, LABEL_SHADE);
 
 	const unsigned filled = total ? BAR_W * std::min(done, total) / total : BAR_W;
 
