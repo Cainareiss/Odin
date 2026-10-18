@@ -605,6 +605,11 @@ GameList::load_game(const std::string &rom_dir, const std::string &name) const
 		}
 		auto bytes = load_section(section, rom_dir + "/" + name);
 
+		/* "optional": true, a section the game runs without */
+		if (!bytes && json_is_true(json_object_get(section, "optional"))) {
+			std::printf("Section %s left out: not found\n", section_name ? section_name : "?");
+			continue;
+		}
 		if (!bytes)
 			return std::nullopt;
 		game.sections.emplace_back(json_string_value(json_object_get(section, "name")), std::move(*bytes));

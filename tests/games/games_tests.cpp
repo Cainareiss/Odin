@@ -80,6 +80,14 @@ const char LIST[] = R"({
             { "name": "c.bin", "size": 2 }, { "name": "a.bin", "size": 4 } ] } ] },
     { "name": "short", "mach": "hikaru", "sections": [
         { "name": "bootrom", "type": "alternative", "data": [ { "name": "boot.bin", "size": 3 } ] } ] },
+    { "name": "spare", "mach": "hikaru", "sections": [
+        { "name": "io_rom", "type": "alternative", "optional": true, "data": [ { "name": "missing.bin", "size": 4 } ] },
+        { "name": "bootrom", "type": "alternative", "data": [ { "name": "boot.bin", "size": 4 } ] } ] },
+    { "name": "kept", "mach": "hikaru", "sections": [
+        { "name": "io_rom", "type": "alternative", "optional": true, "data": [ { "name": "a.bin", "size": 4 } ] },
+        { "name": "bootrom", "type": "alternative", "data": [ { "name": "boot.bin", "size": 4 } ] } ] },
+    { "name": "needed", "mach": "hikaru", "sections": [
+        { "name": "io_rom", "type": "alternative", "data": [ { "name": "missing.bin", "size": 4 } ] } ] },
     { "name": "odd", "mach": "hikaru", "sections": [
         { "name": "bootrom", "type": "shuffle", "data": [ { "name": "boot.bin", "size": 4 } ] } ] },
     { "name": "unequal", "mach": "hikaru", "sections": [
@@ -202,11 +210,11 @@ void test_games(const std::string &dir)
 	const std::string roms = dir + "/games_test_roms";
 
 	std::filesystem::create_directories(roms + "/toy");
-	for (const char *game : { "short", "odd", "unequal", "stepless", "fit", "misfit", "wheel" })
+	for (const char *game : { "short", "odd", "unequal", "stepless", "fit", "misfit", "wheel", "spare", "kept", "needed" })
 		std::filesystem::create_directories(roms + "/" + game);
 	write(dir + "/games_test.json", LIST);
 	write(roms + "/fit/e.bin", std::string(2 << 20, 'E'));
-	for (const char *game : { "toy", "short", "odd", "unequal", "stepless", "misfit", "wheel" }) {
+	for (const char *game : { "toy", "short", "odd", "unequal", "stepless", "misfit", "wheel", "spare", "kept", "needed" }) {
 		const std::string folder = roms + "/" + game;
 
 		write(folder + "/boot.bin", "BOOT");
@@ -317,6 +325,11 @@ void test_games(const std::string &dir)
 	check(!list.load_game(roms, "unequal"), "nor one whose alternative files have different sizes");
 	check(!list.load_game(roms, "stepless"), "nor one that interleaves without telling by how many bytes");
 	check(!list.load_game(roms, "misfit"), "nor one whose EPROMs are not of the size its ROM board takes");
+	check(!list.load_game(roms, "needed"), "nor one a file of a section of which is not there");
+	const std::optional<Game> spare = list.load_game(roms, "spare"), kept = list.load_game(roms, "kept");
+	check(spare && spare->section("io_rom").empty() && is(spare->section("bootrom"), "BOOT"),
+	      "an optional section not there: left out, the game loads");
+	check(kept && is(kept->section("io_rom"), "A0A1"), "there: loaded");
 	const std::optional<Game> fit = list.load_game(roms, "fit");
 	check(fit && fit->rom_board && fit->rom_board->eprom_mb == 2 && !fit->rom_board->crypt_key &&
 	      !fit->rom_board->has_actel && fit->section("eprom").size() == 4 << 20,
