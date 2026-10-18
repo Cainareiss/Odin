@@ -188,7 +188,7 @@ load_game_list(odin::GameList &games)
 			continue;
 		if (!games.load(path))
 			return false;
-		std::printf("loading game list from '%s'", path.c_str());
+		std::printf("loading game list from '%s'\n", path.c_str());
 		return true;
 	}
 	std::fprintf(stderr, "ERROR: no list of the games: '%s', '%s' nor '%s'\n",
@@ -235,7 +235,7 @@ Session::load_or_save_state(bool load)
 	const std::string path = m_board.game_name() + ".odinstate";
 
 	if (load ? m_board.load_state(path) : m_board.save_state(path))
-		std::printf("%s state '%s'", load ? "loaded" : "saved", path.c_str());
+		std::printf("%s state '%s'\n", load ? "loaded" : "saved", path.c_str());
 	else
 		std::fprintf(stderr, "ERROR: failed to %s state '%s'\n", load ? "load" : "save", path.c_str());
 }
@@ -464,11 +464,11 @@ main(int argc, char **argv)
 			std::fprintf(stderr, "ERROR: failed to load state '%s'\n", options.state_path.c_str());
 	}
 	if (started) {
-		std::printf("Running");
+		std::printf("Running\n");
 		Session(options, *board, *display, keys, controls, audio.get(), outputs.get()).run();
 	}
 
-	std::printf("Finalizing");
+	std::printf("Finalizing\n");
 	board->power_off();
 	return started ? 0 : 1;
 }

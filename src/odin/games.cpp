@@ -57,7 +57,7 @@ load_datum(const json_t *datum, const std::string &dir)
 	if (!name || !size)
 		return std::nullopt;
 	const std::string path = dir + "/" + name;
-	std::printf("Loading %u bytes from '%s'", static_cast<unsigned>(size), path.c_str());
+	std::printf("Loading %u bytes from '%s'\n", static_cast<unsigned>(size), path.c_str());
 	return read_file(path, size);
 }
 
@@ -72,7 +72,7 @@ load_section(const json_t *section, const std::string &dir)
 
 	if (!name || !type || !num)
 		return std::nullopt;
-	std::printf("Loading section %s, %s", name, type);
+	std::printf("Loading section %s, %s\n", name, type);
 
 	if (!std::strcmp(type, "alternative")) {
 		/* They stand for one another: the same size. */
