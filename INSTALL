@@ -39,7 +39,7 @@ Options:
 			and forth)
  -v			more messages
 
-Keys: Escape quits, Space pauses, F4 saves <game>.odinstate and F1 loads it.
+Keys: Escape quits, P pauses, F4 saves <game>.odinstate and F1 loads it.
 0 is TEST and 9 SERVICE, the buttons of the cabinet: they open and work
 the menu of the BOOTROM and the test menus of the games (both together
 leave INPUT TEST); 5 and 6 are the coins. Player 1

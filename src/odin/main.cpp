@@ -229,9 +229,10 @@ Session::load_or_save_state(bool load)
 		std::fprintf(stderr, "ERROR: failed to %s state '%s'\n", load ? "load" : "save", path.c_str());
 }
 
-/* The keys of the emulator: Escape quits, Space pauses, F1 loads the state
- * of the game and F4 saves it, F11 or Alt+Enter takes the whole display.
- * The others are the control panel, see keyboard.hpp. True to quit. */
+/* The keys of the emulator: Escape quits, P pauses (as in MAME), F1 loads
+ * the state of the game and F4 saves it, F11 or Alt+Enter takes the whole
+ * display. The others are the control panel, see keyboard.hpp. True to
+ * quit. */
 bool
 Session::process_events()
 {
@@ -248,7 +249,7 @@ Session::process_events()
 			case SDLK_ESCAPE:
 				quit = true;
 				break;
-			case SDLK_SPACE:
+			case SDLK_p:
 				m_paused = !m_paused;
 				if (m_paused)
 					m_controls.quiet();
