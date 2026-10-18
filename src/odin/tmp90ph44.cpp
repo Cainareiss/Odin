@@ -56,12 +56,17 @@ Tmp90ph44::Tmp90ph44(std::span<const uint8_t> rom, Tmp90ph44Board &board)
 
 /* After the data book (TMP90C840, reset): the timers and the prescaler
  * stop, the watchdog runs with WDTE set and WDTP 00, every port is an
- * input. */
+ * input, its latch at 0. */
 void
 Tmp90ph44::reset()
 {
 	m_sfr.fill(0);
 	m_sfr[WDMOD] = 0x80;
+	/* HEURISTIC: the latch of P3 at 1, as that of the TMP90C840 (3.5.4),
+	 * the only one the data book gives; there P3 has no direction register.
+	 * The program sets P3CR before P3 (00A4): at 0, P3 bit 2 would tell the
+	 * MIE the board has its address for an instruction. */
+	m_sfr[P3] = 0xFF;
 	m_prescaler = 0;
 	m_timer.fill(0);
 	m_watchdog = 0;

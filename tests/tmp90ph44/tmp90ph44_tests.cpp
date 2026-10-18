@@ -425,6 +425,16 @@ void test_ports()
 	check(board.out[5].told == 1 && board.out[5].latch == 0x40 && board.out[5].driven == 0xC0,
 	      "P5: P56 and P57 drive");
 	check(board.out[0].told == 0 && board.out[4].told == 0, "the ports not written: nothing told");
+
+	/* P3CR FF at once: the latch of P3 drives the pins */
+	Rom first;
+	Board early;
+
+	first.put(0, { 0x37, 0xC7, 0xFF, LOOP[0], LOOP[1] });
+	Tmp90ph44 reset(first.bytes, early);
+	reset.run(20);
+	check(early.out[3].told == 1 && early.out[3].latch == 0xFF && early.out[3].driven == 0xFF,
+	      "the latch of P3 at 1 from the reset");
 }
 
 void test_analog()
