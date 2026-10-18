@@ -146,8 +146,8 @@ core running the dumped firmware (MAME wangmid, crp1231lr10_ver0110.ic2).
 Status byte st1 'V' that von4 tests on command 0x33 is not understood.
 
 JVS (src/odin/jvs.cpp: the cable and the protocol of the standard). The
-I/O boards are imitations made from their programs, which are not run:
-jvs_837_13551.cpp from 315-6215 (a TMP90PH44: no TLCS-90 core here), and
+I/O boards are imitations made from their programs, which Odin does not
+run yet: jvs_837_13551.cpp from 315-6215 (a TMP90PH44, below), and
 jvs_837_13741.cpp from epr-21868 (a 315-6146; the I/O board of NASCAR,
 "io" in odin-games.json; the program is in the 18wheelr set of MAME). Both
 programs take the same commands, answer an unknown one with the reports
@@ -180,7 +180,32 @@ them: DATA_RETRANSMIT (2F), which both programs answer with their last
 reply as it was (epr-21868 at 061F, 315-6215 at 04F6); more than 2 bytes
 a player in SWITCH_INPUTS, which the 837-13551 answers with nothing, not
 even a report (0D5C; here report 2). For 0 players or 0 bytes it gives
-report 1 and the system byte (0D1A), as here.
+report 1 and the system byte (0D1A), as here. Nor ANALOG_INPUTS for 0
+channels, whose report 315-6215 leaves out, or for more than 8, after
+whose report it sends the bytes of an earlier reply (0A70: the reply
+moves on by the count); nor SET_ADDRESS to a board that has an address,
+which the 837-13551 lets by (0309).
+The TMP90PH44 of the 837-13551 (src/odin/tlcs90.cpp, tmp90ph44.cpp,
+MARKDOWN/75), not wired yet in place of the imitation:
+tests/jvs/s6215_bench.cpp runs 315-6215 on it against the imitation, its
+switches, coins and analog channels on the pins its tables name (572
+replies the same); it needs the PROM of a game. There the board starts
+its reply 250 to 675 us after the request, the poll of the games
+(20 02 02 21 02 22 08) 590 us, 6.8 characters, where the imitation starts
+after 1 (JVS_TURNAROUND_BYTES); it reads its inputs at each INTWD, every
+4.44 ms: a switch changes after 3 ticks, a coin counts after 3 closed and
+3 open, a jam after 1000 (06F9), a coin meter pulses 50 ticks (0926), and
+its return pin reads 0 when the meter is not wired, which stops the slot.
+HEURISTIC in the chip: no data sheet of the TMP90C844 was found, its
+registers are at the addresses MAME gives (tmp90844_regs), T01MOD and
+T23MOD laid out as MAME reads them; timers 0 and 2 ask for nothing;
+INTEH bit 2 enables 0028 and bit 0 0038, and the serial interrupts are
+taken as enabled by INTEL 0C and INTEH 48; the bits of IRFH but bit 2;
+P5 reads its latch; ADMOD F7 converts AN0-AN3 over and over, a read
+giving the pin then; INTWD waits for the interrupts to be open, where on
+the TMP90C840 it does not: so, the board dies from its 9th frame on
+(interrupt() in tmp90ph44.cpp). In the bench: P3 bits 0-1 read 3 with no
+board after it; the bytes the board sends are not heard back.
 The outputs of the boards: each game
 lists those the host uses ("outputs" in odin-games.json, read in its
 OUTPUT TEST); the nozzle vibration of BRAVEFF (outputs 2 and 5) shakes
