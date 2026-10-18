@@ -159,6 +159,48 @@ Tmp90ph44::turn(uint64_t end)
 	return billed;
 }
 
+void
+Tmp90ph44::save(Tmp90ph44State &out) const
+{
+	m_cpu.save(out.cpu);
+	out.ram = m_ram;
+	out.sfr = m_sfr;
+	out.timer = m_timer;
+	out.states = m_states;
+	out.prescaler = m_prescaler;
+	out.watchdog = m_watchdog;
+	out.requests = m_requests;
+	out.tx_left = m_tx_left;
+	out.tx = m_tx;
+	out.rx = m_rx;
+	out.rx_full = m_rx_full;
+	out.rx_errors = m_rx_errors;
+}
+
+/* run() leaves the devices up to date: they are so at the time loaded. */
+void
+Tmp90ph44::load(const Tmp90ph44State &in)
+{
+	m_cpu.load(in.cpu);
+	m_ram = in.ram;
+	m_sfr = in.sfr;
+	m_timer = in.timer;
+	m_states = in.states;
+	m_synced = in.states;
+	m_prescaler = in.prescaler;
+	m_watchdog = in.watchdog;
+	m_requests = in.requests;
+	m_tx_left = in.tx_left;
+	m_tx = in.tx;
+	m_rx = in.rx;
+	m_rx_full = in.rx_full != 0;
+	m_rx_errors = in.rx_errors;
+	m_trial.on = false;
+	m_back.fill(0);
+	m_cool.fill({});
+	m_next_event = next_event();
+}
+
 /* After the data book (TMP90C840, 3.8.2): the byte goes from the shift
  * register into SCBUF with INTRX, unless SCBUF has not been read since the
  * last one: then the new byte is lost and OERR set. */

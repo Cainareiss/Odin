@@ -55,6 +55,9 @@ struct Board : odin::Tmp90ph44Board {
 	Out out[8];
 	uint8_t analog[4] = { 0x11, 0x22, 0x33, 0x44 };
 	std::vector<uint8_t> sent;
+	/* When set, the time of each byte sent */
+	const Tmp90ph44 *chip = nullptr;
+	std::vector<uint64_t> sent_at;
 	uint8_t bus_read(uint16_t) override
 	{
 		bus++;
@@ -64,7 +67,12 @@ struct Board : odin::Tmp90ph44Board {
 	uint8_t port_pins(unsigned port) override { return pins[port]; }
 	void port_out(unsigned port, uint8_t latch, uint8_t driven) override { out[port] = { out[port].told + 1, latch, driven }; }
 	uint8_t analog_pin(unsigned n) override { return analog[n]; }
-	void serial_sent(uint8_t byte) override { sent.push_back(byte); }
+	void serial_sent(uint8_t byte) override
+	{
+		sent.push_back(byte);
+		if (chip)
+			sent_at.push_back(chip->states());
+	}
 };
 
 /* A PROM: the program at 0, the handlers at their vectors */
@@ -332,6 +340,66 @@ void test_idle()
 	check(turns.states() == steps.states() && a == b, "an interrupt inside a turn: the same as one instruction at a time");
 }
 
+void test_state()
+{
+	Rom rom;
+
+	/* The watchdog, timer 1 over and over, a byte sent after each byte
+	 * sent, bytes received: WDMOD A1, T01MOD 0B, TREG1 14, INTEH 4C, INTEL
+	 * 0C, SCMOD 29, BRGCR 02, TRUN 22, EI, SCBUF 55. The handlers count in
+	 * FF00, FF01 and FF04; RX keeps SCBUF in FF05 and SCCR in FF06. From
+	 * 0100, past the vectors. */
+	rom.put(0, { 0x1A, 0x00, 0x01 });
+	rom.put(0x100, { 0x3E, 0xBF, 0xFF, 0x37, 0xD2, 0xA1, 0x37, 0xD8, 0x0B, 0x37, 0xD5, 0x14, 0x37, 0xF5, 0x4C,
+	                 0x37, 0xF4, 0x0C, 0x37, 0xE6, 0x29, 0x37, 0xE9, 0x02, 0x37, 0xDC, 0x22, 0x03, 0x37, 0xE8, 0x55,
+	                 LOOP[0], LOOP[1] });
+	rom.put(0x20, { 0x87, 0x00, 0x1F });
+	rom.put(0x28, { 0x87, 0x01, 0x1F });
+	rom.put(0x60, { 0x1A, 0x40, 0x01 });
+	rom.put(0x140, { 0x27, 0xE8, 0x2F, 0x05, 0x27, 0xE7, 0x2F, 0x06, 0x1F });
+	rom.put(0x68, { 0x87, 0x04, 0x37, 0xE8, 0x5A, 0x1F });
+
+	/* Saved with a byte not read yet, one lost over it, a byte being
+	 * sent, the timers between two ticks; then, the second time, one more
+	 * byte received before anything runs, lost too */
+	for (bool more : { false, true }) {
+		Board one, other;
+		Tmp90ph44 kept(rom.bytes, one), loaded(rom.bytes, other);
+		one.chip = &kept;
+		other.chip = &loaded;
+
+		kept.run(50333);
+		kept.serial_received(0x3C);
+		kept.serial_received(0x3D);
+		odin::Tmp90ph44State state;
+		kept.save(state);
+		const size_t before = one.sent.size();
+		loaded.load(state);
+		if (more) {
+			kept.serial_received(0x3E);
+			loaded.serial_received(0x3E);
+		}
+
+		bool same = true;
+		for (int chunk = 0; chunk < 60; chunk++) {
+			kept.run(997);
+			loaded.run(997);
+			odin::Tlcs90State a, b;
+			kept.cpu().save(a);
+			loaded.cpu().save(b);
+			same = same && kept.states() == loaded.states() && a == b;
+			for (uint16_t at = 0xFDC0; at != 0; at++)
+				same = same && kept.peek(at) == loaded.peek(at);
+		}
+		same = same &&
+		       std::vector<uint8_t>(one.sent.begin() + static_cast<long>(before), one.sent.end()) == other.sent &&
+		       std::vector<uint64_t>(one.sent_at.begin() + static_cast<long>(before), one.sent_at.end()) == other.sent_at;
+		check(same, more ? "saved, loaded, a byte more: the same from there" : "saved, loaded in another chip: the same from there");
+		check(kept.peek(0xFF00) > 1 && kept.peek(0xFF01) > 20 && kept.peek(0xFF04) > 50 && kept.peek(0xFF05) == 0x3C &&
+		      (kept.peek(0xFF06) & 0x10), "the watchdog, timer 1, the line both ways all ran");
+	}
+}
+
 void test_ports()
 {
 	Rom rom;
@@ -383,6 +451,7 @@ int main()
 	test_serial();
 	test_overrun();
 	test_idle();
+	test_state();
 	test_ports();
 	test_analog();
 

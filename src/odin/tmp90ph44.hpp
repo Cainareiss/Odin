@@ -48,6 +48,19 @@ public:
 	virtual void serial_sent(uint8_t byte) = 0;
 };
 
+/* What the chip keeps from one run() to the next, plain data. The trials
+ * of loops are not kept: they change what is run, never what it does. */
+struct Tmp90ph44State {
+	Tlcs90State cpu;
+	std::array<uint8_t, 0x200> ram;
+	std::array<uint8_t, 0x40> sfr;
+	std::array<uint8_t, 4> timer;
+	uint64_t states, prescaler;
+	uint32_t watchdog, requests;
+	int32_t tx_left;
+	uint8_t tx, rx, rx_full, rx_errors;
+};
+
 /* The Toshiba TMP90PH44: the TMP90C844 with 16 KB of PROM at 0000 and
  * 512 bytes of RAM at FDC0 (Toshiba data sheet TMP90PH44), around a
  * TLCS-90 CPU. No data sheet of the TMP90C844 was found: the addresses of
@@ -92,6 +105,10 @@ public:
 	/* The data bits of a byte on the serial line have been sampled:
 	 * RX_STATES after its start. */
 	void serial_received(uint8_t byte);
+
+	/* Between two run() calls */
+	void save(Tmp90ph44State &out) const;
+	void load(const Tmp90ph44State &in);
 
 	Tlcs90 &cpu() { return m_cpu; }
 	/* A byte of the memory as the CPU sees it, the registers as written */
