@@ -735,6 +735,14 @@ the reset. HEURISTIC: the line resets the SH-4 as at power-on, not its
 bridge. The copy of the cabinet is slower by the waits the ROM board adds,
 which no code tells: it waits for a measure (the load of a cabinet from
 power-on).
+The copy follows the table at 0x390 of the EPROMs: from bank 10 at +400
+to 0C010000, a length of 200000 (BRAVEFF) to 7F0000 (VON4), 01FF0000 for
+PODRACE and SGNASCAR. Window 03 is 16 MB: theirs runs on past it, through
+the 64 registers of the bridge (04000000) and 04000040-04FF03FF, into
+0D00FC40-0DFFFFFF of the master RAM (4 178 160 reads of 8 bytes past the
+registers; the loop changes no bank, 0x0C00B8A2). HEURISTIC: what the
+bridge gives past its registers is not known (MAME maps 04000000-040000FF
+and nothing above); it reads 0 here.
 Bits 1 and 4 are the reset lines of the graphics chips (GP_RES, every
 chip; PCI1_RES, the display chip): a chip goes back to its power-on state
 when its line falls and does nothing until it rises

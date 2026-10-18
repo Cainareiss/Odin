@@ -296,7 +296,9 @@ MemCtl::read(uint32_t addr, unsigned size, uint64_t &value)
 	if (addr >= 0x04000040 && addr <= 0x04FFFFFF) {
 		/* Rest of the bridge page: registers 40-FF (MAME hikaru.cpp
 		 * sh4_map_main maps 04000000-040000FF) and nothing above. The
-		 * game loader over-reads into it (0C00B8E6); reads as zero. */
+		 * game loader reads 04000040-04FF03FF for PODRACE and SGNASCAR,
+		 * whose tables ask for more than window 03 holds (0C00B8E6);
+		 * reads as zero (HEURISTIC). */
 		value = 0;
 		tell_bridge_page('R', size, addr, 0);
 		return true;
