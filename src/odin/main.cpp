@@ -322,8 +322,11 @@ Session::run()
 	while (!process_events()) {
 		if (m_options.num_frames > 0 && m_board.frame() >= m_options.num_frames)
 			return;
-		if (m_paused)
+		if (m_paused) {
+			/* Asleep until something comes, the next key */
+			SDL_WaitEvent(nullptr);
 			continue;
+		}
 		m_display.begin_frame();
 		m_controls.update();
 		m_board.run_frame();
