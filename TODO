@@ -918,8 +918,10 @@ a scene has given all back (11 times in its loop), it reads FFFFFFFC
 twice and writes FFFFFFF8 and FFFFFFFC, where the SH-4 has no register;
 the word read goes into the links of the heap (0 here). PHARRIER makes four of them at every frame, twice:
 its copy through the store queues (0x0C011AF0) masks the low bits of the
-target away, writes its first 32 bytes below the queues, at DFFFFFE0, and
-sends no PREF; it is called for one block.
+target away (its mask, the top bits of the target turned over and moved up
+24 bits, is F3000000 where F3FFFFFF would keep them), writes its first 32
+bytes below the queues, at DFFFFFE0, and sends no PREF; it is called for
+one block, which the cabinet does not copy either.
 
 The clock of the AICA starts on the local time of the host
 (src/odin/aica.cpp): two runs do not leave the same byte in the memory of
