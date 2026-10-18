@@ -279,6 +279,12 @@ uint8_t Mie::in8(uint16_t port)
 {
 	const uint8_t p = static_cast<uint8_t>(port);
 
+	if (p == static_cast<unsigned>(PORT_UART1) + static_cast<unsigned>(UART_LSR)) {
+		/* No effect: it changes only in uart_tick, at times known
+		 * before (uart_end). */
+		m_wait.lsr = true;
+		return uart_read(UART_LSR);
+	}
 	m_wait.touched = true;
 	if (p <= PORT_GPIO_H) {
 		return gpio_read(p);
@@ -470,25 +476,33 @@ uint8_t Mie::uart_read(uint8_t reg)
 		return u.lcr;
 	case UART_MCR:
 		return u.mcr;
-	case UART_LSR: {
-		uint8_t v = 0;
-		if (u.rx_count) {
-			v |= LSR_DR;
-		}
-		if (u.tx_count == 0) {
-			v |= LSR_THRE;
-			if (u.tx_ticks == 0) {
-				v |= LSR_TEMT;
-			}
-		}
-		return v;
-	}
+	case UART_LSR:
+		return uart_lsr();
 	case UART_MSR:
 		return 0;
 	case UART_SCR:
 	default:
 		return u.scr;
 	}
+}
+
+/* Without the CPU, its bits only go from 0 to 1: a byte lands, the
+ * transmitter empties. */
+uint8_t Mie::uart_lsr() const
+{
+	const MieUartState &u = m_uart;
+	uint8_t v = 0;
+
+	if (u.rx_count) {
+		v |= LSR_DR;
+	}
+	if (u.tx_count == 0) {
+		v |= LSR_THRE;
+		if (u.tx_ticks == 0) {
+			v |= LSR_TEMT;
+		}
+	}
+	return v;
 }
 
 void Mie::uart_write(uint8_t reg, uint8_t value)
@@ -773,6 +787,8 @@ void Mie::wait_mark(uint32_t done)
 	m_wait.countdown = m_wait.period;
 	m_wait.touched = false;
 	m_wait.steps = 0;
+	m_wait.lsr = false;
+	m_wait.lsr_at = uart_lsr();
 	m_cpu.forget_refresh_read();
 }
 
@@ -799,17 +815,21 @@ uint32_t Mie::wait_check(uint32_t done, uint32_t cycles)
 	m_cpu.save(now);
 	const uint32_t refresh = (now.r - m_wait.regs.r) & 0x7Fu;
 	now.r = static_cast<uint8_t>((now.r & 0x80) | (m_wait.regs.r & 0x7F));
-	if (!m_wait.touched && !m_cpu.refresh_read() && now == m_wait.regs) {
+	if (!m_wait.touched && !m_cpu.refresh_read() && now == m_wait.regs &&
+	    !(m_wait.lsr && uart_lsr() != m_wait.lsr_at)) {
 		if (m_wait.steps <= MAX_TURN) {
 			m_proof.on = true;
 			m_proof.length = m_wait.steps;
 			m_proof.at = 0;
 			m_proof.period = turn;
 			m_proof.refresh = refresh;
+			m_proof.lsr = m_wait.lsr;
+			m_proof.lsr_at = m_wait.lsr_at;
 			m_proof.cpu[0] = m_wait.regs;
 			return bill(done, cycles);
 		}
-		const uint32_t turns = (cycles - done - 1) / turn;
+		const uint32_t end = m_wait.lsr ? uart_end(done, cycles) : cycles;
+		const uint32_t turns = end > done ? (end - done - 1) / turn : 0;
 
 		counted = turns * turn;
 		tick(counted);
@@ -826,7 +846,8 @@ uint32_t Mie::wait_check(uint32_t done, uint32_t cycles)
 }
 
 /* A call that starts on a turn proven to wait: it still is if the CPU is
- * where the turn has it, R aside. A write to the memory would have
+ * where the turn has it, R aside, and UART 1 as the turn read it (a byte
+ * from the line, the host at its ports). A write to the memory would have
  * dropped it. */
 uint32_t Mie::resume(uint32_t cycles)
 {
@@ -835,7 +856,7 @@ uint32_t Mie::resume(uint32_t cycles)
 
 	m_cpu.save(now);
 	now.r = static_cast<uint8_t>((now.r & 0x80) | (then.r & 0x7F));
-	if (!(now == then)) {
+	if (!(now == then) || (m_proof.lsr && uart_lsr() != m_proof.lsr_at)) {
 		m_proof.on = false;
 		return 0;
 	}
@@ -849,12 +870,18 @@ uint32_t Mie::resume(uint32_t cycles)
  * when every turn is run. The clocks counted. */
 uint32_t Mie::bill(uint32_t done, uint32_t cycles)
 {
-	if (done >= cycles) {
+	const uint32_t end = m_proof.lsr ? uart_end(done, cycles) : cycles;
+
+	if (done >= end) {
+		if (end < cycles) {
+			m_proof.on = false;
+			wait_mark(done);
+		}
 		return 0;
 	}
 
 	const uint64_t from = m_proof.offset[m_proof.at];
-	const uint64_t last = from + (cycles - done - 1);
+	const uint64_t last = from + (end - done - 1);
 	const uint64_t into = last % m_proof.period;
 	unsigned to = m_proof.length - 1;
 
@@ -877,7 +904,36 @@ uint32_t Mie::bill(uint32_t done, uint32_t cycles)
 		tick(billed);
 		m_wait_cycles += billed;
 	}
+	/* UART 1 changes next: the search starts again there */
+	if (end < cycles) {
+		m_proof.on = false;
+		wait_mark(done + billed);
+	}
 	return billed;
+}
+
+/* The end of a call for a turn that reads the state of UART 1: the
+ * instructions billed start before it can change, at the end of the byte
+ * being sent (TEMT, or THRE as the next one leaves the FIFO) or the
+ * landing of a byte of the reply (DR). An instruction sees what the ticks
+ * of those before it did. */
+uint32_t Mie::uart_end(uint32_t done, uint32_t cycles) const
+{
+	const MieUartState &u = m_uart;
+	uint64_t ticks = UINT64_MAX;
+
+	if (u.tx_ticks) {
+		ticks = u.tx_ticks;
+	} else if (u.tx_count) {
+		ticks = 0;
+	}
+	if (u.wire_pos < u.wire_count) {
+		ticks = std::min<uint64_t>(ticks, u.wire_ticks);
+	}
+	if (ticks == UINT64_MAX) {
+		return cycles;
+	}
+	return static_cast<uint32_t>(std::min<uint64_t>(cycles, done + ticks / TICKS_PER_Z80_CYCLE + 1));
 }
 
 uint32_t Mie::run(uint32_t cycles)

@@ -361,6 +361,34 @@ void test_waits()
 	share = waits("a loop that waits after R was read", { 0xED, 0x5F, 0x3A, 0x00, 0xC0, 0xB7, 0x28, 0xFA, 0x76 }, 40);
 	check(share >= 80, "its turns are counted");
 
+	/* The divisor at 256: a character takes 44 444 clocks, longer than the
+	 * 60 calls; the wait for the end of it reads the state of UART 1. */
+	share = waits("a loop that waits on UART 1 for longer than its calls", {
+		0x3E, 0x80, 0xD3, 0x13, 0xAF, 0xD3, 0x10, 0x3E, 0x01, 0xD3, 0x11, 0xAF, 0xD3, 0x13,
+		0x3E, 0x55, 0xD3, 0x10, 0xDB, 0x15, 0xCB, 0x77, 0x28, 0xFA, 0x76,
+	}, 99);
+	check(share >= 90, "its turns are counted up to where UART 1 would change");
+
+	/* The divisor at 16, 2 560 clocks a character, and the wait for its end
+	 * with 70 nop in each turn: more instructions than are kept, the turns
+	 * counted whole, up to where UART 1 would change */
+	std::vector<uint8_t> slow = { 0x3E, 0x80, 0xD3, 0x13, 0x3E, 0x10, 0xD3, 0x10, 0xAF, 0xD3, 0x13, 0x3E, 0x55, 0xD3, 0x10,
+	                              0xDB, 0x15, 0xCB, 0x77 };
+	slow.resize(slow.size() + 70, 0);
+	for (const uint8_t b : { uint8_t(0x28), uint8_t(0xB4), uint8_t(0x76) })
+		slow.push_back(b);
+	waits("a long loop that waits on UART 1", slow, 99);
+	waits("a long loop that waits on UART 1, in long calls", slow, 99, 63130);
+
+	/* F1 01 to the imitation of the 837-13551, then each of the six bytes
+	 * of its reply waited for (in a, (15) / bit 0, a / jr z) and kept */
+	waits("a loop that waits for the bytes of a reply", {
+		0x3E, 0x80, 0xD3, 0x13, 0x3E, 0x08, 0xD3, 0x10, 0xAF, 0xD3, 0x13, 0x3E, 0x01, 0xD3, 0x90,
+		0x3E, 0xE0, 0xD3, 0x10, 0x3E, 0xFF, 0xD3, 0x10, 0x3E, 0x03, 0xD3, 0x10, 0x3E, 0xF1, 0xD3, 0x10,
+		0x3E, 0x01, 0xD3, 0x10, 0x3E, 0xF4, 0xD3, 0x10, 0xDB, 0x15, 0xCB, 0x77, 0x28, 0xFA, 0xAF, 0xD3, 0x90,
+		0x21, 0x00, 0xC1, 0x06, 0x06, 0xDB, 0x15, 0xCB, 0x47, 0x28, 0xFA, 0xDB, 0x10, 0x77, 0x23, 0x10, 0xF4, 0x76,
+	}, 99);
+
 	/* A character sent at each turn until the host writes. */
 	waits("a loop that writes a port",
 	      { 0x3A, 0x00, 0xC0, 0xB7, 0x20, 0x06, 0x3E, 0x41, 0xD3, 0x10, 0x18, 0xF4, 0x76 }, 3);
@@ -580,6 +608,94 @@ void test_line()
 	check(ram[0x4002] == 0x8E, "the sense input as the board sets it");
 }
 
+/* Bytes from a line between two calls, waited for on UART 1 and kept
+ * (ld hl, C000 / in a, (15) / bit 0, a / jr z / in a, (10) / ld (hl), a
+ * / inc hl / jr): each seen as by a MIE that runs every turn. */
+void test_wait_line()
+{
+	const std::vector<uint8_t> program = { 0x21, 0x00, 0xC0, 0xDB, 0x15, 0xCB, 0x47, 0x28, 0xFA, 0xDB, 0x10, 0x77,
+	                                       0x23, 0x18, 0xF4 };
+	std::vector<uint8_t> rom(2048, 0), ram_a(32768, 0), ram_b(32768, 0);
+	std::copy(program.begin(), program.end(), rom.begin());
+	Pins pins;
+	Line line_a, line_b;
+	odin::Mie counted(pins, rom, ram_a), run(pins, rom, ram_b);
+	counted.attach_line(&line_a);
+	run.attach_line(&line_b);
+	run.set_waits_counted(false);
+	bool same = true;
+	for (unsigned call = 0; call < 1000; call++) {
+		if (call % 35 == 15) {
+			counted.line_received(static_cast<uint8_t>(0x40 + call / 35));
+			run.line_received(static_cast<uint8_t>(0x40 + call / 35));
+		}
+		counted.run(60);
+		run.run(60);
+		odin::Z80State a, b;
+		counted.cpu().save(a);
+		run.cpu().save(b);
+		same = same && a == b && ram_a == ram_b;
+	}
+	check(same && ram_a[0x4000] == 0x40 && ram_a[0x4001] == 0x41 && counted.waits_counted() > 1000 * 60 * 3 / 4,
+	      "bytes from the line between calls: seen at once, the waits counted from one call to the next");
+}
+
+/* The divisor at 18: a character takes 3 125 clocks, from the start of
+ * the OUT that gives it. The first of two bytes ends at clock 3 183, just
+ * where the wait for the FIFO to empty (from clock 176, 31 clocks a turn)
+ * starts a turn and where the first call ends; the second byte leaves the
+ * FIFO at the tick after. */
+void test_wait_fifo()
+{
+	std::vector<uint8_t> program = { 0x3E, 0x80, 0xD3, 0x13, 0x3E, 0x12, 0xD3, 0x10, 0xAF, 0xD3, 0x13,
+	                                 0x3E, 0x55, 0xD3, 0x10, 0xD3, 0x10 };
+	program.resize(program.size() + 24, 0);
+	for (const uint8_t b : { uint8_t(0xDB), uint8_t(0x15), uint8_t(0xCB), uint8_t(0x6F), uint8_t(0x28), uint8_t(0xFA),
+	                         uint8_t(0x76) })
+		program.push_back(b);
+	std::vector<uint8_t> rom(2048, 0), ram_a(32768, 0), ram_b(32768, 0);
+	std::copy(program.begin(), program.end(), rom.begin());
+	Pins pins;
+	odin::Mie counted(pins, rom, ram_a), run(pins, rom, ram_b);
+	run.set_waits_counted(false);
+	const bool first = counted.run(3183) == 3183 && run.run(3183) == 3183;
+	counted.run(500);
+	run.run(500);
+	odin::Z80State a, b;
+	counted.cpu().save(a);
+	run.cpu().save(b);
+	check(first && a == b && b.halted, "a call that starts where a byte ends and the next leaves the FIFO");
+}
+
+/* The same divisor, one byte: it ends at clock 3 183, inside the JR of a
+ * turn of the wait for its end (from clock 177); the IN after starts a
+ * clock later and sees it. */
+void test_wait_temt()
+{
+	std::vector<uint8_t> program = { 0x3E, 0x80, 0xD3, 0x13, 0x3E, 0x12, 0xD3, 0x10, 0xAF, 0xD3, 0x13,
+	                                 0x3E, 0x55, 0xD3, 0x10 };
+	program.resize(program.size() + 27, 0);
+	for (const uint8_t b : { uint8_t(0xDB), uint8_t(0x15), uint8_t(0xCB), uint8_t(0x77), uint8_t(0x28), uint8_t(0xFA),
+	                         uint8_t(0x76) })
+		program.push_back(b);
+	std::vector<uint8_t> rom(2048, 0), ram_a(32768, 0), ram_b(32768, 0);
+	std::copy(program.begin(), program.end(), rom.begin());
+	Pins pins;
+	odin::Mie counted(pins, rom, ram_a), run(pins, rom, ram_b);
+	run.set_waits_counted(false);
+	bool same = true;
+	for (int call = 0; call < 10; call++) {
+		counted.run(500);
+		run.run(500);
+		odin::Z80State a, b;
+		counted.cpu().save(a);
+		run.cpu().save(b);
+		same = same && a == b;
+	}
+	check(same && counted.cpu().halted() && counted.waits_counted() > 2000,
+	      "the end of a byte just before a read of it: seen there");
+}
+
 int main()
 {
 	test_eeprom();
@@ -591,6 +707,9 @@ int main()
 	test_uart_speed();
 	test_reply_time();
 	test_line();
+	test_wait_line();
+	test_wait_fifo();
+	test_wait_temt();
 	test_short_runs();
 	std::printf("%u checks passed, %u failed\n", g_passed, g_failed);
 	return g_failed ? 1 : 0;
