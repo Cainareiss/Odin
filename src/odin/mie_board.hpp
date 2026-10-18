@@ -80,6 +80,7 @@ public:
 		MieState mie;
 		CardReaderState card;
 		uint8_t has_card;
+		uint8_t busrq_by;	/* bit 0 the master, bit 1 the slave */
 	};
 
 	/* rom: the 2 KB ROM of the 315-6146, Mie::ROM_SIZE bytes, copied.
@@ -113,11 +114,12 @@ public:
 	 * size the window does not take. */
 	bool host_read(uint32_t offset, unsigned size, uint32_t &value);
 	bool host_write(uint32_t offset, unsigned size, uint32_t value);
-	/* The bus request register (01000000 and 01000100 of the main
-	 * processor): bit 8 written is BUSRQ, bit 8 read is clear while the
-	 * bus is granted. */
+	/* The bus request register of each main processor, `which` 0 the
+	 * master (01000000 and 01000100), 1 the slave (1B000100): bit 8
+	 * written is its BUSRQ, bit 8 read is clear while the bus is granted.
+	 * HEURISTIC: the Z80 sees one request, made while either asks. */
 	uint32_t busrq_read();
-	void busrq_write(uint32_t value);
+	void busrq_write(unsigned which, uint32_t value);
 
 	/* Port D carries the resets of the main board, active low (bit 0 the
 	 * system, 1 the GPU, 2 the slave SH-4, 3 CN4, 4 the display chip, 5
@@ -171,7 +173,6 @@ public:
 	/* MieHost */
 	uint8_t gpio_read(uint8_t port) override;
 	void gpio_write(uint8_t port, uint8_t value) override;
-	uint8_t gpio_readback(uint8_t port, uint8_t latched) override;
 
 	/* JvsInputs */
 	uint8_t system() override;
@@ -203,6 +204,7 @@ private:
 	std::unique_ptr<CardReader> m_card;
 	FILE *m_log;
 	uint8_t m_irq_lines;
+	uint8_t m_busrq_by = 0;	/* who asks for the bus, see busrq_write */
 	std::function<void(uint8_t)> m_port_d;
 };
 

@@ -112,18 +112,6 @@ MieBoard::gpio_write(uint8_t port, uint8_t value)
 }
 
 uint8_t
-MieBoard::gpio_readback(uint8_t port, uint8_t latched)
-{
-	/* HACK: the BOOTROM (0x0C00B860, every version) writes port E = 0xF0
-	 * with the port as output, then waits for bits 0-3 (the LED pins) to
-	 * read high. MAME reads 0xFF there and boots; the pin levels are not
-	 * measured on hardware. Pulled high here until they are. */
-	if (port == 4)
-		return static_cast<uint8_t>(latched | 0x0F);
-	return latched;
-}
-
-uint8_t
 MieBoard::system()
 {
 	poll_inputs();
@@ -148,6 +136,7 @@ MieBoard::reset()
 	m_cycle_acc = 0;
 	m_mie_ahead = 0;
 	m_z80_time = 0;
+	m_busrq_by = 0;
 	m_eeprom.reset();
 	m_io->reset();
 	m_jvs.reset();
@@ -260,9 +249,12 @@ MieBoard::busrq_read()
 }
 
 void
-MieBoard::busrq_write(uint32_t value)
+MieBoard::busrq_write(unsigned which, uint32_t value)
 {
-	m_mie.set_busrq((value & 0x100) != 0);
+	const uint8_t bit = static_cast<uint8_t>(1u << (which & 1));
+
+	m_busrq_by = static_cast<uint8_t>((value & 0x100) ? m_busrq_by | bit : m_busrq_by & ~bit);
+	m_mie.set_busrq(m_busrq_by != 0);
 }
 
 uint8_t
@@ -319,6 +311,7 @@ MieBoard::save(State &out)
 	out.has_card = m_card ? 1 : 0;
 	if (m_card)
 		m_card->save(out.card);
+	out.busrq_by = m_busrq_by;
 }
 
 bool
@@ -329,6 +322,7 @@ MieBoard::load(const State &in)
 	m_cycle_acc = in.cycle_acc;
 	m_mie_ahead = in.mie_ahead;
 	m_z80_time = in.z80_time;
+	m_busrq_by = in.busrq_by;
 	m_eeprom.load(in.eeprom);
 	m_io->load(in.io);
 	m_jvs.load(in.jvs);

@@ -297,7 +297,6 @@ Hikaru::save_items(StateFile &state)
 	ok = state.put(m_porta[MASTER]) && state.put(unused) &&
 	     state.put(m_porta[SLAVE]) && state.put(unused) &&
 	     state.put(unused) && state.put(unused) &&
-	     state.put(m_unk1A800008_s) && state.put(m_unk1B000100_s) &&
 	     state.put(rombd) &&
 	     put_chip<Eeprom93c46State>(state, m_eeprom) &&
 	     put_chip<X76f100State>(state, m_rombd.eeprom());
@@ -367,7 +366,6 @@ Hikaru::load_items(StateFile &state)
 	ok = state.get(m_porta[MASTER]) && state.get(unused) &&
 	     state.get(m_porta[SLAVE]) && state.get(unused) &&
 	     state.get(unused) && state.get(unused) &&
-	     state.get(m_unk1A800008_s) && state.get(m_unk1B000100_s) &&
 	     state.get(rombd);
 	if (ok)
 		m_rombd.load(rombd);

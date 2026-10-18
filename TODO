@@ -124,13 +124,11 @@ HIKARU
 Move the slave GPU access to src/odin/hikaru_gpu.cpp.
 
 MIE (src/odin/mie.cpp, its ROM and the program the BOOTROM uploads, run
-by a Z80; every game needs its ROM): HACK in src/odin/mie_board.cpp,
-port E bits 0-3 read high while the port is an output; the BOOTROM waits
-for that at 0x0C00B860 and MAME reads 0xFF there. Measure the pins.
-The slave reaches the MIE through a window of its own (1A800008 among its
-ports, 1B000100 for its bus) and checks it at start: HACK in
-hikaru_bus.cpp, a stand-in gives the bus at once and keeps the port as
-written. The MEMCTL
+by a Z80; every game needs its ROM). The slave reaches it through a window
+of its own, 1A800000-1A8000FF for its ports and 1B000100 for its bus, and
+meets the master on port E at start (see Resets). HEURISTIC: the Z80 sees
+one bus request, made while either processor asks; the slave window is
+the part of it the BOOTROM uses, the rest of it is not known. The MEMCTL
 of the slave is not run (as Valkyrie had it: no game is known to start a
 transfer there).
 The backup RAM of the main board (64 KB) is kept in the save folder of
@@ -688,15 +686,16 @@ the slave.
 Resets (hikaru.cpp, set_resets): the master drives port D of the MIE
 through its window. The system library pulses bit 5 and the sound boards
 are reset, their clock aside. The BOOTROM pulses bit 2, the reset of the
-slave SH-4, as soon as the MIE gives its bus (frame 27): that one is NOT
-done (HACK in hikaru.cpp). The slave needs a frame and a half to start
-again, then clears the word where the master leaves its first job; the
-master writes that word without waiting, after the BOOTROM has copied the
-game from the ROM board with its own loop through a window (0x0C00B8E6, no
-DMA), 1.5 frames for BRAVEFF and 2.2 for PHARRIER here: with the reset,
-BRAVEFF and PHARRIER write it a frame too early and never start. The copy
-of the cabinet is slower by the waits the ROM board adds, which no code
-tells: it waits for a measure (the load of a cabinet from power-on).
+slave SH-4, as soon as the MIE gives its bus, with port E at
+0xF0; the slave starts again from its reset vector, clears the word where
+the master leaves its jobs, then sets port E bits 0-3 (the LEDs 7 to 10)
+through its own window; the master waits for them (0x0C00B860) before it
+copies the game from the ROM board (0x0C00B8E6, its own loop, no DMA) and
+leaves its first job. The games start a frame or two later than without
+the reset. HEURISTIC: the line resets the SH-4 as at power-on, not its
+bridge. The copy of the cabinet is slower by the waits the ROM board adds,
+which no code tells: it waits for a measure (the load of a cabinet from
+power-on).
 Bits 1 and 4 are the reset lines of the graphics chips (GP_RES, every
 chip; PCI1_RES, the display chip): a chip goes back to its power-on state
 when its line falls and does nothing until it rises
@@ -729,8 +728,8 @@ The other resets (system, CN4) and a video clock other than the one the
 games choose (bits 6 and 7 set) stop the emulator. HEURISTIC: the lines
 are high while the MIE does not drive the port. The master reaches none of
 these chips before the BOOTROM drives it at frame 27 (it writes only the
-word at 14000000, at frame 1); the slave runs from power-on, see the HACK
-above.
+word at 14000000, at frame 1); the slave runs from power-on, and again
+from its reset.
 
 Main board: bit 0 of 15002000 reads 0, which makes Odin the second main
 board, 837-14097, for the BOOTROM (it prints the name in its system menu).

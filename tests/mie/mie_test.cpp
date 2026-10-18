@@ -272,6 +272,54 @@ void test_port_d()
 	check(calls == 2 && pins_told == 0xFF, "and each new value is told");
 }
 
+/* A port driven as an output reads back its latch: port E, the LEDs the
+ * master and the slave meet on at start (Hikaru::set_resets). */
+void test_port_readback()
+{
+	std::vector<uint8_t> rom(2048, 0), ram(32768, 0);
+	odin::MieBoard mie(rom, ram, 200000000, nullptr);
+	uint32_t v = 0;
+
+	mie.host_write(2 * 4, 1, 0xF0);
+	mie.host_write(2 * 8, 1, 0x43);
+	mie.host_read(2 * 4, 1, v);
+	check(v == 0xF0, "port E driven at F0 reads its bits 0-3 low");
+	mie.host_write(2 * 4, 1, 0xFF);
+	mie.host_read(2 * 4, 1, v);
+	check(v == 0xFF, "and high once FF is written");
+}
+
+/* The bus of the Z80, asked by the master (01000100) and by the slave
+ * (1B000100, the BOOTROM @0C00BEE0): granted while either asks, given
+ * back when neither does, and who asks kept in the state. */
+void test_bus_two_hosts()
+{
+	std::vector<uint8_t> rom(2048, 0), ram(32768, 0);
+	odin::MieBoard mie(rom, ram, 200000000, nullptr);
+	const auto granted = [&mie] { return (mie.busrq_read() & 0x100) == 0; };
+	odin::MieBoard::State saved{};
+
+	mie.host_write(2 * 0x30, 1, 0x40);
+	check(!granted(), "the bus is the Z80's while nobody asks");
+	mie.busrq_write(1, 0x100);
+	check(granted(), "the slave asks: granted");
+	mie.busrq_write(0, 0x100);
+	mie.busrq_write(1, 0);
+	check(granted(), "the slave lets go while the master asks: still granted");
+	mie.busrq_write(1, 0x100);
+	mie.busrq_write(0, 0);
+	check(granted(), "the master lets go while the slave asks: still granted");
+	mie.save(saved);
+	mie.busrq_write(1, 0);
+	check(!granted(), "neither asks: given back");
+	mie.load(saved);
+	check(granted(), "who asks comes back with a load");
+	mie.busrq_write(0, 0);
+	check(granted(), "the slave keeps the bus the master lets go after the load");
+	mie.busrq_write(1, 0);
+	check(!granted(), "until it lets go");
+}
+
 /* Loops of the program that only wait: with the turns counted and with
  * every turn run, the chip and its memory must be the same after each call
  * of 505 Z80 clocks, a line of the Hikaru. The host writes 1 at C000 before
@@ -464,11 +512,11 @@ void test_wait_bus()
 		if (call == 10)
 			for (odin::MieBoard *mie : { &counted, &run }) {
 				mie->host_write(2 * 0x30, 1, 0x40);
-				mie->busrq_write(0x100);
+				mie->busrq_write(0, 0x100);
 			}
 		if (call == 20)
 			for (odin::MieBoard *mie : { &counted, &run })
-				mie->busrq_write(0);
+				mie->busrq_write(0, 0);
 		counted.run(6313);
 		run.run(6313);
 		odin::MieBoard::State a{}, b{};
@@ -783,6 +831,8 @@ int main()
 	test_eeprom();
 	test_interrupts();
 	test_port_d();
+	test_port_readback();
+	test_bus_two_hosts();
 	test_waits();
 	test_wait_loaded();
 	test_wait_bus();

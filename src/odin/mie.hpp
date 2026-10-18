@@ -49,9 +49,6 @@ public:
 	virtual uint8_t gpio_read(uint8_t port) = 0;
 	/* New level driven on a port configured as output. */
 	virtual void gpio_write(uint8_t port, uint8_t value) = 0;
-	/* Level read back on a port configured as output: the latch,
-	 * unless the board pulls a pin elsewhere. */
-	virtual uint8_t gpio_readback(uint8_t, uint8_t latched) { return latched; }
 };
 
 /* The far end of UART 1 when it is a line byte by byte, an I/O board that

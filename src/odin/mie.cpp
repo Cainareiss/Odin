@@ -376,14 +376,15 @@ void Mie::out8(uint16_t port, uint8_t value)
 	}
 }
 
-/* GPIO: direction bit set = input (MAME mie.cpp gpio_r). */
+/* GPIO: direction bit set = input (MAME mie.cpp gpio_r); an output reads
+ * back its latch. */
 
 uint8_t Mie::gpio_read(uint8_t port)
 {
 	if (m_gpio_dir & (1u << port)) {
 		return m_host.gpio_read(port);
 	}
-	return m_host.gpio_readback(port, m_gpio_val[port]);
+	return m_gpio_val[port];
 }
 
 void Mie::gpio_write(uint8_t port, uint8_t value)

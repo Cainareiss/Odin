@@ -260,7 +260,7 @@ Hikaru::Hikaru(const Game &game, const RomBoard::Config &rombd, bool verbose)
 	          [this](const char *what) { cpu_error("%s", what); }),
 	  m_eeprom(m_clock),
 	  m_bus{Bus(*this, MASTER), Bus(*this, SLAVE)}, m_hooked{false, false},
-	  m_porta{0, 0}, m_irq_lines(0), m_mie_port_d(0), m_unk1A800008_s(0), m_unk1B000100_s(0),
+	  m_porta{0, 0}, m_irq_lines(0), m_mie_port_d(0),
 	  m_line(0), m_dots_per_line(0), m_lines_per_frame(0), m_lines_shown(0), m_line_rest(0),
 	  m_mie_trace(nullptr), m_sh_trace{nullptr, nullptr}, m_stats(env_flag("ODIN_STATS")),
 	  m_stats_ns{}, m_stats_slices(0), m_stats_told{}, m_stats_told_at(0)
@@ -558,9 +558,6 @@ Hikaru::reset()
 	m_mie_port_d = 0xFF;
 	set_gpu_reset_lines();
 
-	m_unk1A800008_s = 0xFFFF;
-	m_unk1B000100_s = 0xFEFF;
-
 	m_rombd.reset();
 
 	m_sched.reset();
@@ -663,14 +660,16 @@ Hikaru::update_irqs()
  *    Here it does each time its SYSTEM MENU is left with EXIT, see the
  *    TODO.
  *
- * HACK: the reset of the slave is not done. The slave takes a frame and a
- * half to start again (it clears its memory) and then clears the word
- * where the master leaves its first job (14000000); the master writes that
- * word without waiting for anything (PHARRIER @0C010BC4), after the BOOTROM
- * has copied the game from the ROM board with its own loop (0x0C00B8E6),
- * 1.5 frames for BRAVEFF and 2.2 for PHARRIER here: the waits the ROM board
- * adds are not known. With the reset done, BRAVEFF and PHARRIER write the
- * word a frame too early and never start.
+ * The slave is held while its line is low and starts again from its reset
+ * vector when it goes high. The BOOTROM uses that to know the slave ready:
+ * holding the bus of the MIE (@0C00BE44), the master drives port D at 0xFB,
+ * port E at 0xF0 (bits 0-3, the LEDs 7 to 10, low), then port D at 0xFF;
+ * the slave starts again, clears the word where the master leaves its jobs
+ * (@0C00BEAE, its 10000000, 14000000 of the master), then through its own
+ * window on the MIE reads port E and writes 0xFF until it has read bits 0-3
+ * high (@0C00BEE0); the master waits for these bits (@0C00B860) before it
+ * copies the game from the ROM board and leaves its first job. HEURISTIC:
+ * the line resets the SH-4 as at power-on, and not its bridge.
  */
 
 /* Bits 1 and 4 of port D, to the graphics chips */
@@ -685,6 +684,7 @@ void
 Hikaru::set_resets(uint8_t pins)
 {
 	const uint8_t fell = m_mie_port_d & static_cast<uint8_t>(~pins);
+	const uint8_t rose = pins & static_cast<uint8_t>(~m_mie_port_d);
 
 	m_mie_port_d = pins;
 
@@ -694,6 +694,15 @@ Hikaru::set_resets(uint8_t pins)
 		fatal("resets %02X asked on port D of the MIE, which are not implemented", ~pins & 0x09);
 
 	set_gpu_reset_lines();
+
+	/* The slave stays stopped from its reset to the end of it. Its clock
+	 * stays that of the board, as after a load. */
+	if (fell & 0x04) {
+		m_sh[SLAVE]->reset(true);
+		m_sh[SLAVE]->set_time(m_sched.now());
+	}
+	if (rose & 0x04)
+		m_sh[SLAVE]->set_run(Sh4Run::Running);
 
 	/* The boards are held as long as the line is low, see run_cycles. */
 	if (fell & 0x20) {

@@ -37,8 +37,10 @@ public:
 	 * 6: the effect processor no longer keeps the length of its program;
 	 * 7: a sound board keeps the cycles its ARM7 ran past a period;
 	 * 8: the MIE board keeps the clocks its Z80 ran past its share;
-	 * 9: it keeps the chip of the 837-13551 and its line */
-	static constexpr unsigned VERSION = 9;
+	 * 9: it keeps the chip of the 837-13551 and its line;
+	 * 10: it keeps which processor asks for the bus of the MIE, the slave
+	 * reaching it through its own window */
+	static constexpr unsigned VERSION = 10;
 
 	enum class Mode {
 		SAVE,

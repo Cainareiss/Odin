@@ -214,14 +214,14 @@ Hikaru::master_read(uint32_t addr, unsigned size, uint64_t &value)
 	}
 	/* Not logged: the MIE is polled in tight loops. */
 	if (addr >= 0x00800000 && addr <= 0x0083FFFF)
-		return size != 8 && mie_read(addr, size, value);
+		return size != 8 && mie_read(MASTER, addr, size, value);
 	if (addr >= 0x00C00000 && addr <= 0x00C0FFFF) {
 		value = load(m_bram, addr & 0x0000FFFF, size);
 		return true;
 	}
 	/* The bus request register of the MIE */
 	if (addr >= 0x01000000 && addr <= 0x010001FF)
-		return (size == 2 || size == 4) && mie_read(addr, size, value);
+		return (size == 2 || size == 4) && mie_read(MASTER, addr, size, value);
 	if (addr >= 0x02000000 && addr <= 0x03FFFFFF)
 		return m_memctl[MASTER].read(addr, size, value);
 	/* The whole bridge page: registers at 00-3F, the rest reads as zero */
@@ -288,13 +288,13 @@ Hikaru::master_write(uint32_t addr, unsigned size, uint64_t value)
 		return gpu_write(addr, size, value);
 	}
 	if (addr >= 0x00800000 && addr <= 0x0083FFFF)
-		return size != 8 && mie_write(addr, size, value);
+		return size != 8 && mie_write(MASTER, addr, size, value);
 	if (addr >= 0x00C00000 && addr <= 0x00C0FFFF) {
 		store(m_bram, addr & 0x0000FFFF, size, value);
 		return true;
 	}
 	if (addr >= 0x01000000 && addr <= 0x010001FF)
-		return (size == 2 || size == 4) && mie_write(addr, size, value);
+		return (size == 2 || size == 4) && mie_write(MASTER, addr, size, value);
 	if (addr >= 0x02000000 && addr <= 0x03FFFFFF)
 		return m_memctl[MASTER].write(addr, size, value);
 	if (addr >= 0x04000000 && addr <= 0x04FFFFFF) {
@@ -349,8 +349,8 @@ Hikaru::master_write(uint32_t addr, unsigned size, uint64_t value)
  * Area 4	10000000-100000FF Master/Slave Communication Box
  *		10000100-10FFFFFF Command RAM [Slave] (4 MB and its mirrors)
  * Area 5	14000800-1400083F Master's 18000000
- * Area 6	1A800000-1A800003 GPU
- *		1B000100-1B000103 GPU
+ * Area 6	1A800000-1A8000FF MIE ports, see mie_read
+ *		1B000100-1B0001FF MIE bus request
  */
 
 bool
@@ -376,11 +376,14 @@ Hikaru::slave_read(uint32_t addr, unsigned size, uint64_t &value)
 		value = load(m_cmdram, addr & 0x003FFFFF, size);
 		return true;
 	}
-	if ((addr >= 0x14000800 && addr <= 0x1400083F) || (addr >= 0x1A800000 && addr <= 0x1A8000FF) ||
-	    (addr >= 0x1B000100 && addr <= 0x1B0001FF)) {
+	if (addr >= 0x14000800 && addr <= 0x1400083F) {
 		log_access("UNK/S", 'R', size, addr, 0);
-		return slave_window_read(addr, size, value);
+		return slave_config_read(addr, size, value);
 	}
+	if (addr >= 0x1A800000 && addr <= 0x1A8000FF)
+		return size != 8 && mie_read(SLAVE, addr, size, value);
+	if (addr >= 0x1B000100 && addr <= 0x1B0001FF)
+		return (size == 2 || size == 4) && mie_read(SLAVE, addr, size, value);
 	return false;
 }
 
@@ -406,11 +409,14 @@ Hikaru::slave_write(uint32_t addr, unsigned size, uint64_t value)
 		store(m_cmdram, addr & 0x003FFFFF, size, value);
 		return true;
 	}
-	if ((addr >= 0x14000800 && addr <= 0x1400083F) || (addr >= 0x1A800000 && addr <= 0x1A8000FF) ||
-	    (addr >= 0x1B000100 && addr <= 0x1B0001FF)) {
+	if (addr >= 0x14000800 && addr <= 0x1400083F) {
 		log_access("UNK/S", 'W', size, addr, value);
-		return slave_window_write(addr, size, value);
+		return slave_config_write(addr, size, value);
 	}
+	if (addr >= 0x1A800000 && addr <= 0x1A8000FF)
+		return size != 8 && mie_write(SLAVE, addr, size, value);
+	if (addr >= 0x1B000100 && addr <= 0x1B0001FF)
+		return (size == 2 || size == 4) && mie_write(SLAVE, addr, size, value);
 	return false;
 }
 
@@ -456,14 +462,35 @@ Hikaru::gpu_write(uint32_t addr, unsigned size, uint64_t value)
  * 01000000/01000100  bus request: bit 8 written requests the Z80 bus,
  *                    bit 8 read is clear once it is granted
  *
+ * The slave has a window of its own: 1A800000-1A8000FF its ports (the
+ * part it uses), 1B000100 its bus request. The BOOTROM uses both at start,
+ * see Hikaru::set_resets.
+ *
  * The chip lives in mie.cpp, the board wiring in mie_board.cpp.
  */
 
+namespace {
+
+struct MieWindow {
+	uint32_t first, last;		/* the ports, then the memory */
+	uint32_t busrq_first, busrq_last;
+};
+
+/* By processor, Hikaru::MASTER then SLAVE */
+constexpr MieWindow MIE_WINDOWS[2] = {
+	{ 0x00800000, 0x0083FFFF, 0x01000000, 0x010001FF },
+	{ 0x1A800000, 0x1A8000FF, 0x1B000100, 0x1B0001FF },
+};
+
+} /* namespace */
+
 bool
-Hikaru::mie_read(uint32_t addr, unsigned size, uint64_t &value)
+Hikaru::mie_read(unsigned which, uint32_t addr, unsigned size, uint64_t &value)
 {
+	const MieWindow &window = MIE_WINDOWS[which];
+
 	value = 0;
-	if (addr >= 0x00800000 && addr <= 0x0083FFFF) {
+	if (addr >= window.first && addr <= window.last) {
 		/* The window is 16 bits wide: a 32-bit access is two words,
 		 * the low one first. */
 		const unsigned part = (size == 4) ? 2 : size;
@@ -471,7 +498,7 @@ Hikaru::mie_read(uint32_t addr, unsigned size, uint64_t &value)
 		for (unsigned i = 0; i < size; i += part) {
 			uint32_t word = 0;
 
-			if (!m_mie->host_read(addr + i - 0x00800000, part, word)) {
+			if (!m_mie->host_read(addr + i - window.first, part, word)) {
 				board_error("MIE unhandled R%u %08X", size * 8, addr);
 				value = 0;
 				return false;
@@ -480,7 +507,7 @@ Hikaru::mie_read(uint32_t addr, unsigned size, uint64_t &value)
 		}
 		return true;
 	}
-	if (addr >= 0x01000000 && addr <= 0x010001FF) {
+	if (addr >= window.busrq_first && addr <= window.busrq_last) {
 		value = m_mie->busrq_read();
 		return true;
 	}
@@ -488,21 +515,23 @@ Hikaru::mie_read(uint32_t addr, unsigned size, uint64_t &value)
 }
 
 bool
-Hikaru::mie_write(uint32_t addr, unsigned size, uint64_t value)
+Hikaru::mie_write(unsigned which, uint32_t addr, unsigned size, uint64_t value)
 {
-	if (addr >= 0x00800000 && addr <= 0x0083FFFF) {
+	const MieWindow &window = MIE_WINDOWS[which];
+
+	if (addr >= window.first && addr <= window.last) {
 		const unsigned part = (size == 4) ? 2 : size;
 
 		for (unsigned i = 0; i < size; i += part) {
-			if (!m_mie->host_write(addr + i - 0x00800000, part, static_cast<uint32_t>(value >> (8 * i)))) {
+			if (!m_mie->host_write(addr + i - window.first, part, static_cast<uint32_t>(value >> (8 * i)))) {
 				board_error("MIE unhandled W%u %08X = %" PRIX64, size * 8, addr, value);
 				return false;
 			}
 		}
 		return true;
 	}
-	if (addr >= 0x01000000 && addr <= 0x010001FF) {
-		m_mie->busrq_write(static_cast<uint32_t>(value));
+	if (addr >= window.busrq_first && addr <= window.busrq_last) {
+		m_mie->busrq_write(which, static_cast<uint32_t>(value));
 		return true;
 	}
 	return false;
@@ -576,14 +605,10 @@ Hikaru::mscomm_write(uint32_t addr, unsigned size, uint64_t value)
 	return true;
 }
 
-/* The window of the slave on the MIE: 1A800008 is among its ports and
- * 1B000100 asks for its bus, as 01000100 does for the master; the slave
- * checks the MIE through it at start (@0C00BE9A). HACK: a stand-in, the bus
- * is given at once and the port keeps what was written. 14000800 is the
- * configuration space of the command processor, read through the bridge of
- * the slave. */
+/* 14000800 of the slave is the configuration space of the command
+ * processor, read through its bridge. */
 bool
-Hikaru::slave_window_read(uint32_t addr, unsigned size, uint64_t &value)
+Hikaru::slave_config_read(uint32_t addr, unsigned size, uint64_t &value)
 {
 	switch (addr) {
 	case 0x14000800:
@@ -592,23 +617,13 @@ Hikaru::slave_window_read(uint32_t addr, unsigned size, uint64_t &value)
 			fatal("14000800 is 32 bits wide", addr, size);
 		value = 0x17C311DB;	/* SEGA PCI ID #2 */
 		return true;
-	case 0x1A800008:
-		if (size != 2)
-			fatal("1A800008 is 16 bits wide", addr, size);
-		value = m_unk1A800008_s & 0xFFFF;
-		return true;
-	case 0x1B000100:
-		if (size != 2)
-			fatal("1B000100 is 16 bits wide", addr, size);
-		value = m_unk1B000100_s & 0xFFFF;
-		return true;
 	default:
 		return false;
 	}
 }
 
 bool
-Hikaru::slave_window_write(uint32_t addr, unsigned size, uint64_t value)
+Hikaru::slave_config_write(uint32_t addr, unsigned size, uint64_t)
 {
 	switch (addr) {
 	case 0x1400080D:
@@ -623,18 +638,6 @@ Hikaru::slave_window_write(uint32_t addr, unsigned size, uint64_t value)
 	case 0x1400081C:
 		if (size != 4)
 			fatal("the configuration space at 14000800 is 32 bits wide", addr, size);
-		return true;
-	case 0x1A800008:
-		if (size != 2)
-			fatal("1A800008 is 16 bits wide", addr, size);
-		m_unk1A800008_s = static_cast<uint32_t>(value);
-		return true;
-	case 0x1B000100:
-		/* This is a semaphore, akin to 01000000 and 01000100 in the
-		 * master address space. */
-		if (size != 2)
-			fatal("1B000100 is 16 bits wide", addr, size);
-		m_unk1B000100_s = static_cast<uint32_t>(value ^ 0x100);
 		return true;
 	default:
 		return false;

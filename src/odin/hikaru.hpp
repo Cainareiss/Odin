@@ -191,12 +191,13 @@ private:
 	bool slave_write(uint32_t addr, unsigned size, uint64_t value);
 	bool gpu_read(uint32_t addr, unsigned size, uint64_t &value);
 	bool gpu_write(uint32_t addr, unsigned size, uint64_t value);
-	bool mie_read(uint32_t addr, unsigned size, uint64_t &value);
-	bool mie_write(uint32_t addr, unsigned size, uint64_t value);
+	/* The window of the master or of the slave on the MIE */
+	bool mie_read(unsigned which, uint32_t addr, unsigned size, uint64_t &value);
+	bool mie_write(unsigned which, uint32_t addr, unsigned size, uint64_t value);
 	bool mscomm_read(uint32_t addr, unsigned size, uint64_t &value);
 	bool mscomm_write(uint32_t addr, unsigned size, uint64_t value);
-	bool slave_window_read(uint32_t addr, unsigned size, uint64_t &value);
-	bool slave_window_write(uint32_t addr, unsigned size, uint64_t value);
+	bool slave_config_read(uint32_t addr, unsigned size, uint64_t &value);
+	bool slave_config_write(uint32_t addr, unsigned size, uint64_t value);
 	bool sound_read(unsigned which, uint32_t addr, unsigned size, uint64_t &value);
 	bool sound_write(unsigned which, uint32_t addr, unsigned size, uint64_t value);
 	void texram_write(unsigned bank, uint32_t offs, unsigned size, uint64_t value);
@@ -264,9 +265,6 @@ private:
 	uint16_t m_porta[2];
 	uint8_t m_irq_lines;	/* see update_irqs */
 	uint8_t m_mie_port_d;	/* see set_resets */
-	/* The window of the slave on the MIE, see slave_window_read */
-	uint32_t m_unk1A800008_s;
-	uint32_t m_unk1B000100_s;
 
 	/* The frame being run: its line, and the screen the game has set */
 	unsigned m_line;
