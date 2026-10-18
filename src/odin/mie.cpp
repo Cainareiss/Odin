@@ -1280,7 +1280,7 @@ void Mie::log_unknown(char rw, const char *space, uint32_t addr, uint32_t value)
 	if (!m_log) {
 		return;
 	}
-	std::fputs(std::format("mie: unknown {} {} {:04x} pc {:04x} value {:02x}\n",
+	std::fputs(std::format("{}: unknown {} {} {:04x} pc {:04x} value {:02x}\n", m_external ? "i/o board" : "mie",
 	                       space, rw, addr, m_cpu.pc(), value).c_str(), m_log);
 }
 

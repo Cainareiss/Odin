@@ -65,9 +65,17 @@ MieBoard::MieBoard(std::span<const uint8_t> rom, std::span<uint8_t> ram, uint32_
 		m_io = std::make_unique<Jvs837_13551>(*this);
 
 	const char *const io = std::getenv("ODIN_IO");
-	if (io_board == "837-13551" && io_rom.size() == Tmp90ph44::ROM_SIZE && !(io && !std::strcmp(io, "imitation"))) {
-		m_line = std::make_unique<Io837_13551>(io_rom, *this);
-		m_mie.attach_line(m_line.get());
+	const bool imitation = io && !std::strcmp(io, "imitation");
+
+	if (io_board == "837-13551" && io_rom.size() == Tmp90ph44::ROM_SIZE && !imitation) {
+		m_line_13551 = std::make_unique<Io837_13551>(io_rom, *this);
+		m_line = m_line_13551.get();
+	} else if (io_board == "837-13741" && io_rom.size() == 0x10000 && !imitation) {
+		m_line_13741 = std::make_unique<Io837_13741>(io_rom, *this);
+		m_line = m_line_13741.get();
+	}
+	if (m_line) {
+		m_mie.attach_line(m_line);
 	} else {
 		m_jvs.add_device(m_io.get());
 		m_mie.attach_jvs(&m_jvs);
@@ -281,6 +289,8 @@ MieBoard::set_log(FILE *out)
 {
 	m_log = out;
 	m_mie.set_log(out);
+	if (m_line_13741)
+		m_line_13741->set_log(out);
 	if (m_card)
 		m_card->set_log(out);
 }
@@ -301,9 +311,11 @@ MieBoard::save(State &out)
 	out.cycle_acc = m_cycle_acc;
 	out.mie_ahead = m_mie_ahead;
 	out.z80_time = m_z80_time;
-	out.has_line = m_line ? 1 : 0;
-	if (m_line)
-		m_line->save(out.line);
+	out.has_line = m_line_13551 ? 1 : m_line_13741 ? 2 : 0;
+	if (m_line_13551)
+		m_line_13551->save(out.line);
+	if (m_line_13741)
+		m_line_13741->save(out.line_13741);
 	m_eeprom.save(out.eeprom);
 	m_io->save(out.io);
 	m_jvs.save(out.jvs);
@@ -317,7 +329,7 @@ MieBoard::save(State &out)
 bool
 MieBoard::load(const State &in)
 {
-	if ((in.has_card != 0) != (m_card != nullptr) || (in.has_line != 0) != (m_line != nullptr))
+	if ((in.has_card != 0) != (m_card != nullptr) || in.has_line != (m_line_13551 ? 1 : m_line_13741 ? 2 : 0))
 		return false;
 	m_cycle_acc = in.cycle_acc;
 	m_mie_ahead = in.mie_ahead;
@@ -327,8 +339,10 @@ MieBoard::load(const State &in)
 	m_io->load(in.io);
 	m_jvs.load(in.jvs);
 	m_mie.load(in.mie);
-	if (m_line)
-		m_line->load(in.line, m_mie);
+	if (m_line_13551)
+		m_line_13551->load(in.line, m_mie);
+	if (m_line_13741)
+		m_line_13741->load(in.line_13741, m_mie);
 	if (m_card)
 		m_card->load(in.card);
 	return true;

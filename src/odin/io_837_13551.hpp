@@ -19,6 +19,7 @@
 #ifndef ODIN_IO_837_13551_HPP
 #define ODIN_IO_837_13551_HPP
 
+#include "odin/io_line.hpp"
 #include "odin/jvs.hpp"
 #include "odin/mie.hpp"
 #include "odin/tmp90ph44.hpp"
@@ -49,7 +50,7 @@ struct Io837_13551Pin {
  * Its time is that of the line: ticks of 1/9.216 GHz from the reset, a
  * state of the chip 1250 of them. HEURISTIC: its 14.7456 MHz crystal and
  * the one of the UART of the MIE are taken as the same. */
-class Io837_13551 : public Tmp90ph44Board, public MieLine {
+class Io837_13551 : public Tmp90ph44Board, public IoLineBoard {
 public:
 	static constexpr uint64_t TICKS_PER_STATE = 1250;
 	/* HEURISTIC: a coin closes the switch of its slot 50 ms, then leaves
@@ -100,22 +101,15 @@ public:
 
 	Io837_13551(std::span<const uint8_t> prom, JvsInputs &inputs);
 
-	void reset();
-	/* A coin through slot 0 or 1 */
-	void inc_coin(uint8_t slot) { m_coins[slot & 1]++; }
-	/* Runs the board up to `tick`, giving the chip the bytes of the MIE at
-	 * their time: then the first event for the MIE before it is known. */
-	void run_until(uint64_t tick);
-	/* Where the board is, in ticks */
-	uint64_t now() const { return m_chip.states() * TICKS_PER_STATE; }
-	/* The tick the next Mie::run starts at, for line_sent */
-	void set_run_start(uint64_t tick) { m_run_start = tick; }
-	/* The tick of the first event for the MIE, UINT64_MAX for none */
-	uint64_t next_event() const { return m_to_mie_count ? m_to_mie[0].tick : UINT64_MAX; }
-	/* Gives the MIE the events up to `tick` */
-	void deliver(Mie &mie, uint64_t tick);
-	/* The outputs as JVS numbers them: output 1 is bit 7 of the first byte */
-	std::span<const uint8_t> outputs() const { return m_outputs; }
+	/* IoLineBoard */
+	void reset() override;
+	void inc_coin(uint8_t slot) override { m_coins[slot & 1]++; }
+	void run_until(uint64_t tick) override;
+	uint64_t now() const override { return m_chip.states() * TICKS_PER_STATE; }
+	void set_run_start(uint64_t tick) override { m_run_start = tick; }
+	uint64_t next_event() const override { return m_to_mie_count ? m_to_mie[0].tick : UINT64_MAX; }
+	void deliver(Mie &mie, uint64_t tick) override;
+	std::span<const uint8_t> outputs() const override { return m_outputs; }
 	Tmp90ph44 &chip() { return m_chip; }
 
 	void save(State &out) const;

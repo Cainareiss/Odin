@@ -172,6 +172,8 @@ public:
 	uint8_t int_ack() override;
 	/* A pulse on that input: kept until taken. */
 	void raise_external() { m_external_irq = true; }
+	/* Ticks of the line from the start of the current run() */
+	uint64_t run_ticks() const { return m_run_ticks; }
 
 	/* Host side: the same two spaces, one byte at a time
 	 * (hikaru.cpp localbus_map 0x00800000 and 0x00820000). */

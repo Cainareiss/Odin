@@ -167,8 +167,8 @@ head of a frame to every node, which it reads for nothing else
 the programs first test their memory (the MIE program waits 1.27 s
 before its next frame). The 837-13741 answers after the time its program
 takes (jvs_837_13741.cpp: a part for the frame, one for each command):
-tests/jvs/epr21868_bench.cpp runs epr-21868 on the Z80 of Odin, against
-the imitation (2946 replies the same, 2F aside; the times the imitation
+tests/jvs/epr21868_bench.cpp runs epr-21868 on the board of Odin (below),
+against the imitation (2946 replies the same, 2F aside; the times the imitation
 gives half the time within 4 clocks); it needs the EPROM, not in the
 sets of Hikaru. There, HEURISTIC: the 315-6146 of that board runs at the
 clock of the MIE (the same chip beside the same crystals); vector F8 is
@@ -228,6 +228,25 @@ giving the pin then; INTWD waits for the interrupts to be open, where on
 the TMP90C840 it does not: so, the board dies from its 9th frame on
 (interrupt() in tmp90ph44.cpp). In the bench: P3 bits 0-1 read 3 with no
 board after it; the bytes the board sends are not heard back.
+The 315-6146 of the 837-13741 (src/odin/io_837_13741.cpp, d71054.cpp,
+MARKDOWN/82) runs epr-21868 on the JVS line of NASCAR when its folder has
+it (section io_rom, optional); without it or with ODIN_IO=imitation the
+imitation answers. Its pins are those the program reads and drives,
+found by running it: port 0 TEST, TILT, the coins, the return pins of the
+meters and two DIP switches; ports 1, 2 and 6 the switches of the
+players; outputs 1-22 on ports 3-5. tests/jvs/line_bench.cpp runs it on
+the line of the MIE as the 837-13551. HEURISTIC there: the D71054 counts
+the 16 MHz of the Z80 (OSC2 / 2), counter 2 clocking counters 0 and 1,
+the output of counter 0 the interrupt of the chip: a tick every 1 ms, the
+period the numbers of the program aim at (no schematic seen); its first
+pulse a whole period after counter 0 is loaded; the crystal of the board
+and that of the UART of the MIE are the same; port 91 reads FF (no board
+after it, its DIP switches off: configuration 0 of the manual); a coin
+closes its switch 50 ms, then leaves it open 50 ms. The inputs of the
+host change at the start of a frame, just before the MIE asks the board:
+a switch reaches the game a frame after the imitation gives it (3
+readings 1 ms apart, done after the reply), an analog channel one frame
+in three (read each tick).
 The outputs of the boards: each game
 lists those the host uses ("outputs" in odin-games.json, read in its
 OUTPUT TEST); the nozzle vibration of BRAVEFF (outputs 2 and 5) shakes

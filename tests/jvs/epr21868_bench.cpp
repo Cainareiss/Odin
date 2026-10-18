@@ -19,34 +19,23 @@
  */
 
 /* The program of the 837-13741, the I/O board of NASCAR (epr-21868, in the
- * 18wheelr set of MAME), run by the Z80 of Odin, against its imitation
- * (jvs_837_13741.cpp): the replies to the frames the MIE program sends,
- * byte for byte, and the time the board takes to start each reply.
- *
- * The board around its 315-6146, as the program uses it: the EPROM at
- * 0000, 32 KB of SRAM at 8000, UART 1 (ports 10-15) to the host, the
- * converter of the analog channels (port 0F), the switches (C0-C6), the
- * coins and the return pins of the coin meters (port 00), the line from
- * the next board (port 91). The chip runs at 16 MHz and its UART from
- * 14.7456 MHz, as the MIE (mie.cpp: the same chip beside the same two
- * crystals). Interrupt vector F8 is UART 1: the table of the program at
- * 00F2-00FF sends it to the routine that reads the UART, and port 30 bit 3,
- * which the program sets, enables it. Vector FE is the tick of its timer,
- * here every TICK cycles: a choice of the bench (neither the clock of its
- * D71054 nor the counter that interrupts is known), on which only the
- * coins and the switches depend. The coin meters are wired (their return
- * pins read 0), as on a cabinet.
+ * 18wheelr set of MAME), run by the board of Odin (io_837_13741.cpp),
+ * against its imitation (jvs_837_13741.cpp): the replies to the frames the
+ * MIE program sends, byte for byte, and the time the board takes to start
+ * each reply. A MIE at the other end of the line only takes the bytes.
  *
  * Not run with the unit tests: it needs the EPROM.
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
- *            -I src tests/jvs/epr21868_bench.cpp src/odin/z80.cpp src/odin/z80_ops.cpp \
- *            src/odin/jvs.cpp src/odin/jvs_837_13741.cpp -o epr21868_bench
+ *            -I src tests/jvs/epr21868_bench.cpp src/odin/io_837_13741.cpp src/odin/d71054.cpp \
+ *            src/odin/mie.cpp src/odin/z80.cpp src/odin/z80_ops.cpp src/odin/jvs.cpp \
+ *            src/odin/jvs_837_13741.cpp -o epr21868_bench
  * Run: epr21868_bench <epr-21868.ic7>. Exit status 0 when every reply is the
  * same. */
 
+#include "odin/io_837_13741.hpp"
 #include "odin/jvs.hpp"
 #include "odin/jvs_837_13741.hpp"
-#include "odin/z80.hpp"
+#include "odin/mie.hpp"
 
 #include <algorithm>
 #include <array>
@@ -62,10 +51,9 @@
 namespace {
 
 /* Ticks of 1/9.216 GHz, in which both clocks are whole (mie.cpp) */
-constexpr uint64_t TICKS_PER_CYCLE = 576;
-constexpr uint64_t TICKS_PER_UART_CLOCK = 625;
+constexpr uint64_t TICKS_PER_CYCLE = odin::Mie::TICKS_PER_CYCLE;
 constexpr uint64_t TICKS_PER_US = 9216;
-constexpr uint64_t TICK = 16000;	/* the timer of the bench: 1 ms */
+constexpr uint64_t TICK = 16000;	/* the timer as the program sets it: 1 ms */
 /* How far the time of the imitation may be from the measured one, in
  * clocks: half the time, and at most (a tick of the timer just before
  * the end of the request delays the reply, on the board too) */
@@ -75,179 +63,65 @@ constexpr int64_t TOLERANCE = 80;
 /* What the inputs of the board read: switches released, analog channels */
 struct Panel {
 	std::array<uint8_t, 8> analog{};
-	bool coin[2] = { false, false };
 };
 
-class Board : public odin::Z80Bus {
+struct Pins : odin::MieHost {
+	uint8_t gpio_read(uint8_t) override { return 0xFF; }
+	void gpio_write(uint8_t, uint8_t) override {}
+};
+
+class Board {
 public:
-	Board(std::vector<uint8_t> rom, Panel &panel)
-		: m_rom(std::move(rom)), m_ram(0x8000, 0), m_panel(panel), m_cpu(*this)
+	Board(std::span<const uint8_t> rom, odin::JvsInputs &inputs)
+		: m_board(rom, inputs), m_mie_rom(odin::Mie::ROM_SIZE), m_mie_ram(odin::Mie::RAM_SIZE),
+		  m_mie(m_pins, m_mie_rom, m_mie_ram)
 	{
-		m_cpu.reset();
 	}
 
-	uint64_t now() const { return m_now; }
-	uint16_t pc() const { return m_cpu.pc(); }
-	uint64_t byte_ticks() const
-	{
-		const uint64_t divisor = (static_cast<uint64_t>(m_dlm) << 8) | m_dll;
-		return 10 * 16 * (divisor ? divisor : 1) * TICKS_PER_UART_CLOCK;
-	}
+	uint64_t now() const { return m_board.now(); }
+	uint16_t pc() { return m_board.chip().cpu().pc(); }
+	uint64_t byte_ticks() const { return odin::Io837_13741::CHAR_TICKS; }
+	void inc_coin(uint8_t slot) { m_board.inc_coin(slot); }
 
 	/* A byte on the line from the host, its stop bit ending at `at` */
 	void arrive(uint64_t at, uint8_t value) { m_wire.emplace_back(at, value); }
 	/* The bytes the board sent, with the tick its start bit began */
 	std::vector<std::pair<uint64_t, uint8_t>> &sent() { return m_sent; }
 
+	/* Each byte of the host given as its start bit goes, those of the
+	 * board taken as they end, in pieces as MieBoard::run_line runs it */
 	void run_until(uint64_t until)
 	{
-		while (m_now < until) {
-			m_now += m_cpu.step() * TICKS_PER_CYCLE;
-			if (m_now >= m_next_tick) {
-				m_tick_pending = true;
-				m_next_tick += TICK * TICKS_PER_CYCLE;
+		while (now() < until) {
+			uint64_t to = std::min(until, now() + 1024 * TICKS_PER_CYCLE);
+
+			if (!m_wire.empty()) {
+				const uint64_t start = m_wire.front().first - byte_ticks();
+
+				if (start <= now()) {
+					m_board.set_run_start(0);
+					m_board.line_sent(m_wire.front().second, start);
+					m_wire.pop_front();
+					continue;
+				}
+				to = std::min(to, start);
 			}
-			uart();
-			m_cpu.set_int(uart_irq() || m_tick_pending);
+			m_board.run_until(to);
+			while (m_board.next_event() <= now()) {
+				const uint64_t at = m_board.next_event();
+
+				m_board.deliver(m_mie, at);
+				if (m_mie.in8(0x15) & 1)
+					m_sent.emplace_back(at - byte_ticks(), m_mie.in8(0x10));
+			}
 		}
-	}
-
-	uint8_t read8(uint16_t addr) override
-	{
-		return addr < 0x8000 ? (addr < m_rom.size() ? m_rom[addr] : 0xFF) : m_ram[addr - 0x8000u];
-	}
-
-	void write8(uint16_t addr, uint8_t value) override
-	{
-		if (addr >= 0x8000)
-			m_ram[addr - 0x8000u] = value;
-	}
-
-	uint8_t in8(uint16_t port) override
-	{
-		switch (port & 0xFF) {
-		case 0x00:
-			/* Bits 0-1 DIP switches off, 2-3 the return pins of the
-			 * meters, 4-5 the coin switches (closed is 0) */
-			return static_cast<uint8_t>(0xF3 & ~(m_panel.coin[0] ? 0x10 : 0) & ~(m_panel.coin[1] ? 0x20 : 0));
-		case 0x0F:
-			return m_panel.analog[m_adc++ & 7];
-		case 0x10:
-			if (m_lcr & 0x80)
-				return m_dll;
-			if (m_rx.empty())
-				return 0;
-			{
-				const uint8_t v = m_rx.front();
-				m_rx.pop_front();
-				return v;
-			}
-		case 0x11:
-			return (m_lcr & 0x80) ? m_dlm : m_ier;
-		case 0x12:
-			if ((m_ier & 1) && !m_rx.empty())
-				return 0xC4;
-			if ((m_ier & 2) && m_thre) {
-				m_thre = false;
-				return 0xC2;
-			}
-			return 0xC1;
-		case 0x13:
-			return m_lcr;
-		case 0x15:
-			return static_cast<uint8_t>((m_rx.empty() ? 0 : 0x01) | (m_tx.empty() ? 0x20 : 0) |
-			                            (m_tx.empty() && m_now >= m_tx_end ? 0x40 : 0));
-		case 0x30:
-			return m_irq_enable;
-		default:
-			/* The DIP switches of 91 off, no board after it; the
-			 * switches released */
-			return 0xFF;
-		}
-	}
-
-	void out8(uint16_t port, uint8_t value) override
-	{
-		switch (port & 0xFF) {
-		case 0x0F:
-			m_adc = 0;
-			break;
-		case 0x10:
-			if (m_lcr & 0x80) {
-				m_dll = value;
-			} else if (m_tx.empty() && m_now >= m_tx_end) {
-				m_sent.emplace_back(m_now, value);
-				m_tx_end = m_now + byte_ticks();
-				m_thre = true;
-			} else {
-				m_tx.push_back(value);
-				m_thre = false;
-			}
-			break;
-		case 0x11:
-			if (m_lcr & 0x80)
-				m_dlm = value;
-			else
-				m_ier = value;
-			break;
-		case 0x12:
-			if (value & 2)
-				m_rx.clear();
-			if (value & 4)
-				m_tx.clear();
-			break;
-		case 0x13:
-			m_lcr = value;
-			break;
-		case 0x30:
-			m_irq_enable = value;
-			break;
-		default:
-			break;
-		}
-	}
-
-	uint8_t int_ack() override
-	{
-		if (uart_irq())
-			return 0xF8;
-		m_tick_pending = false;
-		return 0xFE;
 	}
 
 private:
-	bool uart_irq() const
-	{
-		return (m_irq_enable & 0x08) && (((m_ier & 1) && !m_rx.empty()) || ((m_ier & 2) && m_thre));
-	}
-
-	void uart()
-	{
-		while (!m_wire.empty() && m_wire.front().first <= m_now) {
-			m_rx.push_back(m_wire.front().second);
-			m_wire.pop_front();
-		}
-		while (!m_tx.empty() && m_now >= m_tx_end) {
-			m_sent.emplace_back(m_tx_end, m_tx.front());
-			m_tx.pop_front();
-			m_tx_end += byte_ticks();
-			if (m_tx.empty())
-				m_thre = true;
-		}
-	}
-
-	std::vector<uint8_t> m_rom, m_ram;
-	Panel &m_panel;
-	odin::Z80 m_cpu;
-	uint64_t m_now = 0;
-	uint64_t m_next_tick = TICK * TICKS_PER_CYCLE;
-	bool m_tick_pending = false;
-	uint8_t m_irq_enable = 0;
-	uint8_t m_adc = 0;
-	uint8_t m_dll = 0, m_dlm = 0, m_ier = 0, m_lcr = 0;
-	bool m_thre = true;
-	uint64_t m_tx_end = 0;
-	std::deque<uint8_t> m_rx, m_tx;
+	odin::Io837_13741 m_board;
+	Pins m_pins;
+	std::vector<uint8_t> m_mie_rom, m_mie_ram;
+	odin::Mie m_mie;
 	std::deque<std::pair<uint64_t, uint8_t>> m_wire;
 	std::vector<std::pair<uint64_t, uint8_t>> m_sent;
 };
@@ -371,8 +245,8 @@ int main(int argc, char **argv)
 	}
 
 	Panel panel;
-	Board board(rom, panel);
 	Inputs inputs(panel);
+	Board board(rom, inputs);
 	odin::Jvs837_13741 imitation(inputs);
 	odin::JvsHost host;
 	host.add_device(&imitation);
@@ -399,11 +273,9 @@ int main(int argc, char **argv)
 	bench.send("poll, channels moved", frame(0x01, { 0x20, 0x02, 0x02, 0x21, 0x02, 0x22, 0x08 }));
 	bench.send("32 03 12 34 56", frame(0x01, { 0x32, 0x03, 0x12, 0x34, 0x56 }));
 
-	/* A coin through slot 1: 10 ticks closed, 10 open */
-	panel.coin[0] = true;
-	board.run_until(board.now() + 10 * TICK * TICKS_PER_CYCLE);
-	panel.coin[0] = false;
-	board.run_until(board.now() + 10 * TICK * TICKS_PER_CYCLE);
+	/* A coin through slot 1 */
+	board.inc_coin(0);
+	board.run_until(board.now() + 2 * odin::Io837_13741::COIN_CYCLES * TICKS_PER_CYCLE);
 	imitation.inc_coin(0);
 	bench.send("21 02 after a coin", frame(0x01, { 0x21, 0x02 }));
 	bench.send("35 01 00 05", frame(0x01, { 0x35, 0x01, 0x00, 0x05 }));

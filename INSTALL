@@ -23,7 +23,9 @@ The games are those of odin-games.json: airtrix, braveff, pharrier, podrace,
 sgnascar and von4. The file is looked for in the current directory, then in
 $HOME, then in ~/.local/share/odin. The ROM directory holds one directory
 for each game, of the name of the game, with the files odin-games.json lists
-for it.
+for it. The programs of the I/O boards of PODRACE (315-6215.bin) and NASCAR
+(epr-21868.ic7, from the 18wheelr set of MAME) may be left out: an
+imitation of the board answers then.
 
 Options:
 

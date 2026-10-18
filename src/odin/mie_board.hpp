@@ -34,6 +34,7 @@
 #include "odin/card_reader.hpp"
 #include "odin/eeprom_93c46.hpp"
 #include "odin/io_837_13551.hpp"
+#include "odin/io_837_13741.hpp"
 #include "odin/jvs.hpp"
 #include "odin/jvs_837_13551.hpp"
 #include "odin/jvs_837_13741.hpp"
@@ -72,8 +73,9 @@ public:
 		uint64_t cycle_acc;
 		uint32_t mie_ahead;
 		uint64_t z80_time;
-		uint8_t has_line;
+		uint8_t has_line;	/* 1 the 837-13551, 2 the 837-13741 */
 		Io837_13551::State line;
+		Io837_13741::State line_13741;
 		Eeprom93c46State eeprom;
 		JvsIoBoardState io;
 		JvsHostState jvs;
@@ -89,9 +91,10 @@ public:
 	 * clock_hz: the clock of the cycles given to run. read_inputs: called
 	 * when the board looks at its switches. io_board: the I/O board on the
 	 * JVS cable, one that knows_io_board. io_rom: the program of the
-	 * 837-13551 (315-6215), which its chip then runs on a line byte by
-	 * byte; without it, or with ODIN_IO=imitation, its imitation answers
-	 * (jvs_837_13551.cpp). */
+	 * 837-13551 (315-6215) or of the 837-13741 (epr-21868), which its chip
+	 * then runs on a line byte by byte; without it, or with
+	 * ODIN_IO=imitation, its imitation answers (jvs_837_13551.cpp,
+	 * jvs_837_13741.cpp). */
 	MieBoard(std::span<const uint8_t> rom, std::span<uint8_t> ram, uint32_t clock_hz,
 	         std::function<void(Inputs &)> read_inputs, const std::string &io_board = "837-13551",
 	         std::span<const uint8_t> io_rom = {});
@@ -198,7 +201,10 @@ private:
 	Eeprom93c46 m_eeprom;
 	JvsHost m_jvs;		/* the JVS cable, from UART 1 of the MIE */
 	std::unique_ptr<JvsIoBoard> m_io;
-	std::unique_ptr<Io837_13551> m_line;
+	/* The I/O board that runs its program, if one does: m_line is it */
+	std::unique_ptr<Io837_13551> m_line_13551;
+	std::unique_ptr<Io837_13741> m_line_13741;
+	IoLineBoard *m_line = nullptr;
 	uint32_t m_line_piece = LINE_PIECE;
 	Mie m_mie;
 	std::unique_ptr<CardReader> m_card;

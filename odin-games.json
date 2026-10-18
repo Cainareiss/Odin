@@ -476,6 +476,14 @@
 					]
 				},
 				{
+					"name" : "io_rom",
+					"type" : "alternative",
+					"optional" : true,
+					"data" : [
+						{ "name" : "epr-21868.ic7", "size" : 65536 }
+					]
+				},
+				{
 					"name" : "eeprom",
 					"type" : "alternative",
 					"data" : [
