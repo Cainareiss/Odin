@@ -464,6 +464,19 @@ GameList::load_game(const std::string &rom_dir, const std::string &name) const
 	if (!rom || !num)
 		return std::nullopt;
 	game.name = name;
+	game.title = name;
+	if (const json_t *const title = json_object_get(rom, "title")) {
+		const char *const text = json_string_value(title);
+		const size_t length = text ? std::strlen(text) : 0;
+
+		if (!length || length > Game::MAX_TITLE ||
+		    !std::all_of(text, text + length, [](char c) { return c >= ' ' && c <= '~'; })) {
+			std::fprintf(stderr, "ERROR: game '%s': \"title\" is not 1 to %zu printable ASCII characters\n",
+			             name.c_str(), Game::MAX_TITLE);
+			return std::nullopt;
+		}
+		game.title = text;
+	}
 	game.machine = json_string_value(json_object_get(rom, "mach"));
 	const char *const io = json_string_value(json_object_get(rom, "io"));
 	game.io_board = io ? io : "837-13551";

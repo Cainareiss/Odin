@@ -94,7 +94,7 @@ const char LIST[] = R"({
     { "name": "misfit", "mach": "hikaru", "rom_board": { "eprom_mb": 2 }, "sections": [
         { "name": "eprom", "type": "interleave", "amnt": 2, "data": [
             { "name": "a.bin", "size": 4 }, { "name": "b.bin", "size": 4 } ] } ] },
-    { "name": "wheel", "mach": "hikaru", "io": "837-13741", "option_speakers": true, "option_level": -22.5,
+    { "name": "wheel", "title": "Wheel ~ Test: 2!", "mach": "hikaru", "io": "837-13741", "option_speakers": true, "option_level": -22.5,
       "option_vibration": true, "drive_board": { "first_output": 15 },
       "rom_board": { "eprom_mb": 4, "315-5881": "291b02C7", "actel": { "key": "56DEDF33", "id": "4252" } },
       "mie_eeprom": "4242520001aBCDEF0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ff",
@@ -236,6 +236,8 @@ void test_games(const std::string &dir)
 	}
 
 	const std::optional<Game> wheel = list.load_game(roms, "wheel");
+	check(wheel && wheel->title == "Wheel ~ Test: 2!", "the title the list tells");
+	check(toy && toy->title == "toy", "without \"title\", the name");
 	check(wheel && wheel->io_board == "837-13741", "the I/O board the list tells");
 	check(wheel && wheel->option_speakers, "the speakers of the optional sound board the list tells");
 	check(wheel && wheel->option_level == -22.5, "the level of the optional board the list tells, in dB");
@@ -391,6 +393,12 @@ void test_bad_controls(const std::string &dir)
 		refused += refuses(bad);
 	check(refused == static_cast<int>(std::size(bad_chips)),
 	      "a game whose chip is not 128 bytes in hexadecimal is refused");
+	check(refuses(R"("title": 3)") && refuses(R"("title": "")") &&
+	      refuses("\"title\": \"" + std::string(odin::Game::MAX_TITLE + 1, 'A') + "\"") &&
+	      refuses(R"("title": "Caf\u00e9")") && refuses(R"("title": "A\tB")") && refuses(R"("title": "A\u007fB")"),
+	      "and one whose \"title\" is not 1 to 48 printable ASCII characters");
+	check(!refuses("\"title\": \"" + std::string(odin::Game::MAX_TITLE, 'A') + "\""),
+	      "a title of 48 characters is not");
 	check(refuses(R"("option_speakers": "yes")") && refuses(R"("option_speakers": 1)"),
 	      "and one whose \"option_speakers\" is not true or false");
 	check(refuses(R"("drive_board": 15)") && refuses(R"("drive_board": {})") &&

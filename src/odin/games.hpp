@@ -154,6 +154,10 @@ struct GameRomBoard {
  * "maskrom", "mie", "eeprom", "rombd_eeprom"). */
 struct Game {
 	std::string name;
+	/* The name it is shown under: "title" in the list, 1 to MAX_TITLE
+	 * printable ASCII characters; the name when the list does not say. */
+	std::string title;
+	static constexpr size_t MAX_TITLE = 48;
 	std::string machine;
 	/* The JVS I/O board of its cabinet: "io" in the list, 837-13551 when
 	 * the list does not say. */

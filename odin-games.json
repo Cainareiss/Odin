@@ -3,6 +3,7 @@
 	"roms" : [
 		{
 			"name" : "bootrom",
+			"title" : "Hikaru BIOS",
 			"mach" : "hikaru",
 			"sections" : [
 				{
@@ -25,6 +26,7 @@
 		},
 		{
 			"name" : "airtrix",
+			"title" : "Air Trix",
 			"mach" : "hikaru",
 			"rom_board" : { "eprom_mb" : 4, "315-5881" : "291B02C7" },
 			"mie_eeprom" : "42434f30010101001800040101010100121200000000000000000000060041495254524958300000000000000100010100000000000000000000000000007e4442434f30010101001800040101010100121200000000000000000000060041495254524958300000000000000100010100000000000000000000000000007e44",
@@ -104,6 +106,7 @@
 		},
 		{
 			"name" : "braveff",
+			"title" : "Brave Fire Fighters",
 			"mach" : "hikaru",
 			"rom_board" : { "eprom_mb" : 2 },
 			"mie_eeprom" : "42414b300201010018000401010101002211111100000000000000000600010010a1040404003083de1770d03c7cc52083b50080ff000000000000000000f1cc42414b300201010018000401010101002211111100000000000000000600010010a1040404003083de1770d03c7cc52083b50080ff000000000000000000f1cc",
@@ -208,6 +211,7 @@
 		},
 		{
 			"name" : "pharrier",
+			"title" : "Planet Harriers",
 			"mach" : "hikaru",
 			"rom_board" : { "eprom_mb" : 4, "315-5881" : "2912C68A" },
 			"option_speakers" : true,
@@ -302,6 +306,7 @@
 		},
 		{
 			"name" : "podrace",
+			"title" : "Star Wars Racer Arcade",
 			"mach" : "hikaru",
 			"rom_board" : { "eprom_mb" : 4, "315-5881" : "2903DAD5" },
 			"option_vibration" : true,
@@ -405,6 +410,7 @@
 		},
 		{
 			"name" : "sgnascar",
+			"title" : "NASCAR Arcade",
 			"mach" : "hikaru",
 			"rom_board" : { "eprom_mb" : 4, "actel" : { "key" : "56DEDF33", "id" : "4252" } },
 			"option_speakers" : true,
@@ -496,6 +502,7 @@
 		},
 		{
 			"name" : "von4",
+			"title" : "Cyber Troopers Virtual-On Force",
 			"mach" : "hikaru",
 			"rom_board" : { "eprom_mb" : 4 },
 			"mie_eeprom" : "424458300201010018000401010101001100000000000000000000000600000000000000000000000000000000000000000000000000000000000000000001ba424458300201010018000401010101001100000000000000000000000600000000000000000000000000000000000000000000000000000000000000000001ba",
