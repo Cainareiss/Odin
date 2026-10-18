@@ -8,8 +8,6 @@ HEURISTIC and its stand-ins HACK: each one has its lines here.
 GENERAL
 -------
 
-Add support for "required" field in the JSON file.
-
 One language: every file is C++20, built with the same warnings, and the
 frames of Valkyrie (machine, device, CPU, buffer, memory map) are gone: the
 board is a class (src/odin/hikaru.cpp), the window another
