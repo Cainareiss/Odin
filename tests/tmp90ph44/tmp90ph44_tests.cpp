@@ -124,6 +124,12 @@ void test_timer()
 	chip.run(400);
 	check(chip.peek(0xFF01) == 1, "stopped: once");
 
+	/* The same in one run: the match is an event within it */
+	Tmp90ph44 once(rom.bytes, board);
+
+	once.run(20 * 64 + 400);
+	check(once.peek(0xFF01) == 1, "one run: the interrupt of 0028 taken within it");
+
 	/* The same with INTEH 00: no interrupt */
 	rom.put(0x0A, { 0x00 });
 	Tmp90ph44 off(rom.bytes, board);
@@ -170,6 +176,13 @@ void test_serial()
 	chip.serial_received(0xA7);
 	chip.run(100);
 	check(chip.peek(0xFF05) == 0xA7, "a byte received: 0060, SCBUF");
+
+	/* The same in one run: the end of the byte is an event within it */
+	Board other;
+	Tmp90ph44 once(rom.bytes, other);
+
+	once.run(30 + Tmp90ph44::BYTE_STATES + 200);
+	check(other.sent.size() == 1 && once.peek(0xFF04) == 1, "one run: the byte sent, 0068 taken within it");
 }
 
 void test_overrun()

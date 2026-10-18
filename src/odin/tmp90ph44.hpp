@@ -102,9 +102,11 @@ private:
 	uint8_t sfr_read(uint8_t reg);
 	void sfr_write(uint8_t reg, uint8_t value);
 	void tell_port(unsigned port);
-	/* Timers, watchdog and serial line for `states` more */
-	void advance(uint32_t states);
+	void sync();
+	uint64_t next_event() const;
 	uint32_t timer_period(unsigned n) const;
+	unsigned ticks_to_match(unsigned n) const;
+	uint32_t watchdog_period() const;
 	void request(uint16_t vector) { m_requests |= 1u << (vector >> 3); }
 
 	Tlcs90 m_cpu;
@@ -113,6 +115,8 @@ private:
 	std::array<uint8_t, 0x200> m_ram{};
 	std::array<uint8_t, 0x40> m_sfr{};	/* FFC0-FFFF as written */
 	uint64_t m_states = 0;
+	uint64_t m_synced = 0;		/* the devices are up to date at this time */
+	uint64_t m_next_event = 0;	/* the first time one asks for an interrupt */
 	uint64_t m_prescaler = 0;	/* states since the prescaler runs */
 	std::array<uint8_t, 4> m_timer{};
 	uint32_t m_watchdog = 0;	/* states since cleared */

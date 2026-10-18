@@ -68,6 +68,8 @@ Tmp90ph44::reset()
 	m_rx_full = false;
 	m_rx_errors = 0;
 	m_tx_left = -1;
+	m_synced = m_states;
+	m_next_event = next_event();
 	m_cpu.reset();
 }
 
@@ -79,9 +81,12 @@ Tmp90ph44::run(uint32_t states)
 	while (done < states) {
 		const uint32_t s = m_cpu.step();
 
-		advance(s);
+		m_states += s;
 		done += s;
+		if (m_states >= m_next_event)
+			sync();
 	}
+	sync();
 	return done;
 }
 
@@ -204,13 +209,14 @@ Tmp90ph44::sfr_read(uint8_t reg)
 void
 Tmp90ph44::sfr_write(uint8_t reg, uint8_t value)
 {
+	sync();
 	switch (reg) {
 	case WDCR:
 		if (value == 0x4E)
 			m_watchdog = 0;
 		else if (value == 0xB1 && !(m_sfr[WDMOD] & 0x80))
 			m_sfr[WDMOD] &= 0x7F;
-		return;
+		break;
 	case TRUN: {
 		const uint8_t stopped = m_sfr[TRUN] & static_cast<uint8_t>(~value);
 
@@ -221,19 +227,19 @@ Tmp90ph44::sfr_write(uint8_t reg, uint8_t value)
 		if (stopped & 0x20)
 			m_prescaler = 0;
 		m_sfr[TRUN] = value;
-		return;
+		break;
 	}
 	case SCBUF:
 		if (m_tx_left >= 0)
 			unknown("byte written while one is being sent:", value);
 		m_tx = value;
 		m_tx_left = BYTE_STATES;
-		return;
+		break;
 	case IRFL:
 		/* The flag of the vector value * 8 (1499, 14C1: 05 for 0028, 07
 		 * for 0038) */
 		m_requests &= ~(1u << (value & 31));
-		return;
+		break;
 	default:
 		m_sfr[reg] = value;
 		if (reg < P5)
@@ -244,8 +250,9 @@ Tmp90ph44::sfr_write(uint8_t reg, uint8_t value)
 			tell_port(6);
 			tell_port(7);
 		}
-		return;
+		break;
 	}
+	m_next_event = next_event();
 }
 
 /* P0 to P4 drive the bits their control register sets; P56 and P57 are
@@ -283,33 +290,56 @@ Tmp90ph44::timer_period(unsigned n) const
 	}
 }
 
-void
-Tmp90ph44::advance(uint32_t states)
+/* The ticks timer n has left to its match */
+unsigned
+Tmp90ph44::ticks_to_match(unsigned n) const
 {
-	m_states += states;
+	return ((m_sfr[TREG0 + n] - m_timer[n] - 1) & 0xFF) + 1u;
+}
+
+uint32_t
+Tmp90ph44::watchdog_period() const
+{
+	return 1u << (13 + 2 * ((m_sfr[WDMOD] >> 5) & 3));
+}
+
+/* The timers, the watchdog and the serial line brought to now: what they
+ * did since the last time, as they would have done it after each
+ * instruction. Nothing of theirs is seen by the CPU between their events
+ * (the requests IRFH reads change only then), so the chip brings them up
+ * to date only at an event, before a write to a register, and at the end
+ * of run() (MARKDOWN/76). */
+void
+Tmp90ph44::sync()
+{
+	const uint64_t states = m_states - m_synced;
+
+	m_synced = m_states;
+	if (!states)
+		return;
 
 	/* The timers: one tick per period of their clock, counted from the
-	 * start of the prescaler */
+	 * start of the prescaler; cleared at their match */
 	if ((m_sfr[TRUN] & 0x20) && (m_sfr[TRUN] & 0x0F)) {
-		const uint64_t from = m_prescaler, to = m_prescaler + states;
-
 		for (unsigned n = 0; n < 4; n++) {
 			if (!(m_sfr[TRUN] & (1u << n)))
 				continue;
 			const uint32_t period = timer_period(n);
-			const uint8_t match = m_sfr[TREG0 + n];
+			uint64_t ticks = (m_prescaler + states) / period - m_prescaler / period;
+			const unsigned left = ticks_to_match(n);
 
-			for (uint64_t tick = from / period + 1; tick * period <= to; tick++) {
-				if (++m_timer[n] != match)
-					continue;
-				m_timer[n] = 0;
-				/* HEURISTIC: timers 0 and 2, whose vectors the
-				 * program leaves empty, ask for nothing. */
-				if (n == 1)
-					request(VEC_T1);
-				else if (n == 3)
-					request(VEC_T3);
+			if (ticks < left) {
+				m_timer[n] = static_cast<uint8_t>(m_timer[n] + ticks);
+				continue;
 			}
+			ticks -= left;
+			m_timer[n] = static_cast<uint8_t>(ticks % (m_sfr[TREG0 + n] ? m_sfr[TREG0 + n] : 256u));
+			/* HEURISTIC: timers 0 and 2, whose vectors the program
+			 * leaves empty, ask for nothing. */
+			if (n == 1)
+				request(VEC_T1);
+			else if (n == 3)
+				request(VEC_T3);
 		}
 	}
 	if (m_sfr[TRUN] & 0x20)
@@ -317,11 +347,9 @@ Tmp90ph44::advance(uint32_t states)
 
 	/* The watchdog: INTWD each 2^(14 + 2 WDTP) periods of fc */
 	if (m_sfr[WDMOD] & 0x80) {
-		const uint32_t period = 1u << (13 + 2 * ((m_sfr[WDMOD] >> 5) & 3));
-
-		m_watchdog += states;
-		if (m_watchdog >= period) {
-			m_watchdog -= period;
+		m_watchdog += static_cast<uint32_t>(states);
+		if (m_watchdog >= watchdog_period()) {
+			m_watchdog -= watchdog_period();
 			request(VEC_WD);
 		}
 	}
@@ -336,6 +364,28 @@ Tmp90ph44::advance(uint32_t states)
 			request(VEC_TX);
 		}
 	}
+	m_next_event = next_event();
+}
+
+/* The first time a device asks for an interrupt: the overflow of the
+ * watchdog, the match of timer 1 or 3, the end of the byte sent */
+uint64_t
+Tmp90ph44::next_event() const
+{
+	uint64_t next = UINT64_MAX;
+
+	if (m_sfr[WDMOD] & 0x80)
+		next = m_synced + (m_watchdog < watchdog_period() ? watchdog_period() - m_watchdog : 0);
+	if (m_tx_left >= 0)
+		next = std::min(next, m_synced + static_cast<uint64_t>(m_tx_left) + 1);
+	if (m_sfr[TRUN] & 0x20)
+		for (unsigned n : { 1u, 3u })
+			if (m_sfr[TRUN] & (1u << n)) {
+				const uint32_t period = timer_period(n);
+
+				next = std::min(next, m_synced + (m_prescaler / period + ticks_to_match(n)) * period - m_prescaler);
+			}
+	return next;
 }
 
 /* In the order of their vectors, the watchdog first. HEURISTIC: INTWD
