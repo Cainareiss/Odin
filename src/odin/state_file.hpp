@@ -43,8 +43,10 @@ public:
 	 * 11: a ROM board without the 315-5881 keeps the RAM of its local bus;
 	 * 12: the MIE keeps its converter channel, its external interrupt
 	 * and the request of the transmitter of UART 1;
-	 * 13: it keeps the chip of the 837-13741 and its line */
-	static constexpr unsigned VERSION = 13;
+	 * 13: it keeps the chip of the 837-13741 and its line;
+	 * 14: the SH-4 as its core keeps it, and none of the words the
+	 * board of Valkyrie kept */
+	static constexpr unsigned VERSION = 14;
 
 	enum class Mode {
 		SAVE,

@@ -219,8 +219,6 @@ private:
 	/* hikaru_state.cpp */
 	bool save_items(StateFile &state);
 	bool load_items(StateFile &state);
-	bool save_cpu(StateFile &state, unsigned which);
-	bool load_cpu(StateFile &state, unsigned which);
 
 	const Game &m_game;
 	bool m_verbose;

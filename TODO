@@ -11,15 +11,8 @@ GENERAL
 One language: every file is C++20, built with the same warnings, and the
 frames of Valkyrie (machine, device, CPU, buffer, memory map) are gone: the
 board is a class (src/odin/hikaru.cpp), the window another
-(src/odin/display.cpp). What is left of them:
-- the save states keep their layout (hikaru_state.cpp): the SH-4 as the
-  interpreter of Valkyrie laid it out, and four words of the board that
-  are always zero. A new version of the format can drop them; the states
-  made before would then be refused.
-- the messages of the start ("loading game list from", "Loading section",
-  "Running", "Finalizing") and of F1 and F4 have no end of line;
-- Odin ends with the status 0 when a game cannot be loaded;
-- while paused (Space) the main loop spins.
+(src/odin/display.cpp), and the save states keep each chip as it keeps
+itself.
 
 Speed: the frames are held at 60 per second (-u lifts the limit). On a
 Ryzen 5 5600X with a GeForce RTX 3080 the whole demo loops, from power-on
