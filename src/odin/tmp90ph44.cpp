@@ -65,7 +65,6 @@ Tmp90ph44::reset()
 	m_timer.fill(0);
 	m_watchdog = 0;
 	m_requests = 0;
-	m_flags = 0;
 	m_rx_full = false;
 	m_rx_errors = 0;
 	m_tx_left = -1;
@@ -195,13 +194,8 @@ Tmp90ph44::sfr_read(uint8_t reg)
 		/* The request flags of the vectors 0018 to 0050, bit n for the
 		 * vector (n + 3) * 8. Bit 2, 0028, is polled with the interrupts
 		 * shut while the delay before a reply runs (05DB, 14AB);
-		 * HEURISTIC for the other bits, which the program does not read.
-		 * HEURISTIC: a flag stays set when its interrupt is taken, until
-		 * FFEA clears it. The program clears it itself before it starts
-		 * the delay (147C), and the watchdog interrupt opens the others
-		 * (019A) while the poll may run: a flag the acceptance cleared
-		 * would leave the poll waiting for ever, one reply in 25. */
-		return static_cast<uint8_t>(m_flags >> 3);
+		 * HEURISTIC for the other bits, which the program does not read. */
+		return static_cast<uint8_t>(m_requests >> 3);
 	default:
 		return m_sfr[reg];
 	}
@@ -239,7 +233,6 @@ Tmp90ph44::sfr_write(uint8_t reg, uint8_t value)
 		/* The flag of the vector value * 8 (1499, 14C1: 05 for 0028, 07
 		 * for 0038) */
 		m_requests &= ~(1u << (value & 31));
-		m_flags &= ~(1u << (value & 31));
 		return;
 	default:
 		m_sfr[reg] = value;
@@ -345,7 +338,16 @@ Tmp90ph44::advance(uint32_t states)
 	}
 }
 
-/* The watchdog first, then the maskable ones in the order of their vectors.
+/* In the order of their vectors, the watchdog first. HEURISTIC: INTWD
+ * waits for the interrupts to be open, as the others do; on the TMP90C840
+ * it does not (data book, table 3.3 (1)). The program does all its work
+ * on a frame inside INTRX (0276: the commands, the poll of the delay at
+ * 05DB, the start of the reply at 13BB) and shuts the interrupts only at
+ * its start (0079), while the handler of INTWD opens them (019A). Taken
+ * inside INTRX, INTWD would let the delay be taken and its flag cleared,
+ * the poll then waiting for ever, and bytes be lost or sent twice
+ * (tests/jvs/s6215_bench.cpp: the board dead from its 9th frame on, or
+ * 93 frames of 572 wrong with the flag kept; none wrong this way).
  * HEURISTIC: INTEH bit 2 enables 0028 and bit 0 0038, as the program sets
  * and clears them (147C, 1499, 14B9, 14E3); the serial ones are taken as
  * enabled by the bits the program sets at its start and never clears
@@ -353,23 +355,23 @@ Tmp90ph44::advance(uint32_t states)
 uint16_t
 Tmp90ph44::interrupt(bool maskable)
 {
+	if (!maskable)
+		return 0;
+
+	const uint8_t inteh = m_sfr[INTEH];
+	const bool serial = (inteh & 0x48) == 0x48 && (m_sfr[INTEL] & 0x0C) == 0x0C;
 	uint16_t vector = 0;
 
 	if (m_requests & (1u << (VEC_WD >> 3)))
 		vector = VEC_WD;
-	else if (maskable) {
-		const uint8_t inteh = m_sfr[INTEH];
-		const bool serial = (inteh & 0x48) == 0x48 && (m_sfr[INTEL] & 0x0C) == 0x0C;
-
-		if ((m_requests & (1u << (VEC_T1 >> 3))) && (inteh & 0x04))
-			vector = VEC_T1;
-		else if ((m_requests & (1u << (VEC_T3 >> 3))) && (inteh & 0x01))
-			vector = VEC_T3;
-		else if ((m_requests & (1u << (VEC_RX >> 3))) && serial)
-			vector = VEC_RX;
-		else if ((m_requests & (1u << (VEC_TX >> 3))) && serial)
-			vector = VEC_TX;
-	}
+	else if ((m_requests & (1u << (VEC_T1 >> 3))) && (inteh & 0x04))
+		vector = VEC_T1;
+	else if ((m_requests & (1u << (VEC_T3 >> 3))) && (inteh & 0x01))
+		vector = VEC_T3;
+	else if ((m_requests & (1u << (VEC_RX >> 3))) && serial)
+		vector = VEC_RX;
+	else if ((m_requests & (1u << (VEC_TX >> 3))) && serial)
+		vector = VEC_TX;
 	if (vector)
 		m_requests &= ~(1u << (vector >> 3));
 	return vector;

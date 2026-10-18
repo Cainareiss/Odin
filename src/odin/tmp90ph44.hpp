@@ -59,8 +59,8 @@ public:
  *    phiT16 (fc/128) or phiT256 (fc/2048). Timer n counts while TRUN bit n
  *    and the prescaler bit 5 are set, is cleared when it matches TREGn
  *    and then asks for its interrupt.
- *  - Watchdog: 20 stages on fc/2; INTWD, non-maskable, every 2^(14 + 2 *
- *    WDTP) periods of fc; 4E in WDCR clears it, B1 with WDTE clear stops it.
+ *  - Watchdog: 20 stages on fc/2; INTWD every 2^(14 + 2 * WDTP) periods
+ *    of fc; 4E in WDCR clears it, B1 with WDTE clear stops it.
  *  - Interrupts: a flag per vector, cleared when taken or when FFEA is
  *    written with the vector / 8.
  *  - Serial channel: 8-bit UART at the rate of the JVS line; a byte
@@ -105,11 +105,7 @@ private:
 	/* Timers, watchdog and serial line for `states` more */
 	void advance(uint32_t states);
 	uint32_t timer_period(unsigned n) const;
-	void request(uint16_t vector)
-	{
-		m_requests |= 1u << (vector >> 3);
-		m_flags |= 1u << (vector >> 3);
-	}
+	void request(uint16_t vector) { m_requests |= 1u << (vector >> 3); }
 
 	Tlcs90 m_cpu;
 	Tmp90ph44Board &m_board;
@@ -120,8 +116,7 @@ private:
 	uint64_t m_prescaler = 0;	/* states since the prescaler runs */
 	std::array<uint8_t, 4> m_timer{};
 	uint32_t m_watchdog = 0;	/* states since cleared */
-	uint32_t m_requests = 0;	/* to the CPU, a bit per vector / 8 */
-	uint32_t m_flags = 0;		/* as FFEB reads them, the same bits */
+	uint32_t m_requests = 0;	/* a bit per vector / 8 */
 	uint8_t m_rx = 0;
 	bool m_rx_full = false;		/* SCBUF not read since its byte came */
 	uint8_t m_rx_errors = 0;	/* SCCR bits 4-2 */

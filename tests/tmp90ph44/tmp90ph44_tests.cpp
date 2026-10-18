@@ -80,18 +80,28 @@ void test_watchdog()
 	Rom rom;
 	Board board;
 
-	/* WDMOD A1: WDTP 01, 2^16 periods of fc = 32768 states. The handler
-	 * counts in FF00. */
-	rom.put(0, { 0x3E, 0xBF, 0xFF, 0x37, 0xD2, 0xA1, LOOP[0], LOOP[1] });
+	/* WDMOD A1: WDTP 01, 2^16 periods of fc = 32768 states; EI. The
+	 * handler counts in FF00. */
+	rom.put(0, { 0x3E, 0xBF, 0xFF, 0x37, 0xD2, 0xA1, 0x03, LOOP[0], LOOP[1] });
 	rom.put(0x20, { 0x87, 0x00, 0x1F });
 	Tmp90ph44 chip(rom.bytes, board);
 
 	chip.run(32768 - 100);
 	check(chip.peek(0xFF00) == 0, "no watchdog interrupt before 2^16 / fc");
 	chip.run(200);
-	check(chip.peek(0xFF00) == 1, "one at 2^16 / fc, the interrupts shut");
+	check(chip.peek(0xFF00) == 1, "one at 2^16 / fc");
 	chip.run(2 * 32768);
 	check(chip.peek(0xFF00) == 3, "then one each 2^16 / fc");
+
+	/* The same, EI once P0 bit 0 reads 0 */
+	rom.put(6, { 0x27, 0xC0, 0x6C, 0x01, 0xCE, 0xFA, 0x03, LOOP[0], LOOP[1] });
+	Tmp90ph44 shut(rom.bytes, board);
+
+	shut.run(32768 + 200);
+	check(shut.peek(0xFF00) == 0, "the interrupts shut: INTWD waits");
+	board.pins[0] = 0xFE;
+	shut.run(100);
+	check(shut.peek(0xFF00) == 1, "and is taken once they open");
 }
 
 void test_timer()
@@ -100,12 +110,9 @@ void test_timer()
 	Board board;
 
 	/* T01MOD 0B (timer 1 on phiT16), TREG1 14, INTEH 04, EI, TRUN 22.
-	 * The handler stops the timer, counts in FF01, keeps FFEB in FF02.
-	 * The main program then clears the flag (FFEA 05) and keeps FFEB in
-	 * FF03. */
-	rom.put(0, { 0x3E, 0xBF, 0xFF, 0x37, 0xD8, 0x0B, 0x37, 0xD5, 0x14, 0x37, 0xF5, 0x04, 0x03, 0x37, 0xDC, 0x22 });
-	/* Waits for FF01 (LD A,(FF01); CP A,0; JR Z), clears the flag, keeps FFEB */
-	rom.put(0x10, { 0x27, 0x01, 0x6F, 0x00, 0xC6, 0xFA, 0x37, 0xEA, 0x05, 0x27, 0xEB, 0x2F, 0x03, LOOP[0], LOOP[1] });
+	 * The handler stops the timer, counts in FF01, keeps FFEB in FF02. */
+	rom.put(0, { 0x3E, 0xBF, 0xFF, 0x37, 0xD8, 0x0B, 0x37, 0xD5, 0x14, 0x37, 0xF5, 0x04, 0x03, 0x37, 0xDC, 0x22,
+	             LOOP[0], LOOP[1] });
 	rom.put(0x28, { 0x37, 0xDC, 0x20, 0x87, 0x01, 0x27, 0xEB, 0x2F, 0x02, 0x1F });
 	Tmp90ph44 chip(rom.bytes, board);
 
@@ -113,17 +120,32 @@ void test_timer()
 	check(chip.peek(0xFF01) == 0, "timer 1: nothing before 20 ticks of fc / 128");
 	chip.run(400);
 	check(chip.peek(0xFF01) == 1, "the interrupt of 0028 at the match");
-	check(chip.peek(0xFF02) & 0x04, "FFEB bit 2 still set in the handler");
+	check(!(chip.peek(0xFF02) & 0x04), "FFEB bit 2 cleared when it is taken");
 	chip.run(400);
 	check(chip.peek(0xFF01) == 1, "stopped: once");
-	check(!(chip.peek(0xFF03) & 0x04), "FFEA 05 clears it");
 
 	/* The same with INTEH 00: no interrupt */
 	rom.put(0x0A, { 0x00 });
-	Tmp90ph44 shut(rom.bytes, board);
+	Tmp90ph44 off(rom.bytes, board);
 
-	shut.run(3000);
-	check(shut.peek(0xFF01) == 0, "INTEH bit 2 clear: 0028 not taken");
+	off.run(3000);
+	check(off.peek(0xFF01) == 0, "INTEH bit 2 clear: 0028 not taken");
+
+	/* No EI: FFEB polled until bit 2 sets, kept in FF03; FFEA 05, FFEB
+	 * kept in FF04; then EI. The handler counts in FF01. */
+	Rom poll;
+	poll.put(0, { 0x3E, 0xBF, 0xFF, 0x37, 0xD8, 0x0B, 0x37, 0xD5, 0x14, 0x37, 0xF5, 0x04, 0x37, 0xDC, 0x22,
+	              0x27, 0xEB, 0x6C, 0x04, 0xC6, 0xFA, 0x27, 0xEB, 0x2F, 0x03, 0x37, 0xEA, 0x05, 0x27, 0xEB, 0x2F, 0x04,
+	              0x03, LOOP[0], LOOP[1] });
+	poll.put(0x28, { 0x87, 0x01, 0x1F });
+	Tmp90ph44 polled(poll.bytes, board);
+
+	polled.run(1700);
+	check(polled.peek(0xFF03) & 0x04, "the interrupts shut: FFEB bit 2 set at the match");
+	check(!(polled.peek(0xFF04) & 0x04), "FFEA 05 clears it");
+	check(polled.peek(0xFF01) == 0, "and the request: not taken once they open");
+	polled.run(1300);
+	check(polled.peek(0xFF01) == 1, "the next match taken");
 }
 
 void test_serial()
