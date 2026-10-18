@@ -416,6 +416,15 @@ CRCs MAME read on these boards. BRAVEFF never probes. HEURISTIC: bit 3 of
 in 32 bits, F4 or F6 where the games reach the 315-5881 in 16 bits, FD
 then F4 in the probe); the high half of such an access reads zero; the
 RAM is fitted on the boards whose 315-5881 is not (BRAVEFF, VON4).
+The size of each set of ROMs: a routine of the BOOTROM (0x7984; the games
+run a copy of it, SGNASCAR at 0C070A24, from 0x60E24 of its EPROMs)
+selects banks 10 to 1B in turn and compares two bytes of each every 124,
+127 times, with those 4 MB further on; a bank whose bytes all agree is a
+mirror, its bit set in
+the word at GBR+6. It reads the empty sockets too (11 to 13 on the board
+of SGNASCAR). HEURISTIC: an empty socket reads 0 (rom_board.cpp
+read_rom); any value that stays the same gives the same word (FF as
+well), a floating bus would not.
 
 SGNASCAR ROM board security FPGA (src/odin/actel_m1.cpp, the stream
 decoder of MAME's Naomi M1 board): registers at local bus 0x0A000000, key

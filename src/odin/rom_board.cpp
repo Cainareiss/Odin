@@ -364,9 +364,11 @@ RomBoard::write_guard(uint32_t offs, unsigned size, uint64_t value, bool wide)
 }
 
 /* A read of a set of ROMs at an offset in it. Past its end is an empty
- * socket, which reads zero. The games probe every socket at boot (von4
- * 0C713C84: pages 10-1B, 128 bytes each against the +4MB mirror), so an
- * empty one is read thousands of times: it is told once a page. */
+ * socket, which reads zero (HEURISTIC). The games probe every socket at
+ * boot (the routine of the BOOTROM at 0x7984, which they copy: von4
+ * 0C713C84, sgnascar 0C070A24: pages 10-1B, 254 bytes each against the
+ * +4MB mirror), so an empty one is read hundreds of times: it is told
+ * once a page. */
 uint64_t
 RomBoard::read_rom(std::span<const uint8_t> rom, uint32_t offs, unsigned size, uint32_t bus_addr)
 {
