@@ -25,7 +25,10 @@ $HOME, then in ~/.local/share/odin. The ROM directory holds one directory
 for each game, of the name of the game, with the files odin-games.json lists
 for it. The programs of the I/O boards of PODRACE (315-6215.bin) and NASCAR
 (epr-21868.ic7, from the 18wheelr set of MAME) may be left out: an
-imitation of the board answers then.
+imitation of the board answers then, made from that program and checked
+against it. The games play the same without them, and NASCAR sends its
+wheel (the force feedback) the same orders; with them the board runs its
+own program, a little slower.
 
 Options:
 

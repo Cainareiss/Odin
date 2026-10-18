@@ -231,7 +231,10 @@ board after it; the bytes the board sends are not heard back.
 The 315-6146 of the 837-13741 (src/odin/io_837_13741.cpp, d71054.cpp,
 MARKDOWN/82) runs epr-21868 on the JVS line of NASCAR when its folder has
 it (section io_rom, optional); without it or with ODIN_IO=imitation the
-imitation answers. Its pins are those the program reads and drives,
+imitation answers: the game plays the same, and the outputs to its drive
+board (15-22, the force feedback) are the same (18/10/2026, a race
+started both ways), so the EPROM is not needed. Its pins are those the
+program reads and drives,
 found by running it: port 0 TEST, TILT, the coins, the return pins of the
 meters and two DIP switches; ports 1, 2 and 6 the switches of the
 players; outputs 1-22 on ports 3-5. tests/jvs/line_bench.cpp runs it on
