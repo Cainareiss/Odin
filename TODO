@@ -102,9 +102,13 @@ PHARRIER readies its 146 programs in 3.0 s on an RTX 3080 (595.58). The
 lists of a player are to be merged into shaders/ once Reda has played
 every game; the first start on the laptop is to be measured.
 
-The debug keys (ODIN_DEBUG_KEYS) were not tried with the thread; the
-pause, F11, F4, F1 and Escape were, with keys sent to the window, and -s,
--l, -w, -f and -x. F1 used to abort while the machine ran ("IRL pin held
+The pause, F11, F4, F1 and Escape were tried with the thread, with keys
+sent to the window, and -s, -l, -w, -f and -x; the debug keys
+(ODIN_DEBUG_KEYS) too (18/10/2026, keys sent from inside on hidden
+screens, against the same keys without the switches): 1, 3, t, u, l, a,
+d and g change the pictures from the first press to the second and no
+further, y steps through the types of polygons; 2 changes none of the
+eight scenes tried, which show no second layer. F1 used to abort while the machine ran ("IRL pin held
 while ICR.IRLM is clear"): the reset before the load cleared the registers
 of the SH-4 and raised its pins from chips not reset yet.
 
@@ -931,7 +935,7 @@ of their shaders in renderer_programs.cpp and renderer_shaders.cpp, the
 textures in renderer_textures.cpp, the 2D layers in renderer_layers.cpp.
 HR_LOG=1 logs the objects of every mesh,
 HR_LOG_FRAME=<frame> those of one frame; ODIN_DEBUG_KEYS=1 gives the keys
-1 2 3 t u p i j l a d g a switch each (renderer_debug.cpp).
+1 2 3 t u y l a d g a switch each (renderer_debug.cpp).
 
 -x N draws the 3D N times finer than the 640 x 480 screen of the hardware
 (1 to 6; renderer_buffers.cpp). The clip windows and the 2D layers keep the

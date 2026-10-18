@@ -24,7 +24,6 @@
 #include "odin/renderer.hpp"
 #include "odin/renderer_gl.hpp"
 
-#include <algorithm>
 #include <cmath>
 #include <cstddef>
 
@@ -471,13 +470,8 @@ Renderer::draw_mesh(const odin_mesh_t &mesh)
 		glUniform1f(locs.depth_scale, depth_scale);
 	}
 
-	if (m_debug[DEBUG_NO_INSTANCING]) {
-		draw_instance(mesh, std::min(static_cast<unsigned>(m_debug[DEBUG_SELECT_INSTANCE]),
-		                             mesh.num_instances - 1));
-	} else {
-		for (unsigned i = 0; i < mesh.num_instances; i++)
-			draw_instance(mesh, i);
-	}
+	for (unsigned i = 0; i < mesh.num_instances; i++)
+		draw_instance(mesh, i);
 	m_times.mesh(mesh.num_tris * mesh.num_instances);
 
 	glBindVertexArray(0);

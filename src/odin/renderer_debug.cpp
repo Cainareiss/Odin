@@ -47,9 +47,7 @@ constexpr Control CONTROLS[] = {
 	{  0, 1, '3' },	/* DEBUG_NO_3D */
 	{  0, 1, 't' },	/* DEBUG_NO_TEXTURES */
 	{  0, 1, 'u' },	/* DEBUG_NO_MIPMAPS */
-	{ -1, 7, 'p' },	/* DEBUG_SELECT_POLYTYPE: -1 draws them all */
-	{  0, 1, 'i' },	/* DEBUG_NO_INSTANCING */
-	{  0, 3, 'j' },	/* DEBUG_SELECT_INSTANCE: the one drawn without instancing */
+	{ -1, 7, 'y' },	/* DEBUG_SELECT_POLYTYPE: -1 draws them all; P pauses */
 	{  0, 1, 'l' },	/* DEBUG_NO_LIGHTING */
 	{  0, 1, 'a' },	/* DEBUG_NO_AMBIENT */
 	{  0, 1, 'd' },	/* DEBUG_NO_DIFFUSE */
