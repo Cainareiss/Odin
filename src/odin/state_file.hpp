@@ -36,8 +36,9 @@ public:
 	 * 5: the sound chips keep their voices (aica_voice.hpp);
 	 * 6: the effect processor no longer keeps the length of its program;
 	 * 7: a sound board keeps the cycles its ARM7 ran past a period;
-	 * 8: the MIE board keeps the clocks its Z80 ran past its share */
-	static constexpr unsigned VERSION = 8;
+	 * 8: the MIE board keeps the clocks its Z80 ran past its share;
+	 * 9: it keeps the chip of the 837-13551 and its line */
+	static constexpr unsigned VERSION = 9;
 
 	enum class Mode {
 		SAVE,

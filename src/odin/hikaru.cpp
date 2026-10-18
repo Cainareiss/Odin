@@ -403,7 +403,9 @@ Hikaru::build_mie()
 	m_mie = std::make_unique<MieBoard>(m_game.section("mie"), m_mie_ram, m_clock, [this](MieBoard::Inputs &inputs) {
 		if (m_panel)
 			m_panel->read_inputs(inputs);
-	}, m_game.io_board);
+	}, m_game.io_board, m_game.section("io_rom"));
+	std::printf("I/O board %s: %s\n", m_game.io_board.c_str(),
+	            m_mie->runs_io_program() ? "its program run (io_rom)" : "its imitation");
 	m_mie->set_port_d([this](uint8_t pins) { set_resets(pins); });
 	m_mie->set_log(stderr);
 	/* ODIN_TURNS=0, a test: the program of the MIE runs every turn of its

@@ -56,6 +56,14 @@
 					]
 				},
 				{
+					"name" : "io_rom",
+					"type" : "alternative",
+					"optional" : true,
+					"data" : [
+						{ "name" : "315-6215.bin", "size" : 16384 }
+					]
+				},
+				{
 					"name" : "eeprom",
 					"type" : "alternative",
 					"data" : [
@@ -138,6 +146,14 @@
 					"type" : "alternative",
 					"data" : [
 						{ "name" : "315-6146.bin", "size" : 2048 }
+					]
+				},
+				{
+					"name" : "io_rom",
+					"type" : "alternative",
+					"optional" : true,
+					"data" : [
+						{ "name" : "315-6215.bin", "size" : 16384 }
 					]
 				},
 				{
@@ -242,6 +258,14 @@
 					]
 				},
 				{
+					"name" : "io_rom",
+					"type" : "alternative",
+					"optional" : true,
+					"data" : [
+						{ "name" : "315-6215.bin", "size" : 16384 }
+					]
+				},
+				{
 					"name" : "eeprom",
 					"type" : "alternative",
 					"data" : [
@@ -331,6 +355,14 @@
 					"type" : "alternative",
 					"data" : [
 						{ "name" : "315-6146.bin", "size" : 2048 }
+					]
+				},
+				{
+					"name" : "io_rom",
+					"type" : "alternative",
+					"optional" : true,
+					"data" : [
+						{ "name" : "315-6215.bin", "size" : 16384 }
 					]
 				},
 				{
@@ -541,6 +573,14 @@
 					"type" : "alternative",
 					"data" : [
 						{ "name" : "315-6146.bin", "size" : 2048 }
+					]
+				},
+				{
+					"name" : "io_rom",
+					"type" : "alternative",
+					"optional" : true,
+					"data" : [
+						{ "name" : "315-6215.bin", "size" : 16384 }
 					]
 				},
 				{

@@ -66,6 +66,9 @@ OBJ := \
 	src/odin/jvs.o \
 	src/odin/jvs_837_13551.o \
 	src/odin/jvs_837_13741.o \
+	src/odin/io_837_13551.o \
+	src/odin/tmp90ph44.o \
+	src/odin/tlcs90.o \
 	src/odin/card_reader.o \
 	src/odin/sound_board.o \
 	src/odin/aica.o \

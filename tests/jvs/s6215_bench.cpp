@@ -54,6 +54,7 @@
  * Run: s6215_bench <315-6215.bin>. Exit status 0 when every reply, sense
  * line and output is the same. */
 
+#include "odin/io_837_13551.hpp"
 #include "odin/jvs.hpp"
 #include "odin/jvs_837_13551.hpp"
 #include "odin/tmp90ph44.hpp"
@@ -472,6 +473,26 @@ int main(int argc, char **argv)
 	            wiring.switches.size(), wiring.coin[0].port, __builtin_ctz(wiring.coin[0].mask), wiring.coin[1].port,
 	            __builtin_ctz(wiring.coin[1].mask), wiring.meters.size());
 
+	/* The pins of the board in Odin (io_837_13551.hpp) are those */
+	unsigned pins_wrong = 0;
+	for (const auto &s : wiring.switches) {
+		const auto same = [&s](const odin::Io837_13551Pin &p) {
+			const unsigned byte = p.word == 0 ? 0 : 2u * p.word - (p.bit >= 8 ? 1u : 0u);
+			return p.port == s.pin.port && p.mask == s.pin.mask && byte == s.byte &&
+			       (1u << (p.bit & 7)) == s.bit;
+		};
+		if (std::count_if(odin::Io837_13551::PINS.begin(), odin::Io837_13551::PINS.end(), same) != 1)
+			pins_wrong++;
+	}
+	for (unsigned slot = 0; slot < 2; slot++)
+		if (odin::Io837_13551::COIN_PORT[slot] != wiring.coin[slot].port ||
+		    odin::Io837_13551::COIN_MASK != wiring.coin[slot].mask)
+			pins_wrong++;
+	for (const Pin &m : wiring.meters)
+		if (m.port != odin::Io837_13551::COIN_PORT[m.port == 4] || m.mask != odin::Io837_13551::METER_MASK)
+			pins_wrong++;
+	std::printf("the pins of io_837_13551.hpp: %s\n", pins_wrong ? "NOT those of the program" : "those of the program");
+
 	/* Its start, then its loop */
 	bench.wait(SECOND);
 	std::printf("after 1 s the board runs at %04X\n", chip.cpu().pc());
@@ -588,5 +609,5 @@ int main(int argc, char **argv)
 	std::printf("%u replies the same, %u different, %u frames the tick hit (run_until); %u faults of the board "
 	            "(bytes sent with the line not driven, external bus cycles, analog reads with P56 not driven)\n",
 	            bench.same, bench.different, bench.raced, board.faults());
-	return bench.different || board.faults() ? 1 : 0;
+	return bench.different || board.faults() || pins_wrong ? 1 : 0;
 }

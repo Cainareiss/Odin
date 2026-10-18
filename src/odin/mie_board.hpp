@@ -21,6 +21,7 @@
 #ifndef ODIN_MIE_BOARD_HPP
 #define ODIN_MIE_BOARD_HPP
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <cstdio>
@@ -32,6 +33,7 @@
 
 #include "odin/card_reader.hpp"
 #include "odin/eeprom_93c46.hpp"
+#include "odin/io_837_13551.hpp"
 #include "odin/jvs.hpp"
 #include "odin/jvs_837_13551.hpp"
 #include "odin/jvs_837_13741.hpp"
@@ -69,6 +71,9 @@ public:
 	struct State {
 		uint64_t cycle_acc;
 		uint32_t mie_ahead;
+		uint64_t z80_time;
+		uint8_t has_line;
+		Io837_13551::State line;
 		Eeprom93c46State eeprom;
 		JvsIoBoardState io;
 		JvsHostState jvs;
@@ -82,12 +87,21 @@ public:
 	 * bytes, owned by the caller and shared with the window of the host.
 	 * clock_hz: the clock of the cycles given to run. read_inputs: called
 	 * when the board looks at its switches. io_board: the I/O board on the
-	 * JVS cable, one that knows_io_board. */
+	 * JVS cable, one that knows_io_board. io_rom: the program of the
+	 * 837-13551 (315-6215), which its chip then runs on a line byte by
+	 * byte; without it, or with ODIN_IO=imitation, its imitation answers
+	 * (jvs_837_13551.cpp). */
 	MieBoard(std::span<const uint8_t> rom, std::span<uint8_t> ram, uint32_t clock_hz,
-	         std::function<void(Inputs &)> read_inputs, const std::string &io_board = "837-13551");
+	         std::function<void(Inputs &)> read_inputs, const std::string &io_board = "837-13551",
+	         std::span<const uint8_t> io_rom = {});
 
 	/* The I/O boards there is a node for: 837-13551, 837-13741. */
 	static bool knows_io_board(const std::string &name);
+	/* The chip of the I/O board runs its program */
+	bool runs_io_program() const { return m_line != nullptr; }
+	/* A test: that chip so many clocks of the Z80 ahead of the MIE, at
+	 * most LINE_PIECE; less must give the same. */
+	void set_line_piece(uint32_t clocks) { m_line_piece = std::min(clocks, LINE_PIECE); }
 
 	void reset();
 	/* Advances the board by that many cycles of the main processor. */
@@ -140,7 +154,7 @@ public:
 	Eeprom93c46 &eeprom() { return m_eeprom; }
 	/* The outputs of the I/O board as the game set them: output 1 is
 	 * bit 7 of the first byte. */
-	std::span<const uint8_t> io_outputs() const { return m_io->outputs(); }
+	std::span<const uint8_t> io_outputs() const { return m_line ? m_line->outputs() : m_io->outputs(); }
 
 	/* Puts a CRP-1231 card reader on the serial block of the MIE.
 	 * card_file (may be nullptr) holds the three tracks of the card and
@@ -151,7 +165,7 @@ public:
 
 	void save(State &out);
 	/* False when the state has a card reader and the board has none, or
-	 * the reverse. */
+	 * the reverse; the same for an I/O board that runs its program. */
 	bool load(const State &in);
 
 	/* MieHost */
@@ -165,17 +179,26 @@ public:
 	uint16_t analog(uint8_t channel) override;
 
 private:
+	/* The chip of the I/O board runs up to this many clocks of the Z80
+	 * ahead of the MIE, 64 us: less than a byte takes to go from the MIE
+	 * to it (MARKDOWN/77). */
+	static constexpr uint32_t LINE_PIECE = 1024;
+
 	void poll_inputs();
+	void run_line(uint32_t share);
 
 	std::function<void(Inputs &)> m_read_inputs;
 	uint32_t m_clock_hz;
 	uint64_t m_cycle_acc;
 	uint32_t m_mie_ahead;	/* Z80 clocks the MIE ran past its share */
+	uint64_t m_z80_time;	/* the clocks of the board since the reset */
 	std::array<uint8_t, Mie::ROM_SIZE> m_rom;
 	Inputs m_inputs;
 	Eeprom93c46 m_eeprom;
 	JvsHost m_jvs;		/* the JVS cable, from UART 1 of the MIE */
 	std::unique_ptr<JvsIoBoard> m_io;
+	std::unique_ptr<Io837_13551> m_line;
+	uint32_t m_line_piece = LINE_PIECE;
 	Mie m_mie;
 	std::unique_ptr<CardReader> m_card;
 	FILE *m_log;

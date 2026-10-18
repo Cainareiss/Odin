@@ -146,8 +146,9 @@ core running the dumped firmware (MAME wangmid, crp1231lr10_ver0110.ic2).
 Status byte st1 'V' that von4 tests on command 0x33 is not understood.
 
 JVS (src/odin/jvs.cpp: the cable and the protocol of the standard). The
-I/O boards are imitations made from their programs, which Odin does not
-run yet: jvs_837_13551.cpp from 315-6215 (a TMP90PH44, below), and
+I/O boards are imitations made from their programs: jvs_837_13551.cpp
+from 315-6215 (a TMP90PH44, run in its place when the PROM is there,
+below), and
 jvs_837_13741.cpp from epr-21868 (a 315-6146; the I/O board of NASCAR,
 "io" in odin-games.json; the program is in the 18wheelr set of MAME). Both
 programs take the same commands, answer an unknown one with the reports
@@ -166,8 +167,9 @@ gives half the time within 4 clocks); it needs the EPROM, not in the
 sets of Hikaru. There, HEURISTIC: the 315-6146 of that board runs at the
 clock of the MIE (the same chip beside the same crystals); vector F8 is
 its UART, as its program tells; vector FE, the tick of its timer, comes
-every 1 ms. Not copied yet, HEURISTIC: the reply delay of the 837-13551
-(JVS_TURNAROUND_BYTES in mie.cpp); the coins and the switches, which the
+every 1 ms. Not copied yet, HEURISTIC, where the imitation of the
+837-13551 answers: its reply delay (JVS_TURNAROUND_BYTES in mie.cpp); the
+coins and the switches, which the
 programs read at each tick of a timer whose period is not known
 (epr-21868 at 0828: neither the clock of its D71054 nor the counter that
 interrupts is known). There a coin counts when its switch opens after 3
@@ -186,9 +188,22 @@ whose report it sends the bytes of an earlier reply (0A70: the reply
 moves on by the count); nor SET_ADDRESS to a board that has an address,
 which the 837-13551 lets by (0309).
 The TMP90PH44 of the 837-13551 (src/odin/tlcs90.cpp, tmp90ph44.cpp,
-MARKDOWN/75), not wired yet in place of the imitation:
-tests/jvs/s6215_bench.cpp runs 315-6215 on it against the imitation, its
-switches, coins and analog channels on the pins its tables name (572
+MARKDOWN/75 to 77) runs 315-6215 on the JVS line for the games whose
+folder has it (section io_rom of odin-games.json, optional); without it
+(von4: not in its folder) or with ODIN_IO=imitation the imitation answers.
+io_837_13551.cpp is the board around the chip: its pins are those the
+tables of the program name, which tests/jvs/s6215_bench.cpp checks against
+the PROM. MieBoard runs the chip up to 64 us ahead of the MIE, then the
+MIE up to it, stopped where a byte or the sense line comes: a byte of the
+MIE takes longer than that to reach the chip, so each sees the other at
+the right time (tests/jvs/line_bench.cpp, the MIE asking F1 01 of the
+chip: the first byte 375 us after the request, 9 us later when the tick
+of the board holds the interrupt of the last byte; the same with the chip
+1 us ahead). HEURISTIC there: the 14.7456 MHz crystal of the board
+and that of the UART of the MIE are the same; a coin closes its switch
+50 ms, then leaves it open 50 ms. tests/jvs/s6215_bench.cpp runs 315-6215
+on the chip against the imitation, its switches, coins and analog
+channels on the pins its tables name (572
 replies the same); it needs the PROM of a game. There the board starts
 its reply 250 to 675 us after the request, the poll of the games
 (20 02 02 21 02 22 08) 590 us, 6.8 characters, where the imitation starts
@@ -201,7 +216,8 @@ registers are at the addresses MAME gives (tmp90844_regs), T01MOD and
 T23MOD laid out as MAME reads them; timers 0 and 2 ask for nothing;
 INTEH bit 2 enables 0028 and bit 0 0038, and the serial interrupts are
 taken as enabled by INTEL 0C and INTEH 48; the bits of IRFH but bit 2;
-P5 reads its latch; ADMOD F7 converts AN0-AN3 over and over, a read
+P5 reads its latch; the latch of P3 is at 1 after the reset, as on the
+TMP90C840; ADMOD F7 converts AN0-AN3 over and over, a read
 giving the pin then; INTWD waits for the interrupts to be open, where on
 the TMP90C840 it does not: so, the board dies from its 9th frame on
 (interrupt() in tmp90ph44.cpp). In the bench: P3 bits 0-1 read 3 with no

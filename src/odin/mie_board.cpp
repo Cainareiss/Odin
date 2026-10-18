@@ -20,6 +20,8 @@
 
 #include "odin/mie_board.hpp"
 
+#include <algorithm>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <utility>
@@ -50,8 +52,9 @@ MieBoard::knows_io_board(const std::string &name)
 }
 
 MieBoard::MieBoard(std::span<const uint8_t> rom, std::span<uint8_t> ram, uint32_t clock_hz,
-                   std::function<void(Inputs &)> read_inputs, const std::string &io_board)
-	: m_read_inputs(std::move(read_inputs)), m_clock_hz(clock_hz), m_cycle_acc(0), m_mie_ahead(0),
+                   std::function<void(Inputs &)> read_inputs, const std::string &io_board,
+                   std::span<const uint8_t> io_rom)
+	: m_read_inputs(std::move(read_inputs)), m_clock_hz(clock_hz), m_cycle_acc(0), m_mie_ahead(0), m_z80_time(0),
 	  m_rom(copy_rom(rom)), m_inputs{},
 	  m_eeprom(Mie::CLOCK_HZ), m_mie(*this, m_rom, ram), m_log(nullptr),
 	  m_irq_lines(0)
@@ -60,8 +63,15 @@ MieBoard::MieBoard(std::span<const uint8_t> rom, std::span<uint8_t> ram, uint32_
 		m_io = std::make_unique<Jvs837_13741>(*this);
 	else
 		m_io = std::make_unique<Jvs837_13551>(*this);
-	m_jvs.add_device(m_io.get());
-	m_mie.attach_jvs(&m_jvs);
+
+	const char *const io = std::getenv("ODIN_IO");
+	if (io_board == "837-13551" && io_rom.size() == Tmp90ph44::ROM_SIZE && !(io && !std::strcmp(io, "imitation"))) {
+		m_line = std::make_unique<Io837_13551>(io_rom, *this);
+		m_mie.attach_line(m_line.get());
+	} else {
+		m_jvs.add_device(m_io.get());
+		m_mie.attach_jvs(&m_jvs);
+	}
 }
 
 uint8_t
@@ -137,10 +147,15 @@ MieBoard::reset()
 {
 	m_cycle_acc = 0;
 	m_mie_ahead = 0;
+	m_z80_time = 0;
 	m_eeprom.reset();
 	m_io->reset();
 	m_jvs.reset();
 	m_mie.reset();
+	if (m_line) {
+		m_line->reset();
+		m_mie.set_line_addressed(false);
+	}
 	if (m_card)
 		m_card->reset();
 }
@@ -156,12 +171,46 @@ MieBoard::run(uint32_t cycles)
 
 		/* The MIE ends its last instruction: what it ran past its
 		 * share comes off the next one. */
-		if (share > m_mie_ahead)
+		if (m_line)
+			run_line(share);
+		else if (share > m_mie_ahead)
 			m_mie_ahead = m_mie.run(share - m_mie_ahead) - (share - m_mie_ahead);
 		else
 			m_mie_ahead -= share;
+		m_z80_time += share;
 		m_eeprom.tick(share);
 	}
+}
+
+/* The chip of the I/O board a piece ahead of the MIE, then the MIE up to
+ * where the chip is, stopped where the board has something for it: a byte
+ * or the sense line, which it then sees after the instruction that holds
+ * the time they come, as UART 1 shows them (MARKDOWN/77). */
+void
+MieBoard::run_line(uint32_t share)
+{
+	constexpr uint64_t TICKS = Mie::TICKS_PER_CYCLE;
+	const uint64_t target = m_z80_time + share;
+	uint64_t mie = m_z80_time + m_mie_ahead;
+
+	while (mie < target) {
+		if (m_line->now() < target * TICKS)
+			m_line->run_until((mie + m_line_piece) * TICKS);
+
+		const uint64_t end = std::min<uint64_t>(target, m_line->now() / TICKS);
+
+		while (mie < end) {
+			const uint64_t event = m_line->next_event();
+			const uint64_t to = event == UINT64_MAX ? end : std::min(end, (event + TICKS - 1) / TICKS);
+
+			if (to > mie) {
+				m_line->set_run_start(mie * TICKS);
+				mie += m_mie.run(static_cast<uint32_t>(to - mie));
+			}
+			m_line->deliver(m_mie, mie * TICKS);
+		}
+	}
+	m_mie_ahead = static_cast<uint32_t>(mie - target);
 }
 
 /* Byte-wide registers and memory on even addresses (hikaru.cpp
@@ -259,6 +308,10 @@ MieBoard::save(State &out)
 {
 	out.cycle_acc = m_cycle_acc;
 	out.mie_ahead = m_mie_ahead;
+	out.z80_time = m_z80_time;
+	out.has_line = m_line ? 1 : 0;
+	if (m_line)
+		m_line->save(out.line);
 	m_eeprom.save(out.eeprom);
 	m_io->save(out.io);
 	m_jvs.save(out.jvs);
@@ -271,14 +324,17 @@ MieBoard::save(State &out)
 bool
 MieBoard::load(const State &in)
 {
-	if ((in.has_card != 0) != (m_card != nullptr))
+	if ((in.has_card != 0) != (m_card != nullptr) || (in.has_line != 0) != (m_line != nullptr))
 		return false;
 	m_cycle_acc = in.cycle_acc;
 	m_mie_ahead = in.mie_ahead;
+	m_z80_time = in.z80_time;
 	m_eeprom.load(in.eeprom);
 	m_io->load(in.io);
 	m_jvs.load(in.jvs);
 	m_mie.load(in.mie);
+	if (m_line)
+		m_line->load(in.line, m_mie);
 	if (m_card)
 		m_card->load(in.card);
 	return true;
@@ -291,7 +347,9 @@ MieBoard::poll_inputs()
 		return;
 	m_read_inputs(m_inputs);
 	for (uint8_t slot = 0; slot < 2; slot++) {
-		if (m_inputs.jvs_coin[slot])
+		if (m_inputs.jvs_coin[slot] && m_line)
+			m_line->inc_coin(slot);
+		else if (m_inputs.jvs_coin[slot])
 			m_io->inc_coin(slot);
 	}
 }

@@ -29,7 +29,8 @@
  *            src/odin/jvs.cpp src/odin/jvs_837_13551.cpp src/odin/jvs_837_13741.cpp \
  *            src/odin/mie.cpp \
  *            src/odin/mie_board.cpp src/odin/card_reader.cpp src/odin/z80.cpp \
- *            src/odin/z80_ops.cpp -o mie_test
+ *            src/odin/z80_ops.cpp src/odin/io_837_13551.cpp src/odin/tmp90ph44.cpp \
+ *            src/odin/tlcs90.cpp -o mie_test
  * Exit status is 0 when every check passes. */
 
 #include "odin/eeprom_93c46.hpp"
@@ -511,8 +512,8 @@ int main()
 	test_waits();
 	test_uart_speed();
 	test_reply_time();
-	test_short_runs();
 	test_line();
+	test_short_runs();
 	std::printf("%u checks passed, %u failed\n", g_passed, g_failed);
 	return g_failed ? 1 : 0;
 }
