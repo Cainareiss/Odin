@@ -696,6 +696,88 @@ void test_wait_temt()
 	      "the end of a byte just before a read of it: seen there");
 }
 
+/* Two MIE, one that runs every turn, `calls` calls of `clocks`, bytes from
+ * a line every `every` calls (0: none): the same after each call. The
+ * clocks counted. */
+uint64_t counted_calls(const char *name, const std::vector<uint8_t> &program, unsigned calls, uint32_t clocks,
+                       unsigned every)
+{
+	std::vector<uint8_t> rom(2048, 0), ram_a(32768, 0), ram_b(32768, 0);
+	std::copy(program.begin(), program.end(), rom.begin());
+	Pins pins;
+	Line line_a, line_b;
+	odin::Mie counted(pins, rom, ram_a), run(pins, rom, ram_b);
+	counted.attach_line(&line_a);
+	run.attach_line(&line_b);
+	run.set_waits_counted(false);
+	bool same = true;
+	for (unsigned call = 0; call < calls; call++) {
+		if (every && call % every == every - 1) {
+			counted.line_received(static_cast<uint8_t>(call / every));
+			run.line_received(static_cast<uint8_t>(call / every));
+		}
+		counted.run(clocks);
+		run.run(clocks);
+		odin::Z80State a, b;
+		counted.cpu().save(a);
+		run.cpu().save(b);
+		same = same && a == b && ram_a == ram_b;
+	}
+	check(same, name);
+	return counted.waits_counted();
+}
+
+/* Loops that count down while they wait (MARKDOWN/78 § 8) */
+void test_wait_count()
+{
+	/* 887F of the program of the MIE: ld e, 0 / dec e / jp z, timeout /
+	 * in a, (15) / bit 0, a / jr z; each byte kept from C000; the
+	 * timeout puts FF in C100 */
+	std::vector<uint8_t> wait = { 0x21, 0x00, 0xC0, 0x1E, 0x00, 0x1D, 0xCA, 0x20, 0x00, 0xDB, 0x15, 0xCB, 0x47,
+	                              0x28, 0xF6, 0xDB, 0x10, 0x77, 0x23, 0x18, 0xEE };
+	wait.resize(0x20, 0);
+	for (const uint8_t b : { uint8_t(0x3E), uint8_t(0xFF), uint8_t(0x32), uint8_t(0x00), uint8_t(0xC1), uint8_t(0x76) })
+		wait.push_back(b);
+	uint64_t clocks = counted_calls("a wait with a timeout in E, bytes from the line", wait, 700, 505, 7);
+	check(clocks > 700 * 505 / 2, "its turns counted while E does not reach 0");
+	/* The same wait for the bytes of the reply of the imitation of the
+	 * 837-13551 to F1 01: each lands inside a call */
+	waits("a wait with a timeout in E, bytes from the imitation", {
+		0x3E, 0x80, 0xD3, 0x13, 0x3E, 0x08, 0xD3, 0x10, 0xAF, 0xD3, 0x13, 0x3E, 0x01, 0xD3, 0x90,
+		0x3E, 0xE0, 0xD3, 0x10, 0x3E, 0xFF, 0xD3, 0x10, 0x3E, 0x03, 0xD3, 0x10, 0x3E, 0xF1, 0xD3, 0x10,
+		0x3E, 0x01, 0xD3, 0x10, 0x3E, 0xF4, 0xD3, 0x10, 0xDB, 0x15, 0xCB, 0x77, 0x28, 0xFA, 0xAF, 0xD3, 0x90,
+		0x21, 0x00, 0xC1, 0x06, 0x06, 0x1E, 0x00, 0x1D, 0xCA, 0x48, 0x00, 0xDB, 0x15, 0xCB, 0x47, 0x28, 0xF6,
+		0xDB, 0x10, 0x77, 0x23, 0x10, 0xEE, 0x76, 0x3E, 0xFF, 0x32, 0x00, 0xC2, 0x76,
+	}, 99);
+	/* No byte: E falls to 0 after 255 turns, the timeout taken there */
+	counted_calls("and when no byte comes, the timeout", wait, 300, 300, 0);
+
+	/* djnz on the same wait */
+	clocks = counted_calls("a wait with a timeout in B (djnz)",
+	                       { 0x06, 0x00, 0xDB, 0x15, 0xCB, 0x47, 0x20, 0x02, 0x10, 0xF8, 0x3E, 0x01, 0x32, 0x00,
+	                         0xC1, 0x76 }, 300, 300, 0);
+	check(clocks > 2000, "its turns counted too");
+
+	/* Not counted, so run; each runs short of the turn that leaves it,
+	 * with nothing else to count: E read again (ld a, e / cp 40 / jr z:
+	 * out at E 40), a flag of the DEC read later (jp p / xor a: out at E
+	 * 7F), a
+	 * jump on its sign right after it, its flags left as they are to the
+	 * end of the turn (dec e / jr nz) */
+	check(counted_calls("a loop that reads its count", { 0x1E, 0xFF, 0x1D, 0xCA, 0x0F, 0x00, 0x7B, 0xFE, 0x40, 0x28,
+	                                                   0x04, 0xAF, 0xC3, 0x02, 0x00, 0x76 }, 10, 505, 0) == 0,
+	      "not counted");
+	check(counted_calls("a loop that reads a flag of its DEC", { 0x1E, 0xFF, 0x1D, 0xCA, 0x0C, 0x00, 0xF2, 0x0C, 0x00,
+	                                                           0xAF, 0x18, 0xF6, 0x76 }, 8, 505, 0) == 0,
+	      "not counted");
+	check(counted_calls("a loop that jumps on the sign of its DEC", { 0x1E, 0xFF, 0x1D, 0xF2, 0x09, 0x00, 0xAF, 0x18,
+	                                                                0xF9, 0x76 }, 6, 505, 0) == 0,
+	      "not counted");
+	check(counted_calls("a loop that keeps the flags of its DEC", { 0x1E, 0x00, 0x00, 0x1D, 0x20, 0xFC, 0x76 }, 8, 505,
+	                    0) == 0,
+	      "not counted");
+}
+
 int main()
 {
 	test_eeprom();
@@ -710,6 +792,7 @@ int main()
 	test_wait_line();
 	test_wait_fifo();
 	test_wait_temt();
+	test_wait_count();
 	test_short_runs();
 	std::printf("%u checks passed, %u failed\n", g_passed, g_failed);
 	return g_failed ? 1 : 0;

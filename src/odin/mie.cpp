@@ -780,6 +780,162 @@ void Mie::line_received(uint8_t byte)
 
 /* Loops that only wait */
 
+namespace {
+
+/* What an instruction of a turn reads and writes, for those a waiting loop
+ * is made of: registers by their number in the opcodes (A 7, bit 6 none),
+ * flags as in F. An instruction not in this list is not known. */
+struct Effect {
+	bool known = false;
+	uint8_t reads = 0, writes = 0;
+	uint8_t flags_read = 0, flags_written = 0;
+	int dec = -1;		/* DEC r */
+	bool djnz = false;
+	bool z_jump = false;	/* a jump on Z or on NZ */
+};
+
+constexpr uint8_t FLAG_S = 0x80, FLAG_Z = 0x40, FLAG_PV = 0x04, FLAG_C = 0x01;
+
+Effect effect(uint8_t op, uint8_t next)
+{
+	const auto reg = [](unsigned r) { return static_cast<uint8_t>(1u << r); };
+	constexpr uint8_t A = 0x80;
+	Effect e;
+
+	if (op == 0x00 || op == 0x18 || op == 0xC3) {
+		e.known = true;
+	} else if ((op & 0xC6) == 0x04 && ((op >> 3) & 7) != 6) {
+		/* INC r, DEC r */
+		e.known = true;
+		e.reads = e.writes = reg((op >> 3) & 7);
+		e.flags_written = 0xFE;
+		if (op & 1) {
+			e.dec = (op >> 3) & 7;
+		}
+	} else if (op == 0x10) {
+		e.known = e.djnz = true;
+		e.reads = e.writes = reg(0);
+	} else if ((op & 0xE7) == 0x20 || (op & 0xC7) == 0xC2) {
+		/* JR cc, JP cc */
+		static constexpr uint8_t FLAG_OF[8] = { FLAG_Z, FLAG_Z, FLAG_C, FLAG_C, FLAG_PV, FLAG_PV, FLAG_S, FLAG_S };
+		const unsigned cc = (op & 0xE7) == 0x20 ? (op >> 3) & 3 : (op >> 3) & 7;
+
+		e.known = true;
+		e.flags_read = FLAG_OF[cc];
+		e.z_jump = cc < 2;
+	} else if (op == 0xDB) {
+		/* IN A,(n): A on the high half of the address */
+		e.known = true;
+		e.reads = e.writes = A;
+	} else if (op == 0x3A) {
+		e.known = true;
+		e.writes = A;
+	} else if (op >= 0x40 && op < 0x80 && op != 0x76 && ((op >> 3) & 7) != 6 && (op & 7) != 6) {
+		e.known = true;
+		e.reads = reg(op & 7);
+		e.writes = reg((op >> 3) & 7);
+	} else if ((op >= 0x80 && op < 0xC0 && (op & 7) != 6) || (op & 0xC7) == 0xC6) {
+		/* ADD ADC SUB SBC AND XOR OR CP, of r or n */
+		const unsigned alu = (op >> 3) & 7;
+
+		e.known = true;
+		e.reads = static_cast<uint8_t>(A | (op < 0xC0 ? reg(op & 7) : 0));
+		e.writes = alu == 7 ? 0 : A;
+		e.flags_read = alu == 1 || alu == 3 ? FLAG_C : 0;
+		e.flags_written = 0xFF;
+	} else if (op == 0xCB && next >= 0x40 && next < 0x80 && (next & 7) != 6) {
+		/* BIT b,r */
+		e.known = true;
+		e.reads = reg(next & 7);
+		e.flags_written = 0xFE;
+	}
+	return e;
+}
+
+uint8_t &reg_of(Z80State &s, unsigned r)
+{
+	switch (r) {
+	case 0: return s.b;
+	case 1: return s.c;
+	case 2: return s.d;
+	case 3: return s.e;
+	case 4: return s.h;
+	default: return s.l;
+	}
+}
+
+} /* namespace */
+
+/* The turn from the mark does the same for any value of register `reg`
+ * that it does not bring to 0: it reads it only in one DEC of it (or a
+ * DJNZ of B), a jump on Z right after, no other flag of that DEC read
+ * before it is written again, all of them written again before the DEC
+ * comes round; and only instructions known to do no more than Effect
+ * tells (MARKDOWN/78 § 8). 1 if so, 0 if so but the mark is where the
+ * flags still hold what the DEC made of the count (then `dec_pc`, a
+ * place for it), -1 if not. */
+int Mie::counts_down(unsigned reg, uint16_t &dec_pc)
+{
+	const uint8_t bit = static_cast<uint8_t>(1u << reg);
+	const unsigned steps = m_wait.steps;
+	const auto pc_of = [this](unsigned n) { return n ? m_proof.cpu[n].pc : m_wait.regs.pc; };
+	unsigned dec = steps;
+
+	for (unsigned n = 0; n < steps && dec == steps; n++) {
+		const Effect e = effect(read8(pc_of(n)), read8(static_cast<uint16_t>(pc_of(n) + 1)));
+
+		if (e.dec == static_cast<int>(reg) || (e.djnz && reg == 0)) {
+			dec = n;
+		}
+	}
+	if (dec == steps) {
+		return -1;
+	}
+
+	/* Round the loop from the DEC */
+	uint8_t tainted = 0;
+	unsigned clean = dec;
+	bool z_next = false;
+
+	for (unsigned k = 0; k < steps; k++) {
+		const unsigned n = (dec + k) % steps;
+		const Effect e = effect(read8(pc_of(n)), read8(static_cast<uint16_t>(pc_of(n) + 1)));
+
+		if (!e.known) {
+			return -1;
+		}
+		if (k == 0) {
+			if (!e.djnz) {
+				tainted = e.flags_written;
+				z_next = true;
+			}
+		} else if (z_next) {
+			if (!e.z_jump) {
+				return -1;
+			}
+			z_next = false;
+		} else if ((e.reads & bit) || (e.writes & bit) || (e.flags_read & tainted)) {
+			return -1;
+		} else if (tainted) {
+			tainted &= static_cast<uint8_t>(~e.flags_written);
+			clean = n;
+		}
+	}
+	if (z_next || tainted) {
+		return -1;
+	}
+	/* The mark is before instruction 0: the flags there come from the DEC
+	 * if 0 is after it and not after the instruction that writes them
+	 * again */
+	const unsigned at = (steps - dec) % steps, upto = (clean + steps - dec) % steps;
+
+	if (at != 0 && at <= upto) {
+		dec_pc = pc_of(dec);
+		return 0;
+	}
+	return 1;
+}
+
 void Mie::wait_mark(uint32_t done)
 {
 	m_cpu.save(m_wait.regs);
@@ -789,6 +945,7 @@ void Mie::wait_mark(uint32_t done)
 	m_wait.steps = 0;
 	m_wait.lsr = false;
 	m_wait.lsr_at = uart_lsr();
+	m_wait.mark_at = -1;
 	m_cpu.forget_refresh_read();
 }
 
@@ -815,8 +972,19 @@ uint32_t Mie::wait_check(uint32_t done, uint32_t cycles)
 	m_cpu.save(now);
 	const uint32_t refresh = (now.r - m_wait.regs.r) & 0x7Fu;
 	now.r = static_cast<uint8_t>((now.r & 0x80) | (m_wait.regs.r & 0x7F));
-	if (!m_wait.touched && !m_cpu.refresh_read() && now == m_wait.regs &&
-	    !(m_wait.lsr && uart_lsr() != m_wait.lsr_at)) {
+	const bool clean = !m_wait.touched && !m_cpu.refresh_read() && !(m_wait.lsr && uart_lsr() != m_wait.lsr_at);
+	int count = -1, counting = -1;
+	uint16_t dec_pc = 0;
+
+	for (unsigned r = 0; clean && r < 6 && !(now == m_wait.regs); r++) {
+		Z80State other = now;
+
+		reg_of(other, r) = reg_of(m_wait.regs, r);
+		if (other == m_wait.regs) {
+			count = static_cast<int>(r);
+		}
+	}
+	if (clean && now == m_wait.regs) {
 		if (m_wait.steps <= MAX_TURN) {
 			m_proof.on = true;
 			m_proof.length = m_wait.steps;
@@ -835,13 +1003,33 @@ uint32_t Mie::wait_check(uint32_t done, uint32_t cycles)
 		tick(counted);
 		m_cpu.add_refresh(turns * refresh);
 		m_wait_cycles += counted;
-	} else {
+	} else if (count >= 0 && m_wait.steps <= MAX_TURN &&
+	           (counting = counts_down(static_cast<unsigned>(count), dec_pc)) == 1) {
+		/* A loop that counts down, by one a turn: whole turns, while its
+		 * DEC does not give 0 */
+		const unsigned r = static_cast<unsigned>(count);
+		const uint32_t end = m_wait.lsr ? uart_end(done, cycles) : cycles;
+		const uint32_t turns = std::min<uint32_t>(static_cast<uint8_t>(reg_of(now, r) - 1),
+		                                          end > done ? (end - done - 1) / turn : 0);
+		Z80State regs;
+
+		counted = turns * turn;
+		m_cpu.save(regs);
+		reg_of(regs, r) = static_cast<uint8_t>(reg_of(regs, r) - turns);
+		m_cpu.load(regs);
+		m_cpu.add_refresh(turns * refresh);
+		tick(counted);
+		m_wait_cycles += counted;
+	} else if (counting != 0) {
 		if (m_wait.busy < 6) {
 			m_wait.busy++;
 		}
 		m_wait.pass = (1u << m_wait.busy) - 1;
 	}
 	wait_mark(done + counted);
+	if (counting == 0) {
+		m_wait.mark_at = dec_pc;
+	}
 	return counted;
 }
 
@@ -959,6 +1147,8 @@ uint32_t Mie::run(uint32_t cycles)
 		if (waits && !m_proof.on) {
 			if (m_cpu.pc() == m_wait.regs.pc) {
 				done += wait_check(done, cycles);
+			} else if (m_cpu.pc() == m_wait.mark_at) {
+				wait_mark(done);
 			} else if (--m_wait.countdown == 0) {
 				if (m_wait.period < 1024) {
 					m_wait.period *= 2;

@@ -222,6 +222,7 @@ private:
 	uint32_t bill(uint32_t done, uint32_t cycles);
 	uint32_t uart_end(uint32_t done, uint32_t cycles) const;
 	uint8_t uart_lsr() const;
+	int counts_down(unsigned reg, uint16_t &dec_pc);
 	void log_unknown(char rw, const char *space, uint32_t addr, uint32_t value);
 	void trace_host(char rw, uint32_t addr, uint8_t value) const;
 
@@ -259,6 +260,7 @@ private:
 		uint32_t steps;		/* instructions since the mark */
 		bool lsr;		/* the state of UART 1 read since */
 		uint8_t lsr_at;		/* that state at the mark */
+		int mark_at;		/* the next mark there, -1 none */
 	};
 	Wait m_wait;
 	/* What the search ran since its mark, kept once the turn is proven
