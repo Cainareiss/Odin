@@ -601,14 +601,37 @@ and made up an interrupt of the AICA at the end of the frame. The NMI pin
 of the slave is bit 0 of the port A of the master, taken at the falling
 edge: the slave clears the NMI flag of its DMAC at each interrupt, where
 MAME names the pin IRL3.
-HEURISTIC: bit 12 of the status of the bridge (04000004) is cleared by
-writing 1, the handler writes back what it read; the second sound board
-shares the line of the first, the handler acknowledges both; nothing
-passes while the MIE does not drive its mask, and pins 4 to 6 of its port
-F ask for nothing while it does not drive them; a pin of port A of an
-SH-4 that is not an output is high; the NMI pin of the master is held
-high; bit 7 of 15000088 follows the causes of 1A000018, which the handler
-acknowledges after it; 15000084 is 0 at reset.
+Bit 12 of the status of the bridge (04000004) and its bits 0 to 11 are
+cleared by writing 1, as the code of the games has it: the handler writes
+back what it read (PHARRIER 0x0C0102A6), the check of the display chip
+writes 0x0FC0 before it reads its ID and again when one of these bits is
+set (0x0C010542), VON4 writes 0x003F before and after two reads of its
+own (0x0C711E42, 0x0C711E70). Were a 0 to clear, each of these writes
+would clear bit 12 as well.
+HEURISTIC: bit 7 of 15000088 follows the causes of 1A000018, which the
+handler acknowledges after it. A bit set at the edge of a cause does the
+same; one set as long as a cause is held would interrupt twice.
+HEURISTIC, with no effect on the six games (measured from power-on, the
+code where it is said):
+- the second sound board shares the line of the first, the handler
+  acknowledges both: no game lets the line through, the BOOTROM and the
+  system library write 0xE1 to the mask (0x0C001EEE, 0x0C010AA2) and the
+  handler masks the line as well (byte GBR+0x12);
+- nothing passes while the MIE does not drive its mask, and pins 4 to 6
+  of its port F ask for nothing while it does not drive them: the BOOTROM
+  drives the port at frame 27, no line asks before, and the master keeps
+  its interrupts shut (SR.I 15, then 14 from the jump to the game,
+  0x0C00B908) until the game opens them, right after it has written the
+  mask (PHARRIER 0x0C010080, 0x0C010084); its first interrupt comes at
+  frame 33 to 61;
+- a pin of port A of an SH-4 that is not an output is high: the reads of
+  the port found in the code of the games test pin 5 (the data of the
+  EEPROM) and the lines on pins 6 to 9, the others write the outputs
+  back, and the routine of the EEPROM drives its pins low before each
+  access (0x0C00678C);
+- the NMI pin of the master is held high: no game handles it, its vector
+  is the routine that returns 1 for a cause it does not know (0x0C0011CC),
+  after which the BOOTROM returns from the interrupt as for any other.
 Not implemented, the emulator stops with a message: the slave pulling its
 line to the master (IRL3 of the master for MAME), a DMA of the bridge of
 the slave.
@@ -655,7 +678,10 @@ processor has for 483FB800 taken for one of the bus: nothing answers there
 (48 "unhandled" lines).
 The other resets (system, CN4) and a video clock other than the one the
 games choose (bits 6 and 7 set) stop the emulator. HEURISTIC: the lines
-are high while the MIE does not drive the port.
+are high while the MIE does not drive the port. The master reaches none of
+these chips before the BOOTROM drives it at frame 27 (it writes only the
+word at 14000000, at frame 1); the slave runs from power-on, see the HACK
+above.
 
 Main board: bit 0 of 15002000 reads 0, which makes Odin the second main
 board, 837-14097, for the BOOTROM (it prints the name in its system menu).
