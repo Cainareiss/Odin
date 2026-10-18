@@ -1,0 +1,323 @@
+/*
+ * Odin
+ * Copyright (C) 2026 Réda Chérif-Touil
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#include "odin/tmp90ph44.hpp"
+
+#include <algorithm>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+
+namespace odin {
+
+namespace {
+
+/* Registers, from FFC0 (MAME tmp90844_regs) */
+enum : uint8_t {
+	P0 = 0x00, P1 = 0x02, P2 = 0x04, P3 = 0x06, P3CR = 0x07, P4 = 0x08, P5 = 0x0A, P6 = 0x0B, P7 = 0x0C, P67CR = 0x0D,
+	WDMOD = 0x12, WDCR = 0x13, TREG0 = 0x14, T01MOD = 0x18, T23MOD = 0x19, TRUN = 0x1C,
+	SCMOD = 0x26, SCCR = 0x27, SCBUF = 0x28, BRGCR = 0x29, IRFL = 0x2A, IRFH = 0x2B,
+	INTEL = 0x34, INTEH = 0x35
+};
+
+constexpr uint16_t RAM_BASE = 0xFDC0;
+
+[[noreturn]] void
+unknown(const char *what, unsigned value)
+{
+	std::fprintf(stderr, "FATAL: TMP90PH44: %s %02X, which is not known\n", what, value);
+	std::abort();
+}
+
+} /* namespace */
+
+Tmp90ph44::Tmp90ph44(std::span<const uint8_t> rom, Tmp90ph44Board &board)
+	: m_cpu(*this), m_board(board)
+{
+	std::memcpy(m_rom.data(), rom.data(), std::min(rom.size(), m_rom.size()));
+	reset();
+}
+
+/* After the data book (TMP90C840, reset): the timers and the prescaler
+ * stop, the watchdog runs with WDTE set and WDTP 00, every port is an
+ * input. */
+void
+Tmp90ph44::reset()
+{
+	m_sfr.fill(0);
+	m_sfr[WDMOD] = 0x80;
+	m_prescaler = 0;
+	m_timer.fill(0);
+	m_watchdog = 0;
+	m_requests = 0;
+	m_flags = 0;
+	m_tx_left = -1;
+	m_cpu.reset();
+}
+
+uint32_t
+Tmp90ph44::run(uint32_t states)
+{
+	uint32_t done = 0;
+
+	while (done < states) {
+		const uint32_t s = m_cpu.step();
+
+		advance(s);
+		done += s;
+	}
+	return done;
+}
+
+void
+Tmp90ph44::serial_received(uint8_t byte)
+{
+	if (!(m_sfr[SCMOD] & 0x20))
+		return;
+	m_rx = byte;
+	request(VEC_RX);
+}
+
+uint8_t
+Tmp90ph44::peek(uint16_t addr) const
+{
+	if (addr < ROM_SIZE)
+		return m_rom[addr];
+	if (addr >= 0xFFC0)
+		return m_sfr[addr - 0xFFC0];
+	if (addr >= RAM_BASE)
+		return m_ram[addr - RAM_BASE];
+	return 0xFF;
+}
+
+uint8_t
+Tmp90ph44::read8(uint16_t addr)
+{
+	if (addr < ROM_SIZE)
+		return m_rom[addr];
+	if (addr >= 0xFFC0)
+		return sfr_read(static_cast<uint8_t>(addr - 0xFFC0));
+	if (addr >= RAM_BASE)
+		return m_ram[addr - RAM_BASE];
+	return m_board.bus_read(addr);
+}
+
+void
+Tmp90ph44::write8(uint16_t addr, uint8_t value)
+{
+	if (addr < ROM_SIZE)
+		return;
+	if (addr >= 0xFFC0)
+		sfr_write(static_cast<uint8_t>(addr - 0xFFC0), value);
+	else if (addr >= RAM_BASE)
+		m_ram[addr - RAM_BASE] = value;
+	else
+		m_board.bus_write(addr, value);
+}
+
+uint8_t
+Tmp90ph44::sfr_read(uint8_t reg)
+{
+	switch (reg) {
+	case P0:
+	case P1:
+	case P2:
+	case P3:
+	case P4: {
+		/* A bit of the control register after the port set drives the
+		 * pin (P3CR 9C, P3 bits 0 and 1 read as inputs at 1450); the
+		 * program leaves P0, P1, P2 and P4 inputs, the switches and
+		 * coins its tables name (3080-31C0). */
+		const uint8_t out = m_sfr[reg + 1];
+
+		return static_cast<uint8_t>((m_sfr[reg] & out) | (m_board.port_pins(reg / 2) & ~out));
+	}
+	case P6:
+	case P7: {
+		/* Four bits each, driven as P67CR says */
+		const uint8_t out = reg == P6 ? m_sfr[P67CR] & 0x0F : m_sfr[P67CR] >> 4;
+
+		return static_cast<uint8_t>((m_sfr[reg] & out) | (m_board.port_pins(reg == P6 ? 6 : 7) & ~out & 0x0F));
+	}
+	case SCCR:
+		/* No error on the line: bits 2 to 4 clear (read at 143C) */
+		return m_sfr[SCCR] & 0xE3;
+	case SCBUF:
+		return m_rx;
+	case IRFH:
+		/* The request flags of the vectors 0018 to 0050, bit n for the
+		 * vector (n + 3) * 8. Bit 2, 0028, is polled with the interrupts
+		 * shut while the delay before a reply runs (05DB, 14AB);
+		 * HEURISTIC for the other bits, which the program does not read.
+		 * HEURISTIC: a flag stays set when its interrupt is taken, until
+		 * FFEA clears it. The program clears it itself before it starts
+		 * the delay (147C), and the watchdog interrupt opens the others
+		 * (019A) while the poll may run: a flag the acceptance cleared
+		 * would leave the poll waiting for ever, one reply in 25. */
+		return static_cast<uint8_t>(m_flags >> 3);
+	default:
+		return m_sfr[reg];
+	}
+}
+
+void
+Tmp90ph44::sfr_write(uint8_t reg, uint8_t value)
+{
+	switch (reg) {
+	case WDCR:
+		if (value == 0x4E)
+			m_watchdog = 0;
+		else if (value == 0xB1 && !(m_sfr[WDMOD] & 0x80))
+			m_sfr[WDMOD] &= 0x7F;
+		return;
+	case TRUN: {
+		const uint8_t stopped = m_sfr[TRUN] & static_cast<uint8_t>(~value);
+
+		/* A timer stopped is cleared; so is the prescaler. */
+		for (unsigned n = 0; n < 4; n++)
+			if (stopped & (1u << n))
+				m_timer[n] = 0;
+		if (stopped & 0x20)
+			m_prescaler = 0;
+		m_sfr[TRUN] = value;
+		return;
+	}
+	case SCBUF:
+		if (m_tx_left >= 0)
+			unknown("byte written while one is being sent:", value);
+		m_tx = value;
+		m_tx_left = BYTE_STATES;
+		return;
+	case IRFL:
+		/* The flag of the vector value * 8 (1499, 14C1: 05 for 0028, 07
+		 * for 0038) */
+		m_requests &= ~(1u << (value & 31));
+		m_flags &= ~(1u << (value & 31));
+		return;
+	default:
+		m_sfr[reg] = value;
+		return;
+	}
+}
+
+/* The states of a tick of timer n: T01MOD and T23MOD as MAME reads them
+ * (bits 1-0 timer 0 or 2, bits 3-2 timer 1 or 3: 1 phiT1, 2 phiT16, 3
+ * phiT256; bits 7-4 the 8-bit mode, 0). HEURISTIC: the layout of these
+ * registers of the TMP90C844. */
+uint32_t
+Tmp90ph44::timer_period(unsigned n) const
+{
+	const uint8_t mod = m_sfr[n < 2 ? T01MOD : T23MOD];
+	const unsigned clock = (mod >> ((n & 1) * 2)) & 3;
+
+	if (mod & 0xF0)
+		unknown("timer mode", mod);
+	switch (clock) {
+	case 1: return 4;
+	case 2: return 64;
+	case 3: return 1024;
+	default: unknown("timer clock", mod);
+	}
+}
+
+void
+Tmp90ph44::advance(uint32_t states)
+{
+	m_states += states;
+
+	/* The timers: one tick per period of their clock, counted from the
+	 * start of the prescaler */
+	if ((m_sfr[TRUN] & 0x20) && (m_sfr[TRUN] & 0x0F)) {
+		const uint64_t from = m_prescaler, to = m_prescaler + states;
+
+		for (unsigned n = 0; n < 4; n++) {
+			if (!(m_sfr[TRUN] & (1u << n)))
+				continue;
+			const uint32_t period = timer_period(n);
+			const uint8_t match = m_sfr[TREG0 + n];
+
+			for (uint64_t tick = from / period + 1; tick * period <= to; tick++) {
+				if (++m_timer[n] != match)
+					continue;
+				m_timer[n] = 0;
+				/* HEURISTIC: timers 0 and 2, whose vectors the
+				 * program leaves empty, ask for nothing. */
+				if (n == 1)
+					request(VEC_T1);
+				else if (n == 3)
+					request(VEC_T3);
+			}
+		}
+	}
+	if (m_sfr[TRUN] & 0x20)
+		m_prescaler += states;
+
+	/* The watchdog: INTWD each 2^(14 + 2 WDTP) periods of fc */
+	if (m_sfr[WDMOD] & 0x80) {
+		const uint32_t period = 1u << (13 + 2 * ((m_sfr[WDMOD] >> 5) & 3));
+
+		m_watchdog += states;
+		if (m_watchdog >= period) {
+			m_watchdog -= period;
+			request(VEC_WD);
+		}
+	}
+
+	/* The byte being sent */
+	if (m_tx_left >= 0) {
+		m_tx_left -= static_cast<int32_t>(states);
+		if (m_tx_left < 0) {
+			if (m_sfr[BRGCR] != 0x02 || (m_sfr[SCMOD] & 0x0F) != 0x09)
+				unknown("serial mode", static_cast<unsigned>(m_sfr[BRGCR] << 4 | (m_sfr[SCMOD] & 0x0F)));
+			m_board.serial_sent(m_tx);
+			request(VEC_TX);
+		}
+	}
+}
+
+/* The watchdog first, then the maskable ones in the order of their vectors.
+ * HEURISTIC: INTEH bit 2 enables 0028 and bit 0 0038, as the program sets
+ * and clears them (147C, 1499, 14B9, 14E3); the serial ones are taken as
+ * enabled by the bits the program sets at its start and never clears
+ * (INTEL 0C, INTEH 48), which of them for which not being known. */
+uint16_t
+Tmp90ph44::interrupt(bool maskable)
+{
+	uint16_t vector = 0;
+
+	if (m_requests & (1u << (VEC_WD >> 3)))
+		vector = VEC_WD;
+	else if (maskable) {
+		const uint8_t inteh = m_sfr[INTEH];
+		const bool serial = (inteh & 0x48) == 0x48 && (m_sfr[INTEL] & 0x0C) == 0x0C;
+
+		if ((m_requests & (1u << (VEC_T1 >> 3))) && (inteh & 0x04))
+			vector = VEC_T1;
+		else if ((m_requests & (1u << (VEC_T3 >> 3))) && (inteh & 0x01))
+			vector = VEC_T3;
+		else if ((m_requests & (1u << (VEC_RX >> 3))) && serial)
+			vector = VEC_RX;
+		else if ((m_requests & (1u << (VEC_TX >> 3))) && serial)
+			vector = VEC_TX;
+	}
+	if (vector)
+		m_requests &= ~(1u << (vector >> 3));
+	return vector;
+}
+
+} /* namespace odin */

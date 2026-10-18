@@ -1,0 +1,119 @@
+/*
+ * Odin
+ * Copyright (C) 2026 Réda Chérif-Touil
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#ifndef ODIN_TMP90PH44_HPP
+#define ODIN_TMP90PH44_HPP
+
+#include <array>
+#include <cstdint>
+#include <span>
+
+#include "odin/tlcs90.hpp"
+
+namespace odin {
+
+/* What the board around the chip gives it. */
+class Tmp90ph44Board {
+public:
+	virtual ~Tmp90ph44Board() = default;
+	/* The external bus, 4000 to FDBF */
+	virtual uint8_t bus_read(uint16_t addr) = 0;
+	virtual void bus_write(uint16_t addr, uint8_t value) = 0;
+	/* The pins of port 0 to 8 */
+	virtual uint8_t port_pins(unsigned port) = 0;
+	/* A byte has left on the serial line, its stop bit ended. */
+	virtual void serial_sent(uint8_t byte) = 0;
+};
+
+/* The Toshiba TMP90PH44: the TMP90C844 with 16 KB of PROM at 0000 and
+ * 512 bytes of RAM at FDC0 (Toshiba data sheet TMP90PH44), around a
+ * TLCS-90 CPU. No data sheet of the TMP90C844 was found: the addresses of
+ * its registers are those MAME gives (tmp90844_regs); a block works as the
+ * same block of the TMP90C840 in the 1988 Toshiba data book where the
+ * register is the same, and as the program 315-6215 uses it otherwise
+ * (MARKDOWN/75). A register value nothing tells the meaning of stops the
+ * emulator.
+ *
+ *  - Prescaler: fc/4 into 9 stages; the 8-bit timers count phiT1 (fc/8),
+ *    phiT16 (fc/128) or phiT256 (fc/2048). Timer n counts while TRUN bit n
+ *    and the prescaler bit 5 are set, is cleared when it matches TREGn
+ *    and then asks for its interrupt.
+ *  - Watchdog: 20 stages on fc/2; INTWD, non-maskable, every 2^(14 + 2 *
+ *    WDTP) periods of fc; 4E in WDCR clears it, B1 with WDTE clear stops it.
+ *  - Interrupts: a flag per vector, cleared when taken or when FFEA is
+ *    written with the vector / 8.
+ *  - Serial channel: 8-bit UART at the rate of the JVS line.
+ *
+ * Times are in states, two periods of fc. */
+class Tmp90ph44 : private Tlcs90Bus {
+public:
+	static constexpr size_t ROM_SIZE = 0x4000;
+	/* States a byte takes on the line: 10 bits at fc / 128 a bit */
+	static constexpr uint32_t BYTE_STATES = 640;
+
+	Tmp90ph44(std::span<const uint8_t> rom, Tmp90ph44Board &board);
+
+	/* The reset pin */
+	void reset();
+	/* Runs instructions and devices for at least `states`; the states it ran. */
+	uint32_t run(uint32_t states);
+	/* A byte has arrived on the serial line, its stop bit ended. */
+	void serial_received(uint8_t byte);
+
+	Tlcs90 &cpu() { return m_cpu; }
+	/* A byte of the memory as the CPU sees it, the registers as written */
+	uint8_t peek(uint16_t addr) const;
+	uint64_t states() const { return m_states; }
+
+private:
+	enum : uint16_t { VEC_WD = 0x20, VEC_T1 = 0x28, VEC_T3 = 0x38, VEC_RX = 0x60, VEC_TX = 0x68 };
+
+	uint8_t read8(uint16_t addr) override;
+	void write8(uint16_t addr, uint8_t value) override;
+	uint16_t interrupt(bool maskable) override;
+
+	uint8_t sfr_read(uint8_t reg);
+	void sfr_write(uint8_t reg, uint8_t value);
+	/* Timers, watchdog and serial line for `states` more */
+	void advance(uint32_t states);
+	uint32_t timer_period(unsigned n) const;
+	void request(uint16_t vector)
+	{
+		m_requests |= 1u << (vector >> 3);
+		m_flags |= 1u << (vector >> 3);
+	}
+
+	Tlcs90 m_cpu;
+	Tmp90ph44Board &m_board;
+	std::array<uint8_t, ROM_SIZE> m_rom;
+	std::array<uint8_t, 0x200> m_ram{};
+	std::array<uint8_t, 0x40> m_sfr{};	/* FFC0-FFFF as written */
+	uint64_t m_states = 0;
+	uint64_t m_prescaler = 0;	/* states since the prescaler runs */
+	std::array<uint8_t, 4> m_timer{};
+	uint32_t m_watchdog = 0;	/* states since cleared */
+	uint32_t m_requests = 0;	/* to the CPU, a bit per vector / 8 */
+	uint32_t m_flags = 0;		/* as FFEB reads them, the same bits */
+	uint8_t m_rx = 0;
+	int32_t m_tx_left = -1;		/* states until the byte is sent */
+	uint8_t m_tx = 0;
+};
+
+} /* namespace odin */
+
+#endif /* ODIN_TMP90PH44_HPP */
