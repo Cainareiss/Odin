@@ -78,8 +78,10 @@ void test_save_and_load(const std::string &dir)
 
 	const std::vector<uint8_t> file = bytes_of(path);
 	check(file.size() == 32 + 4 + 4 + 4 + 5, "the file: 32 bytes of name, then each item after its size");
-	check(std::string(file.begin(), file.begin() + 20) == "odin state 00000007\n" && file[20] == 0 && file[31] == 0,
-	      "the name of the format, padded with zeros");
+	char name[21];
+	std::snprintf(name, sizeof(name), "odin state %08X\n", StateFile::VERSION);
+	check(std::string(file.begin(), file.begin() + 20) == name && file[20] == 0 && file[31] == 0,
+	      "the name of the format and its version, padded with zeros");
 	check(file[32] == 4 && file[33] == 0 && file[36] == 0x78 && file[39] == 0x12,
 	      "a size and its item, least significant byte first");
 	check(file[40] == 5 && file[44] == 1 && file[48] == 5, "the second item");
