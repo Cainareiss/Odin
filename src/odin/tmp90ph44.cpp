@@ -76,18 +76,86 @@ Tmp90ph44::reset()
 uint32_t
 Tmp90ph44::run(uint32_t states)
 {
+	const uint64_t end = m_states + states;
 	uint32_t done = 0;
 
 	while (done < states) {
+		const uint16_t from = m_cpu.pc();
 		const uint32_t s = m_cpu.step();
 
 		m_states += s;
 		done += s;
-		if (m_states >= m_next_event)
+		if (m_states >= m_next_event) {
 			sync();
+			spoil(Spoil::AGAIN);
+		}
+		if (m_trial.on)
+			done += static_cast<uint32_t>(turn(end));
+		else if (m_cpu.pc() <= from)
+			jumped_back();
 	}
+	m_trial.on = false;
 	sync();
 	return done;
+}
+
+/* A place jumped back to (or stayed at: a jump to itself, HALT) a second
+ * time in a while starts a turn on trial, unless a turn from there was
+ * found not idle a short time ago. */
+void
+Tmp90ph44::jumped_back()
+{
+	const uint16_t pc = m_cpu.pc();
+	const bool again = std::find(m_back.begin(), m_back.end(), pc) != m_back.end();
+
+	std::copy_backward(m_back.begin(), m_back.end() - 1, m_back.end());
+	m_back[0] = pc;
+	if (!again)
+		return;
+	const Cool &cool = m_cool[pc & 15];
+	if (cool.pc == pc && m_states < cool.until)
+		return;
+	m_trial.on = true;
+	m_trial.spoil = Spoil::NONE;
+	m_trial.pc = pc;
+	m_trial.steps = 0;
+	m_trial.start = m_states;
+	m_cpu.save(m_trial.cpu);
+}
+
+/* After each instruction of a turn on trial. Back at its start in the same
+ * state, it is a fixed point: nothing it reads can change before the next
+ * event of a device, so it would go round the same way until then. Its
+ * turns are billed up to just before that event and the end of run(), and
+ * the CPU goes on from there as it would have. The states billed. */
+uint64_t
+Tmp90ph44::turn(uint64_t end)
+{
+	if (m_trial.spoil == Spoil::NONE && ++m_trial.steps > MAX_TURN)
+		m_trial.spoil = Spoil::NEVER;
+	if (m_trial.spoil == Spoil::NONE && m_cpu.pc() != m_trial.pc)
+		return 0;
+	m_trial.on = false;
+
+	Tlcs90State now;
+	m_cpu.save(now);
+	if (m_trial.spoil == Spoil::NONE && !(now == m_trial.cpu))
+		m_trial.spoil = Spoil::NEVER;
+	if (m_trial.spoil == Spoil::NEVER)
+		m_cool[m_trial.pc & 15] = { m_trial.pc, m_states + COOLDOWN };
+	if (m_trial.spoil != Spoil::NONE)
+		return 0;
+
+	const uint64_t period = m_states - m_trial.start;
+	const uint64_t limit = std::min(m_next_event, end);
+
+	if (m_states + period >= limit)
+		return 0;
+	const uint64_t billed = (limit - m_states - 1) / period * period;
+
+	m_states += billed;
+	m_skipped += billed;
+	return billed;
 }
 
 /* After the data book (TMP90C840, 3.8.2): the byte goes from the shift
@@ -128,6 +196,7 @@ Tmp90ph44::read8(uint16_t addr)
 		return sfr_read(static_cast<uint8_t>(addr - 0xFFC0));
 	if (addr >= RAM_BASE)
 		return m_ram[addr - RAM_BASE];
+	spoil(Spoil::NEVER);
 	return m_board.bus_read(addr);
 }
 
@@ -136,12 +205,17 @@ Tmp90ph44::write8(uint16_t addr, uint8_t value)
 {
 	if (addr < ROM_SIZE)
 		return;
-	if (addr >= 0xFFC0)
+	if (addr >= 0xFFC0) {
+		spoil(Spoil::NEVER);
 		sfr_write(static_cast<uint8_t>(addr - 0xFFC0), value);
-	else if (addr >= RAM_BASE)
+	} else if (addr >= RAM_BASE) {
+		if (m_ram[addr - RAM_BASE] != value)
+			spoil(Spoil::AGAIN);
 		m_ram[addr - RAM_BASE] = value;
-	else
+	} else {
+		spoil(Spoil::NEVER);
 		m_board.bus_write(addr, value);
+	}
 }
 
 uint8_t
@@ -422,8 +496,10 @@ Tmp90ph44::interrupt(bool maskable)
 		vector = VEC_RX;
 	else if ((m_requests & (1u << (VEC_TX >> 3))) && serial)
 		vector = VEC_TX;
-	if (vector)
+	if (vector) {
 		m_requests &= ~(1u << (vector >> 3));
+		spoil(Spoil::AGAIN);
+	}
 	return vector;
 }
 

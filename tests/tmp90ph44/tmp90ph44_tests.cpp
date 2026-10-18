@@ -46,6 +46,7 @@ void check(bool ok, const char *what)
 }
 
 struct Board : odin::Tmp90ph44Board {
+	unsigned bus = 0;
 	struct Out {
 		unsigned told = 0;
 		uint8_t latch = 0, driven = 0;
@@ -54,8 +55,12 @@ struct Board : odin::Tmp90ph44Board {
 	Out out[8];
 	uint8_t analog[4] = { 0x11, 0x22, 0x33, 0x44 };
 	std::vector<uint8_t> sent;
-	uint8_t bus_read(uint16_t) override { return 0xFF; }
-	void bus_write(uint16_t, uint8_t) override {}
+	uint8_t bus_read(uint16_t) override
+	{
+		bus++;
+		return 0xFF;
+	}
+	void bus_write(uint16_t, uint8_t) override { bus++; }
 	uint8_t port_pins(unsigned port) override { return pins[port]; }
 	void port_out(unsigned port, uint8_t latch, uint8_t driven) override { out[port] = { out[port].told + 1, latch, driven }; }
 	uint8_t analog_pin(unsigned n) override { return analog[n]; }
@@ -215,6 +220,118 @@ void test_overrun()
 	check(chip.peek(0xFF04) == 2, "SCBUF read: the next byte comes in");
 }
 
+/* The states of a run of `program` that billed, and the chip left */
+uint64_t billed(std::initializer_list<uint8_t> program, uint32_t states)
+{
+	Rom rom;
+	Board board;
+
+	rom.put(0, program);
+	Tmp90ph44 chip(rom.bytes, board);
+	chip.run(states);
+	return chip.skipped();
+}
+
+void test_idle()
+{
+	Rom rom;
+	Board board;
+
+	/* WDMOD A1, EI; waits for FF00 to change (LD A,(FF00); CP A,0; JR Z),
+	 * then JR T,$. The watchdog handler counts in FF00. */
+	rom.put(0, { 0x3E, 0xBF, 0xFF, 0x37, 0xD2, 0xA1, 0x03, 0x27, 0x00, 0x6F, 0x00, 0xC6, 0xFA, LOOP[0], LOOP[1] });
+	rom.put(0x20, { 0x87, 0x00, 0x1F });
+	constexpr uint32_t TOTAL = 3 * 32768 + 1000;
+	Tmp90ph44 once(rom.bytes, board), stepped(rom.bytes, board);
+
+	once.run(TOTAL);
+	while (stepped.states() < TOTAL)
+		stepped.run(1);
+	odin::Tlcs90State a, b;
+	once.cpu().save(a);
+	stepped.cpu().save(b);
+	check(once.skipped() > 2 * 32768, "the idle loops billed without being run");
+	check(stepped.skipped() == 0, "none billed one instruction at a time");
+	check(once.states() == stepped.states() && a == b && once.peek(0xFF00) == 3 && stepped.peek(0xFF00) == 3,
+	      "and the same: each interrupt taken on the same instruction");
+
+	/* Loops that are not idle */
+	check(billed({ 0x3E, 0xBF, 0xFF, 0x87, 0x01, 0xC8, 0xFC }, 20000) == 0, "INC (FF01) in a loop: not billed");
+	check(billed({ 0x80, 0xC8, 0xFD }, 20000) == 0, "INC B in a loop: not billed");
+
+	/* Waits for P0 bit 0 to read 0 (LD A,(FFC0); AND A,1; 20 NOP; JR NZ),
+	 * then INC (FF02) */
+	Rom poll;
+	Board pins;
+
+	poll.put(0, { 0x3E, 0xBF, 0xFF, 0x27, 0xC0, 0x6C, 0x01 });
+	poll.put(0x1B, { 0xCE, 0xE6, 0x87, 0x02, LOOP[0], LOOP[1] });
+	Tmp90ph44 waiting(poll.bytes, pins);
+	waiting.run(20000);
+	check(waiting.skipped() > 15000 && waiting.peek(0xFF02) == 0, "a loop on a pin: billed");
+	/* The run ends inside a turn, the pin read */
+	while (waiting.cpu().pc() != 0x05)
+		waiting.run(1);
+	pins.pins[0] = 0xFE;
+	waiting.run(300);
+	check(waiting.peek(0xFF02) == 1, "the pin changed between two runs: seen at once");
+
+	/* WDMOD A1, EI, then WDCR 4E over and over: the watchdog never ends */
+	Rom clear;
+
+	clear.put(0, { 0x3E, 0xBF, 0xFF, 0x37, 0xD2, 0xA1, 0x03, 0x37, 0xD3, 0x4E, 0xC8, 0xFB });
+	clear.put(0x20, { 0x87, 0x00, 0x1F });
+	Tmp90ph44 clearing(clear.bytes, board);
+	clearing.run(100000);
+	check(clearing.peek(0xFF00) == 0, "a loop writing a register: run, not billed");
+
+	/* P6 0A over and over: the board told of each write */
+	Board told;
+	Rom port;
+
+	port.put(0, { 0x37, 0xCB, 0x0A, 0xC8, 0xFB });
+	Tmp90ph44 writing(port.bytes, told);
+	writing.run(100000);
+	check(writing.skipped() == 0 && told.out[6].told > 3000, "a loop writing a port: each write told");
+
+	/* LD A,(4000), or LD (4000),A, over and over: each cycle on the bus */
+	for (uint8_t op : { uint8_t(0xE3), uint8_t(0xEB) }) {
+		Board external;
+		Rom bus;
+
+		bus.put(0, { op, 0x00, 0x40, uint8_t(op == 0xE3 ? 0x2E : 0x26), 0xC8, 0xFA });
+		Tmp90ph44 cycling(bus.bytes, external);
+		cycling.run(100000);
+		check(cycling.skipped() == 0 && external.bus > 5000,
+		      op == 0xE3 ? "a loop reading the external bus: each cycle made" : "a loop writing it: each cycle made");
+	}
+
+	/* Watchdog off, RX on; NOP, NOP, EI, NOP, DI, JR: a byte received
+	 * between two runs, the second run starting on the JR, is taken inside
+	 * a turn, where EI opens the interrupts. Its handler does nothing, and
+	 * what its entry pushes (PC 001C, A 00, F 20) is on the stack already
+	 * (FFBB 20, FFBD 1C): only the interrupt tells the turn is not idle. */
+	Rom open;
+
+	open.put(0, { 0x3E, 0xBF, 0xFF, 0x37, 0xD2, 0x00, 0x37, 0xD3, 0xB1, 0x37, 0xE6, 0x29, 0x37, 0xF4, 0x0C,
+	              0x37, 0xF5, 0x48, 0x37, 0xBB, 0x20, 0x37, 0xBD, 0x1C, 0x00, 0x00, 0x03, 0x00, 0x02, 0xC8, 0xF9 });
+	open.put(0x60, { 0x1F });
+	Tmp90ph44 turns(open.bytes, board), steps(open.bytes, board);
+	turns.run(5000);
+	while (turns.cpu().pc() != 0x1D)
+		turns.run(1);
+	while (steps.states() < turns.states())
+		steps.run(1);
+	turns.serial_received(0x55);
+	steps.serial_received(0x55);
+	turns.run(1300);
+	while (steps.states() < turns.states())
+		steps.run(1);
+	turns.cpu().save(a);
+	steps.cpu().save(b);
+	check(turns.states() == steps.states() && a == b, "an interrupt inside a turn: the same as one instruction at a time");
+}
+
 void test_ports()
 {
 	Rom rom;
@@ -265,6 +382,7 @@ int main()
 	test_timer();
 	test_serial();
 	test_overrun();
+	test_idle();
 	test_ports();
 	test_analog();
 

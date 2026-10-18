@@ -27,7 +27,9 @@
 
 namespace odin {
 
-/* What the board around the chip gives it. */
+/* What the board around the chip gives it. The pins and the analog inputs
+ * stay as they are for the whole of a run(): the chip bills the turns of a
+ * loop that reads them without running them (Tmp90ph44::run). */
 class Tmp90ph44Board {
 public:
 	virtual ~Tmp90ph44Board() = default;
@@ -81,7 +83,11 @@ public:
 
 	/* The reset pin */
 	void reset();
-	/* Runs instructions and devices for at least `states`; the states it ran. */
+	/* Runs instructions and devices for at least `states`; the states it
+	 * ran. A loop proven idle is billed without being run: a turn that
+	 * comes back to its start in the same state, having changed nothing,
+	 * read nothing that changes and taken no interrupt, would do the same
+	 * up to the next event of a device (MARKDOWN/76). */
 	uint32_t run(uint32_t states);
 	/* The data bits of a byte on the serial line have been sampled:
 	 * RX_STATES after its start. */
@@ -91,6 +97,8 @@ public:
 	/* A byte of the memory as the CPU sees it, the registers as written */
 	uint8_t peek(uint16_t addr) const;
 	uint64_t states() const { return m_states; }
+	/* The states run() billed without running them */
+	uint64_t skipped() const { return m_skipped; }
 
 private:
 	enum : uint16_t { VEC_WD = 0x20, VEC_T1 = 0x28, VEC_T3 = 0x38, VEC_RX = 0x60, VEC_TX = 0x68 };
@@ -109,6 +117,23 @@ private:
 	uint32_t watchdog_period() const;
 	void request(uint16_t vector) { m_requests |= 1u << (vector >> 3); }
 
+	/* What spoils the turn on trial: something that may not come again
+	 * (an interrupt, an event, a byte of memory changed), or something no
+	 * idle loop does (MAX_TURN instructions, a register written, the
+	 * external bus, a state not the same). The registers that change when
+	 * read (SCBUF, SCCR) do so the first time only. */
+	enum class Spoil : uint8_t { NONE, AGAIN, NEVER };
+	static constexpr unsigned MAX_TURN = 64;
+	/* How long a loop that cannot be idle is not tried again */
+	static constexpr uint64_t COOLDOWN = 1u << 15;
+	void jumped_back();
+	uint64_t turn(uint64_t end);
+	void spoil(Spoil how)
+	{
+		if (m_trial.on && how > m_trial.spoil)
+			m_trial.spoil = how;
+	}
+
 	Tlcs90 m_cpu;
 	Tmp90ph44Board &m_board;
 	std::array<uint8_t, ROM_SIZE> m_rom;
@@ -126,6 +151,23 @@ private:
 	uint8_t m_rx_errors = 0;	/* SCCR bits 4-2 */
 	int32_t m_tx_left = -1;		/* states until the byte is sent */
 	uint8_t m_tx = 0;
+
+	/* A turn of a loop on trial, from `pc` in the state `cpu` */
+	struct Trial {
+		bool on = false;
+		Spoil spoil = Spoil::NONE;
+		uint16_t pc = 0;
+		unsigned steps = 0;
+		uint64_t start = 0;
+		Tlcs90State cpu{};
+	} m_trial;
+	std::array<uint16_t, 4> m_back{};	/* the last places jumped back to */
+	struct Cool {
+		uint16_t pc;
+		uint64_t until;
+	};
+	std::array<Cool, 16> m_cool{};
+	uint64_t m_skipped = 0;
 };
 
 } /* namespace odin */
