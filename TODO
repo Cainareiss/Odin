@@ -910,8 +910,13 @@ manual is decoded; FSCA and FSRRA, which it does not list, come from the
 SH7091 (MAME sh4.cpp).
 
 A read that nothing answers gives 0 (HEURISTIC: the value of the bus is
-not known; BRAVEFF reads FFFFFFFC at 0C076E48). A write that nothing
-answers is dropped. PHARRIER makes four of them at every frame, twice:
+not known). A write that nothing answers is dropped. BRAVEFF makes both:
+its malloc (0x0C076E6A) hangs each block it gives after the last one it
+gave (0x0CAC18F0) through the two words before them (0x0C076E40), and
+does not look whether there is one: with none, at the first block after
+a scene has given all back (11 times in its loop), it reads FFFFFFFC
+twice and writes FFFFFFF8 and FFFFFFFC, where the SH-4 has no register;
+the word read goes into the links of the heap (0 here). PHARRIER makes four of them at every frame, twice:
 its copy through the store queues (0x0C011AF0) masks the low bits of the
 target away, writes its first 32 bytes below the queues, at DFFFFFE0, and
 sends no PREF; it is called for one block.
