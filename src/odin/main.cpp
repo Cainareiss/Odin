@@ -61,7 +61,7 @@ struct Options {
 	 * them (the two boards on two channels) */
 	std::optional<odin::AudioOut::Mode> sound = odin::AudioOut::Mode::MAIN;
 	bool sound_asked = false;
-	odin::Display::Options display = { 1, 1, 0, false };
+	odin::Display::Options display = { 1, 1, 0, false, {} };
 };
 
 const char HELP[] = "Usage: %s [options]\n"
@@ -379,6 +379,7 @@ main(int argc, char **argv)
 		return 0;
 
 	odin::Keyboard keys;
+	options.display.title = game->title;
 	const std::unique_ptr<odin::Display> display = odin::Display::make(*board, keys, options.display);
 	if (!display)
 		return 0;

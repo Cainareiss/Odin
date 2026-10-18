@@ -21,6 +21,7 @@
 
 #include "odin/renderer.hpp"
 #include "odin/hikaru_gpu.hpp"
+#include "odin/loading_screen.hpp"
 #include "odin/picture.hpp"
 #include "odin/renderer_gl.hpp"
 #include "odin/renderer_shaders.hpp"
@@ -167,29 +168,79 @@ Renderer::build_presenter()
 	glUseProgram(0);
 }
 
-/* Compiles the mesh programs the lists of the game name, and draws a
- * triangle without area with each. See MeshPrograms; on the thread that
- * draws the frames. */
+/* Compiles the mesh programs the lists of the game name, those of Odin
+ * then those of the player, and draws a triangle without area with each.
+ * See MeshPrograms; on the thread that draws the frames. */
 void
-Renderer::prepare_programs()
+Renderer::prepare_programs(const std::function<void(unsigned, unsigned)> &progress)
 {
 	static const odin_vertex_body_t none[3] = {};
-	const auto draw = [] { glDrawArrays(GL_TRIANGLES, 0, 3); };
+	std::vector<uint64_t> keys;
 
-	upload_vertices(none, 3);
-	glBindVertexArray(m_mesh_vao);
-	glBindFramebuffer(GL_FRAMEBUFFER, m_scene_fb);
-
-	if (!m_options.programs_seed.empty())
-		m_programs.compile_listed(m_options.programs_seed, draw);
-	if (!m_options.programs_kept.empty()) {
-		m_programs.compile_listed(m_options.programs_kept, draw);
-		m_programs.list_in(m_options.programs_kept);
+	for (const std::string *list : { &m_options.programs_seed, &m_options.programs_kept }) {
+		if (list->empty())
+			continue;
+		for (const uint64_t key : MeshPrograms::read_list(*list))
+			if (!m_programs.holds(key) && std::find(keys.begin(), keys.end(), key) == keys.end())
+				keys.push_back(key);
 	}
+
+	const unsigned total = static_cast<unsigned>(keys.size());
+
+	if (total)
+		progress(0, total);
+	upload_vertices(none, 3);
+	for (unsigned i = 0; i < total; i++) {
+		/* Back from the loading screen, drawn in the window */
+		glBindVertexArray(m_mesh_vao);
+		glBindFramebuffer(GL_FRAMEBUFFER, m_scene_fb);
+		m_programs.add(keys[i]);
+		glDrawArrays(GL_TRIANGLES, 0, 3);
+		progress(i + 1, total);
+	}
+	glUseProgram(0);
+	if (!m_options.programs_kept.empty())
+		m_programs.list_in(m_options.programs_kept);
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glBindVertexArray(0);
 	gl::check("preparing the programs");
+}
+
+void
+Renderer::draw_loading(std::string_view title, unsigned done, unsigned total, unsigned window_w, unsigned window_h)
+{
+	const PictureRect rect = picture_rect(window_w, window_h);
+	/* What the drawing of the frames finds is left as it was. */
+	const GLboolean scissoring = glIsEnabled(GL_SCISSOR_TEST);
+	GLint box[4];
+	GLfloat color[4];
+
+	glGetIntegerv(GL_SCISSOR_BOX, box);
+	glGetFloatv(GL_COLOR_CLEAR_VALUE, color);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glDisable(GL_SCISSOR_TEST);
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
+	glEnable(GL_SCISSOR_TEST);
+	for (const LoadingRect &r : LoadingScreen::layout(title, done, total)) {
+		const unsigned x0 = rect.x + r.x * rect.w / LoadingScreen::WIDTH;
+		const unsigned x1 = rect.x + (r.x + r.w) * rect.w / LoadingScreen::WIDTH;
+		const unsigned y0 = rect.y + r.y * rect.h / LoadingScreen::HEIGHT;
+		const unsigned y1 = rect.y + (r.y + r.h) * rect.h / LoadingScreen::HEIGHT;
+
+		if (x1 <= x0 || y1 <= y0)
+			continue;
+		glScissor(static_cast<GLint>(x0), static_cast<GLint>(window_h - y1), static_cast<GLsizei>(x1 - x0),
+		          static_cast<GLsizei>(y1 - y0));
+		glClearColor(r.shade, r.shade, r.shade, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT);
+	}
+	if (!scissoring)
+		glDisable(GL_SCISSOR_TEST);
+	glScissor(box[0], box[1], box[2], box[3]);
+	glClearColor(color[0], color[1], color[2], color[3]);
+	gl::check("the loading screen");
 }
 
 /* Nothing a program holds, nothing bound is of the list about to be

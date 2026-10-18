@@ -82,6 +82,7 @@ public:
 		unsigned anisotropy;	/* of the texture filter, 1 for none as on the board */
 		unsigned window;	/* the window that many times the screen */
 		bool fullscreen;
+		std::string title;	/* of the game, on its loading screen */
 	};
 
 	/* The window of a board, which it becomes the screen of; nothing,
@@ -113,6 +114,7 @@ private:
 	        SDL_GLContext context);
 
 	void set_window(unsigned times, bool fullscreen);
+	void prepare_programs(const std::string &title);
 	/* Waits for the frame being drawn. */
 	void finish();
 	/* Has the drawing thread do a job, and waits for it. */

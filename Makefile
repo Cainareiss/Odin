@@ -96,7 +96,8 @@ OBJ := \
 	src/odin/renderer_layers.o \
 	src/odin/renderer_state.o \
 	src/odin/renderer_debug.o \
-	src/odin/renderer_gl.o
+	src/odin/renderer_gl.o \
+	src/odin/loading_screen.o
 
 all: bin/odin
 

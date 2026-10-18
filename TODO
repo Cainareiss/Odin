@@ -102,6 +102,14 @@ SGNASCAR, 4 to 8 ms late. In BRAVEFF (frame 3407) and SGNASCAR (8843,
 9701) they are the same frames at each run and the drawing is not waited
 for: frames the machine itself takes 20 to 24 ms to run. Which chip of it
 was not measured.
+While the programs are made ready the window shows a loading screen
+(src/odin/loading_screen.cpp): black, the title of the game in the middle
+("title" in odin-games.json, in a 5 by 7 font of our own), a bar below
+that fills as they are; the window has its size and its full screen
+first, and keeps answering. With the driver cache off, PHARRIER readies
+its 146 programs in 3.0 s on an RTX 3080 (595.58). The lists of a player
+are to be merged into shaders/ once Reda has played every game; the
+first start on the laptop is to be measured.
 
 The debug keys (ODIN_DEBUG_KEYS) were not tried with the thread; the
 pause, F11, F4, F1 and Escape were, with keys sent to the window, and -s,

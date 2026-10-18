@@ -21,6 +21,8 @@
 
 #include "odin/display.hpp"
 
+#include <atomic>
+#include <chrono>
 #include <cinttypes>
 #include <cstdlib>
 #include <filesystem>
@@ -198,12 +200,48 @@ Display::Display(Hikaru &board, const Keyboard &keys, const Options &options, SD
 		SDL_GL_MakeCurrent(m_window, m_context);
 		SDL_GL_SetSwapInterval(0);
 	});
-	run([this] { m_renderer->prepare_programs(); });
-
 	if (options.window >= 2 || options.fullscreen)
 		set_window(options.window ? options.window : 1, options.fullscreen);
+	prepare_programs(options.title);
 
 	m_board.set_screen(this);
+}
+
+/* The programs of the lists of the game are compiled before its first
+ * frame, on the drawing thread, with the loading screen drawn at most 60
+ * times a second. The window answers meanwhile; its events wait in their
+ * queue for the game. */
+void
+Display::prepare_programs(const std::string &title)
+{
+	constexpr uint64_t EVERY_NS = 1000000000 / 60;
+	const auto window_size = [this] {
+		int w, h;
+
+		SDL_GL_GetDrawableSize(m_window, &w, &h);
+		return static_cast<uint64_t>(static_cast<uint32_t>(w)) << 32 | static_cast<uint32_t>(h);
+	};
+	std::atomic<uint64_t> size(window_size());
+	uint64_t shown = 0;
+
+	finish();
+	m_drawing->post([&] {
+		m_renderer->prepare_programs([&](unsigned done, unsigned total) {
+			const uint64_t now = host_ns();
+
+			if (done && done < total && now - shown < EVERY_NS)
+				return;
+			shown = now;
+			const uint64_t wh = size;
+			m_renderer->draw_loading(title, done, total, static_cast<unsigned>(wh >> 32),
+			                         static_cast<unsigned>(wh));
+			SDL_GL_SwapWindow(m_window);
+		});
+	});
+	while (!m_drawing->wait_for(std::chrono::milliseconds(16))) {
+		SDL_PumpEvents();
+		size = window_size();
+	}
 }
 
 Display::~Display()

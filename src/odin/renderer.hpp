@@ -24,8 +24,10 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <GL/glew.h>
@@ -101,8 +103,14 @@ public:
 
 	/* Makes ready the mesh programs the lists of the options name, so
 	 * that the game does not stutter when it first draws with one. To
-	 * be called on the thread draw_frame runs on. */
-	void prepare_programs();
+	 * be called on the thread draw_frame runs on. When there are some,
+	 * `progress` is told how many of how many are ready: none, then after
+	 * each one. */
+	void prepare_programs(const std::function<void(unsigned, unsigned)> &progress);
+	/* The loading screen (loading_screen.hpp) of a game in the window,
+	 * placed as the picture of a frame is, while the programs are made
+	 * ready. */
+	void draw_loading(std::string_view title, unsigned done, unsigned total, unsigned window_w, unsigned window_h);
 
 	/* Draws the 3D `scale` times finer than the screen of the hardware,
 	 * 1 at first. The pictures kept are carried over, pixel for pixel. */

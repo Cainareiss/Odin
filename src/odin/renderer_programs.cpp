@@ -142,34 +142,35 @@ MeshPrograms::get(const MeshVariant &variant)
 	return m_programs.emplace(key, compile(variant)).first->second;
 }
 
-unsigned
-MeshPrograms::compile_listed(const std::string &path, const std::function<void()> &draw)
+std::vector<uint64_t>
+MeshPrograms::read_list(const std::string &path)
 {
 	std::FILE *const file = open_list(path);
-	unsigned compiled = 0;
+	std::vector<uint64_t> keys;
 	char line[32];
 
 	if (!file)
-		return 0;
+		return keys;
 	while (std::fgets(line, sizeof(line), file)) {
 		char *end;
 		const uint64_t key = std::strtoull(line, &end, 16);
 
 		/* Sixteen digits and the end of the line: a line cut short
 		 * by a crash is not a key. */
-		if (end != line + 16 || *end != '\n')
-			continue;
-		const std::optional<MeshVariant> variant = MeshVariant::from_key(key);
-
-		if (variant && !m_programs.contains(key)) {
-			m_programs.emplace(key, compile(*variant));
-			draw();
-			compiled++;
-		}
+		if (end == line + 16 && *end == '\n' && MeshVariant::from_key(key))
+			keys.push_back(key);
 	}
 	std::fclose(file);
-	glUseProgram(0);
-	return compiled;
+	return keys;
+}
+
+void
+MeshPrograms::add(uint64_t key)
+{
+	const std::optional<MeshVariant> variant = MeshVariant::from_key(key);
+
+	if (variant && !m_programs.contains(key))
+		m_programs.emplace(key, compile(*variant));
 }
 
 void

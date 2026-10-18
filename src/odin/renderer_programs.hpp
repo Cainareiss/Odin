@@ -24,10 +24,10 @@
 
 #include <cstdint>
 #include <cstdio>
-#include <functional>
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include <GL/glew.h>
 
@@ -136,10 +136,13 @@ public:
 	 * compiled is left in use. */
 	MeshProgram &get(const MeshVariant &variant);
 
-	/* Compiles the programs a file lists and calls `draw` with each of
-	 * them in use; tells how many it did. A file that is not such a list
-	 * is left unread. */
-	unsigned compile_listed(const std::string &path, const std::function<void()> &draw);
+	/* The programs a file lists, those of a variant MeshVariant knows, in
+	 * its order; none for a file that is not such a list. */
+	static std::vector<uint64_t> read_list(const std::string &path);
+	bool holds(uint64_t key) const { return m_programs.contains(key); }
+	/* Compiles the program of a key read_list gave, unless it is held,
+	 * and leaves it in use. */
+	void add(uint64_t key);
 	/* Lists in a file the programs compiled from now on, after the ones
 	 * it lists already. */
 	void list_in(const std::string &path);
