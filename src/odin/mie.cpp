@@ -800,7 +800,7 @@ uint32_t Mie::wait_check(uint32_t done, uint32_t cycles)
 	return counted;
 }
 
-void Mie::run(uint32_t cycles)
+uint32_t Mie::run(uint32_t cycles)
 {
 	const bool waits = m_waits_counted && !m_trace;
 	uint32_t done = 0;
@@ -814,7 +814,7 @@ void Mie::run(uint32_t cycles)
 			/* Bus released to the host: the CPU waits, the rest of
 			 * the chip keeps going. */
 			tick(cycles - done);
-			break;
+			return cycles;
 		}
 		if (waits) {
 			if (m_cpu.pc() == m_wait.regs.pc) {
@@ -837,6 +837,7 @@ void Mie::run(uint32_t cycles)
 		tick(c);
 		done += c;
 	}
+	return done;
 }
 
 void Mie::log_unknown(char rw, const char *space, uint32_t addr, uint32_t value)

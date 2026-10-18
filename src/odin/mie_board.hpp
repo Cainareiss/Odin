@@ -68,6 +68,7 @@ public:
 	/* The whole board. Plain data. */
 	struct State {
 		uint64_t cycle_acc;
+		uint32_t mie_ahead;
 		Eeprom93c46State eeprom;
 		JvsIoBoardState io;
 		JvsHostState jvs;
@@ -169,6 +170,7 @@ private:
 	std::function<void(Inputs &)> m_read_inputs;
 	uint32_t m_clock_hz;
 	uint64_t m_cycle_acc;
+	uint32_t m_mie_ahead;	/* Z80 clocks the MIE ran past its share */
 	std::array<uint8_t, Mie::ROM_SIZE> m_rom;
 	Inputs m_inputs;
 	Eeprom93c46 m_eeprom;

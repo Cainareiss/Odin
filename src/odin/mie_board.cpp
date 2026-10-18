@@ -51,7 +51,7 @@ MieBoard::knows_io_board(const std::string &name)
 
 MieBoard::MieBoard(std::span<const uint8_t> rom, std::span<uint8_t> ram, uint32_t clock_hz,
                    std::function<void(Inputs &)> read_inputs, const std::string &io_board)
-	: m_read_inputs(std::move(read_inputs)), m_clock_hz(clock_hz), m_cycle_acc(0),
+	: m_read_inputs(std::move(read_inputs)), m_clock_hz(clock_hz), m_cycle_acc(0), m_mie_ahead(0),
 	  m_rom(copy_rom(rom)), m_inputs{},
 	  m_eeprom(Mie::CLOCK_HZ), m_mie(*this, m_rom, ram), m_log(nullptr),
 	  m_irq_lines(0)
@@ -136,6 +136,7 @@ void
 MieBoard::reset()
 {
 	m_cycle_acc = 0;
+	m_mie_ahead = 0;
 	m_eeprom.reset();
 	m_io->reset();
 	m_jvs.reset();
@@ -151,8 +152,15 @@ MieBoard::run(uint32_t cycles)
 	const uint64_t z80_cycles = m_cycle_acc / m_clock_hz;
 	m_cycle_acc -= z80_cycles * m_clock_hz;
 	if (z80_cycles) {
-		m_mie.run(static_cast<uint32_t>(z80_cycles));
-		m_eeprom.tick(static_cast<uint32_t>(z80_cycles));
+		const uint32_t share = static_cast<uint32_t>(z80_cycles);
+
+		/* The MIE ends its last instruction: what it ran past its
+		 * share comes off the next one. */
+		if (share > m_mie_ahead)
+			m_mie_ahead = m_mie.run(share - m_mie_ahead) - (share - m_mie_ahead);
+		else
+			m_mie_ahead -= share;
+		m_eeprom.tick(share);
 	}
 }
 
@@ -250,6 +258,7 @@ void
 MieBoard::save(State &out)
 {
 	out.cycle_acc = m_cycle_acc;
+	out.mie_ahead = m_mie_ahead;
 	m_eeprom.save(out.eeprom);
 	m_io->save(out.io);
 	m_jvs.save(out.jvs);
@@ -265,6 +274,7 @@ MieBoard::load(const State &in)
 	if ((in.has_card != 0) != (m_card != nullptr))
 		return false;
 	m_cycle_acc = in.cycle_acc;
+	m_mie_ahead = in.mie_ahead;
 	m_eeprom.load(in.eeprom);
 	m_io->load(in.io);
 	m_jvs.load(in.jvs);

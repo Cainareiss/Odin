@@ -137,8 +137,9 @@ public:
 	/* busak() with a trace line. */
 	bool host_busak_read();
 
-	/* Runs the chip for `cycles` Z80 clocks. */
-	void run(uint32_t cycles);
+	/* Runs the chip for at least `cycles` Z80 clocks: it ends the
+	 * instruction it is in. The clocks it ran. */
+	uint32_t run(uint32_t cycles);
 	/* A program that waits goes round a loop that only reads the memory
 	 * and leaves every register as it was, R aside, which it does not
 	 * read. Nothing changes what it reads before the chip is run again:
