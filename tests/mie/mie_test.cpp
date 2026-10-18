@@ -438,6 +438,22 @@ void test_reply_time()
 	check(untimed >= 74 && untimed <= 77, "the 837-13551, two characters after the request");
 }
 
+/* Short runs: the MIE ends the instruction it is in, and what it ran past
+ * its share comes off the next. 0000: inc hl / ld (C100), hl / jr 0000,
+ * 6 + 16 + 12 clocks; 10 000 runs of 17 clocks, 5 000 turns. */
+void test_short_runs()
+{
+	std::vector<uint8_t> rom(2048, 0), ram(32768, 0);
+	const std::vector<uint8_t> program = { 0x23, 0x22, 0x00, 0xC1, 0x18, 0xFA };
+
+	std::copy(program.begin(), program.end(), rom.begin());
+	odin::MieBoard mie(rom, ram, odin::Mie::CLOCK_HZ, nullptr);
+	for (int i = 0; i < 10000; i++)
+		mie.run(17);
+	const unsigned turns = ram[0x4100] | ram[0x4101] << 8;
+	check(turns >= 4999 && turns <= 5001, "runs of 17 clocks: the MIE at 16 MHz all the same");
+}
+
 int main()
 {
 	test_eeprom();
@@ -446,6 +462,7 @@ int main()
 	test_waits();
 	test_uart_speed();
 	test_reply_time();
+	test_short_runs();
 	std::printf("%u checks passed, %u failed\n", g_passed, g_failed);
 	return g_failed ? 1 : 0;
 }
