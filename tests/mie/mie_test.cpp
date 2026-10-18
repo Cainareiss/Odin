@@ -39,6 +39,7 @@
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -454,6 +455,54 @@ void test_short_runs()
 	check(turns >= 4999 && turns <= 5001, "runs of 17 clocks: the MIE at 16 MHz all the same");
 }
 
+/* A line on UART 1 instead of a JvsHost: each byte sent told with the
+ * time its start bit begins, a byte given back read from UART 1, the sense
+ * input set by the board. The program: the divisor at 8, 55 AA 0F sent,
+ * the sense into C000, a byte waited for and read into C001, the sense
+ * again into C002. */
+struct Line : odin::MieLine {
+	std::vector<std::pair<uint8_t, uint64_t>> sent;
+	void line_sent(uint8_t byte, uint64_t ticks) override { sent.emplace_back(byte, ticks); }
+};
+
+struct Pins : odin::MieHost {
+	uint8_t gpio_read(uint8_t) override { return 0xFF; }
+	void gpio_write(uint8_t, uint8_t) override {}
+};
+
+void test_line()
+{
+	std::vector<uint8_t> rom(2048, 0), ram(32768, 0);
+	const std::vector<uint8_t> program = {
+		0x3E, 0x80, 0xD3, 0x13, 0x3E, 0x08, 0xD3, 0x10, 0xAF, 0xD3, 0x13,	/* the divisor at 8 */
+		0x3E, 0x55, 0xD3, 0x10, 0x3E, 0xAA, 0xD3, 0x10, 0x3E, 0x0F, 0xD3, 0x10,
+		0xDB, 0x91, 0x32, 0x00, 0xC0,						/* in a, (91) / ld (C000), a */
+		0xDB, 0x15, 0xCB, 0x47, 0x28, 0xFA,					/* in a, (15) / bit 0, a / jr z */
+		0xDB, 0x10, 0x32, 0x01, 0xC0,						/* in a, (10) / ld (C001), a */
+		0xDB, 0x91, 0x32, 0x02, 0xC0, 0x76,					/* in a, (91) / ld (C002), a / halt */
+	};
+	std::copy(program.begin(), program.end(), rom.begin());
+	Pins pins;
+	Line line;
+	odin::Mie mie(pins, rom, ram);
+	mie.attach_line(&line);
+
+	mie.run(5000);
+	/* 10 bits of 16 clocks of the UART, 625 ticks, divisor 8 */
+	constexpr uint64_t BYTE = 10 * 16 * 625 * 8;
+	check(line.sent.size() == 3 && line.sent[0].first == 0x55 && line.sent[1].first == 0xAA &&
+	      line.sent[2].first == 0x0F, "a line: each byte sent told");
+	check(line.sent.size() == 3 && line.sent[0].second < 200 * odin::Mie::TICKS_PER_CYCLE &&
+	      line.sent[1].second == line.sent[0].second + BYTE && line.sent[2].second == line.sent[1].second + BYTE,
+	      "with the time its start bit begins, a character apart");
+	check(ram[0x4000] == 0x8C, "a line: a board is wired, not addressed yet");
+	mie.set_line_addressed(true);
+	mie.line_received(0x5A);
+	mie.run(2000);
+	check(ram[0x4001] == 0x5A, "a byte from the line, read from UART 1");
+	check(ram[0x4002] == 0x8E, "the sense input as the board sets it");
+}
+
 int main()
 {
 	test_eeprom();
@@ -463,6 +512,7 @@ int main()
 	test_uart_speed();
 	test_reply_time();
 	test_short_runs();
+	test_line();
 	std::printf("%u checks passed, %u failed\n", g_passed, g_failed);
 	return g_failed ? 1 : 0;
 }

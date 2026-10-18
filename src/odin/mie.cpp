@@ -84,7 +84,7 @@ constexpr uint32_t UART_CLOCKS_PER_BIT = 16;
  * 16 MHz: with the divisor 8 the programs set (MIE program at 8677,
  * epr-21868 at 01A1) that is the 115200 bauds of JVS. Times on the line
  * are counted in ticks of 1/9.216 GHz, in which both clocks are whole. */
-constexpr uint32_t TICKS_PER_Z80_CYCLE = 576;
+constexpr uint32_t TICKS_PER_Z80_CYCLE = Mie::TICKS_PER_CYCLE;
 constexpr uint32_t TICKS_PER_UART_CLOCK = 625;
 /* For an I/O board whose program was not timed (JvsHost::reply_cycles), the
  * time from the end of the request to the end of the first byte of the
@@ -402,8 +402,8 @@ void Mie::gpio_dir_write(uint8_t value)
  * is wired, bit 1 set when every board has its address. */
 uint8_t Mie::jvs_sense() const
 {
-	const bool present = m_jvs && m_jvs->presence_line();
-	const bool addressed = m_jvs && m_jvs->address_set_line();
+	const bool present = m_line || (m_jvs && m_jvs->presence_line());
+	const bool addressed = m_line ? m_line_addressed : m_jvs && m_jvs->address_set_line();
 
 	return static_cast<uint8_t>(0x8C | (addressed ? 2 : 0) | (present ? 0 : 1));
 }
@@ -588,6 +588,8 @@ void Mie::uart_tick(uint32_t cycles)
 			}
 			u.tx_count--;
 			u.tx_ticks = byte_ticks;
+			if (m_line)
+				m_line->line_sent(u.tx_byte, m_run_ticks + (ticks - left));
 		} else {
 			break;
 		}
@@ -747,6 +749,17 @@ void Mie::tick(uint32_t cycles)
 {
 	uart_tick(cycles);
 	serial_tick(cycles);
+	m_run_ticks += static_cast<uint64_t>(cycles) * TICKS_PER_Z80_CYCLE;
+}
+
+void Mie::line_received(uint8_t byte)
+{
+	MieUartState &u = m_uart;
+
+	if (u.rx_count < u.rx_fifo.size()) {
+		u.rx_fifo[(u.rx_head + u.rx_count) % static_cast<uint32_t>(u.rx_fifo.size())] = byte;
+		u.rx_count++;
+	}
 }
 
 /* Loops that only wait */
@@ -805,6 +818,7 @@ uint32_t Mie::run(uint32_t cycles)
 	const bool waits = m_waits_counted && !m_trace;
 	uint32_t done = 0;
 
+	m_run_ticks = 0;
 	m_wait.period = 4;
 	m_wait.pass = 0;
 	m_wait.busy = 0;

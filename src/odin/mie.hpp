@@ -54,6 +54,16 @@ public:
 	virtual uint8_t gpio_readback(uint8_t, uint8_t latched) { return latched; }
 };
 
+/* The far end of UART 1 when it is a line byte by byte, an I/O board that
+ * runs its own program, rather than a JvsHost. Ticks are those of the
+ * line, 1/9.216 GHz, from the start of the current Mie::run(). */
+class MieLine {
+public:
+	virtual ~MieLine() = default;
+	/* A byte from UART 1: its start bit begins `ticks` into the run. */
+	virtual void line_sent(uint8_t byte, uint64_t ticks) = 0;
+};
+
 /* What sits at the far end of the serial adapter block (ports 0x09-
  * 0x0E): a device on an RS-232 line. */
 class MieSerialDevice {
@@ -109,6 +119,8 @@ public:
 	static constexpr uint32_t ROM_SIZE = 0x800;
 	/* Z80 0x8000-0xFFFF, the half the host sees through its window. */
 	static constexpr uint32_t RAM_SIZE = 0x8000;
+	/* A Z80 clock in ticks of the line, 1/9.216 GHz (mie.cpp) */
+	static constexpr uint32_t TICKS_PER_CYCLE = 576;
 
 	/* `rom` is the 2 KB 315-6146 mask ROM; `ram` the 32 KB shared half,
 	 * owned by the caller. */
@@ -157,6 +169,11 @@ public:
 	/* The JVS cable on UART 1, which the board owns. Without one the sense
 	 * input tells that no I/O board is wired. */
 	void attach_jvs(JvsHost *cable) { m_jvs = cable; }
+	/* Or a line, byte by byte: the board gives UART 1 what the line
+	 * brings, at its time, and sets the sense input. */
+	void attach_line(MieLine *line) { m_line = line; }
+	void line_received(uint8_t byte);
+	void set_line_addressed(bool addressed) { m_line_addressed = addressed; }
 	const Z80 &cpu() const { return m_cpu; }
 	/* Device on the serial adapter line; nullptr leaves the line open. */
 	void set_serial_device(MieSerialDevice *dev) { m_serial_device = dev; }
@@ -219,6 +236,9 @@ private:
 	MieUartState m_uart;
 	MieSerialState m_serial;
 	MieSerialDevice *m_serial_device;
+	MieLine *m_line = nullptr;
+	bool m_line_addressed = false;
+	uint64_t m_run_ticks = 0;	/* from the start of the current run() */
 
 	/* The search for a loop that waits, in a call of run(): the
 	 * registers at a mark and the cycles run before it, whether the
