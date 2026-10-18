@@ -21,6 +21,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <vector>
 
 namespace odin {
 
@@ -75,6 +76,10 @@ public:
 	void load(const Tlcs90State &in);
 	/* One line per instruction to `out`; nullptr turns it off. */
 	void set_trace(FILE *out) { m_trace = out; }
+	/* The memory below `end` never changes (a ROM): its instructions are
+	 * decoded once, the address of a memory operand at a register taken
+	 * again each time. */
+	void set_fixed(uint16_t end) { m_decoded.assign(end, {}); }
 
 	uint16_t pc() const { return m_pc; }
 	uint16_t sp() const { return m_sp; }
@@ -97,6 +102,11 @@ private:
 		enum class Kind : uint8_t { NONE, R8, R16, IMM, MEM } kind = Kind::NONE;
 		uint8_t reg = 0;
 		uint16_t value = 0;	/* immediate, address, bit or condition */
+		/* A memory operand, or its address as an immediate (LDA, JP,
+		 * CALL), at a register pair plus disp, at HL + A, or fixed */
+		enum : uint8_t { HL_PLUS_A = 0xFE, FIXED = 0xFF };
+		uint8_t base = FIXED;
+		int8_t disp = 0;
 	};
 	struct Instruction {
 		Op op;
@@ -109,6 +119,12 @@ private:
 	static Operand reg16(uint8_t n) { return { Operand::Kind::R16, n, 0 }; }
 	static Operand imm(uint16_t v) { return { Operand::Kind::IMM, 0, v }; }
 	static Operand mem(uint16_t addr) { return { Operand::Kind::MEM, 0, addr }; }
+	/* The address of a memory operand, as an immediate */
+	static Operand itself(Operand m)
+	{
+		m.kind = Operand::Kind::IMM;
+		return m;
+	}
 
 	uint8_t fetch() { return m_bus.read8(m_pc++); }
 	uint16_t fetch16();
@@ -129,6 +145,8 @@ private:
 
 	/* The addressing modes of the prefixes E0 to FE */
 	Operand mem_of(uint8_t prefix, uint8_t displacement);
+	Operand based(uint8_t base, uint8_t displacement) const;
+	uint16_t address_of(const Operand &o) const;
 	void decode(Instruction &ins);
 	void decode_prefixed(Instruction &ins, uint8_t prefix);
 	uint32_t execute(const Instruction &ins);
@@ -146,6 +164,11 @@ private:
 	uint16_t m_ix = 0, m_iy = 0, m_sp = 0, m_pc = 0;
 	bool m_halted = false, m_ei_pending = false;
 	FILE *m_trace = nullptr;
+	struct Decoded {
+		Instruction ins{};
+		uint8_t length = 0;	/* 0: not decoded yet */
+	};
+	std::vector<Decoded> m_decoded;	/* by address, below set_fixed's end */
 };
 
 } /* namespace odin */

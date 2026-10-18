@@ -50,6 +50,7 @@ Tmp90ph44::Tmp90ph44(std::span<const uint8_t> rom, Tmp90ph44Board &board)
 	: m_cpu(*this), m_board(board)
 {
 	std::memcpy(m_rom.data(), rom.data(), std::min(rom.size(), m_rom.size()));
+	m_cpu.set_fixed(ROM_SIZE);
 	reset();
 }
 

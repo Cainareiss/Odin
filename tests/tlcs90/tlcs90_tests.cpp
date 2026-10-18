@@ -34,6 +34,8 @@ namespace {
 using odin::Tlcs90;
 
 int g_checks, g_failures;
+/* The programs below 2000 decoded once (Tlcs90::set_fixed) */
+bool g_fixed;
 
 void check(bool ok, const char *what)
 {
@@ -72,6 +74,12 @@ struct Ram : odin::Tlcs90Bus {
 struct Machine {
 	Ram ram;
 	Tlcs90 cpu{ ram };
+
+	Machine()
+	{
+		if (g_fixed)
+			cpu.set_fixed(0x2000);
+	}
 };
 
 void test_loads_and_addressing()
@@ -268,15 +276,74 @@ void test_interrupts()
 	check(!h.cpu.halted() && h.cpu.pc() == 0x0020 && h.ram.m[0x2FFE] == 0x04, "an interrupt ends it");
 }
 
-} /* namespace */
+/* Instructions decoded once, run again with other registers: (HL),
+ * (IX+d), (HL+A), LDA HL,(IX+d), JP HL */
+void test_decoded_once()
+{
+	Machine t;
 
-int main()
+	t.cpu.set_fixed(0x2000);
+	t.ram.put(0, { 0x3E, 0x00, 0x30, 0x3A, 0x00, 0x20, 0x30, 0x04, 0x36, 0x00, 0xE2, 0x60, 0x92, 0x18, 0xFB,
+	               0x2F, 0x00, 0x3C, 0x00, 0x20, 0x30, 0x04, 0x36, 0x00, 0xF0, 0x01, 0x60, 0x94, 0x18, 0xFA,
+	               0x2F, 0x01, 0x3A, 0xFF, 0x1F, 0x36, 0x01, 0xF3, 0x28, 0x86, 0x6F, 0x05, 0xCE, 0xF9, 0x20,
+	               0x2F, 0x02, 0x3C, 0x00, 0x20, 0x30, 0x02, 0xF4, 0x05, 0x3A, 0x94, 0x18, 0xFA, 0x08,
+	               0x3A, 0x50, 0x00, 0x1A, 0x48, 0x00 });
+	t.ram.put(0x48, { 0xEA, 0xC8 });
+	t.ram.put(0x50, { 0x37, 0x03, 0x01, 0x3A, 0x60, 0x00, 0x1A, 0x48, 0x00 });
+	t.ram.put(0x60, { 0x37, 0x04, 0x01, 0xC8, 0xFE });
+	t.ram.put(0x2000, { 1, 2, 3, 4, 5 });
+	for (int i = 0; i < 300 && t.cpu.pc() != 0x63; i++)
+		t.cpu.step();
+	check(t.ram.m[0xFF00] == 10, "ADD A,(HL) again: HL taken each time");
+	check(t.ram.m[0xFF01] == 14, "ADD A,(IX+1) again: IX each time");
+	check(t.ram.m[0xFF02] == 4, "LD B,(HL+A) again: A each time");
+	check(t.cpu.de() == 0x2006, "LDA HL,(IX+5) again: IX each time");
+	check(t.ram.m[0xFF03] == 1 && t.ram.m[0xFF04] == 1 && t.cpu.pc() == 0x63, "JP HL again: HL each time");
+
+	/* CALL HL twice, HL changed by the first one it calls */
+	Machine c;
+
+	c.cpu.set_fixed(0x2000);
+	c.ram.put(0, { 0x3E, 0x00, 0x30, 0x3A, 0x80, 0x00, 0xEA, 0xD8, 0x1A, 0x06, 0x00 });
+	c.ram.put(0x80, { 0x37, 0x06, 0x01, 0x3A, 0x90, 0x00, 0x1E });
+	c.ram.put(0x90, { 0x37, 0x07, 0x01, 0xC8, 0xFE });
+	for (int i = 0; i < 100 && c.cpu.pc() != 0x93; i++)
+		c.cpu.step();
+	check(c.ram.m[0xFF06] == 1 && c.ram.m[0xFF07] == 1, "CALL HL again: HL each time");
+
+	/* LD HL,1234 from 1FFE to 2000: past the end of the fixed memory, not
+	 * kept */
+	Machine e;
+
+	e.cpu.set_fixed(0x2000);
+	e.ram.put(0, { 0x1A, 0xFE, 0x1F });
+	e.ram.put(0x1FFE, { 0x3A, 0x34, 0x12, 0xC8, 0xFB });
+	e.cpu.step();
+	e.cpu.step();
+	const uint16_t first = e.cpu.hl();
+	e.cpu.step();
+	e.ram.m[0x2000] = 0x56;
+	e.cpu.step();
+	check(first == 0x1234 && e.cpu.hl() == 0x5634, "an instruction ending past the fixed memory: decoded each time");
+}
+
+void run_all()
 {
 	test_loads_and_addressing();
 	test_arithmetic();
 	test_rotations();
 	test_jumps();
 	test_interrupts();
+}
+
+} /* namespace */
+
+int main()
+{
+	run_all();
+	g_fixed = true;
+	run_all();
+	test_decoded_once();
 
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures ? 1 : 0;

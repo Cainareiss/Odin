@@ -209,12 +209,31 @@ Tlcs90::mem_of(uint8_t prefix, uint8_t d)
 			return mem(fetch16());
 		if (low == 7)
 			return mem(static_cast<uint16_t>(0xFF00 | fetch()));
-		return mem(r16(low));
+		return based(low, 0);
 	default:
 		if (low == 3 || low == 7)
-			return mem(static_cast<uint16_t>(r16(HL) + static_cast<int8_t>(m_r[A])));
-		return mem(static_cast<uint16_t>(r16(static_cast<uint8_t>(IX + (low & 3))) + static_cast<int8_t>(d)));
+			return based(Operand::HL_PLUS_A, 0);
+		return based(static_cast<uint8_t>(IX + (low & 3)), d);
 	}
+}
+
+Tlcs90::Operand
+Tlcs90::based(uint8_t base, uint8_t d) const
+{
+	Operand o = mem(0);
+
+	o.base = base;
+	o.disp = static_cast<int8_t>(d);
+	o.value = address_of(o);
+	return o;
+}
+
+uint16_t
+Tlcs90::address_of(const Operand &o) const
+{
+	if (o.base == Operand::HL_PLUS_A)
+		return static_cast<uint16_t>(r16(HL) + static_cast<int8_t>(m_r[A]));
+	return static_cast<uint16_t>(r16(o.base) + o.disp);
 }
 
 void
@@ -454,7 +473,7 @@ Tlcs90::decode_prefixed(Instruction &ins, uint8_t b0)
 	case 0x38:
 		if (b1 == 0x3F) { set(Op::LD, 12 + extra); ins.wide = true; ins.x = m; ins.y = imm(fetch16()); return; }
 		/* LDA rr, the address itself; only the indexed forms */
-		if (indexed && b1 != 0x3B) { set(Op::LDA, 6 + extra); ins.wide = true; ins.x = reg16(b1 & 7); ins.y = imm(m.value); return; }
+		if (indexed && b1 != 0x3B) { set(Op::LDA, 6 + extra); ins.wide = true; ins.x = reg16(b1 & 7); ins.y = itself(m); return; }
 		break;
 	case 0x40:
 		if (b1 == 0x43 || b1 == 0x47) break;
@@ -464,10 +483,10 @@ Tlcs90::decode_prefixed(Instruction &ins, uint8_t b0)
 	case 0xC0:
 	case 0xC8:
 		/* JP [cc,] to the address itself: (gg) is gg, (mn) is mn */
-		set(Op::JP, 8 + extra, 6 + extra); ins.x = imm(b1 & 15); ins.y = imm(m.value); return;
+		set(Op::JP, 8 + extra, 6 + extra); ins.x = imm(b1 & 15); ins.y = itself(m); return;
 	case 0xD0:
 	case 0xD8:
-		set(Op::CALL, 14 + extra, 6 + extra); ins.x = imm(b1 & 15); ins.y = imm(m.value); return;
+		set(Op::CALL, 14 + extra, 6 + extra); ins.x = imm(b1 & 15); ins.y = itself(m); return;
 	default:
 		break;
 	}
@@ -497,7 +516,21 @@ Tlcs90::step()
 	const uint16_t at = m_pc;
 	Instruction ins;
 
-	decode(ins);
+	if (at < m_decoded.size() && m_decoded[at].length) {
+		const Decoded &known = m_decoded[at];
+
+		ins = known.ins;
+		m_pc = static_cast<uint16_t>(at + known.length);
+		for (Operand *o : { &ins.x, &ins.y })
+			if (o->base != Operand::FIXED)
+				o->value = address_of(*o);
+	} else {
+		decode(ins);
+		const unsigned length = static_cast<uint16_t>(m_pc - at);
+
+		if (at + length <= m_decoded.size())
+			m_decoded[at] = { ins, static_cast<uint8_t>(length) };
+	}
 	if (m_trace)
 		std::fprintf(m_trace, "%04X A%02X F%02X BC%04X DE%04X HL%04X IX%04X IY%04X SP%04X\n", at, m_r[A], m_f,
 		             r16(BC), r16(DE), r16(HL), m_ix, m_iy, m_sp);
