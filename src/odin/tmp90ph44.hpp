@@ -36,6 +36,12 @@ public:
 	virtual void bus_write(uint16_t addr, uint8_t value) = 0;
 	/* The pins of port 0 to 8 */
 	virtual uint8_t port_pins(unsigned port) = 0;
+	/* The program has written port 0 to 7 or its control register: its
+	 * latch and the bits that drive their pins. Until then, after the
+	 * reset pin, no pin is driven. */
+	virtual void port_out(unsigned port, uint8_t latch, uint8_t driven) = 0;
+	/* Analog input AN0 to AN3 converted: 00 at AGND, FF at VREF */
+	virtual uint8_t analog_pin(unsigned n) = 0;
 	/* A byte has left on the serial line, its stop bit ended. */
 	virtual void serial_sent(uint8_t byte) = 0;
 };
@@ -58,6 +64,7 @@ public:
  *  - Interrupts: a flag per vector, cleared when taken or when FFEA is
  *    written with the vector / 8.
  *  - Serial channel: 8-bit UART at the rate of the JVS line.
+ *  - A/D converter: AN0 to AN3 (P50-P53) into FFF0-FFF3.
  *
  * Times are in states, two periods of fc. */
 class Tmp90ph44 : private Tlcs90Bus {
@@ -89,6 +96,7 @@ private:
 
 	uint8_t sfr_read(uint8_t reg);
 	void sfr_write(uint8_t reg, uint8_t value);
+	void tell_port(unsigned port);
 	/* Timers, watchdog and serial line for `states` more */
 	void advance(uint32_t states);
 	uint32_t timer_period(unsigned n) const;

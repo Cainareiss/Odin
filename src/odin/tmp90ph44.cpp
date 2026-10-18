@@ -32,7 +32,7 @@ enum : uint8_t {
 	P0 = 0x00, P1 = 0x02, P2 = 0x04, P3 = 0x06, P3CR = 0x07, P4 = 0x08, P5 = 0x0A, P6 = 0x0B, P7 = 0x0C, P67CR = 0x0D,
 	WDMOD = 0x12, WDCR = 0x13, TREG0 = 0x14, T01MOD = 0x18, T23MOD = 0x19, TRUN = 0x1C,
 	SCMOD = 0x26, SCCR = 0x27, SCBUF = 0x28, BRGCR = 0x29, IRFL = 0x2A, IRFH = 0x2B,
-	INTEL = 0x34, INTEH = 0x35
+	ADMOD = 0x2F, ADREG0 = 0x30, INTEL = 0x34, INTEH = 0x35
 };
 
 constexpr uint16_t RAM_BASE = 0xFDC0;
@@ -154,6 +154,22 @@ Tmp90ph44::sfr_read(uint8_t reg)
 
 		return static_cast<uint8_t>((m_sfr[reg] & out) | (m_board.port_pins(reg == P6 ? 6 : 7) & ~out & 0x0F));
 	}
+	case P5:
+		/* HEURISTIC: the latch. The program reads P5 only to change P56
+		 * (1296, 12B0); P50-P53 are its analog inputs. */
+		return m_sfr[P5];
+	case ADREG0:
+	case ADREG0 + 1:
+	case ADREG0 + 2:
+	case ADREG0 + 3:
+		/* HEURISTIC: ADMOD F7 converts AN0 to AN3 over and over into
+		 * FFF0-FFF3, and a read gives the pin as it is then. The program
+		 * never starts a conversion nor waits for one, and reads the four
+		 * at each tick (127E), 4.44 ms apart; a conversion of the
+		 * TMP90C840 takes 190 states. */
+		if (m_sfr[ADMOD] != 0xF7)
+			unknown("A/D mode", m_sfr[ADMOD]);
+		return m_board.analog_pin(reg - ADREG0);
 	case SCCR:
 		/* No error on the line: bits 2 to 4 clear (read at 143C) */
 		return m_sfr[SCCR] & 0xE3;
@@ -211,8 +227,31 @@ Tmp90ph44::sfr_write(uint8_t reg, uint8_t value)
 		return;
 	default:
 		m_sfr[reg] = value;
+		if (reg < P5)
+			tell_port(reg / 2u);
+		else if (reg <= P7)
+			tell_port(reg - P5 + 5u);
+		else if (reg == P67CR) {
+			tell_port(6);
+			tell_port(7);
+		}
 		return;
 	}
+}
+
+/* P0 to P4 drive the bits their control register sets; P56 and P57 are
+ * outputs (data sheet TMP90PH44, table 2.2); P6 and P7 four bits each, as
+ * P67CR says. */
+void
+Tmp90ph44::tell_port(unsigned port)
+{
+	if (port < 5)
+		m_board.port_out(port, m_sfr[P0 + 2 * port], m_sfr[P0 + 2 * port + 1]);
+	else if (port == 5)
+		m_board.port_out(5, m_sfr[P5], 0xC0);
+	else
+		m_board.port_out(port, m_sfr[port == 6 ? P6 : P7] & 0x0F,
+		                 port == 6 ? m_sfr[P67CR] & 0x0F : static_cast<uint8_t>(m_sfr[P67CR] >> 4));
 }
 
 /* The states of a tick of timer n: T01MOD and T23MOD as MAME reads them

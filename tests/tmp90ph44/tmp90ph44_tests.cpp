@@ -46,11 +46,19 @@ void check(bool ok, const char *what)
 }
 
 struct Board : odin::Tmp90ph44Board {
+	struct Out {
+		unsigned told = 0;
+		uint8_t latch = 0, driven = 0;
+	};
 	uint8_t pins[9] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+	Out out[8];
+	uint8_t analog[4] = { 0x11, 0x22, 0x33, 0x44 };
 	std::vector<uint8_t> sent;
 	uint8_t bus_read(uint16_t) override { return 0xFF; }
 	void bus_write(uint16_t, uint8_t) override {}
 	uint8_t port_pins(unsigned port) override { return pins[port]; }
+	void port_out(unsigned port, uint8_t latch, uint8_t driven) override { out[port] = { out[port].told + 1, latch, driven }; }
+	uint8_t analog_pin(unsigned n) override { return analog[n]; }
 	void serial_sent(uint8_t byte) override { sent.push_back(byte); }
 };
 
@@ -147,15 +155,41 @@ void test_ports()
 	Rom rom;
 	Board board;
 
-	/* P3CR 9C, P3 0C, then P3 and P0 read into FF06 and FF07 */
-	rom.put(0, { 0x37, 0xC7, 0x9C, 0x37, 0xC6, 0x0C, 0x27, 0xC6, 0x2F, 0x06, 0x27, 0xC0, 0x2F, 0x07, LOOP[0], LOOP[1] });
+	/* P3CR 9C, P3 0C, then P3 and P0 read into FF06 and FF07; P6 0A, P7
+	 * 05, then P67CR F3; P5 40 */
+	rom.put(0, { 0x37, 0xC7, 0x9C, 0x37, 0xC6, 0x0C, 0x27, 0xC6, 0x2F, 0x06, 0x27, 0xC0, 0x2F, 0x07,
+	             0x37, 0xCB, 0x0A, 0x37, 0xCC, 0x05, 0x37, 0xCD, 0xF3, 0x37, 0xCA, 0x40, LOOP[0], LOOP[1] });
 	board.pins[3] = 0x03;
 	board.pins[0] = 0x5A;
 	Tmp90ph44 chip(rom.bytes, board);
 
-	chip.run(100);
+	chip.run(200);
 	check(chip.peek(0xFF06) == 0x0F, "P3: the latch on the bits P3CR drives, the pins on the others");
 	check(chip.peek(0xFF07) == 0x5A, "P0, all inputs: the pins");
+	check(board.out[3].told == 2 && board.out[3].latch == 0x0C && board.out[3].driven == 0x9C,
+	      "the board told of P3 at each write to it or to P3CR");
+	check(board.out[6].told == 2 && board.out[6].latch == 0x0A && board.out[6].driven == 0x03,
+	      "P6: its latch, the low half of P67CR");
+	check(board.out[7].told == 2 && board.out[7].latch == 0x05 && board.out[7].driven == 0x0F,
+	      "P7: its latch, the high half of P67CR");
+	check(board.out[5].told == 1 && board.out[5].latch == 0x40 && board.out[5].driven == 0xC0,
+	      "P5: P56 and P57 drive");
+	check(board.out[0].told == 0 && board.out[4].told == 0, "the ports not written: nothing told");
+}
+
+void test_analog()
+{
+	Rom rom;
+	Board board;
+
+	/* ADMOD F7, then FFF0-FFF3 into FF08-FF0B */
+	rom.put(0, { 0x37, 0xEF, 0xF7, 0x27, 0xF0, 0x2F, 0x08, 0x27, 0xF1, 0x2F, 0x09, 0x27, 0xF2, 0x2F, 0x0A,
+	             0x27, 0xF3, 0x2F, 0x0B, LOOP[0], LOOP[1] });
+	Tmp90ph44 chip(rom.bytes, board);
+
+	chip.run(100);
+	check(chip.peek(0xFF08) == 0x11 && chip.peek(0xFF09) == 0x22 && chip.peek(0xFF0A) == 0x33 &&
+	      chip.peek(0xFF0B) == 0x44, "FFF0-FFF3: AN0 to AN3");
 }
 
 } /* namespace */
@@ -166,6 +200,7 @@ int main()
 	test_timer();
 	test_serial();
 	test_ports();
+	test_analog();
 
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures ? 1 : 0;
