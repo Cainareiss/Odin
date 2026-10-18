@@ -479,7 +479,7 @@ Tmp90ph44::next_event() const
 uint16_t
 Tmp90ph44::interrupt(bool maskable)
 {
-	if (!maskable)
+	if (!maskable || !m_requests)
 		return 0;
 
 	const uint8_t inteh = m_sfr[INTEH];
