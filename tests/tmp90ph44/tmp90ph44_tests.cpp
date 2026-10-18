@@ -280,7 +280,7 @@ void test_idle()
 	/* The run ends inside a turn, the pin read */
 	while (waiting.cpu().pc() != 0x05)
 		waiting.run(1);
-	pins.pins[0] = 0xFE;
+	pins.pins[0] = 0x00;
 	waiting.run(300);
 	check(waiting.peek(0xFF02) == 1, "the pin changed between two runs: seen at once");
 
@@ -338,6 +338,118 @@ void test_idle()
 	turns.cpu().save(a);
 	steps.cpu().save(b);
 	check(turns.states() == steps.states() && a == b, "an interrupt inside a turn: the same as one instruction at a time");
+}
+
+/* The wait of 315-6215 (0149): CALL a routine that tests bit 1 of FE70
+ * and gives L, compare L, again while 0; then INC (FF02). The watchdog
+ * off; with `timer`, timer 1 counts in FF01 every 1280 states. From 0100. */
+Rom waiting(bool timer)
+{
+	Rom rom;
+
+	rom.put(0, { 0x1A, 0x00, 0x01 });
+	rom.put(0x28, { 0x87, 0x01, 0x1F });
+	rom.put(0x100, { 0x3E, 0xBF, 0xFF, 0x37, 0xD2, 0x00, 0x37, 0xD3, 0xB1 });
+	if (timer)
+		rom.put(0x109, { 0x37, 0xD8, 0x0B, 0x37, 0xD5, 0x14, 0x37, 0xF5, 0x04, 0x37, 0xDC, 0x22, 0x03 });
+	rom.put(0x116, { 0x1C, 0x30, 0x01, 0xFD, 0x6F, 0x00, 0xC6, 0xF8, 0x87, 0x02, LOOP[0], LOOP[1] });
+	rom.put(0x130, { 0xE3, 0x70, 0xFE, 0xA9, 0xEB, 0x3B, 0x01, 0xCE, 0x35, 0x00, 0x1E, 0x35, 0x01, 0x1E });
+	return rom;
+}
+
+/* A turn proven idle kept from one run() to the next */
+void test_kept()
+{
+	const Rom rom = waiting(true);
+	Board board, other;
+	Tmp90ph44 kept(rom.bytes, board), stepped(rom.bytes, other);
+	bool same = true;
+
+	/* Runs of 1 to 151 states, most ending inside a turn */
+	for (unsigned n = 0; n < 3000; n++) {
+		kept.run(1 + n * 37 % 151);
+		while (stepped.states() < kept.states())
+			stepped.run(1);
+		odin::Tlcs90State a, b;
+		kept.cpu().save(a);
+		stepped.cpu().save(b);
+		same = same && kept.states() == stepped.states() && a == b && kept.peek(0xFF01) == stepped.peek(0xFF01);
+	}
+	check(same, "runs ending inside a turn: the same as one instruction at a time");
+	check(kept.peek(0xFF01) > 100 && 2 * kept.skipped() > kept.states(), "the turn kept from one run to the next: most billed");
+
+	/* Without events, what changes between two runs */
+	const Rom quiet = waiting(false);
+	Board one, two;
+	Tmp90ph44 moved(quiet.bytes, one), loaded(quiet.bytes, two);
+
+	moved.run(5000);
+	odin::Tlcs90State cpu;
+	moved.cpu().save(cpu);
+	cpu.pc = 0x011E;
+	moved.cpu().load(cpu);
+	moved.run(40);
+	check(moved.peek(0xFF02) == 1, "the CPU changed between two runs: it goes on from there");
+
+	loaded.run(5000);
+	odin::Tmp90ph44State state;
+	loaded.save(state);
+	state.ram[0xFE70 - 0xFDC0] |= 0x02;
+	loaded.load(state);
+	loaded.run(200);
+	check(loaded.peek(0xFF02) == 1, "loaded with the memory changed: the turn sees it");
+
+	/* LD A,(P5), CP A,40, JR Z, else the watchdog off, P5 40 and back:
+	 * the reset pin clears P5 under a turn that waits on it */
+	Rom latch;
+	Board pin;
+
+	latch.put(0, { 0x27, 0xCA, 0x6F, 0x40, 0xC6, 0xFA, 0x1A, 0x00, 0x01 });
+	latch.put(0x100, { 0x37, 0xD2, 0x00, 0x37, 0xD3, 0xB1, 0x37, 0xCA, 0x40, 0x1A, 0x00, 0x00 });
+	Tmp90ph44 reset(latch.bytes, pin);
+	reset.run(40000);
+	while (reset.cpu().pc() != 0)
+		reset.run(1);
+	reset.reset();
+	reset.run(200);
+	check(pin.out[5].told == 2, "the reset pin: a turn proven before is run again");
+
+	/* The watchdog off, SCMOD 29, then waits for OERR in SCCR; SCBUF not
+	 * read: the second byte is lost and sets it */
+	Rom error;
+	Board line;
+
+	error.put(0, { 0x37, 0xD2, 0x00, 0x37, 0xD3, 0xB1, 0x37, 0xE6, 0x29, 0x27, 0xE7, 0x6C, 0x10, 0xC6, 0xFA, 0x87, 0x02,
+	               LOOP[0], LOOP[1] });
+	Tmp90ph44 lost(error.bytes, line);
+	lost.run(500);
+	lost.serial_received(0xA7);
+	lost.run(3000);
+	lost.serial_received(0xB5);
+	lost.run(100);
+	check(lost.peek(0xFF02) == 1, "a byte lost between two runs: OERR seen at once");
+
+	/* The watchdog off; waits for P0 bit 0 to read 0, then the wait of
+	 * 0149 at 0100: the pin read by the first turn, not by the second */
+	Rom unread;
+	Board moving;
+
+	unread.put(0, { 0x3E, 0xBF, 0xFF, 0x37, 0xD2, 0x00, 0x37, 0xD3, 0xB1, 0x27, 0xC0, 0x6C, 0x01, 0xCE, 0xFA, 0x1A, 0x00,
+	                0x01 });
+	unread.put(0x100, { 0x1C, 0x30, 0x01, 0xFD, 0x6F, 0x00, 0xC6, 0xF8, LOOP[0], LOOP[1] });
+	unread.put(0x130, { 0xE3, 0x70, 0xFE, 0xA9, 0xEB, 0x3B, 0x01, 0xCE, 0x35, 0x00, 0x1E, 0x35, 0x01, 0x1E });
+	Tmp90ph44 still(unread.bytes, moving);
+	still.run(5000);
+	moving.pins[0] = 0x00;
+	still.run(100);
+	check(still.cpu().pc() >= 0x100, "the pin read by the turn changed: seen at once");
+	still.run(5000);
+	const uint64_t skipped = still.skipped(), states = still.states();
+	for (unsigned n = 0; n < 2000; n++) {
+		moving.pins[0] = n & 1 ? 0xFC : 0xFE;
+		still.run(50);
+	}
+	check(2 * (still.skipped() - skipped) > still.states() - states, "a pin the turn does not read changed: still billed");
 }
 
 void test_state()
@@ -461,6 +573,7 @@ int main()
 	test_serial();
 	test_overrun();
 	test_idle();
+	test_kept();
 	test_state();
 	test_ports();
 	test_analog();

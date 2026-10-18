@@ -29,7 +29,8 @@ namespace odin {
 
 /* What the board around the chip gives it. The pins and the analog inputs
  * stay as they are for the whole of a run(): the chip bills the turns of a
- * loop that reads them without running them (Tmp90ph44::run). */
+ * loop that reads them without running them (Tmp90ph44::run), and reads
+ * them again at the start of the next. */
 class Tmp90ph44Board {
 public:
 	virtual ~Tmp90ph44Board() = default;
@@ -100,7 +101,9 @@ public:
 	 * ran. A loop proven idle is billed without being run: a turn that
 	 * comes back to its start in the same state, having changed nothing,
 	 * read nothing that changes and taken no interrupt, would do the same
-	 * up to the next event of a device (MARKDOWN/76). */
+	 * up to the next event of a device (MARKDOWN/76). The proof holds into
+	 * the next run() if the CPU is where the turn has it and the pins the
+	 * turn read are the same (MARKDOWN/77). */
 	uint32_t run(uint32_t states);
 	/* The data bits of a byte on the serial line have been sampled:
 	 * RX_STATES after its start. */
@@ -145,8 +148,13 @@ private:
 	static constexpr uint64_t COOLDOWN = 1u << 15;
 	void jumped_back();
 	uint64_t turn(uint64_t end);
+	uint64_t resume(uint64_t end);
+	uint64_t bill(uint64_t end);
+	uint8_t pin(unsigned n);
+	uint8_t pin_now(unsigned n) { return n < 8 ? m_board.port_pins(n) : m_board.analog_pin(n - 8); }
 	void spoil(Spoil how)
 	{
+		m_proof.on = false;
 		if (m_trial.on && how > m_trial.spoil)
 			m_trial.spoil = how;
 	}
@@ -169,15 +177,27 @@ private:
 	int32_t m_tx_left = -1;		/* states until the byte is sent */
 	uint8_t m_tx = 0;
 
-	/* A turn of a loop on trial, from `pc` in the state `cpu` */
+	/* A turn of a loop on trial, from `pc` */
 	struct Trial {
 		bool on = false;
 		Spoil spoil = Spoil::NONE;
 		uint16_t pc = 0;
 		unsigned steps = 0;
 		uint64_t start = 0;
-		Tlcs90State cpu{};
 	} m_trial;
+	/* What the turn on trial ran, kept once it is proven idle: before its
+	 * instruction n, the CPU and the states from its start. Pin n is port
+	 * n, 8 + n AN n. */
+	struct Proof {
+		bool on = false;
+		unsigned length = 0;
+		unsigned at = 0;		/* the instruction the CPU is before */
+		uint64_t period = 0;		/* the states of a turn */
+		uint16_t read = 0;		/* bit n: pin n read, as `pins` has it */
+		std::array<uint8_t, 12> pins{};
+		std::array<uint32_t, MAX_TURN> offset{};
+		std::array<Tlcs90State, MAX_TURN> cpu{};
+	} m_proof;
 	std::array<uint16_t, 4> m_back{};	/* the last places jumped back to */
 	struct Cool {
 		uint16_t pc;

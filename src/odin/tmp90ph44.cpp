@@ -76,6 +76,7 @@ Tmp90ph44::reset()
 	m_tx_left = -1;
 	m_synced = m_states;
 	m_next_event = next_event();
+	m_proof.on = false;
 	m_cpu.reset();
 }
 
@@ -85,6 +86,8 @@ Tmp90ph44::run(uint32_t states)
 	const uint64_t end = m_states + states;
 	uint32_t done = 0;
 
+	if (m_proof.on)
+		done += static_cast<uint32_t>(resume(end));
 	while (done < states) {
 		const uint16_t from = m_cpu.pc();
 		const uint32_t s = m_cpu.step();
@@ -97,6 +100,8 @@ Tmp90ph44::run(uint32_t states)
 		}
 		if (m_trial.on)
 			done += static_cast<uint32_t>(turn(end));
+		else if (m_proof.on)
+			m_proof.at = m_proof.at + 1 == m_proof.length ? 0 : m_proof.at + 1;
 		else if (m_cpu.pc() <= from)
 			jumped_back();
 	}
@@ -126,42 +131,102 @@ Tmp90ph44::jumped_back()
 	m_trial.pc = pc;
 	m_trial.steps = 0;
 	m_trial.start = m_states;
-	m_cpu.save(m_trial.cpu);
+	m_proof.read = 0;
+	m_cpu.save(m_proof.cpu[0]);
 }
 
 /* After each instruction of a turn on trial. Back at its start in the same
  * state, it is a fixed point: nothing it reads can change before the next
- * event of a device, so it would go round the same way until then. Its
- * turns are billed up to just before that event and the end of run(), and
- * the CPU goes on from there as it would have. The states billed. */
+ * event of a device, so it would go round the same way until then. The
+ * states billed. */
 uint64_t
 Tmp90ph44::turn(uint64_t end)
 {
 	if (m_trial.spoil == Spoil::NONE && ++m_trial.steps > MAX_TURN)
 		m_trial.spoil = Spoil::NEVER;
-	if (m_trial.spoil == Spoil::NONE && m_cpu.pc() != m_trial.pc)
+	if (m_trial.spoil == Spoil::NONE && m_cpu.pc() != m_trial.pc) {
+		if (m_trial.steps < MAX_TURN) {
+			m_proof.offset[m_trial.steps] = static_cast<uint32_t>(m_states - m_trial.start);
+			m_cpu.save(m_proof.cpu[m_trial.steps]);
+		}
 		return 0;
+	}
 	m_trial.on = false;
 
 	Tlcs90State now;
 	m_cpu.save(now);
-	if (m_trial.spoil == Spoil::NONE && !(now == m_trial.cpu))
+	if (m_trial.spoil == Spoil::NONE && !(now == m_proof.cpu[0]))
 		m_trial.spoil = Spoil::NEVER;
 	if (m_trial.spoil == Spoil::NEVER)
 		m_cool[m_trial.pc & 15] = { m_trial.pc, m_states + COOLDOWN };
 	if (m_trial.spoil != Spoil::NONE)
 		return 0;
+	m_proof.on = true;
+	m_proof.length = m_trial.steps;
+	m_proof.at = 0;
+	m_proof.period = m_states - m_trial.start;
+	return bill(end);
+}
 
-	const uint64_t period = m_states - m_trial.start;
+/* A run() that starts on a turn proven idle: it still is if the CPU is
+ * where the turn has it and the pins the turn read have not changed. */
+uint64_t
+Tmp90ph44::resume(uint64_t end)
+{
+	Tlcs90State now;
+
+	m_cpu.save(now);
+	if (!(now == m_proof.cpu[m_proof.at]))
+		m_proof.on = false;
+	for (unsigned n = 0; m_proof.on && n < m_proof.pins.size(); n++)
+		if ((m_proof.read >> n & 1) && pin_now(n) != m_proof.pins[n])
+			m_proof.on = false;
+	return m_proof.on ? bill(end) : 0;
+}
+
+/* The CPU before an instruction of a turn proven idle goes round the same
+ * way up to the next event of a device or the end of run(). The
+ * instructions it would run before the last of these are billed, the CPU
+ * put in the state it would have after them; the one after is run, and
+ * reaches it, as one at a time. The states billed. */
+uint64_t
+Tmp90ph44::bill(uint64_t end)
+{
 	const uint64_t limit = std::min(m_next_event, end);
 
-	if (m_states + period >= limit)
+	if (m_states >= limit)
 		return 0;
-	const uint64_t billed = (limit - m_states - 1) / period * period;
 
-	m_states += billed;
-	m_skipped += billed;
+	const uint64_t from = m_proof.offset[m_proof.at];
+	const uint64_t last = from + (limit - m_states - 1);
+	const uint64_t into = last % m_proof.period;
+	unsigned to = m_proof.length - 1;
+
+	while (m_proof.offset[to] > into)
+		to--;
+
+	const uint64_t billed = last - into + m_proof.offset[to] - from;
+
+	if (billed) {
+		m_cpu.load(m_proof.cpu[to]);
+		m_proof.at = to;
+		m_states += billed;
+		m_skipped += billed;
+	}
 	return billed;
+}
+
+/* Pin n as the board has it: a turn on trial keeps what it read. */
+uint8_t
+Tmp90ph44::pin(unsigned n)
+{
+	const uint8_t value = pin_now(n);
+
+	if (m_trial.on) {
+		m_proof.read = static_cast<uint16_t>(m_proof.read | 1u << n);
+		m_proof.pins[n] = value;
+	}
+	return value;
 }
 
 void
@@ -201,6 +266,7 @@ Tmp90ph44::load(const Tmp90ph44State &in)
 	m_rx_full = in.rx_full != 0;
 	m_rx_errors = in.rx_errors;
 	m_trial.on = false;
+	m_proof.on = false;
 	m_back.fill(0);
 	m_cool.fill({});
 	m_next_event = next_event();
@@ -214,6 +280,7 @@ Tmp90ph44::serial_received(uint8_t byte)
 {
 	if (!(m_sfr[SCMOD] & 0x20))
 		return;
+	m_proof.on = false;
 	if (m_rx_full) {
 		m_rx_errors |= 0x10;
 		return;
@@ -281,14 +348,14 @@ Tmp90ph44::sfr_read(uint8_t reg)
 		 * coins its tables name (3080-31C0). */
 		const uint8_t out = m_sfr[reg + 1];
 
-		return static_cast<uint8_t>((m_sfr[reg] & out) | (m_board.port_pins(reg / 2) & ~out));
+		return static_cast<uint8_t>((m_sfr[reg] & out) | (pin(reg / 2u) & ~out));
 	}
 	case P6:
 	case P7: {
 		/* Four bits each, driven as P67CR says */
 		const uint8_t out = reg == P6 ? m_sfr[P67CR] & 0x0F : m_sfr[P67CR] >> 4;
 
-		return static_cast<uint8_t>((m_sfr[reg] & out) | (m_board.port_pins(reg == P6 ? 6 : 7) & ~out & 0x0F));
+		return static_cast<uint8_t>((m_sfr[reg] & out) | (pin(reg == P6 ? 6u : 7u) & ~out & 0x0F));
 	}
 	case P5:
 		/* HEURISTIC: the latch. The program reads P5 only to change P56
@@ -305,7 +372,7 @@ Tmp90ph44::sfr_read(uint8_t reg)
 		 * TMP90C840 takes 190 states. */
 		if (m_sfr[ADMOD] != 0xF7)
 			unknown("A/D mode", m_sfr[ADMOD]);
-		return m_board.analog_pin(reg - ADREG0);
+		return pin(8u + reg - ADREG0);
 	case SCCR: {
 		/* OERR, bit 4, as serial_received sets it; no parity nor framing
 		 * error on the line. The three are cleared when read. */
