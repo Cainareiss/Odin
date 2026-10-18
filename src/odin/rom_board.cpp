@@ -266,15 +266,22 @@ RomBoard::RomBoard(const Config &config, std::span<const uint8_t> eprom, std::sp
                    std::optional<Actel> actel, std::function<void(const char *)> error)
 	: m_config(config), m_eprom(eprom), m_maskrom(maskrom), m_error(std::move(error))
 {
+	/* Two 8-bit SRAMs, 32 KB each, on both boards MAME draws (CY7C1399 on
+	 * the 837-14140, CY7C199 on the 837-13403), at 0A000000 (MAME
+	 * localbus_map_5881). HEURISTIC: also on the boards whose 315-5881 is
+	 * not fitted (BRAVEFF, VON4): the probe of the BOOTROM then finds the
+	 * EPROMs from IC29, as their names are; not on the board of SGNASCAR,
+	 * whose FPGA answers there. */
+	if (m_config.has_rom && !actel)
+		m_local_ram.assign(LOCAL_RAM_SIZE, 0);
 	if (m_config.has_5881) {
-		m_crypt_ram.assign(CRYPT_RAM_SIZE, 0);
 		m_crypt = std::make_unique<Crypt315_5881>(m_config.crypt_key);
 		/* The chip reads its input from the RAM, one byte-swapped word
 		 * at a time (MAME hikaru.cpp prot_ram_r). */
 		m_crypt->set_read([this](uint32_t addr) {
 			uint16_t word;
 
-			std::memcpy(&word, &m_crypt_ram[(addr & 0x7FFF) * 2], 2);
+			std::memcpy(&word, &m_local_ram[(addr & 0x7FFF) * 2], 2);
 			return static_cast<uint16_t>((word >> 8) | (word << 8));
 		});
 	}
@@ -311,53 +318,44 @@ RomBoard::save(Config &out) const
 void
 RomBoard::reset()
 {
-	std::fill(m_crypt_ram.begin(), m_crypt_ram.end(), 0);
+	std::fill(m_local_ram.begin(), m_local_ram.end(), 0);
 	if (m_fpga)
 		m_fpga->reset();
 }
 
 uint64_t
-RomBoard::read_guard(uint32_t offs, unsigned size)
+RomBoard::read_guard(uint32_t offs, unsigned size, bool wide)
 {
-	uint64_t value = 0;
+	if (!m_local_ram.empty() && offs <= 0xFFFF) {
+		/* The RAM is 16 bits wide: a 32-bit access on a wide local bus
+		 * reaches its low half only, and the high half reads zero
+		 * (HEURISTIC). */
+		const unsigned reached = (wide && size == 4) ? 2 : size;
 
-	if (m_crypt && offs <= 0xFFFF) {
-		/* RAM of the 315-5881 (MAME hikaru.cpp localbus_map_5881) */
-		if (offs + size <= CRYPT_RAM_SIZE)
-			value = load_bytes(&m_crypt_ram[offs], size);
-		return value;
+		return offs + reached <= LOCAL_RAM_SIZE ? load_bytes(&m_local_ram[offs], reached) : 0;
 	}
 	if (m_crypt && offs >= 0x10000 && offs <= 0x1000F)
 		return low_bytes(m_crypt->bus_read(offs & 0xF, size), size);
 	if (m_fpga && offs <= 0x13)
 		return low_bytes(m_fpga->bus_read(offs, size), size);
-
-	/* HACK for the boards without the 315-5881 nor the FPGA (von4; braveff
-	 * never probes): the BOOTROM probe (ROM 0x1F3A) writes 0x19620217 at
-	 * +0xC, the control byte +0x26 of the bridge at FD, then at +0x8 with
-	 * it at F4, and keeps "+C kept" in bit 3 and "+8 kept" in bit 2 of
-	 * GBR+0x1C. Only its ROM BOARD TEST page reads them: 4 numbers the
-	 * EPROMs from IC 29 (0x4B86), 8 puts the mask ROMs from IC 19 a page in
-	 * two (0x4D56, 0x4F96). The chips of the sets want 4 for these boards
-	 * (EPROMs IC29...); SGNASCAR gets its 8 from its FPGA. What these
-	 * boards answer has not been measured. */
-	if (offs == 0x8)
-		return low_bytes(0x19620217, size);
 	return 0;
 }
 
 bool
 RomBoard::guarded(uint32_t offs) const
 {
-	return (m_crypt && (offs <= 0xFFFF || (offs >= 0x10000 && offs <= 0x1000F))) || (m_fpga && offs <= 0x13);
+	return (!m_local_ram.empty() && offs <= 0xFFFF) || (m_crypt && offs >= 0x10000 && offs <= 0x1000F) ||
+	       (m_fpga && offs <= 0x13);
 }
 
 void
-RomBoard::write_guard(uint32_t offs, unsigned size, uint64_t value)
+RomBoard::write_guard(uint32_t offs, unsigned size, uint64_t value, bool wide)
 {
-	if (m_crypt && offs <= 0xFFFF) {
-		if (offs + size <= CRYPT_RAM_SIZE)
-			store_bytes(&m_crypt_ram[offs], size, value);
+	if (!m_local_ram.empty() && offs <= 0xFFFF) {
+		const unsigned reached = (wide && size == 4) ? 2 : size;
+
+		if (offs + reached <= LOCAL_RAM_SIZE)
+			store_bytes(&m_local_ram[offs], reached, value);
 	} else if (m_crypt && offs >= 0x10000 && offs <= 0x1000F) {
 		m_crypt->bus_write(offs & 0xF, size, static_cast<uint32_t>(value));
 	} else if (m_fpga && offs <= 0x13) {

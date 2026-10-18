@@ -39,8 +39,9 @@ public:
 	 * 8: the MIE board keeps the clocks its Z80 ran past its share;
 	 * 9: it keeps the chip of the 837-13551 and its line;
 	 * 10: it keeps which processor asks for the bus of the MIE, the slave
-	 * reaching it through its own window */
-	static constexpr unsigned VERSION = 10;
+	 * reaching it through its own window;
+	 * 11: a ROM board without the 315-5881 keeps the RAM of its local bus */
+	static constexpr unsigned VERSION = 11;
 
 	enum class Mode {
 		SAVE,

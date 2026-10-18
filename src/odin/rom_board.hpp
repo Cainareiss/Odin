@@ -39,8 +39,8 @@ namespace odin {
 /* The ROM board of a game, on the external bus of the Hikaru: its EPROMs
  * and mask ROMs in the pages 10 to 3F, its X76F100 EEPROM in a page of its
  * own, and in the page 0A what guards the game: a 315-5881 with its RAM,
- * the security FPGA of SGNASCAR, or neither. See rom_board.cpp for the
- * layouts. */
+ * the security FPGA of SGNASCAR, or the RAM alone. See rom_board.cpp for
+ * the layouts. */
 class RomBoard {
 public:
 	/* How the ROMs of a game sit on the bus. Plain data, saved with the
@@ -67,7 +67,7 @@ public:
 		uint16_t id;
 	};
 
-	static constexpr size_t CRYPT_RAM_SIZE = 0x10000;
+	static constexpr size_t LOCAL_RAM_SIZE = 0x10000;
 
 	/* The layout of a board whose EPROMs have `eprom_mb` MB (2 or 4), with
 	 * a 315-5881 when its key is told; for 0 MB, no board: the BOOTROM
@@ -83,9 +83,10 @@ public:
 	/* The power-on state of what the board resets. */
 	void reset();
 
-	/* The page 0A of the bus. A read that nothing answers gives zero. */
-	uint64_t read_guard(uint32_t offs, unsigned size);
-	void write_guard(uint32_t offs, unsigned size, uint64_t value);
+	/* The page 0A of the bus, its local bus 32 bits wide or not (see
+	 * MemCtl::wide_local_bus). A read that nothing answers gives zero. */
+	uint64_t read_guard(uint32_t offs, unsigned size, bool wide);
+	void write_guard(uint32_t offs, unsigned size, uint64_t value, bool wide);
 	/* A chip of the board answers at that offset of the page. */
 	bool guarded(uint32_t offs) const;
 	/* The pages 10 to 3F: the EEPROM in its page, the ROMs in theirs,
@@ -105,8 +106,8 @@ public:
 	/* Nothing on a board without the chip */
 	Crypt315_5881 *crypt() { return m_crypt.get(); }
 	ActelM1 *fpga() { return m_fpga.get(); }
-	/* The RAM of the 315-5881, empty on a board without it */
-	std::span<uint8_t> crypt_ram() { return m_crypt_ram; }
+	/* The RAM of the local bus, empty on a board without it */
+	std::span<uint8_t> local_ram() { return m_local_ram; }
 
 private:
 	uint64_t read_rom(std::span<const uint8_t> rom, uint32_t offs, unsigned size, uint32_t bus_addr);
@@ -115,7 +116,7 @@ private:
 	std::span<const uint8_t> m_eprom, m_maskrom;
 	std::function<void(const char *)> m_error;
 	X76f100 m_eeprom;
-	std::vector<uint8_t> m_crypt_ram;
+	std::vector<uint8_t> m_local_ram;
 	std::unique_ptr<Crypt315_5881> m_crypt;
 	std::unique_ptr<ActelM1> m_fpga;
 };

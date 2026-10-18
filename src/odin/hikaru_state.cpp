@@ -273,8 +273,8 @@ Hikaru::save_items(StateFile &state)
 	     put_bytes(state, m_memctl[MASTER].registers()) &&
 	     put_bytes(state, m_memctl[SLAVE].registers()) &&
 	     put_bytes(state, m_mscomm) && put_bytes(state, unused_regs);
-	if (ok && m_rombd.crypt())
-		ok = put_bytes(state, m_rombd.crypt_ram());
+	if (ok && !m_rombd.local_ram().empty())
+		ok = put_bytes(state, m_rombd.local_ram());
 	ok = ok && put_bytes(state, m_iregs[MASTER]) && put_bytes(state, m_iregs[SLAVE]);
 	if (!ok) {
 		std::fprintf(stderr, "ERROR: save state: cannot save buffer\n");
@@ -340,8 +340,8 @@ Hikaru::load_items(StateFile &state)
 	     get_bytes(state, m_memctl[MASTER].registers()) &&
 	     get_bytes(state, m_memctl[SLAVE].registers()) &&
 	     get_bytes(state, m_mscomm) && get_bytes(state, unused_regs);
-	if (ok && m_rombd.crypt())
-		ok = get_bytes(state, m_rombd.crypt_ram());
+	if (ok && !m_rombd.local_ram().empty())
+		ok = get_bytes(state, m_rombd.local_ram());
 	ok = ok && get_bytes(state, m_iregs[MASTER]) && get_bytes(state, m_iregs[SLAVE]);
 	if (!ok) {
 		std::fprintf(stderr, "ERROR: load state: cannot load buffer\n");

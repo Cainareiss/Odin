@@ -382,14 +382,15 @@ from IC 19, a page in two (0x4D56, 0x4F96). The names of the chips of the
 sets give the answer each board must get: 04 for AIRTRIX, BRAVEFF,
 PHARRIER, PODRACE and VON4 (EPROMs IC29...), 08 for SGNASCAR (EPROMs
 IC35, mask ROMs IC19...). SGNASCAR gets it (its FPGA keeps +C, gives its
-ID 4252 at +8). VON4 gets it from a constant at +8 (rom_board.cpp, HACK:
-what a board without a chip answers is not known); BRAVEFF never probes.
-AIRTRIX, PHARRIER and PODRACE get 0C here, the RAM of their 315-5881
-keeping +C as well, and their ROM BOARD TEST page numbers the EPROMs from
-IC 35: not known, what FD changes (its bit 3 is set where SGNASCAR reads
-its FPGA, FC, in 32 bits, and clear where the games reach the 315-5881,
-F4 or F6, in 16 bits: a bus of 32 bits that a board of 16 does not keep
-whole?).
+ID 4252 at +8); the others from the 64 KB RAM of the local bus, two 8-bit
+SRAMs on both boards MAME draws, whose 32-bit access on a wide bus keeps
+the low half only (rom_board.cpp, memctl.hpp wide_local_bus); the ROM
+BOARD TEST pages of AIRTRIX and PODRACE then give the numbers and the
+CRCs MAME read on these boards. BRAVEFF never probes. HEURISTIC: bit 3 of
++0x26 makes the local bus 32 bits wide (FC where SGNASCAR reads its FPGA
+in 32 bits, F4 or F6 where the games reach the 315-5881 in 16 bits, FD
+then F4 in the probe); the high half of such an access reads zero; the
+RAM is fitted on the boards whose 315-5881 is not (BRAVEFF, VON4).
 
 SGNASCAR ROM board security FPGA (src/odin/actel_m1.cpp, the stream
 decoder of MAME's Naomi M1 board): registers at local bus 0x0A000000, key

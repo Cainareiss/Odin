@@ -95,6 +95,12 @@ public:
 	/* The page of the external bus a window is open on */
 	uint32_t window_page(uint32_t addr) const { return window_bank(addr) & 0x7F; }
 
+	/* The local bus of the ROM board is 32 bits wide. HEURISTIC: bit 3 of
+	 * +26, as the programs set it: FC for the 32-bit FPGA of SGNASCAR, F4
+	 * and F6 for the 315-5881 that AIRTRIX, PODRACE and PHARRIER reach 16
+	 * bits at a time, FD then F4 for the two halves of the probe of the
+	 * BOOTROM (ROM 0x1F3A). */
+	bool wide_local_bus() const { return (reg(0x26, 1) & 0x08) != 0; }
 	/* IRL1 of the master SH-4, held while bit 12 of +04 is set: the
 	 * handler of the games (PHARRIER @0C0102A0) tests the bit and writes
 	 * back what it read to let the line go. */

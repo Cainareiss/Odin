@@ -151,29 +151,37 @@ void test_eeprom_and_guards()
 	      "only the page of the EEPROM is written");
 	check(plain.read(0x14000000, 4) <= 1, "its page reads the data line");
 
-	check(plain.read_guard(0x8, 4) == 0x19620217 && plain.read_guard(0xC, 4) == 0 &&
-	      plain.read_guard(0x8, 2) == 0x0217, "a board without a guard chip answers the probe at +8");
-	check(!plain.crypt() && !plain.fpga() && plain.crypt_ram().empty(), "and has no chip there");
+	/* The probe of the BOOTROM (ROM 0x1F3A): 0x19620217 at +C on a wide
+	 * local bus, then at +8 on a narrow one; a 16-bit RAM keeps the second
+	 * only, as the EPROMs from IC29 want. */
+	plain.write_guard(0xC, 4, 0x19620217, true);
+	plain.write_guard(0x8, 4, 0x19620217, false);
+	check(plain.read_guard(0xC, 4, true) == 0x0217 && plain.read_guard(0x8, 4, false) == 0x19620217,
+	      "a board without a guard chip has its RAM: the probe keeps +8, not +C");
+	check(plain.read_guard(0xC, 4, false) == 0x0217 && plain.read_guard(0xA, 2, true) == 0x1962,
+	      "a wide 32-bit access reaches the low half alone; 16 bits are the same either way");
+	check(!plain.crypt() && !plain.fpga() && plain.local_ram().size() == 0x10000, "and no chip there");
 
-	check(nascar.fpga() && nascar.read_guard(0x8, 4) == 0x4252, "SGNASCAR has the FPGA, with its ID at +8");
-	nascar.write_guard(0xC, 4, 0x12345678);
-	check(nascar.read_guard(0xC, 4) == 0x12345678 && nascar.read_guard(0xE, 2) == 0x1234,
-	      "its +0C keeps what is written");
+	check(nascar.fpga() && nascar.read_guard(0x8, 4, true) == 0x4252, "SGNASCAR has the FPGA, with its ID at +8");
+	nascar.write_guard(0xC, 4, 0x12345678, true);
+	check(nascar.read_guard(0xC, 4, true) == 0x12345678 && nascar.read_guard(0xE, 2, false) == 0x1234,
+	      "its +0C keeps what is written, all 32 bits");
+	check(nascar.local_ram().empty(), "and no RAM");
 	nascar.reset();
-	check(nascar.read_guard(0xC, 4) == 0, "until a reset");
+	check(nascar.read_guard(0xC, 4, true) == 0, "until a reset");
 
-	check(airtrix.crypt() && airtrix.crypt_ram().size() == 0x10000, "AIRTRIX has the 315-5881 and its 64 KB of RAM");
-	airtrix.write_guard(0x100, 4, 0xCAFEF00D);
-	check(airtrix.read_guard(0x100, 4) == 0xCAFEF00D && airtrix.read_guard(0x102, 2) == 0xCAFE &&
-	      airtrix.crypt_ram()[0x100] == 0x0D, "the RAM at 0A000000");
-	check(airtrix.read_guard(0x10000, 2) == 0, "the registers of the chip at 0A010000: ready");
+	check(airtrix.crypt() && airtrix.local_ram().size() == 0x10000, "AIRTRIX has the 315-5881 and its 64 KB of RAM");
+	airtrix.write_guard(0x100, 4, 0xCAFEF00D, false);
+	check(airtrix.read_guard(0x100, 4, false) == 0xCAFEF00D && airtrix.read_guard(0x102, 2, false) == 0xCAFE &&
+	      airtrix.local_ram()[0x100] == 0x0D, "the RAM at 0A000000");
+	check(airtrix.read_guard(0x10000, 2, false) == 0, "the registers of the chip at 0A010000: ready");
 	airtrix.reset();
-	check(airtrix.read_guard(0x100, 4) == 0, "a reset empties the RAM");
+	check(airtrix.read_guard(0x100, 4, false) == 0, "a reset empties the RAM");
 
 	check(airtrix.guarded(0x100) && airtrix.guarded(0x1000F) && !airtrix.guarded(0x10010),
 	      "the chip answers over its RAM and its registers, not above");
-	check(nascar.guarded(0x13) && !nascar.guarded(0x14) && !plain.guarded(0x8),
-	      "the FPGA over its 20 bytes; nothing answers on a board without a chip");
+	check(nascar.guarded(0x13) && !nascar.guarded(0x14) && plain.guarded(0xFFFF) && !plain.guarded(0x10000),
+	      "the FPGA over its 20 bytes; the RAM alone on a board without a chip");
 }
 
 } /* namespace */

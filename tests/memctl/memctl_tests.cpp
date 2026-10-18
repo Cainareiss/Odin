@@ -108,6 +108,22 @@ void test_registers()
 	      "once only, and a write there does nothing");
 }
 
+/* Bit 3 of +26: the local bus of the ROM board 32 bits wide (FC, FD) or
+ * not (F4, F6). */
+void test_local_bus_width()
+{
+	Bus bus;
+	MemCtl memctl(bus, true);
+
+	memctl.reset();
+	memctl.write(0x04000026, 1, 0xFD);
+	check(memctl.wide_local_bus(), "FD: 32 bits wide");
+	memctl.write(0x04000026, 1, 0xF4);
+	check(!memctl.wide_local_bus(), "F4: 16 bits");
+	memctl.write(0x04000024, 4, 0x00080000);
+	check(memctl.wide_local_bus(), "bit 3 of the byte at +26, written as a word at +24");
+}
+
 void test_windows()
 {
 	Bus bus;
@@ -308,6 +324,7 @@ int main()
 {
 	test_registers();
 	test_windows();
+	test_local_bus_width();
 	test_status_and_transfer();
 	test_transfer_in_blocks();
 	test_window_spans();

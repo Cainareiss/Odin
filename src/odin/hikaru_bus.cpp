@@ -760,7 +760,7 @@ Hikaru::bus_read(uint32_t bus_addr, unsigned size, uint64_t &value)
 		value = load(m_texram[1], offs, size);
 	} else if (bus_addr >= 0x0A000000 && bus_addr <= 0x0AFFFFFF) {
 		/* The chip that guards the game, see RomBoard */
-		value = m_rombd.read_guard(offs, size);
+		value = m_rombd.read_guard(offs, size, m_memctl[m_current].wide_local_bus());
 		log = !m_rombd.guarded(offs);
 	} else if (bus_addr >= 0x0C000000 && bus_addr <= 0x0CFFFFFF) {
 		return sound_read(MASTER, bus_addr, size, value);
@@ -901,7 +901,7 @@ Hikaru::bus_write(uint32_t bus_addr, unsigned size, uint64_t value)
 	} else if (bus_addr >= 0x06000000 && bus_addr <= 0x063FFFFF) {
 		texram_write(1, offs, size, value);
 	} else if (bus_addr >= 0x0A000000 && bus_addr <= 0x0AFFFFFF) {
-		m_rombd.write_guard(offs, size, value);
+		m_rombd.write_guard(offs, size, value, m_memctl[m_current].wide_local_bus());
 		log = !m_rombd.guarded(offs);
 	} else if (bus_addr >= 0x0C000000 && bus_addr <= 0x0CFFFFFF) {
 		return sound_write(MASTER, bus_addr, size, value);
