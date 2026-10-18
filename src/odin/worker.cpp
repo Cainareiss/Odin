@@ -60,6 +60,16 @@ Worker::wait()
 	m_done.wait(lock, [this] { return !m_busy; });
 }
 
+bool
+Worker::wait_for(std::chrono::milliseconds time)
+{
+	if (!m_busy)
+		return true;
+
+	std::unique_lock lock(m_mutex);
+	return m_done.wait_for(lock, time, [this] { return !m_busy; });
+}
+
 void
 Worker::loop()
 {

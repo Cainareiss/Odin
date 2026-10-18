@@ -20,6 +20,7 @@
 #define ODIN_WORKER_HPP
 
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <functional>
 #include <mutex>
@@ -46,6 +47,8 @@ public:
 	void post(std::function<void()> job);
 	/* Waits for the job given last. */
 	void wait();
+	/* Waits for it at most that long: whether it is done. */
+	bool wait_for(std::chrono::milliseconds time);
 	/* Gives a job and waits for it. */
 	void run(std::function<void()> job)
 	{

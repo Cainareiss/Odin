@@ -84,6 +84,24 @@ void test_post()
 	check(ended, "wait does");
 }
 
+void test_wait_for()
+{
+	Worker worker;
+	std::atomic<bool> go(false), ended(false);
+
+	check(worker.wait_for(std::chrono::milliseconds(0)), "wait_for with no job given: done");
+	worker.post([&] {
+		while (!go)
+			std::this_thread::yield();
+		ended = true;
+	});
+	check(!worker.wait_for(std::chrono::milliseconds(20)), "wait_for a job that goes on: not done");
+	check(!ended, "and it did not end it");
+	go = true;
+	check(worker.wait_for(std::chrono::seconds(10)), "wait_for a job that ends: done");
+	check(ended, "once it has ended");
+}
+
 void test_one_at_a_time()
 {
 	Worker worker;
@@ -130,6 +148,7 @@ int main()
 {
 	test_run();
 	test_post();
+	test_wait_for();
 	test_one_at_a_time();
 	test_end();
 
