@@ -128,7 +128,15 @@ by a Z80; every game needs its ROM). The slave reaches it through a window
 of its own, 1A800000-1A8000FF for its ports and 1B000100 for its bus, and
 meets the master on port E at start (see Resets). HEURISTIC: the Z80 sees
 one bus request, made while either processor asks; the slave window is
-the part of it the BOOTROM uses, the rest of it is not known. The MEMCTL
+the part of it the BOOTROM uses, the rest of it is not known.
+The same chip runs the I/O board of NASCAR (837-13741, epr-21868): from
+the EPROM of the board below 8000, with the ports, the converter channels
+and the pins of port 91 of the board, and its interrupts (MAME mie.cpp:
+levels 0-6 at F2 + 2 n, UART 1 at level 3). HEURISTIC: the input of the
+board enabled by bit 7 of port 30, at vector FE (epr-21868: 88 at 02B5,
+its timer at 0828), after the levels; the internal RAM and Maple block
+not seen below 8000 then (the program does not reach them); a program
+that lets a source through is run turn by turn. The MEMCTL
 of the slave is not run (as Valkyrie had it: no game is known to start a
 transfer there).
 The backup RAM of the main board (64 KB) is kept in the save folder of

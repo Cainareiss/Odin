@@ -40,8 +40,10 @@ public:
 	 * 9: it keeps the chip of the 837-13551 and its line;
 	 * 10: it keeps which processor asks for the bus of the MIE, the slave
 	 * reaching it through its own window;
-	 * 11: a ROM board without the 315-5881 keeps the RAM of its local bus */
-	static constexpr unsigned VERSION = 11;
+	 * 11: a ROM board without the 315-5881 keeps the RAM of its local bus;
+	 * 12: the MIE keeps its converter channel, its external interrupt
+	 * and the request of the transmitter of UART 1 */
+	static constexpr unsigned VERSION = 12;
 
 	enum class Mode {
 		SAVE,

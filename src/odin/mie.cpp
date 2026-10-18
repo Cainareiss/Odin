@@ -71,8 +71,20 @@ enum : uint8_t {
 	LSR_DR = 0x01,
 	LSR_THRE = 0x20,
 	LSR_TEMT = 0x40,
+	IER_RX = 0x01,
+	IER_THRE = 0x02,
 	IIR_NONE = 0x01,
+	IIR_THRE = 0x02,
+	IIR_RX = 0x04,
 	IIR_FIFO = 0xC0
+};
+
+/* Bits of port 30: the levels the program lets through (UART 1 is level
+ * 3), the input of the board (bit 7); bit 6 gates BUSAK. */
+enum : uint8_t {
+	IRQ_UART1 = 0x08,
+	IRQ_EXTERNAL = 0x80,
+	IRQ_SOURCES = 0xBF
 };
 
 /* Bits on the wire per character: start, 8 data, stop. */
@@ -124,7 +136,8 @@ constexpr uint32_t SERIAL_REQUEST_CYCLES = 160;
 } /* namespace */
 
 Mie::Mie(MieHost &host, std::span<const uint8_t> rom, std::span<uint8_t> ram)
-	: m_host(host), m_cpu(*this), m_jvs(nullptr), m_rom(rom), m_ram(ram),
+	: m_host(host), m_cpu(*this), m_jvs(nullptr), m_rom(rom), m_external(rom.size() > ROM_SIZE),
+	  m_adc_channel(0), m_external_irq(false), m_ram(ram),
 	  /* Zeroed with the gaps between their fields, which the states copy */
 	  m_uart{}, m_serial{}, m_serial_device(nullptr), m_wait{},
 	  m_waits_counted(true), m_wait_cycles(0), m_log(nullptr), m_trace(nullptr),
@@ -147,6 +160,8 @@ void Mie::reset()
 	m_maple_irqlevel = 0xFF;
 	m_jvs_control = 0;
 	m_busrq = false;
+	m_adc_channel = 0;
+	m_external_irq = false;
 	uart_reset();
 	serial_reset();
 	m_proof.on = false;
@@ -232,6 +247,9 @@ uint8_t Mie::read8(uint16_t addr)
 	if (addr >= RAM_BASE) {
 		return m_ram[addr - RAM_BASE];
 	}
+	if (m_external) {
+		return addr < m_rom.size() ? m_rom[addr] : 0xFF;
+	}
 	if (addr >= RAM_LOW_BASE) {
 		return m_ram_low[addr - RAM_LOW_BASE];
 	}
@@ -252,6 +270,11 @@ void Mie::write8(uint16_t addr, uint8_t value)
 	m_proof.on = false;
 	if (addr >= RAM_BASE) {
 		m_ram[addr - RAM_BASE] = value;
+	} else if (m_external) {
+		if (!m_mem_logged[1]) {
+			m_mem_logged[1] = true;
+			log_unknown('w', "rom", addr, value);
+		}
 	} else if (addr >= RAM_LOW_BASE) {
 		m_ram_low[addr - RAM_LOW_BASE] = value;
 	} else if (addr >= MAPLE_BASE) {
@@ -299,21 +322,28 @@ uint8_t Mie::in8(uint16_t port)
 	case PORT_GPIO_DIR:
 		return m_gpio_dir;
 	case PORT_ADC:
-		return 0;
+		/* The channels one after the other from 0 (epr-21868 139B) */
+		return m_host.analog_read(m_adc_channel++ & 7u);
 	case PORT_IRQ_ENABLE:
 		return m_irq_enable;
 	case PORT_MAPLE_IRQLEVEL:
 		return m_maple_irqlevel;
 	case PORT_IRQ_PENDING:
 		return m_irq_pending;
-	case PORT_JVS_SENSE:
-		return jvs_sense();
+	case PORT_JVS_SENSE: {
+		uint8_t pins;
+
+		return m_host.sense_pins(pins) ? pins : jvs_sense();
+	}
 	default:
 		break;
 	}
 	if (p >= PORT_UART2 && p <= PORT_UART2_END) {
 		/* Second UART, nothing wired: transmitter idle, no data. */
 		return (p - PORT_UART2) == UART_LSR ? (LSR_THRE | LSR_TEMT) : 0;
+	}
+	if (uint8_t value; m_host.board_in8(p, value)) {
+		return value;
 	}
 	if (!m_port_logged[p]) {
 		m_port_logged[p] = true;
@@ -344,11 +374,14 @@ void Mie::out8(uint16_t port, uint8_t value)
 		gpio_dir_write(value);
 		return;
 	case PORT_ADC:
+		m_adc_channel = 0;
 		return;
 	case PORT_IRQ_ENABLE:
-		/* Bit 6 also gates BUSAK. No interrupt source is wired on
-		 * Hikaru, so the mask has no other effect. */
+		/* Bit 6 also gates BUSAK. The programs of the main board never
+		 * let a source through (MIE ROM 0124, 0201, 027B; uploaded 8012,
+		 * 8031: bit 6 only); a proof of a wait does not see them. */
 		m_irq_enable = value;
+		m_proof.on = false;
 		return;
 	case PORT_MAPLE_IRQLEVEL:
 		m_maple_irqlevel = value;
@@ -363,11 +396,15 @@ void Mie::out8(uint16_t port, uint8_t value)
 			uart_commit_frame();
 		}
 		m_jvs_control = value;
+		m_host.jvs_control_written(value);
 		return;
 	default:
 		break;
 	}
 	if (p >= PORT_UART2 && p <= PORT_UART2_END) {
+		return;
+	}
+	if (m_host.board_out8(p, value)) {
 		return;
 	}
 	if (!m_port_logged[256 + p]) {
@@ -440,6 +477,39 @@ void Mie::uart_reset()
 	m_uart.wire_pos = 0;
 	m_uart.wire_count = 0;
 	m_uart.wire_ticks = 0;
+	m_uart.thre_irq = 0;
+}
+
+/* Interrupts */
+
+bool Mie::uart_irq() const
+{
+	return ((m_uart.ier & IER_RX) && m_uart.rx_count) || ((m_uart.ier & IER_THRE) && m_uart.thre_irq);
+}
+
+bool Mie::irq_line() const
+{
+	const uint8_t levels = static_cast<uint8_t>(m_irq_pending | (uart_irq() ? IRQ_UART1 : 0));
+
+	return (m_irq_enable & levels & 0x7F) || ((m_irq_enable & IRQ_EXTERNAL) && m_external_irq);
+}
+
+uint8_t Mie::int_ack()
+{
+	const uint8_t levels = static_cast<uint8_t>(m_irq_enable & (m_irq_pending | (uart_irq() ? IRQ_UART1 : 0)) & 0x7F);
+
+	for (unsigned level = 0; level < 7; level++) {
+		if (levels & (1u << level)) {
+			/* UART 1 asks as long as its cause holds */
+			m_irq_pending = static_cast<uint8_t>(m_irq_pending & ~(1u << level));
+			return static_cast<uint8_t>(0xF2 + 2 * level);
+		}
+	}
+	if ((m_irq_enable & IRQ_EXTERNAL) && m_external_irq) {
+		m_external_irq = false;
+		return 0xFE;
+	}
+	return 0xFF;
 }
 
 /* A divisor above 21474 (under 6 bauds; no program sets one) is held
@@ -471,8 +541,20 @@ uint8_t Mie::uart_read(uint8_t reg)
 		return 0;
 	case UART_IER_DLM:
 		return (u.lcr & LCR_DLAB) ? u.dlm : u.ier;
-	case UART_IIR_FCR:
-		return static_cast<uint8_t>(IIR_NONE | ((u.fcr & FCR_ENABLE) ? IIR_FIFO : 0));
+	case UART_IIR_FCR: {
+		/* Received data first, then the transmitter, whose request
+		 * this read takes (a 16550) */
+		const uint8_t fifo = (u.fcr & FCR_ENABLE) ? IIR_FIFO : 0;
+
+		if ((u.ier & IER_RX) && u.rx_count) {
+			return static_cast<uint8_t>(IIR_RX | fifo);
+		}
+		if ((u.ier & IER_THRE) && u.thre_irq) {
+			u.thre_irq = 0;
+			return static_cast<uint8_t>(IIR_THRE | fifo);
+		}
+		return static_cast<uint8_t>(IIR_NONE | fifo);
+	}
 	case UART_LCR:
 		return u.lcr;
 	case UART_MCR:
@@ -513,14 +595,21 @@ void Mie::uart_write(uint8_t reg, uint8_t value)
 	case UART_RBR_THR_DLL:
 		if (u.lcr & LCR_DLAB) {
 			u.dll = value;
-		} else if (u.tx_count < u.tx_fifo.size()) {
-			u.tx_fifo[u.tx_count++] = value;
+		} else {
+			u.thre_irq = 0;
+			if (u.tx_count < u.tx_fifo.size()) {
+				u.tx_fifo[u.tx_count++] = value;
+			}
 		}
 		break;
 	case UART_IER_DLM:
 		if (u.lcr & LCR_DLAB) {
 			u.dlm = value;
 		} else {
+			/* Enabled while it is empty, the transmitter asks at once */
+			if ((value & IER_THRE) && !(u.ier & IER_THRE) && u.tx_count == 0) {
+				u.thre_irq = 1;
+			}
 			u.ier = value;
 		}
 		break;
@@ -605,6 +694,9 @@ void Mie::uart_tick(uint32_t cycles)
 			}
 			u.tx_count--;
 			u.tx_ticks = byte_ticks;
+			if (u.tx_count == 0) {
+				u.thre_irq = 1;
+			}
 			if (m_line)
 				m_line->line_sent(u.tx_byte, m_run_ticks + (ticks - left));
 		} else {
@@ -1145,7 +1237,9 @@ uint32_t Mie::run(uint32_t cycles)
 			tick(cycles - done);
 			return cycles;
 		}
-		if (waits && !m_proof.on) {
+		/* A program that lets an interrupt through is run turn by
+		 * turn (writing port 30 drops a proof) */
+		if (waits && !m_proof.on && !(m_irq_enable & IRQ_SOURCES)) {
 			if (m_cpu.pc() == m_wait.regs.pc) {
 				done += wait_check(done, cycles);
 			} else if (m_cpu.pc() == m_wait.mark_at) {
@@ -1165,6 +1259,7 @@ uint32_t Mie::run(uint32_t cycles)
 			m_trace_armed = false;
 			m_cpu.set_trace(m_trace);
 		}
+		m_cpu.set_int((m_irq_enable & IRQ_SOURCES) && irq_line());
 		const uint32_t c = m_cpu.step();
 		if (m_trace_left && !m_trace_armed && --m_trace_left == 0) {
 			m_cpu.set_trace(nullptr);
@@ -1203,6 +1298,8 @@ void Mie::save(MieState &out) const
 	out.busrq = m_busrq ? 1 : 0;
 	out.uart = m_uart;
 	out.serial = m_serial;
+	out.adc_channel = m_adc_channel;
+	out.external_irq = m_external_irq ? 1 : 0;
 }
 
 void Mie::load(const MieState &in)
@@ -1220,6 +1317,8 @@ void Mie::load(const MieState &in)
 	m_busrq = in.busrq != 0;
 	m_uart = in.uart;
 	m_serial = in.serial;
+	m_adc_channel = in.adc_channel;
+	m_external_irq = in.external_irq != 0;
 }
 
 } /* namespace odin */

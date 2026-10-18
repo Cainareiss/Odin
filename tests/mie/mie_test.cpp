@@ -320,6 +320,125 @@ void test_bus_two_hosts()
 	check(!granted(), "until it lets go");
 }
 
+/* An I/O board around the chip (the 837-13741 of NASCAR): its EPROM at
+ * 0000, its own ports, the channels of its converter, port 91 from its
+ * pins, the lines of port 90, its interrupt input. */
+class IoBoard : public odin::MieHost {
+public:
+	uint8_t gpio_read(uint8_t) override { return 0xFF; }
+	void gpio_write(uint8_t, uint8_t) override {}
+	uint8_t analog_read(unsigned n) override { return static_cast<uint8_t>(0x10 + n); }
+	bool board_in8(uint8_t port, uint8_t &value) override
+	{
+		if (port != 0xC2)
+			return false;
+		value = 0x5A;
+		return true;
+	}
+	bool board_out8(uint8_t port, uint8_t value) override
+	{
+		if (port != 0xA3)
+			return false;
+		written = value;
+		return true;
+	}
+	bool sense_pins(uint8_t &value) override
+	{
+		value = 0xFE;
+		return true;
+	}
+	void jvs_control_written(uint8_t value) override { control = value; }
+	uint8_t written = 0, control = 0;
+};
+
+void test_io_board()
+{
+	std::vector<uint8_t> rom(0x8000, 0), ram(0x8000, 0);
+	IoBoard board;
+
+	rom[0] = 0x31;
+	rom[0x7FFF] = 0xC9;
+	odin::Mie mie(board, rom, ram);
+
+	check(mie.read8(0) == 0x31 && mie.read8(0x7FFF) == 0xC9, "the chip of an I/O board reads its EPROM below 8000");
+	mie.write8(0x7000, 0x12);
+	mie.write8(0x8000, 0x34);
+	check(mie.read8(0x7000) == 0 && ram[0] == 0x34, "which a write does not change; the RAM from 8000");
+	mie.out8(0xA3, 0x34);
+	check(mie.in8(0xC2) == 0x5A && board.written == 0x34, "the ports of the board");
+	check(mie.in8(0x91) == 0xFE, "port 91 from its pins");
+	mie.out8(0x90, 0x02);
+	check(board.control == 0x02, "port 90 told");
+	mie.out8(0x0F, 0);
+	const uint8_t a0 = mie.in8(0x0F), a1 = mie.in8(0x0F);
+	mie.out8(0x0F, 0);
+	check(a0 == 0x10 && a1 == 0x11 && mie.in8(0x0F) == 0x10, "the channels of the converter one after the other");
+
+	mie.out8(0x13, 0x03);
+	mie.out8(0x12, 0x07);
+	check((mie.in8(0x12) & 0x0F) == 0x01, "UART 1: nothing asks");
+	mie.out8(0x11, 0x01);
+	mie.line_received(0x55);
+	check((mie.in8(0x12) & 0x0F) == 0x04, "a byte received asks while the receiver may");
+	check(mie.int_ack() == 0xFF, "but no source is let through");
+	mie.out8(0x30, 0x88);
+	check(mie.int_ack() == 0xF8, "with bit 3 of port 30, UART 1 at level 3, vector F8");
+	mie.in8(0x10);
+	check((mie.in8(0x12) & 0x0F) == 0x01, "the byte read, nothing asks");
+	mie.out8(0x11, 0x03);
+	check((mie.in8(0x12) & 0x0F) == 0x02 && (mie.in8(0x12) & 0x0F) == 0x01,
+	      "the transmitter, enabled while empty, asks once, the read takes it");
+	mie.raise_external();
+	check(mie.int_ack() == 0xFE && mie.int_ack() == 0xFF, "the input of the board at FE, once");
+}
+
+/* A program that lets the input of the board through runs every turn and
+ * takes the interrupt: it waits for 8000 to change, which the routine of
+ * vector FE does. */
+void test_io_interrupt()
+{
+	std::vector<uint8_t> rom(0x8000, 0), ram(0x8000, 0);
+	const std::vector<uint8_t> start = {
+		0x31, 0x00, 0xFF,	/* ld sp,FF00 */
+		0x3E, 0x00, 0xED, 0x47,	/* ld a,0 ; ld i,a */
+		0xED, 0x5E,		/* im 2 */
+		0x3E, 0x80, 0xD3, 0x30,	/* ld a,80 ; out (30),a */
+		0xFB,			/* ei */
+		0x3A, 0x00, 0x80,	/* loop: ld a,(8000) */
+		0xB7,			/* or a */
+		0x28, 0xFA,		/* jr z,loop */
+		0x76,			/* halt */
+	};
+	const std::vector<uint8_t> routine = { 0x3E, 0x77, 0x32, 0x00, 0x80, 0xFB, 0xED, 0x4D };	/* ld (8000),77 ; ei ; reti */
+	IoBoard board;
+
+	std::copy(start.begin(), start.end(), rom.begin());
+	rom[0xFE] = 0x00;
+	rom[0xFF] = 0x02;
+	std::copy(routine.begin(), routine.end(), rom.begin() + 0x200);
+	odin::Mie mie(board, rom, ram);
+
+	mie.run(4000);
+	check(ram[0] == 0 && mie.waits_counted() == 0, "the loop runs every turn while a source is let through");
+	mie.raise_external();
+	mie.run(200);
+	check(ram[0] == 0x77, "the input of the board takes the CPU to the routine of vector FE");
+
+	/* The same wait with no source let through is counted, from one call
+	 * to the next, until port 30 is written */
+	std::vector<uint8_t> ram2(0x8000, 0);
+	rom[0x0A] = 0x00;
+	odin::Mie quiet(board, rom, ram2);
+
+	for (int call = 0; call < 4; call++)
+		quiet.run(4000);
+	check(quiet.waits_counted() > 0, "a wait with no source let through is counted");
+	quiet.host_write_port(0x30, 0x80);
+	quiet.raise_external();
+	quiet.run(4000);
+	check(ram2[0] == 0x77, "port 30 written, the wait counted no more: the interrupt is taken");
+}
+
 /* Loops of the program that only wait: with the turns counted and with
  * every turn run, the chip and its memory must be the same after each call
  * of 505 Z80 clocks, a line of the Hikaru. The host writes 1 at C000 before
@@ -833,6 +952,8 @@ int main()
 	test_port_d();
 	test_port_readback();
 	test_bus_two_hosts();
+	test_io_board();
+	test_io_interrupt();
 	test_waits();
 	test_wait_loaded();
 	test_wait_bus();

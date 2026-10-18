@@ -49,6 +49,36 @@ public:
 	virtual uint8_t gpio_read(uint8_t port) = 0;
 	/* New level driven on a port configured as output. */
 	virtual void gpio_write(uint8_t port, uint8_t value) = 0;
+	/* What an I/O board adds around the chip; the main board has none
+	 * of it. Channel `n` of the converter (port 0F). */
+	virtual uint8_t analog_read(unsigned n)
+	{
+		(void)n;
+		return 0;
+	}
+	/* The ports the chip does not decode: false when nothing answers. */
+	virtual bool board_in8(uint8_t port, uint8_t &value)
+	{
+		(void)port;
+		(void)value;
+		return false;
+	}
+	virtual bool board_out8(uint8_t port, uint8_t value)
+	{
+		(void)port;
+		(void)value;
+		return false;
+	}
+	/* Port 91, when the board gives its pins: false for the sense of the
+	 * JVS cable of UART 1, as the MIE of the main board reads it. */
+	virtual bool sense_pins(uint8_t &value)
+	{
+		(void)value;
+		return false;
+	}
+	/* Port 90 written: bit 0 the driver of UART 1, bit 1 the line that
+	 * tells the board before that an address is set. */
+	virtual void jvs_control_written(uint8_t value) { (void)value; }
 };
 
 /* The far end of UART 1 when it is a line byte by byte, an I/O board that
@@ -84,6 +114,7 @@ struct MieUartState {
 	uint32_t rx_head, rx_count;
 	std::array<uint8_t, 512> wire;
 	uint32_t wire_pos, wire_count, wire_ticks;
+	uint8_t thre_irq;	/* the transmitter asks for its interrupt */
 };
 
 struct MieSerialState {
@@ -107,6 +138,8 @@ struct MieState {
 	uint8_t busrq;
 	MieUartState uart;
 	MieSerialState serial;
+	uint8_t adc_channel;
+	uint8_t external_irq;
 };
 
 class Mie : public Z80Bus {
@@ -120,7 +153,8 @@ public:
 	static constexpr uint32_t TICKS_PER_CYCLE = 576;
 
 	/* `rom` is the 2 KB 315-6146 mask ROM; `ram` the 32 KB shared half,
-	 * owned by the caller. */
+	 * owned by the caller. A larger `rom` is the EPROM of an I/O board,
+	 * which the chip runs from: 0000-7FFF is that EPROM. */
 	Mie(MieHost &host, std::span<const uint8_t> rom, std::span<uint8_t> ram);
 
 	void reset();
@@ -130,6 +164,14 @@ public:
 	void write8(uint16_t addr, uint8_t value) override;
 	uint8_t in8(uint16_t port) override;
 	void out8(uint16_t port, uint8_t value) override;
+	/* The interrupt: levels 0-6 at vectors F2 + 2 n, the lowest first
+	 * (MAME mie.cpp irq_callback), UART 1 being level 3; then the input
+	 * of the board, enabled by bit 7 of port 30, at vector FE. HEURISTIC:
+	 * that input and its vector, from epr-21868 (its timer, port 30 =
+	 * 88 at 02B5, routine of vector FE at 0828). */
+	uint8_t int_ack() override;
+	/* A pulse on that input: kept until taken. */
+	void raise_external() { m_external_irq = true; }
 
 	/* Host side: the same two spaces, one byte at a time
 	 * (hikaru.cpp localbus_map 0x00800000 and 0x00820000). */
@@ -197,6 +239,8 @@ private:
 		RAM_BASE = 0x8000
 	};
 
+	bool uart_irq() const;
+	bool irq_line() const;
 	uint8_t gpio_read(uint8_t port);
 	void gpio_write(uint8_t port, uint8_t value);
 	void gpio_dir_write(uint8_t value);
@@ -227,6 +271,9 @@ private:
 	Z80 m_cpu;
 	JvsHost *m_jvs;
 	std::span<const uint8_t> m_rom;
+	bool m_external;	/* runs from the EPROM of an I/O board */
+	uint8_t m_adc_channel;
+	bool m_external_irq;
 	std::span<uint8_t> m_ram;
 	std::array<uint8_t, 0x800> m_ram_low;
 	std::array<uint8_t, 0x40> m_maple;
