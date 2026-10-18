@@ -105,8 +105,8 @@ public:
 	void busrq_write(uint32_t value);
 
 	/* Port D carries the resets of the main board, active low (bit 0 the
-	 * system, 1 the GPU, 2 the slave SH-4, 3 CN4, 4 the bridge, 5 the
-	 * sound boards), and on bits 6 and 7 the choice of the video clock.
+	 * system, 1 the GPU, 2 the slave SH-4, 3 CN4, 4 the display chip, 5
+	 * the sound boards), and on bits 6 and 7 the choice of the video clock.
 	 * The function is called with the pins each time the chip drives a
 	 * new value. */
 	void set_port_d(std::function<void(uint8_t)> fn) { m_port_d = std::move(fn); }
