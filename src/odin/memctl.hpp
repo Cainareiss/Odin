@@ -39,8 +39,9 @@ public:
 	class Host {
 	public:
 		virtual ~Host() = default;
-		/* An access of the external bus, 1, 2, 4 or 8 bytes. False
-		 * when nothing answers. */
+		/* An access of the external bus, 1, 2, 4 or 8 bytes; bit 31
+		 * is the top bit of the page of the window. False when
+		 * nothing answers. */
 		virtual bool bus_read(uint32_t bus_addr, unsigned size, uint64_t &value) = 0;
 		virtual bool bus_write(uint32_t bus_addr, unsigned size, uint64_t value) = 0;
 		/* Moves up to `words` 32-bit words from src to dst at once, as

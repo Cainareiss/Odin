@@ -302,10 +302,8 @@ MemCtl::read(uint32_t addr, unsigned size, uint64_t &value)
 		return true;
 	}
 
-	const uint32_t bank = window_bank(addr) & 0x7F;
-
 	value = 0;
-	return m_host.bus_read((bank << 24) | (addr & 0xFFFFFF), size, value);
+	return m_host.bus_read((window_bank(addr) << 24) | (addr & 0xFFFFFF), size, value);
 }
 
 bool
@@ -349,9 +347,7 @@ MemCtl::write(uint32_t addr, unsigned size, uint64_t value)
 		return true;
 	}
 
-	const uint32_t bank = window_bank(addr) & 0x7F;
-
-	return m_host.bus_write((bank << 24) | (addr & 0xFFFFFF), size, value);
+	return m_host.bus_write((window_bank(addr) << 24) | (addr & 0xFFFFFF), size, value);
 }
 
 std::span<const uint8_t>

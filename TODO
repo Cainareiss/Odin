@@ -271,9 +271,13 @@ DMA, RTC and the ARM7 are in, and the voices (aica_voice.cpp: sampler,
 loops, envelope, filter, levels, LFO, the monitors the sound driver reads), the
 effect processor (aica_dsp.cpp) and the mix of a chip (ODIN_WAV writes that
 of the main board; -o plays the boards, audio_out.cpp); still missing: the
-HACK in hikaru_bus.cpp (PHARRIER points its window 2 at bus page 8C, the
-sound board with A31 set, and wants bit 2 of its first word; no source
-says what is there). The FIQ: reading 0x2D00 does not drop it, bit 0
+first word of bus page 8C, the first sound board with A31 set
+(hikaru_bus.cpp, bus_read): PHARRIER stops with "ERROR !! NO AICA
+EXTENSION BOARD." unless its bit 2 is set; the BOOTROM finds the optional
+board otherwise, by the clock of page 0D (0x79EC), and the sound library
+takes that. HEURISTIC until a source or a measure: what answers there,
+its other bits (0), and A31 changing nothing on the other pages.
+The FIQ: reading 0x2D00 does not drop it, bit 0
 of 0x2D04 does (MAME and Flycast agree). HEURISTIC (MAME): the level
 follows the pending sources while the line is up, and the line stays
 down after 0x2D04 until a register of the interrupts changes; Flycast

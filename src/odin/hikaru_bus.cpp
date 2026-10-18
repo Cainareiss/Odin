@@ -679,12 +679,6 @@ Hikaru::sound_read(unsigned which, uint32_t addr, unsigned size, uint64_t &value
 		std::printf("%s : AICA/%c R%u @%08X\n", board_string().c_str(), which == MASTER ? 'M' : 'S',
 		            8 * size, offs);
 
-	/* HACK: PHARRIER reads this and wants 4 (PH:@0C0B2884). Not a
-	 * register of the chip; kept until the real board is traced. */
-	if (offs == 0) {
-		value = 4;
-		return true;
-	}
 	if (!m_sound[which]->host_read(offs, size, value)) {
 		board_error("AICA unhandled R%u %08X", size * 8, addr);
 		value = 0;
@@ -740,14 +734,26 @@ Hikaru::texram_store(unsigned bank, uint32_t offs, unsigned size, uint64_t value
 	store(m_texram[bank], twiddle((offs + 2) >> 1) << 1, 2, swap16(value >> 16));
 }
 
-/* The external bus, see memctl.cpp for what is on it. */
+/* The external bus, see memctl.cpp for what is on it. Bit 31 is the top bit
+ * of the page of a window. PHARRIER reads the first word of page 8C, the
+ * first sound board with that bit, and stops with "ERROR !! NO AICA
+ * EXTENSION BOARD." unless its bit 2 is set (@0C0B2884); the extension
+ * board is always there. HEURISTIC: what answers there and its other bits
+ * are not known (0); the bit changes nothing on the other pages (the
+ * 315-5881 at 8A, the ROM board at 90). */
 bool
 Hikaru::bus_read(uint32_t bus_addr, unsigned size, uint64_t &value)
 {
+	value = 0;
+	if (bus_addr == 0x8C000000 && size <= 4) {
+		value = 0x4;
+		return true;
+	}
+	bus_addr &= 0x7FFFFFFF;
+
 	const uint32_t offs = bus_addr & 0xFFFFFF;
 	bool log = false;
 
-	value = 0;
 	if (bus_addr >= 0x04000000 && bus_addr <= 0x043FFFFF) {
 		value = load(m_texram[0], offs, size);
 	} else if (bus_addr >= 0x06000000 && bus_addr <= 0x063FFFFF) {
@@ -885,6 +891,8 @@ Hikaru::bus_copy(uint32_t src, uint32_t dst, uint32_t words)
 bool
 Hikaru::bus_write(uint32_t bus_addr, unsigned size, uint64_t value)
 {
+	bus_addr &= 0x7FFFFFFF;
+
 	const uint32_t offs = bus_addr & 0xFFFFFF;
 	bool log = false;
 

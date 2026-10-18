@@ -116,10 +116,9 @@ void test_windows()
 	memctl.reset();
 	memctl.write(0x04000018, 4, 0x70C01211);	/* 03: 70, 02: C0, 01: 12, 00: 11 */
 	memctl.write(0x04000010, 4, 0x0C0A0000);	/* 17: 0C, 16: 0A */
-	bus.words[0x40123454] = 0xCAFE;
-
-	check(read(memctl, 0x02123454, 4) == 0xCAFE && bus.last_read == 0x40123454,
-	      "the window at 02 opens on the page of its byte, less its top bit");
+	bus.words[0xC0123454] = 0xCAFE;
+	check(read(memctl, 0x02123454, 4) == 0xCAFE && bus.last_read == 0xC0123454,
+	      "the window at 02 opens on the page of its byte, its top bit for the board");
 	read(memctl, 0x03000010, 2);
 	check(bus.last_read == 0x70000010 && bus.last_size == 2, "the window at 03");
 	read(memctl, 0x16000020, 1);
