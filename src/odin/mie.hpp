@@ -155,8 +155,9 @@ public:
 	/* A program that waits goes round a loop that only reads the memory
 	 * and leaves every register as it was, R aside, which it does not
 	 * read. Nothing changes what it reads before the chip is run again:
-	 * the turns left are counted without being run. Off, every turn is
-	 * run; the two must give the same. */
+	 * the turns left are counted without being run, and still are in the
+	 * calls after while the memory is not written (MARKDOWN/78). Off,
+	 * every turn is run; the two must give the same. */
 	void set_waits_counted(bool on) { m_waits_counted = on; }
 	/* Z80 clocks counted that way so far, for measuring. */
 	uint64_t waits_counted() const { return m_wait_cycles; }
@@ -216,6 +217,8 @@ private:
 	void tick(uint32_t cycles);
 	void wait_mark(uint32_t done);
 	uint32_t wait_check(uint32_t done, uint32_t cycles);
+	uint32_t resume(uint32_t cycles);
+	uint32_t bill(uint32_t done, uint32_t cycles);
 	void log_unknown(char rw, const char *space, uint32_t addr, uint32_t value);
 	void trace_host(char rw, uint32_t addr, uint8_t value) const;
 
@@ -250,8 +253,23 @@ private:
 		bool touched;
 		uint32_t countdown, period;
 		uint32_t pass, busy;
+		uint32_t steps;		/* instructions since the mark */
 	};
 	Wait m_wait;
+	/* What the search ran since its mark, kept once the turn is proven
+	 * to wait: before its instruction n, the CPU and the clocks from the
+	 * mark. A turn of more instructions is counted by whole turns, in its
+	 * call only. */
+	static constexpr unsigned MAX_TURN = 64;
+	struct Proof {
+		bool on = false;
+		unsigned length = 0;
+		unsigned at = 0;		/* the instruction the CPU is before */
+		uint32_t period = 0;		/* the clocks of a turn */
+		uint32_t refresh = 0;		/* its M1 cycles */
+		std::array<uint32_t, MAX_TURN> offset{};
+		std::array<Z80State, MAX_TURN> cpu{};
+	} m_proof;
 	bool m_waits_counted;
 	uint64_t m_wait_cycles;
 

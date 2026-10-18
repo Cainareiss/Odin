@@ -277,7 +277,7 @@ void test_port_d()
  * of 505 Z80 clocks, a line of the Hikaru. The host writes 1 at C000 before
  * the call `release`. Returns the share of the clocks that were counted, in
  * percent. */
-unsigned waits(const char *name, const std::vector<uint8_t> &program, unsigned release)
+unsigned waits(const char *name, const std::vector<uint8_t> &program, unsigned release, uint32_t per_call = 6313)
 {
 	std::vector<uint8_t> rom_a(2048, 0), rom_b(2048, 0), ram_a(32768, 0), ram_b(32768, 0);
 
@@ -293,8 +293,8 @@ unsigned waits(const char *name, const std::vector<uint8_t> &program, unsigned r
 			counted.host_write(0x20000 + 2 * 0xC000, 1, 1);
 			run.host_write(0x20000 + 2 * 0xC000, 1, 1);
 		}
-		counted.run(6313);
-		run.run(6313);
+		counted.run(per_call);
+		run.run(per_call);
 
 		odin::MieBoard::State a{}, b{};
 		counted.save(a);
@@ -303,7 +303,7 @@ unsigned waits(const char *name, const std::vector<uint8_t> &program, unsigned r
 	}
 	check(same, name);
 	check(run.waits_counted() == 0, "nothing is counted when every turn is run");
-	return static_cast<unsigned>(counted.waits_counted() * 100 / (calls * 505ull));
+	return static_cast<unsigned>(counted.waits_counted() * 100 / (calls * per_call * 16ull / 200));
 }
 
 void test_waits()
@@ -312,6 +312,18 @@ void test_waits()
 	unsigned share = waits("a loop that reads the memory until the host writes there",
 	                       { 0x3A, 0x00, 0xC0, 0xB7, 0x28, 0xFA, 0x76 }, 20);
 	check(share >= 80, "most of its turns are counted, and those of the halt after it");
+
+	/* ld a, (C000) / or a / eight nop / jr z: 61 clocks, in calls of 200,
+	 * most ending inside a turn */
+	share = waits("a long loop in short calls",
+	              { 0x3A, 0x00, 0xC0, 0xB7, 0, 0, 0, 0, 0, 0, 0, 0, 0x28, 0xF2, 0x76 }, 40, 2500);
+	check(share >= 90, "its turns are counted from one call to the next");
+
+	/* The same after 30 nop: the search marks the loop on its way */
+	std::vector<uint8_t> after(30, 0);
+	after.insert(after.end(), { 0x3A, 0x00, 0xC0, 0xB7, 0, 0, 0, 0, 0, 0, 0, 0, 0x28, 0xF2, 0x76 });
+	share = waits("a long loop after other code, in short calls", after, 40, 2500);
+	check(share >= 90, "its turns are counted from one call to the next too");
 
 	/* The same, with a count in the memory at each turn. */
 	share = waits("a loop that writes the memory",
@@ -373,6 +385,70 @@ void test_waits()
 		0x3A, 0x00, 0xC0, 0xB7, 0x28, 0xFA, 0x76,
 	}, 40);
 	check(share >= 80, "its turns are counted");
+}
+
+/* A state loaded where the program waits, with the memory loaded too as
+ * the board does it (hikaru_state.cpp): the loop sees that memory. */
+void test_wait_loaded()
+{
+	const std::vector<uint8_t> program = { 0x3A, 0x00, 0xC0, 0xB7, 0, 0, 0, 0, 0, 0, 0, 0, 0x28, 0xF2, 0x76 };
+	std::vector<uint8_t> rom_a(2048, 0), rom_b(2048, 0), ram_a(32768, 0), ram_b(32768, 0);
+
+	std::copy(program.begin(), program.end(), rom_a.begin());
+	std::copy(program.begin(), program.end(), rom_b.begin());
+	odin::MieBoard counted(rom_a, ram_a, 200000000, nullptr), run(rom_b, ram_b, 200000000, nullptr);
+	run.set_waits_counted(false);
+	for (int call = 0; call < 20; call++) {
+		counted.run(6313);
+		run.run(6313);
+	}
+	odin::MieBoard::State a{}, b{};
+	counted.save(a);
+	run.save(b);
+	ram_a[0x4000] = ram_b[0x4000] = 1;
+	counted.load(a);
+	run.load(b);
+	bool same = true;
+	for (int call = 0; call < 5; call++) {
+		counted.run(6313);
+		run.run(6313);
+		odin::MieBoard::State c{}, d{};
+		counted.save(c);
+		run.save(d);
+		same = same && std::memcmp(&c, &d, sizeof(c)) == 0;
+	}
+	check(same && ram_a[0x4000] == 1, "a state loaded with the memory: the loop that waited sees it");
+}
+
+/* The host takes the bus (BUSRQ with bit 6 of port 30) while the program
+ * waits: the CPU does not move, then goes on. */
+void test_wait_bus()
+{
+	const std::vector<uint8_t> program = { 0x3A, 0x00, 0xC0, 0xB7, 0, 0, 0, 0, 0, 0, 0, 0, 0x28, 0xF2, 0x76 };
+	std::vector<uint8_t> rom_a(2048, 0), rom_b(2048, 0), ram_a(32768, 0), ram_b(32768, 0);
+
+	std::copy(program.begin(), program.end(), rom_a.begin());
+	std::copy(program.begin(), program.end(), rom_b.begin());
+	odin::MieBoard counted(rom_a, ram_a, 200000000, nullptr), run(rom_b, ram_b, 200000000, nullptr);
+	run.set_waits_counted(false);
+	bool same = true;
+	for (int call = 0; call < 30; call++) {
+		if (call == 10)
+			for (odin::MieBoard *mie : { &counted, &run }) {
+				mie->host_write(2 * 0x30, 1, 0x40);
+				mie->busrq_write(0x100);
+			}
+		if (call == 20)
+			for (odin::MieBoard *mie : { &counted, &run })
+				mie->busrq_write(0);
+		counted.run(6313);
+		run.run(6313);
+		odin::MieBoard::State a{}, b{};
+		counted.save(a);
+		run.save(b);
+		same = same && std::memcmp(&a, &b, sizeof(a)) == 0;
+	}
+	check(same, "the bus taken by the host while the program waits: the same as every turn run");
 }
 
 /* The speed of the JVS line: the divisor 8 of the programs, nine
@@ -510,6 +586,8 @@ int main()
 	test_interrupts();
 	test_port_d();
 	test_waits();
+	test_wait_loaded();
+	test_wait_bus();
 	test_uart_speed();
 	test_reply_time();
 	test_line();

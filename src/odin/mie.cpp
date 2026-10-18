@@ -149,6 +149,7 @@ void Mie::reset()
 	m_busrq = false;
 	uart_reset();
 	serial_reset();
+	m_proof.on = false;
 	m_cpu.reset();
 }
 
@@ -248,6 +249,7 @@ uint8_t Mie::read8(uint16_t addr)
 void Mie::write8(uint16_t addr, uint8_t value)
 {
 	m_wait.touched = true;
+	m_proof.on = false;
 	if (addr >= RAM_BASE) {
 		m_ram[addr - RAM_BASE] = value;
 	} else if (addr >= RAM_LOW_BASE) {
@@ -770,6 +772,7 @@ void Mie::wait_mark(uint32_t done)
 	m_wait.done = done;
 	m_wait.countdown = m_wait.period;
 	m_wait.touched = false;
+	m_wait.steps = 0;
 	m_cpu.forget_refresh_read();
 }
 
@@ -797,6 +800,15 @@ uint32_t Mie::wait_check(uint32_t done, uint32_t cycles)
 	const uint32_t refresh = (now.r - m_wait.regs.r) & 0x7Fu;
 	now.r = static_cast<uint8_t>((now.r & 0x80) | (m_wait.regs.r & 0x7F));
 	if (!m_wait.touched && !m_cpu.refresh_read() && now == m_wait.regs) {
+		if (m_wait.steps <= MAX_TURN) {
+			m_proof.on = true;
+			m_proof.length = m_wait.steps;
+			m_proof.at = 0;
+			m_proof.period = turn;
+			m_proof.refresh = refresh;
+			m_proof.cpu[0] = m_wait.regs;
+			return bill(done, cycles);
+		}
 		const uint32_t turns = (cycles - done - 1) / turn;
 
 		counted = turns * turn;
@@ -813,6 +825,61 @@ uint32_t Mie::wait_check(uint32_t done, uint32_t cycles)
 	return counted;
 }
 
+/* A call that starts on a turn proven to wait: it still is if the CPU is
+ * where the turn has it, R aside. A write to the memory would have
+ * dropped it. */
+uint32_t Mie::resume(uint32_t cycles)
+{
+	const Z80State &then = m_proof.cpu[m_proof.at];
+	Z80State now;
+
+	m_cpu.save(now);
+	now.r = static_cast<uint8_t>((now.r & 0x80) | (then.r & 0x7F));
+	if (!(now == then)) {
+		m_proof.on = false;
+		return 0;
+	}
+	return bill(0, cycles);
+}
+
+/* The CPU before an instruction of a turn proven to wait goes round the
+ * same way to the end of the call. The instructions it would run before
+ * that are counted, the CPU put in the state it would have after them, R
+ * advanced by their M1 cycles; the one after is run and ends the call, as
+ * when every turn is run. The clocks counted. */
+uint32_t Mie::bill(uint32_t done, uint32_t cycles)
+{
+	if (done >= cycles) {
+		return 0;
+	}
+
+	const uint64_t from = m_proof.offset[m_proof.at];
+	const uint64_t last = from + (cycles - done - 1);
+	const uint64_t into = last % m_proof.period;
+	unsigned to = m_proof.length - 1;
+
+	while (m_proof.offset[to] > into) {
+		to--;
+	}
+
+	const uint32_t billed = static_cast<uint32_t>(last - into + m_proof.offset[to] - from);
+
+	if (billed) {
+		const uint8_t r0 = m_proof.cpu[0].r;
+		const uint32_t m1 = static_cast<uint32_t>((last - into) / m_proof.period) * m_proof.refresh +
+		                    ((m_proof.cpu[to].r - r0) & 0x7Fu) - ((m_proof.cpu[m_proof.at].r - r0) & 0x7Fu);
+		Z80State now, land = m_proof.cpu[to];
+
+		m_cpu.save(now);
+		land.r = static_cast<uint8_t>((now.r & 0x80) | ((now.r + m1) & 0x7F));
+		m_cpu.load(land);
+		m_proof.at = to;
+		tick(billed);
+		m_wait_cycles += billed;
+	}
+	return billed;
+}
+
 uint32_t Mie::run(uint32_t cycles)
 {
 	const bool waits = m_waits_counted && !m_trace;
@@ -823,6 +890,9 @@ uint32_t Mie::run(uint32_t cycles)
 	m_wait.pass = 0;
 	m_wait.busy = 0;
 	wait_mark(0);
+	if (waits && m_proof.on && !busak()) {
+		done += resume(cycles);
+	}
 	while (done < cycles) {
 		if (busak()) {
 			/* Bus released to the host: the CPU waits, the rest of
@@ -830,7 +900,7 @@ uint32_t Mie::run(uint32_t cycles)
 			tick(cycles - done);
 			return cycles;
 		}
-		if (waits) {
+		if (waits && !m_proof.on) {
 			if (m_cpu.pc() == m_wait.regs.pc) {
 				done += wait_check(done, cycles);
 			} else if (--m_wait.countdown == 0) {
@@ -838,6 +908,10 @@ uint32_t Mie::run(uint32_t cycles)
 					m_wait.period *= 2;
 				}
 				wait_mark(done);
+			}
+			if (!m_proof.on && m_wait.steps && m_wait.steps < MAX_TURN) {
+				m_proof.offset[m_wait.steps] = done - m_wait.done;
+				m_cpu.save(m_proof.cpu[m_wait.steps]);
 			}
 		}
 		if (m_trace_armed && m_cpu.pc() == m_trace_start) {
@@ -850,6 +924,11 @@ uint32_t Mie::run(uint32_t cycles)
 		}
 		tick(c);
 		done += c;
+		if (m_proof.on) {
+			m_proof.at = m_proof.at + 1 == m_proof.length ? 0 : m_proof.at + 1;
+		} else {
+			m_wait.steps++;
+		}
 	}
 	return done;
 }
@@ -881,6 +960,7 @@ void Mie::save(MieState &out) const
 
 void Mie::load(const MieState &in)
 {
+	m_proof.on = false;
 	m_cpu.load(in.cpu);
 	m_ram_low = in.ram_low;
 	m_maple = in.maple;
