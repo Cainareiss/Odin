@@ -83,10 +83,15 @@ const char HELP[] = "Usage: %s [options]\n"
 "	-h              Show this help\n";
 
 /* False when there is nothing to run: the help was shown. */
-bool
+enum class Parsed { RUN, HELP_ASKED, WRONG };
+
+/* The help is shown for -h, without options and for an option that is not
+ * right. */
+Parsed
 parse_options(int argc, char **argv, Options &options)
 {
 	int opt = (argc < 2) ? 'h' : 0;
+	bool wrong = false;
 
 	while (opt != 'h' && (opt = getopt(argc, argv, "R:r:n:l:s:ux:a:w:fo:vh?")) != -1) {
 		switch (opt) {
@@ -114,18 +119,22 @@ parse_options(int argc, char **argv, Options &options)
 			static const std::pair<const char *, odin::AudioOut::Mode> modes[] = {
 				{ "main", odin::AudioOut::Mode::MAIN }, { "option", odin::AudioOut::Mode::OPTION },
 				{ "mix", odin::AudioOut::Mode::MIX }, { "quad", odin::AudioOut::Mode::QUAD } };
-			opt = 'h';
+			bool known = false;
 			for (const auto &[name, mode] : modes) {
 				if (std::string(optarg) == name) {
 					options.sound = mode;
-					opt = 'o';
+					known = true;
 				}
 			}
 			if (std::string(optarg) == "off") {
 				options.sound.reset();
-				opt = 'o';
+				known = true;
 			}
 			options.sound_asked = true;
+			if (!known) {
+				opt = 'h';
+				wrong = true;
+			}
 			break;
 		}
 		case 'u':
@@ -149,13 +158,15 @@ parse_options(int argc, char **argv, Options &options)
 			options.verbose = true;
 			break;
 		default:
+			wrong = opt != 'h';
 			opt = 'h';
 			break;
 		}
 	}
-	if (opt == 'h')
-		std::printf(HELP, argv[0]);
-	return opt != 'h';
+	if (opt != 'h')
+		return Parsed::RUN;
+	std::printf(HELP, argv[0]);
+	return wrong ? Parsed::WRONG : Parsed::HELP_ASKED;
 }
 
 /* The list of the games: in the folder Odin is started from, else in the
@@ -354,39 +365,39 @@ main(int argc, char **argv)
 	std::printf("A hard fork of Valkyrie, Copyright(C) 2011-2013 Stefano Teso\n");
 	std::printf("Released under the GPL3 License.\n");
 
-	if (!parse_options(argc, argv, options))
-		return 0;
+	if (const Parsed parsed = parse_options(argc, argv, options); parsed != Parsed::RUN)
+		return parsed == Parsed::HELP_ASKED ? 0 : 1;
 
 	if (!load_game_list(games)) {
 		std::fprintf(stderr, "ERROR: failed to load the game list\n");
-		return 0;
+		return 1;
 	}
 
 	if (!games.has(options.game)) {
 		std::fprintf(stderr, "ERROR: failed to load '%s': game name not in game list\n", options.game.c_str());
-		return 0;
+		return 1;
 	}
 
 	const std::optional<odin::Game> game = games.load_game(options.rom_path, options.game);
 	if (!game) {
 		std::fprintf(stderr, "ERROR: failed to load '%s': can't load game files\n", options.game.c_str());
-		return 0;
+		return 1;
 	}
 	if (game->machine != "hikaru") {
 		std::fprintf(stderr, "ERROR: failed to load '%s': a game of the %s, not of the Hikaru\n",
 		             options.game.c_str(), game->machine.c_str());
-		return 0;
+		return 1;
 	}
 
 	const std::unique_ptr<odin::Hikaru> board = odin::Hikaru::make(*game, options.verbose);
 	if (!board)
-		return 0;
+		return 1;
 
 	odin::Keyboard keys;
 	options.display.title = game->title;
 	const std::unique_ptr<odin::Display> display = odin::Display::make(*board, keys, options.display);
 	if (!display)
-		return 0;
+		return 1;
 	odin::Settings settings;
 	const std::string settings_file = odin::Settings::user_file();
 	if (!settings_file.empty() && settings.load(settings_file))
