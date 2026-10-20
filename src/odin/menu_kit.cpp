@@ -31,18 +31,25 @@ namespace {
 
 /* The cut of the corners of a group and of a control, the room around a
  * row and between its texts and its control, and the room in a cell of a
- * control, in points */
-constexpr float GROUP_CUT = 6.0f;
+ * control and in a button, in points */
+constexpr float GROUP_CUT = 5.0f;
 constexpr float CONTROL_CUT = 3.0f;
 constexpr float ROW_PAD = 8.0f;
 constexpr float GAP = 14.0f;
 constexpr float CELL_WIDE = 7.0f;
 constexpr float CELL_HIGH = 3.0f;
+constexpr float BUTTON_WIDE = 8.0f;
+constexpr float BUTTON_HIGH = 4.0f;
 /* The texts of a row have that room at the least beside its control, else
  * the control goes under them */
 constexpr float TEXT_LEAST = 120.0f;
-/* What is left of a colour on a row that cannot change */
+/* What is left of a colour on a row that cannot change; of the action
+ * colour on the outline of what is chosen, and in its fill */
 constexpr float OFF_ALPHA = 0.4f;
+constexpr float CHOSEN_LINE = 0.6f;
+constexpr float CHOSEN_FILL = 0.15f;
+/* The letters of a title in small capitals that far apart, in ems */
+constexpr float TITLE_SPACING = 0.12f;
 
 /* The most labels a choice has */
 constexpr size_t MOST_LABELS = 8;
@@ -50,13 +57,7 @@ constexpr size_t MOST_LABELS = 8;
 ImU32
 faded(ImU32 colour, bool off)
 {
-	if (!off)
-		return colour;
-
-	const ImU32 alpha = (colour >> IM_COL32_A_SHIFT) & 0xFF;
-
-	return (colour & ~IM_COL32_A_MASK) |
-	       (static_cast<ImU32>(static_cast<float>(alpha) * OFF_ALPHA) << IM_COL32_A_SHIFT);
+	return off ? MenuKit::alpha(colour, OFF_ALPHA) : colour;
 }
 
 /* The fill of a cell of a control, its corners cut on the outer sides of
@@ -91,7 +92,258 @@ fill_cell(ImDrawList *list, ImVec2 a, ImVec2 b, float cut, bool first, bool last
 	list->AddConvexPolyFilled(points.data(), n, colour);
 }
 
+/* The height of a text at that size, on as many lines as that width takes */
+float
+wrapped_h(const char *text, float size, float width)
+{
+	return ImGui::GetFont()->CalcTextSizeA(size, FLT_MAX, width, text).y;
+}
+
+/* The character at p (UTF-8) and its length in bytes */
+unsigned
+decode(const char *p, int &length)
+{
+	const auto c = static_cast<unsigned char>(p[0]);
+
+	length = 1;
+	if (c < 0x80)
+		return c;
+
+	const int n = c >= 0xF0 ? 4 : c >= 0xE0 ? 3 : c >= 0xC0 ? 2 : 1;
+	unsigned code = c & (0x7Fu >> n);
+
+	for (; length < n && (static_cast<unsigned char>(p[length]) & 0xC0) == 0x80; length++)
+		code = code << 6 | (static_cast<unsigned char>(p[length]) & 0x3F);
+	return code;
+}
+
+/* The signs the font has not, and their widths in ems */
+struct Sign {
+	unsigned code;
+	float em;
+};
+
+constexpr Sign SIGNS[] = {
+	{ 0x25B2, 0.75f }, { 0x25BC, 0.75f }, { 0x25C0, 0.7f }, { 0x25B6, 0.7f }, { 0x25BE, 0.6f },
+	{ 0x2190, 0.9f }, { 0x2192, 0.9f }, { 0x2191, 0.6f }, { 0x2193, 0.6f }, { 0x2194, 1.1f }, { 0x2195, 0.6f },
+	{ 0x23CE, 0.9f }, { 0x2715, 0.85f }, { 0x25CB, 0.85f }, { 0x25A1, 0.85f }, { 0x25B3, 0.85f },
+	{ 0x2039, 0.5f }, { 0x203A, 0.5f }, { 0x2212, 0.6f },
+};
+
+const Sign *
+sign_of(unsigned code)
+{
+	for (const Sign &sign : SIGNS)
+		if (sign.code == code)
+			return &sign;
+	return nullptr;
+}
+
+/* A sign in its box from x, a line of that size high from y */
+void
+draw_sign(ImDrawList *list, const Sign &sign, float x, float y, float size, ImU32 colour)
+{
+	const float e = size, w = std::max(1.0f, e * 0.09f), adv = sign.em * e, cx = x + adv / 2.0f, cy = y + e * 0.52f;
+	const float h = e * 0.26f, l = x + e * 0.1f, r = x + adv - e * 0.1f, head = e * 0.2f;
+	const auto line = [&](ImVec2 p, ImVec2 q) { list->AddLine(p, q, colour, w); };
+	/* An arrow head at the tip, pointing along (dx, dy) */
+	const auto tip = [&](ImVec2 t, float dx, float dy) {
+		line(t, { t.x - dx * head + dy * head, t.y - dy * head - dx * head });
+		line(t, { t.x - dx * head - dy * head, t.y - dy * head + dx * head });
+	};
+
+	switch (sign.code) {
+	case 0x25B2:
+		list->AddTriangleFilled({ cx, cy - h }, { cx + h * 1.15f, cy + h * 0.85f }, { cx - h * 1.15f, cy + h * 0.85f },
+		                        colour);
+		break;
+	case 0x25BC:
+		list->AddTriangleFilled({ cx - h * 1.15f, cy - h * 0.85f }, { cx + h * 1.15f, cy - h * 0.85f }, { cx, cy + h },
+		                        colour);
+		break;
+	case 0x25B6:
+		list->AddTriangleFilled({ cx - h * 0.85f, cy - h * 1.15f }, { cx + h, cy }, { cx - h * 0.85f, cy + h * 1.15f },
+		                        colour);
+		break;
+	case 0x25C0:
+		list->AddTriangleFilled({ cx + h * 0.85f, cy + h * 1.15f }, { cx - h, cy }, { cx + h * 0.85f, cy - h * 1.15f },
+		                        colour);
+		break;
+	case 0x25BE: {
+		const float s = e * 0.18f;
+
+		list->AddTriangleFilled({ cx - s * 1.2f, cy - s * 0.6f }, { cx + s * 1.2f, cy - s * 0.6f }, { cx, cy + s * 0.9f },
+		                        colour);
+		break;
+	}
+	case 0x2190:
+	case 0x2192:
+	case 0x2194: {
+		line({ l, cy }, { r, cy });
+		if (sign.code != 0x2190)
+			tip({ r, cy }, 1.0f, 0.0f);
+		if (sign.code != 0x2192)
+			tip({ l, cy }, -1.0f, 0.0f);
+		break;
+	}
+	case 0x2191:
+	case 0x2193:
+	case 0x2195: {
+		const float top = cy - e * 0.32f, bottom = cy + e * 0.32f;
+
+		line({ cx, top }, { cx, bottom });
+		if (sign.code != 0x2193)
+			tip({ cx, top }, 0.0f, -1.0f);
+		if (sign.code != 0x2191)
+			tip({ cx, bottom }, 0.0f, 1.0f);
+		break;
+	}
+	case 0x23CE: {
+		const ImVec2 corner = { r - e * 0.05f, cy + e * 0.12f }, end = { l + e * 0.05f, cy + e * 0.12f };
+
+		line({ corner.x, cy - e * 0.32f }, corner);
+		line(corner, end);
+		tip(end, -1.0f, 0.0f);
+		break;
+	}
+	case 0x2715: {
+		const float m = e * 0.27f;
+
+		line({ cx - m, cy - m }, { cx + m, cy + m });
+		line({ cx + m, cy - m }, { cx - m, cy + m });
+		break;
+	}
+	case 0x25CB:
+		list->AddCircle({ cx, cy }, e * 0.3f, colour, 0, w);
+		break;
+	case 0x25A1:
+		list->AddRect({ cx - e * 0.27f, cy - e * 0.27f }, { cx + e * 0.27f, cy + e * 0.27f }, colour, 0.0f,
+		              ImDrawFlags_None, w);
+		break;
+	case 0x25B3:
+		list->AddTriangle({ cx, cy - e * 0.3f }, { cx + e * 0.32f, cy + e * 0.25f }, { cx - e * 0.32f, cy + e * 0.25f },
+		                  colour, w);
+		break;
+	case 0x2039:
+	case 0x203A: {
+		const float d = sign.code == 0x2039 ? 1.0f : -1.0f;
+		const ImVec2 points[3] = { { cx + d * e * 0.1f, cy - e * 0.22f }, { cx - d * e * 0.1f, cy },
+			                   { cx + d * e * 0.1f, cy + e * 0.22f } };
+
+		list->AddPolyline(points, 3, colour, ImDrawFlags_None, w);
+		break;
+	}
+	default:
+		line({ l, cy }, { r, cy });
+		break;
+	}
+}
+
+/* A text drawn, its signs too, when `list` is given: its width */
+float
+run(ImDrawList *list, ImVec2 at, ImU32 colour, const char *text, float size, float spacing)
+{
+	ImFont *const font = ImGui::GetFont();
+	float x = at.x;
+	const char *p = text, *plain = text;
+
+	if (size <= 0.0f)
+		size = ImGui::GetFontSize();
+
+	const auto flush = [&](const char *end) {
+		if (end <= plain)
+			return;
+		if (list)
+			list->AddText(font, size, { x, at.y }, colour, plain, end);
+		x += font->CalcTextSizeA(size, FLT_MAX, 0.0f, plain, end).x;
+	};
+
+	while (*p) {
+		int n;
+		const Sign *const sign = sign_of(decode(p, n));
+
+		if (!sign && spacing == 0.0f) {
+			p += n;
+			continue;
+		}
+		flush(p);
+		if (sign) {
+			if (list)
+				draw_sign(list, *sign, x, at.y, size, colour);
+			x += sign->em * size;
+		} else {
+			if (list)
+				list->AddText(font, size, { x, at.y }, colour, p, p + n);
+			x += font->CalcTextSizeA(size, FLT_MAX, 0.0f, p, p + n).x;
+		}
+		p += n;
+		plain = p;
+		if (*p)
+			x += spacing;
+	}
+	flush(p);
+	return x - at.x;
+}
+
+/* The points of the outline of a pill */
+std::vector<ImVec2>
+pill_points(ImVec2 a, ImVec2 b)
+{
+	const float r = (b.y - a.y) / 2.0f, pi = std::numbers::pi_v<float>;
+	std::vector<ImVec2> points;
+
+	for (int i = 0; i <= 8; i++) {
+		const float t = -pi / 2.0f + pi * static_cast<float>(i) / 8.0f;
+
+		points.push_back({ b.x - r + r * std::cos(t), a.y + r + r * std::sin(t) });
+	}
+	for (int i = 0; i <= 8; i++) {
+		const float t = pi / 2.0f + pi * static_cast<float>(i) / 8.0f;
+
+		points.push_back({ a.x + r + r * std::cos(t), a.y + r + r * std::sin(t) });
+	}
+	return points;
+}
+
 } /* namespace */
+
+ImU32
+MenuKit::alpha(ImU32 colour, float share)
+{
+	const ImU32 a = (colour >> IM_COL32_A_SHIFT) & 0xFF;
+
+	return (colour & ~IM_COL32_A_MASK) | (static_cast<ImU32>(static_cast<float>(a) * share) << IM_COL32_A_SHIFT);
+}
+
+float
+MenuKit::measure(const char *text, float size, float spacing)
+{
+	return run(nullptr, {}, 0, text, size, spacing);
+}
+
+void
+MenuKit::write(ImDrawList *list, ImVec2 at, ImU32 colour, const char *text, float size, float spacing)
+{
+	run(list, at, colour, text, size, spacing);
+}
+
+std::string
+MenuKit::fitted(const std::string &text, float width, float size)
+{
+	if (measure(text.c_str(), size) <= width)
+		return text;
+
+	const float dots = measure("...", size);
+	size_t n = text.size();
+
+	while (n > 0 && measure(text.substr(0, n).c_str(), size) + dots > width) {
+		n--;
+		/* not in the middle of a character of UTF-8 */
+		while (n > 0 && (static_cast<unsigned char>(text[n]) & 0xC0) == 0x80)
+			n--;
+	}
+	return text.substr(0, n) + "...";
+}
 
 void
 MenuKit::frame(ImDrawList *list, ImVec2 a, ImVec2 b, float cut, ImU32 fill, ImU32 border)
@@ -145,6 +397,12 @@ MenuKit::dashed_frame(ImDrawList *list, ImVec2 a, ImVec2 b, ImU32 colour) const
 	dashes(list, points, true, colour, 1.0f, px(3.0f), px(2.0f));
 }
 
+void
+MenuKit::dashed_pill(ImDrawList *list, ImVec2 a, ImVec2 b, ImU32 colour) const
+{
+	dashes(list, pill_points(a, b), true, colour, 1.0f, px(3.0f), px(2.0f));
+}
+
 /* The paths of the mock-up, in a square of 24 */
 void
 MenuKit::icon(ImDrawList *list, Icon icon, ImVec2 at, float side, ImU32 colour)
@@ -154,8 +412,15 @@ MenuKit::icon(ImDrawList *list, Icon icon, ImVec2 at, float side, ImU32 colour)
 	const auto arc = [&](float x, float y, float r, float from, float to) {
 		list->PathArcTo(p(x, y), r * k, from * std::numbers::pi_v<float> / 180.0f, to * std::numbers::pi_v<float> / 180.0f);
 	};
+	const auto lines = [&](std::initializer_list<ImVec2> points, bool closed) {
+		for (const ImVec2 q : points)
+			list->PathLineTo(p(q.x, q.y));
+		list->PathStroke(colour, closed ? ImDrawFlags_Closed : ImDrawFlags_None, w);
+	};
 
 	switch (icon) {
+	case Icon::NONE:
+		break;
 	case Icon::PAD:
 	case Icon::INPUT:
 		list->PathLineTo(p(6, 9));
@@ -187,10 +452,7 @@ MenuKit::icon(ImDrawList *list, Icon icon, ImVec2 at, float side, ImU32 colour)
 		break;
 	case Icon::AUDIO:
 	case Icon::MUTE:
-		for (const ImVec2 q : { ImVec2{ 4, 9 }, ImVec2{ 4, 15 }, ImVec2{ 8, 15 }, ImVec2{ 13, 19 }, ImVec2{ 13, 5 },
-		                        ImVec2{ 8, 9 } })
-			list->PathLineTo(p(q.x, q.y));
-		list->PathStroke(colour, ImDrawFlags_Closed, w);
+		lines({ { 4, 9 }, { 4, 15 }, { 8, 15 }, { 13, 19 }, { 13, 5 }, { 8, 9 } }, true);
 		if (icon == Icon::AUDIO) {
 			arc(13.35f, 12, 4, -48.5f, 48.5f);
 			list->PathStroke(colour, ImDrawFlags_None, w);
@@ -250,6 +512,46 @@ MenuKit::icon(ImDrawList *list, Icon icon, ImVec2 at, float side, ImU32 colour)
 		list->AddLine(p(12, 11), p(12, 17), colour, w);
 		list->AddLine(p(12, 7.5f), p(12, 8.0f), colour, w);
 		break;
+	case Icon::LIST:
+		for (const float y : { 7.0f, 12.0f, 17.0f }) {
+			list->AddLine(p(9, y), p(20, y), colour, w);
+			list->AddCircleFilled(p(4.5f, y), w * 0.8f, colour);
+		}
+		break;
+	case Icon::SWAP:
+		lines({ { 4, 8 }, { 20, 8 } }, false);
+		lines({ { 16, 4 }, { 20, 8 }, { 16, 12 } }, false);
+		lines({ { 20, 16 }, { 4, 16 } }, false);
+		lines({ { 8, 12 }, { 4, 16 }, { 8, 20 } }, false);
+		break;
+	case Icon::DEFAULTS:
+		/* Round from the top, the way of the clock, back to the top */
+		arc(12, 13, 7, -60, 200);
+		list->PathStroke(colour, ImDrawFlags_None, w);
+		lines({ { 11, 3 }, { 15.5f, 6.9f }, { 10.5f, 9.5f } }, false);
+		break;
+	case Icon::CLEAR:
+		list->AddLine(p(6, 6), p(18, 18), colour, w);
+		list->AddLine(p(18, 6), p(6, 18), colour, w);
+		break;
+	case Icon::MAP:
+		lines({ { 6, 6 }, { 14, 12 }, { 6, 18 } }, true);
+		list->AddLine(p(18, 6), p(18, 18), colour, w);
+		break;
+	case Icon::UNDO:
+		lines({ { 9, 14 }, { 4, 9 }, { 9, 4 } }, false);
+		list->PathLineTo(p(4, 9));
+		list->PathLineTo(p(14, 9));
+		arc(14, 15, 6, -90, 90);
+		list->PathLineTo(p(11, 21));
+		list->PathStroke(colour, ImDrawFlags_None, w);
+		break;
+	case Icon::RUNE:
+		/* ᚨ, ansuz: a stem and two branches down to the right */
+		list->AddLine(p(8, 2), p(8, 22), colour, w);
+		list->AddLine(p(8, 3), p(16, 9), colour, w);
+		list->AddLine(p(8, 9), p(16, 15), colour, w);
+		break;
 	}
 }
 
@@ -259,8 +561,8 @@ MenuKit::tabs(std::span<const char *const> names, std::span<const Icon> icons, b
 	ImDrawList *const list = ImGui::GetWindowDrawList();
 	const ImVec2 at = ImGui::GetCursorScreenPos();
 	const float width = ImGui::GetContentRegionAvail().x;
-	const float wide = px(10.0f), high = px(CELL_HIGH + 1.0f), gap = px(6.0f), line = ImGui::GetTextLineHeight();
-	const float h = line + 2.0f * high, side = line, space = px(6.0f);
+	const float wide = px(8.0f), high = px(CELL_HIGH + 1.0f), gap = px(4.0f), line = ImGui::GetTextLineHeight();
+	const float h = line + 2.0f * high, side = line, space = px(5.0f);
 	const int was = chosen;
 	const auto shows = [&](size_t i) { return !narrow || static_cast<int>(i) == chosen; };
 	const auto tab_w = [&](size_t i) {
@@ -285,9 +587,7 @@ MenuKit::tabs(std::span<const char *const> names, std::span<const Icon> icons, b
 		const ImU32 colour = on ? m_palette.action : hovered ? m_palette.ink : m_palette.dim;
 
 		if (on)
-			frame(list, a, b, px(CONTROL_CUT), 0, m_palette.action);
-		else if (hovered)
-			frame(list, a, b, px(CONTROL_CUT), m_palette.hover, 0);
+			frame(list, a, b, px(CONTROL_CUT), 0, alpha(m_palette.action, CHOSEN_LINE));
 		if (i < icons.size())
 			icon(list, icons[i], { a.x + wide, a.y + high }, side, colour);
 		if (shows(i))
@@ -303,10 +603,11 @@ void
 MenuKit::begin_group(const char *title)
 {
 	ImDrawList *const list = ImGui::GetWindowDrawList();
+	const float size = font(SMALL);
 
 	ImGui::Dummy({ 0.0f, px(10.0f) });
-	list->AddText(ImGui::GetCursorScreenPos(), m_palette.dim, title);
-	ImGui::Dummy({ 0.0f, ImGui::GetTextLineHeight() + px(4.0f) });
+	write(list, ImGui::GetCursorScreenPos(), m_palette.dim, title, size, size * TITLE_SPACING);
+	ImGui::Dummy({ 0.0f, size + px(5.0f) });
 	m_group_top = ImGui::GetCursorScreenPos();
 	m_first_row = true;
 	/* The rows on top, the frame drawn under them once their height is known */
@@ -321,8 +622,8 @@ MenuKit::end_group()
 	const ImVec2 end = ImGui::GetCursorScreenPos();
 
 	list->ChannelsSetCurrent(0);
-	frame(list, m_group_top, { m_group_top.x + ImGui::GetContentRegionAvail().x, end.y }, px(GROUP_CUT),
-	      m_palette.group, m_palette.line);
+	frame(list, m_group_top, { m_group_top.x + ImGui::GetContentRegionAvail().x, end.y }, px(GROUP_CUT), 0,
+	      m_palette.line);
 	list->ChannelsMerge();
 }
 
@@ -333,28 +634,27 @@ MenuKit::begin_row(float &width)
 
 	width = ImGui::GetContentRegionAvail().x;
 	if (!m_first_row)
-		ImGui::GetWindowDrawList()->AddLine({ at.x + px(ROW_PAD), at.y }, { at.x + width - px(ROW_PAD), at.y },
-		                                    m_palette.line, 1.0f);
+		ImGui::GetWindowDrawList()->AddLine({ at.x + 1.0f, at.y }, { at.x + width - 1.0f, at.y }, m_palette.line, 1.0f);
 	m_first_row = false;
 	return at;
 }
 
 /* The name, what the row does and why it does not change, one under the
- * other in that width: their height */
+ * other in that width, the last two smaller and fainter: their height */
 float
 MenuKit::texts(ImVec2 at, float width, const char *name, const char *about, const char *locked) const
 {
 	ImDrawList *const list = ImGui::GetWindowDrawList();
-	ImFont *const font = ImGui::GetFont();
-	const float size = ImGui::GetFontSize(), space = px(2.0f);
-	float h = ImGui::CalcTextSize(name, nullptr, false, width).y;
+	ImFont *const face = ImGui::GetFont();
+	const float space = px(2.0f), note = font(NOTE);
+	float h = wrapped_h(name, ImGui::GetFontSize(), width);
 
-	list->AddText(font, size, at, m_palette.ink, name, nullptr, width);
-	for (const auto &[text, colour] : { std::pair{ about, m_palette.dim }, std::pair{ locked, m_palette.faint } }) {
+	list->AddText(face, ImGui::GetFontSize(), at, m_palette.ink, name, nullptr, width);
+	for (const char *text : { about, locked }) {
 		if (!text || !*text)
 			continue;
-		list->AddText(font, size, { at.x, at.y + h + space }, colour, text, nullptr, width);
-		h += space + ImGui::CalcTextSize(text, nullptr, false, width).y;
+		list->AddText(face, note, { at.x, at.y + h + space }, m_palette.faint, text, nullptr, width);
+		h += space + wrapped_h(text, note, width);
 	}
 	return h;
 }
@@ -400,8 +700,8 @@ MenuKit::segments_size(std::span<const char *const> labels) const
 	float w = 0.0f;
 
 	for (const char *label : labels)
-		w += ImGui::CalcTextSize(label).x + 2.0f * px(CELL_WIDE);
-	return { w, ImGui::GetTextLineHeight() + 2.0f * px(CELL_HIGH) };
+		w += measure(label, font(SMALL)) + 2.0f * px(CELL_WIDE);
+	return { w, font(SMALL) + 2.0f * px(CELL_HIGH) };
 }
 
 bool
@@ -410,13 +710,13 @@ MenuKit::segments(ImVec2 a, std::span<const char *const> labels, int &chosen, bo
 	IM_ASSERT(!labels.empty() && labels.size() <= MOST_LABELS);
 
 	ImDrawList *const list = ImGui::GetWindowDrawList();
-	const float wide = px(CELL_WIDE), high = px(CELL_HIGH);
-	const float control_h = ImGui::GetTextLineHeight() + 2.0f * high;
+	const float wide = px(CELL_WIDE), high = px(CELL_HIGH), size = font(SMALL);
+	const float control_h = size + 2.0f * high;
 	std::array<float, MOST_LABELS> cells;
 	float control = 0.0f;
 
 	for (size_t i = 0; i < labels.size(); i++)
-		control += cells[i] = ImGui::CalcTextSize(labels[i]).x + 2.0f * wide;
+		control += cells[i] = measure(labels[i], size) + 2.0f * wide;
 
 	const int was = chosen;
 	float x = a.x;
@@ -430,15 +730,14 @@ MenuKit::segments(ImVec2 a, std::span<const char *const> labels, int &chosen, bo
 			chosen = static_cast<int>(i);
 
 		const bool on = chosen == static_cast<int>(i), hovered = !still && ImGui::IsItemHovered();
-		const ImVec2 size = ImGui::CalcTextSize(labels[i]);
 
 		if (on || hovered)
 			fill_cell(list, ca, cb, px(CONTROL_CUT), i == 0, i + 1 == labels.size(),
 			          faded(on ? m_palette.action : m_palette.hover, still));
 		if (i > 0)
 			list->AddLine(ca, { x, cb.y }, faded(m_palette.outline, still), 1.0f);
-		list->AddText({ x + (cells[i] - size.x) / 2.0f, a.y + high },
-		              faded(on ? m_palette.on_action : hovered ? m_palette.ink : m_palette.dim, still), labels[i]);
+		write(list, { x + wide, a.y + high },
+		      faded(on ? m_palette.on_action : hovered ? m_palette.ink : m_palette.dim, still), labels[i], size);
 		x += cells[i];
 	}
 	ImGui::EndDisabled();
@@ -451,15 +750,15 @@ MenuKit::dropdown(const char *name, const char *about, std::span<const std::stri
 {
 	ImGui::PushID(name);
 
-	const float pad = px(ROW_PAD), wide = px(CELL_WIDE), arrow = ImGui::CalcTextSize("v").x;
+	const float pad = px(ROW_PAD), wide = px(CELL_WIDE), caret = measure("▾");
 	const float control_h = picker_height();
 	float longest = 0.0f, width;
 
 	for (const std::string &label : labels)
-		longest = std::max(longest, ImGui::CalcTextSize(label.c_str()).x);
+		longest = std::max(longest, measure(label.c_str()));
 
 	const ImVec2 at = begin_row(width);
-	const float control = std::min(longest + 3.0f * wide + arrow, width / 2.0f);
+	const float control = std::min(longest + 3.0f * wide + caret, width / 2.0f);
 	const Placed placed = place(at, width, control, control_h, name, about, nullptr);
 	const bool changed = picker("box", { at.x + width - pad - control, placed.top }, control, labels, chosen);
 
@@ -477,30 +776,31 @@ MenuKit::picker_height() const
 
 bool
 MenuKit::picker(const char *id, ImVec2 at, float width, std::span<const std::string> labels, int &chosen,
-                const Icon *icon_shown) const
+                Icon icon_shown) const
 {
 	ImGui::PushID(id);
 
 	ImDrawList *const list = ImGui::GetWindowDrawList();
 	const MenuPalette &p = m_palette;
-	const float wide = px(CELL_WIDE), high = px(CELL_HIGH), arrow = ImGui::CalcTextSize("v").x;
+	const float wide = px(CELL_WIDE + 1.0f), high = px(CELL_HIGH), caret = measure("▾");
 	const ImVec2 b = { at.x + width, at.y + picker_height() };
 	const int was = chosen;
 
 	ImGui::SetCursorScreenPos(at);
 	if (ImGui::InvisibleButton("open", { width, b.y - at.y }))
 		ImGui::OpenPopup("list");
-	frame(list, at, b, px(CONTROL_CUT), ImGui::IsItemHovered() ? p.hover : 0, p.outline);
+	frame(list, at, b, px(GROUP_CUT), 0, ImGui::IsItemHovered() || ImGui::IsPopupOpen("list") ? p.stroke : p.line);
 	if (chosen >= 0 && static_cast<size_t>(chosen) < labels.size()) {
-		const float side = ImGui::GetTextLineHeight(), before = icon_shown ? side + px(6.0f) : 0.0f;
+		const float side = ImGui::GetTextLineHeight();
+		const float before = icon_shown != Icon::NONE ? side + px(6.0f) : 0.0f;
 
-		if (icon_shown)
-			icon(list, *icon_shown, { at.x + wide, at.y + high }, side, p.dim);
-		list->PushClipRect(at, { b.x - wide - arrow, b.y }, true);
-		list->AddText({ at.x + wide + before, at.y + high }, p.ink, labels[static_cast<size_t>(chosen)].c_str());
+		icon(list, icon_shown, { at.x + wide, at.y + high }, side, p.dim);
+		list->PushClipRect(at, { b.x - wide - caret, b.y }, true);
+		write(list, { at.x + wide + before, at.y + high }, p.ink,
+		      fitted(labels[static_cast<size_t>(chosen)], b.x - 2.0f * wide - caret - at.x - wide - before).c_str());
 		list->PopClipRect();
 	}
-	list->AddText({ b.x - wide - arrow, at.y + high }, p.dim, "v");
+	write(list, { b.x - wide - caret, at.y + high }, p.dim, "▾");
 
 	list_popup({ at.x, b.y + px(2.0f) }, width, labels, chosen);
 	ImGui::PopID();
@@ -518,113 +818,114 @@ MenuKit::list_popup(ImVec2 at, float width, std::span<const std::string> labels,
 	/* As wide as its longest label, moved left where it would leave the
 	 * window */
 	for (const std::string &label : labels)
-		longest = std::max(longest, ImGui::CalcTextSize(label.c_str()).x + 2.0f * px(CELL_WIDE));
+		longest = std::max(longest, measure(label.c_str()) + 2.0f * px(CELL_WIDE) + 2.0f * px(4.0f));
 	longest = std::min(longest, room - 2.0f * margin);
 	ImGui::SetNextWindowPos({ std::max(margin, std::min(at.x, room - margin - longest)), at.y });
 	ImGui::SetNextWindowSizeConstraints({ longest, 0.0f }, { longest, ImGui::GetIO().DisplaySize.y });
 	ImGui::PushStyleColor(ImGuiCol_PopupBg, ImGui::ColorConvertU32ToFloat4(p.screen));
-	ImGui::PushStyleColor(ImGuiCol_Border, ImGui::ColorConvertU32ToFloat4(p.faint));
-	ImGui::PushStyleColor(ImGuiCol_Header, ImGui::ColorConvertU32ToFloat4(p.action));
-	ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImGui::ColorConvertU32ToFloat4(p.line));
-	ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImGui::ColorConvertU32ToFloat4(p.action));
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { px(CELL_WIDE), px(CELL_HIGH) });
+	ImGui::PushStyleColor(ImGuiCol_Border, ImGui::ColorConvertU32ToFloat4(p.stroke));
+	ImGui::PushStyleColor(ImGuiCol_Header, ImGui::ColorConvertU32ToFloat4(0));
+	ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImGui::ColorConvertU32ToFloat4(p.hover));
+	ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImGui::ColorConvertU32ToFloat4(p.hover));
+	ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(p.ink));
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { px(4.0f), px(4.0f) });
 	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { 0.0f, px(2.0f) });
+	ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, { 0.0f, 0.5f });
 	ImGui::PushStyleVar(ImGuiStyleVar_PopupBorderSize, 1.0f);
 	ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, 0.0f);
 	if (ImGui::BeginPopup("list")) {
+		ImDrawList *const list = ImGui::GetWindowDrawList();
+		const float h = ImGui::GetTextLineHeight() + 2.0f * px(CELL_HIGH + 1.0f);
+
 		for (size_t i = 0; i < labels.size(); i++) {
 			const bool on = static_cast<int>(i) == chosen;
+			const ImVec2 a = ImGui::GetCursorScreenPos();
 
-			ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(on ? p.on_action : p.ink));
-			if (ImGui::Selectable(labels[i].c_str(), on))
+			ImGui::PushID(static_cast<int>(i));
+			if (ImGui::Selectable("##item", on, ImGuiSelectableFlags_None, { 0.0f, h }))
 				chosen = static_cast<int>(i);
-			ImGui::PopStyleColor();
+			ImGui::PopID();
+			if (on)
+				frame(list, ImGui::GetItemRectMin(), ImGui::GetItemRectMax(), px(CONTROL_CUT), 0, p.stroke);
+			write(list, { a.x + px(CELL_WIDE), a.y + (h - ImGui::GetTextLineHeight()) / 2.0f }, p.ink, labels[i].c_str());
 		}
 		ImGui::EndPopup();
 	}
-	ImGui::PopStyleVar(4);
-	ImGui::PopStyleColor(5);
+	ImGui::PopStyleVar(5);
+	ImGui::PopStyleColor(6);
 	return chosen != was;
 }
 
-bool
-MenuKit::binding(const char *id, ImVec2 at, float width, bool first, const char *name, const char *inputs, bool lit,
-                 bool catching, float &h) const
+ImVec2
+MenuKit::button_size(const char *label, Icon icon_shown) const
 {
-	ImDrawList *const list = ImGui::GetWindowDrawList();
-	const float pad = px(ROW_PAD), line = ImGui::GetTextLineHeight(), gap = px(GAP);
-	const char *const shown = catching ? "press..." : (inputs && *inputs) ? inputs : "-";
-	const float shown_w = std::min(ImGui::CalcTextSize(shown).x, width / 2.0f);
-	const float name_w = std::max(px(40.0f), width - shown_w - gap - 2.0f * pad);
-	const float name_h = ImGui::CalcTextSize(name, nullptr, false, name_w).y;
-	const float shown_h = ImGui::CalcTextSize(shown, nullptr, false, shown_w).y;
+	const float size = font(SMALL), side = icon_shown != Icon::NONE ? size + px(4.0f) : 0.0f;
 
-	h = std::max({ name_h, shown_h, line }) + 2.0f * pad;
+	return { side + measure(label, size) + 2.0f * px(BUTTON_WIDE), size + 2.0f * px(BUTTON_HIGH) };
+}
+
+bool
+MenuKit::button(const char *label, bool same_line, Icon icon_shown, Tone tone) const
+{
+	if (same_line)
+		ImGui::SameLine(0.0f, px(10.0f));
+
+	const ImVec2 at = ImGui::GetCursorScreenPos();
+	const bool clicked = button(label, at, false, icon_shown, tone);
+
 	ImGui::SetCursorScreenPos(at);
-
-	const bool clicked = ImGui::InvisibleButton(id, { width, h });
-	const bool hovered = ImGui::IsItemHovered();
-	const ImVec2 b = { at.x + width, at.y + h };
-
-	if (catching)
-		frame(list, { at.x + 1.0f, at.y + 1.0f }, { b.x - 1.0f, b.y - 1.0f }, px(CONTROL_CUT), m_palette.hover,
-		      m_palette.accent);
-	else if (hovered)
-		frame(list, at, b, px(CONTROL_CUT), m_palette.hover, 0);
-	if (!first && !catching)
-		list->AddLine({ at.x + pad, at.y }, { b.x - pad, at.y }, m_palette.line, 1.0f);
-	if (lit)
-		list->AddRectFilled({ at.x + px(2.0f), at.y + pad }, { at.x + px(4.0f), b.y - pad }, m_palette.accent);
-	list->AddText(ImGui::GetFont(), ImGui::GetFontSize(), { at.x + pad, at.y + (h - name_h) / 2.0f },
-	              lit ? m_palette.accent : m_palette.ink, name, nullptr, name_w);
-	list->AddText(ImGui::GetFont(), ImGui::GetFontSize(), { b.x - pad - shown_w, at.y + (h - shown_h) / 2.0f },
-	              catching ? m_palette.accent : (inputs && *inputs) ? m_palette.dim : m_palette.faint, shown,
-	              nullptr, shown_w);
+	ImGui::Dummy(button_size(label, icon_shown));
 	return clicked;
 }
 
 bool
-MenuKit::button(const char *label, bool same_line) const
+MenuKit::button(const char *label, ImVec2 at, bool on, Icon icon_shown, Tone tone) const
 {
 	ImDrawList *const list = ImGui::GetWindowDrawList();
-	const float wide = px(CELL_WIDE + 3.0f), high = px(CELL_HIGH + 1.0f);
-	const ImVec2 size = ImGui::CalcTextSize(label);
-	const ImVec2 box = { size.x + 2.0f * wide, size.y + 2.0f * high };
+	const float size = font(SMALL);
+	const ImVec2 box = button_size(label, icon_shown), b = { at.x + box.x, at.y + box.y };
 
-	if (same_line)
-		ImGui::SameLine(0.0f, px(8.0f));
+	ImGui::SetCursorScreenPos(at);
 
-	const ImVec2 a = ImGui::GetCursorScreenPos(), b = { a.x + box.x, a.y + box.y };
 	const bool clicked = ImGui::InvisibleButton(label, box);
 	const bool hovered = ImGui::IsItemHovered();
+	const ImU32 hot = tone == Tone::DANGER ? m_palette.danger : m_palette.action;
+	const ImU32 border = hovered ? hot : on ? alpha(m_palette.action, CHOSEN_LINE) :
+	                     tone == Tone::STRONG ? m_palette.stroke : m_palette.outline;
+	const ImU32 ink = hovered ? hot : m_palette.ink;
+	float x = at.x + px(BUTTON_WIDE);
 
-	frame(list, a, b, px(CONTROL_CUT), hovered ? m_palette.hover : 0, m_palette.outline);
-	list->AddText({ a.x + wide, a.y + high }, hovered ? m_palette.ink : m_palette.dim, label);
+	frame(list, at, b, px(CONTROL_CUT), on ? alpha(m_palette.action, CHOSEN_FILL) : 0, border);
+	if (icon_shown != Icon::NONE) {
+		icon(list, icon_shown, { x, at.y + px(BUTTON_HIGH) }, size, ink);
+		x += size + px(4.0f);
+	}
+	write(list, { x, at.y + px(BUTTON_HIGH) }, ink, label, size);
 	return clicked;
 }
 
 ImVec2
-MenuKit::button_size(const char *label) const
+MenuKit::arrow_size() const
 {
-	const ImVec2 size = ImGui::CalcTextSize(label);
-
-	return { size.x + 2.0f * px(CELL_WIDE + 3.0f), size.y + 2.0f * px(CELL_HIGH + 1.0f) };
+	return { px(22.0f), font(SMALL) + 2.0f * px(BUTTON_HIGH) };
 }
 
 bool
-MenuKit::button(const char *label, ImVec2 at, bool on) const
+MenuKit::arrow(const char *id, ImVec2 at, bool right) const
 {
 	ImDrawList *const list = ImGui::GetWindowDrawList();
-	const ImVec2 box = button_size(label), b = { at.x + box.x, at.y + box.y };
+	const ImVec2 size = arrow_size(), b = { at.x + size.x, at.y + size.y };
+	const char *const sign = right ? "›" : "‹";
+	const float big = ImGui::GetFontSize() * 1.15f;
 
 	ImGui::SetCursorScreenPos(at);
 
-	const bool clicked = ImGui::InvisibleButton(label, box);
+	const bool clicked = ImGui::InvisibleButton(id, size);
 	const bool hovered = ImGui::IsItemHovered();
 
-	frame(list, at, b, px(CONTROL_CUT), hovered ? m_palette.hover : 0, on ? m_palette.action : m_palette.outline);
-	list->AddText({ at.x + px(CELL_WIDE + 3.0f), at.y + px(CELL_HIGH + 1.0f) },
-	              on ? m_palette.action : hovered ? m_palette.ink : m_palette.dim, label);
+	list->AddRect(at, b, hovered ? m_palette.action : m_palette.outline, size.y / 2.0f);
+	write(list, { (at.x + b.x - measure(sign, big)) / 2.0f, (at.y + b.y - big) / 2.0f },
+	      hovered ? m_palette.action : m_palette.ink, sign, big);
 	return clicked;
 }
 
@@ -641,35 +942,37 @@ MenuKit::value(const char *name, const char *about, const char *value, const cha
 	ImGui::PushID(name);
 
 	ImDrawList *const list = ImGui::GetWindowDrawList();
-	const float pad = px(ROW_PAD), space = px(8.0f), small = ImGui::GetFontSize() * 0.8f;
+	const float pad = px(ROW_PAD), space = px(8.0f), size = font(SMALL), small = font(TINY);
 	const char *const shown_button = locked ? nullptr : action;
 	const char *const shown_word = shown_button ? nullptr : word;
-	ImFont *const font = ImGui::GetFont();
+	ImFont *const face = ImGui::GetFont();
 	const ImVec2 button_box = shown_button ? button_size(shown_button) : ImVec2{};
-	const float word_w = shown_word ? font->CalcTextSizeA(small, FLT_MAX, 0.0f, shown_word).x : 0.0f;
+	const float word_w = shown_word ? measure(shown_word, small, small * TITLE_SPACING) : 0.0f;
 	const float after = shown_button ? button_box.x + space : shown_word ? word_w + space : 0.0f;
 	float width;
 	const ImVec2 at = begin_row(width);
 	/* A long value takes half the row at most, on more lines; the whole
-	 * row under the texts, where they have not room enough */
-	const float wide_w = ImGui::CalcTextSize(value).x;
+	 * row under the texts, where they have not room enough (a pixel more:
+	 * a text as wide as its room may go to the line) */
+	const float wide_w = std::ceil(face->CalcTextSizeA(size, FLT_MAX, 0.0f, value).x) + 1.0f;
 	const bool under = width - std::min(wide_w, width / 2.0f - after) - after - px(GAP) - 2.0f * pad < px(TEXT_LEAST);
 	const float value_w = std::max(px(20.0f), std::min(wide_w, (under ? width - 2.0f * pad : width / 2.0f) - after));
-	const ImVec2 value_size = ImGui::CalcTextSize(value, nullptr, false, value_w);
+	const ImVec2 value_size = face->CalcTextSizeA(size, FLT_MAX, value_w, value);
 	const float control_h = std::max(value_size.y, button_box.y);
 	const Placed placed = place(at, width, value_w + after, control_h, name, about, locked);
 	const float h = placed.h, mid = placed.top + control_h / 2.0f;
 	const float right = at.x + width - pad;
 	bool clicked = false;
 
-	list->AddText(font, ImGui::GetFontSize(), { right - after - value_w, mid - value_size.y / 2.0f }, m_palette.dim,
-	              value, nullptr, value_w);
+	list->AddText(face, size, { right - after - value_w, mid - value_size.y / 2.0f }, m_palette.dim, value, nullptr,
+	              value_w);
 	if (shown_button) {
 		m_button_a = { right - button_box.x, mid - button_box.y / 2.0f };
 		m_button_b = { m_button_a.x + button_box.x, m_button_a.y + button_box.y };
 		clicked = button(shown_button, m_button_a, false);
-	} else if (shown_word)
-		list->AddText(font, small, { right - word_w, mid - small / 2.0f }, m_palette.faint, shown_word);
+	} else if (shown_word) {
+		write(list, { right - word_w, mid - small / 2.0f }, m_palette.faint, shown_word, small, small * TITLE_SPACING);
+	}
 	ImGui::SetCursorScreenPos(at);
 	ImGui::Dummy({ width, h });
 	ImGui::PopID();
@@ -698,8 +1001,8 @@ MenuKit::slider(const char *name, const char *about, float &value, float low, fl
 
 	ImDrawList *const list = ImGui::GetWindowDrawList();
 	const bool still = locked || off;
-	const float pad = px(ROW_PAD), track_w = px(64.0f), track_h = px(6.0f), space = px(8.0f);
-	const float shown_w = std::max(ImGui::CalcTextSize(shown).x, ImGui::CalcTextSize("-60 dB").x);
+	const float pad = px(ROW_PAD), track_w = px(64.0f), track_h = px(6.0f), space = px(8.0f), size = font(SMALL);
+	const float shown_w = std::max(measure(shown, size), measure("-60 dB", size));
 	const float control = track_w + space + shown_w, line = ImGui::GetTextLineHeight();
 	float width;
 	const ImVec2 at = begin_row(width);
@@ -728,8 +1031,8 @@ MenuKit::slider(const char *name, const char *about, float &value, float low, fl
 	const float r = track_h / 2.0f;
 
 	list->AddRectFilled(a, { a.x + track_w * fill, b.y }, faded(m_palette.action, still), r);
-	list->AddRect(a, b, faded(hovered ? m_palette.dim : m_palette.outline, still), r);
-	list->AddText({ b.x + space, placed.top }, faded(m_palette.ink, still), shown);
+	list->AddRect(a, b, faded(hovered ? m_palette.stroke : m_palette.outline, still), r);
+	write(list, { b.x + space, mid - size / 2.0f }, faded(m_palette.ink, still), shown, size);
 
 	ImGui::SetCursorScreenPos(at);
 	ImGui::Dummy({ width, h });
@@ -740,63 +1043,73 @@ MenuKit::slider(const char *name, const char *about, float &value, float low, fl
 ImVec2
 MenuKit::key_size(const char *name) const
 {
-	const float h = ImGui::GetTextLineHeight() + 2.0f * px(3.0f);
+	const float h = font(SMALL) + 2.0f * px(BUTTON_HIGH);
 
-	return { std::max(h, ImGui::CalcTextSize(name).x + 2.0f * px(5.0f)), h };
+	return { std::max(h, measure(name, font(NOTE)) + 2.0f * px(4.0f)), h };
 }
 
 void
 MenuKit::key(ImDrawList *list, ImVec2 at, const char *name, bool used, bool lit) const
 {
 	const ImVec2 size = key_size(name), b = { at.x + size.x, at.y + size.y };
-	const float w = ImGui::CalcTextSize(name).x;
+	const float note = font(NOTE), w = measure(name, note);
 
-	frame(list, at, b, px(CONTROL_CUT), lit ? m_palette.accent : m_palette.group,
-	      lit ? m_palette.accent : used ? m_palette.dim : m_palette.outline);
-	list->AddText({ at.x + (size.x - w) / 2.0f, at.y + px(3.0f) },
-	              lit ? m_palette.on_accent : used ? m_palette.ink : m_palette.faint, name);
+	list->AddRectFilled(at, b, lit ? m_palette.accent : m_palette.part, px(5.0f));
+	list->AddRect(at, b, lit ? m_palette.accent : used ? m_palette.stroke : m_palette.outline, px(5.0f));
+	write(list, { at.x + (size.x - w) / 2.0f, at.y + (size.y - note) / 2.0f },
+	      lit ? m_palette.on_accent : used ? m_palette.ink : m_palette.faint, name, note);
 }
 
 ImVec2
 MenuKit::pill_size(const char *name) const
 {
-	const float h = ImGui::GetTextLineHeight() + 2.0f * px(3.0f);
+	const float h = font(SMALL) + 2.0f * px(BUTTON_HIGH);
 
-	return { std::max(h, ImGui::CalcTextSize(name).x + 2.0f * px(7.0f)), h };
+	return { std::max(h, measure(name, font(SMALL)) + 2.0f * px(6.0f)), h };
 }
 
 void
 MenuKit::pill(ImDrawList *list, ImVec2 at, const char *name) const
 {
 	const ImVec2 size = pill_size(name);
-	const float w = ImGui::CalcTextSize(name).x;
+	const float small = font(SMALL), w = measure(name, small);
 
 	list->AddRect(at, { at.x + size.x, at.y + size.y }, m_palette.outline, size.y / 2.0f);
-	list->AddText({ at.x + (size.x - w) / 2.0f, at.y + px(3.0f) }, m_palette.ink, name);
+	write(list, { at.x + (size.x - w) / 2.0f, at.y + (size.y - small) / 2.0f }, m_palette.ink, name, small);
 }
 
 int
-MenuKit::shortcut(const char *name, std::span<const std::string> keys, std::span<const std::string> pad, int catching)
+MenuKit::shortcut(const char *name, std::span<const std::vector<std::string>> keys, std::span<const std::string> pad,
+                  int catching)
 {
 	ImGui::PushID(name);
 
 	ImDrawList *const list = ImGui::GetWindowDrawList();
 	const char press[] = "press...", none[] = "-";
-	const float pad_room = px(ROW_PAD), gap = px(4.0f), plus = ImGui::CalcTextSize("+").x;
-	const float line = ImGui::GetTextLineHeight(), cap_h = key_size("x").y;
-	/* The keys, then the buttons as wide as "Guide + Back" at the least */
-	const auto width_of = [&](size_t i) {
-		return static_cast<int>(i) == catching ? ImGui::CalcTextSize(press).x + 2.0f * px(5.0f) :
-		                                         key_size(keys[i].c_str()).x;
+	const float small = font(SMALL), note = font(NOTE);
+	const float pad_room = px(ROW_PAD), gap = px(3.0f), apart = px(8.0f), plus = measure("+", small);
+	const float cap_h = key_size("x").y;
+	const float press_key = measure(press, note) + 2.0f * px(5.0f), press_pad = measure(press, small) + 2.0f * px(7.0f);
+	/* A combination: its caps with + between them */
+	const auto combination_w = [&](size_t i) {
+		if (static_cast<int>(i) == catching)
+			return press_key;
+
+		float w = 0.0f;
+
+		for (size_t k = 0; k < keys[i].size(); k++)
+			w += key_size(keys[i][k].c_str()).x + (k ? 2.0f * gap + plus : 0.0f);
+		return w;
 	};
 	float keys_w = 0.0f, pad_w = 0.0f;
 
 	for (size_t i = 0; i < keys.size(); i++)
-		keys_w += width_of(i) + (i ? gap : 0.0f);
+		keys_w += combination_w(i) + (i ? apart : 0.0f);
+	/* The buttons as wide as "Guide + Back" at the least */
 	if (catching == 2)
-		pad_w = ImGui::CalcTextSize(press).x + 2.0f * px(7.0f);
+		pad_w = press_pad;
 	else if (pad.empty())
-		pad_w = ImGui::CalcTextSize(none).x;
+		pad_w = measure(none, small);
 	else
 		for (size_t i = 0; i < pad.size(); i++)
 			pad_w += pill_size(pad[i].c_str()).x + (i ? 2.0f * gap + plus : 0.0f);
@@ -806,7 +1119,7 @@ MenuKit::shortcut(const char *name, std::span<const std::string> keys, std::span
 	const ImVec2 at = begin_row(width);
 	const float control = keys_w + px(GAP) + pad_w;
 	/* Where the name has not room enough beside them, they go under it */
-	const bool under = width - control - px(GAP) - 2.0f * pad_room < px(120.0f);
+	const bool under = width - control - px(GAP) - 2.0f * pad_room < px(TEXT_LEAST);
 	const float text_w = under ? width - 2.0f * pad_room : width - control - px(GAP) - 2.0f * pad_room;
 	const float text_h = texts({ at.x + pad_room, at.y + pad_room }, text_w, name, nullptr, nullptr);
 	const float h = (under ? text_h + px(6.0f) + cap_h : std::max(text_h, cap_h)) + 2.0f * pad_room;
@@ -815,22 +1128,36 @@ MenuKit::shortcut(const char *name, std::span<const std::string> keys, std::span
 	int clicked = -1;
 
 	for (size_t i = 0; i < keys.size(); i++) {
-		const float w = width_of(i);
+		const float w = combination_w(i);
 
 		ImGui::SetCursorScreenPos({ x, y });
 		ImGui::PushID(static_cast<int>(i));
 		if (ImGui::InvisibleButton("key", { w, cap_h }))
 			clicked = static_cast<int>(i);
 		ImGui::PopID();
+
+		const bool hovered = ImGui::IsItemHovered();
+
 		if (static_cast<int>(i) == catching) {
-			frame(list, { x, y }, { x + w, y + cap_h }, px(CONTROL_CUT), m_palette.hover, m_palette.accent);
-			list->AddText({ x + px(5.0f), y + px(3.0f) }, m_palette.accent, press);
-		} else {
-			key(list, { x, y }, keys[i].c_str(), true, false);
-			if (ImGui::IsItemHovered())
-				frame(list, { x, y }, { x + w, y + cap_h }, px(CONTROL_CUT), m_palette.hover, 0);
+			list->AddRect({ x, y }, { x + w, y + cap_h }, m_palette.accent, px(5.0f));
+			write(list, { x + px(5.0f), y + (cap_h - note) / 2.0f }, m_palette.accent, press, note);
+			x += w + apart;
+			continue;
 		}
-		x += w + gap;
+		for (size_t k = 0; k < keys[i].size(); k++) {
+			const char *const cap = keys[i][k].c_str();
+			const float cap_w = key_size(cap).x;
+
+			if (k) {
+				write(list, { x + gap, y + (cap_h - small) / 2.0f }, m_palette.faint, "+", small);
+				x += 2.0f * gap + plus;
+			}
+			key(list, { x, y }, cap, true, false);
+			if (hovered)
+				list->AddRect({ x, y }, { x + cap_w, y + cap_h }, m_palette.action, px(5.0f));
+			x += cap_w;
+		}
+		x += apart;
 	}
 
 	const float pad_x = at.x + width - pad_room - pad_w;
@@ -839,23 +1166,24 @@ MenuKit::shortcut(const char *name, std::span<const std::string> keys, std::span
 	if (ImGui::InvisibleButton("pad", { pad_w, cap_h }))
 		clicked = 2;
 	if (catching == 2) {
-		const float w = ImGui::CalcTextSize(press).x + 2.0f * px(7.0f);
-
-		list->AddRect({ pad_x + pad_w - w, y }, { pad_x + pad_w, y + cap_h }, m_palette.accent, cap_h / 2.0f);
-		list->AddText({ pad_x + pad_w - w + px(7.0f), y + px(3.0f) }, m_palette.accent, press);
+		list->AddRect({ pad_x + pad_w - press_pad, y }, { pad_x + pad_w, y + cap_h }, m_palette.accent, cap_h / 2.0f);
+		write(list, { pad_x + pad_w - press_pad + px(7.0f), y + (cap_h - small) / 2.0f }, m_palette.accent, press, small);
 	} else {
-		if (ImGui::IsItemHovered())
-			list->AddRectFilled({ pad_x, y }, { pad_x + pad_w, y + cap_h }, m_palette.hover, cap_h / 2.0f);
+		const bool hovered = ImGui::IsItemHovered();
 		float right = pad_x + pad_w;
 
 		if (pad.empty())
-			list->AddText({ right - ImGui::CalcTextSize(none).x, y + (cap_h - line) / 2.0f }, m_palette.faint, none);
+			write(list, { right - measure(none, small), y + (cap_h - small) / 2.0f }, m_palette.faint, none, small);
 		for (size_t i = pad.size(); i-- > 0;) {
-			right -= pill_size(pad[i].c_str()).x;
+			const ImVec2 size = pill_size(pad[i].c_str());
+
+			right -= size.x;
 			pill(list, { right, y }, pad[i].c_str());
+			if (hovered)
+				list->AddRect({ right, y }, { right + size.x, y + size.y }, m_palette.action, size.y / 2.0f);
 			if (i) {
 				right -= gap + plus;
-				list->AddText({ right, y + (cap_h - line) / 2.0f }, m_palette.faint, "+");
+				write(list, { right, y + (cap_h - small) / 2.0f }, m_palette.faint, "+", small);
 				right -= gap;
 			}
 		}
@@ -870,14 +1198,13 @@ void
 MenuKit::paragraph(const char *title, const char *text)
 {
 	ImDrawList *const list = ImGui::GetWindowDrawList();
-	const float width = ImGui::GetContentRegionAvail().x;
+	const float width = ImGui::GetContentRegionAvail().x, size = font(SMALL);
 
 	ImGui::Dummy({ 0.0f, px(10.0f) });
-	list->AddText(ImGui::GetCursorScreenPos(), m_palette.dim, title);
-	ImGui::Dummy({ 0.0f, ImGui::GetTextLineHeight() + px(4.0f) });
-	list->AddText(ImGui::GetFont(), ImGui::GetFontSize(), ImGui::GetCursorScreenPos(), m_palette.faint, text, nullptr,
-	              width);
-	ImGui::Dummy({ 0.0f, ImGui::CalcTextSize(text, nullptr, false, width).y });
+	write(list, ImGui::GetCursorScreenPos(), m_palette.dim, title, size, size * TITLE_SPACING);
+	ImGui::Dummy({ 0.0f, size + px(5.0f) });
+	list->AddText(ImGui::GetFont(), size, ImGui::GetCursorScreenPos(), m_palette.faint, text, nullptr, width);
+	ImGui::Dummy({ 0.0f, wrapped_h(text, size, width) });
 }
 
 } /* namespace odin */

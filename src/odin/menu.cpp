@@ -19,6 +19,7 @@
 #include "odin/menu.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <utility>
 
 #include <cstdio>
@@ -43,21 +44,27 @@ constexpr std::array<std::pair<const char *, const char *>, 2> MENU_HINTS = { {
 	{ SDL_HINT_MOUSE_AUTO_CAPTURE, "0" },
 } };
 
-/* The frame in the window: its margin, its largest size, the cut of its
- * corners at 45 degrees and its padding, in points */
-constexpr float MARGIN = 16.0f;
-constexpr float WIDEST = 1080.0f;
-constexpr float HIGHEST = 760.0f;
-constexpr float CUT = 8.0f;
-constexpr float PADDING = 14.0f;
+/* The menu takes the whole window, made for one of 640 by 480 points
+ * (a window nearly square) or 960 by 540 (16:9 and wider), then larger by
+ * one factor as the window grows (mock-up v50); its padding, in points */
+constexpr float COMPACT_W = 640.0f;
+constexpr float COMPACT_H = 480.0f;
+constexpr float LARGE_W = 960.0f;
+constexpr float LARGE_H = 540.0f;
+constexpr float PADDING = 10.0f;
+/* The line under the tabs: what it leaves at each end of the width, where
+ * it fades in and out; ochre while a control of Input is touched */
+constexpr float LINE_ENDS = 0.11f;
+constexpr float LINE_FADE = 0.22f;
+constexpr float LINE_HOT = 0.85f;
 
 /* The tabs of the pages, in the order of Menu::Page */
 constexpr const char *TABS[] = { "Input", "Display", "Audio", "Hotkeys", "Outputs", "Paths", "About" };
 constexpr MenuKit::Icon TAB_ICONS[] = { MenuKit::Icon::INPUT, MenuKit::Icon::DISPLAY, MenuKit::Icon::AUDIO,
 	                                MenuKit::Icon::HOTKEYS, MenuKit::Icon::OUTPUTS, MenuKit::Icon::FOLDER,
 	                                MenuKit::Icon::ABOUT };
-/* A window narrower than this many times its height has the names of the
- * tabs not chosen left out */
+/* A window this many times wider than high takes the large menu; a
+ * narrower one has the names of the tabs not chosen left out */
 constexpr float WIDE = 1.5f;
 
 /* The window at start, that many times the screen; its sizes shorter
@@ -145,6 +152,18 @@ set_hint(const char *name, const std::optional<std::string> &value)
 		SDL_SetHint(name, value->c_str());
 	else
 		SDL_ResetHint(name);
+}
+
+/* The line under the tabs, faded at its ends */
+void
+under_tabs(ImDrawList *list, float left, float right, float y, ImU32 colour)
+{
+	const ImU32 clear = MenuKit::alpha(colour, 0.0f);
+	const float fade = (right - left) * LINE_FADE;
+
+	list->AddRectFilledMultiColor({ left, y }, { left + fade, y + 1.0f }, clear, colour, colour, clear);
+	list->AddRectFilled({ left + fade, y }, { right - fade, y + 1.0f }, colour);
+	list->AddRectFilledMultiColor({ right - fade, y }, { right, y + 1.0f }, colour, clear, clear, colour);
 }
 
 } /* namespace */
@@ -235,16 +254,21 @@ Menu::popup_open() const
 	return ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel);
 }
 
-/* The menu follows the scale the user gives the display (125 % on a
- * laptop, say), in points: the pixels of a dense display are SDL's. */
+/* The menu grows with the window, by one factor for all (mock-up v50): as
+ * much as the menu made for 640 by 480, or 960 by 540 in a wide window,
+ * takes to fill it one way, the other way given the room left; never
+ * smaller. In points: the pixels of a dense display are SDL's. */
 void
 Menu::follow_scale()
 {
-	const float density = SDL_GetWindowPixelDensity(m_window);
-	float scale = SDL_GetWindowDisplayScale(m_window) / (density > 0.0f ? density : 1.0f);
+	int w = 0, h = 0;
 
-	if (scale <= 0.0f)
-		scale = 1.0f;
+	SDL_GetWindowSize(m_window, &w, &h);
+
+	const float fw = static_cast<float>(w), fh = static_cast<float>(h);
+	const bool large = fw >= WIDE * fh;
+	const float scale = std::max(1.0f, std::min(fw / (large ? LARGE_W : COMPACT_W), fh / (large ? LARGE_H : COMPACT_H)));
+
 	if (scale == m_scale)
 		return;
 
@@ -256,8 +280,8 @@ Menu::follow_scale()
 	m_scale = scale;
 }
 
-/* The frame: the tabs at the top, the page under them, what it says and
- * what the keys do at the bottom */
+/* The whole window: the tabs at the top, the page under them, what it
+ * says and what the keys do at the bottom */
 void
 Menu::build(MenuState &state)
 {
@@ -268,30 +292,36 @@ Menu::build(MenuState &state)
 
 	MenuKit kit(RUNASTEINN, m_scale);
 	const MenuPalette &palette = kit.palette();
-	const ImVec2 room = ImGui::GetIO().DisplaySize;
-	const float w = std::max(0.0f, std::min(room.x - 2.0f * kit.px(MARGIN), kit.px(WIDEST)));
-	const float h = std::max(0.0f, std::min(room.y - 2.0f * kit.px(MARGIN), kit.px(HIGHEST)));
-	const ImVec2 a = { (room.x - w) / 2.0f, (room.y - h) / 2.0f }, b = { a.x + w, a.y + h };
-	const float line = ImGui::GetTextLineHeight(), pad = kit.px(PADDING);
+	const ImVec2 a = { 0.0f, 0.0f }, b = ImGui::GetIO().DisplaySize;
+	const float w = b.x, line = ImGui::GetTextLineHeight(), pad = kit.px(PADDING), foot_pad = kit.px(6.0f);
 
 	ImGui::SetNextWindowPos(a);
-	ImGui::SetNextWindowSize({ w, h });
+	ImGui::SetNextWindowSize(b);
 	ImGui::Begin("Odin", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
 	             ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBackground);
 
 	ImDrawList *const list = ImGui::GetWindowDrawList();
+	const bool touched = std::any_of(state.touched.begin(), state.touched.end(), [](bool t) { return t; });
+	const bool hot = m_page == INPUT && (state.catching || touched);
 
-	MenuKit::frame(list, a, b, kit.px(CUT), palette.frame, palette.faint);
-	kit.tabs(TABS, TAB_ICONS, room.x < WIDE * room.y, m_page);
+	list->AddRectFilled(a, b, palette.frame);
+	kit.tabs(TABS, TAB_ICONS, b.x < WIDE * b.y, m_page);
+	under_tabs(list, a.x + w * LINE_ENDS, b.x - w * LINE_ENDS, ImGui::GetCursorScreenPos().y + kit.px(3.0f),
+	           hot ? MenuKit::alpha(palette.accent, LINE_HOT) : palette.outline);
+	ImGui::Dummy({ 0.0f, kit.px(5.0f) });
 
 	/* What the page says at the bottom, beside the keys, on as many lines
-	 * as it takes: the page above it */
+	 * as it takes, under a line: the page above it. Input says it with
+	 * the names and inputs of its controls. */
 	const char keys[] = "Esc: back to the game    Ctrl+Q: quit";
 	const float keys_w = ImGui::CalcTextSize(keys).x, help_w = std::max(0.0f, w - 3.0f * pad - keys_w);
-	const std::string help = this->help(m_page, state);
-	const float foot = std::max(line, ImGui::CalcTextSize(help.c_str(), nullptr, false, help_w).y);
+	const std::string help = m_page == INPUT ? std::string() : this->help(m_page, state);
+	const float foot = m_page == INPUT ? input_foot(kit, state, {}, help_w, 0.0f, false) :
+	                   std::max(line, ImGui::CalcTextSize(help.c_str(), nullptr, false, help_w).y);
+	const float foot_top = b.y - foot_pad - foot;
 
-	ImGui::BeginChild("page", { 0.0f, -(foot + pad) }, ImGuiChildFlags_None, ImGuiWindowFlags_NoBackground);
+	ImGui::BeginChild("page", { 0.0f, foot_top - foot_pad - ImGui::GetCursorScreenPos().y }, ImGuiChildFlags_None,
+	                  ImGuiWindowFlags_NoBackground);
 	if (m_page == INPUT)
 		page_input(kit, state);
 	else if (m_page == DISPLAY)
@@ -309,9 +339,17 @@ Menu::build(MenuState &state)
 	ImGui::Dummy({ 0.0f, kit.px(4.0f) });
 	ImGui::EndChild();
 
-	list->AddText(ImGui::GetFont(), ImGui::GetFontSize(), { a.x + pad, b.y - pad - foot }, palette.dim, help.c_str(),
-	              nullptr, help_w);
-	list->AddText({ b.x - pad - keys_w, b.y - pad - line }, palette.faint, keys);
+	/* While an input is caught, Input says what to do there, keys and all */
+	const bool keys_shown = m_page != INPUT || !state.catching;
+
+	list->AddLine({ a.x, foot_top - foot_pad }, { b.x, foot_top - foot_pad }, palette.line, 1.0f);
+	if (m_page == INPUT)
+		input_foot(kit, state, { a.x + pad, foot_top }, keys_shown ? help_w : w - 2.0f * pad, foot, true);
+	else
+		list->AddText(ImGui::GetFont(), ImGui::GetFontSize(), { a.x + pad, foot_top + (foot - line) / 2.0f },
+		              palette.dim, help.c_str(), nullptr, help_w);
+	if (keys_shown)
+		list->AddText({ b.x - pad - keys_w, foot_top + (foot - line) / 2.0f }, palette.faint, keys);
 
 	ImGui::End();
 	ImGui::Render();
@@ -370,7 +408,7 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 	               state.unthrottled_given ? "set by the command line: -u" : nullptr))
 		state.unthrottled = pace == 1;
 
-	static constexpr const char *ON_OFF[] = { "On", "Off" };
+	static constexpr const char *ON_OFF[] = { "on", "off" };
 	int speed = state.show_speed ? 0 : 1;
 
 	if (kit.choice("Show the speed", "frames per second in the title", ON_OFF, speed))
@@ -385,8 +423,6 @@ Menu::help(int page, const MenuState &state)
 	const char *const kept = state.kept ? "." : ", until Odin closes: ODIN_CONFIG=none keeps nothing.";
 
 	switch (page) {
-	case INPUT:
-		return input_help(state);
 	case DISPLAY:
 		return std::string("These settings hold for every game") + kept;
 	case AUDIO:
@@ -406,22 +442,25 @@ Menu::help(int page, const MenuState &state)
 	}
 }
 
-/* About: Odin, and the libraries it is made with */
+/* About: the rune and Odin, in the middle; the libraries it is made with */
 void
 Menu::page_about(MenuKit &kit) const
 {
 	ImDrawList *const list = ImGui::GetWindowDrawList();
+	const MenuPalette &palette = kit.palette();
 	const ImVec2 at = ImGui::GetCursorScreenPos();
-	const float big = ImGui::GetStyle().FontSizeBase * 2.5f;
+	const float width = ImGui::GetContentRegionAvail().x, mid = at.x + width / 2.0f;
+	const float rune = kit.px(34.0f), big = MenuKit::font(22.0f / 12.5f), letters = big * 0.2f;
+	const char *const what = "Sega Hikaru emulator, as close to the hardware as it goes";
+	float y = at.y + kit.px(10.0f);
 
-	ImGui::Dummy({ 0.0f, kit.px(14.0f) });
-	ImGui::PushFont(nullptr, big);
-	list->AddText({ at.x + kit.px(8.0f), ImGui::GetCursorScreenPos().y }, kit.palette().ink, "ODIN");
-	ImGui::Dummy({ 0.0f, ImGui::GetTextLineHeight() });
-	ImGui::PopFont();
-	list->AddText({ at.x + kit.px(8.0f), ImGui::GetCursorScreenPos().y + kit.px(4.0f) }, kit.palette().dim,
-	              "Sega Hikaru emulator, as close to the hardware as it goes");
-	ImGui::Dummy({ 0.0f, ImGui::GetTextLineHeight() + kit.px(8.0f) });
+	MenuKit::icon(list, MenuKit::Icon::RUNE, { mid - rune / 2.0f, y }, rune, palette.ink);
+	y += rune + kit.px(6.0f);
+	MenuKit::write(list, { mid - MenuKit::measure("ODIN", big, letters) / 2.0f, y }, palette.ink, "ODIN", big, letters);
+	y += big + kit.px(6.0f);
+	list->AddText({ mid - ImGui::CalcTextSize(what).x / 2.0f, y }, palette.dim, what);
+	y += ImGui::GetTextLineHeight();
+	ImGui::Dummy({ 0.0f, y + kit.px(6.0f) - at.y });
 
 	kit.begin_group("LICENCES");
 	for (const auto &[name, by, licence] : LICENCES)
@@ -524,11 +563,14 @@ Menu::draw(unsigned window_w, unsigned window_h)
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT);
 
-	/* Where the picture of the game was */
+	/* The picture of the game over the whole window, its middle kept
+	 * where the window is of another shape (mock-up v50) */
 	const PictureRect rect = picture_rect(window_w, window_h);
 	if (m_frozen && rect.w && rect.h) {
-		glViewport(static_cast<GLint>(rect.x), static_cast<GLint>(rect.y), static_cast<GLsizei>(rect.w),
-		           static_cast<GLsizei>(rect.h));
+		const double k = std::max(static_cast<double>(window_w) / rect.w, static_cast<double>(window_h) / rect.h);
+		const auto w = static_cast<GLsizei>(std::lround(rect.w * k)), h = static_cast<GLsizei>(std::lround(rect.h * k));
+
+		glViewport((static_cast<GLint>(window_w) - w) / 2, (static_cast<GLint>(window_h) - h) / 2, w, h);
 		glUseProgram(m_show);
 		glUniform1f(m_show_light, LIGHT);
 		glBindVertexArray(m_vao);

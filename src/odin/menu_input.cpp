@@ -25,6 +25,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <numbers>
 #include <utility>
 
 #include "imgui/imgui.h"
@@ -63,16 +64,45 @@ constexpr float STICK_TOUCHED = 0.3f;
 constexpr int16_t TRIGGER_TOUCHED = 6554;
 
 bool
-is_playstation(SDL_GamepadType type)
+is_switch(SDL_GamepadType type)
 {
-	return type == SDL_GAMEPAD_TYPE_PS3 || type == SDL_GAMEPAD_TYPE_PS4 || type == SDL_GAMEPAD_TYPE_PS5;
+	return type >= SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_PRO && type <= SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_PAIR;
 }
 
-/* The name of an input of a gamepad of that kind, as its maker prints it */
+/* The names a maker prints on the buttons that differ: Back, Start, the
+ * sticks pressed, Guide, the shoulders and the triggers */
+struct Family {
+	const char *back, *start, *left_stick, *right_stick, *guide, *lb, *rb, *lt, *rt;
+};
+
+const Family &
+family(SDL_GamepadType type)
+{
+	static constexpr Family ODIN = { "Select", "Start", "L3", "R3", "Guide", "LB", "RB", "LT", "RT" };
+	static constexpr Family XBOX_360 = { "Back", "Start", "LS", "RS", "Guide", "LB", "RB", "LT", "RT" };
+	static constexpr Family XBOX_ONE = { "View", "Menu", "LS", "RS", "Guide", "LB", "RB", "LT", "RT" };
+	static constexpr Family PS3 = { "Select", "Start", "L3", "R3", "PS", "L1", "R1", "L2", "R2" };
+	static constexpr Family PS4 = { "Share", "Options", "L3", "R3", "PS", "L1", "R1", "L2", "R2" };
+	static constexpr Family PS5 = { "Create", "Options", "L3", "R3", "PS", "L1", "R1", "L2", "R2" };
+	static constexpr Family SWITCH = { "−", "+", "LS", "RS", "Home", "L", "R", "ZL", "ZR" };
+
+	switch (type) {
+	case SDL_GAMEPAD_TYPE_XBOX360: return XBOX_360;
+	case SDL_GAMEPAD_TYPE_XBOXONE: return XBOX_ONE;
+	case SDL_GAMEPAD_TYPE_PS3: return PS3;
+	case SDL_GAMEPAD_TYPE_PS4: return PS4;
+	case SDL_GAMEPAD_TYPE_PS5: return PS5;
+	default: return is_switch(type) ? SWITCH : ODIN;
+	}
+}
+
+/* The name of an input of a gamepad of that kind, as its maker prints it:
+ * the marks of a PlayStation, a way of a stick or of the D-pad as an
+ * arrow (mock-up v50) */
 std::string
 pad_label(const PadInput &pad, SDL_GamepadType type)
 {
-	const bool ps = is_playstation(type);
+	const Family &names = family(type);
 
 	if (pad.type == PadInput::Type::BUTTON) {
 		const auto button = static_cast<SDL_GamepadButton>(pad.index);
@@ -82,23 +112,23 @@ pad_label(const PadInput &pad, SDL_GamepadType type)
 		case SDL_GAMEPAD_BUTTON_EAST:
 		case SDL_GAMEPAD_BUTTON_WEST:
 		case SDL_GAMEPAD_BUTTON_NORTH: {
-			static const char *const FACES[] = { "?", "A", "B", "X", "Y", "Cross", "Circle", "Square", "Triangle" };
+			static const char *const FACES[] = { "?", "A", "B", "X", "Y", "✕", "○", "□", "△" };
 			const SDL_GamepadButtonLabel label =
 				SDL_GetGamepadButtonLabelForType(type == SDL_GAMEPAD_TYPE_UNKNOWN ? SDL_GAMEPAD_TYPE_STANDARD : type, button);
 
 			return FACES[static_cast<size_t>(label) < std::size(FACES) ? static_cast<size_t>(label) : 0];
 		}
-		case SDL_GAMEPAD_BUTTON_BACK: return ps ? "Share" : "Back";
-		case SDL_GAMEPAD_BUTTON_GUIDE: return "Guide";
-		case SDL_GAMEPAD_BUTTON_START: return ps ? "Options" : "Start";
-		case SDL_GAMEPAD_BUTTON_LEFT_STICK: return "L3";
-		case SDL_GAMEPAD_BUTTON_RIGHT_STICK: return "R3";
-		case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER: return ps ? "L1" : "LB";
-		case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER: return ps ? "R1" : "RB";
-		case SDL_GAMEPAD_BUTTON_DPAD_UP: return "D-pad up";
-		case SDL_GAMEPAD_BUTTON_DPAD_DOWN: return "D-pad down";
-		case SDL_GAMEPAD_BUTTON_DPAD_LEFT: return "D-pad left";
-		case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: return "D-pad right";
+		case SDL_GAMEPAD_BUTTON_BACK: return names.back;
+		case SDL_GAMEPAD_BUTTON_GUIDE: return names.guide;
+		case SDL_GAMEPAD_BUTTON_START: return names.start;
+		case SDL_GAMEPAD_BUTTON_LEFT_STICK: return names.left_stick;
+		case SDL_GAMEPAD_BUTTON_RIGHT_STICK: return names.right_stick;
+		case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER: return names.lb;
+		case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER: return names.rb;
+		case SDL_GAMEPAD_BUTTON_DPAD_UP: return "D-pad ↑";
+		case SDL_GAMEPAD_BUTTON_DPAD_DOWN: return "D-pad ↓";
+		case SDL_GAMEPAD_BUTTON_DPAD_LEFT: return "D-pad ←";
+		case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: return "D-pad →";
 		case SDL_GAMEPAD_BUTTON_TOUCHPAD: return "Touchpad";
 		default: {
 			const char *const name = SDL_GetGamepadStringForButton(button);
@@ -111,20 +141,21 @@ pad_label(const PadInput &pad, SDL_GamepadType type)
 	const auto axis = static_cast<SDL_GamepadAxis>(pad.index);
 
 	if (axis == SDL_GAMEPAD_AXIS_LEFT_TRIGGER)
-		return ps ? "L2" : "LT";
+		return names.lt;
 	if (axis == SDL_GAMEPAD_AXIS_RIGHT_TRIGGER)
-		return ps ? "R2" : "RT";
+		return names.rt;
 
 	const bool left = axis == SDL_GAMEPAD_AXIS_LEFTX || axis == SDL_GAMEPAD_AXIS_LEFTY;
 	const bool across = axis == SDL_GAMEPAD_AXIS_LEFTX || axis == SDL_GAMEPAD_AXIS_RIGHTX;
-	std::string out = left ? "Left stick " : "Right stick ";
+	const bool positive = pad.type == PadInput::Type::AXIS_POSITIVE;
+	std::string out = left ? "L stick " : "R stick ";
 
 	if (pad.type == PadInput::Type::AXIS)
-		out += across ? "X" : "Y";
+		out += across ? "↔" : "↕";
 	else if (across)
-		out += pad.type == PadInput::Type::AXIS_POSITIVE ? "right" : "left";
+		out += positive ? "→" : "←";
 	else
-		out += pad.type == PadInput::Type::AXIS_POSITIVE ? "down" : "up";
+		out += positive ? "↓" : "↑";
 	return pad.inverted ? out + " (inverted)" : out;
 }
 
@@ -135,7 +166,14 @@ label(const HostInput &input, SDL_GamepadType type)
 
 	switch (input.kind) {
 	case HostInput::Kind::KEY:
-		return SDL_GetKeyName(input.key);
+		switch (input.key) {
+		case SDLK_LEFT: return "←";
+		case SDLK_RIGHT: return "→";
+		case SDLK_UP: return "↑";
+		case SDLK_DOWN: return "↓";
+		case SDLK_RETURN: return "Enter";
+		default: return SDL_GetKeyName(input.key);
+		}
 	case HostInput::Kind::PAD:
 		if (input.pad.with >= 0) {
 			const PadInput with = { PadInput::Type::BUTTON, static_cast<uint8_t>(input.pad.with) };
@@ -173,77 +211,6 @@ capitals(std::string text)
 		if (c >= 'a' && c <= 'z')
 			c = static_cast<char>(c - 'a' + 'A');
 	return text;
-}
-
-/* A text cut to that width, three dots where it is cut */
-std::string
-fitted(const std::string &text, float width)
-{
-	if (ImGui::CalcTextSize(text.c_str()).x <= width)
-		return text;
-
-	const float dots = ImGui::CalcTextSize("...").x;
-	size_t n = text.size();
-
-	while (n > 0 && ImGui::CalcTextSize(text.c_str(), text.c_str() + n).x + dots > width)
-		n--;
-	/* not in the middle of a character of UTF-8 */
-	while (n > 0 && (static_cast<unsigned char>(text[n]) & 0xC0) == 0x80)
-		n--;
-	return text.substr(0, n) + "...";
-}
-
-/* A text of inputs as it is drawn: on a PlayStation gamepad the names of
- * its four buttons as their marks (cross, circle, square, triangle). Its
- * width; drawn when `list` is given. */
-float
-inputs_text(ImDrawList *list, ImVec2 at, const std::string &text, bool marks, ImU32 colour)
-{
-	static constexpr const char *FACES[] = { "Cross", "Circle", "Square", "Triangle" };
-	const float line = ImGui::GetTextLineHeight(), mark = line * 0.9f;
-	float x = at.x;
-	size_t from = 0;
-
-	while (from < text.size()) {
-		size_t next = std::string::npos;
-		int face = -1;
-
-		for (int f = 0; marks && f < 4; f++) {
-			const size_t found = text.find(FACES[f], from);
-
-			if (found < next)
-				next = found, face = f;
-		}
-
-		const size_t end = std::min(next, text.size());
-
-		if (end > from) {
-			if (list)
-				list->AddText({ x, at.y }, colour, text.c_str() + from, text.c_str() + end);
-			x += ImGui::CalcTextSize(text.c_str() + from, text.c_str() + end).x;
-		}
-		if (face < 0)
-			break;
-		if (list) {
-			const float m = mark * 0.22f, w = std::max(1.0f, line / 10.0f);
-			const ImVec2 a = { x + m, at.y + (line - mark) / 2.0f + m }, b = { x + mark - m, at.y + (line + mark) / 2.0f - m };
-			const ImVec2 c = { (a.x + b.x) / 2.0f, (a.y + b.y) / 2.0f };
-
-			if (face == 0) {
-				list->AddLine(a, b, colour, w);
-				list->AddLine({ a.x, b.y }, { b.x, a.y }, colour, w);
-			} else if (face == 1) {
-				list->AddCircle(c, (b.x - a.x) / 2.0f, colour, 0, w);
-			} else if (face == 2) {
-				list->AddRect(a, b, colour, 0.0f, ImDrawFlags_None, w);
-			} else {
-				list->AddTriangle({ c.x, a.y }, { b.x, b.y }, { a.x, b.y }, colour, w);
-			}
-		}
-		x += mark;
-		from = next + std::strlen(FACES[face]);
-	}
-	return x - at.x;
 }
 
 bool
@@ -301,8 +268,8 @@ input_rows(const MenuState &state)
 			add(control.name, { i, 0, control.role }, bindings.part(c, 0), lit, true);
 			break;
 		case GameControl::Type::POSITIONS:
-			add(control.name + " UP", { i, 2, control.role }, bindings.part(c, 2), lit, true);
-			add(control.name + " DOWN", { i, 1, control.role }, bindings.part(c, 1), lit, true);
+			add(control.name + " ▲", { i, 2, control.role }, bindings.part(c, 2), lit, true);
+			add(control.name + " ▼", { i, 1, control.role }, bindings.part(c, 1), lit, true);
 			break;
 		case GameControl::Type::ANALOG: {
 			const char *const left = GameControl::half(control.low, false);
@@ -335,6 +302,115 @@ input_rows(const MenuState &state)
 	if (state.player == 0)
 		add("TEST", { -1, 0, Role::TEST }, bindings.cabinet(Role::TEST), worked(controls.size() + 2), true);
 	return rows;
+}
+
+/* Whether two parts are of the same control (or role of the cabinet) */
+bool
+same_control(const MenuSlot &a, const MenuSlot &b)
+{
+	return a.control == b.control && (a.control >= 0 || a.role == b.role);
+}
+
+/* The next input of these parts is caught, each in turn; none when the
+ * first is caught already */
+void
+catch_parts(MenuState &state, const std::vector<MenuSlot> &parts)
+{
+	if (parts.empty() || same(state.catching, parts.front())) {
+		state.catching.reset();
+		state.catch_next.clear();
+		return;
+	}
+	state.catching = parts.front();
+	state.catch_next.assign(parts.begin() + 1, parts.end());
+}
+
+/* A control of the player as Classic and the line at the bottom show it:
+ * its name, its parts (rows of input_rows) each after its sign (▲ and ▼
+ * of a lever, · before a half on a gamepad), how far it is worked now (0
+ * to 1) */
+struct Group {
+	struct Part {
+		size_t row;
+		const char *sign;
+	};
+
+	std::string name;
+	std::vector<Part> parts;
+	bool lit = false, chosen = false;
+	float amount = 0.0f;
+
+	/* Its parts caught in turn on a click: not the halves of an axis on a
+	 * gamepad, which a button pressed for the whole takes */
+	std::vector<MenuSlot> to_catch(std::span<const InputRow> rows) const
+	{
+		std::vector<MenuSlot> out;
+
+		for (const Part &part : parts)
+			if (rows[part.row].catchable && !rows[part.row].half)
+				out.push_back(rows[part.row].slot);
+		return out;
+	}
+};
+
+std::vector<Group>
+groups(const MenuState &state, std::span<const InputRow> rows)
+{
+	const std::vector<GameControl> &controls = state.panel->controls();
+	std::vector<Group> out;
+
+	for (size_t r = 0; r < rows.size(); r++) {
+		const InputRow &row = rows[r];
+		const int c = row.slot.control;
+		const bool chosen = same(state.catching, row.slot);
+
+		/* A half on a gamepad, empty, says nothing */
+		if (row.half && row.inputs.empty() && !chosen)
+			continue;
+		if (out.empty() || c < 0 || rows[out.back().parts.front().row].slot.control != c) {
+			Group group;
+
+			group.name = c >= 0 && controls[static_cast<size_t>(c)].type != GameControl::Type::BUTTON ?
+			             controls[static_cast<size_t>(c)].name : row.name;
+			if (c >= 0 && static_cast<size_t>(c) < state.now.size()) {
+				const ControlNow &now = state.now[static_cast<size_t>(c)];
+
+				group.amount = controls[static_cast<size_t>(c)].type == GameControl::Type::ANALOG ?
+				               std::min(1.0f, std::abs(now.value)) : now.on ? 1.0f : 0.0f;
+			}
+			out.push_back(std::move(group));
+		}
+
+		Group &group = out.back();
+		const char *sign = "";
+
+		if (c >= 0) {
+			const GameControl &control = controls[static_cast<size_t>(c)];
+
+			if (control.type == GameControl::Type::POSITIONS)
+				sign = row.slot.part == 2 ? "▲" : "▼";
+			else if (row.half)
+				sign = "·";
+		}
+		group.parts.push_back({ r, sign });
+		group.lit = group.lit || row.lit;
+		group.chosen = group.chosen || chosen;
+		if (c < 0)
+			group.amount = row.lit ? 1.0f : 0.0f;
+	}
+	return out;
+}
+
+/* A part as a chip says it: its sign, then its inputs, "press..." while
+ * caught, "-" for none */
+std::string
+part_text(const MenuState &state, std::span<const InputRow> rows, const Group::Part &part, SDL_GamepadType type)
+{
+	const InputRow &row = rows[part.row];
+	const std::string inputs = same(state.catching, row.slot) ? "press..." :
+	                           row.inputs.empty() ? "-" : labels(row.inputs, type);
+
+	return *part.sign ? std::string(part.sign) + " " + inputs : inputs;
 }
 
 /* What part of the drawing an input of a gamepad is, and the key of its
@@ -401,8 +477,10 @@ struct Label {
 };
 
 /* The text of a label: its names, the words they begin with said once
- * ("STICK H · V"); three or more that differ only by their last word are
- * one control, its directions say nothing more ("LEFT-LEVER") */
+ * ("1P START · WATER"); names that differ only by their last word are one
+ * control, its directions say nothing more, when there are three of them
+ * or more ("LEFT-LEVER") or when that word is an axis or an arrow ("1P
+ * SIGHT LOCATION", for X and Y) */
 std::string
 label_text(std::span<const std::string> names)
 {
@@ -411,10 +489,18 @@ label_text(std::span<const std::string> names)
 
 		return space == std::string::npos ? std::string() : name.substr(0, space);
 	};
+	/* One character, of one byte or of a sign */
+	const auto mark = [](const std::string &name) {
+		const size_t space = name.rfind(' ');
+		const size_t length = space == std::string::npos ? 0 : name.size() - space - 1;
+
+		return length == 1 || (length == 3 && static_cast<unsigned char>(name[space + 1]) >= 0xE0);
+	};
 	const std::string first = stem(names[0]);
 
-	if (names.size() >= 3 && !first.empty() &&
-	    std::all_of(names.begin(), names.end(), [&](const std::string &n) { return stem(n) == first; }))
+	if (names.size() >= 2 && !first.empty() &&
+	    std::all_of(names.begin(), names.end(), [&](const std::string &n) { return stem(n) == first; }) &&
+	    (names.size() >= 3 || std::all_of(names.begin(), names.end(), mark)))
 		return first;
 
 	std::string text = names[0];
@@ -540,25 +626,26 @@ Menu::games_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width)
 	ImDrawList *const list = ImGui::GetWindowDrawList();
 	const MenuPalette &palette = kit.palette();
 	const float line = ImGui::GetTextLineHeight(), spacing = kit.px(14.0f), dot = kit.px(2.5f);
+	const float letters = ImGui::GetFontSize() * 0.1f;
 	std::vector<std::string> names;
 	float total = 0.0f;
 
 	for (const auto &[name, title] : state.games) {
 		names.push_back(capitals(title));
-		total += ImGui::CalcTextSize(names.back().c_str()).x + spacing + 3.0f * dot;
+		total += MenuKit::measure(names.back().c_str(), 0.0f, letters) + spacing + 4.0f * dot;
 	}
 	if (names.empty())
 		return at.y;
 
 	const auto title = [&](size_t g, ImVec2 p, bool clickable) {
-		const ImVec2 size = ImGui::CalcTextSize(names[g].c_str());
+		const float w = MenuKit::measure(names[g].c_str(), 0.0f, letters);
 		const bool shown = g == state.shown;
 		bool hovered = false;
 
 		if (clickable) {
 			ImGui::SetCursorScreenPos(p);
 			ImGui::PushID(static_cast<int>(g));
-			if (ImGui::InvisibleButton("game", { size.x + 3.0f * dot, line + kit.px(4.0f) }) && !shown)
+			if (ImGui::InvisibleButton("game", { w + 4.0f * dot, line + kit.px(4.0f) }) && !shown)
 				state.show = g;
 			hovered = ImGui::IsItemHovered();
 			ImGui::PopID();
@@ -566,12 +653,12 @@ Menu::games_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width)
 
 		const ImU32 colour = shown ? palette.action : hovered ? palette.ink : palette.dim;
 
-		list->AddText(p, colour, names[g].c_str());
+		MenuKit::write(list, p, colour, names[g].c_str(), 0.0f, letters);
 		if (shown)
-			list->AddLine({ p.x, p.y + line + kit.px(2.0f) }, { p.x + size.x, p.y + line + kit.px(2.0f) }, colour, 1.0f);
+			list->AddLine({ p.x, p.y + line + kit.px(2.0f) }, { p.x + w, p.y + line + kit.px(2.0f) }, colour, 1.0f);
 		if (g == state.running)
-			list->AddCircleFilled({ p.x + size.x + 2.0f * dot, p.y + line / 2.0f }, dot, colour);
-		return size.x + 3.0f * dot;
+			list->AddCircleFilled({ p.x + w + 2.4f * dot + dot, p.y + line / 2.0f }, dot, MenuKit::alpha(colour, 0.8f));
+		return w + 4.0f * dot;
 	};
 
 	if (total - spacing <= width) {
@@ -584,24 +671,25 @@ Menu::games_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width)
 
 	/* ‹ the game › and a dot for each */
 	const size_t n = names.size(), shown = std::min(state.shown, n - 1);
-	const float arrow = kit.button_size("<").x, w = ImGui::CalcTextSize(names[shown].c_str()).x + 3.0f * dot;
+	const ImVec2 arrow = kit.arrow_size();
+	const float w = MenuKit::measure(names[shown].c_str(), 0.0f, letters) + 4.0f * dot;
 	const float dots = static_cast<float>(n) * kit.px(9.0f);
-	float x = at.x + (width - (2.0f * arrow + w + 2.0f * spacing + spacing + dots)) / 2.0f;
+	float x = at.x + (width - (2.0f * arrow.x + w + 2.0f * spacing + spacing + dots)) / 2.0f;
 
 	ImGui::PushID("games");
-	if (kit.button("<", { x, at.y }, false))
+	if (kit.arrow("before", { x, at.y }, false))
 		state.show = (shown + n - 1) % n;
-	x += arrow + spacing;
-	title(shown, { x, at.y + kit.px(4.0f) }, false);
+	x += arrow.x + spacing;
+	title(shown, { x, at.y + (arrow.y - line) / 2.0f }, false);
 	x += w + spacing;
-	if (kit.button(">", { x, at.y }, false))
+	if (kit.arrow("after", { x, at.y }, true))
 		state.show = (shown + 1) % n;
 	ImGui::PopID();
-	x += arrow + spacing;
+	x += arrow.x + spacing;
 	for (size_t g = 0; g < n; g++)
-		list->AddCircleFilled({ x + kit.px(4.5f) + static_cast<float>(g) * kit.px(9.0f), at.y + kit.button_size("<").y / 2.0f },
-		                      dot, g == shown ? palette.ink : palette.outline);
-	return at.y + kit.button_size("<").y;
+		list->AddCircleFilled({ x + kit.px(4.5f) + static_cast<float>(g) * kit.px(9.0f), at.y + arrow.y / 2.0f }, dot,
+		                      g == shown ? palette.ink : palette.outline);
+	return at.y + arrow.y;
 }
 
 namespace {
@@ -652,15 +740,15 @@ devices_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width, bool t
 
 			ImGui::SetCursorScreenPos({ x, at.y });
 			if (ImGui::InvisibleButton("player", { size.x + kit.px(8.0f), h }))
-				state.player = player, state.catching.reset();
-			list->AddText({ x, at.y + (h - size.y) / 2.0f },
-			              shown ? palette.action : ImGui::IsItemHovered() ? palette.ink : palette.dim, name);
+				state.player = player, state.catching.reset(), state.catch_next.clear();
+			list->AddText({ x, at.y + (h - size.y) / 2.0f }, shown || ImGui::IsItemHovered() ? palette.ink : palette.dim,
+			              name);
 			x += size.x + kit.px(8.0f);
 			w -= size.x + kit.px(8.0f);
 		}
 		const MenuKit::Icon kind = device ? MenuKit::Icon::PAD : MenuKit::Icon::KEYBOARD;
 
-		if (kit.picker("device", { x, at.y }, w, devices, device, &kind)) {
+		if (kit.picker("device", { x, at.y }, w, devices, device, kind)) {
 			const size_t chosen = static_cast<size_t>(device);
 
 			state.player = player;
@@ -683,7 +771,7 @@ column_width(const MenuKit &kit, std::span<const Label> labels, float box)
 	float longest = 0.0f;
 
 	for (const Label &l : labels)
-		longest = std::max(longest, ImGui::CalcTextSize(l.text.c_str()).x);
+		longest = std::max(longest, MenuKit::measure(l.text.c_str()));
 	return std::clamp(longest + kit.px(16.0f), kit.px(COLUMN_MIN), box * 0.3f);
 }
 
@@ -701,13 +789,14 @@ not_mapped(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows,
 	const char *const title = "NOT MAPPED";
 	const float line = ImGui::GetTextLineHeight(), wide = kit.px(9.0f), high = kit.px(2.0f);
 	const float h = line + 2.0f * high, gap = kit.px(6.0f), room = b.x - a.x - 2.0f * kit.px(BOX_INSIDE);
+	const float tiny = MenuKit::font(MenuKit::TINY), letters = tiny * 0.12f;
 	/* The lines of chips: the title first, then each name */
 	std::vector<std::vector<std::pair<int, float>>> lines(1);
-	float used = ImGui::CalcTextSize(title).x + gap;
+	float used = MenuKit::measure(title, tiny, letters) + gap;
 
 	lines[0].push_back({ -1, used - gap });
 	for (const size_t r : empty) {
-		const float w = ImGui::CalcTextSize(rows[r].name.c_str()).x + 2.0f * wide;
+		const float w = MenuKit::measure(rows[r].name.c_str()) + 2.0f * wide;
 
 		if (used + w > room && !lines.back().empty()) {
 			lines.emplace_back();
@@ -734,7 +823,7 @@ not_mapped(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows,
 
 		for (const auto &[r, w] : chips) {
 			if (r < 0) {
-				list->AddText({ x, y + high }, palette.faint, title);
+				MenuKit::write(list, { x, y + (h - tiny) / 2.0f }, palette.faint, title, tiny, letters);
 				x += w + gap;
 				continue;
 			}
@@ -744,12 +833,8 @@ not_mapped(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows,
 
 			ImGui::SetCursorScreenPos({ x, y });
 			ImGui::PushID(r);
-			if (ImGui::InvisibleButton("empty", { w, h }) && row.catchable) {
-				if (chosen)
-					state.catching.reset();
-				else
-					state.catching = row.slot;
-			}
+			if (ImGui::InvisibleButton("empty", { w, h }) && row.catchable)
+				catch_parts(state, { row.slot });
 
 			const bool hovered = ImGui::IsItemHovered();
 
@@ -757,11 +842,11 @@ not_mapped(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows,
 			if (chosen)
 				MenuKit::frame(list, { x, y }, { x + w, y + h }, kit.px(3.0f), 0, palette.accent);
 			else if (hovered)
-				MenuKit::frame(list, { x, y }, { x + w, y + h }, kit.px(3.0f), 0, palette.stroke);
+				MenuKit::frame(list, { x, y }, { x + w, y + h }, kit.px(3.0f), 0, palette.action);
 			else
 				kit.dashed_frame(list, { x, y }, { x + w, y + h }, palette.outline);
-			list->AddText({ x + wide, y + high }, chosen ? palette.accent : hovered ? palette.ink : palette.dim,
-			              row.name.c_str());
+			MenuKit::write(list, { x + wide, y + high }, chosen ? palette.accent : hovered ? palette.action : palette.dim,
+			               row.name.c_str());
 			x += w + gap;
 		}
 		y += h + gap;
@@ -783,7 +868,7 @@ next_mapping(MenuState &state, std::span<const InputRow> rows)
 	const uint64_t now = SDL_GetTicks();
 
 	if (state.catching) {
-		if (i >= rows.size() || !same(state.catching, rows[i].slot)) {
+		if (i >= rows.size() || !same_control(*state.catching, rows[i].slot)) {
 			state.mapping.reset();
 			return;
 		}
@@ -793,6 +878,7 @@ next_mapping(MenuState &state, std::span<const InputRow> rows)
 	for (i = i >= rows.size() ? 0 : i + 1; i < rows.size(); i++)
 		if (rows[i].catchable && !rows[i].half)
 			break;
+	state.catch_next.clear();
 	if (i >= rows.size()) {
 		state.mapping.reset();
 		state.catching.reset();
@@ -831,10 +917,14 @@ cabinet_box(const MenuKit &kit, const MenuState &state, ImVec2 a, ImVec2 b, bool
 		const std::string &title = state.games[state.shown].second;
 		const float pad = kit.px(8.0f);
 
+		const float tiny = MenuKit::font(MenuKit::TINY), small = MenuKit::font(MenuKit::SMALL);
+
 		MenuKit::frame(list, a, b, kit.px(BOX_CUT), 0, palette.line);
-		list->AddText({ a.x + pad, a.y + kit.px(5.0f) }, palette.cabinet, "THE CABINET");
-		list->AddText({ b.x - pad - ImGui::CalcTextSize(title.c_str()).x, a.y + kit.px(5.0f) }, palette.dim, title.c_str());
-		top = a.y + kit.px(5.0f) + ImGui::GetTextLineHeight();
+		MenuKit::write(list, { a.x + pad, a.y + kit.px(6.0f) + small - tiny }, palette.cabinet, "THE CABINET", tiny,
+		               tiny * 0.14f);
+		MenuKit::write(list, { b.x - pad - MenuKit::measure(title.c_str(), small), a.y + kit.px(6.0f) }, palette.dim,
+		               title.c_str(), small);
+		top = a.y + kit.px(6.0f) + small;
 	}
 	draw_cabinet(kit, state.games[state.shown].first, now, { a.x + kit.px(4.0f), top },
 	             { b.x - kit.px(4.0f), b.y - kit.px(6.0f) });
@@ -942,23 +1032,19 @@ draw_label(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows,
 		list->AddCircleFilled(l.line.back(), kit.px(DOT), rest);
 	}
 
-	const std::string text = fitted(l.text, room);
-	const float line = ImGui::GetTextLineHeight(), w = ImGui::CalcTextSize(text.c_str()).x;
+	const std::string text = MenuKit::fitted(l.text, room);
+	const float line = ImGui::GetTextLineHeight(), w = MenuKit::measure(text.c_str());
 	const ImVec2 at = { l.left ? edge - kit.px(6.0f) - w : edge + kit.px(6.0f), l.y - line / 2.0f };
 
 	ImGui::SetCursorScreenPos(at);
 	ImGui::PushID(l.key);
-	if (ImGui::InvisibleButton("label", { w, line }) && rows[l.row].catchable) {
-		if (l.chosen)
-			state.catching.reset();
-		else
-			state.catching = rows[l.row].slot;
-	}
+	if (ImGui::InvisibleButton("label", { w, line }) && rows[l.row].catchable)
+		catch_parts(state, l.chosen ? std::vector<MenuSlot>() : std::vector<MenuSlot>{ rows[l.row].slot });
 	ImGui::PopID();
 
 	const ImU32 colour = l.hot || l.chosen ? palette.accent : ImGui::IsItemHovered() ? palette.dim : palette.ink;
 
-	list->AddText(at, colour, text.c_str());
+	MenuKit::write(list, at, colour, text.c_str());
 	if (l.hot)
 		list->AddLine({ at.x, at.y + line + kit.px(1.0f) }, { at.x + w, at.y + line + kit.px(1.0f) }, colour, 1.0f);
 }
@@ -986,11 +1072,12 @@ draw_elsewhere(const MenuKit &kit, const MenuState &state, std::span<const Input
 	float y = std::max(last(left) + gap * 1.6f, bottom - static_cast<float>(sorted.elsewhere.size() - 1) * gap);
 
 	for (const auto &[r, whole] : sorted.elsewhere) {
-		const std::string text = fitted(whole, w);
-		const float tw = ImGui::CalcTextSize(text.c_str()).x;
+		const std::string text = MenuKit::fitted(whole, w);
+		const float tw = MenuKit::measure(text.c_str());
 		const ImVec2 at = { left ? a.x + kit.px(6.0f) : b.x - kit.px(6.0f) - tw, y - line / 2.0f };
 
-		list->AddText(at, same(state.catching, rows[r].slot) ? kit.palette().accent : kit.palette().dim, text.c_str());
+		MenuKit::write(list, at, same(state.catching, rows[r].slot) ? kit.palette().accent : kit.palette().dim,
+		               text.c_str());
 		y += gap;
 	}
 }
@@ -1109,12 +1196,12 @@ keyboard_box(const MenuKit &kit, const MenuState &state, std::span<const InputRo
 		const bool down = std::find(state.keys_held.begin(), state.keys_held.end(), dk.key) != state.keys_held.end();
 		const float dy = down ? 1.5f : 0.0f;
 		const ImVec2 p = at(x, y + dy), q = at(x + w, y + dy + U - GAP - 1);
-		const ImVec2 text = ImGui::GetFont()->CalcTextSizeA(size, 1e9f, 0.0f, dk.name);
+		const float text = MenuKit::measure(dk.name, size);
 
 		list->AddRectFilled(p, q, down ? palette.accent : palette.part, 4.0f * k);
 		list->AddRect(p, q, on ? palette.stroke : faint, 4.0f * k, ImDrawFlags_None, kit.px(1.0f));
-		list->AddText(ImGui::GetFont(), size, { (p.x + q.x - text.x) / 2.0f, (p.y + q.y - text.y) / 2.0f },
-		              down ? palette.on_accent : on ? palette.ink : palette.faint, dk.name);
+		MenuKit::write(list, { (p.x + q.x - text) / 2.0f, (p.y + q.y - size) / 2.0f },
+		               down ? palette.on_accent : on ? palette.ink : palette.faint, dk.name, size);
 	};
 
 	for (size_t r = 0; r < 5; r++) {
@@ -1130,10 +1217,10 @@ keyboard_box(const MenuKit &kit, const MenuState &state, std::span<const InputRo
 
 	const float ax = X0 + 15 * U + 8;
 
-	key({ SDLK_UP, "^", 1 }, ax + U, Y0 + 3 * U, U - GAP);
-	key({ SDLK_LEFT, "<", 1 }, ax, Y0 + 4 * U, U - GAP);
-	key({ SDLK_DOWN, "v", 1 }, ax + U, Y0 + 4 * U, U - GAP);
-	key({ SDLK_RIGHT, ">", 1 }, ax + 2 * U, Y0 + 4 * U, U - GAP);
+	key({ SDLK_UP, "↑", 1 }, ax + U, Y0 + 3 * U, U - GAP);
+	key({ SDLK_LEFT, "←", 1 }, ax, Y0 + 4 * U, U - GAP);
+	key({ SDLK_DOWN, "↓", 1 }, ax + U, Y0 + 4 * U, U - GAP);
+	key({ SDLK_RIGHT, "→", 1 }, ax + 2 * U, Y0 + 4 * U, U - GAP);
 
 	/* The mouse: its outline, its two buttons, its wheel */
 	std::vector<ImVec2> body = { { 584, 116 } }, left = { { 582, 118 } }, right = { { 586, 118 } };
@@ -1162,21 +1249,50 @@ keyboard_box(const MenuKit &kit, const MenuState &state, std::span<const InputRo
 	list->AddRect(at(580, 132), at(588, 154), palette.stroke, 4.0f * k, ImDrawFlags_None, kit.px(1.0f));
 }
 
-/* The controls as a list in two columns (Classic): each name and its
- * inputs on the device shown; a click catches the next one */
+/* What the page asks while the next input of a part is caught (mock-up
+ * v50) */
+std::string
+prompt(const MenuState &state, const MenuSlot &slot)
+{
+	const bool pad = state.on_pad();
+	const std::string thing = pad ? "button" : "key";
+	const GameControl *const control = slot.control >= 0 ? &state.panel->controls()[static_cast<size_t>(slot.control)] :
+	                                   nullptr;
+
+	if (!control || control->type == GameControl::Type::BUTTON)
+		return "Press the " + thing + " you want";
+	if (control->type == GameControl::Type::POSITIONS)
+		return "The " + thing + (slot.part == 2 ? " that shifts up" : " that shifts down");
+
+	const bool two_ways = GameControl::half(control->low, false);
+	const bool vertical = control->low == GameControl::Low::UP || control->low == GameControl::Low::DOWN;
+
+	if (slot.part == 0)
+		return two_ways ? "Move a stick along it, or press a button for each way" : "Press the trigger or pedal you want";
+	if (!two_ways)
+		return "Press the " + thing + " you want";
+	return "The " + thing + " for " + (slot.part == 1 ? (vertical ? "forward" : "left") : (vertical ? "back" : "right"));
+}
+
+/* The controls as a list in two columns (Classic): each name, and its
+ * inputs on the device shown in a pill, filled as far as the control is
+ * worked; a click on the name catches its parts in turn, on a part that
+ * part */
 void
 list_box(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, ImVec2 a, ImVec2 b, float corner)
 {
 	ImDrawList *list = ImGui::GetWindowDrawList();
 	const MenuPalette &palette = kit.palette();
 	const auto type = static_cast<SDL_GamepadType>(state.pad_types[state.player & 1]);
+	const std::vector<Group> all = groups(state, rows);
 	const float line = ImGui::GetTextLineHeight(), gap = kit.px(28.0f), wide = kit.px(8.0f), high = kit.px(2.0f);
+	const float apart = kit.px(8.0f);
 	ImVec2 lo = { a.x + kit.px(14.0f), a.y + kit.px(BOX_INSIDE) + corner };
 	const ImVec2 hi = { b.x - kit.px(14.0f), b.y - kit.px(BOX_INSIDE) };
-	const size_t half = (rows.size() + 1) / 2;
+	const size_t half = (all.size() + 1) / 2;
 	/* As high as the room leaves them, at most as in the mock-up; when
 	 * they do not fit, the list scrolls, its bar beside the columns */
-	const float h = std::clamp((hi.y - lo.y) / static_cast<float>(std::max<size_t>(half, 1)), line + 2.0f * high + kit.px(2.0f),
+	const float h = std::clamp((hi.y - lo.y) / static_cast<float>(std::max<size_t>(half, 1)), line + 2.0f * high + kit.px(4.0f),
 	                           line + kit.px(16.0f));
 	const bool scrolls = static_cast<float>(half) * h > hi.y - lo.y;
 	const float column = (hi.x - lo.x - gap - (scrolls ? ImGui::GetStyle().ScrollbarSize : 0.0f)) / 2.0f;
@@ -1190,48 +1306,169 @@ list_box(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, I
 
 	const float top = scrolls ? lo.y : std::max(lo.y, (lo.y + hi.y - static_cast<float>(half) * h) / 2.0f);
 
-	for (size_t r = 0; r < rows.size(); r++) {
-		const InputRow &row = rows[r];
-		const bool second = r >= half, chosen = same(state.catching, row.slot);
-		const ImVec2 at = { lo.x + (second ? column + gap : 0.0f), top + static_cast<float>(second ? r - half : r) * h };
-		const std::string whole = chosen ? "press..." : row.inputs.empty() ? "-" : labels(row.inputs, type);
-		const bool marks = is_playstation(type) && state.on_pad() &&
-		                   inputs_text(nullptr, {}, whole, true, 0) <= column / 2.0f - 2.0f * wide;
-		const std::string inputs = marks ? whole : fitted(whole, column / 2.0f - 2.0f * wide);
-		const float chip = inputs_text(nullptr, {}, inputs, marks, 0) + 2.0f * wide;
-		const ImVec2 ca = { at.x + column - chip, at.y + (h - line) / 2.0f - high };
-		const std::string name = fitted(row.name, column - chip - kit.px(14.0f));
-		const ImVec2 cb = { at.x + column, ca.y + line + 2.0f * high };
+	for (size_t g = 0; g < all.size(); g++) {
+		const Group &group = all[g];
+		const bool second = g >= half;
+		const ImVec2 at = { lo.x + (second ? column + gap : 0.0f), top + static_cast<float>(second ? g - half : g) * h };
+		/* The pill: its parts, the longest cut first where they are too
+		 * long together */
+		const size_t n = group.parts.size();
+		const float room = column * 0.6f - 2.0f * wide;
+		std::vector<std::string> texts;
+		std::vector<float> widths;
+		bool empty = true;
 
-		ImGui::SetCursorScreenPos(at);
-		ImGui::PushID(static_cast<int>(r));
-		if (ImGui::InvisibleButton("row", { column, h }) && row.catchable) {
-			if (chosen)
-				state.catching.reset();
-			else
-				state.catching = row.slot;
+		for (const Group::Part &part : group.parts) {
+			texts.push_back(part_text(state, rows, part, type));
+			widths.push_back(MenuKit::measure(texts.back().c_str()));
+			empty = empty && rows[part.row].inputs.empty() && !same(state.catching, rows[part.row].slot);
 		}
 
-		const bool hovered = ImGui::IsItemHovered();
+		const auto sum = [&] {
+			float together = static_cast<float>(n - 1) * apart;
 
+			for (const float w : widths)
+				together += w;
+			return together;
+		};
+
+		for (size_t k = 0; k < n && sum() > room; k++) {
+			const size_t longest = static_cast<size_t>(std::max_element(widths.begin(), widths.end()) - widths.begin());
+
+			texts[longest] = MenuKit::fitted(texts[longest], std::max(0.0f, widths[longest] - (sum() - room)));
+			widths[longest] = MenuKit::measure(texts[longest].c_str());
+		}
+
+		const float total = sum();
+
+		const float chip_w = std::max(kit.px(34.0f), total + 2.0f * wide);
+		const ImVec2 ca = { at.x + column - chip_w, at.y + (h - line) / 2.0f - high };
+		const ImVec2 cb = { at.x + column, ca.y + line + 2.0f * high };
+		int hovered_part = -1;
+
+		ImGui::PushID(static_cast<int>(g));
+		ImGui::SetCursorScreenPos(at);
+		if (ImGui::InvisibleButton("name", { ca.x - at.x, h }))
+			catch_parts(state, group.chosen ? std::vector<MenuSlot>() : group.to_catch(rows));
+
+		bool hovered = ImGui::IsItemHovered();
+		float x = ca.x + wide + (chip_w - 2.0f * wide - total) / 2.0f;
+
+		for (size_t p = 0; p < n; p++) {
+			const InputRow &row = rows[group.parts[p].row];
+			const float w = MenuKit::measure(texts[p].c_str());
+			const float from = p ? x - apart / 2.0f : ca.x, to = p + 1 < n ? x + w + apart / 2.0f : cb.x;
+
+			ImGui::SetCursorScreenPos({ from, at.y });
+			ImGui::PushID(static_cast<int>(p));
+			if (ImGui::InvisibleButton("part", { to - from, h }) && row.catchable)
+				catch_parts(state, same(state.catching, row.slot) ? std::vector<MenuSlot>() :
+				                                                     std::vector<MenuSlot>{ row.slot });
+			if (ImGui::IsItemHovered())
+				hovered_part = static_cast<int>(p), hovered = true;
+			ImGui::PopID();
+			x += w + apart;
+		}
 		ImGui::PopID();
+
 		if (hovered)
 			list->AddRectFilled(at, { at.x + column, at.y + h }, palette.hover);
 		list->AddLine({ at.x, at.y + h }, { at.x + column, at.y + h }, palette.line, 1.0f);
-		list->AddText({ at.x + kit.px(4.0f), at.y + (h - line) / 2.0f }, row.lit || chosen ? palette.accent : palette.ink,
-		              name.c_str());
-		if (row.inputs.empty() && !chosen)
-			kit.dashed_frame(list, ca, cb, palette.outline);
+		MenuKit::write(list, { at.x + kit.px(4.0f), at.y + (h - line) / 2.0f },
+		               group.lit || group.chosen ? palette.accent : palette.ink,
+		               MenuKit::fitted(group.name, ca.x - at.x - kit.px(14.0f)).c_str());
+		if (group.amount > 0.01f) {
+			list->PushClipRect(ca, { ca.x + chip_w * group.amount, cb.y }, true);
+			list->AddRectFilled(ca, cb, MenuKit::alpha(palette.accent, 0.55f), (cb.y - ca.y) / 2.0f);
+			list->PopClipRect();
+		}
+		if (empty)
+			kit.dashed_pill(list, ca, cb, palette.outline);
 		else
-			MenuKit::frame(list, ca, cb, kit.px(3.0f), 0, chosen || row.lit ? palette.accent : palette.outline);
-		inputs_text(list, { ca.x + wide, ca.y + high }, inputs, marks,
-		            chosen ? palette.accent : row.inputs.empty() ? palette.faint : palette.ink);
+			list->AddRect(ca, cb, group.chosen || group.lit ? palette.accent : palette.outline, (cb.y - ca.y) / 2.0f);
+		x = ca.x + wide + (chip_w - 2.0f * wide - total) / 2.0f;
+		for (size_t p = 0; p < n; p++) {
+			const InputRow &row = rows[group.parts[p].row];
+			const ImU32 colour = same(state.catching, row.slot) ? palette.accent :
+			                     static_cast<int>(p) == hovered_part ? palette.action :
+			                     row.inputs.empty() ? palette.faint : palette.ink;
+
+			MenuKit::write(list, { x, ca.y + high }, colour, texts[p].c_str());
+			x += MenuKit::measure(texts[p].c_str()) + apart;
+		}
 	}
 	if (scrolls) {
 		ImGui::SetCursorScreenPos(lo);
 		ImGui::Dummy({ hi.x - lo.x, static_cast<float>(half) * h });
 		ImGui::EndChild();
 	}
+}
+
+/* The buttons under the drawing, as many on a line as fit: Defaults, Clear
+ * mapping (Undo for a while after), Start mapping; the vibration of the
+ * pad where the game shakes it. Their height, with the room around them;
+ * drawn and clicked when `draw`. */
+float
+buttons_bar(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, ImVec2 at, float width, bool draw)
+{
+	using Icon = MenuKit::Icon;
+	using Tone = MenuKit::Tone;
+	static constexpr const char *ON_OFF[] = { "on", "off" };
+	const float across = kit.px(12.0f), down = kit.px(5.0f), h = kit.button_size("Defaults", Icon::DEFAULTS).y;
+	const char *const clear = state.undo ? "Undo" : "Clear mapping";
+	const ImVec2 cells = kit.segments_size(ON_OFF);
+	const char *const shake_name = ImGui::CalcTextSize("Vibration (experimental)").x + kit.px(8.0f) + cells.x <= width ?
+	                               "Vibration (experimental)" : "Vibration";
+	std::vector<float> widths = { kit.button_size("Defaults", Icon::DEFAULTS).x,
+		                      kit.button_size(clear, state.undo ? Icon::UNDO : Icon::CLEAR).x };
+
+	if (!state.mapping)
+		widths.push_back(kit.button_size("Start mapping", Icon::MAP).x);
+	if (state.can_shake)
+		widths.push_back(ImGui::CalcTextSize(shake_name).x + kit.px(8.0f) + cells.x);
+
+	/* Each at its place, left to right, a line under the other */
+	std::vector<ImVec2> places;
+	float x = 0.0f, y = 0.0f;
+
+	for (const float w : widths) {
+		if (x > 0.0f && x + w > width) {
+			x = 0.0f;
+			y += h + down;
+		}
+		places.push_back({ at.x + x, at.y + kit.px(5.0f) + y });
+		x += w + across;
+	}
+
+	const float height = kit.px(5.0f) + y + h + kit.px(6.0f);
+
+	if (!draw)
+		return height;
+
+	ImDrawList *const list = ImGui::GetWindowDrawList();
+	size_t i = 0;
+
+	if (kit.button("Defaults", places[i++], false, Icon::DEFAULTS))
+		state.ask = MenuState::Ask::DEFAULTS;
+	if (kit.button(clear, places[i++], false, state.undo ? Icon::UNDO : Icon::CLEAR,
+	               state.undo ? Tone::STRONG : Tone::DANGER))
+		state.ask = state.undo ? MenuState::Ask::UNDO : MenuState::Ask::CLEAR;
+	if (!state.mapping && kit.button("Start mapping", places[i++], false, Icon::MAP)) {
+		/* The first control: the one before it is none */
+		state.mapping = rows.size();
+		state.catching.reset();
+		state.catch_next.clear();
+	}
+	if (state.can_shake) {
+		const ImVec2 p = places[i];
+		const float name_w = ImGui::CalcTextSize(shake_name).x;
+		int shake = state.shake ? 0 : 1;
+
+		list->AddText({ p.x, p.y + (h - ImGui::GetTextLineHeight()) / 2.0f }, kit.palette().dim, shake_name);
+		if (kit.segments({ p.x + name_w + kit.px(8.0f), p.y + (h - cells.y) / 2.0f }, ON_OFF, shake))
+			state.shake = shake == 0;
+	}
+	return height;
 }
 
 } /* namespace */
@@ -1242,6 +1479,7 @@ Menu::page_input(MenuKit &kit, MenuState &state) const
 	if (!state.panel)
 		return;
 
+	using Icon = MenuKit::Icon;
 	const MenuPalette &palette = kit.palette();
 	const std::vector<GameControl> &controls = state.panel->controls();
 	/* Every cabinet has the SERVICE of player 2: a game of two players has
@@ -1251,6 +1489,8 @@ Menu::page_input(MenuKit &kit, MenuState &state) const
 
 	if (!two)
 		state.player = 0;
+	if (!state.catching)
+		state.catch_next.clear();
 
 	const ImVec2 top = ImGui::GetCursorScreenPos(), room = ImGui::GetContentRegionAvail();
 	const float width = room.x, gap = kit.px(ROW_GAP);
@@ -1260,33 +1500,38 @@ Menu::page_input(MenuKit &kit, MenuState &state) const
 	y = devices_row(kit, state, { top.x, y }, width, two) + gap;
 
 	const std::vector<InputRow> rows = input_rows(state);
-	const float buttons_h = kit.button_size("Default").y;
 
 	next_mapping(state, rows);
 	/* A window wide enough (16:9) has the cabinet beside the device; a
 	 * narrower one shows either */
 	const ImVec2 window = ImGui::GetIO().DisplaySize;
 	const bool wide = window.x >= WIDE * window.y;
-	const float bottom = top.y + room.y - buttons_h - gap - kit.px(4.0f);
+	const float bottom = top.y + room.y - kit.px(4.0f);
 	const float split = wide ? top.x + (width - gap) * PAD_SHARE : top.x + width;
 	const ImVec2 a = { top.x, y }, b = { split, bottom };
 	const bool cabinet = !wide && state.cabinet_shown;
+	/* The buttons at the bottom of the box, under a line (none while the
+	 * cabinet is in it); the drawing above them */
+	const ImVec2 bar_at = { a.x + kit.px(10.0f), 0.0f };
+	const float bar_w = b.x - a.x - kit.px(20.0f);
+	const float bar_top = cabinet ? b.y : b.y - buttons_bar(kit, state, rows, bar_at, bar_w, false);
+	const ImVec2 inside = { b.x, bar_top };
 	/* The buttons in the corner of the box: Classic for a gamepad, the
 	 * swap of the device and the cabinet in a narrow window */
 	const char *const swap = cabinet ? "Controller" : "Cabinet";
 	const bool classic = !cabinet;
-	const ImVec2 classic_size = kit.button_size("Classic"), swap_size = kit.button_size(swap);
+	const ImVec2 classic_size = kit.button_size("Classic", Icon::LIST), swap_size = kit.button_size(swap, Icon::SWAP);
 	const float corner = classic || !wide ? std::max(classic_size.y, swap_size.y) + kit.px(5.0f) : 0.0f;
 
 	MenuKit::frame(ImGui::GetWindowDrawList(), a, b, kit.px(BOX_CUT), 0, palette.line);
 	if (cabinet)
 		cabinet_box(kit, state, a, b, false);
 	else if (state.classic)
-		list_box(kit, state, rows, a, b, corner);
+		list_box(kit, state, rows, a, inside, corner);
 	else if (state.on_pad())
-		pad_box(kit, state, rows, a, b, corner);
+		pad_box(kit, state, rows, a, inside, corner);
 	else
-		keyboard_box(kit, state, rows, a, b, corner);
+		keyboard_box(kit, state, rows, a, inside, corner);
 	if (wide)
 		cabinet_box(kit, state, { split + gap, y }, { top.x + width, bottom }, true);
 
@@ -1294,84 +1539,121 @@ Menu::page_input(MenuKit &kit, MenuState &state) const
 
 	if (!wide) {
 		x -= swap_size.x;
-		if (kit.button(swap, { x, a.y + kit.px(5.0f) }, false))
+		if (kit.button(swap, { x, a.y + kit.px(5.0f) }, false, Icon::SWAP))
 			state.cabinet_shown = !state.cabinet_shown;
 		x -= kit.px(6.0f);
 	}
-	if (classic && kit.button("Classic", { x - classic_size.x, a.y + kit.px(5.0f) }, state.classic))
+	if (classic && kit.button("Classic", { x - classic_size.x, a.y + kit.px(5.0f) }, state.classic, Icon::LIST))
 		state.classic = !state.classic;
-
-	/* What changes all the inputs of the player on the device shown */
-	ImGui::SetCursorScreenPos({ top.x, b.y + gap });
-	if (kit.button("Default"))
-		state.ask = MenuState::Ask::DEFAULTS;
-	if (state.undo ? kit.button("Undo", true) : kit.button("Clear all", true))
-		state.ask = state.undo ? MenuState::Ask::UNDO : MenuState::Ask::CLEAR;
-	if (!state.mapping && kit.button("Start mapping", true)) {
-		/* The first control: the one before it is none */
-		state.mapping = rows.size();
-		state.catching.reset();
-	} else if (state.mapping) {
-		if (kit.button("Skip", true))
-			state.mapping_since = 0;
-		if (kit.button("Stop", true))
-			state.mapping.reset(), state.catching.reset();
-	}
-
-	/* At the end of the row, the vibration of the pad where the game has
-	 * some (its long name where there is room) */
-	static constexpr const char *ON_OFF[] = { "On", "Off" };
-	const ImVec2 cells = kit.segments_size(ON_OFF);
-	const float room_left = top.x + width - ImGui::GetItemRectMax().x - kit.px(16.0f) - cells.x;
-	const char *const name = ImGui::CalcTextSize("Vibration (experimental)").x <= room_left ? "Vibration (experimental)" :
-	                         ImGui::CalcTextSize("Vibration").x <= room_left ? "Vibration" : nullptr;
-
-	if (state.can_shake && name) {
-		const ImVec2 at = { top.x + width - cells.x, b.y + gap + (buttons_h - cells.y) / 2.0f };
-		int shake = state.shake ? 0 : 1;
-
-		ImGui::GetWindowDrawList()->AddText({ at.x - kit.px(8.0f) - ImGui::CalcTextSize(name).x,
-		                                      at.y + (cells.y - ImGui::GetTextLineHeight()) / 2.0f },
-		                                    palette.dim, name);
-		if (kit.segments(at, ON_OFF, shake))
-			state.shake = shake == 0;
+	if (!cabinet) {
+		ImGui::GetWindowDrawList()->AddLine({ a.x + 1.0f, bar_top }, { b.x - 1.0f, bar_top }, palette.line, 1.0f);
+		buttons_bar(kit, state, rows, { bar_at.x, bar_top }, bar_w, true);
 	}
 	ImGui::SetCursorScreenPos(top);
 	ImGui::Dummy({ width, room.y - kit.px(4.0f) });
 }
 
-/* What the page says at the bottom: the control whose input is caught,
- * else the one worked, else how it works */
-std::string
-Menu::input_help(const MenuState &state)
+/* What the page says at the bottom (mock-up v50): the part caught, what to
+ * do, Skip and Stop while each control is caught in turn; else the control
+ * worked now and its inputs, filled as far as it is; else how it works */
+float
+Menu::input_foot(const MenuKit &kit, MenuState &state, ImVec2 at, float width, float height, bool draw)
 {
-	if (!state.panel)
-		return "";
+	static constexpr char REST[] = "Touch a button or move a stick: its control lights. Click a name to change it.";
+	const float line = ImGui::GetTextLineHeight();
 
+	if (!draw)
+		return std::max({ line, kit.button_size("Stop").y, ImGui::CalcTextSize(REST, nullptr, false, width).y });
+	if (!state.panel)
+		return height;
+
+	ImDrawList *const list = ImGui::GetWindowDrawList();
+	const MenuPalette &palette = kit.palette();
 	const std::vector<InputRow> rows = input_rows(state);
 	const auto type = static_cast<SDL_GamepadType>(state.pad_types[state.player & 1]);
-	const std::string press = state.on_pad() ? "press the button, or move the stick, you want" : "press the key you want";
+	const float y = at.y + (height - line) / 2.0f, space = kit.px(10.0f), right = at.x + width;
+	float x = at.x;
+	const auto say = [&](const std::string &text, ImU32 colour) {
+		const std::string shown = MenuKit::fitted(text, std::max(0.0f, right - x));
 
-	if (state.mapping && *state.mapping < rows.size()) {
-		size_t done = 0, all = 0;
+		MenuKit::write(list, { x, y }, colour, shown.c_str());
+		x += MenuKit::measure(shown.c_str()) + space;
+	};
+	const auto caught = std::find_if(rows.begin(), rows.end(),
+	                                 [&](const InputRow &row) { return same(state.catching, row.slot); });
 
-		for (size_t r = 0; r < rows.size(); r++)
-			if (rows[r].catchable && !rows[r].half)
-				all++, done += r <= *state.mapping;
+	if (caught != rows.end()) {
+		const double beat = static_cast<double>(SDL_GetTicks() % 1600) / 1600.0;
+		const float beating = 0.725f + 0.275f * static_cast<float>(std::cos(beat * 2.0 * std::numbers::pi));
+		const ImU32 pulse = MenuKit::alpha(palette.accent, beating);
+		const bool mapping = state.mapping && *state.mapping < rows.size();
+		/* What comes after the prompt: the seconds left and two buttons,
+		 * or how to let it be */
+		float after = ImGui::CalcTextSize("Esc cancels").x;
+
+		if (mapping) {
+			size_t done = 0, all = 0;
+
+			for (size_t r = 0; r < rows.size(); r++)
+				if (rows[r].catchable && !rows[r].half)
+					all++, done += r <= *state.mapping;
+			say(std::to_string(done) + " / " + std::to_string(all), palette.accent);
+			after = ImGui::CalcTextSize("6 s").x + space + kit.button_size("Skip ›").x + space + kit.button_size("Stop").x;
+		}
+		say(caught->name, palette.accent);
+
+		const std::string asked = prompt(state, caught->slot);
+		const float room = std::max(0.0f, right - x - space - after);
+		const std::string shown = MenuKit::fitted(asked, room);
+
+		MenuKit::write(list, { x, y }, pulse, shown.c_str());
+		x += MenuKit::measure(shown.c_str()) + space;
+		if (!mapping) {
+			say("Esc cancels", palette.faint);
+			return height;
+		}
 
 		const uint64_t gone = SDL_GetTicks() - state.mapping_since;
 		const uint64_t left = gone >= MAPPING_MS ? 0 : (MAPPING_MS - gone + 999) / 1000;
+		const float button_y = at.y + (height - kit.button_size("Stop").y) / 2.0f;
 
-		return std::to_string(done) + " / " + std::to_string(all) + "  " + rows[*state.mapping].name + ": " + press + ", " +
-		       std::to_string(left) + " s. Esc stops.";
+		say(std::to_string(left) + " s", palette.faint);
+		if (kit.button("Skip ›", { x, button_y }, false))
+			state.mapping_since = 0;
+		x += kit.button_size("Skip ›").x + space;
+		if (kit.button("Stop", { x, button_y }, false))
+			state.mapping.reset(), state.catching.reset(), state.catch_next.clear();
+		return height;
 	}
-	for (const InputRow &row : rows)
-		if (same(state.catching, row.slot))
-			return row.name + ": " + press + ". Esc lets it be.";
-	for (const InputRow &row : rows)
-		if (row.lit)
-			return row.name + (row.inputs.empty() ? "" : ": " + labels(row.inputs, type));
-	return "Touch a button or move a stick: its control lights. Click a name to change it.";
+
+	for (const Group &group : groups(state, rows)) {
+		if (!group.lit)
+			continue;
+
+		std::string text;
+
+		for (const Group::Part &part : group.parts)
+			text += (text.empty() ? "" : "  ") + part_text(state, rows, part, type);
+		say(group.name, palette.accent);
+
+		const float chip_w = std::min(MenuKit::measure(text.c_str()) + 2.0f * kit.px(7.0f), std::max(0.0f, right - x));
+		const ImVec2 ca = { x, y - kit.px(2.0f) }, cb = { x + chip_w, y + line + kit.px(2.0f) };
+
+		if (group.amount > 0.01f) {
+			list->PushClipRect(ca, { ca.x + chip_w * group.amount, cb.y }, true);
+			list->AddRectFilled(ca, cb, MenuKit::alpha(palette.accent, 0.55f), kit.px(5.0f));
+			list->PopClipRect();
+		}
+		list->AddRect(ca, cb, palette.stroke, kit.px(5.0f));
+		MenuKit::write(list, { x + kit.px(7.0f), y }, palette.ink,
+		               MenuKit::fitted(text, chip_w - 2.0f * kit.px(7.0f)).c_str());
+		return height;
+	}
+	const float rest_h = ImGui::CalcTextSize(REST, nullptr, false, width).y;
+
+	list->AddText(ImGui::GetFont(), ImGui::GetFontSize(), { at.x, at.y + (height - rest_h) / 2.0f }, palette.dim, REST,
+	              nullptr, width);
+	return height;
 }
 
 } /* namespace odin */

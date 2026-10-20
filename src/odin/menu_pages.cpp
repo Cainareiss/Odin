@@ -38,7 +38,7 @@ namespace odin {
 
 namespace {
 
-constexpr const char *ON_OFF[] = { "On", "Off" };
+constexpr const char *ON_OFF[] = { "on", "off" };
 
 /* A page in two: what it shows in a box at the left, its settings at the
  * right, as 1 to 1.15 (mock-up v50); the room between them, below the row
@@ -49,9 +49,9 @@ constexpr float ROW_GAP = 6.0f;
 constexpr float BOX_CUT = 5.0f;
 constexpr float BOX_INSIDE = 8.0f;
 
-/* An output: its width at the least (two in a row in a window of 640 by
- * 480 at 125 %), the side of its icon, the room in it and between two */
-constexpr float TILE_LEAST = 84.0f;
+/* An output: its width at the least, the side of its icon, the room in it
+ * and between two (mock-up v50) */
+constexpr float TILE_LEAST = 110.0f;
 constexpr float TILE_ICON = 26.0f;
 constexpr float TILE_PAD = 8.0f;
 constexpr float TILE_GAP = 8.0f;
@@ -169,7 +169,8 @@ output_tiles(const MenuKit &kit, const MenuState &state, const Box &box)
 {
 	const MenuPalette &palette = kit.palette();
 	const float inside = kit.px(BOX_INSIDE), gap = kit.px(TILE_GAP), pad = kit.px(TILE_PAD), side = kit.px(TILE_ICON);
-	const float width = box.b.x - box.a.x - 2.0f * inside, size = ImGui::GetFontSize();
+	const float width = box.b.x - box.a.x - 2.0f * inside, size = MenuKit::font(MenuKit::TINY);
+	const float small = MenuKit::font(MenuKit::SMALL);
 	const size_t columns = std::max<size_t>(1, static_cast<size_t>((width + gap) / (kit.px(TILE_LEAST) + gap)));
 	const size_t rows = (state.outputs.size() + columns - 1) / columns;
 	const float tile_w = (width - static_cast<float>(columns - 1) * gap) / static_cast<float>(columns);
@@ -181,7 +182,7 @@ output_tiles(const MenuKit &kit, const MenuState &state, const Box &box)
 
 	const float tile_h = 2.0f * pad + side + kit.px(4.0f) + names;
 	const float tiles_h = static_cast<float>(rows) * tile_h + static_cast<float>(rows ? rows - 1 : 0) * gap;
-	const float caption_h = centred({}, width, size, caption, 0);
+	const float caption_h = centred({}, width, small, caption, 0);
 	const float all_h = tiles_h + (rows ? gap : 0.0f) + caption_h;
 
 	in_box(kit, box, all_h, [&](float top) {
@@ -191,15 +192,14 @@ output_tiles(const MenuKit &kit, const MenuState &state, const Box &box)
 			const MenuState::Output &output = state.outputs[i];
 			const ImVec2 a = { box.a.x + inside + static_cast<float>(i % columns) * (tile_w + gap),
 			                   top + static_cast<float>(i / columns) * (tile_h + gap) };
-			const ImU32 colour = output.on ? palette.accent : palette.dim;
-
 			MenuKit::frame(list, a, { a.x + tile_w, a.y + tile_h }, kit.px(BOX_CUT), output.on ? palette.hover : 0,
 			               output.on ? palette.accent : palette.line);
-			MenuKit::icon(list, icon_of(output.role), { a.x + (tile_w - side) / 2.0f, a.y + pad }, side, colour);
+			MenuKit::icon(list, icon_of(output.role), { a.x + (tile_w - side) / 2.0f, a.y + pad }, side,
+			              output.on ? palette.accent : palette.stroke);
 			centred({ a.x + pad, a.y + pad + side + kit.px(4.0f) }, tile_w - 2.0f * pad, size, output.name.c_str(),
 			        output.on ? palette.accent : palette.dim);
 		}
-		centred({ box.a.x + inside, top + tiles_h + (rows ? gap : 0.0f) }, width, size, caption, palette.faint);
+		centred({ box.a.x + inside, top + tiles_h + (rows ? gap : 0.0f) }, width, small, caption, palette.faint);
 	});
 }
 
@@ -268,14 +268,18 @@ decibels(float db)
 	return text;
 }
 
-/* The size of the second line of a box of the drawing, `inner` wide */
+/* The largest size up to `size` a text fits `width` at: measured there,
+ * as the font has its own widths at each size */
 float
-sub_size(float inner, const char *sub)
+fit(const char *text, float size, float width)
 {
-	const float f = ImGui::GetFontSize();
-	const float wide = ImGui::GetFont()->CalcTextSizeA(f * 0.7f, FLT_MAX, 0.0f, sub).x;
+	ImFont *const font = ImGui::GetFont();
+	const float wide = font->CalcTextSizeA(size, FLT_MAX, 0.0f, text).x;
+	float fitted = wide > width ? size * width / std::max(wide, 1.0f) : size;
 
-	return std::min(f * 0.7f, f * 0.7f * inner / std::max(wide, 1.0f));
+	while (fitted > 4.0f && font->CalcTextSizeA(fitted, FLT_MAX, 0.0f, text).x > width)
+		fitted -= 0.5f;
+	return fitted;
 }
 
 /* A box of the drawing: its name and where it plays (`sub`, when the card
@@ -290,16 +294,16 @@ route_box(const MenuKit &kit, ImVec2 a, ImVec2 b, const char *name, const char *
 	const float f = ImGui::GetFontSize(), inner = b.x - a.x - kit.px(6.0f);
 	const auto width = [&](float size, const char *text) { return font->CalcTextSizeA(size, FLT_MAX, 0.0f, text).x; };
 	const char *const shown = width(f * 0.8f, name) <= inner ? name : short_name;
-	const float name_size = std::min(f * 0.8f, f * 0.8f * inner / std::max(width(f * 0.8f, shown), 1.0f));
-	const float second = sub ? sub_size(inner, sub) : 0.0f;
+	const float name_size = fit(shown, f * 0.8f, inner);
+	const float second = sub ? fit(sub, f * 0.7f, inner) : 0.0f;
 	const bool with_sub = sub && name_size + second + kit.px(4.0f) <= b.y - a.y;
 	const float high = name_size + (with_sub ? second + kit.px(2.0f) : 0.0f);
 	const float top = (a.y + b.y - high) / 2.0f, mid = (a.x + b.x) / 2.0f;
 
 	if (on)
-		MenuKit::frame(list, a, b, kit.px(3.0f), palette.group, palette.dim);
+		MenuKit::frame(list, a, b, kit.px(3.0f), palette.part, palette.stroke);
 	else {
-		MenuKit::frame(list, a, b, kit.px(3.0f), palette.group, 0);
+		MenuKit::frame(list, a, b, kit.px(3.0f), palette.part, 0);
 		kit.dashed_frame(list, a, b, palette.outline);
 	}
 	list->PushClipRect(a, b, true);
@@ -330,7 +334,7 @@ route_line(const MenuKit &kit, ImVec2 p, ImVec2 q, bool on, const std::string &l
 		points.push_back({ x, y });
 	}
 	if (on)
-		list->AddPolyline(points.data(), static_cast<int>(points.size()), palette.dim, ImDrawFlags_None, 1.4f);
+		list->AddPolyline(points.data(), static_cast<int>(points.size()), palette.stroke, ImDrawFlags_None, 1.4f);
 	else
 		MenuKit::dashes(list, points, false, palette.outline, 1.4f, kit.px(2.0f), kit.px(4.0f));
 	if (level.empty())
@@ -365,27 +369,24 @@ route_card(const MenuKit &kit, const MenuState::SoundGame &game, ImVec2 at, floa
 	const ImVec2 o = { at.x + (width - ROUTE_W * k) / 2.0f, at.y + pad + line + kit.px(4.0f) };
 	const auto p = [&](float x, float y) { return ImVec2{ o.x + x * k, o.y + y * k }; };
 	const bool option = game.played != 0, four = game.played == 2;
-	/* Where the boards play, in all its boxes or in none: legible */
-	const float inner = 140.0f * k - kit.px(6.0f);
-	const bool subs =
-		std::min(sub_size(inner, boards.main), sub_size(inner, boards.option)) >= ImGui::GetFontSize() * 0.55f;
-	const auto sub = [subs](const char *text) { return subs ? text : nullptr; };
 	std::string title = game.title;
 
 	for (char &c : title)
 		if (c >= 'a' && c <= 'z')
 			c = static_cast<char>(c - 'a' + 'A');
+	const float small = MenuKit::font(MenuKit::SMALL);
+
 	MenuKit::frame(list, at, { at.x + width, at.y + h }, kit.px(BOX_CUT), 0, palette.line);
-	list->AddText({ at.x + pad, at.y + pad }, palette.dim, title.c_str());
-	route_box(kit, p(4, 6), p(144, 48), "Main board", "Main", sub(boards.main), true);
-	route_box(kit, p(4, 62), p(144, 104), "Optional board", "Optional", sub(boards.option), option);
+	MenuKit::write(list, { at.x + pad, at.y + pad + line - small }, palette.dim, title.c_str(), small, small * 0.12f);
+	route_box(kit, p(4, 6), p(144, 48), "Main board", "Main", boards.main, true);
+	route_box(kit, p(4, 62), p(144, 104), "Optional board", "Optional", boards.option, option);
 	if (four) {
-		route_box(kit, p(222, 6), p(326, 48), "Front", "Front", sub("channels 1-2"), true);
-		route_box(kit, p(222, 62), p(326, 104), "Rear", "Rear", sub("channels 3-4"), true);
+		route_box(kit, p(222, 6), p(326, 48), "Front", "Front", "channels 1-2", true);
+		route_box(kit, p(222, 62), p(326, 104), "Rear", "Rear", "channels 3-4", true);
 		route_line(kit, p(144, 27), p(222, 27), true, "");
 		route_line(kit, p(144, 83), p(222, 83), true, "");
 	} else {
-		route_box(kit, p(222, 34), p(326, 76), "Your speakers", "Speakers", sub("stereo"), true);
+		route_box(kit, p(222, 34), p(326, 76), "Your speakers", "Speakers", "stereo", true);
 		route_line(kit, p(144, 27), p(222, 50), true, "");
 		route_line(kit, p(144, 83), p(222, 60), option, game.played == 1 ? decibels(game.level) : "");
 	}
@@ -397,7 +398,7 @@ route_card(const MenuKit &kit, const MenuState::SoundGame &game, ImVec2 at, floa
 void
 route_cards(const MenuKit &kit, const MenuState &state, const Box &box)
 {
-	const float inside = kit.px(BOX_INSIDE), gap = kit.px(TILE_GAP), size = ImGui::GetFontSize();
+	const float inside = kit.px(BOX_INSIDE), gap = kit.px(TILE_GAP), size = MenuKit::font(MenuKit::SMALL);
 	const float width = std::min(box.b.x - box.a.x - 2.0f * inside, kit.px(ROUTE_W + 2.0f * CARD_PAD));
 	const float x = (box.a.x + box.b.x - width) / 2.0f;
 	std::string others;
@@ -531,15 +532,18 @@ cap_name(SDL_Keycode key)
 	}
 }
 
-std::string
-cap_name(const HotKey &key)
+/* The caps of a combination: its modifiers, then its key (Enter after
+ * them as its sign, mock-up v50) */
+std::vector<std::string>
+caps(const HotKey &key)
 {
-	std::string out;
+	std::vector<std::string> out;
 
 	for (const auto &[mod, name] : MODIFIER_CAPS)
 		if (key.mods & mod)
-			out = out + name + "+";
-	return out + cap_name(key.key);
+			out.push_back(name);
+	out.push_back(!out.empty() && key.key == SDLK_RETURN ? "⏎" : cap_name(key.key));
+	return out;
 }
 
 /* Whether a key, or a modifier of either side, is held */
@@ -572,7 +576,7 @@ void
 hotkeys_keyboard(const MenuKit &kit, const MenuState &state, const Box &box)
 {
 	const MenuPalette &palette = kit.palette();
-	const float inside = kit.px(BOX_INSIDE), gap = kit.px(3.0f), group = kit.px(6.0f), size = ImGui::GetFontSize();
+	const float inside = kit.px(BOX_INSIDE), gap = kit.px(3.0f), group = kit.px(6.0f), size = MenuKit::font(MenuKit::SMALL);
 	const float width = box.b.x - box.a.x - 2.0f * inside, cap_h = kit.key_size("x").y;
 	std::vector<std::pair<SDL_Keycode, std::string>> others;
 	const auto used = [&](SDL_Keycode key) {
@@ -631,7 +635,7 @@ hotkeys_keyboard(const MenuKit &kit, const MenuState &state, const Box &box)
 	const float text_w = std::min(width, kit.px(260.0f));
 	const float caption_h = centred({}, width, size, caption, 0);
 	const float guide_w = kit.pill_size("Guide").x, guide_text_w = text_w - guide_w - kit.px(8.0f);
-	const float guide_h = std::max(cap_h, ImGui::CalcTextSize(guide, nullptr, false, guide_text_w).y);
+	const float guide_h = std::max(cap_h, ImGui::GetFont()->CalcTextSizeA(size, FLT_MAX, guide_text_w, guide).y);
 	const float all_h = cap_h + gap + (others.empty() ? 0.0f : cap_h + gap) + kit.px(6.0f) + caption_h +
 	                    kit.px(10.0f) + guide_h;
 	in_box(kit, box, all_h, [&](float y) {
@@ -667,7 +671,7 @@ hotkeys_keyboard(const MenuKit &kit, const MenuState &state, const Box &box)
 		y += centred({ box.a.x + inside, y }, width, size, caption, palette.faint) + kit.px(10.0f);
 		x = (box.a.x + box.b.x - text_w) / 2.0f;
 		kit.pill(list, { x, y }, "Guide");
-		list->AddText(ImGui::GetFont(), size, { x + guide_w + kit.px(8.0f), y + kit.px(3.0f) }, palette.dim, guide,
+		list->AddText(ImGui::GetFont(), size, { x + guide_w + kit.px(8.0f), y + (cap_h - size) / 2.0f }, palette.dim, guide,
 		              nullptr, guide_text_w);
 	});
 }
@@ -687,7 +691,8 @@ Menu::page_hotkeys(MenuKit &kit, MenuState &state) const
 	kit.begin_group("KEYS");
 	for (size_t a = 0; a < Hotkeys::ACTIONS; a++) {
 		const Hotkeys::Binding &binding = state.hotkeys[a];
-		std::vector<std::string> keys, pad;
+		std::vector<std::vector<std::string>> keys;
+		std::vector<std::string> pad;
 		std::vector<size_t> slots;
 		const auto caught = [&](size_t slot) {
 			return state.hotkey_catching && state.hotkey_catching->first == a && state.hotkey_catching->second == slot;
@@ -699,14 +704,14 @@ Menu::page_hotkeys(MenuKit &kit, MenuState &state) const
 				continue;
 			if (caught(slot))
 				catching = static_cast<int>(keys.size());
-			keys.push_back(cap_name(binding.keys[slot]));
+			keys.push_back(caps(binding.keys[slot]));
 			slots.push_back(slot);
 		}
 		/* An action without a key takes one in its first place */
 		if (keys.empty()) {
 			if (caught(0))
 				catching = 0;
-			keys.push_back("-");
+			keys.push_back({ "-" });
 			slots.push_back(0);
 		}
 		if (caught(Hotkeys::KEYS))
@@ -725,7 +730,7 @@ Menu::page_hotkeys(MenuKit &kit, MenuState &state) const
 	}
 	kit.end_group();
 	ImGui::Dummy({ 0.0f, kit.px(6.0f) });
-	if (kit.button("Default")) {
+	if (kit.button("Defaults", false, MenuKit::Icon::DEFAULTS)) {
 		state.hotkeys_default = true;
 		state.hotkey_catching.reset();
 	}

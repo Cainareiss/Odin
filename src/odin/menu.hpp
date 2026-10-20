@@ -158,9 +158,11 @@ struct MenuState {
 	 * device */
 	bool cabinet_shown = false;
 	bool on_pad() const { return gamepad[player & 1]; }
-	/* The part whose next input is caught; what the page asks of the
-	 * inputs of the player and the device shown, Undo while it is offered */
+	/* The part whose next input is caught, and those caught after it, in
+	 * turn; what the page asks of the inputs of the player and the device
+	 * shown, Undo while it is offered */
 	std::optional<MenuSlot> catching;
+	std::vector<MenuSlot> catch_next;
 	/* Start mapping: each control of the player in turn, the place of the
 	 * one caught now in the list of the page, since when (SDL ticks) */
 	std::optional<size_t> mapping;
@@ -211,9 +213,11 @@ private:
 	void page_outputs(MenuKit &kit, MenuState &state) const;
 	void page_paths(MenuKit &kit, MenuState &state) const;
 	void page_about(MenuKit &kit) const;
-	/* What the pages say at the bottom */
+	/* What the pages say at the bottom; Input, at that place, that wide
+	 * and high: the control caught or touched, its inputs, what to do.
+	 * The height it takes, drawn when `draw`. */
 	static std::string help(int page, const MenuState &state);
-	static std::string input_help(const MenuState &state);
+	static float input_foot(const MenuKit &kit, MenuState &state, ImVec2 at, float width, float height, bool draw);
 	static std::string hotkeys_help(const MenuState &state);
 	/* A button of a gamepad of that kind (SDL_GamepadType), as its maker
 	 * prints it */

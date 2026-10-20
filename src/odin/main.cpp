@@ -459,10 +459,11 @@ private:
 	 * milliseconds at most */
 	static constexpr unsigned MENU_PICTURES = 3;
 	static constexpr Uint64 MENU_PICTURE_MS = 16;
-	/* How long Undo is offered after Clear all; how often Start mapping
-	 * draws its count of seconds */
+	/* How long Undo is offered after Clear mapping; how often the menu is
+	 * drawn while an input is caught, its prompt beating (Start mapping
+	 * counts its seconds too) */
 	static constexpr Uint64 UNDO_MS = 5000;
-	static constexpr Uint64 MAPPING_TICK_MS = 250;
+	static constexpr Uint64 CATCH_TICK_MS = 33;
 
 	bool process_events();
 	/* What Odin does on a hotkey in the game: true to quit */
@@ -512,7 +513,7 @@ private:
 	bool m_other_shakes = false;
 	std::optional<odin::ControlPanel> m_other;
 	odin::MenuState m_menu_state;
-	/* The inputs as Clear all found them, and until when Undo puts them back */
+	/* The inputs as Clear mapping found them, and until when Undo puts them back */
 	odin::Settings::Lines m_cleared;
 	std::string m_cleared_game;
 	Uint64 m_undo_until = 0;
@@ -749,6 +750,7 @@ Session::catch_input(const SDL_Event &event)
 			return true;
 		if (event.key.key == SDLK_ESCAPE) {
 			state.catching.reset();
+			state.catch_next.clear();
 			state.mapping.reset();
 			return true;
 		}
@@ -793,6 +795,22 @@ Session::catch_input(const SDL_Event &event)
 		/* A stick on a part that is pressed: its half */
 		if (axis && event.gaxis.axis < SDL_GAMEPAD_AXIS_LEFT_TRIGGER && state.catching->part != 0)
 			input.pad.type = value < 0 ? odin::PadInput::Type::AXIS_NEGATIVE : odin::PadInput::Type::AXIS_POSITIVE;
+		/* A button on an analog control goes on its half: of a pedal, or
+		 * of each way in turn */
+		if (!axis && state.catching->control >= 0 && state.catching->part == 0) {
+			const auto c = static_cast<size_t>(state.catching->control);
+			const odin::GameControl &control = panel_shown().controls()[c];
+
+			if (control.type == odin::GameControl::Type::ANALOG) {
+				const bool two_ways = odin::GameControl::half(control.low, false);
+
+				const odin::MenuSlot other_way = { state.catching->control, 2, state.catching->role };
+
+				state.catching->part = two_ways ? 1 : 2;
+				if (two_ways)
+					state.catch_next.insert(state.catch_next.begin(), other_way);
+			}
+		}
 		caught(input);
 		return true;
 	}
@@ -864,7 +882,8 @@ Session::keep_hotkeys()
 	}
 }
 
-/* The input caught takes the place of those of its kind on that part */
+/* The input caught takes the place of those of its kind on that part; the
+ * next part waiting is caught then */
 void
 Session::caught(const odin::HostInput &input)
 {
@@ -877,11 +896,15 @@ Session::caught(const odin::HostInput &input)
 	std::erase_if(inputs, [&input](const odin::HostInput &in) { return in.kind == input.kind; });
 	inputs.push_back(input);
 	keep_binding(slot.control < 0 ? bindings.cabinet_line(slot.role, inputs) : bindings.line(c, slot.part, inputs));
+	if (!m_menu_state.catch_next.empty()) {
+		m_menu_state.catching = m_menu_state.catch_next.front();
+		m_menu_state.catch_next.erase(m_menu_state.catch_next.begin());
+	}
 }
 
-/* Default and Clear all: the inputs of the device shown, of every part of
- * the controls of the player and their coin (and TEST for player 1), back
- * to their defaults or none */
+/* Defaults and Clear mapping: the inputs of the device shown, of every
+ * part of the controls of the player and their coin (and TEST for player
+ * 1), back to their defaults or none */
 void
 Session::change_inputs(bool to_defaults)
 {
@@ -920,7 +943,7 @@ Session::change_inputs(bool to_defaults)
 		keep_binding(line);
 }
 
-/* The inputs back as Clear all found them */
+/* The inputs back as Clear mapping found them */
 void
 Session::undo()
 {
@@ -975,6 +998,7 @@ Session::show_game(size_t game)
 
 	state.shown = other ? game : state.running;
 	state.catching.reset();
+	state.catch_next.clear();
 	m_other.reset();
 	if (!other)
 		return;
@@ -997,15 +1021,17 @@ Session::wait_in_menu()
 		if (m_menu_test && !m_menu_pictures)
 			press_escape();
 	}
-	/* Undo goes when its time is over; Start mapping counts the seconds of
-	 * the control it waits for */
+	/* Undo goes when its time is over; the prompt of an input caught
+	 * beats, Start mapping counts the seconds of the control it waits for */
+	const bool caught = m_menu_state.catching || m_menu_state.mapping;
+
 	if (m_menu_state.undo && SDL_GetTicks() >= m_undo_until)
 		m_menu_pictures = std::max(m_menu_pictures, 1u);
-	if (m_menu_state.mapping && SDL_GetTicks() - m_menu_drawn >= MAPPING_TICK_MS)
+	if (caught && SDL_GetTicks() - m_menu_drawn >= CATCH_TICK_MS)
 		m_menu_pictures = std::max(m_menu_pictures, 1u);
 	if (!m_menu_pictures) {
-		if (m_menu_state.mapping)
-			SDL_WaitEventTimeout(nullptr, static_cast<Sint32>(MAPPING_TICK_MS));
+		if (caught)
+			SDL_WaitEventTimeout(nullptr, static_cast<Sint32>(CATCH_TICK_MS));
 		else if (m_menu_state.undo)
 			SDL_WaitEventTimeout(nullptr, static_cast<Sint32>(m_undo_until - std::min(m_undo_until, SDL_GetTicks())));
 		else

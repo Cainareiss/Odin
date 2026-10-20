@@ -105,6 +105,8 @@ open_window(SDL_Window *&window, SDL_GLContext &context)
 		std::fprintf(stderr, "ERROR: could not create SDL window: '%s'\n", SDL_GetError());
 		return false;
 	}
+	/* Never smaller than the screen of the board: the menu is made for it */
+	SDL_SetWindowMinimumSize(window, Renderer::WIDTH, Renderer::HEIGHT);
 	SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
 
 	context = SDL_GL_CreateContext(window);

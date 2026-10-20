@@ -21,21 +21,22 @@
 
 #include <span>
 #include <string>
+#include <vector>
 
 #include "imgui/imgui.h"
 
 namespace odin {
 
 /* The colours of a palette of the menu (mock-up v50): the screen behind
- * the pages, the frame and its groups, the ink and its two softer tones,
- * the lines between rows, the outline of a control and its hovered fill,
+ * the pages, the frame, the ink and its two softer tones, the lines of the
+ * frames and between rows, the outline of a control and its hovered fill,
  * the accent for what is touched and the ink on it, the action colour for
- * what is chosen and the ink on it. The drawings: the body of a gamepad and
- * a part on it, their strokes (the details take the outline of a control),
- * an arrow on a part; the lavender of the cabinet, its strokes and its
- * details. */
+ * what is clicked or chosen and the ink on it, the red of what clears. The
+ * drawings: the body of a gamepad and a part on it, their strokes (the
+ * details take the outline of a control), an arrow on a part; the lavender
+ * of the cabinet, its strokes and its details. */
 struct MenuPalette {
-	ImU32 screen, frame, group, ink, dim, faint, line, outline, hover, accent, on_accent, action, on_action;
+	ImU32 screen, frame, ink, dim, faint, line, outline, hover, accent, on_accent, action, on_action, danger;
 	ImU32 body, part, stroke, arrow;
 	ImU32 cabinet, cabinet_stroke, cabinet_detail;
 };
@@ -43,41 +44,69 @@ struct MenuPalette {
 /* Rúnasteinn, the palette by default: granite and the red ochre of painted
  * runestones. The frame lets the game show through, at a fifth. */
 inline constexpr MenuPalette RUNASTEINN = {
-	IM_COL32(0x2A, 0x2A, 0x28, 0xFF), IM_COL32(0x2F, 0x2F, 0x2C, 0xCC), IM_COL32(0x38, 0x38, 0x34, 0x99),
+	IM_COL32(0x2A, 0x2A, 0x28, 0xFF), IM_COL32(0x2F, 0x2F, 0x2C, 0xCC),
 	IM_COL32(0xEE, 0xEA, 0xE2, 0xFF), IM_COL32(0xB0, 0xAB, 0xA0, 0xFF), IM_COL32(0x83, 0x7F, 0x75, 0xFF),
-	IM_COL32(0xEE, 0xEA, 0xE2, 0x24), IM_COL32(0xEE, 0xEA, 0xE2, 0x38), IM_COL32(0xEE, 0xEA, 0xE2, 0x10),
+	IM_COL32(0xEE, 0xEA, 0xE2, 0x29), IM_COL32(0xEE, 0xEA, 0xE2, 0x38), IM_COL32(0xEE, 0xEA, 0xE2, 0x10),
 	IM_COL32(0xE0, 0x66, 0x4A, 0xFF), IM_COL32(0x16, 0x06, 0x04, 0xFF), IM_COL32(0x6A, 0xA9, 0xB0, 0xFF),
-	IM_COL32(0x2A, 0x2A, 0x28, 0xFF),
+	IM_COL32(0x2A, 0x2A, 0x28, 0xFF), IM_COL32(0xEF, 0x5A, 0x50, 0xFF),
 	IM_COL32(0x2F, 0x2F, 0x2C, 0xFF), IM_COL32(0x38, 0x38, 0x34, 0xFF), IM_COL32(0xEE, 0xEA, 0xE2, 0x9E),
 	IM_COL32(0xEE, 0xEA, 0xE2, 0x73),
 	IM_COL32(0xBD, 0xB5, 0xD0, 0xFF), IM_COL32(0xBD, 0xB5, 0xD0, 0xCC), IM_COL32(0xBD, 0xB5, 0xD0, 0x66),
 };
 
 /* The dressed widgets of the menu, on Dear ImGui: corners cut at 45
- * degrees, one stroke of one pixel, the action colour only on what is
- * chosen. Sizes are in points, times the scale of the display. One is
+ * degrees, one stroke of one pixel, the action colour on what is clicked
+ * and chosen. Sizes are in points, times the scale of the display. One is
  * made for each picture of the menu. */
 class MenuKit {
 public:
+	/* The sizes of the smaller texts, against the font (rows of 12.5
+	 * pixels in the mock-up): what a row does and a key cap (10.5); a
+	 * title, a cell, a button, a pill and a caption (11); a word in small
+	 * capitals (10) */
+	static constexpr float NOTE = 10.5f / 12.5f;
+	static constexpr float SMALL = 11.0f / 12.5f;
+	static constexpr float TINY = 10.0f / 12.5f;
+
 	MenuKit(const MenuPalette &palette, float scale) : m_palette(palette), m_scale(scale) {}
 
 	const MenuPalette &palette() const { return m_palette; }
 	float px(float points) const { return points * m_scale; }
+	/* That share of the font, in pixels */
+	static float font(float share) { return ImGui::GetFontSize() * share; }
+	/* A colour with that share of its opacity */
+	static ImU32 alpha(ImU32 colour, float share);
 
 	/* The icons of the menu (mock-up v50), drawn in a square of that side:
 	 * a gamepad, a gamepad with its cross, a screen, a speaker, a keyboard
 	 * and a smaller one, a light with its rays, a folder, an i; the outputs
-	 * of a cabinet: a lamp, a shaker, a lock, a speaker crossed out */
-	enum class Icon { PAD, INPUT, DISPLAY, AUDIO, KEYBOARD, HOTKEYS, OUTPUTS, FOLDER, ABOUT, LAMP, RUMBLE, LOCK, MUTE };
+	 * of a cabinet: a lamp, a shaker, a lock, a speaker crossed out; those
+	 * of the buttons: a list, two arrows that swap, an arrow that turns
+	 * back, a cross, a start and its bar, an arrow back; the rune ᚨ */
+	enum class Icon {
+		NONE, PAD, INPUT, DISPLAY, AUDIO, KEYBOARD, HOTKEYS, OUTPUTS, FOLDER, ABOUT, LAMP, RUMBLE, LOCK, MUTE,
+		LIST, SWAP, DEFAULTS, CLEAR, MAP, UNDO, RUNE,
+	};
 	static void icon(ImDrawList *list, Icon icon, ImVec2 at, float side, ImU32 colour);
+
+	/* Texts with the signs the font of the menu has not, drawn: the arrows
+	 * ▲ ▼ ◀ ▶ ← → ↑ ↓ ↔ ↕ ▾ ‹ ›, Enter ⏎, the marks of a PlayStation
+	 * gamepad ✕ ○ □ △, the minus of a Switch −. Their width, at that size
+	 * (0: the font's), the letters that far apart (small capitals). */
+	static float measure(const char *text, float size = 0.0f, float spacing = 0.0f);
+	static void write(ImDrawList *list, ImVec2 at, ImU32 colour, const char *text, float size = 0.0f,
+	                  float spacing = 0.0f);
+	/* A text cut to that width, three dots where it is cut */
+	static std::string fitted(const std::string &text, float width, float size = 0.0f);
 
 	/* A frame with its corners cut; a colour of 0 is none */
 	static void frame(ImDrawList *list, ImVec2 a, ImVec2 b, float cut, ImU32 fill, ImU32 border);
 	/* A line of dashes along points, `on` long and `off` apart; a frame of
-	 * them with its corners cut */
+	 * them with its corners cut, a pill of them */
 	static void dashes(ImDrawList *list, std::span<const ImVec2> points, bool closed, ImU32 colour, float width,
 	                   float on, float off);
 	void dashed_frame(ImDrawList *list, ImVec2 a, ImVec2 b, ImU32 colour) const;
+	void dashed_pill(ImDrawList *list, ImVec2 a, ImVec2 b, ImU32 colour) const;
 
 	/* The tabs in the middle of the width, each its icon and its name (the
 	 * one chosen only, when `narrow`): a click picks one. True when the
@@ -120,33 +149,35 @@ public:
 	/* A button of a gamepad drawn as a pill; its size first */
 	ImVec2 pill_size(const char *name) const;
 	void pill(ImDrawList *list, ImVec2 at, const char *name) const;
-	/* A row of an action of Odin: its name, its keys as caps, its gamepad
-	 * buttons as pills (none: a dash); those caught now (0 and 1 the keys,
-	 * 2 the buttons, -1 none) say "press...". What is clicked: 0 to 2, -1
-	 * for none. */
-	int shortcut(const char *name, std::span<const std::string> keys, std::span<const std::string> pad,
+	/* A row of an action of Odin: its name, its keys (each the caps of a
+	 * combination), its gamepad buttons as pills (none: a dash); those
+	 * caught now (0 and 1 the keys, 2 the buttons, -1 none) say
+	 * "press...". What is clicked: 0 to 2, -1 for none. */
+	int shortcut(const char *name, std::span<const std::vector<std::string>> keys, std::span<const std::string> pad,
 	             int catching);
 	/* A row with a list that drops down from its right: true when the
 	 * choice changed */
 	bool dropdown(const char *name, const char *about, std::span<const std::string> labels, int &chosen);
 	/* The same list from a box alone at that place, that wide, an icon
-	 * before what is chosen (none: nullptr); its height */
+	 * before what is chosen; its height */
 	bool picker(const char *id, ImVec2 at, float width, std::span<const std::string> labels, int &chosen,
-	            const Icon *icon = nullptr) const;
+	            Icon icon = Icon::NONE) const;
 	float picker_height() const;
 
-	/* A row of a list of controls, at that place and that width: its name
-	 * and its inputs; lit while the control is worked, "press..." while
-	 * its input is being caught. True on a click. Its height in `h`. */
-	bool binding(const char *id, ImVec2 at, float width, bool first, const char *name, const char *inputs,
-	             bool lit, bool catching, float &h) const;
-	/* A button of a page, after the one before on its line (`same_line`).
-	 * True on a click. */
-	bool button(const char *label, bool same_line = false) const;
-	/* A button at that place, outlined with the action colour while on; its
+	/* What a button is: plain (the action colour when hovered), Undo (its
+	 * outline clearer), one that clears (red when hovered) */
+	enum class Tone { PLAIN, STRONG, DANGER };
+	/* A button of a page, after the one before on its line (`same_line`),
+	 * its icon before its label. True on a click. */
+	bool button(const char *label, bool same_line = false, Icon icon = Icon::NONE, Tone tone = Tone::PLAIN) const;
+	/* A button at that place, filled with the action colour while on; its
 	 * size first. True on a click. */
-	ImVec2 button_size(const char *label) const;
-	bool button(const char *label, ImVec2 at, bool on) const;
+	ImVec2 button_size(const char *label, Icon icon = Icon::NONE) const;
+	bool button(const char *label, ImVec2 at, bool on, Icon icon = Icon::NONE, Tone tone = Tone::PLAIN) const;
+	/* A round button with ‹ or › (`right`); its size first. True on a
+	 * click. */
+	ImVec2 arrow_size() const;
+	bool arrow(const char *id, ImVec2 at, bool right) const;
 
 private:
 	/* The top of the row, its line above it when it is not the first of
