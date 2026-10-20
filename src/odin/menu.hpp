@@ -22,15 +22,27 @@
 #include <array>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include <GL/glew.h>
 #include <SDL3/SDL.h>
 
 #include "imgui/imgui.h"
+#include "odin/roles.hpp"
 
 namespace odin {
 
+class ControlPanel;
 class MenuKit;
+
+/* What the page Input changes: a part of a control of the panel (0 the
+ * control, 1 and 2 its halves or a lever down and up, bindings.hpp), or a
+ * role of the cabinet (control -1) */
+struct MenuSlot {
+	int control = -1;
+	unsigned part = 0;
+	Role role = Role::COIN1;
+};
 
 /* What the pages of the menu show and change. The thread of the board
  * keeps it and does what changed (main.cpp). */
@@ -49,6 +61,24 @@ struct MenuState {
 	unsigned display_w = 0, display_h = 0;
 	/* odin.ini keeps what changes: not with ODIN_CONFIG=none */
 	bool kept = true;
+
+	/* Input: the game, the panel of its cabinet (its controls and their
+	 * inputs), which are worked now (the controls, then COIN1, COIN2 and
+	 * TEST), the gamepad of each player (its name, SDL_GamepadType) */
+	std::string game;
+	const ControlPanel *panel = nullptr;
+	std::vector<bool> touched;
+	std::array<std::string, 2> pads;
+	std::array<int, 2> pad_types{};
+	/* The player shown, and the inputs: of the gamepad, else of the
+	 * keyboard (and the mouse, shown) */
+	unsigned player = 0;
+	bool gamepad = false;
+	/* The part whose next input is caught; what the page asks of the
+	 * inputs of the player and the device shown, Undo while it is offered */
+	std::optional<MenuSlot> catching;
+	enum class Ask { NONE, DEFAULTS, CLEAR, UNDO } ask = Ask::NONE;
+	bool undo = false;
 };
 
 /* The menu of Odin, drawn with Dear ImGui over the picture of the last
@@ -81,9 +111,10 @@ public:
 
 private:
 	/* The pages, in the order of their tabs */
-	enum Page { DISPLAY, ABOUT, PAGES };
+	enum Page { INPUT, DISPLAY, ABOUT, PAGES };
 
 	void follow_scale();
+	void page_input(MenuKit &kit, MenuState &state) const;
 	void page_display(MenuKit &kit, MenuState &state) const;
 	void page_about(MenuKit &kit) const;
 	/* What the page says at the bottom */

@@ -252,6 +252,62 @@ MenuKit::choice(const char *name, const char *about, std::span<const char *const
 	return chosen != was;
 }
 
+bool
+MenuKit::binding(const char *id, ImVec2 at, float width, bool first, const char *name, const char *inputs, bool lit,
+                 bool catching, float &h) const
+{
+	ImDrawList *const list = ImGui::GetWindowDrawList();
+	const float pad = px(ROW_PAD), line = ImGui::GetTextLineHeight(), gap = px(GAP);
+	const char *const shown = catching ? "press..." : (inputs && *inputs) ? inputs : "-";
+	const float shown_w = std::min(ImGui::CalcTextSize(shown).x, width / 2.0f);
+	const float name_w = std::max(px(40.0f), width - shown_w - gap - 2.0f * pad);
+	const float name_h = ImGui::CalcTextSize(name, nullptr, false, name_w).y;
+	const float shown_h = ImGui::CalcTextSize(shown, nullptr, false, shown_w).y;
+
+	h = std::max({ name_h, shown_h, line }) + 2.0f * pad;
+	ImGui::SetCursorScreenPos(at);
+
+	const bool clicked = ImGui::InvisibleButton(id, { width, h });
+	const bool hovered = ImGui::IsItemHovered();
+	const ImVec2 b = { at.x + width, at.y + h };
+
+	if (catching)
+		frame(list, { at.x + 1.0f, at.y + 1.0f }, { b.x - 1.0f, b.y - 1.0f }, px(CONTROL_CUT), m_palette.hover,
+		      m_palette.accent);
+	else if (hovered)
+		frame(list, at, b, px(CONTROL_CUT), m_palette.hover, 0);
+	if (!first && !catching)
+		list->AddLine({ at.x + pad, at.y }, { b.x - pad, at.y }, m_palette.line, 1.0f);
+	if (lit)
+		list->AddRectFilled({ at.x + px(2.0f), at.y + pad }, { at.x + px(4.0f), b.y - pad }, m_palette.accent);
+	list->AddText(ImGui::GetFont(), ImGui::GetFontSize(), { at.x + pad, at.y + (h - name_h) / 2.0f },
+	              lit ? m_palette.accent : m_palette.ink, name, nullptr, name_w);
+	list->AddText(ImGui::GetFont(), ImGui::GetFontSize(), { b.x - pad - shown_w, at.y + (h - shown_h) / 2.0f },
+	              catching ? m_palette.accent : (inputs && *inputs) ? m_palette.dim : m_palette.faint, shown,
+	              nullptr, shown_w);
+	return clicked;
+}
+
+bool
+MenuKit::button(const char *label, bool same_line) const
+{
+	ImDrawList *const list = ImGui::GetWindowDrawList();
+	const float wide = px(CELL_WIDE + 3.0f), high = px(CELL_HIGH + 1.0f);
+	const ImVec2 size = ImGui::CalcTextSize(label);
+	const ImVec2 box = { size.x + 2.0f * wide, size.y + 2.0f * high };
+
+	if (same_line)
+		ImGui::SameLine(0.0f, px(8.0f));
+
+	const ImVec2 a = ImGui::GetCursorScreenPos(), b = { a.x + box.x, a.y + box.y };
+	const bool clicked = ImGui::InvisibleButton(label, box);
+	const bool hovered = ImGui::IsItemHovered();
+
+	frame(list, a, b, px(CONTROL_CUT), hovered ? m_palette.hover : 0, m_palette.outline);
+	list->AddText({ a.x + wide, a.y + high }, hovered ? m_palette.ink : m_palette.dim, label);
+	return clicked;
+}
+
 void
 MenuKit::text(const char *name, const char *about, const char *value)
 {

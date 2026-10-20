@@ -273,6 +273,7 @@ public:
 		state.unthrottled_given = options.given.unthrottled;
 		state.gpu = display.gpu();
 		state.kept = !settings_file.empty();
+		state.game = options.display.title;
 	}
 
 	/* Runs the frames until the user quits or the last one asked is
@@ -284,6 +285,8 @@ private:
 	 * milliseconds at most */
 	static constexpr unsigned MENU_PICTURES = 3;
 	static constexpr Uint64 MENU_PICTURE_MS = 16;
+	/* How long Undo is offered after Clear all */
+	static constexpr Uint64 UNDO_MS = 5000;
 
 	bool process_events();
 	bool menu_event(const SDL_Event &event);
@@ -293,6 +296,11 @@ private:
 	void draw_menu();
 	void apply(const odin::MenuState &was);
 	void keep(const char *key, const std::optional<std::string> &value);
+	bool catch_input(const SDL_Event &event);
+	void caught(const odin::HostInput &input);
+	void change_inputs(bool to_defaults);
+	void undo();
+	void keep_binding(const odin::Bindings::Line &line);
 	void press_escape();
 	void load_or_save_state(bool load);
 	void save_state_at_frame();
@@ -308,6 +316,9 @@ private:
 	odin::Settings &m_settings;
 	const std::string &m_settings_file;	/* empty: nothing is kept */
 	odin::MenuState m_menu_state;
+	/* The inputs as Clear all found them, and until when Undo puts them back */
+	odin::Settings::Lines m_cleared;
+	Uint64 m_undo_until = 0;
 	bool m_paused;
 	std::chrono::steady_clock::time_point m_next;	/* when the next frame is due */
 	unsigned m_menu_pictures;	/* still to draw */
@@ -406,6 +417,10 @@ Session::process_events()
 bool
 Session::menu_event(const SDL_Event &event)
 {
+	if (m_menu_state.catching && catch_input(event)) {
+		m_menu_pictures = MENU_PICTURES;
+		return false;
+	}
 	switch (event.type) {
 	case SDL_EVENT_QUIT:
 		return true;
@@ -461,6 +476,155 @@ Session::close_menu()
 	m_next = std::chrono::steady_clock::now();
 }
 
+/* The keys Odin works itself, which a control of the game does not take */
+bool
+is_odin_key(SDL_Keycode key)
+{
+	return key == SDLK_ESCAPE || key == SDLK_F10 || key == SDLK_F11 || key == SDLK_F1 || key == SDLK_F4 || key == SDLK_P;
+}
+
+/* The page Input waits for an input: Escape lets it go; a key, or on a
+ * gamepad a button or a stick, a trigger from half its way, is the one.
+ * True when the event was taken. */
+bool
+Session::catch_input(const SDL_Event &event)
+{
+	odin::MenuState &state = m_menu_state;
+
+	switch (event.type) {
+	case SDL_EVENT_KEY_DOWN:
+	case SDL_EVENT_KEY_UP:
+		m_keys.set(event.key.key, event.key.down);
+		if (!event.key.down || event.key.repeat)
+			return true;
+		if (event.key.key == SDLK_ESCAPE) {
+			state.catching.reset();
+			return true;
+		}
+		if (!state.gamepad && !is_odin_key(event.key.key)) {
+			odin::HostInput input{};
+
+			input.kind = odin::HostInput::Kind::KEY;
+			input.key = event.key.key;
+			caught(input);
+		}
+		return true;
+	case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+	case SDL_EVENT_GAMEPAD_AXIS_MOTION: {
+		m_controls.event(event);
+		if (!state.gamepad)
+			return true;
+
+		odin::HostInput input{};
+		const bool axis = event.type == SDL_EVENT_GAMEPAD_AXIS_MOTION;
+		const int value = axis ? event.gaxis.value : 0;
+
+		if (axis && std::abs(value) < odin::ControlPanel::PRESSED)
+			return true;
+		input.kind = odin::HostInput::Kind::PAD;
+		input.pad.index = axis ? event.gaxis.axis : event.gbutton.button;
+		input.pad.type = !axis ? odin::PadInput::Type::BUTTON : odin::PadInput::Type::AXIS;
+		/* A stick on a part that is pressed: its half */
+		if (axis && event.gaxis.axis < SDL_GAMEPAD_AXIS_LEFT_TRIGGER && state.catching->part != 0)
+			input.pad.type = value < 0 ? odin::PadInput::Type::AXIS_NEGATIVE : odin::PadInput::Type::AXIS_POSITIVE;
+		caught(input);
+		return true;
+	}
+	default:
+		return false;
+	}
+}
+
+/* The input caught takes the place of those of its kind on that part */
+void
+Session::caught(const odin::HostInput &input)
+{
+	const odin::MenuSlot slot = *m_menu_state.catching;
+	const odin::Bindings &bindings = m_controls.panel().bindings();
+	const size_t c = static_cast<size_t>(slot.control);
+	std::vector<odin::HostInput> inputs = slot.control < 0 ? bindings.cabinet(slot.role) : bindings.part(c, slot.part);
+
+	m_menu_state.catching.reset();
+	std::erase_if(inputs, [&input](const odin::HostInput &in) { return in.kind == input.kind; });
+	inputs.push_back(input);
+	keep_binding(slot.control < 0 ? bindings.cabinet_line(slot.role, inputs) : bindings.line(c, slot.part, inputs));
+}
+
+/* Default and Clear all: the inputs of the device shown, of every part of
+ * the controls of the player and their coin (and TEST for player 1), back
+ * to their defaults or none */
+void
+Session::change_inputs(bool to_defaults)
+{
+	const odin::MenuState &state = m_menu_state;
+	const auto kind = state.gamepad ? odin::HostInput::Kind::PAD : odin::HostInput::Kind::KEY;
+	const auto changed = [&](std::vector<odin::HostInput> inputs, const std::vector<odin::HostInput> &standard) {
+		std::erase_if(inputs, [kind](const odin::HostInput &in) { return in.kind == kind; });
+		if (to_defaults)
+			for (const odin::HostInput &in : standard)
+				if (in.kind == kind)
+					inputs.push_back(in);
+		return inputs;
+	};
+	std::vector<odin::Bindings::Line> lines;
+	{
+		const odin::Bindings &bindings = m_controls.panel().bindings();
+		const std::vector<odin::GameControl> &controls = m_controls.panel().controls();
+
+		for (size_t c = 0; c < controls.size(); c++) {
+			if (controls[c].player != state.player)
+				continue;
+			const bool parts = controls[c].type != odin::GameControl::Type::BUTTON;
+
+			for (unsigned part = parts ? 1 : 0; part <= (parts ? 2u : 0u); part++)
+				lines.push_back(bindings.line(c, part, changed(bindings.part(c, part), bindings.standard(c, part))));
+			if (controls[c].type == odin::GameControl::Type::ANALOG && odin::GameControl::half(controls[c].low, false))
+				lines.push_back(bindings.line(c, 0, changed(bindings.part(c, 0), bindings.standard(c, 0))));
+		}
+		for (const odin::Role role : { state.player ? odin::Role::COIN2 : odin::Role::COIN1, odin::Role::TEST }) {
+			if (role == odin::Role::TEST && state.player)
+				continue;
+			lines.push_back(bindings.cabinet_line(role, changed(bindings.cabinet(role), bindings.cabinet_standard(role))));
+		}
+	}
+	for (const odin::Bindings::Line &line : lines)
+		keep_binding(line);
+}
+
+/* The inputs back as Clear all found them */
+void
+Session::undo()
+{
+	const std::string section = "controls." + m_board.game_name();
+	std::vector<std::string> keys;
+
+	for (const auto &[key, value] : m_settings.section(section))
+		keys.push_back(key);
+	for (const auto &[key, value] : m_cleared)
+		keys.push_back(key);
+	for (const std::string &key : keys) {
+		std::optional<std::string> was;
+
+		for (const auto &[k, value] : m_cleared)
+			if (k == key)
+				was = value;
+		keep_binding({ key, was });
+	}
+	m_undo_until = 0;
+}
+
+void
+Session::keep_binding(const odin::Bindings::Line &line)
+{
+	const std::string section = "controls." + m_board.game_name();
+
+	if (m_settings_file.empty())
+		m_settings.set(section, line.key, line.value);
+	else
+		m_settings.change(m_settings_file, section, line.key, line.value);
+	m_controls.rebind(m_settings);
+}
+
 /* The menu draws its pictures, then sleeps until the next event */
 void
 Session::wait_in_menu()
@@ -474,8 +638,14 @@ Session::wait_in_menu()
 		if (m_menu_test && !m_menu_pictures)
 			press_escape();
 	}
+	/* Undo goes when its time is over */
+	if (m_menu_state.undo && SDL_GetTicks() >= m_undo_until)
+		m_menu_pictures = std::max(m_menu_pictures, 1u);
 	if (!m_menu_pictures) {
-		SDL_WaitEvent(nullptr);
+		if (m_menu_state.undo)
+			SDL_WaitEventTimeout(nullptr, static_cast<Sint32>(m_undo_until - std::min(m_undo_until, SDL_GetTicks())));
+		else
+			SDL_WaitEvent(nullptr);
 		return;
 	}
 
@@ -493,11 +663,36 @@ Session::draw_menu()
 
 	state.fullscreen = m_display.fullscreen();
 	m_display.display_size(state.display_w, state.display_h);
+	state.panel = &m_controls.panel();
+	state.touched.clear();
+	for (size_t c = 0; c < m_controls.panel().controls().size(); c++)
+		state.touched.push_back(m_controls.touched(c));
+	for (const odin::Role role : { odin::Role::COIN1, odin::Role::COIN2, odin::Role::TEST })
+		state.touched.push_back(m_controls.touched(role));
+	for (unsigned player = 0; player < 2; player++) {
+		state.pads[player] = m_controls.pad_name(player);
+		state.pad_types[player] = m_controls.pad_type(player);
+	}
+	state.undo = m_undo_until && SDL_GetTicks() < m_undo_until;
 
 	const odin::MenuState was = state;
 
 	m_display.draw_menu(state);
 	apply(was);
+
+	if (state.ask == odin::MenuState::Ask::DEFAULTS) {
+		change_inputs(true);
+	} else if (state.ask == odin::MenuState::Ask::CLEAR) {
+		m_cleared = m_settings.section("controls." + m_board.game_name());
+		change_inputs(false);
+		m_undo_until = SDL_GetTicks() + UNDO_MS;
+	} else if (state.ask == odin::MenuState::Ask::UNDO) {
+		undo();
+	}
+	if (state.ask != odin::MenuState::Ask::NONE)
+		m_menu_pictures = MENU_PICTURES;
+	state.ask = odin::MenuState::Ask::NONE;
+	m_controls.settle();
 }
 
 /* A setting changed in the menu is done now, and kept in odin.ini when it

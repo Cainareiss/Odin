@@ -73,6 +73,15 @@ public:
 	            const char *locked = nullptr, bool off = false);
 	void text(const char *name, const char *about, const char *value);
 
+	/* A row of a list of controls, at that place and that width: its name
+	 * and its inputs; lit while the control is worked, "press..." while
+	 * its input is being caught. True on a click. Its height in `h`. */
+	bool binding(const char *id, ImVec2 at, float width, bool first, const char *name, const char *inputs,
+	             bool lit, bool catching, float &h) const;
+	/* A button of a page, after the one before on its line (`same_line`).
+	 * True on a click. */
+	bool button(const char *label, bool same_line = false) const;
+
 private:
 	/* The top of the row, its line above it when it is not the first of
 	 * its group, and the room left for its texts */
