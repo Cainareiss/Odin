@@ -89,6 +89,8 @@ struct MenuState {
 	unsigned player = 0;
 	std::array<bool, 2> gamepad{};
 	std::array<PadState, 2> pad_states{};
+	/* The keys held now */
+	std::vector<SDL_Keycode> keys_held;
 	bool classic = false;
 	/* In a window not wide enough for both, the cabinet in place of the
 	 * device */

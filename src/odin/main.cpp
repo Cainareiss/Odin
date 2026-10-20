@@ -758,6 +758,7 @@ Session::draw_menu()
 		}
 		for (const odin::Role role : { odin::Role::COIN1, odin::Role::COIN2, odin::Role::TEST })
 			state.touched.push_back(state.panel->touched(host, role));
+		state.keys_held = m_keys.held();
 	}
 	for (unsigned player = 0; player < 2; player++) {
 		state.pads[player] = m_controls.pad_name(player);

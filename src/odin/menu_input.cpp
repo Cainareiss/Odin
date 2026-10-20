@@ -968,6 +968,130 @@ pad_box(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, Im
 	not_mapped(kit, state, rows, sorted.empty, a, b, true);
 }
 
+/* The keys of the drawing of the keyboard, row by row: the key, its name,
+ * its width in keys */
+struct DrawnKey {
+	SDL_Keycode key;
+	const char *name;
+	float width;
+};
+
+constexpr DrawnKey KEY_ROWS[5][14] = {
+	{ { SDLK_ESCAPE, "Esc", 1 }, { SDLK_1, "1", 1 }, { SDLK_2, "2", 1 }, { SDLK_3, "3", 1 }, { SDLK_4, "4", 1 },
+	  { SDLK_5, "5", 1 }, { SDLK_6, "6", 1 }, { SDLK_7, "7", 1 }, { SDLK_8, "8", 1 }, { SDLK_9, "9", 1 },
+	  { SDLK_0, "0", 1 }, { SDLK_MINUS, "-", 1 }, { SDLK_EQUALS, "=", 1 }, { SDLK_BACKSPACE, "Back", 2 } },
+	{ { SDLK_TAB, "Tab", 1.5f }, { SDLK_Q, "Q", 1 }, { SDLK_W, "W", 1 }, { SDLK_E, "E", 1 }, { SDLK_R, "R", 1 },
+	  { SDLK_T, "T", 1 }, { SDLK_Y, "Y", 1 }, { SDLK_U, "U", 1 }, { SDLK_I, "I", 1 }, { SDLK_O, "O", 1 },
+	  { SDLK_P, "P", 1 }, { SDLK_LEFTBRACKET, "[", 1 }, { SDLK_RIGHTBRACKET, "]", 1 }, { SDLK_BACKSLASH, "\\", 1.5f } },
+	{ { SDLK_CAPSLOCK, "Caps", 1.75f }, { SDLK_A, "A", 1 }, { SDLK_S, "S", 1 }, { SDLK_D, "D", 1 }, { SDLK_F, "F", 1 },
+	  { SDLK_G, "G", 1 }, { SDLK_H, "H", 1 }, { SDLK_J, "J", 1 }, { SDLK_K, "K", 1 }, { SDLK_L, "L", 1 },
+	  { SDLK_SEMICOLON, ";", 1 }, { SDLK_APOSTROPHE, "'", 1 }, { SDLK_RETURN, "Enter", 2.25f }, {} },
+	{ { SDLK_LSHIFT, "Shift", 2.25f }, { SDLK_Z, "Z", 1 }, { SDLK_X, "X", 1 }, { SDLK_C, "C", 1 }, { SDLK_V, "V", 1 },
+	  { SDLK_B, "B", 1 }, { SDLK_N, "N", 1 }, { SDLK_M, "M", 1 }, { SDLK_COMMA, ",", 1 }, { SDLK_PERIOD, ".", 1 },
+	  { SDLK_SLASH, "/", 1 }, { SDLK_RSHIFT, "Shift", 2.75f }, {}, {} },
+	{ { SDLK_LCTRL, "Ctrl", 1.5f }, { SDLK_LGUI, "", 1.25f }, { SDLK_LALT, "Alt", 1.25f }, { SDLK_SPACE, "", 6.25f },
+	  { SDLK_RALT, "Alt", 1.25f }, { SDLK_RCTRL, "Ctrl", 1.5f }, {}, {}, {}, {}, {}, {}, {}, {} },
+};
+
+/* A quadratic curve from p, through the control c, to q */
+void
+curve_to(std::vector<ImVec2> &points, ImVec2 c, ImVec2 q)
+{
+	const ImVec2 p = points.back();
+
+	for (int k = 1; k <= 8; k++) {
+		const float t = static_cast<float>(k) / 8.0f, u = 1.0f - t;
+
+		points.push_back({ u * u * p.x + 2 * u * t * c.x + t * t * q.x, u * u * p.y + 2 * u * t * c.y + t * t * q.y });
+	}
+}
+
+/* The keyboard drawn (and the mouse): the keys of the controls of the
+ * player clear, the others faint, a key held lit; a mouse button pressed
+ * lit. Its controls change in Classic. */
+void
+keyboard_box(const MenuKit &kit, const MenuState &state, std::span<const InputRow> rows, ImVec2 a, ImVec2 b,
+             float corner)
+{
+	ImDrawList *const list = ImGui::GetWindowDrawList();
+	const MenuPalette &palette = kit.palette();
+	/* The drawing of the mock-up, in its units: 640 by 220 from (0, 96) */
+	constexpr float W = 640.0f, H = 220.0f, TOP = 96.0f, U = 28.0f, X0 = 14.0f, Y0 = 130.0f, GAP = 3.0f;
+	const ImVec2 lo = { a.x + kit.px(BOX_INSIDE), a.y + corner + kit.px(BOX_INSIDE) };
+	const ImVec2 hi = { b.x - kit.px(BOX_INSIDE), b.y - kit.px(BOX_INSIDE) };
+	const float k = std::max(0.0f, std::min((hi.x - lo.x) / W, (hi.y - lo.y) / H));
+	const ImVec2 o = { (lo.x + hi.x - W * k) / 2.0f, (lo.y + hi.y - H * k) / 2.0f - TOP * k };
+	const auto at = [&](float x, float y) { return ImVec2{ o.x + x * k, o.y + y * k }; };
+	const ImU32 faint = (palette.ink & ~IM_COL32_A_MASK) | (0x2Eu << IM_COL32_A_SHIFT);
+	std::vector<SDL_Keycode> bound;
+
+	for (const InputRow &row : rows)
+		for (const HostInput &input : row.inputs)
+			if (input.kind == HostInput::Kind::KEY)
+				bound.push_back(input.key);
+
+	MenuKit::frame(list, at(X0 - 8, Y0 - 10), at(X0 - 8 + 18 * U + 30, Y0 - 10 + 5 * U + 18), kit.px(4.0f), palette.body,
+	               palette.stroke);
+
+	const float size = 10.0f * k;
+	const auto key = [&](const DrawnKey &dk, float x, float y, float w) {
+		const bool on = std::find(bound.begin(), bound.end(), dk.key) != bound.end();
+		const bool down = std::find(state.keys_held.begin(), state.keys_held.end(), dk.key) != state.keys_held.end();
+		const float dy = down ? 1.5f : 0.0f;
+		const ImVec2 p = at(x, y + dy), q = at(x + w, y + dy + U - GAP - 1);
+		const ImVec2 text = ImGui::GetFont()->CalcTextSizeA(size, 1e9f, 0.0f, dk.name);
+
+		list->AddRectFilled(p, q, down ? palette.accent : palette.part, 4.0f * k);
+		list->AddRect(p, q, on ? palette.stroke : faint, 4.0f * k, ImDrawFlags_None, kit.px(1.0f));
+		list->AddText(ImGui::GetFont(), size, { (p.x + q.x - text.x) / 2.0f, (p.y + q.y - text.y) / 2.0f },
+		              down ? palette.on_accent : on ? palette.ink : palette.faint, dk.name);
+	};
+
+	for (size_t r = 0; r < 5; r++) {
+		float x = X0;
+
+		for (const DrawnKey &dk : KEY_ROWS[r]) {
+			if (!dk.name)
+				break;
+			key(dk, x, Y0 + static_cast<float>(r) * U, dk.width * U - GAP);
+			x += dk.width * U;
+		}
+	}
+
+	const float ax = X0 + 15 * U + 8;
+
+	key({ SDLK_UP, "^", 1 }, ax + U, Y0 + 3 * U, U - GAP);
+	key({ SDLK_LEFT, "<", 1 }, ax, Y0 + 4 * U, U - GAP);
+	key({ SDLK_DOWN, "v", 1 }, ax + U, Y0 + 4 * U, U - GAP);
+	key({ SDLK_RIGHT, ">", 1 }, ax + 2 * U, Y0 + 4 * U, U - GAP);
+
+	/* The mouse: its outline, its two buttons, its wheel */
+	std::vector<ImVec2> body = { { 584, 116 } }, left = { { 582, 118 } }, right = { { 586, 118 } };
+
+	curve_to(body, { 620, 116 }, { 622, 160 });
+	body.push_back({ 622, 230 });
+	curve_to(body, { 622, 282 }, { 584, 282 });
+	curve_to(body, { 546, 282 }, { 546, 230 });
+	body.push_back({ 546, 160 });
+	curve_to(body, { 548, 116 }, { 584, 116 });
+	curve_to(left, { 550, 120 }, { 548, 160 });
+	left.insert(left.end(), { { 548, 176 }, { 582, 176 } });
+	curve_to(right, { 618, 120 }, { 620, 160 });
+	right.insert(right.end(), { { 620, 176 }, { 586, 176 } });
+	for (std::vector<ImVec2> *shape : { &body, &left, &right })
+		for (ImVec2 &p : *shape)
+			p = at(p.x, p.y);
+	list->AddConvexPolyFilled(body.data(), static_cast<int>(body.size()), palette.body);
+	for (const auto &[half, button] : { std::pair{ &left, 0 }, std::pair{ &right, 1 } })
+		if (ImGui::IsMouseDown(button))
+			list->AddConvexPolyFilled(half->data(), static_cast<int>(half->size()), palette.accent);
+	list->AddPolyline(body.data(), static_cast<int>(body.size()), palette.stroke, ImDrawFlags_Closed, kit.px(1.1f));
+	list->AddLine(at(584, 116), at(584, 176), palette.outline, kit.px(0.8f));
+	list->AddLine(at(547, 176), at(621, 176), palette.outline, kit.px(0.8f));
+	list->AddRectFilled(at(580, 132), at(588, 154), ImGui::IsMouseDown(2) ? palette.accent : palette.part, 4.0f * k);
+	list->AddRect(at(580, 132), at(588, 154), palette.stroke, 4.0f * k, ImDrawFlags_None, kit.px(1.0f));
+}
+
 /* The controls as a list in two columns (Classic): each name and its
  * inputs on the device shown; a click catches the next one */
 void
@@ -1078,17 +1202,19 @@ Menu::page_input(MenuKit &kit, MenuState &state) const
 	/* The buttons in the corner of the box: Classic for a gamepad, the
 	 * swap of the device and the cabinet in a narrow window */
 	const char *const swap = cabinet ? "Controller" : "Cabinet";
-	const bool classic = state.on_pad() && !cabinet;
+	const bool classic = !cabinet;
 	const ImVec2 classic_size = kit.button_size("Classic"), swap_size = kit.button_size(swap);
 	const float corner = classic || !wide ? std::max(classic_size.y, swap_size.y) + kit.px(5.0f) : 0.0f;
 
 	MenuKit::frame(ImGui::GetWindowDrawList(), a, b, kit.px(BOX_CUT), 0, palette.line);
 	if (cabinet)
 		cabinet_box(kit, state, a, b, false);
-	else if (state.on_pad() && !state.classic)
+	else if (state.classic)
+		list_box(kit, state, rows, a, b, corner);
+	else if (state.on_pad())
 		pad_box(kit, state, rows, a, b, corner);
 	else
-		list_box(kit, state, rows, a, b, corner);
+		keyboard_box(kit, state, rows, a, b, corner);
 	if (wide)
 		cabinet_box(kit, state, { split + gap, y }, { top.x + width, bottom }, true);
 
