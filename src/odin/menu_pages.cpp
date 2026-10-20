@@ -49,9 +49,9 @@ constexpr float ROW_GAP = 6.0f;
 constexpr float BOX_CUT = 5.0f;
 constexpr float BOX_INSIDE = 8.0f;
 
-/* An output: its width at the least, the side of its icon, the room in it
- * and between two */
-constexpr float TILE_LEAST = 110.0f;
+/* An output: its width at the least (two in a row in a window of 640 by
+ * 480 at 125 %), the side of its icon, the room in it and between two */
+constexpr float TILE_LEAST = 84.0f;
 constexpr float TILE_ICON = 26.0f;
 constexpr float TILE_PAD = 8.0f;
 constexpr float TILE_GAP = 8.0f;
@@ -119,6 +119,33 @@ centred(ImVec2 top, float width, float size, const char *text, ImU32 colour)
 	return y - top.y;
 }
 
+/* What a box shows, `high` high: in its middle, or from its top in a
+ * child that scrolls where it is higher than the box (mock-up v50).
+ * `draw` takes the top, and draws in the list of the window it is in. */
+template <typename Draw>
+void
+in_box(const MenuKit &kit, const Box &box, float high, Draw draw)
+{
+	const float inside = kit.px(BOX_INSIDE);
+	const ImVec2 a = { box.a.x + 1.0f, box.a.y + 1.0f }, size = { box.b.x - box.a.x - 2.0f, box.b.y - box.a.y - 2.0f };
+
+	if (high <= size.y - 2.0f * inside) {
+		ImGui::GetWindowDrawList()->PushClipRect(box.a, box.b, true);
+		draw((box.a.y + box.b.y - high) / 2.0f);
+		ImGui::GetWindowDrawList()->PopClipRect();
+		return;
+	}
+	ImGui::SetCursorScreenPos(a);
+	ImGui::BeginChild("drawing", size, ImGuiChildFlags_None, ImGuiWindowFlags_NoBackground);
+
+	const float top = ImGui::GetCursorScreenPos().y + inside;
+
+	draw(top);
+	ImGui::SetCursorScreenPos({ a.x, top });
+	ImGui::Dummy({ 1.0f, high + inside });
+	ImGui::EndChild();
+}
+
 MenuKit::Icon
 icon_of(GameOutput::Role role)
 {
@@ -140,7 +167,6 @@ icon_of(GameOutput::Role role)
 void
 output_tiles(const MenuKit &kit, const MenuState &state, const Box &box)
 {
-	ImDrawList *const list = ImGui::GetWindowDrawList();
 	const MenuPalette &palette = kit.palette();
 	const float inside = kit.px(BOX_INSIDE), gap = kit.px(TILE_GAP), pad = kit.px(TILE_PAD), side = kit.px(TILE_ICON);
 	const float width = box.b.x - box.a.x - 2.0f * inside, size = ImGui::GetFontSize();
@@ -157,36 +183,45 @@ output_tiles(const MenuKit &kit, const MenuState &state, const Box &box)
 	const float tiles_h = static_cast<float>(rows) * tile_h + static_cast<float>(rows ? rows - 1 : 0) * gap;
 	const float caption_h = centred({}, width, size, caption, 0);
 	const float all_h = tiles_h + (rows ? gap : 0.0f) + caption_h;
-	const float top = std::max(box.a.y + inside, (box.a.y + box.b.y - all_h) / 2.0f);
 
-	list->PushClipRect(box.a, box.b, true);
-	for (size_t i = 0; i < state.outputs.size(); i++) {
-		const MenuState::Output &output = state.outputs[i];
-		const ImVec2 a = { box.a.x + inside + static_cast<float>(i % columns) * (tile_w + gap),
-		                   top + static_cast<float>(i / columns) * (tile_h + gap) };
-		const ImU32 colour = output.on ? palette.accent : palette.dim;
+	in_box(kit, box, all_h, [&](float top) {
+		ImDrawList *const list = ImGui::GetWindowDrawList();
 
-		MenuKit::frame(list, a, { a.x + tile_w, a.y + tile_h }, kit.px(BOX_CUT), output.on ? palette.hover : 0,
-		               output.on ? palette.accent : palette.line);
-		MenuKit::icon(list, icon_of(output.role), { a.x + (tile_w - side) / 2.0f, a.y + pad }, side, colour);
-		centred({ a.x + pad, a.y + pad + side + kit.px(4.0f) }, tile_w - 2.0f * pad, size, output.name.c_str(),
-		        output.on ? palette.accent : palette.dim);
-	}
-	centred({ box.a.x + inside, top + tiles_h + (rows ? gap : 0.0f) }, width, size, caption, palette.faint);
-	list->PopClipRect();
+		for (size_t i = 0; i < state.outputs.size(); i++) {
+			const MenuState::Output &output = state.outputs[i];
+			const ImVec2 a = { box.a.x + inside + static_cast<float>(i % columns) * (tile_w + gap),
+			                   top + static_cast<float>(i / columns) * (tile_h + gap) };
+			const ImU32 colour = output.on ? palette.accent : palette.dim;
+
+			MenuKit::frame(list, a, { a.x + tile_w, a.y + tile_h }, kit.px(BOX_CUT), output.on ? palette.hover : 0,
+			               output.on ? palette.accent : palette.line);
+			MenuKit::icon(list, icon_of(output.role), { a.x + (tile_w - side) / 2.0f, a.y + pad }, side, colour);
+			centred({ a.x + pad, a.y + pad + side + kit.px(4.0f) }, tile_w - 2.0f * pad, size, output.name.c_str(),
+			        output.on ? palette.accent : palette.dim);
+		}
+		centred({ box.a.x + inside, top + tiles_h + (rows ? gap : 0.0f) }, width, size, caption, palette.faint);
+	});
 }
 
-/* A path as the user knows it: the home folder as ~ */
+/* A path as the user knows it: the home folder as ~; on Windows with its
+ * separators, as its own dialogs give them */
 std::string
 shown_path(const std::string &path, const char *none)
 {
-	const std::string home = home_dir();
-
 	if (path.empty())
 		return none;
+#ifdef _WIN32
+	std::string out = path;
+
+	std::replace(out.begin(), out.end(), '/', '\\');
+	return out;
+#else
+	const std::string home = home_dir();
+
 	if (!home.empty() && path.starts_with(home) && (path.size() == home.size() || path[home.size()] == '/'))
 		return "~" + path.substr(home.size());
 	return path;
+#endif
 }
 
 } /* namespace */
@@ -231,21 +266,33 @@ decibels(float db)
 	return text;
 }
 
-/* A box of the drawing: its name and where it plays, in its middle; framed
- * when it plays, dashed when not */
+/* The size of the second line of a box of the drawing, `inner` wide */
+float
+sub_size(float inner, const char *sub)
+{
+	const float f = ImGui::GetFontSize();
+	const float wide = ImGui::GetFont()->CalcTextSizeA(f * 0.7f, FLT_MAX, 0.0f, sub).x;
+
+	return std::min(f * 0.7f, f * 0.7f * inner / std::max(wide, 1.0f));
+}
+
+/* A box of the drawing: its name and where it plays (`sub`, when the card
+ * has room for it), in its middle; framed when it plays, dashed when not.
+ * A small box takes the short name. */
 void
-route_box(const MenuKit &kit, ImVec2 a, ImVec2 b, const char *name, const char *sub, bool on)
+route_box(const MenuKit &kit, ImVec2 a, ImVec2 b, const char *name, const char *short_name, const char *sub, bool on)
 {
 	ImDrawList *const list = ImGui::GetWindowDrawList();
 	ImFont *const font = ImGui::GetFont();
 	const MenuPalette &palette = kit.palette();
 	const float f = ImGui::GetFontSize(), inner = b.x - a.x - kit.px(6.0f);
-	const float name_size = f * 0.8f;
-	const float sub_w = font->CalcTextSizeA(f * 0.7f, FLT_MAX, 0.0f, sub).x;
-	const float sub_size = std::max(f * 0.5f, f * 0.7f * std::min(1.0f, inner / std::max(sub_w, 1.0f)));
-	const float name_w = font->CalcTextSizeA(name_size, FLT_MAX, 0.0f, name).x;
-	const float sub_shown_w = font->CalcTextSizeA(sub_size, FLT_MAX, 0.0f, sub).x;
-	const float top = (a.y + b.y - name_size - sub_size - kit.px(2.0f)) / 2.0f, mid = (a.x + b.x) / 2.0f;
+	const auto width = [&](float size, const char *text) { return font->CalcTextSizeA(size, FLT_MAX, 0.0f, text).x; };
+	const char *const shown = width(f * 0.8f, name) <= inner ? name : short_name;
+	const float name_size = std::min(f * 0.8f, f * 0.8f * inner / std::max(width(f * 0.8f, shown), 1.0f));
+	const float second = sub ? sub_size(inner, sub) : 0.0f;
+	const bool with_sub = sub && name_size + second + kit.px(4.0f) <= b.y - a.y;
+	const float high = name_size + (with_sub ? second + kit.px(2.0f) : 0.0f);
+	const float top = (a.y + b.y - high) / 2.0f, mid = (a.x + b.x) / 2.0f;
 
 	if (on)
 		MenuKit::frame(list, a, b, kit.px(3.0f), palette.group, palette.dim);
@@ -254,9 +301,11 @@ route_box(const MenuKit &kit, ImVec2 a, ImVec2 b, const char *name, const char *
 		kit.dashed_frame(list, a, b, palette.outline);
 	}
 	list->PushClipRect(a, b, true);
-	list->AddText(font, name_size, { mid - name_w / 2.0f, top }, on ? palette.ink : palette.dim, name);
-	list->AddText(font, sub_size, { mid - sub_shown_w / 2.0f, top + name_size + kit.px(2.0f) },
-	              on ? palette.dim : palette.faint, sub);
+	list->AddText(font, name_size, { mid - width(name_size, shown) / 2.0f, top }, on ? palette.ink : palette.dim,
+	              shown);
+	if (with_sub)
+		list->AddText(font, second, { mid - width(second, sub) / 2.0f, top + name_size + kit.px(2.0f) },
+		              on ? palette.dim : palette.faint, sub);
 	list->PopClipRect();
 }
 
@@ -314,6 +363,11 @@ route_card(const MenuKit &kit, const MenuState::SoundGame &game, ImVec2 at, floa
 	const ImVec2 o = { at.x + (width - ROUTE_W * k) / 2.0f, at.y + pad + line + kit.px(4.0f) };
 	const auto p = [&](float x, float y) { return ImVec2{ o.x + x * k, o.y + y * k }; };
 	const bool option = game.played != 0, four = game.played == 2;
+	/* Where the boards play, in all its boxes or in none: legible */
+	const float inner = 140.0f * k - kit.px(6.0f);
+	const bool subs =
+		std::min(sub_size(inner, boards.main), sub_size(inner, boards.option)) >= ImGui::GetFontSize() * 0.55f;
+	const auto sub = [subs](const char *text) { return subs ? text : nullptr; };
 	std::string title = game.title;
 
 	for (char &c : title)
@@ -321,15 +375,15 @@ route_card(const MenuKit &kit, const MenuState::SoundGame &game, ImVec2 at, floa
 			c = static_cast<char>(c - 'a' + 'A');
 	MenuKit::frame(list, at, { at.x + width, at.y + h }, kit.px(BOX_CUT), 0, palette.line);
 	list->AddText({ at.x + pad, at.y + pad }, palette.dim, title.c_str());
-	route_box(kit, p(4, 6), p(144, 48), "Main board", boards.main, true);
-	route_box(kit, p(4, 62), p(144, 104), "Optional board", boards.option, option);
+	route_box(kit, p(4, 6), p(144, 48), "Main board", "Main", sub(boards.main), true);
+	route_box(kit, p(4, 62), p(144, 104), "Optional board", "Optional", sub(boards.option), option);
 	if (four) {
-		route_box(kit, p(222, 6), p(326, 48), "Front", "channels 1-2", true);
-		route_box(kit, p(222, 62), p(326, 104), "Rear", "channels 3-4", true);
+		route_box(kit, p(222, 6), p(326, 48), "Front", "Front", sub("channels 1-2"), true);
+		route_box(kit, p(222, 62), p(326, 104), "Rear", "Rear", sub("channels 3-4"), true);
 		route_line(kit, p(144, 27), p(222, 27), true, "");
 		route_line(kit, p(144, 83), p(222, 83), true, "");
 	} else {
-		route_box(kit, p(222, 34), p(326, 76), "Your speakers", "stereo", true);
+		route_box(kit, p(222, 34), p(326, 76), "Your speakers", "Speakers", sub("stereo"), true);
 		route_line(kit, p(144, 27), p(222, 50), true, "");
 		route_line(kit, p(144, 83), p(222, 60), option, game.played == 1 ? decibels(game.level) : "");
 	}
@@ -365,14 +419,12 @@ route_cards(const MenuKit &kit, const MenuState &state, const Box &box)
 	for (const MenuState::SoundGame &game : state.sound_games)
 		all_h += route_card(kit, game, {}, width, false) + gap;
 
-	float y = std::max(box.a.y + inside, (box.a.y + box.b.y - all_h) / 2.0f);
-
-	ImGui::GetWindowDrawList()->PushClipRect(box.a, box.b, true);
-	for (const MenuState::SoundGame &game : state.sound_games)
-		y += route_card(kit, game, { x, y }, width, true) + gap;
-	if (!titles.empty())
-		centred({ x, y }, width, size, others.c_str(), kit.palette().faint);
-	ImGui::GetWindowDrawList()->PopClipRect();
+	in_box(kit, box, all_h, [&](float y) {
+		for (const MenuState::SoundGame &game : state.sound_games)
+			y += route_card(kit, game, { x, y }, width, true) + gap;
+		if (!titles.empty())
+			centred({ x, y }, width, size, others.c_str(), kit.palette().faint);
+	});
 }
 
 /* Audio: where the sound goes, how loud; how the cabinets with two sound
@@ -413,7 +465,8 @@ Menu::page_audio(MenuKit &kit, MenuState &state) const
 	static constexpr const char *KEEP_MUTE[] = { "Keep", "Mute" };
 	int background = state.background ? 0 : 1;
 
-	if (kit.choice("Sound in the background", "when Odin is not the active window", KEEP_MUTE, background, state.silent))
+	if (kit.choice("Sound in the background", "when Odin is not the active window", KEEP_MUTE, background,
+	               state.silent))
 		state.background = background == 0;
 	kit.end_group();
 
@@ -514,7 +567,6 @@ held(const MenuState &state, SDL_Keycode key)
 void
 hotkeys_keyboard(const MenuKit &kit, const MenuState &state, const Box &box)
 {
-	ImDrawList *const list = ImGui::GetWindowDrawList();
 	const MenuPalette &palette = kit.palette();
 	const float inside = kit.px(BOX_INSIDE), gap = kit.px(3.0f), group = kit.px(6.0f), size = ImGui::GetFontSize();
 	const float width = box.b.x - box.a.x - 2.0f * inside, cap_h = kit.key_size("x").y;
@@ -578,42 +630,42 @@ hotkeys_keyboard(const MenuKit &kit, const MenuState &state, const Box &box)
 	const float guide_h = std::max(cap_h, ImGui::CalcTextSize(guide, nullptr, false, guide_text_w).y);
 	const float all_h = cap_h + gap + (others.empty() ? 0.0f : cap_h + gap) + kit.px(6.0f) + caption_h +
 	                    kit.px(10.0f) + guide_h;
-	float y = std::max(box.a.y + inside, (box.a.y + box.b.y - all_h) / 2.0f);
-	float x = (box.a.x + box.b.x - row_width(all)) / 2.0f;
-	bool first = true;
+	in_box(kit, box, all_h, [&](float y) {
+		ImDrawList *const list = ImGui::GetWindowDrawList();
+		float x = (box.a.x + box.b.x - row_width(all)) / 2.0f;
+		bool first = true;
 
-	list->PushClipRect(box.a, box.b, true);
-	for (const SDL_Keycode key : FUNCTION_ROW) {
-		if (!key) {
-			x += all ? group : 0.0f;
-			continue;
-		}
-		if (!all && !used(key))
-			continue;
+		for (const SDL_Keycode key : FUNCTION_ROW) {
+			if (!key) {
+				x += all ? group : 0.0f;
+				continue;
+			}
+			if (!all && !used(key))
+				continue;
 
-		const std::string name = cap_name(key);
+			const std::string name = cap_name(key);
 
-		x += first ? 0.0f : gap;
-		kit.key(list, { x, y }, name.c_str(), used(key), held(state, key));
-		x += kit.key_size(name.c_str()).x;
-		first = false;
-	}
-	y += cap_h + gap;
-	if (!others.empty()) {
-		x = (box.a.x + box.b.x - others_w) / 2.0f;
-		for (const auto &[key, name] : others) {
-			kit.key(list, { x, y }, name.c_str(), true, held(state, key));
-			x += kit.key_size(name.c_str()).x + gap;
+			x += first ? 0.0f : gap;
+			kit.key(list, { x, y }, name.c_str(), used(key), held(state, key));
+			x += kit.key_size(name.c_str()).x;
+			first = false;
 		}
 		y += cap_h + gap;
-	}
-	y += kit.px(6.0f);
-	y += centred({ box.a.x + inside, y }, width, size, caption, palette.faint) + kit.px(10.0f);
-	x = (box.a.x + box.b.x - text_w) / 2.0f;
-	kit.pill(list, { x, y }, "Guide");
-	list->AddText(ImGui::GetFont(), size, { x + guide_w + kit.px(8.0f), y + kit.px(3.0f) }, palette.dim, guide, nullptr,
-	              guide_text_w);
-	list->PopClipRect();
+		if (!others.empty()) {
+			x = (box.a.x + box.b.x - others_w) / 2.0f;
+			for (const auto &[key, name] : others) {
+				kit.key(list, { x, y }, name.c_str(), true, held(state, key));
+				x += kit.key_size(name.c_str()).x + gap;
+			}
+			y += cap_h + gap;
+		}
+		y += kit.px(6.0f);
+		y += centred({ box.a.x + inside, y }, width, size, caption, palette.faint) + kit.px(10.0f);
+		x = (box.a.x + box.b.x - text_w) / 2.0f;
+		kit.pill(list, { x, y }, "Guide");
+		list->AddText(ImGui::GetFont(), size, { x + guide_w + kit.px(8.0f), y + kit.px(3.0f) }, palette.dim, guide,
+		              nullptr, guide_text_w);
+	});
 }
 
 /* Hotkeys: what Odin does itself on a key or with Guide held, each changed
@@ -633,24 +685,27 @@ Menu::page_hotkeys(MenuKit &kit, MenuState &state) const
 		const Hotkeys::Binding &binding = state.hotkeys[a];
 		std::vector<std::string> keys, pad;
 		std::vector<size_t> slots;
+		const auto caught = [&](size_t slot) {
+			return state.hotkey_catching && state.hotkey_catching->first == a && state.hotkey_catching->second == slot;
+		};
 		int catching = -1;
 
 		for (size_t slot = 0; slot < Hotkeys::KEYS; slot++) {
 			if (binding.keys[slot].key == SDLK_UNKNOWN)
 				continue;
-			if (state.hotkey_catching && state.hotkey_catching->first == a && state.hotkey_catching->second == slot)
+			if (caught(slot))
 				catching = static_cast<int>(keys.size());
 			keys.push_back(cap_name(binding.keys[slot]));
 			slots.push_back(slot);
 		}
 		/* An action without a key takes one in its first place */
 		if (keys.empty()) {
-			if (state.hotkey_catching && state.hotkey_catching->first == a && state.hotkey_catching->second == 0)
+			if (caught(0))
 				catching = 0;
 			keys.push_back("-");
 			slots.push_back(0);
 		}
-		if (state.hotkey_catching && state.hotkey_catching->first == a && state.hotkey_catching->second == Hotkeys::KEYS)
+		if (caught(Hotkeys::KEYS))
 			catching = 2;
 		if (binding.pad != Hotkeys::NO_PAD)
 			pad.push_back(button_name(SDL_GAMEPAD_BUTTON_GUIDE, type));

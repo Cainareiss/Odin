@@ -38,6 +38,9 @@ constexpr float ROW_PAD = 8.0f;
 constexpr float GAP = 14.0f;
 constexpr float CELL_WIDE = 7.0f;
 constexpr float CELL_HIGH = 3.0f;
+/* The texts of a row have that room at the least beside its control, else
+ * the control goes under them */
+constexpr float TEXT_LEAST = 120.0f;
 /* What is left of a colour on a row that cannot change */
 constexpr float OFF_ALPHA = 0.4f;
 
@@ -344,9 +347,9 @@ MenuKit::texts(ImVec2 at, float width, const char *name, const char *about, cons
 	ImDrawList *const list = ImGui::GetWindowDrawList();
 	ImFont *const font = ImGui::GetFont();
 	const float size = ImGui::GetFontSize(), space = px(2.0f);
-	float h = ImGui::GetTextLineHeight();
+	float h = ImGui::CalcTextSize(name, nullptr, false, width).y;
 
-	list->AddText(at, m_palette.ink, name);
+	list->AddText(font, size, at, m_palette.ink, name, nullptr, width);
 	for (const auto &[text, colour] : { std::pair{ about, m_palette.dim }, std::pair{ locked, m_palette.faint } }) {
 		if (!text || !*text)
 			continue;
@@ -354,6 +357,22 @@ MenuKit::texts(ImVec2 at, float width, const char *name, const char *about, cons
 		h += space + ImGui::CalcTextSize(text, nullptr, false, width).y;
 	}
 	return h;
+}
+
+MenuKit::Placed
+MenuKit::place(ImVec2 at, float width, float control, float control_h, const char *name, const char *about,
+               const char *locked) const
+{
+	const float pad = px(ROW_PAD), beside = width - control - px(GAP) - 2.0f * pad;
+	const bool under = beside < px(TEXT_LEAST);
+	const float text_h = texts({ at.x + pad, at.y + pad }, under ? width - 2.0f * pad : beside, name, about, locked);
+
+	if (under)
+		return { text_h + px(6.0f) + control_h + 2.0f * pad, at.y + pad + text_h + px(6.0f) };
+
+	const float h = std::max(text_h, control_h) + 2.0f * pad;
+
+	return { h, at.y + (h - control_h) / 2.0f };
 }
 
 bool
@@ -374,9 +393,9 @@ MenuKit::choice(const char *name, const char *about, std::span<const char *const
 		control += cells[i] = ImGui::CalcTextSize(labels[i]).x + 2.0f * wide;
 
 	const ImVec2 at = begin_row(width);
-	const float text_w = std::max(px(80.0f), width - control - px(GAP) - 2.0f * pad);
-	const float h = std::max(texts({ at.x + pad, at.y + pad }, text_w, name, about, locked), control_h) + 2.0f * pad;
-	const ImVec2 a = { at.x + width - pad - control, at.y + (h - control_h) / 2.0f };
+	const Placed placed = place(at, width, control, control_h, name, about, locked);
+	const float h = placed.h;
+	const ImVec2 a = { at.x + width - pad - control, placed.top };
 	const int was = chosen;
 	float x = a.x;
 
@@ -423,13 +442,11 @@ MenuKit::dropdown(const char *name, const char *about, std::span<const std::stri
 
 	const ImVec2 at = begin_row(width);
 	const float control = std::min(longest + 3.0f * wide + arrow, width / 2.0f);
-	const float text_w = std::max(px(80.0f), width - control - px(GAP) - 2.0f * pad);
-	const float h = std::max(texts({ at.x + pad, at.y + pad }, text_w, name, about, nullptr), control_h) + 2.0f * pad;
-	const bool changed = picker("box", { at.x + width - pad - control, at.y + (h - control_h) / 2.0f }, control, labels,
-	                            chosen);
+	const Placed placed = place(at, width, control, control_h, name, about, nullptr);
+	const bool changed = picker("box", { at.x + width - pad - control, placed.top }, control, labels, chosen);
 
 	ImGui::SetCursorScreenPos(at);
-	ImGui::Dummy({ width, h });
+	ImGui::Dummy({ width, placed.h });
 	ImGui::PopID();
 	return changed;
 }
@@ -477,10 +494,16 @@ MenuKit::list_popup(ImVec2 at, float width, std::span<const std::string> labels,
 {
 	const MenuPalette &p = m_palette;
 	const int was = chosen;
+	const float room = ImGui::GetIO().DisplaySize.x, margin = px(8.0f);
+	float longest = width;
 
-	ImGui::SetNextWindowPos(at);
-	ImGui::SetNextWindowSizeConstraints({ width, 0.0f }, { std::max(width, ImGui::GetIO().DisplaySize.x - at.x - px(8.0f)),
-	                                                        ImGui::GetIO().DisplaySize.y });
+	/* As wide as its longest label, moved left where it would leave the
+	 * window */
+	for (const std::string &label : labels)
+		longest = std::max(longest, ImGui::CalcTextSize(label.c_str()).x + 2.0f * px(CELL_WIDE));
+	longest = std::min(longest, room - 2.0f * margin);
+	ImGui::SetNextWindowPos({ std::max(margin, std::min(at.x, room - margin - longest)), at.y });
+	ImGui::SetNextWindowSizeConstraints({ longest, 0.0f }, { longest, ImGui::GetIO().DisplaySize.y });
 	ImGui::PushStyleColor(ImGuiCol_PopupBg, ImGui::ColorConvertU32ToFloat4(p.screen));
 	ImGui::PushStyleColor(ImGuiCol_Border, ImGui::ColorConvertU32ToFloat4(p.faint));
 	ImGui::PushStyleColor(ImGuiCol_Header, ImGui::ColorConvertU32ToFloat4(p.action));
@@ -590,22 +613,7 @@ MenuKit::button(const char *label, ImVec2 at, bool on) const
 void
 MenuKit::text(const char *name, const char *about, const char *value)
 {
-	ImDrawList *const list = ImGui::GetWindowDrawList();
-	const float pad = px(ROW_PAD);
-	float width;
-	const ImVec2 at = begin_row(width);
-	/* A long value takes half the row at most, on more lines */
-	const float value_w = std::min(ImGui::CalcTextSize(value).x, width / 2.0f);
-	const ImVec2 value_size = ImGui::CalcTextSize(value, nullptr, false, value_w);
-	const float text_w = std::max(px(80.0f), width - value_w - px(GAP) - 2.0f * pad);
-	const float h = std::max(texts({ at.x + pad, at.y + pad }, text_w, name, about, nullptr), value_size.y) +
-	                2.0f * pad;
-
-	list->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
-	              { at.x + width - pad - value_w, at.y + (h - value_size.y) / 2.0f }, m_palette.dim, value, nullptr,
-	              value_w);
-	ImGui::SetCursorScreenPos(at);
-	ImGui::Dummy({ width, h });
+	this->value(name, about, value, nullptr);
 }
 
 bool
@@ -624,23 +632,26 @@ MenuKit::value(const char *name, const char *about, const char *value, const cha
 	const float after = shown_button ? button_box.x + space : shown_word ? word_w + space : 0.0f;
 	float width;
 	const ImVec2 at = begin_row(width);
-	/* A long value takes half the row at most, on more lines */
-	const float value_w = std::min(ImGui::CalcTextSize(value).x, width / 2.0f - after);
+	/* A long value takes half the row at most, on more lines; the whole
+	 * row under the texts, where they have not room enough */
+	const float wide_w = ImGui::CalcTextSize(value).x;
+	const bool under = width - std::min(wide_w, width / 2.0f - after) - after - px(GAP) - 2.0f * pad < px(TEXT_LEAST);
+	const float value_w = std::max(px(20.0f), std::min(wide_w, (under ? width - 2.0f * pad : width / 2.0f) - after));
 	const ImVec2 value_size = ImGui::CalcTextSize(value, nullptr, false, value_w);
-	const float text_w = std::max(px(80.0f), width - value_w - after - px(GAP) - 2.0f * pad);
-	const float h = std::max({ texts({ at.x + pad, at.y + pad }, text_w, name, about, locked), value_size.y,
-	                           button_box.y }) + 2.0f * pad;
+	const float control_h = std::max(value_size.y, button_box.y);
+	const Placed placed = place(at, width, value_w + after, control_h, name, about, locked);
+	const float h = placed.h, mid = placed.top + control_h / 2.0f;
 	const float right = at.x + width - pad;
 	bool clicked = false;
 
-	list->AddText(font, ImGui::GetFontSize(), { right - after - value_w, at.y + (h - value_size.y) / 2.0f },
-	              m_palette.dim, value, nullptr, value_w);
+	list->AddText(font, ImGui::GetFontSize(), { right - after - value_w, mid - value_size.y / 2.0f }, m_palette.dim,
+	              value, nullptr, value_w);
 	if (shown_button) {
-		m_button_a = { right - button_box.x, at.y + (h - button_box.y) / 2.0f };
+		m_button_a = { right - button_box.x, mid - button_box.y / 2.0f };
 		m_button_b = { m_button_a.x + button_box.x, m_button_a.y + button_box.y };
 		clicked = button(shown_button, m_button_a, false);
 	} else if (shown_word)
-		list->AddText(font, small, { right - word_w, at.y + (h - small) / 2.0f }, m_palette.faint, shown_word);
+		list->AddText(font, small, { right - word_w, mid - small / 2.0f }, m_palette.faint, shown_word);
 	ImGui::SetCursorScreenPos(at);
 	ImGui::Dummy({ width, h });
 	ImGui::PopID();
@@ -674,13 +685,13 @@ MenuKit::slider(const char *name, const char *about, float &value, float low, fl
 	const float control = track_w + space + shown_w, line = ImGui::GetTextLineHeight();
 	float width;
 	const ImVec2 at = begin_row(width);
-	const float text_w = std::max(px(80.0f), width - control - px(GAP) - 2.0f * pad);
-	const float h = std::max(texts({ at.x + pad, at.y + pad }, text_w, name, about, locked), line) + 2.0f * pad;
-	const ImVec2 a = { at.x + width - pad - control, at.y + (h - track_h) / 2.0f }, b = { a.x + track_w, a.y + track_h };
+	const Placed placed = place(at, width, control, line, name, about, locked);
+	const float h = placed.h, mid = placed.top + line / 2.0f;
+	const ImVec2 a = { at.x + width - pad - control, mid - track_h / 2.0f }, b = { a.x + track_w, a.y + track_h };
 	const float was = value;
 
 	/* The track takes the mouse a little above and below it */
-	ImGui::SetCursorScreenPos({ a.x, at.y + (h - line) / 2.0f });
+	ImGui::SetCursorScreenPos({ a.x, placed.top });
 	ImGui::BeginDisabled(still);
 	ImGui::InvisibleButton("track", { track_w, line });
 
@@ -700,7 +711,7 @@ MenuKit::slider(const char *name, const char *about, float &value, float low, fl
 
 	list->AddRectFilled(a, { a.x + track_w * fill, b.y }, faded(m_palette.action, still), r);
 	list->AddRect(a, b, faded(hovered ? m_palette.dim : m_palette.outline, still), r);
-	list->AddText({ b.x + space, at.y + (h - line) / 2.0f }, faded(m_palette.ink, still), shown);
+	list->AddText({ b.x + space, placed.top }, faded(m_palette.ink, still), shown);
 
 	ImGui::SetCursorScreenPos(at);
 	ImGui::Dummy({ width, h });
@@ -757,7 +768,8 @@ MenuKit::shortcut(const char *name, std::span<const std::string> keys, std::span
 	const float line = ImGui::GetTextLineHeight(), cap_h = key_size("x").y;
 	/* The keys, then the buttons as wide as "Guide + Back" at the least */
 	const auto width_of = [&](size_t i) {
-		return static_cast<int>(i) == catching ? ImGui::CalcTextSize(press).x + 2.0f * px(5.0f) : key_size(keys[i].c_str()).x;
+		return static_cast<int>(i) == catching ? ImGui::CalcTextSize(press).x + 2.0f * px(5.0f) :
+		                                         key_size(keys[i].c_str()).x;
 	};
 	float keys_w = 0.0f, pad_w = 0.0f;
 

@@ -150,6 +150,15 @@ private:
 	 * its group, and the room left for its texts */
 	ImVec2 begin_row(float &width);
 	float texts(ImVec2 at, float width, const char *name, const char *about, const char *locked) const;
+	/* The texts of a row drawn, and the place of its control, `control`
+	 * wide and `control_h` high: beside them, or under them where they
+	 * would have too little room. The height of the row and the top of
+	 * the control. */
+	struct Placed {
+		float h, top;
+	};
+	Placed place(ImVec2 at, float width, float control, float control_h, const char *name, const char *about,
+	             const char *locked) const;
 	/* The list that drops from a box or a button, at that place, as wide
 	 * at least */
 	bool list_popup(ImVec2 at, float width, std::span<const std::string> labels, int &chosen) const;
