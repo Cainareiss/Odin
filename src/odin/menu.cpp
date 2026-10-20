@@ -434,6 +434,19 @@ Menu::page_input(MenuKit &kit, MenuState &state) const
 	const auto type = static_cast<SDL_GamepadType>(state.pad_types[state.player & 1]);
 
 	kit.begin_group("DEVICE");
+
+	/* The game whose controls are set: the one that runs first */
+	std::vector<std::string> titles;
+	int game = static_cast<int>(state.shown);
+
+	for (size_t g = 0; g < state.games.size(); g++)
+		titles.push_back(g == state.running ? state.games[g].second + " (running)" : state.games[g].second);
+	if (!titles.empty() &&
+	    kit.dropdown("Game", state.shown == state.running ? "the one running now" : "its controls, for when it runs",
+	                 titles, game)) {
+		state.show = static_cast<size_t>(game);
+		state.catching.reset();
+	}
 	if (two) {
 		static constexpr const char *PLAYERS[] = { "Player 1", "Player 2" };
 		int player = static_cast<int>(state.player);
@@ -583,7 +596,7 @@ Menu::page_input(MenuKit &kit, MenuState &state) const
 		kit.end_group();
 	};
 
-	columns(capitals(state.game).c_str(), rows);
+	columns(state.shown < state.games.size() ? capitals(state.games[state.shown].second).c_str() : "CONTROLS", rows);
 	columns("SYSTEM", cabinet);
 
 	ImGui::Dummy({ 0.0f, kit.px(10.0f) });

@@ -63,10 +63,15 @@ struct MenuState {
 	/* odin.ini keeps what changes: not with ODIN_CONFIG=none */
 	bool kept = true;
 
-	/* Input: the game, the panel of its cabinet (its controls and their
+	/* Input: the games of the list (name, title), the one whose controls
+	 * are shown and the one that runs, another one asked */
+	std::vector<std::pair<std::string, std::string>> games;
+	size_t shown = 0, running = 0;
+	std::optional<size_t> show;
+	/* The panel of the cabinet of the game shown (its controls and their
 	 * inputs), which are worked now (the controls, then COIN1, COIN2 and
-	 * TEST), the gamepad of each player (its name, SDL_GamepadType) */
-	std::string game;
+	 * TEST: none for a game that does not run), the gamepad of each player
+	 * (its name, SDL_GamepadType) */
 	const ControlPanel *panel = nullptr;
 	std::vector<bool> touched;
 	std::array<std::string, 2> pads;

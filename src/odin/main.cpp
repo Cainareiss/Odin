@@ -253,9 +253,10 @@ class Session {
 public:
 	Session(const Options &options, odin::Hikaru &board, odin::Display &display, odin::Keyboard &keys,
 	        odin::Controls &controls, odin::AudioOut *audio, odin::OutputsNetwork *outputs, odin::Settings &settings,
-	        const std::string &settings_file)
+	        const std::string &settings_file, const odin::GameList &games)
 		: m_options(options), m_board(board), m_display(display), m_keys(keys), m_controls(controls), m_audio(audio),
-		  m_outputs(outputs), m_settings(settings), m_settings_file(settings_file), m_paused(false), m_next(),
+		  m_outputs(outputs), m_settings(settings), m_settings_file(settings_file), m_games(games), m_paused(false),
+		  m_next(),
 		  m_menu_pictures(0), m_menu_drawn(0),
 		  m_menu_test(static_cast<unsigned>(std::max(odin::env_int("ODIN_MENU_TEST", 0), 0)))
 	{
@@ -273,7 +274,10 @@ public:
 		state.unthrottled_given = options.given.unthrottled;
 		state.gpu = display.gpu();
 		state.kept = !settings_file.empty();
-		state.game = options.display.title;
+		state.games = games.titles("hikaru");
+		for (size_t g = 0; g < state.games.size(); g++)
+			if (state.games[g].first == board.game_name())
+				state.shown = state.running = g;
 	}
 
 	/* Runs the frames until the user quits or the last one asked is
@@ -296,11 +300,15 @@ private:
 	void draw_menu();
 	void apply(const odin::MenuState &was);
 	void keep(const char *key, const std::optional<std::string> &value);
+	/* The game whose controls the page Input shows: its name and panel */
+	std::string game_shown() const;
+	const odin::ControlPanel &panel_shown() const { return m_other ? *m_other : m_controls.panel(); }
+	void show_game(size_t game);
 	bool catch_input(const SDL_Event &event);
 	void caught(const odin::HostInput &input);
 	void change_inputs(bool to_defaults);
 	void undo();
-	void keep_binding(const odin::Bindings::Line &line);
+	void keep_binding(const odin::Bindings::Line &line, const std::string &game = "");
 	void press_escape();
 	void load_or_save_state(bool load);
 	void save_state_at_frame();
@@ -315,9 +323,14 @@ private:
 	odin::OutputsNetwork *m_outputs;	/* nullptr: none for other programs */
 	odin::Settings &m_settings;
 	const std::string &m_settings_file;	/* empty: nothing is kept */
+	const odin::GameList &m_games;
+	/* The panel of a game shown that does not run, and its controls */
+	std::vector<odin::GameControl> m_other_controls;
+	std::optional<odin::ControlPanel> m_other;
 	odin::MenuState m_menu_state;
 	/* The inputs as Clear all found them, and until when Undo puts them back */
 	odin::Settings::Lines m_cleared;
+	std::string m_cleared_game;
 	Uint64 m_undo_until = 0;
 	/* Guide is held while an input is caught: the next button goes with it */
 	bool m_catch_guide = false;
@@ -560,7 +573,7 @@ void
 Session::caught(const odin::HostInput &input)
 {
 	const odin::MenuSlot slot = *m_menu_state.catching;
-	const odin::Bindings &bindings = m_controls.panel().bindings();
+	const odin::Bindings &bindings = panel_shown().bindings();
 	const size_t c = static_cast<size_t>(slot.control);
 	std::vector<odin::HostInput> inputs = slot.control < 0 ? bindings.cabinet(slot.role) : bindings.part(c, slot.part);
 
@@ -588,8 +601,8 @@ Session::change_inputs(bool to_defaults)
 	};
 	std::vector<odin::Bindings::Line> lines;
 	{
-		const odin::Bindings &bindings = m_controls.panel().bindings();
-		const std::vector<odin::GameControl> &controls = m_controls.panel().controls();
+		const odin::Bindings &bindings = panel_shown().bindings();
+		const std::vector<odin::GameControl> &controls = panel_shown().controls();
 
 		for (size_t c = 0; c < controls.size(); c++) {
 			if (controls[c].player != state.player)
@@ -615,7 +628,7 @@ Session::change_inputs(bool to_defaults)
 void
 Session::undo()
 {
-	const std::string section = "controls." + m_board.game_name();
+	const std::string section = "controls." + m_cleared_game;
 	std::vector<std::string> keys;
 
 	for (const auto &[key, value] : m_settings.section(section))
@@ -628,21 +641,49 @@ Session::undo()
 		for (const auto &[k, value] : m_cleared)
 			if (k == key)
 				was = value;
-		keep_binding({ key, was });
+		keep_binding({ key, was }, m_cleared_game);
 	}
 	m_undo_until = 0;
 }
 
 void
-Session::keep_binding(const odin::Bindings::Line &line)
+Session::keep_binding(const odin::Bindings::Line &line, const std::string &game)
 {
-	const std::string section = "controls." + m_board.game_name();
+	const std::string section = "controls." + (game.empty() ? game_shown() : game);
 
 	if (m_settings_file.empty())
 		m_settings.set(section, line.key, line.value);
 	else
 		m_settings.change(m_settings_file, section, line.key, line.value);
 	m_controls.rebind(m_settings);
+	if (m_other)
+		m_other.emplace(m_other_controls, m_settings, game_shown());
+}
+
+std::string
+Session::game_shown() const
+{
+	const odin::MenuState &state = m_menu_state;
+
+	return state.shown < state.games.size() ? state.games[state.shown].first : m_board.game_name();
+}
+
+/* Another game in the page Input: a panel of its own, made from the list
+ * and the settings, for its inputs only */
+void
+Session::show_game(size_t game)
+{
+	odin::MenuState &state = m_menu_state;
+	const std::optional<odin::Game> other = game < state.games.size() && game != state.running ?
+	                                        m_games.describe(state.games[game].first) : std::nullopt;
+
+	state.shown = other ? game : state.running;
+	state.catching.reset();
+	m_other.reset();
+	if (!other)
+		return;
+	m_other_controls = other->controls;
+	m_other.emplace(m_other_controls, m_settings, other->name);
 }
 
 /* The menu draws its pictures, then sleeps until the next event */
@@ -683,12 +724,14 @@ Session::draw_menu()
 
 	state.fullscreen = m_display.fullscreen();
 	m_display.display_size(state.display_w, state.display_h);
-	state.panel = &m_controls.panel();
+	state.panel = &panel_shown();
 	state.touched.clear();
-	for (size_t c = 0; c < m_controls.panel().controls().size(); c++)
-		state.touched.push_back(m_controls.touched(c));
-	for (const odin::Role role : { odin::Role::COIN1, odin::Role::COIN2, odin::Role::TEST })
-		state.touched.push_back(m_controls.touched(role));
+	if (!m_other) {
+		for (size_t c = 0; c < m_controls.panel().controls().size(); c++)
+			state.touched.push_back(m_controls.touched(c));
+		for (const odin::Role role : { odin::Role::COIN1, odin::Role::COIN2, odin::Role::TEST })
+			state.touched.push_back(m_controls.touched(role));
+	}
 	for (unsigned player = 0; player < 2; player++) {
 		state.pads[player] = m_controls.pad_name(player);
 		state.pad_types[player] = m_controls.pad_type(player);
@@ -701,19 +744,38 @@ Session::draw_menu()
 		state.wanted[player] = m_controls.wanted(player);
 		state.wanted_names[player] = m_controls.wanted_name(player);
 	}
+	/* Those of a game that does not run are in its settings */
+	if (m_other) {
+		state.wanted = {};
+		state.wanted_names = {};
+		for (const auto &[key, value] : m_settings.section("players." + game_shown())) {
+			const size_t space = value.find(' ');
+
+			if (key == "p1" || key == "p2") {
+				state.wanted[key[1] - '1'] = value.substr(0, space);
+				state.wanted_names[key[1] - '1'] = space == std::string::npos ? "" : value.substr(space + 1);
+			}
+		}
+	}
 
 	const odin::MenuState was = state;
 
 	m_display.draw_menu(state);
 	apply(was);
 
+	if (state.show) {
+		show_game(*state.show);
+		state.show.reset();
+		m_menu_pictures = MENU_PICTURES;
+	}
 	/* The gamepad a player wants for the game: [players.<game>] p1 or p2 */
 	if (state.want) {
 		const auto &[guid, name] = *state.want;
-		const std::string section = "players." + m_board.game_name(), key = state.player ? "p2" : "p1";
+		const std::string section = "players." + game_shown(), key = state.player ? "p2" : "p1";
 		const std::optional<std::string> value = guid.empty() ? std::nullopt : std::optional(guid + " " + name);
 
-		m_controls.want(state.player, guid, name);
+		if (!m_other)
+			m_controls.want(state.player, guid, name);
 		if (m_settings_file.empty())
 			m_settings.set(section, key, value);
 		else
@@ -724,7 +786,8 @@ Session::draw_menu()
 	if (state.ask == odin::MenuState::Ask::DEFAULTS) {
 		change_inputs(true);
 	} else if (state.ask == odin::MenuState::Ask::CLEAR) {
-		m_cleared = m_settings.section("controls." + m_board.game_name());
+		m_cleared_game = game_shown();
+		m_cleared = m_settings.section("controls." + m_cleared_game);
 		change_inputs(false);
 		m_undo_until = SDL_GetTicks() + UNDO_MS;
 	} else if (state.ask == odin::MenuState::Ask::UNDO) {
@@ -978,7 +1041,8 @@ main(int argc, char **argv)
 	}
 	if (started) {
 		std::printf("Running\n");
-		Session(options, *board, *display, keys, controls, audio.get(), outputs.get(), settings, settings_file).run();
+		Session(options, *board, *display, keys, controls, audio.get(), outputs.get(), settings, settings_file, games)
+			.run();
 	}
 
 	std::printf("Finalizing\n");
