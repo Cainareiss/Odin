@@ -114,4 +114,118 @@ Settings::section(const std::string &name) const
 	return found == m_sections.end() ? none : found->second;
 }
 
+std::string
+Settings::changed(std::string_view text, const std::string &section, const std::string &key,
+                  const std::optional<std::string> &value)
+{
+	std::vector<std::string> lines;
+	const bool ended = !text.empty() && text.back() == '\n';
+
+	while (!text.empty()) {
+		const size_t end = text.find('\n');
+
+		lines.emplace_back(text.substr(0, end));
+		text.remove_prefix(end == std::string_view::npos ? text.size() : end + 1);
+	}
+
+	/* The lines of the key, and where a new one goes in the section: after
+	 * its last line that is not blank, or its header (the lines before the
+	 * first header are the section without a name) */
+	const std::string eol = !lines.empty() && !lines.front().empty() && lines.front().back() == '\r' ? "\r" : "";
+	std::vector<size_t> found;
+	std::optional<size_t> place;
+	bool inside = section.empty();
+
+	if (inside)
+		place = 0;
+	for (size_t i = 0; i < lines.size(); i++) {
+		const std::string_view line = trimmed(lines[i]);
+		const size_t equal = line.find('=');
+
+		if (line.size() > 2 && line.front() == '[' && line.back() == ']') {
+			inside = trimmed(line.substr(1, line.size() - 2)) == section;
+			if (inside)
+				place = i + 1;
+			continue;
+		}
+		if (!inside || line.empty())
+			continue;
+		place = i + 1;
+		if (line.front() != '#' && line.front() != ';' && equal != std::string_view::npos &&
+		    trimmed(line.substr(0, equal)) == key)
+			found.push_back(i);
+	}
+
+	const std::string setting = value ? key + " = " + *value + eol : std::string();
+
+	if (value && !found.empty()) {
+		lines[found.back()] = setting;
+		found.pop_back();
+	} else if (value && place) {
+		lines.insert(lines.begin() + static_cast<std::ptrdiff_t>(*place), setting);
+	} else if (value) {
+		if (!lines.empty() && !trimmed(lines.back()).empty())
+			lines.push_back(eol);
+		lines.push_back("[" + section + "]" + eol);
+		lines.push_back(setting);
+	}
+	for (auto i = found.rbegin(); i != found.rend(); i++)
+		lines.erase(lines.begin() + static_cast<std::ptrdiff_t>(*i));
+
+	std::string out;
+
+	for (size_t i = 0; i < lines.size(); i++) {
+		out += lines[i];
+		if (i + 1 < lines.size() || ended || value)
+			out += '\n';
+	}
+	return out;
+}
+
+bool
+Settings::change(const std::string &path, const std::string &section, const std::string &key,
+                 const std::optional<std::string> &value)
+{
+	std::error_code error;
+	std::string text;
+
+	if (std::filesystem::exists(path, error)) {
+		std::ifstream file(path, std::ios::binary);
+		std::stringstream read;
+
+		read << file.rdbuf();
+		if (!file) {
+			std::fprintf(stderr, "ERROR: settings: cannot read '%s'\n", path.c_str());
+			return false;
+		}
+		text = read.str();
+	}
+
+	const std::string out = changed(text, section, key, value);
+	const std::string temporary = path + ".new";
+
+	if (const std::filesystem::path folder = std::filesystem::path(path).parent_path(); !folder.empty())
+		std::filesystem::create_directories(folder, error);
+	{
+		std::ofstream file(temporary, std::ios::binary | std::ios::trunc);
+
+		file << out;
+		file.close();
+		if (!file) {
+			std::fprintf(stderr, "ERROR: settings: cannot write '%s'\n", temporary.c_str());
+			std::filesystem::remove(temporary, error);
+			return false;
+		}
+	}
+	std::filesystem::rename(temporary, path, error);
+	if (error) {
+		std::fprintf(stderr, "ERROR: settings: cannot replace '%s': %s\n", path.c_str(), error.message().c_str());
+		std::filesystem::remove(temporary, error);
+		return false;
+	}
+	m_sections.clear();
+	parse(out, path);
+	return true;
+}
+
 } /* namespace odin */

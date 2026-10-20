@@ -20,6 +20,7 @@
 #define ODIN_SETTINGS_HPP
 
 #include <map>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -46,6 +47,20 @@ public:
 
 	/* The lines of a section; none when the file has no such section. */
 	const Lines &section(const std::string &name) const;
+
+	/* A key of a section given a value, or taken out (nullopt: the value
+	 * by default then): the file is read again, changed, written whole to
+	 * a file beside it and renamed over it, then read here again. False,
+	 * said on stderr, if it cannot be written. */
+	bool change(const std::string &path, const std::string &section, const std::string &key,
+	            const std::optional<std::string> &value);
+	/* The text of such a file with that change, the rest of it as it was:
+	 * comments, order, unknown lines and line ends. The last line of the
+	 * key takes the value and the ones before it go (the last line says);
+	 * a new key goes after the last line of its section, a new section at
+	 * the end. */
+	static std::string changed(std::string_view text, const std::string &section, const std::string &key,
+	                           const std::optional<std::string> &value);
 
 private:
 	std::map<std::string, Lines> m_sections;
