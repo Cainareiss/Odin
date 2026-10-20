@@ -179,7 +179,9 @@ B goes back (a list dropped open closes first, a key caught is let go,
 else the game goes on). The D-pad or the left stick moves a frame from
 row to row; left and right change a choice or a slider, A presses. On
 the page Input the frame goes from control to control: A changes it, X
-clears it and Y sets it back to its default, on the device shown. [menu]
+clears it and Y sets it back to its default, on the device shown; while
+Start mapping, A held a second skips a control (let go sooner, it is the
+button the control takes). [menu]
 gives them other inputs, as [controls.<game>] does: up, down, left,
 right, press, back, clear, default, page_before, page_after, game_before,
 game_after.

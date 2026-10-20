@@ -1677,6 +1677,8 @@ Menu::input_foot(const MenuKit &kit, MenuState &state, ImVec2 at, float width, f
 					all++, done += r <= *state.mapping;
 			say(std::to_string(done) + " / " + std::to_string(all), palette.accent);
 			after = ImGui::CalcTextSize("6 s").x + space + kit.button_size("Skip ›").x + space + kit.button_size("Stop").x;
+			if (state.on_pad() && !state.pills[4].empty())
+				after += kit.pill_size(state.pills[4].c_str()).x + kit.px(4.0f);
 		}
 		say(caught->name, palette.accent);
 
@@ -1696,9 +1698,23 @@ Menu::input_foot(const MenuKit &kit, MenuState &state, ImVec2 at, float width, f
 		const float button_y = at.y + (height - kit.button_size("Stop").y) / 2.0f;
 
 		say(std::to_string(left) + " s", palette.faint);
+		/* On a gamepad, the button that presses held is Skip: its pill,
+		 * and the button filling as it is held */
+		if (state.on_pad() && !state.pills[4].empty()) {
+			const ImVec2 pill = kit.pill_size(state.pills[4].c_str());
+
+			kit.pill(list, { x, at.y + (height - pill.y) / 2.0f }, state.pills[4].c_str());
+			x += pill.x + kit.px(4.0f);
+		}
+
+		const ImVec2 skip = kit.button_size("Skip ›");
+
 		if (kit.button("Skip ›", { x, button_y }, false))
 			state.mapping_since = 0;
-		x += kit.button_size("Skip ›").x + space;
+		if (state.skip_hold > 0.0f)
+			list->AddRectFilled({ x, button_y }, { x + skip.x * state.skip_hold, button_y + skip.y },
+			                    MenuKit::alpha(palette.action, 0.35f));
+		x += skip.x + space;
 		if (kit.button("Stop", { x, button_y }, false))
 			state.mapping.reset(), state.catching.reset(), state.catch_next.clear();
 		return height;

@@ -516,12 +516,17 @@ private:
 	 * counts its seconds too) */
 	static constexpr Uint64 UNDO_MS = 5000;
 	static constexpr Uint64 CATCH_TICK_MS = 33;
+	/* How long the button that presses is held to skip a control while
+	 * Start mapping: a choice of the emulator */
+	static constexpr Uint64 SKIP_HOLD_MS = 1000;
 
 	bool process_events();
 	/* What Odin does on a hotkey in the game: true to quit */
 	bool act(odin::Hotkeys::Action action);
 	bool menu_event(const SDL_Event &event);
 	bool navigate(odin::MenuNav::Action action);
+	bool presses(int button) const;
+	void catch_pad(bool axis, int index, int value);
 	void open_menu();
 	void close_menu();
 	void wait_in_menu();
@@ -576,6 +581,13 @@ private:
 	Uint64 m_undo_until = 0;
 	/* Guide is held while an input is caught: the next button goes with it */
 	bool m_catch_guide = false;
+	/* Start mapping: the button that presses, held since then; it skipped */
+	struct Held {
+		int button;
+		uint64_t since;
+		bool skipped;
+	};
+	std::optional<Held> m_held;
 	/* The window is the active one */
 	bool m_focused = true;
 	/* The folder of the save states (empty: the one Odin is started from),
@@ -825,6 +837,7 @@ Session::close_menu()
 {
 	m_display.close_menu();
 	m_nav.reset();
+	m_held.reset();
 	m_menu_state.nav = {};
 	m_keys.swallow();
 	if (m_audio)
@@ -871,6 +884,14 @@ Session::catch_input(const SDL_Event &event)
 		m_controls.guide_combo();
 		if (event.gbutton.button == SDL_GAMEPAD_BUTTON_GUIDE)
 			m_catch_guide = false;
+		/* The button that presses, let go before it skipped: caught */
+		if (m_held && m_held->button == event.gbutton.button) {
+			const Held held = *m_held;
+
+			m_held.reset();
+			if (!held.skipped)
+				catch_pad(false, held.button, 0);
+		}
 		return true;
 	case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
 	case SDL_EVENT_GAMEPAD_AXIS_MOTION: {
@@ -886,7 +907,6 @@ Session::catch_input(const SDL_Event &event)
 			return true;
 		}
 
-		odin::HostInput input{};
 		const bool axis = event.type == SDL_EVENT_GAMEPAD_AXIS_MOTION;
 		const int value = axis ? event.gaxis.value : 0;
 
@@ -896,36 +916,66 @@ Session::catch_input(const SDL_Event &event)
 			m_catch_guide = true;
 			return true;
 		}
-		input.kind = odin::HostInput::Kind::PAD;
-		input.pad.index = axis ? event.gaxis.axis : event.gbutton.button;
-		input.pad.type = !axis ? odin::PadInput::Type::BUTTON : odin::PadInput::Type::AXIS;
-		if (!axis && m_catch_guide)
-			input.pad.with = SDL_GAMEPAD_BUTTON_GUIDE;
-		/* A stick on a part that is pressed: its half */
-		if (axis && event.gaxis.axis < SDL_GAMEPAD_AXIS_LEFT_TRIGGER && state.catching->part != 0)
-			input.pad.type = value < 0 ? odin::PadInput::Type::AXIS_NEGATIVE : odin::PadInput::Type::AXIS_POSITIVE;
-		/* A button on an analog control goes on its half: of a pedal, or
-		 * of each way in turn */
-		if (!axis && state.catching->control >= 0 && state.catching->part == 0) {
-			const auto c = static_cast<size_t>(state.catching->control);
-			const odin::GameControl &control = panel_shown().controls()[c];
-
-			if (control.type == odin::GameControl::Type::ANALOG) {
-				const bool two_ways = odin::GameControl::half(control.low, false);
-
-				const odin::MenuSlot other_way = { state.catching->control, 2, state.catching->role };
-
-				state.catching->part = two_ways ? 1 : 2;
-				if (two_ways)
-					state.catch_next.insert(state.catch_next.begin(), other_way);
-			}
+		/* Start mapping: the button that presses, held, skips the control
+		 * (draw_menu); let go sooner, it is caught then */
+		if (!axis && state.mapping && !m_catch_guide && presses(event.gbutton.button)) {
+			m_held = Held{ event.gbutton.button, SDL_GetTicks(), false };
+			return true;
 		}
-		caught(input);
+		catch_pad(axis, axis ? event.gaxis.axis : event.gbutton.button, value);
 		return true;
 	}
 	default:
 		return false;
 	}
+}
+
+/* Whether a button of a gamepad presses in the menu (menu_nav.hpp) */
+bool
+Session::presses(int button) const
+{
+	const std::vector<odin::HostInput> &inputs = m_nav.inputs(odin::MenuNav::PRESS);
+
+	return std::any_of(inputs.begin(), inputs.end(), [button](const odin::HostInput &in) {
+		return in.kind == odin::HostInput::Kind::PAD && in.pad.type == odin::PadInput::Type::BUTTON &&
+		       in.pad.index == button && in.pad.with < 0;
+	});
+}
+
+/* An input of a gamepad caught: a button (held with Guide when it is), or
+ * an axis past half its way */
+void
+Session::catch_pad(bool axis, int index, int value)
+{
+	odin::MenuState &state = m_menu_state;
+	odin::HostInput input{};
+
+	if (!state.catching)
+		return;
+	input.kind = odin::HostInput::Kind::PAD;
+	input.pad.index = static_cast<uint8_t>(index);
+	input.pad.type = !axis ? odin::PadInput::Type::BUTTON : odin::PadInput::Type::AXIS;
+	if (!axis && m_catch_guide)
+		input.pad.with = SDL_GAMEPAD_BUTTON_GUIDE;
+	/* A stick on a part that is pressed: its half */
+	if (axis && index < SDL_GAMEPAD_AXIS_LEFT_TRIGGER && state.catching->part != 0)
+		input.pad.type = value < 0 ? odin::PadInput::Type::AXIS_NEGATIVE : odin::PadInput::Type::AXIS_POSITIVE;
+	/* A button on an analog control goes on its half: of a pedal, or of
+	 * each way in turn */
+	if (!axis && state.catching->control >= 0 && state.catching->part == 0) {
+		const auto c = static_cast<size_t>(state.catching->control);
+		const odin::GameControl &control = panel_shown().controls()[c];
+
+		if (control.type == odin::GameControl::Type::ANALOG) {
+			const bool two_ways = odin::GameControl::half(control.low, false);
+			const odin::MenuSlot other_way = { state.catching->control, 2, state.catching->role };
+
+			state.catching->part = two_ways ? 1 : 2;
+			if (two_ways)
+				state.catch_next.insert(state.catch_next.begin(), other_way);
+		}
+	}
+	caught(input);
 }
 
 /* The page Hotkeys waits for a key (Ctrl, Alt, Shift or Gui held with it
@@ -1233,6 +1283,20 @@ Session::draw_menu()
 		}
 	}
 	state.undo = m_undo_until && SDL_GetTicks() < m_undo_until;
+	/* The button that presses held long enough while Start mapping: Skip */
+	state.skip_hold = 0.0f;
+	if (m_held && !m_held->skipped) {
+		const uint64_t held = SDL_GetTicks() - m_held->since;
+
+		if (!state.mapping) {
+			m_held.reset();
+		} else if (held >= SKIP_HOLD_MS) {
+			state.mapping_since = 0;
+			m_held->skipped = true;
+		} else {
+			state.skip_hold = static_cast<float>(held) / SKIP_HOLD_MS;
+		}
+	}
 	for (size_t a = 0; a < odin::Hotkeys::ACTIONS; a++)
 		state.hotkeys[a] = m_hotkeys.of(static_cast<odin::Hotkeys::Action>(a));
 	if (m_audio)

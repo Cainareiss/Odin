@@ -169,6 +169,8 @@ struct MenuState {
 	 * one caught now in the list of the page, since when (SDL ticks) */
 	std::optional<size_t> mapping;
 	uint64_t mapping_since = 0;
+	/* How far the button that presses is held toward Skip, 0 to 1 */
+	float skip_hold = 0.0f;
 	enum class Ask { NONE, DEFAULTS, CLEAR, UNDO, PART_DEFAULTS, PART_CLEAR } ask = Ask::NONE;
 	bool undo = false;
 
