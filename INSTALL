@@ -44,8 +44,9 @@ Options:
 			and forth)
  -v			more messages
 
-Keys: Escape or F10 opens the menu, which pauses the game, Ctrl+Q quits, P
-pauses, F4 saves <game>.odinstate and F1 loads it.
+Keys: Escape or F10 opens the menu, which pauses the game (its Display
+page sets the window and the picture, kept in [display] of odin.ini),
+Ctrl+Q quits, P pauses, F4 saves <game>.odinstate and F1 loads it.
 0 is TEST and 9 SERVICE, the buttons of the cabinet: they open and work
 the menu of the BOOTROM and the test menus of the games (both together
 leave INPUT TEST); 5 and 6 are the coins. Player 1
@@ -94,8 +95,10 @@ the keys, a stick and the mouse, the last that moved works a control. The
 sight meets the pointer once NOZZLE SENSOR SETTING (in the test menu of
 the game) has been done with the mouse.
 
-Gamepads: one for each player, in the order they are plugged in. SELECT
-(SHARE) puts in a coin for the player of the pad. Start, the D-pad, A, B,
+Gamepads: one for each player, in the order they are plugged in, or the
+one chosen for the game in the menu (Input). SELECT (SHARE) puts in a
+coin for the player of the pad. Guide alone opens the menu; Guide held
+with the left stick pressed is SERVICE, with the right one TEST. Start, the D-pad, A, B,
 X, Y, LB, RB, LT, RT, the sticks and the triggers work the controls of
 each game as their roles tell (odin-games.json): for NASCAR,
 the wheel on the left stick, the pedals on the triggers, the gears on LB
@@ -123,6 +126,12 @@ when pulled.) An analog control takes the axes of a pad on its line, and
 keys and buttons on the halves of its way: <id>_left and <id>_right, or
 <id>_up and <id>_down; a pedal takes them on its own line, with its axes
 (gas_pedal = pad:righttrigger, key:Up).
+
+(pad:guide+leftstick is a button held with Guide.) The menu (Escape, F10
+or Guide) writes these lines itself, and the gamepad chosen for a player:
+
+ [players.braveff]
+ p1 = 030000005e0400008e02000014010000 Xbox 360 Controller
 
 The cabinet has 1p_service and 2p_service, coin1 and coin2, test (of the
 I/O board), board_test and board_service; a game without controls in the
