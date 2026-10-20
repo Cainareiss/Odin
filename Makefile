@@ -32,6 +32,7 @@ OBJ := \
 	src/odin/main.o \
 	src/odin/display.o \
 	src/odin/menu.o \
+	src/odin/menu_kit.o \
 	src/odin/keyboard.o \
 	src/odin/controls.o \
 	src/odin/outputs_network.o \
