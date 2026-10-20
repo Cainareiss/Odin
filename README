@@ -49,4 +49,6 @@ the hardware description and the memory map of their Hikaru driver, and the
 MAME, nullDC, lxdream and Demul developers for their work and findings.
 
 The menu is drawn with Dear ImGui, Copyright (c) 2014-2026 Omar Cornut,
-released under the MIT License (src/imgui/LICENSE.txt).
+released under the MIT License (src/imgui/LICENSE.txt). Its gamepads are
+drawn from AL2009man's Gamepad-Asset-Pack, Copyright (c) 2024 Al. Lopez,
+released under the MIT License (src/odin/pad_drawings_al2009man.cpp).

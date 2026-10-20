@@ -141,3 +141,5 @@ Not allowed:
   copyright. Credit stays where it belongs.
 - Dear ImGui keeps its MIT licence and its copyright holders
   (`src/imgui/LICENSE.txt`).
+- The gamepad drawings made from AL2009man's Gamepad-Asset-Pack keep its
+  MIT licence, written at the top of `src/odin/pad_drawings_al2009man.cpp`.

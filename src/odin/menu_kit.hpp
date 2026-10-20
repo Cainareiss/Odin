@@ -29,10 +29,13 @@ namespace odin {
 /* The colours of a palette of the menu (mock-up v50): the screen behind
  * the pages, the frame and its groups, the ink and its two softer tones,
  * the lines between rows, the outline of a control and its hovered fill,
- * the accent for what is touched, the action colour for what is chosen
- * and the ink on it. */
+ * the accent for what is touched and the ink on it, the action colour for
+ * what is chosen and the ink on it. The drawings: the body of a gamepad and
+ * a part on it, their strokes (the details take the outline of a control),
+ * an arrow on a part. */
 struct MenuPalette {
-	ImU32 screen, frame, group, ink, dim, faint, line, outline, hover, accent, action, on_action;
+	ImU32 screen, frame, group, ink, dim, faint, line, outline, hover, accent, on_accent, action, on_action;
+	ImU32 body, part, stroke, arrow;
 };
 
 /* Rúnasteinn, the palette by default: granite and the red ochre of painted
@@ -41,7 +44,10 @@ inline constexpr MenuPalette RUNASTEINN = {
 	IM_COL32(0x2A, 0x2A, 0x28, 0xFF), IM_COL32(0x2F, 0x2F, 0x2C, 0xCC), IM_COL32(0x38, 0x38, 0x34, 0x99),
 	IM_COL32(0xEE, 0xEA, 0xE2, 0xFF), IM_COL32(0xB0, 0xAB, 0xA0, 0xFF), IM_COL32(0x83, 0x7F, 0x75, 0xFF),
 	IM_COL32(0xEE, 0xEA, 0xE2, 0x24), IM_COL32(0xEE, 0xEA, 0xE2, 0x38), IM_COL32(0xEE, 0xEA, 0xE2, 0x10),
-	IM_COL32(0xE0, 0x66, 0x4A, 0xFF), IM_COL32(0x6A, 0xA9, 0xB0, 0xFF), IM_COL32(0x2A, 0x2A, 0x28, 0xFF),
+	IM_COL32(0xE0, 0x66, 0x4A, 0xFF), IM_COL32(0x16, 0x06, 0x04, 0xFF), IM_COL32(0x6A, 0xA9, 0xB0, 0xFF),
+	IM_COL32(0x2A, 0x2A, 0x28, 0xFF),
+	IM_COL32(0x2F, 0x2F, 0x2C, 0xFF), IM_COL32(0x38, 0x38, 0x34, 0xFF), IM_COL32(0xEE, 0xEA, 0xE2, 0x9E),
+	IM_COL32(0xEE, 0xEA, 0xE2, 0x73),
 };
 
 /* The dressed widgets of the menu, on Dear ImGui: corners cut at 45
@@ -57,6 +63,11 @@ public:
 
 	/* A frame with its corners cut; a colour of 0 is none */
 	static void frame(ImDrawList *list, ImVec2 a, ImVec2 b, float cut, ImU32 fill, ImU32 border);
+	/* A line of dashes along points, `on` long and `off` apart; a frame of
+	 * them with its corners cut */
+	static void dashes(ImDrawList *list, std::span<const ImVec2> points, bool closed, ImU32 colour, float width,
+	                   float on, float off);
+	void dashed_frame(ImDrawList *list, ImVec2 a, ImVec2 b, ImU32 colour) const;
 
 	/* The tabs in the middle of the width: a click picks one. True when
 	 * the choice changed. */
@@ -76,6 +87,9 @@ public:
 	/* A row with a list that drops down from its right: true when the
 	 * choice changed */
 	bool dropdown(const char *name, const char *about, std::span<const std::string> labels, int &chosen);
+	/* The same list from a box alone at that place, that wide; its height */
+	bool picker(const char *id, ImVec2 at, float width, std::span<const std::string> labels, int &chosen) const;
+	float picker_height() const;
 
 	/* A row of a list of controls, at that place and that width: its name
 	 * and its inputs; lit while the control is worked, "press..." while
@@ -85,6 +99,10 @@ public:
 	/* A button of a page, after the one before on its line (`same_line`).
 	 * True on a click. */
 	bool button(const char *label, bool same_line = false) const;
+	/* A button at that place, outlined with the action colour while on; its
+	 * size first. True on a click. */
+	ImVec2 button_size(const char *label) const;
+	bool button(const char *label, ImVec2 at, bool on) const;
 
 private:
 	/* The top of the row, its line above it when it is not the first of

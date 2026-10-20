@@ -76,6 +76,8 @@ public:
 	 * empty and unknown when there is none */
 	std::string pad_name(unsigned player) const;
 	SDL_GamepadType pad_type(unsigned player) const;
+	/* What it does now (nothing: none) */
+	PadState pad_state(unsigned player) const { return seat(player) ? seat(player)->state : PadState(); }
 	/* The gamepads plugged in, in the order they came: name and GUID */
 	struct Plugged {
 		std::string name, guid;

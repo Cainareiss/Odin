@@ -29,11 +29,11 @@
 #include <SDL3/SDL.h>
 
 #include "imgui/imgui.h"
+#include "odin/control_panel.hpp"
 #include "odin/roles.hpp"
 
 namespace odin {
 
-class ControlPanel;
 class MenuKit;
 
 /* What the page Input changes: a part of a control of the panel (0 the
@@ -82,10 +82,14 @@ struct MenuState {
 	std::vector<std::pair<std::string, std::string>> plugged;
 	std::array<std::string, 2> wanted, wanted_names;
 	std::optional<std::pair<std::string, std::string>> want;
-	/* The player shown, and the inputs: of the gamepad, else of the
-	 * keyboard (and the mouse, shown) */
+	/* The player shown, and the inputs of each player: of the gamepad, else
+	 * of the keyboard (and the mouse, shown); what the gamepad of each player
+	 * does now; the controls as a list rather than on the drawing */
 	unsigned player = 0;
-	bool gamepad = false;
+	std::array<bool, 2> gamepad{};
+	std::array<PadState, 2> pad_states{};
+	bool classic = false;
+	bool on_pad() const { return gamepad[player & 1]; }
 	/* The part whose next input is caught; what the page asks of the
 	 * inputs of the player and the device shown, Undo while it is offered */
 	std::optional<MenuSlot> catching;
@@ -129,8 +133,9 @@ private:
 	void page_input(MenuKit &kit, MenuState &state) const;
 	void page_display(MenuKit &kit, MenuState &state) const;
 	void page_about(MenuKit &kit) const;
-	/* What the page says at the bottom */
+	/* What the pages say at the bottom */
 	static const char *display_help(const MenuState &state);
+	static std::string input_help(const MenuState &state);
 	void start_gl();
 	void size_blur(unsigned w, unsigned h);
 

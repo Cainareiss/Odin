@@ -67,6 +67,7 @@ constexpr const char *LICENCES[][3] = {
 	{ "SDL 3", "Sam Lantinga", "zlib" },
 	{ "GLEW", "Milan Ikits, Marcelo Magallon", "BSD / MIT" },
 	{ "Jansson", "Petri Lehtinen", "MIT" },
+	{ "Gamepad drawings", "AL2009man, Gamepad-Asset-Pack", "MIT" },
 };
 
 ImVec4
@@ -84,122 +85,6 @@ index_of(const T (&values)[N], T value)
 		if (values[i] == value)
 			return static_cast<int>(i);
 	return -1;
-}
-
-bool
-is_playstation(SDL_GamepadType type)
-{
-	return type == SDL_GAMEPAD_TYPE_PS3 || type == SDL_GAMEPAD_TYPE_PS4 || type == SDL_GAMEPAD_TYPE_PS5;
-}
-
-/* The name of an input of a gamepad of that kind, as its maker prints it */
-std::string
-pad_label(const PadInput &pad, SDL_GamepadType type)
-{
-	const bool ps = is_playstation(type);
-
-	if (pad.type == PadInput::Type::BUTTON) {
-		const auto button = static_cast<SDL_GamepadButton>(pad.index);
-
-		switch (button) {
-		case SDL_GAMEPAD_BUTTON_SOUTH:
-		case SDL_GAMEPAD_BUTTON_EAST:
-		case SDL_GAMEPAD_BUTTON_WEST:
-		case SDL_GAMEPAD_BUTTON_NORTH: {
-			static const char *const FACES[] = { "?", "A", "B", "X", "Y", "Cross", "Circle", "Square", "Triangle" };
-			const SDL_GamepadButtonLabel label =
-				SDL_GetGamepadButtonLabelForType(type == SDL_GAMEPAD_TYPE_UNKNOWN ? SDL_GAMEPAD_TYPE_STANDARD : type, button);
-
-			return FACES[static_cast<size_t>(label) < std::size(FACES) ? static_cast<size_t>(label) : 0];
-		}
-		case SDL_GAMEPAD_BUTTON_BACK: return ps ? "Share" : "Back";
-		case SDL_GAMEPAD_BUTTON_GUIDE: return "Guide";
-		case SDL_GAMEPAD_BUTTON_START: return ps ? "Options" : "Start";
-		case SDL_GAMEPAD_BUTTON_LEFT_STICK: return "L3";
-		case SDL_GAMEPAD_BUTTON_RIGHT_STICK: return "R3";
-		case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER: return ps ? "L1" : "LB";
-		case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER: return ps ? "R1" : "RB";
-		case SDL_GAMEPAD_BUTTON_DPAD_UP: return "D-pad up";
-		case SDL_GAMEPAD_BUTTON_DPAD_DOWN: return "D-pad down";
-		case SDL_GAMEPAD_BUTTON_DPAD_LEFT: return "D-pad left";
-		case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: return "D-pad right";
-		case SDL_GAMEPAD_BUTTON_TOUCHPAD: return "Touchpad";
-		default: {
-			const char *const name = SDL_GetGamepadStringForButton(button);
-
-			return name ? name : "?";
-		}
-		}
-	}
-
-	const auto axis = static_cast<SDL_GamepadAxis>(pad.index);
-
-	if (axis == SDL_GAMEPAD_AXIS_LEFT_TRIGGER)
-		return ps ? "L2" : "LT";
-	if (axis == SDL_GAMEPAD_AXIS_RIGHT_TRIGGER)
-		return ps ? "R2" : "RT";
-
-	const bool left = axis == SDL_GAMEPAD_AXIS_LEFTX || axis == SDL_GAMEPAD_AXIS_LEFTY;
-	const bool across = axis == SDL_GAMEPAD_AXIS_LEFTX || axis == SDL_GAMEPAD_AXIS_RIGHTX;
-	std::string out = left ? "Left stick " : "Right stick ";
-
-	if (pad.type == PadInput::Type::AXIS)
-		out += across ? "X" : "Y";
-	else if (across)
-		out += pad.type == PadInput::Type::AXIS_POSITIVE ? "right" : "left";
-	else
-		out += pad.type == PadInput::Type::AXIS_POSITIVE ? "down" : "up";
-	return pad.inverted ? out + " (inverted)" : out;
-}
-
-std::string
-label(const HostInput &input, SDL_GamepadType type)
-{
-	static const char *const MOUSE[] = { "Mouse left", "Mouse middle", "Mouse right" };
-
-	switch (input.kind) {
-	case HostInput::Kind::KEY:
-		return SDL_GetKeyName(input.key);
-	case HostInput::Kind::PAD:
-		if (input.pad.with >= 0) {
-			const PadInput with = { PadInput::Type::BUTTON, static_cast<uint8_t>(input.pad.with) };
-
-			return pad_label(with, type) + " + " + pad_label(input.pad, type);
-		}
-		return pad_label(input.pad, type);
-	case HostInput::Kind::MOUSE:
-		break;
-	}
-	switch (input.mouse.type) {
-	case MouseInput::Type::X: return "Mouse X";
-	case MouseInput::Type::Y: return "Mouse Y";
-	case MouseInput::Type::OFF: return "Mouse off the screen";
-	case MouseInput::Type::BUTTON: break;
-	}
-	return MOUSE[input.mouse.button % 3];
-}
-
-/* The inputs of the device shown: the gamepad's, else the keys and the
- * mouse */
-std::string
-labels(const std::vector<HostInput> &inputs, bool gamepad, SDL_GamepadType type)
-{
-	std::string out;
-
-	for (const HostInput &input : inputs)
-		if ((input.kind == HostInput::Kind::PAD) == gamepad)
-			out += (out.empty() ? "" : ", ") + label(input, type);
-	return out;
-}
-
-/* The ASCII letters in capitals, for the title of a group */
-std::string
-capitals(std::string text)
-{
-	for (char &c : text)
-		if (c >= 'a' && c <= 'z')
-			c = static_cast<char>(c - 'a' + 'A');
-	return text;
 }
 
 /* The blur: how far apart its taps are, in texels of the half picture,
@@ -390,10 +275,8 @@ Menu::build(MenuState &state)
 	 * as it takes: the page above it */
 	const char keys[] = "Esc: back to the game    Ctrl+Q: quit";
 	const float keys_w = ImGui::CalcTextSize(keys).x, help_w = std::max(0.0f, w - 3.0f * pad - keys_w);
-	const char *const help = m_page == INPUT   ? "Touch a button or move a stick: its control lights. Click a name to change it." :
-	                         m_page == DISPLAY ? display_help(state) :
-	                                             "";
-	const float foot = std::max(line, ImGui::CalcTextSize(help, nullptr, false, help_w).y);
+	const std::string help = m_page == INPUT ? input_help(state) : m_page == DISPLAY ? display_help(state) : "";
+	const float foot = std::max(line, ImGui::CalcTextSize(help.c_str(), nullptr, false, help_w).y);
 
 	ImGui::BeginChild("page", { 0.0f, -(foot + pad) }, ImGuiChildFlags_None, ImGuiWindowFlags_NoBackground);
 	if (m_page == INPUT)
@@ -405,207 +288,12 @@ Menu::build(MenuState &state)
 	ImGui::Dummy({ 0.0f, kit.px(4.0f) });
 	ImGui::EndChild();
 
-	list->AddText(ImGui::GetFont(), ImGui::GetFontSize(), { a.x + pad, b.y - pad - foot }, palette.dim, help,
+	list->AddText(ImGui::GetFont(), ImGui::GetFontSize(), { a.x + pad, b.y - pad - foot }, palette.dim, help.c_str(),
 	              nullptr, help_w);
 	list->AddText({ b.x - pad - keys_w, b.y - pad - line }, palette.faint, keys);
 
 	ImGui::End();
 	ImGui::Render();
-}
-
-/* Input: the device of a player, and what works each control of the game
- * on it, in two columns; a click catches the next input for a control */
-void
-Menu::page_input(MenuKit &kit, MenuState &state) const
-{
-	if (!state.panel)
-		return;
-
-	const ControlPanel &panel = *state.panel;
-	const Bindings &bindings = panel.bindings();
-	const std::vector<GameControl> &controls = panel.controls();
-	/* Every cabinet has the SERVICE of player 2: a game of two players has
-	 * more of theirs */
-	const bool two = std::any_of(controls.begin(), controls.end(),
-	                             [](const GameControl &c) { return c.player == 1 && c.role != Role::SERVICE; });
-
-	if (!two)
-		state.player = 0;
-	const auto type = static_cast<SDL_GamepadType>(state.pad_types[state.player & 1]);
-
-	kit.begin_group("DEVICE");
-
-	/* The game whose controls are set: the one that runs first */
-	std::vector<std::string> titles;
-	int game = static_cast<int>(state.shown);
-
-	for (size_t g = 0; g < state.games.size(); g++)
-		titles.push_back(g == state.running ? state.games[g].second + " (running)" : state.games[g].second);
-	if (!titles.empty() &&
-	    kit.dropdown("Game", state.shown == state.running ? "the one running now" : "its controls, for when it runs",
-	                 titles, game)) {
-		state.show = static_cast<size_t>(game);
-		state.catching.reset();
-	}
-	if (two) {
-		static constexpr const char *PLAYERS[] = { "Player 1", "Player 2" };
-		int player = static_cast<int>(state.player);
-
-		if (kit.choice("Player", "the one whose controls are below", PLAYERS, player)) {
-			state.player = static_cast<unsigned>(player);
-			state.catching.reset();
-		}
-	}
-
-	/* The keyboard, any gamepad, each one plugged in (the same name twice
-	 * counted), the one wanted when it is not there */
-	const unsigned me = state.player & 1;
-	const std::string &pad = state.pads[me];
-	std::vector<std::string> devices = { "Keyboard and mouse", "Any gamepad (the first free one)" };
-	int device = state.gamepad ? 1 : 0;
-
-	for (size_t i = 0; i < state.plugged.size(); i++) {
-		const auto &[name, guid] = state.plugged[i];
-		const auto before = std::count_if(state.plugged.begin(), state.plugged.begin() + static_cast<std::ptrdiff_t>(i),
-		                                  [&name](const auto &other) { return other.first == name; });
-
-		if (state.gamepad && device == 1 && guid == state.wanted[me])
-			device = static_cast<int>(devices.size());
-		devices.push_back(before ? name + " (" + std::to_string(before + 1) + ")" : name);
-	}
-	if (state.gamepad && !state.wanted[me].empty() && device == 1) {
-		device = static_cast<int>(devices.size());
-		devices.push_back((state.wanted_names[me].empty() ? "The gamepad chosen" : state.wanted_names[me]) +
-		                  " (not plugged in)");
-	}
-
-	const std::string about = !state.gamepad ? "the keys, and the mouse where the game has a sight" :
-	                          pad.empty()    ? "none for this player now" :
-	                                           "now: " + pad;
-
-	if (kit.dropdown("Device", about.c_str(), devices, device)) {
-		const size_t chosen = static_cast<size_t>(device);
-
-		state.gamepad = device != 0;
-		state.catching.reset();
-		if (device == 1 && !state.wanted[me].empty())
-			state.want = std::pair<std::string, std::string>();
-		else if (chosen >= 2 && chosen - 2 < state.plugged.size())
-			state.want = std::pair(state.plugged[chosen - 2].second, state.plugged[chosen - 2].first);
-	}
-	kit.end_group();
-
-	/* The parts of the controls of the player, the device shown: an axis
-	 * on a gamepad only (or the mouse that aims), the cabinet apart */
-	struct Row {
-		std::string name;
-		MenuSlot slot;
-		std::string inputs;
-		bool lit, catchable;
-	};
-	std::vector<Row> rows, cabinet;
-	const auto add = [&](std::vector<Row> &to, std::string name, MenuSlot slot, const std::vector<HostInput> &inputs,
-	                     bool lit, bool catchable) {
-		to.push_back({ std::move(name), slot, labels(inputs, state.gamepad, type), lit, catchable });
-	};
-	/* After the controls in `touched`: COIN1, COIN2, TEST */
-	const auto worked = [&state, &controls](size_t i) {
-		return state.touched.size() == controls.size() + 3 && state.touched[i];
-	};
-
-	for (size_t c = 0; c < controls.size(); c++) {
-		const GameControl &control = controls[c];
-		const int i = static_cast<int>(c);
-		const bool lit = worked(c);
-
-		if (control.player != state.player)
-			continue;
-		if (control.role == Role::SERVICE) {
-			add(cabinet, "SERVICE", { i, 0, Role::SERVICE }, bindings.part(c, 0), lit, true);
-			continue;
-		}
-		switch (control.type) {
-		case GameControl::Type::BUTTON:
-			add(rows, control.name, { i, 0, control.role }, bindings.part(c, 0), lit, true);
-			break;
-		case GameControl::Type::POSITIONS:
-			add(rows, control.name + " UP", { i, 2, control.role }, bindings.part(c, 2), lit, true);
-			add(rows, control.name + " DOWN", { i, 1, control.role }, bindings.part(c, 1), lit, true);
-			break;
-		case GameControl::Type::ANALOG: {
-			const char *const left = GameControl::half(control.low, false);
-			const char *const right = GameControl::half(control.low, true);
-			const bool mouse = std::any_of(bindings.part(c, 0).begin(), bindings.part(c, 0).end(),
-			                               [](const HostInput &in) { return in.kind == HostInput::Kind::MOUSE; });
-
-			if (state.gamepad || mouse)
-				add(rows, control.name, { i, 0, control.role }, bindings.part(c, 0), lit, state.gamepad);
-			if (!left || !right) {
-				add(rows, state.gamepad ? control.name + " (pressed)" : control.name, { i, 2, control.role },
-				    bindings.part(c, 2), lit, true);
-				break;
-			}
-			const std::string side = capitals(left + 1), other = capitals(right + 1);
-
-			add(rows, control.name + " " + side, { i, 1, control.role }, bindings.part(c, 1), lit, true);
-			add(rows, control.name + " " + other, { i, 2, control.role }, bindings.part(c, 2), lit, true);
-			break;
-		}
-		}
-	}
-
-	const Role coin = state.player ? Role::COIN2 : Role::COIN1;
-
-	add(cabinet, "COIN", { -1, 0, coin }, bindings.cabinet(coin), worked(controls.size() + state.player), true);
-	if (state.player == 0)
-		add(cabinet, "TEST", { -1, 0, Role::TEST }, bindings.cabinet(Role::TEST), worked(controls.size() + 2), true);
-
-	const auto same = [](const std::optional<MenuSlot> &a, const MenuSlot &b) {
-		return a && a->control == b.control && a->part == b.part && a->role == b.role;
-	};
-	const auto columns = [&](const char *title, std::vector<Row> &list) {
-		kit.begin_group(title);
-		ImGui::PushID(title);
-
-		const ImVec2 top = ImGui::GetCursorScreenPos();
-		const float width = ImGui::GetContentRegionAvail().x, gap = kit.px(10.0f);
-		const float column = (width - gap) / 2.0f;
-		const size_t half = (list.size() + 1) / 2;
-		float ys[2] = { top.y, top.y };
-
-		for (size_t r = 0; r < list.size(); r++) {
-			const unsigned side = r < half ? 0 : 1;
-			const Row &row = list[r];
-			const bool catching = same(state.catching, row.slot);
-			float h;
-
-			ImGui::PushID(static_cast<int>(r));
-			if (kit.binding("row", { top.x + (side ? column + gap : 0.0f), ys[side] }, column, r == 0 || r == half,
-			                row.name.c_str(), row.inputs.c_str(), row.lit, catching, h) && row.catchable) {
-				if (catching)
-					state.catching.reset();
-				else
-					state.catching = row.slot;
-			}
-			ImGui::PopID();
-			ys[side] += h;
-		}
-		ImGui::SetCursorScreenPos(top);
-		ImGui::Dummy({ width, std::max(ys[0], ys[1]) - top.y });
-		ImGui::PopID();
-		kit.end_group();
-	};
-
-	columns(state.shown < state.games.size() ? capitals(state.games[state.shown].second).c_str() : "CONTROLS", rows);
-	columns("SYSTEM", cabinet);
-
-	ImGui::Dummy({ 0.0f, kit.px(10.0f) });
-	if (kit.button("Default"))
-		state.ask = MenuState::Ask::DEFAULTS;
-	if (kit.button("Clear all", true))
-		state.ask = MenuState::Ask::CLEAR;
-	if (state.undo && kit.button("Undo", true))
-		state.ask = MenuState::Ask::UNDO;
 }
 
 /* Display: what draws the picture, how fine, where, how fast */

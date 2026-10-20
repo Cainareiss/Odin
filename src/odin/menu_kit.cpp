@@ -20,6 +20,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <utility>
 
 namespace odin {
@@ -97,6 +98,46 @@ MenuKit::frame(ImDrawList *list, ImVec2 a, ImVec2 b, float cut, ImU32 fill, ImU3
 		list->AddConvexPolyFilled(points, 8, fill);
 	if (border)
 		list->AddPolyline(points, 8, border, ImDrawFlags_Closed, 1.0f);
+}
+
+void
+MenuKit::dashes(ImDrawList *list, std::span<const ImVec2> points, bool closed, ImU32 colour, float width, float on,
+                float off)
+{
+	const size_t n = points.size();
+	float left = on;	/* of the dash or of the gap now */
+	bool drawing = true;
+
+	for (size_t i = 0; i + 1 < n + (closed ? 1 : 0); i++) {
+		ImVec2 p = points[i];
+		const ImVec2 q = points[(i + 1) % n];
+		float length = std::hypot(q.x - p.x, q.y - p.y);
+
+		while (length > 0.0f) {
+			const float step = std::min(left, length);
+			const ImVec2 r = { p.x + (q.x - p.x) * step / length, p.y + (q.y - p.y) * step / length };
+
+			if (drawing)
+				list->AddLine(p, r, colour, width);
+			p = r;
+			length -= step;
+			left -= step;
+			if (left <= 0.0f) {
+				drawing = !drawing;
+				left = drawing ? on : off;
+			}
+		}
+	}
+}
+
+void
+MenuKit::dashed_frame(ImDrawList *list, ImVec2 a, ImVec2 b, ImU32 colour) const
+{
+	const float cut = px(CONTROL_CUT);
+	const ImVec2 points[8] = { { a.x + cut, a.y }, { b.x - cut, a.y }, { b.x, a.y + cut }, { b.x, b.y - cut },
+	                           { b.x - cut, b.y }, { a.x + cut, b.y }, { a.x, b.y - cut }, { a.x, a.y + cut } };
+
+	dashes(list, points, true, colour, 1.0f, px(3.0f), px(2.0f));
 }
 
 bool
@@ -257,10 +298,8 @@ MenuKit::dropdown(const char *name, const char *about, std::span<const std::stri
 {
 	ImGui::PushID(name);
 
-	ImDrawList *const list = ImGui::GetWindowDrawList();
-	const MenuPalette &p = m_palette;
-	const float pad = px(ROW_PAD), wide = px(CELL_WIDE), high = px(CELL_HIGH);
-	const float control_h = ImGui::GetTextLineHeight() + 2.0f * high, arrow = ImGui::CalcTextSize("v").x;
+	const float pad = px(ROW_PAD), wide = px(CELL_WIDE), arrow = ImGui::CalcTextSize("v").x;
+	const float control_h = picker_height();
 	float longest = 0.0f, width;
 
 	for (const std::string &label : labels)
@@ -270,24 +309,47 @@ MenuKit::dropdown(const char *name, const char *about, std::span<const std::stri
 	const float control = std::min(longest + 3.0f * wide + arrow, width / 2.0f);
 	const float text_w = std::max(px(80.0f), width - control - px(GAP) - 2.0f * pad);
 	const float h = std::max(texts({ at.x + pad, at.y + pad }, text_w, name, about, nullptr), control_h) + 2.0f * pad;
-	const ImVec2 a = { at.x + width - pad - control, at.y + (h - control_h) / 2.0f };
-	const ImVec2 b = { a.x + control, a.y + control_h };
+	const bool changed = picker("box", { at.x + width - pad - control, at.y + (h - control_h) / 2.0f }, control, labels,
+	                            chosen);
+
+	ImGui::SetCursorScreenPos(at);
+	ImGui::Dummy({ width, h });
+	ImGui::PopID();
+	return changed;
+}
+
+float
+MenuKit::picker_height() const
+{
+	return ImGui::GetTextLineHeight() + 2.0f * px(CELL_HIGH);
+}
+
+bool
+MenuKit::picker(const char *id, ImVec2 at, float width, std::span<const std::string> labels, int &chosen) const
+{
+	ImGui::PushID(id);
+
+	ImDrawList *const list = ImGui::GetWindowDrawList();
+	const MenuPalette &p = m_palette;
+	const float wide = px(CELL_WIDE), high = px(CELL_HIGH), arrow = ImGui::CalcTextSize("v").x;
+	const ImVec2 b = { at.x + width, at.y + picker_height() };
 	const int was = chosen;
 
-	ImGui::SetCursorScreenPos(a);
-	if (ImGui::InvisibleButton("open", { control, control_h }))
+	ImGui::SetCursorScreenPos(at);
+	if (ImGui::InvisibleButton("open", { width, b.y - at.y }))
 		ImGui::OpenPopup("list");
-	frame(list, a, b, px(CONTROL_CUT), ImGui::IsItemHovered() ? p.hover : 0, p.outline);
+	frame(list, at, b, px(CONTROL_CUT), ImGui::IsItemHovered() ? p.hover : 0, p.outline);
 	if (chosen >= 0 && static_cast<size_t>(chosen) < labels.size()) {
-		list->PushClipRect(a, { b.x - wide - arrow, b.y }, true);
-		list->AddText({ a.x + wide, a.y + high }, p.ink, labels[static_cast<size_t>(chosen)].c_str());
+		list->PushClipRect(at, { b.x - wide - arrow, b.y }, true);
+		list->AddText({ at.x + wide, at.y + high }, p.ink, labels[static_cast<size_t>(chosen)].c_str());
 		list->PopClipRect();
 	}
-	list->AddText({ b.x - wide - arrow, a.y + high }, p.dim, "v");
+	list->AddText({ b.x - wide - arrow, at.y + high }, p.dim, "v");
 
 	/* The list under the box, as wide at least */
-	ImGui::SetNextWindowPos({ a.x, b.y + px(2.0f) });
-	ImGui::SetNextWindowSizeConstraints({ control, 0.0f }, { width, ImGui::GetIO().DisplaySize.y });
+	ImGui::SetNextWindowPos({ at.x, b.y + px(2.0f) });
+	ImGui::SetNextWindowSizeConstraints({ width, 0.0f }, { std::max(width, ImGui::GetIO().DisplaySize.x - at.x - px(8.0f)),
+	                                                        ImGui::GetIO().DisplaySize.y });
 	ImGui::PushStyleColor(ImGuiCol_PopupBg, ImGui::ColorConvertU32ToFloat4(p.screen));
 	ImGui::PushStyleColor(ImGuiCol_Border, ImGui::ColorConvertU32ToFloat4(p.faint));
 	ImGui::PushStyleColor(ImGuiCol_Header, ImGui::ColorConvertU32ToFloat4(p.action));
@@ -310,9 +372,6 @@ MenuKit::dropdown(const char *name, const char *about, std::span<const std::stri
 	}
 	ImGui::PopStyleVar(4);
 	ImGui::PopStyleColor(5);
-
-	ImGui::SetCursorScreenPos(at);
-	ImGui::Dummy({ width, h });
 	ImGui::PopID();
 	return chosen != was;
 }
@@ -370,6 +429,31 @@ MenuKit::button(const char *label, bool same_line) const
 
 	frame(list, a, b, px(CONTROL_CUT), hovered ? m_palette.hover : 0, m_palette.outline);
 	list->AddText({ a.x + wide, a.y + high }, hovered ? m_palette.ink : m_palette.dim, label);
+	return clicked;
+}
+
+ImVec2
+MenuKit::button_size(const char *label) const
+{
+	const ImVec2 size = ImGui::CalcTextSize(label);
+
+	return { size.x + 2.0f * px(CELL_WIDE + 3.0f), size.y + 2.0f * px(CELL_HIGH + 1.0f) };
+}
+
+bool
+MenuKit::button(const char *label, ImVec2 at, bool on) const
+{
+	ImDrawList *const list = ImGui::GetWindowDrawList();
+	const ImVec2 box = button_size(label), b = { at.x + box.x, at.y + box.y };
+
+	ImGui::SetCursorScreenPos(at);
+
+	const bool clicked = ImGui::InvisibleButton(label, box);
+	const bool hovered = ImGui::IsItemHovered();
+
+	frame(list, at, b, px(CONTROL_CUT), hovered ? m_palette.hover : 0, on ? m_palette.action : m_palette.outline);
+	list->AddText({ at.x + px(CELL_WIDE + 3.0f), at.y + px(CELL_HIGH + 1.0f) },
+	              on ? m_palette.action : hovered ? m_palette.ink : m_palette.dim, label);
 	return clicked;
 }
 

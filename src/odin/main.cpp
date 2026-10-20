@@ -275,6 +275,9 @@ public:
 		state.gpu = display.gpu();
 		state.kept = !settings_file.empty();
 		state.games = games.titles("hikaru");
+		for (const auto &[key, value] : settings.section("menu"))
+			if (key == "classic")
+				state.classic = value == "on";
 		state.shown = state.running = state.games.size();
 		for (size_t g = 0; g < state.games.size(); g++)
 			if (state.games[g].first == board.game_name())
@@ -338,6 +341,7 @@ private:
 	Uint64 m_undo_until = 0;
 	/* Guide is held while an input is caught: the next button goes with it */
 	bool m_catch_guide = false;
+	bool m_menu_opened = false;
 	bool m_paused;
 	std::chrono::steady_clock::time_point m_next;	/* when the next frame is due */
 	unsigned m_menu_pictures;	/* still to draw */
@@ -486,6 +490,12 @@ Session::open_menu()
 	m_controls.quiet();
 	if (m_audio)
 		m_audio->pause(true);
+	/* The page Input shows the gamepad of the player when there is one,
+	 * until the user picks a device */
+	if (!m_menu_opened)
+		for (unsigned player = 0; player < 2; player++)
+			m_menu_state.gamepad[player] = !m_controls.pad_name(player).empty();
+	m_menu_opened = true;
 	m_display.open_menu();
 	m_menu_pictures = MENU_PICTURES;
 }
@@ -526,7 +536,7 @@ Session::catch_input(const SDL_Event &event)
 			state.catching.reset();
 			return true;
 		}
-		if (!state.gamepad && !is_odin_key(event.key.key)) {
+		if (!state.on_pad() && !is_odin_key(event.key.key)) {
 			odin::HostInput input{};
 
 			input.kind = odin::HostInput::Kind::KEY;
@@ -543,7 +553,7 @@ Session::catch_input(const SDL_Event &event)
 	case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
 	case SDL_EVENT_GAMEPAD_AXIS_MOTION: {
 		m_controls.event(event);
-		if (!state.gamepad)
+		if (!state.on_pad())
 			return true;
 
 		odin::HostInput input{};
@@ -594,7 +604,7 @@ void
 Session::change_inputs(bool to_defaults)
 {
 	const odin::MenuState &state = m_menu_state;
-	const auto kind = state.gamepad ? odin::HostInput::Kind::PAD : odin::HostInput::Kind::KEY;
+	const auto kind = state.on_pad() ? odin::HostInput::Kind::PAD : odin::HostInput::Kind::KEY;
 	const auto changed = [&](std::vector<odin::HostInput> inputs, const std::vector<odin::HostInput> &standard) {
 		std::erase_if(inputs, [kind](const odin::HostInput &in) { return in.kind == kind; });
 		if (to_defaults)
@@ -739,6 +749,7 @@ Session::draw_menu()
 	for (unsigned player = 0; player < 2; player++) {
 		state.pads[player] = m_controls.pad_name(player);
 		state.pad_types[player] = m_controls.pad_type(player);
+		state.pad_states[player] = m_controls.pad_state(player);
 	}
 	state.undo = m_undo_until && SDL_GetTicks() < m_undo_until;
 	state.plugged.clear();
@@ -838,6 +849,8 @@ Session::apply(const odin::MenuState &was)
 		m_display.set_show_speed(now.show_speed);
 		keep("show_speed", on_off(now.show_speed, true));
 	}
+	if (now.classic != was.classic && !m_settings_file.empty())
+		m_settings.change(m_settings_file, "menu", "classic", on_off(now.classic, false));
 }
 
 void
