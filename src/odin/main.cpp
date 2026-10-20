@@ -275,9 +275,13 @@ public:
 		state.gpu = display.gpu();
 		state.kept = !settings_file.empty();
 		state.games = games.titles("hikaru");
+		state.shown = state.running = state.games.size();
 		for (size_t g = 0; g < state.games.size(); g++)
 			if (state.games[g].first == board.game_name())
 				state.shown = state.running = g;
+		/* The BIOS alone: the page Input shows the first game */
+		if (state.running == state.games.size())
+			show_game(0);
 	}
 
 	/* Runs the frames until the user quits or the last one asked is

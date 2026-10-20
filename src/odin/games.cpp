@@ -464,7 +464,8 @@ GameList::titles(const std::string &machine) const
 		const char *const name = json_string_value(json_object_get(rom, "name"));
 		const char *const title = json_string_value(json_object_get(rom, "title"));
 
-		if (machine == json_string_value(json_object_get(rom, "mach")))
+		if (machine == json_string_value(json_object_get(rom, "mach")) &&
+		    json_array_size(json_object_get(rom, "controls")) > 0)
 			out.emplace_back(name, title ? title : name);
 	}
 	return out;

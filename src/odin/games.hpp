@@ -224,7 +224,7 @@ public:
 
 	bool has(const std::string &name) const;
 	/* The names and titles of the games of a machine, in the order of the
-	 * list */
+	 * list: those that have controls (not the BIOS alone) */
 	std::vector<std::pair<std::string, std::string>> titles(const std::string &machine) const;
 	/* What the list tells of a game, without its files: nothing when it is
 	 * not in the list, or not right */

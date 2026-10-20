@@ -332,9 +332,8 @@ void test_games(const std::string &dir)
 
 	const auto titles = list.titles("hikaru");
 
-	check(!titles.empty() && titles[0].first == "toy" && titles[0].second == "toy" &&
-	      std::all_of(titles.begin(), titles.end(), [](const auto &t) { return !t.first.empty(); }),
-	      "the names and titles of the games of a machine, in the order of the list");
+	check(titles.size() == 1 && titles[0].first == "wheel" && titles[0].second == "Wheel ~ Test: 2!",
+	      "the names and titles of the games of a machine that have controls, in the order of the list");
 	check(list.titles("naomi").empty(), "none of another machine");
 	check(!list.load_game(roms, "unequal"), "nor one whose alternative files have different sizes");
 	check(!list.load_game(roms, "stepless"), "nor one that interleaves without telling by how many bytes");
