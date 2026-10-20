@@ -492,6 +492,8 @@ void test_lines_to_write()
 	      "a pedal line written reads back on its two parts");
 	check(!mine.line(0, 0, plain.of(0)).value, "the defaults are those of the role, whatever the settings say");
 
+	check(mine.standard(0, 0) == plain.of(0) && mine.part(0, 0) == mine.of(0) && mine.part(2, 2) == mine.toward(2, true) &&
+	      mine.cabinet_standard(Role::TEST) == plain.cabinet(Role::TEST), "the parts, and their defaults kept");
 	line = plain.cabinet_line(Role::COIN1, plain.cabinet(Role::COIN1));
 	check(line.key == "coin1" && !line.value, "a coin with its defaults");
 	line = plain.cabinet_line(Role::TEST, { key("key:F2") });

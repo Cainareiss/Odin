@@ -412,6 +412,12 @@ Bindings::cabinet(Role role) const
 	return m_cabinet[cabinet_index(role)];
 }
 
+const std::vector<HostInput> &
+Bindings::cabinet_standard(Role role) const
+{
+	return m_cabinet_defaults[cabinet_index(role)];
+}
+
 Bindings::Line
 Bindings::line(size_t control, unsigned part, const std::vector<HostInput> &inputs) const
 {

@@ -118,6 +118,12 @@ public:
 	}
 	/* Those of a role of the cabinet */
 	const std::vector<HostInput> &cabinet(Role role) const;
+	/* A part of a control (0 the control, 1 and 2 its halves or a lever
+	 * down and up), and the defaults of the part or of a role of the
+	 * cabinet, before the settings */
+	const std::vector<HostInput> &part(size_t control, unsigned part) const { return m_controls[control][part]; }
+	const std::vector<HostInput> &standard(size_t control, unsigned part) const { return m_defaults[control][part]; }
+	const std::vector<HostInput> &cabinet_standard(Role role) const;
 
 	/* A line of [controls.<game>]: its key, and its value; none when the
 	 * inputs are the defaults (the line can go) */
