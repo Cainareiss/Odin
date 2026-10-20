@@ -24,6 +24,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <utility>
 
 #include "imgui/imgui.h"
@@ -190,6 +191,59 @@ fitted(const std::string &text, float width)
 	while (n > 0 && (static_cast<unsigned char>(text[n]) & 0xC0) == 0x80)
 		n--;
 	return text.substr(0, n) + "...";
+}
+
+/* A text of inputs as it is drawn: on a PlayStation gamepad the names of
+ * its four buttons as their marks (cross, circle, square, triangle). Its
+ * width; drawn when `list` is given. */
+float
+inputs_text(ImDrawList *list, ImVec2 at, const std::string &text, bool marks, ImU32 colour)
+{
+	static constexpr const char *FACES[] = { "Cross", "Circle", "Square", "Triangle" };
+	const float line = ImGui::GetTextLineHeight(), mark = line * 0.9f;
+	float x = at.x;
+	size_t from = 0;
+
+	while (from < text.size()) {
+		size_t next = std::string::npos;
+		int face = -1;
+
+		for (int f = 0; marks && f < 4; f++) {
+			const size_t found = text.find(FACES[f], from);
+
+			if (found < next)
+				next = found, face = f;
+		}
+
+		const size_t end = std::min(next, text.size());
+
+		if (end > from) {
+			if (list)
+				list->AddText({ x, at.y }, colour, text.c_str() + from, text.c_str() + end);
+			x += ImGui::CalcTextSize(text.c_str() + from, text.c_str() + end).x;
+		}
+		if (face < 0)
+			break;
+		if (list) {
+			const float m = mark * 0.22f, w = std::max(1.0f, line / 10.0f);
+			const ImVec2 a = { x + m, at.y + (line - mark) / 2.0f + m }, b = { x + mark - m, at.y + (line + mark) / 2.0f - m };
+			const ImVec2 c = { (a.x + b.x) / 2.0f, (a.y + b.y) / 2.0f };
+
+			if (face == 0) {
+				list->AddLine(a, b, colour, w);
+				list->AddLine({ a.x, b.y }, { b.x, a.y }, colour, w);
+			} else if (face == 1) {
+				list->AddCircle(c, (b.x - a.x) / 2.0f, colour, 0, w);
+			} else if (face == 2) {
+				list->AddRect(a, b, colour, 0.0f, ImDrawFlags_None, w);
+			} else {
+				list->AddTriangle({ c.x, a.y }, { b.x, b.y }, { a.x, b.y }, colour, w);
+			}
+		}
+		x += mark;
+		from = next + std::strlen(FACES[face]);
+	}
+	return x - at.x;
 }
 
 bool
@@ -1124,9 +1178,11 @@ list_box(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, I
 		const InputRow &row = rows[r];
 		const bool second = r >= half, chosen = same(state.catching, row.slot);
 		const ImVec2 at = { lo.x + (second ? column + gap : 0.0f), top + static_cast<float>(second ? r - half : r) * h };
-		const std::string inputs = fitted(chosen ? "press..." : row.inputs.empty() ? "-" : labels(row.inputs, type),
-		                                  column / 2.0f - 2.0f * wide);
-		const float chip = ImGui::CalcTextSize(inputs.c_str()).x + 2.0f * wide;
+		const std::string whole = chosen ? "press..." : row.inputs.empty() ? "-" : labels(row.inputs, type);
+		const bool marks = is_playstation(type) && state.on_pad() &&
+		                   inputs_text(nullptr, {}, whole, true, 0) <= column / 2.0f - 2.0f * wide;
+		const std::string inputs = marks ? whole : fitted(whole, column / 2.0f - 2.0f * wide);
+		const float chip = inputs_text(nullptr, {}, inputs, marks, 0) + 2.0f * wide;
 		const ImVec2 ca = { at.x + column - chip, at.y + (h - line) / 2.0f - high };
 		const std::string name = fitted(row.name, column - chip - kit.px(14.0f));
 		const ImVec2 cb = { at.x + column, ca.y + line + 2.0f * high };
@@ -1152,8 +1208,8 @@ list_box(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, I
 			kit.dashed_frame(list, ca, cb, palette.outline);
 		else
 			MenuKit::frame(list, ca, cb, kit.px(3.0f), 0, chosen || row.lit ? palette.accent : palette.outline);
-		list->AddText({ ca.x + wide, ca.y + high }, chosen ? palette.accent : row.inputs.empty() ? palette.faint : palette.ink,
-		              inputs.c_str());
+		inputs_text(list, { ca.x + wide, ca.y + high }, inputs, marks,
+		            chosen ? palette.accent : row.inputs.empty() ? palette.faint : palette.ink);
 	}
 	if (scrolls) {
 		ImGui::SetCursorScreenPos(lo);
