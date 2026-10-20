@@ -104,15 +104,29 @@ OBJ := \
 	src/odin/renderer_gl.o \
 	src/odin/loading_screen.o
 
+# Dear ImGui as it comes, for the menu: built without our warnings
+IMGUI_OBJ := \
+	src/imgui/imgui.o \
+	src/imgui/imgui_draw.o \
+	src/imgui/imgui_tables.o \
+	src/imgui/imgui_widgets.o \
+	src/imgui/imgui_impl_sdl3.o \
+	src/imgui/imgui_impl_opengl3.o
+
+IMGUI_FLAGS := -std=c++20 -I src/imgui $(SDL_CFLAGS) $(OPT_FLAGS) $(PGO_FLAGS) $(DEP_FLAGS)
+
 all: bin/odin
 
-bin/odin: $(OBJ)
+bin/odin: $(OBJ) $(IMGUI_OBJ)
 	$(LD) $+ -o $@ $(CXXFLAGS) $(LDFLAGS)
 
 %.o: %.cpp
 	$(CXX) -c $< -o $@ $(CXXFLAGS)
 
--include $(patsubst %.o,%.d,$(OBJ))
+src/imgui/%.o: src/imgui/%.cpp
+	$(CXX) -c $< -o $@ $(IMGUI_FLAGS)
+
+-include $(patsubst %.o,%.d,$(OBJ) $(IMGUI_OBJ))
 
 # A product is fused with a sum only where the code says std::fma.
 src/odin/sh4_ops.o: CXXFLAGS += -ffp-contract=off
