@@ -361,6 +361,10 @@ main(int argc, char **argv)
 	Options options;
 	odin::GameList games;
 
+	/* With the OpenGL driver of Intel loaded, a process of Windows ends
+	 * without what its buffers still hold: it goes out here. */
+	std::atexit([] { std::fflush(nullptr); });
+
 	std::printf("Odin, Copyright(C) 2026 Réda Chérif-Touil\n");
 	std::printf("A hard fork of Valkyrie, Copyright(C) 2011-2013 Stefano Teso\n");
 	std::printf("Released under the GPL3 License.\n");
