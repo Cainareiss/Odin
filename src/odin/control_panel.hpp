@@ -55,6 +55,16 @@ struct HostState {
 	const MouseState *mouse = nullptr;
 };
 
+/* Where a control is now, for the drawing of the cabinet: worked or not;
+ * an analog one from -1 (left or up) to 1 (right or down), a pedal from 0
+ * to 1, as its inputs hold it now (a key at the end of the way); a lever at
+ * its position. */
+struct ControlNow {
+	bool on = false;
+	float value = 0.0f;
+	size_t position = 0;
+};
+
 /* The control panel of a cabinet: from what the host holds, the switches
  * and the channels the board reads, each control worked by its own inputs
  * (bindings.hpp). A game without controls in the list has the standard
@@ -95,6 +105,9 @@ public:
 	 * way */
 	bool touched(const HostState &host, size_t control) const;
 	bool touched(const HostState &host, Role role) const { return pressed(host, m_bindings.cabinet(role), 0); }
+	/* A control as the host holds it now, the lever where the last update
+	 * left it; nothing changes */
+	ControlNow now(const HostState &host, size_t control) const;
 
 	/* The channel for that value of an axis, the low values on the way the
 	 * game wants them: a stick from -32768 (left or up), a trigger from 0

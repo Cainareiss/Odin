@@ -78,6 +78,9 @@ public:
 	SDL_GamepadType pad_type(unsigned player) const;
 	/* What it does now (nothing: none) */
 	PadState pad_state(unsigned player) const { return seat(player) ? seat(player)->state : PadState(); }
+	/* What the host holds now: the keys, the gamepad of each player, the
+	 * mouse */
+	HostState host_state() const { return host(); }
 	/* The gamepads plugged in, in the order they came: name and GUID */
 	struct Plugged {
 		std::string name, guid;

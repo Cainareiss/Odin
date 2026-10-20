@@ -70,10 +70,11 @@ struct MenuState {
 	std::optional<size_t> show;
 	/* The panel of the cabinet of the game shown (its controls and their
 	 * inputs), which are worked now (the controls, then COIN1, COIN2 and
-	 * TEST: none for a game that does not run), the gamepad of each player
-	 * (its name, SDL_GamepadType) */
+	 * TEST) and where its controls are, the gamepad of each player (its
+	 * name, SDL_GamepadType) */
 	const ControlPanel *panel = nullptr;
 	std::vector<bool> touched;
+	std::vector<ControlNow> now;
 	std::array<std::string, 2> pads;
 	std::array<int, 2> pad_types{};
 	/* The gamepads plugged in (name, GUID), the one each player wants

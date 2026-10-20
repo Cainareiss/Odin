@@ -740,11 +740,16 @@ Session::draw_menu()
 	m_display.display_size(state.display_w, state.display_h);
 	state.panel = &panel_shown();
 	state.touched.clear();
-	if (!m_other) {
-		for (size_t c = 0; c < m_controls.panel().controls().size(); c++)
-			state.touched.push_back(m_controls.touched(c));
+	state.now.clear();
+	{
+		const odin::HostState host = m_controls.host_state();
+
+		for (size_t c = 0; c < state.panel->controls().size(); c++) {
+			state.now.push_back(state.panel->now(host, c));
+			state.touched.push_back(state.now.back().on);
+		}
 		for (const odin::Role role : { odin::Role::COIN1, odin::Role::COIN2, odin::Role::TEST })
-			state.touched.push_back(m_controls.touched(role));
+			state.touched.push_back(state.panel->touched(host, role));
 	}
 	for (unsigned player = 0; player < 2; player++) {
 		state.pads[player] = m_controls.pad_name(player);
