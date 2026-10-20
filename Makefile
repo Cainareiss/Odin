@@ -31,6 +31,7 @@ CXXFLAGS := -std=c++20 -pthread -I src -Wall -Wextra -Wpedantic -Wconversion -Ws
 OBJ := \
 	src/odin/main.o \
 	src/odin/display.o \
+	src/odin/menu.o \
 	src/odin/keyboard.o \
 	src/odin/controls.o \
 	src/odin/outputs_network.o \

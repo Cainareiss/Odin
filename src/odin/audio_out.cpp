@@ -90,4 +90,13 @@ AudioOut::play(std::span<const int16_t> main, std::span<const int16_t> option)
 	SDL_PutAudioStreamData(m_stream, m_frames.data(), static_cast<int>(m_frames.size() * 2));
 }
 
+void
+AudioOut::pause(bool paused)
+{
+	if (paused)
+		SDL_PauseAudioStreamDevice(m_stream);
+	else
+		SDL_ResumeAudioStreamDevice(m_stream);
+}
+
 } /* namespace odin */

@@ -29,6 +29,7 @@
 
 #include "odin/env.hpp"
 #include "odin/keyboard.hpp"
+#include "odin/menu.hpp"
 #include "odin/renderer.hpp"
 #include "odin/state_file.hpp"
 #include "odin/worker.hpp"
@@ -158,8 +159,8 @@ Display::make(Hikaru &board, const Keyboard &keys, const Options &options)
 
 Display::Display(Hikaru &board, const Keyboard &keys, const Options &options, SDL_Window *window,
                  SDL_GLContext context)
-	: m_board(board), m_keys(keys), m_window(window), m_context(context),
-	  m_frame(0), m_scale(options.scale), m_anisotropy(options.anisotropy), m_logged(false),
+	: m_board(board), m_keys(keys), m_window(window), m_context(context), m_menu_shown(false),
+	  m_title(options.title), m_frame(0), m_scale(options.scale), m_anisotropy(options.anisotropy), m_logged(false),
 	  m_picture_fb(0), m_picture_width(Renderer::WIDTH), m_picture_height(Renderer::HEIGHT),
 	  m_late(env_flag("ODIN_LATE_DRAW")), m_held(false), m_late_draw(0),
 	  m_shot_prefix(std::getenv("ODIN_SCREENSHOT")), m_shot_every(60),
@@ -253,6 +254,10 @@ Display::~Display()
 	run([this] { SDL_GL_MakeCurrent(m_window, nullptr); });
 	m_drawing.reset();
 	SDL_GL_MakeCurrent(m_window, m_context);
+	if (m_menu) {
+		m_menu->release();
+		m_menu.reset();
+	}
 	m_renderer.reset();
 
 	if (m_stats)
@@ -285,6 +290,43 @@ Display::run(std::function<void()> job)
 {
 	finish();
 	m_drawing->run(std::move(job));
+}
+
+void
+Display::open_menu()
+{
+	if (!m_menu)
+		m_menu = std::make_unique<Menu>(m_window, m_title);
+	m_menu->open();
+	run([this] { m_menu->freeze(m_picture_fb, m_picture_width, m_picture_height); });
+	m_menu_shown = true;
+}
+
+void
+Display::close_menu()
+{
+	m_menu->close();
+	m_menu_shown = false;
+}
+
+void
+Display::menu_event(const SDL_Event &event)
+{
+	m_menu->event(event);
+}
+
+/* Built on this thread, drawn on the drawing thread meanwhile */
+void
+Display::draw_menu()
+{
+	int w, h;
+
+	m_menu->build();
+	SDL_GetWindowSizeInPixels(m_window, &w, &h);
+	run([this, w, h] {
+		m_menu->draw(static_cast<unsigned>(w), static_cast<unsigned>(h));
+		SDL_GL_SwapWindow(m_window);
+	});
 }
 
 void

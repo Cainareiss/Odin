@@ -38,6 +38,7 @@
 namespace odin {
 
 class Keyboard;
+class Menu;
 class Renderer;
 class Worker;
 
@@ -101,6 +102,15 @@ public:
 	/* Between the window and the whole display */
 	void toggle_fullscreen();
 
+	/* The menu (menu.hpp), over the picture of the last frame while the
+	 * board waits: open_menu freezes that picture, draw_menu builds the
+	 * menu and shows it once. */
+	void open_menu();
+	void close_menu();
+	bool menu_shown() const { return m_menu_shown; }
+	void menu_event(const SDL_Event &event);
+	void draw_menu();
+
 	/* Hikaru::Screen */
 	void list_launched() override;
 	void before_texture_write(unsigned bank, uint32_t x, uint32_t y, uint32_t w, uint32_t h) override;
@@ -134,6 +144,10 @@ private:
 	SDL_GLContext m_context;
 	std::unique_ptr<Renderer> m_renderer;
 	std::unique_ptr<Worker> m_drawing;
+	/* Made when it opens first */
+	std::unique_ptr<Menu> m_menu;
+	bool m_menu_shown;
+	std::string m_title;
 
 	/* The frame given to the drawing thread: its number, the options it
 	 * is drawn with, whether its drawing writes a log, and the picture

@@ -19,6 +19,7 @@
  * along with Valkyrie.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -197,13 +198,18 @@ load_game_list(odin::GameList &games)
 }
 
 /* A game being run: its board, with the window, the keyboard and the
- * gamepads around it. */
+ * gamepads around it.
+ *
+ * ODIN_MENU_TEST=<n> is a test of the menu: Escape is pressed after every
+ * n frames, which opens it, and again once it has drawn its pictures,
+ * which closes it. The pictures of the game must be the same. */
 class Session {
 public:
 	Session(const Options &options, odin::Hikaru &board, odin::Display &display, odin::Keyboard &keys,
 	        odin::Controls &controls, odin::AudioOut *audio, odin::OutputsNetwork *outputs)
 		: m_options(options), m_board(board), m_display(display), m_keys(keys), m_controls(controls), m_audio(audio),
-		  m_outputs(outputs), m_paused(false), m_next()
+		  m_outputs(outputs), m_paused(false), m_next(), m_menu_pictures(0), m_menu_drawn(0),
+		  m_menu_test(static_cast<unsigned>(std::max(odin::env_int("ODIN_MENU_TEST", 0), 0)))
 	{
 	}
 
@@ -212,7 +218,17 @@ public:
 	void run();
 
 private:
+	/* After an event the menu draws this many pictures, one in so many
+	 * milliseconds at most */
+	static constexpr unsigned MENU_PICTURES = 3;
+	static constexpr Uint64 MENU_PICTURE_MS = 16;
+
 	bool process_events();
+	bool menu_event(const SDL_Event &event);
+	void open_menu();
+	void close_menu();
+	void wait_in_menu();
+	void press_escape();
 	void load_or_save_state(bool load);
 	void save_state_at_frame();
 	void limit_frame_rate();
@@ -226,7 +242,28 @@ private:
 	odin::OutputsNetwork *m_outputs;	/* nullptr: none for other programs */
 	bool m_paused;
 	std::chrono::steady_clock::time_point m_next;	/* when the next frame is due */
+	unsigned m_menu_pictures;	/* still to draw */
+	Uint64 m_menu_drawn;		/* when the last one was */
+	unsigned m_menu_test;
 };
+
+bool
+is_quit(const SDL_KeyboardEvent &key)
+{
+	return key.down && key.key == SDLK_Q && (key.mod & SDL_KMOD_CTRL);
+}
+
+bool
+is_menu(const SDL_KeyboardEvent &key)
+{
+	return key.down && !key.repeat && (key.key == SDLK_ESCAPE || key.key == SDLK_F10);
+}
+
+bool
+is_fullscreen(const SDL_KeyboardEvent &key)
+{
+	return key.down && (key.key == SDLK_F11 || (key.key == SDLK_RETURN && (key.mod & SDL_KMOD_ALT)));
+}
 
 /* F1 and F4: <game>.odinstate */
 void
@@ -240,10 +277,10 @@ Session::load_or_save_state(bool load)
 		std::fprintf(stderr, "ERROR: failed to %s state '%s'\n", load ? "load" : "save", path.c_str());
 }
 
-/* The keys of the emulator: Escape quits, P pauses (as in MAME), F1 loads
- * the state of the game and F4 saves it, F11 or Alt+Enter takes the whole
- * display. The others are the control panel, see keyboard.hpp. True to
- * quit. */
+/* The keys of the emulator: Escape or F10 opens the menu, which pauses the
+ * game, Ctrl+Q quits, P pauses (as in MAME), F1 loads the state of the
+ * game and F4 saves it, F11 or Alt+Enter takes the whole display. The
+ * others are the control panel, see keyboard.hpp. True to quit. */
 bool
 Session::process_events()
 {
@@ -251,15 +288,22 @@ Session::process_events()
 	bool quit = false;
 
 	while (SDL_PollEvent(&event)) {
+		if (m_display.menu_shown()) {
+			quit = menu_event(event) || quit;
+			continue;
+		}
 		if (m_controls.event(event))
 			continue;
 		switch (event.type) {
 		case SDL_EVENT_KEY_DOWN:
 			m_keys.set(event.key.key, true);
-			switch (event.key.key) {
-			case SDLK_ESCAPE:
+			if (is_quit(event.key))
 				quit = true;
-				break;
+			else if (is_menu(event.key))
+				open_menu();
+			else if (is_fullscreen(event.key))
+				m_display.toggle_fullscreen();
+			switch (event.key.key) {
 			case SDLK_P:
 				m_paused = !m_paused;
 				if (m_paused)
@@ -270,13 +314,6 @@ Session::process_events()
 				break;
 			case SDLK_F4:
 				load_or_save_state(false);
-				break;
-			case SDLK_F11:
-				m_display.toggle_fullscreen();
-				break;
-			case SDLK_RETURN:
-				if (event.key.mod & SDL_KMOD_ALT)
-					m_display.toggle_fullscreen();
 				break;
 			default:
 				break;
@@ -293,6 +330,106 @@ Session::process_events()
 		}
 	}
 	return quit;
+}
+
+/* With the menu open, Escape or F10 closes it and Ctrl+Q quits; F11 and
+ * Alt+Enter still take the whole display. The keyboard and the gamepads
+ * are followed as they go; all the rest is the menu's. True to quit. */
+bool
+Session::menu_event(const SDL_Event &event)
+{
+	switch (event.type) {
+	case SDL_EVENT_QUIT:
+		return true;
+	case SDL_EVENT_KEY_DOWN:
+	case SDL_EVENT_KEY_UP:
+		m_keys.set(event.key.key, event.key.down);
+		if (is_quit(event.key))
+			return true;
+		if (is_menu(event.key)) {
+			close_menu();
+			return false;
+		}
+		if (is_fullscreen(event.key))
+			m_display.toggle_fullscreen();
+		break;
+	case SDL_EVENT_GAMEPAD_ADDED:
+	case SDL_EVENT_GAMEPAD_REMOVED:
+	case SDL_EVENT_GAMEPAD_AXIS_MOTION:
+	case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+	case SDL_EVENT_GAMEPAD_BUTTON_UP:
+		m_controls.event(event);
+		return false;
+	case SDL_EVENT_WINDOW_MOUSE_LEAVE:
+		m_controls.event(event);
+		break;
+	default:
+		break;
+	}
+	m_display.menu_event(event);
+	m_menu_pictures = MENU_PICTURES;
+	return false;
+}
+
+/* The game pauses: no pad shakes, the sound stops where it is */
+void
+Session::open_menu()
+{
+	m_controls.quiet();
+	if (m_audio)
+		m_audio->pause(true);
+	m_display.open_menu();
+	m_menu_pictures = MENU_PICTURES;
+}
+
+/* The keys held now are not the game's; its frames start again now */
+void
+Session::close_menu()
+{
+	m_display.close_menu();
+	m_keys.swallow();
+	if (m_audio)
+		m_audio->pause(false);
+	m_next = std::chrono::steady_clock::now();
+}
+
+/* The menu draws its pictures, then sleeps until the next event */
+void
+Session::wait_in_menu()
+{
+	const Uint64 now = SDL_GetTicks();
+
+	if (m_menu_pictures && now - m_menu_drawn >= MENU_PICTURE_MS) {
+		m_display.draw_menu();
+		m_menu_drawn = now;
+		m_menu_pictures--;
+		if (m_menu_test && !m_menu_pictures)
+			press_escape();
+	}
+	if (!m_menu_pictures) {
+		SDL_WaitEvent(nullptr);
+		return;
+	}
+
+	const Uint64 since = SDL_GetTicks() - m_menu_drawn;
+
+	SDL_WaitEventTimeout(nullptr, since >= MENU_PICTURE_MS ? 0 : static_cast<Sint32>(MENU_PICTURE_MS - since));
+}
+
+/* ODIN_MENU_TEST: Escape pressed and released */
+void
+Session::press_escape()
+{
+	SDL_Event event{};
+
+	event.type = SDL_EVENT_KEY_DOWN;
+	event.key.key = SDLK_ESCAPE;
+	event.key.scancode = SDL_SCANCODE_ESCAPE;
+	event.key.down = true;
+	SDL_PushEvent(&event);
+	event.type = SDL_EVENT_KEY_UP;
+	event.key.down = false;
+	SDL_PushEvent(&event);
 }
 
 /* -s: <game>-<frame>.odinstate, written once the frame is drawn */
@@ -333,6 +470,10 @@ Session::run()
 	while (!process_events()) {
 		if (m_options.num_frames > 0 && m_board.frame() >= m_options.num_frames)
 			return;
+		if (m_display.menu_shown()) {
+			wait_in_menu();
+			continue;
+		}
 		if (m_paused) {
 			/* Asleep until something comes, the next key */
 			SDL_WaitEvent(nullptr);
@@ -348,6 +489,8 @@ Session::run()
 			m_audio->play(m_board.sound(false), m_board.sound(true));
 		m_display.end_frame(m_board.frame());
 		save_state_at_frame();
+		if (m_menu_test && m_board.frame() % m_menu_test == 0)
+			press_escape();
 		if (!m_options.unthrottled)
 			limit_frame_rate();
 	}

@@ -114,6 +114,8 @@ public:
 	 * a little longer than the 1/60 s they are shown for: between 30 and
 	 * 120 ms are kept ahead, a sample more or less a frame. */
 	void play(std::span<const int16_t> main, std::span<const int16_t> option);
+	/* The menu stops the sound where it is, and lets it go on */
+	void pause(bool paused);
 
 private:
 	AudioOut(SDL_AudioStream *stream, Mode mode, int32_t option_gain)
