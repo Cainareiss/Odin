@@ -19,7 +19,8 @@ RUNNING
 
  $ bin/odin -R <ROM directory> -r <game>
 
-The games are those of odin-games.json: airtrix, braveff, pharrier, podrace,
+(-R may be left out once the menu, page Paths, keeps the folder: roms in
+[paths] of odin.ini.) The games are those of odin-games.json: airtrix, braveff, pharrier, podrace,
 sgnascar and von4. The file is looked for in the current directory, then in
 $HOME, then in ~/.local/share/odin. The ROM directory holds one directory
 for each game, of the name of the game, with the files odin-games.json lists
@@ -42,11 +43,13 @@ Options:
  -w <num>		makes the window num times 640 by 480
  -f			takes the whole display (F11 or Alt+Enter goes back
 			and forth)
- -v			more messages
+ -v			says each access of the board (slow; also "verbose = on"
+			in [log] of odin.ini, page Paths of the menu)
 
 Keys: Escape or F10 opens the menu, which pauses the game (its Display
 page sets the window and the picture, kept in [display] of odin.ini),
-Ctrl+Q quits, P pauses, F4 saves <game>.odinstate and F1 loads it.
+Ctrl+Q quits, P pauses, F4 saves <game>.odinstate and F1 loads it, in
+~/.local/share/odin/states (states in [paths] of odin.ini, page Paths).
 0 is TEST and 9 SERVICE, the buttons of the cabinet: they open and work
 the menu of the BOOTROM and the test menus of the games (both together
 leave INPUT TEST); 5 and 6 are the coins. Player 1
@@ -144,8 +147,9 @@ What the board keeps without power (the settings of the BIOS, the records
 and settings of the game, the clock) is read at start and written on exit,
 in a folder for each game: ~/.local/share/odin/saves/<game> (under
 XDG_DATA_HOME when it is set), %APPDATA%\odin\saves\<game> on Windows,
-~/Library/Application Support/odin/saves/<game> on macOS. ODIN_SAVES=<folder>
-takes another folder, ODIN_SAVES=none keeps nothing. The files have the names
+~/Library/Application Support/odin/saves/<game> on macOS, or the folder
+saves in [paths] of odin.ini (page Paths). ODIN_SAVES=<folder> takes
+another folder before it, ODIN_SAVES=none keeps nothing. The files have the names
 MAME gives them: mie_eeprom (the SYSTEM MENU of the BIOS: country, coins,
 cabinet type, sound of the attract), nvram (the game), main_eeprom and
 rombd_eeprom (the serial number of the main board, the security of the ROM

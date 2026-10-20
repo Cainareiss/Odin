@@ -49,17 +49,25 @@ user_data_dir()
 #endif
 }
 
-SaveFolder
-SaveFolder::of_game(const std::string &game)
+std::string
+SaveFolder::root(const std::string &chosen)
 {
-	const char *const chosen = std::getenv("ODIN_SAVES");
+	const char *const given = std::getenv("ODIN_SAVES");
 	const std::string data = user_data_dir();
 
-	if (chosen && chosen[0])
-		return std::strcmp(chosen, "none") ? SaveFolder(std::string(chosen) + "/" + game) : SaveFolder();
-	if (!data.empty())
-		return SaveFolder(data + "/odin/saves/" + game);
-	return SaveFolder();
+	if (given && given[0])
+		return std::strcmp(given, "none") ? given : "";
+	if (!chosen.empty())
+		return chosen;
+	return data.empty() ? data : data + "/odin/saves";
+}
+
+SaveFolder
+SaveFolder::of_game(const std::string &game, const std::string &chosen)
+{
+	const std::string folder = root(chosen);
+
+	return folder.empty() ? SaveFolder() : SaveFolder(folder + "/" + game);
 }
 
 std::string

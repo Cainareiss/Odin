@@ -116,6 +116,10 @@ public:
 	 * window is on */
 	const std::string &gpu() const { return m_gpu; }
 	void display_size(unsigned &w, unsigned &h) const;
+	/* The window, for the dialogs of the system; the list of the 3D
+	 * programs of the game kept for the user (empty: none) */
+	SDL_Window *window() const { return m_window; }
+	const std::string &program_list() const { return m_program_list; }
 
 	/* The menu (menu.hpp), over the picture of the last frame while the
 	 * board waits: open_menu freezes that picture, draw_menu builds the
@@ -156,6 +160,7 @@ private:
 	Hikaru &m_board;
 	const Keyboard &m_keys;
 	SDL_Window *m_window;
+	std::string m_program_list;
 	SDL_GLContext m_context;
 	std::unique_ptr<Renderer> m_renderer;
 	std::unique_ptr<Worker> m_drawing;

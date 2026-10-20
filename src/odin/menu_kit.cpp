@@ -20,6 +20,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cfloat>
 #include <cmath>
 #include <numbers>
 #include <utility>
@@ -180,6 +181,16 @@ MenuKit::icon(ImDrawList *list, Icon icon, ImVec2 at, float side, ImU32 colour)
 		for (const float x : { 6.0f, 10.0f, 14.0f, 18.0f })
 			list->AddLine(p(x, 10), p(x + 1, 10), colour, w);
 		list->AddLine(p(7, 14), p(17, 14), colour, w);
+		break;
+	case Icon::FOLDER:
+		list->PathLineTo(p(3, 7));
+		arc(5, 7, 2, 180, 270);
+		list->PathLineTo(p(9, 5));
+		list->PathLineTo(p(11, 7));
+		arc(19, 9, 2, 270, 360);
+		arc(19, 17, 2, 0, 90);
+		arc(5, 17, 2, 90, 180);
+		list->PathStroke(colour, ImDrawFlags_Closed, w);
 		break;
 	case Icon::ABOUT:
 		list->AddCircle(p(12, 12), 9.0f * k, colour, 0, w);
@@ -536,6 +547,43 @@ MenuKit::text(const char *name, const char *about, const char *value)
 	              value_w);
 	ImGui::SetCursorScreenPos(at);
 	ImGui::Dummy({ width, h });
+}
+
+bool
+MenuKit::value(const char *name, const char *about, const char *value, const char *action, const char *word,
+               const char *locked)
+{
+	ImGui::PushID(name);
+
+	ImDrawList *const list = ImGui::GetWindowDrawList();
+	const float pad = px(ROW_PAD), space = px(8.0f), small = ImGui::GetFontSize() * 0.8f;
+	const char *const shown_button = locked ? nullptr : action;
+	const char *const shown_word = shown_button ? nullptr : word;
+	ImFont *const font = ImGui::GetFont();
+	const ImVec2 button_box = shown_button ? button_size(shown_button) : ImVec2{};
+	const float word_w = shown_word ? font->CalcTextSizeA(small, FLT_MAX, 0.0f, shown_word).x : 0.0f;
+	const float after = shown_button ? button_box.x + space : shown_word ? word_w + space : 0.0f;
+	float width;
+	const ImVec2 at = begin_row(width);
+	/* A long value takes half the row at most, on more lines */
+	const float value_w = std::min(ImGui::CalcTextSize(value).x, width / 2.0f - after);
+	const ImVec2 value_size = ImGui::CalcTextSize(value, nullptr, false, value_w);
+	const float text_w = std::max(px(80.0f), width - value_w - after - px(GAP) - 2.0f * pad);
+	const float h = std::max({ texts({ at.x + pad, at.y + pad }, text_w, name, about, locked), value_size.y,
+	                           button_box.y }) + 2.0f * pad;
+	const float right = at.x + width - pad;
+	bool clicked = false;
+
+	list->AddText(font, ImGui::GetFontSize(), { right - after - value_w, at.y + (h - value_size.y) / 2.0f },
+	              m_palette.dim, value, nullptr, value_w);
+	if (shown_button)
+		clicked = button(shown_button, { right - button_box.x, at.y + (h - button_box.y) / 2.0f }, false);
+	else if (shown_word)
+		list->AddText(font, small, { right - word_w, at.y + (h - small) / 2.0f }, m_palette.faint, shown_word);
+	ImGui::SetCursorScreenPos(at);
+	ImGui::Dummy({ width, h });
+	ImGui::PopID();
+	return clicked;
 }
 
 } /* namespace odin */

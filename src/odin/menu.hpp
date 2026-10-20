@@ -63,6 +63,19 @@ struct MenuState {
 	/* odin.ini keeps what changes: not with ODIN_CONFIG=none */
 	bool kept = true;
 
+	/* Paths: the folders of the games and of their saves, at the next
+	 * launch (those the command line or ODIN_SAVES gives are shown, not
+	 * changed), of the save states; the settings file and the lists of the
+	 * 3D programs (empty: none). The board saying each access, at the next
+	 * launch. */
+	std::string roms, saves, states, settings_file, shader_lists;
+	bool roms_given = false, saves_given = false;
+	bool verbose = false, verbose_given = false;
+	/* A folder to ask the system for; its picker is open; the system has
+	 * none */
+	enum class Folder { NONE, ROMS, SAVES, STATES } choose = Folder::NONE;
+	bool choosing = false, no_picker = false;
+
 	/* Input: the games of the list (name, title), the one whose controls
 	 * are shown and the one that runs, another one asked */
 	std::vector<std::pair<std::string, std::string>> games;
@@ -137,14 +150,15 @@ public:
 
 private:
 	/* The pages, in the order of their tabs */
-	enum Page { INPUT, DISPLAY, ABOUT, PAGES };
+	enum Page { INPUT, DISPLAY, PATHS, ABOUT, PAGES };
 
 	void follow_scale();
 	void page_input(MenuKit &kit, MenuState &state) const;
 	void page_display(MenuKit &kit, MenuState &state) const;
+	void page_paths(MenuKit &kit, MenuState &state) const;
 	void page_about(MenuKit &kit) const;
 	/* What the pages say at the bottom */
-	static const char *display_help(const MenuState &state);
+	static std::string help(int page, const MenuState &state);
 	static std::string input_help(const MenuState &state);
 	void start_gl();
 	void size_blur(unsigned w, unsigned h);

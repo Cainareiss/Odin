@@ -38,6 +38,7 @@
 
 #include "odin/display.hpp"
 #include "odin/env.hpp"
+#include "odin/folder_dialog.hpp"
 #include "odin/games.hpp"
 #include "odin/audio_out.hpp"
 #include "odin/hikaru.hpp"
@@ -45,12 +46,16 @@
 #include "odin/keyboard.hpp"
 #include "odin/menu.hpp"
 #include "odin/outputs_network.hpp"
+#include "odin/save_folder.hpp"
 #include "odin/settings.hpp"
 
 namespace {
 
 struct Options {
 	std::string rom_path;
+	/* The folder of the saves of the games and that of the save states
+	 * odin.ini gives (empty: by default) */
+	std::string saves, states;
 	std::string game;
 	unsigned num_frames = 0;
 	std::string state_path;
@@ -67,6 +72,7 @@ struct Options {
 	/* What the command line says of the display: odin.ini does not change it */
 	struct {
 		bool scale = false, anisotropy = false, window = false, fullscreen = false, unthrottled = false;
+		bool roms = false, verbose = false;
 	} given;
 };
 
@@ -103,6 +109,7 @@ parse_options(int argc, char **argv, Options &options)
 		switch (opt) {
 		case 'R':
 			options.rom_path = optarg;
+			options.given.roms = true;
 			break;
 		case 'r':
 			options.game = optarg;
@@ -166,7 +173,7 @@ parse_options(int argc, char **argv, Options &options)
 			options.display.fullscreen = options.given.fullscreen = true;
 			break;
 		case 'v':
-			options.verbose = true;
+			options.verbose = options.given.verbose = true;
 			break;
 		default:
 			wrong = opt != 'h';
@@ -214,6 +221,44 @@ read_display(const odin::Settings &settings, Options &options)
 			std::fprintf(stderr, "ERROR: settings: [display]: not right: %s = %s\n", key.c_str(), value.c_str());
 		}
 	}
+}
+
+/* [paths] of odin.ini: the folder of the games where the command line
+ * gives none, those of the saves and of the save states; [log]: the board
+ * says each access where the command line does not. The last line says. */
+void
+read_paths(const odin::Settings &settings, Options &options)
+{
+	for (const auto &[key, value] : settings.section("paths")) {
+		if (key == "roms" && !value.empty()) {
+			if (!options.given.roms)
+				options.rom_path = value;
+		} else if (key == "saves" && !value.empty()) {
+			options.saves = value;
+		} else if (key == "states" && !value.empty()) {
+			options.states = value;
+		} else {
+			std::fprintf(stderr, "ERROR: settings: [paths]: not right: %s = %s\n", key.c_str(), value.c_str());
+		}
+	}
+	for (const auto &[key, value] : settings.section("log")) {
+		if (key == "verbose" && (value == "on" || value == "off")) {
+			if (!options.given.verbose)
+				options.verbose = value == "on";
+		} else {
+			std::fprintf(stderr, "ERROR: settings: [log]: not right: %s = %s\n", key.c_str(), value.c_str());
+		}
+	}
+}
+
+/* The folder of the save states by default: <data>/odin/states, else the
+ * folder Odin is started from (empty) */
+std::string
+default_states()
+{
+	const std::string data = odin::user_data_dir();
+
+	return data.empty() ? data : data + "/odin/states";
 }
 
 /* The list of the games: in the folder Odin is started from, else in the
@@ -274,6 +319,16 @@ public:
 		state.unthrottled_given = options.given.unthrottled;
 		state.gpu = display.gpu();
 		state.kept = !settings_file.empty();
+		state.roms = options.rom_path;
+		state.roms_given = options.given.roms;
+		state.saves = odin::SaveFolder::root(options.saves);
+		const char *const saves = std::getenv("ODIN_SAVES");
+		state.saves_given = saves && saves[0];
+		state.states = m_states = options.states.empty() ? default_states() : options.states;
+		state.settings_file = settings_file;
+		state.shader_lists = std::filesystem::path(display.program_list()).parent_path().string();
+		state.verbose = options.verbose;
+		state.verbose_given = options.given.verbose;
 		state.games = games.titles("hikaru");
 		for (const auto &[key, value] : settings.section("menu"))
 			if (key == "classic")
@@ -309,6 +364,9 @@ private:
 	void draw_menu();
 	void apply(const odin::MenuState &was);
 	void keep(const char *key, const std::optional<std::string> &value);
+	void keep(const char *section, const char *key, const std::optional<std::string> &value);
+	/* The folder the picker of the system gave */
+	void take_folder();
 	/* The game whose controls the page Input shows: its name and panel */
 	std::string game_shown() const;
 	const odin::ControlPanel &panel_shown() const { return m_other ? *m_other : m_controls.panel(); }
@@ -343,6 +401,10 @@ private:
 	Uint64 m_undo_until = 0;
 	/* Guide is held while an input is caught: the next button goes with it */
 	bool m_catch_guide = false;
+	/* The folder of the save states (empty: the one Odin is started from),
+	 * and the picker of the system that changes the folders */
+	std::string m_states;
+	odin::FolderDialog m_dialog;
 	bool m_menu_opened = false;
 	bool m_paused;
 	std::chrono::steady_clock::time_point m_next;	/* when the next frame is due */
@@ -369,12 +431,15 @@ is_fullscreen(const SDL_KeyboardEvent &key)
 	return key.down && (key.key == SDLK_F11 || (key.key == SDLK_RETURN && (key.mod & SDL_KMOD_ALT)));
 }
 
-/* F1 and F4: <game>.odinstate */
+/* F1 and F4: <game>.odinstate in the folder of the save states */
 void
 Session::load_or_save_state(bool load)
 {
-	const std::string path = m_board.game_name() + ".odinstate";
+	const std::string path = (m_states.empty() ? "" : m_states + "/") + m_board.game_name() + ".odinstate";
+	std::error_code error;
 
+	if (!load && !m_states.empty())
+		std::filesystem::create_directories(m_states, error);
 	if (load ? m_board.load_state(path) : m_board.save_state(path))
 		std::printf("%s state '%s'\n", load ? "loaded" : "saved", path.c_str());
 	else
@@ -392,6 +457,10 @@ Session::process_events()
 	bool quit = false;
 
 	while (SDL_PollEvent(&event)) {
+		if (event.type == m_dialog.event()) {
+			take_folder();
+			continue;
+		}
 		if (m_display.menu_shown()) {
 			quit = menu_event(event) || quit;
 			continue;
@@ -744,6 +813,7 @@ Session::draw_menu()
 {
 	odin::MenuState &state = m_menu_state;
 
+	state.choosing = m_dialog.open();
 	state.fullscreen = m_display.fullscreen();
 	m_display.display_size(state.display_w, state.display_h);
 	state.panel = &panel_shown();
@@ -791,6 +861,16 @@ Session::draw_menu()
 
 	m_display.draw_menu(state);
 	apply(was);
+
+	if (state.choose != odin::MenuState::Folder::NONE) {
+		const odin::MenuState::Folder folder = state.choose;
+
+		state.no_picker = false;
+		m_dialog.ask(m_display.window(), folder == odin::MenuState::Folder::ROMS ? state.roms :
+		             folder == odin::MenuState::Folder::SAVES ? state.saves : state.states, static_cast<int>(folder));
+		state.choose = odin::MenuState::Folder::NONE;
+		m_menu_pictures = MENU_PICTURES;
+	}
 
 	if (state.show) {
 		show_game(*state.show);
@@ -865,13 +945,60 @@ Session::apply(const odin::MenuState &was)
 	}
 	if (now.classic != was.classic && !m_settings_file.empty())
 		m_settings.change(m_settings_file, "menu", "classic", on_off(now.classic, false));
+	if (now.verbose != was.verbose)
+		keep("log", "verbose", on_off(now.verbose, false));
 }
 
 void
 Session::keep(const char *key, const std::optional<std::string> &value)
 {
+	keep("display", key, value);
+}
+
+void
+Session::keep(const char *section, const char *key, const std::optional<std::string> &value)
+{
 	if (!m_settings_file.empty())
-		m_settings.change(m_settings_file, "display", key, value);
+		m_settings.change(m_settings_file, section, key, value);
+}
+
+/* The folder of the games and that of the saves wait for the next launch;
+ * the save states go to theirs now. A folder of their own by default is
+ * no line in odin.ini. */
+void
+Session::take_folder()
+{
+	using Folder = odin::MenuState::Folder;
+	odin::MenuState &state = m_menu_state;
+	const std::optional<odin::FolderDialog::Answer> answer = m_dialog.answer();
+
+	m_menu_pictures = MENU_PICTURES;
+	if (!answer)
+		return;
+	state.no_picker = !answer->error.empty();
+	if (state.no_picker)
+		std::fprintf(stderr, "ERROR: no folder picker: %s\n", answer->error.c_str());
+	if (answer->folder.empty())
+		return;
+
+	const std::string &folder = answer->folder;
+
+	switch (static_cast<Folder>(answer->asked)) {
+	case Folder::ROMS:
+		state.roms = folder;
+		keep("paths", "roms", folder);
+		break;
+	case Folder::SAVES:
+		state.saves = folder;
+		keep("paths", "saves", folder == odin::SaveFolder::root() ? std::nullopt : std::optional(folder));
+		break;
+	case Folder::STATES:
+		state.states = m_states = folder;
+		keep("paths", "states", folder == default_states() ? std::nullopt : std::optional(folder));
+		break;
+	default:
+		break;
+	}
 }
 
 /* ODIN_MENU_TEST: Escape pressed and released */
@@ -978,6 +1105,13 @@ main(int argc, char **argv)
 		return 1;
 	}
 
+	odin::Settings settings;
+	const std::string settings_file = odin::Settings::user_file();
+	if (!settings_file.empty() && settings.load(settings_file))
+		std::printf("settings: '%s'\n", settings_file.c_str());
+	read_paths(settings, options);
+	read_display(settings, options);
+
 	if (!games.has(options.game)) {
 		std::fprintf(stderr, "ERROR: failed to load '%s': game name not in game list\n", options.game.c_str());
 		return 1;
@@ -997,12 +1131,6 @@ main(int argc, char **argv)
 	const std::unique_ptr<odin::Hikaru> board = odin::Hikaru::make(*game, options.verbose);
 	if (!board)
 		return 1;
-
-	odin::Settings settings;
-	const std::string settings_file = odin::Settings::user_file();
-	if (!settings_file.empty() && settings.load(settings_file))
-		std::printf("settings: '%s'\n", settings_file.c_str());
-	read_display(settings, options);
 
 	odin::Keyboard keys;
 	options.display.title = game->title;
@@ -1061,7 +1189,7 @@ main(int argc, char **argv)
 
 	bool started = true;
 
-	board->keep_in(odin::SaveFolder::of_game(game->name));
+	board->keep_in(odin::SaveFolder::of_game(game->name, options.saves));
 	board->reset();
 	if (!options.state_path.empty()) {
 		started = board->load_state(options.state_path);

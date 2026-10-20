@@ -38,11 +38,14 @@ std::string user_data_dir();
  * file for each memory. Nothing is read or written when there is none. */
 class SaveFolder {
 public:
-	/* <folder>/<game> with ODIN_SAVES=<folder>; else <data>/odin/saves/<game>,
-	 * <data> being %APPDATA% on Windows, ~/Library/Application Support on
-	 * macOS, XDG_DATA_HOME or ~/.local/share elsewhere. None with
+	/* <folder>/<game> with ODIN_SAVES=<folder>; else <chosen>/<game>, the
+	 * folder the settings give; else <data>/odin/saves/<game>, <data>
+	 * being %APPDATA% on Windows, ~/Library/Application Support on macOS,
+	 * XDG_DATA_HOME or ~/.local/share elsewhere. None with
 	 * ODIN_SAVES=none, or when there is no such place. */
-	static SaveFolder of_game(const std::string &game);
+	static SaveFolder of_game(const std::string &game, const std::string &chosen = "");
+	/* The folder of the folders of the games; empty: none */
+	static std::string root(const std::string &chosen = "");
 
 	SaveFolder() = default;
 	explicit SaveFolder(std::string dir) : m_dir(std::move(dir)) {}

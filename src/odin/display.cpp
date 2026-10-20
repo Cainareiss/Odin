@@ -193,6 +193,7 @@ Display::Display(Hikaru &board, const Keyboard &keys, const Options &options, SD
 	};
 	looks.ctx = const_cast<Keyboard *>(&m_keys);
 	find_program_lists(board.game_name(), looks.programs_seed, looks.programs_kept);
+	m_program_list = looks.programs_kept;
 
 	m_renderer = std::make_unique<Renderer>(memory, looks);
 	m_renderer->set_gpu(&board.gpu());

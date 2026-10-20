@@ -52,8 +52,9 @@ constexpr float CUT = 8.0f;
 constexpr float PADDING = 14.0f;
 
 /* The tabs of the pages, in the order of Menu::Page */
-constexpr const char *TABS[] = { "Input", "Display", "About" };
-constexpr MenuKit::Icon TAB_ICONS[] = { MenuKit::Icon::INPUT, MenuKit::Icon::DISPLAY, MenuKit::Icon::ABOUT };
+constexpr const char *TABS[] = { "Input", "Display", "Paths", "About" };
+constexpr MenuKit::Icon TAB_ICONS[] = { MenuKit::Icon::INPUT, MenuKit::Icon::DISPLAY, MenuKit::Icon::FOLDER,
+	                                MenuKit::Icon::ABOUT };
 /* A window narrower than this many times its height has the names of the
  * tabs not chosen left out */
 constexpr float WIDE = 1.5f;
@@ -279,7 +280,7 @@ Menu::build(MenuState &state)
 	 * as it takes: the page above it */
 	const char keys[] = "Esc: back to the game    Ctrl+Q: quit";
 	const float keys_w = ImGui::CalcTextSize(keys).x, help_w = std::max(0.0f, w - 3.0f * pad - keys_w);
-	const std::string help = m_page == INPUT ? input_help(state) : m_page == DISPLAY ? display_help(state) : "";
+	const std::string help = this->help(m_page, state);
 	const float foot = std::max(line, ImGui::CalcTextSize(help.c_str(), nullptr, false, help_w).y);
 
 	ImGui::BeginChild("page", { 0.0f, -(foot + pad) }, ImGuiChildFlags_None, ImGuiWindowFlags_NoBackground);
@@ -287,6 +288,8 @@ Menu::build(MenuState &state)
 		page_input(kit, state);
 	else if (m_page == DISPLAY)
 		page_display(kit, state);
+	else if (m_page == PATHS)
+		page_paths(kit, state);
 	else
 		page_about(kit);
 	ImGui::Dummy({ 0.0f, kit.px(4.0f) });
@@ -362,11 +365,24 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 
 }
 
-const char *
-Menu::display_help(const MenuState &state)
+std::string
+Menu::help(int page, const MenuState &state)
 {
-	return state.kept ? "These settings hold for every game." :
-	                    "These settings hold for every game, until Odin closes: ODIN_CONFIG=none keeps nothing.";
+	const char *const kept = state.kept ? "." : ", until Odin closes: ODIN_CONFIG=none keeps nothing.";
+
+	switch (page) {
+	case INPUT:
+		return input_help(state);
+	case DISPLAY:
+		return std::string("These settings hold for every game") + kept;
+	case PATHS:
+		if (state.no_picker)
+			return "This system gives Odin no folder picker: [paths] of odin.ini takes the folders.";
+		return state.choosing ? "Pick the folder in the window of the system." :
+		                        std::string("These paths hold for every game") + kept;
+	default:
+		return "";
+	}
 }
 
 /* About: Odin, and the libraries it is made with */

@@ -65,8 +65,9 @@ public:
 	float px(float points) const { return points * m_scale; }
 
 	/* The icons of the menu (mock-up v50), drawn in a square of that side:
-	 * a gamepad, a gamepad with its cross, a screen, a keyboard, an i */
-	enum class Icon { PAD, INPUT, DISPLAY, KEYBOARD, ABOUT };
+	 * a gamepad, a gamepad with its cross, a screen, a keyboard, a folder,
+	 * an i */
+	enum class Icon { PAD, INPUT, DISPLAY, KEYBOARD, FOLDER, ABOUT };
 	static void icon(ImDrawList *list, Icon icon, ImVec2 at, float side, ImU32 colour);
 
 	/* A frame with its corners cut; a colour of 0 is none */
@@ -93,6 +94,11 @@ public:
 	bool choice(const char *name, const char *about, std::span<const char *const> labels, int &chosen,
 	            const char *locked = nullptr, bool off = false);
 	void text(const char *name, const char *about, const char *value);
+	/* A row with a value at its right and after it a button (true on a
+	 * click), or a word in small capitals when there is no button; one the
+	 * command line sets says so (`locked`), with no button */
+	bool value(const char *name, const char *about, const char *value, const char *action, const char *word = nullptr,
+	           const char *locked = nullptr);
 	/* A row with a list that drops down from its right: true when the
 	 * choice changed */
 	bool dropdown(const char *name, const char *about, std::span<const std::string> labels, int &chosen);

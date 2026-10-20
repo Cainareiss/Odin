@@ -77,7 +77,14 @@ void test_where()
 	setenv("ODIN_SAVES", "none", 1);
 	check(SaveFolder::of_game("braveff").none(), "ODIN_SAVES=none: no folder");
 	check(SaveFolder::of_game("braveff").path("nvram").empty(), "no folder: no path");
+	check(SaveFolder::of_game("braveff", "/chosen").none(), "ODIN_SAVES=none: no folder, whatever the settings say");
+	setenv("ODIN_SAVES", "/elsewhere", 1);
+	check(SaveFolder::of_game("braveff", "/chosen").dir() == "/elsewhere/braveff", "ODIN_SAVES before the settings");
+	check(SaveFolder::root("/chosen") == "/elsewhere", "the folder of the games: ODIN_SAVES");
 	unsetenv("ODIN_SAVES");
+	check(SaveFolder::of_game("braveff", "/chosen").dir() == "/chosen/braveff", "the settings: <folder>/<game>");
+	check(SaveFolder::root("/chosen") == "/chosen", "the folder of the games: the settings");
+	check(SaveFolder::root() == "/home/someone/.local/share/odin/saves", "the folder of the games by default");
 	check(SaveFolder::of_game("sgnascar").dir() == "/home/someone/.local/share/odin/saves/sgnascar",
 	      "default: ~/.local/share/odin/saves/<game>");
 	check(SaveFolder::of_game("sgnascar").path("nvram") == "/home/someone/.local/share/odin/saves/sgnascar/nvram",
