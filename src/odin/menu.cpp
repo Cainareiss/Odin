@@ -31,6 +31,7 @@
 #include "odin/menu_kit.hpp"
 #include "odin/picture.hpp"
 #include "odin/renderer_gl.hpp"
+#include "odin/version.hpp"
 
 namespace odin {
 
@@ -442,7 +443,8 @@ Menu::help(int page, const MenuState &state)
 	}
 }
 
-/* About: the rune and Odin, in the middle; the libraries it is made with */
+/* About: the rune, Odin and the commit it is built from, in the middle;
+ * the libraries it is made with */
 void
 Menu::page_about(MenuKit &kit) const
 {
@@ -451,7 +453,9 @@ Menu::page_about(MenuKit &kit) const
 	const ImVec2 at = ImGui::GetCursorScreenPos();
 	const float width = ImGui::GetContentRegionAvail().x, mid = at.x + width / 2.0f;
 	const float rune = kit.px(34.0f), big = MenuKit::font(22.0f / 12.5f), letters = big * 0.2f;
+	const float small = MenuKit::font(MenuKit::SMALL);
 	const char *const what = "Sega Hikaru emulator, as close to the hardware as it goes";
+	const char *const version = odin_version();
 	float y = at.y + kit.px(10.0f);
 
 	MenuKit::icon(list, MenuKit::Icon::RUNE, { mid - rune / 2.0f, y }, rune, palette.ink);
@@ -459,7 +463,11 @@ Menu::page_about(MenuKit &kit) const
 	MenuKit::write(list, { mid - MenuKit::measure("ODIN", big, letters) / 2.0f, y }, palette.ink, "ODIN", big, letters);
 	y += big + kit.px(6.0f);
 	list->AddText({ mid - ImGui::CalcTextSize(what).x / 2.0f, y }, palette.dim, what);
-	y += ImGui::GetTextLineHeight();
+	y += ImGui::GetTextLineHeight() + kit.px(4.0f);
+	if (*version) {
+		list->AddText(ImGui::GetFont(), small, { mid - MenuKit::measure(version, small) / 2.0f, y }, palette.dim, version);
+		y += small;
+	}
 	ImGui::Dummy({ 0.0f, y + kit.px(6.0f) - at.y });
 
 	kit.begin_group("LICENCES");

@@ -42,6 +42,7 @@ OBJ := \
 	src/odin/pad_drawings_al2009man.o \
 	src/odin/keyboard.o \
 	src/odin/log_file.o \
+	src/odin/version.o \
 	src/odin/hotkeys.o \
 	src/odin/controls.o \
 	src/odin/outputs_network.o \
@@ -141,6 +142,13 @@ src/imgui/%.o: src/imgui/%.cpp
 
 # A product is fused with a sum only where the code says std::fma.
 src/odin/sh4_ops.o: CXXFLAGS += -ffp-contract=off
+
+# The commit the binary is built from, for the menu; made again with each
+# commit
+VERSION := $(shell git rev-parse --short HEAD 2>/dev/null)
+GIT_DIR := $(shell git rev-parse --git-dir 2>/dev/null)
+src/odin/version.o: CXXFLAGS += -DODIN_VERSION='"$(VERSION)"'
+src/odin/version.o: $(wildcard $(GIT_DIR)/HEAD $(GIT_DIR)/index)
 
 install:
 	@( mkdir -pv $(HOME)/.local/bin )
