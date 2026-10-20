@@ -40,11 +40,15 @@ public:
 
 	/* A frame has seen the keys. */
 	void settle();
+	/* The keys down now are let go of, and pressed again only once
+	 * released: the key that closes the menu is not the game's. */
+	void swallow();
 
 private:
 	std::vector<SDL_Keycode> m_held;
 	std::vector<SDL_Keycode> m_fresh;	/* down since the last frame */
 	std::vector<SDL_Keycode> m_release;	/* up before a frame saw them */
+	std::vector<SDL_Keycode> m_swallowed;	/* down when swallowed, until released */
 };
 
 } /* namespace odin */

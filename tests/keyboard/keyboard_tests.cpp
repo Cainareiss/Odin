@@ -16,7 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* Unit tests for the keyboard: the keys held, and a press shorter than a
+/* Unit tests for the keyboard: the keys held, a press shorter than a
  * frame kept until a frame has seen it.
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
@@ -80,12 +80,38 @@ void test_short_press()
 	check(!keyboard.down(SDLK_1), "a key held over a frame is released at once");
 }
 
+void test_swallow()
+{
+	Keyboard keyboard;
+
+	keyboard.set(SDLK_RETURN, true);
+	keyboard.swallow();
+	check(!keyboard.down(SDLK_RETURN), "a key down when swallowed is let go of");
+	keyboard.set(SDLK_RETURN, true);
+	check(!keyboard.down(SDLK_RETURN), "its repeats are nothing");
+	keyboard.set(SDLK_RETURN, false);
+	check(!keyboard.down(SDLK_RETURN), "nor is its release");
+	keyboard.set(SDLK_RETURN, true);
+	check(keyboard.down(SDLK_RETURN), "pressed again, it is down");
+
+	keyboard.set(SDLK_5, true);
+	keyboard.set(SDLK_5, false);
+	keyboard.swallow();
+	check(!keyboard.down(SDLK_5), "a short press is let go of too");
+	keyboard.set(SDLK_5, true);
+	check(keyboard.down(SDLK_5), "and the next press is not waited for a release");
+	keyboard.settle();
+	keyboard.set(SDLK_5, false);
+	check(!keyboard.down(SDLK_5), "which releases it as before");
+}
+
 } /* namespace */
 
 int main()
 {
 	test_keys();
 	test_short_press();
+	test_swallow();
 
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures ? 1 : 0;

@@ -44,6 +44,11 @@ take_out(std::vector<SDL_Keycode> &keys, SDL_Keycode key)
 void
 Keyboard::set(SDL_Keycode key, bool down)
 {
+	if (has(m_swallowed, key)) {
+		if (!down)
+			take_out(m_swallowed, key);
+		return;
+	}
 	if (down) {
 		if (!has(m_held, key)) {
 			m_held.push_back(key);
@@ -71,6 +76,18 @@ Keyboard::settle()
 		take_out(m_held, key);
 	m_release.clear();
 	m_fresh.clear();
+}
+
+void
+Keyboard::swallow()
+{
+	/* A key already released waits for no release */
+	for (const SDL_Keycode key : m_held)
+		if (!has(m_release, key) && !has(m_swallowed, key))
+			m_swallowed.push_back(key);
+	m_held.clear();
+	m_fresh.clear();
+	m_release.clear();
 }
 
 } /* namespace odin */
