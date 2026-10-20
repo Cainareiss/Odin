@@ -32,10 +32,12 @@ namespace odin {
  * the accent for what is touched and the ink on it, the action colour for
  * what is chosen and the ink on it. The drawings: the body of a gamepad and
  * a part on it, their strokes (the details take the outline of a control),
- * an arrow on a part. */
+ * an arrow on a part; the lavender of the cabinet, its strokes and its
+ * details. */
 struct MenuPalette {
 	ImU32 screen, frame, group, ink, dim, faint, line, outline, hover, accent, on_accent, action, on_action;
 	ImU32 body, part, stroke, arrow;
+	ImU32 cabinet, cabinet_stroke, cabinet_detail;
 };
 
 /* Rúnasteinn, the palette by default: granite and the red ochre of painted
@@ -48,6 +50,7 @@ inline constexpr MenuPalette RUNASTEINN = {
 	IM_COL32(0x2A, 0x2A, 0x28, 0xFF),
 	IM_COL32(0x2F, 0x2F, 0x2C, 0xFF), IM_COL32(0x38, 0x38, 0x34, 0xFF), IM_COL32(0xEE, 0xEA, 0xE2, 0x9E),
 	IM_COL32(0xEE, 0xEA, 0xE2, 0x73),
+	IM_COL32(0xBD, 0xB5, 0xD0, 0xFF), IM_COL32(0xBD, 0xB5, 0xD0, 0xCC), IM_COL32(0xBD, 0xB5, 0xD0, 0x66),
 };
 
 /* The dressed widgets of the menu, on Dear ImGui: corners cut at 45

@@ -27,6 +27,7 @@
 #include <utility>
 
 #include "imgui/imgui.h"
+#include "odin/cabinet_view.hpp"
 #include "odin/control_panel.hpp"
 #include "odin/menu_kit.hpp"
 #include "odin/pad_view.hpp"
@@ -39,6 +40,10 @@ namespace {
  * of the device; a label column at its widest and narrowest, a label from
  * the next, the room the leader lines keep from the box's edges */
 constexpr float ROW_GAP = 6.0f;
+/* A window this many times wider than high has the cabinet beside the
+ * device, which takes this share of the width (1.4 to 1) */
+constexpr float WIDE = 1.5f;
+constexpr float PAD_SHARE = 1.4f / 2.4f;
 constexpr float BOX_CUT = 5.0f;
 constexpr float BOX_INSIDE = 8.0f;
 constexpr float COLUMN_MIN = 90.0f;
@@ -692,6 +697,44 @@ not_mapped(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows,
 	return height;
 }
 
+/* The cabinet of the game shown: in its own box, its name and the game's
+ * at the top (`framed`), or in the box of the device */
+void
+cabinet_box(const MenuKit &kit, const MenuState &state, ImVec2 a, ImVec2 b, bool framed)
+{
+	if (!state.panel || state.shown >= state.games.size())
+		return;
+
+	ImDrawList *const list = ImGui::GetWindowDrawList();
+	const MenuPalette &palette = kit.palette();
+	const std::vector<GameControl> &controls = state.panel->controls();
+	const size_t n = controls.size();
+	const auto service = std::find_if(controls.begin(), controls.end(),
+	                                  [](const GameControl &c) { return c.role == Role::SERVICE && c.player == 0; });
+	CabinetNow now{ controls, state.now };
+
+	if (state.touched.size() == n + 3) {
+		now.coin = state.touched[n];
+		now.test = state.touched[n + 2];
+	}
+	if (service != controls.end() && static_cast<size_t>(service - controls.begin()) < state.now.size())
+		now.service = state.now[static_cast<size_t>(service - controls.begin())].on;
+
+	float top = a.y + kit.px(BOX_INSIDE);
+
+	if (framed) {
+		const std::string &title = state.games[state.shown].second;
+		const float pad = kit.px(8.0f);
+
+		MenuKit::frame(list, a, b, kit.px(BOX_CUT), 0, palette.line);
+		list->AddText({ a.x + pad, a.y + kit.px(5.0f) }, palette.cabinet, "THE CABINET");
+		list->AddText({ b.x - pad - ImGui::CalcTextSize(title.c_str()).x, a.y + kit.px(5.0f) }, palette.dim, title.c_str());
+		top = a.y + kit.px(5.0f) + ImGui::GetTextLineHeight();
+	}
+	draw_cabinet(kit, state.games[state.shown].first, now, { a.x + kit.px(4.0f), top },
+	             { b.x - kit.px(4.0f), b.y - kit.px(6.0f) });
+}
+
 /* The controls of the player sorted for the drawing: those on a part of it,
  * one label for each part's input; those on an input it has not; those on
  * nothing */
@@ -987,17 +1030,40 @@ Menu::page_input(MenuKit &kit, MenuState &state) const
 
 	const std::vector<InputRow> rows = input_rows(state);
 	const float buttons_h = kit.button_size("Default").y;
-	const ImVec2 a = { top.x, y }, b = { top.x + width, top.y + room.y - buttons_h - gap - kit.px(4.0f) };
-	/* The button Classic in the corner of the box, for a gamepad */
-	const ImVec2 classic = kit.button_size("Classic");
-	const float corner = state.on_pad() ? classic.y + kit.px(5.0f) : 0.0f;
+	/* A window wide enough (16:9) has the cabinet beside the device; a
+	 * narrower one shows either */
+	const ImVec2 window = ImGui::GetIO().DisplaySize;
+	const bool wide = window.x >= WIDE * window.y;
+	const float bottom = top.y + room.y - buttons_h - gap - kit.px(4.0f);
+	const float split = wide ? top.x + (width - gap) * PAD_SHARE : top.x + width;
+	const ImVec2 a = { top.x, y }, b = { split, bottom };
+	const bool cabinet = !wide && state.cabinet_shown;
+	/* The buttons in the corner of the box: Classic for a gamepad, the
+	 * swap of the device and the cabinet in a narrow window */
+	const char *const swap = cabinet ? "Controller" : "Cabinet";
+	const bool classic = state.on_pad() && !cabinet;
+	const ImVec2 classic_size = kit.button_size("Classic"), swap_size = kit.button_size(swap);
+	const float corner = classic || !wide ? std::max(classic_size.y, swap_size.y) + kit.px(5.0f) : 0.0f;
 
 	MenuKit::frame(ImGui::GetWindowDrawList(), a, b, kit.px(BOX_CUT), 0, palette.line);
-	if (state.on_pad() && !state.classic)
+	if (cabinet)
+		cabinet_box(kit, state, a, b, false);
+	else if (state.on_pad() && !state.classic)
 		pad_box(kit, state, rows, a, b, corner);
 	else
 		list_box(kit, state, rows, a, b, corner);
-	if (state.on_pad() && kit.button("Classic", { b.x - kit.px(6.0f) - classic.x, a.y + kit.px(5.0f) }, state.classic))
+	if (wide)
+		cabinet_box(kit, state, { split + gap, y }, { top.x + width, bottom }, true);
+
+	float x = b.x - kit.px(6.0f);
+
+	if (!wide) {
+		x -= swap_size.x;
+		if (kit.button(swap, { x, a.y + kit.px(5.0f) }, false))
+			state.cabinet_shown = !state.cabinet_shown;
+		x -= kit.px(6.0f);
+	}
+	if (classic && kit.button("Classic", { x - classic_size.x, a.y + kit.px(5.0f) }, state.classic))
 		state.classic = !state.classic;
 
 	/* What changes all the inputs of the player on the device shown */
@@ -1020,7 +1086,6 @@ Menu::input_help(const MenuState &state)
 
 	const std::vector<InputRow> rows = input_rows(state);
 	const auto type = static_cast<SDL_GamepadType>(state.pad_types[state.player & 1]);
-
 	for (const InputRow &row : rows)
 		if (same(state.catching, row.slot))
 			return row.name + ": " + (state.on_pad() ? "press the button, or move the stick" : "press the key") +

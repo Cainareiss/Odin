@@ -90,6 +90,9 @@ struct MenuState {
 	std::array<bool, 2> gamepad{};
 	std::array<PadState, 2> pad_states{};
 	bool classic = false;
+	/* In a window not wide enough for both, the cabinet in place of the
+	 * device */
+	bool cabinet_shown = false;
 	bool on_pad() const { return gamepad[player & 1]; }
 	/* The part whose next input is caught; what the page asks of the
 	 * inputs of the player and the device shown, Undo while it is offered */
