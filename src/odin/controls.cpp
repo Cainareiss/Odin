@@ -188,6 +188,12 @@ Controls::event(const SDL_Event &event)
 			const unsigned button = event.gbutton.button;
 
 			press(pad->state.buttons[button], pad->fresh[button], pad->release[button], event.gbutton.down);
+			if (button != SDL_GAMEPAD_BUTTON_GUIDE)
+				pad->guide_alone = pad->guide_alone && !event.gbutton.down;
+			else if (event.gbutton.down)
+				pad->guide_alone = true;
+			else if (std::exchange(pad->guide_alone, false))
+				m_guide_tapped = true;
 		}
 		return true;
 	default:

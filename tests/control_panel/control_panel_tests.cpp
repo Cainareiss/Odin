@@ -156,7 +156,7 @@ void test_standard_panel()
 	check(held({SDLK_2}).jvs_player[1] == 0x8000 &&
 	      held({SDLK_R}).jvs_player[1] == 0x2000 && held({SDLK_F}).jvs_player[1] == 0x1000 &&
 	      held({SDLK_D}).jvs_player[1] == 0x0800 && held({SDLK_G}).jvs_player[1] == 0x0400,
-	      "player 2: Start and R F D G (the SERVICE of player 2 has no key)");
+	      "player 2: Start and R F D G (the SERVICE of player 2 has no key, only Guide + L3 on its pad)");
 	check(held({SDLK_A}).jvs_player[1] == 0x0200 && held({SDLK_S}).jvs_player[1] == 0x0100 &&
 	      held({SDLK_Q}).jvs_player[1] == 0x0080 && held({SDLK_W}).jvs_player[1] == 0x0040 &&
 	      held({SDLK_E}).jvs_player[1] == 0x0020 && held({SDLK_T}).jvs_player[1] == 0x0010,
@@ -586,6 +586,13 @@ void test_touched()
 	pad.buttons[SDL_GAMEPAD_BUTTON_NORTH] = true;
 	check(panel.touched(host, index("view")), "the pad of player 1: Y, VIEW");
 	check(!panel.touched(host, index("fog")), "a control of player 2 is not worked by the pad of player 1");
+	pad.buttons[SDL_GAMEPAD_BUTTON_NORTH] = false;
+	pad.buttons[SDL_GAMEPAD_BUTTON_RIGHT_STICK] = true;
+	check(!panel.touched(host, Role::TEST), "R3 alone: not TEST");
+	pad.buttons[SDL_GAMEPAD_BUTTON_GUIDE] = true;
+	check(panel.touched(host, Role::TEST), "Guide held with R3: TEST");
+	pad.buttons[SDL_GAMEPAD_BUTTON_RIGHT_STICK] = false;
+	check(!panel.touched(host, Role::TEST), "Guide alone: nothing");
 }
 
 int main()

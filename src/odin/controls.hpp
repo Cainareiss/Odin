@@ -21,6 +21,7 @@
 
 #include <array>
 #include <span>
+#include <utility>
 #include <vector>
 
 #include <SDL3/SDL.h>
@@ -65,6 +66,9 @@ public:
 	 * now */
 	bool touched(size_t control) const { return m_panel.touched(host(), control); }
 	bool touched(Role role) const { return m_panel.touched(host(), role); }
+	/* Guide of a gamepad pressed and let go alone since the last call:
+	 * the menu (with another button, Guide is a shortcut) */
+	bool guide_tapped() { return std::exchange(m_guide_tapped, false); }
 	/* The gamepad of a player: its name, its kind (SDL_GamepadType);
 	 * empty and unknown when there is none */
 	std::string pad_name(unsigned player) const;
@@ -110,6 +114,7 @@ private:
 		std::array<bool, SDL_GAMEPAD_BUTTON_COUNT> release{};
 		Uint16 rumbling = 0;	/* how hard it shakes */
 		Uint64 rumbled = 0;	/* when it was last asked to */
+		bool guide_alone = false;	/* Guide held, no other button since */
 	};
 
 	void open(SDL_JoystickID id);
@@ -123,6 +128,7 @@ private:
 	ControlPanel m_panel;
 	std::vector<GameOutput> m_outputs;
 	bool m_on;
+	bool m_guide_tapped = false;
 	bool m_felt = false;
 	Uint16 m_felt_level = 0;	/* how hard the felt sound shakes, smoothed */
 	unsigned m_drive_output = 0;

@@ -172,7 +172,7 @@ ControlPanel::held(const HostState &host, const HostInput &input, unsigned playe
 
 	const PadState *const pad = host.pads[player & 1];
 
-	if (!pad)
+	if (!pad || (input.pad.with >= 0 && !pad->buttons[static_cast<size_t>(input.pad.with)]))
 		return false;
 	switch (input.pad.type) {
 	case PadInput::Type::BUTTON:

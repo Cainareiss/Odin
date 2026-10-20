@@ -161,6 +161,11 @@ label(const HostInput &input, SDL_GamepadType type)
 	case HostInput::Kind::KEY:
 		return SDL_GetKeyName(input.key);
 	case HostInput::Kind::PAD:
+		if (input.pad.with >= 0) {
+			const PadInput with = { PadInput::Type::BUTTON, static_cast<uint8_t>(input.pad.with) };
+
+			return pad_label(with, type) + " + " + pad_label(input.pad, type);
+		}
 		return pad_label(input.pad, type);
 	case HostInput::Kind::MOUSE:
 		break;

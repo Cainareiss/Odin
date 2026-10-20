@@ -175,14 +175,18 @@ void test_defaults()
 	      "button1 of player 2: the key A and A of its pad");
 	check(Bindings::defaults(Role::START, 1).size() == 2 && is_key(Bindings::defaults(Role::START, 1)[0], SDLK_2),
 	      "start of player 2: 2 and Start");
-	check(Bindings::defaults(Role::SERVICE, 0).size() == 1 && is_key(Bindings::defaults(Role::SERVICE, 0)[0], SDLK_9) &&
-	      Bindings::defaults(Role::SERVICE, 1).empty(), "Service: 9 for player 1, no pad; none for player 2");
+	check(Bindings::defaults(Role::SERVICE, 0).size() == 2 && is_key(Bindings::defaults(Role::SERVICE, 0)[0], SDLK_9) &&
+	      Bindings::defaults(Role::SERVICE, 0)[1].text() == "pad:guide+leftstick" &&
+	      Bindings::defaults(Role::SERVICE, 1).size() == 1 && Bindings::defaults(Role::SERVICE, 1)[0].text() == "pad:guide+leftstick",
+	      "Service: 9 for player 1, and Guide with the left stick pressed on the pad of each player");
 	check(is_key(Bindings::defaults(Role::COIN1, 0)[0], SDLK_5) && is_key(Bindings::defaults(Role::COIN2, 1)[0], SDLK_6) &&
 	      is_pad(Bindings::defaults(Role::COIN1, 0)[1], PadInput::Type::BUTTON, SDL_GAMEPAD_BUTTON_BACK) &&
 	      is_pad(Bindings::defaults(Role::COIN2, 0)[1], PadInput::Type::BUTTON, SDL_GAMEPAD_BUTTON_BACK) &&
-	      Bindings::defaults(Role::TEST, 0).size() == 1 && is_key(Bindings::defaults(Role::TEST, 0)[0], SDLK_0) &&
+	      Bindings::defaults(Role::TEST, 0).size() == 2 && is_key(Bindings::defaults(Role::TEST, 0)[0], SDLK_0) &&
+	      Bindings::defaults(Role::TEST, 0)[1].text() == "pad:guide+rightstick" &&
 	      Bindings::defaults(Role::BOARD_TEST, 0).empty() && Bindings::defaults(Role::BOARD_SERVICE, 0).empty(),
-	      "the cabinet: coins 5, 6 and SELECT, Test 0; the switches of the main board without key");
+	      "the cabinet: coins 5, 6 and SELECT, Test 0 and Guide with the right stick; the switches of the main board "
+	      "without key");
 	check(is_key(Bindings::defaults(Role::UP, 1)[0], SDLK_R) && is_key(Bindings::defaults(Role::BUTTON6, 1)[0], SDLK_T) &&
 	      is_key(Bindings::defaults(Role::BUTTON4, 0)[0], SDLK_Z), "the other keys as INSTALL tells them");
 	check(Bindings::defaults(Role::STEER, 0).size() == 1 &&
@@ -435,6 +439,14 @@ void test_text()
 
 		check(input && input->text() == text && HostInput::parse(input->text()) == input, text);
 	}
+	const auto chord = HostInput::parse("pad:guide+leftstick");
+
+	check(chord && chord->pad.type == PadInput::Type::BUTTON && chord->pad.index == SDL_GAMEPAD_BUTTON_LEFT_STICK &&
+	      chord->pad.with == SDL_GAMEPAD_BUTTON_GUIDE && chord->text() == "pad:guide+leftstick",
+	      "pad:guide+leftstick: a button held with Guide, and back");
+	check(!HostInput::parse("pad:guide+leftx") && !HostInput::parse("pad:nope+a") && !HostInput::parse("pad:guide+") &&
+	      !HostInput::parse("pad:a+a") && HostInput::parse("pad:+leftx") && !(*HostInput::parse("pad:a") == *chord),
+	      "a second button only, not the same, and +leftx stays half a stick");
 	check(HostInput::text({ *HostInput::parse("key:A"), *HostInput::parse("pad:b") }) == "key:A, pad:b",
 	      "a list, with a comma");
 	check(HostInput::text({}).empty(), "no input: nothing");

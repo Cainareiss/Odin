@@ -31,9 +31,10 @@ namespace {
  * player: a stick on the keys of the directions, the second stick of
  * player 1 on those of player 2, the gears on the keys of LB and RB.
  * TEST and SERVICE are the buttons of the cabinet, on its I/O board,
- * which the BOOTROM and the games all read; the switches of the main
- * board have no key. The coin of a player is also the SELECT of their
- * pad. */
+ * which the BOOTROM and the games all read: Guide with the left stick
+ * pressed for SERVICE, with the right one for TEST (Guide is the key of
+ * the shortcuts, as on Batocera); the switches of the main board have no
+ * key. The coin of a player is also the SELECT of their pad. */
 struct Default {
 	Role role;
 	const char *key1;	/* the key of player 1, or of the cabinet */
@@ -43,7 +44,7 @@ struct Default {
 
 const Default DEFAULTS[] = {
 	{ Role::START, "1", "2", "start" },
-	{ Role::SERVICE, "9", nullptr, nullptr },
+	{ Role::SERVICE, "9", nullptr, "guide+leftstick" },
 	{ Role::UP, "Up", "R", "dpup" },
 	{ Role::DOWN, "Down", "F", "dpdown" },
 	{ Role::LEFT, "Left", "D", "dpleft" },
@@ -77,7 +78,7 @@ const Default DEFAULTS[] = {
 	{ Role::GUN_Y, nullptr, nullptr, "lefty" },
 	{ Role::COIN1, "5", nullptr, "back" },
 	{ Role::COIN2, "6", nullptr, "back" },
-	{ Role::TEST, "0", nullptr, nullptr },
+	{ Role::TEST, "0", nullptr, "guide+rightstick" },
 	{ Role::BOARD_TEST, nullptr, nullptr, nullptr },
 	{ Role::BOARD_SERVICE, nullptr, nullptr, nullptr },
 };
@@ -206,6 +207,20 @@ HostInput::parse(std::string_view text)
 		return std::nullopt;
 	text.remove_prefix(4);
 
+	/* A button held first, then another */
+	if (const size_t plus = text.find('+', 1); plus != std::string_view::npos) {
+		const std::string first(text.substr(0, plus)), second(text.substr(plus + 1));
+		const SDL_GamepadButton with = SDL_GetGamepadButtonFromString(first.c_str());
+		const SDL_GamepadButton button = SDL_GetGamepadButtonFromString(second.c_str());
+
+		if (with == SDL_GAMEPAD_BUTTON_INVALID || button == SDL_GAMEPAD_BUTTON_INVALID || with == button)
+			return std::nullopt;
+		out.kind = Kind::PAD;
+		out.pad = PadInput{ PadInput::Type::BUTTON, static_cast<uint8_t>(button) };
+		out.pad.with = static_cast<int8_t>(with);
+		return out;
+	}
+
 	constexpr std::string_view INVERT = ":invert";
 	const bool inverted = text.size() > INVERT.size() && text.substr(text.size() - INVERT.size()) == INVERT;
 
@@ -261,6 +276,8 @@ HostInput::text() const
 	                         SDL_GetGamepadStringForAxis(static_cast<SDL_GamepadAxis>(pad.index));
 	std::string out = "pad:";
 
+	if (pad.with >= 0)
+		out = out + SDL_GetGamepadStringForButton(static_cast<SDL_GamepadButton>(pad.with)) + "+";
 	if (pad.type == PadInput::Type::AXIS_NEGATIVE)
 		out += '-';
 	else if (pad.type == PadInput::Type::AXIS_POSITIVE)

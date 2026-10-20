@@ -319,6 +319,8 @@ private:
 	/* The inputs as Clear all found them, and until when Undo puts them back */
 	odin::Settings::Lines m_cleared;
 	Uint64 m_undo_until = 0;
+	/* Guide is held while an input is caught: the next button goes with it */
+	bool m_catch_guide = false;
 	bool m_paused;
 	std::chrono::steady_clock::time_point m_next;	/* when the next frame is due */
 	unsigned m_menu_pictures;	/* still to draw */
@@ -371,8 +373,11 @@ Session::process_events()
 			quit = menu_event(event) || quit;
 			continue;
 		}
-		if (m_controls.event(event))
+		if (m_controls.event(event)) {
+			if (m_controls.guide_tapped())
+				open_menu();
 			continue;
+		}
 		switch (event.type) {
 		case SDL_EVENT_KEY_DOWN:
 			m_keys.set(event.key.key, true);
@@ -442,6 +447,9 @@ Session::menu_event(const SDL_Event &event)
 	case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
 	case SDL_EVENT_GAMEPAD_BUTTON_UP:
 		m_controls.event(event);
+		if (m_controls.guide_tapped())
+			close_menu();
+		m_menu_pictures = MENU_PICTURES;
 		return false;
 	case SDL_EVENT_WINDOW_MOUSE_LEAVE:
 		m_controls.event(event);
@@ -484,8 +492,8 @@ is_odin_key(SDL_Keycode key)
 }
 
 /* The page Input waits for an input: Escape lets it go; a key, or on a
- * gamepad a button or a stick, a trigger from half its way, is the one.
- * True when the event was taken. */
+ * gamepad a button (Guide held, then another: both), a stick or a trigger
+ * from half its way, is the one. True when the event was taken. */
 bool
 Session::catch_input(const SDL_Event &event)
 {
@@ -509,6 +517,12 @@ Session::catch_input(const SDL_Event &event)
 			caught(input);
 		}
 		return true;
+	case SDL_EVENT_GAMEPAD_BUTTON_UP:
+		m_controls.event(event);
+		m_controls.guide_tapped();
+		if (event.gbutton.button == SDL_GAMEPAD_BUTTON_GUIDE)
+			m_catch_guide = false;
+		return true;
 	case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
 	case SDL_EVENT_GAMEPAD_AXIS_MOTION: {
 		m_controls.event(event);
@@ -521,9 +535,15 @@ Session::catch_input(const SDL_Event &event)
 
 		if (axis && std::abs(value) < odin::ControlPanel::PRESSED)
 			return true;
+		if (!axis && event.gbutton.button == SDL_GAMEPAD_BUTTON_GUIDE) {
+			m_catch_guide = true;
+			return true;
+		}
 		input.kind = odin::HostInput::Kind::PAD;
 		input.pad.index = axis ? event.gaxis.axis : event.gbutton.button;
 		input.pad.type = !axis ? odin::PadInput::Type::BUTTON : odin::PadInput::Type::AXIS;
+		if (!axis && m_catch_guide)
+			input.pad.with = SDL_GAMEPAD_BUTTON_GUIDE;
 		/* A stick on a part that is pressed: its half */
 		if (axis && event.gaxis.axis < SDL_GAMEPAD_AXIS_LEFT_TRIGGER && state.catching->part != 0)
 			input.pad.type = value < 0 ? odin::PadInput::Type::AXIS_NEGATIVE : odin::PadInput::Type::AXIS_POSITIVE;
