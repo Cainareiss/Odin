@@ -26,6 +26,7 @@
 #include <cstdint>
 #include <memory>
 #include <span>
+#include <string>
 #include <vector>
 
 struct SDL_AudioStream;
@@ -104,11 +105,24 @@ public:
 	static uint16_t smoothed(uint16_t was, uint16_t now) { return static_cast<uint16_t>((3 * was + now) / 4); }
 
 	/* nullptr when the host gives no sound device; the optional board at
-	 * option_db in the mix */
-	static std::unique_ptr<AudioOut> make(Mode mode, double option_db);
+	 * option_db in the mix; on the device of that name, else (or when it
+	 * is not there) on the one the system gives */
+	static std::unique_ptr<AudioOut> make(Mode mode, double option_db, const std::string &device = "");
 	~AudioOut();
 	AudioOut(const AudioOut &) = delete;
 	AudioOut &operator=(const AudioOut &) = delete;
+
+	/* The names of the devices the system plays on */
+	std::vector<std::string> devices() const;
+	/* Played another way or on another device, at once: false, said on
+	 * stderr, when it cannot be (it plays as before) */
+	bool change(Mode mode, const std::string &device);
+	Mode mode() const { return m_mode; }
+	void set_option_level(double db) { m_option_gain = gain_of(db); }
+	/* The volume of Odin, 0 to 1, and whether it is heard (not while its
+	 * window is in the background, when the user says so) */
+	void set_volume(float volume);
+	void set_heard(bool heard);
 
 	/* The samples of a frame of each board. The board makes its frames
 	 * a little longer than the 1/60 s they are shown for: between 30 and
@@ -123,10 +137,15 @@ private:
 	{
 	}
 
+	void follow_gain();
+
 	SDL_AudioStream *m_stream;	/* bound to the device */
 	Mode m_mode;
 	int32_t m_option_gain;
 	std::vector<int16_t> m_frames;
+	float m_volume = 1.0f;
+	bool m_heard = true;
+	bool m_paused = false;
 };
 
 } /* namespace odin */

@@ -63,6 +63,28 @@ struct MenuState {
 	/* odin.ini keeps what changes: not with ODIN_CONFIG=none */
 	bool kept = true;
 
+	/* Audio: the devices the system plays on and the one chosen (empty:
+	 * the system's), the volume of Odin from 0 to 100, its sound kept while
+	 * its window is in the background; why there is no sound now (none:
+	 * there is) */
+	std::vector<std::string> devices;
+	std::string device;
+	unsigned volume = 100;
+	bool background = true;
+	const char *silent = nullptr;
+	/* The games whose cabinet has speakers for the optional sound board:
+	 * how they are played (0 the main board, 1 both on two channels, 2 the
+	 * four channels apart; -1 another way the command line says, for the
+	 * game that runs, which `locked` says), the level of the optional board
+	 * in the two channels and the one of the list, in dB */
+	struct SoundGame {
+		std::string name, title;
+		int played;
+		float level, standard;
+		bool locked;
+	};
+	std::vector<SoundGame> sound_games;
+
 	/* Outputs: those of the cabinet of the game shown (their names, what
 	 * they are), lit while on in the game that runs; sent to the programs
 	 * of lamps, the port taken by another program, how many programs take
@@ -153,6 +175,8 @@ public:
 	void close();
 	void event(const SDL_Event &event);
 	void build(MenuState &state);
+	/* A list dropped open, which Escape closes before the menu */
+	bool popup_open() const;
 
 	/* The drawing thread: the picture of the last frame, from its
 	 * framebuffer, becomes the background (0: there is none yet, black);
@@ -163,11 +187,12 @@ public:
 
 private:
 	/* The pages, in the order of their tabs */
-	enum Page { INPUT, DISPLAY, OUTPUTS, PATHS, ABOUT, PAGES };
+	enum Page { INPUT, DISPLAY, AUDIO, OUTPUTS, PATHS, ABOUT, PAGES };
 
 	void follow_scale();
 	void page_input(MenuKit &kit, MenuState &state) const;
 	void page_display(MenuKit &kit, MenuState &state) const;
+	void page_audio(MenuKit &kit, MenuState &state) const;
 	void page_outputs(MenuKit &kit, MenuState &state) const;
 	void page_paths(MenuKit &kit, MenuState &state) const;
 	void page_about(MenuKit &kit) const;

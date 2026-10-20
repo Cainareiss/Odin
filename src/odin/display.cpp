@@ -318,6 +318,12 @@ Display::menu_event(const SDL_Event &event)
 	m_menu->event(event);
 }
 
+bool
+Display::menu_popup_open() const
+{
+	return m_menu && m_menu->popup_open();
+}
+
 /* Built on this thread, drawn on the drawing thread meanwhile */
 void
 Display::draw_menu(MenuState &state)

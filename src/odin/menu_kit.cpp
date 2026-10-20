@@ -182,6 +182,20 @@ MenuKit::icon(ImDrawList *list, Icon icon, ImVec2 at, float side, ImU32 colour)
 			list->AddLine(p(x, 10), p(x + 1, 10), colour, w);
 		list->AddLine(p(7, 14), p(17, 14), colour, w);
 		break;
+	case Icon::AUDIO:
+	case Icon::MUTE:
+		for (const ImVec2 q : { ImVec2{ 4, 9 }, ImVec2{ 4, 15 }, ImVec2{ 8, 15 }, ImVec2{ 13, 19 }, ImVec2{ 13, 5 },
+		                        ImVec2{ 8, 9 } })
+			list->PathLineTo(p(q.x, q.y));
+		list->PathStroke(colour, ImDrawFlags_Closed, w);
+		if (icon == Icon::AUDIO) {
+			arc(13.35f, 12, 4, -48.5f, 48.5f);
+			list->PathStroke(colour, ImDrawFlags_None, w);
+		} else {
+			list->AddLine(p(16, 9), p(21, 15), colour, w);
+			list->AddLine(p(21, 9), p(16, 15), colour, w);
+		}
+		break;
 	case Icon::OUTPUTS:
 		list->AddCircle(p(12, 12), 3.0f * k, colour, 0, w);
 		list->AddLine(p(12, 3), p(12, 6), colour, w);
@@ -211,14 +225,6 @@ MenuKit::icon(ImDrawList *list, Icon icon, ImVec2 at, float side, ImU32 colour)
 		arc(12, 8, 4, 180, 360);
 		list->PathLineTo(p(16, 11));
 		list->PathStroke(colour, ImDrawFlags_None, w);
-		break;
-	case Icon::MUTE:
-		for (const ImVec2 q : { ImVec2{ 4, 9 }, ImVec2{ 4, 15 }, ImVec2{ 8, 15 }, ImVec2{ 13, 19 }, ImVec2{ 13, 5 },
-		                        ImVec2{ 8, 9 } })
-			list->PathLineTo(p(q.x, q.y));
-		list->PathStroke(colour, ImDrawFlags_Closed, w);
-		list->AddLine(p(16, 9), p(21, 15), colour, w);
-		list->AddLine(p(21, 9), p(16, 15), colour, w);
 		break;
 	case Icon::FOLDER:
 		list->PathLineTo(p(3, 7));
@@ -455,8 +461,18 @@ MenuKit::picker(const char *id, ImVec2 at, float width, std::span<const std::str
 	}
 	list->AddText({ b.x - wide - arrow, at.y + high }, p.dim, "v");
 
-	/* The list under the box, as wide at least */
-	ImGui::SetNextWindowPos({ at.x, b.y + px(2.0f) });
+	list_popup({ at.x, b.y + px(2.0f) }, width, labels, chosen);
+	ImGui::PopID();
+	return chosen != was;
+}
+
+bool
+MenuKit::list_popup(ImVec2 at, float width, std::span<const std::string> labels, int &chosen) const
+{
+	const MenuPalette &p = m_palette;
+	const int was = chosen;
+
+	ImGui::SetNextWindowPos(at);
 	ImGui::SetNextWindowSizeConstraints({ width, 0.0f }, { std::max(width, ImGui::GetIO().DisplaySize.x - at.x - px(8.0f)),
 	                                                        ImGui::GetIO().DisplaySize.y });
 	ImGui::PushStyleColor(ImGuiCol_PopupBg, ImGui::ColorConvertU32ToFloat4(p.screen));
@@ -464,7 +480,7 @@ MenuKit::picker(const char *id, ImVec2 at, float width, std::span<const std::str
 	ImGui::PushStyleColor(ImGuiCol_Header, ImGui::ColorConvertU32ToFloat4(p.action));
 	ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImGui::ColorConvertU32ToFloat4(p.line));
 	ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImGui::ColorConvertU32ToFloat4(p.action));
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { wide, high });
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { px(CELL_WIDE), px(CELL_HIGH) });
 	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { 0.0f, px(2.0f) });
 	ImGui::PushStyleVar(ImGuiStyleVar_PopupBorderSize, 1.0f);
 	ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, 0.0f);
@@ -481,7 +497,6 @@ MenuKit::picker(const char *id, ImVec2 at, float width, std::span<const std::str
 	}
 	ImGui::PopStyleVar(4);
 	ImGui::PopStyleColor(5);
-	ImGui::PopID();
 	return chosen != was;
 }
 
@@ -614,14 +629,91 @@ MenuKit::value(const char *name, const char *about, const char *value, const cha
 
 	list->AddText(font, ImGui::GetFontSize(), { right - after - value_w, at.y + (h - value_size.y) / 2.0f },
 	              m_palette.dim, value, nullptr, value_w);
-	if (shown_button)
-		clicked = button(shown_button, { right - button_box.x, at.y + (h - button_box.y) / 2.0f }, false);
-	else if (shown_word)
+	if (shown_button) {
+		m_button_a = { right - button_box.x, at.y + (h - button_box.y) / 2.0f };
+		m_button_b = { m_button_a.x + button_box.x, m_button_a.y + button_box.y };
+		clicked = button(shown_button, m_button_a, false);
+	} else if (shown_word)
 		list->AddText(font, small, { right - word_w, at.y + (h - small) / 2.0f }, m_palette.faint, shown_word);
 	ImGui::SetCursorScreenPos(at);
 	ImGui::Dummy({ width, h });
 	ImGui::PopID();
 	return clicked;
+}
+
+bool
+MenuKit::value_list(const char *name, const char *about, const char *value, const char *action,
+                    std::span<const std::string> labels, int &chosen, const char *locked)
+{
+	const int was = chosen;
+
+	ImGui::PushID(name);
+	if (this->value(name, about, value, action, nullptr, locked))
+		ImGui::OpenPopup("list");
+	list_popup({ m_button_a.x, m_button_b.y + px(2.0f) }, m_button_b.x - m_button_a.x, labels, chosen);
+	ImGui::PopID();
+	return chosen != was;
+}
+
+bool
+MenuKit::slider(const char *name, const char *about, float &value, float low, float high, float step, const char *shown,
+                const char *locked, bool off)
+{
+	ImGui::PushID(name);
+
+	ImDrawList *const list = ImGui::GetWindowDrawList();
+	const bool still = locked || off;
+	const float pad = px(ROW_PAD), track_w = px(64.0f), track_h = px(6.0f), space = px(8.0f);
+	const float shown_w = std::max(ImGui::CalcTextSize(shown).x, ImGui::CalcTextSize("-60 dB").x);
+	const float control = track_w + space + shown_w, line = ImGui::GetTextLineHeight();
+	float width;
+	const ImVec2 at = begin_row(width);
+	const float text_w = std::max(px(80.0f), width - control - px(GAP) - 2.0f * pad);
+	const float h = std::max(texts({ at.x + pad, at.y + pad }, text_w, name, about, locked), line) + 2.0f * pad;
+	const ImVec2 a = { at.x + width - pad - control, at.y + (h - track_h) / 2.0f }, b = { a.x + track_w, a.y + track_h };
+	const float was = value;
+
+	/* The track takes the mouse a little above and below it */
+	ImGui::SetCursorScreenPos({ a.x, at.y + (h - line) / 2.0f });
+	ImGui::BeginDisabled(still);
+	ImGui::InvisibleButton("track", { track_w, line });
+
+	const bool hovered = !still && ImGui::IsItemHovered();
+
+	if (!still && ImGui::IsItemActive()) {
+		const float t = std::clamp((ImGui::GetIO().MousePos.x - a.x) / track_w, 0.0f, 1.0f);
+
+		value = low + std::round(t * (high - low) / step) * step;
+	} else if (hovered && ImGui::GetIO().MouseWheel != 0.0f) {
+		value = std::clamp(value + (ImGui::GetIO().MouseWheel > 0.0f ? step : -step), low, high);
+	}
+	ImGui::EndDisabled();
+
+	const float fill = (std::clamp(value, low, high) - low) / (high - low);
+	const float r = track_h / 2.0f;
+
+	list->AddRectFilled(a, { a.x + track_w * fill, b.y }, faded(m_palette.action, still), r);
+	list->AddRect(a, b, faded(hovered ? m_palette.dim : m_palette.outline, still), r);
+	list->AddText({ b.x + space, at.y + (h - line) / 2.0f }, faded(m_palette.ink, still), shown);
+
+	ImGui::SetCursorScreenPos(at);
+	ImGui::Dummy({ width, h });
+	ImGui::PopID();
+	return value != was;
+}
+
+void
+MenuKit::paragraph(const char *title, const char *text)
+{
+	ImDrawList *const list = ImGui::GetWindowDrawList();
+	const float width = ImGui::GetContentRegionAvail().x;
+
+	ImGui::Dummy({ 0.0f, px(10.0f) });
+	list->AddText(ImGui::GetCursorScreenPos(), m_palette.dim, title);
+	ImGui::Dummy({ 0.0f, ImGui::GetTextLineHeight() + px(4.0f) });
+	list->AddText(ImGui::GetFont(), ImGui::GetFontSize(), ImGui::GetCursorScreenPos(), m_palette.faint, text, nullptr,
+	              width);
+	ImGui::Dummy({ 0.0f, ImGui::CalcTextSize(text, nullptr, false, width).y });
 }
 
 } /* namespace odin */

@@ -129,6 +129,7 @@ public:
 	bool menu_shown() const { return m_menu_shown; }
 	void menu_event(const SDL_Event &event);
 	void draw_menu(MenuState &state);
+	bool menu_popup_open() const;
 
 	/* Hikaru::Screen */
 	void list_launched() override;

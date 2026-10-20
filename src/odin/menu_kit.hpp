@@ -65,10 +65,10 @@ public:
 	float px(float points) const { return points * m_scale; }
 
 	/* The icons of the menu (mock-up v50), drawn in a square of that side:
-	 * a gamepad, a gamepad with its cross, a screen, a keyboard, a light
-	 * with its rays, a folder, an i; the outputs of a cabinet: a lamp, a
-	 * shaker, a lock, a speaker crossed out */
-	enum class Icon { PAD, INPUT, DISPLAY, KEYBOARD, OUTPUTS, FOLDER, ABOUT, LAMP, RUMBLE, LOCK, MUTE };
+	 * a gamepad, a gamepad with its cross, a screen, a speaker, a keyboard,
+	 * a light with its rays, a folder, an i; the outputs of a cabinet: a
+	 * lamp, a shaker, a lock, a speaker crossed out */
+	enum class Icon { PAD, INPUT, DISPLAY, AUDIO, KEYBOARD, OUTPUTS, FOLDER, ABOUT, LAMP, RUMBLE, LOCK, MUTE };
 	static void icon(ImDrawList *list, Icon icon, ImVec2 at, float side, ImU32 colour);
 
 	/* A frame with its corners cut; a colour of 0 is none */
@@ -100,6 +100,16 @@ public:
 	 * command line sets says so (`locked`), with no button */
 	bool value(const char *name, const char *about, const char *value, const char *action, const char *word = nullptr,
 	           const char *locked = nullptr);
+	/* The same, its button opening a list under it: true when one is
+	 * chosen */
+	bool value_list(const char *name, const char *about, const char *value, const char *action,
+	                std::span<const std::string> labels, int &chosen, const char *locked = nullptr);
+	/* A row with a slider from `low` to `high` by `step`, `shown` after it
+	 * (the value and its unit): true when it moved */
+	bool slider(const char *name, const char *about, float &value, float low, float high, float step, const char *shown,
+	            const char *locked = nullptr, bool off = false);
+	/* A title and a text under it, with no frame */
+	void paragraph(const char *title, const char *text);
 	/* A row with a list that drops down from its right: true when the
 	 * choice changed */
 	bool dropdown(const char *name, const char *about, std::span<const std::string> labels, int &chosen);
@@ -127,11 +137,16 @@ private:
 	 * its group, and the room left for its texts */
 	ImVec2 begin_row(float &width);
 	float texts(ImVec2 at, float width, const char *name, const char *about, const char *locked) const;
+	/* The list that drops from a box or a button, at that place, as wide
+	 * at least */
+	bool list_popup(ImVec2 at, float width, std::span<const std::string> labels, int &chosen) const;
 
 	const MenuPalette &m_palette;
 	float m_scale;
 	ImVec2 m_group_top = {};
 	bool m_first_row = true;
+	/* The last button a value row drew */
+	ImVec2 m_button_a = {}, m_button_b = {};
 };
 
 } /* namespace odin */

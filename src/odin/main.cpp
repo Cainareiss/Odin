@@ -68,6 +68,11 @@ struct Options {
 	 * them (the two boards on two channels) */
 	std::optional<odin::AudioOut::Mode> sound = odin::AudioOut::Mode::MAIN;
 	bool sound_asked = false;
+	/* [sound] of odin.ini: the device (empty: the system's), the volume
+	 * from 0 to 100, the sound kept while the window is in the background */
+	std::string sound_device;
+	unsigned volume = 100;
+	bool background = true;
 	odin::Display::Options display = { 1, 1, 0, false, true, {} };
 	/* What the command line says of the display: odin.ini does not change it */
 	struct {
@@ -251,6 +256,63 @@ read_paths(const odin::Settings &settings, Options &options)
 	}
 }
 
+/* [sound] of odin.ini: the device, the volume, the sound in the
+ * background. The last line says. */
+void
+read_sound(const odin::Settings &settings, Options &options)
+{
+	for (const auto &[key, value] : settings.section("sound")) {
+		char *end = nullptr;
+		const long number = std::strtol(value.c_str(), &end, 10);
+
+		if (key == "device" && !value.empty())
+			options.sound_device = value;
+		else if (key == "volume" && !value.empty() && !*end && number >= 0 && number <= 100)
+			options.volume = static_cast<unsigned>(number);
+		else if (key == "background" && (value == "on" || value == "off"))
+			options.background = value == "on";
+		else
+			std::fprintf(stderr, "ERROR: settings: [sound]: not right: %s = %s\n", key.c_str(), value.c_str());
+	}
+}
+
+/* How [sound.<game>] says to play the two boards: main, mix or quad */
+std::optional<odin::AudioOut::Mode>
+mode_named(const std::string &name)
+{
+	if (name == "main")
+		return odin::AudioOut::Mode::MAIN;
+	if (name == "mix")
+		return odin::AudioOut::Mode::MIX;
+	if (name == "quad")
+		return odin::AudioOut::Mode::QUAD;
+	return std::nullopt;
+}
+
+/* The way of playing of the page Audio: 0 the main board, 1 both, 2 four
+ * channels, -1 the optional board alone */
+int
+played_of(odin::AudioOut::Mode mode)
+{
+	switch (mode) {
+	case odin::AudioOut::Mode::MAIN:
+		return 0;
+	case odin::AudioOut::Mode::MIX:
+		return 1;
+	case odin::AudioOut::Mode::QUAD:
+		return 2;
+	default:
+		return -1;
+	}
+}
+
+odin::AudioOut::Mode
+mode_of(int played)
+{
+	return played == 0 ? odin::AudioOut::Mode::MAIN :
+	       played == 2 ? odin::AudioOut::Mode::QUAD : odin::AudioOut::Mode::MIX;
+}
+
 /* The folder of the save states by default: <data>/odin/states, else the
  * folder Odin is started from (empty) */
 std::string
@@ -333,6 +395,38 @@ public:
 		state.verbose_given = options.given.verbose;
 		state.network = network;
 		state.network_failed = network && !m_outputs;
+		state.device = options.sound_device;
+		state.volume = options.volume;
+		state.background = options.background;
+		state.silent = options.unthrottled ? "no sound at an unlimited pace (Display)" :
+		               !options.sound ? "set by the command line: -o off" :
+		               !audio ? "no sound device" : nullptr;
+		for (const auto &[name, title] : games.titles("hikaru")) {
+			const bool runs = name == game.name;
+			const std::optional<odin::Game> other = runs ? std::nullopt : games.describe(name);
+
+			if (!(runs ? game.option_speakers : other && other->option_speakers))
+				continue;
+
+			odin::MenuState::SoundGame sound = { name, title, 1, 0.0f, 0.0f, false };
+
+			sound.level = sound.standard = static_cast<float>(runs ? game.option_level : other->option_level);
+			for (const auto &[key, value] : settings.section("sound." + name)) {
+				char *end = nullptr;
+				const double db = std::strtod(value.c_str(), &end);
+
+				if (key == "mode" && mode_named(value))
+					sound.played = played_of(*mode_named(value));
+				else if (key == "option_level" && !value.empty() && !*end && db >= odin::Game::LOWEST_LEVEL &&
+				         db <= odin::Game::HIGHEST_LEVEL)
+					sound.level = static_cast<float>(db);
+			}
+			if (runs && options.sound_asked) {
+				sound.played = options.sound ? played_of(*options.sound) : -1;
+				sound.locked = true;
+			}
+			state.sound_games.push_back(sound);
+		}
 		state.games = games.titles("hikaru");
 		for (const auto &[key, value] : settings.section("menu"))
 			if (key == "classic")
@@ -408,6 +502,8 @@ private:
 	Uint64 m_undo_until = 0;
 	/* Guide is held while an input is caught: the next button goes with it */
 	bool m_catch_guide = false;
+	/* The window is the active one */
+	bool m_focused = true;
 	/* The folder of the save states (empty: the one Odin is started from),
 	 * and the picker of the system that changes the folders */
 	std::string m_states;
@@ -467,6 +563,11 @@ Session::process_events()
 		if (event.type == m_dialog.event()) {
 			take_folder();
 			continue;
+		}
+		if (event.type == SDL_EVENT_WINDOW_FOCUS_GAINED || event.type == SDL_EVENT_WINDOW_FOCUS_LOST) {
+			m_focused = event.type == SDL_EVENT_WINDOW_FOCUS_GAINED;
+			if (m_audio)
+				m_audio->set_heard(m_focused || m_menu_state.background);
 		}
 		if (m_display.menu_shown()) {
 			quit = menu_event(event) || quit;
@@ -533,7 +634,8 @@ Session::menu_event(const SDL_Event &event)
 		m_keys.set(event.key.key, event.key.down);
 		if (is_quit(event.key))
 			return true;
-		if (is_menu(event.key)) {
+		/* Escape closes a list dropped open first */
+		if (is_menu(event.key) && !(event.key.key == SDLK_ESCAPE && m_display.menu_popup_open())) {
 			close_menu();
 			return false;
 		}
@@ -844,6 +946,8 @@ Session::draw_menu()
 		state.pad_states[player] = m_controls.pad_state(player);
 	}
 	state.undo = m_undo_until && SDL_GetTicks() < m_undo_until;
+	if (m_audio)
+		state.devices = m_audio->devices();
 	/* The outputs of the game shown, lit as the board left them */
 	state.outputs.clear();
 	for (const odin::GameOutput &output : m_other ? m_other_outputs : m_game.outputs)
@@ -963,6 +1067,45 @@ Session::apply(const odin::MenuState &was)
 		m_settings.change(m_settings_file, "menu", "classic", on_off(now.classic, false));
 	if (now.verbose != was.verbose)
 		keep("log", "verbose", on_off(now.verbose, false));
+	/* The sound: at once for the game that runs */
+	if (now.device != was.device) {
+		if (m_audio)
+			m_audio->change(m_audio->mode(), now.device);
+		keep("sound", "device", now.device.empty() ? std::nullopt : std::optional(now.device));
+	}
+	if (now.volume != was.volume) {
+		if (m_audio)
+			m_audio->set_volume(static_cast<float>(now.volume) / 100.0f);
+		keep("sound", "volume", number(now.volume, 100));
+	}
+	if (now.background != was.background) {
+		if (m_audio)
+			m_audio->set_heard(m_focused || now.background);
+		keep("sound", "background", on_off(now.background, true));
+	}
+	for (size_t g = 0; g < now.sound_games.size() && g < was.sound_games.size(); g++) {
+		const odin::MenuState::SoundGame &game = now.sound_games[g], &before = was.sound_games[g];
+		const std::string section = "sound." + game.name;
+		const bool runs = game.name == m_game.name && m_audio;
+
+		if (game.played != before.played) {
+			static constexpr const char *MODES[] = { "main", "mix", "quad" };
+
+			if (runs)
+				m_audio->change(mode_of(game.played), now.device);
+			keep(section.c_str(), "mode", game.played == 1 || game.played < 0 ? std::nullopt :
+			                              std::optional<std::string>(MODES[game.played]));
+		}
+		if (game.level != before.level) {
+			char db[16];
+
+			std::snprintf(db, sizeof(db), "%g", static_cast<double>(game.level));
+			if (runs)
+				m_audio->set_option_level(game.level);
+			keep(section.c_str(), "option_level", game.level == game.standard ? std::nullopt :
+			                                      std::optional<std::string>(db));
+		}
+	}
 	/* The programs of lamps: the port opened or closed now */
 	if (now.network != was.network) {
 		if (now.network)
@@ -1137,6 +1280,7 @@ main(int argc, char **argv)
 		std::printf("settings: '%s'\n", settings_file.c_str());
 	read_paths(settings, options);
 	read_display(settings, options);
+	read_sound(settings, options);
 
 	if (!games.has(options.game)) {
 		std::fprintf(stderr, "ERROR: failed to load '%s': game name not in game list\n", options.game.c_str());
@@ -1179,6 +1323,9 @@ main(int argc, char **argv)
 
 	if (!options.sound_asked && game->option_speakers)
 		options.sound = odin::AudioOut::Mode::MIX;
+	for (const auto &[key, value] : settings.section("sound." + game->name))
+		if (key == "mode" && !options.sound_asked && mode_named(value))
+			options.sound = mode_named(value);
 
 	/* The optional board in the mix and on the pad: the list, or the last
 	 * lines of [sound.<game>] */
@@ -1193,6 +1340,8 @@ main(int argc, char **argv)
 			option_level = db;
 		else if (key == "vibration" && (value == "on" || value == "off"))
 			vibration = value == "on";
+		else if (key == "mode" && mode_named(value))
+			continue;
 		else
 			std::fprintf(stderr, "ERROR: settings: [sound.%s]: not right: %s = %s\n", game->name.c_str(),
 			             key.c_str(), value.c_str());
@@ -1203,7 +1352,9 @@ main(int argc, char **argv)
 	if (options.sound && options.unthrottled && options.sound_asked)
 		std::fprintf(stderr, "sound: not with -u\n");
 	else if (options.sound && !options.unthrottled)
-		audio = odin::AudioOut::make(*options.sound, option_level);
+		audio = odin::AudioOut::make(*options.sound, option_level, options.sound_device);
+	if (audio && options.volume != 100)
+		audio->set_volume(static_cast<float>(options.volume) / 100.0f);
 	if (audio && options.sound == odin::AudioOut::Mode::MIX && option_level != 0)
 		std::printf("sound: the optional board at %+g dB in the mix\n", option_level);
 	controls.feel_option_board(vibration && game->option_vibration);

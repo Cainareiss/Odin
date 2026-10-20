@@ -85,7 +85,16 @@ turns that knob, in the section of the game:
  option_level = -15
 
 (-60 to 12 dB; -o quad plays the four channels apart, -o main and
--o option one board alone.) In Racer the second board feeds the vibration
+-o option one board alone; "mode = quad" or "mode = main" in that section
+too.) The menu, page Audio, sets them, and in [sound] the device the sound
+plays on, the volume of Odin and its sound while the window is in the
+background:
+
+ [sound]
+ device = <a name the page lists>
+ volume = 80
+ background = off
+ In Racer the second board feeds the vibration
 device of the control panel, not speakers: the pad of player 1 shakes as
 hard as its sound. In NASCAR the pad of player 1 shakes with the shocks
 the game gives the wheel, not with the hold and the damping that follow
