@@ -47,6 +47,7 @@
 #include "odin/keyboard.hpp"
 #include "odin/log_file.hpp"
 #include "odin/menu.hpp"
+#include "odin/menu_nav.hpp"
 #include "odin/outputs_network.hpp"
 #include "odin/save_folder.hpp"
 #include "odin/settings.hpp"
@@ -375,6 +376,11 @@ known_settings(const odin::GameList &games)
 	out.insert(out.end(), { { "outputs", "network", "off" }, { "paths", "roms", "" },
 	                        { "paths", "saves", odin::SaveFolder::root() }, { "paths", "states", default_states() },
 	                        { "log", "verbose", "off" }, { "menu", "classic", "off" } });
+	for (size_t a = 0; a < odin::MenuNav::ACTIONS; a++) {
+		const auto action = static_cast<odin::MenuNav::Action>(a);
+
+		out.push_back({ "menu", odin::MenuNav::id(action), odin::MenuNav::standard(action) });
+	}
 	for (const auto &[name, title] : games.titles("hikaru")) {
 		const std::optional<odin::Game> game = games.describe(name);
 
@@ -411,7 +417,7 @@ public:
 	        const std::string &settings_file, const odin::GameList &games)
 		: m_options(options), m_game(game), m_board(board), m_display(display), m_keys(keys), m_controls(controls),
 		  m_audio(audio), m_outputs(std::move(outputs)), m_settings(settings), m_settings_file(settings_file),
-		  m_games(games), m_hotkeys(settings), m_paused(false),
+		  m_games(games), m_hotkeys(settings), m_nav(settings), m_paused(false),
 		  m_next(),
 		  m_menu_pictures(0), m_menu_drawn(0),
 		  m_menu_test(static_cast<unsigned>(std::max(odin::env_int("ODIN_MENU_TEST", 0), 0)))
@@ -484,7 +490,7 @@ public:
 		for (const auto &[key, value] : settings.section("menu")) {
 			if (key == "classic" && (value == "on" || value == "off"))
 				state.classic = value == "on";
-			else
+			else if (!odin::MenuNav::knows(key))
 				std::fprintf(stderr, "ERROR: settings: [menu]: not right: %s = %s\n", key.c_str(), value.c_str());
 		}
 		state.shown = state.running = state.games.size();
@@ -515,6 +521,7 @@ private:
 	/* What Odin does on a hotkey in the game: true to quit */
 	bool act(odin::Hotkeys::Action action);
 	bool menu_event(const SDL_Event &event);
+	bool navigate(odin::MenuNav::Action action);
 	void open_menu();
 	void close_menu();
 	void wait_in_menu();
@@ -552,6 +559,7 @@ private:
 	const std::string &m_settings_file;	/* empty: nothing is kept */
 	const odin::GameList &m_games;
 	odin::Hotkeys m_hotkeys;
+	odin::MenuNav m_nav;
 	/* The panel of a game shown that does not run, its controls and its
 	 * outputs */
 	std::vector<odin::GameControl> m_other_controls;
@@ -745,10 +753,49 @@ Session::menu_event(const SDL_Event &event)
 	}
 	if (action == Action::FULLSCREEN)
 		m_display.toggle_fullscreen();
+	/* The menu's own buttons; the keys of a list dropped open are the list's */
+	for (const odin::MenuNav::Action nav : m_nav.event(event)) {
+		if (action || (!pad && m_display.menu_popup_open()) || !navigate(nav))
+			continue;
+		close_menu();
+		m_menu_pictures = MENU_PICTURES;
+		return false;
+	}
 	/* The gamepads are Odin's, not Dear ImGui's */
 	if (!pad)
 		m_display.menu_event(event);
 	m_menu_pictures = MENU_PICTURES;
+	return false;
+}
+
+/* What a button of the menu asks, for its next picture: true for B with no
+ * list dropped open, back to the game */
+bool
+Session::navigate(odin::MenuNav::Action action)
+{
+	using Nav = odin::MenuNav;
+	odin::MenuState::Nav &nav = m_menu_state.nav;
+
+	switch (action) {
+	case Nav::UP: nav.move--; break;
+	case Nav::DOWN: nav.move++; break;
+	case Nav::LEFT: nav.side--; break;
+	case Nav::RIGHT: nav.side++; break;
+	case Nav::PRESS: nav.press = true; break;
+	case Nav::CLEAR: nav.clear = true; break;
+	case Nav::RESET: nav.reset = true; break;
+	case Nav::PAGE_BEFORE: nav.page--; break;
+	case Nav::PAGE_AFTER: nav.page++; break;
+	case Nav::GAME_BEFORE: nav.game--; break;
+	case Nav::GAME_AFTER: nav.game++; break;
+	case Nav::BACK:
+		if (!m_display.menu_popup_open())
+			return true;
+		nav.back = true;
+		break;
+	default:
+		break;
+	}
 	return false;
 }
 
@@ -774,6 +821,8 @@ void
 Session::close_menu()
 {
 	m_display.close_menu();
+	m_nav.reset();
+	m_menu_state.nav = {};
 	m_keys.swallow();
 	if (m_audio)
 		m_audio->pause(false);
@@ -1119,6 +1168,22 @@ Session::draw_menu()
 		state.pad_types[player] = m_controls.pad_type(player);
 		state.pad_states[player] = m_controls.pad_state(player);
 	}
+	/* The pills of the pages and the games: the first button of each, as
+	 * the pad of player 1 (else 2) names it */
+	{
+		using Nav = odin::MenuNav;
+		const int kind = !state.pads[0].empty() ? state.pad_types[0] :
+		                 !state.pads[1].empty() ? state.pad_types[1] : SDL_GAMEPAD_TYPE_UNKNOWN;
+		const Nav::Action pills[] = { Nav::PAGE_BEFORE, Nav::PAGE_AFTER, Nav::GAME_BEFORE, Nav::GAME_AFTER };
+
+		for (size_t i = 0; i < state.pills.size(); i++) {
+			const std::vector<odin::HostInput> &inputs = m_nav.inputs(pills[i]);
+			const auto pad = std::find_if(inputs.begin(), inputs.end(),
+			                              [](const odin::HostInput &in) { return in.kind == odin::HostInput::Kind::PAD; });
+
+			state.pills[i] = pad == inputs.end() ? std::string() : odin::Menu::input_name(pad->pad, kind);
+		}
+	}
 	state.undo = m_undo_until && SDL_GetTicks() < m_undo_until;
 	for (size_t a = 0; a < odin::Hotkeys::ACTIONS; a++)
 		state.hotkeys[a] = m_hotkeys.of(static_cast<odin::Hotkeys::Action>(a));
@@ -1163,6 +1228,7 @@ Session::draw_menu()
 	const odin::MenuState was = state;
 
 	m_display.draw_menu(state);
+	state.nav = {};
 	apply(was);
 
 	if (state.hotkeys_default) {

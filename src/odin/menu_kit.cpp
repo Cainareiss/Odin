@@ -565,7 +565,8 @@ MenuKit::icon(ImDrawList *list, Icon icon, ImVec2 at, float side, ImU32 colour)
 }
 
 bool
-MenuKit::tabs(std::span<const char *const> names, std::span<const Icon> icons, bool narrow, int &chosen) const
+MenuKit::tabs(std::span<const char *const> names, std::span<const Icon> icons, bool narrow, int &chosen,
+              std::span<const std::string> pills) const
 {
 	ImDrawList *const list = ImGui::GetWindowDrawList();
 	const ImVec2 at = ImGui::GetCursorScreenPos();
@@ -577,13 +578,24 @@ MenuKit::tabs(std::span<const char *const> names, std::span<const Icon> icons, b
 	const auto tab_w = [&](size_t i) {
 		return side + (shows(i) ? space + ImGui::CalcTextSize(names[i]).x : 0.0f) + 2.0f * wide;
 	};
-	float total = -gap;
+	const auto pill_w = [&](size_t i) { return i < pills.size() && !pills[i].empty() ? pill_size(pills[i].c_str()).x : 0.0f; };
+	const float pills_room = px(12.0f);
+	float total = -gap + pill_w(0) + pill_w(1) + (pill_w(0) > 0.0f ? pills_room : 0.0f) +
+	              (pill_w(1) > 0.0f ? pills_room : 0.0f);
 
 	for (size_t i = 0; i < names.size(); i++)
 		total += tab_w(i) + gap;
 
 	float x = at.x + std::max(0.0f, (width - total) / 2.0f);
+	const auto draw_pill = [&](size_t i) {
+		const ImVec2 size = pill_size(pills[i].c_str());
 
+		pill(list, { x, at.y + (h - size.y) / 2.0f }, pills[i].c_str());
+		x += size.x + pills_room;
+	};
+
+	if (pill_w(0) > 0.0f)
+		draw_pill(0);
 	for (size_t i = 0; i < names.size(); i++) {
 		const float w = tab_w(i);
 		const ImVec2 a = { x, at.y }, b = { x + w, at.y + h };
@@ -602,6 +614,10 @@ MenuKit::tabs(std::span<const char *const> names, std::span<const Icon> icons, b
 		if (shows(i))
 			list->AddText({ a.x + wide + side + space, a.y + high }, colour, names[i]);
 		x += w + gap;
+	}
+	if (pill_w(1) > 0.0f) {
+		x += pills_room - gap;
+		draw_pill(1);
 	}
 	ImGui::SetCursorScreenPos(at);
 	ImGui::Dummy({ width, h });

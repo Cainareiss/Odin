@@ -174,6 +174,12 @@ and the controls of the page Input as a list rather than on the drawing
  [menu]
  classic = on
 
+In the menu, LB and RB of a gamepad change the page, LT and RT the game,
+B goes back (a list dropped open closes first, else the game goes on);
+[menu] gives them other inputs, as [controls.<game>] does: page_before,
+page_after, game_before, game_after, back, and up, down, left, right,
+press, clear, default for the frame that moves on the pages.
+
 Odin writes every key it knows in odin.ini, at the start, those at their
 value by default as comments ("# volume = 100"): taking the # away and
 changing the value changes it. The menu writes a change in place, and

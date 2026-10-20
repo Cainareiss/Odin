@@ -628,6 +628,12 @@ route(const Label &label, float from, float knee, std::span<const std::pair<ImVe
 } /* namespace */
 
 std::string
+Menu::input_name(const PadInput &pad, int kind)
+{
+	return pad_label(pad, kind);
+}
+
+std::string
 Menu::button_name(int button, int kind)
 {
 	PadInput pad{};
@@ -638,7 +644,8 @@ Menu::button_name(int button, int kind)
 }
 
 /* The games, the one shown marked and the one that runs dotted; when they
- * do not fit, the one shown between arrows. Its bottom. */
+ * do not fit, the one shown between arrows; the pills of the buttons of a
+ * gamepad that change it at the ends. Its bottom. */
 float
 Menu::games_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width)
 {
@@ -656,6 +663,18 @@ Menu::games_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width)
 	if (names.empty())
 		return at.y;
 
+	const std::string &before = state.pills[2], &after = state.pills[3];
+	const float pills = (before.empty() ? 0.0f : kit.pill_size(before.c_str()).x + spacing) +
+	                    (after.empty() ? 0.0f : kit.pill_size(after.c_str()).x + spacing);
+	const auto pill = [&](const std::string &name, float &x, float h) {
+		if (name.empty())
+			return;
+
+		const ImVec2 size = kit.pill_size(name.c_str());
+
+		kit.pill(list, { x, at.y + (h - size.y) / 2.0f }, name.c_str());
+		x += size.x + spacing;
+	};
 	const auto title = [&](size_t g, ImVec2 p, bool clickable) {
 		const float w = MenuKit::measure(names[g].c_str(), 0.0f, letters);
 		const bool shown = g == state.shown;
@@ -678,11 +697,13 @@ Menu::games_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width)
 		return w + 4.0f * dot;
 	};
 
-	if (total - spacing <= width) {
-		float x = at.x + (width - total + spacing) / 2.0f;
+	if (total - spacing + pills <= width) {
+		float x = at.x + (width - total + spacing - pills) / 2.0f;
 
+		pill(before, x, line);
 		for (size_t g = 0; g < names.size(); g++)
 			x += title(g, { x, at.y }, true) + spacing;
+		pill(after, x, line);
 		return at.y + line + kit.px(4.0f);
 	}
 
@@ -691,8 +712,9 @@ Menu::games_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width)
 	const ImVec2 arrow = kit.arrow_size();
 	const float w = MenuKit::measure(names[shown].c_str(), 0.0f, letters) + 4.0f * dot;
 	const float dots = static_cast<float>(n) * kit.px(9.0f);
-	float x = at.x + (width - (2.0f * arrow.x + w + 2.0f * spacing + spacing + dots)) / 2.0f;
+	float x = at.x + (width - (2.0f * arrow.x + w + 2.0f * spacing + spacing + dots + pills)) / 2.0f;
 
+	pill(before, x, arrow.y);
 	ImGui::PushID("games");
 	if (kit.arrow("before", { x, at.y }, false))
 		state.show = (shown + n - 1) % n;
@@ -706,6 +728,8 @@ Menu::games_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width)
 	for (size_t g = 0; g < n; g++)
 		list->AddCircleFilled({ x + kit.px(4.5f) + static_cast<float>(g) * kit.px(9.0f), at.y + arrow.y / 2.0f }, dot,
 		                      g == shown ? palette.ink : palette.outline);
+	x += dots + spacing;
+	pill(after, x, arrow.y);
 	return at.y + arrow.y;
 }
 

@@ -169,6 +169,18 @@ struct MenuState {
 	uint64_t mapping_since = 0;
 	enum class Ask { NONE, DEFAULTS, CLEAR, UNDO } ask = Ask::NONE;
 	bool undo = false;
+
+	/* What the gamepad asked since the last picture (menu_nav.hpp): the
+	 * page or the game before (-1) or after (1), the frame of focus moved
+	 * up or down, a choice or a slider moved, pressed, cleared or set to
+	 * its default; a list dropped open closed */
+	struct Nav {
+		int page = 0, game = 0, move = 0, side = 0;
+		bool press = false, clear = false, reset = false, back = false;
+	} nav;
+	/* The names of the buttons that change the page and the game, before
+	 * and after, on the gamepad of player 1 (empty: no pill) */
+	std::array<std::string, 4> pills;
 };
 
 /* The menu of Odin, drawn with Dear ImGui over the picture of the last
@@ -185,6 +197,10 @@ public:
 	~Menu();
 	Menu(const Menu &) = delete;
 	Menu &operator=(const Menu &) = delete;
+
+	/* An input of a gamepad of that kind (pad_drawing.hpp), as its maker
+	 * prints it */
+	static std::string input_name(const PadInput &pad, int kind);
 
 	/* The thread of the board */
 	void open();
@@ -206,6 +222,7 @@ private:
 	enum Page { INPUT, DISPLAY, AUDIO, HOTKEYS, OUTPUTS, PATHS, ABOUT, PAGES };
 
 	void follow_scale();
+	void navigate(MenuState &state);
 	void page_input(MenuKit &kit, MenuState &state) const;
 	void page_display(MenuKit &kit, MenuState &state) const;
 	void page_audio(MenuKit &kit, MenuState &state) const;

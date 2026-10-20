@@ -273,6 +273,41 @@ Menu::popup_open() const
 	return ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel);
 }
 
+/* What a gamepad asks: the page or the game before or after (the games of
+ * the pages that show them); a list dropped open takes the moves, A and B
+ * as the keys of its list */
+void
+Menu::navigate(MenuState &state)
+{
+	MenuState::Nav &nav = state.nav;
+
+	if (nav.page) {
+		m_page = (m_page + PAGES + nav.page % PAGES) % PAGES;
+		nav = {};
+	}
+	if (const int n = static_cast<int>(state.games.size()); nav.game && n && (m_page == INPUT || m_page == OUTPUTS)) {
+		const int shown = static_cast<int>(std::min(state.shown, state.games.size() - 1));
+
+		state.show = static_cast<size_t>((shown + nav.game % n + n) % n);
+	}
+	if (!popup_open())
+		return;
+
+	ImGuiIO &io = ImGui::GetIO();
+	const auto tap = [&io](ImGuiKey key) {
+		io.AddKeyEvent(key, true);
+		io.AddKeyEvent(key, false);
+	};
+
+	for (int i = 0; i < std::abs(nav.move); i++)
+		tap(nav.move < 0 ? ImGuiKey_UpArrow : ImGuiKey_DownArrow);
+	if (nav.press)
+		tap(ImGuiKey_Enter);
+	if (nav.back)
+		tap(ImGuiKey_Escape);
+	nav = {};
+}
+
 /* The menu grows with the window, by one factor for all (mock-up v50): as
  * much as the menu made for 640 by 480, or 960 by 540 in a wide window,
  * takes to fill its share one way, the other way given the room left;
@@ -305,6 +340,7 @@ Menu::build(MenuState &state)
 {
 	ImGui::SetCurrentContext(m_imgui);
 	follow_scale();
+	navigate(state);
 	ImGui_ImplSDL3_NewFrame();
 	ImGui::NewFrame();
 
@@ -324,7 +360,7 @@ Menu::build(MenuState &state)
 	ImDrawList *const list = ImGui::GetWindowDrawList();
 
 	kit.frame(list, a, b, kit.px(CUT), palette.frame, palette.outline);
-	kit.tabs(TABS, TAB_ICONS, room.x < WIDE * room.y, m_page);
+	kit.tabs(TABS, TAB_ICONS, room.x < WIDE * room.y, m_page, { state.pills.data(), 2 });
 	under_tabs(list, a.x + w * LINE_ENDS, b.x - w * LINE_ENDS, ImGui::GetCursorScreenPos().y + kit.px(LINE_UNDER),
 	           kit.stroke(), MenuKit::alpha(palette.accent, LINE_ALPHA));
 	ImGui::Dummy({ 0.0f, kit.px(LINE_ROOM) });
