@@ -808,10 +808,13 @@ Menu::page_paths(MenuKit &kit, MenuState &state) const
 	kit.end_group();
 
 	kit.begin_group("LOG");
+	kit.value("Log file", "what Odin says, kept from its last launch; the one before in odin-previous.log",
+	          shown_path(state.log_file, "none: ODIN_LOG=none").c_str(), nullptr, "READ ONLY");
+
 	int verbose = state.verbose ? 0 : 1;
 
-	if (kit.choice("Detailed log", "each access of the board, in the terminal; Odin runs far slower · at the next "
-	               "launch", ON_OFF, verbose, state.verbose_given ? "set by the command line: -v" : nullptr))
+	if (kit.choice("Detailed log", "each access of the board, in the terminal and the log file; Odin runs far "
+	               "slower · at the next launch", ON_OFF, verbose, state.verbose_given ? "set by the command line: -v" : nullptr))
 		state.verbose = verbose == 0;
 	kit.end_group();
 }

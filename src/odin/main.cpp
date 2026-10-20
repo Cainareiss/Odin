@@ -45,6 +45,7 @@
 #include "odin/hotkeys.hpp"
 #include "odin/controls.hpp"
 #include "odin/keyboard.hpp"
+#include "odin/log_file.hpp"
 #include "odin/menu.hpp"
 #include "odin/outputs_network.hpp"
 #include "odin/save_folder.hpp"
@@ -58,6 +59,8 @@ struct Options {
 	 * odin.ini gives (empty: by default) */
 	std::string saves, states;
 	std::string game;
+	/* The file of what Odin says; empty: none */
+	std::string log_file;
 	unsigned num_frames = 0;
 	std::string state_path;
 	std::vector<unsigned> save_frames;
@@ -391,6 +394,7 @@ public:
 		state.saves_given = saves && saves[0];
 		state.states = m_states = options.states.empty() ? default_states() : options.states;
 		state.settings_file = settings_file;
+		state.log_file = options.log_file;
 		state.shader_lists = std::filesystem::path(display.program_list()).parent_path().string();
 		state.verbose = options.verbose;
 		state.verbose_given = options.given.verbose;
@@ -1387,6 +1391,10 @@ main(int argc, char **argv)
 	/* With the OpenGL driver of Intel loaded, a process of Windows ends
 	 * without what its buffers still hold: it goes out here. */
 	std::atexit([] { std::fflush(nullptr); });
+
+	/* What Odin says goes to odin.log too, from its first line */
+	if (const std::string log = odin::LogFile::path(); odin::LogFile::start(log))
+		options.log_file = log;
 
 	std::printf("Odin, Copyright(C) 2026 Réda Chérif-Touil\n");
 	std::printf("A hard fork of Valkyrie, Copyright(C) 2011-2013 Stefano Teso\n");

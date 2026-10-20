@@ -113,7 +113,7 @@ struct MenuState {
 	 * changed), of the save states; the settings file and the lists of the
 	 * 3D programs (empty: none). The board saying each access, at the next
 	 * launch. */
-	std::string roms, saves, states, settings_file, shader_lists;
+	std::string roms, saves, states, settings_file, shader_lists, log_file;
 	bool roms_given = false, saves_given = false;
 	bool verbose = false, verbose_given = false;
 	/* A folder to ask the system for; its picker is open; the system has
