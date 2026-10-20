@@ -167,6 +167,24 @@ capitals(std::string text)
 	return text;
 }
 
+/* A text cut to that width, three dots where it is cut */
+std::string
+fitted(const std::string &text, float width)
+{
+	if (ImGui::CalcTextSize(text.c_str()).x <= width)
+		return text;
+
+	const float dots = ImGui::CalcTextSize("...").x;
+	size_t n = text.size();
+
+	while (n > 0 && ImGui::CalcTextSize(text.c_str(), text.c_str() + n).x + dots > width)
+		n--;
+	/* not in the middle of a character of UTF-8 */
+	while (n > 0 && (static_cast<unsigned char>(text[n]) & 0xC0) == 0x80)
+		n--;
+	return text.substr(0, n) + "...";
+}
+
 bool
 same(const std::optional<MenuSlot> &a, const MenuSlot &b)
 {
@@ -776,7 +794,8 @@ draw_label(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows,
 		list->AddCircleFilled(l.line.back(), kit.px(DOT), rest);
 	}
 
-	const float line = ImGui::GetTextLineHeight(), w = std::min(ImGui::CalcTextSize(l.text.c_str()).x, room);
+	const std::string text = fitted(l.text, room);
+	const float line = ImGui::GetTextLineHeight(), w = ImGui::CalcTextSize(text.c_str()).x;
 	const ImVec2 at = { l.left ? edge - kit.px(6.0f) - w : edge + kit.px(6.0f), l.y - line / 2.0f };
 
 	ImGui::SetCursorScreenPos(at);
@@ -791,9 +810,7 @@ draw_label(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows,
 
 	const ImU32 colour = l.hot || l.chosen ? palette.accent : ImGui::IsItemHovered() ? palette.dim : palette.ink;
 
-	list->PushClipRect(at, { at.x + w, at.y + line + 1.0f }, true);
-	list->AddText(at, colour, l.text.c_str());
-	list->PopClipRect();
+	list->AddText(at, colour, text.c_str());
 	if (l.hot)
 		list->AddLine({ at.x, at.y + line + kit.px(1.0f) }, { at.x + w, at.y + line + kit.px(1.0f) }, colour, 1.0f);
 }
@@ -820,13 +837,12 @@ draw_elsewhere(const MenuKit &kit, const MenuState &state, std::span<const Input
 	const bool left = last(true) <= last(false);
 	float y = std::max(last(left) + gap * 1.6f, bottom - static_cast<float>(sorted.elsewhere.size() - 1) * gap);
 
-	for (const auto &[r, text] : sorted.elsewhere) {
-		const float tw = std::min(w, ImGui::CalcTextSize(text.c_str()).x);
+	for (const auto &[r, whole] : sorted.elsewhere) {
+		const std::string text = fitted(whole, w);
+		const float tw = ImGui::CalcTextSize(text.c_str()).x;
 		const ImVec2 at = { left ? a.x + kit.px(6.0f) : b.x - kit.px(6.0f) - tw, y - line / 2.0f };
 
-		list->PushClipRect(at, { at.x + w, at.y + line }, true);
 		list->AddText(at, same(state.catching, rows[r].slot) ? kit.palette().accent : kit.palette().dim, text.c_str());
-		list->PopClipRect();
 		y += gap;
 	}
 }
@@ -879,26 +895,38 @@ pad_box(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, Im
 void
 list_box(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, ImVec2 a, ImVec2 b, float corner)
 {
-	ImDrawList *const list = ImGui::GetWindowDrawList();
+	ImDrawList *list = ImGui::GetWindowDrawList();
 	const MenuPalette &palette = kit.palette();
 	const auto type = static_cast<SDL_GamepadType>(state.pad_types[state.player & 1]);
 	const float line = ImGui::GetTextLineHeight(), gap = kit.px(28.0f), wide = kit.px(8.0f), high = kit.px(2.0f);
-	const ImVec2 lo = { a.x + kit.px(14.0f), a.y + kit.px(BOX_INSIDE) + corner };
+	ImVec2 lo = { a.x + kit.px(14.0f), a.y + kit.px(BOX_INSIDE) + corner };
 	const ImVec2 hi = { b.x - kit.px(14.0f), b.y - kit.px(BOX_INSIDE) };
-	const float column = (hi.x - lo.x - gap) / 2.0f;
 	const size_t half = (rows.size() + 1) / 2;
-	/* As high as the room leaves them, at most as in the mock-up */
+	/* As high as the room leaves them, at most as in the mock-up; when
+	 * they do not fit, the list scrolls, its bar beside the columns */
 	const float h = std::clamp((hi.y - lo.y) / static_cast<float>(std::max<size_t>(half, 1)), line + 2.0f * high + kit.px(2.0f),
 	                           line + kit.px(16.0f));
-	const float top = std::max(lo.y, (lo.y + hi.y - static_cast<float>(half) * h) / 2.0f);
+	const bool scrolls = static_cast<float>(half) * h > hi.y - lo.y;
+	const float column = (hi.x - lo.x - gap - (scrolls ? ImGui::GetStyle().ScrollbarSize : 0.0f)) / 2.0f;
+
+	if (scrolls) {
+		ImGui::SetCursorScreenPos(lo);
+		ImGui::BeginChild("list", { hi.x - lo.x, hi.y - lo.y }, ImGuiChildFlags_None, ImGuiWindowFlags_NoBackground);
+		lo = ImGui::GetCursorScreenPos();
+		list = ImGui::GetWindowDrawList();
+	}
+
+	const float top = scrolls ? lo.y : std::max(lo.y, (lo.y + hi.y - static_cast<float>(half) * h) / 2.0f);
 
 	for (size_t r = 0; r < rows.size(); r++) {
 		const InputRow &row = rows[r];
 		const bool second = r >= half, chosen = same(state.catching, row.slot);
 		const ImVec2 at = { lo.x + (second ? column + gap : 0.0f), top + static_cast<float>(second ? r - half : r) * h };
-		const std::string inputs = chosen ? "press..." : row.inputs.empty() ? "-" : labels(row.inputs, type);
-		const float chip = std::min(column / 2.0f, ImGui::CalcTextSize(inputs.c_str()).x + 2.0f * wide);
+		const std::string inputs = fitted(chosen ? "press..." : row.inputs.empty() ? "-" : labels(row.inputs, type),
+		                                  column / 2.0f - 2.0f * wide);
+		const float chip = ImGui::CalcTextSize(inputs.c_str()).x + 2.0f * wide;
 		const ImVec2 ca = { at.x + column - chip, at.y + (h - line) / 2.0f - high };
+		const std::string name = fitted(row.name, column - chip - kit.px(14.0f));
 		const ImVec2 cb = { at.x + column, ca.y + line + 2.0f * high };
 
 		ImGui::SetCursorScreenPos(at);
@@ -916,18 +944,19 @@ list_box(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, I
 		if (hovered)
 			list->AddRectFilled(at, { at.x + column, at.y + h }, palette.hover);
 		list->AddLine({ at.x, at.y + h }, { at.x + column, at.y + h }, palette.line, 1.0f);
-		list->PushClipRect(at, { ca.x - kit.px(10.0f), at.y + h }, true);
 		list->AddText({ at.x + kit.px(4.0f), at.y + (h - line) / 2.0f }, row.lit || chosen ? palette.accent : palette.ink,
-		              row.name.c_str());
-		list->PopClipRect();
+		              name.c_str());
 		if (row.inputs.empty() && !chosen)
 			kit.dashed_frame(list, ca, cb, palette.outline);
 		else
 			MenuKit::frame(list, ca, cb, kit.px(3.0f), 0, chosen || row.lit ? palette.accent : palette.outline);
-		list->PushClipRect(ca, cb, true);
 		list->AddText({ ca.x + wide, ca.y + high }, chosen ? palette.accent : row.inputs.empty() ? palette.faint : palette.ink,
 		              inputs.c_str());
-		list->PopClipRect();
+	}
+	if (scrolls) {
+		ImGui::SetCursorScreenPos(lo);
+		ImGui::Dummy({ hi.x - lo.x, static_cast<float>(half) * h });
+		ImGui::EndChild();
 	}
 }
 
