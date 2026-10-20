@@ -58,10 +58,14 @@ constexpr float SHARE = 0.88f;
 constexpr float CUT = 8.0f;
 constexpr float PADDING = 10.0f;
 /* The line under the tabs, of the accent of the palette: what it leaves
- * at each end of the width, where it fades in and out, its opacity */
-constexpr float LINE_ENDS = 0.11f;
-constexpr float LINE_FADE = 0.22f;
+ * at each end of the width (it spans the row of the games under it), how
+ * much of it fades in and out at each end, its opacity; how far under the
+ * tabs it is, and the room under it, in points */
+constexpr float LINE_ENDS = 0.04f;
+constexpr float LINE_FADE = 0.08f;
 constexpr float LINE_ALPHA = 0.85f;
+constexpr float LINE_UNDER = 2.0f;
+constexpr float LINE_ROOM = 9.0f;
 
 /* The tabs of the pages, in the order of Menu::Page */
 constexpr const char *TABS[] = { "Input", "Display", "Audio", "Hotkeys", "Outputs", "Paths", "About" };
@@ -321,9 +325,9 @@ Menu::build(MenuState &state)
 
 	kit.frame(list, a, b, kit.px(CUT), palette.frame, palette.faint);
 	kit.tabs(TABS, TAB_ICONS, room.x < WIDE * room.y, m_page);
-	under_tabs(list, a.x + w * LINE_ENDS, b.x - w * LINE_ENDS, ImGui::GetCursorScreenPos().y + kit.px(3.0f), kit.stroke(),
-	           MenuKit::alpha(palette.accent, LINE_ALPHA));
-	ImGui::Dummy({ 0.0f, kit.px(5.0f) });
+	under_tabs(list, a.x + w * LINE_ENDS, b.x - w * LINE_ENDS, ImGui::GetCursorScreenPos().y + kit.px(LINE_UNDER),
+	           kit.stroke(), MenuKit::alpha(palette.accent, LINE_ALPHA));
+	ImGui::Dummy({ 0.0f, kit.px(LINE_ROOM) });
 
 	/* What the page says at the bottom, beside the keys, on as many lines
 	 * as it takes, under a line: the page above it. Input says it with
