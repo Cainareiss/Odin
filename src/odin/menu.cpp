@@ -45,19 +45,23 @@ constexpr std::array<std::pair<const char *, const char *>, 2> MENU_HINTS = { {
 	{ SDL_HINT_MOUSE_AUTO_CAPTURE, "0" },
 } };
 
-/* The menu takes the whole window, made for one of 640 by 480 points
- * (a window nearly square) or 960 by 540 (16:9 and wider), then larger by
- * one factor as the window grows (mock-up v50); its padding, in points */
+/* The menu is made for 640 by 480 points (a window nearly square) or 960
+ * by 540 (16:9 and wider), then larger by one factor as the window grows
+ * (mock-up v50). It takes that share of the window, the game around it, at
+ * the least the size it is made for where the window has room for it. The
+ * cut of its corners and its padding, in points. */
 constexpr float COMPACT_W = 640.0f;
 constexpr float COMPACT_H = 480.0f;
 constexpr float LARGE_W = 960.0f;
 constexpr float LARGE_H = 540.0f;
+constexpr float SHARE = 0.88f;
+constexpr float CUT = 8.0f;
 constexpr float PADDING = 10.0f;
-/* The line under the tabs: what it leaves at each end of the width, where
- * it fades in and out; ochre while a control of Input is touched */
+/* The line under the tabs, of the accent of the palette: what it leaves
+ * at each end of the width, where it fades in and out, its opacity */
 constexpr float LINE_ENDS = 0.11f;
 constexpr float LINE_FADE = 0.22f;
-constexpr float LINE_HOT = 0.85f;
+constexpr float LINE_ALPHA = 0.85f;
 
 /* The tabs of the pages, in the order of Menu::Page */
 constexpr const char *TABS[] = { "Input", "Display", "Audio", "Hotkeys", "Outputs", "Paths", "About" };
@@ -67,6 +71,16 @@ constexpr MenuKit::Icon TAB_ICONS[] = { MenuKit::Icon::INPUT, MenuKit::Icon::DIS
 /* A window this many times wider than high takes the large menu; a
  * narrower one has the names of the tabs not chosen left out */
 constexpr float WIDE = 1.5f;
+
+/* The size of the menu in a window of that size, and the size it is made
+ * for */
+std::pair<ImVec2, ImVec2>
+menu_size(float w, float h)
+{
+	const ImVec2 made = w >= WIDE * h ? ImVec2{ LARGE_W, LARGE_H } : ImVec2{ COMPACT_W, COMPACT_H };
+
+	return { { std::min(w, std::max(w * SHARE, made.x)), std::min(h, std::max(h * SHARE, made.y)) }, made };
+}
 
 /* The window at start, that many times the screen; its sizes shorter
  * where the row is narrow */
@@ -257,8 +271,8 @@ Menu::popup_open() const
 
 /* The menu grows with the window, by one factor for all (mock-up v50): as
  * much as the menu made for 640 by 480, or 960 by 540 in a wide window,
- * takes to fill it one way, the other way given the room left; never
- * smaller. In points: the pixels of a dense display are SDL's. */
+ * takes to fill its share one way, the other way given the room left;
+ * never smaller. In points: the pixels of a dense display are SDL's. */
 void
 Menu::follow_scale()
 {
@@ -266,9 +280,8 @@ Menu::follow_scale()
 
 	SDL_GetWindowSize(m_window, &w, &h);
 
-	const float fw = static_cast<float>(w), fh = static_cast<float>(h);
-	const bool large = fw >= WIDE * fh;
-	const float scale = std::max(1.0f, std::min(fw / (large ? LARGE_W : COMPACT_W), fh / (large ? LARGE_H : COMPACT_H)));
+	const auto [size, made] = menu_size(static_cast<float>(w), static_cast<float>(h));
+	const float scale = std::max(1.0f, std::min(size.x / made.x, size.y / made.y));
 
 	if (scale == m_scale)
 		return;
@@ -281,8 +294,8 @@ Menu::follow_scale()
 	m_scale = scale;
 }
 
-/* The whole window: the tabs at the top, the page under them, what it
- * says and what the keys do at the bottom */
+/* The frame in the middle of the window: the tabs at the top, the page
+ * under them, what it says and what the keys do at the bottom */
 void
 Menu::build(MenuState &state)
 {
@@ -293,22 +306,23 @@ Menu::build(MenuState &state)
 
 	MenuKit kit(RUNASTEINN, m_scale);
 	const MenuPalette &palette = kit.palette();
-	const ImVec2 a = { 0.0f, 0.0f }, b = ImGui::GetIO().DisplaySize;
-	const float w = b.x, line = ImGui::GetTextLineHeight(), pad = kit.px(PADDING), foot_pad = kit.px(6.0f);
+	const ImVec2 room = ImGui::GetIO().DisplaySize;
+	const ImVec2 size = menu_size(room.x, room.y).first;
+	const ImVec2 a = { std::round((room.x - size.x) / 2.0f), std::round((room.y - size.y) / 2.0f) };
+	const ImVec2 b = { a.x + size.x, a.y + size.y };
+	const float w = size.x, line = ImGui::GetTextLineHeight(), pad = kit.px(PADDING), foot_pad = kit.px(6.0f);
 
 	ImGui::SetNextWindowPos(a);
-	ImGui::SetNextWindowSize(b);
+	ImGui::SetNextWindowSize(size);
 	ImGui::Begin("Odin", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
 	             ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBackground);
 
 	ImDrawList *const list = ImGui::GetWindowDrawList();
-	const bool touched = std::any_of(state.touched.begin(), state.touched.end(), [](bool t) { return t; });
-	const bool hot = m_page == INPUT && (state.catching || touched);
 
-	list->AddRectFilled(a, b, palette.frame);
-	kit.tabs(TABS, TAB_ICONS, b.x < WIDE * b.y, m_page);
+	kit.frame(list, a, b, kit.px(CUT), palette.frame, palette.faint);
+	kit.tabs(TABS, TAB_ICONS, room.x < WIDE * room.y, m_page);
 	under_tabs(list, a.x + w * LINE_ENDS, b.x - w * LINE_ENDS, ImGui::GetCursorScreenPos().y + kit.px(3.0f), kit.stroke(),
-	           hot ? MenuKit::alpha(palette.accent, LINE_HOT) : palette.outline);
+	           MenuKit::alpha(palette.accent, LINE_ALPHA));
 	ImGui::Dummy({ 0.0f, kit.px(5.0f) });
 
 	/* What the page says at the bottom, beside the keys, on as many lines
