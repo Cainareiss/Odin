@@ -78,6 +78,10 @@ struct HostInput {
 	/* "key:Left Ctrl", "pad:a", "pad:-lefty", "pad:lefty:invert",
 	 * "mouse:left", "mouse:x"; nothing for what is not one */
 	static std::optional<HostInput> parse(std::string_view text);
+	/* And back: what parse reads; a list with ", " between */
+	std::string text() const;
+	static std::string text(const std::vector<HostInput> &inputs);
+	bool operator==(const HostInput &other) const { return text() == other.text(); }
 	/* The axis of a pad or where the mouse points: a channel */
 	bool is_axis() const
 	{
@@ -115,6 +119,20 @@ public:
 	/* Those of a role of the cabinet */
 	const std::vector<HostInput> &cabinet(Role role) const;
 
+	/* A line of [controls.<game>]: its key, and its value; none when the
+	 * inputs are the defaults (the line can go) */
+	struct Line {
+		std::string key;
+		std::optional<std::string> value;
+	};
+	/* The line that gives those inputs to a part of a control: 0 the
+	 * control (the axes of an analog one), 1 and 2 a lever down and up, an
+	 * analog control left or up and right or down, 2 what presses a pedal.
+	 * A pedal has one line for its axes and what presses it: the part not
+	 * given stays as it is. */
+	Line line(size_t control, unsigned part, const std::vector<HostInput> &inputs) const;
+	Line cabinet_line(Role role, const std::vector<HostInput> &inputs) const;
+
 	/* The defaults of a role of a player; for a role of the cabinet the
 	 * player does not count. */
 	static std::vector<HostInput> defaults(Role role, unsigned player);
@@ -123,8 +141,10 @@ public:
 	static std::vector<HostInput> keys_toward(Role role, unsigned player, bool positive);
 
 private:
-	std::vector<std::array<std::vector<HostInput>, 3>> m_controls;
-	std::array<std::vector<HostInput>, 5> m_cabinet;
+	std::vector<GameControl> m_panel;
+	/* As the settings leave them, and before them: the defaults */
+	std::vector<std::array<std::vector<HostInput>, 3>> m_controls, m_defaults;
+	std::array<std::vector<HostInput>, 5> m_cabinet, m_cabinet_defaults;
 };
 
 } /* namespace odin */

@@ -425,6 +425,79 @@ void test_own_keys()
 
 } /* namespace */
 
+/* An input back to its text, which reads the same; a list of them */
+void test_text()
+{
+	for (const char *text : { "key:Left Ctrl", "key:Z", "key:F2", "key:Return", "pad:a", "pad:start", "pad:-lefty",
+	                          "pad:+rightx", "pad:lefty:invert", "pad:righttrigger", "pad:leftshoulder",
+	                          "mouse:left", "mouse:middle", "mouse:right", "mouse:x", "mouse:y", "mouse:off" }) {
+		const auto input = HostInput::parse(text);
+
+		check(input && input->text() == text && HostInput::parse(input->text()) == input, text);
+	}
+	check(HostInput::text({ *HostInput::parse("key:A"), *HostInput::parse("pad:b") }) == "key:A, pad:b",
+	      "a list, with a comma");
+	check(HostInput::text({}).empty(), "no input: nothing");
+	check(*HostInput::parse("pad:a") == *HostInput::parse("pad:a") && !(*HostInput::parse("pad:a") == *HostInput::parse("pad:b")),
+	      "the same input is equal, another is not");
+}
+
+/* The line a part of a control is written to: none for its defaults */
+void test_lines_to_write()
+{
+	GameControl gas = control("gas", GameControl::Type::ANALOG, Role::ACCEL, 0);
+	GameControl stick = control("stick", GameControl::Type::ANALOG, Role::STICK_Y, 0);
+
+	gas.low = GameControl::Low::RELEASED;
+	stick.low = GameControl::Low::DOWN;
+
+	const std::vector<GameControl> panel = { control("view", GameControl::Type::BUTTON, Role::BUTTON4, 0),
+	                                         control("gear", GameControl::Type::POSITIONS, Role::GEAR, 0), gas, stick };
+	const Bindings plain(panel, Settings(), "sgnascar");
+	const auto key = [](const char *name) { return *HostInput::parse(name); };
+
+	Bindings::Line line = plain.line(0, 0, plain.of(0));
+
+	check(line.key == "view" && !line.value, "a button with its defaults: no value, the line can go");
+	line = plain.line(0, 0, { key("key:Q"), key("pad:y") });
+	check(line.key == "view" && line.value == "key:Q, pad:y", "a button changed");
+	line = plain.line(0, 0, {});
+	check(line.key == "view" && line.value && line.value->empty(), "a button without inputs: an empty value");
+	line = plain.line(1, 2, { key("key:W") });
+	check(line.key == "gear_up" && line.value == "key:W", "a lever up");
+	line = plain.line(1, 1, plain.lever(1, false));
+	check(line.key == "gear_down" && !line.value, "a lever down with its defaults");
+	line = plain.line(3, 1, { key("key:I") });
+	check(line.key == "stick_up" && line.value == "key:I", "an analog control: its half that goes up");
+	line = plain.line(3, 0, { key("pad:righty") });
+	check(line.key == "stick" && line.value == "pad:righty", "and its axes");
+
+	line = plain.line(2, 2, { key("key:Space") });
+	check(line.key == "gas" && line.value == "pad:righttrigger, key:Space",
+	      "a pedal: one line, its axes kept and what presses it");
+	line = plain.line(2, 0, {});
+	check(line.key == "gas" && line.value == "key:Up", "a pedal without axes keeps what presses it");
+	line = plain.line(2, 2, plain.toward(2, true));
+	check(line.key == "gas" && !line.value, "a pedal with its defaults");
+
+	Settings settings;
+
+	settings.parse("[controls.sgnascar]\n" + line.key + " = " + *plain.line(2, 2, { key("key:Space") }).value + "\n"
+	               "view = key:Q, pad:y\n", "test");
+	const Bindings mine(panel, settings, "sgnascar");
+
+	check(mine.of(0).size() == 2 && mine.of(0)[0] == key("key:Q") && mine.of(0)[1] == key("pad:y"),
+	      "a line written reads back");
+	check(mine.toward(2, true).size() == 1 && mine.toward(2, true)[0] == key("key:Space") && mine.of(2).size() == 1,
+	      "a pedal line written reads back on its two parts");
+	check(!mine.line(0, 0, plain.of(0)).value, "the defaults are those of the role, whatever the settings say");
+
+	line = plain.cabinet_line(Role::COIN1, plain.cabinet(Role::COIN1));
+	check(line.key == "coin1" && !line.value, "a coin with its defaults");
+	line = plain.cabinet_line(Role::TEST, { key("key:F2") });
+	check(line.key == "test" && line.value == "key:F2", "TEST changed");
+}
+
 int main(int argc, char **argv)
 {
 	const std::string dir = (argc > 1) ? argv[1] : std::filesystem::temp_directory_path().string();
@@ -437,6 +510,8 @@ int main(int argc, char **argv)
 	test_mouse();
 	test_game_lines();
 	test_own_keys();
+	test_text();
+	test_lines_to_write();
 
 	std::printf("\n%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures ? 1 : 0;

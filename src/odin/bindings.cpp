@@ -152,6 +152,19 @@ cabinet_role(size_t index)
 	return static_cast<Role>(static_cast<size_t>(Role::COIN1) + index);
 }
 
+size_t
+cabinet_index(Role role)
+{
+	return static_cast<size_t>(role) - static_cast<size_t>(Role::COIN1);
+}
+
+/* An analog control that only goes one way */
+bool
+is_pedal(const GameControl &control)
+{
+	return control.type == GameControl::Type::ANALOG && !GameControl::half(control.low, false);
+}
+
 } /* namespace */
 
 bool
@@ -226,6 +239,48 @@ HostInput::parse(std::string_view text)
 	return out;
 }
 
+std::string
+HostInput::text() const
+{
+	static const char *const BUTTONS[] = { "left", "middle", "right" };
+
+	switch (kind) {
+	case Kind::KEY:
+		return std::string("key:") + SDL_GetKeyName(key);
+	case Kind::MOUSE:
+		return std::string("mouse:") + (mouse.type == MouseInput::Type::X   ? "x" :
+		                                mouse.type == MouseInput::Type::Y   ? "y" :
+		                                mouse.type == MouseInput::Type::OFF ? "off" :
+		                                                                      BUTTONS[mouse.button % 3]);
+	case Kind::PAD:
+		break;
+	}
+
+	const char *const name = pad.type == PadInput::Type::BUTTON ?
+	                         SDL_GetGamepadStringForButton(static_cast<SDL_GamepadButton>(pad.index)) :
+	                         SDL_GetGamepadStringForAxis(static_cast<SDL_GamepadAxis>(pad.index));
+	std::string out = "pad:";
+
+	if (pad.type == PadInput::Type::AXIS_NEGATIVE)
+		out += '-';
+	else if (pad.type == PadInput::Type::AXIS_POSITIVE)
+		out += '+';
+	out += name ? name : "";
+	if (pad.inverted)
+		out += ":invert";
+	return out;
+}
+
+std::string
+HostInput::text(const std::vector<HostInput> &inputs)
+{
+	std::string out;
+
+	for (const HostInput &input : inputs)
+		out += (out.empty() ? "" : ", ") + input.text();
+	return out;
+}
+
 std::vector<HostInput>
 Bindings::defaults(Role role, unsigned player)
 {
@@ -261,7 +316,7 @@ Bindings::keys_toward(Role role, unsigned player, bool positive)
 }
 
 Bindings::Bindings(const std::vector<GameControl> &panel, const Settings &settings, const std::string &game)
-	: m_controls(panel.size())
+	: m_panel(panel), m_controls(panel.size())
 {
 	const bool aims = std::any_of(panel.begin(), panel.end(), [](const GameControl &control) {
 		return control.role == Role::GUN_X && control.player == 0;
@@ -300,6 +355,8 @@ Bindings::Bindings(const std::vector<GameControl> &panel, const Settings &settin
 	}
 	for (size_t r = 0; r < m_cabinet.size(); r++)
 		m_cabinet[r] = defaults(cabinet_role(r), 0);
+	m_defaults = m_controls;
+	m_cabinet_defaults = m_cabinet;
 
 	for (const auto &[key, value] : settings.section("controls." + game)) {
 		std::vector<HostInput> *target = nullptr;
@@ -352,7 +409,43 @@ Bindings::Bindings(const std::vector<GameControl> &panel, const Settings &settin
 const std::vector<HostInput> &
 Bindings::cabinet(Role role) const
 {
-	return m_cabinet[static_cast<size_t>(role) - static_cast<size_t>(Role::COIN1)];
+	return m_cabinet[cabinet_index(role)];
+}
+
+Bindings::Line
+Bindings::line(size_t control, unsigned part, const std::vector<HostInput> &inputs) const
+{
+	const GameControl &c = m_panel[control];
+	const auto value = [](const std::vector<HostInput> &now, const std::vector<HostInput> &standard) {
+		return now == standard ? std::nullopt : std::optional<std::string>(HostInput::text(now));
+	};
+
+	if (is_pedal(c)) {
+		std::vector<HostInput> both = part == 0 ? inputs : m_controls[control][0];
+		std::vector<HostInput> standard = m_defaults[control][0];
+
+		for (const HostInput &input : part == 2 ? inputs : m_controls[control][2])
+			both.push_back(input);
+		for (const HostInput &input : m_defaults[control][2])
+			standard.push_back(input);
+		return { c.id, value(both, standard) };
+	}
+
+	std::string key = c.id;
+
+	if (part && c.type == GameControl::Type::POSITIONS)
+		key += part == 2 ? "_up" : "_down";
+	else if (part)
+		key += GameControl::half(c.low, part == 2);
+	return { key, value(inputs, m_defaults[control][part]) };
+}
+
+Bindings::Line
+Bindings::cabinet_line(Role role, const std::vector<HostInput> &inputs) const
+{
+	const std::vector<HostInput> &standard = m_cabinet_defaults[cabinet_index(role)];
+
+	return { role_name(role), inputs == standard ? std::nullopt : std::optional<std::string>(HostInput::text(inputs)) };
 }
 
 } /* namespace odin */
