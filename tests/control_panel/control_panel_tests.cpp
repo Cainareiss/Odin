@@ -30,6 +30,7 @@
 #include "odin/picture.hpp"
 
 #include <cctype>
+#include <cmath>
 #include <cstdio>
 #include <initializer_list>
 
@@ -595,6 +596,47 @@ void test_touched()
 	check(!panel.touched(host, Role::TEST), "Guide alone: nothing");
 }
 
+void test_now()
+{
+	ControlPanel panel(cabinet(), Settings(), "sgnascar");
+	const auto index = [&panel](const char *id) {
+		for (size_t c = 0; c < panel.controls().size(); c++)
+			if (panel.controls()[c].id == id)
+				return c;
+		return panel.controls().size();
+	};
+	const size_t wheel = index("wheel"), gas = index("gas"), gear = index("gear"), view = index("view");
+	const std::vector<SDL_Keycode> none, left = { SDLK_LEFT }, up = { SDLK_UP };
+	PadState pad;
+	HostState host;
+
+	host.keys = &none;
+	host.pads[0] = &pad;
+	check(!panel.now(host, wheel).on && panel.now(host, wheel).value == 0.0f && panel.now(host, gas).value == 0.0f &&
+	      panel.now(host, gear).position == 0, "nothing held: the wheel centred, the gas let go, the lever on N");
+	host.keys = &left;
+	check(panel.now(host, wheel).on && panel.now(host, wheel).value == -1.0f, "Left: the wheel at the end of its way, left");
+	host.keys = &up;
+	check(panel.now(host, gas).on && panel.now(host, gas).value == 1.0f, "Up: the pedal all the way down");
+	host.keys = &none;
+	pad.axes[SDL_GAMEPAD_AXIS_LEFTX] = 16384;
+	check(std::abs(panel.now(host, wheel).value - 0.5f) < 0.001f, "the stick half way right: the wheel half way right");
+	pad.axes[SDL_GAMEPAD_AXIS_RIGHT_TRIGGER] = 32767;
+	check(panel.now(host, gas).value == 1.0f, "the trigger pulled: the pedal down");
+	host.keys = &left;
+	pad.axes[SDL_GAMEPAD_AXIS_LEFTX] = 30000;
+	check(panel.now(host, wheel).value == -1.0f, "the key further than the stick: the key");
+	host.keys = &none;
+	pad = PadState{};
+	pad.buttons[SDL_GAMEPAD_BUTTON_NORTH] = true;
+	check(panel.now(host, view).on && panel.now(host, view).value == 0.0f, "a button: worked, no value");
+	pad = PadState{};
+	pad.buttons[SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER] = true;
+	check(panel.now(host, gear).position == 0, "the lever does not move without an update");
+	after(panel, {}, &pad);
+	check(panel.now(host, gear).position == 1 && panel.now(host, gear).on, "after the update: on 1, worked");
+}
+
 int main()
 {
 	test_standard_panel();
@@ -609,6 +651,7 @@ int main()
 	test_picture();
 	test_pressed();
 	test_touched();
+	test_now();
 
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures ? 1 : 0;
