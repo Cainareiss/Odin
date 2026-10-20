@@ -77,7 +77,7 @@ left lever, Space and Left Shift those of the right one.
 
 In Brave the pad of a player shakes while the nozzle of the cabinet does
 (the switch Vibration of the page Input, or "vibration = off" in
-[sound.braveff], stops it).
+[players.braveff], stops it).
 The lamps and the other outputs of the cabinets go to other programs (a
 lamp or a force feedback program) as MAME gives them with its network
 output, when odin.ini says so (the menu, page Outputs, turns it on and
@@ -116,8 +116,8 @@ user wants it ("mode = mix", -13 dB by default, or "mode = quad" in
 [sound.podrace]). In NASCAR the pad of player 1 shakes with the shocks
 the game gives the wheel, not with the hold and the damping that follow
 the moves of the wheel (experimental; the switch Vibration of the page
-Input, or "vibration = off" in [sound.podrace] or [sound.sgnascar], stops
-it).
+Input, or "vibration = off" in [players.podrace] or [players.sgnascar],
+stops it).
 
 The mouse aims for player 1 in Brave: the sight where it points on the
 picture, water on the left button, fog on the right one, Start on the

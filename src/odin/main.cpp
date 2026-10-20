@@ -1081,11 +1081,11 @@ Session::draw_menu()
 		state.hotkeys[a] = m_hotkeys.of(static_cast<odin::Hotkeys::Action>(a));
 	if (m_audio)
 		state.devices = m_audio->devices();
-	/* The pad shakes as the cabinet of the game shown, unless [sound.<game>]
-	 * says off (the last line says) */
+	/* The pad shakes as the cabinet of the game shown, unless
+	 * [players.<game>] says off (the last line says) */
 	state.can_shake = m_other ? m_other_shakes : m_game.shakes();
 	state.shake = true;
-	for (const auto &[key, value] : m_settings.section("sound." + game_shown()))
+	for (const auto &[key, value] : m_settings.section("players." + game_shown()))
 		if (key == "vibration" && (value == "on" || value == "off"))
 			state.shake = value == "on";
 	/* The outputs of the game shown, lit as the board left them */
@@ -1254,7 +1254,7 @@ Session::apply(const odin::MenuState &was)
 	}
 	/* The vibration of the game shown: at once for the game that runs */
 	if (now.shake != was.shake && now.can_shake) {
-		const std::string section = "sound." + game_shown();
+		const std::string section = "players." + game_shown();
 
 		if (!m_other) {
 			m_controls.feel_option_board(now.shake && m_game.option_vibration);
@@ -1491,10 +1491,13 @@ main(int argc, char **argv)
 		if (key == "mode" && !options.sound_asked && mode_named(value))
 			options.sound = mode_named(value);
 
-	/* The optional board in the mix and on the pad: the list, or the last
-	 * lines of [sound.<game>]; the pads shake unless it says off */
+	/* The optional board in the mix: the list, or the last lines of
+	 * [sound.<game>]; the pads shake unless [players.<game>] says off */
 	double option_level = game->option_level;
 	bool vibration = true;
+	for (const auto &[key, value] : settings.section("players." + game->name))
+		if (key == "vibration" && (value == "on" || value == "off"))
+			vibration = value == "on";
 	for (const auto &[key, value] : settings.section("sound." + game->name)) {
 		char *end = nullptr;
 		const double db = std::strtod(value.c_str(), &end);
@@ -1502,8 +1505,6 @@ main(int argc, char **argv)
 		if (key == "option_level" && !value.empty() && !*end && db >= odin::Game::LOWEST_LEVEL &&
 		    db <= odin::Game::HIGHEST_LEVEL)
 			option_level = db;
-		else if (key == "vibration" && (value == "on" || value == "off"))
-			vibration = value == "on";
 		else if (key == "mode" && mode_named(value))
 			continue;
 		else
