@@ -18,6 +18,9 @@
 
 #include "odin/pad_drawing.hpp"
 
+#include <algorithm>
+#include <iterator>
+
 namespace odin {
 
 namespace {
@@ -709,10 +712,25 @@ constexpr PadDrawing PAD_GENERIC = {
 
 } /* namespace */
 
-const PadDrawing &
-pad_drawing(SDL_GamepadType type)
+/* The Steam Controller: Valve, wired, Bluetooth, through its receiver (as
+ * SDL knows them, controller_list.h) */
+int
+pad_kind(SDL_GamepadType type, uint16_t vendor, uint16_t product)
 {
-	switch (type) {
+	static constexpr uint16_t STEAM_CONTROLLERS[] = { 0x1101, 0x1102, 0x1105, 0x1106, 0x1142 };
+
+	if (vendor == 0x28de && std::find(std::begin(STEAM_CONTROLLERS), std::end(STEAM_CONTROLLERS), product) !=
+	    std::end(STEAM_CONTROLLERS))
+		return PAD_STEAM_CONTROLLER;
+	return type;
+}
+
+const PadDrawing &
+pad_drawing(int kind)
+{
+	if (kind == PAD_STEAM_CONTROLLER)
+		return PAD_STEAM;
+	switch (static_cast<SDL_GamepadType>(kind)) {
 	case SDL_GAMEPAD_TYPE_XBOX360: return PAD_XBOX360;
 	case SDL_GAMEPAD_TYPE_XBOXONE: return PAD_XBOXONE;
 	case SDL_GAMEPAD_TYPE_PS3: return PAD_PS3;

@@ -75,10 +75,11 @@ public:
 	/* The button pressed with Guide held since the last call: a shortcut
 	 * (-1: none) */
 	int guide_combo() { return std::exchange(m_guide_combo, -1); }
-	/* The gamepad of a player: its name, its kind (SDL_GamepadType);
-	 * empty and unknown when there is none */
+	/* The gamepad of a player: its name, its kind (pad_drawing.hpp: its
+	 * SDL_GamepadType, or the Steam Controller); empty and unknown when
+	 * there is none */
 	std::string pad_name(unsigned player) const;
-	SDL_GamepadType pad_type(unsigned player) const;
+	int pad_type(unsigned player) const;
 	/* What it does now (nothing: none) */
 	PadState pad_state(unsigned player) const { return seat(player) ? seat(player)->state : PadState(); }
 	/* What the host holds now: the keys, the gamepad of each player, the

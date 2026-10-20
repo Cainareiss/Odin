@@ -570,10 +570,10 @@ held(const MenuState &state, SDL_Keycode key)
 
 /* The keyboard drawn: the function row, Odin's keys clear and lit while
  * held (in a narrow box its keys alone), then its other keys and the
- * modifiers they take; how it reads; Guide on a gamepad. In the middle of
- * the box. */
+ * modifiers they take; how it reads; Guide on a gamepad, as its maker
+ * names it. In the middle of the box. */
 void
-hotkeys_keyboard(const MenuKit &kit, const MenuState &state, const Box &box)
+hotkeys_keyboard(const MenuKit &kit, const MenuState &state, const Box &box, const std::string &guide_name)
 {
 	const MenuPalette &palette = kit.palette();
 	const float inside = kit.px(BOX_INSIDE), gap = kit.px(3.0f), group = kit.px(6.0f), size = MenuKit::font(MenuKit::SMALL);
@@ -634,7 +634,7 @@ hotkeys_keyboard(const MenuKit &kit, const MenuState &state, const Box &box)
 	const char guide[] = "held = the controller's hotkey, as on Batocera";
 	const float text_w = std::min(width, kit.px(260.0f));
 	const float caption_h = centred({}, width, size, caption, 0);
-	const float guide_w = kit.pill_size("Guide").x, guide_text_w = text_w - guide_w - kit.px(8.0f);
+	const float guide_w = kit.pill_size(guide_name.c_str()).x, guide_text_w = text_w - guide_w - kit.px(8.0f);
 	const float guide_h = std::max(cap_h, ImGui::GetFont()->CalcTextSizeA(size, FLT_MAX, guide_text_w, guide).y);
 	const float all_h = cap_h + gap + (others.empty() ? 0.0f : cap_h + gap) + kit.px(6.0f) + caption_h +
 	                    kit.px(10.0f) + guide_h;
@@ -670,7 +670,7 @@ hotkeys_keyboard(const MenuKit &kit, const MenuState &state, const Box &box)
 		y += kit.px(6.0f);
 		y += centred({ box.a.x + inside, y }, width, size, caption, palette.faint) + kit.px(10.0f);
 		x = (box.a.x + box.b.x - text_w) / 2.0f;
-		kit.pill(list, { x, y }, "Guide");
+		kit.pill(list, { x, y }, guide_name.c_str());
 		list->AddText(ImGui::GetFont(), size, { x + guide_w + kit.px(8.0f), y + (cap_h - size) / 2.0f }, palette.dim, guide,
 		              nullptr, guide_text_w);
 	});
@@ -685,7 +685,7 @@ Menu::page_hotkeys(MenuKit &kit, MenuState &state) const
 	const Box box = left_box(kit, top, room);
 	const int type = state.pad_types[0];
 
-	hotkeys_keyboard(kit, state, box);
+	hotkeys_keyboard(kit, state, box, button_name(SDL_GAMEPAD_BUTTON_GUIDE, type));
 	begin_settings(kit, box, top, room);
 
 	kit.begin_group("KEYS");

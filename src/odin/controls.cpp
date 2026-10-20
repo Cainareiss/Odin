@@ -20,6 +20,7 @@
 
 #include "odin/audio_out.hpp"
 #include "odin/drive_board.hpp"
+#include "odin/pad_drawing.hpp"
 #include "odin/picture.hpp"
 #include "odin/seats.hpp"
 
@@ -364,10 +365,13 @@ Controls::pad_name(unsigned player) const
 	return name ? name : "";
 }
 
-SDL_GamepadType
+int
 Controls::pad_type(unsigned player) const
 {
-	return seat(player) ? SDL_GetGamepadType(seat(player)->handle) : SDL_GAMEPAD_TYPE_UNKNOWN;
+	SDL_Gamepad *const pad = seat(player) ? seat(player)->handle : nullptr;
+
+	return pad ? pad_kind(SDL_GetGamepadType(pad), SDL_GetGamepadVendor(pad), SDL_GetGamepadProduct(pad)) :
+	             SDL_GAMEPAD_TYPE_UNKNOWN;
 }
 
 void

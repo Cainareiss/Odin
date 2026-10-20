@@ -63,36 +63,49 @@ constexpr float DOT = 2.0f;
 constexpr float STICK_TOUCHED = 0.3f;
 constexpr int16_t TRIGGER_TOUCHED = 6554;
 
-bool
-is_switch(SDL_GamepadType type)
+/* The type of SDL of a kind of gamepad (pad_drawing.hpp): the Steam
+ * Controller and an unknown one are standard */
+SDL_GamepadType
+sdl_type(int kind)
 {
-	return type >= SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_PRO && type <= SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_PAIR;
+	return kind == PAD_STEAM_CONTROLLER || kind == SDL_GAMEPAD_TYPE_UNKNOWN ? SDL_GAMEPAD_TYPE_STANDARD :
+	                                                                         static_cast<SDL_GamepadType>(kind);
+}
+
+bool
+is_switch(int kind)
+{
+	return kind >= SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_PRO && kind <= SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_PAIR;
 }
 
 /* The names a maker prints on the buttons that differ: Back, Start, the
- * sticks pressed, Guide, the shoulders and the triggers */
+ * sticks pressed, Guide, the shoulders and the triggers; the D-pad and the
+ * right stick (the pads of the Steam Controller) */
 struct Family {
-	const char *back, *start, *left_stick, *right_stick, *guide, *lb, *rb, *lt, *rt;
+	const char *back, *start, *left_stick, *right_stick, *guide, *lb, *rb, *lt, *rt, *dpad, *right_axes;
 };
 
 const Family &
-family(SDL_GamepadType type)
+family(int kind)
 {
-	static constexpr Family ODIN = { "Select", "Start", "L3", "R3", "Guide", "LB", "RB", "LT", "RT" };
-	static constexpr Family XBOX_360 = { "Back", "Start", "LS", "RS", "Guide", "LB", "RB", "LT", "RT" };
-	static constexpr Family XBOX_ONE = { "View", "Menu", "LS", "RS", "Guide", "LB", "RB", "LT", "RT" };
-	static constexpr Family PS3 = { "Select", "Start", "L3", "R3", "PS", "L1", "R1", "L2", "R2" };
-	static constexpr Family PS4 = { "Share", "Options", "L3", "R3", "PS", "L1", "R1", "L2", "R2" };
-	static constexpr Family PS5 = { "Create", "Options", "L3", "R3", "PS", "L1", "R1", "L2", "R2" };
-	static constexpr Family SWITCH = { "−", "+", "LS", "RS", "Home", "L", "R", "ZL", "ZR" };
+	static constexpr Family ODIN = { "Select", "Start", "L3", "R3", "Guide", "LB", "RB", "LT", "RT", "D-pad", "R stick" };
+	static constexpr Family XBOX_360 = { "Back", "Start", "LS", "RS", "Guide", "LB", "RB", "LT", "RT", "D-pad", "R stick" };
+	static constexpr Family XBOX_ONE = { "View", "Menu", "LS", "RS", "Guide", "LB", "RB", "LT", "RT", "D-pad", "R stick" };
+	static constexpr Family PS3 = { "Select", "Start", "L3", "R3", "PS", "L1", "R1", "L2", "R2", "D-pad", "R stick" };
+	static constexpr Family PS4 = { "Share", "Options", "L3", "R3", "PS", "L1", "R1", "L2", "R2", "D-pad", "R stick" };
+	static constexpr Family PS5 = { "Create", "Options", "L3", "R3", "PS", "L1", "R1", "L2", "R2", "D-pad", "R stick" };
+	static constexpr Family SWITCH = { "−", "+", "LS", "RS", "Home", "L", "R", "ZL", "ZR", "D-pad", "R stick" };
+	static constexpr Family STEAM = { "◀", "▶", "LS", "R pad", "Steam", "LB", "RB", "LT", "RT", "L pad", "R pad" };
 
-	switch (type) {
+	if (kind == PAD_STEAM_CONTROLLER)
+		return STEAM;
+	switch (static_cast<SDL_GamepadType>(kind)) {
 	case SDL_GAMEPAD_TYPE_XBOX360: return XBOX_360;
 	case SDL_GAMEPAD_TYPE_XBOXONE: return XBOX_ONE;
 	case SDL_GAMEPAD_TYPE_PS3: return PS3;
 	case SDL_GAMEPAD_TYPE_PS4: return PS4;
 	case SDL_GAMEPAD_TYPE_PS5: return PS5;
-	default: return is_switch(type) ? SWITCH : ODIN;
+	default: return is_switch(kind) ? SWITCH : ODIN;
 	}
 }
 
@@ -100,9 +113,10 @@ family(SDL_GamepadType type)
  * the marks of a PlayStation, a way of a stick or of the D-pad as an
  * arrow (mock-up v50) */
 std::string
-pad_label(const PadInput &pad, SDL_GamepadType type)
+pad_label(const PadInput &pad, int kind)
 {
-	const Family &names = family(type);
+	const Family &names = family(kind);
+	const std::string dpad = std::string(names.dpad) + " ";
 
 	if (pad.type == PadInput::Type::BUTTON) {
 		const auto button = static_cast<SDL_GamepadButton>(pad.index);
@@ -113,8 +127,7 @@ pad_label(const PadInput &pad, SDL_GamepadType type)
 		case SDL_GAMEPAD_BUTTON_WEST:
 		case SDL_GAMEPAD_BUTTON_NORTH: {
 			static const char *const FACES[] = { "?", "A", "B", "X", "Y", "✕", "○", "□", "△" };
-			const SDL_GamepadButtonLabel label =
-				SDL_GetGamepadButtonLabelForType(type == SDL_GAMEPAD_TYPE_UNKNOWN ? SDL_GAMEPAD_TYPE_STANDARD : type, button);
+			const SDL_GamepadButtonLabel label = SDL_GetGamepadButtonLabelForType(sdl_type(kind), button);
 
 			return FACES[static_cast<size_t>(label) < std::size(FACES) ? static_cast<size_t>(label) : 0];
 		}
@@ -125,12 +138,18 @@ pad_label(const PadInput &pad, SDL_GamepadType type)
 		case SDL_GAMEPAD_BUTTON_RIGHT_STICK: return names.right_stick;
 		case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER: return names.lb;
 		case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER: return names.rb;
-		case SDL_GAMEPAD_BUTTON_DPAD_UP: return "D-pad ↑";
-		case SDL_GAMEPAD_BUTTON_DPAD_DOWN: return "D-pad ↓";
-		case SDL_GAMEPAD_BUTTON_DPAD_LEFT: return "D-pad ←";
-		case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: return "D-pad →";
+		case SDL_GAMEPAD_BUTTON_DPAD_UP: return dpad + "↑";
+		case SDL_GAMEPAD_BUTTON_DPAD_DOWN: return dpad + "↓";
+		case SDL_GAMEPAD_BUTTON_DPAD_LEFT: return dpad + "←";
+		case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: return dpad + "→";
 		case SDL_GAMEPAD_BUTTON_TOUCHPAD: return "Touchpad";
 		default: {
+			/* The grips of the Steam Controller, under it */
+			if (kind == PAD_STEAM_CONTROLLER && button == SDL_GAMEPAD_BUTTON_RIGHT_PADDLE1)
+				return "R grip";
+			if (kind == PAD_STEAM_CONTROLLER && button == SDL_GAMEPAD_BUTTON_LEFT_PADDLE1)
+				return "L grip";
+
 			const char *const name = SDL_GetGamepadStringForButton(button);
 
 			return name ? name : "?";
@@ -148,7 +167,7 @@ pad_label(const PadInput &pad, SDL_GamepadType type)
 	const bool left = axis == SDL_GAMEPAD_AXIS_LEFTX || axis == SDL_GAMEPAD_AXIS_LEFTY;
 	const bool across = axis == SDL_GAMEPAD_AXIS_LEFTX || axis == SDL_GAMEPAD_AXIS_RIGHTX;
 	const bool positive = pad.type == PadInput::Type::AXIS_POSITIVE;
-	std::string out = left ? "L stick " : "R stick ";
+	std::string out = left ? "L stick " : std::string(names.right_axes) + " ";
 
 	if (pad.type == PadInput::Type::AXIS)
 		out += across ? "↔" : "↕";
@@ -160,7 +179,7 @@ pad_label(const PadInput &pad, SDL_GamepadType type)
 }
 
 std::string
-label(const HostInput &input, SDL_GamepadType type)
+label(const HostInput &input, int kind)
 {
 	static const char *const MOUSE[] = { "Mouse left", "Mouse middle", "Mouse right" };
 
@@ -178,9 +197,9 @@ label(const HostInput &input, SDL_GamepadType type)
 		if (input.pad.with >= 0) {
 			const PadInput with = { PadInput::Type::BUTTON, static_cast<uint8_t>(input.pad.with) };
 
-			return pad_label(with, type) + " + " + pad_label(input.pad, type);
+			return pad_label(with, kind) + " + " + pad_label(input.pad, kind);
 		}
-		return pad_label(input.pad, type);
+		return pad_label(input.pad, kind);
 	case HostInput::Kind::MOUSE:
 		break;
 	}
@@ -194,12 +213,12 @@ label(const HostInput &input, SDL_GamepadType type)
 }
 
 std::string
-labels(const std::vector<HostInput> &inputs, SDL_GamepadType type)
+labels(const std::vector<HostInput> &inputs, int kind)
 {
 	std::string out;
 
 	for (const HostInput &input : inputs)
-		out += (out.empty() ? "" : ", ") + label(input, type);
+		out += (out.empty() ? "" : ", ") + label(input, kind);
 	return out;
 }
 
@@ -404,11 +423,11 @@ groups(const MenuState &state, std::span<const InputRow> rows)
 /* A part as a chip says it: its sign, then its inputs, "press..." while
  * caught, "-" for none */
 std::string
-part_text(const MenuState &state, std::span<const InputRow> rows, const Group::Part &part, SDL_GamepadType type)
+part_text(const MenuState &state, std::span<const InputRow> rows, const Group::Part &part, int kind)
 {
 	const InputRow &row = rows[part.row];
 	const std::string inputs = same(state.catching, row.slot) ? "press..." :
-	                           row.inputs.empty() ? "-" : labels(row.inputs, type);
+	                           row.inputs.empty() ? "-" : labels(row.inputs, kind);
 
 	return *part.sign ? std::string(part.sign) + " " + inputs : inputs;
 }
@@ -609,13 +628,13 @@ route(const Label &label, float from, float knee, std::span<const std::pair<ImVe
 } /* namespace */
 
 std::string
-Menu::button_name(int button, int type)
+Menu::button_name(int button, int kind)
 {
 	PadInput pad{};
 
 	pad.type = PadInput::Type::BUTTON;
 	pad.index = static_cast<uint8_t>(button);
-	return pad_label(pad, static_cast<SDL_GamepadType>(type));
+	return pad_label(pad, kind);
 }
 
 /* The games, the one shown marked and the one that runs dotted; when they
@@ -940,7 +959,7 @@ struct Sorted {
 };
 
 Sorted
-sort_rows(const MenuState &state, std::span<const InputRow> rows, const PadDrawing &drawing, SDL_GamepadType type)
+sort_rows(const MenuState &state, std::span<const InputRow> rows, const PadDrawing &drawing, int kind)
 {
 	const PadState &now = state.pad_states[state.player & 1];
 	Sorted out;
@@ -956,9 +975,9 @@ sort_rows(const MenuState &state, std::span<const InputRow> rows, const PadDrawi
 			std::string name = rows[r].name;
 
 			if (input.pad.with >= 0)
-				name += " + " + capitals(pad_label({ PadInput::Type::BUTTON, static_cast<uint8_t>(input.pad.with) }, type));
+				name += " + " + capitals(pad_label({ PadInput::Type::BUTTON, static_cast<uint8_t>(input.pad.with) }, kind));
 			if (part < 0) {
-				out.elsewhere.push_back({ r, std::move(name) + " · " + label(input, type) });
+				out.elsewhere.push_back({ r, std::move(name) + " · " + label(input, kind) });
 				continue;
 			}
 
@@ -1092,9 +1111,9 @@ void
 pad_box(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, ImVec2 a, ImVec2 b, float corner)
 {
 	const unsigned me = state.player & 1;
-	const auto type = static_cast<SDL_GamepadType>(state.pad_types[me]);
-	const PadDrawing &drawing = pad_drawing(type);
-	Sorted sorted = sort_rows(state, rows, drawing, type);
+	const int kind = state.pad_types[me];
+	const PadDrawing &drawing = pad_drawing(kind);
+	Sorted sorted = sort_rows(state, rows, drawing, kind);
 	const float tray = not_mapped(kit, state, rows, sorted.empty, a, b, false);
 	const float column = column_width(kit, sorted.labels, b.x - a.x), inside = kit.px(BOX_INSIDE);
 	const float bottom = b.y - kit.px(LABEL_EDGE) - tray;
@@ -1283,7 +1302,7 @@ list_box(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, I
 {
 	ImDrawList *list = ImGui::GetWindowDrawList();
 	const MenuPalette &palette = kit.palette();
-	const auto type = static_cast<SDL_GamepadType>(state.pad_types[state.player & 1]);
+	const int kind = state.pad_types[state.player & 1];
 	const std::vector<Group> all = groups(state, rows);
 	const float line = ImGui::GetTextLineHeight(), gap = kit.px(28.0f), wide = kit.px(8.0f), high = kit.px(2.0f);
 	const float apart = kit.px(8.0f);
@@ -1319,7 +1338,7 @@ list_box(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, I
 		bool empty = true;
 
 		for (const Group::Part &part : group.parts) {
-			texts.push_back(part_text(state, rows, part, type));
+			texts.push_back(part_text(state, rows, part, kind));
 			widths.push_back(MenuKit::measure(texts.back().c_str()));
 			empty = empty && rows[part.row].inputs.empty() && !same(state.catching, rows[part.row].slot);
 		}
@@ -1571,7 +1590,7 @@ Menu::input_foot(const MenuKit &kit, MenuState &state, ImVec2 at, float width, f
 	ImDrawList *const list = ImGui::GetWindowDrawList();
 	const MenuPalette &palette = kit.palette();
 	const std::vector<InputRow> rows = input_rows(state);
-	const auto type = static_cast<SDL_GamepadType>(state.pad_types[state.player & 1]);
+	const int kind = state.pad_types[state.player & 1];
 	const float y = at.y + (height - line) / 2.0f, space = kit.px(10.0f), right = at.x + width;
 	float x = at.x;
 	const auto say = [&](const std::string &text, ImU32 colour) {
@@ -1634,7 +1653,7 @@ Menu::input_foot(const MenuKit &kit, MenuState &state, ImVec2 at, float width, f
 		std::string text;
 
 		for (const Group::Part &part : group.parts)
-			text += (text.empty() ? "" : "  ") + part_text(state, rows, part, type);
+			text += (text.empty() ? "" : "  ") + part_text(state, rows, part, kind);
 		say(group.name, palette.accent);
 
 		const float chip_w = std::min(MenuKit::measure(text.c_str()) + 2.0f * kit.px(7.0f), std::max(0.0f, right - x));

@@ -129,7 +129,7 @@ struct MenuState {
 	/* The panel of the cabinet of the game shown (its controls and their
 	 * inputs), which are worked now (the controls, then COIN1, COIN2 and
 	 * TEST) and where its controls are, the gamepad of each player (its
-	 * name, SDL_GamepadType) */
+	 * name, its kind: pad_drawing.hpp) */
 	const ControlPanel *panel = nullptr;
 	std::vector<bool> touched;
 	std::vector<ControlNow> now;
@@ -219,9 +219,9 @@ private:
 	static std::string help(int page, const MenuState &state);
 	static float input_foot(const MenuKit &kit, MenuState &state, ImVec2 at, float width, float height, bool draw);
 	static std::string hotkeys_help(const MenuState &state);
-	/* A button of a gamepad of that kind (SDL_GamepadType), as its maker
+	/* A button of a gamepad of that kind (pad_drawing.hpp), as its maker
 	 * prints it */
-	static std::string button_name(int button, int type);
+	static std::string button_name(int button, int kind);
 	/* The row of the games of the pages Input and Outputs: its bottom */
 	static float games_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width);
 	void start_gl();

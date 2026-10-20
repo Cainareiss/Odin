@@ -29,8 +29,8 @@ namespace odin {
 
 /* The drawings of the gamepads in the menu, seen from the front with their
  * top edge: AL2009man's Gamepad-Asset-Pack (MIT, pad_drawings_al2009man.cpp)
- * for the Xbox 360, Xbox One and Series, PlayStation 4 and 5 and Switch Pro
- * gamepads, Odin's for the DualShock 3 and any other one
+ * for the Xbox 360, Xbox One and Series, PlayStation 4 and 5, Switch Pro and
+ * Steam Controller gamepads, Odin's for the DualShock 3 and any other one
  * (pad_drawings.cpp). Their data is made from SVG by a tool kept outside
  * the repository. */
 
@@ -102,11 +102,18 @@ struct PadDrawing {
 	std::span<const uint16_t> lists;
 };
 
-/* The drawing of a kind of gamepad (SDL_GamepadType) */
-const PadDrawing &pad_drawing(SDL_GamepadType type);
+/* The kinds of gamepad the menu draws and names: those of SDL
+ * (SDL_GamepadType), and the Steam Controller of 2015, which SDL counts as
+ * a standard gamepad. The kind of a gamepad of that type, maker and
+ * product (its USB ids). */
+inline constexpr int PAD_STEAM_CONTROLLER = SDL_GAMEPAD_TYPE_COUNT;
+int pad_kind(SDL_GamepadType type, uint16_t vendor, uint16_t product);
+
+/* The drawing of a kind of gamepad */
+const PadDrawing &pad_drawing(int kind);
 
 /* The drawings of AL2009man's pack (pad_drawings_al2009man.cpp) */
-extern const PadDrawing PAD_XBOX360, PAD_XBOXONE, PAD_PS4, PAD_PS5, PAD_SWITCH_PRO;
+extern const PadDrawing PAD_XBOX360, PAD_XBOXONE, PAD_PS4, PAD_PS5, PAD_SWITCH_PRO, PAD_STEAM;
 
 } /* namespace odin */
 
