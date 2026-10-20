@@ -17,9 +17,9 @@
  */
 
 /* Unit tests for the settings file and the bindings: the lines read, the
- * names of keys and pad inputs, the defaults of the roles, the keys the
- * list of games gives a button, the lines of a game by the ids of its
- * controls, and what is refused.
+ * names of keys and pad inputs, the defaults of the roles, the keys and
+ * pad inputs the list of games gives a button, the lines of a game by the
+ * ids of its controls, and what is refused.
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
  *            -I src $(pkg-config --cflags sdl3) tests/bindings/bindings_tests.cpp src/odin/bindings.cpp \
@@ -427,6 +427,46 @@ void test_own_keys()
 	check(lined.of(1).size() == 1 && is_key(lined.of(1)[0], SDLK_F1), "a line of the settings takes their place");
 }
 
+void test_own_pad()
+{
+	using Type = PadInput::Type;
+	std::vector<GameControl> panel = {
+		control("1p_water", GameControl::Type::BUTTON, Role::BUTTON1, 0),
+		control("bomb", GameControl::Type::BUTTON, Role::BUTTON3, 0),
+		control("2p_fog", GameControl::Type::BUTTON, Role::BUTTON2, 1),
+		control("boost", GameControl::Type::BUTTON, Role::BUTTON6, 0),
+		control("view", GameControl::Type::BUTTON, Role::BUTTON4, 0),
+		control("1p_sight_x", GameControl::Type::ANALOG, Role::GUN_X, 0),
+	};
+	Settings settings;
+
+	panel[0].pad = { "righttrigger" };
+	panel[1].pad = { "a", "guide+x" };
+	panel[2].pad = { "lefttrigger" };
+	panel[3].pad = { "leftx" };
+	panel[4].keys = { "Z" };
+	panel[4].pad = { "y", "nope" };
+	settings.parse("[controls.braveff]\n1p_water = pad:a\n", "test");
+	const Bindings own(panel, Settings(), "braveff");
+	const Bindings lined(panel, settings, "braveff");
+
+	check(own.of(0).size() == 3 && is_key(own.of(0)[0], SDLK_LCTRL) &&
+	      is_pad(own.of(0)[1], Type::AXIS, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) && own.of(0)[2].kind == HostInput::Kind::MOUSE,
+	      "the pad input the list gives a button takes the place of that of its role; its key and the mouse stay");
+	check(own.of(1).size() == 3 && is_key(own.of(1)[0], SDLK_LSHIFT) &&
+	      is_pad(own.of(1)[1], Type::BUTTON, SDL_GAMEPAD_BUTTON_SOUTH) &&
+	      is_pad(own.of(1)[2], Type::BUTTON, SDL_GAMEPAD_BUTTON_WEST) && own.of(1)[2].pad.with == SDL_GAMEPAD_BUTTON_GUIDE,
+	      "several, in their order, a button held with Guide among them");
+	check(own.of(2).size() == 2 && is_key(own.of(2)[0], SDLK_S) &&
+	      is_pad(own.of(2)[1], Type::AXIS, SDL_GAMEPAD_AXIS_LEFT_TRIGGER), "for player 2, the key of player 2 stays");
+	check(own.of(3).size() == 1 && is_key(own.of(3)[0], SDLK_C), "a whole stick is no button: no pad input");
+	check(own.of(4).size() == 2 && is_key(own.of(4)[0], SDLK_Z) && is_pad(own.of(4)[1], Type::BUTTON, SDL_GAMEPAD_BUTTON_NORTH),
+	      "its own keys and pad inputs together; a name that is no input is left out");
+	check(own.standard(0, 0) == own.of(0) && !own.line(0, 0, own.of(0)).value, "they are the defaults: no line");
+	check(lined.of(0).size() == 1 && is_pad(lined.of(0)[0], Type::BUTTON, SDL_GAMEPAD_BUTTON_SOUTH) &&
+	      lined.line(0, 0, lined.of(0)).value == "pad:a", "a line of the settings takes their place, and is written");
+}
+
 } /* namespace */
 
 /* An input back to its text, which reads the same; a list of them */
@@ -524,6 +564,7 @@ int main(int argc, char **argv)
 	test_mouse();
 	test_game_lines();
 	test_own_keys();
+	test_own_pad();
 	test_text();
 	test_lines_to_write();
 

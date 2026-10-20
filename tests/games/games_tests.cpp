@@ -111,7 +111,7 @@ const char LIST[] = R"({
         { "name": "GAS", "id": "gas_2", "analog": 7, "low": "released", "role": "accel" },
         { "name": "LEVER", "id": "lever", "analog": 3, "low": "up", "role": "stick2_y", "player": 2 },
         { "name": "VIEW", "id": "view", "switch": "1P DOWN", "role": "button4", "player": 1, "keys": [ "Z", "Space" ] },
-        { "name": "FIRE", "id": "fire", "switch": "2P PUSH3", "role": "gun_offscreen" },
+        { "name": "FIRE", "id": "fire", "switch": "2P PUSH3", "role": "gun_offscreen", "pad": [ "righttrigger", "a" ] },
         { "name": "SHIFT", "id": "shift", "switch": "1P PUSH10", "role": "stick2_left" },
         { "name": "GEAR", "id": "gear", "role": "gear", "positions": [
             { "name": "N", "switches": [] },
@@ -163,6 +163,11 @@ const char *const BAD_CONTROLS[] = {
 	R"("controls": [ { "name": "A", "id": "a", "switch": "1P START", "role": "start", "keys": [ "Z", "" ] } ])",
 	R"("controls": [ { "name": "A", "id": "a", "switch": "1P START", "role": "start", "keys": [ 3 ] } ])",
 	R"("controls": [ { "name": "A", "id": "a", "analog": 0, "low": "left", "role": "steer", "keys": [ "Z" ] } ])",
+	R"("controls": [ { "name": "A", "id": "a", "switch": "1P START", "role": "start", "pad": [] } ])",
+	R"("controls": [ { "name": "A", "id": "a", "switch": "1P START", "role": "start", "pad": "a" } ])",
+	R"("controls": [ { "name": "A", "id": "a", "switch": "1P START", "role": "start", "pad": [ "a", "" ] } ])",
+	R"("controls": [ { "name": "A", "id": "a", "switch": "1P START", "role": "start", "pad": [ 3 ] } ])",
+	R"("controls": [ { "name": "A", "id": "a", "analog": 0, "low": "left", "role": "steer", "pad": [ "leftx" ] } ])",
 	R"("controls": [ { "name": "A", "switch": "1P START", "role": "start" } ])",
 	R"("controls": [ { "name": "A", "id": "", "switch": "1P START", "role": "start" } ])",
 	R"("controls": [ { "name": "A", "id": "View", "switch": "1P START", "role": "start" } ])",
@@ -274,6 +279,8 @@ void test_games(const std::string &dir)
 		check(c[0].id == "wheel" && c[1].id == "gas_2" && c[6].id == "gear", "the id of each control");
 		check(c[3].keys == std::vector<std::string>{ "Z", "Space" } && c[0].keys.empty() && c[4].keys.empty(),
 		      "the keys of a button, in their order; none when the list gives none");
+		check(c[4].pad == std::vector<std::string>{ "righttrigger", "a" } && c[3].pad.empty() && c[0].pad.empty(),
+		      "the inputs of the gamepad of a button, in their order; none when the list gives none");
 		check(c[2].player == 1 && c[2].role == odin::Role::STICK2_Y, "player 2 when it says 2");
 		check(c[1].analog == 7 && c[1].low == GameControl::Low::RELEASED, "channel 7, low when released");
 		check(c[2].analog == 3 && c[2].low == GameControl::Low::UP, "low when up");

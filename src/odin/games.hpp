@@ -94,9 +94,10 @@ struct GameControl {
 	Role role;
 	uint8_t player;		/* 0 or 1 */
 	/* The keys of a button in place of those of its role (SDL names), as
-	 * the drivers of MAME give some controls their own keys; none: those
-	 * of the role */
-	std::vector<std::string> keys;
+	 * the drivers of MAME give some controls their own keys, and its
+	 * inputs of the gamepad ("righttrigger", "a": bindings.hpp), as a
+	 * trigger is the trigger of a nozzle; none: those of the role */
+	std::vector<std::string> keys, pad;
 };
 
 /* An output of the I/O board of a cabinet, with the name its OUTPUT TEST

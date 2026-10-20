@@ -162,7 +162,7 @@ I/O board), board_test and board_service; a game without controls in the
 list has 1p_start, 1p_up, 1p_down, 1p_left, 1p_right, 1p_push1 to 1p_push6,
 and the same for 2p. The keys and pad inputs it starts with are in
 src/odin/bindings.cpp; odin-games.json gives a few buttons their own keys
-("keys").
+("keys") and pad inputs ("pad").
 
 What the board keeps without power (the settings of the BIOS, the records
 and settings of the game, the clock) is read at start and written on exit,

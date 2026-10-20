@@ -94,8 +94,8 @@ struct HostInput {
 
 /* The inputs that work each control of a panel (any one of them) and each
  * control of the cabinet: the defaults of their roles (the keys as INSTALL
- * tells them, or those the list of games gives a button, the gamepad of
- * the player), then the lines of
+ * tells them and the gamepad of the player, or the keys and the inputs of
+ * the gamepad the list of games gives a button), then the lines of
  * [controls.<game>] in the settings, "<id> = key:Left Ctrl, pad:a" (a lever
  * has "<id>_down" and "<id>_up"; an analog control the axes of a pad, and
  * what moves it one way or the other on the halves of its way, "<id>_left"

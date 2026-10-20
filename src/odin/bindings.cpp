@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <initializer_list>
+#include <iterator>
 #include <utility>
 
 namespace odin {
@@ -157,6 +158,34 @@ size_t
 cabinet_index(Role role)
 {
 	return static_cast<size_t>(role) - static_cast<size_t>(Role::COIN1);
+}
+
+/* The inputs of a button: the keys, then the inputs of the gamepad, of its
+ * role or those the list of games gives it in their place; a name that is
+ * not one is said on stderr */
+std::vector<HostInput>
+own_inputs(const std::vector<HostInput> &of_role, const GameControl &control, const std::string &game)
+{
+	using Kind = HostInput::Kind;
+	std::vector<HostInput> out;
+
+	for (const auto &[kind, names] : { std::pair{ Kind::KEY, &control.keys }, std::pair{ Kind::PAD, &control.pad } }) {
+		if (names->empty()) {
+			std::copy_if(of_role.begin(), of_role.end(), std::back_inserter(out),
+			             [kind](const HostInput &input) { return input.kind == kind; });
+			continue;
+		}
+		for (const std::string &name : *names) {
+			const auto input = HostInput::parse((kind == Kind::KEY ? "key:" : "pad:") + name);
+
+			if (input && (kind == Kind::KEY || input->pad.is_digital()))
+				out.push_back(*input);
+			else
+				std::fprintf(stderr, "ERROR: controls: %s: %s: not a %s: %s\n", game.c_str(), control.id.c_str(),
+				             kind == Kind::KEY ? "key" : "button of a gamepad", name.c_str());
+		}
+	}
+	return out;
 }
 
 /* An analog control that only goes one way */
@@ -347,21 +376,7 @@ Bindings::Bindings(const std::vector<GameControl> &panel, const Settings &settin
 			m_controls[c][2] = defaults(Role::GEAR_UP, control.player);
 			continue;
 		}
-		m_controls[c][0] = defaults(control.role, control.player);
-		if (!control.keys.empty()) {
-			std::vector<HostInput> own;
-
-			for (const std::string &key : control.keys)
-				if (const auto input = HostInput::parse("key:" + key))
-					own.push_back(*input);
-				else
-					std::fprintf(stderr, "ERROR: controls: %s: %s: not a key: %s\n", game.c_str(),
-					             control.id.c_str(), key.c_str());
-			for (const HostInput &input : m_controls[c][0])
-				if (input.kind != HostInput::Kind::KEY)
-					own.push_back(input);
-			m_controls[c][0] = std::move(own);
-		}
+		m_controls[c][0] = own_inputs(defaults(control.role, control.player), control, game);
 		for (const auto &[role, name] : MOUSE_DEFAULTS)
 			if (aims && control.player == 0 && role == control.role)
 				m_controls[c][0].push_back(*HostInput::parse(std::string("mouse:") + name));

@@ -21,6 +21,8 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <initializer_list>
+#include <utility>
 
 #include <jansson.h>
 
@@ -194,7 +196,8 @@ is_id(const char *text)
 
 /* A control: {"name": ..., "id": ..., then "switch", "analog" with "low",
  * or "positions"; "role", and "player" when it is 2; a switch may have
- * "keys", a list of key names}. */
+ * "keys", a list of key names, and "pad", a list of inputs of the
+ * gamepad}. */
 std::optional<GameControl>
 parse_control(const json_t *control)
 {
@@ -208,23 +211,25 @@ parse_control(const json_t *control)
 	const char *const role = json_string_value(json_object_get(control, "role"));
 	const json_t *const player = json_object_get(control, "player");
 	const json_t *const keys = json_object_get(control, "keys");
+	const json_t *const pad = json_object_get(control, "pad");
 	const auto parsed_role = role ? parse_role(role) : std::nullopt;
 
 	if (!name || !name[0] || !is_id(id) || (button != nullptr) + (analog != nullptr) + (positions != nullptr) != 1 ||
 	    !parsed_role || (player && json_integer_value(player) != 1 && json_integer_value(player) != 2) ||
-	    (keys && (!button || !json_array_size(keys))))
+	    (keys && (!button || !json_array_size(keys))) || (pad && (!button || !json_array_size(pad))))
 		return std::nullopt;
 	out.name = name;
 	out.id = id;
 	out.role = *parsed_role;
 	out.player = player ? static_cast<uint8_t>(json_integer_value(player) - 1) : 0;
-	for (size_t k = 0; k < json_array_size(keys); k++) {
-		const char *const key = json_string_value(json_array_get(keys, k));
+	for (const auto &[list, names] : { std::pair{ keys, &out.keys }, std::pair{ pad, &out.pad } })
+		for (size_t k = 0; k < json_array_size(list); k++) {
+			const char *const input = json_string_value(json_array_get(list, k));
 
-		if (!key || !key[0])
-			return std::nullopt;
-		out.keys.emplace_back(key);
-	}
+			if (!input || !input[0])
+				return std::nullopt;
+			names->emplace_back(input);
+		}
 	if (button) {
 		const auto sw = parse_switch(button);
 
