@@ -754,11 +754,15 @@ Menu::games_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width, bo
 
 namespace {
 
-/* The device of each player: the keyboard, any gamepad or one of them; in
- * a game of two, a click on P1 or P2 shows that player. Its bottom. */
+/* The device of each player: the keyboard or a gamepad plugged in, the one
+ * that plays chosen, each with the drawing it shows and whether it has a
+ * wire; in a game of two, a click on P1 or P2 shows that player. Its
+ * bottom. */
 float
 devices_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width, bool two)
 {
+	static constexpr char FOOT[] = "Pick the gamepad you play this game with; each game keeps its own. "
+	                               "The keyboard and mouse always play.";
 	ImDrawList *const list = ImGui::GetWindowDrawList();
 	const MenuPalette &palette = kit.palette();
 	const float h = kit.picker_height(), spacing = kit.px(10.0f);
@@ -766,28 +770,26 @@ devices_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width, bool t
 	const float each = (width - spacing * static_cast<float>(players - 1)) / static_cast<float>(players);
 
 	for (unsigned player = 0; player < players; player++) {
-		/* The keyboard, any gamepad, each one plugged in (the same name
-		 * twice counted), the one wanted when it is not there */
-		std::vector<std::string> devices = { "Keyboard and mouse", "Any gamepad (the first free one)" };
-		int device = state.gamepad[player] ? 1 : 0;
+		/* The keyboard, then each gamepad plugged in (the same name twice
+		 * counted) */
+		std::vector<MenuKit::Item> devices = {
+			{ "Keyboard and mouse", "Keyboard + mouse", {}, MenuKit::Icon::KEYBOARD, false },
+		};
+		int device = 0;
 
 		for (size_t i = 0; i < state.plugged.size(); i++) {
-			const auto &[name, guid] = state.plugged[i];
+			const MenuState::Plugged &pad = state.plugged[i];
 			const auto before = std::count_if(state.plugged.begin(), state.plugged.begin() + static_cast<std::ptrdiff_t>(i),
-			                                  [&name](const auto &other) { return other.first == name; });
+			                                  [&pad](const MenuState::Plugged &other) { return other.name == pad.name; });
 
-			if (state.gamepad[player] && device == 1 && guid == state.wanted[player])
+			if (state.gamepad[player] && pad.player == static_cast<int>(player))
 				device = static_cast<int>(devices.size());
-			devices.push_back(before ? name + " (" + std::to_string(before + 1) + ")" : name);
+			devices.push_back({ before ? pad.name + " (" + std::to_string(before + 1) + ")" : pad.name,
+			                    std::string("Controller · ") + pad_drawing_name(pad.kind),
+			                    pad.connection == SDL_JOYSTICK_CONNECTION_WIRED    ? "WIRED" :
+			                    pad.connection == SDL_JOYSTICK_CONNECTION_WIRELESS ? "WIRELESS" : "",
+			                    MenuKit::Icon::PAD, true });
 		}
-		if (state.gamepad[player] && !state.wanted[player].empty() && device == 1) {
-			device = static_cast<int>(devices.size());
-			devices.push_back((state.wanted_names[player].empty() ? "The gamepad chosen" : state.wanted_names[player]) +
-			                  " (not plugged in)");
-		}
-		/* Any gamepad says which one it is now */
-		if (device == 1 && !state.pads[player].empty())
-			devices[1] = "Any gamepad: " + state.pads[player];
 
 		float x = at.x + static_cast<float>(player) * (each + spacing);
 		float w = each;
@@ -808,16 +810,14 @@ devices_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width, bool t
 		}
 		const MenuKit::Icon kind = device ? MenuKit::Icon::PAD : MenuKit::Icon::KEYBOARD;
 
-		if (kit.picker("device", { x, at.y }, w, devices, device, kind)) {
+		if (kit.picker("device", { x, at.y }, w, devices, device, kind, FOOT)) {
 			const size_t chosen = static_cast<size_t>(device);
 
 			state.player = player;
 			state.gamepad[player] = device != 0;
 			state.catching.reset();
-			if (device == 1 && !state.wanted[player].empty())
-				state.want = std::pair<std::string, std::string>();
-			else if (chosen >= 2 && chosen - 2 < state.plugged.size())
-				state.want = std::pair(state.plugged[chosen - 2].second, state.plugged[chosen - 2].first);
+			if (chosen >= 1 && chosen - 1 < state.plugged.size())
+				state.want = std::pair(state.plugged[chosen - 1].guid, state.plugged[chosen - 1].name);
 		}
 		ImGui::PopID();
 	}

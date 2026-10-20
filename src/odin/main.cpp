@@ -20,6 +20,7 @@
  */
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -50,6 +51,7 @@
 #include "odin/menu_nav.hpp"
 #include "odin/outputs_network.hpp"
 #include "odin/save_folder.hpp"
+#include "odin/seats.hpp"
 #include "odin/settings.hpp"
 
 namespace {
@@ -1323,24 +1325,38 @@ Session::draw_menu()
 		m_outputs->welcome();
 		state.programs = m_outputs->clients();
 	}
-	state.plugged.clear();
-	for (const odin::Controls::Plugged &pad : m_controls.plugged())
-		state.plugged.emplace_back(pad.name, pad.guid);
-	for (unsigned player = 0; player < 2; player++) {
-		state.wanted[player] = m_controls.wanted(player);
-		state.wanted_names[player] = m_controls.wanted_name(player);
-	}
-	/* Those of a game that does not run are in its settings */
-	if (m_other) {
-		state.wanted = {};
-		state.wanted_names = {};
-		for (const auto &[key, value] : m_settings.section("players." + game_shown())) {
-			const size_t space = value.find(' ');
+	/* The gamepads plugged in and their players; those of a game that does
+	 * not run as its settings would seat them */
+	const std::vector<odin::Controls::Plugged> plugged = m_controls.plugged();
+	std::array<SDL_JoystickID, 2> seats{};
 
-			if (key == "p1" || key == "p2") {
-				state.wanted[key[1] - '1'] = value.substr(0, space);
-				state.wanted_names[key[1] - '1'] = space == std::string::npos ? "" : value.substr(space + 1);
-			}
+	if (m_other) {
+		std::array<std::string, 2> wanted;
+		std::vector<odin::OpenPad> open;
+
+		for (const auto &[key, value] : m_settings.section("players." + game_shown()))
+			if (key == "p1" || key == "p2")
+				wanted[key[1] - '1'] = value.substr(0, value.find(' '));
+		for (const odin::Controls::Plugged &pad : plugged)
+			open.push_back({ pad.id, pad.guid });
+		seats = odin::seat_pads(open, wanted, {});
+	}
+	state.plugged.clear();
+	for (const odin::Controls::Plugged &pad : plugged)
+		state.plugged.push_back({ pad.name, pad.guid, pad.kind,
+		                          !m_other ? pad.player : pad.id == seats[0] ? 0 : pad.id == seats[1] ? 1 : -1,
+		                          pad.connection });
+	/* A player with no gamepad is shown on the keyboard */
+	for (unsigned player = 0; player < 2; player++) {
+		if (!state.gamepad[player] ||
+		    std::any_of(state.plugged.begin(), state.plugged.end(),
+		                [player](const odin::MenuState::Plugged &pad) { return pad.player == static_cast<int>(player); }))
+			continue;
+		state.gamepad[player] = false;
+		if (state.player == player) {
+			state.catching.reset();
+			state.catch_next.clear();
+			state.mapping.reset();
 		}
 	}
 
@@ -1378,7 +1394,7 @@ Session::draw_menu()
 		const std::optional<std::string> value = guid.empty() ? std::nullopt : std::optional(guid + " " + name);
 
 		if (!m_other)
-			m_controls.want(state.player, guid, name);
+			m_controls.want(state.player, guid);
 		if (m_settings_file.empty())
 			m_settings.set(section, key, value);
 		else

@@ -85,16 +85,20 @@ public:
 	/* What the host holds now: the keys, the gamepad of each player, the
 	 * mouse */
 	HostState host_state() const { return host(); }
-	/* The gamepads plugged in, in the order they came: name and GUID */
+	/* The gamepads plugged in, in the order they came: name, GUID, kind
+	 * (pad_drawing.hpp), id, the player it is the pad of (-1: none), by a
+	 * wire or not (as SDL knows it) */
 	struct Plugged {
 		std::string name, guid;
+		int kind;
+		SDL_JoystickID id;
+		int player;
+		SDL_JoystickConnectionState connection;
 	};
 	std::vector<Plugged> plugged() const;
-	/* The gamepad a player wants: its GUID and name, empty for the first
-	 * free one; it takes its seat at once */
-	const std::string &wanted(unsigned player) const { return m_wanted[player & 1]; }
-	const std::string &wanted_name(unsigned player) const { return m_wanted_names[player & 1]; }
-	void want(unsigned player, const std::string &guid, const std::string &name);
+	/* The gamepad a player wants: its GUID, empty for the first free one;
+	 * it takes its seat at once */
+	void want(unsigned player, const std::string &guid);
 
 	void read_inputs(MieBoard::Inputs &inputs) override { m_panel.fill(inputs); }
 	/* The outputs of the board after a frame: the pad of a player shakes
@@ -173,7 +177,7 @@ private:
 	size_t m_wheel_move = 0;
 	std::vector<Pad> m_pads;	/* plugged in, in the order they came */
 	std::array<SDL_JoystickID, 2> m_seats{};	/* that of each player, 0: none */
-	std::array<std::string, 2> m_wanted, m_wanted_names;
+	std::array<std::string, 2> m_wanted;
 	MouseState m_mouse;
 	bool m_mouse_seen;		/* it has moved on the window */
 	bool m_mouse_placed;		/* the system has told where it is */

@@ -201,6 +201,16 @@ public:
 	bool picker(const char *id, ImVec2 at, float width, std::span<const std::string> labels, int &chosen,
 	            Icon icon = Icon::NONE) const;
 	float picker_height() const;
+	/* A line of such a list: its name with an icon before it, what it is
+	 * under it, dimmer, a word at its right (in a pill when `strong`) */
+	struct Item {
+		std::string name, about, tag;
+		Icon icon = Icon::NONE;
+		bool strong = false;
+	};
+	/* The same with those lines, and a text at the foot of the list */
+	bool picker(const char *id, ImVec2 at, float width, std::span<const Item> items, int &chosen, Icon icon,
+	            const char *foot) const;
 
 	/* What a button is: plain (in the action colour, its outline fainter
 	 * until hovered), Undo (in the ink, its outline clearer, until
@@ -236,7 +246,7 @@ private:
 	bool press_button(const char *label, ImVec2 at, bool on, Icon icon, Tone tone) const;
 	/* The list that drops from a box or a button, at that place, as wide
 	 * at least */
-	bool list_popup(ImVec2 at, float width, std::span<const std::string> labels, int &chosen) const;
+	bool list_popup(ImVec2 at, float width, std::span<const Item> items, int &chosen, const char *foot = nullptr) const;
 
 	const MenuPalette &m_palette;
 	float m_scale;

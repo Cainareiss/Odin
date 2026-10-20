@@ -742,4 +742,26 @@ pad_drawing(int kind)
 	}
 }
 
+const char *
+pad_drawing_name(int kind)
+{
+	const PadDrawing &drawing = pad_drawing(kind);
+
+	if (&drawing == &PAD_XBOX360)
+		return "Xbox 360";
+	if (&drawing == &PAD_XBOXONE)
+		return "Xbox One / Series";
+	if (&drawing == &PAD_PS3)
+		return "PlayStation 3";
+	if (&drawing == &PAD_PS4)
+		return "PlayStation 4";
+	if (&drawing == &PAD_PS5)
+		return "PlayStation 5";
+	if (&drawing == &PAD_SWITCH_PRO)
+		return "Switch Pro";
+	if (&drawing == &PAD_STEAM)
+		return "Steam Controller";
+	return "generic";
+}
+
 } /* namespace odin */

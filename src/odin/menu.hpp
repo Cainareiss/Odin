@@ -136,11 +136,15 @@ struct MenuState {
 	std::vector<ControlNow> now;
 	std::array<std::string, 2> pads;
 	std::array<int, 2> pad_types{};
-	/* The gamepads plugged in (name, GUID), the one each player wants
-	 * (GUID and name; empty: the first free one), the one asked for the
-	 * player shown */
-	std::vector<std::pair<std::string, std::string>> plugged;
-	std::array<std::string, 2> wanted, wanted_names;
+	/* The gamepads plugged in (name, GUID, kind, the player it is the pad
+	 * of in the game shown, -1: none, by a wire or not), the one asked for
+	 * the player shown */
+	struct Plugged {
+		std::string name, guid;
+		int kind, player;
+		SDL_JoystickConnectionState connection;
+	};
+	std::vector<Plugged> plugged;
 	std::optional<std::pair<std::string, std::string>> want;
 	/* The player shown, and the inputs of each player: of the gamepad, else
 	 * of the keyboard (and the mouse, shown); what the gamepad of each player

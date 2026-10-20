@@ -43,11 +43,8 @@ Controls::Controls(Keyboard &keys, const std::vector<GameControl> &controls, con
 	if (chosen && !std::strcmp(chosen, "none"))
 		return;
 	for (const auto &[key, value] : settings.section("players." + game)) {
-		const size_t space = value.find(' ');
-
 		if (key == "p1" || key == "p2") {
-			m_wanted[key[1] - '1'] = value.substr(0, space);
-			m_wanted_names[key[1] - '1'] = space == std::string::npos ? "" : value.substr(space + 1);
+			m_wanted[key[1] - '1'] = value.substr(0, value.find(' '));
 		} else if (key != "vibration" || (value != "on" && value != "off")) {	/* vibration: main.cpp */
 			std::fprintf(stderr, "ERROR: settings: [players.%s]: not right: %s = %s\n", game.c_str(), key.c_str(),
 			             value.c_str());
@@ -129,16 +126,19 @@ Controls::plugged() const
 	for (const Pad &pad : m_pads) {
 		const char *const name = SDL_GetGamepadName(pad.handle);
 
-		out.push_back({ name ? name : "", pad.guid });
+		out.push_back({ name ? name : "", pad.guid,
+		                pad_kind(SDL_GetGamepadType(pad.handle), SDL_GetGamepadVendor(pad.handle),
+		                         SDL_GetGamepadProduct(pad.handle)),
+		                pad.id, pad.id == m_seats[0] ? 0 : pad.id == m_seats[1] ? 1 : -1,
+		                SDL_GetGamepadConnectionState(pad.handle) });
 	}
 	return out;
 }
 
 void
-Controls::want(unsigned player, const std::string &guid, const std::string &name)
+Controls::want(unsigned player, const std::string &guid)
 {
 	m_wanted[player & 1] = guid;
-	m_wanted_names[player & 1] = name;
 	reseat();
 }
 
