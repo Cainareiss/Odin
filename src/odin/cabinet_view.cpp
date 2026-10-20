@@ -56,6 +56,14 @@ constexpr float INK_WIDTH = 1.8f;
 constexpr float TEXT = 19.0f;
 constexpr float BIG = 24.0f;
 
+/* How a control lights: worked now (the accent, its outline thicker), its
+ * input caught now (the accent) */
+struct Light {
+	bool worked = false, chosen = false;
+
+	Light operator|(Light other) const { return { worked || other.worked, chosen || other.chosen }; }
+};
+
 /* An affine map of the plane: x' = a x + c y + e, y' = b x + d y + f */
 struct Map {
 	float a = 1.0f, b = 0.0f, c = 0.0f, d = 1.0f, e = 0.0f, f = 0.0f;
@@ -70,7 +78,7 @@ struct Map {
 
 /* What draws a cabinet: first it measures (its extent, in its units), then
  * it is placed in the box and draws; what it draws moves (translated,
- * turned, scaled), and a control worked is outlined with the accent. */
+ * turned, scaled), and a control lit is in the accent. */
 class Pen {
 public:
 	Pen(const MenuKit &kit) : m_kit(kit), m_list(ImGui::GetWindowDrawList()) {}
@@ -111,8 +119,8 @@ public:
 		if (on)
 			scale(1.0f - SINK, 1.0f - SINK, x, y);
 	}
-	/* What follows is of a control worked now */
-	void hot(bool on) { m_hot = on; }
+	/* What follows is of a control that lights so (none: it does not) */
+	void light(Light how = {}) { m_light = how; }
 
 	void shape(std::vector<ImVec2> points, bool closed, Ink ink, float width = 0.0f, float alpha = 1.0f);
 	void circle(float x, float y, float r, Ink ink, float alpha = 1.0f) { ellipse(x, y, r, r, ink, alpha); }
@@ -132,11 +140,13 @@ public:
 
 private:
 	ImVec2 at(ImVec2 p);
+	bool lit() const { return m_light.worked || m_light.chosen; }
 	void stroke(std::span<const ImVec2> points, bool closed, Ink ink, float width);
 
 	const MenuKit &m_kit;
 	ImDrawList *m_list;
-	bool m_measuring = true, m_hot = false;
+	bool m_measuring = true;
+	Light m_light;
 	ImVec2 m_lo = { 1e9f, 1e9f }, m_hi = { -1e9f, -1e9f };
 	ImVec2 m_origin = {};
 	float m_scale = 1.0f;
@@ -164,12 +174,12 @@ Pen::stroke(std::span<const ImVec2> points, bool closed, Ink ink, float width)
 	const MenuPalette &palette = m_kit.palette();
 	const bool outline = ink == Ink::BODY || ink == Ink::PART || ink == Ink::LINE;
 	ImU32 colour = ink == Ink::INK ? palette.ink : outline ? palette.cabinet_stroke : palette.cabinet_detail;
-	float w = outline             ? m_kit.px(m_hot ? HOT_OUTLINE : OUTLINE) :
+	float w = outline             ? m_kit.px(m_light.worked ? HOT_OUTLINE : OUTLINE) :
 	          ink == Ink::DETAIL ? m_kit.px(DETAIL) :
 	          ink == Ink::INK    ? (width > 0.0f ? width : INK_WIDTH) * m_scale :
 	                               width * m_scale;
 
-	if (m_hot || ink == Ink::LIT)
+	if (lit() || ink == Ink::LIT)
 		colour = palette.accent;
 	if (ink == Ink::DETAIL && width > 0.0f)
 		w = width * m_scale;
@@ -274,7 +284,7 @@ Pen::arc(float x, float y, float r, float from, float to, Ink ink, float width, 
 	if (m_measuring)
 		return;
 
-	ImU32 colour = ink == Ink::LIT ? m_kit.palette().accent : m_hot ? m_kit.palette().accent : m_kit.palette().cabinet_detail;
+	ImU32 colour = ink == Ink::LIT || lit() ? m_kit.palette().accent : m_kit.palette().cabinet_detail;
 
 	colour = (colour & ~IM_COL32_A_MASK) |
 	         (static_cast<ImU32>(alpha * static_cast<float>(colour >> IM_COL32_A_SHIFT)) << IM_COL32_A_SHIFT);
@@ -302,7 +312,7 @@ Pen::dashes(float x1, float y1, float x2, float y2, float on, float off)
 	const ImVec2 points[2] = { p, q };
 
 	if (!m_measuring)
-		MenuKit::dashes(m_list, points, false, m_hot ? m_kit.palette().accent : m_kit.palette().cabinet_detail,
+		MenuKit::dashes(m_list, points, false, lit() ? m_kit.palette().accent : m_kit.palette().cabinet_detail,
 		                m_kit.px(DETAIL), on * m_scale, off * m_scale);
 }
 
@@ -330,7 +340,7 @@ Pen::text(float x, float y, const char *text, Align align, float size, bool ink,
 	}
 
 	const MenuPalette &palette = m_kit.palette();
-	const ImU32 colour = m_hot ? palette.accent : ink ? palette.ink : palette.cabinet;
+	const ImU32 colour = lit() ? palette.accent : ink ? palette.ink : palette.cabinet;
 	const float screen_size = size * m_scale;
 
 	if (!turned) {
@@ -376,7 +386,7 @@ Pen::legend(float x, float y, const char *first, const char *second)
 	if (!m_measuring) {
 		const ImVec2 dot = at({ start + a + mark + b + c + mark / 2.0f, mid });
 
-		m_list->AddCircleFilled(dot, mark * 0.25f * m_scale, m_hot ? m_kit.palette().accent : m_kit.palette().cabinet);
+		m_list->AddCircleFilled(dot, mark * 0.25f * m_scale, lit() ? m_kit.palette().accent : m_kit.palette().cabinet);
 	}
 }
 
@@ -401,6 +411,7 @@ public:
 
 		return c && c->on;
 	}
+	Light light(const char *id) const { return { on(id), !m_now.chosen.empty() && m_now.chosen == id }; }
 	float value(const char *id) const
 	{
 		const ControlNow *const c = find(id);
@@ -444,7 +455,7 @@ push_button(Pen &pen, const Controls &c, const char *id, float x, float y, float
 	const bool on = c.on(id);
 
 	r = std::round(r * 1.4f);
-	pen.hot(on);
+	pen.light(c.light(id));
 	pen.circle(x, y, r + 5.0f, Ink::DETAIL);
 	pen.push();
 	pen.sink(on, x, y);
@@ -460,7 +471,7 @@ push_button(Pen &pen, const Controls &c, const char *id, float x, float y, float
 		pen.text(x, y + r + 20.0f, label, Align::CENTRE);
 	else
 		pen.text(x, y - r - 12.0f, label, Align::CENTRE);
-	pen.hot(false);
+	pen.light();
 }
 
 /* COIN, SERVICE and TEST in a row from there */
@@ -471,12 +482,12 @@ cabinet_row(Pen &pen, const Controls &c, float x, float y)
 		{ "coin", 0.0f, "COIN" }, { "service", 112.0f, "SERVICE" }, { "test", 250.0f, "TEST" } } };
 
 	for (const auto &[id, dx, label] : buttons) {
-		pen.hot(c.on(id));
+		pen.light(c.light(id));
 		pen.circle(x + dx, y, 12.0f, Ink::PART);
 		if (c.on(id))
 			pen.circle(x + dx, y, 11.0f, Ink::LIT);
 		pen.text(x + dx + 19.0f, y + 6.0f, label, Align::LEFT);
-		pen.hot(false);
+		pen.light();
 	}
 }
 
@@ -508,7 +519,7 @@ nascar(Pen &pen, const Controls &c)
 	/* The wheel turns 135 degrees each way */
 	const float cx = 220, cy = 244, R = 144, r = 118;
 
-	pen.hot(c.on("steering_wheel"));
+	pen.light(c.light("steering_wheel"));
 	pen.push();
 	pen.turn(c.value("steering_wheel") * 135.0f, cx, cy);
 	pen.ring(cx, cy, R, r);
@@ -526,7 +537,7 @@ nascar(Pen &pen, const Controls &c)
 	const GameControl *const gear = c.control("gear");
 	const size_t position = std::min<size_t>(c.position("gear"), places.size() - 1);
 
-	pen.hot(c.on("gear"));
+	pen.light(c.light("gear"));
 	pen.rect(sx - 60, sy - 82, 120, 164, 14, Ink::BODY);
 	pen.line(sx - 26, sy - 50, sx - 26, sy + 50, Ink::THICK, 7.0f);
 	pen.line(sx + 26, sy - 50, sx + 26, sy + 50, Ink::THICK, 7.0f);
@@ -544,11 +555,11 @@ nascar(Pen &pen, const Controls &c)
 
 	pen.text(sx, sy + 108, ("GEAR " + name).c_str(), Align::CENTRE, BIG);
 	pen.text(sx, sy - 96, "SHIFT LEVER", Align::CENTRE);
-	pen.hot(c.on("brake_pedal"));
+	pen.light(c.light("brake_pedal"));
 	pedal(pen, 140, 440, 64, 74, c.value("brake_pedal"), "BRAKE");
-	pen.hot(c.on("gas_pedal"));
+	pen.light(c.light("gas_pedal"));
 	pedal(pen, 242, 426, 48, 88, c.value("gas_pedal"), "GAS");
-	pen.hot(false);
+	pen.light();
 }
 
 /* A nozzle of Brave, as the maquette draws it lying, before it stands it
@@ -564,18 +575,18 @@ nozzle(Pen &pen, const Controls &c, unsigned p)
 	pen.rect(128, -20, 24, 40, 6, Ink::PART);
 	pen.rect(150, -15, 300, 30, 11, Ink::BODY);
 	pen.rect(448, -18, 14, 36, 5, Ink::PART);
-	pen.hot(fog_on);
+	pen.light(c.light(fog.c_str()));
 	pen.rect(462, -24, 90, 48, 11, Ink::PART);
 	if (fog_on)
 		pen.rect(463, -23, 88, 46, 10, Ink::LIT, 0.3f);
 	for (int k = 0; k < 7; k++)
 		pen.line(476.0f + static_cast<float>(k) * 11.0f, -18, 476.0f + static_cast<float>(k) * 11.0f, 18, Ink::DETAIL);
-	pen.hot(false);
+	pen.light();
 	pen.shape({ { 552, -14 }, { 640, -24 }, { 646.7f, -24 }, { 650, -20.7f }, { 650, -14 }, { 650, 14 }, { 650, 20.7f },
 	            { 646.7f, 24 }, { 640, 24 }, { 552, 14 } },
 	          true, Ink::BODY);
 	pen.ellipse(650, 0, 6, 22, Ink::PART);
-	pen.hot(water_on);
+	pen.light(c.light(water.c_str()));
 	pen.push();
 	if (water_on)
 		pen.move(0, 2);
@@ -583,7 +594,7 @@ nozzle(Pen &pen, const Controls &c, unsigned p)
 	if (water_on)
 		pen.ellipse(310, -15, 15, 6, Ink::LIT);
 	pen.pop();
-	pen.hot(false);
+	pen.light();
 	if (p == 1) {
 		pen.text(310, -32, "DRAINAGE", Align::CENTRE, TEXT, false, true);
 		pen.text(507, -34, "FOG STREAM SW", Align::CENTRE, TEXT, false, true);
@@ -595,7 +606,7 @@ brave(Pen &pen, const Controls &c)
 {
 	const float X = 112, Y = 196, W = 476, H = 357;
 
-	pen.hot(c.on("1p_sight_x") || c.on("1p_sight_y") || c.on("2p_sight_x") || c.on("2p_sight_y"));
+	pen.light(c.light("1p_sight_x") | c.light("1p_sight_y") | c.light("2p_sight_x") | c.light("2p_sight_y"));
 	pen.rect(X, Y, W, H, 8, Ink::BODY);
 	for (int k = 1; k < 4; k++) {
 		const float fx = X + static_cast<float>(k) * W / 4.0f, fy = Y + static_cast<float>(k) * H / 4.0f;
@@ -603,7 +614,7 @@ brave(Pen &pen, const Controls &c)
 		pen.line(fx, Y + 6, fx, Y + H - 6, Ink::DETAIL, 1.0f);
 		pen.line(X + 6, fy, X + W - 6, fy, Ink::DETAIL, 1.0f);
 	}
-	pen.hot(false);
+	pen.light();
 
 	/* The nozzles stand on each side of the screen, START under each */
 	for (const auto &[p, tx] : { std::pair{ 1u, 56.0f }, std::pair{ 2u, 644.0f } }) {
@@ -616,9 +627,9 @@ brave(Pen &pen, const Controls &c)
 		pen.pop();
 		pen.text(tx + 4, 722, p == 1 ? "1P" : "2P", Align::CENTRE, BIG);
 		push_button(pen, c, start.c_str(), tx, 788, 13, "", 'b');
-		pen.hot(c.on(start.c_str()));
+		pen.light(c.light(start.c_str()));
 		pen.text(p == 1 ? tx + 30 : tx - 30, 794, "START", p == 1 ? Align::LEFT : Align::RIGHT);
-		pen.hot(false);
+		pen.light();
 	}
 
 	/* Where each nozzle aims, and when it is off the screen */
@@ -629,7 +640,7 @@ brave(Pen &pen, const Controls &c)
 		const float px = X + (c.value(x.c_str()) + 1.0f) / 2.0f * W, py = Y + (c.value(y.c_str()) + 1.0f) / 2.0f * H;
 		const char number[2] = { static_cast<char>('0' + p), 0 };
 
-		pen.hot(c.on(x.c_str()) || c.on(y.c_str()));
+		pen.light(c.light(x.c_str()) | c.light(y.c_str()));
 		if (!away) {
 			pen.ellipse(px, py, 14, 14, Ink::INK);
 			pen.line(px - 22, py, px - 8, py, Ink::INK, 1.8f);
@@ -638,10 +649,10 @@ brave(Pen &pen, const Controls &c)
 			pen.line(px, py + 8, px, py + 22, Ink::INK, 1.8f);
 			pen.text(px + 18, py - 14, number, Align::LEFT, TEXT, true);
 		}
-		pen.hot(away);
+		pen.light(c.light(off.c_str()));
 		pen.text(X + W, Y + H + (p == 1 ? 24.0f : 44.0f), away ? (p == 1 ? "1P OUT OF SCREEN" : "2P OUT OF SCREEN") : "",
 		         Align::RIGHT);
-		pen.hot(false);
+		pen.light();
 	}
 	pen.text(X, Y - 12, "SIGHT LOCATION", Align::LEFT);
 }
@@ -652,25 +663,25 @@ harriers(Pen &pen, const Controls &c)
 	const float cx = 250, cy = 340, R = 130;
 	const float x = cx + c.value("stick_h") * (R - 44), y = cy + c.value("stick_v") * (R - 44);
 
-	pen.hot(c.on("stick_h") || c.on("stick_v"));
+	pen.light(c.light("stick_h") | c.light("stick_v"));
 	pen.circle(cx, cy, R, Ink::BODY);
 	pen.circle(cx, cy, R * 0.5f, Ink::DETAIL);
 	pen.dashes(cx - R + 10, cy, cx + R - 10, cy, 3, 6);
 	pen.dashes(cx, cy - R + 10, cx, cy + R - 10, 3, 6);
-	pen.hot(false);
+	pen.light();
 	pen.line(cx, cy, x, y, Ink::DETAIL, 3.0f);
 	pen.push();
 	pen.move(x, y);
 	pen.circle(0, 0, 40, Ink::PART);
-	pen.hot(c.on("bullet"));
+	pen.light(c.light("bullet"));
 	pen.arc(0, 0, 47, -PI / 2 - 0.55f, -PI / 2 + 0.55f, Ink::THICK, 7.0f);
 	if (c.on("bullet"))
 		pen.arc(0, 0, 47, -PI / 2 - 0.55f, -PI / 2 + 0.55f, Ink::LIT, 7.0f);
-	pen.hot(c.on("missile"));
+	pen.light(c.light("missile"));
 	pen.circle(0, 8, 12, Ink::PART);
 	if (c.on("missile"))
 		pen.circle(0, 8, 11, Ink::LIT);
-	pen.hot(false);
+	pen.light();
 	pen.pop();
 	pen.legend(cx, cy - R - 14, "BULLET", "MISSILE");
 	pen.text(cx, cy + R + 26, "STICK H · STICK V", Align::CENTRE);
@@ -678,7 +689,7 @@ harriers(Pen &pen, const Controls &c)
 	for (const auto &[id, bx, label] : { std::tuple{ "vr_l", 240.0f, "VR L" }, std::tuple{ "vr_r", 310.0f, "VR R" } }) {
 		const bool on = c.on(id);
 
-		pen.hot(on);
+		pen.light(c.light(id));
 		pen.push();
 		pen.sink(on, bx, 104);
 		pen.rect(bx - 17, 90, 34, 28, 6, Ink::PART);
@@ -686,7 +697,7 @@ harriers(Pen &pen, const Controls &c)
 			pen.rect(bx - 16, 91, 32, 26, 5, Ink::LIT);
 		pen.pop();
 		pen.text(bx, 136, label, Align::CENTRE);
-		pen.hot(false);
+		pen.light();
 	}
 	push_button(pen, c, "start", 390, 104, 13, "START", 'b');
 }
@@ -699,7 +710,7 @@ racer(Pen &pen, const Controls &c)
 	pen.rect(20, 20, 480, 580, 30, Ink::BODY);
 	for (const auto &[id, x, brake] : { std::tuple{ "left_lever", 130.0f, false }, std::tuple{ "right_lever", 390.0f, true } }) {
 		pen.rect(x - 12, 78 + dy, 24, 268, 12, Ink::PART);
-		pen.hot(c.on(id));
+		pen.light(c.light(id));
 		pen.push();
 		pen.move(0, c.value(id) * 110.0f);
 		pen.rect(x - 74, 200 + dy, 148, 38, 19, Ink::PART);
@@ -708,7 +719,7 @@ racer(Pen &pen, const Controls &c)
 		if (brake && c.has("brake")) {
 			const bool on = c.on("brake");
 
-			pen.hot(on);
+			pen.light(c.light("brake"));
 			pen.push();
 			if (on)
 				pen.move(0, -9);
@@ -718,7 +729,7 @@ racer(Pen &pen, const Controls &c)
 			pen.text(x - 82, 268 + dy, "BRAKE", Align::RIGHT);
 		}
 		pen.pop();
-		pen.hot(false);
+		pen.light();
 	}
 	pen.text(130, 64 + dy, "LEFT LEVER", Align::CENTRE);
 	pen.text(390, 64 + dy, "RIGHT LEVER", Align::CENTRE);
@@ -783,32 +794,33 @@ air_trix(Pen &pen, const Controls &c)
 		return points;
 	};
 
-	pen.hot(c.on("yaw"));
+	pen.light(c.light("yaw"));
 	pen.shape(circle(0.72f), true, Ink::BODY);
 	pen.shape(circle(0.56f), true, Ink::DETAIL);
-	pen.hot(false);
+	pen.light();
 	pen.shape(board(1, -0.05f, 1, all), true, Ink::DETAIL);
-	pen.hot(c.on("roll"));
+	pen.light(c.light("roll"));
 	pen.shape(board(1, 0, 1, all), true, Ink::BODY);
 	pen.shape(board(0.8f, 0.002f, 0.84f, all), true, Ink::DETAIL);
-	for (const auto &[on, nose] : { std::pair{ up, true }, std::pair{ down, false } }) {
+	for (const auto &[id, nose] : { std::pair{ "up", true }, std::pair{ "down", false } }) {
 		const auto end = board(1, 0.003f, 1, [nose](float z) { return nose ? z > 0.7f : z < -0.7f; });
+		const bool on = c.on(id);
 
-		pen.hot(on);
+		pen.light(c.light(id));
 		pen.shape(end, true, Ink::LINE);
 		if (on)
 			pen.shape(end, true, Ink::LIT, 0.0f, 0.85f);
 	}
-	pen.hot(false);
+	pen.light();
 	pen.text(290, 425, "YAW · ROLL", Align::CENTRE);
 
 	const ImVec2 nose = world(0, lift(1.1f) + 0.08f, 1.18f), tail = world(0, lift(1.1f) + 0.08f, -1.18f);
 
-	pen.hot(up);
+	pen.light(c.light("up"));
 	pen.text(nose.x, nose.y - 10, "NOSE · UP", Align::CENTRE);
-	pen.hot(down);
+	pen.light(c.light("down"));
 	pen.text(tail.x, tail.y + 28, "TAIL · DOWN", Align::CENTRE);
-	pen.hot(false);
+	pen.light();
 	pen.rect(110, 456, 360, 112, 20, Ink::BODY);
 	push_button(pen, c, "start", 200, 500, 22, "START", 'b');
 	push_button(pen, c, "left", 320, 500, 17, "LEFT", 'b');
@@ -822,6 +834,7 @@ virtual_on(Pen &pen, const Controls &c)
 	for (const auto &[side, cx, label] : { std::tuple{ "left", 210.0f, "LEFT-LEVER" }, std::tuple{ "right", 450.0f, "RIGHT-LEVER" } }) {
 		const std::string lever = std::string(side) + "_lever_";
 		const auto on = [&](const char *way) { return c.on((lever + way).c_str()); };
+		const auto light = [&](const char *way) { return c.light((lever + way).c_str()); };
 		const float cy = 270, R = 104;
 		float dx = static_cast<float>(on("right")) - static_cast<float>(on("left"));
 		float dy = static_cast<float>(on("down")) - static_cast<float>(on("up"));
@@ -835,10 +848,10 @@ virtual_on(Pen &pen, const Controls &c)
 			outer.push_back({ cx + R * std::cos(a), cy + R * std::sin(a) });
 			inner.push_back({ cx + 44 * std::cos(a), cy + 44 * std::sin(a) });
 		}
-		pen.hot(on("up") || on("down") || on("left") || on("right"));
+		pen.light(light("up") | light("down") | light("left") | light("right"));
 		pen.shape(outer, true, Ink::BODY);
 		pen.shape(inner, true, Ink::DETAIL);
-		pen.hot(false);
+		pen.light();
 
 		const float x = cx + dx * 60, y = cy + dy * 60;
 		const std::string trigger = std::string(side) + "_trigger", turbo = std::string(side) + "_turbo";
@@ -847,15 +860,15 @@ virtual_on(Pen &pen, const Controls &c)
 		pen.push();
 		pen.move(x, y);
 		pen.circle(0, 0, 36, Ink::PART);
-		pen.hot(c.on(trigger.c_str()));
+		pen.light(c.light(trigger.c_str()));
 		pen.arc(0, 0, 43, -PI / 2 - 0.5f, -PI / 2 + 0.5f, Ink::THICK, 7.0f);
 		if (c.on(trigger.c_str()))
 			pen.arc(0, 0, 43, -PI / 2 - 0.5f, -PI / 2 + 0.5f, Ink::LIT, 7.0f);
-		pen.hot(c.on(turbo.c_str()));
+		pen.light(c.light(turbo.c_str()));
 		pen.circle(0, 4, 12, Ink::PART);
 		if (c.on(turbo.c_str()))
 			pen.circle(0, 4, 11, Ink::LIT);
-		pen.hot(false);
+		pen.light();
 		pen.pop();
 		pen.text(cx, cy + R + 26, label, Align::CENTRE);
 		pen.legend(cx, cy - R - 14, "TRIGGER", "TURBO");

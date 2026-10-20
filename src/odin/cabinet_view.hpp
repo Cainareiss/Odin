@@ -21,6 +21,7 @@
 
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "imgui/imgui.h"
@@ -30,18 +31,20 @@
 namespace odin {
 
 /* What lights the drawing of a cabinet: its controls and where they are
- * now, and whether COIN, SERVICE and TEST of player 1 are worked */
+ * now, whether COIN, SERVICE and TEST of player 1 are worked, the control
+ * whose input is caught (its id, "coin", "service" or "test"; empty: none) */
 struct CabinetNow {
 	std::span<const GameControl> controls;
 	std::span<const ControlNow> now;
 	bool coin = false, service = false, test = false;
+	std::string_view chosen = {};
 };
 
 /* The cabinet of a game drawn in a box (mock-up v50), as large as it fits
  * and in its middle: its controls where the cabinet has them, which move
  * as they are worked and are outlined with the accent, the light of a
- * button lit; COIN, SERVICE and TEST under them. False for a game it has
- * no drawing of. */
+ * button lit; COIN, SERVICE and TEST under them. The control whose input
+ * is caught is in the accent too. False for a game it has no drawing of. */
 bool draw_cabinet(const MenuKit &kit, const std::string &game, const CabinetNow &now, ImVec2 a, ImVec2 b);
 
 } /* namespace odin */

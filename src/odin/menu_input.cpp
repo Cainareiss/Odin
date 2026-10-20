@@ -939,6 +939,13 @@ cabinet_box(const MenuKit &kit, const MenuState &state, ImVec2 a, ImVec2 b, bool
 	}
 	if (service != controls.end() && static_cast<size_t>(service - controls.begin()) < state.now.size())
 		now.service = state.now[static_cast<size_t>(service - controls.begin())].on;
+	if (const std::optional<MenuSlot> &slot = state.catching) {
+		if (slot->control < 0)
+			now.chosen = slot->role == Role::COIN1 ? "coin" : slot->role == Role::TEST ? "test" : "";
+		else if (static_cast<size_t>(slot->control) < n)
+			now.chosen = controls.begin() + slot->control == service ?
+			             "service" : std::string_view(controls[static_cast<size_t>(slot->control)].id);
+	}
 
 	float top = a.y + kit.px(BOX_INSIDE);
 
