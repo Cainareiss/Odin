@@ -64,6 +64,11 @@ public:
 	const MenuPalette &palette() const { return m_palette; }
 	float px(float points) const { return points * m_scale; }
 
+	/* The icons of the menu (mock-up v50), drawn in a square of that side:
+	 * a gamepad, a gamepad with its cross, a screen, a keyboard, an i */
+	enum class Icon { PAD, INPUT, DISPLAY, KEYBOARD, ABOUT };
+	static void icon(ImDrawList *list, Icon icon, ImVec2 at, float side, ImU32 colour);
+
 	/* A frame with its corners cut; a colour of 0 is none */
 	static void frame(ImDrawList *list, ImVec2 a, ImVec2 b, float cut, ImU32 fill, ImU32 border);
 	/* A line of dashes along points, `on` long and `off` apart; a frame of
@@ -72,9 +77,10 @@ public:
 	                   float on, float off);
 	void dashed_frame(ImDrawList *list, ImVec2 a, ImVec2 b, ImU32 colour) const;
 
-	/* The tabs in the middle of the width: a click picks one. True when
-	 * the choice changed. */
-	bool tabs(std::span<const char *const> names, int &chosen) const;
+	/* The tabs in the middle of the width, each its icon and its name (the
+	 * one chosen only, when `narrow`): a click picks one. True when the
+	 * choice changed. */
+	bool tabs(std::span<const char *const> names, std::span<const Icon> icons, bool narrow, int &chosen) const;
 
 	/* A group of settings: its title, then its rows in a frame */
 	void begin_group(const char *title);
@@ -90,8 +96,10 @@ public:
 	/* A row with a list that drops down from its right: true when the
 	 * choice changed */
 	bool dropdown(const char *name, const char *about, std::span<const std::string> labels, int &chosen);
-	/* The same list from a box alone at that place, that wide; its height */
-	bool picker(const char *id, ImVec2 at, float width, std::span<const std::string> labels, int &chosen) const;
+	/* The same list from a box alone at that place, that wide, an icon
+	 * before what is chosen (none: nullptr); its height */
+	bool picker(const char *id, ImVec2 at, float width, std::span<const std::string> labels, int &chosen,
+	            const Icon *icon = nullptr) const;
 	float picker_height() const;
 
 	/* A row of a list of controls, at that place and that width: its name

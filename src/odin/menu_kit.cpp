@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <numbers>
 #include <utility>
 
 namespace odin {
@@ -140,25 +141,76 @@ MenuKit::dashed_frame(ImDrawList *list, ImVec2 a, ImVec2 b, ImU32 colour) const
 	dashes(list, points, true, colour, 1.0f, px(3.0f), px(2.0f));
 }
 
+/* The paths of the mock-up, in a square of 24 */
+void
+MenuKit::icon(ImDrawList *list, Icon icon, ImVec2 at, float side, ImU32 colour)
+{
+	const float k = side / 24.0f, w = std::max(1.0f, 1.8f * k);
+	const auto p = [&](float x, float y) { return ImVec2{ at.x + x * k, at.y + y * k }; };
+	const auto arc = [&](float x, float y, float r, float from, float to) {
+		list->PathArcTo(p(x, y), r * k, from * std::numbers::pi_v<float> / 180.0f, to * std::numbers::pi_v<float> / 180.0f);
+	};
+
+	switch (icon) {
+	case Icon::PAD:
+	case Icon::INPUT:
+		list->PathLineTo(p(6, 9));
+		list->PathLineTo(p(18, 9));
+		arc(18, 13, 4, 270, 360);
+		list->PathLineTo(p(22, 14));
+		arc(19, 14, 3, 0, 143);
+		list->PathLineTo(p(15, 14));
+		list->PathLineTo(p(9, 14));
+		list->PathLineTo(p(7.4f, 15.8f));
+		arc(5, 14, 3, 37, 180);
+		list->PathLineTo(p(2, 13));
+		arc(6, 13, 4, 180, 270);
+		list->PathStroke(colour, ImDrawFlags_Closed, w);
+		if (icon == Icon::INPUT) {
+			list->AddLine(p(7, 12), p(7, 15), colour, w);
+			list->AddLine(p(5.5f, 13.5f), p(8.5f, 13.5f), colour, w);
+		}
+		break;
+	case Icon::DISPLAY:
+		list->AddRect(p(3, 5), p(21, 17), colour, 2.0f * k, ImDrawFlags_None, w);
+		list->AddLine(p(8, 21), p(16, 21), colour, w);
+		break;
+	case Icon::KEYBOARD:
+		list->AddRect(p(2, 6), p(22, 18), colour, 2.0f * k, ImDrawFlags_None, w);
+		for (const float x : { 6.0f, 10.0f, 14.0f, 18.0f })
+			list->AddLine(p(x, 10), p(x + 1, 10), colour, w);
+		list->AddLine(p(7, 14), p(17, 14), colour, w);
+		break;
+	case Icon::ABOUT:
+		list->AddCircle(p(12, 12), 9.0f * k, colour, 0, w);
+		list->AddLine(p(12, 11), p(12, 17), colour, w);
+		list->AddLine(p(12, 7.5f), p(12, 8.0f), colour, w);
+		break;
+	}
+}
+
 bool
-MenuKit::tabs(std::span<const char *const> names, int &chosen) const
+MenuKit::tabs(std::span<const char *const> names, std::span<const Icon> icons, bool narrow, int &chosen) const
 {
 	ImDrawList *const list = ImGui::GetWindowDrawList();
 	const ImVec2 at = ImGui::GetCursorScreenPos();
 	const float width = ImGui::GetContentRegionAvail().x;
-	const float wide = px(10.0f), high = px(CELL_HIGH + 1.0f), gap = px(6.0f);
-	const float h = ImGui::GetTextLineHeight() + 2.0f * high;
+	const float wide = px(10.0f), high = px(CELL_HIGH + 1.0f), gap = px(6.0f), line = ImGui::GetTextLineHeight();
+	const float h = line + 2.0f * high, side = line, space = px(6.0f);
 	const int was = chosen;
-	float total = 0.0f;
+	const auto shows = [&](size_t i) { return !narrow || static_cast<int>(i) == chosen; };
+	const auto tab_w = [&](size_t i) {
+		return side + (shows(i) ? space + ImGui::CalcTextSize(names[i]).x : 0.0f) + 2.0f * wide;
+	};
+	float total = -gap;
 
-	for (const char *const name : names)
-		total += ImGui::CalcTextSize(name).x + 2.0f * wide + gap;
-	total -= gap;
+	for (size_t i = 0; i < names.size(); i++)
+		total += tab_w(i) + gap;
 
 	float x = at.x + std::max(0.0f, (width - total) / 2.0f);
 
 	for (size_t i = 0; i < names.size(); i++) {
-		const float w = ImGui::CalcTextSize(names[i]).x + 2.0f * wide;
+		const float w = tab_w(i);
 		const ImVec2 a = { x, at.y }, b = { x + w, at.y + h };
 
 		ImGui::SetCursorScreenPos(a);
@@ -166,13 +218,16 @@ MenuKit::tabs(std::span<const char *const> names, int &chosen) const
 			chosen = static_cast<int>(i);
 
 		const bool on = chosen == static_cast<int>(i), hovered = ImGui::IsItemHovered();
+		const ImU32 colour = on ? m_palette.action : hovered ? m_palette.ink : m_palette.dim;
 
 		if (on)
 			frame(list, a, b, px(CONTROL_CUT), 0, m_palette.action);
 		else if (hovered)
 			frame(list, a, b, px(CONTROL_CUT), m_palette.hover, 0);
-		list->AddText({ a.x + wide, a.y + high }, on ? m_palette.action : hovered ? m_palette.ink : m_palette.dim,
-		              names[i]);
+		if (i < icons.size())
+			icon(list, icons[i], { a.x + wide, a.y + high }, side, colour);
+		if (shows(i))
+			list->AddText({ a.x + wide + side + space, a.y + high }, colour, names[i]);
 		x += w + gap;
 	}
 	ImGui::SetCursorScreenPos(at);
@@ -325,7 +380,8 @@ MenuKit::picker_height() const
 }
 
 bool
-MenuKit::picker(const char *id, ImVec2 at, float width, std::span<const std::string> labels, int &chosen) const
+MenuKit::picker(const char *id, ImVec2 at, float width, std::span<const std::string> labels, int &chosen,
+                const Icon *icon_shown) const
 {
 	ImGui::PushID(id);
 
@@ -340,8 +396,12 @@ MenuKit::picker(const char *id, ImVec2 at, float width, std::span<const std::str
 		ImGui::OpenPopup("list");
 	frame(list, at, b, px(CONTROL_CUT), ImGui::IsItemHovered() ? p.hover : 0, p.outline);
 	if (chosen >= 0 && static_cast<size_t>(chosen) < labels.size()) {
+		const float side = ImGui::GetTextLineHeight(), before = icon_shown ? side + px(6.0f) : 0.0f;
+
+		if (icon_shown)
+			icon(list, *icon_shown, { at.x + wide, at.y + high }, side, p.dim);
 		list->PushClipRect(at, { b.x - wide - arrow, b.y }, true);
-		list->AddText({ at.x + wide, at.y + high }, p.ink, labels[static_cast<size_t>(chosen)].c_str());
+		list->AddText({ at.x + wide + before, at.y + high }, p.ink, labels[static_cast<size_t>(chosen)].c_str());
 		list->PopClipRect();
 	}
 	list->AddText({ b.x - wide - arrow, at.y + high }, p.dim, "v");

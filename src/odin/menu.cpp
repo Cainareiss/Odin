@@ -53,6 +53,10 @@ constexpr float PADDING = 14.0f;
 
 /* The tabs of the pages, in the order of Menu::Page */
 constexpr const char *TABS[] = { "Input", "Display", "About" };
+constexpr MenuKit::Icon TAB_ICONS[] = { MenuKit::Icon::INPUT, MenuKit::Icon::DISPLAY, MenuKit::Icon::ABOUT };
+/* A window narrower than this many times its height has the names of the
+ * tabs not chosen left out */
+constexpr float WIDE = 1.5f;
 
 /* The window at start, that many times the screen; its sizes shorter
  * where the row is narrow */
@@ -269,7 +273,7 @@ Menu::build(MenuState &state)
 	ImDrawList *const list = ImGui::GetWindowDrawList();
 
 	MenuKit::frame(list, a, b, kit.px(CUT), palette.frame, palette.faint);
-	kit.tabs(TABS, m_page);
+	kit.tabs(TABS, TAB_ICONS, room.x < WIDE * room.y, m_page);
 
 	/* What the page says at the bottom, beside the keys, on as many lines
 	 * as it takes: the page above it */

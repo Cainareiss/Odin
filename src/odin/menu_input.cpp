@@ -644,7 +644,9 @@ devices_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width, bool t
 			x += size.x + kit.px(8.0f);
 			w -= size.x + kit.px(8.0f);
 		}
-		if (kit.picker("device", { x, at.y }, w, devices, device)) {
+		const MenuKit::Icon kind = device ? MenuKit::Icon::PAD : MenuKit::Icon::KEYBOARD;
+
+		if (kit.picker("device", { x, at.y }, w, devices, device, &kind)) {
 			const size_t chosen = static_cast<size_t>(device);
 
 			state.player = player;
