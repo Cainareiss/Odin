@@ -160,7 +160,8 @@ Display::make(Hikaru &board, const Keyboard &keys, const Options &options)
 Display::Display(Hikaru &board, const Keyboard &keys, const Options &options, SDL_Window *window,
                  SDL_GLContext context)
 	: m_board(board), m_keys(keys), m_window(window), m_context(context), m_menu_shown(false),
-	  m_title(options.title), m_frame(0), m_scale(options.scale), m_anisotropy(options.anisotropy), m_logged(false),
+	  m_title(options.title), m_show_speed(options.show_speed),
+	  m_frame(0), m_scale(options.scale), m_anisotropy(options.anisotropy), m_logged(false),
 	  m_picture_fb(0), m_picture_width(Renderer::WIDTH), m_picture_height(Renderer::HEIGHT),
 	  m_late(env_flag("ODIN_LATE_DRAW")), m_held(false), m_late_draw(0),
 	  m_shot_prefix(std::getenv("ODIN_SCREENSHOT")), m_shot_every(60),
@@ -172,6 +173,7 @@ Display::Display(Hikaru &board, const Keyboard &keys, const Options &options, SD
 	Renderer::Memory memory;
 	Renderer::Options looks;
 
+	m_gpu = reinterpret_cast<const char *>(glGetString(GL_RENDERER));
 	if (const int every = env_int("ODIN_SCREENSHOT_EVERY", 0); every > 0)
 		m_shot_every = static_cast<unsigned>(every);
 
@@ -317,11 +319,11 @@ Display::menu_event(const SDL_Event &event)
 
 /* Built on this thread, drawn on the drawing thread meanwhile */
 void
-Display::draw_menu()
+Display::draw_menu(MenuState &state)
 {
 	int w, h;
 
-	m_menu->build();
+	m_menu->build(state);
 	SDL_GetWindowSizeInPixels(m_window, &w, &h);
 	run([this, w, h] {
 		m_menu->draw(static_cast<unsigned>(w), static_cast<unsigned>(h));
@@ -472,7 +474,7 @@ Display::show_speed()
 	char title[512];
 
 	m_title_frames++;
-	if (m_title_since && now - m_title_since < second)
+	if (!m_show_speed || (m_title_since && now - m_title_since < second))
 		return;
 
 	/* Nothing to tell at the start nor after a pause */
@@ -519,6 +521,58 @@ Display::set_window(unsigned times, bool fullscreen)
 	SDL_SetWindowPosition(m_window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
 	if (fullscreen)
 		SDL_SetWindowFullscreen(m_window, true);
+}
+
+void
+Display::set_scale(unsigned scale)
+{
+	finish();
+	m_scale = scale;
+}
+
+void
+Display::set_anisotropy(unsigned level)
+{
+	finish();
+	m_anisotropy = level;
+}
+
+bool
+Display::fullscreen() const
+{
+	return (SDL_GetWindowFlags(m_window) & SDL_WINDOW_FULLSCREEN) != 0;
+}
+
+void
+Display::set_fullscreen(bool on)
+{
+	if (on != fullscreen())
+		toggle_fullscreen();
+}
+
+void
+Display::resize(unsigned times)
+{
+	if (!fullscreen())
+		set_window(times, false);
+}
+
+void
+Display::set_show_speed(bool on)
+{
+	m_show_speed = on;
+	m_title_since = 0;
+	if (!on)
+		SDL_SetWindowTitle(m_window, "Odin");
+}
+
+void
+Display::display_size(unsigned &w, unsigned &h) const
+{
+	const SDL_DisplayMode *const mode = SDL_GetDesktopDisplayMode(SDL_GetDisplayForWindow(m_window));
+
+	w = mode ? static_cast<unsigned>(static_cast<float>(mode->w) * mode->pixel_density) : 0;
+	h = mode ? static_cast<unsigned>(static_cast<float>(mode->h) * mode->pixel_density) : 0;
 }
 
 void

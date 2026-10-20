@@ -21,9 +21,12 @@
 #include <algorithm>
 #include <utility>
 
+#include <cstdio>
+
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_opengl3.h"
 #include "imgui/imgui_impl_sdl3.h"
+#include "odin/menu_kit.hpp"
 #include "odin/picture.hpp"
 #include "odin/renderer_gl.hpp"
 
@@ -39,13 +42,6 @@ constexpr std::array<std::pair<const char *, const char *>, 2> MENU_HINTS = { {
 	{ SDL_HINT_MOUSE_AUTO_CAPTURE, "0" },
 } };
 
-/* Rúnasteinn, the palette by default: granite and the red ochre of painted
- * runestones. The frame lets the game show through, at a fifth. */
-constexpr ImU32 FRAME = IM_COL32(0x2F, 0x2F, 0x2C, 0xCC);
-constexpr ImU32 INK = IM_COL32(0xEE, 0xEA, 0xE2, 0xFF);
-constexpr ImU32 DIM = IM_COL32(0xB0, 0xAB, 0xA0, 0xFF);
-constexpr ImU32 FAINT = IM_COL32(0x83, 0x7F, 0x75, 0xFF);
-
 /* The frame in the window: its margin, its largest size, the cut of its
  * corners at 45 degrees and its padding, in points */
 constexpr float MARGIN = 16.0f;
@@ -53,6 +49,41 @@ constexpr float WIDEST = 1080.0f;
 constexpr float HIGHEST = 760.0f;
 constexpr float CUT = 8.0f;
 constexpr float PADDING = 14.0f;
+
+/* The tabs of the pages, in the order of Menu::Page */
+constexpr const char *TABS[] = { "Display", "About" };
+
+/* The window at start, that many times the screen; its sizes shorter
+ * where the row is narrow */
+constexpr const char *WINDOW_SIZES[] = { "640 × 480", "1280 × 960", "1920 × 1440", "2560 × 1920" };
+constexpr const char *WINDOW_WIDTHS[] = { "640", "1280", "1920", "2560" };
+constexpr unsigned ANISOTROPY[] = { 1, 2, 4, 8, 16 };
+
+/* The libraries Odin is made with: who wrote them, their licence */
+constexpr const char *LICENCES[][3] = {
+	{ "Odin", "Réda Chérif-Touil · Valkyrie, Stefano Teso", "GPL 3.0 or later" },
+	{ "Dear ImGui", "Omar Cornut", "MIT" },
+	{ "SDL 3", "Sam Lantinga", "zlib" },
+	{ "GLEW", "Milan Ikits, Marcelo Magallon", "BSD / MIT" },
+	{ "Jansson", "Petri Lehtinen", "MIT" },
+};
+
+ImVec4
+colour(ImU32 c)
+{
+	return ImGui::ColorConvertU32ToFloat4(c);
+}
+
+/* Which of the values is the one; -1 for none */
+template <typename T, size_t N>
+int
+index_of(const T (&values)[N], T value)
+{
+	for (size_t i = 0; i < N; i++)
+		if (values[i] == value)
+			return static_cast<int>(i);
+	return -1;
+}
 
 /* The blur: how far apart its taps are, in texels of the half picture,
  * how many times it goes back and forth, and how much light it keeps */
@@ -99,14 +130,6 @@ void main()
 }
 )";
 
-/* The outline of a frame with its corners cut at 45 degrees */
-std::array<ImVec2, 8>
-cut_corners(ImVec2 a, ImVec2 b, float cut)
-{
-	return { { { a.x + cut, a.y }, { b.x - cut, a.y }, { b.x, a.y + cut }, { b.x, b.y - cut },
-	           { b.x - cut, b.y }, { a.x + cut, b.y }, { a.x, b.y - cut }, { a.x, a.y + cut } } };
-}
-
 void
 set_hint(const char *name, const std::optional<std::string> &value)
 {
@@ -119,7 +142,7 @@ set_hint(const char *name, const std::optional<std::string> &value)
 } /* namespace */
 
 Menu::Menu(SDL_Window *window, const std::string &title)
-	: m_window(window), m_title(title), m_imgui(nullptr), m_cursor_shown(true),
+	: m_window(window), m_title(title), m_imgui(nullptr), m_scale(0.0f), m_page(DISPLAY), m_cursor_shown(true),
 	  m_gl(false), m_vao(0), m_blur(0), m_show(0), m_blur_step(-1), m_show_light(-1),
 	  m_blur_tex{}, m_blur_fb{}, m_blur_w(0), m_blur_h(0), m_frozen(false)
 {
@@ -133,10 +156,26 @@ Menu::Menu(SDL_Window *window, const std::string &title)
 	io.IniFilename = nullptr;
 	io.LogFilename = nullptr;
 
+	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+
+	/* The kit draws the widgets; the windows only hold them */
 	ImGuiStyle &style = ImGui::GetStyle();
+	const MenuPalette &palette = RUNASTEINN;
 	style.WindowBorderSize = 0.0f;
-	style.Colors[ImGuiCol_Text] = ImGui::ColorConvertU32ToFloat4(INK);
-	style.Colors[ImGuiCol_TextDisabled] = ImGui::ColorConvertU32ToFloat4(FAINT);
+	style.ChildBorderSize = 0.0f;
+	style.WindowPadding = { PADDING, PADDING };
+	style.ItemSpacing = { 0.0f, 0.0f };
+	style.ScrollbarSize = 8.0f;
+	style.ScrollbarRounding = 0.0f;
+	style.Colors[ImGuiCol_Text] = colour(palette.ink);
+	style.Colors[ImGuiCol_TextDisabled] = colour(palette.faint);
+	style.Colors[ImGuiCol_ChildBg] = colour(0);
+	style.Colors[ImGuiCol_ScrollbarBg] = colour(0);
+	style.Colors[ImGuiCol_ScrollbarGrab] = colour(palette.outline);
+	style.Colors[ImGuiCol_ScrollbarGrabHovered] = colour(palette.dim);
+	style.Colors[ImGuiCol_ScrollbarGrabActive] = colour(palette.ink);
+	style.Colors[ImGuiCol_NavCursor] = colour(palette.accent);
+	m_style = style;
 
 	ImGui_ImplSDL3_InitForOpenGL(window, nullptr);
 	/* The gamepads are Odin's (controls.hpp) */
@@ -181,19 +220,44 @@ Menu::event(const SDL_Event &event)
 	ImGui_ImplSDL3_ProcessEvent(&event);
 }
 
-/* The frame, empty for now: ODIN and the game at the top, what the keys do
- * at the bottom */
+/* The menu follows the scale the user gives the display (125 % on a
+ * laptop, say), in points: the pixels of a dense display are SDL's. */
 void
-Menu::build()
+Menu::follow_scale()
+{
+	const float density = SDL_GetWindowPixelDensity(m_window);
+	float scale = SDL_GetWindowDisplayScale(m_window) / (density > 0.0f ? density : 1.0f);
+
+	if (scale <= 0.0f)
+		scale = 1.0f;
+	if (scale == m_scale)
+		return;
+
+	ImGuiStyle &style = ImGui::GetStyle();
+
+	style = m_style;
+	style.ScaleAllSizes(scale);
+	style.FontScaleDpi = scale;
+	m_scale = scale;
+}
+
+/* The frame: the tabs at the top, the page under them, what it says and
+ * what the keys do at the bottom */
+void
+Menu::build(MenuState &state)
 {
 	ImGui::SetCurrentContext(m_imgui);
+	follow_scale();
 	ImGui_ImplSDL3_NewFrame();
 	ImGui::NewFrame();
 
+	MenuKit kit(RUNASTEINN, m_scale);
+	const MenuPalette &palette = kit.palette();
 	const ImVec2 room = ImGui::GetIO().DisplaySize;
-	const float w = std::max(0.0f, std::min(room.x - 2.0f * MARGIN, WIDEST));
-	const float h = std::max(0.0f, std::min(room.y - 2.0f * MARGIN, HIGHEST));
+	const float w = std::max(0.0f, std::min(room.x - 2.0f * kit.px(MARGIN), kit.px(WIDEST)));
+	const float h = std::max(0.0f, std::min(room.y - 2.0f * kit.px(MARGIN), kit.px(HIGHEST)));
 	const ImVec2 a = { (room.x - w) / 2.0f, (room.y - h) / 2.0f }, b = { a.x + w, a.y + h };
+	const float line = ImGui::GetTextLineHeight(), pad = kit.px(PADDING);
 
 	ImGui::SetNextWindowPos(a);
 	ImGui::SetNextWindowSize({ w, h });
@@ -201,19 +265,123 @@ Menu::build()
 	             ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBackground);
 
 	ImDrawList *const list = ImGui::GetWindowDrawList();
-	const std::array<ImVec2, 8> outline = cut_corners(a, b, CUT);
-	const float line = ImGui::GetTextLineHeight();
-	const float head = a.y + PADDING + line + PADDING;
 
-	list->AddConvexPolyFilled(outline.data(), static_cast<int>(outline.size()), FRAME);
-	list->AddPolyline(outline.data(), static_cast<int>(outline.size()), FAINT, ImDrawFlags_Closed, 1.0f);
-	list->AddText({ a.x + PADDING, a.y + PADDING }, INK, "ODIN");
-	list->AddText({ a.x + PADDING + ImGui::CalcTextSize("ODIN").x + line, a.y + PADDING }, DIM, m_title.c_str());
-	list->AddLine({ a.x, head }, { b.x, head }, FAINT, 1.0f);
-	list->AddText({ a.x + PADDING, b.y - PADDING - line }, DIM, "Esc: back to the game    Ctrl+Q: quit");
+	MenuKit::frame(list, a, b, kit.px(CUT), palette.frame, palette.faint);
+	kit.tabs(TABS, m_page);
+
+	/* What the page says at the bottom, beside the keys, on as many lines
+	 * as it takes: the page above it */
+	const char keys[] = "Esc: back to the game    Ctrl+Q: quit";
+	const float keys_w = ImGui::CalcTextSize(keys).x, help_w = std::max(0.0f, w - 3.0f * pad - keys_w);
+	const char *const help = m_page == DISPLAY ? display_help(state) : "";
+	const float foot = std::max(line, ImGui::CalcTextSize(help, nullptr, false, help_w).y);
+
+	ImGui::BeginChild("page", { 0.0f, -(foot + pad) }, ImGuiChildFlags_None, ImGuiWindowFlags_NoBackground);
+	if (m_page == DISPLAY)
+		page_display(kit, state);
+	else
+		page_about(kit);
+	ImGui::Dummy({ 0.0f, kit.px(4.0f) });
+	ImGui::EndChild();
+
+	list->AddText(ImGui::GetFont(), ImGui::GetFontSize(), { a.x + pad, b.y - pad - foot }, palette.dim, help,
+	              nullptr, help_w);
+	list->AddText({ b.x - pad - keys_w, b.y - pad - line }, palette.faint, keys);
 
 	ImGui::End();
 	ImGui::Render();
+}
+
+/* Display: what draws the picture, how fine, where, how fast */
+void
+Menu::page_display(MenuKit &kit, MenuState &state) const
+{
+	char about[160];
+	const bool narrow = ImGui::GetContentRegionAvail().x < kit.px(560.0f);
+
+	kit.begin_group("ENGINE");
+	kit.text("Graphics card", "the one the system gives Odin, with OpenGL 4.3", state.gpu.c_str());
+	kit.end_group();
+
+	kit.begin_group("3D QUALITY");
+	static constexpr const char *SCALES[] = { "1×", "2×", "3×", "4×", "5×", "6×" };
+	int scale = static_cast<int>(state.scale) - 1;
+
+	std::snprintf(about, sizeof(about), "internal resolution %u × %u%s", 640 * state.scale, 480 * state.scale,
+	              state.scale == 1 ? " · as the cabinet" : "");
+	if (kit.choice("Upscaling", about, SCALES, scale, state.scale_given ? "set by the command line: -x" : nullptr))
+		state.scale = static_cast<unsigned>(scale) + 1;
+
+	static constexpr const char *FILTERS[] = { "None", "2×", "4×", "8×", "16×" };
+	int filter = index_of(ANISOTROPY, state.anisotropy);
+
+	if (kit.choice("Texture filter", "anisotropic; the cabinet has none. Shows on far floors and roads (NASCAR, "
+	               "Virtual-On), hardly elsewhere", FILTERS, filter,
+	               state.anisotropy_given ? "set by the command line: -a" : nullptr))
+		state.anisotropy = ANISOTROPY[filter];
+	kit.end_group();
+
+	kit.begin_group("SCREEN");
+	static constexpr const char *MODES[] = { "Window", "Full screen" };
+	int mode = state.fullscreen ? 1 : 0;
+
+	std::snprintf(about, sizeof(about), "full screen at the size of the display, detected: %u × %u · F11 or Alt+Enter",
+	              state.display_w, state.display_h);
+	if (kit.choice("Display", about, MODES, mode, state.fullscreen_given ? "set by the command line: -f" : nullptr))
+		state.fullscreen = mode == 1;
+
+	int window = static_cast<int>(state.window) - 1;
+
+	if (kit.choice("Window size at start", "640 × 480 by default", narrow ? WINDOW_WIDTHS : WINDOW_SIZES, window,
+	               state.window_given ? "set by the command line: -w" : nullptr, state.fullscreen))
+		state.window = static_cast<unsigned>(window) + 1;
+	kit.end_group();
+
+	kit.begin_group("SPEED");
+	static constexpr const char *PACES[] = { "60 fps (cabinet)", "Unlimited" };
+	int pace = state.unthrottled ? 1 : 0;
+
+	if (kit.choice("Pace", "unlimited: as fast as the machine, without sound · at the next launch", PACES, pace,
+	               state.unthrottled_given ? "set by the command line: -u" : nullptr))
+		state.unthrottled = pace == 1;
+
+	static constexpr const char *ON_OFF[] = { "On", "Off" };
+	int speed = state.show_speed ? 0 : 1;
+
+	if (kit.choice("Show the speed", "frames per second in the title", ON_OFF, speed))
+		state.show_speed = speed == 0;
+	kit.end_group();
+
+}
+
+const char *
+Menu::display_help(const MenuState &state)
+{
+	return state.kept ? "These settings hold for every game." :
+	                    "These settings hold for every game, until Odin closes: ODIN_CONFIG=none keeps nothing.";
+}
+
+/* About: Odin, and the libraries it is made with */
+void
+Menu::page_about(MenuKit &kit) const
+{
+	ImDrawList *const list = ImGui::GetWindowDrawList();
+	const ImVec2 at = ImGui::GetCursorScreenPos();
+	const float big = ImGui::GetStyle().FontSizeBase * 2.5f;
+
+	ImGui::Dummy({ 0.0f, kit.px(14.0f) });
+	ImGui::PushFont(nullptr, big);
+	list->AddText({ at.x + kit.px(8.0f), ImGui::GetCursorScreenPos().y }, kit.palette().ink, "ODIN");
+	ImGui::Dummy({ 0.0f, ImGui::GetTextLineHeight() });
+	ImGui::PopFont();
+	list->AddText({ at.x + kit.px(8.0f), ImGui::GetCursorScreenPos().y + kit.px(4.0f) }, kit.palette().dim,
+	              "Sega Hikaru emulator, as close to the hardware as it goes");
+	ImGui::Dummy({ 0.0f, ImGui::GetTextLineHeight() + kit.px(8.0f) });
+
+	kit.begin_group("LICENCES");
+	for (const auto &[name, by, licence] : LICENCES)
+		kit.text(name, by, licence);
+	kit.end_group();
 }
 
 void

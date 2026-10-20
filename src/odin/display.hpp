@@ -39,6 +39,7 @@ namespace odin {
 
 class Keyboard;
 class Menu;
+struct MenuState;
 class Renderer;
 class Worker;
 
@@ -83,6 +84,7 @@ public:
 		unsigned anisotropy;	/* of the texture filter, 1 for none as on the board */
 		unsigned window;	/* the window that many times the screen */
 		bool fullscreen;
+		bool show_speed;	/* the frames a second in the title */
 		std::string title;	/* of the game, on its loading screen */
 	};
 
@@ -102,14 +104,27 @@ public:
 	/* Between the window and the whole display */
 	void toggle_fullscreen();
 
+	/* What the menu sets, the board waiting meanwhile. The window takes
+	 * `times` the screen unless it is on the whole display. */
+	void set_scale(unsigned scale);
+	void set_anisotropy(unsigned level);
+	bool fullscreen() const;
+	void set_fullscreen(bool on);
+	void resize(unsigned times);
+	void set_show_speed(bool on);
+	/* The graphics card, and the size in pixels of the display the
+	 * window is on */
+	const std::string &gpu() const { return m_gpu; }
+	void display_size(unsigned &w, unsigned &h) const;
+
 	/* The menu (menu.hpp), over the picture of the last frame while the
 	 * board waits: open_menu freezes that picture, draw_menu builds the
-	 * menu and shows it once. */
+	 * menu from the state and shows it once. */
 	void open_menu();
 	void close_menu();
 	bool menu_shown() const { return m_menu_shown; }
 	void menu_event(const SDL_Event &event);
-	void draw_menu();
+	void draw_menu(MenuState &state);
 
 	/* Hikaru::Screen */
 	void list_launched() override;
@@ -148,6 +163,8 @@ private:
 	std::unique_ptr<Menu> m_menu;
 	bool m_menu_shown;
 	std::string m_title;
+	std::string m_gpu;
+	bool m_show_speed;
 
 	/* The frame given to the drawing thread: its number, the options it
 	 * is drawn with, whether its drawing writes a log, and the picture

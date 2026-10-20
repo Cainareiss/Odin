@@ -26,9 +26,30 @@
 #include <GL/glew.h>
 #include <SDL3/SDL.h>
 
-struct ImGuiContext;
+#include "imgui/imgui.h"
 
 namespace odin {
+
+class MenuKit;
+
+/* What the pages of the menu show and change. The thread of the board
+ * keeps it and does what changed (main.cpp). */
+struct MenuState {
+	/* Display: the 3D that many times finer, the texture filter (1 for
+	 * none), the window at start that many times the screen, the whole
+	 * display, frames without a limit (at the next launch), the frames a
+	 * second in the title */
+	unsigned scale = 1, anisotropy = 1, window = 1;
+	bool fullscreen = false, unthrottled = false, show_speed = true;
+	/* Said on the command line: shown, not changed */
+	bool scale_given = false, anisotropy_given = false, window_given = false, fullscreen_given = false,
+	     unthrottled_given = false;
+	/* The graphics card, and the size of the display in pixels */
+	std::string gpu;
+	unsigned display_w = 0, display_h = 0;
+	/* odin.ini keeps what changes: not with ODIN_CONFIG=none */
+	bool kept = true;
+};
 
 /* The menu of Odin, drawn with Dear ImGui over the picture of the last
  * frame, frozen and blurred, while the game is paused (main.cpp).
@@ -49,7 +70,7 @@ public:
 	void open();
 	void close();
 	void event(const SDL_Event &event);
-	void build();
+	void build(MenuState &state);
 
 	/* The drawing thread: the picture of the last frame, from its
 	 * framebuffer, becomes the background (0: there is none yet, black);
@@ -59,12 +80,24 @@ public:
 	void release();
 
 private:
+	/* The pages, in the order of their tabs */
+	enum Page { DISPLAY, ABOUT, PAGES };
+
+	void follow_scale();
+	void page_display(MenuKit &kit, MenuState &state) const;
+	void page_about(MenuKit &kit) const;
+	/* What the page says at the bottom */
+	static const char *display_help(const MenuState &state);
 	void start_gl();
 	void size_blur(unsigned w, unsigned h);
 
 	SDL_Window *m_window;
 	std::string m_title;
 	ImGuiContext *m_imgui;
+	/* The style at a scale of 1, and the scale of the display now */
+	ImGuiStyle m_style;
+	float m_scale;
+	int m_page;
 	/* What Odin had where Dear ImGui changes it while the menu is open:
 	 * two hints of the mouse, the pointer shown or hidden */
 	std::array<std::optional<std::string>, 2> m_hints;

@@ -43,6 +43,7 @@
 #include "odin/hikaru.hpp"
 #include "odin/controls.hpp"
 #include "odin/keyboard.hpp"
+#include "odin/menu.hpp"
 #include "odin/outputs_network.hpp"
 #include "odin/settings.hpp"
 
@@ -62,7 +63,11 @@ struct Options {
 	 * them (the two boards on two channels) */
 	std::optional<odin::AudioOut::Mode> sound = odin::AudioOut::Mode::MAIN;
 	bool sound_asked = false;
-	odin::Display::Options display = { 1, 1, 0, false, {} };
+	odin::Display::Options display = { 1, 1, 0, false, true, {} };
+	/* What the command line says of the display: odin.ini does not change it */
+	struct {
+		bool scale = false, anisotropy = false, window = false, fullscreen = false, unthrottled = false;
+	} given;
 };
 
 const char HELP[] = "Usage: %s [options]\n"
@@ -139,21 +144,26 @@ parse_options(int argc, char **argv, Options &options)
 			break;
 		}
 		case 'u':
-			options.unthrottled = true;
+			options.unthrottled = options.given.unthrottled = true;
 			break;
 		case 'x':
-			if (const int scale = std::atoi(optarg); scale >= 2 && scale <= 6)
+			if (const int scale = std::atoi(optarg); scale >= 2 && scale <= 6) {
 				options.display.scale = static_cast<unsigned>(scale);
+				options.given.scale = true;
+			}
 			break;
 		case 'a':
-			if (const int level = std::atoi(optarg); level >= 2 && level <= 16)
+			if (const int level = std::atoi(optarg); level >= 2 && level <= 16) {
 				options.display.anisotropy = static_cast<unsigned>(level);
+				options.given.anisotropy = true;
+			}
 			break;
 		case 'w':
 			options.display.window = static_cast<unsigned>(std::atoi(optarg));
+			options.given.window = true;
 			break;
 		case 'f':
-			options.display.fullscreen = true;
+			options.display.fullscreen = options.given.fullscreen = true;
 			break;
 		case 'v':
 			options.verbose = true;
@@ -168,6 +178,42 @@ parse_options(int argc, char **argv, Options &options)
 		return Parsed::RUN;
 	std::printf(HELP, argv[0]);
 	return wrong ? Parsed::WRONG : Parsed::HELP_ASKED;
+}
+
+/* [display] of odin.ini, where the command line says nothing: the 3D 1 to
+ * 6 times finer, the texture filter (1 to 16), the window 1 to 6 times the
+ * screen, the whole display, no limit to the frames, the speed in the
+ * title. The last line says. */
+void
+read_display(const odin::Settings &settings, Options &options)
+{
+	for (const auto &[key, value] : settings.section("display")) {
+		char *end = nullptr;
+		const long number = std::strtol(value.c_str(), &end, 10);
+		const bool whole = !value.empty() && !*end;
+		const bool on = value == "on", off = value == "off";
+
+		if (key == "scale" && whole && number >= 1 && number <= 6) {
+			if (!options.given.scale)
+				options.display.scale = static_cast<unsigned>(number);
+		} else if (key == "anisotropy" && whole && number >= 1 && number <= 16) {
+			if (!options.given.anisotropy)
+				options.display.anisotropy = static_cast<unsigned>(number);
+		} else if (key == "window" && whole && number >= 1 && number <= 6) {
+			if (!options.given.window)
+				options.display.window = static_cast<unsigned>(number);
+		} else if (key == "fullscreen" && (on || off)) {
+			if (!options.given.fullscreen)
+				options.display.fullscreen = on;
+		} else if (key == "unthrottled" && (on || off)) {
+			if (!options.given.unthrottled)
+				options.unthrottled = on;
+		} else if (key == "show_speed" && (on || off)) {
+			options.display.show_speed = on;
+		} else {
+			std::fprintf(stderr, "ERROR: settings: [display]: not right: %s = %s\n", key.c_str(), value.c_str());
+		}
+	}
 }
 
 /* The list of the games: in the folder Odin is started from, else in the
@@ -206,11 +252,27 @@ load_game_list(odin::GameList &games)
 class Session {
 public:
 	Session(const Options &options, odin::Hikaru &board, odin::Display &display, odin::Keyboard &keys,
-	        odin::Controls &controls, odin::AudioOut *audio, odin::OutputsNetwork *outputs)
+	        odin::Controls &controls, odin::AudioOut *audio, odin::OutputsNetwork *outputs, odin::Settings &settings,
+	        const std::string &settings_file)
 		: m_options(options), m_board(board), m_display(display), m_keys(keys), m_controls(controls), m_audio(audio),
-		  m_outputs(outputs), m_paused(false), m_next(), m_menu_pictures(0), m_menu_drawn(0),
+		  m_outputs(outputs), m_settings(settings), m_settings_file(settings_file), m_paused(false), m_next(),
+		  m_menu_pictures(0), m_menu_drawn(0),
 		  m_menu_test(static_cast<unsigned>(std::max(odin::env_int("ODIN_MENU_TEST", 0), 0)))
 	{
+		odin::MenuState &state = m_menu_state;
+
+		state.scale = options.display.scale;
+		state.anisotropy = options.display.anisotropy;
+		state.window = options.display.window ? options.display.window : 1;
+		state.unthrottled = options.unthrottled;
+		state.show_speed = options.display.show_speed;
+		state.scale_given = options.given.scale;
+		state.anisotropy_given = options.given.anisotropy;
+		state.window_given = options.given.window;
+		state.fullscreen_given = options.given.fullscreen;
+		state.unthrottled_given = options.given.unthrottled;
+		state.gpu = display.gpu();
+		state.kept = !settings_file.empty();
 	}
 
 	/* Runs the frames until the user quits or the last one asked is
@@ -228,6 +290,9 @@ private:
 	void open_menu();
 	void close_menu();
 	void wait_in_menu();
+	void draw_menu();
+	void apply(const odin::MenuState &was);
+	void keep(const char *key, const std::optional<std::string> &value);
 	void press_escape();
 	void load_or_save_state(bool load);
 	void save_state_at_frame();
@@ -240,6 +305,9 @@ private:
 	odin::Controls &m_controls;
 	odin::AudioOut *m_audio;	/* nullptr: no sound */
 	odin::OutputsNetwork *m_outputs;	/* nullptr: none for other programs */
+	odin::Settings &m_settings;
+	const std::string &m_settings_file;	/* empty: nothing is kept */
+	odin::MenuState m_menu_state;
 	bool m_paused;
 	std::chrono::steady_clock::time_point m_next;	/* when the next frame is due */
 	unsigned m_menu_pictures;	/* still to draw */
@@ -400,7 +468,7 @@ Session::wait_in_menu()
 	const Uint64 now = SDL_GetTicks();
 
 	if (m_menu_pictures && now - m_menu_drawn >= MENU_PICTURE_MS) {
-		m_display.draw_menu();
+		draw_menu();
 		m_menu_drawn = now;
 		m_menu_pictures--;
 		if (m_menu_test && !m_menu_pictures)
@@ -414,6 +482,66 @@ Session::wait_in_menu()
 	const Uint64 since = SDL_GetTicks() - m_menu_drawn;
 
 	SDL_WaitEventTimeout(nullptr, since >= MENU_PICTURE_MS ? 0 : static_cast<Sint32>(MENU_PICTURE_MS - since));
+}
+
+/* The menu drawn once from what is so now (F11 may have changed the
+ * display), then what it changed done */
+void
+Session::draw_menu()
+{
+	odin::MenuState &state = m_menu_state;
+
+	state.fullscreen = m_display.fullscreen();
+	m_display.display_size(state.display_w, state.display_h);
+
+	const odin::MenuState was = state;
+
+	m_display.draw_menu(state);
+	apply(was);
+}
+
+/* A setting changed in the menu is done now, and kept in odin.ini when it
+ * is not the one by default; the pace waits for the next launch */
+void
+Session::apply(const odin::MenuState &was)
+{
+	const odin::MenuState &now = m_menu_state;
+	const auto number = [](unsigned value, unsigned standard) {
+		return value == standard ? std::nullopt : std::optional<std::string>(std::to_string(value));
+	};
+	const auto on_off = [](bool value, bool standard) {
+		return value == standard ? std::nullopt : std::optional<std::string>(value ? "on" : "off");
+	};
+
+	if (now.scale != was.scale) {
+		m_display.set_scale(now.scale);
+		keep("scale", number(now.scale, 1));
+	}
+	if (now.anisotropy != was.anisotropy) {
+		m_display.set_anisotropy(now.anisotropy);
+		keep("anisotropy", number(now.anisotropy, 1));
+	}
+	if (now.fullscreen != was.fullscreen) {
+		m_display.set_fullscreen(now.fullscreen);
+		keep("fullscreen", on_off(now.fullscreen, false));
+	}
+	if (now.window != was.window) {
+		m_display.resize(now.window);
+		keep("window", number(now.window, 1));
+	}
+	if (now.unthrottled != was.unthrottled)
+		keep("unthrottled", on_off(now.unthrottled, false));
+	if (now.show_speed != was.show_speed) {
+		m_display.set_show_speed(now.show_speed);
+		keep("show_speed", on_off(now.show_speed, true));
+	}
+}
+
+void
+Session::keep(const char *key, const std::optional<std::string> &value)
+{
+	if (!m_settings_file.empty())
+		m_settings.change(m_settings_file, "display", key, value);
 }
 
 /* ODIN_MENU_TEST: Escape pressed and released */
@@ -540,15 +668,17 @@ main(int argc, char **argv)
 	if (!board)
 		return 1;
 
+	odin::Settings settings;
+	const std::string settings_file = odin::Settings::user_file();
+	if (!settings_file.empty() && settings.load(settings_file))
+		std::printf("settings: '%s'\n", settings_file.c_str());
+	read_display(settings, options);
+
 	odin::Keyboard keys;
 	options.display.title = game->title;
 	const std::unique_ptr<odin::Display> display = odin::Display::make(*board, keys, options.display);
 	if (!display)
 		return 1;
-	odin::Settings settings;
-	const std::string settings_file = odin::Settings::user_file();
-	if (!settings_file.empty() && settings.load(settings_file))
-		std::printf("settings: '%s'\n", settings_file.c_str());
 	odin::Controls controls(keys, game->controls, game->outputs, settings, game->name);
 	board->set_panel(&controls);
 
@@ -612,7 +742,7 @@ main(int argc, char **argv)
 	}
 	if (started) {
 		std::printf("Running\n");
-		Session(options, *board, *display, keys, controls, audio.get(), outputs.get()).run();
+		Session(options, *board, *display, keys, controls, audio.get(), outputs.get(), settings, settings_file).run();
 	}
 
 	std::printf("Finalizing\n");
