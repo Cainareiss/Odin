@@ -428,6 +428,9 @@ Menu::build(MenuState &state)
 	ImGui::Dummy({ 0.0f, kit.px(4.0f) });
 	ImGui::EndChild();
 	m_focus.last = m_focus.count;
+	/* The advanced options of the page Input close with it */
+	if (m_page != INPUT)
+		state.advanced = false;
 
 	/* While an input is caught, Input says what to do there, keys and all */
 	const bool keys_shown = m_page != INPUT || !state.catching;

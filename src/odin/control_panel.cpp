@@ -19,7 +19,9 @@
 #include "odin/control_panel.hpp"
 
 #include <algorithm>
+#include <charconv>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 
 namespace odin {
@@ -97,6 +99,42 @@ panel_of(const std::vector<GameControl> &controls)
 }
 
 } /* namespace */
+
+PadTuning
+PadTuning::of(const Settings &settings, const std::string &guid, bool tell)
+{
+	PadTuning out;
+
+	for (const std::string &section : { std::string("gamepads"), "gamepad." + guid }) {
+		for (const auto &[key, value] : settings.section(section)) {
+			const bool dead = key == "dead_zone";
+			int *const field = dead ? &out.dead_zone : key == "trigger_threshold" ? &out.trigger_threshold : nullptr;
+			int percent = -1;
+			const auto [end, error] = std::from_chars(value.data(), value.data() + value.size(), percent);
+
+			if (field && error == std::errc() && end == value.data() + value.size() && percent >= 0 &&
+			    percent <= (dead ? MOST_DEAD_ZONE : MOST_TRIGGER_THRESHOLD))
+				*field = percent;
+			else if (tell)
+				std::fprintf(stderr, "ERROR: settings: [%s]: not right: %s = %s\n", section.c_str(), key.c_str(),
+				             value.c_str());
+		}
+	}
+	return out;
+}
+
+void
+PadTuning::shape(int16_t &x, int16_t &y) const
+{
+	if (dead_zone <= 0)
+		return;
+
+	const double fx = x / 32767.0, fy = y / 32767.0, length = std::hypot(fx, fy), edge = dead_zone / 100.0;
+	const double k = length <= edge ? 0.0 : (length - edge) / (1.0 - edge) / length;
+
+	x = static_cast<int16_t>(std::clamp(std::lround(fx * k * 32767.0), -32768L, 32767L));
+	y = static_cast<int16_t>(std::clamp(std::lround(fy * k * 32767.0), -32768L, 32767L));
+}
 
 ControlPanel::ControlPanel(const std::vector<GameControl> &controls, const Settings &settings, const std::string &game)
 	: m_controls(panel_of(controls)), m_bindings(m_controls, settings, game), m_inputs(idle_inputs(m_controls)),
@@ -183,7 +221,7 @@ ControlPanel::held(const HostState &host, const HostInput &input, unsigned playe
 		return pad->axes[input.pad.index] >= PRESSED;
 	case PadInput::Type::AXIS:
 		/* A trigger: the bindings give no whole stick to what is pressed */
-		return pad->axes[input.pad.index] >= PRESSED;
+		return pad->axes[input.pad.index] >= pad->trigger_pressed;
 	}
 	return false;
 }

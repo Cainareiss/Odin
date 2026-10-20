@@ -383,6 +383,8 @@ known_settings(const odin::GameList &games)
 
 		out.push_back({ "menu", odin::MenuNav::id(action), odin::MenuNav::standard(action) });
 	}
+	out.insert(out.end(), { { "gamepads", "dead_zone", std::to_string(odin::PadTuning::DEAD_ZONE) },
+	                        { "gamepads", "trigger_threshold", std::to_string(odin::PadTuning::TRIGGER_THRESHOLD) } });
 	for (const auto &[name, title] : games.titles("hikaru")) {
 		const std::optional<odin::Game> game = games.describe(name);
 
@@ -411,6 +413,17 @@ known_settings(const odin::GameList &games)
  * ODIN_MENU_TEST=<n> is a test of the menu: Escape is pressed after every
  * n frames, which opens it, and again once it has drawn its pictures,
  * which closes it. The pictures of the game must be the same. */
+/* The make and model of the gamepad of the player shown in the menu; empty
+ * when the player has none */
+std::string
+pad_shown(const odin::MenuState &state)
+{
+	for (const odin::MenuState::Plugged &pad : state.plugged)
+		if (pad.player == static_cast<int>(state.player))
+			return pad.guid;
+	return {};
+}
+
 class Session {
 public:
 	Session(const Options &options, const odin::Game &game, odin::Hikaru &board, odin::Display &display,
@@ -575,6 +588,7 @@ private:
 	std::vector<odin::GameControl> m_other_controls;
 	std::vector<odin::GameOutput> m_other_outputs;
 	bool m_other_shakes = false;
+	std::array<std::string, 2> m_other_shakers;
 	std::optional<odin::ControlPanel> m_other;
 	odin::MenuState m_menu_state;
 	/* The inputs as Clear mapping found them, and until when Undo puts them back */
@@ -737,9 +751,14 @@ Session::menu_event(const SDL_Event &event)
 		m_keys.set(event.key.key, event.key.down);
 		if (event.key.down && !event.key.repeat)
 			action = m_hotkeys.key_action(event.key.key, event.key.mod);
-		/* Escape closes a list dropped open first */
-		if (action == Action::MENU && event.key.key == SDLK_ESCAPE && m_display.menu_popup_open())
+		/* Escape closes a list dropped open first, then the advanced
+		 * options */
+		if (action == Action::MENU && event.key.key == SDLK_ESCAPE && m_display.menu_popup_open()) {
 			action.reset();
+		} else if (action == Action::MENU && event.key.key == SDLK_ESCAPE && m_menu_state.advanced) {
+			action.reset();
+			m_menu_state.advanced = false;
+		}
 		break;
 	case SDL_EVENT_GAMEPAD_ADDED:
 	case SDL_EVENT_GAMEPAD_REMOVED:
@@ -806,6 +825,11 @@ Session::navigate(odin::MenuNav::Action action)
 	case Nav::GAME_BEFORE: nav.game--; break;
 	case Nav::GAME_AFTER: nav.game++; break;
 	case Nav::BACK:
+		/* The advanced options close first, as a list dropped open */
+		if (m_menu_state.advanced && !m_display.menu_popup_open()) {
+			m_menu_state.advanced = false;
+			break;
+		}
 		if (!m_display.menu_popup_open())
 			return true;
 		nav.back = true;
@@ -840,6 +864,7 @@ Session::close_menu()
 	m_display.close_menu();
 	m_nav.reset();
 	m_held.reset();
+	m_menu_state.advanced = false;
 	m_menu_state.nav = {};
 	m_keys.swallow();
 	if (m_audio)
@@ -1206,6 +1231,7 @@ Session::show_game(size_t game)
 	m_other_controls = other->controls;
 	m_other_outputs = other->outputs;
 	m_other_shakes = other->shakes();
+	m_other_shakers = { other->shaker(0), other->shaker(1) };
 	m_other.emplace(m_other_controls, m_settings, other->name);
 }
 
@@ -1313,6 +1339,7 @@ Session::draw_menu()
 	/* The pad shakes as the cabinet of the game shown, unless
 	 * [players.<game>] says off (the last line says) */
 	state.can_shake = m_other ? m_other_shakes : m_game.shakes();
+	state.shake_from = m_other ? m_other_shakers[state.player & 1] : m_game.shaker(state.player & 1);
 	state.shake = true;
 	for (const auto &[key, value] : m_settings.section("players." + game_shown()))
 		if (key == "vibration" && (value == "on" || value == "off"))
@@ -1359,6 +1386,7 @@ Session::draw_menu()
 			state.mapping.reset();
 		}
 	}
+	state.tuning = odin::PadTuning::of(m_settings, pad_shown(state), false);
 
 	const odin::MenuState was = state;
 
@@ -1509,6 +1537,24 @@ Session::apply(const odin::MenuState &was)
 			m_controls.feel_outputs(now.shake);
 		}
 		keep(section.c_str(), "vibration", on_off(now.shake, true));
+	}
+	/* The dead zone and the trigger threshold of the gamepad shown: of its
+	 * make and model, a line of their own where they differ from
+	 * [gamepads] */
+	if (const std::string guid = pad_shown(now);
+	    !guid.empty() && (now.tuning.dead_zone != was.tuning.dead_zone ||
+	                      now.tuning.trigger_threshold != was.tuning.trigger_threshold)) {
+		const odin::PadTuning all = odin::PadTuning::of(m_settings, {}, false);
+		const std::string section = "gamepad." + guid;
+		const auto line = [](int percent, int standard) {
+			return percent == standard ? std::nullopt : std::optional(std::to_string(percent));
+		};
+
+		if (now.tuning.dead_zone != was.tuning.dead_zone)
+			keep(section.c_str(), "dead_zone", line(now.tuning.dead_zone, all.dead_zone));
+		if (now.tuning.trigger_threshold != was.tuning.trigger_threshold)
+			keep(section.c_str(), "trigger_threshold", line(now.tuning.trigger_threshold, all.trigger_threshold));
+		m_controls.retune();
 	}
 	/* The programs of lamps: the port opened or closed now */
 	if (now.network != was.network) {

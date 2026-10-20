@@ -76,8 +76,8 @@ K L the right one, Left Ctrl and Left Alt the shot and the dash of the
 left lever, Space and Left Shift those of the right one.
 
 In Brave the pad of a player shakes while the nozzle of the cabinet does
-(the switch Vibration of the page Input, or "vibration = off" in
-[players.braveff], stops it).
+(Vibration in the advanced options of the page Input, or "vibration =
+off" in [players.braveff], stops it).
 The lamps and the other outputs of the cabinets go to other programs (a
 lamp or a force feedback program) as MAME gives them with its network
 output, when odin.ini says so (the menu, page Outputs, turns it on and
@@ -115,9 +115,9 @@ hard as its sound; the page Audio plays it in the speakers too, where the
 user wants it ("mode = mix", -13 dB by default, or "mode = quad" in
 [sound.podrace]). In NASCAR the pad of player 1 shakes with the shocks
 the game gives the wheel, not with the hold and the damping that follow
-the moves of the wheel (experimental; the switch Vibration of the page
-Input, or "vibration = off" in [players.podrace] or [players.sgnascar],
-stops it).
+the moves of the wheel (experimental; Vibration in the advanced options
+of the page Input, or "vibration = off" in [players.podrace] or
+[players.sgnascar], stops it).
 
 The mouse aims for player 1 in Brave: the sight where it points on the
 picture, water on the left button, fog on the right one, Start on the
@@ -168,6 +168,21 @@ or Guide) writes these lines itself, and the gamepad chosen for a player:
  [players.braveff]
  p1 = 030000005e0400008e02000014010000 Xbox 360 Controller
 
+and for the gamepads the dead zone of their sticks, in % of the way (a
+circle round the centre where a stick gives nothing; past it the way
+starts from 0), and how far a trigger goes before it presses a button
+(the advanced options of the page Input; 0 to 30 and 0 to 50):
+
+ [gamepads]
+ dead_zone = 3
+ trigger_threshold = 3
+
+a make and model its own in [gamepad.<GUID>], the GUID of its line in
+[players.<game>]:
+
+ [gamepad.030000005e0400008e02000014010000]
+ dead_zone = 8
+
 and the controls of the page Input as a list rather than on the drawing
 (the button Classic):
 
@@ -177,8 +192,8 @@ and the controls of the page Input as a list rather than on the drawing
 In the menu, LB and RB of a gamepad change the page, LT and RT the game
 (on the page Input they are tested as the controls they work: there the
 first two rows of the frame, the tabs and the games, change them), B goes
-back (a list dropped open closes first, a key caught is let go,
-else the game goes on). The D-pad or the left stick moves a frame from
+back (a list dropped open closes first, then the advanced options, a
+key caught is let go, else the game goes on). The D-pad or the left stick moves a frame from
 row to row; left and right change a choice or a slider, A presses. On
 the page Input the frame goes from control to control: A changes it, X
 clears it and Y sets it back to its default, on the device shown; while

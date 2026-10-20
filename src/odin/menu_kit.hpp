@@ -110,7 +110,7 @@ public:
 	 * back, a cross, a start and its bar, an arrow back; the rune ᚨ */
 	enum class Icon {
 		NONE, PAD, INPUT, DISPLAY, AUDIO, KEYBOARD, HOTKEYS, OUTPUTS, FOLDER, ABOUT, LAMP, RUMBLE, LOCK, MUTE,
-		LIST, SWAP, DEFAULTS, CLEAR, MAP, UNDO, RUNE,
+		LIST, SWAP, DEFAULTS, CLEAR, MAP, UNDO, RUNE, SETTINGS,
 	};
 	static void icon(ImDrawList *list, Icon icon, ImVec2 at, float side, ImU32 colour);
 
@@ -164,6 +164,13 @@ public:
 	/* The choice alone, at that place: its size first */
 	ImVec2 segments_size(std::span<const char *const> labels) const;
 	bool segments(ImVec2 at, std::span<const char *const> labels, int &chosen, bool still = false) const;
+	/* A slider alone at that place, as high as a line: its track from `low`
+	 * to `high` by `step`, `shown` after it, which takes the room of the
+	 * wider of it and `widest`; left and right of the gamepad move it a
+	 * twentieth of the way while `focused`. True when it moved. */
+	ImVec2 track_size(const char *shown, const char *widest) const;
+	bool track(ImVec2 at, float &value, float low, float high, float step, const char *shown, bool focused,
+	           bool still = false) const;
 	void text(const char *name, const char *about, const char *value);
 	/* A row with a value at its right and after it a button (true on a
 	 * click), or a word in small capitals when there is no button; one the

@@ -32,7 +32,7 @@ namespace odin {
 
 Controls::Controls(Keyboard &keys, const std::vector<GameControl> &controls, const std::vector<GameOutput> &outputs,
                    const Settings &settings, const std::string &game)
-	: m_keys(keys), m_game_controls(controls), m_game(game), m_panel(controls, settings, game), m_outputs(outputs), m_on(false), m_mouse_seen(false),
+	: m_keys(keys), m_settings(settings), m_game_controls(controls), m_game(game), m_panel(controls, settings, game), m_outputs(outputs), m_on(false), m_mouse_seen(false),
 	  m_mouse_placed(false), m_mouse_from_x(0), m_mouse_from_y(0), m_mouse_fresh{}, m_mouse_release{}
 {
 	for (const GameControl &control : controls)
@@ -163,8 +163,10 @@ Controls::open(SDL_JoystickID id)
 	pad.handle = handle;
 	pad.id = id;
 	pad.guid = guid;
+	pad.tuning = PadTuning::of(m_settings, guid, true);
 	for (unsigned axis = 0; axis < SDL_GAMEPAD_AXIS_COUNT; axis++)
-		pad.state.axes[axis] = SDL_GetGamepadAxis(handle, static_cast<SDL_GamepadAxis>(axis));
+		pad.axes[axis] = SDL_GetGamepadAxis(handle, static_cast<SDL_GamepadAxis>(axis));
+	shape(pad);
 	for (unsigned button = 0; button < SDL_GAMEPAD_BUTTON_COUNT; button++)
 		pad.state.buttons[button] = SDL_GetGamepadButton(handle, static_cast<SDL_GamepadButton>(button));
 	m_pads.push_back(std::move(pad));
@@ -253,8 +255,10 @@ Controls::event(const SDL_Event &event)
 		close(event.gdevice.which);
 		return true;
 	case SDL_EVENT_GAMEPAD_AXIS_MOTION:
-		if (Pad *const pad = find(event.gaxis.which); pad && event.gaxis.axis < SDL_GAMEPAD_AXIS_COUNT)
-			pad->state.axes[event.gaxis.axis] = event.gaxis.value;
+		if (Pad *const pad = find(event.gaxis.which); pad && event.gaxis.axis < SDL_GAMEPAD_AXIS_COUNT) {
+			pad->axes[event.gaxis.axis] = event.gaxis.value;
+			shape(*pad);
+		}
 		return true;
 	case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
 	case SDL_EVENT_GAMEPAD_BUTTON_UP:
@@ -355,6 +359,24 @@ void
 Controls::rebind(const Settings &settings)
 {
 	m_panel = ControlPanel(m_game_controls, settings, m_game);
+}
+
+void
+Controls::retune()
+{
+	for (Pad &pad : m_pads) {
+		pad.tuning = PadTuning::of(m_settings, pad.guid, false);
+		shape(pad);
+	}
+}
+
+void
+Controls::shape(Pad &pad)
+{
+	pad.state.axes = pad.axes;
+	pad.tuning.shape(pad.state.axes[SDL_GAMEPAD_AXIS_LEFTX], pad.state.axes[SDL_GAMEPAD_AXIS_LEFTY]);
+	pad.tuning.shape(pad.state.axes[SDL_GAMEPAD_AXIS_RIGHTX], pad.state.axes[SDL_GAMEPAD_AXIS_RIGHTY]);
+	pad.state.trigger_pressed = pad.tuning.trigger_pressed();
 }
 
 std::string

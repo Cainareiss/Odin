@@ -33,6 +33,7 @@
 #include <cmath>
 #include <cstdio>
 #include <initializer_list>
+#include <utility>
 
 namespace {
 
@@ -44,6 +45,7 @@ using odin::MieBoard;
 using odin::MouseState;
 using odin::PadInput;
 using odin::PadState;
+using odin::PadTuning;
 using odin::Role;
 using odin::Settings;
 
@@ -568,13 +570,53 @@ void test_pressed()
 	pad.axes[SDL_GAMEPAD_AXIS_LEFTY] = -16384;
 	check(after(panel, {}, &pad).jvs_player[0] == 0x0200, "half way: pressed");
 	pad = PadState{};
+	pad.axes[SDL_GAMEPAD_AXIS_LEFT_TRIGGER] = 982;
+	check(after(panel, {}, &pad).jvs_player[0] == 0, "a trigger short of its threshold (3 %): not pressed");
+	pad.axes[SDL_GAMEPAD_AXIS_LEFT_TRIGGER] = 983;
+	check(after(panel, {}, &pad).jvs_player[0] == 0x0100, "at its threshold: pressed");
+	pad.trigger_pressed = PadTuning{ 3, 50 }.trigger_pressed();
+	pad.axes[SDL_GAMEPAD_AXIS_LEFT_TRIGGER] = 16382;
+	check(after(panel, {}, &pad).jvs_player[0] == 0, "a threshold of 50 %: not pressed short of half way");
 	pad.axes[SDL_GAMEPAD_AXIS_LEFT_TRIGGER] = 16383;
-	check(after(panel, {}, &pad).jvs_player[0] == 0, "a trigger less than half way: not pressed");
-	pad.axes[SDL_GAMEPAD_AXIS_LEFT_TRIGGER] = 16384;
-	check(after(panel, {}, &pad).jvs_player[0] == 0x0100, "half way: pressed");
+	check(after(panel, {}, &pad).jvs_player[0] == 0x0100, "pressed from there");
 	pad = PadState{};
 	pad.axes[SDL_GAMEPAD_AXIS_RIGHTX] = 16384;
 	check(after(panel, {}, &pad).jvs_player[0] == 0x0080, "+rightx half way: pressed");
+}
+
+/* The dead zone and the trigger threshold of a gamepad: [gamepads], then
+ * [gamepad.<GUID>]; a stick shaped round its centre */
+void test_tuning()
+{
+	Settings settings;
+
+	settings.parse("[gamepads]\ndead_zone = 10\n[gamepad.abc]\ntrigger_threshold = 20\n"
+	               "[gamepad.bad]\ndead_zone = 31\ntrigger_threshold = 5x\nwhat = 1\n", "test");
+
+	const PadTuning none = PadTuning::of(Settings(), "abc", false), all = PadTuning::of(settings, "", false);
+	const PadTuning abc = PadTuning::of(settings, "abc", false), bad = PadTuning::of(settings, "bad", false);
+
+	check(none.dead_zone == 3 && none.trigger_threshold == 3, "by default: 3 % and 3 %");
+	check(all.dead_zone == 10 && all.trigger_threshold == 3, "[gamepads] for every gamepad");
+	check(abc.dead_zone == 10 && abc.trigger_threshold == 20, "[gamepad.<GUID>] over it for its make and model");
+	check(bad.dead_zone == 10 && bad.trigger_threshold == 3, "past its end, not a number: refused");
+
+	const PadTuning ten{ 10, 3 }, three{ 3, 3 }, zero{ 0, 3 };
+	const auto shaped = [](const PadTuning &tuning, int16_t x, int16_t y) {
+		tuning.shape(x, y);
+		return std::pair<int, int>(x, y);
+	};
+
+	check(shaped(ten, 3000, 0) == std::pair(0, 0) && shaped(ten, 2000, 2000) == std::pair(0, 0),
+	      "inside the dead zone, a circle: at rest");
+	check(shaped(ten, 16384, 0) == std::pair(14564, 0), "past it: from 0 at its edge");
+	check(shaped(ten, 32767, 0) == std::pair(32767, 0) && shaped(ten, -32768, 0) == std::pair(-32768, 0) &&
+	      shaped(ten, 32767, 32767) == std::pair(32767, 32767), "all the way: all the way, the corners too");
+	check(shaped(three, 983, 0) == std::pair(0, 0) && shaped(three, 1000, 0) == std::pair(18, 0),
+	      "3 %: a stick at rest stays there");
+	check(shaped(zero, 3000, -5) == std::pair(3000, -5), "none: as the stick gives it");
+	check(PadTuning{ 3, 0 }.trigger_pressed() == 1 && three.trigger_pressed() == 983 &&
+	      PadTuning{ 3, 50 }.trigger_pressed() == 16383, "a trigger presses from its threshold, 0 %: once it moves");
 }
 
 } /* namespace */
@@ -676,6 +718,7 @@ int main()
 	test_mouse_one_pointer();
 	test_picture();
 	test_pressed();
+	test_tuning();
 	test_touched();
 	test_now();
 

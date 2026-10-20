@@ -65,6 +65,9 @@ public:
 	 * again when they change in the settings */
 	const ControlPanel &panel() const { return m_panel; }
 	void rebind(const Settings &settings);
+	/* The dead zone and the trigger threshold of each gamepad read again
+	 * from the settings (control_panel.hpp: PadTuning) */
+	void retune();
 	/* Whether a control of the panel or a role of the cabinet is worked
 	 * now */
 	bool touched(size_t control) const { return m_panel.touched(host(), control); }
@@ -140,6 +143,8 @@ private:
 		SDL_Gamepad *handle = nullptr;
 		SDL_JoystickID id = 0;
 		std::string guid;
+		std::array<int16_t, SDL_GAMEPAD_AXIS_COUNT> axes{};	/* as SDL gives them */
+		PadTuning tuning;
 		PadState state;
 		std::array<bool, SDL_GAMEPAD_BUTTON_COUNT> fresh{};
 		std::array<bool, SDL_GAMEPAD_BUTTON_COUNT> release{};
@@ -148,6 +153,8 @@ private:
 		bool guide_alone = false;	/* Guide held, no other button since */
 	};
 
+	/* What a pad gives the game of its axes */
+	static void shape(Pad &pad);
 	void open(SDL_JoystickID id);
 	void close(SDL_JoystickID id);
 	Pad *find(SDL_JoystickID id);
@@ -158,6 +165,7 @@ private:
 	HostState host() const;
 
 	Keyboard &m_keys;
+	const Settings &m_settings;	/* the session's, which the menu changes */
 	std::vector<GameControl> m_game_controls;
 	std::string m_game;
 	ControlPanel m_panel;

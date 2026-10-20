@@ -212,6 +212,11 @@ struct Game {
 		       std::any_of(outputs.begin(), outputs.end(),
 		                   [](const GameOutput &output) { return output.role == GameOutput::Role::RUMBLE; });
 	}
+	/* What shakes the pad of a player (0 or 1), as the menu says it: its
+	 * rumble outputs ("output 1P NOZZLE VIBRATION"), the vibration device
+	 * of the optional board or the shocks of the drive board (player 1);
+	 * empty: nothing */
+	std::string shaker(unsigned player) const;
 };
 
 /* The list of the games, a JSON file (odin-games.json). A game has sections

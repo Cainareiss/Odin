@@ -554,6 +554,17 @@ MenuKit::icon(ImDrawList *list, Icon icon, ImVec2 at, float side, ImU32 colour)
 		list->AddLine(p(6, 6), p(18, 18), colour, w);
 		list->AddLine(p(18, 6), p(6, 18), colour, w);
 		break;
+	case Icon::SETTINGS:
+		/* A wheel with eight teeth round a hole */
+		list->AddCircle(p(12, 12), 2.5f * k, colour, 0, w);
+		list->AddCircle(p(12, 12), 6.5f * k, colour, 0, w);
+		for (int t = 0; t < 8; t++) {
+			const float angle = static_cast<float>(t) * std::numbers::pi_v<float> / 4.0f;
+			const float c = std::cos(angle), s = std::sin(angle);
+
+			list->AddLine(p(12 + 6.5f * c, 12 + 6.5f * s), p(12 + 9.5f * c, 12 + 9.5f * s), colour, 1.6f * w);
+		}
+		break;
 	case Icon::MAP:
 		lines({ { 6, 6 }, { 14, 12 }, { 6, 18 } }, true);
 		list->AddLine(p(18, 6), p(18, 18), colour, w);
@@ -1139,27 +1150,47 @@ MenuKit::slider(const char *name, const char *about, float &value, float low, fl
 {
 	ImGui::PushID(name);
 
-	ImDrawList *const list = ImGui::GetWindowDrawList();
 	const bool still = locked || off;
-	const float pad = px(ROW_PAD), track_w = px(64.0f), track_h = px(6.0f), space = px(8.0f), size = font(SMALL);
-	const float shown_w = std::max(measure(shown, size), measure("-60 dB", size));
-	const float control = track_w + space + shown_w, line = ImGui::GetTextLineHeight();
+	const float pad = px(ROW_PAD), control = track_size(shown, "-60 dB").x, line = ImGui::GetTextLineHeight();
 	float width;
 	const ImVec2 at = begin_row(width);
 	const Placed placed = place(at, width, control, line, name, about, locked, off);
-	const float h = placed.h, mid = placed.top + line / 2.0f;
-	const ImVec2 a = { at.x + width - pad - control, mid - track_h / 2.0f }, b = { a.x + track_w, a.y + track_h };
+	const bool focused = focus(at, { at.x + width, at.y + placed.h });
+	const bool moved = track({ at.x + width - pad - control, placed.top }, value, low, high, step, shown, focused, still);
+
+	ImGui::SetCursorScreenPos(at);
+	ImGui::Dummy({ width, placed.h });
+	ImGui::PopID();
+	return moved;
+}
+
+ImVec2
+MenuKit::track_size(const char *shown, const char *widest) const
+{
+	const float size = font(SMALL);
+
+	return { px(64.0f) + px(8.0f) + std::max(measure(shown, size), measure(widest, size)), ImGui::GetTextLineHeight() };
+}
+
+bool
+MenuKit::track(ImVec2 at, float &value, float low, float high, float step, const char *shown, bool focused,
+               bool still) const
+{
+	ImDrawList *const list = ImGui::GetWindowDrawList();
+	const float track_w = px(64.0f), track_h = px(6.0f), space = px(8.0f), size = font(SMALL);
+	const float line = ImGui::GetTextLineHeight(), mid = at.y + line / 2.0f;
+	const ImVec2 a = { at.x, mid - track_h / 2.0f }, b = { a.x + track_w, a.y + track_h };
 	const float was = value;
 
 	/* The gamepad: left or right, a twentieth of the way */
-	if (focus(at, { at.x + width, at.y + h }) && !still && side()) {
+	if (focused && !still && side()) {
 		const float jump = std::max(step, std::round((high - low) / 20.0f / step) * step);
 
 		value = std::clamp(value + static_cast<float>(side()) * jump, low, high);
 	}
 
 	/* The track takes the mouse a little above and below it */
-	ImGui::SetCursorScreenPos({ a.x, placed.top });
+	ImGui::SetCursorScreenPos(at);
 	ImGui::BeginDisabled(still);
 	ImGui::InvisibleButton("track", { track_w, line });
 
@@ -1180,10 +1211,6 @@ MenuKit::slider(const char *name, const char *about, float &value, float low, fl
 	list->AddRectFilled(a, { a.x + track_w * fill, b.y }, faded(m_palette.action, still), r);
 	list->AddRect(a, b, faded(alpha(m_palette.action, ACTION_LINE), still), r, ImDrawFlags_None, stroke());
 	write(list, { b.x + space, mid - size / 2.0f }, faded(m_palette.ink, still), shown, size);
-
-	ImGui::SetCursorScreenPos(at);
-	ImGui::Dummy({ width, h });
-	ImGui::PopID();
 	return value != was;
 }
 

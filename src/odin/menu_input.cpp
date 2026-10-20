@@ -23,7 +23,9 @@
 #include "odin/menu.hpp"
 
 #include <algorithm>
+#include <cfloat>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <numbers>
 #include <utility>
@@ -1468,31 +1470,26 @@ list_box(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, I
 	}
 }
 
-/* The buttons under the drawing, as many on a line as fit: Defaults, Clear
- * mapping (Undo for a while after), Start mapping; on a gamepad, its
- * vibration, or that the game does not shake it. Their height, with the
- * room around them; drawn and clicked when `draw`. */
+/* The buttons under the drawing, as many on a line as fit: Advanced
+ * options on a gamepad, Defaults, Clear mapping (Undo for a while after),
+ * Start mapping. Their height, with the room around them; drawn and
+ * clicked when `draw`. */
 float
 buttons_bar(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, ImVec2 at, float width, bool draw)
 {
 	using Icon = MenuKit::Icon;
 	using Tone = MenuKit::Tone;
-	static constexpr const char *ON_OFF[] = { "on", "off" };
-	static constexpr const char *NO_SHAKE = "this game does not shake";
 	const float across = kit.px(12.0f), down = kit.px(5.0f), h = kit.button_size("Defaults", Icon::DEFAULTS).y;
 	const char *const clear = state.undo ? "Undo" : "Clear mapping";
-	const ImVec2 cells = kit.segments_size(ON_OFF);
-	const bool vibration = state.on_pad();
-	const float control_w = state.can_shake ? cells.x : ImGui::CalcTextSize(NO_SHAKE).x;
-	const char *const shake_name = ImGui::CalcTextSize("Vibration (experimental)").x + kit.px(8.0f) + control_w <= width ?
-	                               "Vibration (experimental)" : "Vibration";
-	std::vector<float> widths = { kit.button_size("Defaults", Icon::DEFAULTS).x,
-		                      kit.button_size(clear, state.undo ? Icon::UNDO : Icon::CLEAR).x };
+	const bool advanced = state.on_pad();
+	std::vector<float> widths;
 
+	if (advanced)
+		widths.push_back(kit.button_size("Advanced options", Icon::SETTINGS).x);
+	widths.push_back(kit.button_size("Defaults", Icon::DEFAULTS).x);
+	widths.push_back(kit.button_size(clear, state.undo ? Icon::UNDO : Icon::CLEAR).x);
 	if (!state.mapping)
 		widths.push_back(kit.button_size("Start mapping", Icon::MAP).x);
-	if (vibration)
-		widths.push_back(ImGui::CalcTextSize(shake_name).x + kit.px(8.0f) + control_w);
 
 	/* Each at its place, left to right, a line under the other */
 	std::vector<ImVec2> places;
@@ -1512,9 +1509,14 @@ buttons_bar(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows
 	if (!draw)
 		return height;
 
-	ImDrawList *const list = ImGui::GetWindowDrawList();
 	size_t i = 0;
 
+	if (advanced && kit.button("Advanced options", places[i++], false, Icon::SETTINGS)) {
+		state.advanced = true;
+		state.catching.reset();
+		state.catch_next.clear();
+		state.mapping.reset();
+	}
 	if (kit.button("Defaults", places[i++], false, Icon::DEFAULTS))
 		state.ask = MenuState::Ask::DEFAULTS;
 	if (kit.button(clear, places[i++], false, state.undo ? Icon::UNDO : Icon::CLEAR,
@@ -1526,24 +1528,84 @@ buttons_bar(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows
 		state.catching.reset();
 		state.catch_next.clear();
 	}
-	if (vibration) {
-		const ImVec2 p = places[i];
-		const float name_w = ImGui::CalcTextSize(shake_name).x, text_y = p.y + (h - ImGui::GetTextLineHeight()) / 2.0f;
-		const MenuPalette &palette = kit.palette();
-		int shake = state.shake ? 0 : 1;
-
-		list->AddText({ p.x, text_y }, state.can_shake ? palette.dim : palette.faint, shake_name);
-		/* The gamepad: left or right, or A, switches it */
-		if (state.can_shake &&
-		    kit.focus(p, { p.x + name_w + kit.px(8.0f) + cells.x, p.y + h }, kit.px(3.0f)) &&
-		    (kit.side() || kit.pressed()))
-			state.shake = kit.side() ? kit.side() < 0 : !state.shake;
-		if (!state.can_shake)
-			list->AddText({ p.x + name_w + kit.px(8.0f), text_y }, palette.faint, NO_SHAKE);
-		else if (kit.segments({ p.x + name_w + kit.px(8.0f), p.y + (h - cells.y) / 2.0f }, ON_OFF, shake))
-			state.shake = shake == 0;
-	}
 	return height;
+}
+
+/* The advanced options of the gamepad shown, over its box (mock-up v50):
+ * the vibration of the game, the dead zone and the trigger threshold of
+ * its make and model; Close (B, Escape) */
+void
+advanced_box(const MenuKit &kit, MenuState &state, ImVec2 a, ImVec2 b)
+{
+	using Icon = MenuKit::Icon;
+	static constexpr const char *ON_OFF[] = { "on", "off" };
+	static constexpr char NO_SHAKE[] = "this game does not shake";
+	static constexpr char FOOT[] = "Game settings hold for this game; device settings follow it everywhere.";
+	ImDrawList *const list = ImGui::GetWindowDrawList();
+	const MenuPalette &palette = kit.palette();
+	const float line = ImGui::GetTextLineHeight(), note = MenuKit::font(MenuKit::NOTE), apart = kit.px(16.0f);
+	const ImVec2 lo = { a.x + kit.px(14.0f), a.y + kit.px(BOX_INSIDE) };
+	const ImVec2 hi = { b.x - kit.px(14.0f), b.y - kit.px(BOX_INSIDE) };
+	const ImVec2 close = kit.button_size("Close", Icon::CLEAR);
+	const std::string title = "Advanced options · Controller · " +
+	                          std::string(pad_drawing_name(state.pad_types[state.player & 1])) +
+	                          (state.shown < state.games.size() ? " · " + state.games[state.shown].second : "");
+	const float rule = lo.y + close.y + kit.px(8.0f);
+	float y = rule + kit.px(14.0f);
+
+	MenuKit::write(list, { lo.x, lo.y + (close.y - line) / 2.0f }, palette.ink,
+	               MenuKit::fitted(title, hi.x - lo.x - close.x - kit.px(12.0f)).c_str());
+	list->AddLine({ lo.x, rule }, { hi.x, rule }, palette.line, kit.stroke());
+
+	/* The vibration, with what shakes on the cabinet under it */
+	{
+		const ImVec2 cells = kit.segments_size(ON_OFF);
+		const float h = std::max(line + (state.shake_from.empty() ? 0.0f : kit.px(2.0f) + note), cells.y);
+
+		list->AddText({ lo.x, y }, state.can_shake ? palette.ink : palette.faint, "Vibration (experimental)");
+		if (!state.shake_from.empty())
+			MenuKit::write(list, { lo.x, y + line + kit.px(2.0f) }, palette.dim, state.shake_from.c_str(), note);
+		if (!state.can_shake) {
+			list->AddText({ hi.x - ImGui::CalcTextSize(NO_SHAKE).x, y }, palette.faint, NO_SHAKE);
+		} else {
+			/* The gamepad: left or right, or A, switches it */
+			if (kit.focus({ lo.x, y }, { hi.x, y + h }, kit.px(4.0f)) && (kit.side() || kit.pressed()))
+				state.shake = kit.side() ? kit.side() < 0 : !state.shake;
+
+			int shake = state.shake ? 0 : 1;
+
+			if (kit.segments({ hi.x - cells.x, y + (h - cells.y) / 2.0f }, ON_OFF, shake))
+				state.shake = shake == 0;
+		}
+		y += h + apart;
+	}
+
+	/* A share of the way, in %, from 0 to `most` */
+	const auto percent = [&](const char *name, int &value, int most) {
+		char shown[16];
+
+		std::snprintf(shown, sizeof(shown), "%d %%", value);
+
+		const float control = kit.track_size(shown, "50 %").x;
+		const bool focused = kit.focus({ lo.x, y }, { hi.x, y + line }, kit.px(4.0f));
+		float moved = static_cast<float>(value);
+
+		list->AddText({ lo.x, y }, palette.ink, name);
+		ImGui::PushID(name);
+		if (kit.track({ hi.x - control, y }, moved, 0.0f, static_cast<float>(most), 1.0f, shown, focused))
+			value = static_cast<int>(std::lround(moved));
+		ImGui::PopID();
+		y += line + apart;
+	};
+
+	percent("Stick dead zone", state.tuning.dead_zone, PadTuning::MOST_DEAD_ZONE);
+	percent("Trigger threshold", state.tuning.trigger_threshold, PadTuning::MOST_TRIGGER_THRESHOLD);
+
+	const float foot_h = ImGui::GetFont()->CalcTextSizeA(note, FLT_MAX, hi.x - lo.x, FOOT).y;
+
+	list->AddText(ImGui::GetFont(), note, { lo.x, hi.y - foot_h }, palette.faint, FOOT, nullptr, hi.x - lo.x);
+	if (kit.button("Close", { hi.x - close.x, lo.y }, false, Icon::CLEAR))
+		state.advanced = false;
 }
 
 } /* namespace */
@@ -1575,13 +1637,23 @@ Menu::page_input(MenuKit &kit, MenuState &state) const
 	y = devices_row(kit, state, { top.x, y }, width, two) + gap;
 
 	const std::vector<InputRow> rows = input_rows(state);
+	/* A window wide enough (16:9) has the cabinet beside the device; a
+	 * narrower one shows either. The advanced options of a gamepad take
+	 * the place of its box. */
+	const ImVec2 window = ImGui::GetIO().DisplaySize;
+	const bool wide = window.x >= WIDE * window.y;
+	const bool cabinet = !wide && state.cabinet_shown;
+
+	state.advanced = state.advanced && state.on_pad();
+
+	const bool options = state.advanced && !cabinet;
 
 	next_mapping(state, rows);
 	/* The gamepad: each part shown in turn, drawn as if caught; A changes
 	 * it, X clears it, Y sets it back to its default */
 	state.picked.reset();
 	for (const InputRow &row : rows) {
-		if ((row.half && row.inputs.empty()) || !kit.focus_mark())
+		if (options || (row.half && row.inputs.empty()) || !kit.focus_mark())
 			continue;
 		state.picked = row.slot;
 		if (kit.pressed() && row.catchable)
@@ -1591,30 +1663,27 @@ Menu::page_input(MenuKit &kit, MenuState &state) const
 		else if (state.nav.reset)
 			state.ask = MenuState::Ask::PART_DEFAULTS;
 	}
-	/* A window wide enough (16:9) has the cabinet beside the device; a
-	 * narrower one shows either */
-	const ImVec2 window = ImGui::GetIO().DisplaySize;
-	const bool wide = window.x >= WIDE * window.y;
 	const float bottom = top.y + room.y - kit.px(4.0f);
 	const float split = wide ? top.x + (width - gap) * PAD_SHARE : top.x + width;
 	const ImVec2 a = { top.x, y }, b = { split, bottom };
-	const bool cabinet = !wide && state.cabinet_shown;
 	/* The buttons at the bottom of the box, under a line (none while the
 	 * cabinet is in it); the drawing above them */
 	const ImVec2 bar_at = { a.x + kit.px(10.0f), 0.0f };
 	const float bar_w = b.x - a.x - kit.px(20.0f);
-	const float bar_top = cabinet ? b.y : b.y - buttons_bar(kit, state, rows, bar_at, bar_w, false);
+	const float bar_top = cabinet || options ? b.y : b.y - buttons_bar(kit, state, rows, bar_at, bar_w, false);
 	const ImVec2 inside = { b.x, bar_top };
 	/* The buttons in the corner of the box: Classic for a gamepad, the
 	 * swap of the device and the cabinet in a narrow window */
 	const char *const swap = cabinet ? "Controller" : "Cabinet";
-	const bool classic = !cabinet;
+	const bool classic = !cabinet && !options;
 	const ImVec2 classic_size = kit.button_size("Classic", Icon::LIST), swap_size = kit.button_size(swap, Icon::SWAP);
 	const float corner = classic || !wide ? std::max(classic_size.y, swap_size.y) + kit.px(5.0f) : 0.0f;
 
 	kit.frame(ImGui::GetWindowDrawList(), a, b, kit.px(BOX_CUT), 0, palette.line);
 	if (cabinet)
 		cabinet_box(kit, state, a, b, false);
+	else if (options)
+		advanced_box(kit, state, a, b);
 	else if (state.classic)
 		list_box(kit, state, rows, a, inside, corner);
 	else if (state.on_pad())
@@ -1626,7 +1695,7 @@ Menu::page_input(MenuKit &kit, MenuState &state) const
 
 	float x = b.x - kit.px(6.0f);
 
-	if (!wide) {
+	if (!wide && !options) {
 		x -= swap_size.x;
 		if (kit.button(swap, { x, a.y + kit.px(5.0f) }, false, Icon::SWAP))
 			state.cabinet_shown = !state.cabinet_shown;
@@ -1634,7 +1703,7 @@ Menu::page_input(MenuKit &kit, MenuState &state) const
 	}
 	if (classic && kit.button("Classic", { x - classic_size.x, a.y + kit.px(5.0f) }, state.classic, Icon::LIST))
 		state.classic = !state.classic;
-	if (!cabinet) {
+	if (!cabinet && !options) {
 		ImGui::GetWindowDrawList()->AddLine({ a.x + 1.0f, bar_top }, { b.x - 1.0f, bar_top }, palette.line, kit.stroke());
 		buttons_bar(kit, state, rows, { bar_at.x, bar_top }, bar_w, true);
 	}

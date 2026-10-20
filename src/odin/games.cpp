@@ -364,6 +364,21 @@ parse_rom_board(json_t *board)
 
 } /* namespace */
 
+std::string
+Game::shaker(unsigned player) const
+{
+	std::string out;
+
+	for (const GameOutput &output : outputs)
+		if (output.role == GameOutput::Role::RUMBLE && output.player == player)
+			out += (out.empty() ? "output " : ", ") + output.name;
+	if (out.empty() && player == 0 && option_vibration)
+		out = "the shaker of the optional board";
+	if (out.empty() && player == 0 && drive_first_output)
+		out = "the shocks of the cabinet wheel";
+	return out;
+}
+
 std::span<const uint8_t>
 Game::section(const std::string &wanted) const
 {

@@ -159,6 +159,12 @@ struct MenuState {
 	 * Brave; experimental: the shaker of Racer, the shocks of NASCAR), and
 	 * whether it does */
 	bool can_shake = false, shake = true;
+	/* What shakes on the cabinet ("output NOZZLE VIBRATION"); the dead
+	 * zone and the trigger threshold of the gamepad shown (its make and
+	 * model's); its advanced options open over the drawing */
+	std::string shake_from;
+	PadTuning tuning;
+	bool advanced = false;
 	/* In a window not wide enough for both, the cabinet in place of the
 	 * device */
 	bool cabinet_shown = false;

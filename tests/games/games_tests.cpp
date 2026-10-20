@@ -548,6 +548,14 @@ void test_shipped_outputs()
 		if (const std::optional<Game> game = shipped.describe(name); game && game->shakes())
 			shake += std::string(name) + " ";
 	check(shake == "braveff podrace sgnascar ", "the games that shake a pad: the nozzles, the shaker, the wheel");
+
+	const auto shaker = [&shipped](const char *name, unsigned player) { return shipped.describe(name)->shaker(player); };
+
+	check(shaker("braveff", 0) == "output 1P NOZZLE VIBRATION" && shaker("braveff", 1) == "output 2P NOZZLE VIBRATION",
+	      "what shakes the pad of each player of BRAVEFF: its nozzle");
+	check(shaker("podrace", 0) == "the shaker of the optional board" &&
+	      shaker("sgnascar", 0) == "the shocks of the cabinet wheel" && shaker("sgnascar", 1).empty() &&
+	      shaker("airtrix", 0).empty(), "the shaker of Racer, the shocks of NASCAR (player 1), nothing in Air Trix");
 }
 
 void test_lists(const std::string &dir)

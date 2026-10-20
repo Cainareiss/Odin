@@ -19,6 +19,7 @@
 #ifndef ODIN_CONTROL_PANEL_HPP
 #define ODIN_CONTROL_PANEL_HPP
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <string>
@@ -32,13 +33,37 @@
 
 namespace odin {
 
-/* A gamepad as the host sees it now */
+/* The dead zone of the sticks of a gamepad and how far its triggers go
+ * before they press a button, in % of their way: [gamepads] of odin.ini,
+ * then [gamepad.<GUID>] of its make and model. */
+struct PadTuning {
+	static constexpr int DEAD_ZONE = 3, TRIGGER_THRESHOLD = 3;
+	static constexpr int MOST_DEAD_ZONE = 30, MOST_TRIGGER_THRESHOLD = 50;
+
+	int dead_zone = DEAD_ZONE, trigger_threshold = TRIGGER_THRESHOLD;
+
+	/* Those of a make and model; a line that is not right is said on
+	 * stderr when `tell` */
+	static PadTuning of(const Settings &settings, const std::string &guid, bool tell);
+	/* A stick, both its axes, past its dead zone: from 0 at its edge to
+	 * all the way at its end, the same way */
+	void shape(int16_t &x, int16_t &y) const;
+	/* Where a trigger starts to press */
+	constexpr int16_t trigger_pressed() const
+	{
+		return static_cast<int16_t>(std::max(1, trigger_threshold * 32767 / 100));
+	}
+};
+
+/* A gamepad as the host sees it now: its sticks past their dead zone */
 struct PadState {
 	std::array<int16_t, SDL_GAMEPAD_AXIS_COUNT> axes{};
 	std::array<bool, SDL_GAMEPAD_BUTTON_COUNT> buttons{};
 	/* Pressed with Guide held: a shortcut of Odin (hotkeys.hpp), not the
 	 * game's, until let go; it still works with Guide (guide+leftstick) */
 	std::array<bool, SDL_GAMEPAD_BUTTON_COUNT> shortcut{};
+	/* Where a trigger starts to press a button */
+	int16_t trigger_pressed = PadTuning{}.trigger_pressed();
 };
 
 /* The mouse as the host sees it now: where it points on the picture, 0 to
@@ -78,8 +103,9 @@ struct ControlNow {
  * Service of the main board. */
 class ControlPanel {
 public:
-	/* Half a stick or a trigger is pressed from half its way on: a choice
-	 * of the emulator, not of the cabinet. */
+	/* Half a stick is pressed from half its way on (a trigger from its
+	 * threshold, PadTuning): a choice of the emulator, not of the
+	 * cabinet. */
 	static constexpr int PRESSED = 16384;
 	/* A key moves an analog control this much a frame, and lets it back
 	 * as fast (the step of xemu's Chihiro wheel): a choice of the
