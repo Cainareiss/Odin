@@ -30,9 +30,9 @@ namespace odin {
 /* The drawings of the gamepads in the menu, seen from the front with their
  * top edge: AL2009man's Gamepad-Asset-Pack (MIT, pad_drawings_al2009man.cpp)
  * for the Xbox 360, Xbox One and Series, PlayStation 4 and 5, Switch Pro and
- * Steam Controller (2015) gamepads, Odin's for the DualShock 3, the Steam
- * Controller of 2026 and any other one (pad_drawings.cpp). Their data is
- * made from SVG by a tool kept outside the repository. */
+ * Steam Controller gamepads, Odin's for the DualShock 3 and any other one
+ * (pad_drawings.cpp). Their data is made from SVG by a tool kept outside
+ * the repository. */
 
 /* The tones of the menu a shape takes (menu_kit.hpp): the body, a part on
  * it, a line drawn as a shape, a detail, a light, an arrow on a part; gold
@@ -103,11 +103,10 @@ struct PadDrawing {
 };
 
 /* The kinds of gamepad the menu draws and names: those of SDL
- * (SDL_GamepadType), and the Steam Controllers of 2015 and 2026, which SDL
- * counts as standard gamepads. The kind of a gamepad of that type, maker
- * and product (its USB ids). */
+ * (SDL_GamepadType), and the Steam Controller of 2015, which SDL counts as
+ * a standard gamepad. The kind of a gamepad of that type, maker and
+ * product (its USB ids). */
 inline constexpr int PAD_STEAM_CONTROLLER = SDL_GAMEPAD_TYPE_COUNT;
-inline constexpr int PAD_STEAM_CONTROLLER_2026 = SDL_GAMEPAD_TYPE_COUNT + 1;
 int pad_kind(SDL_GamepadType type, uint16_t vendor, uint16_t product);
 
 /* The drawing of a kind of gamepad */

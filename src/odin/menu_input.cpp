@@ -64,12 +64,12 @@ constexpr float STICK_TOUCHED = 0.3f;
 constexpr int16_t TRIGGER_TOUCHED = 6554;
 
 /* The type of SDL of a kind of gamepad (pad_drawing.hpp): the Steam
- * Controllers and an unknown one are standard */
+ * Controller and an unknown one are standard */
 SDL_GamepadType
 sdl_type(int kind)
 {
-	return kind >= SDL_GAMEPAD_TYPE_COUNT || kind == SDL_GAMEPAD_TYPE_UNKNOWN ? SDL_GAMEPAD_TYPE_STANDARD :
-	                                                                          static_cast<SDL_GamepadType>(kind);
+	return kind == PAD_STEAM_CONTROLLER || kind == SDL_GAMEPAD_TYPE_UNKNOWN ? SDL_GAMEPAD_TYPE_STANDARD :
+	                                                                         static_cast<SDL_GamepadType>(kind);
 }
 
 bool
@@ -96,12 +96,9 @@ family(int kind)
 	static constexpr Family PS5 = { "Create", "Options", "L3", "R3", "PS", "L1", "R1", "L2", "R2", "D-pad", "R stick" };
 	static constexpr Family SWITCH = { "−", "+", "LS", "RS", "Home", "L", "R", "ZL", "ZR", "D-pad", "R stick" };
 	static constexpr Family STEAM = { "◀", "▶", "LS", "R pad", "Steam", "LB", "RB", "LT", "RT", "L pad", "R pad" };
-	static constexpr Family STEAM_2026 = { "View", "Menu", "L3", "R3", "Steam", "L1", "R1", "L2", "R2", "D-pad", "R stick" };
 
 	if (kind == PAD_STEAM_CONTROLLER)
 		return STEAM;
-	if (kind == PAD_STEAM_CONTROLLER_2026)
-		return STEAM_2026;
 	switch (static_cast<SDL_GamepadType>(kind)) {
 	case SDL_GAMEPAD_TYPE_XBOX360: return XBOX_360;
 	case SDL_GAMEPAD_TYPE_XBOXONE: return XBOX_ONE;
@@ -147,22 +144,11 @@ pad_label(const PadInput &pad, int kind)
 		case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: return dpad + "→";
 		case SDL_GAMEPAD_BUTTON_TOUCHPAD: return "Touchpad";
 		default: {
-			/* Under the Steam Controllers: the grips of that of 2015, the
-			 * four buttons of that of 2026; its Quick Access button */
+			/* The grips of the Steam Controller, under it */
 			if (kind == PAD_STEAM_CONTROLLER && button == SDL_GAMEPAD_BUTTON_RIGHT_PADDLE1)
 				return "R grip";
 			if (kind == PAD_STEAM_CONTROLLER && button == SDL_GAMEPAD_BUTTON_LEFT_PADDLE1)
 				return "L grip";
-			if (kind == PAD_STEAM_CONTROLLER_2026) {
-				switch (button) {
-				case SDL_GAMEPAD_BUTTON_RIGHT_PADDLE1: return "R4";
-				case SDL_GAMEPAD_BUTTON_LEFT_PADDLE1: return "L4";
-				case SDL_GAMEPAD_BUTTON_RIGHT_PADDLE2: return "R5";
-				case SDL_GAMEPAD_BUTTON_LEFT_PADDLE2: return "L5";
-				case SDL_GAMEPAD_BUTTON_MISC1: return "...";
-				default: break;
-				}
-			}
 
 			const char *const name = SDL_GetGamepadStringForButton(button);
 
