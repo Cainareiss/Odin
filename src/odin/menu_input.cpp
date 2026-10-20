@@ -1317,6 +1317,25 @@ Menu::page_input(MenuKit &kit, MenuState &state) const
 		if (kit.button("Stop", true))
 			state.mapping.reset(), state.catching.reset();
 	}
+
+	/* At the end of the row, the vibration of the pad where the game has
+	 * some (its long name where there is room) */
+	static constexpr const char *ON_OFF[] = { "On", "Off" };
+	const ImVec2 cells = kit.segments_size(ON_OFF);
+	const float room_left = top.x + width - ImGui::GetItemRectMax().x - kit.px(16.0f) - cells.x;
+	const char *const name = ImGui::CalcTextSize("Vibration (experimental)").x <= room_left ? "Vibration (experimental)" :
+	                         ImGui::CalcTextSize("Vibration").x <= room_left ? "Vibration" : nullptr;
+
+	if (state.can_shake && name) {
+		const ImVec2 at = { top.x + width - cells.x, b.y + gap + (buttons_h - cells.y) / 2.0f };
+		int shake = state.shake ? 0 : 1;
+
+		ImGui::GetWindowDrawList()->AddText({ at.x - kit.px(8.0f) - ImGui::CalcTextSize(name).x,
+		                                      at.y + (cells.y - ImGui::GetTextLineHeight()) / 2.0f },
+		                                    palette.dim, name);
+		if (kit.segments(at, ON_OFF, shake))
+			state.shake = shake == 0;
+	}
 	ImGui::SetCursorScreenPos(top);
 	ImGui::Dummy({ width, room.y - kit.px(4.0f) });
 }

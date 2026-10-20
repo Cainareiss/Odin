@@ -150,6 +150,10 @@ struct MenuState {
 	/* The keys held now */
 	std::vector<SDL_Keycode> keys_held;
 	bool classic = false;
+	/* The game shown shakes the pad of player 1 as its cabinet shakes
+	 * (experimental: the shaker of Racer, the shocks of NASCAR), and
+	 * whether it does */
+	bool can_shake = false, shake = true;
 	/* In a window not wide enough for both, the cabinet in place of the
 	 * device */
 	bool cabinet_shown = false;

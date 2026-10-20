@@ -106,8 +106,9 @@ hard as its sound; the page Audio plays it in the speakers too, where the
 user wants it ("mode = mix", -13 dB by default, or "mode = quad" in
 [sound.podrace]). In NASCAR the pad of player 1 shakes with the shocks
 the game gives the wheel, not with the hold and the damping that follow
-the moves of the wheel (experimental; "vibration = off" in [sound.podrace]
-or [sound.sgnascar] stops it).
+the moves of the wheel (experimental; the switch Vibration of the page
+Input, or "vibration = off" in [sound.podrace] or [sound.sgnascar], stops
+it).
 
 The mouse aims for player 1 in Brave: the sight where it points on the
 picture, water on the left button, fog on the right one, Start on the

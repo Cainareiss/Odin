@@ -379,23 +379,45 @@ bool
 MenuKit::choice(const char *name, const char *about, std::span<const char *const> labels, int &chosen,
                 const char *locked, bool off)
 {
-	IM_ASSERT(!labels.empty() && labels.size() <= MOST_LABELS);
 	ImGui::PushID(name);
 
+	const float pad = px(ROW_PAD);
+	const ImVec2 control = segments_size(labels);
+	float width;
+	const ImVec2 at = begin_row(width);
+	const Placed placed = place(at, width, control.x, control.y, name, about, locked);
+	const bool changed = segments({ at.x + width - pad - control.x, placed.top }, labels, chosen, locked || off);
+
+	ImGui::SetCursorScreenPos(at);
+	ImGui::Dummy({ width, placed.h });
+	ImGui::PopID();
+	return changed;
+}
+
+ImVec2
+MenuKit::segments_size(std::span<const char *const> labels) const
+{
+	float w = 0.0f;
+
+	for (const char *label : labels)
+		w += ImGui::CalcTextSize(label).x + 2.0f * px(CELL_WIDE);
+	return { w, ImGui::GetTextLineHeight() + 2.0f * px(CELL_HIGH) };
+}
+
+bool
+MenuKit::segments(ImVec2 a, std::span<const char *const> labels, int &chosen, bool still) const
+{
+	IM_ASSERT(!labels.empty() && labels.size() <= MOST_LABELS);
+
 	ImDrawList *const list = ImGui::GetWindowDrawList();
-	const bool still = locked || off;
-	const float pad = px(ROW_PAD), wide = px(CELL_WIDE), high = px(CELL_HIGH);
+	const float wide = px(CELL_WIDE), high = px(CELL_HIGH);
 	const float control_h = ImGui::GetTextLineHeight() + 2.0f * high;
 	std::array<float, MOST_LABELS> cells;
-	float control = 0.0f, width;
+	float control = 0.0f;
 
 	for (size_t i = 0; i < labels.size(); i++)
 		control += cells[i] = ImGui::CalcTextSize(labels[i]).x + 2.0f * wide;
 
-	const ImVec2 at = begin_row(width);
-	const Placed placed = place(at, width, control, control_h, name, about, locked);
-	const float h = placed.h;
-	const ImVec2 a = { at.x + width - pad - control, placed.top };
 	const int was = chosen;
 	float x = a.x;
 
@@ -421,10 +443,6 @@ MenuKit::choice(const char *name, const char *about, std::span<const char *const
 	}
 	ImGui::EndDisabled();
 	frame(list, a, { a.x + control, a.y + control_h }, px(CONTROL_CUT), 0, faded(m_palette.outline, still));
-
-	ImGui::SetCursorScreenPos(at);
-	ImGui::Dummy({ width, h });
-	ImGui::PopID();
 	return chosen != was;
 }
 

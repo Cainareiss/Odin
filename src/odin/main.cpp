@@ -505,6 +505,7 @@ private:
 	 * outputs */
 	std::vector<odin::GameControl> m_other_controls;
 	std::vector<odin::GameOutput> m_other_outputs;
+	bool m_other_shakes = false;
 	std::optional<odin::ControlPanel> m_other;
 	odin::MenuState m_menu_state;
 	/* The inputs as Clear all found them, and until when Undo puts them back */
@@ -975,6 +976,7 @@ Session::show_game(size_t game)
 		return;
 	m_other_controls = other->controls;
 	m_other_outputs = other->outputs;
+	m_other_shakes = other->option_vibration || other->drive_first_output;
 	m_other.emplace(m_other_controls, m_settings, other->name);
 }
 
@@ -1046,6 +1048,13 @@ Session::draw_menu()
 		state.hotkeys[a] = m_hotkeys.of(static_cast<odin::Hotkeys::Action>(a));
 	if (m_audio)
 		state.devices = m_audio->devices();
+	/* The pad shakes as the cabinet of the game shown, unless [sound.<game>]
+	 * says off (the last line says) */
+	state.can_shake = m_other ? m_other_shakes : m_game.option_vibration || m_game.drive_first_output;
+	state.shake = true;
+	for (const auto &[key, value] : m_settings.section("sound." + game_shown()))
+		if (key == "vibration" && (value == "on" || value == "off"))
+			state.shake = value == "on";
 	/* The outputs of the game shown, lit as the board left them */
 	state.outputs.clear();
 	for (const odin::GameOutput &output : m_other ? m_other_outputs : m_game.outputs)
@@ -1210,6 +1219,16 @@ Session::apply(const odin::MenuState &was)
 			                                      std::optional<std::string>(db));
 		}
 	}
+	/* The vibration of the game shown: at once for the game that runs */
+	if (now.shake != was.shake && now.can_shake) {
+		const std::string section = "sound." + game_shown();
+
+		if (!m_other) {
+			m_controls.feel_option_board(now.shake && m_game.option_vibration);
+			m_controls.feel_drive_board(now.shake ? m_game.drive_first_output : 0);
+		}
+		keep(section.c_str(), "vibration", on_off(now.shake, true));
+	}
 	/* The programs of lamps: the port opened or closed now */
 	if (now.network != was.network) {
 		if (now.network)
@@ -1228,10 +1247,13 @@ Session::keep(const char *key, const std::optional<std::string> &value)
 	keep("display", key, value);
 }
 
+/* In odin.ini; with none, for the time Odin runs */
 void
 Session::keep(const char *section, const char *key, const std::optional<std::string> &value)
 {
-	if (!m_settings_file.empty())
+	if (m_settings_file.empty())
+		m_settings.set(section, key, value);
+	else
 		m_settings.change(m_settings_file, section, key, value);
 }
 

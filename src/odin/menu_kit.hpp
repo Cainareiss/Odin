@@ -94,6 +94,9 @@ public:
 	 * a row that cannot change now is `off`. */
 	bool choice(const char *name, const char *about, std::span<const char *const> labels, int &chosen,
 	            const char *locked = nullptr, bool off = false);
+	/* The choice alone, at that place: its size first */
+	ImVec2 segments_size(std::span<const char *const> labels) const;
+	bool segments(ImVec2 at, std::span<const char *const> labels, int &chosen, bool still = false) const;
 	void text(const char *name, const char *about, const char *value);
 	/* A row with a value at its right and after it a button (true on a
 	 * click), or a word in small capitals when there is no button; one the
