@@ -522,6 +522,16 @@ route(const Label &label, float from, float knee, std::span<const std::pair<ImVe
 
 } /* namespace */
 
+std::string
+Menu::button_name(int button, int type)
+{
+	PadInput pad{};
+
+	pad.type = PadInput::Type::BUTTON;
+	pad.index = static_cast<uint8_t>(button);
+	return pad_label(pad, static_cast<SDL_GamepadType>(type));
+}
+
 /* The games, the one shown marked and the one that runs dotted; when they
  * do not fit, the one shown between arrows. Its bottom. */
 float

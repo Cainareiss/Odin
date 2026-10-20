@@ -195,6 +195,32 @@ void test_coins()
 	pad2.buttons[SDL_GAMEPAD_BUTTON_BACK] = true;
 	inputs = after(pads, {}, &pad1, &pad2);
 	check(inputs.jvs_coin[0] == 0 && inputs.jvs_coin[1] == 1, "SELECT of pad 2: the second slot");
+
+	/* Guide held with Back pauses Odin: no coin */
+	ControlPanel shortcuts({}, Settings(), "bootrom");
+
+	pad1 = pad2 = PadState{};
+	pad1.buttons[SDL_GAMEPAD_BUTTON_GUIDE] = pad1.buttons[SDL_GAMEPAD_BUTTON_BACK] = true;
+	pad1.shortcut[SDL_GAMEPAD_BUTTON_BACK] = true;
+	inputs = after(shortcuts, {}, &pad1, &pad2);
+	check(inputs.jvs_coin[0] == 0, "SELECT pressed with Guide held: a shortcut, no coin");
+	pad1.buttons[SDL_GAMEPAD_BUTTON_GUIDE] = false;
+	inputs = after(shortcuts, {}, &pad1, &pad2);
+	check(inputs.jvs_coin[0] == 0, "nor once Guide is let go, while SELECT is held");
+	pad1 = PadState{};
+	after(shortcuts, {}, &pad1, &pad2);
+	pad1.buttons[SDL_GAMEPAD_BUTTON_BACK] = true;
+	inputs = after(shortcuts, {}, &pad1, &pad2);
+	check(inputs.jvs_coin[0] == 1, "SELECT pressed again alone: a coin");
+	pad1 = PadState{};
+	pad1.buttons[SDL_GAMEPAD_BUTTON_GUIDE] = pad1.buttons[SDL_GAMEPAD_BUTTON_LEFT_STICK] = true;
+	pad1.shortcut[SDL_GAMEPAD_BUTTON_LEFT_STICK] = true;
+	size_t service = 0;
+
+	while (service < shortcuts.controls().size() && shortcuts.controls()[service].role != odin::Role::SERVICE)
+		service++;
+	check(service < shortcuts.controls().size() && shortcuts.touched({ nullptr, { &pad1, nullptr }, nullptr }, service),
+	      "Guide with the left stick pressed is still SERVICE");
 }
 
 void test_game()

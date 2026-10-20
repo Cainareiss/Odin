@@ -49,7 +49,13 @@ Options:
 Keys: Escape or F10 opens the menu, which pauses the game (its Display
 page sets the window and the picture, kept in [display] of odin.ini),
 Ctrl+Q quits, P pauses, F4 saves <game>.odinstate and F1 loads it, in
-~/.local/share/odin/states (states in [paths] of odin.ini, page Paths).
+~/.local/share/odin/states (states in [paths] of odin.ini, page Paths),
+F11 or Alt+Enter takes the whole display. The page Hotkeys of the menu
+changes these keys and the buttons below, kept in [hotkeys] of odin.ini:
+
+ [hotkeys]
+ pause = Pause, pad:guide+y
+
 0 is TEST and 9 SERVICE, the buttons of the cabinet: they open and work
 the menu of the BOOTROM and the test menus of the games (both together
 leave INPUT TEST); 5 and 6 are the coins. Player 1
@@ -111,7 +117,9 @@ the game) has been done with the mouse.
 Gamepads: one for each player, in the order they are plugged in, or the
 one chosen for the game in the menu (Input). SELECT (SHARE) puts in a
 coin for the player of the pad. Guide alone opens the menu; Guide held
-with the left stick pressed is SERVICE, with the right one TEST. Start, the D-pad, A, B,
+with Back pauses, with RB saves the state, with LB loads it, with Start
+quits (a button pressed with Guide is not the game's), with the left stick
+pressed is SERVICE, with the right one TEST. Start, the D-pad, A, B,
 X, Y, LB, RB, LT, RT, the sticks and the triggers work the controls of
 each game as their roles tell (odin-games.json): for NASCAR,
 the wheel on the left stick, the pedals on the triggers, the gears on LB

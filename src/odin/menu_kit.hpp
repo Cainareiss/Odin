@@ -65,10 +65,10 @@ public:
 	float px(float points) const { return points * m_scale; }
 
 	/* The icons of the menu (mock-up v50), drawn in a square of that side:
-	 * a gamepad, a gamepad with its cross, a screen, a speaker, a keyboard,
-	 * a light with its rays, a folder, an i; the outputs of a cabinet: a
-	 * lamp, a shaker, a lock, a speaker crossed out */
-	enum class Icon { PAD, INPUT, DISPLAY, AUDIO, KEYBOARD, OUTPUTS, FOLDER, ABOUT, LAMP, RUMBLE, LOCK, MUTE };
+	 * a gamepad, a gamepad with its cross, a screen, a speaker, a keyboard
+	 * and a smaller one, a light with its rays, a folder, an i; the outputs
+	 * of a cabinet: a lamp, a shaker, a lock, a speaker crossed out */
+	enum class Icon { PAD, INPUT, DISPLAY, AUDIO, KEYBOARD, HOTKEYS, OUTPUTS, FOLDER, ABOUT, LAMP, RUMBLE, LOCK, MUTE };
 	static void icon(ImDrawList *list, Icon icon, ImVec2 at, float side, ImU32 colour);
 
 	/* A frame with its corners cut; a colour of 0 is none */
@@ -110,6 +110,19 @@ public:
 	            const char *locked = nullptr, bool off = false);
 	/* A title and a text under it, with no frame */
 	void paragraph(const char *title, const char *text);
+	/* A key drawn: its name in a cap, the outline clear when `used`, lit
+	 * when held (`lit`); its size first */
+	ImVec2 key_size(const char *name) const;
+	void key(ImDrawList *list, ImVec2 at, const char *name, bool used, bool lit) const;
+	/* A button of a gamepad drawn as a pill; its size first */
+	ImVec2 pill_size(const char *name) const;
+	void pill(ImDrawList *list, ImVec2 at, const char *name) const;
+	/* A row of an action of Odin: its name, its keys as caps, its gamepad
+	 * buttons as pills (none: a dash); those caught now (0 and 1 the keys,
+	 * 2 the buttons, -1 none) say "press...". What is clicked: 0 to 2, -1
+	 * for none. */
+	int shortcut(const char *name, std::span<const std::string> keys, std::span<const std::string> pad,
+	             int catching);
 	/* A row with a list that drops down from its right: true when the
 	 * choice changed */
 	bool dropdown(const char *name, const char *about, std::span<const std::string> labels, int &chosen);

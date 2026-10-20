@@ -196,6 +196,12 @@ MenuKit::icon(ImDrawList *list, Icon icon, ImVec2 at, float side, ImU32 colour)
 			list->AddLine(p(21, 9), p(16, 15), colour, w);
 		}
 		break;
+	case Icon::HOTKEYS:
+		list->AddRect(p(3, 7), p(21, 17), colour, 2.0f * k, ImDrawFlags_None, w);
+		for (const float x : { 7.0f, 11.0f, 15.0f })
+			list->AddLine(p(x, 11), p(x + 2, 11), colour, w);
+		list->AddLine(p(8, 14), p(16, 14), colour, w);
+		break;
 	case Icon::OUTPUTS:
 		list->AddCircle(p(12, 12), 3.0f * k, colour, 0, w);
 		list->AddLine(p(12, 3), p(12, 6), colour, w);
@@ -700,6 +706,134 @@ MenuKit::slider(const char *name, const char *about, float &value, float low, fl
 	ImGui::Dummy({ width, h });
 	ImGui::PopID();
 	return value != was;
+}
+
+ImVec2
+MenuKit::key_size(const char *name) const
+{
+	const float h = ImGui::GetTextLineHeight() + 2.0f * px(3.0f);
+
+	return { std::max(h, ImGui::CalcTextSize(name).x + 2.0f * px(5.0f)), h };
+}
+
+void
+MenuKit::key(ImDrawList *list, ImVec2 at, const char *name, bool used, bool lit) const
+{
+	const ImVec2 size = key_size(name), b = { at.x + size.x, at.y + size.y };
+	const float w = ImGui::CalcTextSize(name).x;
+
+	frame(list, at, b, px(CONTROL_CUT), lit ? m_palette.accent : m_palette.group,
+	      lit ? m_palette.accent : used ? m_palette.dim : m_palette.outline);
+	list->AddText({ at.x + (size.x - w) / 2.0f, at.y + px(3.0f) },
+	              lit ? m_palette.on_accent : used ? m_palette.ink : m_palette.faint, name);
+}
+
+ImVec2
+MenuKit::pill_size(const char *name) const
+{
+	const float h = ImGui::GetTextLineHeight() + 2.0f * px(3.0f);
+
+	return { std::max(h, ImGui::CalcTextSize(name).x + 2.0f * px(7.0f)), h };
+}
+
+void
+MenuKit::pill(ImDrawList *list, ImVec2 at, const char *name) const
+{
+	const ImVec2 size = pill_size(name);
+	const float w = ImGui::CalcTextSize(name).x;
+
+	list->AddRect(at, { at.x + size.x, at.y + size.y }, m_palette.outline, size.y / 2.0f);
+	list->AddText({ at.x + (size.x - w) / 2.0f, at.y + px(3.0f) }, m_palette.ink, name);
+}
+
+int
+MenuKit::shortcut(const char *name, std::span<const std::string> keys, std::span<const std::string> pad, int catching)
+{
+	ImGui::PushID(name);
+
+	ImDrawList *const list = ImGui::GetWindowDrawList();
+	const char press[] = "press...", none[] = "-";
+	const float pad_room = px(ROW_PAD), gap = px(4.0f), plus = ImGui::CalcTextSize("+").x;
+	const float line = ImGui::GetTextLineHeight(), cap_h = key_size("x").y;
+	/* The keys, then the buttons as wide as "Guide + Back" at the least */
+	const auto width_of = [&](size_t i) {
+		return static_cast<int>(i) == catching ? ImGui::CalcTextSize(press).x + 2.0f * px(5.0f) : key_size(keys[i].c_str()).x;
+	};
+	float keys_w = 0.0f, pad_w = 0.0f;
+
+	for (size_t i = 0; i < keys.size(); i++)
+		keys_w += width_of(i) + (i ? gap : 0.0f);
+	if (catching == 2)
+		pad_w = ImGui::CalcTextSize(press).x + 2.0f * px(7.0f);
+	else if (pad.empty())
+		pad_w = ImGui::CalcTextSize(none).x;
+	else
+		for (size_t i = 0; i < pad.size(); i++)
+			pad_w += pill_size(pad[i].c_str()).x + (i ? 2.0f * gap + plus : 0.0f);
+	pad_w = std::max(pad_w, pill_size("Guide").x + pill_size("Back").x + 2.0f * gap + plus);
+
+	float width;
+	const ImVec2 at = begin_row(width);
+	const float control = keys_w + px(GAP) + pad_w;
+	/* Where the name has not room enough beside them, they go under it */
+	const bool under = width - control - px(GAP) - 2.0f * pad_room < px(120.0f);
+	const float text_w = under ? width - 2.0f * pad_room : width - control - px(GAP) - 2.0f * pad_room;
+	const float text_h = texts({ at.x + pad_room, at.y + pad_room }, text_w, name, nullptr, nullptr);
+	const float h = (under ? text_h + px(6.0f) + cap_h : std::max(text_h, cap_h)) + 2.0f * pad_room;
+	const float y = under ? at.y + pad_room + text_h + px(6.0f) : at.y + (h - cap_h) / 2.0f;
+	float x = at.x + width - pad_room - control;
+	int clicked = -1;
+
+	for (size_t i = 0; i < keys.size(); i++) {
+		const float w = width_of(i);
+
+		ImGui::SetCursorScreenPos({ x, y });
+		ImGui::PushID(static_cast<int>(i));
+		if (ImGui::InvisibleButton("key", { w, cap_h }))
+			clicked = static_cast<int>(i);
+		ImGui::PopID();
+		if (static_cast<int>(i) == catching) {
+			frame(list, { x, y }, { x + w, y + cap_h }, px(CONTROL_CUT), m_palette.hover, m_palette.accent);
+			list->AddText({ x + px(5.0f), y + px(3.0f) }, m_palette.accent, press);
+		} else {
+			key(list, { x, y }, keys[i].c_str(), true, false);
+			if (ImGui::IsItemHovered())
+				frame(list, { x, y }, { x + w, y + cap_h }, px(CONTROL_CUT), m_palette.hover, 0);
+		}
+		x += w + gap;
+	}
+
+	const float pad_x = at.x + width - pad_room - pad_w;
+
+	ImGui::SetCursorScreenPos({ pad_x, y });
+	if (ImGui::InvisibleButton("pad", { pad_w, cap_h }))
+		clicked = 2;
+	if (catching == 2) {
+		const float w = ImGui::CalcTextSize(press).x + 2.0f * px(7.0f);
+
+		list->AddRect({ pad_x + pad_w - w, y }, { pad_x + pad_w, y + cap_h }, m_palette.accent, cap_h / 2.0f);
+		list->AddText({ pad_x + pad_w - w + px(7.0f), y + px(3.0f) }, m_palette.accent, press);
+	} else {
+		if (ImGui::IsItemHovered())
+			list->AddRectFilled({ pad_x, y }, { pad_x + pad_w, y + cap_h }, m_palette.hover, cap_h / 2.0f);
+		float right = pad_x + pad_w;
+
+		if (pad.empty())
+			list->AddText({ right - ImGui::CalcTextSize(none).x, y + (cap_h - line) / 2.0f }, m_palette.faint, none);
+		for (size_t i = pad.size(); i-- > 0;) {
+			right -= pill_size(pad[i].c_str()).x;
+			pill(list, { right, y }, pad[i].c_str());
+			if (i) {
+				right -= gap + plus;
+				list->AddText({ right, y + (cap_h - line) / 2.0f }, m_palette.faint, "+");
+				right -= gap;
+			}
+		}
+	}
+	ImGui::SetCursorScreenPos(at);
+	ImGui::Dummy({ width, h });
+	ImGui::PopID();
+	return clicked;
 }
 
 void

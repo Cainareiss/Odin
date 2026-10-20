@@ -36,6 +36,9 @@ namespace odin {
 struct PadState {
 	std::array<int16_t, SDL_GAMEPAD_AXIS_COUNT> axes{};
 	std::array<bool, SDL_GAMEPAD_BUTTON_COUNT> buttons{};
+	/* Pressed with Guide held: a shortcut of Odin (hotkeys.hpp), not the
+	 * game's, until let go; it still works with Guide (guide+leftstick) */
+	std::array<bool, SDL_GAMEPAD_BUTTON_COUNT> shortcut{};
 };
 
 /* The mouse as the host sees it now: where it points on the picture, 0 to

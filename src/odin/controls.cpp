@@ -261,6 +261,13 @@ Controls::event(const SDL_Event &event)
 			const unsigned button = event.gbutton.button;
 
 			press(pad->state.buttons[button], pad->fresh[button], pad->release[button], event.gbutton.down);
+			if (event.gbutton.down && button != SDL_GAMEPAD_BUTTON_GUIDE &&
+			    pad->state.buttons[SDL_GAMEPAD_BUTTON_GUIDE]) {
+				pad->state.shortcut[button] = true;
+				m_guide_combo = static_cast<int>(button);
+			}
+			if (!pad->state.buttons[button])
+				pad->state.shortcut[button] = false;
 			if (button != SDL_GAMEPAD_BUTTON_GUIDE)
 				pad->guide_alone = pad->guide_alone && !event.gbutton.down;
 			else if (event.gbutton.down)
@@ -377,7 +384,7 @@ Controls::settle()
 	for (Pad &pad : m_pads) {
 		for (unsigned button = 0; button < SDL_GAMEPAD_BUTTON_COUNT; button++)
 			if (pad.release[button])
-				pad.state.buttons[button] = false;
+				pad.state.buttons[button] = pad.state.shortcut[button] = false;
 		pad.fresh = {};
 		pad.release = {};
 	}

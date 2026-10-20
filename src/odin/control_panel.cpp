@@ -176,7 +176,7 @@ ControlPanel::held(const HostState &host, const HostInput &input, unsigned playe
 		return false;
 	switch (input.pad.type) {
 	case PadInput::Type::BUTTON:
-		return pad->buttons[input.pad.index];
+		return pad->buttons[input.pad.index] && (input.pad.with >= 0 || !pad->shortcut[input.pad.index]);
 	case PadInput::Type::AXIS_NEGATIVE:
 		return pad->axes[input.pad.index] <= -PRESSED;
 	case PadInput::Type::AXIS_POSITIVE:

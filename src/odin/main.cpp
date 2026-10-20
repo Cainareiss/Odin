@@ -42,6 +42,7 @@
 #include "odin/games.hpp"
 #include "odin/audio_out.hpp"
 #include "odin/hikaru.hpp"
+#include "odin/hotkeys.hpp"
 #include "odin/controls.hpp"
 #include "odin/keyboard.hpp"
 #include "odin/menu.hpp"
@@ -364,7 +365,7 @@ public:
 	        const std::string &settings_file, const odin::GameList &games)
 		: m_options(options), m_game(game), m_board(board), m_display(display), m_keys(keys), m_controls(controls),
 		  m_audio(audio), m_outputs(std::move(outputs)), m_settings(settings), m_settings_file(settings_file),
-		  m_games(games), m_paused(false),
+		  m_games(games), m_hotkeys(settings), m_paused(false),
 		  m_next(),
 		  m_menu_pictures(0), m_menu_drawn(0),
 		  m_menu_test(static_cast<unsigned>(std::max(odin::env_int("ODIN_MENU_TEST", 0), 0)))
@@ -455,6 +456,8 @@ private:
 	static constexpr Uint64 MAPPING_TICK_MS = 250;
 
 	bool process_events();
+	/* What Odin does on a hotkey in the game: true to quit */
+	bool act(odin::Hotkeys::Action action);
 	bool menu_event(const SDL_Event &event);
 	void open_menu();
 	void close_menu();
@@ -470,6 +473,8 @@ private:
 	const odin::ControlPanel &panel_shown() const { return m_other ? *m_other : m_controls.panel(); }
 	void show_game(size_t game);
 	bool catch_input(const SDL_Event &event);
+	bool catch_hotkey(const SDL_Event &event);
+	void keep_hotkeys();
 	void caught(const odin::HostInput &input);
 	void change_inputs(bool to_defaults);
 	void undo();
@@ -490,6 +495,7 @@ private:
 	odin::Settings &m_settings;
 	const std::string &m_settings_file;	/* empty: nothing is kept */
 	const odin::GameList &m_games;
+	odin::Hotkeys m_hotkeys;
 	/* The panel of a game shown that does not run, its controls and its
 	 * outputs */
 	std::vector<odin::GameControl> m_other_controls;
@@ -516,24 +522,6 @@ private:
 	unsigned m_menu_test;
 };
 
-bool
-is_quit(const SDL_KeyboardEvent &key)
-{
-	return key.down && key.key == SDLK_Q && (key.mod & SDL_KMOD_CTRL);
-}
-
-bool
-is_menu(const SDL_KeyboardEvent &key)
-{
-	return key.down && !key.repeat && (key.key == SDLK_ESCAPE || key.key == SDLK_F10);
-}
-
-bool
-is_fullscreen(const SDL_KeyboardEvent &key)
-{
-	return key.down && (key.key == SDLK_F11 || (key.key == SDLK_RETURN && (key.mod & SDL_KMOD_ALT)));
-}
-
 /* F1 and F4: <game>.odinstate in the folder of the save states */
 void
 Session::load_or_save_state(bool load)
@@ -549,10 +537,12 @@ Session::load_or_save_state(bool load)
 		std::fprintf(stderr, "ERROR: failed to %s state '%s'\n", load ? "load" : "save", path.c_str());
 }
 
-/* The keys of the emulator: Escape or F10 opens the menu, which pauses the
- * game, Ctrl+Q quits, P pauses (as in MAME), F1 loads the state of the
- * game and F4 saves it, F11 or Alt+Enter takes the whole display. The
- * others are the control panel, see keyboard.hpp. True to quit. */
+/* The hotkeys of the emulator (hotkeys.hpp): by default Escape or F10
+ * opens the menu, which pauses the game, Ctrl+Q quits, P pauses (as in
+ * MAME), F1 loads the state of the game and F4 saves it, F11 or Alt+Enter
+ * takes the whole display; on a gamepad Guide alone the menu, and with
+ * another button the others. The keys are the control panel's too, see
+ * keyboard.hpp. True to quit. */
 bool
 Session::process_events()
 {
@@ -574,34 +564,21 @@ Session::process_events()
 			continue;
 		}
 		if (m_controls.event(event)) {
+			const int combo = m_controls.guide_combo();
+
+			if (const auto action = m_hotkeys.pad_action(combo >= 0 ? combo : odin::Hotkeys::NO_PAD))
+				quit = act(*action) || quit;
 			if (m_controls.guide_tapped())
-				open_menu();
+				if (const auto action = m_hotkeys.pad_action(odin::Hotkeys::GUIDE_ALONE))
+					quit = act(*action) || quit;
 			continue;
 		}
 		switch (event.type) {
 		case SDL_EVENT_KEY_DOWN:
 			m_keys.set(event.key.key, true);
-			if (is_quit(event.key))
-				quit = true;
-			else if (is_menu(event.key))
-				open_menu();
-			else if (is_fullscreen(event.key))
-				m_display.toggle_fullscreen();
-			switch (event.key.key) {
-			case SDLK_P:
-				m_paused = !m_paused;
-				if (m_paused)
-					m_controls.quiet();
-				break;
-			case SDLK_F1:
-				load_or_save_state(true);
-				break;
-			case SDLK_F4:
-				load_or_save_state(false);
-				break;
-			default:
-				break;
-			}
+			if (!event.key.repeat)
+				if (const auto action = m_hotkeys.key_action(event.key.key, event.key.mod))
+					quit = act(*action) || quit;
 			break;
 		case SDL_EVENT_KEY_UP:
 			m_keys.set(event.key.key, false);
@@ -616,49 +593,99 @@ Session::process_events()
 	return quit;
 }
 
-/* With the menu open, Escape or F10 closes it and Ctrl+Q quits; F11 and
- * Alt+Enter still take the whole display. The keyboard and the gamepads
+bool
+Session::act(odin::Hotkeys::Action action)
+{
+	using Action = odin::Hotkeys::Action;
+
+	switch (action) {
+	case Action::MENU:
+		open_menu();
+		break;
+	case Action::PAUSE:
+		m_paused = !m_paused;
+		if (m_paused)
+			m_controls.quiet();
+		break;
+	case Action::SAVE_STATE:
+		load_or_save_state(false);
+		break;
+	case Action::LOAD_STATE:
+		load_or_save_state(true);
+		break;
+	case Action::FULLSCREEN:
+		m_display.toggle_fullscreen();
+		break;
+	case Action::QUIT:
+		return true;
+	}
+	return false;
+}
+
+/* With the menu open, its hotkey closes it and that of quitting quits;
+ * that of the whole display still works. The keyboard and the gamepads
  * are followed as they go; all the rest is the menu's. True to quit. */
 bool
 Session::menu_event(const SDL_Event &event)
 {
+	using Action = odin::Hotkeys::Action;
+
 	if (m_menu_state.catching && catch_input(event)) {
 		m_menu_pictures = MENU_PICTURES;
 		return false;
 	}
+	if (m_menu_state.hotkey_catching && catch_hotkey(event)) {
+		m_menu_pictures = MENU_PICTURES;
+		return false;
+	}
+
+	std::optional<Action> action;
+	bool pad = false;
+
 	switch (event.type) {
 	case SDL_EVENT_QUIT:
 		return true;
 	case SDL_EVENT_KEY_DOWN:
 	case SDL_EVENT_KEY_UP:
 		m_keys.set(event.key.key, event.key.down);
-		if (is_quit(event.key))
-			return true;
+		if (event.key.down && !event.key.repeat)
+			action = m_hotkeys.key_action(event.key.key, event.key.mod);
 		/* Escape closes a list dropped open first */
-		if (is_menu(event.key) && !(event.key.key == SDLK_ESCAPE && m_display.menu_popup_open())) {
-			close_menu();
-			return false;
-		}
-		if (is_fullscreen(event.key))
-			m_display.toggle_fullscreen();
+		if (action == Action::MENU && event.key.key == SDLK_ESCAPE && m_display.menu_popup_open())
+			action.reset();
 		break;
 	case SDL_EVENT_GAMEPAD_ADDED:
 	case SDL_EVENT_GAMEPAD_REMOVED:
 	case SDL_EVENT_GAMEPAD_AXIS_MOTION:
 	case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
-	case SDL_EVENT_GAMEPAD_BUTTON_UP:
+	case SDL_EVENT_GAMEPAD_BUTTON_UP: {
 		m_controls.event(event);
+
+		const int combo = m_controls.guide_combo();
+
+		action = m_hotkeys.pad_action(combo >= 0 ? combo : odin::Hotkeys::NO_PAD);
 		if (m_controls.guide_tapped())
-			close_menu();
-		m_menu_pictures = MENU_PICTURES;
-		return false;
+			action = m_hotkeys.pad_action(odin::Hotkeys::GUIDE_ALONE);
+		pad = true;
+		break;
+	}
 	case SDL_EVENT_WINDOW_MOUSE_LEAVE:
 		m_controls.event(event);
 		break;
 	default:
 		break;
 	}
-	m_display.menu_event(event);
+	if (action == Action::QUIT)
+		return true;
+	if (action == Action::MENU) {
+		close_menu();
+		return false;
+	}
+	if (action == Action::FULLSCREEN)
+		m_display.toggle_fullscreen();
+	/* The gamepads are Odin's, not Dear ImGui's */
+	if (!pad)
+		m_display.menu_event(event);
 	m_menu_pictures = MENU_PICTURES;
 	return false;
 }
@@ -691,13 +718,6 @@ Session::close_menu()
 	m_next = std::chrono::steady_clock::now();
 }
 
-/* The keys Odin works itself, which a control of the game does not take */
-bool
-is_odin_key(SDL_Keycode key)
-{
-	return key == SDLK_ESCAPE || key == SDLK_F10 || key == SDLK_F11 || key == SDLK_F1 || key == SDLK_F4 || key == SDLK_P;
-}
-
 /* The page Input waits for an input: Escape lets it go; a key, or on a
  * gamepad a button (Guide held, then another: both), a stick or a trigger
  * from half its way, is the one. True when the event was taken. */
@@ -717,7 +737,8 @@ Session::catch_input(const SDL_Event &event)
 			state.mapping.reset();
 			return true;
 		}
-		if (!state.on_pad() && !is_odin_key(event.key.key)) {
+		/* The keys Odin works itself go to no control of the game */
+		if (!state.on_pad() && event.key.key != SDLK_ESCAPE && !m_hotkeys.takes(event.key.key)) {
 			odin::HostInput input{};
 
 			input.kind = odin::HostInput::Kind::KEY;
@@ -728,12 +749,14 @@ Session::catch_input(const SDL_Event &event)
 	case SDL_EVENT_GAMEPAD_BUTTON_UP:
 		m_controls.event(event);
 		m_controls.guide_tapped();
+		m_controls.guide_combo();
 		if (event.gbutton.button == SDL_GAMEPAD_BUTTON_GUIDE)
 			m_catch_guide = false;
 		return true;
 	case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
 	case SDL_EVENT_GAMEPAD_AXIS_MOTION: {
 		m_controls.event(event);
+		m_controls.guide_combo();
 		if (!state.on_pad())
 			return true;
 
@@ -760,6 +783,69 @@ Session::catch_input(const SDL_Event &event)
 	}
 	default:
 		return false;
+	}
+}
+
+/* The page Hotkeys waits for a key (Ctrl, Alt, Shift or Gui held with it
+ * are its own) or for a button pressed with Guide held, or Guide tapped
+ * alone; Escape lets it be. True when the event was taken. */
+bool
+Session::catch_hotkey(const SDL_Event &event)
+{
+	odin::MenuState &state = m_menu_state;
+	const auto action = static_cast<odin::Hotkeys::Action>(state.hotkey_catching->first);
+	const size_t slot = state.hotkey_catching->second;
+
+	switch (event.type) {
+	case SDL_EVENT_KEY_DOWN:
+	case SDL_EVENT_KEY_UP:
+		m_keys.set(event.key.key, event.key.down);
+		if (!event.key.down || event.key.repeat)
+			return true;
+		if (event.key.key == SDLK_ESCAPE) {
+			state.hotkey_catching.reset();
+			return true;
+		}
+		if (slot < odin::Hotkeys::KEYS && !odin::Hotkeys::is_modifier(event.key.key)) {
+			m_hotkeys.set_key(action, slot, { event.key.key, event.key.mod });
+			state.hotkey_catching.reset();
+			keep_hotkeys();
+		}
+		return true;
+	case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+	case SDL_EVENT_GAMEPAD_BUTTON_UP:
+	case SDL_EVENT_GAMEPAD_AXIS_MOTION: {
+		m_controls.event(event);
+
+		const int combo = m_controls.guide_combo();
+		const bool tapped = m_controls.guide_tapped();
+
+		if (slot == odin::Hotkeys::KEYS && (combo >= 0 || tapped)) {
+			m_hotkeys.set_pad(action, combo >= 0 ? combo : odin::Hotkeys::GUIDE_ALONE);
+			state.hotkey_catching.reset();
+			keep_hotkeys();
+		}
+		return true;
+	}
+	default:
+		return false;
+	}
+}
+
+/* [hotkeys]: a line for each action not as by default */
+void
+Session::keep_hotkeys()
+{
+	for (size_t a = 0; a < odin::Hotkeys::ACTIONS; a++) {
+		const auto action = static_cast<odin::Hotkeys::Action>(a);
+		const odin::Hotkeys::Binding &binding = m_hotkeys.of(action);
+		const std::optional<std::string> line = binding == odin::Hotkeys::standard(action) ? std::nullopt :
+		                                        std::optional(odin::Hotkeys::line(binding));
+
+		if (m_settings_file.empty())
+			m_settings.set("hotkeys", odin::Hotkeys::id(action), line);
+		else
+			m_settings.change(m_settings_file, "hotkeys", odin::Hotkeys::id(action), line);
 	}
 }
 
@@ -946,6 +1032,8 @@ Session::draw_menu()
 		state.pad_states[player] = m_controls.pad_state(player);
 	}
 	state.undo = m_undo_until && SDL_GetTicks() < m_undo_until;
+	for (size_t a = 0; a < odin::Hotkeys::ACTIONS; a++)
+		state.hotkeys[a] = m_hotkeys.of(static_cast<odin::Hotkeys::Action>(a));
 	if (m_audio)
 		state.devices = m_audio->devices();
 	/* The outputs of the game shown, lit as the board left them */
@@ -982,6 +1070,12 @@ Session::draw_menu()
 	m_display.draw_menu(state);
 	apply(was);
 
+	if (state.hotkeys_default) {
+		m_hotkeys.reset();
+		keep_hotkeys();
+		state.hotkeys_default = false;
+		m_menu_pictures = MENU_PICTURES;
+	}
 	if (state.choose != odin::MenuState::Folder::NONE) {
 		const odin::MenuState::Folder folder = state.choose;
 

@@ -72,6 +72,9 @@ public:
 	/* Guide of a gamepad pressed and let go alone since the last call:
 	 * the menu (with another button, Guide is a shortcut) */
 	bool guide_tapped() { return std::exchange(m_guide_tapped, false); }
+	/* The button pressed with Guide held since the last call: a shortcut
+	 * (-1: none) */
+	int guide_combo() { return std::exchange(m_guide_combo, -1); }
 	/* The gamepad of a player: its name, its kind (SDL_GamepadType);
 	 * empty and unknown when there is none */
 	std::string pad_name(unsigned player) const;
@@ -152,6 +155,7 @@ private:
 	std::vector<GameOutput> m_outputs;
 	bool m_on;
 	bool m_guide_tapped = false;
+	int m_guide_combo = -1;
 	bool m_felt = false;
 	Uint16 m_felt_level = 0;	/* how hard the felt sound shakes, smoothed */
 	unsigned m_drive_output = 0;

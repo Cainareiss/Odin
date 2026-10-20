@@ -41,6 +41,7 @@ OBJ := \
 	src/odin/pad_drawings.o \
 	src/odin/pad_drawings_al2009man.o \
 	src/odin/keyboard.o \
+	src/odin/hotkeys.o \
 	src/odin/controls.o \
 	src/odin/outputs_network.o \
 	src/odin/control_panel.o \

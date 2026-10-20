@@ -30,6 +30,7 @@
 
 #include "imgui/imgui.h"
 #include "odin/control_panel.hpp"
+#include "odin/hotkeys.hpp"
 #include "odin/roles.hpp"
 
 namespace odin {
@@ -84,6 +85,13 @@ struct MenuState {
 		bool locked;
 	};
 	std::vector<SoundGame> sound_games;
+
+	/* Hotkeys: the keys and the gamepad buttons of each action of Odin; the
+	 * action whose next key (0 or 1) or buttons (2) are caught; all of them
+	 * back as by default */
+	std::array<Hotkeys::Binding, Hotkeys::ACTIONS> hotkeys{};
+	std::optional<std::pair<size_t, size_t>> hotkey_catching;
+	bool hotkeys_default = false;
 
 	/* Outputs: those of the cabinet of the game shown (their names, what
 	 * they are), lit while on in the game that runs; sent to the programs
@@ -187,18 +195,23 @@ public:
 
 private:
 	/* The pages, in the order of their tabs */
-	enum Page { INPUT, DISPLAY, AUDIO, OUTPUTS, PATHS, ABOUT, PAGES };
+	enum Page { INPUT, DISPLAY, AUDIO, HOTKEYS, OUTPUTS, PATHS, ABOUT, PAGES };
 
 	void follow_scale();
 	void page_input(MenuKit &kit, MenuState &state) const;
 	void page_display(MenuKit &kit, MenuState &state) const;
 	void page_audio(MenuKit &kit, MenuState &state) const;
+	void page_hotkeys(MenuKit &kit, MenuState &state) const;
 	void page_outputs(MenuKit &kit, MenuState &state) const;
 	void page_paths(MenuKit &kit, MenuState &state) const;
 	void page_about(MenuKit &kit) const;
 	/* What the pages say at the bottom */
 	static std::string help(int page, const MenuState &state);
 	static std::string input_help(const MenuState &state);
+	static std::string hotkeys_help(const MenuState &state);
+	/* A button of a gamepad of that kind (SDL_GamepadType), as its maker
+	 * prints it */
+	static std::string button_name(int button, int type);
 	/* The row of the games of the pages Input and Outputs: its bottom */
 	static float games_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width);
 	void start_gl();

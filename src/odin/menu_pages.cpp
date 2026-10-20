@@ -16,7 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* The pages Audio, Outputs and Paths of the menu (mock-up v50) */
+/* The pages Audio, Hotkeys, Outputs and Paths of the menu (mock-up v50) */
 
 #include "odin/menu.hpp"
 
@@ -27,6 +27,7 @@
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "imgui/imgui.h"
@@ -440,6 +441,252 @@ Menu::page_audio(MenuKit &kit, MenuState &state) const
 	}
 
 	end_settings(kit, top, room);
+}
+
+/* The actions of Odin as the page Hotkeys says them, in the order of
+ * Hotkeys::Action */
+constexpr const char *HOTKEY_NAMES[Hotkeys::ACTIONS] = {
+	"Open / close the menu (the game pauses)", "Pause", "Save the state", "Load the state", "Full screen", "Quit",
+};
+
+/* The modifiers as their caps say them */
+constexpr std::pair<SDL_Keymod, const char *> MODIFIER_CAPS[] = {
+	{ SDL_KMOD_CTRL, "Ctrl" }, { SDL_KMOD_ALT, "Alt" }, { SDL_KMOD_SHIFT, "Shift" }, { SDL_KMOD_GUI, "Gui" },
+};
+
+/* The row of the function keys of a keyboard, a gap (0) between groups */
+constexpr SDL_Keycode FUNCTION_ROW[] = {
+	SDLK_ESCAPE, 0, SDLK_F1, SDLK_F2, SDLK_F3, SDLK_F4, 0, SDLK_F5, SDLK_F6, SDLK_F7, SDLK_F8, 0,
+	SDLK_F9, SDLK_F10, SDLK_F11, SDLK_F12,
+};
+
+/* A key as its cap says it */
+std::string
+cap_name(SDL_Keycode key)
+{
+	switch (key) {
+	case SDLK_ESCAPE:
+		return "Esc";
+	case SDLK_RETURN:
+		return "Enter";
+	default:
+		return SDL_GetKeyName(key);
+	}
+}
+
+std::string
+cap_name(const HotKey &key)
+{
+	std::string out;
+
+	for (const auto &[mod, name] : MODIFIER_CAPS)
+		if (key.mods & mod)
+			out = out + name + "+";
+	return out + cap_name(key.key);
+}
+
+/* Whether a key, or a modifier of either side, is held */
+bool
+held(const MenuState &state, SDL_Keycode key)
+{
+	const auto is = [&](SDL_Keycode k) {
+		return std::find(state.keys_held.begin(), state.keys_held.end(), k) != state.keys_held.end();
+	};
+
+	switch (key) {
+	case SDLK_LCTRL:
+		return is(SDLK_LCTRL) || is(SDLK_RCTRL);
+	case SDLK_LALT:
+		return is(SDLK_LALT) || is(SDLK_RALT);
+	case SDLK_LSHIFT:
+		return is(SDLK_LSHIFT) || is(SDLK_RSHIFT);
+	case SDLK_LGUI:
+		return is(SDLK_LGUI) || is(SDLK_RGUI);
+	default:
+		return is(key);
+	}
+}
+
+/* The keyboard drawn: the function row, Odin's keys clear and lit while
+ * held (in a narrow box its keys alone), then its other keys and the
+ * modifiers they take; how it reads; Guide on a gamepad. In the middle of
+ * the box. */
+void
+hotkeys_keyboard(const MenuKit &kit, const MenuState &state, const Box &box)
+{
+	ImDrawList *const list = ImGui::GetWindowDrawList();
+	const MenuPalette &palette = kit.palette();
+	const float inside = kit.px(BOX_INSIDE), gap = kit.px(3.0f), group = kit.px(6.0f), size = ImGui::GetFontSize();
+	const float width = box.b.x - box.a.x - 2.0f * inside, cap_h = kit.key_size("x").y;
+	std::vector<std::pair<SDL_Keycode, std::string>> others;
+	const auto used = [&](SDL_Keycode key) {
+		for (const Hotkeys::Binding &binding : state.hotkeys)
+			for (const HotKey &k : binding.keys)
+				if (k.key == key && key != SDLK_UNKNOWN)
+					return true;
+		return false;
+	};
+	const auto add = [&](SDL_Keycode key, const std::string &name) {
+		for (const auto &[k, n] : others)
+			if (k == key)
+				return;
+		others.emplace_back(key, name);
+	};
+
+	for (const Hotkeys::Binding &binding : state.hotkeys) {
+		for (const HotKey &k : binding.keys) {
+			if (k.key == SDLK_UNKNOWN)
+				continue;
+			static constexpr SDL_Keycode LEFT[] = { SDLK_LCTRL, SDLK_LALT, SDLK_LSHIFT, SDLK_LGUI };
+
+			for (size_t m = 0; m < std::size(MODIFIER_CAPS); m++)
+				if (k.mods & MODIFIER_CAPS[m].first)
+					add(LEFT[m], MODIFIER_CAPS[m].second);
+			if (std::find(std::begin(FUNCTION_ROW), std::end(FUNCTION_ROW), k.key) == std::end(FUNCTION_ROW))
+				add(k.key, cap_name(k.key));
+		}
+	}
+
+	/* The function row, or Odin's keys of it alone where it does not fit */
+	const auto row_width = [&](bool all) {
+		float w = 0.0f;
+		bool first = true;
+
+		for (const SDL_Keycode key : FUNCTION_ROW) {
+			if (!key) {
+				w += all ? group : 0.0f;
+				continue;
+			}
+			if (!all && !used(key))
+				continue;
+			w += (first ? 0.0f : gap) + kit.key_size(cap_name(key).c_str()).x;
+			first = false;
+		}
+		return w;
+	};
+	const bool all = row_width(true) <= width;
+	float others_w = -gap;
+
+	for (const auto &[key, name] : others)
+		others_w += kit.key_size(name.c_str()).x + gap;
+
+	const char caption[] = "Light outline: Odin's keys. Touch them: they light.";
+	const char guide[] = "held = the controller's hotkey, as on Batocera";
+	const float text_w = std::min(width, kit.px(260.0f));
+	const float caption_h = centred({}, width, size, caption, 0);
+	const float guide_w = kit.pill_size("Guide").x, guide_text_w = text_w - guide_w - kit.px(8.0f);
+	const float guide_h = std::max(cap_h, ImGui::CalcTextSize(guide, nullptr, false, guide_text_w).y);
+	const float all_h = cap_h + gap + (others.empty() ? 0.0f : cap_h + gap) + kit.px(6.0f) + caption_h +
+	                    kit.px(10.0f) + guide_h;
+	float y = std::max(box.a.y + inside, (box.a.y + box.b.y - all_h) / 2.0f);
+	float x = (box.a.x + box.b.x - row_width(all)) / 2.0f;
+	bool first = true;
+
+	list->PushClipRect(box.a, box.b, true);
+	for (const SDL_Keycode key : FUNCTION_ROW) {
+		if (!key) {
+			x += all ? group : 0.0f;
+			continue;
+		}
+		if (!all && !used(key))
+			continue;
+
+		const std::string name = cap_name(key);
+
+		x += first ? 0.0f : gap;
+		kit.key(list, { x, y }, name.c_str(), used(key), held(state, key));
+		x += kit.key_size(name.c_str()).x;
+		first = false;
+	}
+	y += cap_h + gap;
+	if (!others.empty()) {
+		x = (box.a.x + box.b.x - others_w) / 2.0f;
+		for (const auto &[key, name] : others) {
+			kit.key(list, { x, y }, name.c_str(), true, held(state, key));
+			x += kit.key_size(name.c_str()).x + gap;
+		}
+		y += cap_h + gap;
+	}
+	y += kit.px(6.0f);
+	y += centred({ box.a.x + inside, y }, width, size, caption, palette.faint) + kit.px(10.0f);
+	x = (box.a.x + box.b.x - text_w) / 2.0f;
+	kit.pill(list, { x, y }, "Guide");
+	list->AddText(ImGui::GetFont(), size, { x + guide_w + kit.px(8.0f), y + kit.px(3.0f) }, palette.dim, guide, nullptr,
+	              guide_text_w);
+	list->PopClipRect();
+}
+
+/* Hotkeys: what Odin does itself on a key or with Guide held, each changed
+ * by a click and the next key or button */
+void
+Menu::page_hotkeys(MenuKit &kit, MenuState &state) const
+{
+	const ImVec2 top = ImGui::GetCursorScreenPos(), room = ImGui::GetContentRegionAvail();
+	const Box box = left_box(kit, top, room);
+	const int type = state.pad_types[0];
+
+	hotkeys_keyboard(kit, state, box);
+	begin_settings(kit, box, top, room);
+
+	kit.begin_group("KEYS");
+	for (size_t a = 0; a < Hotkeys::ACTIONS; a++) {
+		const Hotkeys::Binding &binding = state.hotkeys[a];
+		std::vector<std::string> keys, pad;
+		std::vector<size_t> slots;
+		int catching = -1;
+
+		for (size_t slot = 0; slot < Hotkeys::KEYS; slot++) {
+			if (binding.keys[slot].key == SDLK_UNKNOWN)
+				continue;
+			if (state.hotkey_catching && state.hotkey_catching->first == a && state.hotkey_catching->second == slot)
+				catching = static_cast<int>(keys.size());
+			keys.push_back(cap_name(binding.keys[slot]));
+			slots.push_back(slot);
+		}
+		/* An action without a key takes one in its first place */
+		if (keys.empty()) {
+			if (state.hotkey_catching && state.hotkey_catching->first == a && state.hotkey_catching->second == 0)
+				catching = 0;
+			keys.push_back("-");
+			slots.push_back(0);
+		}
+		if (state.hotkey_catching && state.hotkey_catching->first == a && state.hotkey_catching->second == Hotkeys::KEYS)
+			catching = 2;
+		if (binding.pad != Hotkeys::NO_PAD)
+			pad.push_back(button_name(SDL_GAMEPAD_BUTTON_GUIDE, type));
+		if (binding.pad != Hotkeys::NO_PAD && binding.pad != Hotkeys::GUIDE_ALONE)
+			pad.push_back(button_name(binding.pad, type));
+
+		const int clicked = kit.shortcut(HOTKEY_NAMES[a], keys, pad, catching);
+
+		if (clicked == 2)
+			state.hotkey_catching = { a, Hotkeys::KEYS };
+		else if (clicked >= 0)
+			state.hotkey_catching = { a, slots[static_cast<size_t>(clicked)] };
+	}
+	kit.end_group();
+	ImGui::Dummy({ 0.0f, kit.px(6.0f) });
+	if (kit.button("Default")) {
+		state.hotkeys_default = true;
+		state.hotkey_catching.reset();
+	}
+
+	end_settings(kit, top, room);
+}
+
+/* What the page says at the bottom: what the key or button caught does and
+ * how to give it, else how it works */
+std::string
+Menu::hotkeys_help(const MenuState &state)
+{
+	if (!state.hotkey_catching)
+		return "Everything can be reassigned: click a key or a combination to change it.";
+
+	const std::string name = HOTKEY_NAMES[state.hotkey_catching->first];
+
+	if (state.hotkey_catching->second == Hotkeys::KEYS)
+		return name + ": hold Guide and press a button, or tap Guide alone. Esc lets it be.";
+	return name + ": press the key you want, with Ctrl, Alt or Shift held if you like. Esc lets it be.";
 }
 
 /* Outputs: those of the cabinet of the game shown, lit as the game lights
