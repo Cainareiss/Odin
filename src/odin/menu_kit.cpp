@@ -565,6 +565,25 @@ MenuKit::icon(ImDrawList *list, Icon icon, ImVec2 at, float side, ImU32 colour)
 }
 
 bool
+MenuKit::focus(ImVec2 a, ImVec2 b, float out) const
+{
+	if (!m_focus || m_focus->count++ != m_focus->at)
+		return false;
+	frame(ImGui::GetWindowDrawList(), { a.x - out, a.y - out }, { b.x + out, b.y + out }, px(CONTROL_CUT), 0,
+	      m_palette.accent);
+	/* The page scrolls to show it all */
+	if (m_focus->moved) {
+		const float top = ImGui::GetWindowPos().y, bottom = top + ImGui::GetWindowHeight(), room = px(6.0f);
+
+		if (a.y - room < top)
+			ImGui::SetScrollY(ImGui::GetScrollY() - (top - a.y) - room);
+		else if (b.y + room > bottom)
+			ImGui::SetScrollY(ImGui::GetScrollY() + (b.y - bottom) + room);
+	}
+	return true;
+}
+
+bool
 MenuKit::tabs(std::span<const char *const> names, std::span<const Icon> icons, bool narrow, int &chosen,
               std::span<const std::string> pills) const
 {
@@ -711,10 +730,21 @@ MenuKit::choice(const char *name, const char *about, std::span<const char *const
 
 	const float pad = px(ROW_PAD);
 	const ImVec2 control = segments_size(labels);
+	const int was = chosen, last = static_cast<int>(labels.size()) - 1;
 	float width;
 	const ImVec2 at = begin_row(width);
 	const Placed placed = place(at, width, control.x, control.y, name, about, locked, off);
-	const bool changed = segments({ at.x + width - pad - control.x, placed.top }, labels, chosen, locked || off);
+
+	/* The gamepad: left or right to the next label, A to the next one round */
+	if (focus(at, { at.x + width, at.y + placed.h }) && !locked && !off) {
+		if (side())
+			chosen = std::clamp(std::max(chosen, 0) + side(), 0, last);
+		else if (pressed())
+			chosen = chosen >= last ? 0 : chosen + 1;
+	}
+
+	const bool changed = segments({ at.x + width - pad - control.x, placed.top }, labels, chosen, locked || off) ||
+	                     chosen != was;
 
 	ImGui::SetCursorScreenPos(at);
 	ImGui::Dummy({ width, placed.h });
@@ -814,8 +844,10 @@ MenuKit::picker(const char *id, ImVec2 at, float width, std::span<const std::str
 	const ImVec2 b = { at.x + width, at.y + picker_height() };
 	const int was = chosen;
 
+	const bool focused = focus(at, b, px(3.0f));
+
 	ImGui::SetCursorScreenPos(at);
-	if (ImGui::InvisibleButton("open", { width, b.y - at.y }))
+	if (ImGui::InvisibleButton("open", { width, b.y - at.y }) || (focused && pressed()))
 		ImGui::OpenPopup("list");
 	frame(list, at, b, px(GROUP_CUT), 0, alpha(p.action, ACTION_LINE));
 	if (chosen >= 0 && static_cast<size_t>(chosen) < labels.size()) {
@@ -909,6 +941,15 @@ MenuKit::button(const char *label, bool same_line, Icon icon_shown, Tone tone) c
 bool
 MenuKit::button(const char *label, ImVec2 at, bool on, Icon icon_shown, Tone tone) const
 {
+	const ImVec2 box = button_size(label, icon_shown);
+	const bool focused = focus(at, { at.x + box.x, at.y + box.y }, px(3.0f));
+
+	return press_button(label, at, on, icon_shown, tone) || (focused && pressed());
+}
+
+bool
+MenuKit::press_button(const char *label, ImVec2 at, bool on, Icon icon_shown, Tone tone) const
+{
 	ImDrawList *const list = ImGui::GetWindowDrawList();
 	const float size = font(SMALL);
 	const ImVec2 box = button_size(label, icon_shown), b = { at.x + box.x, at.y + box.y };
@@ -988,14 +1029,15 @@ MenuKit::value(const char *name, const char *about, const char *value, const cha
 	const Placed placed = place(at, width, value_w + after, control_h, name, about, locked);
 	const float h = placed.h, mid = placed.top + control_h / 2.0f;
 	const float right = at.x + width - pad;
-	bool clicked = false;
+	/* The gamepad presses its button */
+	bool clicked = shown_button && focus(at, { at.x + width, at.y + h }) && pressed();
 
 	list->AddText(face, size, { right - after - value_w, mid - value_size.y / 2.0f }, m_palette.dim, value, nullptr,
 	              value_w);
 	if (shown_button) {
 		m_button_a = { right - button_box.x, mid - button_box.y / 2.0f };
 		m_button_b = { m_button_a.x + button_box.x, m_button_a.y + button_box.y };
-		clicked = button(shown_button, m_button_a, false);
+		clicked = press_button(shown_button, m_button_a, false, Icon::NONE, Tone::PLAIN) || clicked;
 	} else if (shown_word) {
 		write(list, { right - word_w, mid - small / 2.0f }, m_palette.faint, shown_word, small, small * TITLE_SPACING);
 	}
@@ -1036,6 +1078,13 @@ MenuKit::slider(const char *name, const char *about, float &value, float low, fl
 	const float h = placed.h, mid = placed.top + line / 2.0f;
 	const ImVec2 a = { at.x + width - pad - control, mid - track_h / 2.0f }, b = { a.x + track_w, a.y + track_h };
 	const float was = value;
+
+	/* The gamepad: left or right, a twentieth of the way */
+	if (focus(at, { at.x + width, at.y + h }) && !still && side()) {
+		const float jump = std::max(step, std::round((high - low) / 20.0f / step) * step);
+
+		value = std::clamp(value + static_cast<float>(side()) * jump, low, high);
+	}
 
 	/* The track takes the mouse a little above and below it */
 	ImGui::SetCursorScreenPos({ a.x, placed.top });
@@ -1153,10 +1202,20 @@ MenuKit::shortcut(const char *name, std::span<const std::vector<std::string>> ke
 	const float y = under ? at.y + pad_room + text_h + px(6.0f) : at.y + (h - cap_h) / 2.0f;
 	float x = at.x + width - pad_room - control;
 	int clicked = -1;
+	/* The gamepad: left or right to a key or the buttons, A to catch it */
+	const bool focused = focus(at, { at.x + width, at.y + h });
+	const int slots = static_cast<int>(keys.size()) + 1;
+	std::vector<std::pair<ImVec2, ImVec2>> places;
 
+	if (focused) {
+		m_focus->part = std::clamp(m_focus->part + side(), 0, slots - 1);
+		if (pressed())
+			clicked = m_focus->part == slots - 1 ? 2 : m_focus->part;
+	}
 	for (size_t i = 0; i < keys.size(); i++) {
 		const float w = combination_w(i);
 
+		places.push_back({ { x, y }, { x + w, y + cap_h } });
 		ImGui::SetCursorScreenPos({ x, y });
 		ImGui::PushID(static_cast<int>(i));
 		if (ImGui::InvisibleButton("key", { w, cap_h }))
@@ -1184,6 +1243,13 @@ MenuKit::shortcut(const char *name, std::span<const std::vector<std::string>> ke
 
 	const float pad_x = at.x + width - pad_room - pad_w;
 
+	places.push_back({ { pad_x, y }, { pad_x + pad_w, y + cap_h } });
+	if (focused) {
+		const auto &[pa, pb] = places[static_cast<size_t>(m_focus->part)];
+
+		frame(list, { pa.x - px(3.0f), pa.y - px(3.0f) }, { pb.x + px(3.0f), pb.y + px(3.0f) }, px(CONTROL_CUT), 0,
+		      alpha(m_palette.accent, ACTION_LINE));
+	}
 	ImGui::SetCursorScreenPos({ pad_x, y });
 	if (ImGui::InvisibleButton("pad", { pad_w, cap_h }))
 		clicked = 2;

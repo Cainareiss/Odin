@@ -283,6 +283,8 @@ Menu::navigate(MenuState &state)
 
 	if (nav.page) {
 		m_page = (m_page + PAGES + nav.page % PAGES) % PAGES;
+		m_focus = {};
+		m_focus.at = 0;
 		nav = {};
 	}
 	if (const int n = static_cast<int>(state.games.size()); nav.game && n && (m_page == INPUT || m_page == OUTPUTS)) {
@@ -290,8 +292,27 @@ Menu::navigate(MenuState &state)
 
 		state.show = static_cast<size_t>((shown + nav.game % n + n) % n);
 	}
-	if (!popup_open())
+	m_focus.side = 0;
+	m_focus.press = false;
+	m_focus.moved = false;
+	if (!popup_open()) {
+		/* The frame: on the first item at the first button, else moved */
+		if (m_focus.at >= m_focus.last && m_focus.last > 0)
+			m_focus.at = m_focus.last - 1;
+		if (m_focus.at < 0 && (nav.move || nav.side || nav.press)) {
+			m_focus.at = 0;
+			m_focus.moved = true;
+		} else if (m_focus.at >= 0) {
+			if (nav.move && m_focus.last > 0) {
+				m_focus.at = ((m_focus.at + nav.move) % m_focus.last + m_focus.last) % m_focus.last;
+				m_focus.moved = true;
+				m_focus.part = 0;
+			}
+			m_focus.side = nav.side;
+			m_focus.press = nav.press;
+		}
 		return;
+	}
 
 	ImGuiIO &io = ImGui::GetIO();
 	const auto tap = [&io](ImGuiKey key) {
@@ -344,7 +365,7 @@ Menu::build(MenuState &state)
 	ImGui_ImplSDL3_NewFrame();
 	ImGui::NewFrame();
 
-	MenuKit kit(RUNASTEINN, m_scale);
+	MenuKit kit(RUNASTEINN, m_scale, &m_focus);
 	const MenuPalette &palette = kit.palette();
 	const ImVec2 room = ImGui::GetIO().DisplaySize;
 	const ImVec2 size = menu_size(room.x, room.y).first;
@@ -360,7 +381,9 @@ Menu::build(MenuState &state)
 	ImDrawList *const list = ImGui::GetWindowDrawList();
 
 	kit.frame(list, a, b, kit.px(CUT), palette.frame, palette.outline);
-	kit.tabs(TABS, TAB_ICONS, room.x < WIDE * room.y, m_page, { state.pills.data(), 2 });
+	/* A tab clicked: no frame on the page shown */
+	if (kit.tabs(TABS, TAB_ICONS, room.x < WIDE * room.y, m_page, { state.pills.data(), 2 }))
+		m_focus = {};
 	under_tabs(list, a.x + w * LINE_ENDS, b.x - w * LINE_ENDS, ImGui::GetCursorScreenPos().y + kit.px(LINE_UNDER),
 	           kit.stroke(), MenuKit::alpha(palette.accent, LINE_ALPHA));
 	ImGui::Dummy({ 0.0f, kit.px(LINE_ROOM) });
@@ -377,6 +400,7 @@ Menu::build(MenuState &state)
 
 	ImGui::BeginChild("page", { 0.0f, foot_top - foot_pad - ImGui::GetCursorScreenPos().y }, ImGuiChildFlags_None,
 	                  ImGuiWindowFlags_NoBackground);
+	m_focus.count = 0;
 	if (m_page == INPUT)
 		page_input(kit, state);
 	else if (m_page == DISPLAY)
@@ -393,6 +417,7 @@ Menu::build(MenuState &state)
 		page_about(kit);
 	ImGui::Dummy({ 0.0f, kit.px(4.0f) });
 	ImGui::EndChild();
+	m_focus.last = m_focus.count;
 
 	/* While an input is caught, Input says what to do there, keys and all */
 	const bool keys_shown = m_page != INPUT || !state.catching;

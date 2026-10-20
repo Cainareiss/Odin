@@ -31,6 +31,7 @@
 #include "imgui/imgui.h"
 #include "odin/control_panel.hpp"
 #include "odin/hotkeys.hpp"
+#include "odin/menu_kit.hpp"
 #include "odin/roles.hpp"
 
 namespace odin {
@@ -251,6 +252,8 @@ private:
 	ImGuiStyle m_style;
 	float m_scale;
 	int m_page;
+	/* The frame the gamepad moves on the page */
+	MenuFocus m_focus;
 	/* What Odin had where Dear ImGui changes it while the menu is open:
 	 * two hints of the mouse, the pointer shown or hidden */
 	std::array<std::optional<std::string>, 2> m_hints;

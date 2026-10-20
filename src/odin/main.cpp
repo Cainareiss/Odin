@@ -837,6 +837,10 @@ Session::catch_input(const SDL_Event &event)
 {
 	odin::MenuState &state = m_menu_state;
 
+	/* The buttons of the menu follow what is held, as ever */
+	const std::vector<odin::MenuNav::Action> nav = m_nav.event(event);
+	const bool back = std::find(nav.begin(), nav.end(), odin::MenuNav::BACK) != nav.end();
+
 	switch (event.type) {
 	case SDL_EVENT_KEY_DOWN:
 	case SDL_EVENT_KEY_UP:
@@ -869,8 +873,15 @@ Session::catch_input(const SDL_Event &event)
 	case SDL_EVENT_GAMEPAD_AXIS_MOTION: {
 		m_controls.event(event);
 		m_controls.guide_combo();
-		if (!state.on_pad())
+		/* A key is caught: B of a gamepad lets it go */
+		if (!state.on_pad()) {
+			if (back) {
+				state.catching.reset();
+				state.catch_next.clear();
+				state.mapping.reset();
+			}
 			return true;
+		}
 
 		odin::HostInput input{};
 		const bool axis = event.type == SDL_EVENT_GAMEPAD_AXIS_MOTION;
@@ -923,6 +934,7 @@ Session::catch_hotkey(const SDL_Event &event)
 	odin::MenuState &state = m_menu_state;
 	const auto action = static_cast<odin::Hotkeys::Action>(state.hotkey_catching->first);
 	const size_t slot = state.hotkey_catching->second;
+	const std::vector<odin::MenuNav::Action> nav = m_nav.event(event);
 
 	switch (event.type) {
 	case SDL_EVENT_KEY_DOWN:
@@ -952,6 +964,9 @@ Session::catch_hotkey(const SDL_Event &event)
 			m_hotkeys.set_pad(action, combo >= 0 ? combo : odin::Hotkeys::GUIDE_ALONE);
 			state.hotkey_catching.reset();
 			keep_hotkeys();
+		} else if (std::find(nav.begin(), nav.end(), odin::MenuNav::BACK) != nav.end()) {
+			/* B alone is no shortcut: it lets the catch go */
+			state.hotkey_catching.reset();
 		}
 		return true;
 	}

@@ -57,6 +57,20 @@ inline constexpr MenuPalette RUNASTEINN = {
 	IM_COL32(0xBD, 0xB5, 0xD0, 0xFF), IM_COL32(0xBD, 0xB5, 0xD0, 0xCC), IM_COL32(0xBD, 0xB5, 0xD0, 0x66),
 };
 
+/* The frame of focus a gamepad moves on a page (menu_nav.hpp): the item it
+ * is on, in the order the page draws them (-1: none, until a button moves
+ * it), how many the page drew at the last picture and draws now, whether
+ * it moved there now (the page scrolls to it); what the gamepad asks of
+ * that item now: a choice or a slider moved, pressed; the part of the
+ * item chosen (a slot of a shortcut) */
+struct MenuFocus {
+	int at = -1, last = 0, count = 0;
+	bool moved = false;
+	int side = 0;
+	bool press = false;
+	int part = 0;
+};
+
 /* The dressed widgets of the menu, on Dear ImGui: corners cut at 45
  * degrees, one stroke of one pixel, the action colour on what is clicked
  * and chosen. Sizes are in points, times the scale of the display. One is
@@ -74,7 +88,10 @@ public:
 	 * the tab chosen; full on a button hovered or on */
 	static constexpr float ACTION_LINE = 0.6f;
 
-	MenuKit(const MenuPalette &palette, float scale) : m_palette(palette), m_scale(scale) {}
+	MenuKit(const MenuPalette &palette, float scale, MenuFocus *focus = nullptr)
+		: m_palette(palette), m_scale(scale), m_focus(focus)
+	{
+	}
 
 	const MenuPalette &palette() const { return m_palette; }
 	float px(float points) const { return points * m_scale; }
@@ -107,6 +124,13 @@ public:
 	                  float spacing = 0.0f);
 	/* A text cut to that width, three dots where it is cut */
 	static std::string fitted(const std::string &text, float width, float size = 0.0f);
+
+	/* An item the frame of focus moves on, from a to b, the frame that much
+	 * outside it (inside: below 0): true when the frame is on it; then what
+	 * the gamepad asks of it */
+	bool focus(ImVec2 a, ImVec2 b, float out = -1.0f) const;
+	int side() const { return m_focus ? m_focus->side : 0; }
+	bool pressed() const { return m_focus && m_focus->press; }
 
 	/* A frame with its corners cut; a colour of 0 is none */
 	void frame(ImDrawList *list, ImVec2 a, ImVec2 b, float cut, ImU32 fill, ImU32 border) const;
@@ -205,12 +229,15 @@ private:
 	};
 	Placed place(ImVec2 at, float width, float control, float control_h, const char *name, const char *about,
 	             const char *locked, bool off = false) const;
+	/* A button drawn and clicked, the gamepad aside */
+	bool press_button(const char *label, ImVec2 at, bool on, Icon icon, Tone tone) const;
 	/* The list that drops from a box or a button, at that place, as wide
 	 * at least */
 	bool list_popup(ImVec2 at, float width, std::span<const std::string> labels, int &chosen) const;
 
 	const MenuPalette &m_palette;
 	float m_scale;
+	MenuFocus *m_focus;
 	ImVec2 m_group_top = {};
 	bool m_first_row = true;
 	/* The last button a value row drew */
