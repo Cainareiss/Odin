@@ -182,6 +182,16 @@ Settings::changed(std::string_view text, const std::string &section, const std::
 	return out;
 }
 
+void
+Settings::set(const std::string &section, const std::string &key, const std::optional<std::string> &value)
+{
+	Lines &lines = m_sections[section];
+
+	std::erase_if(lines, [&key](const std::pair<std::string, std::string> &line) { return line.first == key; });
+	if (value)
+		lines.emplace_back(key, *value);
+}
+
 bool
 Settings::change(const std::string &path, const std::string &section, const std::string &key,
                  const std::optional<std::string> &value)

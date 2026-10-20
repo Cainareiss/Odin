@@ -91,6 +91,20 @@ void test_changed()
 	      "what is written reads back");
 }
 
+void test_set()
+{
+	Settings settings;
+
+	settings.parse("[controls.von4]\nstart = key:1\nstart = key:2\ncoin1 = key:5\n", "test");
+	settings.set("controls.von4", "start", "key:Return");
+	check(settings.section("controls.von4").size() == 2 && settings.section("controls.von4")[1].second == "key:Return",
+	      "set here: the lines of the key go, the new one is the last");
+	settings.set("controls.von4", "coin1", std::nullopt);
+	check(settings.section("controls.von4").size() == 1, "taken out here");
+	settings.set("display", "scale", "2");
+	check(settings.section("display").size() == 1, "in a new section");
+}
+
 std::string read(const std::filesystem::path &path)
 {
 	std::ifstream file(path, std::ios::binary);
@@ -132,6 +146,7 @@ void test_change()
 int main()
 {
 	test_changed();
+	test_set();
 	test_change();
 
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);

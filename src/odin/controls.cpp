@@ -30,7 +30,7 @@ namespace odin {
 
 Controls::Controls(Keyboard &keys, const std::vector<GameControl> &controls, const std::vector<GameOutput> &outputs,
                    const Settings &settings, const std::string &game)
-	: m_keys(keys), m_panel(controls, settings, game), m_outputs(outputs), m_on(false), m_mouse_seen(false),
+	: m_keys(keys), m_game_controls(controls), m_game(game), m_panel(controls, settings, game), m_outputs(outputs), m_on(false), m_mouse_seen(false),
 	  m_mouse_placed(false), m_mouse_from_x(0), m_mouse_from_y(0), m_mouse_fresh{}, m_mouse_release{}
 {
 	for (const GameControl &control : controls)
@@ -247,8 +247,8 @@ Controls::quiet()
 		}
 }
 
-void
-Controls::update()
+HostState
+Controls::host() const
 {
 	HostState host;
 
@@ -256,8 +256,39 @@ Controls::update()
 	for (unsigned player = 0; player < 2; player++)
 		host.pads[player] = m_pads[player].handle ? &m_pads[player].state : nullptr;
 	host.mouse = m_mouse_seen ? &m_mouse : nullptr;
-	m_panel.update(host);
+	return host;
+}
 
+void
+Controls::rebind(const Settings &settings)
+{
+	m_panel = ControlPanel(m_game_controls, settings, m_game);
+}
+
+std::string
+Controls::pad_name(unsigned player) const
+{
+	const char *const name = m_pads[player & 1].handle ? SDL_GetGamepadName(m_pads[player & 1].handle) : nullptr;
+
+	return name ? name : "";
+}
+
+SDL_GamepadType
+Controls::pad_type(unsigned player) const
+{
+	return m_pads[player & 1].handle ? SDL_GetGamepadType(m_pads[player & 1].handle) : SDL_GAMEPAD_TYPE_UNKNOWN;
+}
+
+void
+Controls::update()
+{
+	m_panel.update(host());
+	settle();
+}
+
+void
+Controls::settle()
+{
 	m_keys.settle();
 	for (Pad &pad : m_pads) {
 		for (unsigned button = 0; button < SDL_GAMEPAD_BUTTON_COUNT; button++)

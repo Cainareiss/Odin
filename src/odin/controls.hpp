@@ -53,6 +53,22 @@ public:
 	bool event(const SDL_Event &event);
 	/* Once a frame, before it runs. */
 	void update();
+	/* While the menu is open: what was let go of is let go of, as a frame
+	 * would */
+	void settle();
+
+	/* The panel of the game and its inputs (control_panel.hpp), made
+	 * again when they change in the settings */
+	const ControlPanel &panel() const { return m_panel; }
+	void rebind(const Settings &settings);
+	/* Whether a control of the panel or a role of the cabinet is worked
+	 * now */
+	bool touched(size_t control) const { return m_panel.touched(host(), control); }
+	bool touched(Role role) const { return m_panel.touched(host(), role); }
+	/* The gamepad of a player: its name, its kind (SDL_GamepadType);
+	 * empty and unknown when there is none */
+	std::string pad_name(unsigned player) const;
+	SDL_GamepadType pad_type(unsigned player) const;
 
 	void read_inputs(MieBoard::Inputs &inputs) override { m_panel.fill(inputs); }
 	/* The outputs of the board after a frame: the pad of a player shakes
@@ -99,8 +115,11 @@ private:
 	void open(SDL_JoystickID id);
 	void close(SDL_JoystickID id);
 	Pad *find(SDL_JoystickID id);
+	HostState host() const;
 
 	Keyboard &m_keys;
+	std::vector<GameControl> m_game_controls;
+	std::string m_game;
 	ControlPanel m_panel;
 	std::vector<GameOutput> m_outputs;
 	bool m_on;

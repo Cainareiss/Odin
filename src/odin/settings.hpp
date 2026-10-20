@@ -54,6 +54,8 @@ public:
 	 * said on stderr, if it cannot be written. */
 	bool change(const std::string &path, const std::string &section, const std::string &key,
 	            const std::optional<std::string> &value);
+	/* The same change here only, for the time Odin runs */
+	void set(const std::string &section, const std::string &key, const std::optional<std::string> &value);
 	/* The text of such a file with that change, the rest of it as it was:
 	 * comments, order, unknown lines and line ends. The last line of the
 	 * key takes the value and the ones before it go (the last line says);

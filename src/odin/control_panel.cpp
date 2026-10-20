@@ -197,6 +197,24 @@ ControlPanel::pressed(const HostState &host, const std::vector<HostInput> &input
 	return false;
 }
 
+bool
+ControlPanel::touched(const HostState &host, size_t control) const
+{
+	const GameControl &c = m_controls[control];
+	const PadState *const pad = host.pads[c.player & 1];
+
+	if (pressed(host, m_bindings.lever(control, false), c.player) ||
+	    pressed(host, m_bindings.lever(control, true), c.player))
+		return true;
+	if (c.type != GameControl::Type::ANALOG)
+		return pressed(host, m_bindings.of(control), c.player);
+	for (const HostInput &input : m_bindings.of(control))
+		if (input.kind == HostInput::Kind::PAD && pad &&
+		    std::abs(static_cast<int>(pad->axes[input.pad.index])) >= PRESSED)
+			return true;
+	return false;
+}
+
 /* The keys take an analog control a step a frame toward the end they push
  * to, or back to rest. Of the keys and the axes bound, the last that moved
  * works it: one that went further than MOVED from where it was last kept

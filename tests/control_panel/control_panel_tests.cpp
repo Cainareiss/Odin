@@ -552,6 +552,42 @@ void test_pressed()
 
 } /* namespace */
 
+/* What the menu lights: a control whose input is held now, a stick of an
+ * analog control from half its way, a role of the cabinet */
+void test_touched()
+{
+	const ControlPanel panel(cabinet(), Settings(), "sgnascar");
+	const auto index = [&panel](const char *id) {
+		for (size_t c = 0; c < panel.controls().size(); c++)
+			if (panel.controls()[c].id == id)
+				return c;
+		return panel.controls().size();
+	};
+	const std::vector<SDL_Keycode> none, z = { SDLK_Z }, x = { SDLK_X }, five = { SDLK_5 };
+	PadState pad;
+	HostState host;
+
+	host.keys = &none;
+	host.pads[0] = &pad;
+	check(!panel.touched(host, index("view")) && !panel.touched(host, index("wheel")) &&
+	      !panel.touched(host, Role::COIN1), "nothing held: nothing touched");
+	host.keys = &z;
+	check(panel.touched(host, index("view")) && !panel.touched(host, index("fog")), "Z: VIEW, not FOG");
+	host.keys = &x;
+	check(panel.touched(host, index("gear")), "X: the lever, down");
+	host.keys = &five;
+	check(panel.touched(host, Role::COIN1) && !panel.touched(host, Role::COIN2), "5: the coin of player 1");
+	host.keys = &none;
+	pad.axes[SDL_GAMEPAD_AXIS_LEFTX] = -20000;
+	check(panel.touched(host, index("wheel")), "the stick from half its way: the wheel");
+	pad.axes[SDL_GAMEPAD_AXIS_LEFTX] = -10000;
+	check(!panel.touched(host, index("wheel")), "less: not yet");
+	pad.axes[SDL_GAMEPAD_AXIS_LEFTX] = 0;
+	pad.buttons[SDL_GAMEPAD_BUTTON_NORTH] = true;
+	check(panel.touched(host, index("view")), "the pad of player 1: Y, VIEW");
+	check(!panel.touched(host, index("fog")), "a control of player 2 is not worked by the pad of player 1");
+}
+
 int main()
 {
 	test_standard_panel();
@@ -565,6 +601,7 @@ int main()
 	test_mouse_one_pointer();
 	test_picture();
 	test_pressed();
+	test_touched();
 
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures ? 1 : 0;

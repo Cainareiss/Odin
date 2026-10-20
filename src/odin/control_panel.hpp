@@ -86,6 +86,16 @@ public:
 	/* An analog channel as the last update left it */
 	uint16_t analog_channel(size_t channel) const { return m_inputs.jvs_analog[channel]; }
 
+	/* The controls of the panel, those of the game and those every
+	 * cabinet has, and their inputs */
+	const std::vector<GameControl> &controls() const { return m_controls; }
+	const Bindings &bindings() const { return m_bindings; }
+	/* Whether an input of a control of the panel, or of a role of the
+	 * cabinet, is held now: a stick of an analog control from half its
+	 * way */
+	bool touched(const HostState &host, size_t control) const;
+	bool touched(const HostState &host, Role role) const { return pressed(host, m_bindings.cabinet(role), 0); }
+
 	/* The channel for that value of an axis, the low values on the way the
 	 * game wants them: a stick from -32768 (left or up), a trigger from 0
 	 * (let go). */
