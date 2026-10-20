@@ -869,8 +869,15 @@ Session::catch_input(const SDL_Event &event)
 			state.mapping.reset();
 			return true;
 		}
+		/* A gamepad is caught: the keys of quitting and of the whole display
+		 * work as in the rest of the menu */
+		if (state.on_pad()) {
+			const auto action = m_hotkeys.key_action(event.key.key, event.key.mod);
+
+			return action != odin::Hotkeys::Action::QUIT && action != odin::Hotkeys::Action::FULLSCREEN;
+		}
 		/* The keys Odin works itself go to no control of the game */
-		if (!state.on_pad() && event.key.key != SDLK_ESCAPE && !m_hotkeys.takes(event.key.key)) {
+		if (event.key.key != SDLK_ESCAPE && !m_hotkeys.takes(event.key.key)) {
 			odin::HostInput input{};
 
 			input.kind = odin::HostInput::Kind::KEY;
