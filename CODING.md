@@ -48,7 +48,7 @@ Not allowed:
 - Global mutable state. Devices own their state; the machine owns the
   devices.
 - Type punning through pointer casts. Use `std::bit_cast` or `memcpy`.
-- Boost or any other third-party library. Dependencies stay SDL2,
+- Boost or any other third-party library. Dependencies stay SDL3,
   OpenGL 4.3 core with GLEW, and jansson.
 
 ## 4. Hardware rules (what LLE means here)
