@@ -509,7 +509,16 @@ void test_lines_to_write()
 	const auto key = [](const char *name) { return *HostInput::parse(name); };
 
 	Bindings::Line line = plain.line(0, 0, plain.of(0));
+	const auto lines = plain.standard_lines();
+	const auto has = [&lines](size_t i, const char *k, const char *v) {
+		return i < lines.size() && lines[i].first == k && lines[i].second == v;
+	};
 
+	check(lines.size() == 12 && has(0, "view", "key:Z, pad:y") && has(1, "gear_down", "key:X, pad:leftshoulder") &&
+	      has(2, "gear_up", "key:C, pad:rightshoulder") && has(3, "gas", "pad:righttrigger, key:Up") &&
+	      has(4, "stick", "pad:lefty") && has(5, "stick_up", "key:Up") && has(6, "stick_down", "key:Down") &&
+	      has(7, "coin1", "key:5, pad:back") && has(11, "board_service", ""),
+	      "every line at the defaults: a button, a lever, a pedal on one line, an analog control, the cabinet");
 	check(line.key == "view" && !line.value, "a button with its defaults: no value, the line can go");
 	line = plain.line(0, 0, { key("key:Q"), key("pad:y") });
 	check(line.key == "view" && line.value == "key:Q, pad:y", "a button changed");

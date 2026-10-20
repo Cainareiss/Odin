@@ -354,6 +354,49 @@ load_game_list(odin::GameList &games)
 	return false;
 }
 
+/* Every key of odin.ini, at its value by default, in the order the file
+ * shows them: what holds for every game (INSTALL), then the sound, the
+ * controls and the gamepads of each game of the list */
+std::vector<odin::Settings::Known>
+known_settings(const odin::GameList &games)
+{
+	using Hotkeys = odin::Hotkeys;
+	std::vector<odin::Settings::Known> out = {
+		{ "display", "scale", "1" }, { "display", "anisotropy", "1" }, { "display", "window", "1" },
+		{ "display", "fullscreen", "off" }, { "display", "unthrottled", "off" }, { "display", "show_speed", "on" },
+		{ "sound", "device", "" }, { "sound", "volume", "100" }, { "sound", "background", "on" },
+	};
+
+	for (size_t a = 0; a < Hotkeys::ACTIONS; a++) {
+		const auto action = static_cast<Hotkeys::Action>(a);
+
+		out.push_back({ "hotkeys", Hotkeys::id(action), Hotkeys::line(Hotkeys::standard(action)) });
+	}
+	out.insert(out.end(), { { "outputs", "network", "off" }, { "paths", "roms", "" },
+	                        { "paths", "saves", odin::SaveFolder::root() }, { "paths", "states", default_states() },
+	                        { "log", "verbose", "off" }, { "menu", "classic", "off" } });
+	for (const auto &[name, title] : games.titles("hikaru")) {
+		const std::optional<odin::Game> game = games.describe(name);
+
+		if (!game)
+			continue;
+		if (game->option_speakers || game->option_vibration) {
+			char db[16];
+
+			std::snprintf(db, sizeof(db), "%g", game->option_level);
+			out.push_back({ "sound." + name, "mode", game->option_speakers ? "mix" : "main" });
+			out.push_back({ "sound." + name, "option_level", db });
+		}
+		for (const auto &[key, value] : odin::ControlPanel(game->controls, odin::Settings(), name).bindings().standard_lines())
+			out.push_back({ "controls." + name, key, value });
+		out.push_back({ "players." + name, "p1", "" });
+		out.push_back({ "players." + name, "p2", "" });
+		if (game->shakes())
+			out.push_back({ "players." + name, "vibration", "on" });
+	}
+	return out;
+}
+
 /* A game being run: its board, with the window, the keyboard and the
  * gamepads around it.
  *
@@ -1440,8 +1483,11 @@ main(int argc, char **argv)
 
 	odin::Settings settings;
 	const std::string settings_file = odin::Settings::user_file();
-	if (!settings_file.empty() && settings.load(settings_file))
+	if (!settings_file.empty() && settings.load(settings_file)) {
 		std::printf("settings: '%s'\n", settings_file.c_str());
+		settings.know(known_settings(games));
+		settings.complete(settings_file);
+	}
 	read_paths(settings, options);
 	read_display(settings, options);
 	read_sound(settings, options);

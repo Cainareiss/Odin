@@ -17,7 +17,8 @@
  */
 
 /* Unit tests for the settings of the user: a key changed in the text of
- * odin.ini with the rest of it kept, and in a real file.
+ * odin.ini with the rest of it kept, and in a real file; the keys Odin
+ * knows, as comments at their values by default.
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
  *            -I src tests/settings/settings_tests.cpp src/odin/settings.cpp \
@@ -31,6 +32,7 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -91,6 +93,47 @@ void test_changed()
 	      "what is written reads back");
 }
 
+/* A key Odin knows: one line, its comment when it has no value; the file
+ * made whole */
+void test_known()
+{
+	const std::string top = "# The settings of Odin. A line that starts with # is a setting at its value\n"
+	                        "# by default: take the # away and change the value to change it. INSTALL\n"
+	                        "# tells what each one does.\n\n";
+	const std::vector<Settings::Known> keys = { { "display", "scale", "1" }, { "display", "window", "1" },
+	                                            { "sound", "device", "" }, { "sound", "volume", "100" } };
+
+	check_text(Settings::changed("[display]\n# scale = 1\nwindow = 2\n", "display", "scale", "2", "1"),
+	           "[display]\nscale = 2\nwindow = 2\n", "a value in place of the comment");
+	check_text(Settings::changed("[display]\nscale = 2\nwindow = 2\n", "display", "scale", std::nullopt, "1"),
+	           "[display]\n# scale = 1\nwindow = 2\n", "back to its value by default: the comment again");
+	check_text(Settings::changed("[display]\n# scale = 1\nscale = 3\n", "display", "scale", std::nullopt, "1"),
+	           "[display]\n# scale = 1\n", "one line for the key");
+	check_text(Settings::changed("", "sound", "device", std::nullopt, ""), "[sound]\n# device =\n",
+	           "a value by default that is empty");
+	check_text(Settings::changed("[display]\n# scale is big = 2\n", "display", "scale", "2", "1"),
+	           "[display]\n# scale is big = 2\nscale = 2\n", "a comment of the user stays");
+
+	const std::string whole = Settings::completed("", keys);
+
+	check_text(whole, top + "[display]\n# scale = 1\n# window = 1\n\n[sound]\n# device =\n# volume = 100\n",
+	           "a file made whole: a word on top, each key as a comment");
+	check_text(Settings::completed(whole, keys), whole, "a whole file stays as it is");
+	check_text(Settings::completed("[sound]\nvolume = 80\n[display]\n# scale = 4\n# my note = 2\n", keys),
+	           top + "[sound]\nvolume = 80\n# device =\n[display]\n# scale = 1\n# my note = 2\n# window = 1\n",
+	           "the values of the user stay, a comment of a value by default is made right, what lacks is added");
+	check_text(Settings::completed("[display]\r\nscale = 2\r\n", { keys[0], keys[1] }),
+	           "# The settings of Odin. A line that starts with # is a setting at its value\r\n"
+	           "# by default: take the # away and change the value to change it. INSTALL\r\n"
+	           "# tells what each one does.\r\n\r\n[display]\r\nscale = 2\r\n# window = 1\r\n",
+	           "the line ends of the file");
+
+	Settings settings;
+
+	settings.parse(whole, "test");
+	check(settings.section("display").empty() && settings.section("sound").empty(), "the comments are no values");
+}
+
 void test_set()
 {
 	Settings settings;
@@ -146,6 +189,7 @@ void test_change()
 int main()
 {
 	test_changed();
+	test_known();
 	test_set();
 	test_change();
 

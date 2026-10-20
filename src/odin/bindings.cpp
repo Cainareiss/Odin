@@ -478,6 +478,30 @@ Bindings::line(size_t control, unsigned part, const std::vector<HostInput> &inpu
 	return { key, value(inputs, m_defaults[control][part]) };
 }
 
+std::vector<std::pair<std::string, std::string>>
+Bindings::standard_lines() const
+{
+	std::vector<std::pair<std::string, std::string>> out;
+
+	for (size_t c = 0; c < m_panel.size(); c++) {
+		const GameControl &control = m_panel[c];
+		const bool whole = control.type == GameControl::Type::BUTTON || is_pedal(control);
+		const unsigned first = control.type == GameControl::Type::POSITIONS ? 1 : 0;
+
+		for (unsigned part = first; part <= (whole ? 0u : 2u); part++) {
+			std::vector<HostInput> inputs = m_defaults[c][part];
+
+			/* A pedal: what presses it on the line of its axes */
+			if (is_pedal(control))
+				inputs.insert(inputs.end(), m_defaults[c][2].begin(), m_defaults[c][2].end());
+			out.emplace_back(line(c, part, m_defaults[c][part]).key, HostInput::text(inputs));
+		}
+	}
+	for (size_t r = 0; r < m_cabinet_defaults.size(); r++)
+		out.emplace_back(role_name(cabinet_role(r)), HostInput::text(m_cabinet_defaults[r]));
+	return out;
+}
+
 Bindings::Line
 Bindings::cabinet_line(Role role, const std::vector<HostInput> &inputs) const
 {

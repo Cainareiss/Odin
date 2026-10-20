@@ -141,6 +141,10 @@ public:
 	 * given stays as it is. */
 	Line line(size_t control, unsigned part, const std::vector<HostInput> &inputs) const;
 	Line cabinet_line(Role role, const std::vector<HostInput> &inputs) const;
+	/* Every line of [controls.<game>] at the defaults, those of the
+	 * controls in the order of the panel, then those of the cabinet: its
+	 * key and its value */
+	std::vector<std::pair<std::string, std::string>> standard_lines() const;
 
 	/* The defaults of a role of a player; for a role of the cabinet the
 	 * player does not count. */

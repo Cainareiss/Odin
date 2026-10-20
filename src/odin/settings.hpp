@@ -30,10 +30,16 @@ namespace odin {
 
 /* The settings of the user, odin.ini: "[section]" lines, then
  * "key = value" lines; a line that starts with # or ; is a comment. A key
- * keeps the order of the file. */
+ * keeps the order of the file. Each key Odin knows is in the file: as a
+ * comment at its value by default, "# key = value", until the user changes
+ * it. */
 class Settings {
 public:
 	using Lines = std::vector<std::pair<std::string, std::string>>;
+	/* A key Odin knows, in its section, with its value by default */
+	struct Known {
+		std::string section, key, value;
+	};
 
 	/* ODIN_CONFIG=<file>; none with ODIN_CONFIG=none; else odin.ini in
 	 * the data folder of Odin, beside saves/. Empty when there is none. */
@@ -48,10 +54,21 @@ public:
 	/* The lines of a section; none when the file has no such section. */
 	const Lines &section(const std::string &name) const;
 
+	/* The keys Odin knows, in the order the file shows them */
+	void know(std::vector<Known> keys) { m_known = std::move(keys); }
+	/* The file made whole: each key Odin knows that it lacks, as a comment
+	 * at its value by default, after the last line of its section (a
+	 * section it lacks at the end), and such a comment of a value by
+	 * default that changed since made right; a word on top. Written as a
+	 * change is, only when it changed. */
+	bool complete(const std::string &path);
+	static std::string completed(std::string_view text, const std::vector<Known> &keys);
+
 	/* A key of a section given a value, or taken out (nullopt: the value
-	 * by default then): the file is read again, changed, written whole to
-	 * a file beside it and renamed over it, then read here again. False,
-	 * said on stderr, if it cannot be written. */
+	 * by default then; a key Odin knows goes back to its comment): the
+	 * file is read again, changed, written whole to a file beside it and
+	 * renamed over it, then read here again. False, said on stderr, if it
+	 * cannot be written. */
 	bool change(const std::string &path, const std::string &section, const std::string &key,
 	            const std::optional<std::string> &value);
 	/* The same change here only, for the time Odin runs */
@@ -60,12 +77,17 @@ public:
 	 * comments, order, unknown lines and line ends. The last line of the
 	 * key takes the value and the ones before it go (the last line says);
 	 * a new key goes after the last line of its section, a new section at
-	 * the end. */
+	 * the end. With its value by default (`standard`), a key has one line,
+	 * its comment "# key = value" when it has no value. */
 	static std::string changed(std::string_view text, const std::string &section, const std::string &key,
-	                           const std::optional<std::string> &value);
+	                           const std::optional<std::string> &value,
+	                           const std::optional<std::string> &standard = std::nullopt);
 
 private:
+	bool write(const std::string &path, const std::string &text);
+
 	std::map<std::string, Lines> m_sections;
+	std::vector<Known> m_known;
 };
 
 } /* namespace odin */
