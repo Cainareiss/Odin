@@ -281,9 +281,9 @@ MIE): until NOZZLE SENSOR SETTING is done once with the mouse, the sight
 reaches the edge of the screen before the mouse. The mouse counts once it
 has moved more than 2 pixels from where the system first put it (the
 system tells where it is when the window opens under it). To come: the
-light guns (evdev.cpp, rawinput.cpp), wheels and their pedals, the drive
-board and its force (drive_board_838_13366.cpp), gamepads
-known again from one run to the next, the interface that writes odin.ini.
+light guns (evdev.cpp, rawinput.cpp) and their recoil or rumble on the
+nozzle outputs of BRAVEFF (XGunner, RetroShooter 3...), wheels and their
+pedals, the drive board and its force (drive_board_838_13366.cpp).
 Without a gamepad a control rests: a stick or a lever centred, a pedal let
 go (the gas and brake of SGNASCAR read 00 in its INPUT TEST). A key moves
 an analog control 1000 a frame toward the end it pushes to, and lets it
