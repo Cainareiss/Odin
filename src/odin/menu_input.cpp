@@ -653,9 +653,10 @@ Menu::button_name(int button, int kind)
 
 /* The games, the one shown marked and the one that runs dotted; when they
  * do not fit, the one shown between arrows; the pills of the buttons of a
- * gamepad that change it at the ends. Its bottom. */
+ * gamepad that change it at the ends, or else a row of the frame, left and
+ * right changing it (`focusable`). Its bottom. */
 float
-Menu::games_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width)
+Menu::games_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width, bool focusable)
 {
 	ImDrawList *const list = ImGui::GetWindowDrawList();
 	const MenuPalette &palette = kit.palette();
@@ -671,7 +672,14 @@ Menu::games_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width)
 	if (names.empty())
 		return at.y;
 
-	const std::string &before = state.pills[2], &after = state.pills[3];
+	static const std::string none;
+	const std::string &before = focusable ? none : state.pills[2], &after = focusable ? none : state.pills[3];
+	const auto step = [&](ImVec2 a, ImVec2 b) {
+		const size_t n = names.size(), shown = std::min(state.shown, n - 1);
+
+		if (focusable && kit.focus(a, b, kit.px(3.0f)) && kit.side())
+			state.show = (shown + n + (kit.side() < 0 ? n - 1 : 1)) % n;
+	};
 	const float pills = (before.empty() ? 0.0f : kit.pill_size(before.c_str()).x + spacing) +
 	                    (after.empty() ? 0.0f : kit.pill_size(after.c_str()).x + spacing);
 	const auto pill = [&](const std::string &name, float &x, float h) {
@@ -708,6 +716,7 @@ Menu::games_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width)
 	if (total - spacing + pills <= width) {
 		float x = at.x + (width - total + spacing - pills) / 2.0f;
 
+		step({ x, at.y }, { x + total - spacing + pills, at.y + line + kit.px(4.0f) });
 		pill(before, x, line);
 		for (size_t g = 0; g < names.size(); g++)
 			x += title(g, { x, at.y }, true) + spacing;
@@ -720,8 +729,10 @@ Menu::games_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width)
 	const ImVec2 arrow = kit.arrow_size();
 	const float w = MenuKit::measure(names[shown].c_str(), 0.0f, letters) + 4.0f * dot;
 	const float dots = static_cast<float>(n) * kit.px(9.0f);
-	float x = at.x + (width - (2.0f * arrow.x + w + 2.0f * spacing + spacing + dots + pills)) / 2.0f;
+	const float row_w = 2.0f * arrow.x + w + 2.0f * spacing + spacing + dots + pills;
+	float x = at.x + (width - row_w) / 2.0f;
 
+	step({ x, at.y }, { x + row_w, at.y + arrow.y });
 	pill(before, x, arrow.y);
 	ImGui::PushID("games");
 	if (kit.arrow("before", { x, at.y }, false))
@@ -1560,7 +1571,7 @@ Menu::page_input(MenuKit &kit, MenuState &state) const
 	const float width = room.x, gap = kit.px(ROW_GAP);
 	float y = top.y;
 
-	y = games_row(kit, state, { top.x, y }, width) + gap;
+	y = games_row(kit, state, { top.x, y }, width, true) + gap;
 	y = devices_row(kit, state, { top.x, y }, width, two) + gap;
 
 	const std::vector<InputRow> rows = input_rows(state);

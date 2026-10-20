@@ -274,20 +274,21 @@ Menu::popup_open() const
 }
 
 /* What a gamepad asks: the page or the game before or after (the games of
- * the pages that show them); a list dropped open takes the moves, A and B
- * as the keys of its list */
+ * the page Outputs; on the page Input these buttons are tested as the
+ * controls they work, and its first rows change the page and the game); a
+ * list dropped open takes the moves, A and B as the keys of its list */
 void
 Menu::navigate(MenuState &state)
 {
 	MenuState::Nav &nav = state.nav;
 
-	if (nav.page) {
+	if (nav.page && m_page != INPUT) {
 		m_page = (m_page + PAGES + nav.page % PAGES) % PAGES;
 		m_focus = {};
 		m_focus.at = 0;
 		nav = {};
 	}
-	if (const int n = static_cast<int>(state.games.size()); nav.game && n && (m_page == INPUT || m_page == OUTPUTS)) {
+	if (const int n = static_cast<int>(state.games.size()); nav.game && n && m_page == OUTPUTS) {
 		const int shown = static_cast<int>(std::min(state.shown, state.games.size() - 1));
 
 		state.show = static_cast<size_t>((shown + nav.game % n + n) % n);
@@ -381,9 +382,19 @@ Menu::build(MenuState &state)
 	ImDrawList *const list = ImGui::GetWindowDrawList();
 
 	kit.frame(list, a, b, kit.px(CUT), palette.frame, palette.outline);
-	/* A tab clicked: no frame on the page shown */
-	if (kit.tabs(TABS, TAB_ICONS, room.x < WIDE * room.y, m_page, { state.pills.data(), 2 }))
+	/* On the page Input the tabs are the first row of the frame, without
+	 * pills: left and right change the page there. A tab clicked: no frame
+	 * on the page shown */
+	const bool tabs_row = m_page == INPUT, by_pad = tabs_row && m_focus.at == 0 && m_focus.side;
+
+	m_focus.count = 0;
+	if (kit.tabs(TABS, TAB_ICONS, room.x < WIDE * room.y, m_page,
+	             tabs_row ? std::span<const std::string>() : std::span<const std::string>(state.pills.data(), 2),
+	             tabs_row)) {
 		m_focus = {};
+		if (by_pad)
+			m_focus.at = 0;
+	}
 	under_tabs(list, a.x + w * LINE_ENDS, b.x - w * LINE_ENDS, ImGui::GetCursorScreenPos().y + kit.px(LINE_UNDER),
 	           kit.stroke(), MenuKit::alpha(palette.accent, LINE_ALPHA));
 	ImGui::Dummy({ 0.0f, kit.px(LINE_ROOM) });
@@ -400,7 +411,6 @@ Menu::build(MenuState &state)
 
 	ImGui::BeginChild("page", { 0.0f, foot_top - foot_pad - ImGui::GetCursorScreenPos().y }, ImGuiChildFlags_None,
 	                  ImGuiWindowFlags_NoBackground);
-	m_focus.count = 0;
 	if (m_page == INPUT)
 		page_input(kit, state);
 	else if (m_page == DISPLAY)

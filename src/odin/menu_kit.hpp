@@ -145,10 +145,11 @@ public:
 
 	/* The tabs in the middle of the width, each its icon and its name (the
 	 * one chosen only, when `narrow`), between the pills of the buttons of
-	 * a gamepad that change them (none: empty): a click picks one. True
-	 * when the choice changed. */
+	 * a gamepad that change them (none: empty): a click picks one, and left
+	 * or right of the gamepad where they are a row of the frame
+	 * (`focusable`). True when the choice changed. */
 	bool tabs(std::span<const char *const> names, std::span<const Icon> icons, bool narrow, int &chosen,
-	          std::span<const std::string> pills = {}) const;
+	          std::span<const std::string> pills = {}, bool focusable = false) const;
 
 	/* A group of settings: its title, then its rows in a frame */
 	void begin_group(const char *title);

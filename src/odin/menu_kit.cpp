@@ -585,7 +585,7 @@ MenuKit::focus(ImVec2 a, ImVec2 b, float out) const
 
 bool
 MenuKit::tabs(std::span<const char *const> names, std::span<const Icon> icons, bool narrow, int &chosen,
-              std::span<const std::string> pills) const
+              std::span<const std::string> pills, bool focusable) const
 {
 	ImDrawList *const list = ImGui::GetWindowDrawList();
 	const ImVec2 at = ImGui::GetCursorScreenPos();
@@ -599,13 +599,27 @@ MenuKit::tabs(std::span<const char *const> names, std::span<const Icon> icons, b
 	};
 	const auto pill_w = [&](size_t i) { return i < pills.size() && !pills[i].empty() ? pill_size(pills[i].c_str()).x : 0.0f; };
 	const float pills_room = px(12.0f);
-	float total = -gap + pill_w(0) + pill_w(1) + (pill_w(0) > 0.0f ? pills_room : 0.0f) +
-	              (pill_w(1) > 0.0f ? pills_room : 0.0f);
+	const auto whole = [&] {
+		float total = -gap + pill_w(0) + pill_w(1) + (pill_w(0) > 0.0f ? pills_room : 0.0f) +
+		              (pill_w(1) > 0.0f ? pills_room : 0.0f);
 
-	for (size_t i = 0; i < names.size(); i++)
-		total += tab_w(i) + gap;
+		for (size_t i = 0; i < names.size(); i++)
+			total += tab_w(i) + gap;
+		return total;
+	};
+	float total = whole();
+	const int count = static_cast<int>(names.size());
+
+	/* The gamepad: left or right to the tab beside, the row laid out again */
+	if (focusable && focus({ at.x + std::max(0.0f, (width - total) / 2.0f), at.y },
+	                       { at.x + std::max(0.0f, (width - total) / 2.0f) + total, at.y + h }, px(3.0f)) &&
+	    this->side()) {
+		chosen = ((chosen + this->side()) % count + count) % count;
+		total = whole();
+	}
 
 	float x = at.x + std::max(0.0f, (width - total) / 2.0f);
+
 	const auto draw_pill = [&](size_t i) {
 		const ImVec2 size = pill_size(pills[i].c_str());
 

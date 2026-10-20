@@ -245,7 +245,7 @@ private:
 	 * prints it */
 	static std::string button_name(int button, int kind);
 	/* The row of the games of the pages Input and Outputs: its bottom */
-	static float games_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width);
+	static float games_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width, bool focusable = false);
 	void start_gl();
 	void size_blur(unsigned w, unsigned h);
 
