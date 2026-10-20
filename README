@@ -47,3 +47,6 @@ Odin is a hard fork of Valkyrie, Copyright (c) 2011-2013 Stefano Teso,
 released under the GPL v3 License. Valkyrie thanked the MAME developers for
 the hardware description and the memory map of their Hikaru driver, and the
 MAME, nullDC, lxdream and Demul developers for their work and findings.
+
+The menu is drawn with Dear ImGui, Copyright (c) 2014-2026 Omar Cornut,
+released under the MIT License (src/imgui/LICENSE.txt).

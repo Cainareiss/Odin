@@ -10,6 +10,8 @@ written so that everyone knows what to do.
 - All the code is C++20, in the sober subset described in section 3.
 - Build flags: `-std=c++20 -Wall -Wextra -Wpedantic -Wconversion
   -Wshadow`. Every file compiles warning-free. No compiler extensions.
+  Dear ImGui (`src/imgui`) is not ours: it is kept as it comes and built
+  with its own flags.
 
 ## 2. One class per chip
 
@@ -49,7 +51,9 @@ Not allowed:
   devices.
 - Type punning through pointer casts. Use `std::bit_cast` or `memcpy`.
 - Boost or any other third-party library. Dependencies stay SDL3,
-  OpenGL 4.3 core with GLEW, and jansson.
+  OpenGL 4.3 core with GLEW, and jansson. The one exception is Dear
+  ImGui, which draws the menu: its core and its SDL3 and OpenGL 3
+  backends, copied into `src/imgui` from a release, unchanged.
 
 ## 4. Hardware rules (what LLE means here)
 
@@ -135,3 +139,5 @@ Not allowed:
 - Odin is GPL-3.0. Code taken from MAME keeps its BSD-3-Clause header and
   its copyright holders. Code taken from Valkyrie keeps Stefano Teso's
   copyright. Credit stays where it belongs.
+- Dear ImGui keeps its MIT licence and its copyright holders
+  (`src/imgui/LICENSE.txt`).
