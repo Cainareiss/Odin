@@ -296,8 +296,10 @@ private:
 	 * milliseconds at most */
 	static constexpr unsigned MENU_PICTURES = 3;
 	static constexpr Uint64 MENU_PICTURE_MS = 16;
-	/* How long Undo is offered after Clear all */
+	/* How long Undo is offered after Clear all; how often Start mapping
+	 * draws its count of seconds */
 	static constexpr Uint64 UNDO_MS = 5000;
+	static constexpr Uint64 MAPPING_TICK_MS = 250;
 
 	bool process_events();
 	bool menu_event(const SDL_Event &event);
@@ -534,6 +536,7 @@ Session::catch_input(const SDL_Event &event)
 			return true;
 		if (event.key.key == SDLK_ESCAPE) {
 			state.catching.reset();
+			state.mapping.reset();
 			return true;
 		}
 		if (!state.on_pad() && !is_odin_key(event.key.key)) {
@@ -713,11 +716,16 @@ Session::wait_in_menu()
 		if (m_menu_test && !m_menu_pictures)
 			press_escape();
 	}
-	/* Undo goes when its time is over */
+	/* Undo goes when its time is over; Start mapping counts the seconds of
+	 * the control it waits for */
 	if (m_menu_state.undo && SDL_GetTicks() >= m_undo_until)
 		m_menu_pictures = std::max(m_menu_pictures, 1u);
+	if (m_menu_state.mapping && SDL_GetTicks() - m_menu_drawn >= MAPPING_TICK_MS)
+		m_menu_pictures = std::max(m_menu_pictures, 1u);
 	if (!m_menu_pictures) {
-		if (m_menu_state.undo)
+		if (m_menu_state.mapping)
+			SDL_WaitEventTimeout(nullptr, static_cast<Sint32>(MAPPING_TICK_MS));
+		else if (m_menu_state.undo)
 			SDL_WaitEventTimeout(nullptr, static_cast<Sint32>(m_undo_until - std::min(m_undo_until, SDL_GetTicks())));
 		else
 			SDL_WaitEvent(nullptr);

@@ -97,6 +97,10 @@ struct MenuState {
 	/* The part whose next input is caught; what the page asks of the
 	 * inputs of the player and the device shown, Undo while it is offered */
 	std::optional<MenuSlot> catching;
+	/* Start mapping: each control of the player in turn, the place of the
+	 * one caught now in the list of the page, since when (SDL ticks) */
+	std::optional<size_t> mapping;
+	uint64_t mapping_since = 0;
 	enum class Ask { NONE, DEFAULTS, CLEAR, UNDO } ask = Ask::NONE;
 	bool undo = false;
 };

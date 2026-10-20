@@ -40,6 +40,8 @@ namespace {
  * of the device; a label column at its widest and narrowest, a label from
  * the next, the room the leader lines keep from the box's edges */
 constexpr float ROW_GAP = 6.0f;
+/* Start mapping waits so long for each control */
+constexpr uint64_t MAPPING_MS = 6000;
 /* A window this many times wider than high has the cabinet beside the
  * device, which takes this share of the width (1.4 to 1) */
 constexpr float WIDE = 1.5f;
@@ -697,6 +699,39 @@ not_mapped(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows,
 	return height;
 }
 
+/* Start mapping: once a control is caught or its time is over, the next
+ * one of the player (not a half the whole axis works); the end after the
+ * last, or when the user catches another one */
+void
+next_mapping(MenuState &state, std::span<const InputRow> rows)
+{
+	if (!state.mapping)
+		return;
+
+	/* The control caught now; past the rows: none yet */
+	size_t &i = *state.mapping;
+	const uint64_t now = SDL_GetTicks();
+
+	if (state.catching) {
+		if (i >= rows.size() || !same(state.catching, rows[i].slot)) {
+			state.mapping.reset();
+			return;
+		}
+		if (now - state.mapping_since < MAPPING_MS)
+			return;
+	}
+	for (i = i >= rows.size() ? 0 : i + 1; i < rows.size(); i++)
+		if (rows[i].catchable && !rows[i].half)
+			break;
+	if (i >= rows.size()) {
+		state.mapping.reset();
+		state.catching.reset();
+		return;
+	}
+	state.catching = rows[i].slot;
+	state.mapping_since = now;
+}
+
 /* The cabinet of the game shown: in its own box, its name and the game's
  * at the top (`framed`), or in the box of the device */
 void
@@ -1030,6 +1065,8 @@ Menu::page_input(MenuKit &kit, MenuState &state) const
 
 	const std::vector<InputRow> rows = input_rows(state);
 	const float buttons_h = kit.button_size("Default").y;
+
+	next_mapping(state, rows);
 	/* A window wide enough (16:9) has the cabinet beside the device; a
 	 * narrower one shows either */
 	const ImVec2 window = ImGui::GetIO().DisplaySize;
@@ -1072,6 +1109,16 @@ Menu::page_input(MenuKit &kit, MenuState &state) const
 		state.ask = MenuState::Ask::DEFAULTS;
 	if (state.undo ? kit.button("Undo", true) : kit.button("Clear all", true))
 		state.ask = state.undo ? MenuState::Ask::UNDO : MenuState::Ask::CLEAR;
+	if (!state.mapping && kit.button("Start mapping", true)) {
+		/* The first control: the one before it is none */
+		state.mapping = rows.size();
+		state.catching.reset();
+	} else if (state.mapping) {
+		if (kit.button("Skip", true))
+			state.mapping_since = 0;
+		if (kit.button("Stop", true))
+			state.mapping.reset(), state.catching.reset();
+	}
 	ImGui::SetCursorScreenPos(top);
 	ImGui::Dummy({ width, room.y - kit.px(4.0f) });
 }
@@ -1086,10 +1133,24 @@ Menu::input_help(const MenuState &state)
 
 	const std::vector<InputRow> rows = input_rows(state);
 	const auto type = static_cast<SDL_GamepadType>(state.pad_types[state.player & 1]);
+	const std::string press = state.on_pad() ? "press the button, or move the stick, you want" : "press the key you want";
+
+	if (state.mapping && *state.mapping < rows.size()) {
+		size_t done = 0, all = 0;
+
+		for (size_t r = 0; r < rows.size(); r++)
+			if (rows[r].catchable && !rows[r].half)
+				all++, done += r <= *state.mapping;
+
+		const uint64_t gone = SDL_GetTicks() - state.mapping_since;
+		const uint64_t left = gone >= MAPPING_MS ? 0 : (MAPPING_MS - gone + 999) / 1000;
+
+		return std::to_string(done) + " / " + std::to_string(all) + "  " + rows[*state.mapping].name + ": " + press + ", " +
+		       std::to_string(left) + " s. Esc stops.";
+	}
 	for (const InputRow &row : rows)
 		if (same(state.catching, row.slot))
-			return row.name + ": " + (state.on_pad() ? "press the button, or move the stick" : "press the key") +
-			       " you want. Esc lets it be.";
+			return row.name + ": " + press + ". Esc lets it be.";
 	for (const InputRow &row : rows)
 		if (row.lit)
 			return row.name + (row.inputs.empty() ? "" : ": " + labels(row.inputs, type));
