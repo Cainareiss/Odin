@@ -31,7 +31,7 @@
 #include <vector>
 
 #include <GL/glew.h>
-#include <SDL.h>
+#include <SDL3/SDL.h>
 
 #include "odin/hikaru.hpp"
 

@@ -23,7 +23,7 @@
 #include <span>
 #include <vector>
 
-#include <SDL.h>
+#include <SDL3/SDL.h>
 
 #include "odin/bindings.hpp"
 #include "odin/control_panel.hpp"
@@ -87,16 +87,16 @@ private:
 	/* A pad and its buttons: a button pressed and released before a frame
 	 * saw it stays pressed until that frame has run. */
 	struct Pad {
-		SDL_GameController *handle = nullptr;
+		SDL_Gamepad *handle = nullptr;
 		SDL_JoystickID id = -1;
 		PadState state;
-		std::array<bool, SDL_CONTROLLER_BUTTON_MAX> fresh{};
-		std::array<bool, SDL_CONTROLLER_BUTTON_MAX> release{};
+		std::array<bool, SDL_GAMEPAD_BUTTON_COUNT> fresh{};
+		std::array<bool, SDL_GAMEPAD_BUTTON_COUNT> release{};
 		Uint16 rumbling = 0;	/* how hard it shakes */
-		Uint32 rumbled = 0;	/* when it was last asked to */
+		Uint64 rumbled = 0;	/* when it was last asked to */
 	};
 
-	void open(int device);
+	void open(SDL_JoystickID id);
 	void close(SDL_JoystickID id);
 	Pad *find(SDL_JoystickID id);
 

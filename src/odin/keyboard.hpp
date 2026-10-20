@@ -24,7 +24,7 @@
 
 #include <vector>
 
-#include <SDL.h>
+#include <SDL3/SDL.h>
 
 namespace odin {
 

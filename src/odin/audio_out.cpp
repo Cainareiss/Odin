@@ -20,7 +20,7 @@
 
 #include "odin/audio_out.hpp"
 
-#include <SDL.h>
+#include <SDL3/SDL.h>
 
 #include <cstdio>
 
@@ -41,30 +41,28 @@ channels(AudioOut::Mode mode)
 std::unique_ptr<AudioOut>
 AudioOut::make(Mode mode, double option_db)
 {
-	if (SDL_InitSubSystem(SDL_INIT_AUDIO)) {
+	if (!SDL_InitSubSystem(SDL_INIT_AUDIO)) {
 		std::fprintf(stderr, "ERROR: sound: %s\n", SDL_GetError());
 		return nullptr;
 	}
 
-	SDL_AudioSpec want = {};
-	want.freq = RATE;
-	want.format = AUDIO_S16SYS;
-	want.channels = static_cast<Uint8>(channels(mode));
-	want.samples = 1024;
+	/* The buffer of the device as before: 1024 frames */
+	SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, "1024");
 
-	const SDL_AudioDeviceID device = SDL_OpenAudioDevice(nullptr, 0, &want, nullptr, 0);
-	if (!device) {
+	const SDL_AudioSpec spec = { SDL_AUDIO_S16, static_cast<int>(channels(mode)), RATE };
+	SDL_AudioStream *const stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, nullptr, nullptr);
+	if (!stream) {
 		std::fprintf(stderr, "ERROR: sound: %s\n", SDL_GetError());
 		SDL_QuitSubSystem(SDL_INIT_AUDIO);
 		return nullptr;
 	}
-	SDL_PauseAudioDevice(device, 0);
-	return std::unique_ptr<AudioOut>(new AudioOut(device, mode, gain_of(option_db)));
+	SDL_ResumeAudioStreamDevice(stream);
+	return std::unique_ptr<AudioOut>(new AudioOut(stream, mode, gain_of(option_db)));
 }
 
 AudioOut::~AudioOut()
 {
-	SDL_CloseAudioDevice(m_device);
+	SDL_DestroyAudioStream(m_stream);
 	SDL_QuitSubSystem(SDL_INIT_AUDIO);
 }
 
@@ -77,19 +75,19 @@ AudioOut::play(std::span<const int16_t> main, std::span<const int16_t> option)
 	if (m_frames.size() < n)
 		return;
 
-	const uint32_t queued = SDL_GetQueuedAudioSize(m_device) / (n * 2);
+	const uint32_t queued = static_cast<uint32_t>(std::max(SDL_GetAudioStreamQueued(m_stream), 0)) / (n * 2);
 	const uint32_t low = RATE * 30 / 1000, high = RATE * 120 / 1000;
 
 	/* After a pause or a stall, start again from what is due now */
 	if (queued > 4 * high)
-		SDL_ClearQueuedAudio(m_device);
+		SDL_ClearAudioStream(m_stream);
 	if (queued > high)
 		m_frames.resize(m_frames.size() - n);
 	else if (queued < low) {
 		const std::vector<int16_t> last(m_frames.end() - n, m_frames.end());
 		m_frames.insert(m_frames.end(), last.begin(), last.end());
 	}
-	SDL_QueueAudio(m_device, m_frames.data(), static_cast<Uint32>(m_frames.size() * 2));
+	SDL_PutAudioStreamData(m_stream, m_frames.data(), static_cast<int>(m_frames.size() * 2));
 }
 
 } /* namespace odin */

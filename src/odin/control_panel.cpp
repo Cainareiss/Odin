@@ -140,7 +140,7 @@ ControlPanel::rest(GameControl::Low low)
 uint16_t
 ControlPanel::pointed(GameControl::Low low, double at)
 {
-	const PadInput axis{ PadInput::Type::AXIS, static_cast<uint8_t>(SDL_CONTROLLER_AXIS_LEFTX) };
+	const PadInput axis{ PadInput::Type::AXIS, static_cast<uint8_t>(SDL_GAMEPAD_AXIS_LEFTX) };
 	const long value = std::lround(std::clamp(at, 0.0, 1.0) * 65535.0) - 32768;
 
 	return channel(axis, low, static_cast<int16_t>(value));
@@ -151,7 +151,7 @@ ControlPanel::end(GameControl::Low low, bool positive)
 {
 	const bool pedal = !GameControl::half(low, positive);
 	const PadInput axis{ PadInput::Type::AXIS,
-	                     static_cast<uint8_t>(pedal ? SDL_CONTROLLER_AXIS_TRIGGERLEFT : SDL_CONTROLLER_AXIS_LEFTX) };
+	                     static_cast<uint8_t>(pedal ? SDL_GAMEPAD_AXIS_LEFT_TRIGGER : SDL_GAMEPAD_AXIS_LEFTX) };
 
 	return channel(axis, low, positive ? 32767 : -32768);
 }

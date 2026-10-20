@@ -20,7 +20,7 @@
  * frame kept until a frame has seen it.
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
- *            `sdl2-config --cflags` -I src tests/keyboard/keyboard_tests.cpp \
+ *            `pkg-config --cflags sdl3` -I src tests/keyboard/keyboard_tests.cpp \
  *            src/odin/keyboard.cpp -o keyboard_tests
  * Exit status is 0 when every check passes. */
 
@@ -47,16 +47,16 @@ void test_keys()
 {
 	Keyboard keyboard;
 
-	check(!keyboard.down(SDLK_a) && keyboard.held().empty(), "no key is down at first");
-	keyboard.set(SDLK_a, true);
-	keyboard.set(SDLK_a, true);
-	check(keyboard.down(SDLK_a) && !keyboard.down(SDLK_s) && keyboard.held().size() == 1,
+	check(!keyboard.down(SDLK_A) && keyboard.held().empty(), "no key is down at first");
+	keyboard.set(SDLK_A, true);
+	keyboard.set(SDLK_A, true);
+	check(keyboard.down(SDLK_A) && !keyboard.down(SDLK_S) && keyboard.held().size() == 1,
 	      "a key pressed is down, a repeat changes nothing");
 	keyboard.settle();
-	keyboard.set(SDLK_a, false);
-	check(!keyboard.down(SDLK_a), "and up once released, after a frame saw it");
-	keyboard.set(SDLK_s, false);
-	check(!keyboard.down(SDLK_s), "a release without a press is nothing");
+	keyboard.set(SDLK_A, false);
+	check(!keyboard.down(SDLK_A), "and up once released, after a frame saw it");
+	keyboard.set(SDLK_S, false);
+	check(!keyboard.down(SDLK_S), "a release without a press is nothing");
 }
 
 void test_short_press()

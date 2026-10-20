@@ -26,7 +26,7 @@
 #include <string_view>
 #include <vector>
 
-#include <SDL.h>
+#include <SDL3/SDL.h>
 
 #include "odin/games.hpp"
 #include "odin/roles.hpp"
@@ -34,11 +34,11 @@
 
 namespace odin {
 
-/* An input of a gamepad, by the name SDL's game controller gives it ("a",
+/* An input of a gamepad, by the name SDL's gamepad API gives it ("a",
  * "start", "leftshoulder", "leftx", "righttrigger"...), half the axis of a
  * stick: "-lefty" is the left stick up, "+leftx" to the right, or the axis
  * of a stick turned over: "lefty:invert". The index is an
- * SDL_GameControllerButton or an SDL_GameControllerAxis. */
+ * SDL_GamepadButton or an SDL_GamepadAxis. */
 struct PadInput {
 	enum class Type { BUTTON, AXIS, AXIS_NEGATIVE, AXIS_POSITIVE };
 

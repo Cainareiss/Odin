@@ -73,7 +73,7 @@ open_window(SDL_Window *&window, SDL_GLContext &context)
 {
 	int num_ms_buffers, num_samples;
 
-	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER)) {
+	if (!SDL_Init(SDL_INIT_VIDEO)) {
 		std::fprintf(stderr, "ERROR: could not initialize SDL: '%s'\n", SDL_GetError());
 		return false;
 	}
@@ -99,13 +99,12 @@ open_window(SDL_Window *&window, SDL_GLContext &context)
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 
-	window = SDL_CreateWindow("Odin", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-	                          Renderer::WIDTH, Renderer::HEIGHT,
-	                          SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+	window = SDL_CreateWindow("Odin", Renderer::WIDTH, Renderer::HEIGHT, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
 	if (!window) {
 		std::fprintf(stderr, "ERROR: could not create SDL window: '%s'\n", SDL_GetError());
 		return false;
 	}
+	SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
 
 	context = SDL_GL_CreateContext(window);
 	if (!context) {
@@ -116,9 +115,11 @@ open_window(SDL_Window *&window, SDL_GLContext &context)
 	/* The frames are paced by the board, not by the display. */
 	SDL_GL_SetSwapInterval(0);
 
+	/* Under Wayland the context is EGL's: GLEW has the functions of OpenGL
+	 * then, only GLX is missing. */
 	glewExperimental = GL_TRUE;
-	if (glewInit() != GLEW_OK) {
-		std::fprintf(stderr, "ERROR: could not initialize glew\n");
+	if (const GLenum glew = glewInit(); glew != GLEW_OK && glew != GLEW_ERROR_NO_GLX_DISPLAY) {
+		std::fprintf(stderr, "ERROR: could not initialize glew (%u)\n", glew);
 		return false;
 	}
 
@@ -218,7 +219,7 @@ Display::prepare_programs(const std::string &title)
 	const auto window_size = [this] {
 		int w, h;
 
-		SDL_GL_GetDrawableSize(m_window, &w, &h);
+		SDL_GetWindowSizeInPixels(m_window, &w, &h);
 		return static_cast<uint64_t>(static_cast<uint32_t>(w)) << 32 | static_cast<uint32_t>(h);
 	};
 	std::atomic<uint64_t> size(window_size());
@@ -260,7 +261,7 @@ Display::~Display()
 		             static_cast<double>(m_draw_ns) / 1e9, static_cast<double>(m_wait_frame_ns) / 1e9,
 		             static_cast<double>(m_wait_write_ns) / 1e9);
 
-	SDL_GL_DeleteContext(m_context);
+	SDL_GL_DestroyContext(m_context);
 	SDL_DestroyWindow(m_window);
 	SDL_Quit();
 }
@@ -305,7 +306,7 @@ Display::end_frame(unsigned frame)
 	m_wait_frame_ns += m_wait_write_ns - waited;
 	m_wait_write_ns = waited;
 	m_frame = frame;
-	SDL_GL_GetDrawableSize(m_window, &w, &h);
+	SDL_GetWindowSizeInPixels(m_window, &w, &h);
 	m_renderer->take_frame(frame, static_cast<unsigned>(w), static_cast<unsigned>(h));
 	m_logged = m_renderer->frame_is_logged();
 	m_message = m_renderer->message();
@@ -460,7 +461,7 @@ Display::set_window(unsigned times, bool fullscreen)
 	finish();
 
 	SDL_GetWindowBordersSize(m_window, &top, &left, &bottom, &right);
-	if (!SDL_GetDisplayUsableBounds(SDL_GetWindowDisplayIndex(m_window), &room)) {
+	if (SDL_GetDisplayUsableBounds(SDL_GetDisplayForWindow(m_window), &room)) {
 		room.w -= left + right;
 		room.h -= top + bottom;
 		if (w > room.w) {
@@ -475,16 +476,16 @@ Display::set_window(unsigned times, bool fullscreen)
 	SDL_SetWindowSize(m_window, w, h);
 	SDL_SetWindowPosition(m_window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
 	if (fullscreen)
-		SDL_SetWindowFullscreen(m_window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+		SDL_SetWindowFullscreen(m_window, true);
 }
 
 void
 Display::toggle_fullscreen()
 {
-	const bool on = (SDL_GetWindowFlags(m_window) & SDL_WINDOW_FULLSCREEN_DESKTOP) != 0;
+	const bool on = (SDL_GetWindowFlags(m_window) & SDL_WINDOW_FULLSCREEN) != 0;
 
 	finish();
-	SDL_SetWindowFullscreen(m_window, on ? 0 : SDL_WINDOW_FULLSCREEN_DESKTOP);
+	SDL_SetWindowFullscreen(m_window, !on);
 }
 
 void

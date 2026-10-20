@@ -157,7 +157,7 @@ cabinet_role(size_t index)
 bool
 PadInput::is_trigger() const
 {
-	return type == Type::AXIS && index >= SDL_CONTROLLER_AXIS_TRIGGERLEFT;
+	return type == Type::AXIS && index >= SDL_GAMEPAD_AXIS_LEFT_TRIGGER;
 }
 
 std::optional<HostInput>
@@ -207,20 +207,20 @@ HostInput::parse(std::string_view text)
 	}
 
 	const std::string name(text);
-	const SDL_GameControllerAxis axis = SDL_GameControllerGetAxisFromString(name.c_str());
-	const SDL_GameControllerButton button = SDL_GameControllerGetButtonFromString(name.c_str());
+	const SDL_GamepadAxis axis = SDL_GetGamepadAxisFromString(name.c_str());
+	const SDL_GamepadButton button = SDL_GetGamepadButtonFromString(name.c_str());
 
 	out.kind = Kind::PAD;
-	if (axis != SDL_CONTROLLER_AXIS_INVALID) {
+	if (axis != SDL_GAMEPAD_AXIS_INVALID) {
 		/* Half a trigger is no input, a stick is turned over whole */
-		if (half != PadInput::Type::AXIS && axis >= SDL_CONTROLLER_AXIS_TRIGGERLEFT)
+		if (half != PadInput::Type::AXIS && axis >= SDL_GAMEPAD_AXIS_LEFT_TRIGGER)
 			return std::nullopt;
-		if (inverted && (half != PadInput::Type::AXIS || axis >= SDL_CONTROLLER_AXIS_TRIGGERLEFT))
+		if (inverted && (half != PadInput::Type::AXIS || axis >= SDL_GAMEPAD_AXIS_LEFT_TRIGGER))
 			return std::nullopt;
 		out.pad = PadInput{ half, static_cast<uint8_t>(axis), inverted };
 		return out;
 	}
-	if (inverted || half != PadInput::Type::AXIS || button == SDL_CONTROLLER_BUTTON_INVALID)
+	if (inverted || half != PadInput::Type::AXIS || button == SDL_GAMEPAD_BUTTON_INVALID)
 		return std::nullopt;
 	out.pad = PadInput{ PadInput::Type::BUTTON, static_cast<uint8_t>(button) };
 	return out;

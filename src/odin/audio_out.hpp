@@ -28,6 +28,8 @@
 #include <span>
 #include <vector>
 
+struct SDL_AudioStream;
+
 namespace odin {
 
 /* The sound of the two boards to the speakers of the host, as the user
@@ -114,12 +116,12 @@ public:
 	void play(std::span<const int16_t> main, std::span<const int16_t> option);
 
 private:
-	AudioOut(uint32_t device, Mode mode, int32_t option_gain)
-		: m_device(device), m_mode(mode), m_option_gain(option_gain)
+	AudioOut(SDL_AudioStream *stream, Mode mode, int32_t option_gain)
+		: m_stream(stream), m_mode(mode), m_option_gain(option_gain)
 	{
 	}
 
-	uint32_t m_device;
+	SDL_AudioStream *m_stream;	/* bound to the device */
 	Mode m_mode;
 	int32_t m_option_gain;
 	std::vector<int16_t> m_frames;

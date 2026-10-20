@@ -21,9 +21,9 @@
  * the gamepads, the lever, the analog channels and their way.
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
- *            -I src $(sdl2-config --cflags) tests/control_panel/control_panel_tests.cpp \
+ *            -I src $(pkg-config --cflags sdl3) tests/control_panel/control_panel_tests.cpp \
  *            src/odin/control_panel.cpp src/odin/bindings.cpp src/odin/settings.cpp src/odin/roles.cpp \
- *            src/odin/save_folder.cpp $(sdl2-config --libs) -o control_panel_tests
+ *            src/odin/save_folder.cpp $(pkg-config --libs sdl3) -o control_panel_tests
  * Exit status is 0 when every check passes. */
 
 #include "odin/control_panel.hpp"
@@ -150,18 +150,18 @@ void test_standard_panel()
 	      held({SDLK_LEFT}).jvs_player[0] == 0x0800 && held({SDLK_RIGHT}).jvs_player[0] == 0x0400,
 	      "player 1: the arrows");
 	check(held({SDLK_LCTRL}).jvs_player[0] == 0x0200 && held({SDLK_LALT}).jvs_player[0] == 0x0100 &&
-	      held({SDLK_LSHIFT}).jvs_player[0] == 0x0080 && held({SDLK_z}).jvs_player[0] == 0x0040 &&
-	      held({SDLK_x}).jvs_player[0] == 0x0020 && held({SDLK_c}).jvs_player[0] == 0x0010,
+	      held({SDLK_LSHIFT}).jvs_player[0] == 0x0080 && held({SDLK_Z}).jvs_player[0] == 0x0040 &&
+	      held({SDLK_X}).jvs_player[0] == 0x0020 && held({SDLK_C}).jvs_player[0] == 0x0010,
 	      "player 1: the six buttons, PUSH3 to PUSH6 in the low byte");
 	check(held({SDLK_2}).jvs_player[1] == 0x8000 &&
-	      held({SDLK_r}).jvs_player[1] == 0x2000 && held({SDLK_f}).jvs_player[1] == 0x1000 &&
-	      held({SDLK_d}).jvs_player[1] == 0x0800 && held({SDLK_g}).jvs_player[1] == 0x0400,
+	      held({SDLK_R}).jvs_player[1] == 0x2000 && held({SDLK_F}).jvs_player[1] == 0x1000 &&
+	      held({SDLK_D}).jvs_player[1] == 0x0800 && held({SDLK_G}).jvs_player[1] == 0x0400,
 	      "player 2: Start and R F D G (the SERVICE of player 2 has no key)");
-	check(held({SDLK_a}).jvs_player[1] == 0x0200 && held({SDLK_s}).jvs_player[1] == 0x0100 &&
-	      held({SDLK_q}).jvs_player[1] == 0x0080 && held({SDLK_w}).jvs_player[1] == 0x0040 &&
-	      held({SDLK_e}).jvs_player[1] == 0x0020 && held({SDLK_t}).jvs_player[1] == 0x0010,
+	check(held({SDLK_A}).jvs_player[1] == 0x0200 && held({SDLK_S}).jvs_player[1] == 0x0100 &&
+	      held({SDLK_Q}).jvs_player[1] == 0x0080 && held({SDLK_W}).jvs_player[1] == 0x0040 &&
+	      held({SDLK_E}).jvs_player[1] == 0x0020 && held({SDLK_T}).jvs_player[1] == 0x0010,
 	      "player 2: the six buttons");
-	check(held({SDLK_1, SDLK_UP, SDLK_z}).jvs_player[0] == 0xA040 && held({SDLK_1, SDLK_UP, SDLK_z}).jvs_player[1] == 0,
+	check(held({SDLK_1, SDLK_UP, SDLK_Z}).jvs_player[0] == 0xA040 && held({SDLK_1, SDLK_UP, SDLK_Z}).jvs_player[1] == 0,
 	      "the keys held together add up, each player its own word");
 
 	ControlPanel panel({}, Settings(), "bootrom");
@@ -187,11 +187,11 @@ void test_coins()
 	ControlPanel pads({}, Settings(), "bootrom");
 	PadState pad1, pad2;
 
-	pad1.buttons[SDL_CONTROLLER_BUTTON_BACK] = true;
+	pad1.buttons[SDL_GAMEPAD_BUTTON_BACK] = true;
 	inputs = after(pads, {}, &pad1, &pad2);
 	check(inputs.jvs_coin[0] == 1 && inputs.jvs_coin[1] == 0, "SELECT of pad 1: a coin in the first slot");
 	pad1 = PadState{};
-	pad2.buttons[SDL_CONTROLLER_BUTTON_BACK] = true;
+	pad2.buttons[SDL_GAMEPAD_BUTTON_BACK] = true;
 	inputs = after(pads, {}, &pad1, &pad2);
 	check(inputs.jvs_coin[0] == 0 && inputs.jvs_coin[1] == 1, "SELECT of pad 2: the second slot");
 }
@@ -201,11 +201,11 @@ void test_game()
 	ControlPanel panel(cabinet(), Settings(), "sgnascar");
 	PadState pad, pad2;
 
-	check(after(panel, {SDLK_z}).jvs_player[0] == 0x1000, "button4 (Z) works VIEW, wired on 1P DOWN");
+	check(after(panel, {SDLK_Z}).jvs_player[0] == 0x1000, "button4 (Z) works VIEW, wired on 1P DOWN");
 	check(after(panel, {SDLK_DOWN}).jvs_player[0] == 0, "the arrow closes no switch: no control of the game is down");
 	check(after(panel, {SDLK_9}).jvs_player[0] == 0x4000 && after(panel, {SDLK_0}).jvs_system == 0x80,
 	      "Service and Test stay for every game");
-	check(after(panel, {SDLK_s}).jvs_player[1] == 0x0080 && after(panel, {SDLK_LALT}).jvs_player[1] == 0,
+	check(after(panel, {SDLK_S}).jvs_player[1] == 0x0080 && after(panel, {SDLK_LALT}).jvs_player[1] == 0,
 	      "FOG belongs to player 2: his button2 (S), not that of player 1");
 
 	MieBoard::Inputs inputs = after(panel, {});
@@ -215,32 +215,32 @@ void test_game()
 	inputs = after(panel, {}, &pad);
 	check(inputs.jvs_analog[0] == 0x8000 && inputs.jvs_analog[1] == 0x0000 && inputs.jvs_analog[3] == 0x8000,
 	      "a pad at rest: wheel and lever centred, gas let go");
-	pad.axes[SDL_CONTROLLER_AXIS_LEFTX] = -32768;
-	pad.axes[SDL_CONTROLLER_AXIS_TRIGGERRIGHT] = 32767;
-	pad.axes[SDL_CONTROLLER_AXIS_LEFTY] = 32767;
+	pad.axes[SDL_GAMEPAD_AXIS_LEFTX] = -32768;
+	pad.axes[SDL_GAMEPAD_AXIS_RIGHT_TRIGGER] = 32767;
+	pad.axes[SDL_GAMEPAD_AXIS_LEFTY] = 32767;
 	inputs = after(panel, {}, &pad);
 	check(inputs.jvs_analog[0] == 0x0000, "the stick left: wheel 0000, low on the left");
 	check(inputs.jvs_analog[1] == 0xFFFF, "the trigger pressed: gas FFFF");
 	check(inputs.jvs_analog[3] == 0x0001, "the stick down on a lever low when down: 0001");
-	pad.axes[SDL_CONTROLLER_AXIS_LEFTY] = -32768;
+	pad.axes[SDL_GAMEPAD_AXIS_LEFTY] = -32768;
 	check(after(panel, {}, &pad).jvs_analog[3] == 0xFFFF, "up on that lever: FFFF");
 	pad = PadState{};
 
-	pad.buttons[SDL_CONTROLLER_BUTTON_Y] = true;
+	pad.buttons[SDL_GAMEPAD_BUTTON_NORTH] = true;
 	check(after(panel, {}, &pad).jvs_player[0] == 0x1000, "Y of the pad works VIEW too");
-	pad.buttons[SDL_CONTROLLER_BUTTON_Y] = false;
-	pad2.buttons[SDL_CONTROLLER_BUTTON_B] = true;
+	pad.buttons[SDL_GAMEPAD_BUTTON_NORTH] = false;
+	pad2.buttons[SDL_GAMEPAD_BUTTON_EAST] = true;
 	check(after(panel, {}, &pad, &pad2).jvs_player[1] == 0x0080 && after(panel, {}, &pad2).jvs_player[1] == 0,
 	      "B on the pad of player 2 works FOG; on the pad of player 1, nothing");
 	pad2 = PadState{};
-	pad.axes[SDL_CONTROLLER_AXIS_RIGHTY] = -32768;
+	pad.axes[SDL_GAMEPAD_AXIS_RIGHTY] = -32768;
 	check(after(panel, {}, &pad).jvs_player[1] == 0x2000 && after(panel, {}, &pad).jvs_player[0] == 0,
 	      "a control of player 1 wired on a switch of player 2: the right stick up of pad 1");
 	pad = PadState{};
-	pad.axes[SDL_CONTROLLER_AXIS_LEFTX] = -32768;
+	pad.axes[SDL_GAMEPAD_AXIS_LEFTX] = -32768;
 	check(after(panel, {}, &pad).jvs_analog[4] == 0x8000 && after(panel, {}, &pad, &pad2).jvs_analog[4] == 0x8000,
 	      "the channel of player 2 does not follow pad 1");
-	pad2.axes[SDL_CONTROLLER_AXIS_LEFTX] = 32767;
+	pad2.axes[SDL_GAMEPAD_AXIS_LEFTX] = 32767;
 	check(after(panel, {}, &pad, &pad2).jvs_analog[4] == 0xFFFF, "it follows pad 2");
 }
 
@@ -282,7 +282,7 @@ void test_keys()
 
 	ControlPanel two(cabinet(), Settings(), "sgnascar");
 
-	check(after(two, {SDLK_g}).jvs_analog[4] == 0x9000 && after(two, {SDLK_g}).jvs_analog[0] == 0x8000,
+	check(after(two, {SDLK_G}).jvs_analog[4] == 0x9000 && after(two, {SDLK_G}).jvs_analog[0] == 0x8000,
 	      "the aim of player 2 on G, and not the wheel of player 1");
 	check(after(two, {SDLK_RIGHT}).jvs_analog[4] == 0x9000, "and not on the arrows: back a step");
 
@@ -291,16 +291,16 @@ void test_keys()
 
 	after(both, {SDLK_LEFT});
 	after(both, {SDLK_LEFT});
-	pad.axes[SDL_CONTROLLER_AXIS_LEFTX] = 30000;
+	pad.axes[SDL_GAMEPAD_AXIS_LEFTX] = 30000;
 	check(after(both, {SDLK_LEFT}, &pad).jvs_analog[0] == 0x8000 + 30000,
 	      "the stick moved more than the keys this frame: the stick");
 	check(after(both, {SDLK_LEFT}, &pad).jvs_analog[0] == 0x4000, "the stick still, the keys still moving: the keys");
-	pad.axes[SDL_CONTROLLER_AXIS_LEFTX] = 30000 + 0x300;
+	pad.axes[SDL_GAMEPAD_AXIS_LEFTX] = 30000 + 0x300;
 	check(after(both, {}, &pad).jvs_analog[0] == 0x5000,
 	      "let go, the keys on their way back, the stick moved less than 400: the keys keep the wheel");
 	for (int i = 0; i < 3; i++)
 		after(both, {}, &pad);
-	pad.axes[SDL_CONTROLLER_AXIS_LEFTX] = 30000 + 0x500;
+	pad.axes[SDL_GAMEPAD_AXIS_LEFTX] = 30000 + 0x500;
 	check(after(both, {}, &pad).jvs_analog[0] == 0x8000 + 30000 + 0x500,
 	      "the keys at rest, the stick 500 from where it was kept, little by little: the stick takes it");
 	check(after(both, {}).jvs_analog[0] == 0x8000, "the pad gone: the keys again, at rest");
@@ -309,11 +309,11 @@ void test_keys()
 	ControlPanel back(cabinet(), Settings(), "sgnascar");
 
 	pad = PadState{};
-	pad.axes[SDL_CONTROLLER_AXIS_LEFTX] = 30000;
+	pad.axes[SDL_GAMEPAD_AXIS_LEFTX] = 30000;
 	after(back, {}, &pad);
 	after(back, {SDLK_LEFT});
 	after(back, {SDLK_LEFT});
-	pad.axes[SDL_CONTROLLER_AXIS_LEFTX] = 0;
+	pad.axes[SDL_GAMEPAD_AXIS_LEFTX] = 0;
 	check(after(back, {SDLK_LEFT}, &pad).jvs_analog[0] == 0x5000,
 	      "a pad back, at rest after it was held right: the keys keep the wheel");
 
@@ -330,12 +330,12 @@ void test_keys()
 	settings.parse("[controls.sgnascar]\nwheel_left = key:A\ngas = pad:righttrigger, key:Space\n", "test");
 	ControlPanel mine(cabinet(), settings, "sgnascar");
 
-	check(after(mine, {SDLK_a}).jvs_analog[0] == 0x7000, "a key of the settings moves the wheel");
+	check(after(mine, {SDLK_A}).jvs_analog[0] == 0x7000, "a key of the settings moves the wheel");
 	check(after(mine, {SDLK_LEFT}).jvs_analog[0] == 0x8000, "Left no longer");
 	check(after(mine, {SDLK_UP}).jvs_analog[1] == 0x0000 && after(mine, {SDLK_SPACE}).jvs_analog[1] == 0x1000,
 	      "the gas on Space, no longer on Up");
 	pad = PadState{};
-	pad.axes[SDL_CONTROLLER_AXIS_TRIGGERRIGHT] = 32767;
+	pad.axes[SDL_GAMEPAD_AXIS_RIGHT_TRIGGER] = 32767;
 	check(after(mine, {}, &pad).jvs_analog[1] == 0xFFFF, "and on the trigger of its line");
 }
 
@@ -345,39 +345,39 @@ void test_lever()
 	PadState pad;
 
 	check(after(panel, {}, &pad).jvs_player[1] == 0, "the lever starts on N");
-	pad.buttons[SDL_CONTROLLER_BUTTON_RIGHTSHOULDER] = true;
+	pad.buttons[SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER] = true;
 	check(after(panel, {}, &pad).jvs_player[1] == 0x2800, "RB: 1, its two switches");
 	check(after(panel, {}, &pad).jvs_player[1] == 0x2800, "held: no other step");
-	pad.buttons[SDL_CONTROLLER_BUTTON_RIGHTSHOULDER] = false;
+	pad.buttons[SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER] = false;
 	after(panel, {}, &pad);
-	pad.buttons[SDL_CONTROLLER_BUTTON_RIGHTSHOULDER] = true;
+	pad.buttons[SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER] = true;
 	check(after(panel, {}, &pad).jvs_player[1] == 0x1000, "RB again: 2");
-	pad.buttons[SDL_CONTROLLER_BUTTON_RIGHTSHOULDER] = false;
+	pad.buttons[SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER] = false;
 	after(panel, {}, &pad);
-	pad.buttons[SDL_CONTROLLER_BUTTON_RIGHTSHOULDER] = true;
+	pad.buttons[SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER] = true;
 	check(after(panel, {}, &pad).jvs_player[1] == 0x1000, "the last stays the last");
 	pad = PadState{};
-	pad.buttons[SDL_CONTROLLER_BUTTON_LEFTSHOULDER] = true;
+	pad.buttons[SDL_GAMEPAD_BUTTON_LEFT_SHOULDER] = true;
 	check(after(panel, {}, &pad).jvs_player[1] == 0x2800, "LB: back to 1");
 	pad = PadState{};
 	after(panel, {}, &pad);
-	pad.buttons[SDL_CONTROLLER_BUTTON_LEFTSHOULDER] = true;
+	pad.buttons[SDL_GAMEPAD_BUTTON_LEFT_SHOULDER] = true;
 	after(panel, {}, &pad);
 	pad = PadState{};
 	after(panel, {}, &pad);
-	pad.buttons[SDL_CONTROLLER_BUTTON_LEFTSHOULDER] = true;
+	pad.buttons[SDL_GAMEPAD_BUTTON_LEFT_SHOULDER] = true;
 	check(after(panel, {}, &pad).jvs_player[1] == 0, "N, and the first stays the first");
 	pad = PadState{};
-	pad.buttons[SDL_CONTROLLER_BUTTON_RIGHTSHOULDER] = true;
+	pad.buttons[SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER] = true;
 	after(panel, {}, &pad);
 	check(after(panel, {}).jvs_player[1] == 0x2800, "the lever stays where it is when the pad is gone");
 
 	ControlPanel keys(cabinet(), Settings(), "sgnascar");
 
-	check(after(keys, {SDLK_c}).jvs_player[1] == 0x2800, "C: 1, as RB");
+	check(after(keys, {SDLK_C}).jvs_player[1] == 0x2800, "C: 1, as RB");
 	after(keys, {});
-	check(after(keys, {SDLK_x}).jvs_player[1] == 0, "X: back to N, as LB");
-	check(after(keys, {SDLK_r}).jvs_player[1] == 0x2000 && after(keys, {SDLK_UP}).jvs_player[1] == 0,
+	check(after(keys, {SDLK_X}).jvs_player[1] == 0, "X: back to N, as LB");
+	check(after(keys, {SDLK_R}).jvs_player[1] == 0x2000 && after(keys, {SDLK_UP}).jvs_player[1] == 0,
 	      "the second stick of player 1 up on R, not on Up");
 }
 
@@ -389,21 +389,21 @@ void test_bindings_from_settings()
 	settings.parse("[controls.sgnascar]\nwheel = pad:leftx, pad:rightx\nview = key:Space\n", "test");
 	ControlPanel panel(cabinet(), settings, "sgnascar");
 
-	pad.axes[SDL_CONTROLLER_AXIS_LEFTX] = 1000;
-	pad.axes[SDL_CONTROLLER_AXIS_RIGHTX] = -20000;
+	pad.axes[SDL_GAMEPAD_AXIS_LEFTX] = 1000;
+	pad.axes[SDL_GAMEPAD_AXIS_RIGHTX] = -20000;
 	check(after(panel, {}, &pad).jvs_analog[0] == 0x8000 - 20000, "of two axes that moved, the one that moved more");
-	pad.axes[SDL_CONTROLLER_AXIS_LEFTX] = 30000;
+	pad.axes[SDL_GAMEPAD_AXIS_LEFTX] = 30000;
 	check(after(panel, {}, &pad).jvs_analog[0] == 0x8000 + 30000, "then the other when it moves");
 	check(after(panel, {}, &pad).jvs_analog[0] == 0x8000 + 30000, "and it keeps the wheel while neither moves");
-	check(after(panel, {SDLK_SPACE}).jvs_player[0] == 0x1000 && after(panel, {SDLK_z}).jvs_player[0] == 0,
+	check(after(panel, {SDLK_SPACE}).jvs_player[0] == 0x1000 && after(panel, {SDLK_Z}).jvs_player[0] == 0,
 	      "a key of the settings in the place of the default");
 }
 
 void test_channel()
 {
 	using Low = GameControl::Low;
-	const PadInput stick{ PadInput::Type::AXIS, SDL_CONTROLLER_AXIS_LEFTX };
-	const PadInput trigger{ PadInput::Type::AXIS, SDL_CONTROLLER_AXIS_TRIGGERRIGHT };
+	const PadInput stick{ PadInput::Type::AXIS, SDL_GAMEPAD_AXIS_LEFTX };
+	const PadInput trigger{ PadInput::Type::AXIS, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER };
 
 	check(ControlPanel::channel(stick, Low::LEFT, -32768) == 0x0000 &&
 	      ControlPanel::channel(stick, Low::LEFT, 0) == 0x8000 &&
@@ -421,7 +421,7 @@ void test_channel()
 	      ControlPanel::rest(Low::LEFT) == 0x8000 && ControlPanel::rest(Low::DOWN) == 0x8000,
 	      "at rest: a pedal let go, a stick centred");
 
-	const PadInput inverted{ PadInput::Type::AXIS, SDL_CONTROLLER_AXIS_LEFTY, true };
+	const PadInput inverted{ PadInput::Type::AXIS, SDL_GAMEPAD_AXIS_LEFTY, true };
 
 	check(ControlPanel::channel(inverted, Low::DOWN, -32768) == 0x0000 &&
 	      ControlPanel::channel(inverted, Low::DOWN, 0) == 0x8000 &&
@@ -467,8 +467,8 @@ void test_mouse()
 	after(panel, {SDLK_RIGHT}, nullptr, nullptr, &mouse);
 	check(after(panel, {SDLK_RIGHT}, nullptr, nullptr, &mouse).jvs_player[0] == 0,
 	      "the keys take X, the mouse off still holds Y: it aims no more, no OUT OF SCREEN");
-	pad.axes[SDL_CONTROLLER_AXIS_LEFTX] = 20000;
-	pad.axes[SDL_CONTROLLER_AXIS_LEFTY] = 20000;
+	pad.axes[SDL_GAMEPAD_AXIS_LEFTX] = 20000;
+	pad.axes[SDL_GAMEPAD_AXIS_LEFTY] = 20000;
 	inputs = after(panel, {}, &pad, nullptr, &mouse);
 	check(inputs.jvs_analog[0] == 0x8000 + 20000 && inputs.jvs_analog[1] == 0x8000 + 20000,
 	      "the stick moves: it takes the sight");
@@ -491,7 +491,7 @@ void test_mouse_one_pointer()
 	PadState pad;
 
 	after(panel, {}, &pad, nullptr, &mouse);
-	pad.axes[SDL_CONTROLLER_AXIS_LEFTY] = 20000;
+	pad.axes[SDL_GAMEPAD_AXIS_LEFTY] = 20000;
 	check(after(panel, {}, &pad, nullptr, &mouse).jvs_analog[1] == 0x8000 + 20000, "the stick takes Y");
 	mouse.x = 0.25;
 	MieBoard::Inputs inputs = after(panel, {}, &pad, nullptr, &mouse);
@@ -500,7 +500,7 @@ void test_mouse_one_pointer()
 	mouse.off = true;
 	after(panel, {}, &pad, nullptr, &mouse);
 	check(after(panel, {}, &pad, nullptr, &mouse).jvs_player[0] == 0x0100, "then off the picture: OUT OF SCREEN");
-	pad.axes[SDL_CONTROLLER_AXIS_LEFTY] = -20000;
+	pad.axes[SDL_GAMEPAD_AXIS_LEFTY] = -20000;
 	check(after(panel, {}, &pad, nullptr, &mouse).jvs_analog[1] == 0x8000 - 20000, "the stick takes Y again");
 	mouse.x = 0.25 + 0x200 / 65536.0;
 	check(after(panel, {}, &pad, nullptr, &mouse).jvs_analog[1] == 0x8000 - 20000,
@@ -536,17 +536,17 @@ void test_pressed()
 	               "1p_push3 = pad:+rightx\n", "test");
 	ControlPanel panel({}, settings, "x");
 
-	pad.axes[SDL_CONTROLLER_AXIS_LEFTY] = -16383;
+	pad.axes[SDL_GAMEPAD_AXIS_LEFTY] = -16383;
 	check(after(panel, {}, &pad).jvs_player[0] == 0, "the stick up less than half way: not pressed");
-	pad.axes[SDL_CONTROLLER_AXIS_LEFTY] = -16384;
+	pad.axes[SDL_GAMEPAD_AXIS_LEFTY] = -16384;
 	check(after(panel, {}, &pad).jvs_player[0] == 0x0200, "half way: pressed");
 	pad = PadState{};
-	pad.axes[SDL_CONTROLLER_AXIS_TRIGGERLEFT] = 16383;
+	pad.axes[SDL_GAMEPAD_AXIS_LEFT_TRIGGER] = 16383;
 	check(after(panel, {}, &pad).jvs_player[0] == 0, "a trigger less than half way: not pressed");
-	pad.axes[SDL_CONTROLLER_AXIS_TRIGGERLEFT] = 16384;
+	pad.axes[SDL_GAMEPAD_AXIS_LEFT_TRIGGER] = 16384;
 	check(after(panel, {}, &pad).jvs_player[0] == 0x0100, "half way: pressed");
 	pad = PadState{};
-	pad.axes[SDL_CONTROLLER_AXIS_RIGHTX] = 16384;
+	pad.axes[SDL_GAMEPAD_AXIS_RIGHTX] = 16384;
 	check(after(panel, {}, &pad).jvs_player[0] == 0x0080, "+rightx half way: pressed");
 }
 

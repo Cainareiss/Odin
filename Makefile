@@ -1,8 +1,8 @@
 CXX := g++
 LD := g++
 
-SDL_CFLAGS := `sdl2-config --cflags`
-SDL_LDFLAGS := `sdl2-config --libs`
+SDL_CFLAGS := `pkg-config --cflags sdl3`
+SDL_LDFLAGS := `pkg-config --libs sdl3`
 
 PKG_CFLAGS := `pkg-config --cflags gl glew jansson`
 PKG_LDFLAGS := `pkg-config --libs gl glew jansson`

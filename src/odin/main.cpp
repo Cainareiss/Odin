@@ -33,7 +33,7 @@
 
 #include <unistd.h>
 
-#include <SDL.h>
+#include <SDL3/SDL.h>
 
 #include "odin/display.hpp"
 #include "odin/env.hpp"
@@ -254,13 +254,13 @@ Session::process_events()
 		if (m_controls.event(event))
 			continue;
 		switch (event.type) {
-		case SDL_KEYDOWN:
-			m_keys.set(event.key.keysym.sym, true);
-			switch (event.key.keysym.sym) {
+		case SDL_EVENT_KEY_DOWN:
+			m_keys.set(event.key.key, true);
+			switch (event.key.key) {
 			case SDLK_ESCAPE:
 				quit = true;
 				break;
-			case SDLK_p:
+			case SDLK_P:
 				m_paused = !m_paused;
 				if (m_paused)
 					m_controls.quiet();
@@ -275,17 +275,17 @@ Session::process_events()
 				m_display.toggle_fullscreen();
 				break;
 			case SDLK_RETURN:
-				if (event.key.keysym.mod & KMOD_ALT)
+				if (event.key.mod & SDL_KMOD_ALT)
 					m_display.toggle_fullscreen();
 				break;
 			default:
 				break;
 			}
 			break;
-		case SDL_KEYUP:
-			m_keys.set(event.key.keysym.sym, false);
+		case SDL_EVENT_KEY_UP:
+			m_keys.set(event.key.key, false);
 			break;
-		case SDL_QUIT:
+		case SDL_EVENT_QUIT:
 			quit = true;
 			break;
 		default:

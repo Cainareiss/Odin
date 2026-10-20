@@ -24,7 +24,7 @@
 #include <string>
 #include <vector>
 
-#include <SDL.h>
+#include <SDL3/SDL.h>
 
 #include "odin/bindings.hpp"
 #include "odin/games.hpp"
@@ -34,8 +34,8 @@ namespace odin {
 
 /* A gamepad as the host sees it now */
 struct PadState {
-	std::array<int16_t, SDL_CONTROLLER_AXIS_MAX> axes{};
-	std::array<bool, SDL_CONTROLLER_BUTTON_MAX> buttons{};
+	std::array<int16_t, SDL_GAMEPAD_AXIS_COUNT> axes{};
+	std::array<bool, SDL_GAMEPAD_BUTTON_COUNT> buttons{};
 };
 
 /* The mouse as the host sees it now: where it points on the picture, 0 to

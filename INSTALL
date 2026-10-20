@@ -2,7 +2,7 @@ BUILDING
 ========
 
 Odin is built on GNU/Linux with GCC (C++20), GNU make and pkg-config.
-It needs the development files of SDL 2, GLEW and Jansson, and a graphics
+It needs the development files of SDL 3, GLEW and Jansson, and a graphics
 driver that offers OpenGL 4.3.
 
  $ cd path/to/odin
