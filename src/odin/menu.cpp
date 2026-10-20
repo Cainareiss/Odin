@@ -444,16 +444,41 @@ Menu::page_input(MenuKit &kit, MenuState &state) const
 		}
 	}
 
-	static constexpr const char *DEVICES[] = { "Keyboard and mouse", "Gamepad" };
-	const std::string &pad = state.pads[state.player & 1];
-	const std::string about = !state.gamepad ? "the keys, and the mouse where the game has a sight" :
-	                          pad.empty()    ? "none plugged in for this player now: the first one goes to player 1" :
-	                                           pad;
+	/* The keyboard, any gamepad, each one plugged in (the same name twice
+	 * counted), the one wanted when it is not there */
+	const unsigned me = state.player & 1;
+	const std::string &pad = state.pads[me];
+	std::vector<std::string> devices = { "Keyboard and mouse", "Any gamepad (the first free one)" };
 	int device = state.gamepad ? 1 : 0;
 
-	if (kit.choice("Device", about.c_str(), DEVICES, device)) {
-		state.gamepad = device == 1;
+	for (size_t i = 0; i < state.plugged.size(); i++) {
+		const auto &[name, guid] = state.plugged[i];
+		const auto before = std::count_if(state.plugged.begin(), state.plugged.begin() + static_cast<std::ptrdiff_t>(i),
+		                                  [&name](const auto &other) { return other.first == name; });
+
+		if (state.gamepad && device == 1 && guid == state.wanted[me])
+			device = static_cast<int>(devices.size());
+		devices.push_back(before ? name + " (" + std::to_string(before + 1) + ")" : name);
+	}
+	if (state.gamepad && !state.wanted[me].empty() && device == 1) {
+		device = static_cast<int>(devices.size());
+		devices.push_back((state.wanted_names[me].empty() ? "The gamepad chosen" : state.wanted_names[me]) +
+		                  " (not plugged in)");
+	}
+
+	const std::string about = !state.gamepad ? "the keys, and the mouse where the game has a sight" :
+	                          pad.empty()    ? "none for this player now" :
+	                                           "now: " + pad;
+
+	if (kit.dropdown("Device", about.c_str(), devices, device)) {
+		const size_t chosen = static_cast<size_t>(device);
+
+		state.gamepad = device != 0;
 		state.catching.reset();
+		if (device == 1 && !state.wanted[me].empty())
+			state.want = std::pair<std::string, std::string>();
+		else if (chosen >= 2 && chosen - 2 < state.plugged.size())
+			state.want = std::pair(state.plugged[chosen - 2].second, state.plugged[chosen - 2].first);
 	}
 	kit.end_group();
 

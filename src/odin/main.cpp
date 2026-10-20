@@ -694,12 +694,33 @@ Session::draw_menu()
 		state.pad_types[player] = m_controls.pad_type(player);
 	}
 	state.undo = m_undo_until && SDL_GetTicks() < m_undo_until;
+	state.plugged.clear();
+	for (const odin::Controls::Plugged &pad : m_controls.plugged())
+		state.plugged.emplace_back(pad.name, pad.guid);
+	for (unsigned player = 0; player < 2; player++) {
+		state.wanted[player] = m_controls.wanted(player);
+		state.wanted_names[player] = m_controls.wanted_name(player);
+	}
 
 	const odin::MenuState was = state;
 
 	m_display.draw_menu(state);
 	apply(was);
 
+	/* The gamepad a player wants for the game: [players.<game>] p1 or p2 */
+	if (state.want) {
+		const auto &[guid, name] = *state.want;
+		const std::string section = "players." + m_board.game_name(), key = state.player ? "p2" : "p1";
+		const std::optional<std::string> value = guid.empty() ? std::nullopt : std::optional(guid + " " + name);
+
+		m_controls.want(state.player, guid, name);
+		if (m_settings_file.empty())
+			m_settings.set(section, key, value);
+		else
+			m_settings.change(m_settings_file, section, key, value);
+		state.want.reset();
+		m_menu_pictures = MENU_PICTURES;
+	}
 	if (state.ask == odin::MenuState::Ask::DEFAULTS) {
 		change_inputs(true);
 	} else if (state.ask == odin::MenuState::Ask::CLEAR) {

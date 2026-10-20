@@ -21,6 +21,7 @@
 #include "odin/audio_out.hpp"
 #include "odin/drive_board.hpp"
 #include "odin/picture.hpp"
+#include "odin/seats.hpp"
 
 #include <cstdio>
 #include <cstdlib>
@@ -40,6 +41,17 @@ Controls::Controls(Keyboard &keys, const std::vector<GameControl> &controls, con
 
 	if (chosen && !std::strcmp(chosen, "none"))
 		return;
+	for (const auto &[key, value] : settings.section("players." + game)) {
+		const size_t space = value.find(' ');
+
+		if (key == "p1" || key == "p2") {
+			m_wanted[key[1] - '1'] = value.substr(0, space);
+			m_wanted_names[key[1] - '1'] = space == std::string::npos ? "" : value.substr(space + 1);
+		} else {
+			std::fprintf(stderr, "ERROR: settings: [players.%s]: not right: %s = %s\n", game.c_str(), key.c_str(),
+			             value.c_str());
+		}
+	}
 	/* The pads already there come as added events. */
 	if (!SDL_InitSubSystem(SDL_INIT_GAMEPAD)) {
 		std::fprintf(stderr, "ERROR: no gamepads: %s\n", SDL_GetError());
@@ -56,8 +68,7 @@ Controls::~Controls()
 	if (!m_on)
 		return;
 	for (Pad &pad : m_pads)
-		if (pad.handle)
-			SDL_CloseGamepad(pad.handle);
+		SDL_CloseGamepad(pad.handle);
 	SDL_QuitSubSystem(SDL_INIT_GAMEPAD);
 }
 
@@ -65,9 +76,69 @@ Controls::Pad *
 Controls::find(SDL_JoystickID id)
 {
 	for (Pad &pad : m_pads)
-		if (pad.handle && pad.id == id)
+		if (id && pad.id == id)
 			return &pad;
 	return nullptr;
+}
+
+Controls::Pad *
+Controls::seat(unsigned player)
+{
+	return find(m_seats[player & 1]);
+}
+
+const Controls::Pad *
+Controls::seat(unsigned player) const
+{
+	for (const Pad &pad : m_pads)
+		if (m_seats[player & 1] && pad.id == m_seats[player & 1])
+			return &pad;
+	return nullptr;
+}
+
+void
+Controls::reseat()
+{
+	std::vector<OpenPad> pads;
+
+	for (const Pad &pad : m_pads)
+		pads.push_back({ pad.id, pad.guid });
+
+	const std::array<SDL_JoystickID, 2> seats = seat_pads(pads, m_wanted, m_seats);
+
+	for (unsigned player = 0; player < 2; player++) {
+		if (seats[player] == m_seats[player])
+			continue;
+		/* A pad that leaves a player stops shaking */
+		if (Pad *const was = seat(player); was && was->rumbling) {
+			SDL_RumbleGamepad(was->handle, 0, 0, 0);
+			was->rumbling = 0;
+		}
+		m_seats[player] = seats[player];
+		if (const Pad *const now = seat(player))
+			std::printf("pad: '%s' for player %u\n", SDL_GetGamepadName(now->handle), player + 1);
+	}
+}
+
+std::vector<Controls::Plugged>
+Controls::plugged() const
+{
+	std::vector<Plugged> out;
+
+	for (const Pad &pad : m_pads) {
+		const char *const name = SDL_GetGamepadName(pad.handle);
+
+		out.push_back({ name ? name : "", pad.guid });
+	}
+	return out;
+}
+
+void
+Controls::want(unsigned player, const std::string &guid, const std::string &name)
+{
+	m_wanted[player & 1] = guid;
+	m_wanted_names[player & 1] = name;
+	reseat();
 }
 
 void
@@ -79,26 +150,27 @@ Controls::open(SDL_JoystickID id)
 		std::fprintf(stderr, "ERROR: gamepad %u: %s\n", static_cast<unsigned>(id), SDL_GetError());
 		return;
 	}
-	Pad *free = nullptr;
-
-	for (Pad &pad : m_pads)
-		if (!pad.handle && !free)
-			free = &pad;
-	if (find(id) || !free) {
-		if (!free)
-			std::printf("pad: '%s' left out, both players have one\n", SDL_GetGamepadName(handle));
+	if (find(id)) {
 		SDL_CloseGamepad(handle);
 		return;
 	}
-	*free = Pad{};
-	free->handle = handle;
-	free->id = id;
+
+	Pad pad;
+	char guid[33];
+
+	SDL_GUIDToString(SDL_GetGamepadGUIDForID(id), guid, sizeof(guid));
+	pad.handle = handle;
+	pad.id = id;
+	pad.guid = guid;
 	for (unsigned axis = 0; axis < SDL_GAMEPAD_AXIS_COUNT; axis++)
-		free->state.axes[axis] = SDL_GetGamepadAxis(handle, static_cast<SDL_GamepadAxis>(axis));
+		pad.state.axes[axis] = SDL_GetGamepadAxis(handle, static_cast<SDL_GamepadAxis>(axis));
 	for (unsigned button = 0; button < SDL_GAMEPAD_BUTTON_COUNT; button++)
-		free->state.buttons[button] =
-			SDL_GetGamepadButton(handle, static_cast<SDL_GamepadButton>(button));
-	std::printf("pad: '%s' plugged, player %d\n", SDL_GetGamepadName(handle), free == &m_pads[0] ? 1 : 2);
+		pad.state.buttons[button] = SDL_GetGamepadButton(handle, static_cast<SDL_GamepadButton>(button));
+	m_pads.push_back(std::move(pad));
+	std::printf("pad: '%s' plugged\n", SDL_GetGamepadName(handle));
+	reseat();
+	if (m_seats[0] != id && m_seats[1] != id)
+		std::printf("pad: '%s' waits, both players have one\n", SDL_GetGamepadName(handle));
 }
 
 void
@@ -110,7 +182,8 @@ Controls::close(SDL_JoystickID id)
 		return;
 	std::printf("pad: '%s' unplugged\n", SDL_GetGamepadName(pad->handle));
 	SDL_CloseGamepad(pad->handle);
-	*pad = Pad{};
+	m_pads.erase(m_pads.begin() + (pad - m_pads.data()));
+	reseat();
 }
 
 namespace {
@@ -228,11 +301,16 @@ Controls::show(std::span<const uint8_t> outputs, std::span<const int16_t> option
 	const Uint16 felt = std::max(m_felt_level, m_drive_level) / FELT_STEP * FELT_STEP;
 
 	for (unsigned player = 0; player < 2; player++) {
-		Pad &pad = m_pads[player];
+		Pad *const seated = seat(player);
 		const bool on = any_on(m_outputs, GameOutput::Role::RUMBLE, outputs, static_cast<int>(player));
 		const Uint16 strength = std::max<Uint16>(on ? RUMBLE : 0, player ? 0 : felt);
 
-		if (!pad.handle || (strength == pad.rumbling && (!strength || now - pad.rumbled < RUMBLE_AGAIN_MS)))
+		if (!seated)
+			continue;
+
+		Pad &pad = *seated;
+
+		if (strength == pad.rumbling && (!strength || now - pad.rumbled < RUMBLE_AGAIN_MS))
 			continue;
 		/* A shake changes its strength a few times a second at most */
 		if (strength && pad.rumbling && strength != pad.rumbling && now - pad.rumbled < FELT_MS)
@@ -247,7 +325,7 @@ void
 Controls::quiet()
 {
 	for (Pad &pad : m_pads)
-		if (pad.handle && pad.rumbling) {
+		if (pad.rumbling) {
 			SDL_RumbleGamepad(pad.handle, 0, 0, 0);
 			pad.rumbling = 0;
 		}
@@ -260,7 +338,7 @@ Controls::host() const
 
 	host.keys = &m_keys.held();
 	for (unsigned player = 0; player < 2; player++)
-		host.pads[player] = m_pads[player].handle ? &m_pads[player].state : nullptr;
+		host.pads[player] = seat(player) ? &seat(player)->state : nullptr;
 	host.mouse = m_mouse_seen ? &m_mouse : nullptr;
 	return host;
 }
@@ -274,7 +352,7 @@ Controls::rebind(const Settings &settings)
 std::string
 Controls::pad_name(unsigned player) const
 {
-	const char *const name = m_pads[player & 1].handle ? SDL_GetGamepadName(m_pads[player & 1].handle) : nullptr;
+	const char *const name = seat(player) ? SDL_GetGamepadName(seat(player)->handle) : nullptr;
 
 	return name ? name : "";
 }
@@ -282,7 +360,7 @@ Controls::pad_name(unsigned player) const
 SDL_GamepadType
 Controls::pad_type(unsigned player) const
 {
-	return m_pads[player & 1].handle ? SDL_GetGamepadType(m_pads[player & 1].handle) : SDL_GAMEPAD_TYPE_UNKNOWN;
+	return seat(player) ? SDL_GetGamepadType(seat(player)->handle) : SDL_GAMEPAD_TYPE_UNKNOWN;
 }
 
 void

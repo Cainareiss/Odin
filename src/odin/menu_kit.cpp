@@ -253,6 +253,71 @@ MenuKit::choice(const char *name, const char *about, std::span<const char *const
 }
 
 bool
+MenuKit::dropdown(const char *name, const char *about, std::span<const std::string> labels, int &chosen)
+{
+	ImGui::PushID(name);
+
+	ImDrawList *const list = ImGui::GetWindowDrawList();
+	const MenuPalette &p = m_palette;
+	const float pad = px(ROW_PAD), wide = px(CELL_WIDE), high = px(CELL_HIGH);
+	const float control_h = ImGui::GetTextLineHeight() + 2.0f * high, arrow = ImGui::CalcTextSize("v").x;
+	float longest = 0.0f, width;
+
+	for (const std::string &label : labels)
+		longest = std::max(longest, ImGui::CalcTextSize(label.c_str()).x);
+
+	const ImVec2 at = begin_row(width);
+	const float control = std::min(longest + 3.0f * wide + arrow, width / 2.0f);
+	const float text_w = std::max(px(80.0f), width - control - px(GAP) - 2.0f * pad);
+	const float h = std::max(texts({ at.x + pad, at.y + pad }, text_w, name, about, nullptr), control_h) + 2.0f * pad;
+	const ImVec2 a = { at.x + width - pad - control, at.y + (h - control_h) / 2.0f };
+	const ImVec2 b = { a.x + control, a.y + control_h };
+	const int was = chosen;
+
+	ImGui::SetCursorScreenPos(a);
+	if (ImGui::InvisibleButton("open", { control, control_h }))
+		ImGui::OpenPopup("list");
+	frame(list, a, b, px(CONTROL_CUT), ImGui::IsItemHovered() ? p.hover : 0, p.outline);
+	if (chosen >= 0 && static_cast<size_t>(chosen) < labels.size()) {
+		list->PushClipRect(a, { b.x - wide - arrow, b.y }, true);
+		list->AddText({ a.x + wide, a.y + high }, p.ink, labels[static_cast<size_t>(chosen)].c_str());
+		list->PopClipRect();
+	}
+	list->AddText({ b.x - wide - arrow, a.y + high }, p.dim, "v");
+
+	/* The list under the box, as wide at least */
+	ImGui::SetNextWindowPos({ a.x, b.y + px(2.0f) });
+	ImGui::SetNextWindowSizeConstraints({ control, 0.0f }, { width, ImGui::GetIO().DisplaySize.y });
+	ImGui::PushStyleColor(ImGuiCol_PopupBg, ImGui::ColorConvertU32ToFloat4(p.screen));
+	ImGui::PushStyleColor(ImGuiCol_Border, ImGui::ColorConvertU32ToFloat4(p.faint));
+	ImGui::PushStyleColor(ImGuiCol_Header, ImGui::ColorConvertU32ToFloat4(p.action));
+	ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImGui::ColorConvertU32ToFloat4(p.line));
+	ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImGui::ColorConvertU32ToFloat4(p.action));
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { wide, high });
+	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { 0.0f, px(2.0f) });
+	ImGui::PushStyleVar(ImGuiStyleVar_PopupBorderSize, 1.0f);
+	ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, 0.0f);
+	if (ImGui::BeginPopup("list")) {
+		for (size_t i = 0; i < labels.size(); i++) {
+			const bool on = static_cast<int>(i) == chosen;
+
+			ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(on ? p.on_action : p.ink));
+			if (ImGui::Selectable(labels[i].c_str(), on))
+				chosen = static_cast<int>(i);
+			ImGui::PopStyleColor();
+		}
+		ImGui::EndPopup();
+	}
+	ImGui::PopStyleVar(4);
+	ImGui::PopStyleColor(5);
+
+	ImGui::SetCursorScreenPos(at);
+	ImGui::Dummy({ width, h });
+	ImGui::PopID();
+	return chosen != was;
+}
+
+bool
 MenuKit::binding(const char *id, ImVec2 at, float width, bool first, const char *name, const char *inputs, bool lit,
                  bool catching, float &h) const
 {

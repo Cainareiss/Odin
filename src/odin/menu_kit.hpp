@@ -20,6 +20,7 @@
 #define ODIN_MENU_KIT_HPP
 
 #include <span>
+#include <string>
 
 #include "imgui/imgui.h"
 
@@ -72,6 +73,9 @@ public:
 	bool choice(const char *name, const char *about, std::span<const char *const> labels, int &chosen,
 	            const char *locked = nullptr, bool off = false);
 	void text(const char *name, const char *about, const char *value);
+	/* A row with a list that drops down from its right: true when the
+	 * choice changed */
+	bool dropdown(const char *name, const char *about, std::span<const std::string> labels, int &chosen);
 
 	/* A row of a list of controls, at that place and that width: its name
 	 * and its inputs; lit while the control is worked, "press..." while

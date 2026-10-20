@@ -35,10 +35,13 @@
 namespace odin {
 
 /* The control panel of the cabinet as the host works it: the keyboard, a
- * gamepad for each player, opened and closed as they are plugged in and
- * out, the first one for player 1, and the mouse, once it has moved on the
- * window more than MOUSE_MOVED pixels from where the system first put it
- * (the system tells where it is when the window opens under it).
+ * gamepad for each player and the mouse, once it has moved on the window
+ * more than MOUSE_MOVED pixels from where the system first put it (the
+ * system tells where it is when the window opens under it). The gamepads
+ * are opened and closed as they are plugged in and out; each player has
+ * the one they want for the game ([players.<game>] of the settings, "p1 =
+ * <GUID> <name>": the first of that make and model), else the first free
+ * one, and keeps it while others come and go (seats.hpp).
  * ODIN_CONTROLLERS=none leaves the gamepads and the mouse out. In a
  * game where player 1 has a sight, the pointer of the system is hidden on
  * the window. */
@@ -73,6 +76,16 @@ public:
 	 * empty and unknown when there is none */
 	std::string pad_name(unsigned player) const;
 	SDL_GamepadType pad_type(unsigned player) const;
+	/* The gamepads plugged in, in the order they came: name and GUID */
+	struct Plugged {
+		std::string name, guid;
+	};
+	std::vector<Plugged> plugged() const;
+	/* The gamepad a player wants: its GUID and name, empty for the first
+	 * free one; it takes its seat at once */
+	const std::string &wanted(unsigned player) const { return m_wanted[player & 1]; }
+	const std::string &wanted_name(unsigned player) const { return m_wanted_names[player & 1]; }
+	void want(unsigned player, const std::string &guid, const std::string &name);
 
 	void read_inputs(MieBoard::Inputs &inputs) override { m_panel.fill(inputs); }
 	/* The outputs of the board after a frame: the pad of a player shakes
@@ -108,7 +121,8 @@ private:
 	 * saw it stays pressed until that frame has run. */
 	struct Pad {
 		SDL_Gamepad *handle = nullptr;
-		SDL_JoystickID id = -1;
+		SDL_JoystickID id = 0;
+		std::string guid;
 		PadState state;
 		std::array<bool, SDL_GAMEPAD_BUTTON_COUNT> fresh{};
 		std::array<bool, SDL_GAMEPAD_BUTTON_COUNT> release{};
@@ -120,6 +134,10 @@ private:
 	void open(SDL_JoystickID id);
 	void close(SDL_JoystickID id);
 	Pad *find(SDL_JoystickID id);
+	Pad *seat(unsigned player);
+	const Pad *seat(unsigned player) const;
+	/* Each player takes the gamepad seats.hpp gives them */
+	void reseat();
 	HostState host() const;
 
 	Keyboard &m_keys;
@@ -138,7 +156,9 @@ private:
 	uint16_t m_wheel_was = 0;
 	std::array<double, 6> m_wheel_moves{};	/* its moves over the last frames */
 	size_t m_wheel_move = 0;
-	std::array<Pad, 2> m_pads;	/* of each player */
+	std::vector<Pad> m_pads;	/* plugged in, in the order they came */
+	std::array<SDL_JoystickID, 2> m_seats{};	/* that of each player, 0: none */
+	std::array<std::string, 2> m_wanted, m_wanted_names;
 	MouseState m_mouse;
 	bool m_mouse_seen;		/* it has moved on the window */
 	bool m_mouse_placed;		/* the system has told where it is */

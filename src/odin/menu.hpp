@@ -22,6 +22,7 @@
 #include <array>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <GL/glew.h>
@@ -70,6 +71,12 @@ struct MenuState {
 	std::vector<bool> touched;
 	std::array<std::string, 2> pads;
 	std::array<int, 2> pad_types{};
+	/* The gamepads plugged in (name, GUID), the one each player wants
+	 * (GUID and name; empty: the first free one), the one asked for the
+	 * player shown */
+	std::vector<std::pair<std::string, std::string>> plugged;
+	std::array<std::string, 2> wanted, wanted_names;
+	std::optional<std::pair<std::string, std::string>> want;
 	/* The player shown, and the inputs: of the gamepad, else of the
 	 * keyboard (and the mouse, shown) */
 	unsigned player = 0;
