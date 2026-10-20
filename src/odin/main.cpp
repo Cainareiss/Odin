@@ -438,9 +438,12 @@ public:
 			state.sound_games.push_back(sound);
 		}
 		state.games = games.titles("hikaru");
-		for (const auto &[key, value] : settings.section("menu"))
-			if (key == "classic")
+		for (const auto &[key, value] : settings.section("menu")) {
+			if (key == "classic" && (value == "on" || value == "off"))
 				state.classic = value == "on";
+			else
+				std::fprintf(stderr, "ERROR: settings: [menu]: not right: %s = %s\n", key.c_str(), value.c_str());
+		}
 		state.shown = state.running = state.games.size();
 		for (size_t g = 0; g < state.games.size(); g++)
 			if (state.games[g].first == board.game_name())
