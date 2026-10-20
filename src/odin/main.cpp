@@ -377,7 +377,8 @@ known_settings(const odin::GameList &games)
 	}
 	out.insert(out.end(), { { "outputs", "network", "off" }, { "paths", "roms", "" },
 	                        { "paths", "saves", odin::SaveFolder::root() }, { "paths", "states", default_states() },
-	                        { "log", "verbose", "off" }, { "menu", "classic", "off" } });
+	                        { "log", "verbose", "off" }, { "menu", "classic", "off" },
+	                        { "menu", "animations", "on" } });
 	for (size_t a = 0; a < odin::MenuNav::ACTIONS; a++) {
 		const auto action = static_cast<odin::MenuNav::Action>(a);
 
@@ -505,6 +506,8 @@ public:
 		for (const auto &[key, value] : settings.section("menu")) {
 			if (key == "classic" && (value == "on" || value == "off"))
 				state.classic = value == "on";
+			else if (key == "animations" && (value == "on" || value == "off"))
+				state.animations = value == "on";
 			else if (!odin::MenuNav::knows(key))
 				std::fprintf(stderr, "ERROR: settings: [menu]: not right: %s = %s\n", key.c_str(), value.c_str());
 		}
@@ -1252,7 +1255,7 @@ Session::wait_in_menu()
 	 * beats, Start mapping counts the seconds of the control it waits for */
 	const bool caught = m_menu_state.catching || m_menu_state.mapping;
 
-	if (m_menu_state.undo && SDL_GetTicks() >= m_undo_until)
+	if ((m_menu_state.undo && SDL_GetTicks() >= m_undo_until) || m_menu_state.moving)
 		m_menu_pictures = std::max(m_menu_pictures, 1u);
 	if (caught && SDL_GetTicks() - m_menu_drawn >= CATCH_TICK_MS)
 		m_menu_pictures = std::max(m_menu_pictures, 1u);
@@ -1387,6 +1390,8 @@ Session::draw_menu()
 		}
 	}
 	state.tuning = odin::PadTuning::of(m_settings, pad_shown(state), false);
+	/* What moves says so as it is drawn */
+	state.moving = false;
 
 	const odin::MenuState was = state;
 

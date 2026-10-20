@@ -234,6 +234,8 @@ public:
 	 * click. */
 	ImVec2 arrow_size() const;
 	bool arrow(const char *id, ImVec2 at, bool right) const;
+	/* A word beside the mouse, framed as the lists are */
+	void tip(const char *text) const;
 
 private:
 	/* The top of the row, its line above it when it is not the first of

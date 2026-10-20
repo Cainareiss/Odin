@@ -165,6 +165,14 @@ struct MenuState {
 	std::string shake_from;
 	PadTuning tuning;
 	bool advanced = false;
+	/* The animations of the menu ([menu] animations): the row of the
+	 * games moves from the game shown before, since then (seconds of the
+	 * menu), the one shown at the last picture; while something moves the
+	 * menu draws on */
+	bool animations = true, moving = false;
+	std::optional<size_t> games_was;
+	size_t games_from = 0;
+	double games_since = 0.0;
 	/* In a window not wide enough for both, the cabinet in place of the
 	 * device */
 	bool cabinet_shown = false;

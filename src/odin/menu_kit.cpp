@@ -1080,6 +1080,25 @@ MenuKit::arrow(const char *id, ImVec2 at, bool right) const
 }
 
 void
+MenuKit::tip(const char *text) const
+{
+	const MenuPalette &p = m_palette;
+
+	ImGui::PushStyleColor(ImGuiCol_PopupBg, ImGui::ColorConvertU32ToFloat4(p.screen));
+	ImGui::PushStyleColor(ImGuiCol_Border, ImGui::ColorConvertU32ToFloat4(p.stroke));
+	ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(p.ink));
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { std::round(px(6.0f)), std::round(px(3.0f)) });
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, stroke());
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+	if (ImGui::BeginTooltip()) {
+		ImGui::TextUnformatted(text);
+		ImGui::EndTooltip();
+	}
+	ImGui::PopStyleVar(3);
+	ImGui::PopStyleColor(3);
+}
+
+void
 MenuKit::text(const char *name, const char *about, const char *value)
 {
 	this->value(name, about, value, nullptr);

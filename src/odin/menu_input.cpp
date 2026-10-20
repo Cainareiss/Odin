@@ -653,105 +653,175 @@ Menu::button_name(int button, int kind)
 	return pad_label(pad, kind);
 }
 
-/* The games, the one shown marked and the one that runs dotted; when they
- * do not fit, the one shown between arrows; the pills of the buttons of a
- * gamepad that change it at the ends, or else a row of the frame, left and
- * right changing it (`focusable`). Its bottom. */
+/* The games: all their names where they fit, the one shown marked, a ▶
+ * before the one that runs; else the one shown by its name between arrows,
+ * the others as dots on each side, as many as come before and after it (a
+ * ring for the one that runs), over a dot its name, a click going there, a change
+ * moving the name to its dot and the dot of the game shown to the middle
+ * (unless [menu] animations = off). The pills of the buttons of a gamepad
+ * that change it at the ends, or else a row of the frame, left and right
+ * changing it (`focusable`). Its bottom. */
 float
 Menu::games_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width, bool focusable)
 {
+	static constexpr double MOVE_S = 0.18;
 	ImDrawList *const list = ImGui::GetWindowDrawList();
 	const MenuPalette &palette = kit.palette();
-	const float line = ImGui::GetTextLineHeight(), spacing = kit.px(14.0f), dot = kit.px(2.5f);
-	const float letters = ImGui::GetFontSize() * 0.1f;
+	const size_t n = state.games.size();
+
+	if (!n)
+		return at.y;
+
+	const float size = ImGui::GetFontSize(), line = ImGui::GetTextLineHeight(), spacing = kit.px(14.0f);
+	const float dot = kit.px(2.5f), pitch = kit.px(9.0f), letters = size * 0.1f;
+	const ImVec2 arrow = kit.arrow_size();
+	const size_t shown = std::min(state.shown, n - 1);
+	/* The game that runs: ▶ */
+	const auto play = [list](ImVec2 c, float r, ImU32 colour) {
+		list->AddTriangleFilled({ c.x - 0.8f * r, c.y - r }, { c.x - 0.8f * r, c.y + r }, { c.x + r, c.y }, colour);
+	};
 	std::vector<std::string> names;
-	float total = 0.0f;
+	std::vector<float> widths;
+	float widest = 0.0f;
 
 	for (const auto &[name, title] : state.games) {
 		names.push_back(capitals(title));
-		total += MenuKit::measure(names.back().c_str(), 0.0f, letters) + spacing + 4.0f * dot;
+		widths.push_back(MenuKit::measure(names.back().c_str(), 0.0f, letters) + 4.0f * dot);
+		widest = std::max(widest, widths.back());
 	}
-	if (names.empty())
-		return at.y;
 
 	static const std::string none;
 	const std::string &before = focusable ? none : state.pills[2], &after = focusable ? none : state.pills[3];
-	const auto step = [&](ImVec2 a, ImVec2 b) {
-		const size_t n = names.size(), shown = std::min(state.shown, n - 1);
+	const float before_w = before.empty() ? 0.0f : kit.pill_size(before.c_str()).x + spacing;
+	const float after_w = after.empty() ? 0.0f : kit.pill_size(after.c_str()).x + spacing;
+	float total = before_w + after_w - spacing;
 
-		if (focusable && kit.focus(a, b, kit.px(3.0f)) && kit.side())
+	for (const float w : widths)
+		total += w + spacing;
+	if (total <= width) {
+		float x = at.x + (width - total) / 2.0f;
+
+		if (focusable && kit.focus({ x, at.y }, { x + total, at.y + line + kit.px(4.0f) }, kit.px(3.0f)) && kit.side())
 			state.show = (shown + n + (kit.side() < 0 ? n - 1 : 1)) % n;
-	};
-	const float pills = (before.empty() ? 0.0f : kit.pill_size(before.c_str()).x + spacing) +
-	                    (after.empty() ? 0.0f : kit.pill_size(after.c_str()).x + spacing);
-	const auto pill = [&](const std::string &name, float &x, float h) {
-		if (name.empty())
-			return;
+		if (!before.empty()) {
+			kit.pill(list, { x, at.y + (line - kit.pill_size(before.c_str()).y) / 2.0f }, before.c_str());
+			x += before_w;
+		}
+		for (size_t g = 0; g < n; g++) {
+			const float w = widths[g] - 4.0f * dot;
+			const ImU32 colour = g == shown ? palette.action : palette.dim;
 
-		const ImVec2 size = kit.pill_size(name.c_str());
-
-		kit.pill(list, { x, at.y + (h - size.y) / 2.0f }, name.c_str());
-		x += size.x + spacing;
-	};
-	const auto title = [&](size_t g, ImVec2 p, bool clickable) {
-		const float w = MenuKit::measure(names[g].c_str(), 0.0f, letters);
-		const bool shown = g == state.shown;
-
-		if (clickable) {
-			ImGui::SetCursorScreenPos(p);
+			ImGui::SetCursorScreenPos({ x, at.y });
 			ImGui::PushID(static_cast<int>(g));
-			if (ImGui::InvisibleButton("game", { w + 4.0f * dot, line + kit.px(4.0f) }) && !shown)
+			if (ImGui::InvisibleButton("game", { widths[g], line + kit.px(4.0f) }) && g != shown)
 				state.show = g;
 			ImGui::PopID();
+			MenuKit::write(list, { x, at.y }, colour, names[g].c_str(), 0.0f, letters);
+			if (g == shown)
+				list->AddLine({ x, at.y + line + kit.px(2.0f) }, { x + w, at.y + line + kit.px(2.0f) }, colour,
+				              kit.stroke());
+			if (g == state.running)
+				play({ x - kit.px(8.0f), at.y + line / 2.0f }, 1.6f * dot, MenuKit::alpha(colour, 0.9f));
+			x += widths[g] + spacing;
 		}
-
-		const ImU32 colour = shown ? palette.action : palette.dim;
-
-		MenuKit::write(list, p, colour, names[g].c_str(), 0.0f, letters);
-		if (shown)
-			list->AddLine({ p.x, p.y + line + kit.px(2.0f) }, { p.x + w, p.y + line + kit.px(2.0f) }, colour, kit.stroke());
-		if (g == state.running)
-			list->AddCircleFilled({ p.x + w + 2.4f * dot + dot, p.y + line / 2.0f }, dot, MenuKit::alpha(colour, 0.8f));
-		return w + 4.0f * dot;
-	};
-
-	if (total - spacing + pills <= width) {
-		float x = at.x + (width - total + spacing - pills) / 2.0f;
-
-		step({ x, at.y }, { x + total - spacing + pills, at.y + line + kit.px(4.0f) });
-		pill(before, x, line);
-		for (size_t g = 0; g < names.size(); g++)
-			x += title(g, { x, at.y }, true) + spacing;
-		pill(after, x, line);
+		if (!after.empty())
+			kit.pill(list, { x, at.y + (line - kit.pill_size(after.c_str()).y) / 2.0f }, after.c_str());
+		/* Nothing moves when the window narrows */
+		state.games_was = state.games_from = shown;
 		return at.y + line + kit.px(4.0f);
 	}
+	/* The arrows stay where they are: room for the longest name and all
+	 * the dots on each side, the name cut where even that does not fit */
+	const float side = static_cast<float>(n - 1) * pitch + spacing;
+	const float rest = before_w + after_w + 2.0f * (arrow.x + spacing + side);
+	const float room = std::clamp(width - rest, 0.0f, widest);
+	const float h = arrow.y, mid = at.y + h / 2.0f;
+	float x = at.x + (width - rest - room) / 2.0f;
 
-	/* ‹ the game › and a dot for each */
-	const size_t n = names.size(), shown = std::min(state.shown, n - 1);
-	const ImVec2 arrow = kit.arrow_size();
-	const float w = MenuKit::measure(names[shown].c_str(), 0.0f, letters) + 4.0f * dot;
-	const float dots = static_cast<float>(n) * kit.px(9.0f);
-	const float row_w = 2.0f * arrow.x + w + 2.0f * spacing + spacing + dots + pills;
-	float x = at.x + (width - row_w) / 2.0f;
-
-	step({ x, at.y }, { x + row_w, at.y + arrow.y });
-	pill(before, x, arrow.y);
+	if (focusable && kit.focus({ x, at.y }, { x + rest + room, at.y + h }, kit.px(3.0f)) && kit.side())
+		state.show = (shown + n + (kit.side() < 0 ? n - 1 : 1)) % n;
+	if (!before.empty()) {
+		kit.pill(list, { x, mid - kit.pill_size(before.c_str()).y / 2.0f }, before.c_str());
+		x += before_w;
+	}
 	ImGui::PushID("games");
 	if (kit.arrow("before", { x, at.y }, false))
 		state.show = (shown + n - 1) % n;
-	x += arrow.x + spacing;
-	title(shown, { x, at.y + (arrow.y - line) / 2.0f }, false);
-	x += w + spacing;
-	if (kit.arrow("after", { x, at.y }, true))
+	if (kit.arrow("after", { x + 2.0f * (spacing + side) + arrow.x + room, at.y }, true))
 		state.show = (shown + 1) % n;
+	if (!after.empty())
+		kit.pill(list, { x + 2.0f * (arrow.x + spacing + side) + room + spacing,
+		                 mid - kit.pill_size(after.c_str()).y / 2.0f }, after.c_str());
+
+	const float centre = x + arrow.x + spacing + side + room / 2.0f;
+	/* Where a game is when `name` is the one by its name */
+	const auto place = [&](size_t name, size_t g) {
+		const float w = std::min(widths[name], room);
+
+		if (g == name)
+			return centre;
+		if (g < name)
+			return centre - w / 2.0f - spacing - (static_cast<float>(name - g) - 0.5f) * pitch;
+		return centre + w / 2.0f + spacing + (static_cast<float>(g - name) - 0.5f) * pitch;
+	};
+
+	/* The move from the game shown at the last picture, eased out */
+	if (!state.games_was || *state.games_was >= n)
+		state.games_was = state.games_from = shown;
+	if (*state.games_was != shown) {
+		state.games_from = *state.games_was;
+		state.games_since = ImGui::GetTime();
+		state.games_was = shown;
+	}
+
+	const bool moves = state.animations && state.games_from < n && state.games_from != shown;
+	const double t = moves ? (ImGui::GetTime() - state.games_since) / MOVE_S : 1.0;
+	const float u = 1.0f - std::pow(1.0f - static_cast<float>(std::clamp(t, 0.0, 1.0)), 3.0f);
+	const size_t from = u < 1.0f ? state.games_from : shown;
+
+	state.moving = state.moving || from != shown;
+	for (size_t g = 0; g < n; g++) {
+		const float gx = place(from, g) + (place(shown, g) - place(from, g)) * u;
+		/* How far it is a name: the game shown comes to it, the one before
+		 * goes from it */
+		const float named = (g == shown ? u : 0.0f) + (g == from && from != shown ? 1.0f - u : 0.0f);
+
+		if (named < 1.0f) {
+			const float a = 1.0f - named;
+
+			if (g == state.running)
+				list->AddCircle({ gx, mid }, dot, MenuKit::alpha(palette.dim, a), 0, kit.stroke());
+			else
+				list->AddCircleFilled({ gx, mid }, dot, MenuKit::alpha(palette.outline, a));
+			if (g != shown) {
+				ImGui::SetCursorScreenPos({ gx - pitch / 2.0f, at.y });
+				ImGui::PushID(static_cast<int>(g));
+				if (ImGui::InvisibleButton("game", { pitch, h }))
+					state.show = g;
+				if (ImGui::IsItemHovered())
+					kit.tip(state.games[g].second.c_str());
+				ImGui::PopID();
+			}
+		}
+		if (named > 0.0f) {
+			/* Smaller and fainter as it goes: the two names cross little */
+			const float k = 0.3f + 0.7f * named, s = size * k;
+			/* Cut, the room between its letters taken first */
+			const float letters_w = letters * static_cast<float>(names[g].size() - 1);
+			const std::string text = widths[g] <= room ? names[g] : MenuKit::fitted(names[g], room - 4.0f * dot - letters_w);
+			const float w = MenuKit::measure(text.c_str(), s, letters * k), left = gx - (w + 4.0f * dot * k) / 2.0f;
+			const ImU32 colour = MenuKit::alpha(palette.action, named * named);
+
+			MenuKit::write(list, { left, mid - line * k / 2.0f }, colour, text.c_str(), s, letters * k);
+			list->AddLine({ left, mid + line * k / 2.0f + kit.px(2.0f) }, { left + w, mid + line * k / 2.0f + kit.px(2.0f) },
+			              colour, kit.stroke());
+			if (g == state.running)
+				list->AddCircle({ left + w + 3.4f * dot * k, mid }, dot * k, MenuKit::alpha(colour, 0.8f), 0,
+				                kit.stroke());
+		}
+	}
 	ImGui::PopID();
-	x += arrow.x + spacing;
-	for (size_t g = 0; g < n; g++)
-		list->AddCircleFilled({ x + kit.px(4.5f) + static_cast<float>(g) * kit.px(9.0f), at.y + arrow.y / 2.0f }, dot,
-		                      g == shown ? palette.ink : palette.outline);
-	x += dots + spacing;
-	pill(after, x, arrow.y);
-	return at.y + arrow.y;
+	return at.y + h;
 }
 
 namespace {
