@@ -529,6 +529,11 @@ Session::load_or_save_state(bool load)
 	const std::string path = (m_states.empty() ? "" : m_states + "/") + m_board.game_name() + ".odinstate";
 	std::error_code error;
 
+	/* None saved yet: the game goes on */
+	if (load && !std::filesystem::exists(path, error)) {
+		std::fprintf(stderr, "no state '%s' to load yet\n", path.c_str());
+		return;
+	}
 	if (!load && !m_states.empty())
 		std::filesystem::create_directories(m_states, error);
 	if (load ? m_board.load_state(path) : m_board.save_state(path))
