@@ -98,13 +98,17 @@ public:
 
 	void read_inputs(MieBoard::Inputs &inputs) override { m_panel.fill(inputs); }
 	/* The outputs of the board after a frame: the pad of a player shakes
-	 * while a rumble output of that player is on; the pad of player 1 also
+	 * while a rumble output of that player is on, when it feels them; the
+	 * pad of player 1 also
 	 * as hard as the vibration device the sound of the optional board
 	 * feeds, when it feels it and no mute output is on, or as the shocks
 	 * the drive board is told, when it feels them. */
 	void show(std::span<const uint8_t> outputs, std::span<const int16_t> option_sound);
 	/* No pad shakes (the emulation stops) */
 	void quiet();
+	/* The pads feel the rumble outputs (the nozzle of Brave): unless the
+	 * user turns the vibration off */
+	void feel_outputs(bool on) { m_rumble = on; }
 	/* EXPERIMENTAL: the pad of player 1 feels the sound of the optional
 	 * board, as the vibration device of the cabinet it feeds */
 	void feel_option_board(bool on) { m_felt = on; }
@@ -157,6 +161,7 @@ private:
 	bool m_on;
 	bool m_guide_tapped = false;
 	int m_guide_combo = -1;
+	bool m_rumble = true;
 	bool m_felt = false;
 	Uint16 m_felt_level = 0;	/* how hard the felt sound shakes, smoothed */
 	unsigned m_drive_output = 0;

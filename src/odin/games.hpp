@@ -19,6 +19,7 @@
 #ifndef ODIN_GAMES_HPP
 #define ODIN_GAMES_HPP
 
+#include <algorithm>
 #include <cstdint>
 #include <optional>
 #include <span>
@@ -203,6 +204,14 @@ struct Game {
 
 	/* The bytes of a section; empty when the game has no such section. */
 	std::span<const uint8_t> section(const std::string &name) const;
+	/* A pad shakes as its cabinet does: a rumble output, the vibration
+	 * device of the optional board, the shocks of the drive board */
+	bool shakes() const
+	{
+		return option_vibration || drive_first_output ||
+		       std::any_of(outputs.begin(), outputs.end(),
+		                   [](const GameOutput &output) { return output.role == GameOutput::Role::RUMBLE; });
+	}
 };
 
 /* The list of the games, a JSON file (odin-games.json). A game has sections

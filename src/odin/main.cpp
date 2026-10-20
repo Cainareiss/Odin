@@ -1007,7 +1007,7 @@ Session::show_game(size_t game)
 		return;
 	m_other_controls = other->controls;
 	m_other_outputs = other->outputs;
-	m_other_shakes = other->option_vibration || other->drive_first_output;
+	m_other_shakes = other->shakes();
 	m_other.emplace(m_other_controls, m_settings, other->name);
 }
 
@@ -1083,7 +1083,7 @@ Session::draw_menu()
 		state.devices = m_audio->devices();
 	/* The pad shakes as the cabinet of the game shown, unless [sound.<game>]
 	 * says off (the last line says) */
-	state.can_shake = m_other ? m_other_shakes : m_game.option_vibration || m_game.drive_first_output;
+	state.can_shake = m_other ? m_other_shakes : m_game.shakes();
 	state.shake = true;
 	for (const auto &[key, value] : m_settings.section("sound." + game_shown()))
 		if (key == "vibration" && (value == "on" || value == "off"))
@@ -1259,6 +1259,7 @@ Session::apply(const odin::MenuState &was)
 		if (!m_other) {
 			m_controls.feel_option_board(now.shake && m_game.option_vibration);
 			m_controls.feel_drive_board(now.shake ? m_game.drive_first_output : 0);
+			m_controls.feel_outputs(now.shake);
 		}
 		keep(section.c_str(), "vibration", on_off(now.shake, true));
 	}
@@ -1491,9 +1492,9 @@ main(int argc, char **argv)
 			options.sound = mode_named(value);
 
 	/* The optional board in the mix and on the pad: the list, or the last
-	 * lines of [sound.<game>] */
+	 * lines of [sound.<game>]; the pads shake unless it says off */
 	double option_level = game->option_level;
-	bool vibration = game->option_vibration || game->drive_first_output;
+	bool vibration = true;
 	for (const auto &[key, value] : settings.section("sound." + game->name)) {
 		char *end = nullptr;
 		const double db = std::strtod(value.c_str(), &end);
@@ -1522,7 +1523,8 @@ main(int argc, char **argv)
 		std::printf("sound: the optional board at %+g dB in the mix\n", option_level);
 	controls.feel_option_board(vibration && game->option_vibration);
 	controls.feel_drive_board(vibration ? game->drive_first_output : 0);
-	if (vibration)
+	controls.feel_outputs(vibration);
+	if (vibration && (game->option_vibration || game->drive_first_output))
 		std::printf("controls: the pad of player 1 shakes as the%s%s of the cabinet (experimental)\n",
 		            game->option_vibration ? " vibration device" : "",
 		            game->drive_first_output ? (game->option_vibration ? " and the wheel" : " wheel") : "");

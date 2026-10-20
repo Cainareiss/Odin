@@ -310,7 +310,7 @@ Controls::show(std::span<const uint8_t> outputs, std::span<const int16_t> option
 
 	for (unsigned player = 0; player < 2; player++) {
 		Pad *const seated = seat(player);
-		const bool on = any_on(m_outputs, GameOutput::Role::RUMBLE, outputs, static_cast<int>(player));
+		const bool on = m_rumble && any_on(m_outputs, GameOutput::Role::RUMBLE, outputs, static_cast<int>(player));
 		const Uint16 strength = std::max<Uint16>(on ? RUMBLE : 0, player ? 0 : felt);
 
 		if (!seated)

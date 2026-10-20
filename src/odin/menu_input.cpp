@@ -1424,27 +1424,30 @@ list_box(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, I
 }
 
 /* The buttons under the drawing, as many on a line as fit: Defaults, Clear
- * mapping (Undo for a while after), Start mapping; the vibration of the
- * pad where the game shakes it. Their height, with the room around them;
- * drawn and clicked when `draw`. */
+ * mapping (Undo for a while after), Start mapping; on a gamepad, its
+ * vibration, or that the game does not shake it. Their height, with the
+ * room around them; drawn and clicked when `draw`. */
 float
 buttons_bar(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, ImVec2 at, float width, bool draw)
 {
 	using Icon = MenuKit::Icon;
 	using Tone = MenuKit::Tone;
 	static constexpr const char *ON_OFF[] = { "on", "off" };
+	static constexpr const char *NO_SHAKE = "this game does not shake";
 	const float across = kit.px(12.0f), down = kit.px(5.0f), h = kit.button_size("Defaults", Icon::DEFAULTS).y;
 	const char *const clear = state.undo ? "Undo" : "Clear mapping";
 	const ImVec2 cells = kit.segments_size(ON_OFF);
-	const char *const shake_name = ImGui::CalcTextSize("Vibration (experimental)").x + kit.px(8.0f) + cells.x <= width ?
+	const bool vibration = state.on_pad();
+	const float control_w = state.can_shake ? cells.x : ImGui::CalcTextSize(NO_SHAKE).x;
+	const char *const shake_name = ImGui::CalcTextSize("Vibration (experimental)").x + kit.px(8.0f) + control_w <= width ?
 	                               "Vibration (experimental)" : "Vibration";
 	std::vector<float> widths = { kit.button_size("Defaults", Icon::DEFAULTS).x,
 		                      kit.button_size(clear, state.undo ? Icon::UNDO : Icon::CLEAR).x };
 
 	if (!state.mapping)
 		widths.push_back(kit.button_size("Start mapping", Icon::MAP).x);
-	if (state.can_shake)
-		widths.push_back(ImGui::CalcTextSize(shake_name).x + kit.px(8.0f) + cells.x);
+	if (vibration)
+		widths.push_back(ImGui::CalcTextSize(shake_name).x + kit.px(8.0f) + control_w);
 
 	/* Each at its place, left to right, a line under the other */
 	std::vector<ImVec2> places;
@@ -1478,13 +1481,16 @@ buttons_bar(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows
 		state.catching.reset();
 		state.catch_next.clear();
 	}
-	if (state.can_shake) {
+	if (vibration) {
 		const ImVec2 p = places[i];
-		const float name_w = ImGui::CalcTextSize(shake_name).x;
+		const float name_w = ImGui::CalcTextSize(shake_name).x, text_y = p.y + (h - ImGui::GetTextLineHeight()) / 2.0f;
+		const MenuPalette &palette = kit.palette();
 		int shake = state.shake ? 0 : 1;
 
-		list->AddText({ p.x, p.y + (h - ImGui::GetTextLineHeight()) / 2.0f }, kit.palette().dim, shake_name);
-		if (kit.segments({ p.x + name_w + kit.px(8.0f), p.y + (h - cells.y) / 2.0f }, ON_OFF, shake))
+		list->AddText({ p.x, text_y }, state.can_shake ? palette.dim : palette.faint, shake_name);
+		if (!state.can_shake)
+			list->AddText({ p.x + name_w + kit.px(8.0f), text_y }, palette.faint, NO_SHAKE);
+		else if (kit.segments({ p.x + name_w + kit.px(8.0f), p.y + (h - cells.y) / 2.0f }, ON_OFF, shake))
 			state.shake = shake == 0;
 	}
 	return height;

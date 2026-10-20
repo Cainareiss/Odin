@@ -515,7 +515,8 @@ void test_shipped_chips()
 }
 
 /* The outputs of the list of the repo: the nozzles of BRAVEFF shake, read
- * in its OUTPUT TEST (output 2 player 1, output 5 player 2) */
+ * in its OUTPUT TEST (output 2 player 1, output 5 player 2); the games
+ * that shake a pad */
 void test_shipped_outputs()
 {
 	json_error_t error;
@@ -538,6 +539,15 @@ void test_shipped_outputs()
 	}
 	json_decref(root);
 	check(rumbles == "braveff:2:0 braveff:5:2 ", "the nozzles of BRAVEFF shake the pads: outputs 2 and 5");
+
+	GameList shipped;
+	std::string shake;
+
+	check(shipped.load("odin-games.json"), "the list of the repo loads");
+	for (const char *name : { "airtrix", "braveff", "pharrier", "podrace", "sgnascar", "von4" })
+		if (const std::optional<Game> game = shipped.describe(name); game && game->shakes())
+			shake += std::string(name) + " ";
+	check(shake == "braveff podrace sgnascar ", "the games that shake a pad: the nozzles, the shaker, the wheel");
 }
 
 void test_lists(const std::string &dir)
