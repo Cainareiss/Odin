@@ -453,8 +453,62 @@ GameList::has(const std::string &name) const
 	return m_root && find(name) != nullptr;
 }
 
+std::vector<std::pair<std::string, std::string>>
+GameList::titles(const std::string &machine) const
+{
+	const json_t *const roms = json_object_get(m_root, "roms");
+	std::vector<std::pair<std::string, std::string>> out;
+
+	for (size_t i = 0; i < json_array_size(roms); i++) {
+		const json_t *const rom = json_array_get(roms, i);
+		const char *const name = json_string_value(json_object_get(rom, "name"));
+		const char *const title = json_string_value(json_object_get(rom, "title"));
+
+		if (machine == json_string_value(json_object_get(rom, "mach")))
+			out.emplace_back(name, title ? title : name);
+	}
+	return out;
+}
+
 std::optional<Game>
 GameList::load_game(const std::string &rom_dir, const std::string &name) const
+{
+	std::optional<Game> game = describe(name);
+	const json_t *const sections = json_object_get(find(name), "sections");
+
+	if (!game)
+		return std::nullopt;
+	for (size_t i = 0; i < json_array_size(sections); i++) {
+		const json_t *const section = json_array_get(sections, i);
+		const char *const section_name = json_string_value(json_object_get(section, "name"));
+		const json_t *const data = json_object_get(section, "data");
+
+		/* EPROMs of the size the board takes */
+		for (size_t j = 0; game->rom_board && section_name && !std::strcmp(section_name, "eprom") &&
+		                   j < json_array_size(data); j++) {
+			if (json_integer_value(json_object_get(json_array_get(data, j), "size")) !=
+			    static_cast<json_int_t>(game->rom_board->eprom_mb) << 20) {
+				std::fprintf(stderr, "ERROR: game '%s': an EPROM is not of %u MB\n", name.c_str(),
+				             game->rom_board->eprom_mb);
+				return std::nullopt;
+			}
+		}
+		auto bytes = load_section(section, rom_dir + "/" + name);
+
+		/* "optional": true, a section the game runs without */
+		if (!bytes && json_is_true(json_object_get(section, "optional"))) {
+			std::printf("Section %s left out: not found\n", section_name ? section_name : "?");
+			continue;
+		}
+		if (!bytes)
+			return std::nullopt;
+		game->sections.emplace_back(json_string_value(json_object_get(section, "name")), std::move(*bytes));
+	}
+	return game;
+}
+
+std::optional<Game>
+GameList::describe(const std::string &name) const
 {
 	const json_t *const rom = m_root ? find(name) : nullptr;
 	const json_t *const sections = json_object_get(rom, "sections");
@@ -587,32 +641,6 @@ GameList::load_game(const std::string &rom_dir, const std::string &name) const
 			return std::nullopt;
 		}
 		game.mie_eeprom = std::move(*bytes);
-	}
-	for (size_t i = 0; i < num; i++) {
-		const json_t *const section = json_array_get(sections, i);
-		const char *const section_name = json_string_value(json_object_get(section, "name"));
-		const json_t *const data = json_object_get(section, "data");
-
-		/* EPROMs of the size the board takes */
-		for (size_t j = 0; game.rom_board && section_name && !std::strcmp(section_name, "eprom") &&
-		                   j < json_array_size(data); j++) {
-			if (json_integer_value(json_object_get(json_array_get(data, j), "size")) !=
-			    static_cast<json_int_t>(game.rom_board->eprom_mb) << 20) {
-				std::fprintf(stderr, "ERROR: game '%s': an EPROM is not of %u MB\n", name.c_str(),
-				             game.rom_board->eprom_mb);
-				return std::nullopt;
-			}
-		}
-		auto bytes = load_section(section, rom_dir + "/" + name);
-
-		/* "optional": true, a section the game runs without */
-		if (!bytes && json_is_true(json_object_get(section, "optional"))) {
-			std::printf("Section %s left out: not found\n", section_name ? section_name : "?");
-			continue;
-		}
-		if (!bytes)
-			return std::nullopt;
-		game.sections.emplace_back(json_string_value(json_object_get(section, "name")), std::move(*bytes));
 	}
 	return game;
 }

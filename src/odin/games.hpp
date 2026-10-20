@@ -223,6 +223,12 @@ public:
 	bool load(const std::string &path);
 
 	bool has(const std::string &name) const;
+	/* The names and titles of the games of a machine, in the order of the
+	 * list */
+	std::vector<std::pair<std::string, std::string>> titles(const std::string &machine) const;
+	/* What the list tells of a game, without its files: nothing when it is
+	 * not in the list, or not right */
+	std::optional<Game> describe(const std::string &name) const;
 	/* The game with its files, read from <rom_dir>/<name>/. Nothing when
 	 * the game is not in the list, a file is missing or has another size
 	 * than the list tells. */

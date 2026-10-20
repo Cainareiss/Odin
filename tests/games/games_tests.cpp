@@ -322,6 +322,20 @@ void test_games(const std::string &dir)
 	check(!list.load_game(roms, "other"), "a game that is not in the list does not load");
 	check(!list.load_game(roms, "short"), "nor one whose file has another size than told");
 	check(!list.load_game(roms, "odd"), "nor one with a section of a type that is not known");
+
+	const std::optional<Game> told = list.describe("wheel"), shorter = list.describe("short");
+
+	check(told && wheel && told->controls.size() == wheel->controls.size() && told->title == wheel->title &&
+	      told->sections.empty(), "described: what the list tells, without the files");
+	check(shorter && !list.describe("other"), "a game whose file is wrong is described all the same; not one "
+	      "that is not in the list");
+
+	const auto titles = list.titles("hikaru");
+
+	check(!titles.empty() && titles[0].first == "toy" && titles[0].second == "toy" &&
+	      std::all_of(titles.begin(), titles.end(), [](const auto &t) { return !t.first.empty(); }),
+	      "the names and titles of the games of a machine, in the order of the list");
+	check(list.titles("naomi").empty(), "none of another machine");
 	check(!list.load_game(roms, "unequal"), "nor one whose alternative files have different sizes");
 	check(!list.load_game(roms, "stepless"), "nor one that interleaves without telling by how many bytes");
 	check(!list.load_game(roms, "misfit"), "nor one whose EPROMs are not of the size its ROM board takes");
