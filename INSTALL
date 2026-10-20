@@ -47,7 +47,10 @@ Options:
 			in [log] of odin.ini, page Paths of the menu)
 
 Keys: Escape or F10 opens the menu, which pauses the game (its Display
-page sets the window and the picture, kept in [display] of odin.ini),
+page sets the window and the picture, kept in [display] of odin.ini:
+scale = 1 to 6, anisotropy = 1 to 16, window = 1 to 6, fullscreen,
+unthrottled and show_speed = on or off; the options say the same and come
+first),
 Ctrl+Q quits, P pauses, F4 saves <game>.odinstate and F1 loads it, in
 ~/.local/share/odin/states (states in [paths] of odin.ini, page Paths),
 F11 or Alt+Enter takes the whole display. The page Hotkeys of the menu
@@ -55,6 +58,10 @@ changes these keys and the buttons below, kept in [hotkeys] of odin.ini:
 
  [hotkeys]
  pause = Pause, pad:guide+y
+
+(menu, pause, save_state, load_state, fullscreen and quit: two keys at
+most, Ctrl+Q written so, and a button held with Guide, pad:guide+<button>,
+or pad:guide for Guide alone; none for nothing.)
 
 0 is TEST and 9 SERVICE, the buttons of the cabinet: they open and work
 the menu of the BOOTROM and the test menus of the games (both together
@@ -158,6 +165,12 @@ or Guide) writes these lines itself, and the gamepad chosen for a player:
 
  [players.braveff]
  p1 = 030000005e0400008e02000014010000 Xbox 360 Controller
+
+and the controls of the page Input as a list rather than on the drawing
+(the button Classic):
+
+ [menu]
+ classic = on
 
 The cabinet has 1p_service and 2p_service, coin1 and coin2, test (of the
 I/O board), board_test and board_service; a game without controls in the
