@@ -673,18 +673,16 @@ Menu::games_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width)
 	const auto title = [&](size_t g, ImVec2 p, bool clickable) {
 		const float w = MenuKit::measure(names[g].c_str(), 0.0f, letters);
 		const bool shown = g == state.shown;
-		bool hovered = false;
 
 		if (clickable) {
 			ImGui::SetCursorScreenPos(p);
 			ImGui::PushID(static_cast<int>(g));
 			if (ImGui::InvisibleButton("game", { w + 4.0f * dot, line + kit.px(4.0f) }) && !shown)
 				state.show = g;
-			hovered = ImGui::IsItemHovered();
 			ImGui::PopID();
 		}
 
-		const ImU32 colour = shown ? palette.action : hovered ? palette.ink : palette.dim;
+		const ImU32 colour = shown ? palette.action : palette.dim;
 
 		MenuKit::write(list, p, colour, names[g].c_str(), 0.0f, letters);
 		if (shown)
@@ -774,8 +772,7 @@ devices_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width, bool t
 			ImGui::SetCursorScreenPos({ x, at.y });
 			if (ImGui::InvisibleButton("player", { size.x + kit.px(8.0f), h }))
 				state.player = player, state.catching.reset(), state.catch_next.clear();
-			list->AddText({ x, at.y + (h - size.y) / 2.0f }, shown || ImGui::IsItemHovered() ? palette.ink : palette.dim,
-			              name);
+			list->AddText({ x, at.y + (h - size.y) / 2.0f }, shown ? palette.ink : palette.dim, name);
 			x += size.x + kit.px(8.0f);
 			w -= size.x + kit.px(8.0f);
 		}
@@ -1075,7 +1072,7 @@ draw_label(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows,
 		catch_parts(state, l.chosen ? std::vector<MenuSlot>() : std::vector<MenuSlot>{ rows[l.row].slot });
 	ImGui::PopID();
 
-	const ImU32 colour = l.hot || l.chosen ? palette.accent : ImGui::IsItemHovered() ? palette.dim : palette.ink;
+	const ImU32 colour = l.hot || l.chosen ? palette.accent : palette.ink;
 
 	MenuKit::write(list, at, colour, text.c_str());
 	if (l.hot)
@@ -1169,13 +1166,13 @@ struct DrawnKey {
 constexpr DrawnKey KEY_ROWS[5][14] = {
 	{ { SDLK_ESCAPE, "Esc", 1 }, { SDLK_1, "1", 1 }, { SDLK_2, "2", 1 }, { SDLK_3, "3", 1 }, { SDLK_4, "4", 1 },
 	  { SDLK_5, "5", 1 }, { SDLK_6, "6", 1 }, { SDLK_7, "7", 1 }, { SDLK_8, "8", 1 }, { SDLK_9, "9", 1 },
-	  { SDLK_0, "0", 1 }, { SDLK_MINUS, "-", 1 }, { SDLK_EQUALS, "=", 1 }, { SDLK_BACKSPACE, "Back", 2 } },
+	  { SDLK_0, "0", 1 }, { SDLK_MINUS, "-", 1 }, { SDLK_EQUALS, "=", 1 }, { SDLK_BACKSPACE, "⌫", 2 } },
 	{ { SDLK_TAB, "Tab", 1.5f }, { SDLK_Q, "Q", 1 }, { SDLK_W, "W", 1 }, { SDLK_E, "E", 1 }, { SDLK_R, "R", 1 },
 	  { SDLK_T, "T", 1 }, { SDLK_Y, "Y", 1 }, { SDLK_U, "U", 1 }, { SDLK_I, "I", 1 }, { SDLK_O, "O", 1 },
 	  { SDLK_P, "P", 1 }, { SDLK_LEFTBRACKET, "[", 1 }, { SDLK_RIGHTBRACKET, "]", 1 }, { SDLK_BACKSLASH, "\\", 1.5f } },
 	{ { SDLK_CAPSLOCK, "Caps", 1.75f }, { SDLK_A, "A", 1 }, { SDLK_S, "S", 1 }, { SDLK_D, "D", 1 }, { SDLK_F, "F", 1 },
 	  { SDLK_G, "G", 1 }, { SDLK_H, "H", 1 }, { SDLK_J, "J", 1 }, { SDLK_K, "K", 1 }, { SDLK_L, "L", 1 },
-	  { SDLK_SEMICOLON, ";", 1 }, { SDLK_APOSTROPHE, "'", 1 }, { SDLK_RETURN, "Enter", 2.25f }, {} },
+	  { SDLK_SEMICOLON, ";", 1 }, { SDLK_APOSTROPHE, "'", 1 }, { SDLK_RETURN, "⏎", 2.25f }, {} },
 	{ { SDLK_LSHIFT, "Shift", 2.25f }, { SDLK_Z, "Z", 1 }, { SDLK_X, "X", 1 }, { SDLK_C, "C", 1 }, { SDLK_V, "V", 1 },
 	  { SDLK_B, "B", 1 }, { SDLK_N, "N", 1 }, { SDLK_M, "M", 1 }, { SDLK_COMMA, ",", 1 }, { SDLK_PERIOD, ".", 1 },
 	  { SDLK_SLASH, "/", 1 }, { SDLK_RSHIFT, "Shift", 2.75f }, {}, {} },
@@ -1377,8 +1374,6 @@ list_box(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, I
 		const float chip_w = std::max(kit.px(34.0f), total + 2.0f * wide);
 		const ImVec2 ca = { at.x + column - chip_w, at.y + (h - line) / 2.0f - high };
 		const ImVec2 cb = { at.x + column, ca.y + line + 2.0f * high };
-		int hovered_part = -1;
-
 		ImGui::PushID(static_cast<int>(g));
 		ImGui::SetCursorScreenPos(at);
 		if (ImGui::InvisibleButton("name", { ca.x - at.x, h }))
@@ -1397,8 +1392,7 @@ list_box(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, I
 			if (ImGui::InvisibleButton("part", { to - from, h }) && row.catchable)
 				catch_parts(state, same(state.catching, row.slot) ? std::vector<MenuSlot>() :
 				                                                     std::vector<MenuSlot>{ row.slot });
-			if (ImGui::IsItemHovered())
-				hovered_part = static_cast<int>(p), hovered = true;
+			hovered = hovered || ImGui::IsItemHovered();
 			ImGui::PopID();
 			x += w + apart;
 		}
@@ -1424,7 +1418,6 @@ list_box(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, I
 		for (size_t p = 0; p < n; p++) {
 			const InputRow &row = rows[group.parts[p].row];
 			const ImU32 colour = same(state.catching, row.slot) ? palette.accent :
-			                     static_cast<int>(p) == hovered_part ? palette.action :
 			                     row.inputs.empty() ? palette.faint : palette.ink;
 
 			MenuKit::write(list, { x, ca.y + high }, colour, texts[p].c_str());

@@ -127,7 +127,7 @@ constexpr Sign SIGNS[] = {
 	{ 0x25B2, 0.75f }, { 0x25BC, 0.75f }, { 0x25C0, 0.7f }, { 0x25B6, 0.7f }, { 0x25BE, 0.6f },
 	{ 0x2190, 0.9f }, { 0x2192, 0.9f }, { 0x2191, 0.6f }, { 0x2193, 0.6f }, { 0x2194, 1.1f }, { 0x2195, 0.6f },
 	{ 0x23CE, 0.9f }, { 0x2715, 0.85f }, { 0x25CB, 0.85f }, { 0x25A1, 0.85f }, { 0x25B3, 0.85f },
-	{ 0x2039, 0.5f }, { 0x203A, 0.5f }, { 0x2212, 0.6f },
+	{ 0x2039, 0.5f }, { 0x203A, 0.5f }, { 0x2212, 0.6f }, { 0x232B, 1.0f },
 };
 
 const Sign *
@@ -224,6 +224,16 @@ draw_sign(ImDrawList *list, const Sign &sign, float x, float y, float size, ImU3
 		list->AddTriangle({ cx, cy - e * 0.3f }, { cx + e * 0.32f, cy + e * 0.25f }, { cx - e * 0.32f, cy + e * 0.25f },
 		                  colour, w);
 		break;
+	case 0x232B: {
+		/* A key pointing left, a cross in it */
+		const float t = cy - e * 0.26f, d = cy + e * 0.26f, n = l + e * 0.22f, m = (n + r) / 2.0f + e * 0.04f;
+		const ImVec2 points[5] = { { l, cy }, { n, t }, { r, t }, { r, d }, { n, d } };
+
+		list->AddPolyline(points, 5, colour, ImDrawFlags_Closed, w);
+		line({ m - e * 0.1f, cy - e * 0.1f }, { m + e * 0.1f, cy + e * 0.1f });
+		line({ m + e * 0.1f, cy - e * 0.1f }, { m - e * 0.1f, cy + e * 0.1f });
+		break;
+	}
 	case 0x2039:
 	case 0x203A: {
 		const float d = sign.code == 0x2039 ? 1.0f : -1.0f;
@@ -583,8 +593,8 @@ MenuKit::tabs(std::span<const char *const> names, std::span<const Icon> icons, b
 		if (ImGui::InvisibleButton(names[i], { w, h }))
 			chosen = static_cast<int>(i);
 
-		const bool on = chosen == static_cast<int>(i), hovered = ImGui::IsItemHovered();
-		const ImU32 colour = on ? m_palette.action : hovered ? m_palette.ink : m_palette.dim;
+		const bool on = chosen == static_cast<int>(i);
+		const ImU32 colour = on ? m_palette.action : m_palette.dim;
 
 		if (on)
 			frame(list, a, b, px(CONTROL_CUT), 0, alpha(m_palette.action, CHOSEN_LINE));
@@ -641,16 +651,17 @@ MenuKit::begin_row(float &width)
 }
 
 /* The name, what the row does and why it does not change, one under the
- * other in that width, the last two smaller and fainter: their height */
+ * other in that width, the last two smaller and fainter; the name faint
+ * too on a row that cannot change now (`off`): their height */
 float
-MenuKit::texts(ImVec2 at, float width, const char *name, const char *about, const char *locked) const
+MenuKit::texts(ImVec2 at, float width, const char *name, const char *about, const char *locked, bool off) const
 {
 	ImDrawList *const list = ImGui::GetWindowDrawList();
 	ImFont *const face = ImGui::GetFont();
 	const float space = px(2.0f), note = font(NOTE);
 	float h = wrapped_h(name, ImGui::GetFontSize(), width);
 
-	list->AddText(face, ImGui::GetFontSize(), at, m_palette.ink, name, nullptr, width);
+	list->AddText(face, ImGui::GetFontSize(), at, off ? m_palette.faint : m_palette.ink, name, nullptr, width);
 	for (const char *text : { about, locked }) {
 		if (!text || !*text)
 			continue;
@@ -662,11 +673,12 @@ MenuKit::texts(ImVec2 at, float width, const char *name, const char *about, cons
 
 MenuKit::Placed
 MenuKit::place(ImVec2 at, float width, float control, float control_h, const char *name, const char *about,
-               const char *locked) const
+               const char *locked, bool off) const
 {
 	const float pad = px(ROW_PAD), beside = width - control - px(GAP) - 2.0f * pad;
 	const bool under = beside < px(TEXT_LEAST);
-	const float text_h = texts({ at.x + pad, at.y + pad }, under ? width - 2.0f * pad : beside, name, about, locked);
+	const float text_h = texts({ at.x + pad, at.y + pad }, under ? width - 2.0f * pad : beside, name, about, locked,
+	                           off);
 
 	if (under)
 		return { text_h + px(6.0f) + control_h + 2.0f * pad, at.y + pad + text_h + px(6.0f) };
@@ -686,7 +698,7 @@ MenuKit::choice(const char *name, const char *about, std::span<const char *const
 	const ImVec2 control = segments_size(labels);
 	float width;
 	const ImVec2 at = begin_row(width);
-	const Placed placed = place(at, width, control.x, control.y, name, about, locked);
+	const Placed placed = place(at, width, control.x, control.y, name, about, locked, off);
 	const bool changed = segments({ at.x + width - pad - control.x, placed.top }, labels, chosen, locked || off);
 
 	ImGui::SetCursorScreenPos(at);
@@ -730,15 +742,14 @@ MenuKit::segments(ImVec2 a, std::span<const char *const> labels, int &chosen, bo
 		if (ImGui::InvisibleButton(labels[i], { cells[i], control_h }))
 			chosen = static_cast<int>(i);
 
-		const bool on = chosen == static_cast<int>(i), hovered = !still && ImGui::IsItemHovered();
+		const bool on = chosen == static_cast<int>(i);
 
-		if (on || hovered)
-			fill_cell(list, ca, cb, px(CONTROL_CUT), i == 0, i + 1 == labels.size(),
-			          faded(on ? m_palette.action : m_palette.hover, still));
+		if (on)
+			fill_cell(list, ca, cb, px(CONTROL_CUT), i == 0, i + 1 == labels.size(), faded(m_palette.action, still));
 		if (i > 0)
 			list->AddLine(ca, { x, cb.y }, faded(m_palette.outline, still), stroke());
 		write(list, { x + wide, a.y + high },
-		      faded(on ? m_palette.on_action : hovered ? m_palette.ink : m_palette.dim, still), labels[i], size);
+		      faded(on ? m_palette.on_action : m_palette.dim, still), labels[i], size);
 		x += cells[i];
 	}
 	ImGui::EndDisabled();
@@ -790,12 +801,12 @@ MenuKit::picker(const char *id, ImVec2 at, float width, std::span<const std::str
 	ImGui::SetCursorScreenPos(at);
 	if (ImGui::InvisibleButton("open", { width, b.y - at.y }))
 		ImGui::OpenPopup("list");
-	frame(list, at, b, px(GROUP_CUT), 0, ImGui::IsItemHovered() || ImGui::IsPopupOpen("list") ? p.stroke : p.line);
+	frame(list, at, b, px(GROUP_CUT), 0, ImGui::IsPopupOpen("list") ? p.stroke : p.line);
 	if (chosen >= 0 && static_cast<size_t>(chosen) < labels.size()) {
 		const float side = ImGui::GetTextLineHeight();
 		const float before = icon_shown != Icon::NONE ? side + px(6.0f) : 0.0f;
 
-		icon(list, icon_shown, { at.x + wide, at.y + high }, side, p.dim);
+		icon(list, icon_shown, { at.x + wide, at.y + high }, side, p.ink);
 		list->PushClipRect(at, { b.x - wide - caret, b.y }, true);
 		write(list, { at.x + wide + before, at.y + high }, p.ink,
 		      fitted(labels[static_cast<size_t>(chosen)], b.x - 2.0f * wide - caret - at.x - wide - before).c_str());
@@ -922,11 +933,9 @@ MenuKit::arrow(const char *id, ImVec2 at, bool right) const
 	ImGui::SetCursorScreenPos(at);
 
 	const bool clicked = ImGui::InvisibleButton(id, size);
-	const bool hovered = ImGui::IsItemHovered();
 
-	list->AddRect(at, b, hovered ? m_palette.action : m_palette.outline, size.y / 2.0f, ImDrawFlags_None, stroke());
-	write(list, { (at.x + b.x - measure(sign, big)) / 2.0f, (at.y + b.y - big) / 2.0f },
-	      hovered ? m_palette.action : m_palette.ink, sign, big);
+	list->AddRect(at, b, m_palette.outline, size.y / 2.0f, ImDrawFlags_None, stroke());
+	write(list, { (at.x + b.x - measure(sign, big)) / 2.0f, (at.y + b.y - big) / 2.0f }, m_palette.ink, sign, big);
 	return clicked;
 }
 
@@ -1007,7 +1016,7 @@ MenuKit::slider(const char *name, const char *about, float &value, float low, fl
 	const float control = track_w + space + shown_w, line = ImGui::GetTextLineHeight();
 	float width;
 	const ImVec2 at = begin_row(width);
-	const Placed placed = place(at, width, control, line, name, about, locked);
+	const Placed placed = place(at, width, control, line, name, about, locked, off);
 	const float h = placed.h, mid = placed.top + line / 2.0f;
 	const ImVec2 a = { at.x + width - pad - control, mid - track_h / 2.0f }, b = { a.x + track_w, a.y + track_h };
 	const float was = value;
@@ -1032,7 +1041,7 @@ MenuKit::slider(const char *name, const char *about, float &value, float low, fl
 	const float r = track_h / 2.0f;
 
 	list->AddRectFilled(a, { a.x + track_w * fill, b.y }, faded(m_palette.action, still), r);
-	list->AddRect(a, b, faded(hovered ? m_palette.stroke : m_palette.outline, still), r, ImDrawFlags_None, stroke());
+	list->AddRect(a, b, faded(m_palette.outline, still), r, ImDrawFlags_None, stroke());
 	write(list, { b.x + space, mid - size / 2.0f }, faded(m_palette.ink, still), shown, size);
 
 	ImGui::SetCursorScreenPos(at);
@@ -1137,9 +1146,6 @@ MenuKit::shortcut(const char *name, std::span<const std::vector<std::string>> ke
 		if (ImGui::InvisibleButton("key", { w, cap_h }))
 			clicked = static_cast<int>(i);
 		ImGui::PopID();
-
-		const bool hovered = ImGui::IsItemHovered();
-
 		if (static_cast<int>(i) == catching) {
 			list->AddRect({ x, y }, { x + w, y + cap_h }, m_palette.accent, px(5.0f), ImDrawFlags_None, stroke());
 			write(list, { x + px(5.0f), y + (cap_h - note) / 2.0f }, m_palette.accent, press, note);
@@ -1151,12 +1157,10 @@ MenuKit::shortcut(const char *name, std::span<const std::vector<std::string>> ke
 			const float cap_w = key_size(cap).x;
 
 			if (k) {
-				write(list, { x + gap, y + (cap_h - small) / 2.0f }, m_palette.faint, "+", small);
+				write(list, { x + gap, y + (cap_h - small) / 2.0f }, m_palette.ink, "+", small);
 				x += 2.0f * gap + plus;
 			}
 			key(list, { x, y }, cap, true, false);
-			if (hovered)
-				list->AddRect({ x, y }, { x + cap_w, y + cap_h }, m_palette.action, px(5.0f), ImDrawFlags_None, stroke());
 			x += cap_w;
 		}
 		x += apart;
@@ -1172,7 +1176,6 @@ MenuKit::shortcut(const char *name, std::span<const std::vector<std::string>> ke
 		              ImDrawFlags_None, stroke());
 		write(list, { pad_x + pad_w - press_pad + px(7.0f), y + (cap_h - small) / 2.0f }, m_palette.accent, press, small);
 	} else {
-		const bool hovered = ImGui::IsItemHovered();
 		float right = pad_x + pad_w;
 
 		if (pad.empty())
@@ -1182,9 +1185,6 @@ MenuKit::shortcut(const char *name, std::span<const std::vector<std::string>> ke
 
 			right -= size.x;
 			pill(list, { right, y }, pad[i].c_str());
-			if (hovered)
-				list->AddRect({ right, y }, { right + size.x, y + size.y }, m_palette.action, size.y / 2.0f,
-				              ImDrawFlags_None, stroke());
 			if (i) {
 				right -= gap + plus;
 				write(list, { right, y + (cap_h - small) / 2.0f }, m_palette.faint, "+", small);

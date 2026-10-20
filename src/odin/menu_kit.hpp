@@ -46,7 +46,7 @@ struct MenuPalette {
 /* Rúnasteinn, the palette by default: granite and the red ochre of painted
  * runestones. The frame lets the game show through, at a fifth. */
 inline constexpr MenuPalette RUNASTEINN = {
-	IM_COL32(0x2A, 0x2A, 0x28, 0xFF), IM_COL32(0x2F, 0x2F, 0x2C, 0xCC),
+	IM_COL32(0x2A, 0x2A, 0x28, 0xFF), IM_COL32(0x2A, 0x2A, 0x28, 0xCC),
 	IM_COL32(0xEE, 0xEA, 0xE2, 0xFF), IM_COL32(0xB0, 0xAB, 0xA0, 0xFF), IM_COL32(0x83, 0x7F, 0x75, 0xFF),
 	IM_COL32(0xEE, 0xEA, 0xE2, 0x29), IM_COL32(0xEE, 0xEA, 0xE2, 0x38), IM_COL32(0xEE, 0xEA, 0xE2, 0x10),
 	IM_COL32(0xE0, 0x66, 0x4A, 0xFF), IM_COL32(0x16, 0x06, 0x04, 0xFF), IM_COL32(0x6A, 0xA9, 0xB0, 0xFF),
@@ -94,9 +94,10 @@ public:
 	static void icon(ImDrawList *list, Icon icon, ImVec2 at, float side, ImU32 colour);
 
 	/* Texts with the signs the font of the menu has not, drawn: the arrows
-	 * ▲ ▼ ◀ ▶ ← → ↑ ↓ ↔ ↕ ▾ ‹ ›, Enter ⏎, the marks of a PlayStation
-	 * gamepad ✕ ○ □ △, the minus of a Switch −. Their width, at that size
-	 * (0: the font's), the letters that far apart (small capitals). */
+	 * ▲ ▼ ◀ ▶ ← → ↑ ↓ ↔ ↕ ▾ ‹ ›, Enter ⏎ and Backspace ⌫, the marks of a
+	 * PlayStation gamepad ✕ ○ □ △, the minus of a Switch −. Their width, at
+	 * that size (0: the font's), the letters that far apart (small
+	 * capitals). */
 	static float measure(const char *text, float size = 0.0f, float spacing = 0.0f);
 	static void write(ImDrawList *list, ImVec2 at, ImU32 colour, const char *text, float size = 0.0f,
 	                  float spacing = 0.0f);
@@ -187,7 +188,7 @@ private:
 	/* The top of the row, its line above it when it is not the first of
 	 * its group, and the room left for its texts */
 	ImVec2 begin_row(float &width);
-	float texts(ImVec2 at, float width, const char *name, const char *about, const char *locked) const;
+	float texts(ImVec2 at, float width, const char *name, const char *about, const char *locked, bool off = false) const;
 	/* The texts of a row drawn, and the place of its control, `control`
 	 * wide and `control_h` high: beside them, or under them where they
 	 * would have too little room. The height of the row and the top of
@@ -196,7 +197,7 @@ private:
 		float h, top;
 	};
 	Placed place(ImVec2 at, float width, float control, float control_h, const char *name, const char *about,
-	             const char *locked) const;
+	             const char *locked, bool off = false) const;
 	/* The list that drops from a box or a button, at that place, as wide
 	 * at least */
 	bool list_popup(ImVec2 at, float width, std::span<const std::string> labels, int &chosen) const;

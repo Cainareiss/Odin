@@ -323,7 +323,7 @@ Menu::build(MenuState &state)
 
 	ImDrawList *const list = ImGui::GetWindowDrawList();
 
-	kit.frame(list, a, b, kit.px(CUT), palette.frame, palette.faint);
+	kit.frame(list, a, b, kit.px(CUT), palette.frame, palette.outline);
 	kit.tabs(TABS, TAB_ICONS, room.x < WIDE * room.y, m_page);
 	under_tabs(list, a.x + w * LINE_ENDS, b.x - w * LINE_ENDS, ImGui::GetCursorScreenPos().y + kit.px(LINE_UNDER),
 	           kit.stroke(), MenuKit::alpha(palette.accent, LINE_ALPHA));
