@@ -36,7 +36,8 @@ namespace odin {
  * what is clicked or chosen and the ink on it, the red of what clears. The
  * drawings: the body of a gamepad and a part on it, their strokes (the
  * details take the outline of a control), an arrow on a part; the lavender
- * of the cabinet, its strokes and its details. */
+ * of the cabinet (and of the titles of the groups), its strokes and its
+ * details. */
 struct MenuPalette {
 	ImU32 screen, frame, ink, dim, faint, line, outline, hover, accent, on_accent, action, on_action, danger;
 	ImU32 body, part, stroke, arrow;

@@ -615,7 +615,7 @@ MenuKit::begin_group(const char *title)
 	const float size = font(SMALL);
 
 	ImGui::Dummy({ 0.0f, px(10.0f) });
-	write(list, ImGui::GetCursorScreenPos(), m_palette.dim, title, size, size * TITLE_SPACING);
+	write(list, ImGui::GetCursorScreenPos(), m_palette.cabinet, title, size, size * TITLE_SPACING);
 	ImGui::Dummy({ 0.0f, size + px(5.0f) });
 	m_group_top = ImGui::GetCursorScreenPos();
 	m_first_row = true;
@@ -1205,7 +1205,7 @@ MenuKit::paragraph(const char *title, const char *text)
 	const float width = ImGui::GetContentRegionAvail().x, size = font(SMALL);
 
 	ImGui::Dummy({ 0.0f, px(10.0f) });
-	write(list, ImGui::GetCursorScreenPos(), m_palette.dim, title, size, size * TITLE_SPACING);
+	write(list, ImGui::GetCursorScreenPos(), m_palette.cabinet, title, size, size * TITLE_SPACING);
 	ImGui::Dummy({ 0.0f, size + px(5.0f) });
 	list->AddText(ImGui::GetFont(), size, ImGui::GetCursorScreenPos(), m_palette.faint, text, nullptr, width);
 	ImGui::Dummy({ 0.0f, wrapped_h(text, size, width) });
