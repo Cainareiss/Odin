@@ -44,9 +44,8 @@ constexpr float BUTTON_HIGH = 4.0f;
  * the control goes under them */
 constexpr float TEXT_LEAST = 120.0f;
 /* What is left of a colour on a row that cannot change; of the action
- * colour on the outline of what is chosen, and in its fill */
+ * colour in the fill of a button on */
 constexpr float OFF_ALPHA = 0.4f;
-constexpr float CHOSEN_LINE = 0.6f;
 constexpr float CHOSEN_FILL = 0.15f;
 /* The letters of a title in small capitals that far apart, in ems */
 constexpr float TITLE_SPACING = 0.12f;
@@ -597,7 +596,7 @@ MenuKit::tabs(std::span<const char *const> names, std::span<const Icon> icons, b
 		const ImU32 colour = on ? m_palette.action : m_palette.dim;
 
 		if (on)
-			frame(list, a, b, px(CONTROL_CUT), 0, alpha(m_palette.action, CHOSEN_LINE));
+			frame(list, a, b, px(CONTROL_CUT), 0, alpha(m_palette.action, ACTION_LINE));
 		if (i < icons.size())
 			icon(list, icons[i], { a.x + wide, a.y + high }, side, colour);
 		if (shows(i))
@@ -725,6 +724,7 @@ MenuKit::segments(ImVec2 a, std::span<const char *const> labels, int &chosen, bo
 	ImDrawList *const list = ImGui::GetWindowDrawList();
 	const float wide = px(CELL_WIDE), high = px(CELL_HIGH), size = font(SMALL);
 	const float control_h = size + 2.0f * high;
+	const ImU32 outline = faded(alpha(m_palette.action, ACTION_LINE), still);
 	std::array<float, MOST_LABELS> cells;
 	float control = 0.0f;
 
@@ -747,13 +747,13 @@ MenuKit::segments(ImVec2 a, std::span<const char *const> labels, int &chosen, bo
 		if (on)
 			fill_cell(list, ca, cb, px(CONTROL_CUT), i == 0, i + 1 == labels.size(), faded(m_palette.action, still));
 		if (i > 0)
-			list->AddLine(ca, { x, cb.y }, faded(m_palette.outline, still), stroke());
+			list->AddLine(ca, { x, cb.y }, outline, stroke());
 		write(list, { x + wide, a.y + high },
 		      faded(on ? m_palette.on_action : m_palette.dim, still), labels[i], size);
 		x += cells[i];
 	}
 	ImGui::EndDisabled();
-	frame(list, a, { a.x + control, a.y + control_h }, px(CONTROL_CUT), 0, faded(m_palette.outline, still));
+	frame(list, a, { a.x + control, a.y + control_h }, px(CONTROL_CUT), 0, outline);
 	return chosen != was;
 }
 
@@ -801,7 +801,7 @@ MenuKit::picker(const char *id, ImVec2 at, float width, std::span<const std::str
 	ImGui::SetCursorScreenPos(at);
 	if (ImGui::InvisibleButton("open", { width, b.y - at.y }))
 		ImGui::OpenPopup("list");
-	frame(list, at, b, px(GROUP_CUT), 0, ImGui::IsPopupOpen("list") ? p.stroke : p.line);
+	frame(list, at, b, px(GROUP_CUT), 0, alpha(p.action, ACTION_LINE));
 	if (chosen >= 0 && static_cast<size_t>(chosen) < labels.size()) {
 		const float side = ImGui::GetTextLineHeight();
 		const float before = icon_shown != Icon::NONE ? side + px(6.0f) : 0.0f;
@@ -901,10 +901,10 @@ MenuKit::button(const char *label, ImVec2 at, bool on, Icon icon_shown, Tone ton
 
 	const bool clicked = ImGui::InvisibleButton(label, box);
 	const bool hovered = ImGui::IsItemHovered();
+	const bool strong = tone == Tone::STRONG && !hovered;
 	const ImU32 hot = tone == Tone::DANGER ? m_palette.danger : m_palette.action;
-	const ImU32 border = hovered ? hot : on ? alpha(m_palette.action, CHOSEN_LINE) :
-	                     tone == Tone::STRONG ? m_palette.stroke : m_palette.outline;
-	const ImU32 ink = hovered ? hot : m_palette.ink;
+	const ImU32 border = strong ? m_palette.stroke : hovered || on ? hot : alpha(hot, ACTION_LINE);
+	const ImU32 ink = strong ? m_palette.ink : hot;
 	float x = at.x + px(BUTTON_WIDE);
 
 	frame(list, at, b, px(CONTROL_CUT), on ? alpha(m_palette.action, CHOSEN_FILL) : 0, border);
@@ -934,8 +934,8 @@ MenuKit::arrow(const char *id, ImVec2 at, bool right) const
 
 	const bool clicked = ImGui::InvisibleButton(id, size);
 
-	list->AddRect(at, b, m_palette.outline, size.y / 2.0f, ImDrawFlags_None, stroke());
-	write(list, { (at.x + b.x - measure(sign, big)) / 2.0f, (at.y + b.y - big) / 2.0f }, m_palette.ink, sign, big);
+	list->AddRect(at, b, alpha(m_palette.action, ACTION_LINE), size.y / 2.0f, ImDrawFlags_None, stroke());
+	write(list, { (at.x + b.x - measure(sign, big)) / 2.0f, (at.y + b.y - big) / 2.0f }, m_palette.action, sign, big);
 	return clicked;
 }
 
@@ -1041,7 +1041,7 @@ MenuKit::slider(const char *name, const char *about, float &value, float low, fl
 	const float r = track_h / 2.0f;
 
 	list->AddRectFilled(a, { a.x + track_w * fill, b.y }, faded(m_palette.action, still), r);
-	list->AddRect(a, b, faded(m_palette.outline, still), r, ImDrawFlags_None, stroke());
+	list->AddRect(a, b, faded(alpha(m_palette.action, ACTION_LINE), still), r, ImDrawFlags_None, stroke());
 	write(list, { b.x + space, mid - size / 2.0f }, faded(m_palette.ink, still), shown, size);
 
 	ImGui::SetCursorScreenPos(at);

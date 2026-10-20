@@ -69,6 +69,9 @@ public:
 	static constexpr float NOTE = 10.5f / 12.5f;
 	static constexpr float SMALL = 11.0f / 12.5f;
 	static constexpr float TINY = 10.0f / 12.5f;
+	/* What is left of the action colour on the outline of a control and of
+	 * the tab chosen; full on a button hovered or on */
+	static constexpr float ACTION_LINE = 0.6f;
 
 	MenuKit(const MenuPalette &palette, float scale) : m_palette(palette), m_scale(scale) {}
 
@@ -169,8 +172,9 @@ public:
 	            Icon icon = Icon::NONE) const;
 	float picker_height() const;
 
-	/* What a button is: plain (the action colour when hovered), Undo (its
-	 * outline clearer), one that clears (red when hovered) */
+	/* What a button is: plain (in the action colour, its outline fainter
+	 * until hovered), Undo (in the ink, its outline clearer, until
+	 * hovered), one that clears (as plain, in red) */
 	enum class Tone { PLAIN, STRONG, DANGER };
 	/* A button of a page, after the one before on its line (`same_line`),
 	 * its icon before its label. True on a click. */

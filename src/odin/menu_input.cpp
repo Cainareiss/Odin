@@ -874,9 +874,8 @@ not_mapped(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows,
 			else if (hovered)
 				kit.frame(list, { x, y }, { x + w, y + h }, kit.px(3.0f), 0, palette.action);
 			else
-				kit.dashed_frame(list, { x, y }, { x + w, y + h }, palette.outline);
-			MenuKit::write(list, { x + wide, y + high }, chosen ? palette.accent : hovered ? palette.action : palette.dim,
-			               row.name.c_str());
+				kit.dashed_frame(list, { x, y }, { x + w, y + h }, MenuKit::alpha(palette.action, MenuKit::ACTION_LINE));
+			MenuKit::write(list, { x + wide, y + high }, chosen ? palette.accent : palette.action, row.name.c_str());
 			x += w + gap;
 		}
 		y += h + gap;
