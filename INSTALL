@@ -175,10 +175,14 @@ and the controls of the page Input as a list rather than on the drawing
  classic = on
 
 In the menu, LB and RB of a gamepad change the page, LT and RT the game,
-B goes back (a list dropped open closes first, else the game goes on);
-[menu] gives them other inputs, as [controls.<game>] does: page_before,
-page_after, game_before, game_after, back, and up, down, left, right,
-press, clear, default for the frame that moves on the pages.
+B goes back (a list dropped open closes first, a key caught is let go,
+else the game goes on). The D-pad or the left stick moves a frame from
+row to row; left and right change a choice or a slider, A presses. On
+the page Input the frame goes from control to control: A changes it, X
+clears it and Y sets it back to its default, on the device shown. [menu]
+gives them other inputs, as [controls.<game>] does: up, down, left,
+right, press, back, clear, default, page_before, page_after, game_before,
+game_after.
 
 Odin writes every key it knows in odin.ini, at the start, those at their
 value by default as comments ("# volume = 100"): taking the # away and

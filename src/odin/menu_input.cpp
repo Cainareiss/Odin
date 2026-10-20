@@ -344,6 +344,14 @@ catch_parts(MenuState &state, const std::vector<MenuSlot> &parts)
 	state.catch_next.assign(parts.begin() + 1, parts.end());
 }
 
+/* A part caught, or else the one the frame of the gamepad is on: drawn in
+ * the accent */
+bool
+is_chosen(const MenuState &state, const MenuSlot &slot)
+{
+	return state.catching ? same(state.catching, slot) : same(state.picked, slot);
+}
+
 /* A control of the player as Classic and the line at the bottom show it:
  * its name, its parts (rows of input_rows) each after its sign (▲ and ▼
  * of a lever, · before a half on a gamepad), how far it is worked now (0
@@ -381,10 +389,10 @@ groups(const MenuState &state, std::span<const InputRow> rows)
 	for (size_t r = 0; r < rows.size(); r++) {
 		const InputRow &row = rows[r];
 		const int c = row.slot.control;
-		const bool chosen = same(state.catching, row.slot);
+		const bool picked = is_chosen(state, row.slot);
 
 		/* A half on a gamepad, empty, says nothing */
-		if (row.half && row.inputs.empty() && !chosen)
+		if (row.half && row.inputs.empty() && !picked)
 			continue;
 		if (out.empty() || c < 0 || rows[out.back().parts.front().row].slot.control != c) {
 			Group group;
@@ -413,7 +421,7 @@ groups(const MenuState &state, std::span<const InputRow> rows)
 		}
 		group.parts.push_back({ r, sign });
 		group.lit = group.lit || row.lit;
-		group.chosen = group.chosen || chosen;
+		group.chosen = group.chosen || picked;
 		if (c < 0)
 			group.amount = row.lit ? 1.0f : 0.0f;
 	}
@@ -778,9 +786,10 @@ devices_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width, bool t
 			const char *const name = player ? "P2" : "P1";
 			const ImVec2 size = ImGui::CalcTextSize(name);
 			const bool shown = state.player == player;
+			const bool focused = kit.focus({ x - kit.px(4.0f), at.y }, { x + size.x + kit.px(4.0f), at.y + h });
 
 			ImGui::SetCursorScreenPos({ x, at.y });
-			if (ImGui::InvisibleButton("player", { size.x + kit.px(8.0f), h }))
+			if (ImGui::InvisibleButton("player", { size.x + kit.px(8.0f), h }) || (focused && kit.pressed()))
 				state.player = player, state.catching.reset(), state.catch_next.clear();
 			list->AddText({ x, at.y + (h - size.y) / 2.0f }, shown ? palette.ink : palette.dim, name);
 			x += size.x + kit.px(8.0f);
@@ -869,7 +878,7 @@ not_mapped(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows,
 			}
 
 			const InputRow &row = rows[static_cast<size_t>(r)];
-			const bool chosen = same(state.catching, row.slot);
+			const bool picked = is_chosen(state, row.slot);
 
 			ImGui::SetCursorScreenPos({ x, y });
 			ImGui::PushID(r);
@@ -879,13 +888,13 @@ not_mapped(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows,
 			const bool hovered = ImGui::IsItemHovered();
 
 			ImGui::PopID();
-			if (chosen)
+			if (picked)
 				kit.frame(list, { x, y }, { x + w, y + h }, kit.px(3.0f), 0, palette.accent);
 			else if (hovered)
 				kit.frame(list, { x, y }, { x + w, y + h }, kit.px(3.0f), 0, palette.action);
 			else
 				kit.dashed_frame(list, { x, y }, { x + w, y + h }, MenuKit::alpha(palette.action, MenuKit::ACTION_LINE));
-			MenuKit::write(list, { x + wide, y + high }, chosen ? palette.accent : palette.action, row.name.c_str());
+			MenuKit::write(list, { x + wide, y + high }, picked ? palette.accent : palette.action, row.name.c_str());
 			x += w + gap;
 		}
 		y += h + gap;
@@ -949,7 +958,8 @@ cabinet_box(const MenuKit &kit, const MenuState &state, ImVec2 a, ImVec2 b, bool
 	}
 	if (service != controls.end() && static_cast<size_t>(service - controls.begin()) < state.now.size())
 		now.service = state.now[static_cast<size_t>(service - controls.begin())].on;
-	if (const std::optional<MenuSlot> &slot = state.catching) {
+	/* Caught, or else picked */
+	if (const std::optional<MenuSlot> slot = state.catching ? state.catching : state.picked) {
 		if (slot->control < 0)
 			now.chosen = slot->role == Role::COIN1 ? "coin" : slot->role == Role::TEST ? "test" : "";
 		else if (static_cast<size_t>(slot->control) < n)
@@ -1012,13 +1022,13 @@ sort_rows(const MenuState &state, std::span<const InputRow> rows, const PadDrawi
 
 			if (it != out.labels.end()) {
 				it->names.push_back(name);
-				it->chosen |= same(state.catching, rows[r].slot);
+				it->chosen |= is_chosen(state, rows[r].slot);
 				continue;
 			}
 
 			Label l{ { name }, r, key, static_cast<size_t>(part) };
 
-			l.chosen = same(state.catching, rows[r].slot);
+			l.chosen = is_chosen(state, rows[r].slot);
 			l.hot = touched(key, now);
 			out.labels.push_back(std::move(l));
 		}
@@ -1122,7 +1132,7 @@ draw_elsewhere(const MenuKit &kit, const MenuState &state, std::span<const Input
 		const float tw = MenuKit::measure(text.c_str());
 		const ImVec2 at = { left ? a.x + kit.px(6.0f) : b.x - kit.px(6.0f) - tw, y - line / 2.0f };
 
-		MenuKit::write(list, at, same(state.catching, rows[r].slot) ? kit.palette().accent : kit.palette().dim,
+		MenuKit::write(list, at, is_chosen(state, rows[r].slot) ? kit.palette().accent : kit.palette().dim,
 		               text.c_str());
 		y += gap;
 	}
@@ -1512,6 +1522,11 @@ buttons_bar(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows
 		int shake = state.shake ? 0 : 1;
 
 		list->AddText({ p.x, text_y }, state.can_shake ? palette.dim : palette.faint, shake_name);
+		/* The gamepad: left or right, or A, switches it */
+		if (state.can_shake &&
+		    kit.focus(p, { p.x + name_w + kit.px(8.0f) + cells.x, p.y + h }, kit.px(3.0f)) &&
+		    (kit.side() || kit.pressed()))
+			state.shake = kit.side() ? kit.side() < 0 : !state.shake;
 		if (!state.can_shake)
 			list->AddText({ p.x + name_w + kit.px(8.0f), text_y }, palette.faint, NO_SHAKE);
 		else if (kit.segments({ p.x + name_w + kit.px(8.0f), p.y + (h - cells.y) / 2.0f }, ON_OFF, shake))
@@ -1551,6 +1566,20 @@ Menu::page_input(MenuKit &kit, MenuState &state) const
 	const std::vector<InputRow> rows = input_rows(state);
 
 	next_mapping(state, rows);
+	/* The gamepad: each part shown in turn, drawn as if caught; A changes
+	 * it, X clears it, Y sets it back to its default */
+	state.picked.reset();
+	for (const InputRow &row : rows) {
+		if ((row.half && row.inputs.empty()) || !kit.focus_mark())
+			continue;
+		state.picked = row.slot;
+		if (kit.pressed() && row.catchable)
+			catch_parts(state, { row.slot });
+		else if (state.nav.clear)
+			state.ask = MenuState::Ask::PART_CLEAR;
+		else if (state.nav.reset)
+			state.ask = MenuState::Ask::PART_DEFAULTS;
+	}
 	/* A window wide enough (16:9) has the cabinet beside the device; a
 	 * narrower one shows either */
 	const ImVec2 window = ImGui::GetIO().DisplaySize;
@@ -1675,10 +1704,14 @@ Menu::input_foot(const MenuKit &kit, MenuState &state, ImVec2 at, float width, f
 		return height;
 	}
 
-	for (const Group &group : groups(state, rows)) {
-		if (!group.lit)
-			continue;
+	/* The control the frame of the gamepad is on, else the one worked now:
+	 * its name and its inputs, filled as far as it is worked */
+	const std::vector<Group> all = groups(state, rows);
+	const auto picked = std::find_if(all.begin(), all.end(), [](const Group &group) { return group.chosen; });
+	const auto worked = std::find_if(all.begin(), all.end(), [](const Group &group) { return group.lit; });
 
+	if (picked != all.end() || worked != all.end()) {
+		const Group &group = picked != all.end() ? *picked : *worked;
 		std::string text;
 
 		for (const Group::Part &part : group.parts)
@@ -1696,6 +1729,23 @@ Menu::input_foot(const MenuKit &kit, MenuState &state, ImVec2 at, float width, f
 		list->AddRect(ca, cb, palette.stroke, kit.px(5.0f), ImDrawFlags_None, kit.stroke());
 		MenuKit::write(list, { x + kit.px(7.0f), y }, palette.ink,
 		               MenuKit::fitted(text, chip_w - 2.0f * kit.px(7.0f)).c_str());
+		x += chip_w + space;
+		if (picked == all.end())
+			return height;
+		/* What the buttons do to it */
+		static constexpr const char *WORDS[] = { "change", "clear", "default" };
+
+		for (size_t i = 0; i < std::size(WORDS); i++) {
+			const std::string &name = state.pills[4 + i];
+			const float pill_w = kit.pill_size(name.c_str()).x, word_w = ImGui::CalcTextSize(WORDS[i]).x;
+
+			if (name.empty() || x + pill_w + kit.px(4.0f) + word_w > right)
+				continue;
+			kit.pill(list, { x, at.y + (height - kit.pill_size(name.c_str()).y) / 2.0f }, name.c_str());
+			x += pill_w + kit.px(4.0f);
+			list->AddText({ x, y }, palette.dim, WORDS[i]);
+			x += word_w + space;
+		}
 		return height;
 	}
 	const float rest_h = ImGui::CalcTextSize(REST, nullptr, false, width).y;

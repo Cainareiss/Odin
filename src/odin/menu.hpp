@@ -160,15 +160,16 @@ struct MenuState {
 	bool cabinet_shown = false;
 	bool on_pad() const { return gamepad[player & 1]; }
 	/* The part whose next input is caught, and those caught after it, in
-	 * turn; what the page asks of the inputs of the player and the device
-	 * shown, Undo while it is offered */
-	std::optional<MenuSlot> catching;
+	 * turn; the part the frame of the gamepad is on (drawn as if caught);
+	 * what the page asks of the inputs of the player and the device shown,
+	 * of all its parts or of that part, Undo while it is offered */
+	std::optional<MenuSlot> catching, picked;
 	std::vector<MenuSlot> catch_next;
 	/* Start mapping: each control of the player in turn, the place of the
 	 * one caught now in the list of the page, since when (SDL ticks) */
 	std::optional<size_t> mapping;
 	uint64_t mapping_since = 0;
-	enum class Ask { NONE, DEFAULTS, CLEAR, UNDO } ask = Ask::NONE;
+	enum class Ask { NONE, DEFAULTS, CLEAR, UNDO, PART_DEFAULTS, PART_CLEAR } ask = Ask::NONE;
 	bool undo = false;
 
 	/* What the gamepad asked since the last picture (menu_nav.hpp): the
@@ -180,8 +181,9 @@ struct MenuState {
 		bool press = false, clear = false, reset = false, back = false;
 	} nav;
 	/* The names of the buttons that change the page and the game, before
-	 * and after, on the gamepad of player 1 (empty: no pill) */
-	std::array<std::string, 4> pills;
+	 * and after, then of those that change, clear and set to its default
+	 * the part picked, on the gamepad of player 1 (empty: no pill) */
+	std::array<std::string, 7> pills;
 };
 
 /* The menu of Odin, drawn with Dear ImGui over the picture of the last

@@ -527,6 +527,9 @@ private:
 	void wait_in_menu();
 	void draw_menu();
 	void apply(const odin::MenuState &was);
+	std::vector<odin::HostInput> kind_changed(std::vector<odin::HostInput> inputs,
+	                                          const std::vector<odin::HostInput> &standard, bool to_defaults) const;
+	void change_part(const odin::MenuSlot &slot, bool to_defaults);
 	void keep(const char *key, const std::optional<std::string> &value);
 	void keep(const char *section, const char *key, const std::optional<std::string> &value);
 	/* The folder the picker of the system gave */
@@ -1019,14 +1022,8 @@ void
 Session::change_inputs(bool to_defaults)
 {
 	const odin::MenuState &state = m_menu_state;
-	const auto kind = state.on_pad() ? odin::HostInput::Kind::PAD : odin::HostInput::Kind::KEY;
-	const auto changed = [&](std::vector<odin::HostInput> inputs, const std::vector<odin::HostInput> &standard) {
-		std::erase_if(inputs, [kind](const odin::HostInput &in) { return in.kind == kind; });
-		if (to_defaults)
-			for (const odin::HostInput &in : standard)
-				if (in.kind == kind)
-					inputs.push_back(in);
-		return inputs;
+	const auto changed = [&](const std::vector<odin::HostInput> &inputs, const std::vector<odin::HostInput> &standard) {
+		return kind_changed(inputs, standard, to_defaults);
 	};
 	std::vector<odin::Bindings::Line> lines;
 	{
@@ -1051,6 +1048,41 @@ Session::change_inputs(bool to_defaults)
 	}
 	for (const odin::Bindings::Line &line : lines)
 		keep_binding(line);
+}
+
+/* The inputs of a part without those of the device shown, or with those
+ * of its defaults */
+std::vector<odin::HostInput>
+Session::kind_changed(std::vector<odin::HostInput> inputs, const std::vector<odin::HostInput> &standard,
+                      bool to_defaults) const
+{
+	const auto kind = m_menu_state.on_pad() ? odin::HostInput::Kind::PAD : odin::HostInput::Kind::KEY;
+
+	std::erase_if(inputs, [kind](const odin::HostInput &in) { return in.kind == kind; });
+	if (to_defaults)
+		for (const odin::HostInput &in : standard)
+			if (in.kind == kind)
+				inputs.push_back(in);
+	return inputs;
+}
+
+/* X and Y of a gamepad on the part picked: its inputs of the device shown
+ * cleared, or back to their defaults */
+void
+Session::change_part(const odin::MenuSlot &slot, bool to_defaults)
+{
+	const odin::Bindings &bindings = panel_shown().bindings();
+
+	if (slot.control < 0) {
+		keep_binding(bindings.cabinet_line(slot.role, kind_changed(bindings.cabinet(slot.role),
+		                                                          bindings.cabinet_standard(slot.role), to_defaults)));
+		return;
+	}
+
+	const size_t c = static_cast<size_t>(slot.control);
+
+	keep_binding(bindings.line(c, slot.part, kind_changed(bindings.part(c, slot.part), bindings.standard(c, slot.part),
+	                                                      to_defaults)));
 }
 
 /* The inputs back as Clear mapping found them */
@@ -1189,7 +1221,8 @@ Session::draw_menu()
 		using Nav = odin::MenuNav;
 		const int kind = !state.pads[0].empty() ? state.pad_types[0] :
 		                 !state.pads[1].empty() ? state.pad_types[1] : SDL_GAMEPAD_TYPE_UNKNOWN;
-		const Nav::Action pills[] = { Nav::PAGE_BEFORE, Nav::PAGE_AFTER, Nav::GAME_BEFORE, Nav::GAME_AFTER };
+		const Nav::Action pills[] = { Nav::PAGE_BEFORE, Nav::PAGE_AFTER, Nav::GAME_BEFORE, Nav::GAME_AFTER,
+		                              Nav::PRESS,       Nav::CLEAR,      Nav::RESET };
 
 		for (size_t i = 0; i < state.pills.size(); i++) {
 			const std::vector<odin::HostInput> &inputs = m_nav.inputs(pills[i]);
@@ -1291,6 +1324,9 @@ Session::draw_menu()
 		m_undo_until = SDL_GetTicks() + UNDO_MS;
 	} else if (state.ask == odin::MenuState::Ask::UNDO) {
 		undo();
+	} else if ((state.ask == odin::MenuState::Ask::PART_DEFAULTS || state.ask == odin::MenuState::Ask::PART_CLEAR) &&
+	           state.picked) {
+		change_part(*state.picked, state.ask == odin::MenuState::Ask::PART_DEFAULTS);
 	}
 	if (state.ask != odin::MenuState::Ask::NONE)
 		m_menu_pictures = MENU_PICTURES;

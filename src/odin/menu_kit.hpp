@@ -129,6 +129,8 @@ public:
 	 * outside it (inside: below 0): true when the frame is on it; then what
 	 * the gamepad asks of it */
 	bool focus(ImVec2 a, ImVec2 b, float out = -1.0f) const;
+	/* One that draws itself as it is focused: the same, no frame */
+	bool focus_mark() const { return m_focus && m_focus->count++ == m_focus->at; }
 	int side() const { return m_focus ? m_focus->side : 0; }
 	bool pressed() const { return m_focus && m_focus->press; }
 
