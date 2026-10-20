@@ -598,24 +598,23 @@ GameList::describe(const std::string &name) const
 		}
 		game.option_speakers = json_is_true(speakers);
 	}
-	if (const json_t *const level = json_object_get(rom, "option_level")) {
-		const double db = json_number_value(level);
-
-		if (!json_is_number(level) || !game.option_speakers ||
-		    !(db >= Game::LOWEST_LEVEL && db <= Game::HIGHEST_LEVEL)) {
-			std::fprintf(stderr,
-			             "ERROR: game '%s': \"option_level\" is not %g to %g dB for \"option_speakers\"\n",
-			             name.c_str(), Game::LOWEST_LEVEL, Game::HIGHEST_LEVEL);
-			return std::nullopt;
-		}
-		game.option_level = db;
-	}
 	if (const json_t *const shaken = json_object_get(rom, "option_vibration")) {
 		if (!json_is_boolean(shaken)) {
 			std::fprintf(stderr, "ERROR: game '%s': \"option_vibration\" is not true or false\n", name.c_str());
 			return std::nullopt;
 		}
 		game.option_vibration = json_is_true(shaken);
+	}
+	if (const json_t *const level = json_object_get(rom, "option_level")) {
+		const double db = json_number_value(level);
+
+		if (!json_is_number(level) || !(game.option_speakers || game.option_vibration) ||
+		    !(db >= Game::LOWEST_LEVEL && db <= Game::HIGHEST_LEVEL)) {
+			std::fprintf(stderr, "ERROR: game '%s': \"option_level\" is not %g to %g dB for \"option_speakers\" "
+			             "or \"option_vibration\"\n", name.c_str(), Game::LOWEST_LEVEL, Game::HIGHEST_LEVEL);
+			return std::nullopt;
+		}
+		game.option_level = db;
 	}
 	if (const json_t *const drive = json_object_get(rom, "drive_board")) {
 		const json_t *const first = json_object_get(drive, "first_output");

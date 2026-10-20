@@ -438,6 +438,8 @@ void test_bad_controls(const std::string &dir)
 	      refuses(R"("option_speakers": true, "option_level": -60.5)") &&
 	      refuses(R"("option_speakers": true, "option_level": 12.5)"),
 	      "and one whose \"option_level\" is not a number of -60 to 12, or comes without its speakers");
+	check(!refuses(R"("option_vibration": true, "option_level": -13)"),
+	      "a level for an optional board that feeds a vibration device is not");
 	for (const char *level : { "-60", "12" }) {
 		GameList ends;
 

@@ -178,8 +178,9 @@ struct Game {
 	bool option_speakers = false;
 	/* The level of the optional board against the main one when the two
 	 * share two speakers (-o mix), in dB: "option_level" in the list,
-	 * LOWEST_LEVEL to HIGHEST_LEVEL, with "option_speakers" only; 0 when
-	 * it does not say. HEURISTIC: on the cabinet the volumes of the switch
+	 * LOWEST_LEVEL to HIGHEST_LEVEL, with "option_speakers" or
+	 * "option_vibration" (a sound the user may hear too); 0 when it does
+	 * not say. HEURISTIC: on the cabinet the volumes of the switch
 	 * unit set it, through an electronic volume no source gives the law of
 	 * (the NASCAR manual draws REAR lower than FRONT at the factory); the
 	 * levels of the list come from levels measured in a race. */

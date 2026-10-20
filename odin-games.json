@@ -334,6 +334,7 @@
 			"mach" : "hikaru",
 			"rom_board" : { "eprom_mb" : 4, "315-5881" : "2903DAD5" },
 			"option_vibration" : true,
+			"option_level" : -13,
 			"mie_eeprom" : "4242502d02010100180004010101010010000000000000000000000006001b17000006080500ffffff1fffffffffffffffffffffffffffffffffffffffff18e84242502d02010100180004010101010010000000000000000000000006001b17000006080500ffffff1fffffffffffffffffffffffffffffffffffffffff18e8",
 			"controls" : [
 				{ "name" : "BOOST", "id" : "boost", "switch" : "1P PUSH1", "role" : "button6" },

@@ -73,14 +73,16 @@ struct MenuState {
 	unsigned volume = 100;
 	bool background = true;
 	const char *silent = nullptr;
-	/* The games whose cabinet has speakers for the optional sound board:
-	 * how they are played (0 the main board, 1 both on two channels, 2 the
-	 * four channels apart; -1 another way the command line says, for the
-	 * game that runs, which `locked` says), the level of the optional board
-	 * in the two channels and the one of the list, in dB */
+	/* The games whose optional sound board the user may hear: those with
+	 * speakers for it on the cabinet, and Racer, whose cabinet has it shake
+	 * the panel. How they are played (0 the main board, 1 both on two
+	 * channels, 2 the four channels apart; -1 another way the command line
+	 * says, for the game that runs, which `locked` says) and how the cabinet
+	 * plays them; the level of the optional board in the two channels and
+	 * the one of the list, in dB */
 	struct SoundGame {
 		std::string name, title;
-		int played;
+		int played, cabinet_played;
 		float level, standard;
 		bool locked;
 	};

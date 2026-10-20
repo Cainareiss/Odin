@@ -226,10 +226,10 @@ shown_path(const std::string &path, const char *none)
 
 } /* namespace */
 
-/* The two sound boards of a cabinet with speakers for the optional one,
- * as its wiring takes them (the manuals and wiring diagrams of SEGA, note
- * 69): its game, where each board plays, what sets the level of the
- * optional one on the cabinet */
+/* The two sound boards of a cabinet, as its wiring takes them (the manuals
+ * and wiring diagrams of SEGA, note 69): its game, where each board plays,
+ * what sets the level of the optional one on the cabinet. The optional
+ * board of Racer feeds the shaker of its panel, no speaker. */
 struct Boards {
 	const char *game, *main, *option, *knob;
 };
@@ -237,6 +237,8 @@ struct Boards {
 constexpr Boards BOARDS[] = {
 	{ "sgnascar", "front speakers (FRONT)", "seat-back speakers (REAR)", "; as the REAR knob of the cabinet" },
 	{ "pharrier", "monitor speakers and woofer", "seat-back speakers (REAR)", "" },
+	{ "podrace", "seat speakers and woofer", "shaker of the panel (VIBRATION)",
+	  "; the cabinet feeds it to the shaker only" },
 };
 constexpr Boards OTHER_BOARDS = { "", "main speakers", "optional speakers", "" };
 
@@ -470,8 +472,10 @@ Menu::page_audio(MenuKit &kit, MenuState &state) const
 		state.background = background == 0;
 	kit.end_group();
 
-	kit.paragraph("SOUND BOARDS", "Both, by default: the main and the optional board mixed on two speakers. Four: "
-	              "as the real cabinet, unmixed, on a four-channel output. Main: without the optional board.");
+	kit.paragraph("SOUND BOARDS", "Both: the main and the optional board mixed on two speakers. Four: the two "
+	              "boards apart, on a four-channel output. Main: without the optional board. By default as the "
+	              "cabinet: the optional board of Racer shakes its panel and is heard nowhere; the shaking is set "
+	              "in Input.");
 	for (MenuState::SoundGame &game : state.sound_games) {
 		std::string title = game.title;
 		char about[160];

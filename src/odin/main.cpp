@@ -406,12 +406,17 @@ public:
 			const bool runs = name == game.name;
 			const std::optional<odin::Game> other = runs ? std::nullopt : games.describe(name);
 
-			if (!(runs ? game.option_speakers : other && other->option_speakers))
+			const odin::Game *const described = runs ? &game : other ? &*other : nullptr;
+
+			if (!described || !(described->option_speakers || described->option_vibration))
 				continue;
 
-			odin::MenuState::SoundGame sound = { name, title, 1, 0.0f, 0.0f, false };
+			/* As the cabinet: both boards in the speakers where it has
+			 * some for the optional one */
+			const int cabinet = described->option_speakers ? 1 : 0;
+			odin::MenuState::SoundGame sound = { name, title, cabinet, cabinet, 0.0f, 0.0f, false };
 
-			sound.level = sound.standard = static_cast<float>(runs ? game.option_level : other->option_level);
+			sound.level = sound.standard = static_cast<float>(described->option_level);
 			for (const auto &[key, value] : settings.section("sound." + name)) {
 				char *end = nullptr;
 				const double db = std::strtod(value.c_str(), &end);
@@ -1192,7 +1197,7 @@ Session::apply(const odin::MenuState &was)
 
 			if (runs)
 				m_audio->change(mode_of(game.played), now.device);
-			keep(section.c_str(), "mode", game.played == 1 || game.played < 0 ? std::nullopt :
+			keep(section.c_str(), "mode", game.played == game.cabinet_played || game.played < 0 ? std::nullopt :
 			                              std::optional<std::string>(MODES[game.played]));
 		}
 		if (game.level != before.level) {
