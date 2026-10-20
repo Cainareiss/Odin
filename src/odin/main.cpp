@@ -296,11 +296,13 @@ load_game_list(odin::GameList &games)
  * which closes it. The pictures of the game must be the same. */
 class Session {
 public:
-	Session(const Options &options, odin::Hikaru &board, odin::Display &display, odin::Keyboard &keys,
-	        odin::Controls &controls, odin::AudioOut *audio, odin::OutputsNetwork *outputs, odin::Settings &settings,
+	Session(const Options &options, const odin::Game &game, odin::Hikaru &board, odin::Display &display,
+	        odin::Keyboard &keys, odin::Controls &controls, odin::AudioOut *audio,
+	        std::unique_ptr<odin::OutputsNetwork> outputs, bool network, odin::Settings &settings,
 	        const std::string &settings_file, const odin::GameList &games)
-		: m_options(options), m_board(board), m_display(display), m_keys(keys), m_controls(controls), m_audio(audio),
-		  m_outputs(outputs), m_settings(settings), m_settings_file(settings_file), m_games(games), m_paused(false),
+		: m_options(options), m_game(game), m_board(board), m_display(display), m_keys(keys), m_controls(controls),
+		  m_audio(audio), m_outputs(std::move(outputs)), m_settings(settings), m_settings_file(settings_file),
+		  m_games(games), m_paused(false),
 		  m_next(),
 		  m_menu_pictures(0), m_menu_drawn(0),
 		  m_menu_test(static_cast<unsigned>(std::max(odin::env_int("ODIN_MENU_TEST", 0), 0)))
@@ -329,6 +331,8 @@ public:
 		state.shader_lists = std::filesystem::path(display.program_list()).parent_path().string();
 		state.verbose = options.verbose;
 		state.verbose_given = options.given.verbose;
+		state.network = network;
+		state.network_failed = network && !m_outputs;
 		state.games = games.titles("hikaru");
 		for (const auto &[key, value] : settings.section("menu"))
 			if (key == "classic")
@@ -382,17 +386,20 @@ private:
 	void limit_frame_rate();
 
 	const Options &m_options;
+	const odin::Game &m_game;
 	odin::Hikaru &m_board;
 	odin::Display &m_display;
 	odin::Keyboard &m_keys;
 	odin::Controls &m_controls;
 	odin::AudioOut *m_audio;	/* nullptr: no sound */
-	odin::OutputsNetwork *m_outputs;	/* nullptr: none for other programs */
+	std::unique_ptr<odin::OutputsNetwork> m_outputs;	/* none: nothing for other programs */
 	odin::Settings &m_settings;
 	const std::string &m_settings_file;	/* empty: nothing is kept */
 	const odin::GameList &m_games;
-	/* The panel of a game shown that does not run, and its controls */
+	/* The panel of a game shown that does not run, its controls and its
+	 * outputs */
 	std::vector<odin::GameControl> m_other_controls;
+	std::vector<odin::GameOutput> m_other_outputs;
 	std::optional<odin::ControlPanel> m_other;
 	odin::MenuState m_menu_state;
 	/* The inputs as Clear all found them, and until when Undo puts them back */
@@ -769,6 +776,7 @@ Session::show_game(size_t game)
 	if (!other)
 		return;
 	m_other_controls = other->controls;
+	m_other_outputs = other->outputs;
 	m_other.emplace(m_other_controls, m_settings, other->name);
 }
 
@@ -836,6 +844,14 @@ Session::draw_menu()
 		state.pad_states[player] = m_controls.pad_state(player);
 	}
 	state.undo = m_undo_until && SDL_GetTicks() < m_undo_until;
+	/* The outputs of the game shown, lit as the board left them */
+	state.outputs.clear();
+	for (const odin::GameOutput &output : m_other ? m_other_outputs : m_game.outputs)
+		state.outputs.push_back({ output.name, output.role, !m_other && output.on(m_board.io_outputs()) });
+	if (m_outputs) {
+		m_outputs->welcome();
+		state.programs = m_outputs->clients();
+	}
 	state.plugged.clear();
 	for (const odin::Controls::Plugged &pad : m_controls.plugged())
 		state.plugged.emplace_back(pad.name, pad.guid);
@@ -947,6 +963,16 @@ Session::apply(const odin::MenuState &was)
 		m_settings.change(m_settings_file, "menu", "classic", on_off(now.classic, false));
 	if (now.verbose != was.verbose)
 		keep("log", "verbose", on_off(now.verbose, false));
+	/* The programs of lamps: the port opened or closed now */
+	if (now.network != was.network) {
+		if (now.network)
+			m_outputs = odin::OutputsNetwork::open(m_game.name, m_game.outputs);
+		else
+			m_outputs.reset();
+		m_menu_state.network_failed = now.network && !m_outputs;
+		m_menu_state.programs = 0;
+		keep("outputs", "network", on_off(now.network, false));
+	}
 }
 
 void
@@ -1148,7 +1174,7 @@ main(int argc, char **argv)
 		else
 			std::fprintf(stderr, "ERROR: settings: [outputs]: not right: %s = %s\n", key.c_str(), value.c_str());
 	}
-	const std::unique_ptr<odin::OutputsNetwork> outputs =
+	std::unique_ptr<odin::OutputsNetwork> outputs =
 		network ? odin::OutputsNetwork::open(game->name, game->outputs) : nullptr;
 
 	if (!options.sound_asked && game->option_speakers)
@@ -1200,8 +1226,8 @@ main(int argc, char **argv)
 	}
 	if (started) {
 		std::printf("Running\n");
-		Session(options, *board, *display, keys, controls, audio.get(), outputs.get(), settings, settings_file, games)
-			.run();
+		Session(options, *game, *board, *display, keys, controls, audio.get(), std::move(outputs), network, settings,
+		        settings_file, games).run();
 	}
 
 	std::printf("Finalizing\n");

@@ -138,6 +138,18 @@ void test_clients()
 	server->show(none);
 	server->show(lamp);
 	check(read_some(first, 36) == "1p_start_lamp = 0\r1p_start_lamp = 1\r", "a client gone, the other goes on");
+	check(server->clients() == 1, "one client left");
+
+	/* The menu open: no frame runs, a client still comes in */
+	const int third = connect_here();
+
+	server->welcome();
+	check(server->clients() == 2, "while no frame runs, a client comes in");
+	check(read_some(third, 21) == "mame_start = braveff\r", "and gets its start at once");
+	server->show(none);
+	check(read_some(third, 18) == "1p_start_lamp = 0\r" && read_some(first, 18) == "1p_start_lamp = 0\r",
+	      "then the changes, as the others");
+	close(third);
 	check(OutputsNetwork::open("braveff", brave()) == nullptr, "the port taken: no second server");
 	server.reset();
 	check(read_some(first, 14) == "mame_stop = 1\r", "the end: mame_stop");

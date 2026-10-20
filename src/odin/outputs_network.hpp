@@ -54,6 +54,9 @@ public:
 	/* Once a frame, the outputs of the board: clients come in, the changes
 	 * go out. */
 	void show(std::span<const uint8_t> outputs);
+	/* The clients that come in, while no frame runs; how many there are */
+	void welcome();
+	size_t clients() const { return m_clients.size(); }
 
 	/* The lines the outputs of the list send as they go from "was" to
 	 * "now"; "was" follows. */
@@ -67,6 +70,7 @@ private:
 	};
 
 	OutputsNetwork(intptr_t listener, const std::string &game, const std::vector<GameOutput> &outputs);
+	void accept_all();
 	void send_all();
 
 	intptr_t m_listener;

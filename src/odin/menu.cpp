@@ -52,9 +52,9 @@ constexpr float CUT = 8.0f;
 constexpr float PADDING = 14.0f;
 
 /* The tabs of the pages, in the order of Menu::Page */
-constexpr const char *TABS[] = { "Input", "Display", "Paths", "About" };
-constexpr MenuKit::Icon TAB_ICONS[] = { MenuKit::Icon::INPUT, MenuKit::Icon::DISPLAY, MenuKit::Icon::FOLDER,
-	                                MenuKit::Icon::ABOUT };
+constexpr const char *TABS[] = { "Input", "Display", "Outputs", "Paths", "About" };
+constexpr MenuKit::Icon TAB_ICONS[] = { MenuKit::Icon::INPUT, MenuKit::Icon::DISPLAY, MenuKit::Icon::OUTPUTS,
+	                                MenuKit::Icon::FOLDER, MenuKit::Icon::ABOUT };
 /* A window narrower than this many times its height has the names of the
  * tabs not chosen left out */
 constexpr float WIDE = 1.5f;
@@ -288,6 +288,8 @@ Menu::build(MenuState &state)
 		page_input(kit, state);
 	else if (m_page == DISPLAY)
 		page_display(kit, state);
+	else if (m_page == OUTPUTS)
+		page_outputs(kit, state);
 	else if (m_page == PATHS)
 		page_paths(kit, state);
 	else
@@ -375,6 +377,8 @@ Menu::help(int page, const MenuState &state)
 		return input_help(state);
 	case DISPLAY:
 		return std::string("These settings hold for every game") + kept;
+	case OUTPUTS:
+		return state.kept ? "" : "Until Odin closes: ODIN_CONFIG=none keeps nothing.";
 	case PATHS:
 		if (state.no_picker)
 			return "This system gives Odin no folder picker: [paths] of odin.ini takes the folders.";

@@ -65,9 +65,10 @@ public:
 	float px(float points) const { return points * m_scale; }
 
 	/* The icons of the menu (mock-up v50), drawn in a square of that side:
-	 * a gamepad, a gamepad with its cross, a screen, a keyboard, a folder,
-	 * an i */
-	enum class Icon { PAD, INPUT, DISPLAY, KEYBOARD, FOLDER, ABOUT };
+	 * a gamepad, a gamepad with its cross, a screen, a keyboard, a light
+	 * with its rays, a folder, an i; the outputs of a cabinet: a lamp, a
+	 * shaker, a lock, a speaker crossed out */
+	enum class Icon { PAD, INPUT, DISPLAY, KEYBOARD, OUTPUTS, FOLDER, ABOUT, LAMP, RUMBLE, LOCK, MUTE };
 	static void icon(ImDrawList *list, Icon icon, ImVec2 at, float side, ImU32 colour);
 
 	/* A frame with its corners cut; a colour of 0 is none */

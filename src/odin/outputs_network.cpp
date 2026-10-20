@@ -179,7 +179,14 @@ OutputsNetwork::changes(const std::vector<GameOutput> &list, std::vector<bool> &
 }
 
 void
-OutputsNetwork::show(std::span<const uint8_t> outputs)
+OutputsNetwork::welcome()
+{
+	accept_all();
+	send_all();
+}
+
+void
+OutputsNetwork::accept_all()
 {
 	for (;;) {
 		const intptr_t client = static_cast<intptr_t>(accept(static_cast<Socket>(m_listener), nullptr, nullptr));
@@ -199,6 +206,12 @@ OutputsNetwork::show(std::span<const uint8_t> outputs)
 #endif
 		m_clients.push_back({ client, "mame_start = " + m_game + "\r" });
 	}
+}
+
+void
+OutputsNetwork::show(std::span<const uint8_t> outputs)
+{
+	accept_all();
 
 	const std::string lines = changes(m_outputs, m_was, outputs);
 

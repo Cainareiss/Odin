@@ -63,6 +63,19 @@ struct MenuState {
 	/* odin.ini keeps what changes: not with ODIN_CONFIG=none */
 	bool kept = true;
 
+	/* Outputs: those of the cabinet of the game shown (their names, what
+	 * they are), lit while on in the game that runs; sent to the programs
+	 * of lamps, the port taken by another program, how many programs take
+	 * them */
+	struct Output {
+		std::string name;
+		GameOutput::Role role;
+		bool on;
+	};
+	std::vector<Output> outputs;
+	bool network = false, network_failed = false;
+	size_t programs = 0;
+
 	/* Paths: the folders of the games and of their saves, at the next
 	 * launch (those the command line or ODIN_SAVES gives are shown, not
 	 * changed), of the save states; the settings file and the lists of the
@@ -150,16 +163,19 @@ public:
 
 private:
 	/* The pages, in the order of their tabs */
-	enum Page { INPUT, DISPLAY, PATHS, ABOUT, PAGES };
+	enum Page { INPUT, DISPLAY, OUTPUTS, PATHS, ABOUT, PAGES };
 
 	void follow_scale();
 	void page_input(MenuKit &kit, MenuState &state) const;
 	void page_display(MenuKit &kit, MenuState &state) const;
+	void page_outputs(MenuKit &kit, MenuState &state) const;
 	void page_paths(MenuKit &kit, MenuState &state) const;
 	void page_about(MenuKit &kit) const;
 	/* What the pages say at the bottom */
 	static std::string help(int page, const MenuState &state);
 	static std::string input_help(const MenuState &state);
+	/* The row of the games of the pages Input and Outputs: its bottom */
+	static float games_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width);
 	void start_gl();
 	void size_blur(unsigned w, unsigned h);
 

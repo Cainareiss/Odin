@@ -520,10 +520,12 @@ route(const Label &label, float from, float knee, std::span<const std::pair<ImVe
 	                         [&](const auto &a, const auto &b) { return cost(a) < cost(b); });
 }
 
+} /* namespace */
+
 /* The games, the one shown marked and the one that runs dotted; when they
  * do not fit, the one shown between arrows. Its bottom. */
 float
-games_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width)
+Menu::games_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width)
 {
 	ImDrawList *const list = ImGui::GetWindowDrawList();
 	const MenuPalette &palette = kit.palette();
@@ -591,6 +593,8 @@ games_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width)
 		                      dot, g == shown ? palette.ink : palette.outline);
 	return at.y + kit.button_size("<").y;
 }
+
+namespace {
 
 /* The device of each player: the keyboard, any gamepad or one of them; in
  * a game of two, a click on P1 or P2 shows that player. Its bottom. */

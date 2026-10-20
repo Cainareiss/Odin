@@ -65,7 +65,8 @@ left lever, Space and Left Shift those of the right one.
 In Brave the pad of a player shakes while the nozzle of the cabinet does.
 The lamps and the other outputs of the cabinets go to other programs (a
 lamp or a force feedback program) as MAME gives them with its network
-output, when odin.ini says so:
+output, when odin.ini says so (the menu, page Outputs, turns it on and
+off, and shows the outputs of each game light):
 
  [outputs]
  network = on

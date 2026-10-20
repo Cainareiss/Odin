@@ -182,6 +182,44 @@ MenuKit::icon(ImDrawList *list, Icon icon, ImVec2 at, float side, ImU32 colour)
 			list->AddLine(p(x, 10), p(x + 1, 10), colour, w);
 		list->AddLine(p(7, 14), p(17, 14), colour, w);
 		break;
+	case Icon::OUTPUTS:
+		list->AddCircle(p(12, 12), 3.0f * k, colour, 0, w);
+		list->AddLine(p(12, 3), p(12, 6), colour, w);
+		list->AddLine(p(12, 18), p(12, 21), colour, w);
+		list->AddLine(p(3, 12), p(6, 12), colour, w);
+		list->AddLine(p(18, 12), p(21, 12), colour, w);
+		break;
+	case Icon::LAMP:
+		/* The bulb over its top, from its left foot to its right one */
+		arc(12, 9, 6, 131.6f, 408.4f);
+		list->PathLineTo(p(14.5f, 17));
+		list->PathLineTo(p(9.5f, 17));
+		list->PathStroke(colour, ImDrawFlags_Closed, w);
+		list->AddLine(p(9, 18), p(15, 18), colour, w);
+		list->AddLine(p(10, 21), p(14, 21), colour, w);
+		break;
+	case Icon::RUMBLE:
+		list->AddRect(p(8, 4), p(16, 20), colour, 2.0f * k, ImDrawFlags_None, w);
+		list->AddLine(p(4, 8), p(4, 16), colour, w);
+		list->AddLine(p(20, 8), p(20, 16), colour, w);
+		list->AddLine(p(2, 10), p(2, 14), colour, w);
+		list->AddLine(p(22, 10), p(22, 14), colour, w);
+		break;
+	case Icon::LOCK:
+		list->AddRect(p(5, 11), p(19, 20), colour, 2.0f * k, ImDrawFlags_None, w);
+		list->PathLineTo(p(8, 11));
+		arc(12, 8, 4, 180, 360);
+		list->PathLineTo(p(16, 11));
+		list->PathStroke(colour, ImDrawFlags_None, w);
+		break;
+	case Icon::MUTE:
+		for (const ImVec2 q : { ImVec2{ 4, 9 }, ImVec2{ 4, 15 }, ImVec2{ 8, 15 }, ImVec2{ 13, 19 }, ImVec2{ 13, 5 },
+		                        ImVec2{ 8, 9 } })
+			list->PathLineTo(p(q.x, q.y));
+		list->PathStroke(colour, ImDrawFlags_Closed, w);
+		list->AddLine(p(16, 9), p(21, 15), colour, w);
+		list->AddLine(p(21, 9), p(16, 15), colour, w);
+		break;
 	case Icon::FOLDER:
 		list->PathLineTo(p(3, 7));
 		arc(5, 7, 2, 180, 270);
