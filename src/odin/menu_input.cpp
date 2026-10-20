@@ -655,7 +655,7 @@ Menu::games_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width)
 
 		MenuKit::write(list, p, colour, names[g].c_str(), 0.0f, letters);
 		if (shown)
-			list->AddLine({ p.x, p.y + line + kit.px(2.0f) }, { p.x + w, p.y + line + kit.px(2.0f) }, colour, 1.0f);
+			list->AddLine({ p.x, p.y + line + kit.px(2.0f) }, { p.x + w, p.y + line + kit.px(2.0f) }, colour, kit.stroke());
 		if (g == state.running)
 			list->AddCircleFilled({ p.x + w + 2.4f * dot + dot, p.y + line / 2.0f }, dot, MenuKit::alpha(colour, 0.8f));
 		return w + 4.0f * dot;
@@ -840,9 +840,9 @@ not_mapped(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows,
 
 			ImGui::PopID();
 			if (chosen)
-				MenuKit::frame(list, { x, y }, { x + w, y + h }, kit.px(3.0f), 0, palette.accent);
+				kit.frame(list, { x, y }, { x + w, y + h }, kit.px(3.0f), 0, palette.accent);
 			else if (hovered)
-				MenuKit::frame(list, { x, y }, { x + w, y + h }, kit.px(3.0f), 0, palette.action);
+				kit.frame(list, { x, y }, { x + w, y + h }, kit.px(3.0f), 0, palette.action);
 			else
 				kit.dashed_frame(list, { x, y }, { x + w, y + h }, palette.outline);
 			MenuKit::write(list, { x + wide, y + high }, chosen ? palette.accent : hovered ? palette.action : palette.dim,
@@ -919,7 +919,7 @@ cabinet_box(const MenuKit &kit, const MenuState &state, ImVec2 a, ImVec2 b, bool
 
 		const float tiny = MenuKit::font(MenuKit::TINY), small = MenuKit::font(MenuKit::SMALL);
 
-		MenuKit::frame(list, a, b, kit.px(BOX_CUT), 0, palette.line);
+		kit.frame(list, a, b, kit.px(BOX_CUT), 0, palette.line);
 		MenuKit::write(list, { a.x + pad, a.y + kit.px(6.0f) + small - tiny }, palette.cabinet, "THE CABINET", tiny,
 		               tiny * 0.14f);
 		MenuKit::write(list, { b.x - pad - MenuKit::measure(title.c_str(), small), a.y + kit.px(6.0f) }, palette.dim,
@@ -1028,7 +1028,7 @@ draw_label(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows,
 		const float alpha = static_cast<float>(palette.stroke >> IM_COL32_A_SHIFT) * REST_ALPHA;
 		const ImU32 rest = (palette.stroke & ~IM_COL32_A_MASK) | (static_cast<ImU32>(alpha) << IM_COL32_A_SHIFT);
 
-		MenuKit::dashes(list, l.line, false, rest, 1.0f, kit.px(DASH_ON), kit.px(DASH_OFF));
+		MenuKit::dashes(list, l.line, false, rest, kit.stroke(), kit.px(DASH_ON), kit.px(DASH_OFF));
 		list->AddCircleFilled(l.line.back(), kit.px(DOT), rest);
 	}
 
@@ -1046,7 +1046,7 @@ draw_label(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows,
 
 	MenuKit::write(list, at, colour, text.c_str());
 	if (l.hot)
-		list->AddLine({ at.x, at.y + line + kit.px(1.0f) }, { at.x + w, at.y + line + kit.px(1.0f) }, colour, 1.0f);
+		list->AddLine({ at.x, at.y + line + kit.px(1.0f) }, { at.x + w, at.y + line + kit.px(1.0f) }, colour, kit.stroke());
 }
 
 /* The controls on an input the drawing has not, at the foot of the column
@@ -1187,7 +1187,7 @@ keyboard_box(const MenuKit &kit, const MenuState &state, std::span<const InputRo
 			if (input.kind == HostInput::Kind::KEY)
 				bound.push_back(input.key);
 
-	MenuKit::frame(list, at(X0 - 8, Y0 - 10), at(X0 - 8 + 18 * U + 30, Y0 - 10 + 5 * U + 18), kit.px(4.0f), palette.body,
+	kit.frame(list, at(X0 - 8, Y0 - 10), at(X0 - 8 + 18 * U + 30, Y0 - 10 + 5 * U + 18), kit.px(4.0f), palette.body,
 	               palette.stroke);
 
 	const float size = 10.0f * k;
@@ -1373,7 +1373,7 @@ list_box(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, I
 
 		if (hovered)
 			list->AddRectFilled(at, { at.x + column, at.y + h }, palette.hover);
-		list->AddLine({ at.x, at.y + h }, { at.x + column, at.y + h }, palette.line, 1.0f);
+		list->AddLine({ at.x, at.y + h }, { at.x + column, at.y + h }, palette.line, kit.stroke());
 		MenuKit::write(list, { at.x + kit.px(4.0f), at.y + (h - line) / 2.0f },
 		               group.lit || group.chosen ? palette.accent : palette.ink,
 		               MenuKit::fitted(group.name, ca.x - at.x - kit.px(14.0f)).c_str());
@@ -1385,7 +1385,8 @@ list_box(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, I
 		if (empty)
 			kit.dashed_pill(list, ca, cb, palette.outline);
 		else
-			list->AddRect(ca, cb, group.chosen || group.lit ? palette.accent : palette.outline, (cb.y - ca.y) / 2.0f);
+			list->AddRect(ca, cb, group.chosen || group.lit ? palette.accent : palette.outline, (cb.y - ca.y) / 2.0f,
+			              ImDrawFlags_None, kit.stroke());
 		x = ca.x + wide + (chip_w - 2.0f * wide - total) / 2.0f;
 		for (size_t p = 0; p < n; p++) {
 			const InputRow &row = rows[group.parts[p].row];
@@ -1523,7 +1524,7 @@ Menu::page_input(MenuKit &kit, MenuState &state) const
 	const ImVec2 classic_size = kit.button_size("Classic", Icon::LIST), swap_size = kit.button_size(swap, Icon::SWAP);
 	const float corner = classic || !wide ? std::max(classic_size.y, swap_size.y) + kit.px(5.0f) : 0.0f;
 
-	MenuKit::frame(ImGui::GetWindowDrawList(), a, b, kit.px(BOX_CUT), 0, palette.line);
+	kit.frame(ImGui::GetWindowDrawList(), a, b, kit.px(BOX_CUT), 0, palette.line);
 	if (cabinet)
 		cabinet_box(kit, state, a, b, false);
 	else if (state.classic)
@@ -1546,7 +1547,7 @@ Menu::page_input(MenuKit &kit, MenuState &state) const
 	if (classic && kit.button("Classic", { x - classic_size.x, a.y + kit.px(5.0f) }, state.classic, Icon::LIST))
 		state.classic = !state.classic;
 	if (!cabinet) {
-		ImGui::GetWindowDrawList()->AddLine({ a.x + 1.0f, bar_top }, { b.x - 1.0f, bar_top }, palette.line, 1.0f);
+		ImGui::GetWindowDrawList()->AddLine({ a.x + 1.0f, bar_top }, { b.x - 1.0f, bar_top }, palette.line, kit.stroke());
 		buttons_bar(kit, state, rows, { bar_at.x, bar_top }, bar_w, true);
 	}
 	ImGui::SetCursorScreenPos(top);
@@ -1644,7 +1645,7 @@ Menu::input_foot(const MenuKit &kit, MenuState &state, ImVec2 at, float width, f
 			list->AddRectFilled(ca, cb, MenuKit::alpha(palette.accent, 0.55f), kit.px(5.0f));
 			list->PopClipRect();
 		}
-		list->AddRect(ca, cb, palette.stroke, kit.px(5.0f));
+		list->AddRect(ca, cb, palette.stroke, kit.px(5.0f), ImDrawFlags_None, kit.stroke());
 		MenuKit::write(list, { x + kit.px(7.0f), y }, palette.ink,
 		               MenuKit::fitted(text, chip_w - 2.0f * kit.px(7.0f)).c_str());
 		return height;

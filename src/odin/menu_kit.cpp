@@ -346,7 +346,7 @@ MenuKit::fitted(const std::string &text, float width, float size)
 }
 
 void
-MenuKit::frame(ImDrawList *list, ImVec2 a, ImVec2 b, float cut, ImU32 fill, ImU32 border)
+MenuKit::frame(ImDrawList *list, ImVec2 a, ImVec2 b, float cut, ImU32 fill, ImU32 border) const
 {
 	const ImVec2 points[8] = { { a.x + cut, a.y }, { b.x - cut, a.y }, { b.x, a.y + cut }, { b.x, b.y - cut },
 	                           { b.x - cut, b.y }, { a.x + cut, b.y }, { a.x, b.y - cut }, { a.x, a.y + cut } };
@@ -354,7 +354,7 @@ MenuKit::frame(ImDrawList *list, ImVec2 a, ImVec2 b, float cut, ImU32 fill, ImU3
 	if (fill)
 		list->AddConvexPolyFilled(points, 8, fill);
 	if (border)
-		list->AddPolyline(points, 8, border, ImDrawFlags_Closed, 1.0f);
+		list->AddPolyline(points, 8, border, ImDrawFlags_Closed, stroke());
 }
 
 void
@@ -394,13 +394,13 @@ MenuKit::dashed_frame(ImDrawList *list, ImVec2 a, ImVec2 b, ImU32 colour) const
 	const ImVec2 points[8] = { { a.x + cut, a.y }, { b.x - cut, a.y }, { b.x, a.y + cut }, { b.x, b.y - cut },
 	                           { b.x - cut, b.y }, { a.x + cut, b.y }, { a.x, b.y - cut }, { a.x, a.y + cut } };
 
-	dashes(list, points, true, colour, 1.0f, px(3.0f), px(2.0f));
+	dashes(list, points, true, colour, stroke(), px(3.0f), px(2.0f));
 }
 
 void
 MenuKit::dashed_pill(ImDrawList *list, ImVec2 a, ImVec2 b, ImU32 colour) const
 {
-	dashes(list, pill_points(a, b), true, colour, 1.0f, px(3.0f), px(2.0f));
+	dashes(list, pill_points(a, b), true, colour, stroke(), px(3.0f), px(2.0f));
 }
 
 /* The paths of the mock-up, in a square of 24 */
@@ -634,7 +634,8 @@ MenuKit::begin_row(float &width)
 
 	width = ImGui::GetContentRegionAvail().x;
 	if (!m_first_row)
-		ImGui::GetWindowDrawList()->AddLine({ at.x + 1.0f, at.y }, { at.x + width - 1.0f, at.y }, m_palette.line, 1.0f);
+		ImGui::GetWindowDrawList()->AddLine({ at.x + 1.0f, at.y }, { at.x + width - 1.0f, at.y }, m_palette.line,
+		                                    stroke());
 	m_first_row = false;
 	return at;
 }
@@ -735,7 +736,7 @@ MenuKit::segments(ImVec2 a, std::span<const char *const> labels, int &chosen, bo
 			fill_cell(list, ca, cb, px(CONTROL_CUT), i == 0, i + 1 == labels.size(),
 			          faded(on ? m_palette.action : m_palette.hover, still));
 		if (i > 0)
-			list->AddLine(ca, { x, cb.y }, faded(m_palette.outline, still), 1.0f);
+			list->AddLine(ca, { x, cb.y }, faded(m_palette.outline, still), stroke());
 		write(list, { x + wide, a.y + high },
 		      faded(on ? m_palette.on_action : hovered ? m_palette.ink : m_palette.dim, still), labels[i], size);
 		x += cells[i];
@@ -831,7 +832,7 @@ MenuKit::list_popup(ImVec2 at, float width, std::span<const std::string> labels,
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { px(4.0f), px(4.0f) });
 	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { 0.0f, px(2.0f) });
 	ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, { 0.0f, 0.5f });
-	ImGui::PushStyleVar(ImGuiStyleVar_PopupBorderSize, 1.0f);
+	ImGui::PushStyleVar(ImGuiStyleVar_PopupBorderSize, stroke());
 	ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, 0.0f);
 	if (ImGui::BeginPopup("list")) {
 		ImDrawList *const list = ImGui::GetWindowDrawList();
@@ -923,7 +924,7 @@ MenuKit::arrow(const char *id, ImVec2 at, bool right) const
 	const bool clicked = ImGui::InvisibleButton(id, size);
 	const bool hovered = ImGui::IsItemHovered();
 
-	list->AddRect(at, b, hovered ? m_palette.action : m_palette.outline, size.y / 2.0f);
+	list->AddRect(at, b, hovered ? m_palette.action : m_palette.outline, size.y / 2.0f, ImDrawFlags_None, stroke());
 	write(list, { (at.x + b.x - measure(sign, big)) / 2.0f, (at.y + b.y - big) / 2.0f },
 	      hovered ? m_palette.action : m_palette.ink, sign, big);
 	return clicked;
@@ -1031,7 +1032,7 @@ MenuKit::slider(const char *name, const char *about, float &value, float low, fl
 	const float r = track_h / 2.0f;
 
 	list->AddRectFilled(a, { a.x + track_w * fill, b.y }, faded(m_palette.action, still), r);
-	list->AddRect(a, b, faded(hovered ? m_palette.stroke : m_palette.outline, still), r);
+	list->AddRect(a, b, faded(hovered ? m_palette.stroke : m_palette.outline, still), r, ImDrawFlags_None, stroke());
 	write(list, { b.x + space, mid - size / 2.0f }, faded(m_palette.ink, still), shown, size);
 
 	ImGui::SetCursorScreenPos(at);
@@ -1055,7 +1056,8 @@ MenuKit::key(ImDrawList *list, ImVec2 at, const char *name, bool used, bool lit)
 	const float note = font(NOTE), w = measure(name, note);
 
 	list->AddRectFilled(at, b, lit ? m_palette.accent : m_palette.part, px(5.0f));
-	list->AddRect(at, b, lit ? m_palette.accent : used ? m_palette.stroke : m_palette.outline, px(5.0f));
+	list->AddRect(at, b, lit ? m_palette.accent : used ? m_palette.stroke : m_palette.outline, px(5.0f), ImDrawFlags_None,
+	              stroke());
 	write(list, { at.x + (size.x - w) / 2.0f, at.y + (size.y - note) / 2.0f },
 	      lit ? m_palette.on_accent : used ? m_palette.ink : m_palette.faint, name, note);
 }
@@ -1074,7 +1076,7 @@ MenuKit::pill(ImDrawList *list, ImVec2 at, const char *name) const
 	const ImVec2 size = pill_size(name);
 	const float small = font(SMALL), w = measure(name, small);
 
-	list->AddRect(at, { at.x + size.x, at.y + size.y }, m_palette.outline, size.y / 2.0f);
+	list->AddRect(at, { at.x + size.x, at.y + size.y }, m_palette.outline, size.y / 2.0f, ImDrawFlags_None, stroke());
 	write(list, { at.x + (size.x - w) / 2.0f, at.y + (size.y - small) / 2.0f }, m_palette.ink, name, small);
 }
 
@@ -1139,7 +1141,7 @@ MenuKit::shortcut(const char *name, std::span<const std::vector<std::string>> ke
 		const bool hovered = ImGui::IsItemHovered();
 
 		if (static_cast<int>(i) == catching) {
-			list->AddRect({ x, y }, { x + w, y + cap_h }, m_palette.accent, px(5.0f));
+			list->AddRect({ x, y }, { x + w, y + cap_h }, m_palette.accent, px(5.0f), ImDrawFlags_None, stroke());
 			write(list, { x + px(5.0f), y + (cap_h - note) / 2.0f }, m_palette.accent, press, note);
 			x += w + apart;
 			continue;
@@ -1154,7 +1156,7 @@ MenuKit::shortcut(const char *name, std::span<const std::vector<std::string>> ke
 			}
 			key(list, { x, y }, cap, true, false);
 			if (hovered)
-				list->AddRect({ x, y }, { x + cap_w, y + cap_h }, m_palette.action, px(5.0f));
+				list->AddRect({ x, y }, { x + cap_w, y + cap_h }, m_palette.action, px(5.0f), ImDrawFlags_None, stroke());
 			x += cap_w;
 		}
 		x += apart;
@@ -1166,7 +1168,8 @@ MenuKit::shortcut(const char *name, std::span<const std::vector<std::string>> ke
 	if (ImGui::InvisibleButton("pad", { pad_w, cap_h }))
 		clicked = 2;
 	if (catching == 2) {
-		list->AddRect({ pad_x + pad_w - press_pad, y }, { pad_x + pad_w, y + cap_h }, m_palette.accent, cap_h / 2.0f);
+		list->AddRect({ pad_x + pad_w - press_pad, y }, { pad_x + pad_w, y + cap_h }, m_palette.accent, cap_h / 2.0f,
+		              ImDrawFlags_None, stroke());
 		write(list, { pad_x + pad_w - press_pad + px(7.0f), y + (cap_h - small) / 2.0f }, m_palette.accent, press, small);
 	} else {
 		const bool hovered = ImGui::IsItemHovered();
@@ -1180,7 +1183,8 @@ MenuKit::shortcut(const char *name, std::span<const std::vector<std::string>> ke
 			right -= size.x;
 			pill(list, { right, y }, pad[i].c_str());
 			if (hovered)
-				list->AddRect({ right, y }, { right + size.x, y + size.y }, m_palette.action, size.y / 2.0f);
+				list->AddRect({ right, y }, { right + size.x, y + size.y }, m_palette.action, size.y / 2.0f,
+				              ImDrawFlags_None, stroke());
 			if (i) {
 				right -= gap + plus;
 				write(list, { right, y + (cap_h - small) / 2.0f }, m_palette.faint, "+", small);

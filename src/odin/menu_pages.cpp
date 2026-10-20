@@ -67,7 +67,7 @@ left_box(const MenuKit &kit, ImVec2 top, ImVec2 room)
 {
 	const Box box = { top, { top.x + (room.x - kit.px(SPLIT_GAP)) * LEFT_SHARE, top.y + room.y } };
 
-	MenuKit::frame(ImGui::GetWindowDrawList(), box.a, box.b, kit.px(BOX_CUT), 0, kit.palette().line);
+	kit.frame(ImGui::GetWindowDrawList(), box.a, box.b, kit.px(BOX_CUT), 0, kit.palette().line);
 	return box;
 }
 
@@ -192,7 +192,7 @@ output_tiles(const MenuKit &kit, const MenuState &state, const Box &box)
 			const MenuState::Output &output = state.outputs[i];
 			const ImVec2 a = { box.a.x + inside + static_cast<float>(i % columns) * (tile_w + gap),
 			                   top + static_cast<float>(i / columns) * (tile_h + gap) };
-			MenuKit::frame(list, a, { a.x + tile_w, a.y + tile_h }, kit.px(BOX_CUT), output.on ? palette.hover : 0,
+			kit.frame(list, a, { a.x + tile_w, a.y + tile_h }, kit.px(BOX_CUT), output.on ? palette.hover : 0,
 			               output.on ? palette.accent : palette.line);
 			MenuKit::icon(list, icon_of(output.role), { a.x + (tile_w - side) / 2.0f, a.y + pad }, side,
 			              output.on ? palette.accent : palette.stroke);
@@ -301,9 +301,9 @@ route_box(const MenuKit &kit, ImVec2 a, ImVec2 b, const char *name, const char *
 	const float top = (a.y + b.y - high) / 2.0f, mid = (a.x + b.x) / 2.0f;
 
 	if (on)
-		MenuKit::frame(list, a, b, kit.px(3.0f), palette.part, palette.stroke);
+		kit.frame(list, a, b, kit.px(3.0f), palette.part, palette.stroke);
 	else {
-		MenuKit::frame(list, a, b, kit.px(3.0f), palette.part, 0);
+		kit.frame(list, a, b, kit.px(3.0f), palette.part, 0);
 		kit.dashed_frame(list, a, b, palette.outline);
 	}
 	list->PushClipRect(a, b, true);
@@ -334,9 +334,9 @@ route_line(const MenuKit &kit, ImVec2 p, ImVec2 q, bool on, const std::string &l
 		points.push_back({ x, y });
 	}
 	if (on)
-		list->AddPolyline(points.data(), static_cast<int>(points.size()), palette.stroke, ImDrawFlags_None, 1.4f);
+		list->AddPolyline(points.data(), static_cast<int>(points.size()), palette.stroke, ImDrawFlags_None, kit.px(1.4f));
 	else
-		MenuKit::dashes(list, points, false, palette.outline, 1.4f, kit.px(2.0f), kit.px(4.0f));
+		MenuKit::dashes(list, points, false, palette.outline, kit.px(1.4f), kit.px(2.0f), kit.px(4.0f));
 	if (level.empty())
 		return;
 
@@ -376,7 +376,7 @@ route_card(const MenuKit &kit, const MenuState::SoundGame &game, ImVec2 at, floa
 			c = static_cast<char>(c - 'a' + 'A');
 	const float small = MenuKit::font(MenuKit::SMALL);
 
-	MenuKit::frame(list, at, { at.x + width, at.y + h }, kit.px(BOX_CUT), 0, palette.line);
+	kit.frame(list, at, { at.x + width, at.y + h }, kit.px(BOX_CUT), 0, palette.line);
 	MenuKit::write(list, { at.x + pad, at.y + pad + line - small }, palette.dim, title.c_str(), small, small * 0.12f);
 	route_box(kit, p(4, 6), p(144, 48), "Main board", "Main", boards.main, true);
 	route_box(kit, p(4, 62), p(144, 104), "Optional board", "Optional", boards.option, option);

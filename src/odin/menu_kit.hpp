@@ -19,6 +19,8 @@
 #ifndef ODIN_MENU_KIT_HPP
 #define ODIN_MENU_KIT_HPP
 
+#include <algorithm>
+#include <cmath>
 #include <span>
 #include <string>
 #include <vector>
@@ -72,6 +74,8 @@ public:
 
 	const MenuPalette &palette() const { return m_palette; }
 	float px(float points) const { return points * m_scale; }
+	/* A stroke of one point, in whole pixels: as thick as the menu grows */
+	float stroke() const { return std::max(1.0f, std::round(m_scale)); }
 	/* That share of the font, in pixels */
 	static float font(float share) { return ImGui::GetFontSize() * share; }
 	/* A colour with that share of its opacity */
@@ -100,7 +104,7 @@ public:
 	static std::string fitted(const std::string &text, float width, float size = 0.0f);
 
 	/* A frame with its corners cut; a colour of 0 is none */
-	static void frame(ImDrawList *list, ImVec2 a, ImVec2 b, float cut, ImU32 fill, ImU32 border);
+	void frame(ImDrawList *list, ImVec2 a, ImVec2 b, float cut, ImU32 fill, ImU32 border) const;
 	/* A line of dashes along points, `on` long and `off` apart; a frame of
 	 * them with its corners cut, a pill of them */
 	static void dashes(ImDrawList *list, std::span<const ImVec2> points, bool closed, ImU32 colour, float width,

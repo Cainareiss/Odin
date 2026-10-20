@@ -155,16 +155,16 @@ set_hint(const char *name, const std::optional<std::string> &value)
 		SDL_ResetHint(name);
 }
 
-/* The line under the tabs, faded at its ends */
+/* The line under the tabs, that thick, faded at its ends */
 void
-under_tabs(ImDrawList *list, float left, float right, float y, ImU32 colour)
+under_tabs(ImDrawList *list, float left, float right, float y, float thick, ImU32 colour)
 {
 	const ImU32 clear = MenuKit::alpha(colour, 0.0f);
 	const float fade = (right - left) * LINE_FADE;
 
-	list->AddRectFilledMultiColor({ left, y }, { left + fade, y + 1.0f }, clear, colour, colour, clear);
-	list->AddRectFilled({ left + fade, y }, { right - fade, y + 1.0f }, colour);
-	list->AddRectFilledMultiColor({ right - fade, y }, { right, y + 1.0f }, colour, clear, clear, colour);
+	list->AddRectFilledMultiColor({ left, y }, { left + fade, y + thick }, clear, colour, colour, clear);
+	list->AddRectFilled({ left + fade, y }, { right - fade, y + thick }, colour);
+	list->AddRectFilledMultiColor({ right - fade, y }, { right, y + thick }, colour, clear, clear, colour);
 }
 
 } /* namespace */
@@ -307,7 +307,7 @@ Menu::build(MenuState &state)
 
 	list->AddRectFilled(a, b, palette.frame);
 	kit.tabs(TABS, TAB_ICONS, b.x < WIDE * b.y, m_page);
-	under_tabs(list, a.x + w * LINE_ENDS, b.x - w * LINE_ENDS, ImGui::GetCursorScreenPos().y + kit.px(3.0f),
+	under_tabs(list, a.x + w * LINE_ENDS, b.x - w * LINE_ENDS, ImGui::GetCursorScreenPos().y + kit.px(3.0f), kit.stroke(),
 	           hot ? MenuKit::alpha(palette.accent, LINE_HOT) : palette.outline);
 	ImGui::Dummy({ 0.0f, kit.px(5.0f) });
 
@@ -343,7 +343,7 @@ Menu::build(MenuState &state)
 	/* While an input is caught, Input says what to do there, keys and all */
 	const bool keys_shown = m_page != INPUT || !state.catching;
 
-	list->AddLine({ a.x, foot_top - foot_pad }, { b.x, foot_top - foot_pad }, palette.line, 1.0f);
+	list->AddLine({ a.x, foot_top - foot_pad }, { b.x, foot_top - foot_pad }, palette.line, kit.stroke());
 	if (m_page == INPUT)
 		input_foot(kit, state, { a.x + pad, foot_top }, keys_shown ? help_w : w - 2.0f * pad, foot, true);
 	else
