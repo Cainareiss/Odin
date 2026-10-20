@@ -944,6 +944,7 @@ MenuKit::list_popup(ImVec2 at, float width, std::span<const Item> items, int &ch
 	ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImGui::ColorConvertU32ToFloat4(p.hover));
 	ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImGui::ColorConvertU32ToFloat4(p.hover));
 	ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(p.ink));
+	ImGui::PushStyleColor(ImGuiCol_NavCursor, ImGui::ColorConvertU32ToFloat4(p.accent));
 	/* In whole pixels: the window is, and a fraction more would scroll */
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { std::round(px(4.0f)), std::round(px(4.0f)) });
 	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { 0.0f, px(2.0f) });
@@ -995,7 +996,7 @@ MenuKit::list_popup(ImVec2 at, float width, std::span<const Item> items, int &ch
 		ImGui::EndPopup();
 	}
 	ImGui::PopStyleVar(5);
-	ImGui::PopStyleColor(6);
+	ImGui::PopStyleColor(7);
 	return chosen != was;
 }
 

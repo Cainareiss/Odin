@@ -220,7 +220,9 @@ Menu::Menu(SDL_Window *window, const std::string &title)
 	style.Colors[ImGuiCol_ScrollbarGrab] = colour(palette.outline);
 	style.Colors[ImGuiCol_ScrollbarGrabHovered] = colour(palette.dim);
 	style.Colors[ImGuiCol_ScrollbarGrabActive] = colour(palette.ink);
-	style.Colors[ImGuiCol_NavCursor] = colour(palette.accent);
+	/* The frame of the menu is the kit's (MenuFocus); Dear ImGui's only in a
+	 * list dropped open (MenuKit::list_popup) */
+	style.Colors[ImGuiCol_NavCursor] = colour(0);
 	m_style = style;
 
 	ImGui_ImplSDL3_InitForOpenGL(window, nullptr);
