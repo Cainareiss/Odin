@@ -321,6 +321,8 @@ Display::Display(const Keyboard &keys, const Options &options, SDL_Window *windo
 	  m_title_since(0), m_title_frames(0)
 {
 	m_gpu = reinterpret_cast<const char *>(glGetString(GL_RENDERER));
+	m_given_w = static_cast<int>(Renderer::WIDTH);
+	m_given_h = static_cast<int>(Renderer::HEIGHT);
 	if (const int every = env_int("ODIN_SCREENSHOT_EVERY", 0); every > 0)
 		m_shot_every = static_cast<unsigned>(every);
 
@@ -331,7 +333,9 @@ Display::Display(const Keyboard &keys, const Options &options, SDL_Window *windo
 		SDL_GL_MakeCurrent(m_window, m_context);
 		SDL_GL_SetSwapInterval(0);
 	});
-	if (options.window >= 2 || options.fullscreen)
+	if (options.window_w && options.window_h)
+		set_window_size(static_cast<int>(options.window_w), static_cast<int>(options.window_h), options.fullscreen);
+	else if (options.window >= 2 || options.fullscreen)
 		set_window(options.window ? options.window : 1, options.fullscreen);
 	show_black();
 }
@@ -1005,13 +1009,18 @@ Display::show_speed()
 	m_title_frames = 0;
 }
 
-/* The window `times` the screen of the board: not larger than what the
- * display has room for, borders included, and of the shape of that
- * screen. */
+/* The window `times` the screen of the board, or of that size: not larger
+ * than what the display has room for, borders included, and of that
+ * shape. */
 void
 Display::set_window(unsigned times, bool fullscreen)
 {
-	int w = static_cast<int>(Renderer::WIDTH * times), h = static_cast<int>(Renderer::HEIGHT * times);
+	set_window_size(static_cast<int>(Renderer::WIDTH * times), static_cast<int>(Renderer::HEIGHT * times), fullscreen);
+}
+
+void
+Display::set_window_size(int w, int h, bool fullscreen)
+{
 	int top = 0, left = 0, bottom = 0, right = 0;
 	SDL_Rect room;
 
@@ -1032,8 +1041,13 @@ Display::set_window(unsigned times, bool fullscreen)
 	}
 	SDL_SetWindowSize(m_window, w, h);
 	SDL_SetWindowPosition(m_window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+	m_given_w = w;
+	m_given_h = h;
+	m_by_hand = false;
 	if (fullscreen)
 		SDL_SetWindowFullscreen(m_window, true);
+	/* Done before the size is read again: not taken for the user's */
+	SDL_SyncWindow(m_window);
 }
 
 void
@@ -1068,6 +1082,30 @@ Display::resize(unsigned times)
 {
 	if (!fullscreen())
 		set_window(times, false);
+}
+
+void
+Display::resize_to(unsigned w, unsigned h)
+{
+	if (!fullscreen())
+		set_window_size(static_cast<int>(w), static_cast<int>(h), false);
+}
+
+bool
+Display::hand_size(unsigned &w, unsigned &h)
+{
+	int now_w = 0, now_h = 0;
+
+	if (!(SDL_GetWindowFlags(m_window) & (SDL_WINDOW_FULLSCREEN | SDL_WINDOW_MAXIMIZED | SDL_WINDOW_MINIMIZED)) &&
+	    SDL_GetWindowSize(m_window, &now_w, &now_h) && now_w > 0 && now_h > 0 &&
+	    (now_w != m_given_w || now_h != m_given_h)) {
+		m_given_w = now_w;
+		m_given_h = now_h;
+		m_by_hand = true;
+	}
+	w = static_cast<unsigned>(m_given_w);
+	h = static_cast<unsigned>(m_given_h);
+	return m_by_hand;
 }
 
 void
@@ -1118,13 +1156,20 @@ Display::display_size(unsigned &w, unsigned &h) const
 	h = mode ? static_cast<unsigned>(static_cast<float>(mode->h) * mode->pixel_density) : 0;
 }
 
+/* The size the user gave the window is taken before it goes; back from
+ * the whole display, the window has its size again */
 void
 Display::toggle_fullscreen()
 {
 	const bool on = (SDL_GetWindowFlags(m_window) & SDL_WINDOW_FULLSCREEN) != 0;
+	unsigned w = 0, h = 0;
 
 	finish();
+	hand_size(w, h);
 	SDL_SetWindowFullscreen(m_window, !on);
+	if (on)
+		SDL_SetWindowSize(m_window, static_cast<int>(w), static_cast<int>(h));
+	SDL_SyncWindow(m_window);
 }
 
 void

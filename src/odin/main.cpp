@@ -105,7 +105,7 @@ struct Options {
 	std::string sound_device;
 	unsigned volume = 100;
 	bool background = true;
-	odin::Display::Options display = { 1, 1, 0, false, true, odin::Display::Vsync::OFF };
+	odin::Display::Options display = { 1, 1, 0, false, true, odin::Display::Vsync::OFF, 0, 0 };
 	/* [display] vsync: the display gets it when the frames are paced */
 	odin::Display::Vsync vsync = VSYNC;
 	/* [display] bezel: around the picture */
@@ -233,10 +233,21 @@ parse_options(int argc, char **argv, Options &options)
 	return wrong ? Parsed::WRONG : Parsed::HELP_ASKED;
 }
 
+/* A size of the window in points as odin.ini writes it, <w>x<h>: from
+ * 320 by 240 to 16384 by 16384 */
+bool
+window_size(const std::string &value, unsigned &w, unsigned &h)
+{
+	char rest = 0;
+
+	return std::sscanf(value.c_str(), "%ux%u%c", &w, &h, &rest) == 2 && w >= 320 && h >= 240 && w <= 16384 &&
+	       h <= 16384;
+}
+
 /* [display] of odin.ini, where the command line says nothing: the 3D 1 to
  * 6 times finer, the texture filter (1 to 16), the window 1 to 6 times the
- * screen, the whole display, no limit to the frames, the speed in the
- * title. The last line says. */
+ * screen or of a size the user gave it, the whole display, no limit to the
+ * frames, the speed in the title. The last line says. */
 void
 read_display(const odin::Settings &settings, Options &options)
 {
@@ -245,6 +256,7 @@ read_display(const odin::Settings &settings, Options &options)
 		const long number = std::strtol(value.c_str(), &end, 10);
 		const bool whole = !value.empty() && !*end;
 		const bool on = value == "on", off = value == "off";
+		unsigned w = 0, h = 0;
 
 		if (key == "scale" && whole && number >= 1 && number <= 6) {
 			if (!options.given.scale)
@@ -253,8 +265,15 @@ read_display(const odin::Settings &settings, Options &options)
 			if (!options.given.anisotropy)
 				options.display.anisotropy = static_cast<unsigned>(number);
 		} else if (key == "window" && whole && number >= 1 && number <= 6) {
-			if (!options.given.window)
+			if (!options.given.window) {
 				options.display.window = static_cast<unsigned>(number);
+				options.display.window_w = options.display.window_h = 0;
+			}
+		} else if (key == "window" && window_size(value, w, h)) {
+			if (!options.given.window) {
+				options.display.window_w = w;
+				options.display.window_h = h;
+			}
 		} else if (key == "fullscreen" && (on || off)) {
 			if (!options.given.fullscreen)
 				options.display.fullscreen = on;
@@ -586,6 +605,8 @@ public:
 		state.scale = options.display.scale;
 		state.anisotropy = options.display.anisotropy;
 		state.window = options.display.window ? options.display.window : 1;
+		state.custom_w = options.display.window_w;
+		state.custom_h = options.display.window_h;
 		state.unthrottled = options.unthrottled;
 		state.show_speed = options.display.show_speed;
 		state.vsync = static_cast<unsigned>(options.vsync);
@@ -682,6 +703,7 @@ public:
 	{
 		if (m_listing)
 			SDL_QuitSubSystem(SDL_INIT_AUDIO);
+		keep_custom();
 	}
 	MenuSession(const MenuSession &) = delete;
 	MenuSession &operator=(const MenuSession &) = delete;
@@ -755,6 +777,13 @@ private:
 	void change_part(const odin::MenuSlot &slot, bool to_defaults);
 	void keep(const char *key, const std::optional<std::string> &value);
 	void keep(const char *section, const char *key, const std::optional<std::string> &value);
+	/* [display] window: the size of Custom, or how many times the screen;
+	 * the size the user gave the window by hand, Custom from now on
+	 * (followed at each picture of the menu, kept in odin.ini when Odin is
+	 * done with this game or the library: a drag gives many sizes) */
+	void keep_window();
+	void follow_hand_size();
+	void keep_custom();
 	/* The game whose controls the page Input shows: its name and panel */
 	std::string game_shown() const;
 	const odin::ControlPanel &panel_shown() const { return m_other ? *m_other : m_controls.panel(); }
@@ -812,6 +841,8 @@ private:
 	std::string m_states;
 	odin::FolderDialog m_dialog;
 	bool m_menu_opened = false;
+	/* A size of the window from the hands of the user, not kept yet */
+	bool m_custom_waits = false;
 	unsigned m_menu_pictures = 0;	/* still to draw */
 	Uint64 m_menu_drawn = 0;	/* when the last one was */
 	const unsigned m_menu_test;
@@ -1602,6 +1633,14 @@ MenuSession::draw_menu()
 
 	state.choosing = m_dialog.open();
 	state.fullscreen = m_display.fullscreen();
+	{
+		int w = 0, h = 0;
+
+		SDL_GetWindowSize(m_display.window(), &w, &h);
+		state.window_w = static_cast<unsigned>(std::max(w, 0));
+		state.window_h = static_cast<unsigned>(std::max(h, 0));
+	}
+	follow_hand_size();
 	m_display.display_size(state.display_w, state.display_h);
 	state.refresh = m_display.refresh();
 	state.vsync_off = m_options.unthrottled ? "off at an unlimited pace" : nullptr;
@@ -1797,9 +1836,13 @@ MenuSession::apply(const odin::MenuState &was)
 		m_display.set_fullscreen(now.fullscreen);
 		keep("fullscreen", on_off(now.fullscreen, false));
 	}
-	if (now.window != was.window) {
-		m_display.resize(now.window);
-		keep("window", number(now.window, 1));
+	if (now.window != was.window || now.custom_w != was.custom_w || now.custom_h != was.custom_h) {
+		/* Custom keeps the window where it is, of the size it has */
+		if (!now.custom_w)
+			m_display.resize(now.window);
+		else if (now.custom_w != now.window_w || now.custom_h != now.window_h)
+			m_display.resize_to(now.custom_w, now.custom_h);
+		keep_window();
 	}
 	if (now.sides != was.sides) {
 		const auto sides = static_cast<odin::Display::Sides>(now.sides);
@@ -1909,6 +1952,39 @@ void
 MenuSession::keep(const char *key, const std::optional<std::string> &value)
 {
 	keep("display", key, value);
+}
+
+void
+MenuSession::keep_window()
+{
+	const odin::MenuState &state = m_menu_state;
+
+	m_custom_waits = false;
+	if (state.custom_w)
+		keep("window", std::to_string(state.custom_w) + "x" + std::to_string(state.custom_h));
+	else
+		keep("window", state.window == 1 ? std::nullopt : std::optional(std::to_string(state.window)));
+}
+
+void
+MenuSession::follow_hand_size()
+{
+	odin::MenuState &state = m_menu_state;
+	unsigned w = 0, h = 0;
+
+	if (state.window_given || !m_display.hand_size(w, h) || (w == state.custom_w && h == state.custom_h))
+		return;
+	state.custom_w = w;
+	state.custom_h = h;
+	m_custom_waits = true;
+}
+
+void
+MenuSession::keep_custom()
+{
+	follow_hand_size();
+	if (m_custom_waits)
+		keep_window();
 }
 
 /* In odin.ini; with none, for the time Odin runs */

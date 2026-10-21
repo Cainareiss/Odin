@@ -99,6 +99,9 @@ public:
 		bool fullscreen;
 		bool show_speed;	/* the frames a second in the title */
 		Vsync vsync;
+		/* The window of that size in points instead, the one the user gave
+		 * it by hand (0: as `window` says) */
+		unsigned window_w, window_h;
 	};
 
 	/* A display that shows fewer frames a second would hold the board
@@ -140,6 +143,13 @@ public:
 	bool fullscreen() const;
 	void set_fullscreen(bool on);
 	void resize(unsigned times);
+	/* The window of that size, as the display has room for it, unless it
+	 * is on the whole display */
+	void resize_to(unsigned w, unsigned h);
+	/* The size the user gave the window by hand, in points: a window, not
+	 * maximized, of another size than Odin gave it last (false: none). It
+	 * is then the size Odin gives it back after the whole display. */
+	bool hand_size(unsigned &w, unsigned &h);
 	void set_show_speed(bool on);
 	/* Each frame waits only where the display keeps up (LEAST_REFRESH);
 	 * again when the window goes to another display */
@@ -208,6 +218,7 @@ private:
 	Display(const Keyboard &keys, const Options &options, SDL_Window *window, SDL_GLContext context);
 
 	void set_window(unsigned times, bool fullscreen);
+	void set_window_size(int w, int h, bool fullscreen);
 	void prepare_programs(const std::string &title);
 	/* Waits for the frame being drawn. */
 	void finish();
@@ -231,6 +242,10 @@ private:
 	Hikaru *m_board;	/* none: the window is black */
 	const Keyboard &m_keys;
 	SDL_Window *m_window;
+	/* The size Odin gave the window last, or took from the user, in
+	 * points; whether it is the user's */
+	int m_given_w = 0, m_given_h = 0;
+	bool m_by_hand = false;
 	std::string m_program_list;
 	SDL_GLContext m_context;
 	std::unique_ptr<Renderer> m_renderer;

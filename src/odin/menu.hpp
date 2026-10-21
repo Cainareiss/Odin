@@ -128,6 +128,9 @@ struct MenuState {
 	 * at all, 1 all, 2 those on time), frames without a limit (at the
 	 * next launch), the frames a second in the title */
 	unsigned scale = 1, anisotropy = 1, window = 1, vsync = 0;
+	/* The window at start of the size the user gave it by hand instead,
+	 * in points (Custom; 0: none); the size it has now */
+	unsigned custom_w = 0, custom_h = 0, window_w = 0, window_h = 0;
 	/* Around the picture where the window is wider (Display::Sides: 0
 	 * black, 1 the picture blurred, 2 the bezel of the game) */
 	unsigned sides = 2;

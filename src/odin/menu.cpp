@@ -116,8 +116,10 @@ menu_size(float w, float h)
 
 /* The window at start, that many times the screen; its sizes shorter
  * where the row is narrow */
-constexpr const char *WINDOW_SIZES[] = { "640 × 480", "1280 × 960", "1920 × 1440", "2560 × 1920" };
-constexpr const char *WINDOW_WIDTHS[] = { "640", "1280", "1920", "2560" };
+constexpr const char *WINDOW_SIZES[] = { "640 × 480", "1280 × 960", "1920 × 1440", "2560 × 1920", "Custom" };
+constexpr const char *WINDOW_WIDTHS[] = { "640", "1280", "1920", "2560", "Custom" };
+/* Custom among them: the size the user gives the window by hand */
+constexpr int CUSTOM = 4;
 constexpr unsigned ANISOTROPY[] = { 1, 2, 4, 8, 16 };
 
 /* The libraries Odin is made with: who wrote them, their licence */
@@ -584,11 +586,20 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 			state.fullscreen = mode == 1;
 	});
 
-	int window = static_cast<int>(state.window) - 1;
+	int window = state.custom_w ? CUSTOM : state.window <= CUSTOM ? static_cast<int>(state.window) - 1 : -1;
+	char sizes[96] = "640 × 480 by default · Custom: the size you give it by hand";
 
+	if (state.custom_w)
+		std::snprintf(sizes, sizeof(sizes), "Custom: %u × %u, the size you gave it by hand", state.custom_w,
+		              state.custom_h);
 	watch(PREVIEW_SCREEN, [&] {
-		if (kit.choice("Window size at start", "640 × 480 by default", narrow ? WINDOW_WIDTHS : WINDOW_SIZES, window,
-		               state.window_given ? "set by the command line: -w" : nullptr, state.fullscreen))
+		if (!kit.choice("Window size at start", sizes, narrow ? WINDOW_WIDTHS : WINDOW_SIZES, window,
+		                state.window_given ? "set by the command line: -w" : nullptr, state.fullscreen))
+			return;
+		/* Custom: the window as it is now */
+		state.custom_w = window == CUSTOM ? state.window_w : 0;
+		state.custom_h = window == CUSTOM ? state.window_h : 0;
+		if (window != CUSTOM)
 			state.window = static_cast<unsigned>(window) + 1;
 	});
 
@@ -778,8 +789,10 @@ Menu::preview(const MenuKit &kit, const MenuState &state, int which, ImVec2 a, I
 	case PREVIEW_SCREEN: {
 		const float sw = static_cast<float>(state.display_w ? state.display_w : 1920);
 		const float sh = static_cast<float>(state.display_h ? state.display_h : 1080);
-		const float ww = state.fullscreen ? sw : 640.0f * static_cast<float>(state.window);
-		const float wh = state.fullscreen ? sh : 480.0f * static_cast<float>(state.window);
+		const float ww = state.fullscreen ? sw :
+		                 state.custom_w ? static_cast<float>(state.custom_w) : 640.0f * static_cast<float>(state.window);
+		const float wh = state.fullscreen ? sh :
+		                 state.custom_h ? static_cast<float>(state.custom_h) : 480.0f * static_cast<float>(state.window);
 		char caption[160];
 
 		if (state.fullscreen)

@@ -85,11 +85,12 @@ Options:
 
 Keys: Escape or F10 opens the menu, which pauses the game (its Display
 page sets the window and the picture, kept in [display] of odin.ini:
-scale = 1 to 6, anisotropy = 1 to 16, window = 1 to 6, vsync = off, on or
-adaptive (the frames on time wait for the display, a late one does not),
-fullscreen, unthrottled and show_speed = on or off; the options say the
-same and come first; no vsync at an unlimited pace, nor vsync = on on a
-display slower than 60 frames a second),
+scale = 1 to 6, anisotropy = 1 to 16, window = 1 to 6 or a size, 1600x900
+(Custom: the window resized by hand keeps its size for the next start),
+vsync = off, on or adaptive (the frames on time wait for the display, a
+late one does not), fullscreen, unthrottled and show_speed = on or off;
+the options say the same and come first; no vsync at an unlimited pace,
+nor vsync = on on a display slower than 60 frames a second),
 Ctrl+Q quits, P pauses, F4 saves <game>.odinstate and F1 loads it, in
 ~/.local/share/odin/states (states in [paths] of odin.ini, page Paths),
 F11 or Alt+Enter takes the whole display. The page Hotkeys of the menu
