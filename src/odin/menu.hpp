@@ -20,6 +20,7 @@
 #define ODIN_MENU_HPP
 
 #include <array>
+#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
@@ -37,6 +38,7 @@
 namespace odin {
 
 class MenuKit;
+class SystemFonts;
 
 /* What the page Input changes: a part of a control of the panel (0 the
  * control, 1 and 2 its halves or a lever down and up, bindings.hpp), or a
@@ -263,6 +265,7 @@ private:
 	enum Preview { PREVIEW_CARD, PREVIEW_UPSCALE, PREVIEW_FILTER, PREVIEW_SCREEN, PREVIEW_VSYNC };
 
 	void follow_scale();
+	void add_fonts();
 	void navigate(MenuState &state);
 	void page_input(MenuKit &kit, MenuState &state) const;
 	void page_display(MenuKit &kit, MenuState &state) const;
@@ -289,6 +292,8 @@ private:
 
 	SDL_Window *m_window;
 	ImGuiContext *m_imgui;
+	/* Mapped while Dear ImGui reads them (add_fonts) */
+	std::unique_ptr<SystemFonts> m_fonts;
 	/* The style at a scale of 1, and the scale of the display now */
 	ImGuiStyle m_style;
 	float m_scale;

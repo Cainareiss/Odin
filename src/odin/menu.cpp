@@ -33,6 +33,7 @@
 #include "odin/menu_kit.hpp"
 #include "odin/picture.hpp"
 #include "odin/renderer_gl.hpp"
+#include "odin/system_fonts.hpp"
 #include "odin/version.hpp"
 
 /* The pictures of the page Display (menu_pictures.S), each from its first
@@ -378,6 +379,31 @@ Menu::follow_scale()
 	m_scale = scale;
 }
 
+/* Once, where Dear ImGui would take its own font (drawn by pixels for a
+ * small menu, else by outlines): that font, and behind it those of the
+ * system for the letters it lacks, those of most languages (a folder named
+ * in Russian, in Japanese...) */
+void
+Menu::add_fonts()
+{
+	ImFontAtlas &fonts = *ImGui::GetIO().Fonts;
+	std::string names;
+
+	if (fonts.Sources.Size)
+		return;
+	fonts.AddFontDefault();
+	m_fonts = std::make_unique<SystemFonts>();
+	for (const SystemFonts::Font &font : m_fonts->fonts()) {
+		ImFontConfig more;
+
+		more.MergeMode = true;
+		more.FontDataOwnedByAtlas = false;
+		fonts.AddFontFromMemoryTTF(const_cast<unsigned char *>(font.data), static_cast<int>(font.size), 0.0f, &more);
+		names += (names.empty() ? "" : ", ") + font.path;
+	}
+	std::printf("menu: letters of other languages from %s\n", names.empty() ? "no font of the system" : names.c_str());
+}
+
 /* The frame in the middle of the window: the tabs at the top, the page
  * under them, what it says and what the keys do at the bottom */
 void
@@ -387,6 +413,7 @@ Menu::build(MenuState &state)
 	follow_scale();
 	navigate(state);
 	ImGui_ImplSDL3_NewFrame();
+	add_fonts();
 	ImGui::NewFrame();
 
 	MenuKit kit(RUNASTEINN, m_scale, &m_focus);

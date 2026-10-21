@@ -36,12 +36,15 @@ in a directory by its name, with or without dashes, in any case, else by its
 CRC. One found by its name with another CRC is said, and taken (another dump
 of the chip). When a file is missing, Odin says which, and the set of MAME
 that holds it. The directories may have names in any language (on Windows,
-10 version 1903 or later). The programs of the I/O boards of SWRACER
-(315-6215.bin) and NASCAR (epr-21868.ic7, from the 18wheelr set of MAME) may
-be left out: an imitation of the board answers then, made from that program
-and checked against it. The games play the same without them, and NASCAR
-sends its wheel (the force feedback) the same orders; with them the board
-runs its own program, a little slower.
+10 version 1903 or later); the menu writes them with the fonts the system
+has: on Windows those it comes with, on Linux DejaVu Sans and, for Chinese,
+Japanese and Korean, Noto Sans CJK, Droid Sans Fallback or WenQuanYi. The
+programs of the I/O boards of SWRACER (315-6215.bin) and NASCAR
+(epr-21868.ic7, from the 18wheelr set of MAME) may be left out: an imitation
+of the board answers then, made from that program and checked against it.
+The games play the same without them, and NASCAR sends its wheel (the force
+feedback) the same orders; with them the board runs its own program, a
+little slower.
 
 Options:
 

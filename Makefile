@@ -39,6 +39,7 @@ OBJ := \
 	src/odin/menu_kit.o \
 	src/odin/menu_nav.o \
 	src/odin/menu_pictures.o \
+	src/odin/system_fonts.o \
 	src/odin/rom_files.o \
 	src/odin/folder_dialog.o \
 	src/odin/pad_view.o \
