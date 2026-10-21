@@ -140,12 +140,46 @@ void test_read_write(const std::string &dir)
 
 } /* namespace */
 
+/* The folder of the pictures of the games, and a picture found there by
+ * its name in any case */
+void
+test_artwork(const std::string &dir)
+{
+	const std::string folder = dir + "/artwork-test";
+	std::error_code error;
+
+	setenv("HOME", "/home/someone", 1);
+	unsetenv("XDG_DATA_HOME");
+	setenv("ODIN_ARTWORK", "none", 1);
+	check(odin::artwork_folder("/chosen").empty(), "ODIN_ARTWORK=none: no folder of the artwork");
+	setenv("ODIN_ARTWORK", "/elsewhere", 1);
+	check(odin::artwork_folder("/chosen") == "/elsewhere", "ODIN_ARTWORK before the settings");
+	unsetenv("ODIN_ARTWORK");
+	check(odin::artwork_folder("/chosen") == "/chosen", "the folder of the artwork the settings give");
+	check(odin::artwork_folder() == "/home/someone/.local/share/odin/artwork", "the folder of the artwork by default");
+	unsetenv("HOME");
+
+	std::filesystem::remove_all(folder, error);
+	std::filesystem::create_directories(folder, error);
+	for (const char *name : { "Swracer_Bezel.png", "airtrix_title.png", "airtrix_logo.txt" })
+		if (std::FILE *const file = std::fopen((folder + "/" + name).c_str(), "wb"))
+			std::fclose(file);
+	check(odin::artwork_file(folder, "airtrix", "title") == folder + "/airtrix_title.png", "a picture by its name");
+	check(odin::artwork_file(folder, "swracer", "bezel") == folder + "/Swracer_Bezel.png",
+	      "a picture by its name in another case");
+	check(odin::artwork_file(folder, "airtrix", "logo").empty(), "no picture but a PNG");
+	check(odin::artwork_file(folder, "von4", "title").empty(), "no picture of a game without one");
+	check(odin::artwork_file("", "airtrix", "title").empty(), "no picture without a folder");
+	std::filesystem::remove_all(folder, error);
+}
+
 int main(int argc, char **argv)
 {
 	const std::string dir = argc > 1 ? argv[1] : ".";
 
 	test_where();
 	test_read_write(dir);
+	test_artwork(dir);
 
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures ? 1 : 0;

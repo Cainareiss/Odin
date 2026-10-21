@@ -21,9 +21,11 @@
 
 #include "odin/display.hpp"
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cinttypes>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -33,12 +35,38 @@
 #include "odin/keyboard.hpp"
 #include "odin/menu.hpp"
 #include "odin/renderer.hpp"
+#include "odin/renderer_gl.hpp"
 #include "odin/state_file.hpp"
 #include "odin/worker.hpp"
 
 namespace odin {
 
 namespace {
+
+/* The bezel over the viewport it is given: a triangle that covers it, the
+ * top of the picture at the top */
+const char *const BEZEL_VERTEX = R"glsl(#version 430
+
+out vec2 place;
+
+void main (void) {
+	const vec2 corner = vec2 (gl_VertexID & 1, gl_VertexID >> 1) * 2.0;
+
+	place = vec2 (corner.x, 1.0 - corner.y);
+	gl_Position = vec4 (corner * 2.0 - 1.0, 0.0, 1.0);
+}
+)glsl";
+
+const char *const BEZEL_FRAGMENT = R"glsl(#version 430
+
+uniform sampler2D bezel;
+in vec2 place;
+out vec4 colour;
+
+void main (void) {
+	colour = texture (bezel, place);
+}
+)glsl";
 
 /* The lists of the mesh programs of a game (MeshPrograms): the one that
  * comes with Odin, in shaders/ where the list of the games is, and the one
@@ -427,6 +455,73 @@ Display::save_picture(const std::string &path)
 }
 
 void
+Display::set_bezel(const std::string &path)
+{
+	SDL_Surface *const png = path.empty() ? nullptr : SDL_LoadPNG(path.c_str());
+	SDL_Surface *const rgba = png ? SDL_ConvertSurface(png, SDL_PIXELFORMAT_RGBA32) : nullptr;
+
+	SDL_DestroySurface(png);
+	if (!path.empty() && !rgba)
+		std::fprintf(stderr, "ERROR: bezel: '%s': %s\n", path.c_str(), SDL_GetError());
+	run([this, rgba] { make_bezel(rgba); });
+	SDL_DestroySurface(rgba);
+}
+
+void
+Display::make_bezel(SDL_Surface *rgba)
+{
+	if (m_bezel)
+		glDeleteTextures(1, &m_bezel);
+	m_bezel = 0;
+	if (!rgba)
+		return;
+	if (!m_bezel_program) {
+		m_bezel_program = gl::compile_program(BEZEL_VERTEX, BEZEL_FRAGMENT);
+		glGenVertexArrays(1, &m_bezel_vao);
+	}
+	glGenTextures(1, &m_bezel);
+	glBindTexture(GL_TEXTURE_2D, m_bezel);
+	glPixelStorei(GL_UNPACK_ROW_LENGTH, rgba->pitch / 4);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, rgba->w, rgba->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba->pixels);
+	glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+	glGenerateMipmap(GL_TEXTURE_2D);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	m_bezel_w = static_cast<float>(rgba->w);
+	m_bezel_h = static_cast<float>(rgba->h);
+}
+
+void
+Display::draw_bezel(unsigned window_w, unsigned window_h)
+{
+	const float ww = static_cast<float>(window_w), wh = static_cast<float>(window_h);
+
+	if (!m_bezel || !m_bezel_program || ww * 3.0f <= wh * 4.0f)
+		return;
+
+	const float k = std::min(ww / m_bezel_w, wh / m_bezel_h);
+	const GLsizei w = static_cast<GLsizei>(std::lround(m_bezel_w * k)), h = static_cast<GLsizei>(std::lround(m_bezel_h * k));
+	GLint viewport[4];
+
+	glGetIntegerv(GL_VIEWPORT, viewport);
+	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+	glViewport((static_cast<GLsizei>(window_w) - w) / 2, (static_cast<GLsizei>(window_h) - h) / 2, w, h);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glUseProgram(m_bezel_program);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, m_bezel);
+	glBindVertexArray(m_bezel_vao);
+	glDrawArrays(GL_TRIANGLES, 0, 3);
+	glBindVertexArray(0);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	glUseProgram(0);
+	glDisable(GL_BLEND);
+	glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
+}
+
+void
 Display::draw_library(LibraryState &state)
 {
 	int w, h;
@@ -478,7 +573,7 @@ Display::end_frame(unsigned frame, bool late)
 	m_logged = m_renderer->frame_is_logged();
 	m_message = m_renderer->message();
 
-	m_drawing->post([this, late] { draw(late); });
+	m_drawing->post([this, late, w, h] { draw(late, static_cast<unsigned>(w), static_cast<unsigned>(h)); });
 	m_held = m_late;
 	/* A log is written whole before the board writes on. */
 	if (m_logged)
@@ -489,7 +584,7 @@ Display::end_frame(unsigned frame, bool late)
 }
 
 void
-Display::draw(bool late)
+Display::draw(bool late, unsigned window_w, unsigned window_h)
 {
 	if (m_late)
 		m_late_draw.acquire();
@@ -500,6 +595,7 @@ Display::draw(bool late)
 	m_renderer->set_anisotropy(m_anisotropy);
 	m_renderer->draw_frame();
 	m_picture_fb = m_renderer->frame_picture(m_picture_width, m_picture_height);
+	draw_bezel(window_w, window_h);
 
 	screenshot();
 	print_fingerprint();

@@ -80,6 +80,9 @@ struct Options {
 	/* The folder of the saves of the games and that of the save states
 	 * odin.ini gives (empty: by default) */
 	std::string saves, states;
+	/* The folder of the pictures of the games odin.ini gives (empty: by
+	 * default), save_folder.hpp */
+	std::string artwork;
 	std::string game;
 	/* The file of what Odin says; empty: none */
 	std::string log_file;
@@ -278,6 +281,8 @@ read_paths(const odin::Settings &settings, Options &options)
 				options.bios_path = value;
 		} else if (key == "saves" && !value.empty()) {
 			options.saves = value;
+		} else if (key == "artwork" && !value.empty()) {
+			options.artwork = value;
 		} else if (key == "states" && !value.empty()) {
 			options.states = value;
 		} else {
@@ -409,6 +414,7 @@ known_settings(const odin::GameList &games)
 	}
 	out.insert(out.end(), { { "outputs", "network", "off" }, { "paths", "roms", "" }, { "paths", "bios", "" },
 	                        { "paths", "saves", odin::SaveFolder::root() }, { "paths", "states", default_states() },
+	                        { "paths", "artwork", odin::artwork_folder() },
 	                        { "log", "verbose", "off" }, { "menu", "classic", "off" },
 	                        { "menu", "animations", "on" } });
 	for (size_t a = 0; a < odin::MenuNav::ACTIONS; a++) {
@@ -495,6 +501,10 @@ public:
 		state.states = m_states = options.states.empty() ? default_states() : options.states;
 		state.settings_file = settings_file;
 		state.log_file = options.log_file;
+		state.artwork = odin::artwork_folder(options.artwork);
+		const char *const artwork = std::getenv("ODIN_ARTWORK");
+		state.artwork_given = artwork && artwork[0];
+		display.set_bezel(odin::artwork_file(state.artwork, game.name, "bezel"));
 		state.shader_lists = std::filesystem::path(display.program_list()).parent_path().string();
 		state.verbose = options.verbose;
 		state.verbose_given = options.given.verbose;
@@ -1459,7 +1469,8 @@ Session::draw_menu()
 		state.no_picker = false;
 		m_dialog.ask(m_display.window(), folder == odin::MenuState::Folder::ROMS ? state.roms :
 		             folder == odin::MenuState::Folder::BIOS ? (state.bios.empty() ? state.roms : state.bios) :
-		             folder == odin::MenuState::Folder::SAVES ? state.saves : state.states, static_cast<int>(folder));
+		             folder == odin::MenuState::Folder::SAVES ? state.saves :
+		             folder == odin::MenuState::Folder::ARTWORK ? state.artwork : state.states, static_cast<int>(folder));
 		state.choose = odin::MenuState::Folder::NONE;
 		m_menu_pictures = MENU_PICTURES;
 	}
@@ -1682,25 +1693,31 @@ Session::take_folder()
 		state.states = m_states = folder;
 		keep("paths", "states", folder == default_states() ? std::nullopt : std::optional(folder));
 		break;
+	case Folder::ARTWORK:
+		state.artwork = folder;
+		keep("paths", "artwork", folder == odin::artwork_folder() ? std::nullopt : std::optional(folder));
+		m_display.set_bezel(odin::artwork_file(folder, m_game.name, "bezel"));
+		break;
 	default:
 		break;
 	}
 }
 
-/* The picture of its title for the library, once: at its title_frame, the
- * game left to itself since power-on, when none is kept yet */
+/* The picture of its title for the library (<game>_title.png in the
+ * folder of the artwork), once: at its title_frame, the game left to
+ * itself since power-on, when none is kept yet */
 void
 Session::capture_title()
 {
-	const std::string folder = odin::library_folder();
-	std::error_code error;
+	const std::string &folder = m_menu_state.artwork;
 
-	if (!m_game.title_frame || m_board.frame() != m_game.title_frame || m_touched || folder.empty())
+	if (!m_game.title_frame || m_board.frame() != m_game.title_frame || m_touched || folder.empty() ||
+	    !odin::artwork_file(folder, m_game.name, "title").empty())
 		return;
 
-	const std::string path = folder + "/" + m_game.name + ".png";
+	const std::string path = folder + "/" + m_game.name + "_title.png";
 
-	if (!std::filesystem::exists(path, error) && m_display.save_picture(path))
+	if (m_display.save_picture(path))
 		std::printf("library: the title of %s kept in '%s'\n", m_game.name.c_str(), path.c_str());
 }
 
@@ -1848,10 +1865,13 @@ library(Options &options, const odin::GameList &games, odin::Settings &settings,
 	display.open_library();
 	SDL_ShowCursor();
 
-	/* The pictures of the games: the title Odin kept of each */
-	if (const std::string folder = odin::library_folder(); !folder.empty()) {
+	/* The pictures of the games in the folder of the artwork: the user's
+	 * <game>_logo.png, else the <game>_title.png Odin kept */
+	if (const std::string folder = odin::artwork_folder(options.artwork); !folder.empty()) {
 		for (const odin::LibraryState::Game &game : state.games) {
-			SDL_Surface *const png = SDL_LoadPNG((folder + "/" + game.name + ".png").c_str());
+			const std::string logo = odin::artwork_file(folder, game.name, "logo");
+			const std::string path = logo.empty() ? odin::artwork_file(folder, game.name, "title") : logo;
+			SDL_Surface *const png = path.empty() ? nullptr : SDL_LoadPNG(path.c_str());
 			SDL_Surface *const rgba = png ? SDL_ConvertSurface(png, SDL_PIXELFORMAT_RGBA32) : nullptr;
 
 			SDL_DestroySurface(png);

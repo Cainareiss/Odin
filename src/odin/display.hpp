@@ -167,6 +167,10 @@ public:
 	/* The picture of the last frame in a PNG file, no larger than 640 by
 	 * 480 (the folder made): false, said on stderr, when it cannot be */
 	bool save_picture(const std::string &path);
+	/* A PNG laid over the window around the picture of the game where the
+	 * window is wider than the screen of the hardware, as large as the
+	 * window holds it, see-through where it is (empty: none) */
+	void set_bezel(const std::string &path);
 	bool menu_popup_open() const;
 
 	/* Hikaru::Screen */
@@ -187,7 +191,11 @@ private:
 	/* Has the drawing thread do a job, and waits for it. */
 	void run(std::function<void()> job);
 	/* On the drawing thread */
-	void draw(bool late);
+	void draw(bool late, unsigned window_w, unsigned window_h);
+	/* On the drawing thread: the bezel made a texture (none: forgotten),
+	 * then laid over the window */
+	void make_bezel(SDL_Surface *rgba);
+	void draw_bezel(unsigned window_w, unsigned window_h);
 	void read_picture(uint8_t *pixels);
 	void screenshot();
 	void print_fingerprint();
@@ -220,6 +228,8 @@ private:
 	unsigned m_scale, m_anisotropy;
 	bool m_logged;
 	GLuint m_picture_fb;
+	GLuint m_bezel = 0, m_bezel_program = 0, m_bezel_vao = 0;
+	float m_bezel_w = 0.0f, m_bezel_h = 0.0f;
 	unsigned m_picture_width, m_picture_height;
 	/* The debug switches as text, for the title */
 	std::string m_message;

@@ -798,6 +798,11 @@ Menu::page_paths(MenuKit &kit, MenuState &state) const
 	              shown_path(state.bios, "the folder of the games").c_str(), change, nullptr,
 	              state.bios_given ? "set by the command line: -B" : nullptr))
 		state.choose = MenuState::Folder::BIOS;
+	if (kit.value("Artwork", "pictures of the games, named by MAME: swracer_logo.png in the library, "
+	              "swracer_bezel.png around the game; Odin keeps swracer_title.png",
+	              shown_path(state.artwork, "none").c_str(), change, nullptr,
+	              state.artwork_given ? "set by ODIN_ARTWORK" : nullptr))
+		state.choose = MenuState::Folder::ARTWORK;
 	kit.end_group();
 
 	kit.begin_group("SAVES");

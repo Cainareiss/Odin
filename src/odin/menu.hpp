@@ -150,12 +150,12 @@ struct MenuState {
 	 * of the save states; the settings file and the lists of the 3D
 	 * programs (empty: none). The board saying each access, at the next
 	 * launch. */
-	std::string roms, bios, saves, states, settings_file, shader_lists, log_file;
-	bool roms_given = false, bios_given = false, saves_given = false;
+	std::string roms, bios, saves, states, artwork, settings_file, shader_lists, log_file;
+	bool roms_given = false, bios_given = false, saves_given = false, artwork_given = false;
 	bool verbose = false, verbose_given = false;
 	/* A folder to ask the system for; its picker is open; the system has
 	 * none */
-	enum class Folder { NONE, ROMS, BIOS, SAVES, STATES } choose = Folder::NONE;
+	enum class Folder { NONE, ROMS, BIOS, SAVES, STATES, ARTWORK } choose = Folder::NONE;
 	bool choosing = false, no_picker = false;
 
 	/* Input: the games of the list (name, title), the one whose controls

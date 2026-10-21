@@ -20,6 +20,7 @@
 
 #include "odin/env.hpp"
 
+#include <cctype>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -50,14 +51,38 @@ user_data_dir()
 }
 
 std::string
-library_folder()
+artwork_folder(const std::string &chosen)
 {
-	const char *const chosen = std::getenv("ODIN_LIBRARY");
+	const char *const given = std::getenv("ODIN_ARTWORK");
 	const std::string data = user_data_dir();
 
-	if (chosen && chosen[0])
-		return std::strcmp(chosen, "none") ? chosen : "";
-	return data.empty() ? data : data + "/odin/library";
+	if (given && given[0])
+		return std::strcmp(given, "none") ? given : "";
+	if (!chosen.empty())
+		return chosen;
+	return data.empty() ? data : data + "/odin/artwork";
+}
+
+std::string
+artwork_file(const std::string &folder, const std::string &game, const std::string &kind)
+{
+	const auto lower = [](std::string text) {
+		for (char &c : text)
+			c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+		return text;
+	};
+	const std::string wanted = lower(game + "_" + kind + ".png");
+	std::error_code error;
+
+	if (folder.empty())
+		return {};
+	if (const std::string exact = folder + "/" + game + "_" + kind + ".png"; std::filesystem::is_regular_file(exact, error))
+		return exact;
+	for (auto it = std::filesystem::directory_iterator(folder, error); !error && it != std::filesystem::directory_iterator();
+	     it.increment(error))
+		if (lower(it->path().filename().string()) == wanted)
+			return it->path().string();
+	return {};
 }
 
 std::string
