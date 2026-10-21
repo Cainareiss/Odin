@@ -328,6 +328,20 @@ read_sound(const odin::Settings &settings, Options &options)
 	}
 }
 
+/* What the command line says, and odin.ini where it says nothing: read
+ * again after the library and each game, which change odin.ini (a line
+ * gone, its value by default again) */
+Options
+with_settings(const Options &command, const odin::Settings &settings)
+{
+	Options options = command;
+
+	read_paths(settings, options);
+	read_display(settings, options);
+	read_sound(settings, options);
+	return options;
+}
+
 /* How [sound.<game>] says to play the two boards: main, mix or quad */
 std::optional<odin::AudioOut::Mode>
 mode_named(const std::string &name)
@@ -456,12 +470,6 @@ known_settings(const odin::GameList &games)
 	return out;
 }
 
-/* A game being run: its board, with the window, the keyboard and the
- * gamepads around it.
- *
- * ODIN_MENU_TEST=<n> is a test of the menu: Escape is pressed after every
- * n frames, which opens it, and again once it has drawn its pictures,
- * which closes it. The pictures of the game must be the same. */
 /* The make and model of the gamepad of the player shown in the menu; empty
  * when the player has none */
 std::string
@@ -482,20 +490,98 @@ struct Opened {
 	std::string game, folder;
 };
 
-class Session {
+/* A word at the right of the bar stays that long. The picker of an
+ * archive, asked for by Open...: no folder of the menu. */
+constexpr Uint64 NOTE_MS = 5000;
+constexpr int ARCHIVE_ASKED = -1;
+
+/* An archive Open... gave: its game, as MAME names its archive (the BIOS is
+ * none), and the folder that holds it; else nothing, and what went wrong
+ * for the bar to say (empty: nothing was chosen) */
+std::optional<Opened>
+open_archive(const odin::FolderDialog::Answer &answer, const odin::GameList &games, std::string &note)
+{
+	if (!answer.error.empty()) {
+		std::fprintf(stderr, "ERROR: no file picker: %s\n", answer.error.c_str());
+		note = "This system gives Odin no file picker";
+		return std::nullopt;
+	}
+	if (answer.folder.empty())
+		return std::nullopt;
+
+	const std::filesystem::path file(answer.folder);
+	std::string name = file.stem().string();
+
+	std::transform(name.begin(), name.end(), name.begin(),
+	               [](unsigned char c) { return static_cast<char>(c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c); });
+	for (const auto &[game, title] : games.titles("hikaru"))
+		if (game == name)
+			return Opened{ game, file.parent_path().string() };
+	std::fprintf(stderr, "ERROR: '%s' is no game of the list: an archive takes the name MAME gives its game\n",
+	             answer.folder.c_str());
+	note = file.filename().string() + ": not a game of Odin";
+	return std::nullopt;
+}
+
+/* [outputs] network: the outputs sent to the programs of lamps. The last
+ * line says. */
+bool
+network_on(const odin::Settings &settings)
+{
+	bool network = false;
+
+	for (const auto &[key, value] : settings.section("outputs")) {
+		if (key == "network" && (value == "on" || value == "off"))
+			network = value == "on";
+		else
+			std::fprintf(stderr, "ERROR: settings: [outputs]: not right: %s = %s\n", key.c_str(), value.c_str());
+	}
+	return network;
+}
+
+/* ODIN_MENU_TEST: Escape pressed and released */
+void
+press_escape()
+{
+	SDL_Event event{};
+
+	event.type = SDL_EVENT_KEY_DOWN;
+	event.key.key = SDLK_ESCAPE;
+	event.key.scancode = SDL_SCANCODE_ESCAPE;
+	event.key.down = true;
+	SDL_PushEvent(&event);
+	event.type = SDL_EVENT_KEY_UP;
+	event.key.down = false;
+	SDL_PushEvent(&event);
+}
+
+/* The menu and the bar, over a game (Session) or over the library: what
+ * they show and change, kept in odin.ini; the inputs the pages Input and
+ * Hotkeys catch; the folders the picker of the system gives. The game that
+ * runs lends its board, its sound and its programs of lamps (the menu turns
+ * them on and off); the library has none of them, and for its gamepads the
+ * controls of no game: its page Input shows the game chosen there.
+ *
+ * ODIN_MENU_TEST=<n> is a test of the menu over a game: Escape is pressed
+ * after every n frames, which opens it, and again once it has drawn its
+ * pictures, which closes it. The pictures of the game must be the same. */
+class MenuSession {
 public:
-	Session(const Options &options, const odin::Game &game, odin::Hikaru &board, odin::Display &display,
-	        odin::Keyboard &keys, odin::Controls &controls, odin::AudioOut *audio,
-	        std::unique_ptr<odin::OutputsNetwork> outputs, bool network, odin::Settings &settings,
-	        const std::string &settings_file, const odin::GameList &games)
-		: m_options(options), m_game(game), m_board(board), m_display(display), m_keys(keys), m_controls(controls),
-		  m_audio(audio), m_outputs(std::move(outputs)), m_settings(settings), m_settings_file(settings_file),
-		  m_games(games), m_hotkeys(settings), m_nav(settings), m_paused(false), m_touched(!options.state_path.empty()),
-		  m_next(),
-		  m_menu_pictures(0), m_menu_drawn(0),
-		  m_menu_test(static_cast<unsigned>(std::max(odin::env_int("ODIN_MENU_TEST", 0), 0)))
+	/* What an event asks of the game or the library: the menu closed, Odin
+	 * to quit */
+	enum class Asked { NONE, CLOSE, QUIT };
+
+	MenuSession(const Options &options, odin::Display &display, odin::Keyboard &keys, odin::Controls &controls,
+	            odin::Settings &settings, const std::string &settings_file, const odin::GameList &games,
+	            const odin::Game *game, odin::Hikaru *board, odin::AudioOut *audio,
+	            std::unique_ptr<odin::OutputsNetwork> outputs, bool network)
+		: m_options(options), m_display(display), m_keys(keys), m_controls(controls), m_settings(settings),
+		  m_settings_file(settings_file), m_games(games), m_game(game), m_board(board), m_audio(audio),
+		  m_outputs(std::move(outputs)), m_hotkeys(settings), m_nav(settings),
+		  m_menu_test(game ? static_cast<unsigned>(std::max(odin::env_int("ODIN_MENU_TEST", 0), 0)) : 0)
 	{
 		odin::MenuState &state = m_menu_state;
+
 
 		state.scale = options.display.scale;
 		state.anisotropy = options.display.anisotropy;
@@ -524,24 +610,30 @@ public:
 		state.artwork = odin::artwork_folder(options.artwork);
 		const char *const artwork = std::getenv("ODIN_ARTWORK");
 		state.artwork_given = artwork && artwork[0];
-		display.set_sides(options.sides, odin::artwork_file(state.artwork, game.name, "bezel"));
-		controls.set_picture_hole(display.picture_hole());
+		if (game) {
+			display.set_sides(options.sides, odin::artwork_file(state.artwork, game->name, "bezel"));
+			controls.set_picture_hole(display.picture_hole());
+		}
 		state.shader_lists = std::filesystem::path(display.program_list()).parent_path().string();
 		state.verbose = options.verbose;
 		state.verbose_given = options.given.verbose;
 		state.network = network;
-		state.network_failed = network && !m_outputs;
+		state.network_failed = network && game && !m_outputs;
 		state.device = options.sound_device;
 		state.volume = options.volume;
 		state.background = options.background;
+		/* The library lists the devices of the system: its sound is
+		 * started for that */
+		m_listing = !game && options.sound && !options.unthrottled && SDL_InitSubSystem(SDL_INIT_AUDIO);
 		state.silent = options.unthrottled ? "no sound at an unlimited pace (Display)" :
 		               !options.sound ? "set by the command line: -o off" :
-		               !audio ? "no sound device" : nullptr;
+		               !audio && !m_listing ? "no sound device" : nullptr;
+		state.library = !game;
 		for (const auto &[name, title] : games.titles("hikaru")) {
-			const bool runs = name == game.name;
+			const bool runs = game && name == game->name;
 			const std::optional<odin::Game> other = runs ? std::nullopt : games.describe(name);
 
-			const odin::Game *const described = runs ? &game : other ? &*other : nullptr;
+			const odin::Game *const described = runs ? game : other ? &*other : nullptr;
 
 			if (!described || !(described->option_speakers || described->option_vibration))
 				continue;
@@ -579,17 +671,58 @@ public:
 		}
 		state.shown = state.running = state.games.size();
 		for (size_t g = 0; g < state.games.size(); g++)
-			if (state.games[g].first == board.game_name())
+			if (board && state.games[g].first == board->game_name())
 				state.shown = state.running = g;
-		/* The BIOS alone: the page Input shows the first game */
+		/* The BIOS alone, or no game: the page Input shows the first one */
 		if (state.running == state.games.size())
 			show_game(0);
 	}
 
-	/* Runs the frames until the user quits, closes the game or opens
-	 * another one (opened() then), or the last one asked is done. */
-	Ended run();
-	const Opened &opened() const { return m_opened; }
+	~MenuSession()
+	{
+		if (m_listing)
+			SDL_QuitSubSystem(SDL_INIT_AUDIO);
+	}
+	MenuSession(const MenuSession &) = delete;
+	MenuSession &operator=(const MenuSession &) = delete;
+
+	/* The menu at that page (-1: the one shown last): the game waits, no
+	 * pad shakes, its sound stops where it is. Closed, the keys held then
+	 * are not the game's. */
+	void open(int page = -1);
+	void close();
+	/* With the menu open: its hotkey asks to close it and that of
+	 * quitting to quit; that of the whole display still works. The
+	 * keyboard and the gamepads are followed as they go; all the rest is
+	 * the menu's. */
+	Asked event(const SDL_Event &event);
+	/* The menu draws its pictures, then sleeps until the next event */
+	void wait();
+	/* The page Input shows that game */
+	void show(const std::string &game);
+	/* The window is the active one, or in the background */
+	void focus(bool focused);
+	/* The picker of the system: the event of its answer; the folder it
+	 * gave, taken (the answer for an archive, Open..., is the caller's);
+	 * a folder asked for; whether it is open */
+	Uint32 picker_event() const { return m_dialog.event(); }
+	std::optional<odin::FolderDialog::Answer> take_folder();
+	void ask_folder(odin::MenuState::Folder folder);
+	bool choosing() const { return m_dialog.open(); }
+	/* The bar from what is so now; what it changed, done, and of what it
+	 * asked, what the menu does: the rest is the caller's */
+	void fill_bar(odin::BarState &bar) const;
+	odin::BarState::Ask do_bar(odin::BarState &bar);
+	/* ODIN_MENU_TEST: the menu opens after that frame */
+	bool tested_at(unsigned frame) const { return m_menu_test && frame % m_menu_test == 0; }
+
+	const odin::MenuState &state() const { return m_menu_state; }
+	const odin::Hotkeys &hotkeys() const { return m_hotkeys; }
+	/* The folder of the save states (empty: the one Odin is started
+	 * from) */
+	const std::string &states() const { return m_states; }
+	/* The programs of lamps (none: nothing for them) */
+	odin::OutputsNetwork *outputs() const { return m_outputs.get(); }
 
 private:
 	/* After an event the menu draws this many pictures, one in so many
@@ -604,39 +737,12 @@ private:
 	/* How long the button that presses is held to skip a control while
 	 * Start mapping: a choice of the emulator */
 	static constexpr Uint64 SKIP_HOLD_MS = 1000;
-	/* The bar: shown that long after the mouse moved; in a game the mouse
-	 * aims in, only from the top edge, that many points high, that long
-	 * (then while the mouse is on it); drawn that often while the game is
-	 * paused. A word at its right stays that long. The picker of an
-	 * archive, asked for by Open...: no folder of the menu. */
-	static constexpr Uint64 BAR_MS = 2500;
-	static constexpr Uint64 BAR_AIM_MS = 400;
-	static constexpr float BAR_EDGE = 2.0f;
-	static constexpr Sint32 BAR_PAUSED_MS = 16;
-	static constexpr Uint64 NOTE_MS = 5000;
-	static constexpr int ARCHIVE_ASKED = -1;
 
-	Ended frames();
-	bool process_events();
-	/* What Odin does on a hotkey in the game: true to quit */
-	bool act(odin::Hotkeys::Action action);
-	bool menu_event(const SDL_Event &event);
+	/* What a button of the menu asks: true for B with no list dropped open,
+	 * the menu to close */
 	bool navigate(odin::MenuNav::Action action);
 	bool presses(int button) const;
 	void catch_pad(bool axis, int index, int value);
-	void open_menu(int page = -1);
-	void close_menu();
-	/* The bar: the mouse shows it and works it (true: the event was the
-	 * bar's alone); shown or hidden as the mouse says; its state from what
-	 * is so now; what it changed and asked, done; a word at its right */
-	bool bar_event(const SDL_Event &event);
-	void follow_bar();
-	void fill_bar();
-	void do_bar();
-	void say(const std::string &note);
-	/* The game of an archive Open... gave, in place of this one */
-	void open_archive(const std::string &path);
-	void wait_in_menu();
 	void draw_menu();
 	void apply(const odin::MenuState &was);
 	std::vector<odin::HostInput> kind_changed(std::vector<odin::HostInput> inputs,
@@ -644,8 +750,6 @@ private:
 	void change_part(const odin::MenuSlot &slot, bool to_defaults);
 	void keep(const char *key, const std::optional<std::string> &value);
 	void keep(const char *section, const char *key, const std::optional<std::string> &value);
-	/* The folder the picker of the system gave */
-	void take_folder();
 	/* The game whose controls the page Input shows: its name and panel */
 	std::string game_shown() const;
 	const odin::ControlPanel &panel_shown() const { return m_other ? *m_other : m_controls.panel(); }
@@ -657,24 +761,22 @@ private:
 	void change_inputs(bool to_defaults);
 	void undo();
 	void keep_binding(const odin::Bindings::Line &line, const std::string &game = "");
-	void press_escape();
-	void load_or_save_state(bool load);
-	std::string state_path() const;
-	void save_state_at_frame();
-	void capture_title();
-	void limit_frame_rate();
 
 	const Options &m_options;
-	const odin::Game &m_game;
-	odin::Hikaru &m_board;
 	odin::Display &m_display;
 	odin::Keyboard &m_keys;
 	odin::Controls &m_controls;
-	odin::AudioOut *m_audio;	/* nullptr: no sound */
-	std::unique_ptr<odin::OutputsNetwork> m_outputs;	/* none: nothing for other programs */
 	odin::Settings &m_settings;
 	const std::string &m_settings_file;	/* empty: nothing is kept */
 	const odin::GameList &m_games;
+	/* The game that runs and its board (none: the library), its sound
+	 * (none: no sound), its programs of lamps (none: nothing for them) */
+	const odin::Game *m_game;
+	odin::Hikaru *m_board;
+	odin::AudioOut *m_audio;
+	std::unique_ptr<odin::OutputsNetwork> m_outputs;
+	/* The sound of SDL started for the devices the library lists */
+	bool m_listing = false;
 	odin::Hotkeys m_hotkeys;
 	odin::MenuNav m_nav;
 	/* The panel of a game shown that does not run, its controls and its
@@ -700,11 +802,81 @@ private:
 	std::optional<Held> m_held;
 	/* The window is the active one */
 	bool m_focused = true;
-	/* The folder of the save states (empty: the one Odin is started from),
-	 * and the picker of the system that changes the folders */
+	/* The folder of the save states, and the picker of the system that
+	 * changes the folders */
 	std::string m_states;
 	odin::FolderDialog m_dialog;
 	bool m_menu_opened = false;
+	unsigned m_menu_pictures = 0;	/* still to draw */
+	Uint64 m_menu_drawn = 0;	/* when the last one was */
+	const unsigned m_menu_test;
+};
+
+/* A game being run: its board, with the window, the keyboard and the
+ * gamepads around it, the menu and the bar over it */
+class Session {
+public:
+	Session(const Options &options, const odin::Game &game, odin::Hikaru &board, odin::Display &display,
+	        odin::Keyboard &keys, odin::Controls &controls, odin::AudioOut *audio,
+	        std::unique_ptr<odin::OutputsNetwork> outputs, bool network, odin::Settings &settings,
+	        const std::string &settings_file, const odin::GameList &games)
+		: m_options(options), m_game(game), m_board(board), m_display(display), m_keys(keys), m_controls(controls),
+		  m_audio(audio), m_games(games),
+		  m_menus(options, display, keys, controls, settings, settings_file, games, &game, &board, audio,
+		          std::move(outputs), network),
+		  m_paused(false), m_touched(!options.state_path.empty()), m_next()
+	{
+	}
+
+	/* Runs the frames until the user quits, closes the game or opens
+	 * another one (opened() then), or the last one asked is done. */
+	Ended run();
+	const Opened &opened() const { return m_opened; }
+
+private:
+	/* The bar: shown that long after the mouse moved; in a game the mouse
+	 * aims in, only from the top edge, that many points high, that long
+	 * (then while the mouse is on it); drawn that often while the game is
+	 * paused */
+	static constexpr Uint64 BAR_MS = 2500;
+	static constexpr Uint64 BAR_AIM_MS = 400;
+	static constexpr float BAR_EDGE = 2.0f;
+	static constexpr Sint32 BAR_PAUSED_MS = 16;
+
+	Ended frames();
+	bool process_events();
+	/* What Odin does on a hotkey in the game: true to quit */
+	bool act(odin::Hotkeys::Action action);
+	/* The menu over the game, which waits; closed, its frames start again
+	 * now */
+	void open_menu(int page = -1);
+	void close_menu();
+	/* The bar: the mouse shows it and works it (true: the event was the
+	 * bar's alone); shown or hidden as the mouse says; its state from what
+	 * is so now; what it changed and asked, done; a word at its right */
+	bool bar_event(const SDL_Event &event);
+	void follow_bar();
+	void fill_bar();
+	void do_bar();
+	void say(const std::string &note);
+	/* The folder the picker of the system gave; the game of an archive
+	 * Open... gave, in place of this one */
+	void take_folder();
+	void load_or_save_state(bool load);
+	std::string state_path() const;
+	void save_state_at_frame();
+	void capture_title();
+	void limit_frame_rate();
+
+	const Options &m_options;
+	const odin::Game &m_game;
+	odin::Hikaru &m_board;
+	odin::Display &m_display;
+	odin::Keyboard &m_keys;
+	odin::Controls &m_controls;
+	odin::AudioOut *m_audio;	/* nullptr: no sound */
+	const odin::GameList &m_games;
+	MenuSession m_menus;
 	/* The bar, until when it is shown since the mouse moved, the buttons
 	 * of the mouse pressed on it, until when its word is said */
 	odin::BarState m_bar;
@@ -718,144 +890,20 @@ private:
 	 * longer be at its title at its title_frame */
 	bool m_touched;
 	std::chrono::steady_clock::time_point m_next;	/* when the next frame is due */
-	unsigned m_menu_pictures;	/* still to draw */
-	Uint64 m_menu_drawn;		/* when the last one was */
-	unsigned m_menu_test;
 };
 
-/* F1 and F4: <game>.odinstate in the folder of the save states */
-std::string
-Session::state_path() const
-{
-	return (m_states.empty() ? "" : m_states + "/") + m_board.game_name() + ".odinstate";
-}
-
-void
-Session::load_or_save_state(bool load)
-{
-	const std::string path = state_path();
-	std::error_code error;
-
-	/* None saved yet: the game goes on */
-	if (load && !std::filesystem::exists(path, error)) {
-		std::fprintf(stderr, "no state '%s' to load yet\n", path.c_str());
-		return;
-	}
-	if (!load && !m_states.empty())
-		std::filesystem::create_directories(m_states, error);
-	if (load ? m_board.load_state(path) : m_board.save_state(path))
-		std::printf("%s state '%s'\n", load ? "loaded" : "saved", path.c_str());
-	else
-		std::fprintf(stderr, "ERROR: failed to %s state '%s'\n", load ? "load" : "save", path.c_str());
-}
-
-/* The hotkeys of the emulator (hotkeys.hpp): by default Escape or F10
- * opens the menu, which pauses the game, Ctrl+Q quits, P pauses (as in
- * MAME), F1 loads the state of the game and F4 saves it, F11 or Alt+Enter
- * takes the whole display; on a gamepad Guide alone the menu, and with
- * another button the others. The keys are the control panel's too, see
- * keyboard.hpp. True to quit. */
-bool
-Session::process_events()
-{
-	SDL_Event event;
-	bool quit = false;
-
-	while (SDL_PollEvent(&event)) {
-		if (event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
-		    event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN || event.type == SDL_EVENT_JOYSTICK_BUTTON_DOWN)
-			m_touched = true;
-		if (event.type == m_dialog.event()) {
-			take_folder();
-			continue;
-		}
-		if (event.type == SDL_EVENT_WINDOW_DISPLAY_CHANGED)
-			m_display.display_changed();
-		if (event.type == SDL_EVENT_WINDOW_FOCUS_GAINED || event.type == SDL_EVENT_WINDOW_FOCUS_LOST) {
-			m_focused = event.type == SDL_EVENT_WINDOW_FOCUS_GAINED;
-			if (m_audio)
-				m_audio->set_heard(m_focused || m_menu_state.background);
-		}
-		if (m_display.menu_shown()) {
-			quit = menu_event(event) || quit;
-			continue;
-		}
-		if (bar_event(event))
-			continue;
-		if (m_controls.event(event)) {
-			const int combo = m_controls.guide_combo();
-
-			if (const auto action = m_hotkeys.pad_action(combo >= 0 ? combo : odin::Hotkeys::NO_PAD))
-				quit = act(*action) || quit;
-			if (m_controls.guide_tapped())
-				if (const auto action = m_hotkeys.pad_action(odin::Hotkeys::GUIDE_ALONE))
-					quit = act(*action) || quit;
-			continue;
-		}
-		switch (event.type) {
-		case SDL_EVENT_KEY_DOWN:
-			m_keys.set(event.key.key, true);
-			if (!event.key.repeat)
-				if (const auto action = m_hotkeys.key_action(event.key.key, event.key.mod))
-					quit = act(*action) || quit;
-			break;
-		case SDL_EVENT_KEY_UP:
-			m_keys.set(event.key.key, false);
-			break;
-		case SDL_EVENT_QUIT:
-			quit = true;
-			break;
-		default:
-			break;
-		}
-	}
-	return quit;
-}
-
-bool
-Session::act(odin::Hotkeys::Action action)
-{
-	using Action = odin::Hotkeys::Action;
-
-	switch (action) {
-	case Action::MENU:
-		open_menu();
-		break;
-	case Action::PAUSE:
-		m_paused = !m_paused;
-		if (m_paused)
-			m_controls.quiet();
-		break;
-	case Action::SAVE_STATE:
-		load_or_save_state(false);
-		break;
-	case Action::LOAD_STATE:
-		load_or_save_state(true);
-		break;
-	case Action::FULLSCREEN:
-		m_display.toggle_fullscreen();
-		break;
-	case Action::QUIT:
-		return true;
-	}
-	return false;
-}
-
-/* With the menu open, its hotkey closes it and that of quitting quits;
- * that of the whole display still works. The keyboard and the gamepads
- * are followed as they go; all the rest is the menu's. True to quit. */
-bool
-Session::menu_event(const SDL_Event &event)
+MenuSession::Asked
+MenuSession::event(const SDL_Event &event)
 {
 	using Action = odin::Hotkeys::Action;
 
 	if (m_menu_state.catching && catch_input(event)) {
 		m_menu_pictures = MENU_PICTURES;
-		return false;
+		return Asked::NONE;
 	}
 	if (m_menu_state.hotkey_catching && catch_hotkey(event)) {
 		m_menu_pictures = MENU_PICTURES;
-		return false;
+		return Asked::NONE;
 	}
 
 	std::optional<Action> action;
@@ -863,7 +911,7 @@ Session::menu_event(const SDL_Event &event)
 
 	switch (event.type) {
 	case SDL_EVENT_QUIT:
-		return true;
+		return Asked::QUIT;
 	case SDL_EVENT_KEY_DOWN:
 	case SDL_EVENT_KEY_UP:
 		m_keys.set(event.key.key, event.key.down);
@@ -900,32 +948,28 @@ Session::menu_event(const SDL_Event &event)
 		break;
 	}
 	if (action == Action::QUIT)
-		return true;
-	if (action == Action::MENU) {
-		close_menu();
-		return false;
-	}
+		return Asked::QUIT;
+	if (action == Action::MENU)
+		return Asked::CLOSE;
 	if (action == Action::FULLSCREEN)
 		m_display.toggle_fullscreen();
 	/* The menu's own buttons; the keys of a list dropped open are the list's */
 	for (const odin::MenuNav::Action nav : m_nav.event(event)) {
 		if (action || (!pad && m_display.menu_popup_open()) || !navigate(nav))
 			continue;
-		close_menu();
 		m_menu_pictures = MENU_PICTURES;
-		return false;
+		return Asked::CLOSE;
 	}
 	/* The gamepads are Odin's, not Dear ImGui's */
 	if (!pad)
 		m_display.menu_event(event);
 	m_menu_pictures = MENU_PICTURES;
-	return false;
+	return Asked::NONE;
 }
 
-/* What a button of the menu asks, for its next picture: true for B with no
- * list dropped open, back to the game */
+/* For its next picture */
 bool
-Session::navigate(odin::MenuNav::Action action)
+MenuSession::navigate(odin::MenuNav::Action action)
 {
 	using Nav = odin::MenuNav;
 	odin::MenuState::Nav &nav = m_menu_state.nav;
@@ -958,9 +1002,8 @@ Session::navigate(odin::MenuNav::Action action)
 	return false;
 }
 
-/* The game pauses: no pad shakes, the sound stops where it is */
 void
-Session::open_menu(int page)
+MenuSession::open(int page)
 {
 	m_controls.quiet();
 	if (m_audio)
@@ -971,90 +1014,82 @@ Session::open_menu(int page)
 		for (unsigned player = 0; player < 2; player++)
 			m_menu_state.gamepad[player] = !m_controls.pad_name(player).empty();
 	m_menu_opened = true;
-	m_bar_until = 0;
-	m_bar_buttons = 0;
 	m_display.open_menu(page);
 	m_menu_pictures = MENU_PICTURES;
 }
 
-/* The mouse moved shows the bar a while (not where the system first puts
- * it: no move); where it aims in the game, only from the top edge of the
- * window. Its buttons pressed on the bar, or with one of its menus open,
- * are the bar's, and let go there; all the rest of the mouse is the game's
- * too. */
-bool
-Session::bar_event(const SDL_Event &event)
+void
+MenuSession::close()
 {
-	switch (event.type) {
-	case SDL_EVENT_MOUSE_MOTION:
-		if ((event.motion.xrel != 0.0f || event.motion.yrel != 0.0f) &&
-		    (!m_controls.aims() || event.motion.y < BAR_EDGE))
-			m_bar_until = std::max(m_bar_until, SDL_GetTicks() + (m_controls.aims() ? BAR_AIM_MS : BAR_MS));
-		follow_bar();
-		m_display.bar_event(event);
-		return false;
-	case SDL_EVENT_MOUSE_BUTTON_DOWN:
-		if (!m_display.bar_shown() || !(m_bar.wants_mouse || m_bar.open || event.button.y < m_bar.bottom))
-			return false;
-		m_bar_buttons |= 1u << event.button.button;
-		m_display.bar_event(event);
-		return true;
-	case SDL_EVENT_MOUSE_BUTTON_UP: {
-		const bool bar = (m_bar_buttons >> event.button.button) & 1u;
-
-		m_bar_buttons &= ~(1u << event.button.button);
-		m_display.bar_event(event);
-		return bar;
-	}
-	case SDL_EVENT_MOUSE_WHEEL:
-		m_display.bar_event(event);
-		return m_display.bar_shown() && m_bar.wants_mouse;
-	case SDL_EVENT_WINDOW_MOUSE_LEAVE:
-		m_bar_until = 0;
-		m_display.bar_event(event);
-		return false;
-	case SDL_EVENT_WINDOW_MOUSE_ENTER:
-	case SDL_EVENT_WINDOW_FOCUS_GAINED:
-	case SDL_EVENT_WINDOW_FOCUS_LOST:
-		m_display.bar_event(event);
-		return false;
-	default:
-		return false;
-	}
+	m_display.close_menu();
+	m_nav.reset();
+	m_held.reset();
+	m_menu_state.advanced = false;
+	m_menu_state.nav = {};
+	m_keys.swallow();
+	if (m_audio)
+		m_audio->pause(false);
 }
 
-/* Shown while the mouse moved lately, is on it, holds a button pressed on
- * it or a menu of it is open; never with the menu. Hidden while the game is
- * paused, the picture is shown again without it. */
 void
-Session::follow_bar()
+MenuSession::show(const std::string &game)
 {
-	const bool held = m_display.bar_shown() && (m_bar.wants_mouse || m_bar.open || m_bar_buttons);
-	const bool shown = !m_display.menu_shown() && (SDL_GetTicks() < m_bar_until || held);
-	std::error_code error;
+	for (size_t g = 0; g < m_menu_state.games.size(); g++)
+		if (m_menu_state.games[g].first == game)
+			show_game(g);
+}
 
-	if (shown == m_display.bar_shown())
+/* Not heard in the background, when the user says so */
+void
+MenuSession::focus(bool focused)
+{
+	m_focused = focused;
+	if (m_audio)
+		m_audio->set_heard(m_focused || m_menu_state.background);
+}
+
+void
+MenuSession::wait()
+{
+	const Uint64 now = SDL_GetTicks();
+
+	if (m_menu_pictures && now - m_menu_drawn >= MENU_PICTURE_MS) {
+		draw_menu();
+		m_menu_drawn = now;
+		m_menu_pictures--;
+		if (m_menu_test && !m_menu_pictures)
+			press_escape();
+	}
+	/* Undo goes when its time is over; the prompt of an input caught
+	 * beats, Start mapping counts the seconds of the control it waits for */
+	const bool caught = m_menu_state.catching || m_menu_state.mapping;
+
+	if ((m_menu_state.undo && SDL_GetTicks() >= m_undo_until) || m_menu_state.moving)
+		m_menu_pictures = std::max(m_menu_pictures, 1u);
+	if (caught && SDL_GetTicks() - m_menu_drawn >= CATCH_TICK_MS)
+		m_menu_pictures = std::max(m_menu_pictures, 1u);
+	if (!m_menu_pictures) {
+		if (caught)
+			SDL_WaitEventTimeout(nullptr, static_cast<Sint32>(CATCH_TICK_MS));
+		else if (m_menu_state.undo)
+			SDL_WaitEventTimeout(nullptr, static_cast<Sint32>(m_undo_until - std::min(m_undo_until, SDL_GetTicks())));
+		else
+			SDL_WaitEvent(nullptr);
 		return;
-	m_display.show_bar(shown);
-	m_bar.wants_mouse = m_bar.open = false;
-	m_bar_buttons = 0;
-	if (shown)
-		m_bar.saved = std::filesystem::exists(state_path(), error);
-	else if (m_paused)
-		m_display.show_again(nullptr);
+	}
+
+	const Uint64 since = SDL_GetTicks() - m_menu_drawn;
+
+	SDL_WaitEventTimeout(nullptr, since >= MENU_PICTURE_MS ? 0 : static_cast<Sint32>(MENU_PICTURE_MS - since));
 }
 
 void
-Session::fill_bar()
+MenuSession::fill_bar(odin::BarState &bar) const
 {
-	odin::BarState &bar = m_bar;
 	const odin::MenuState &state = m_menu_state;
 
-	bar.title = m_game.title;
-	bar.fps = m_display.fps();
 	bar.fullscreen = m_display.fullscreen();
 	bar.show_speed = state.show_speed;
-	bar.paused = m_paused;
 	bar.background = state.background;
 	bar.verbose = state.verbose;
 	bar.verbose_given = state.verbose_given;
@@ -1068,17 +1103,13 @@ Session::fill_bar()
 
 		bar.keys[a] = key.key == SDLK_UNKNOWN ? std::string() : odin::Hotkeys::text(key);
 	}
-	if (SDL_GetTicks() >= m_note_until)
-		bar.note.clear();
 }
 
 /* As the menu does them: kept in odin.ini the same way */
-void
-Session::do_bar()
+odin::BarState::Ask
+MenuSession::do_bar(odin::BarState &bar)
 {
 	using Ask = odin::BarState::Ask;
-	using Folder = odin::MenuState::Folder;
-	odin::BarState &bar = m_bar;
 	odin::MenuState &state = m_menu_state;
 
 	if (bar.sides != state.sides || bar.volume != state.volume || bar.show_speed != state.show_speed ||
@@ -1094,98 +1125,97 @@ Session::do_bar()
 	}
 
 	const Ask ask = std::exchange(bar.ask, Ask::NONE);
-	std::error_code error;
 
 	switch (ask) {
 	case Ask::OPEN:
 		m_dialog.ask_archive(m_display.window(), state.roms, ARCHIVE_ASKED);
-		break;
-	case Ask::CLOSE:
-		m_end = Ended::CLOSED;
-		break;
-	case Ask::SAVE_STATE:
-		load_or_save_state(false);
-		bar.saved = std::filesystem::exists(state_path(), error);
-		break;
-	case Ask::LOAD_STATE:
-		load_or_save_state(true);
-		m_touched = true;
-		break;
+		return Ask::NONE;
 	case Ask::ROMS:
 	case Ask::BIOS:
-		state.no_picker = false;
-		m_dialog.ask(m_display.window(), ask == Ask::ROMS || state.bios.empty() ? state.roms : state.bios,
-		             static_cast<int>(ask == Ask::ROMS ? Folder::ROMS : Folder::BIOS));
-		break;
-	case Ask::SETTINGS:
-		open_menu(bar.page);
-		break;
+		ask_folder(ask == Ask::ROMS ? odin::MenuState::Folder::ROMS : odin::MenuState::Folder::BIOS);
+		return Ask::NONE;
 	case Ask::FULLSCREEN:
 		m_display.toggle_fullscreen();
+		return Ask::NONE;
+	default:
+		return ask;
+	}
+}
+
+/* The folders of the games, of the BIOS and of the saves wait for the next
+ * launch; the save states go to theirs now. A folder of their own by
+ * default is no line in odin.ini. */
+std::optional<odin::FolderDialog::Answer>
+MenuSession::take_folder()
+{
+	using Folder = odin::MenuState::Folder;
+	odin::MenuState &state = m_menu_state;
+	const std::optional<odin::FolderDialog::Answer> answer = m_dialog.answer();
+
+	m_menu_pictures = MENU_PICTURES;
+	if (!answer || answer->asked == ARCHIVE_ASKED)
+		return answer;
+	state.no_picker = !answer->error.empty();
+	if (state.no_picker)
+		std::fprintf(stderr, "ERROR: no folder picker: %s\n", answer->error.c_str());
+	if (answer->folder.empty())
+		return std::nullopt;
+
+	const std::string &folder = answer->folder;
+
+	switch (static_cast<Folder>(answer->asked)) {
+	case Folder::ROMS:
+		state.roms = folder;
+		keep("paths", "roms", folder);
 		break;
-	case Ask::PAUSE:
-		act(odin::Hotkeys::Action::PAUSE);
+	case Folder::BIOS:
+		state.bios = folder;
+		keep("paths", "bios", folder);
 		break;
-	case Ask::QUIT:
-		m_end = Ended::QUIT;
+	case Folder::SAVES:
+		state.saves = folder;
+		keep("paths", "saves", folder == odin::SaveFolder::root() ? std::nullopt : std::optional(folder));
+		break;
+	case Folder::STATES:
+		state.states = m_states = folder;
+		keep("paths", "states", folder == default_states() ? std::nullopt : std::optional(folder));
+		break;
+	case Folder::ARTWORK:
+		state.artwork = folder;
+		keep("paths", "artwork", folder == odin::artwork_folder() ? std::nullopt : std::optional(folder));
+		if (m_game) {
+			m_display.set_sides(static_cast<odin::Display::Sides>(state.sides),
+			                    odin::artwork_file(folder, m_game->name, "bezel"));
+			m_controls.set_picture_hole(m_display.picture_hole());
+		}
 		break;
 	default:
 		break;
 	}
+	return std::nullopt;
 }
 
-/* At the right of the bar, shown a while */
+/* The picker opened where the folder is now; that of the BIOS, else where
+ * the games are */
 void
-Session::say(const std::string &note)
+MenuSession::ask_folder(odin::MenuState::Folder folder)
 {
-	m_bar.note = note;
-	m_note_until = SDL_GetTicks() + NOTE_MS;
-	m_bar_until = std::max(m_bar_until, m_note_until);
-	follow_bar();
-}
+	using Folder = odin::MenuState::Folder;
+	odin::MenuState &state = m_menu_state;
 
-/* The name of the archive is the game's, as MAME names it: the BIOS is
- * none */
-void
-Session::open_archive(const std::string &path)
-{
-	const std::filesystem::path file(path);
-	std::string name = file.stem().string();
-
-	std::transform(name.begin(), name.end(), name.begin(),
-	               [](unsigned char c) { return static_cast<char>(c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c); });
-	for (const auto &[game, title] : m_games.titles("hikaru")) {
-		if (game != name)
-			continue;
-		m_opened = { game, file.parent_path().string() };
-		m_end = Ended::OPENED;
-		return;
-	}
-	std::fprintf(stderr, "ERROR: '%s' is no game of the list: an archive takes the name MAME gives its game\n",
-	             path.c_str());
-	say(file.filename().string() + ": not a game of Odin");
-}
-
-/* The keys held now are not the game's; its frames start again now */
-void
-Session::close_menu()
-{
-	m_display.close_menu();
-	m_nav.reset();
-	m_held.reset();
-	m_menu_state.advanced = false;
-	m_menu_state.nav = {};
-	m_keys.swallow();
-	if (m_audio)
-		m_audio->pause(false);
-	m_next = std::chrono::steady_clock::now();
+	state.no_picker = false;
+	m_dialog.ask(m_display.window(), folder == Folder::ROMS ? state.roms :
+	             folder == Folder::BIOS ? (state.bios.empty() ? state.roms : state.bios) :
+	             folder == Folder::SAVES ? state.saves :
+	             folder == Folder::ARTWORK ? state.artwork : state.states, static_cast<int>(folder));
+	m_menu_pictures = MENU_PICTURES;
 }
 
 /* The page Input waits for an input: Escape lets it go; a key, or on a
  * gamepad a button (Guide held, then another: both), a stick or a trigger
  * from half its way, is the one. True when the event was taken. */
 bool
-Session::catch_input(const SDL_Event &event)
+MenuSession::catch_input(const SDL_Event &event)
 {
 	odin::MenuState &state = m_menu_state;
 
@@ -1275,7 +1305,7 @@ Session::catch_input(const SDL_Event &event)
 
 /* Whether a button of a gamepad presses in the menu (menu_nav.hpp) */
 bool
-Session::presses(int button) const
+MenuSession::presses(int button) const
 {
 	const std::vector<odin::HostInput> &inputs = m_nav.inputs(odin::MenuNav::PRESS);
 
@@ -1288,7 +1318,7 @@ Session::presses(int button) const
 /* An input of a gamepad caught: a button (held with Guide when it is), or
  * an axis past half its way */
 void
-Session::catch_pad(bool axis, int index, int value)
+MenuSession::catch_pad(bool axis, int index, int value)
 {
 	odin::MenuState &state = m_menu_state;
 	odin::HostInput input{};
@@ -1325,7 +1355,7 @@ Session::catch_pad(bool axis, int index, int value)
  * are its own) or for a button pressed with Guide held, or Guide tapped
  * alone; Escape lets it be. True when the event was taken. */
 bool
-Session::catch_hotkey(const SDL_Event &event)
+MenuSession::catch_hotkey(const SDL_Event &event)
 {
 	odin::MenuState &state = m_menu_state;
 	const auto action = static_cast<odin::Hotkeys::Action>(state.hotkey_catching->first);
@@ -1373,7 +1403,7 @@ Session::catch_hotkey(const SDL_Event &event)
 
 /* [hotkeys]: a line for each action not as by default */
 void
-Session::keep_hotkeys()
+MenuSession::keep_hotkeys()
 {
 	for (size_t a = 0; a < odin::Hotkeys::ACTIONS; a++) {
 		const auto action = static_cast<odin::Hotkeys::Action>(a);
@@ -1391,7 +1421,7 @@ Session::keep_hotkeys()
 /* The input caught takes the place of those of its kind on that part; the
  * next part waiting is caught then */
 void
-Session::caught(const odin::HostInput &input)
+MenuSession::caught(const odin::HostInput &input)
 {
 	const odin::MenuSlot slot = *m_menu_state.catching;
 	const odin::Bindings &bindings = panel_shown().bindings();
@@ -1412,7 +1442,7 @@ Session::caught(const odin::HostInput &input)
  * part of the controls of the player and their coin (and TEST for player
  * 1), back to their defaults or none */
 void
-Session::change_inputs(bool to_defaults)
+MenuSession::change_inputs(bool to_defaults)
 {
 	const odin::MenuState &state = m_menu_state;
 	const auto changed = [&](const std::vector<odin::HostInput> &inputs, const std::vector<odin::HostInput> &standard) {
@@ -1446,8 +1476,8 @@ Session::change_inputs(bool to_defaults)
 /* The inputs of a part without those of the device shown, or with those
  * of its defaults */
 std::vector<odin::HostInput>
-Session::kind_changed(std::vector<odin::HostInput> inputs, const std::vector<odin::HostInput> &standard,
-                      bool to_defaults) const
+MenuSession::kind_changed(std::vector<odin::HostInput> inputs, const std::vector<odin::HostInput> &standard,
+                          bool to_defaults) const
 {
 	const auto kind = m_menu_state.on_pad() ? odin::HostInput::Kind::PAD : odin::HostInput::Kind::KEY;
 
@@ -1462,7 +1492,7 @@ Session::kind_changed(std::vector<odin::HostInput> inputs, const std::vector<odi
 /* X and Y of a gamepad on the part picked: its inputs of the device shown
  * cleared, or back to their defaults */
 void
-Session::change_part(const odin::MenuSlot &slot, bool to_defaults)
+MenuSession::change_part(const odin::MenuSlot &slot, bool to_defaults)
 {
 	const odin::Bindings &bindings = panel_shown().bindings();
 
@@ -1480,7 +1510,7 @@ Session::change_part(const odin::MenuSlot &slot, bool to_defaults)
 
 /* The inputs back as Clear mapping found them */
 void
-Session::undo()
+MenuSession::undo()
 {
 	const std::string section = "controls." + m_cleared_game;
 	std::vector<std::string> keys;
@@ -1501,7 +1531,7 @@ Session::undo()
 }
 
 void
-Session::keep_binding(const odin::Bindings::Line &line, const std::string &game)
+MenuSession::keep_binding(const odin::Bindings::Line &line, const std::string &game)
 {
 	const std::string section = "controls." + (game.empty() ? game_shown() : game);
 
@@ -1515,17 +1545,18 @@ Session::keep_binding(const odin::Bindings::Line &line, const std::string &game)
 }
 
 std::string
-Session::game_shown() const
+MenuSession::game_shown() const
 {
 	const odin::MenuState &state = m_menu_state;
 
-	return state.shown < state.games.size() ? state.games[state.shown].first : m_board.game_name();
+	return state.shown < state.games.size() ? state.games[state.shown].first :
+	       m_board ? m_board->game_name() : std::string();
 }
 
 /* Another game in the page Input: a panel of its own, made from the list
  * and the settings, for its inputs only */
 void
-Session::show_game(size_t game)
+MenuSession::show_game(size_t game)
 {
 	odin::MenuState &state = m_menu_state;
 	const std::optional<odin::Game> other = game < state.games.size() && game != state.running ?
@@ -1544,46 +1575,10 @@ Session::show_game(size_t game)
 	m_other.emplace(m_other_controls, m_settings, other->name);
 }
 
-/* The menu draws its pictures, then sleeps until the next event */
-void
-Session::wait_in_menu()
-{
-	const Uint64 now = SDL_GetTicks();
-
-	if (m_menu_pictures && now - m_menu_drawn >= MENU_PICTURE_MS) {
-		draw_menu();
-		m_menu_drawn = now;
-		m_menu_pictures--;
-		if (m_menu_test && !m_menu_pictures)
-			press_escape();
-	}
-	/* Undo goes when its time is over; the prompt of an input caught
-	 * beats, Start mapping counts the seconds of the control it waits for */
-	const bool caught = m_menu_state.catching || m_menu_state.mapping;
-
-	if ((m_menu_state.undo && SDL_GetTicks() >= m_undo_until) || m_menu_state.moving)
-		m_menu_pictures = std::max(m_menu_pictures, 1u);
-	if (caught && SDL_GetTicks() - m_menu_drawn >= CATCH_TICK_MS)
-		m_menu_pictures = std::max(m_menu_pictures, 1u);
-	if (!m_menu_pictures) {
-		if (caught)
-			SDL_WaitEventTimeout(nullptr, static_cast<Sint32>(CATCH_TICK_MS));
-		else if (m_menu_state.undo)
-			SDL_WaitEventTimeout(nullptr, static_cast<Sint32>(m_undo_until - std::min(m_undo_until, SDL_GetTicks())));
-		else
-			SDL_WaitEvent(nullptr);
-		return;
-	}
-
-	const Uint64 since = SDL_GetTicks() - m_menu_drawn;
-
-	SDL_WaitEventTimeout(nullptr, since >= MENU_PICTURE_MS ? 0 : static_cast<Sint32>(MENU_PICTURE_MS - since));
-}
-
 /* The menu drawn once from what is so now (F11 may have changed the
  * display), then what it changed done */
 void
-Session::draw_menu()
+MenuSession::draw_menu()
 {
 	odin::MenuState &state = m_menu_state;
 
@@ -1646,20 +1641,21 @@ Session::draw_menu()
 	}
 	for (size_t a = 0; a < odin::Hotkeys::ACTIONS; a++)
 		state.hotkeys[a] = m_hotkeys.of(static_cast<odin::Hotkeys::Action>(a));
-	if (m_audio)
-		state.devices = m_audio->devices();
+	if (m_audio || m_listing)
+		state.devices = odin::AudioOut::devices();
 	/* The pad shakes as the cabinet of the game shown, unless
 	 * [players.<game>] says off (the last line says) */
-	state.can_shake = m_other ? m_other_shakes : m_game.shakes();
-	state.shake_from = m_other ? m_other_shakers[state.player & 1] : m_game.shaker(state.player & 1);
+	state.can_shake = m_other ? m_other_shakes : m_game && m_game->shakes();
+	state.shake_from = m_other ? m_other_shakers[state.player & 1] :
+	                   m_game ? m_game->shaker(state.player & 1) : std::string();
 	state.shake = true;
 	for (const auto &[key, value] : m_settings.section("players." + game_shown()))
 		if (key == "vibration" && (value == "on" || value == "off"))
 			state.shake = value == "on";
 	/* The outputs of the game shown, lit as the board left them */
 	state.outputs.clear();
-	for (const odin::GameOutput &output : m_other ? m_other_outputs : m_game.outputs)
-		state.outputs.push_back({ output.name, output.role, !m_other && output.on(m_board.io_outputs()) });
+	for (const odin::GameOutput &output : m_other || !m_game ? m_other_outputs : m_game->outputs)
+		state.outputs.push_back({ output.name, output.role, !m_other && m_board && output.on(m_board->io_outputs()) });
 	if (m_outputs) {
 		m_outputs->welcome();
 		state.programs = m_outputs->clients();
@@ -1715,15 +1711,8 @@ Session::draw_menu()
 		m_menu_pictures = MENU_PICTURES;
 	}
 	if (state.choose != odin::MenuState::Folder::NONE) {
-		const odin::MenuState::Folder folder = state.choose;
-
-		state.no_picker = false;
-		m_dialog.ask(m_display.window(), folder == odin::MenuState::Folder::ROMS ? state.roms :
-		             folder == odin::MenuState::Folder::BIOS ? (state.bios.empty() ? state.roms : state.bios) :
-		             folder == odin::MenuState::Folder::SAVES ? state.saves :
-		             folder == odin::MenuState::Folder::ARTWORK ? state.artwork : state.states, static_cast<int>(folder));
+		ask_folder(state.choose);
 		state.choose = odin::MenuState::Folder::NONE;
-		m_menu_pictures = MENU_PICTURES;
 	}
 
 	if (state.show) {
@@ -1768,7 +1757,7 @@ Session::draw_menu()
 /* A setting changed in the menu is done now, and kept in odin.ini when it
  * is not the one by default; the pace waits for the next launch */
 void
-Session::apply(const odin::MenuState &was)
+MenuSession::apply(const odin::MenuState &was)
 {
 	const odin::MenuState &now = m_menu_state;
 	const auto number = [](unsigned value, unsigned standard) {
@@ -1797,7 +1786,7 @@ Session::apply(const odin::MenuState &was)
 	if (now.sides != was.sides) {
 		const auto sides = static_cast<odin::Display::Sides>(now.sides);
 
-		m_display.set_sides(sides, odin::artwork_file(now.artwork, m_game.name, "bezel"));
+		m_display.set_sides(sides, m_game ? odin::artwork_file(now.artwork, m_game->name, "bezel") : std::string());
 		m_controls.set_picture_hole(m_display.picture_hole());
 		keep("bezel", sides == SIDES ? std::nullopt : std::optional<std::string>(SIDES_NAMES[now.sides]));
 	}
@@ -1836,7 +1825,7 @@ Session::apply(const odin::MenuState &was)
 	for (size_t g = 0; g < now.sound_games.size() && g < was.sound_games.size(); g++) {
 		const odin::MenuState::SoundGame &game = now.sound_games[g], &before = was.sound_games[g];
 		const std::string section = "sound." + game.name;
-		const bool runs = game.name == m_game.name && m_audio;
+		const bool runs = m_game && game.name == m_game->name && m_audio;
 
 		if (game.played != before.played) {
 			static constexpr const char *MODES[] = { "main", "mix", "quad" };
@@ -1860,9 +1849,9 @@ Session::apply(const odin::MenuState &was)
 	if (now.shake != was.shake && now.can_shake) {
 		const std::string section = "players." + game_shown();
 
-		if (!m_other) {
-			m_controls.feel_option_board(now.shake && m_game.option_vibration);
-			m_controls.feel_drive_board(now.shake ? m_game.drive_first_output : 0);
+		if (!m_other && m_game) {
+			m_controls.feel_option_board(now.shake && m_game->option_vibration);
+			m_controls.feel_drive_board(now.shake ? m_game->drive_first_output : 0);
 			m_controls.feel_outputs(now.shake);
 		}
 		keep(section.c_str(), "vibration", on_off(now.shake, true));
@@ -1885,27 +1874,28 @@ Session::apply(const odin::MenuState &was)
 			keep(section.c_str(), "trigger_threshold", line(now.tuning.trigger_threshold, all.trigger_threshold));
 		m_controls.retune();
 	}
-	/* The programs of lamps: the port opened or closed now */
+	/* The programs of lamps: the port opened or closed now, for the game
+	 * that runs */
 	if (now.network != was.network) {
-		if (now.network)
-			m_outputs = odin::OutputsNetwork::open(m_game.name, m_game.outputs);
+		if (now.network && m_game)
+			m_outputs = odin::OutputsNetwork::open(m_game->name, m_game->outputs);
 		else
 			m_outputs.reset();
-		m_menu_state.network_failed = now.network && !m_outputs;
+		m_menu_state.network_failed = now.network && m_game && !m_outputs;
 		m_menu_state.programs = 0;
 		keep("outputs", "network", on_off(now.network, false));
 	}
 }
 
 void
-Session::keep(const char *key, const std::optional<std::string> &value)
+MenuSession::keep(const char *key, const std::optional<std::string> &value)
 {
 	keep("display", key, value);
 }
 
 /* In odin.ini; with none, for the time Odin runs */
 void
-Session::keep(const char *section, const char *key, const std::optional<std::string> &value)
+MenuSession::keep(const char *section, const char *key, const std::optional<std::string> &value)
 {
 	if (m_settings_file.empty())
 		m_settings.set(section, key, value);
@@ -1913,61 +1903,276 @@ Session::keep(const char *section, const char *key, const std::optional<std::str
 		m_settings.change(m_settings_file, section, key, value);
 }
 
-/* The folders of the games, of the BIOS and of the saves wait for the next
- * launch; the save states go to theirs now. A folder of their own by
- * default is no line in odin.ini. */
-void
-Session::take_folder()
+/* F1 and F4: <game>.odinstate in the folder of the save states */
+std::string
+Session::state_path() const
 {
-	using Folder = odin::MenuState::Folder;
-	odin::MenuState &state = m_menu_state;
-	const std::optional<odin::FolderDialog::Answer> answer = m_dialog.answer();
+	const std::string &states = m_menus.states();
 
-	m_menu_pictures = MENU_PICTURES;
-	if (!answer)
-		return;
-	if (answer->asked == ARCHIVE_ASKED) {
-		if (!answer->error.empty()) {
-			std::fprintf(stderr, "ERROR: no file picker: %s\n", answer->error.c_str());
-			say("This system gives Odin no file picker");
-		} else if (!answer->folder.empty()) {
-			open_archive(answer->folder);
-		}
+	return (states.empty() ? "" : states + "/") + m_board.game_name() + ".odinstate";
+}
+
+void
+Session::load_or_save_state(bool load)
+{
+	const std::string path = state_path();
+	std::error_code error;
+
+	/* None saved yet: the game goes on */
+	if (load && !std::filesystem::exists(path, error)) {
+		std::fprintf(stderr, "no state '%s' to load yet\n", path.c_str());
 		return;
 	}
-	state.no_picker = !answer->error.empty();
-	if (state.no_picker)
-		std::fprintf(stderr, "ERROR: no folder picker: %s\n", answer->error.c_str());
-	if (answer->folder.empty())
+	if (!load && !m_menus.states().empty())
+		std::filesystem::create_directories(m_menus.states(), error);
+	if (load ? m_board.load_state(path) : m_board.save_state(path))
+		std::printf("%s state '%s'\n", load ? "loaded" : "saved", path.c_str());
+	else
+		std::fprintf(stderr, "ERROR: failed to %s state '%s'\n", load ? "load" : "save", path.c_str());
+}
+
+/* The hotkeys of the emulator (hotkeys.hpp): by default Escape or F10
+ * opens the menu, which pauses the game, Ctrl+Q quits, P pauses (as in
+ * MAME), F1 loads the state of the game and F4 saves it, F11 or Alt+Enter
+ * takes the whole display; on a gamepad Guide alone the menu, and with
+ * another button the others. The keys are the control panel's too, see
+ * keyboard.hpp. True to quit. */
+bool
+Session::process_events()
+{
+	SDL_Event event;
+	bool quit = false;
+
+	while (SDL_PollEvent(&event)) {
+		if (event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
+		    event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN || event.type == SDL_EVENT_JOYSTICK_BUTTON_DOWN)
+			m_touched = true;
+		if (event.type == m_menus.picker_event()) {
+			take_folder();
+			continue;
+		}
+		if (event.type == SDL_EVENT_WINDOW_DISPLAY_CHANGED)
+			m_display.display_changed();
+		if (event.type == SDL_EVENT_WINDOW_FOCUS_GAINED || event.type == SDL_EVENT_WINDOW_FOCUS_LOST)
+			m_menus.focus(event.type == SDL_EVENT_WINDOW_FOCUS_GAINED);
+		if (m_display.menu_shown()) {
+			const MenuSession::Asked asked = m_menus.event(event);
+
+			if (asked == MenuSession::Asked::CLOSE)
+				close_menu();
+			quit = asked == MenuSession::Asked::QUIT || quit;
+			continue;
+		}
+		if (bar_event(event))
+			continue;
+		if (m_controls.event(event)) {
+			const odin::Hotkeys &hotkeys = m_menus.hotkeys();
+			const int combo = m_controls.guide_combo();
+
+			if (const auto action = hotkeys.pad_action(combo >= 0 ? combo : odin::Hotkeys::NO_PAD))
+				quit = act(*action) || quit;
+			if (m_controls.guide_tapped())
+				if (const auto action = hotkeys.pad_action(odin::Hotkeys::GUIDE_ALONE))
+					quit = act(*action) || quit;
+			continue;
+		}
+		switch (event.type) {
+		case SDL_EVENT_KEY_DOWN:
+			m_keys.set(event.key.key, true);
+			if (!event.key.repeat)
+				if (const auto action = m_menus.hotkeys().key_action(event.key.key, event.key.mod))
+					quit = act(*action) || quit;
+			break;
+		case SDL_EVENT_KEY_UP:
+			m_keys.set(event.key.key, false);
+			break;
+		case SDL_EVENT_QUIT:
+			quit = true;
+			break;
+		default:
+			break;
+		}
+	}
+	return quit;
+}
+
+bool
+Session::act(odin::Hotkeys::Action action)
+{
+	using Action = odin::Hotkeys::Action;
+
+	switch (action) {
+	case Action::MENU:
+		open_menu();
+		break;
+	case Action::PAUSE:
+		m_paused = !m_paused;
+		if (m_paused)
+			m_controls.quiet();
+		break;
+	case Action::SAVE_STATE:
+		load_or_save_state(false);
+		break;
+	case Action::LOAD_STATE:
+		load_or_save_state(true);
+		break;
+	case Action::FULLSCREEN:
+		m_display.toggle_fullscreen();
+		break;
+	case Action::QUIT:
+		return true;
+	}
+	return false;
+}
+
+void
+Session::open_menu(int page)
+{
+	m_bar_until = 0;
+	m_bar_buttons = 0;
+	m_menus.open(page);
+}
+
+void
+Session::close_menu()
+{
+	m_menus.close();
+	m_next = std::chrono::steady_clock::now();
+}
+
+/* The mouse moved shows the bar a while (not where the system first puts
+ * it: no move); where it aims in the game, only from the top edge of the
+ * window. Its buttons pressed on the bar, or with one of its menus open,
+ * are the bar's, and let go there; all the rest of the mouse is the game's
+ * too. */
+bool
+Session::bar_event(const SDL_Event &event)
+{
+	switch (event.type) {
+	case SDL_EVENT_MOUSE_MOTION:
+		if ((event.motion.xrel != 0.0f || event.motion.yrel != 0.0f) &&
+		    (!m_controls.aims() || event.motion.y < BAR_EDGE))
+			m_bar_until = std::max(m_bar_until, SDL_GetTicks() + (m_controls.aims() ? BAR_AIM_MS : BAR_MS));
+		follow_bar();
+		m_display.bar_event(event);
+		return false;
+	case SDL_EVENT_MOUSE_BUTTON_DOWN:
+		if (!m_display.bar_shown() || !(m_bar.wants_mouse || m_bar.open || event.button.y < m_bar.bottom))
+			return false;
+		m_bar_buttons |= 1u << event.button.button;
+		m_display.bar_event(event);
+		return true;
+	case SDL_EVENT_MOUSE_BUTTON_UP: {
+		const bool bar = (m_bar_buttons >> event.button.button) & 1u;
+
+		m_bar_buttons &= ~(1u << event.button.button);
+		m_display.bar_event(event);
+		return bar;
+	}
+	case SDL_EVENT_MOUSE_WHEEL:
+		m_display.bar_event(event);
+		return m_display.bar_shown() && m_bar.wants_mouse;
+	case SDL_EVENT_WINDOW_MOUSE_LEAVE:
+		m_bar_until = 0;
+		m_display.bar_event(event);
+		return false;
+	case SDL_EVENT_WINDOW_MOUSE_ENTER:
+	case SDL_EVENT_WINDOW_FOCUS_GAINED:
+	case SDL_EVENT_WINDOW_FOCUS_LOST:
+		m_display.bar_event(event);
+		return false;
+	default:
+		return false;
+	}
+}
+
+/* Shown while the mouse moved lately, is on it, holds a button pressed on
+ * it or a menu of it is open; never with the menu. Hidden while the game is
+ * paused, the picture is shown again without it. */
+void
+Session::follow_bar()
+{
+	const bool held = m_display.bar_shown() && (m_bar.wants_mouse || m_bar.open || m_bar_buttons);
+	const bool shown = !m_display.menu_shown() && (SDL_GetTicks() < m_bar_until || held);
+	std::error_code error;
+
+	if (shown == m_display.bar_shown())
 		return;
+	m_display.show_bar(shown);
+	m_bar.wants_mouse = m_bar.open = false;
+	m_bar_buttons = 0;
+	if (shown)
+		m_bar.saved = std::filesystem::exists(state_path(), error);
+	else if (m_paused)
+		m_display.show_again(nullptr);
+}
 
-	const std::string &folder = answer->folder;
+void
+Session::fill_bar()
+{
+	m_menus.fill_bar(m_bar);
+	m_bar.title = m_game.title;
+	m_bar.fps = m_display.fps();
+	m_bar.paused = m_paused;
+	m_bar.game = true;
+	if (SDL_GetTicks() >= m_note_until)
+		m_bar.note.clear();
+}
 
-	switch (static_cast<Folder>(answer->asked)) {
-	case Folder::ROMS:
-		state.roms = folder;
-		keep("paths", "roms", folder);
+void
+Session::do_bar()
+{
+	using Ask = odin::BarState::Ask;
+	std::error_code error;
+
+	switch (m_menus.do_bar(m_bar)) {
+	case Ask::CLOSE:
+		m_end = Ended::CLOSED;
 		break;
-	case Folder::BIOS:
-		state.bios = folder;
-		keep("paths", "bios", folder);
+	case Ask::SAVE_STATE:
+		load_or_save_state(false);
+		m_bar.saved = std::filesystem::exists(state_path(), error);
 		break;
-	case Folder::SAVES:
-		state.saves = folder;
-		keep("paths", "saves", folder == odin::SaveFolder::root() ? std::nullopt : std::optional(folder));
+	case Ask::LOAD_STATE:
+		load_or_save_state(true);
+		m_touched = true;
 		break;
-	case Folder::STATES:
-		state.states = m_states = folder;
-		keep("paths", "states", folder == default_states() ? std::nullopt : std::optional(folder));
+	case Ask::SETTINGS:
+		open_menu(m_bar.page);
 		break;
-	case Folder::ARTWORK:
-		state.artwork = folder;
-		keep("paths", "artwork", folder == odin::artwork_folder() ? std::nullopt : std::optional(folder));
-		m_display.set_sides(static_cast<odin::Display::Sides>(state.sides), odin::artwork_file(folder, m_game.name, "bezel"));
-		m_controls.set_picture_hole(m_display.picture_hole());
+	case Ask::PAUSE:
+		act(odin::Hotkeys::Action::PAUSE);
+		break;
+	case Ask::QUIT:
+		m_end = Ended::QUIT;
 		break;
 	default:
 		break;
+	}
+}
+
+/* At the right of the bar, shown a while */
+void
+Session::say(const std::string &note)
+{
+	m_bar.note = note;
+	m_note_until = SDL_GetTicks() + NOTE_MS;
+	m_bar_until = std::max(m_bar_until, m_note_until);
+	follow_bar();
+}
+
+void
+Session::take_folder()
+{
+	std::string note;
+
+	if (const std::optional<odin::FolderDialog::Answer> archive = m_menus.take_folder()) {
+		if (const std::optional<Opened> opened = open_archive(*archive, m_games, note)) {
+			m_opened = *opened;
+			m_end = Ended::OPENED;
+		} else if (!note.empty()) {
+			say(note);
+		}
 	}
 }
 
@@ -1977,7 +2182,7 @@ Session::take_folder()
 void
 Session::capture_title()
 {
-	const std::string &folder = m_menu_state.artwork;
+	const std::string &folder = m_menus.state().artwork;
 
 	if (!m_game.title_frame || m_board.frame() != m_game.title_frame || m_touched || folder.empty() ||
 	    !odin::artwork_file(folder, m_game.name, "title").empty())
@@ -1987,22 +2192,6 @@ Session::capture_title()
 
 	if (m_display.save_picture(path))
 		std::printf("library: the title of %s kept in '%s'\n", m_game.name.c_str(), path.c_str());
-}
-
-/* ODIN_MENU_TEST: Escape pressed and released */
-void
-Session::press_escape()
-{
-	SDL_Event event{};
-
-	event.type = SDL_EVENT_KEY_DOWN;
-	event.key.key = SDLK_ESCAPE;
-	event.key.scancode = SDL_SCANCODE_ESCAPE;
-	event.key.down = true;
-	SDL_PushEvent(&event);
-	event.type = SDL_EVENT_KEY_UP;
-	event.key.down = false;
-	SDL_PushEvent(&event);
 }
 
 /* -s: <game>-<frame>.odinstate, written once the frame is drawn */
@@ -2058,7 +2247,7 @@ Session::frames()
 		if (m_options.num_frames > 0 && m_board.frame() >= m_options.num_frames)
 			return Ended::LAST_FRAME;
 		if (m_display.menu_shown()) {
-			wait_in_menu();
+			m_menus.wait();
 			continue;
 		}
 		follow_bar();
@@ -2079,8 +2268,8 @@ Session::frames()
 		m_controls.update();
 		m_board.run_frame();
 		m_controls.show(m_board.io_outputs(), m_board.sound(true));
-		if (m_outputs)
-			m_outputs->show(m_board.io_outputs());
+		if (odin::OutputsNetwork *const outputs = m_menus.outputs())
+			outputs->show(m_board.io_outputs());
 		if (m_audio)
 			m_audio->play(m_board.sound(false), m_board.sound(true));
 
@@ -2093,23 +2282,12 @@ Session::frames()
 			do_bar();
 		save_state_at_frame();
 		capture_title();
-		if (m_menu_test && m_board.frame() % m_menu_test == 0)
+		if (m_menus.tested_at(m_board.frame()))
 			press_escape();
 		if (!m_options.unthrottled)
 			limit_frame_rate();
 	}
 	return Ended::QUIT;
-}
-
-/* In odin.ini; with none, for the time Odin runs */
-void
-keep_setting(odin::Settings &settings, const std::string &settings_file, const char *section, const char *key,
-             const std::string &value)
-{
-	if (settings_file.empty())
-		settings.set(section, key, value);
-	else
-		settings.change(settings_file, section, key, value);
 }
 
 /* The games of the list in the library, each with the files it lacks in
@@ -2136,84 +2314,164 @@ scan_library(odin::LibraryState &state, const odin::GameList &games, const Optio
 	state.bios_given = options.given.bios;
 }
 
-/* The library, Odin started without a game, until one is chosen there
- * (its name) or Odin is to quit (empty). The game played before is chosen
- * again; `failed`, one that did not start, says so. A folder chosen there
- * is kept in odin.ini and taken at once. */
-std::string
-library(Options &options, const odin::GameList &games, odin::Settings &settings, const std::string &settings_file,
-        odin::Display &display, const std::string &last, const std::string &failed)
+/* The pictures of the games in the library, from the folder of the
+ * artwork: the user's <game>_logo.png, else the <game>_title.png Odin
+ * kept; a game with none there forgets the one it had */
+void
+library_pictures(odin::Display &display, const odin::LibraryState &state, const std::string &artwork)
 {
-	const odin::Hotkeys hotkeys(settings);
-	odin::FolderDialog dialog;
+	const std::string folder = odin::artwork_folder(artwork);
+
+	for (const odin::LibraryState::Game &game : state.games) {
+		const std::string logo = folder.empty() ? "" : odin::artwork_file(folder, game.name, "logo");
+		const std::string path = logo.empty() && !folder.empty() ? odin::artwork_file(folder, game.name, "title") : logo;
+		SDL_Surface *const png = path.empty() ? nullptr : SDL_LoadPNG(path.c_str());
+		SDL_Surface *const rgba = png ? SDL_ConvertSurface(png, SDL_PIXELFORMAT_RGBA32) : nullptr;
+
+		SDL_DestroySurface(png);
+		display.add_library_picture(game.name, rgba);
+	}
+}
+
+/* The library, Odin started without a game, until one is chosen there or
+ * by Open... (its name, and the folder of its archive: empty, that of the
+ * games), or Odin is to quit (no name). The game played before is chosen
+ * again; `failed`, one that did not start, says so. The bar is over it, at
+ * all times; the menu opens over it as over a game, its page Input on the
+ * game chosen. What they change is kept in odin.ini and taken at once. */
+Opened
+library(const Options &command, const odin::GameList &games, odin::Settings &settings, const std::string &settings_file,
+        odin::Display &display, odin::Keyboard &keys, const std::string &last, const std::string &failed)
+{
+	using Ask = odin::BarState::Ask;
+	/* Some 60 pictures a second, between the events */
+	static constexpr Sint32 PICTURE_MS = 16;
+	Options options = with_settings(command, settings);
+	/* The gamepads of the menu: the controls of no game */
+	odin::Controls controls(keys, {}, {}, settings, {});
+	MenuSession menus(options, display, keys, controls, settings, settings_file, games, nullptr, nullptr, nullptr,
+	                  nullptr, network_on(settings));
 	odin::LibraryState state;
+	odin::BarState bar;
+	Uint64 note_until = 0;
+	const auto chosen = [&state] {
+		return state.games.empty() ? std::string() : state.games[static_cast<size_t>(state.selected)].name;
+	};
+	const auto open_menu = [&](int page) {
+		menus.show(chosen());
+		menus.open(page);
+	};
+	const auto say = [&](const std::string &note) {
+		bar.note = note;
+		note_until = SDL_GetTicks() + NOTE_MS;
+	};
 
 	scan_library(state, games, options, last);
 	state.failed = failed;
 	display.open_library();
 	SDL_ShowCursor();
-
-	/* The pictures of the games in the folder of the artwork: the user's
-	 * <game>_logo.png, else the <game>_title.png Odin kept */
-	if (const std::string folder = odin::artwork_folder(options.artwork); !folder.empty()) {
-		for (const odin::LibraryState::Game &game : state.games) {
-			const std::string logo = odin::artwork_file(folder, game.name, "logo");
-			const std::string path = logo.empty() ? odin::artwork_file(folder, game.name, "title") : logo;
-			SDL_Surface *const png = path.empty() ? nullptr : SDL_LoadPNG(path.c_str());
-			SDL_Surface *const rgba = png ? SDL_ConvertSurface(png, SDL_PIXELFORMAT_RGBA32) : nullptr;
-
-			SDL_DestroySurface(png);
-			if (rgba)
-				display.add_library_picture(game.name, rgba);
-		}
-	}
+	library_pictures(display, state, options.artwork);
 	for (;;) {
 		SDL_Event event;
 
-		/* Its pictures go on, some 60 a second, between the events */
-		if (SDL_WaitEventTimeout(&event, 16)) {
-			do {
-				if (event.type == SDL_EVENT_QUIT)
-					return {};
-				if (event.type == dialog.event()) {
-					const std::optional<odin::FolderDialog::Answer> answer = dialog.answer();
+		while (SDL_PollEvent(&event)) {
+			if (event.type == SDL_EVENT_QUIT)
+				return {};
+			/* A folder chosen: the games looked for there */
+			if (event.type == menus.picker_event()) {
+				const std::string artwork = menus.state().artwork;
+				std::string note;
 
-					if (answer && !answer->error.empty())
-						std::fprintf(stderr, "ERROR: no folder picker: %s\n", answer->error.c_str());
-					if (answer && !answer->folder.empty()) {
-						const bool roms = answer->asked == static_cast<int>(odin::LibraryState::Folder::ROMS);
-
-						(roms ? options.rom_path : options.bios_path) = answer->folder;
-						keep_setting(settings, settings_file, "paths", roms ? "roms" : "bios", answer->folder);
-						scan_library(state, games, options, state.games.empty() ? std::string() :
-						             state.games[static_cast<size_t>(state.selected)].name);
-					}
+				if (const std::optional<odin::FolderDialog::Answer> archive = menus.take_folder()) {
+					if (const std::optional<Opened> opened = open_archive(*archive, games, note))
+						return *opened;
+					if (!note.empty())
+						say(note);
 					continue;
 				}
-				if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat) {
-					const auto action = hotkeys.key_action(event.key.key, event.key.mod);
+				options = with_settings(command, settings);
+				scan_library(state, games, options, chosen());
+				if (menus.state().artwork != artwork)
+					library_pictures(display, state, options.artwork);
+				continue;
+			}
+			if (event.type == SDL_EVENT_WINDOW_DISPLAY_CHANGED)
+				display.display_changed();
+			if (event.type == SDL_EVENT_WINDOW_FOCUS_GAINED || event.type == SDL_EVENT_WINDOW_FOCUS_LOST)
+				menus.focus(event.type == SDL_EVENT_WINDOW_FOCUS_GAINED);
+			if (display.menu_shown()) {
+				const MenuSession::Asked asked = menus.event(event);
 
-					if (action == odin::Hotkeys::Action::QUIT)
-						return {};
-					if (action == odin::Hotkeys::Action::FULLSCREEN) {
-						display.toggle_fullscreen();
-						continue;
-					}
+				if (asked == MenuSession::Asked::QUIT)
+					return {};
+				if (asked == MenuSession::Asked::CLOSE) {
+					menus.close();
+					display.open_library();
 				}
-				display.menu_event(event);
-			} while (SDL_PollEvent(&event));
-		}
-		display.draw_library(state);
-		if (state.play)
-			return *state.play;
-		if (state.choose != odin::LibraryState::Folder::NONE) {
-			const bool roms = state.choose == odin::LibraryState::Folder::ROMS;
+				continue;
+			}
 
-			dialog.ask(display.window(), roms || options.bios_path.empty() ? options.rom_path : options.bios_path,
-			           static_cast<int>(state.choose));
+			/* The hotkeys that work without a game: the menu (not while a
+			 * menu of the bar is open: Escape closes it), the whole display,
+			 * quitting */
+			std::optional<odin::Hotkeys::Action> action;
+			const odin::Hotkeys &hotkeys = menus.hotkeys();
+
+			if (event.type == SDL_EVENT_GAMEPAD_ADDED || event.type == SDL_EVENT_GAMEPAD_REMOVED ||
+			    event.type == SDL_EVENT_GAMEPAD_AXIS_MOTION || event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN ||
+			    event.type == SDL_EVENT_GAMEPAD_BUTTON_UP) {
+				controls.event(event);
+
+				const int combo = controls.guide_combo();
+
+				action = hotkeys.pad_action(combo >= 0 ? combo : odin::Hotkeys::NO_PAD);
+				if (controls.guide_tapped())
+					action = hotkeys.pad_action(odin::Hotkeys::GUIDE_ALONE);
+			} else if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat) {
+				action = hotkeys.key_action(event.key.key, event.key.mod);
+			}
+			if (action == odin::Hotkeys::Action::QUIT)
+				return {};
+			if (action == odin::Hotkeys::Action::FULLSCREEN) {
+				display.toggle_fullscreen();
+				continue;
+			}
+			if (action == odin::Hotkeys::Action::MENU && !bar.open) {
+				open_menu(-1);
+				continue;
+			}
+			display.menu_event(event);
+		}
+		if (display.menu_shown()) {
+			menus.wait();
+			continue;
+		}
+
+		menus.fill_bar(bar);
+		bar.game = false;
+		if (SDL_GetTicks() >= note_until)
+			bar.note.clear();
+		display.draw_library(state, bar);
+		/* Without a game, the bar has no game to close, save, load or
+		 * pause */
+		switch (menus.do_bar(bar)) {
+		case Ask::SETTINGS:
+			open_menu(bar.page);
+			continue;
+		case Ask::QUIT:
+			return {};
+		default:
+			break;
+		}
+		if (state.play)
+			return { *state.play, {} };
+		if (state.choose != odin::LibraryState::Folder::NONE) {
+			menus.ask_folder(state.choose == odin::LibraryState::Folder::ROMS ? odin::MenuState::Folder::ROMS :
+			                                                                    odin::MenuState::Folder::BIOS);
 			state.choose = odin::LibraryState::Folder::NONE;
 		}
-		state.choosing = dialog.open();
+		state.choosing = menus.choosing();
+		SDL_WaitEventTimeout(nullptr, PICTURE_MS);
 	}
 }
 
@@ -2268,14 +2526,7 @@ play(const Options &given, const std::string &name, const odin::GameList &games,
 	odin::Controls controls(keys, game->controls, game->outputs, settings, game->name);
 	board->set_panel(&controls);
 
-	/* The last line says */
-	bool network = false;
-	for (const auto &[key, value] : settings.section("outputs")) {
-		if (key == "network" && (value == "on" || value == "off"))
-			network = value == "on";
-		else
-			std::fprintf(stderr, "ERROR: settings: [outputs]: not right: %s = %s\n", key.c_str(), value.c_str());
-	}
+	const bool network = network_on(settings);
 	std::unique_ptr<odin::OutputsNetwork> outputs =
 		network ? odin::OutputsNetwork::open(game->name, game->outputs) : nullptr;
 
@@ -2389,9 +2640,8 @@ main(int argc, char **argv)
 		settings.know(known_settings(games));
 		settings.complete(settings_file);
 	}
-	read_paths(settings, options);
-	read_display(settings, options);
-	read_sound(settings, options);
+	Options command = options;
+	options = with_settings(command, settings);
 
 	odin::Keyboard keys;
 	options.display.vsync = options.unthrottled ? odin::Display::Vsync::OFF : options.vsync;
@@ -2413,16 +2663,19 @@ main(int argc, char **argv)
 	/* Without a game, the library: a game chosen there goes back to it
 	 * when it ends, but by the hotkey that quits. Close game goes back to
 	 * it from any game; Open... plays the game of an archive, from the
-	 * folder that holds it, as if chosen there. */
+	 * folder that holds it, as if chosen there. What the library and each
+	 * game change in the settings holds for what comes after them. */
 	std::string name = options.game, last, failed;
 	Opened opened;
 	bool chosen = name.empty();
 	for (size_t played = 0;; played++) {
 		if (name.empty()) {
-			name = library(options, games, settings, settings_file, *display, last, failed);
-			if (name.empty())
+			opened = library(command, games, settings, settings_file, *display, keys, last, failed);
+			if (opened.game.empty())
 				return 0;
+			name = opened.game;
 			chosen = true;
+			options = with_settings(command, settings);
 		}
 
 		Options launch = options;
@@ -2432,13 +2685,10 @@ main(int argc, char **argv)
 
 		const Ended ended = play(launch, name, games, settings, settings_file, *display, keys, opened);
 
-		/* -l and -s were for the first game; what the game changed in the
-		 * settings holds for the library and the games after it */
-		options.state_path.clear();
-		options.save_frames.clear();
-		read_paths(settings, options);
-		read_display(settings, options);
-		read_sound(settings, options);
+		/* -l and -s were for the first game */
+		command.state_path.clear();
+		command.save_frames.clear();
+		options = with_settings(command, settings);
 		if (ended == Ended::OPENED) {
 			name = last = opened.game;
 			failed.clear();

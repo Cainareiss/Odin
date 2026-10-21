@@ -501,7 +501,9 @@ Display::open_menu(int page)
 {
 	if (!m_menu)
 		m_menu = std::make_unique<Menu>(m_window);
+	/* The menus of the bar closed, that of the library too */
 	show_bar(false);
+	m_menu->hide_bar();
 	m_menu->open(page);
 	run([this] { m_menu->freeze(m_picture_fb, m_picture_width, m_picture_height); });
 	m_menu_shown = true;
@@ -788,11 +790,11 @@ Display::draw_blur(unsigned window_w, unsigned window_h)
 }
 
 void
-Display::draw_library(LibraryState &state)
+Display::draw_library(LibraryState &state, BarState &bar)
 {
 	int w, h;
 
-	m_menu->build_library(state);
+	m_menu->build_library(state, bar);
 	SDL_GetWindowSizeInPixels(m_window, &w, &h);
 	run([this, w, h] {
 		/* No picture of a game behind it */

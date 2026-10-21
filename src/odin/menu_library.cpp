@@ -18,8 +18,9 @@
 
 /* The library: the games to choose from when Odin starts without one, as
  * the game picker of sm2-emu lays them out (mock-up v2), in the palette of
- * the menu. Tiles at the left, the game chosen framed; its sheet at the
- * right. Arrows choose, Enter or a click on the game chosen plays it. */
+ * the menu, under the bar. Tiles at the left, the game chosen framed; its
+ * sheet at the right. Arrows choose, Enter or a click on the game chosen
+ * plays it. */
 
 #include "odin/menu.hpp"
 
@@ -97,8 +98,12 @@ Menu::upload_library_pictures()
 		const auto old = m_library_pictures.find(game);
 		GLuint texture = 0;
 
-		if (old != m_library_pictures.end())
+		if (old != m_library_pictures.end()) {
 			glDeleteTextures(1, &old->second.texture);
+			m_library_pictures.erase(old);
+		}
+		if (!rgba)
+			continue;
 		glGenTextures(1, &texture);
 		glBindTexture(GL_TEXTURE_2D, texture);
 		glPixelStorei(GL_UNPACK_ROW_LENGTH, rgba->pitch / 4);
@@ -123,7 +128,7 @@ Menu::open_library()
 }
 
 void
-Menu::build_library(LibraryState &state)
+Menu::build_library(LibraryState &state, BarState &bar_state)
 {
 	ImGui::SetCurrentContext(m_imgui);
 	follow_scale();
@@ -131,32 +136,34 @@ Menu::build_library(LibraryState &state)
 	add_fonts();
 	ImGui::NewFrame();
 	close_bar_menus();
+	bar(bar_state);
 
 	const MenuKit kit(RUNASTEINN, m_scale);
 	const MenuPalette &palette = kit.palette();
 	const ImVec2 room = ImGui::GetIO().DisplaySize;
 	const float margin = kit.px(MARGIN), gap = kit.px(GAP), line = ImGui::GetTextLineHeight();
-	const float size = ImGui::GetFontSize();
+	const float size = ImGui::GetFontSize(), below = bar_state.bottom;
 	const int count = static_cast<int>(state.games.size());
 
-	/* The library reads the keys itself: Dear ImGui moves nothing */
-	ImGui::SetNextWindowPos({ 0.0f, 0.0f });
-	ImGui::SetNextWindowSize(room);
+	/* Under the bar. The library reads the keys itself: Dear ImGui moves
+	 * nothing */
+	ImGui::SetNextWindowPos({ 0.0f, below });
+	ImGui::SetNextWindowSize({ room.x, room.y - below });
 	ImGui::Begin("Library", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
 	             ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoNav);
 
 	ImDrawList *const list = ImGui::GetWindowDrawList();
 
-	list->AddRectFilled({ 0.0f, 0.0f }, room, palette.screen);
+	list->AddRectFilled({ 0.0f, below }, room, palette.screen);
 
 	/* The head: what to do, the keys at its right, the line of the accent
 	 * under them */
 	const char keys[] = "Enter: play    Ctrl+Q: quit";
 
-	MenuKit::write(list, { margin, margin }, palette.cabinet, "SELECT A GAME", size, size * TITLE_SPACING);
-	list->AddText({ room.x - margin - ImGui::CalcTextSize(keys).x, margin }, palette.faint, keys);
+	MenuKit::write(list, { margin, below + margin }, palette.cabinet, "SELECT A GAME", size, size * TITLE_SPACING);
+	list->AddText({ room.x - margin - ImGui::CalcTextSize(keys).x, below + margin }, palette.faint, keys);
 
-	const float under = margin + line + kit.px(8.0f);
+	const float under = below + margin + line + kit.px(8.0f);
 
 	MenuKit::fading_line(list, margin, room.x - margin, under, kit.stroke() * 2.0f,
 	                     MenuKit::alpha(palette.accent, LINE_ALPHA), LINE_FADE);
@@ -178,8 +185,9 @@ Menu::build_library(LibraryState &state)
 	tile_w = std::floor(tile_w);
 	tile_h = std::floor(tile_h);
 
-	/* The arrows move the choice, as the tiles lie; Enter plays */
-	if (count) {
+	/* The arrows move the choice, as the tiles lie; Enter plays. With a
+	 * menu of the bar open, they are its own. */
+	if (count && !bar_state.open) {
 		const auto pressed = [](ImGuiKey key) { return ImGui::IsKeyPressed(key, true); };
 		int chosen = state.selected;
 

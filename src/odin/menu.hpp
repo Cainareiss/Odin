@@ -76,8 +76,9 @@ struct LibraryState {
 	std::string failed;
 };
 
-/* The bar at the top of the window, over the game that goes on (mock-up v3,
- * Atelier): FILE, INPUT, VIDEO, AUDIO, DEBUG and ABOUT, each a menu. What
+/* The bar at the top of the window, over the game that goes on and over the
+ * library (mock-up v3, Atelier): FILE, INPUT, VIDEO, AUDIO, DEBUG and
+ * ABOUT, each a menu. What
  * they show and what was asked there; the thread of the board keeps it
  * and does what was asked (main.cpp). */
 struct BarState {
@@ -93,8 +94,9 @@ struct BarState {
 	unsigned sides = 2, volume = 100;
 	/* Said on the command line: shown, not changed; no sound to set */
 	bool roms_given = false, bios_given = false, verbose_given = false, silent = false;
-	/* A state of the game kept, to load */
-	bool saved = false;
+	/* A state of the game kept, to load; a game runs (not in the library:
+	 * nothing to close, save, load or pause) */
+	bool saved = false, game = true;
 	/* The first key of each action of Odin (Hotkeys::Action), as odin.ini
 	 * says it */
 	std::array<std::string, Hotkeys::ACTIONS> keys;
@@ -133,8 +135,9 @@ struct MenuState {
 	float refresh = 0.0f;
 	bool refresh_short = false;
 	const char *vsync_off = nullptr;
-	/* odin.ini keeps what changes: not with ODIN_CONFIG=none */
-	bool kept = true;
+	/* odin.ini keeps what changes: not with ODIN_CONFIG=none. Opened over
+	 * the library, no game runs. */
+	bool kept = true, library = false;
 
 	/* Audio: the devices the system plays on and the one chosen (empty:
 	 * the system's), the volume of Odin from 0 to 100, its sound kept while
@@ -316,13 +319,14 @@ public:
 	void show_bar();
 	void build_bar(BarState &state);
 	void hide_bar();
-	/* The library, over the whole window (menu_library.cpp); each time it
-	 * opens, the keys and the mouse held before it (a key let go in a
-	 * game) forgotten */
+	/* The library, over the whole window under the bar (menu_library.cpp);
+	 * each time it opens, the keys and the mouse held before it (a key let
+	 * go in a game) forgotten */
 	void open_library();
-	void build_library(LibraryState &state);
+	void build_library(LibraryState &state, BarState &bar);
 	/* A picture of a game for its tile, RGBA, taken (destroyed once made a
-	 * texture at the next picture drawn); one before it replaced */
+	 * texture at the next picture drawn); one before it replaced, or
+	 * forgotten (none) */
 	void add_library_picture(const std::string &game, SDL_Surface *rgba);
 	/* A list dropped open, which Escape closes before the menu */
 	bool popup_open() const;

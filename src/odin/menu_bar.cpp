@@ -16,9 +16,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* The bar over the game (mock-up v3, Atelier), in the palette of the menu:
- * the rune in its gold and ODIN, the six menus, the game and its speed at
- * the right.
+/* The bar over the game and the library (mock-up v3, Atelier), in the
+ * palette of the menu: the rune in its gold and ODIN, the six menus, the
+ * game and its speed at the right.
  * The menu open has the accent under its name. */
 
 #include "odin/menu.hpp"
@@ -191,13 +191,14 @@ Menu::bar(BarState &state)
 			case 0:
 				if (item("Open..."))
 					ask(Ask::OPEN);
-				if (item("Close game"))
+				if (item("Close game", {}, false, state.game))
 					ask(Ask::CLOSE);
 				ImGui::Separator();
-				if (item("Save state", state.keys[static_cast<size_t>(Hotkeys::Action::SAVE_STATE)]))
+				if (item("Save state", state.keys[static_cast<size_t>(Hotkeys::Action::SAVE_STATE)], false,
+				         state.game))
 					ask(Ask::SAVE_STATE);
 				if (item("Load state", state.keys[static_cast<size_t>(Hotkeys::Action::LOAD_STATE)], false,
-				         state.saved))
+				         state.game && state.saved))
 					ask(Ask::LOAD_STATE);
 				ImGui::Separator();
 				if (item("ROM folder...", {}, false, !state.roms_given))
@@ -257,7 +258,7 @@ Menu::bar(BarState &state)
 				break;
 			}
 			case 4:
-				if (item("Pause", state.keys[static_cast<size_t>(Hotkeys::Action::PAUSE)], state.paused))
+				if (item("Pause", state.keys[static_cast<size_t>(Hotkeys::Action::PAUSE)], state.paused, state.game))
 					ask(Ask::PAUSE);
 				if (item("Log each access (next game)", {}, state.verbose, !state.verbose_given))
 					state.verbose = !state.verbose;

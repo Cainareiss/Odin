@@ -92,7 +92,7 @@ AudioOut::make(Mode mode, double option_db, const std::string &device)
 }
 
 std::vector<std::string>
-AudioOut::devices() const
+AudioOut::devices()
 {
 	std::vector<std::string> names;
 	int count = 0;

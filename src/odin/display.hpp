@@ -165,12 +165,13 @@ public:
 	bool menu_shown() const { return m_menu_shown; }
 	void menu_event(const SDL_Event &event);
 	void draw_menu(MenuState &state);
-	/* The library over the whole window, no board attached: opened, then
-	 * built from the state and shown once a picture */
+	/* The library over the whole window, the bar over it, no board
+	 * attached: opened, then built from their states and shown once a
+	 * picture */
 	void open_library();
-	void draw_library(LibraryState &state);
-	/* A picture of a game for the library, RGBA (the menu takes it), after
-	 * it is opened */
+	void draw_library(LibraryState &state, BarState &bar);
+	/* A picture of a game for the library, RGBA (the menu takes it; none:
+	 * the one it had forgotten), after it is opened */
 	void add_library_picture(const std::string &game, SDL_Surface *rgba);
 	/* The picture of the last frame in a PNG file, no larger than 640 by
 	 * 480 (the folder made): false, said on stderr, when it cannot be */

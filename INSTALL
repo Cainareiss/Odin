@@ -26,7 +26,9 @@ with the files and the sets of MAME that hold them, and buttons to choose
 the folders of the games and of the BIOS (kept in [paths]); the arrows or a
 click choose a game, Enter or a second click plays it, and when it ends (but
 by Ctrl+Q, which quits) the library comes back, as it does after Close game
-of the bar from any game. The pictures of the games
+of the bar from any game. The bar is over the library at all times, and the
+menu (Escape, F10 or Guide) opens there as in a game, its page Input on the
+game chosen. The pictures of the games
 are in the folder of the artwork (artwork/ in the data folder of Odin,
 beside saves/; artwork in [paths], page Paths; ODIN_ARTWORK=<folder> another
 one, none none), named after the game in MAME, in any case:
@@ -99,17 +101,18 @@ changes these keys and the buttons below, kept in [hotkeys] of odin.ini:
 most, Ctrl+Q written so, and a button held with Guide, pad:guide+<button>,
 or pad:guide for Guide alone; none for nothing.)
 
-The mouse moved over the window shows a bar at its top a while, the game
-going on under it; in a game the mouse aims in (Brave Fire Fighters), only
-from the top edge of the window. FILE: Open... plays the zip or the 7z of a
-game, the game of its name in MAME, from its directory; Close game goes
-back to the library; the state of the game saved and loaded, the folders
-of the games and of the BIOS, the menu (Settings...), Quit. INPUT, VIDEO,
-AUDIO and ABOUT open the pages of the menu; VIDEO also takes the whole
-display and sets the bezel and the speed in the title, AUDIO the volume and
-the sound in the background; DEBUG pauses the game and has the board say
-each access (at the next game). What the bar changes is kept in odin.ini as
-the menu keeps it.
+In a game, the mouse moved over the window shows the bar at its top a
+while, the game going on under it; in a game the mouse aims in (Brave Fire
+Fighters), only from the top edge of the window. FILE: Open... plays the
+zip or the 7z of a game, the game of its name in MAME, from its directory;
+Close game goes back to the library; the state of the game saved and
+loaded, the folders of the games and of the BIOS, the menu (Settings...),
+Quit. INPUT, VIDEO, AUDIO and ABOUT open the pages of the menu; VIDEO also
+takes the whole display and sets the bezel and the speed in the title,
+AUDIO the volume and the sound in the background; DEBUG pauses the game and
+has the board say each access (at the next game). What the bar changes is
+kept in odin.ini as the menu keeps it. In the library, Close game, the
+states and Pause are greyed out.
 
 0 is TEST and 9 SERVICE, the buttons of the cabinet: they open and work
 the menu of the BOOTROM and the test menus of the games (both together

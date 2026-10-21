@@ -464,7 +464,8 @@ Menu::build(MenuState &state)
 	/* What the page says at the bottom, beside the keys, on as many lines
 	 * as it takes, under a line: the page above it. Input says it with
 	 * the names and inputs of its controls. */
-	const char keys[] = "Esc: back to the game    Ctrl+Q: quit";
+	const char *const keys = state.library ? "Esc: back to the library    Ctrl+Q: quit" :
+	                                         "Esc: back to the game    Ctrl+Q: quit";
 	const float keys_w = ImGui::CalcTextSize(keys).x, help_w = std::max(0.0f, w - 3.0f * pad - keys_w);
 	const std::string help = m_page == INPUT ? std::string() : this->help(m_page, state);
 	const float help_h = m_page == INPUT ? 0.0f : ImGui::CalcTextSize(help.c_str(), nullptr, false, help_w).y;

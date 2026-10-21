@@ -112,8 +112,9 @@ public:
 	AudioOut(const AudioOut &) = delete;
 	AudioOut &operator=(const AudioOut &) = delete;
 
-	/* The names of the devices the system plays on */
-	std::vector<std::string> devices() const;
+	/* The names of the devices the system plays on, its sound started
+	 * (by make, or SDL_InitSubSystem) */
+	static std::vector<std::string> devices();
 	/* Played another way or on another device, at once: false, said on
 	 * stderr, when it cannot be (it plays as before) */
 	bool change(Mode mode, const std::string &device);
