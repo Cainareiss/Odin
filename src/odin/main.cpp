@@ -2057,6 +2057,23 @@ Session::process_events()
 			quit = asked == MenuSession::Asked::QUIT || quit;
 			continue;
 		}
+		/* A menu of the bar open: the keys are its own (Escape closes it)
+		 * but those of quitting and of the whole display; a key let go is
+		 * let go for the game too */
+		if ((event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_KEY_UP) && m_display.bar_shown() &&
+		    m_bar.open) {
+			const std::optional<odin::Hotkeys::Action> action =
+				event.key.down && !event.key.repeat ? m_menus.hotkeys().key_action(event.key.key, event.key.mod) :
+				                                      std::nullopt;
+
+			if (!event.key.down)
+				m_keys.set(event.key.key, false);
+			if (action == odin::Hotkeys::Action::QUIT || action == odin::Hotkeys::Action::FULLSCREEN)
+				quit = act(*action) || quit;
+			else
+				m_display.bar_event(event);
+			continue;
+		}
 		if (bar_event(event))
 			continue;
 		if (m_controls.event(event)) {
