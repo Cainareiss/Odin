@@ -254,11 +254,15 @@ Menu::~Menu()
 }
 
 void
-Menu::open()
+Menu::open(int page)
 {
 	for (const auto &[name, value] : MENU_HINTS)
 		SDL_SetHint(name, value);
 	m_cursor_shown = SDL_CursorVisible();
+	if (page >= 0 && page < PAGES && page != m_page) {
+		m_page = page;
+		m_focus = {};
+	}
 }
 
 void
@@ -407,6 +411,7 @@ Menu::build(MenuState &state)
 	ImGui_ImplSDL3_NewFrame();
 	add_fonts();
 	ImGui::NewFrame();
+	close_bar_menus();
 
 	MenuKit kit(RUNASTEINN, m_scale, &m_focus);
 	const MenuPalette &palette = kit.palette();
@@ -1014,6 +1019,17 @@ Menu::draw(unsigned window_w, unsigned window_h)
 	ImGui_ImplOpenGL3_NewFrame();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 	gl::check("the menu");
+}
+
+void
+Menu::draw_bar(unsigned window_w, unsigned window_h)
+{
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glViewport(0, 0, static_cast<GLsizei>(window_w), static_cast<GLsizei>(window_h));
+	ImGui::SetCurrentContext(m_imgui);
+	ImGui_ImplOpenGL3_NewFrame();
+	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+	gl::check("the bar");
 }
 
 void

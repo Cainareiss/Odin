@@ -130,6 +130,7 @@ Menu::build_library(LibraryState &state)
 	ImGui_ImplSDL3_NewFrame();
 	add_fonts();
 	ImGui::NewFrame();
+	close_bar_menus();
 
 	const MenuKit kit(RUNASTEINN, m_scale);
 	const MenuPalette &palette = kit.palette();

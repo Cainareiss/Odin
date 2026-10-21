@@ -36,6 +36,7 @@ OBJ := \
 	src/odin/menu_input.o \
 	src/odin/menu_pages.o \
 	src/odin/menu_library.o \
+	src/odin/menu_bar.o \
 	src/odin/cabinet_view.o \
 	src/odin/menu_kit.o \
 	src/odin/menu_nav.o \

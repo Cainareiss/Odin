@@ -151,6 +151,13 @@ public:
 	void frame_shown() { m_times.end(); }
 	/* The drawing of the frame taken last writes a log. */
 	bool frame_is_logged() const { return logging(); }
+	/* The picture of the last frame in the window again, as it was shown
+	 * (the board waits) */
+	void show_again(unsigned window_w, unsigned window_h, const PictureHole &hole)
+	{
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+		present(window_w, window_h, hole);
+	}
 
 	/* The picture of the last frame, whatever the size of the window:
 	 * the framebuffer it can be read from, and its size. */

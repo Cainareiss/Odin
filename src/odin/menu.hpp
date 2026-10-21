@@ -76,6 +76,39 @@ struct LibraryState {
 	std::string failed;
 };
 
+/* The bar at the top of the window, over the game that goes on (mock-up v3,
+ * Atelier): FILE, INPUT, VIDEO, AUDIO, DEBUG and ABOUT, each a menu. What
+ * they show and what was asked there; the thread of the board keeps it
+ * and does what was asked (main.cpp). */
+struct BarState {
+	/* At the right: the game and its frames a second, or a word that says
+	 * what went wrong */
+	std::string title, note;
+	float fps = 0.0f;
+	/* Shown checked or chosen, and changed there: the whole display, the
+	 * frames a second in the title, the game paused, its sound kept in the
+	 * background, the board saying each access (at the next launch), what
+	 * is around the picture (MenuState::sides), the volume */
+	bool fullscreen = false, show_speed = true, paused = false, background = true, verbose = false;
+	unsigned sides = 2, volume = 100;
+	/* Said on the command line: shown, not changed; no sound to set */
+	bool roms_given = false, bios_given = false, verbose_given = false, silent = false;
+	/* A state of the game kept, to load */
+	bool saved = false;
+	/* The first key of each action of Odin (Hotkeys::Action), as odin.ini
+	 * says it */
+	std::array<std::string, Hotkeys::ACTIONS> keys;
+	/* What was asked; the page of the settings asked (Menu::Page, -1: the
+	 * one shown last) */
+	enum class Ask { NONE, OPEN, CLOSE, SAVE_STATE, LOAD_STATE, ROMS, BIOS, SETTINGS, FULLSCREEN, PAUSE, QUIT };
+	Ask ask = Ask::NONE;
+	int page = -1;
+	/* The mouse is on the bar or a menu of it is open: its buttons are the
+	 * bar's, not the game's; the bottom of the bar, in points */
+	bool wants_mouse = false, open = false;
+	float bottom = 0.0f;
+};
+
 /* What the pages of the menu show and change. The thread of the board
  * keeps it and does what changed (main.cpp). */
 struct MenuState {
@@ -250,7 +283,8 @@ struct MenuState {
 };
 
 /* The menu of Odin, drawn with Dear ImGui over the picture of the last
- * frame, frozen and blurred, while the game is paused (main.cpp).
+ * frame, frozen and blurred, while the game is paused (main.cpp); its bar
+ * over the frames of the game that goes on, and the library.
  *
  * It is made at its first opening: nothing of it runs before. Two threads
  * work it (display.hpp), never both at once: the one that runs the board
@@ -259,6 +293,9 @@ struct MenuState {
  * let go of where the context is (release) before it is destroyed. */
 class Menu {
 public:
+	/* The pages, in the order of their tabs */
+	enum Page { INPUT, DISPLAY, AUDIO, HOTKEYS, OUTPUTS, PATHS, ABOUT, PAGES };
+
 	explicit Menu(SDL_Window *window);
 	~Menu();
 	Menu(const Menu &) = delete;
@@ -268,11 +305,17 @@ public:
 	 * prints it */
 	static std::string input_name(const PadInput &pad, int kind);
 
-	/* The thread of the board */
-	void open();
+	/* The thread of the board: at that page (-1: the one shown last) */
+	void open(int page = -1);
 	void close();
 	void event(const SDL_Event &event);
 	void build(MenuState &state);
+	/* The bar alone over the game (menu_bar.cpp), opened and closed as the
+	 * menu is: shown, the keys and the mouse held before forgotten; built
+	 * from the state; hidden, its menus closed */
+	void show_bar();
+	void build_bar(BarState &state);
+	void hide_bar();
 	/* The library, over the whole window (menu_library.cpp); each time it
 	 * opens, the keys and the mouse held before it (a key let go in a
 	 * game) forgotten */
@@ -289,11 +332,11 @@ public:
 	 * then the menu is drawn on it in the window. */
 	void freeze(GLuint picture_fb, unsigned w, unsigned h);
 	void draw(unsigned window_w, unsigned window_h);
+	/* The bar built last over what the window shows */
+	void draw_bar(unsigned window_w, unsigned window_h);
 	void release();
 
 private:
-	/* The pages, in the order of their tabs */
-	enum Page { INPUT, DISPLAY, AUDIO, HOTKEYS, OUTPUTS, PATHS, ABOUT, PAGES };
 	/* The pictures of the page Display (menu_pictures.S): real captures
 	 * of Odin, the same place at each scale and at each filter, a frame
 	 * whole and torn */
@@ -304,6 +347,11 @@ private:
 
 	void follow_scale();
 	void add_fonts();
+	/* The bar and its menus, in the frame of Dear ImGui built now; at the
+	 * start of a frame, the menus of a bar hidden since the last one
+	 * closed */
+	void bar(BarState &state);
+	void close_bar_menus();
 	/* The drawing thread: the pictures handed over to the library made
 	 * textures */
 	void upload_library_pictures();
@@ -345,6 +393,8 @@ private:
 	 * two hints of the mouse, the pointer shown or hidden */
 	std::array<std::optional<std::string>, 2> m_hints;
 	bool m_cursor_shown;
+	/* The bar was hidden: its menus close at the next frame */
+	bool m_bar_hidden = false;
 
 	/* The background: the picture at half its size, blurred back and
 	 * forth between two textures, the result in the first */

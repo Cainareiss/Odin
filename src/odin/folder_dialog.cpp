@@ -41,6 +41,18 @@ struct Asked {
 	int asked;
 };
 
+/* Read by the picker until it answers */
+constexpr SDL_DialogFileFilter ARCHIVES[] = { { "Games as MAME keeps them (zip, 7z)", "zip;7z" } };
+
+/* Where the picker opens: the folder when it is there */
+const char *
+start_at(const std::string &from)
+{
+	std::error_code error;
+
+	return !from.empty() && std::filesystem::is_directory(from, error) ? from.c_str() : nullptr;
+}
+
 void SDLCALL
 answered(void *userdata, const char *const *files, int)
 {
@@ -71,21 +83,29 @@ FolderDialog::FolderDialog() : m_slot(std::make_shared<Slot>())
 		m_slot->event = event;
 }
 
+bool
+FolderDialog::start()
+{
+	const std::lock_guard<std::mutex> lock(m_slot->mutex);
+
+	if (m_slot->open)
+		return false;
+	m_slot->open = true;
+	return true;
+}
+
 void
 FolderDialog::ask(SDL_Window *window, const std::string &from, int asked)
 {
-	{
-		const std::lock_guard<std::mutex> lock(m_slot->mutex);
+	if (start())
+		SDL_ShowOpenFolderDialog(answered, new Asked{ m_slot, asked }, window, start_at(from), false);
+}
 
-		if (m_slot->open)
-			return;
-		m_slot->open = true;
-	}
-
-	std::error_code error;
-	const bool there = !from.empty() && std::filesystem::is_directory(from, error);
-
-	SDL_ShowOpenFolderDialog(answered, new Asked{ m_slot, asked }, window, there ? from.c_str() : nullptr, false);
+void
+FolderDialog::ask_archive(SDL_Window *window, const std::string &from, int asked)
+{
+	if (start())
+		SDL_ShowOpenFileDialog(answered, new Asked{ m_slot, asked }, window, ARCHIVES, 1, start_at(from), false);
 }
 
 bool

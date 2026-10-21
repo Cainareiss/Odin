@@ -56,6 +56,8 @@ public:
 
 	/* An event of a gamepad or of the mouse; false for any other. */
 	bool event(const SDL_Event &event);
+	/* The mouse aims in the game (a sight of player 1): no pointer */
+	bool aims() const { return m_cursor_hidden; }
 	/* The mouse is read where the picture is: in the hole of the bezel
 	 * when there is one (picture.hpp) */
 	void set_picture_hole(const PictureHole &hole) { m_hole = hole; }

@@ -41,6 +41,7 @@ namespace odin {
 
 class Keyboard;
 class Menu;
+struct BarState;
 struct LibraryState;
 struct MenuState;
 class Renderer;
@@ -123,10 +124,11 @@ public:
 	void show_black();
 
 	/* A frame of the board: begin_frame before the board runs it,
-	 * end_frame once it has, with its number, and whether it ended after
-	 * its time at 60 frames a second. */
+	 * end_frame once it has, with its number, whether it ended after its
+	 * time at 60 frames a second, and the bar over it while it is shown,
+	 * built then from its state. */
 	void begin_frame();
-	void end_frame(unsigned frame, bool late);
+	void end_frame(unsigned frame, bool late, BarState *bar = nullptr);
 
 	/* Between the window and the whole display */
 	void toggle_fullscreen();
@@ -158,7 +160,7 @@ public:
 	/* The menu (menu.hpp), over the picture of the last frame while the
 	 * board waits: open_menu freezes that picture, draw_menu builds the
 	 * menu from the state and shows it once. */
-	void open_menu();
+	void open_menu(int page = -1);
 	void close_menu();
 	bool menu_shown() const { return m_menu_shown; }
 	void menu_event(const SDL_Event &event);
@@ -181,6 +183,17 @@ public:
 	 * one with no see-through middle) */
 	const PictureHole &picture_hole() const { return m_hole; }
 	bool menu_popup_open() const;
+	/* The bar at the top of the window (menu.hpp: BarState), over the
+	 * frames of the game that goes on: shown or hidden, the events of the
+	 * mouse for it, kept until it is built at the end of the next frame.
+	 * The last picture shown again with the bar over it (none: without),
+	 * while the board waits. */
+	void show_bar(bool on);
+	bool bar_shown() const { return m_bar_shown; }
+	void bar_event(const SDL_Event &event);
+	void show_again(BarState *bar);
+	/* The frames shown in the last second (0: not known yet) */
+	float fps() const { return m_fps; }
 
 	/* Hikaru::Screen */
 	void list_launched() override;
@@ -199,8 +212,8 @@ private:
 	void finish();
 	/* Has the drawing thread do a job, and waits for it. */
 	void run(std::function<void()> job);
-	/* On the drawing thread */
-	void draw(bool late, unsigned window_w, unsigned window_h);
+	/* On the drawing thread, the bar over the frame when `bar` */
+	void draw(bool late, unsigned window_w, unsigned window_h, bool bar);
 	/* On the drawing thread: the bezel made a texture (none: forgotten),
 	 * then laid over the window */
 	void set_bezel(const std::string &path);
@@ -224,6 +237,8 @@ private:
 	/* Made when it opens first */
 	std::unique_ptr<Menu> m_menu;
 	bool m_menu_shown;
+	bool m_bar_shown = false;
+	std::vector<SDL_Event> m_bar_events;
 	std::string m_gpu;
 	bool m_show_speed;
 	Vsync m_vsync;
@@ -267,9 +282,10 @@ private:
 	bool m_stats;
 	uint64_t m_draw_ns, m_wait_frame_ns, m_wait_write_ns;
 	unsigned m_drawn;
-	/* The frames shown in the title */
+	/* The frames shown in the title, and in the last second */
 	uint64_t m_title_since;
 	unsigned m_title_frames;
+	float m_fps = 0.0f;
 };
 
 } /* namespace odin */

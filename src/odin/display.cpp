@@ -335,6 +335,7 @@ Display::attach(Hikaru &board, const std::string &title)
 	m_picture_height = Renderer::HEIGHT;
 	m_speed_since = m_speed_last = m_speed_longest = 0;
 	m_title_since = 0;
+	m_fps = 0.0f;
 	prepare_programs(title);
 	set_vsync(m_vsync);
 	board.set_screen(this);
@@ -456,11 +457,12 @@ Display::run(std::function<void()> job)
 }
 
 void
-Display::open_menu()
+Display::open_menu(int page)
 {
 	if (!m_menu)
 		m_menu = std::make_unique<Menu>(m_window);
-	m_menu->open();
+	show_bar(false);
+	m_menu->open(page);
 	run([this] { m_menu->freeze(m_picture_fb, m_picture_width, m_picture_height); });
 	m_menu_shown = true;
 }
@@ -483,6 +485,62 @@ bool
 Display::menu_popup_open() const
 {
 	return m_menu && m_menu->popup_open();
+}
+
+/* The menu made as the library makes it, its renderer first; the bar takes
+ * the pointer and the hints of the mouse as the menu does */
+void
+Display::show_bar(bool on)
+{
+	if (on == m_bar_shown)
+		return;
+	if (on && !m_menu) {
+		m_menu = std::make_unique<Menu>(m_window);
+		run([this] { m_menu->freeze(0, 0, 0); });
+	}
+	m_bar_shown = on;
+	m_bar_events.clear();
+	if (on) {
+		m_menu->show_bar();
+		m_menu->open();
+	} else {
+		m_menu->hide_bar();
+		m_menu->close();
+	}
+}
+
+void
+Display::bar_event(const SDL_Event &event)
+{
+	if (m_bar_shown)
+		m_bar_events.push_back(event);
+}
+
+void
+Display::show_again(BarState *bar)
+{
+	int w, h;
+
+	if (!m_renderer)
+		return;
+	finish();
+	if (bar && m_bar_shown) {
+		for (const SDL_Event &event : m_bar_events)
+			m_menu->event(event);
+		m_bar_events.clear();
+		m_menu->build_bar(*bar);
+	}
+	SDL_GetWindowSizeInPixels(m_window, &w, &h);
+	m_drawing->run([this, w, h, over = bar && m_bar_shown] {
+		const auto ww = static_cast<unsigned>(w), wh = static_cast<unsigned>(h);
+
+		m_renderer->show_again(ww, wh, m_hole);
+		draw_bezel(ww, wh);
+		draw_blur(ww, wh);
+		if (over)
+			m_menu->draw_bar(ww, wh);
+		SDL_GL_SwapWindow(m_window);
+	});
 }
 
 /* Built on this thread, drawn on the drawing thread meanwhile */
@@ -726,7 +784,7 @@ Display::begin_frame()
 /* The frame before is drawn first: this one is taken with the drawing
  * thread at rest, then drawn while the board goes on. */
 void
-Display::end_frame(unsigned frame, bool late)
+Display::end_frame(unsigned frame, bool late, BarState *bar)
 {
 	const uint64_t waited = m_wait_write_ns;
 	int w, h;
@@ -740,8 +798,17 @@ Display::end_frame(unsigned frame, bool late)
 	m_renderer->take_frame(frame, static_cast<unsigned>(w), static_cast<unsigned>(h), m_hole);
 	m_logged = m_renderer->frame_is_logged();
 	m_message = m_renderer->message();
+	/* Built while the drawing thread rests, drawn over the frame */
+	const bool over = bar && m_bar_shown;
 
-	m_drawing->post([this, late, w, h] { draw(late, static_cast<unsigned>(w), static_cast<unsigned>(h)); });
+	if (over) {
+		for (const SDL_Event &event : m_bar_events)
+			m_menu->event(event);
+		m_bar_events.clear();
+		m_menu->build_bar(*bar);
+	}
+
+	m_drawing->post([this, late, w, h, over] { draw(late, static_cast<unsigned>(w), static_cast<unsigned>(h), over); });
 	m_held = m_late;
 	/* A log is written whole before the board writes on. */
 	if (m_logged)
@@ -752,7 +819,7 @@ Display::end_frame(unsigned frame, bool late)
 }
 
 void
-Display::draw(bool late, unsigned window_w, unsigned window_h)
+Display::draw(bool late, unsigned window_w, unsigned window_h, bool bar)
 {
 	if (m_late)
 		m_late_draw.acquire();
@@ -765,6 +832,8 @@ Display::draw(bool late, unsigned window_w, unsigned window_h)
 	m_picture_fb = m_renderer->frame_picture(m_picture_width, m_picture_height);
 	draw_bezel(window_w, window_h);
 	draw_blur(window_w, window_h);
+	if (bar)
+		m_menu->draw_bar(window_w, window_h);
 
 	screenshot();
 	print_fingerprint();
@@ -874,6 +943,7 @@ Display::show_speed()
 		const double fps = static_cast<double>(m_title_frames) * static_cast<double>(second) /
 		                   static_cast<double>(now - m_title_since);
 
+		m_fps = static_cast<float>(fps);
 		if (!m_message.empty())
 			std::snprintf(title, sizeof(title), "Odin (%4.1f FPS) [%s]", fps, m_message.c_str());
 		else
