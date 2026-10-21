@@ -37,6 +37,7 @@ OBJ := \
 	src/odin/cabinet_view.o \
 	src/odin/menu_kit.o \
 	src/odin/menu_nav.o \
+	src/odin/menu_pictures.o \
 	src/odin/folder_dialog.o \
 	src/odin/pad_view.o \
 	src/odin/pad_drawings.o \
@@ -138,6 +139,10 @@ bin/odin: $(OBJ) $(IMGUI_OBJ)
 
 src/imgui/%.o: src/imgui/%.cpp
 	$(CXX) -c $< -o $@ $(IMGUI_FLAGS)
+
+# The pictures of the menu, put in the binary as their files are
+src/odin/menu_pictures.o: src/odin/menu_pictures.S $(wildcard src/odin/pictures/*.png)
+	$(CXX) -c $< -o $@ -Wa,-I,src/odin
 
 -include $(patsubst %.o,%.d,$(OBJ) $(IMGUI_OBJ))
 

@@ -131,6 +131,10 @@ public:
 	bool focus(ImVec2 a, ImVec2 b, float out = -1.0f) const;
 	/* One that draws itself as it is focused: the same, no frame */
 	bool focus_mark() const { return m_focus && m_focus->count++ == m_focus->at; }
+	/* The item the frame is on, and how many are so far: a row of
+	 * widgets has the frame when it is on one of those it counted */
+	int focus_at() const { return m_focus ? m_focus->at : -1; }
+	int focus_count() const { return m_focus ? m_focus->count : 0; }
 	int side() const { return m_focus ? m_focus->side : 0; }
 	bool pressed() const { return m_focus && m_focus->press; }
 
@@ -236,6 +240,9 @@ public:
 	bool arrow(const char *id, ImVec2 at, bool right) const;
 	/* A word beside the mouse, framed as the lists are */
 	void tip(const char *text) const;
+	/* A word in small capitals, as the titles of the groups are; its width */
+	static void small_caps(ImDrawList *list, ImVec2 at, ImU32 colour, const char *text);
+	static float small_caps_width(const char *text);
 
 private:
 	/* The top of the row, its line above it when it is not the first of

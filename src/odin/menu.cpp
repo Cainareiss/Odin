@@ -19,7 +19,9 @@
 #include "odin/menu.hpp"
 
 #include <algorithm>
+#include <cfloat>
 #include <cmath>
+#include <optional>
 #include <utility>
 
 #include <cstdio>
@@ -33,9 +35,26 @@
 #include "odin/renderer_gl.hpp"
 #include "odin/version.hpp"
 
+/* The pictures of the page Display (menu_pictures.S), each from its first
+ * byte to the one after its last */
+#define PICTURE(name) extern "C" const unsigned char odin_picture_##name[], odin_picture_##name##_end[];
+PICTURE(upscale_1) PICTURE(upscale_2) PICTURE(upscale_3) PICTURE(upscale_4) PICTURE(upscale_5) PICTURE(upscale_6)
+PICTURE(filter_1) PICTURE(filter_2) PICTURE(filter_4) PICTURE(filter_8) PICTURE(filter_16) PICTURE(screen)
+#undef PICTURE
+
 namespace odin {
 
 namespace {
+
+/* Their files, in the order of Menu::Picture */
+const std::pair<const unsigned char *, const unsigned char *> PICTURE_FILES[] = {
+	{ odin_picture_upscale_1, odin_picture_upscale_1_end }, { odin_picture_upscale_2, odin_picture_upscale_2_end },
+	{ odin_picture_upscale_3, odin_picture_upscale_3_end }, { odin_picture_upscale_4, odin_picture_upscale_4_end },
+	{ odin_picture_upscale_5, odin_picture_upscale_5_end }, { odin_picture_upscale_6, odin_picture_upscale_6_end },
+	{ odin_picture_filter_1, odin_picture_filter_1_end }, { odin_picture_filter_2, odin_picture_filter_2_end },
+	{ odin_picture_filter_4, odin_picture_filter_4_end }, { odin_picture_filter_8, odin_picture_filter_8_end },
+	{ odin_picture_filter_16, odin_picture_filter_16_end }, { odin_picture_screen, odin_picture_screen_end },
+};
 
 /* The hints of the mouse Dear ImGui sets for itself (imgui_impl_sdl3.cpp):
  * a click that brings the window to the front is a click, and no capture
@@ -450,15 +469,40 @@ Menu::build(MenuState &state)
 	ImGui::Render();
 }
 
-/* Display: what draws the picture, how fine, where, how fast */
+/* Display: what draws the picture, how fine, where, how fast. At the left,
+ * one at a time, what the row the mouse is on does, else the row of the
+ * frame of the gamepad, else the last one shown: real captures of Odin. */
 void
 Menu::page_display(MenuKit &kit, MenuState &state) const
 {
+	static constexpr float SHARE = 0.45f;	/* of the width, the left's */
+	static constexpr double FADE_S = 0.15;
 	char about[160];
+	const ImVec2 top = ImGui::GetCursorScreenPos(), room = ImGui::GetContentRegionAvail();
+	const float gap = kit.px(14.0f), left = std::floor((room.x - gap) * SHARE), high = room.y - kit.px(4.0f);
+	std::optional<int> pointed, framed;
+	/* A row, and whether the mouse or the frame is on it */
+	const auto watch = [&](int which, const auto &row) {
+		const int from = kit.focus_count();
+		const ImVec2 a = ImGui::GetCursorScreenPos();
+		const float w = ImGui::GetContentRegionAvail().x;
+
+		row();
+		if (ImGui::IsWindowHovered() && ImGui::IsMouseHoveringRect(a, { a.x + w, ImGui::GetCursorScreenPos().y }))
+			pointed = which;
+		if (kit.focus_at() >= from && kit.focus_at() < kit.focus_count())
+			framed = which;
+	};
+
+	ImGui::SetCursorScreenPos({ top.x + left + gap, top.y });
+	ImGui::BeginChild("settings", { room.x - left - gap, high }, ImGuiChildFlags_None, ImGuiWindowFlags_NoBackground);
+
 	const bool narrow = ImGui::GetContentRegionAvail().x < kit.px(560.0f);
 
 	kit.begin_group("ENGINE");
-	kit.text("Graphics card", "the one the system gives Odin, with OpenGL 4.3", state.gpu.c_str());
+	watch(PREVIEW_CARD, [&] {
+		kit.text("Graphics card", "the one the system gives Odin, with OpenGL 4.3", state.gpu.c_str());
+	});
 	kit.end_group();
 
 	kit.begin_group("3D QUALITY");
@@ -467,16 +511,20 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 
 	std::snprintf(about, sizeof(about), "internal resolution %u × %u%s", 640 * state.scale, 480 * state.scale,
 	              state.scale == 1 ? " · as the cabinet" : "");
-	if (kit.choice("Upscaling", about, SCALES, scale, state.scale_given ? "set by the command line: -x" : nullptr))
-		state.scale = static_cast<unsigned>(scale) + 1;
+	watch(PREVIEW_UPSCALE, [&] {
+		if (kit.choice("Upscaling", about, SCALES, scale, state.scale_given ? "set by the command line: -x" : nullptr))
+			state.scale = static_cast<unsigned>(scale) + 1;
+	});
 
 	static constexpr const char *FILTERS[] = { "None", "2×", "4×", "8×", "16×" };
 	int filter = index_of(ANISOTROPY, state.anisotropy);
 
-	if (kit.choice("Texture filter", "anisotropic; the cabinet has none. Shows on far floors and roads (NASCAR, "
-	               "Virtual-On), hardly elsewhere", FILTERS, filter,
-	               state.anisotropy_given ? "set by the command line: -a" : nullptr))
-		state.anisotropy = ANISOTROPY[filter];
+	watch(PREVIEW_FILTER, [&] {
+		if (kit.choice("Texture filter", "anisotropic; the cabinet has none. Shows on far floors and roads (NASCAR, "
+		               "Virtual-On), hardly elsewhere", FILTERS, filter,
+		               state.anisotropy_given ? "set by the command line: -a" : nullptr))
+			state.anisotropy = ANISOTROPY[filter];
+	});
 	kit.end_group();
 
 	kit.begin_group("SCREEN");
@@ -485,31 +533,222 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 
 	std::snprintf(about, sizeof(about), "full screen at the size of the display, detected: %u × %u · F11 or Alt+Enter",
 	              state.display_w, state.display_h);
-	if (kit.choice("Display", about, MODES, mode, state.fullscreen_given ? "set by the command line: -f" : nullptr))
-		state.fullscreen = mode == 1;
+	watch(PREVIEW_SCREEN, [&] {
+		if (kit.choice("Display", about, MODES, mode, state.fullscreen_given ? "set by the command line: -f" : nullptr))
+			state.fullscreen = mode == 1;
+	});
 
 	int window = static_cast<int>(state.window) - 1;
 
-	if (kit.choice("Window size at start", "640 × 480 by default", narrow ? WINDOW_WIDTHS : WINDOW_SIZES, window,
-	               state.window_given ? "set by the command line: -w" : nullptr, state.fullscreen))
-		state.window = static_cast<unsigned>(window) + 1;
+	watch(PREVIEW_SCREEN, [&] {
+		if (kit.choice("Window size at start", "640 × 480 by default", narrow ? WINDOW_WIDTHS : WINDOW_SIZES, window,
+		               state.window_given ? "set by the command line: -w" : nullptr, state.fullscreen))
+			state.window = static_cast<unsigned>(window) + 1;
+	});
 	kit.end_group();
 
 	kit.begin_group("SPEED");
 	static constexpr const char *PACES[] = { "60 fps (cabinet)", "Unlimited" };
 	int pace = state.unthrottled ? 1 : 0;
 
-	if (kit.choice("Pace", "unlimited: as fast as the machine, without sound · at the next launch", PACES, pace,
-	               state.unthrottled_given ? "set by the command line: -u" : nullptr))
-		state.unthrottled = pace == 1;
+	watch(PREVIEW_SCREEN, [&] {
+		if (kit.choice("Pace", "unlimited: as fast as the machine, without sound · at the next launch", PACES, pace,
+		               state.unthrottled_given ? "set by the command line: -u" : nullptr))
+			state.unthrottled = pace == 1;
+	});
 
 	static constexpr const char *ON_OFF[] = { "on", "off" };
 	int speed = state.show_speed ? 0 : 1;
 
-	if (kit.choice("Show the speed", "frames per second in the title", ON_OFF, speed))
-		state.show_speed = speed == 0;
+	watch(PREVIEW_SCREEN, [&] {
+		if (kit.choice("Show the speed", "frames per second in the title", ON_OFF, speed))
+			state.show_speed = speed == 0;
+	});
 	kit.end_group();
+	ImGui::Dummy({ 0.0f, kit.px(4.0f) });
+	ImGui::EndChild();
 
+	/* The left, fading from what it showed to what it shows now */
+	const int wanted = pointed ? *pointed : framed ? *framed : state.preview;
+
+	if (wanted != state.preview) {
+		state.preview_from = state.preview;
+		state.preview = wanted;
+		state.preview_since = ImGui::GetTime();
+	}
+
+	const ImVec2 a = top, b = { top.x + left, top.y + high };
+	const bool fades = state.animations && state.preview_from != state.preview;
+	const float u = fades ? static_cast<float>(std::clamp((ImGui::GetTime() - state.preview_since) / FADE_S, 0.0, 1.0)) :
+	                        1.0f;
+
+	kit.frame(ImGui::GetWindowDrawList(), a, b, kit.px(6.0f), 0, kit.palette().line);
+	if (u < 1.0f) {
+		state.moving = true;
+		preview(kit, state, state.preview_from, a, b, 1.0f - u);
+	}
+	preview(kit, state, state.preview, a, b, u);
+	ImGui::SetCursorScreenPos(top);
+	ImGui::Dummy({ room.x, high });
+}
+
+/* What a row of the page Display does, in the box from a to b, as much
+ * there as `shown` (0 to 1) */
+void
+Menu::preview(const MenuKit &kit, const MenuState &state, int which, ImVec2 a, ImVec2 b, float shown) const
+{
+	ImDrawList *const list = ImGui::GetWindowDrawList();
+	const MenuPalette &palette = kit.palette();
+	const auto faded = [shown](ImU32 colour) { return MenuKit::alpha(colour, shown); };
+	const float pad = kit.px(16.0f), caps = MenuKit::font(MenuKit::SMALL), note = MenuKit::font(MenuKit::NOTE);
+	const float size = ImGui::GetFontSize();
+	const ImVec2 lo = { a.x + pad, a.y + pad }, hi = { b.x - pad, b.y - pad };
+	const float width = hi.x - lo.x, mid = (lo.x + hi.x) / 2.0f;
+	/* A text centred where it fits on a line, else wrapped in the width;
+	 * its height */
+	const auto centred = [&](float y, const char *text, ImU32 colour, float text_size) {
+		const ImVec2 at = ImGui::GetFont()->CalcTextSizeA(text_size, FLT_MAX, width, text);
+		const float x = at.x < width ? mid - at.x / 2.0f : lo.x;
+
+		list->AddText(ImGui::GetFont(), text_size, { x, y }, faded(colour), text, nullptr, width);
+		return at.y;
+	};
+	const auto caps_centred = [&](float x, float y, const char *text) {
+		MenuKit::small_caps(list, { x - MenuKit::small_caps_width(text) / 2.0f, y }, faded(palette.dim), text);
+	};
+	/* The cabinet's against the user's choice (none: the choice is the
+	 * cabinet's), side by side or one above the other, as they are the
+	 * biggest; what they are under them, where they come from at the foot */
+	const auto pair = [&](const char *title, int cabinet, int chosen, const char *cabinet_name, const std::string &chosen_name,
+	                      const char *source) {
+		const float apart = kit.px(12.0f), under = caps + kit.px(16.0f);
+		const float source_h = ImGui::GetFont()->CalcTextSizeA(note, FLT_MAX, width, source).y;
+		const float room = hi.y - lo.y - caps - kit.px(10.0f) - source_h - kit.px(12.0f);
+		const float beside = std::min((width - apart) / 2.0f * 0.75f, room - under);
+		const float stacked = std::min(width * 0.75f, (room - 2.0f * under - apart) / 2.0f);
+		const bool above = stacked > beside;
+		const float h = std::max(above ? stacked : beside, 0.0f), w = h / 0.75f;
+		const float block = caps + kit.px(10.0f) + (above ? 2.0f * (h + under) + apart : h + under);
+		float y = lo.y + std::max(0.0f, (hi.y - lo.y - source_h - kit.px(12.0f) - block) / 2.0f);
+		const std::string chosen_caption = "YOUR CHOICE: " + chosen_name;
+		/* One picture, framed, and its name under it */
+		const auto one = [&](int which_picture, ImVec2 at, const char *name) {
+			const ImVec2 to = { at.x + w, at.y + h };
+
+			if (which_picture >= 0) {
+				picture(list, which_picture, at, to, shown);
+				list->AddRect(at, to, faded(palette.line), 0.0f, ImDrawFlags_None, kit.stroke());
+			} else {
+				const char *const pick = "pick 2× or more to see the difference";
+				const ImVec2 text = ImGui::GetFont()->CalcTextSizeA(note, FLT_MAX, w - kit.px(16.0f), pick);
+
+				kit.dashed_frame(list, at, to, faded(palette.outline));
+				list->AddText(ImGui::GetFont(), note, { at.x + kit.px(8.0f), at.y + (h - text.y) / 2.0f },
+				              faded(palette.faint), pick, nullptr, w - kit.px(16.0f));
+			}
+			caps_centred(at.x + w / 2.0f, to.y + kit.px(8.0f), name);
+		};
+
+		caps_centred(mid, y, title);
+		y += caps + kit.px(10.0f);
+		if (above) {
+			one(cabinet, { mid - w / 2.0f, y }, cabinet_name);
+			one(chosen, { mid - w / 2.0f, y + h + under + apart }, chosen_caption.c_str());
+		} else {
+			one(cabinet, { mid - apart / 2.0f - w, y }, cabinet_name);
+			one(chosen, { mid + apart / 2.0f, y }, chosen_caption.c_str());
+		}
+		list->AddText(ImGui::GetFont(), note, { lo.x, hi.y - source_h }, faded(palette.faint), source, nullptr, width);
+	};
+
+	switch (which) {
+	case PREVIEW_CARD: {
+		const char *const name = state.gpu.empty() ? "not known yet" : state.gpu.c_str();
+		const float big = size * 1.3f;
+		const float name_h = ImGui::GetFont()->CalcTextSizeA(big, FLT_MAX, width, name).y;
+		float y = lo.y + std::max(0.0f, (hi.y - lo.y - caps - name_h - note - kit.px(22.0f)) / 2.0f);
+
+		caps_centred(mid, y, "GRAPHICS CARD");
+		y += caps + kit.px(12.0f);
+		y += centred(y, name, palette.ink, big) + kit.px(10.0f);
+		centred(y, "OpenGL 4.3: what Odin asks of it", palette.dim, note);
+		break;
+	}
+	case PREVIEW_UPSCALE: {
+		const unsigned scale = std::clamp(state.scale, 1u, 6u);
+		char chosen[8];
+
+		std::snprintf(chosen, sizeof(chosen), "%u×", scale);
+		pair("UPSCALING", UPSCALE, scale > 1 ? static_cast<int>(UPSCALE + scale - 1) : -1, "1× · THE CABINET", chosen,
+		     "Real captures of Odin: Brave Fire Fighters, the same picture at each scale.");
+		break;
+	}
+	case PREVIEW_FILTER: {
+		const int filter = index_of(ANISOTROPY, state.anisotropy);
+		static constexpr const char *NAMES[] = { "NONE", "2×", "4×", "8×", "16×" };
+
+		pair("TEXTURE FILTER", FILTER, filter > 0 ? FILTER + filter : -1, "NONE · THE CABINET", NAMES[filter],
+		     "Real captures of Odin: Planet Harriers, the road far off, at 1×.");
+		break;
+	}
+	case PREVIEW_SCREEN: {
+		const float sw = static_cast<float>(state.display_w ? state.display_w : 1920);
+		const float sh = static_cast<float>(state.display_h ? state.display_h : 1080);
+		const float ww = state.fullscreen ? sw : 640.0f * static_cast<float>(state.window);
+		const float wh = state.fullscreen ? sh : 480.0f * static_cast<float>(state.window);
+		char caption[160];
+
+		if (state.fullscreen)
+			std::snprintf(caption, sizeof(caption), "Full screen, the %u × %u of your display.",
+			              static_cast<unsigned>(sw), static_cast<unsigned>(sh));
+		else
+			std::snprintf(caption, sizeof(caption), "Window %u × %u at start, on your %u × %u display%s",
+			              static_cast<unsigned>(ww), static_cast<unsigned>(wh), static_cast<unsigned>(sw),
+			              static_cast<unsigned>(sh), ww > sw || wh > sh ? ": bigger than it." : ".");
+
+		const float caption_h = ImGui::GetFont()->CalcTextSizeA(note, FLT_MAX, width, caption).y;
+		const float k = std::min(width / sw, (hi.y - lo.y - caps - caption_h - kit.px(26.0f)) / sh);
+		float y = lo.y + std::max(0.0f, (hi.y - lo.y - caps - caption_h - kit.px(26.0f) - sh * k) / 2.0f);
+
+		caps_centred(mid, y, "SCREEN");
+		y += caps + kit.px(12.0f);
+
+		/* The display, and the window on it with its title */
+		const ImVec2 sa = { mid - sw * k / 2.0f, y }, sb = { mid + sw * k / 2.0f, y + sh * k };
+		const ImVec2 wa = { mid - ww * k / 2.0f, (sa.y + sb.y) / 2.0f - wh * k / 2.0f }, wb = { wa.x + ww * k, wa.y + wh * k };
+		const float bar = state.fullscreen ? 0.0f : std::max(kit.px(5.0f), 30.0f * k);
+
+		list->AddRectFilled(sa, sb, faded(IM_COL32(0, 0, 0, 0x60)));
+		list->PushClipRect(sa, sb, true);
+		picture(list, SCREEN, { wa.x, wa.y + bar }, wb, shown);
+		if (bar > 0.0f) {
+			const char *const title = state.show_speed ? "Odin (60.0 FPS)" : "Odin";
+			const float title_size = std::min(note, bar * 0.8f);
+
+			list->AddRectFilled(wa, { wb.x, wa.y + bar }, faded(palette.part));
+			if (MenuKit::measure(title, title_size) < wb.x - wa.x - kit.px(8.0f))
+				list->AddText(ImGui::GetFont(), title_size, { wa.x + kit.px(4.0f), wa.y + (bar - title_size) / 2.0f },
+				              faded(palette.dim), title);
+			list->AddRect(wa, wb, faded(palette.outline), 0.0f, ImDrawFlags_None, kit.stroke());
+		}
+		list->PopClipRect();
+		list->AddRect(sa, sb, faded(palette.line), 0.0f, ImDrawFlags_None, kit.stroke());
+		centred(sb.y + kit.px(10.0f), caption, palette.dim, note);
+		break;
+	}
+	default:
+		break;
+	}
+}
+
+/* A picture of the page Display, from a to b (none until the drawing
+ * thread has made it) */
+void
+Menu::picture(ImDrawList *list, int which, ImVec2 a, ImVec2 b, float shown) const
+{
+	if (m_pictures[static_cast<size_t>(which)])
+		list->AddImage(ImTextureRef(static_cast<ImTextureID>(m_pictures[static_cast<size_t>(which)])), a, b, { 0.0f, 0.0f },
+		               { 1.0f, 1.0f }, MenuKit::alpha(IM_COL32_WHITE, shown));
 }
 
 std::string
@@ -580,6 +819,30 @@ Menu::start_gl()
 	m_blur_step = gl::uniform(m_blur, "u_step");
 	m_show = gl::compile_program(WHOLE_WINDOW_VERTEX, SHOW_FRAGMENT);
 	m_show_light = gl::uniform(m_show, "u_light");
+	/* The pictures: bigger than they are, in blocks, as Odin shows the
+	 * picture of a game; smaller, smoothed */
+	static_assert(std::size(PICTURE_FILES) == PICTURES);
+	for (size_t p = 0; p < PICTURES; p++) {
+		const auto [begin, end] = PICTURE_FILES[p];
+		SDL_Surface *const png = SDL_LoadPNG_IO(SDL_IOFromConstMem(begin, static_cast<size_t>(end - begin)), true);
+		SDL_Surface *const rgba = png ? SDL_ConvertSurface(png, SDL_PIXELFORMAT_RGBA32) : nullptr;
+
+		SDL_DestroySurface(png);
+		if (!rgba) {
+			std::fprintf(stderr, "ERROR: menu: picture %zu: %s\n", p, SDL_GetError());
+			continue;
+		}
+		glGenTextures(1, &m_pictures[p]);
+		glBindTexture(GL_TEXTURE_2D, m_pictures[p]);
+		glPixelStorei(GL_UNPACK_ROW_LENGTH, rgba->pitch / 4);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, rgba->w, rgba->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba->pixels);
+		glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+		glGenerateMipmap(GL_TEXTURE_2D);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+		SDL_DestroySurface(rgba);
+	}
+	glBindTexture(GL_TEXTURE_2D, 0);
 	m_gl = true;
 }
 
@@ -703,6 +966,8 @@ Menu::release()
 	glDeleteProgram(m_blur);
 	glDeleteProgram(m_show);
 	glDeleteVertexArrays(1, &m_vao);
+	glDeleteTextures(PICTURES, m_pictures.data());
+	m_pictures = {};
 	m_gl = false;
 }
 

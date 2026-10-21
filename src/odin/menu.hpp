@@ -173,6 +173,10 @@ struct MenuState {
 	std::optional<size_t> games_was;
 	size_t games_from = 0;
 	double games_since = 0.0;
+	/* What the left of the page Display shows (Menu::Preview), what it
+	 * showed before and since when, as one fades into the other */
+	int preview = 0, preview_from = 0;
+	double preview_since = 0.0;
 	/* In a window not wide enough for both, the cabinet in place of the
 	 * device */
 	bool cabinet_shown = false;
@@ -243,11 +247,19 @@ public:
 private:
 	/* The pages, in the order of their tabs */
 	enum Page { INPUT, DISPLAY, AUDIO, HOTKEYS, OUTPUTS, PATHS, ABOUT, PAGES };
+	/* The pictures of the page Display (menu_pictures.S): real captures
+	 * of Odin, the same place at each scale and at each filter */
+	enum Picture { UPSCALE = 0, FILTER = UPSCALE + 6, SCREEN = FILTER + 5, PICTURES };
+	/* What the left of the page Display shows: what the row pointed at
+	 * or in the frame does */
+	enum Preview { PREVIEW_CARD, PREVIEW_UPSCALE, PREVIEW_FILTER, PREVIEW_SCREEN };
 
 	void follow_scale();
 	void navigate(MenuState &state);
 	void page_input(MenuKit &kit, MenuState &state) const;
 	void page_display(MenuKit &kit, MenuState &state) const;
+	void preview(const MenuKit &kit, const MenuState &state, int which, ImVec2 a, ImVec2 b, float shown) const;
+	void picture(ImDrawList *list, int which, ImVec2 a, ImVec2 b, float shown) const;
 	void page_audio(MenuKit &kit, MenuState &state) const;
 	void page_hotkeys(MenuKit &kit, MenuState &state) const;
 	void page_outputs(MenuKit &kit, MenuState &state) const;
@@ -289,6 +301,8 @@ private:
 	std::array<GLuint, 2> m_blur_tex, m_blur_fb;
 	unsigned m_blur_w, m_blur_h;
 	bool m_frozen;
+	/* The pictures as textures */
+	std::array<GLuint, PICTURES> m_pictures{};
 };
 
 } /* namespace odin */

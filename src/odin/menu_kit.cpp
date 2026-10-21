@@ -1081,6 +1081,22 @@ MenuKit::arrow(const char *id, ImVec2 at, bool right) const
 }
 
 void
+MenuKit::small_caps(ImDrawList *list, ImVec2 at, ImU32 colour, const char *text)
+{
+	const float size = font(SMALL);
+
+	write(list, at, colour, text, size, size * TITLE_SPACING);
+}
+
+float
+MenuKit::small_caps_width(const char *text)
+{
+	const float size = font(SMALL);
+
+	return measure(text, size, size * TITLE_SPACING);
+}
+
+void
 MenuKit::tip(const char *text) const
 {
 	const MenuPalette &p = m_palette;
