@@ -673,7 +673,7 @@ Menu::games_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width, bo
 		return at.y;
 
 	const float size = ImGui::GetFontSize(), line = ImGui::GetTextLineHeight(), spacing = kit.px(14.0f);
-	const float dot = kit.px(2.5f), pitch = kit.px(9.0f), letters = size * 0.1f;
+	const float dot = kit.px(2.5f), pitch = kit.px(9.0f), apart = size * 0.1f;
 	const ImVec2 arrow = kit.arrow_size();
 	const size_t shown = std::min(state.shown, n - 1);
 	/* The game that runs: ▶ */
@@ -681,23 +681,33 @@ Menu::games_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width, bo
 		list->AddTriangleFilled({ c.x - 0.8f * r, c.y - r }, { c.x - 0.8f * r, c.y + r }, { c.x + r, c.y }, colour);
 	};
 	std::vector<std::string> names;
-	std::vector<float> widths;
-	float widest = 0.0f;
 
-	for (const auto &[name, title] : state.games) {
+	for (const auto &[name, title] : state.games)
 		names.push_back(capitals(title));
-		widths.push_back(MenuKit::measure(names.back().c_str(), 0.0f, letters) + 4.0f * dot);
-		widest = std::max(widest, widths.back());
-	}
 
 	static const std::string none;
 	const std::string &before = focusable ? none : state.pills[2], &after = focusable ? none : state.pills[3];
 	const float before_w = before.empty() ? 0.0f : kit.pill_size(before.c_str()).x + spacing;
 	const float after_w = after.empty() ? 0.0f : kit.pill_size(after.c_str()).x + spacing;
-	float total = before_w + after_w - spacing;
+	/* The names whole, with as much room between their letters as the
+	 * row has, in whole pixels: less of it before the dots */
+	float tight = before_w + after_w - spacing, gaps = 0.0f;
 
-	for (const float w : widths)
-		total += w + spacing;
+	for (const std::string &name : names) {
+		tight += MenuKit::measure(name.c_str()) + 4.0f * dot + spacing;
+		gaps += static_cast<float>(name.size() - 1);
+	}
+
+	const float spare = (width - tight) / std::max(gaps, 1.0f);
+	const float letters = tight > width || spare >= apart ? apart : std::floor(spare);
+	std::vector<float> widths;
+	float widest = 0.0f, total = before_w + after_w - spacing;
+
+	for (const std::string &name : names) {
+		widths.push_back(MenuKit::measure(name.c_str(), 0.0f, letters) + 4.0f * dot);
+		widest = std::max(widest, widths.back());
+		total += widths.back() + spacing;
+	}
 	if (total <= width) {
 		float x = at.x + (width - total) / 2.0f;
 
