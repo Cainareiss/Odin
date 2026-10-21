@@ -958,9 +958,26 @@ Menu::freeze(GLuint picture_fb, unsigned w, unsigned h)
 	if (!m_gl)
 		start_gl();
 	m_frozen = picture_fb != 0 && w > 1 && h > 1;
-	if (!m_frozen)
-		return;
+	m_frozen_window = false;
+	if (m_frozen)
+		blur(picture_fb, GL_COLOR_ATTACHMENT0, w, h);
+}
 
+void
+Menu::freeze_window(unsigned window_w, unsigned window_h)
+{
+	if (!m_gl)
+		start_gl();
+	m_frozen = m_frozen_window = false;
+	draw(window_w, window_h);
+	m_frozen = m_frozen_window = window_w > 1 && window_h > 1;
+	if (m_frozen)
+		blur(0, GL_BACK, window_w, window_h);
+}
+
+void
+Menu::blur(GLuint fb, GLenum buffer, unsigned w, unsigned h)
+{
 	const unsigned hw = w / 2, hh = h / 2;
 	const GLint iw = static_cast<GLint>(hw), ih = static_cast<GLint>(hh);
 
@@ -970,8 +987,8 @@ Menu::freeze(GLuint picture_fb, unsigned w, unsigned h)
 	glDisable(GL_BLEND);
 
 	/* Half the size: each texel the mean of four pixels */
-	glBindFramebuffer(GL_READ_FRAMEBUFFER, picture_fb);
-	glReadBuffer(GL_COLOR_ATTACHMENT0);
+	glBindFramebuffer(GL_READ_FRAMEBUFFER, fb);
+	glReadBuffer(buffer);
 	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_blur_fb[0]);
 	glBlitFramebuffer(0, 0, static_cast<GLint>(w), static_cast<GLint>(h), 0, 0, iw, ih, GL_COLOR_BUFFER_BIT,
 	                  GL_LINEAR);
@@ -1010,11 +1027,13 @@ Menu::draw(unsigned window_w, unsigned window_h)
 	glClear(GL_COLOR_BUFFER_BIT);
 
 	/* The picture of the game over the whole window, its middle kept
-	 * where the window is of another shape (mock-up v50) */
+	 * where the window is of another shape (mock-up v50); the window as it
+	 * was over all of it */
 	const PictureRect rect = picture_rect(window_w, window_h);
 	if (m_frozen && rect.w && rect.h) {
 		const double k = std::max(static_cast<double>(window_w) / rect.w, static_cast<double>(window_h) / rect.h);
-		const auto w = static_cast<GLsizei>(std::lround(rect.w * k)), h = static_cast<GLsizei>(std::lround(rect.h * k));
+		const auto w = m_frozen_window ? static_cast<GLsizei>(window_w) : static_cast<GLsizei>(std::lround(rect.w * k));
+		const auto h = m_frozen_window ? static_cast<GLsizei>(window_h) : static_cast<GLsizei>(std::lround(rect.h * k));
 
 		glViewport((static_cast<GLint>(window_w) - w) / 2, (static_cast<GLint>(window_h) - h) / 2, w, h);
 		glUseProgram(m_show);

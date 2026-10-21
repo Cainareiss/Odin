@@ -505,7 +505,16 @@ Display::open_menu(int page)
 	show_bar(false);
 	m_menu->hide_bar();
 	m_menu->open(page);
-	run([this] { m_menu->freeze(m_picture_fb, m_picture_width, m_picture_height); });
+	/* Behind it, the last picture of the game, or the library as it was
+	 * drawn last */
+	if (m_board) {
+		run([this] { m_menu->freeze(m_picture_fb, m_picture_width, m_picture_height); });
+	} else {
+		int w, h;
+
+		SDL_GetWindowSizeInPixels(m_window, &w, &h);
+		run([this, w, h] { m_menu->freeze_window(static_cast<unsigned>(w), static_cast<unsigned>(h)); });
+	}
 	m_menu_shown = true;
 }
 

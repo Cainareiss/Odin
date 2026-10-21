@@ -340,9 +340,11 @@ public:
 	bool popup_open() const;
 
 	/* The drawing thread: the picture of the last frame, from its
-	 * framebuffer, becomes the background (0: there is none yet, black);
-	 * then the menu is drawn on it in the window. */
+	 * framebuffer, becomes the background (0: there is none yet, black),
+	 * or the window as built last (the library), drawn again; then the
+	 * menu is drawn on it in the window. */
 	void freeze(GLuint picture_fb, unsigned w, unsigned h);
+	void freeze_window(unsigned window_w, unsigned window_h);
 	void draw(unsigned window_w, unsigned window_h);
 	/* The bar built last over what the window shows */
 	void draw_bar(unsigned window_w, unsigned window_h);
@@ -390,6 +392,8 @@ private:
 	static float games_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width, bool focusable = false);
 	void start_gl();
 	void size_blur(unsigned w, unsigned h);
+	/* The background from that framebuffer and buffer, w by h */
+	void blur(GLuint fb, GLenum buffer, unsigned w, unsigned h);
 
 	SDL_Window *m_window;
 	ImGuiContext *m_imgui;
@@ -416,7 +420,8 @@ private:
 	GLint m_blur_step, m_show_light;
 	std::array<GLuint, 2> m_blur_tex, m_blur_fb;
 	unsigned m_blur_w, m_blur_h;
-	bool m_frozen;
+	/* There is one; it is the window, which it covers as it was */
+	bool m_frozen, m_frozen_window = false;
 	/* The pictures as textures */
 	std::array<GLuint, PICTURES> m_pictures{};
 	/* The library: the pictures of the games handed over, then as
