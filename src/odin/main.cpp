@@ -56,6 +56,22 @@
 
 namespace {
 
+/* A frame of the cabinet, 60 a second */
+constexpr std::chrono::nanoseconds FRAME(1000000000 / 60);
+
+/* How the frames wait for the display by default, and the names of odin.ini */
+constexpr odin::Display::Vsync VSYNC = odin::Display::Vsync::OFF;
+constexpr const char *VSYNCS[] = { "off", "on", "adaptive" };
+
+std::optional<odin::Display::Vsync>
+vsync_named(const std::string &name)
+{
+	for (unsigned i = 0; i < std::size(VSYNCS); i++)
+		if (name == VSYNCS[i])
+			return static_cast<odin::Display::Vsync>(i);
+	return std::nullopt;
+}
+
 struct Options {
 	std::string rom_path;
 	/* The folder of the saves of the games and that of the save states
@@ -80,7 +96,9 @@ struct Options {
 	std::string sound_device;
 	unsigned volume = 100;
 	bool background = true;
-	odin::Display::Options display = { 1, 1, 0, false, true, {} };
+	odin::Display::Options display = { 1, 1, 0, false, true, odin::Display::Vsync::OFF, {} };
+	/* [display] vsync: the display gets it when the frames are paced */
+	odin::Display::Vsync vsync = VSYNC;
 	/* What the command line says of the display: odin.ini does not change it */
 	struct {
 		bool scale = false, anisotropy = false, window = false, fullscreen = false, unthrottled = false;
@@ -229,6 +247,8 @@ read_display(const odin::Settings &settings, Options &options)
 				options.unthrottled = on;
 		} else if (key == "show_speed" && (on || off)) {
 			options.display.show_speed = on;
+		} else if (key == "vsync" && vsync_named(value)) {
+			options.vsync = *vsync_named(value);
 		} else {
 			std::fprintf(stderr, "ERROR: settings: [display]: not right: %s = %s\n", key.c_str(), value.c_str());
 		}
@@ -366,7 +386,8 @@ known_settings(const odin::GameList &games)
 	using Hotkeys = odin::Hotkeys;
 	std::vector<odin::Settings::Known> out = {
 		{ "display", "scale", "1" }, { "display", "anisotropy", "1" }, { "display", "window", "1" },
-		{ "display", "fullscreen", "off" }, { "display", "unthrottled", "off" }, { "display", "show_speed", "on" },
+		{ "display", "fullscreen", "off" }, { "display", "vsync", VSYNCS[static_cast<unsigned>(VSYNC)] },
+		{ "display", "unthrottled", "off" }, { "display", "show_speed", "on" },
 		{ "sound", "device", "" }, { "sound", "volume", "100" }, { "sound", "background", "on" },
 	};
 
@@ -445,6 +466,7 @@ public:
 		state.window = options.display.window ? options.display.window : 1;
 		state.unthrottled = options.unthrottled;
 		state.show_speed = options.display.show_speed;
+		state.vsync = static_cast<unsigned>(options.vsync);
 		state.scale_given = options.given.scale;
 		state.anisotropy_given = options.given.anisotropy;
 		state.window_given = options.given.window;
@@ -658,6 +680,8 @@ Session::process_events()
 			take_folder();
 			continue;
 		}
+		if (event.type == SDL_EVENT_WINDOW_DISPLAY_CHANGED)
+			m_display.display_changed();
 		if (event.type == SDL_EVENT_WINDOW_FOCUS_GAINED || event.type == SDL_EVENT_WINDOW_FOCUS_LOST) {
 			m_focused = event.type == SDL_EVENT_WINDOW_FOCUS_GAINED;
 			if (m_audio)
@@ -1284,6 +1308,9 @@ Session::draw_menu()
 	state.choosing = m_dialog.open();
 	state.fullscreen = m_display.fullscreen();
 	m_display.display_size(state.display_w, state.display_h);
+	state.refresh = m_display.refresh();
+	state.vsync_off = m_options.unthrottled ? "off at an unlimited pace" : nullptr;
+	state.refresh_short = state.refresh > 0.0f && state.refresh < odin::Display::LEAST_REFRESH;
 	state.panel = &panel_shown();
 	state.touched.clear();
 	state.now.clear();
@@ -1483,6 +1510,12 @@ Session::apply(const odin::MenuState &was)
 		m_display.resize(now.window);
 		keep("window", number(now.window, 1));
 	}
+	if (now.vsync != was.vsync) {
+		const auto vsync = static_cast<odin::Display::Vsync>(now.vsync);
+
+		m_display.set_vsync(m_options.unthrottled ? odin::Display::Vsync::OFF : vsync);
+		keep("vsync", vsync == VSYNC ? std::nullopt : std::optional<std::string>(VSYNCS[now.vsync]));
+	}
 	if (now.unthrottled != was.unthrottled)
 		keep("unthrottled", on_off(now.unthrottled, false));
 	if (now.show_speed != was.show_speed) {
@@ -1666,11 +1699,10 @@ Session::save_state_at_frame()
 void
 Session::limit_frame_rate()
 {
-	const std::chrono::nanoseconds period(1000000000 / 60);
 	const auto now = std::chrono::steady_clock::now();
 
-	m_next += period;
-	if (now - m_next > 2 * period)
+	m_next += FRAME;
+	if (now - m_next > 2 * FRAME)
 		m_next = now;
 	else if (now < m_next)
 		std::this_thread::sleep_until(m_next);
@@ -1699,7 +1731,7 @@ Session::run()
 			m_outputs->show(m_board.io_outputs());
 		if (m_audio)
 			m_audio->play(m_board.sound(false), m_board.sound(true));
-		m_display.end_frame(m_board.frame());
+		m_display.end_frame(m_board.frame(), std::chrono::steady_clock::now() > m_next + FRAME);
 		save_state_at_frame();
 		if (m_menu_test && m_board.frame() % m_menu_test == 0)
 			press_escape();
@@ -1769,6 +1801,7 @@ main(int argc, char **argv)
 
 	odin::Keyboard keys;
 	options.display.title = game->title;
+	options.display.vsync = options.unthrottled ? odin::Display::Vsync::OFF : options.vsync;
 	const std::unique_ptr<odin::Display> display = odin::Display::make(*board, keys, options.display);
 	if (!display)
 		return 1;

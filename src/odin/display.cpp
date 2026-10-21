@@ -115,7 +115,7 @@ open_window(SDL_Window *&window, SDL_GLContext &context)
 		return false;
 	}
 
-	/* The frames are paced by the board, not by the display. */
+	/* The frames are paced by the board alone until set_vsync. */
 	SDL_GL_SetSwapInterval(0);
 
 	/* Under Wayland the context is EGL's: GLEW has the functions of OpenGL
@@ -162,7 +162,8 @@ Display::make(Hikaru &board, const Keyboard &keys, const Options &options)
 Display::Display(Hikaru &board, const Keyboard &keys, const Options &options, SDL_Window *window,
                  SDL_GLContext context)
 	: m_board(board), m_keys(keys), m_window(window), m_context(context), m_menu_shown(false),
-	  m_title(options.title), m_show_speed(options.show_speed),
+	  m_title(options.title), m_show_speed(options.show_speed), m_vsync(Vsync::OFF),
+	  m_wait_on_time(false), m_wait_late(false), m_waits(false),
 	  m_frame(0), m_scale(options.scale), m_anisotropy(options.anisotropy), m_logged(false),
 	  m_picture_fb(0), m_picture_width(Renderer::WIDTH), m_picture_height(Renderer::HEIGHT),
 	  m_late(env_flag("ODIN_LATE_DRAW")), m_held(false), m_late_draw(0),
@@ -210,6 +211,7 @@ Display::Display(Hikaru &board, const Keyboard &keys, const Options &options, SD
 	if (options.window >= 2 || options.fullscreen)
 		set_window(options.window ? options.window : 1, options.fullscreen);
 	prepare_programs(options.title);
+	set_vsync(options.vsync);
 
 	m_board.set_screen(this);
 }
@@ -349,7 +351,7 @@ Display::begin_frame()
 /* The frame before is drawn first: this one is taken with the drawing
  * thread at rest, then drawn while the board goes on. */
 void
-Display::end_frame(unsigned frame)
+Display::end_frame(unsigned frame, bool late)
 {
 	const uint64_t waited = m_wait_write_ns;
 	int w, h;
@@ -364,7 +366,7 @@ Display::end_frame(unsigned frame)
 	m_logged = m_renderer->frame_is_logged();
 	m_message = m_renderer->message();
 
-	m_drawing->post([this] { draw(); });
+	m_drawing->post([this, late] { draw(late); });
 	m_held = m_late;
 	/* A log is written whole before the board writes on. */
 	if (m_logged)
@@ -375,7 +377,7 @@ Display::end_frame(unsigned frame)
 }
 
 void
-Display::draw()
+Display::draw(bool late)
 {
 	if (m_late)
 		m_late_draw.acquire();
@@ -389,6 +391,10 @@ Display::draw()
 
 	screenshot();
 	print_fingerprint();
+	if (const bool wait = late ? m_wait_late : m_wait_on_time; wait != m_waits) {
+		SDL_GL_SetSwapInterval(wait ? 1 : 0);
+		m_waits = wait;
+	}
 	SDL_GL_SwapWindow(m_window);
 	m_renderer->frame_shown();
 	if (m_stats) {
@@ -564,6 +570,36 @@ Display::resize(unsigned times)
 {
 	if (!fullscreen())
 		set_window(times, false);
+}
+
+void
+Display::set_vsync(Vsync vsync)
+{
+	const float hz = refresh();
+	const bool keeps_up = hz == 0.0f || hz >= LEAST_REFRESH;
+	const bool late = vsync == Vsync::ON && keeps_up, on_time = late || vsync == Vsync::ADAPTIVE;
+
+	m_vsync = vsync;
+	run([this, on_time, late] {
+		m_wait_on_time = on_time;
+		m_wait_late = late;
+		m_waits = on_time;
+		if (!SDL_GL_SetSwapInterval(on_time ? 1 : 0))
+			std::fprintf(stderr, "ERROR: screen: no vsync: '%s'\n", SDL_GetError());
+	});
+	if (vsync == Vsync::ON && !keeps_up)
+		std::printf("screen: no vsync, the display shows %.2f frames a second\n", static_cast<double>(hz));
+	else if (vsync != Vsync::OFF)
+		std::printf("screen: the frames%s wait for the display (%.2f Hz)\n", vsync == Vsync::ON ? "" : " on time",
+		            static_cast<double>(hz));
+}
+
+float
+Display::refresh() const
+{
+	const SDL_DisplayMode *const mode = SDL_GetCurrentDisplayMode(SDL_GetDisplayForWindow(m_window));
+
+	return mode ? mode->refresh_rate : 0.0f;
 }
 
 void

@@ -79,14 +79,27 @@ class Worker;
  * ODIN_DEBUG_KEYS. */
 class Display : public Hikaru::Screen {
 public:
+	/* How the frames wait for the display: not at all (one may be torn),
+	 * each of them, or those on time (a late one is shown at once, so
+	 * that the game keeps its 60 a second) */
+	enum class Vsync : uint8_t { OFF, ON, ADAPTIVE };
+
 	struct Options {
 		unsigned scale;		/* the 3D that many times finer than the screen, 1 to 6 */
 		unsigned anisotropy;	/* of the texture filter, 1 for none as on the board */
 		unsigned window;	/* the window that many times the screen */
 		bool fullscreen;
 		bool show_speed;	/* the frames a second in the title */
+		Vsync vsync;
 		std::string title;	/* of the game, on its loading screen */
 	};
+
+	/* A display that shows fewer frames a second would hold the board
+	 * back where each frame waits for it: the game slower than the 60 of
+	 * the cabinet, and its sound short of more than the sample a frame
+	 * AudioOut makes up (1 in 735). The frames on time alone wait on any
+	 * display: the late ones catch up. */
+	static constexpr float LEAST_REFRESH = 59.92f;
 
 	/* The window of a board, which it becomes the screen of; nothing,
 	 * with the reason on stderr, if it cannot be opened. The board and
@@ -97,9 +110,10 @@ public:
 	Display &operator=(const Display &) = delete;
 
 	/* A frame of the board: begin_frame before the board runs it,
-	 * end_frame once it has, with its number. */
+	 * end_frame once it has, with its number, and whether it ended after
+	 * its time at 60 frames a second. */
 	void begin_frame();
-	void end_frame(unsigned frame);
+	void end_frame(unsigned frame, bool late);
 
 	/* Between the window and the whole display */
 	void toggle_fullscreen();
@@ -112,6 +126,13 @@ public:
 	void set_fullscreen(bool on);
 	void resize(unsigned times);
 	void set_show_speed(bool on);
+	/* Each frame waits only where the display keeps up (LEAST_REFRESH);
+	 * again when the window goes to another display */
+	void set_vsync(Vsync vsync);
+	void display_changed() { set_vsync(m_vsync); }
+	/* The frames a second of the display the window is on (0: not
+	 * known) */
+	float refresh() const;
 	/* The graphics card, and the size in pixels of the display the
 	 * window is on */
 	const std::string &gpu() const { return m_gpu; }
@@ -150,7 +171,7 @@ private:
 	/* Has the drawing thread do a job, and waits for it. */
 	void run(std::function<void()> job);
 	/* On the drawing thread */
-	void draw();
+	void draw(bool late);
 	void read_picture(uint8_t *pixels);
 	void screenshot();
 	void print_fingerprint();
@@ -171,6 +192,10 @@ private:
 	std::string m_title;
 	std::string m_gpu;
 	bool m_show_speed;
+	Vsync m_vsync;
+	/* On the drawing thread: whether a frame on time and a late one wait
+	 * for the display, and whether the frames wait now */
+	bool m_wait_on_time, m_wait_late, m_waits;
 
 	/* The frame given to the drawing thread: its number, the options it
 	 * is drawn with, whether its drawing writes a log, and the picture

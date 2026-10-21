@@ -42,6 +42,8 @@ PICTURE(filter_4, "pictures/filter-4.png")
 PICTURE(filter_8, "pictures/filter-8.png")
 PICTURE(filter_16, "pictures/filter-16.png")
 PICTURE(screen, "pictures/screen.png")
+PICTURE(whole, "pictures/whole.png")
+PICTURE(torn, "pictures/torn.png")
 
 #if !defined(_WIN32)
 	.section .note.GNU-stack, "", @progbits

@@ -52,16 +52,22 @@ struct MenuSlot {
 struct MenuState {
 	/* Display: the 3D that many times finer, the texture filter (1 for
 	 * none), the window at start that many times the screen, the whole
-	 * display, frames without a limit (at the next launch), the frames a
-	 * second in the title */
-	unsigned scale = 1, anisotropy = 1, window = 1;
+	 * display, how the frames wait for the display (Display::Vsync: 0 not
+	 * at all, 1 all, 2 those on time), frames without a limit (at the
+	 * next launch), the frames a second in the title */
+	unsigned scale = 1, anisotropy = 1, window = 1, vsync = 0;
 	bool fullscreen = false, unthrottled = false, show_speed = true;
 	/* Said on the command line: shown, not changed */
 	bool scale_given = false, anisotropy_given = false, window_given = false, fullscreen_given = false,
 	     unthrottled_given = false;
-	/* The graphics card, and the size of the display in pixels */
+	/* The graphics card, the size of the display in pixels, its frames a
+	 * second (0: not known) and whether they are fewer than the cabinet's;
+	 * why the frames do not wait for it (none: they do as vsync says) */
 	std::string gpu;
 	unsigned display_w = 0, display_h = 0;
+	float refresh = 0.0f;
+	bool refresh_short = false;
+	const char *vsync_off = nullptr;
 	/* odin.ini keeps what changes: not with ODIN_CONFIG=none */
 	bool kept = true;
 
@@ -248,11 +254,12 @@ private:
 	/* The pages, in the order of their tabs */
 	enum Page { INPUT, DISPLAY, AUDIO, HOTKEYS, OUTPUTS, PATHS, ABOUT, PAGES };
 	/* The pictures of the page Display (menu_pictures.S): real captures
-	 * of Odin, the same place at each scale and at each filter */
-	enum Picture { UPSCALE = 0, FILTER = UPSCALE + 6, SCREEN = FILTER + 5, PICTURES };
+	 * of Odin, the same place at each scale and at each filter, a frame
+	 * whole and torn */
+	enum Picture { UPSCALE = 0, FILTER = UPSCALE + 6, SCREEN = FILTER + 5, WHOLE, TORN, PICTURES };
 	/* What the left of the page Display shows: what the row pointed at
 	 * or in the frame does */
-	enum Preview { PREVIEW_CARD, PREVIEW_UPSCALE, PREVIEW_FILTER, PREVIEW_SCREEN };
+	enum Preview { PREVIEW_CARD, PREVIEW_UPSCALE, PREVIEW_FILTER, PREVIEW_SCREEN, PREVIEW_VSYNC };
 
 	void follow_scale();
 	void navigate(MenuState &state);

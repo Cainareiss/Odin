@@ -40,6 +40,7 @@
 #define PICTURE(name) extern "C" const unsigned char odin_picture_##name[], odin_picture_##name##_end[];
 PICTURE(upscale_1) PICTURE(upscale_2) PICTURE(upscale_3) PICTURE(upscale_4) PICTURE(upscale_5) PICTURE(upscale_6)
 PICTURE(filter_1) PICTURE(filter_2) PICTURE(filter_4) PICTURE(filter_8) PICTURE(filter_16) PICTURE(screen)
+PICTURE(whole) PICTURE(torn)
 #undef PICTURE
 
 namespace odin {
@@ -54,6 +55,7 @@ const std::pair<const unsigned char *, const unsigned char *> PICTURE_FILES[] = 
 	{ odin_picture_filter_1, odin_picture_filter_1_end }, { odin_picture_filter_2, odin_picture_filter_2_end },
 	{ odin_picture_filter_4, odin_picture_filter_4_end }, { odin_picture_filter_8, odin_picture_filter_8_end },
 	{ odin_picture_filter_16, odin_picture_filter_16_end }, { odin_picture_screen, odin_picture_screen_end },
+	{ odin_picture_whole, odin_picture_whole_end }, { odin_picture_torn, odin_picture_torn_end },
 };
 
 /* The hints of the mouse Dear ImGui sets for itself (imgui_impl_sdl3.cpp):
@@ -545,6 +547,27 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 		               state.window_given ? "set by the command line: -w" : nullptr, state.fullscreen))
 			state.window = static_cast<unsigned>(window) + 1;
 	});
+
+	static constexpr const char *SYNCS[] = { "off", "on", "adaptive" };
+	static constexpr const char *SYNCS_ABOUT[] = {
+		"the frames do not wait for the display: one may be torn",
+		"each frame waits for the display: none is torn, a late one costs the game time",
+		"the frames on time wait for the display; a late one shows at once and may be torn",
+	};
+	int sync = static_cast<int>(state.vsync);
+	const char *const said = state.vsync_off ? state.vsync_off :
+	                         state.refresh_short && state.vsync == 1 ?
+	                         "off: this display shows fewer frames a second than the 60 of the cabinet" :
+	                         SYNCS_ABOUT[state.vsync];
+
+	if (state.refresh > 0.0f)
+		std::snprintf(about, sizeof(about), "%s · %.2f Hz", said, static_cast<double>(state.refresh));
+	else
+		std::snprintf(about, sizeof(about), "%s", said);
+	watch(PREVIEW_VSYNC, [&] {
+		if (kit.choice("Vertical sync", about, SYNCS, sync, nullptr, state.vsync_off != nullptr))
+			state.vsync = static_cast<unsigned>(sync);
+	});
 	kit.end_group();
 
 	kit.begin_group("SPEED");
@@ -689,6 +712,15 @@ Menu::preview(const MenuKit &kit, const MenuState &state, int which, ImVec2 a, I
 
 		pair("TEXTURE FILTER", FILTER, filter > 0 ? FILTER + filter : -1, "NONE · THE CABINET", NAMES[filter],
 		     "Real captures of Odin: Planet Harriers, the road far off, at 1×.");
+		break;
+	}
+	case PREVIEW_VSYNC: {
+		static constexpr const char *NAMES[] = { "OFF", "ON", "ADAPTIVE" };
+
+		pair("VERTICAL SYNC", WHOLE, state.vsync == 0 ? TORN : WHOLE, "WHOLE · THE CABINET",
+		     NAMES[std::min(state.vsync, 2u)],
+		     "Real captures of Odin: Brave Fire Fighters, two frames that follow; torn, the display shows the top "
+		     "of the first and the bottom of the second.");
 		break;
 	}
 	case PREVIEW_SCREEN: {
