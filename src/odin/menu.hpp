@@ -346,7 +346,8 @@ private:
 	enum Preview { PREVIEW_CARD, PREVIEW_UPSCALE, PREVIEW_FILTER, PREVIEW_SCREEN, PREVIEW_VSYNC };
 
 	void follow_scale();
-	void add_fonts();
+	/* Before each frame, the font of the size of its letters */
+	void follow_fonts();
 	/* The bar and its menus, in the frame of Dear ImGui built now; at the
 	 * start of a frame, the menus of a bar hidden since the last one
 	 * closed */
@@ -381,8 +382,10 @@ private:
 
 	SDL_Window *m_window;
 	ImGuiContext *m_imgui;
-	/* Mapped while Dear ImGui reads them (add_fonts) */
+	/* Mapped while Dear ImGui reads them (follow_fonts); the font of
+	 * Dear ImGui drawn by pixels and by outlines, each with them behind */
 	std::unique_ptr<SystemFonts> m_fonts;
+	ImFont *m_pixel_font = nullptr, *m_outline_font = nullptr;
 	/* The style at a scale of 1, and the scale of the display now */
 	ImGuiStyle m_style;
 	float m_scale;

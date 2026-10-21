@@ -104,7 +104,7 @@ Menu::build_bar(BarState &state)
 	ImGui::SetCurrentContext(m_imgui);
 	follow_scale();
 	ImGui_ImplSDL3_NewFrame();
-	add_fonts();
+	follow_fonts();
 	ImGui::NewFrame();
 	close_bar_menus();
 	bar(state);

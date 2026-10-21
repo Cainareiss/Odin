@@ -375,29 +375,45 @@ Menu::follow_scale()
 	m_scale = scale;
 }
 
-/* Once, where Dear ImGui would take its own font (drawn by pixels for a
- * small menu, else by outlines): that font, and behind it those of the
- * system for the letters it lacks, those of most languages (a folder named
- * in Russian, in Japanese...) */
+/* The font of Dear ImGui, as it chooses it, but at each frame: drawn by
+ * pixels while its letters are under 15 pixels high, by outlines from
+ * there (the size of the window may change). Behind each, for the letters
+ * it lacks (it has those of Latin-1), the fonts of the system: those of
+ * most languages (a folder named in Russian, in Japanese...). Both made
+ * once, where Dear ImGui would take its own. */
 void
-Menu::add_fonts()
+Menu::follow_fonts()
 {
-	ImFontAtlas &fonts = *ImGui::GetIO().Fonts;
-	std::string names;
+	static constexpr float OUTLINES_FROM = 15.0f;
+	ImGuiIO &io = ImGui::GetIO();
+	const ImGuiStyle &style = ImGui::GetStyle();
 
-	if (fonts.Sources.Size)
-		return;
-	fonts.AddFontDefault();
-	m_fonts = std::make_unique<SystemFonts>();
-	for (const SystemFonts::Font &font : m_fonts->fonts()) {
-		ImFontConfig more;
+	if (!m_pixel_font) {
+		ImFontAtlas &fonts = *io.Fonts;
+		std::string names;
 
-		more.MergeMode = true;
-		more.FontDataOwnedByAtlas = false;
-		fonts.AddFontFromMemoryTTF(const_cast<unsigned char *>(font.data), static_cast<int>(font.size), 0.0f, &more);
-		names += (names.empty() ? "" : ", ") + font.path;
+		m_fonts = std::make_unique<SystemFonts>();
+		for (const bool outlines : { false, true }) {
+			(outlines ? m_outline_font : m_pixel_font) = outlines ? fonts.AddFontDefaultVector() : fonts.AddFontDefaultBitmap();
+			for (const SystemFonts::Font &font : m_fonts->fonts()) {
+				ImFontConfig more;
+
+				more.MergeMode = true;
+				more.FontDataOwnedByAtlas = false;
+				fonts.AddFontFromMemoryTTF(const_cast<unsigned char *>(font.data), static_cast<int>(font.size), 0.0f,
+				                           &more);
+				if (!outlines)
+					names += (names.empty() ? "" : ", ") + font.path;
+			}
+		}
+		std::printf("menu: letters of other languages from %s\n", names.empty() ? "no font of the system" : names.c_str());
 	}
-	std::printf("menu: letters of other languages from %s\n", names.empty() ? "no font of the system" : names.c_str());
+
+	/* In pixels of the display, as Dear ImGui reckons it */
+	const float size = (style.FontSizeBase > 0.0f ? style.FontSizeBase : 13.0f) * style.FontScaleMain * style.FontScaleDpi *
+	                   (io.DisplayFramebufferScale.x > 0.0f ? io.DisplayFramebufferScale.x : 1.0f);
+
+	io.FontDefault = size < OUTLINES_FROM ? m_pixel_font : m_outline_font;
 }
 
 /* The frame in the middle of the window: the tabs at the top, the page
@@ -409,7 +425,7 @@ Menu::build(MenuState &state)
 	follow_scale();
 	navigate(state);
 	ImGui_ImplSDL3_NewFrame();
-	add_fonts();
+	follow_fonts();
 	ImGui::NewFrame();
 	close_bar_menus();
 
