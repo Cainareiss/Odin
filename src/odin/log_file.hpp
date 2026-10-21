@@ -42,6 +42,9 @@ public:
 	static std::string path();
 	/* Where the one before goes */
 	static std::string previous(const std::string &path);
+	/* Windows: the console a double click opened for Odin alone is let
+	 * go, before start(); a console Odin shares (a prompt) stays */
+	static void leave_own_console();
 	/* To be called before anything is written to stdout. False, said on
 	 * stderr, when the file cannot be written: Odin says it on its
 	 * terminal alone. */

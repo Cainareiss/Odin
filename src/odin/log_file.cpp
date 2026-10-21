@@ -220,6 +220,23 @@ LogFile::previous(const std::string &path)
 	return path + ".previous";
 }
 
+void
+LogFile::leave_own_console()
+{
+#ifdef _WIN32
+	DWORD processes[2];
+
+	if (GetConsoleProcessList(processes, 2) != 1)
+		return;
+	FreeConsole();
+	/* The C library would still use the console gone, and crash in
+	 * start(): NUL instead */
+	std::freopen("NUL", "r", stdin);
+	std::freopen("NUL", "w", stdout);
+	std::freopen("NUL", "w", stderr);
+#endif
+}
+
 bool
 LogFile::start(const std::string &path, uint64_t most)
 {

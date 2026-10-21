@@ -1942,7 +1942,9 @@ main(int argc, char **argv)
 	 * without what its buffers still hold: it goes out here. */
 	std::atexit([] { std::fflush(nullptr); });
 
-	/* What Odin says goes to odin.log too, from its first line */
+	/* What Odin says goes to odin.log too, from its first line; on
+	 * Windows, with no console of its own after a double click */
+	odin::LogFile::leave_own_console();
 	if (const std::string log = odin::LogFile::path(); odin::LogFile::start(log))
 		options.log_file = log;
 

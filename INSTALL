@@ -249,9 +249,10 @@ menu of the game (CALIBRATION), with the controller you play with, and
 the other games have their own pages for it. The settings of Odin are in
 odin.ini in the same odin folder; ODIN_CONFIG=<file> reads another one.
 
-What Odin says (in the terminal, or the window that opens with it on
-Windows) is written to odin.log in the same odin folder too, from scratch
-at each launch; the log of the launch before is kept as odin-previous.log.
+What Odin says (in the terminal it was started from; on Windows, opened by
+a double click, it has none) is written to odin.log in the same odin folder
+too, from scratch at each launch; the log of the launch before is kept as
+odin-previous.log.
 ODIN_LOG=<file> writes another file, ODIN_LOG=none none. The file stops at
 64 MB (the detailed log of -v says a lot); after a crash it holds the last
 words of Odin.
