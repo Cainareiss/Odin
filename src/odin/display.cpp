@@ -1091,13 +1091,19 @@ Display::resize_to(unsigned w, unsigned h)
 		set_window_size(static_cast<int>(w), static_cast<int>(h), false);
 }
 
+/* A window as large as its display takes the whole display, whether the
+ * system says so or not (gamescope does not) */
 bool
 Display::hand_size(unsigned &w, unsigned &h)
 {
 	int now_w = 0, now_h = 0;
+	SDL_Rect whole{};
+	const bool sized = SDL_GetWindowSize(m_window, &now_w, &now_h) && now_w > 0 && now_h > 0;
+	const bool everything = SDL_GetDisplayBounds(SDL_GetDisplayForWindow(m_window), &whole) && now_w >= whole.w &&
+	                        now_h >= whole.h;
 
-	if (!(SDL_GetWindowFlags(m_window) & (SDL_WINDOW_FULLSCREEN | SDL_WINDOW_MAXIMIZED | SDL_WINDOW_MINIMIZED)) &&
-	    SDL_GetWindowSize(m_window, &now_w, &now_h) && now_w > 0 && now_h > 0 &&
+	if (sized && !everything &&
+	    !(SDL_GetWindowFlags(m_window) & (SDL_WINDOW_FULLSCREEN | SDL_WINDOW_MAXIMIZED | SDL_WINDOW_MINIMIZED)) &&
 	    (now_w != m_given_w || now_h != m_given_h)) {
 		m_given_w = now_w;
 		m_given_h = now_h;
