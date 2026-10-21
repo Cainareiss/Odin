@@ -334,7 +334,7 @@
 		{
 			"name" : "swracer",
 			"title" : "Star Wars Racer Arcade",
-			"title_frame" : 2160,
+			"title_frame" : 6000,
 			"mach" : "hikaru",
 			"rom_board" : { "eprom_mb" : 4, "315-5881" : "2903DAD5" },
 			"option_vibration" : true,
