@@ -138,8 +138,12 @@ public:
 	int side() const { return m_focus ? m_focus->side : 0; }
 	bool pressed() const { return m_focus && m_focus->press; }
 
-	/* A frame with its corners cut; a colour of 0 is none */
-	void frame(ImDrawList *list, ImVec2 a, ImVec2 b, float cut, ImU32 fill, ImU32 border) const;
+	/* A frame with its corners cut; a colour of 0 is none; its border
+	 * that many strokes thick */
+	void frame(ImDrawList *list, ImVec2 a, ImVec2 b, float cut, ImU32 fill, ImU32 border, float strokes = 1.0f) const;
+	/* A line from left to right, `thick` high, that fades in and out at
+	 * its ends (that share of its length each) */
+	static void fading_line(ImDrawList *list, float left, float right, float y, float thick, ImU32 colour, float fade);
 	/* A line of dashes along points, `on` long and `off` apart; a frame of
 	 * them with its corners cut, a pill of them */
 	static void dashes(ImDrawList *list, std::span<const ImVec2> points, bool closed, ImU32 colour, float width,

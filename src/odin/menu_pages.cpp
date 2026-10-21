@@ -203,6 +203,9 @@ output_tiles(const MenuKit &kit, const MenuState &state, const Box &box)
 	});
 }
 
+
+} /* namespace */
+
 /* A path as the user knows it: the home folder as ~; on Windows with its
  * separators, as its own dialogs give them */
 std::string
@@ -223,8 +226,6 @@ shown_path(const std::string &path, const char *none)
 	return path;
 #endif
 }
-
-} /* namespace */
 
 /* The two sound boards of a cabinet, as its wiring takes them (the manuals
  * and wiring diagrams of SEGA, note 69): its game, where each board plays,

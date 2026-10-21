@@ -367,7 +367,8 @@ Display::close_menu()
 void
 Display::menu_event(const SDL_Event &event)
 {
-	m_menu->event(event);
+	if (m_menu)
+		m_menu->event(event);
 }
 
 bool
@@ -377,6 +378,32 @@ Display::menu_popup_open() const
 }
 
 /* Built on this thread, drawn on the drawing thread meanwhile */
+void
+Display::open_library()
+{
+	/* Its renderer first: Dear ImGui builds on it */
+	if (!m_menu) {
+		m_menu = std::make_unique<Menu>(m_window);
+		run([this] { m_menu->freeze(0, 0, 0); });
+	}
+	m_menu->open_library();
+}
+
+void
+Display::draw_library(LibraryState &state)
+{
+	int w, h;
+
+	m_menu->build_library(state);
+	SDL_GetWindowSizeInPixels(m_window, &w, &h);
+	run([this, w, h] {
+		/* No picture of a game behind it */
+		m_menu->freeze(0, 0, 0);
+		m_menu->draw(static_cast<unsigned>(w), static_cast<unsigned>(h));
+		SDL_GL_SwapWindow(m_window);
+	});
+}
+
 void
 Display::draw_menu(MenuState &state)
 {

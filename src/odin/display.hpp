@@ -39,6 +39,7 @@ namespace odin {
 
 class Keyboard;
 class Menu;
+struct LibraryState;
 struct MenuState;
 class Renderer;
 class Worker;
@@ -156,6 +157,10 @@ public:
 	bool menu_shown() const { return m_menu_shown; }
 	void menu_event(const SDL_Event &event);
 	void draw_menu(MenuState &state);
+	/* The library over the whole window, no board attached: opened, then
+	 * built from the state and shown once a picture */
+	void open_library();
+	void draw_library(LibraryState &state);
 	bool menu_popup_open() const;
 
 	/* Hikaru::Screen */

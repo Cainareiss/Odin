@@ -49,6 +49,32 @@ struct MenuSlot {
 	Role role = Role::COIN1;
 };
 
+/* A path as the user knows it: the home folder as ~; on Windows with its
+ * separators, as its own dialogs give them; `none` when it is empty */
+std::string shown_path(const std::string &path, const char *none);
+
+/* The library, what Odin shows when it starts without a game (as a double
+ * click starts it): the games of the list, each with the files it lacks
+ * (none: it can be played), the one chosen; the folders of the games and
+ * of the BIOS, whether the command line gives them; a folder to ask the
+ * system for; the game to play, and why the one before did not start. The
+ * thread of the board keeps it and does what changed (main.cpp). */
+struct LibraryState {
+	struct Game {
+		std::string name, title;
+		std::vector<std::string> missing;
+	};
+
+	std::vector<Game> games;
+	int selected = 0;
+	std::string roms, bios;
+	bool roms_given = false, bios_given = false;
+	enum class Folder { NONE, ROMS, BIOS } choose = Folder::NONE;
+	bool choosing = false;
+	std::optional<std::string> play;
+	std::string failed;
+};
+
 /* What the pages of the menu show and change. The thread of the board
  * keeps it and does what changed (main.cpp). */
 struct MenuState {
@@ -243,6 +269,11 @@ public:
 	void close();
 	void event(const SDL_Event &event);
 	void build(MenuState &state);
+	/* The library, over the whole window (menu_library.cpp); each time it
+	 * opens, the keys and the mouse held before it (a key let go in a
+	 * game) forgotten */
+	void open_library();
+	void build_library(LibraryState &state);
 	/* A list dropped open, which Escape closes before the menu */
 	bool popup_open() const;
 

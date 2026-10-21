@@ -366,7 +366,7 @@ MenuKit::fitted(const std::string &text, float width, float size)
 }
 
 void
-MenuKit::frame(ImDrawList *list, ImVec2 a, ImVec2 b, float cut, ImU32 fill, ImU32 border) const
+MenuKit::frame(ImDrawList *list, ImVec2 a, ImVec2 b, float cut, ImU32 fill, ImU32 border, float strokes) const
 {
 	const ImVec2 points[8] = { { a.x + cut, a.y }, { b.x - cut, a.y }, { b.x, a.y + cut }, { b.x, b.y - cut },
 	                           { b.x - cut, b.y }, { a.x + cut, b.y }, { a.x, b.y - cut }, { a.x, a.y + cut } };
@@ -374,7 +374,18 @@ MenuKit::frame(ImDrawList *list, ImVec2 a, ImVec2 b, float cut, ImU32 fill, ImU3
 	if (fill)
 		list->AddConvexPolyFilled(points, 8, fill);
 	if (border)
-		list->AddPolyline(points, 8, border, ImDrawFlags_Closed, stroke());
+		list->AddPolyline(points, 8, border, ImDrawFlags_Closed, stroke() * strokes);
+}
+
+void
+MenuKit::fading_line(ImDrawList *list, float left, float right, float y, float thick, ImU32 colour, float fade)
+{
+	const ImU32 clear = alpha(colour, 0.0f);
+	const float ends = (right - left) * fade;
+
+	list->AddRectFilledMultiColor({ left, y }, { left + ends, y + thick }, clear, colour, colour, clear);
+	list->AddRectFilled({ left + ends, y }, { right - ends, y + thick }, colour);
+	list->AddRectFilledMultiColor({ right - ends, y }, { right, y + thick }, colour, clear, clear, colour);
 }
 
 void

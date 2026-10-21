@@ -195,18 +195,6 @@ set_hint(const char *name, const std::optional<std::string> &value)
 		SDL_ResetHint(name);
 }
 
-/* The line under the tabs, that thick, faded at its ends */
-void
-under_tabs(ImDrawList *list, float left, float right, float y, float thick, ImU32 colour)
-{
-	const ImU32 clear = MenuKit::alpha(colour, 0.0f);
-	const float fade = (right - left) * LINE_FADE;
-
-	list->AddRectFilledMultiColor({ left, y }, { left + fade, y + thick }, clear, colour, colour, clear);
-	list->AddRectFilled({ left + fade, y }, { right - fade, y + thick }, colour);
-	list->AddRectFilledMultiColor({ right - fade, y }, { right, y + thick }, colour, clear, clear, colour);
-}
-
 } /* namespace */
 
 Menu::Menu(SDL_Window *window)
@@ -445,8 +433,9 @@ Menu::build(MenuState &state)
 		if (by_pad)
 			m_focus.at = 0;
 	}
-	under_tabs(list, a.x + w * LINE_ENDS, b.x - w * LINE_ENDS, ImGui::GetCursorScreenPos().y + kit.px(LINE_UNDER),
-	           kit.stroke(), MenuKit::alpha(palette.accent, LINE_ALPHA));
+	MenuKit::fading_line(list, a.x + w * LINE_ENDS, b.x - w * LINE_ENDS,
+	                     ImGui::GetCursorScreenPos().y + kit.px(LINE_UNDER), kit.stroke(),
+	                     MenuKit::alpha(palette.accent, LINE_ALPHA), LINE_FADE);
 	ImGui::Dummy({ 0.0f, kit.px(LINE_ROOM) });
 
 	/* What the page says at the bottom, beside the keys, on as many lines

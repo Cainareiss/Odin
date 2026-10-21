@@ -112,7 +112,7 @@ struct Options {
 const char HELP[] = "Usage: %s [options]\n"
 "	-R <path>	Path to the ROM directory\n"
 "	-B <path>	Path to the BIOS directory (hikaru.zip...); none: the ROM directory\n"
-"	-r <string>	Name of the game to run (none: Odin opens and waits)\n"
+"	-r <string>	Name of the game to run (none: the library of the games)\n"
 "	-n <num>	Stop after the frame num\n"
 "	-l <path>	Load a state at startup\n"
 "	-s <num>[,...]	Save <game>-<num>.odinstate after these frames\n"
@@ -1771,27 +1771,104 @@ Session::frames()
 	return true;
 }
 
-/* No game: the window black until it closes or the hotkey quits; the one
- * of the whole display works */
+/* In odin.ini; with none, for the time Odin runs */
 void
-wait_without_game(odin::Display &display, const odin::Settings &settings)
+keep_setting(odin::Settings &settings, const std::string &settings_file, const char *section, const char *key,
+             const std::string &value)
+{
+	if (settings_file.empty())
+		settings.set(section, key, value);
+	else
+		settings.change(settings_file, section, key, value);
+}
+
+/* The games of the list in the library, each with the files it lacks in
+ * the folders now; that one chosen */
+void
+scan_library(odin::LibraryState &state, const odin::GameList &games, const Options &options, const std::string &chosen)
+{
+	odin::RomFiles files(options.rom_path, options.bios_path);
+
+	state.games.clear();
+	state.selected = 0;
+	for (const auto &[name, title] : games.titles("hikaru")) {
+		odin::LibraryState::Game game{ name, title, {} };
+
+		for (const odin::RomFiles::File &file : games.missing(files, name))
+			game.missing.push_back(file.name + " (" + (file.set.empty() ? name : file.set) + ".zip)");
+		if (name == chosen)
+			state.selected = static_cast<int>(state.games.size());
+		state.games.push_back(std::move(game));
+	}
+	state.roms = options.rom_path;
+	state.bios = options.bios_path;
+	state.roms_given = options.given.roms;
+	state.bios_given = options.given.bios;
+}
+
+/* The library, Odin started without a game, until one is chosen there
+ * (its name) or Odin is to quit (empty). The game played before is chosen
+ * again; `failed`, one that did not start, says so. A folder chosen there
+ * is kept in odin.ini and taken at once. */
+std::string
+library(Options &options, const odin::GameList &games, odin::Settings &settings, const std::string &settings_file,
+        odin::Display &display, const std::string &last, const std::string &failed)
 {
 	const odin::Hotkeys hotkeys(settings);
-	SDL_Event event;
+	odin::FolderDialog dialog;
+	odin::LibraryState state;
 
-	while (SDL_WaitEvent(&event)) {
-		if (event.type == SDL_EVENT_QUIT)
-			return;
-		if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat) {
-			const auto action = hotkeys.key_action(event.key.key, event.key.mod);
+	scan_library(state, games, options, last);
+	state.failed = failed;
+	display.open_library();
+	SDL_ShowCursor();
+	for (;;) {
+		SDL_Event event;
 
-			if (action == odin::Hotkeys::Action::QUIT)
-				return;
-			if (action == odin::Hotkeys::Action::FULLSCREEN)
-				display.toggle_fullscreen();
+		/* Its pictures go on, some 60 a second, between the events */
+		if (SDL_WaitEventTimeout(&event, 16)) {
+			do {
+				if (event.type == SDL_EVENT_QUIT)
+					return {};
+				if (event.type == dialog.event()) {
+					const std::optional<odin::FolderDialog::Answer> answer = dialog.answer();
+
+					if (answer && !answer->error.empty())
+						std::fprintf(stderr, "ERROR: no folder picker: %s\n", answer->error.c_str());
+					if (answer && !answer->folder.empty()) {
+						const bool roms = answer->asked == static_cast<int>(odin::LibraryState::Folder::ROMS);
+
+						(roms ? options.rom_path : options.bios_path) = answer->folder;
+						keep_setting(settings, settings_file, "paths", roms ? "roms" : "bios", answer->folder);
+						scan_library(state, games, options, state.games.empty() ? std::string() :
+						             state.games[static_cast<size_t>(state.selected)].name);
+					}
+					continue;
+				}
+				if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat) {
+					const auto action = hotkeys.key_action(event.key.key, event.key.mod);
+
+					if (action == odin::Hotkeys::Action::QUIT)
+						return {};
+					if (action == odin::Hotkeys::Action::FULLSCREEN) {
+						display.toggle_fullscreen();
+						continue;
+					}
+				}
+				display.menu_event(event);
+			} while (SDL_PollEvent(&event));
 		}
-		if (event.type == SDL_EVENT_WINDOW_EXPOSED || event.type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED)
-			display.show_black();
+		display.draw_library(state);
+		if (state.play)
+			return *state.play;
+		if (state.choose != odin::LibraryState::Folder::NONE) {
+			const bool roms = state.choose == odin::LibraryState::Folder::ROMS;
+
+			dialog.ask(display.window(), roms || options.bios_path.empty() ? options.rom_path : options.bios_path,
+			           static_cast<int>(state.choose));
+			state.choose = odin::LibraryState::Folder::NONE;
+		}
+		state.choosing = dialog.open();
 	}
 }
 
@@ -1988,15 +2065,26 @@ main(int argc, char **argv)
 		list = comma == std::string::npos ? "" : list.substr(comma + 1);
 	}
 
-	std::string name = options.game;
+	/* Without a game, the library: a game chosen there goes back to it
+	 * when it ends, but by the hotkey that quits */
+	std::string name = options.game, last, failed;
 	for (size_t played = 0;; played++) {
-		if (name.empty()) {
-			wait_without_game(*display, settings);
-			return 0;
+		const bool chosen = name.empty();
+
+		if (chosen) {
+			name = library(options, games, settings, settings_file, *display, last, failed);
+			if (name.empty())
+				return 0;
 		}
 
 		const Ended ended = play(options, name, games, settings, settings_file, *display, keys);
 
+		if (chosen && ended != Ended::QUIT) {
+			failed = ended == Ended::FAILED ? name : "";
+			last = name;
+			name.clear();
+			continue;
+		}
 		if (ended == Ended::FAILED)
 			return 1;
 		if (ended == Ended::QUIT || played >= next.size())
