@@ -17,7 +17,8 @@
  */
 
 /* The bar over the game (mock-up v3, Atelier), in the palette of the menu:
- * the rune and ODIN, the six menus, the game and its speed at the right.
+ * the rune in its gold and ODIN, the six menus, the game and its speed at
+ * the right.
  * The menu open has the accent under its name. */
 
 #include "odin/menu.hpp"
@@ -163,7 +164,7 @@ Menu::bar(BarState &state)
 		list->AddLine({ top.x, bottom - kit.stroke() / 2.0f }, { top.x + size.x, bottom - kit.stroke() / 2.0f }, p.line,
 		              kit.stroke());
 		/* ᚨ ODIN */
-		MenuKit::icon(list, MenuKit::Icon::RUNE, { x, top.y + (size.y - rune) / 2.0f }, rune, p.accent);
+		MenuKit::icon(list, MenuKit::Icon::RUNE, { x, top.y + (size.y - rune) / 2.0f }, rune, LOGO_GOLD);
 		MenuKit::write(list, { x + rune + kit.px(4.0f), top.y + (size.y - line) / 2.0f }, p.ink, "ODIN", logo_size,
 		               logo_spacing);
 		ImGui::SetCursorScreenPos({ x + rune + kit.px(4.0f) + MenuKit::measure("ODIN", logo_size, logo_spacing) +

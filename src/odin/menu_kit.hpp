@@ -26,6 +26,7 @@
 #include <vector>
 
 #include "imgui/imgui.h"
+#include "odin/logo.hpp"
 
 namespace odin {
 
@@ -43,6 +44,9 @@ struct MenuPalette {
 	ImU32 body, part, stroke, arrow;
 	ImU32 cabinet, cabinet_stroke, cabinet_detail;
 };
+
+/* The gold of the logo (logo.hpp) */
+inline constexpr ImU32 LOGO_GOLD = IM_COL32(RUNE_GOLD[0], RUNE_GOLD[1], RUNE_GOLD[2], 0xFF);
 
 /* Rúnasteinn, the palette by default: granite and the red ochre of painted
  * runestones. The frame lets the game show through, at a fifth. */

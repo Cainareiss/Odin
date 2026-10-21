@@ -589,10 +589,8 @@ MenuKit::icon(ImDrawList *list, Icon icon, ImVec2 at, float side, ImU32 colour)
 		list->PathStroke(colour, ImDrawFlags_None, w);
 		break;
 	case Icon::RUNE:
-		/* ᚨ, ansuz: a stem and two branches down to the right */
-		list->AddLine(p(8, 2), p(8, 22), colour, w);
-		list->AddLine(p(8, 3), p(16, 9), colour, w);
-		list->AddLine(p(8, 9), p(16, 15), colour, w);
+		for (const auto &[x1, y1, x2, y2] : RUNE_LINES)
+			list->AddLine(p(x1, y1), p(x2, y2), colour, w);
 		break;
 	}
 }

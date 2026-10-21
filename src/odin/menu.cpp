@@ -842,8 +842,8 @@ Menu::help(int page, const MenuState &state)
 	}
 }
 
-/* About: the rune, Odin and the commit it is built from, in the middle;
- * the libraries it is made with */
+/* About: the rune in its gold, Odin and the commit it is built from, in
+ * the middle; the libraries it is made with */
 void
 Menu::page_about(MenuKit &kit) const
 {
@@ -857,7 +857,7 @@ Menu::page_about(MenuKit &kit) const
 	const char *const version = odin_version();
 	float y = at.y + kit.px(10.0f);
 
-	MenuKit::icon(list, MenuKit::Icon::RUNE, { mid - rune / 2.0f, y }, rune, palette.ink);
+	MenuKit::icon(list, MenuKit::Icon::RUNE, { mid - rune / 2.0f, y }, rune, LOGO_GOLD);
 	y += rune + kit.px(6.0f);
 	MenuKit::write(list, { mid - MenuKit::measure("ODIN", big, letters) / 2.0f, y }, palette.ink, "ODIN", big, letters);
 	y += big + kit.px(6.0f);

@@ -35,6 +35,7 @@
 
 #include "odin/env.hpp"
 #include "odin/keyboard.hpp"
+#include "odin/logo.hpp"
 #include "odin/menu.hpp"
 #include "odin/renderer.hpp"
 #include "odin/renderer_gl.hpp"
@@ -176,6 +177,44 @@ find_program_lists(const std::string &game, std::string &seed, std::string &kept
 	kept = dir + "/" + game + ".txt";
 }
 
+/* The logo in the bar of the window and in the task bar: the rune in its
+ * gold, its lines bolder than the menu draws them, nearly as high as the
+ * picture; each pixel as opaque as the lines cover it */
+void
+set_icon(SDL_Window *window)
+{
+	constexpr int SIDE = 64;
+	constexpr float STROKE = 3.0f, HEIGHT = 0.92f;
+	/* The stem is 20 of the square of 24 high; the middle of the square
+	 * in the middle of the picture */
+	constexpr float K = SIDE * HEIGHT / 20.0f, FROM = SIDE / 2.0f - 12.0f * K, RADIUS = STROKE * K / 2.0f;
+	SDL_Surface *const icon = SDL_CreateSurface(SIDE, SIDE, SDL_PIXELFORMAT_RGBA32);
+
+	if (!icon)
+		return;
+	for (int y = 0; y < SIDE; y++) {
+		auto *const row = static_cast<uint8_t *>(icon->pixels) + static_cast<size_t>(y) * static_cast<size_t>(icon->pitch);
+
+		for (int x = 0; x < SIDE; x++) {
+			const float px = static_cast<float>(x) + 0.5f, py = static_cast<float>(y) + 0.5f;
+			float nearest = SIDE;
+
+			for (const auto &[x1, y1, x2, y2] : RUNE_LINES) {
+				const float ax = FROM + x1 * K, ay = FROM + y1 * K, dx = (x2 - x1) * K, dy = (y2 - y1) * K;
+				const float t = std::clamp(((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy), 0.0f, 1.0f);
+
+				nearest = std::min(nearest, std::hypot(px - ax - t * dx, py - ay - t * dy));
+			}
+			for (int c = 0; c < 3; c++)
+				row[x * 4 + c] = RUNE_GOLD[c];
+			row[x * 4 + 3] = static_cast<uint8_t>(std::lround(255.0f * std::clamp(RADIUS - nearest + 0.5f, 0.0f, 1.0f)));
+		}
+	}
+	if (!SDL_SetWindowIcon(window, icon))
+		std::fprintf(stderr, "ERROR: no icon for the window: '%s'\n", SDL_GetError());
+	SDL_DestroySurface(icon);
+}
+
 /* The window and its OpenGL 4.3 context, current on the calling thread. */
 bool
 open_window(SDL_Window *&window, SDL_GLContext &context)
@@ -215,6 +254,7 @@ open_window(SDL_Window *&window, SDL_GLContext &context)
 	}
 	/* Never smaller than the screen of the board: the menu is made for it */
 	SDL_SetWindowMinimumSize(window, Renderer::WIDTH, Renderer::HEIGHT);
+	set_icon(window);
 	SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
 
 	context = SDL_GL_CreateContext(window);
