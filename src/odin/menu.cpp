@@ -99,6 +99,10 @@ constexpr MenuKit::Icon TAB_ICONS[] = { MenuKit::Icon::INPUT, MenuKit::Icon::DIS
 /* A window this many times wider than high takes the large menu; a
  * narrower one has the names of the tabs not chosen left out */
 constexpr float WIDE = 1.5f;
+/* The letters take the next whole factor that much below it: larger
+ * sooner, as the window is larger (the drawings of the page Input already
+ * are, at 1600 by 900) */
+constexpr float LETTERS_UP = 0.45f;
 
 /* The size of the menu in a window of that size, and the size it is made
  * for */
@@ -357,8 +361,8 @@ Menu::navigate(MenuState &state)
  * much as the menu made for 640 by 480, or 960 by 540 in a wide window,
  * takes to fill its share one way, the other way given the room left;
  * never smaller. In points: the pixels of a dense display are SDL's. Its
- * letters, drawn by pixels, grow by the nearest whole factor in the pixels
- * of the display, so that each stays a square of whole pixels. */
+ * letters, drawn by pixels, grow by a whole factor in the pixels of the
+ * display (LETTERS_UP), so that each stays a square of whole pixels. */
 void
 Menu::follow_scale()
 {
@@ -377,7 +381,7 @@ Menu::follow_scale()
 
 	style = m_style;
 	style.ScaleAllSizes(scale);
-	style.FontScaleDpi = std::max(1.0f, std::round(scale * density)) / density;
+	style.FontScaleDpi = std::max(1.0f, std::floor(scale * density + 1.0f - LETTERS_UP)) / density;
 	m_scale = scale;
 	m_density = density;
 }
