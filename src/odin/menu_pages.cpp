@@ -341,7 +341,7 @@ route_line(const MenuKit &kit, ImVec2 p, ImVec2 q, bool on, const std::string &l
 	if (level.empty())
 		return;
 
-	const float size = ImGui::GetFontSize() * 0.75f;
+	const float size = MenuKit::font(0.75f);
 	const ImVec2 text = ImGui::GetFont()->CalcTextSizeA(size, FLT_MAX, 0.0f, level.c_str());
 	const ImVec2 at = { mid - text.x / 2.0f, (p.y + q.y) / 2.0f - text.y - kit.px(3.0f) };
 

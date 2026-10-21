@@ -341,11 +341,14 @@ Pen::text(float x, float y, const char *text, Align align, float size, bool ink,
 
 	const MenuPalette &palette = m_kit.palette();
 	const ImU32 colour = lit() ? palette.accent : ink ? palette.ink : palette.cabinet;
-	const float screen_size = size * m_scale;
+	/* Drawn at the size of the font that is nearest, the place kept */
+	const float screen_size = MenuKit::text_size(size * m_scale);
+	const ImVec2 shown = font->CalcTextSizeA(screen_size, 1e9f, 0.0f, text);
+	const float shown_shift = align == Align::LEFT ? 0.0f : align == Align::CENTRE ? shown.x / 2.0f : shown.x;
 
 	if (!turned) {
 		const ImVec2 o = m_map({ x, y });
-		const ImVec2 p = { m_origin.x + (o.x - shift) * m_scale, m_origin.y + (o.y - measure.y * 0.8f) * m_scale };
+		const ImVec2 p = { m_origin.x + o.x * m_scale - shown_shift, m_origin.y + o.y * m_scale - shown.y * 0.8f };
 
 		m_list->AddText(font, screen_size, p, colour, text);
 		return;
@@ -360,7 +363,7 @@ Pen::text(float x, float y, const char *text, Align align, float size, bool ink,
 	const int first = m_list->VtxBuffer.Size;
 
 	m_list->PushClipRectFullScreen();
-	m_list->AddText(font, screen_size, { pivot.x - shift * m_scale, pivot.y - measure.y * 0.8f * m_scale }, colour, text);
+	m_list->AddText(font, screen_size, { pivot.x - shown_shift, pivot.y - shown.y * 0.8f }, colour, text);
 	m_list->PopClipRect();
 	for (int v = first; v < m_list->VtxBuffer.Size; v++) {
 		ImVec2 &q = m_list->VtxBuffer[v].pos;

@@ -41,6 +41,7 @@ OBJ := \
 	src/odin/menu_kit.o \
 	src/odin/menu_nav.o \
 	src/odin/menu_pictures.o \
+	src/odin/menu_fonts.o \
 	src/odin/system_fonts.o \
 	src/odin/rom_files.o \
 	src/odin/folder_dialog.o \
@@ -166,6 +167,10 @@ src/odin/rom_files.o: CXXFLAGS += -isystem src/miniz -isystem src/lzma
 
 # The pictures of the menu, put in the binary as their files are
 src/odin/menu_pictures.o: src/odin/menu_pictures.S $(wildcard src/odin/pictures/*.png)
+	$(CXX) -c $< -o $@ -Wa,-I,src/odin
+
+# The font of the menu, the same way
+src/odin/menu_fonts.o: src/odin/menu_fonts.S src/odin/fonts/cozette.ttf
 	$(CXX) -c $< -o $@ -Wa,-I,src/odin
 
 -include $(patsubst %.o,%.d,$(OBJ) $(IMGUI_OBJ) $(ARCHIVE_OBJ))

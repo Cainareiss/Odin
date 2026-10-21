@@ -43,6 +43,8 @@ PICTURE(upscale_1) PICTURE(upscale_2) PICTURE(upscale_3) PICTURE(upscale_4) PICT
 PICTURE(filter_1) PICTURE(filter_2) PICTURE(filter_4) PICTURE(filter_8) PICTURE(filter_16) PICTURE(screen)
 PICTURE(whole) PICTURE(torn)
 #undef PICTURE
+/* The font of the menu (menu_fonts.S) */
+extern "C" const unsigned char odin_font_cozette[], odin_font_cozette_end[];
 
 namespace odin {
 
@@ -124,6 +126,7 @@ constexpr const char *LICENCES[][3] = {
 	{ "miniz", "Rich Geldreich, RAD Game Tools, Valve", "MIT" },
 	{ "LZMA SDK", "Igor Pavlov", "public domain" },
 	{ "Gamepad drawings", "AL2009man, Gamepad-Asset-Pack", "MIT" },
+	{ "Cozette", "the-moonwitch", "MIT" },
 };
 
 ImVec4
@@ -353,7 +356,9 @@ Menu::navigate(MenuState &state)
 /* The menu grows with the window, by one factor for all (mock-up v50): as
  * much as the menu made for 640 by 480, or 960 by 540 in a wide window,
  * takes to fill its share one way, the other way given the room left;
- * never smaller. In points: the pixels of a dense display are SDL's. */
+ * never smaller. In points: the pixels of a dense display are SDL's. Its
+ * letters, drawn by pixels, grow by the nearest whole factor in the pixels
+ * of the display, so that each stays a square of whole pixels. */
 void
 Menu::follow_scale()
 {
@@ -363,57 +368,50 @@ Menu::follow_scale()
 
 	const auto [size, made] = menu_size(static_cast<float>(w), static_cast<float>(h));
 	const float scale = std::max(1.0f, std::min(size.x / made.x, size.y / made.y));
+	const float density = std::max(1.0f, SDL_GetWindowPixelDensity(m_window));
 
-	if (scale == m_scale)
+	if (scale == m_scale && density == m_density)
 		return;
 
 	ImGuiStyle &style = ImGui::GetStyle();
 
 	style = m_style;
 	style.ScaleAllSizes(scale);
-	style.FontScaleDpi = scale;
+	style.FontScaleDpi = std::max(1.0f, std::round(scale * density)) / density;
 	m_scale = scale;
+	m_density = density;
 }
 
-/* The font of Dear ImGui, as it chooses it, but at each frame: drawn by
- * pixels while its letters are under 15 pixels high, by outlines from
- * there (the size of the window may change). Behind each, for the letters
- * it lacks (it has those of Latin-1), the fonts of the system: those of
- * most languages (a folder named in Russian, in Japanese...). Both made
- * once, where Dear ImGui would take its own. */
+/* Once, where Dear ImGui would take its own font: Cozette (menu_fonts.S),
+ * drawn by pixels, 13 high, each letter on whole pixels; behind it, for the
+ * letters it lacks (it has Latin, Greek, Cyrillic and Vietnamese), the
+ * fonts of the system: those of most other languages (a folder named in
+ * Japanese...) */
 void
-Menu::follow_fonts()
+Menu::add_fonts()
 {
-	static constexpr float OUTLINES_FROM = 15.0f;
-	ImGuiIO &io = ImGui::GetIO();
-	const ImGuiStyle &style = ImGui::GetStyle();
+	static constexpr float COZETTE_SIZE = 13.0f;
+	ImFontAtlas &fonts = *ImGui::GetIO().Fonts;
+	ImFontConfig pixels;
+	std::string names;
 
-	if (!m_pixel_font) {
-		ImFontAtlas &fonts = *io.Fonts;
-		std::string names;
+	if (fonts.Sources.Size)
+		return;
+	pixels.FontDataOwnedByAtlas = false;
+	pixels.PixelSnapH = true;
+	pixels.OversampleH = pixels.OversampleV = 1;
+	fonts.AddFontFromMemoryTTF(const_cast<unsigned char *>(odin_font_cozette),
+	                           static_cast<int>(odin_font_cozette_end - odin_font_cozette), COZETTE_SIZE, &pixels);
+	m_fonts = std::make_unique<SystemFonts>();
+	for (const SystemFonts::Font &font : m_fonts->fonts()) {
+		ImFontConfig more;
 
-		m_fonts = std::make_unique<SystemFonts>();
-		for (const bool outlines : { false, true }) {
-			(outlines ? m_outline_font : m_pixel_font) = outlines ? fonts.AddFontDefaultVector() : fonts.AddFontDefaultBitmap();
-			for (const SystemFonts::Font &font : m_fonts->fonts()) {
-				ImFontConfig more;
-
-				more.MergeMode = true;
-				more.FontDataOwnedByAtlas = false;
-				fonts.AddFontFromMemoryTTF(const_cast<unsigned char *>(font.data), static_cast<int>(font.size), 0.0f,
-				                           &more);
-				if (!outlines)
-					names += (names.empty() ? "" : ", ") + font.path;
-			}
-		}
-		std::printf("menu: letters of other languages from %s\n", names.empty() ? "no font of the system" : names.c_str());
+		more.MergeMode = true;
+		more.FontDataOwnedByAtlas = false;
+		fonts.AddFontFromMemoryTTF(const_cast<unsigned char *>(font.data), static_cast<int>(font.size), 0.0f, &more);
+		names += (names.empty() ? "" : ", ") + font.path;
 	}
-
-	/* In pixels of the display, as Dear ImGui reckons it */
-	const float size = (style.FontSizeBase > 0.0f ? style.FontSizeBase : 13.0f) * style.FontScaleMain * style.FontScaleDpi *
-	                   (io.DisplayFramebufferScale.x > 0.0f ? io.DisplayFramebufferScale.x : 1.0f);
-
-	io.FontDefault = size < OUTLINES_FROM ? m_pixel_font : m_outline_font;
+	std::printf("menu: letters of other languages from %s\n", names.empty() ? "no font of the system" : names.c_str());
 }
 
 /* The frame in the middle of the window: the tabs at the top, the page
@@ -425,7 +423,7 @@ Menu::build(MenuState &state)
 	follow_scale();
 	navigate(state);
 	ImGui_ImplSDL3_NewFrame();
-	follow_fonts();
+	add_fonts();
 	ImGui::NewFrame();
 	close_bar_menus();
 
@@ -469,8 +467,8 @@ Menu::build(MenuState &state)
 	const char keys[] = "Esc: back to the game    Ctrl+Q: quit";
 	const float keys_w = ImGui::CalcTextSize(keys).x, help_w = std::max(0.0f, w - 3.0f * pad - keys_w);
 	const std::string help = m_page == INPUT ? std::string() : this->help(m_page, state);
-	const float foot = m_page == INPUT ? input_foot(kit, state, {}, help_w, 0.0f, false) :
-	                   std::max(line, ImGui::CalcTextSize(help.c_str(), nullptr, false, help_w).y);
+	const float help_h = m_page == INPUT ? 0.0f : ImGui::CalcTextSize(help.c_str(), nullptr, false, help_w).y;
+	const float foot = m_page == INPUT ? input_foot(kit, state, {}, help_w, 0.0f, false) : std::max(line, help_h);
 	const float foot_top = b.y - foot_pad - foot;
 
 	ImGui::BeginChild("page", { 0.0f, foot_top - foot_pad - ImGui::GetCursorScreenPos().y }, ImGuiChildFlags_None,
@@ -503,7 +501,7 @@ Menu::build(MenuState &state)
 	if (m_page == INPUT)
 		input_foot(kit, state, { a.x + pad, foot_top }, keys_shown ? help_w : w - 2.0f * pad, foot, true);
 	else
-		list->AddText(ImGui::GetFont(), ImGui::GetFontSize(), { a.x + pad, foot_top + (foot - line) / 2.0f },
+		list->AddText(ImGui::GetFont(), ImGui::GetFontSize(), { a.x + pad, foot_top + (foot - help_h) / 2.0f },
 		              palette.dim, help.c_str(), nullptr, help_w);
 	if (keys_shown)
 		list->AddText({ b.x - pad - keys_w, foot_top + (foot - line) / 2.0f }, palette.faint, keys);
@@ -674,7 +672,6 @@ Menu::preview(const MenuKit &kit, const MenuState &state, int which, ImVec2 a, I
 	const MenuPalette &palette = kit.palette();
 	const auto faded = [shown](ImU32 colour) { return MenuKit::alpha(colour, shown); };
 	const float pad = kit.px(16.0f), caps = MenuKit::font(MenuKit::SMALL), note = MenuKit::font(MenuKit::NOTE);
-	const float size = ImGui::GetFontSize();
 	const ImVec2 lo = { a.x + pad, a.y + pad }, hi = { b.x - pad, b.y - pad };
 	const float width = hi.x - lo.x, mid = (lo.x + hi.x) / 2.0f;
 	/* A text centred where it fits on a line, else wrapped in the width;
@@ -737,7 +734,7 @@ Menu::preview(const MenuKit &kit, const MenuState &state, int which, ImVec2 a, I
 	switch (which) {
 	case PREVIEW_CARD: {
 		const char *const name = state.gpu.empty() ? "not known yet" : state.gpu.c_str();
-		const float big = size * 1.3f;
+		const float big = MenuKit::font(1.3f);
 		const float name_h = ImGui::GetFont()->CalcTextSizeA(big, FLT_MAX, width, name).y;
 		float y = lo.y + std::max(0.0f, (hi.y - lo.y - caps - name_h - note - kit.px(22.0f)) / 2.0f);
 
@@ -805,10 +802,10 @@ Menu::preview(const MenuKit &kit, const MenuState &state, int which, ImVec2 a, I
 		picture(list, SCREEN, { wa.x, wa.y + bar }, wb, shown);
 		if (bar > 0.0f) {
 			const char *const title = state.show_speed ? "Odin (60.0 FPS)" : "Odin";
-			const float title_size = std::min(note, bar * 0.8f);
+			const float title_size = MenuKit::text_size(std::min(note, bar * 0.8f));
 
 			list->AddRectFilled(wa, { wb.x, wa.y + bar }, faded(palette.part));
-			if (MenuKit::measure(title, title_size) < wb.x - wa.x - kit.px(8.0f))
+			if (title_size <= bar && MenuKit::measure(title, title_size) < wb.x - wa.x - kit.px(8.0f))
 				list->AddText(ImGui::GetFont(), title_size, { wa.x + kit.px(4.0f), wa.y + (bar - title_size) / 2.0f },
 				              faded(palette.dim), title);
 			list->AddRect(wa, wb, faded(palette.outline), 0.0f, ImDrawFlags_None, kit.stroke());

@@ -101,8 +101,17 @@ public:
 	float px(float points) const { return points * m_scale; }
 	/* A stroke of one point, in whole pixels: as thick as the menu grows */
 	float stroke() const { return std::max(1.0f, std::round(m_scale)); }
-	/* That share of the font, in pixels */
-	static float font(float share) { return ImGui::GetFontSize() * share; }
+	/* That share of the font, in pixels. Its letters are drawn by pixels:
+	 * a size is a whole number of times the font's, at least once (the
+	 * texts smaller and larger in the mock-up are drawn at its size or
+	 * twice it; their colours tell them apart). */
+	static float font(float share) { return text_size(ImGui::GetFontSize() * share); }
+	static float text_size(float size)
+	{
+		const float font = ImGui::GetFontSize();
+
+		return font * std::max(1.0f, std::round(size / font));
+	}
 	/* A colour with that share of its opacity */
 	static ImU32 alpha(ImU32 colour, float share);
 

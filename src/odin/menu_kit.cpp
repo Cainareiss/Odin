@@ -1078,7 +1078,7 @@ MenuKit::arrow(const char *id, ImVec2 at, bool right) const
 	ImDrawList *const list = ImGui::GetWindowDrawList();
 	const ImVec2 size = arrow_size(), b = { at.x + size.x, at.y + size.y };
 	const char *const sign = right ? "›" : "‹";
-	const float big = ImGui::GetFontSize() * 1.15f;
+	const float big = font(1.15f);
 
 	ImGui::SetCursorScreenPos(at);
 

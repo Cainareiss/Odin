@@ -301,7 +301,7 @@ PadView::draw(ImDrawList *list, const MenuPalette &palette, const PadState &now,
 			std::snprintf(text, sizeof text, "%d %%", static_cast<int>(std::lround(v * 100.0f)));
 
 			const Move m = move(part, now);
-			const float size = part.spot[2] * m_scale;
+			const float size = MenuKit::text_size(part.spot[2] * m_scale);
 			const ImVec2 size_text = ImGui::GetFont()->CalcTextSizeA(size, 1e9f, 0.0f, text);
 			const ImVec2 base = at(part.spot[0], part.spot[1]);
 			const ImU32 colour = part.inside && v > 0.45f ? palette.on_accent :

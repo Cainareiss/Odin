@@ -128,7 +128,7 @@ Menu::build_library(LibraryState &state)
 	ImGui::SetCurrentContext(m_imgui);
 	follow_scale();
 	ImGui_ImplSDL3_NewFrame();
-	follow_fonts();
+	add_fonts();
 	ImGui::NewFrame();
 	close_bar_menus();
 
@@ -261,7 +261,7 @@ Menu::build_library(LibraryState &state)
 	if (count) {
 		const LibraryState::Game &game = state.games[static_cast<size_t>(state.selected)];
 
-		y += wrapped(list, { x, y }, width, size * SHEET_TITLE, palette.ink, game.title) + kit.px(4.0f);
+		y += wrapped(list, { x, y }, width, MenuKit::font(SHEET_TITLE), palette.ink, game.title) + kit.px(4.0f);
 		list->AddText({ x, y }, palette.faint, game.name.c_str());
 		y += line + kit.px(8.0f);
 		list->AddLine({ x, y }, { x + width, y }, palette.line, kit.stroke());
