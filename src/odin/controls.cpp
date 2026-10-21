@@ -32,7 +32,7 @@ namespace odin {
 
 Controls::Controls(Keyboard &keys, const std::vector<GameControl> &controls, const std::vector<GameOutput> &outputs,
                    const Settings &settings, const std::string &game)
-	: m_keys(keys), m_settings(settings), m_game_controls(controls), m_game(game), m_panel(controls, settings, game), m_outputs(outputs), m_on(false), m_mouse_seen(false),
+	: m_keys(keys), m_settings(settings), m_game_controls(controls), m_game(game), m_panel(controls, settings, game), m_outputs(outputs), m_on(false), m_cursor_hidden(false), m_mouse_seen(false),
 	  m_mouse_placed(false), m_mouse_from_x(0), m_mouse_from_y(0), m_mouse_fresh{}, m_mouse_release{}
 {
 	for (const GameControl &control : controls)
@@ -58,11 +58,16 @@ Controls::Controls(Keyboard &keys, const std::vector<GameControl> &controls, con
 	m_on = true;
 	for (const GameControl &control : controls)
 		if (control.role == Role::GUN_X && control.player == 0)
-			SDL_HideCursor();
+			m_cursor_hidden = true;
+	if (m_cursor_hidden)
+		SDL_HideCursor();
 }
 
+/* The next game, or the window without one, finds the cursor as it was */
 Controls::~Controls()
 {
+	if (m_cursor_hidden)
+		SDL_ShowCursor();
 	if (!m_on)
 		return;
 	for (Pad &pad : m_pads)

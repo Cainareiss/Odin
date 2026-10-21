@@ -560,6 +560,7 @@ private:
 	 * Start mapping: a choice of the emulator */
 	static constexpr Uint64 SKIP_HOLD_MS = 1000;
 
+	bool frames();
 	bool process_events();
 	/* What Odin does on a hotkey in the game: true to quit */
 	bool act(odin::Hotkeys::Action action);
@@ -1710,6 +1711,17 @@ Session::limit_frame_rate()
 
 bool
 Session::run()
+{
+	const bool quit = frames();
+
+	/* The next game, or the window without one, finds the menu closed */
+	if (m_display.menu_shown())
+		close_menu();
+	return quit;
+}
+
+bool
+Session::frames()
 {
 	while (!process_events()) {
 		if (m_options.num_frames > 0 && m_board.frame() >= m_options.num_frames)

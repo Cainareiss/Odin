@@ -171,6 +171,7 @@ private:
 	ControlPanel m_panel;
 	std::vector<GameOutput> m_outputs;
 	bool m_on;
+	bool m_cursor_hidden;	/* the mouse aims in the game: no cursor */
 	bool m_guide_tapped = false;
 	int m_guide_combo = -1;
 	bool m_rumble = true;
