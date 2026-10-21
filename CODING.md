@@ -10,8 +10,9 @@ written so that everyone knows what to do.
 - All the code is C++20, in the sober subset described in section 3.
 - Build flags: `-std=c++20 -Wall -Wextra -Wpedantic -Wconversion
   -Wshadow`. Every file compiles warning-free. No compiler extensions.
-  Dear ImGui (`src/imgui`) is not ours: it is kept as it comes and built
-  with its own flags.
+  Dear ImGui (`src/imgui`), miniz (`src/miniz`) and the LZMA SDK
+  (`src/lzma`) are not ours: they are kept as they come and built with
+  their own flags.
 
 ## 2. One class per chip
 
@@ -51,9 +52,11 @@ Not allowed:
   devices.
 - Type punning through pointer casts. Use `std::bit_cast` or `memcpy`.
 - Boost or any other third-party library. Dependencies stay SDL3,
-  OpenGL 4.3 core with GLEW, and jansson. The one exception is Dear
-  ImGui, which draws the menu: its core and its SDL3 and OpenGL 3
-  backends, copied into `src/imgui` from a release, unchanged.
+  OpenGL 4.3 core with GLEW, and jansson. The exceptions are copied from
+  a release, unchanged: Dear ImGui, which draws the menu (its core and
+  its SDL3 and OpenGL 3 backends, `src/imgui`); miniz and the 7z reader
+  of the LZMA SDK, which read the archives of the games (`src/miniz`,
+  `src/lzma`).
 
 ## 4. Hardware rules (what LLE means here)
 
@@ -141,5 +144,8 @@ Not allowed:
   copyright. Credit stays where it belongs.
 - Dear ImGui keeps its MIT licence and its copyright holders
   (`src/imgui/LICENSE.txt`).
+- miniz keeps its MIT licence and its copyright holders
+  (`src/miniz/LICENSE`); the LZMA SDK is in the public domain
+  (`src/lzma/lzma-sdk.txt`).
 - The gamepad drawings made from AL2009man's Gamepad-Asset-Pack keep its
   MIT licence, written at the top of `src/odin/pad_drawings_al2009man.cpp`.

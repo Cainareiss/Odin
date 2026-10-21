@@ -1,4 +1,5 @@
 CXX := g++
+CC := gcc
 LD := g++
 
 SDL_CFLAGS := `pkg-config --cflags sdl3`
@@ -38,6 +39,7 @@ OBJ := \
 	src/odin/menu_kit.o \
 	src/odin/menu_nav.o \
 	src/odin/menu_pictures.o \
+	src/odin/archive.o \
 	src/odin/folder_dialog.o \
 	src/odin/pad_view.o \
 	src/odin/pad_drawings.o \
@@ -129,9 +131,20 @@ IMGUI_OBJ := \
 
 IMGUI_FLAGS := -std=c++20 -I src/imgui $(SDL_CFLAGS) $(OPT_FLAGS) $(PGO_FLAGS) $(DEP_FLAGS)
 
+# miniz and the 7z reader of the LZMA SDK as they come, for the archives of
+# the games: built without our warnings
+ARCHIVE_OBJ := \
+	src/miniz/miniz.o \
+	src/lzma/7zAlloc.o src/lzma/7zArcIn.o src/lzma/7zBuf.o src/lzma/7zBuf2.o src/lzma/7zCrc.o \
+	src/lzma/7zCrcOpt.o src/lzma/7zDec.o src/lzma/7zFile.o src/lzma/7zStream.o src/lzma/Bcj2.o \
+	src/lzma/Bra.o src/lzma/Bra86.o src/lzma/BraIA64.o src/lzma/CpuArch.o src/lzma/Delta.o \
+	src/lzma/Lzma2Dec.o src/lzma/LzmaDec.o src/lzma/Ppmd7.o src/lzma/Ppmd7Dec.o
+
+ARCHIVE_FLAGS := $(OPT_FLAGS) $(PGO_FLAGS) $(DEP_FLAGS)
+
 all: bin/odin
 
-bin/odin: $(OBJ) $(IMGUI_OBJ)
+bin/odin: $(OBJ) $(IMGUI_OBJ) $(ARCHIVE_OBJ)
 	$(LD) $+ -o $@ $(CXXFLAGS) $(LDFLAGS)
 
 %.o: %.cpp
@@ -140,11 +153,19 @@ bin/odin: $(OBJ) $(IMGUI_OBJ)
 src/imgui/%.o: src/imgui/%.cpp
 	$(CXX) -c $< -o $@ $(IMGUI_FLAGS)
 
+src/miniz/%.o: src/miniz/%.c
+	$(CC) -c $< -o $@ $(ARCHIVE_FLAGS)
+
+src/lzma/%.o: src/lzma/%.c
+	$(CC) -c $< -o $@ $(ARCHIVE_FLAGS)
+
+src/odin/archive.o: CXXFLAGS += -isystem src/miniz -isystem src/lzma
+
 # The pictures of the menu, put in the binary as their files are
 src/odin/menu_pictures.o: src/odin/menu_pictures.S $(wildcard src/odin/pictures/*.png)
 	$(CXX) -c $< -o $@ -Wa,-I,src/odin
 
--include $(patsubst %.o,%.d,$(OBJ) $(IMGUI_OBJ))
+-include $(patsubst %.o,%.d,$(OBJ) $(IMGUI_OBJ) $(ARCHIVE_OBJ))
 
 # A product is fused with a sum only where the code says std::fma.
 src/odin/sh4_ops.o: CXXFLAGS += -ffp-contract=off
