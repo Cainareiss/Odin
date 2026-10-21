@@ -588,6 +588,15 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 		if (kit.choice("Vertical sync", about, SYNCS, sync, nullptr, state.vsync_off != nullptr))
 			state.vsync = static_cast<unsigned>(sync);
 	});
+
+	static constexpr const char *SIDES[] = { "Off", "Blur", "Bezel" };
+	int sides = static_cast<int>(state.sides);
+
+	watch(PREVIEW_SCREEN, [&] {
+		if (kit.choice("Bezel", "where the window is wider than the game: black, the game blurred, or its "
+		               "picture in Artwork (swracer_bezel.png, page Paths)", SIDES, sides))
+			state.sides = static_cast<unsigned>(sides);
+	});
 	kit.end_group();
 
 	kit.begin_group("SPEED");

@@ -226,7 +226,7 @@ Controls::event(const SDL_Event &event)
 		int w = 0, h = 0;
 
 		SDL_GetWindowSize(SDL_GetWindowFromID(event.motion.windowID), &w, &h);
-		const PicturePoint point = picture_point(x, y, static_cast<unsigned>(w), static_cast<unsigned>(h));
+		const PicturePoint point = picture_point(x, y, static_cast<unsigned>(w), static_cast<unsigned>(h), m_hole);
 
 		m_mouse.x = point.x;
 		m_mouse.y = point.y;

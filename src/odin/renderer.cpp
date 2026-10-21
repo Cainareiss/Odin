@@ -273,7 +273,7 @@ Renderer::begin_frame()
 }
 
 void
-Renderer::take_frame(unsigned frame, unsigned window_w, unsigned window_h)
+Renderer::take_frame(unsigned frame, unsigned window_w, unsigned window_h, const PictureHole &hole)
 {
 	/* The command processor may still be in the middle of a mesh: draw
 	 * what it pushed so far and let it start a new mesh on the next
@@ -288,6 +288,7 @@ Renderer::take_frame(unsigned frame, unsigned window_w, unsigned window_h)
 	m_frame.layers = m_gpu->eurasia().layers();
 	m_frame.window_w = window_w;
 	m_frame.window_h = window_h;
+	m_frame.hole = hole;
 
 	update_debug();
 	for (unsigned i = 0; i < 2; i++)
@@ -306,7 +307,7 @@ Renderer::draw_frame()
 	forget_held();
 	show();
 	m_times.part(DrawTimes::PART_PRESENT);
-	present(m_frame.window_w, m_frame.window_h);
+	present(m_frame.window_w, m_frame.window_h, m_frame.hole);
 	gl::check("a frame");
 	m_times.part(DrawTimes::PART_SHOWN);
 
@@ -545,20 +546,21 @@ Renderer::compose()
 }
 
 /* The picture of the frame in the window: the largest rectangle of the
- * shape of the screen of the hardware that fits, in the middle, black
- * around (picture_rect, which the mouse reads too). A rectangle of the
- * size of the picture takes it pixel for pixel;
+ * shape of the screen of the hardware that fits, in the middle or in the
+ * hole of the bezel, black around (picture_rect, which the mouse reads
+ * too). A rectangle of the size of the picture takes it pixel for pixel;
  * any other takes for each of its pixels the mean of what it covers. */
 void
-Renderer::present(unsigned window_w, unsigned window_h)
+Renderer::present(unsigned window_w, unsigned window_h, const PictureHole &hole)
 {
-	const PictureRect rect = picture_rect(window_w, window_h);
+	const PictureRect rect = picture_rect(window_w, window_h, hole);
 	const unsigned w = rect.w, h = rect.h;
 
-	if (w == 0 || h == 0)
+	if (w == 0 || h == 0 || rect.x + w > window_w || rect.y + h > window_h)
 		return;
+	/* OpenGL counts from the bottom */
 	const GLint x = static_cast<GLint>(rect.x);
-	const GLint y = static_cast<GLint>(rect.y);
+	const GLint y = static_cast<GLint>(window_h - rect.y - h);
 	const GLint pw = static_cast<GLint>(width()), ph = static_cast<GLint>(height());
 
 	glDisable(GL_SCISSOR_TEST);

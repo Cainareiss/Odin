@@ -85,6 +85,9 @@ struct MenuState {
 	 * at all, 1 all, 2 those on time), frames without a limit (at the
 	 * next launch), the frames a second in the title */
 	unsigned scale = 1, anisotropy = 1, window = 1, vsync = 0;
+	/* Around the picture where the window is wider (Display::Sides: 0
+	 * black, 1 the picture blurred, 2 the bezel of the game) */
+	unsigned sides = 2;
 	bool fullscreen = false, unthrottled = false, show_speed = true;
 	/* Said on the command line: shown, not changed */
 	bool scale_given = false, anisotropy_given = false, window_given = false, fullscreen_given = false,

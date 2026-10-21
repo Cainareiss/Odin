@@ -31,6 +31,7 @@
 #include "odin/games.hpp"
 #include "odin/hikaru.hpp"
 #include "odin/keyboard.hpp"
+#include "odin/picture.hpp"
 
 namespace odin {
 
@@ -55,6 +56,9 @@ public:
 
 	/* An event of a gamepad or of the mouse; false for any other. */
 	bool event(const SDL_Event &event);
+	/* The mouse is read where the picture is: in the hole of the bezel
+	 * when there is one (picture.hpp) */
+	void set_picture_hole(const PictureHole &hole) { m_hole = hole; }
 	/* Once a frame, before it runs. */
 	void update();
 	/* While the menu is open: what was let go of is let go of, as a frame
@@ -190,6 +194,7 @@ private:
 	MouseState m_mouse;
 	bool m_mouse_seen;		/* it has moved on the window */
 	bool m_mouse_placed;		/* the system has told where it is */
+	PictureHole m_hole;
 	int m_mouse_from_x, m_mouse_from_y;	/* where */
 	std::array<bool, 3> m_mouse_fresh;
 	std::array<bool, 3> m_mouse_release;

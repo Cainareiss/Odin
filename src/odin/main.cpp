@@ -63,6 +63,9 @@ constexpr std::chrono::nanoseconds FRAME(1000000000 / 60);
 /* How the frames wait for the display by default, and the names of odin.ini */
 constexpr odin::Display::Vsync VSYNC = odin::Display::Vsync::OFF;
 constexpr const char *VSYNCS[] = { "off", "on", "adaptive" };
+/* Around the picture by default, and the names of odin.ini */
+constexpr odin::Display::Sides SIDES = odin::Display::Sides::BEZEL;
+constexpr const char *SIDES_NAMES[] = { "off", "blur", "image" };
 
 std::optional<odin::Display::Vsync>
 vsync_named(const std::string &name)
@@ -105,6 +108,8 @@ struct Options {
 	odin::Display::Options display = { 1, 1, 0, false, true, odin::Display::Vsync::OFF };
 	/* [display] vsync: the display gets it when the frames are paced */
 	odin::Display::Vsync vsync = VSYNC;
+	/* [display] bezel: around the picture */
+	odin::Display::Sides sides = SIDES;
 	/* What the command line says of the display: odin.ini does not change it */
 	struct {
 		bool scale = false, anisotropy = false, window = false, fullscreen = false, unthrottled = false;
@@ -260,6 +265,10 @@ read_display(const odin::Settings &settings, Options &options)
 			options.display.show_speed = on;
 		} else if (key == "vsync" && vsync_named(value)) {
 			options.vsync = *vsync_named(value);
+		} else if (key == "bezel" && std::find(std::begin(SIDES_NAMES), std::end(SIDES_NAMES), value) !=
+		                                     std::end(SIDES_NAMES)) {
+			options.sides = static_cast<odin::Display::Sides>(
+				std::find(std::begin(SIDES_NAMES), std::end(SIDES_NAMES), value) - std::begin(SIDES_NAMES));
 		} else {
 			std::fprintf(stderr, "ERROR: settings: [display]: not right: %s = %s\n", key.c_str(), value.c_str());
 		}
@@ -403,6 +412,7 @@ known_settings(const odin::GameList &games)
 	std::vector<odin::Settings::Known> out = {
 		{ "display", "scale", "1" }, { "display", "anisotropy", "1" }, { "display", "window", "1" },
 		{ "display", "fullscreen", "off" }, { "display", "vsync", VSYNCS[static_cast<unsigned>(VSYNC)] },
+		{ "display", "bezel", SIDES_NAMES[static_cast<unsigned>(SIDES)] },
 		{ "display", "unthrottled", "off" }, { "display", "show_speed", "on" },
 		{ "sound", "device", "" }, { "sound", "volume", "100" }, { "sound", "background", "on" },
 	};
@@ -484,6 +494,7 @@ public:
 		state.unthrottled = options.unthrottled;
 		state.show_speed = options.display.show_speed;
 		state.vsync = static_cast<unsigned>(options.vsync);
+		state.sides = static_cast<unsigned>(options.sides);
 		state.scale_given = options.given.scale;
 		state.anisotropy_given = options.given.anisotropy;
 		state.window_given = options.given.window;
@@ -504,7 +515,8 @@ public:
 		state.artwork = odin::artwork_folder(options.artwork);
 		const char *const artwork = std::getenv("ODIN_ARTWORK");
 		state.artwork_given = artwork && artwork[0];
-		display.set_bezel(odin::artwork_file(state.artwork, game.name, "bezel"));
+		display.set_sides(options.sides, odin::artwork_file(state.artwork, game.name, "bezel"));
+		controls.set_picture_hole(display.picture_hole());
 		state.shader_lists = std::filesystem::path(display.program_list()).parent_path().string();
 		state.verbose = options.verbose;
 		state.verbose_given = options.given.verbose;
@@ -1543,6 +1555,13 @@ Session::apply(const odin::MenuState &was)
 		m_display.resize(now.window);
 		keep("window", number(now.window, 1));
 	}
+	if (now.sides != was.sides) {
+		const auto sides = static_cast<odin::Display::Sides>(now.sides);
+
+		m_display.set_sides(sides, odin::artwork_file(now.artwork, m_game.name, "bezel"));
+		m_controls.set_picture_hole(m_display.picture_hole());
+		keep("bezel", sides == SIDES ? std::nullopt : std::optional<std::string>(SIDES_NAMES[now.sides]));
+	}
 	if (now.vsync != was.vsync) {
 		const auto vsync = static_cast<odin::Display::Vsync>(now.vsync);
 
@@ -1696,7 +1715,8 @@ Session::take_folder()
 	case Folder::ARTWORK:
 		state.artwork = folder;
 		keep("paths", "artwork", folder == odin::artwork_folder() ? std::nullopt : std::optional(folder));
-		m_display.set_bezel(odin::artwork_file(folder, m_game.name, "bezel"));
+		m_display.set_sides(static_cast<odin::Display::Sides>(state.sides), odin::artwork_file(folder, m_game.name, "bezel"));
+		m_controls.set_picture_hole(m_display.picture_hole());
 		break;
 	default:
 		break;

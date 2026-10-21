@@ -22,6 +22,7 @@
 #ifndef ODIN_DISPLAY_HPP
 #define ODIN_DISPLAY_HPP
 
+#include <atomic>
 #include <cstdint>
 #include <cstdio>
 #include <functional>
@@ -34,6 +35,7 @@
 #include <SDL3/SDL.h>
 
 #include "odin/hikaru.hpp"
+#include "odin/picture.hpp"
 
 namespace odin {
 
@@ -84,6 +86,10 @@ public:
 	 * each of them, or those on time (a late one is shown at once, so
 	 * that the game keeps its 60 a second) */
 	enum class Vsync : uint8_t { OFF, ON, ADAPTIVE };
+	/* Around the picture where the window is wider than it: black, the
+	 * picture itself blurred and dimmer, or the bezel of the game (black
+	 * without one) */
+	enum class Sides : uint8_t { OFF, BLUR, BEZEL };
 
 	struct Options {
 		unsigned scale;		/* the 3D that many times finer than the screen, 1 to 6 */
@@ -167,10 +173,13 @@ public:
 	/* The picture of the last frame in a PNG file, no larger than 640 by
 	 * 480 (the folder made): false, said on stderr, when it cannot be */
 	bool save_picture(const std::string &path);
-	/* A PNG laid over the window around the picture of the game where the
-	 * window is wider than the screen of the hardware, as large as the
-	 * window holds it, see-through where it is (empty: none) */
-	void set_bezel(const std::string &path);
+	/* What is around the picture; with BEZEL, a PNG laid over the window
+	 * where it is wider than the screen of the hardware, as large as the
+	 * window holds it, the picture in its hole (empty: none) */
+	void set_sides(Sides sides, const std::string &bezel);
+	/* The hole of the bezel, where the picture goes (none: no bezel, or
+	 * one with no see-through middle) */
+	const PictureHole &picture_hole() const { return m_hole; }
 	bool menu_popup_open() const;
 
 	/* Hikaru::Screen */
@@ -194,8 +203,10 @@ private:
 	void draw(bool late, unsigned window_w, unsigned window_h);
 	/* On the drawing thread: the bezel made a texture (none: forgotten),
 	 * then laid over the window */
+	void set_bezel(const std::string &path);
 	void make_bezel(SDL_Surface *rgba);
 	void draw_bezel(unsigned window_w, unsigned window_h);
+	void draw_blur(unsigned window_w, unsigned window_h);
 	void read_picture(uint8_t *pixels);
 	void screenshot();
 	void print_fingerprint();
@@ -228,8 +239,12 @@ private:
 	unsigned m_scale, m_anisotropy;
 	bool m_logged;
 	GLuint m_picture_fb;
-	GLuint m_bezel = 0, m_bezel_program = 0, m_bezel_vao = 0;
+	GLuint m_bezel = 0, m_bezel_program = 0, m_bezel_vao = 0, m_bezel_light = 0;
+	/* The sides blurred: the picture made smaller twice */
+	std::atomic<Sides> m_sides{ Sides::OFF };
+	GLuint m_blur_fb[2] = {}, m_blur_tex[2] = {};
 	float m_bezel_w = 0.0f, m_bezel_h = 0.0f;
+	PictureHole m_hole;
 	unsigned m_picture_width, m_picture_height;
 	/* The debug switches as text, for the title */
 	std::string m_message;

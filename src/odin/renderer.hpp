@@ -34,6 +34,7 @@
 
 #include "odin/antarctic_list.hpp"
 #include "odin/eurasia_layers.hpp"
+#include "odin/picture.hpp"
 #include "odin/renderer_programs.hpp"
 #include "odin/renderer_textures.hpp"
 #include "odin/renderer_times.hpp"
@@ -143,7 +144,7 @@ public:
 	 * next frame meanwhile. It must be over before the texture RAM is
 	 * written, and before any call but launch and begin_frame. */
 	void begin_frame();
-	void take_frame(unsigned frame, unsigned window_w, unsigned window_h);
+	void take_frame(unsigned frame, unsigned window_w, unsigned window_h, const PictureHole &hole = {});
 	void draw_frame();
 	/* The window has taken the picture of the frame: the times of its
 	 * drawing end there. */
@@ -231,6 +232,7 @@ private:
 		odin_fb_config_t fb;
 		odin_layers_t layers;
 		unsigned window_w, window_h;
+		PictureHole hole;	/* of the bezel, where the picture goes */
 	};
 
 	/* renderer.cpp */
@@ -244,7 +246,7 @@ private:
 	void draw_list();
 	void check_last_list();
 	void compose();
-	void present(unsigned window_w, unsigned window_h);
+	void present(unsigned window_w, unsigned window_h, const PictureHole &hole);
 
 	/* renderer_buffers.cpp */
 	unsigned width() const { return WIDTH * m_scale; }
