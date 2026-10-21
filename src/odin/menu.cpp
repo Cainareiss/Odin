@@ -121,6 +121,8 @@ constexpr const char *LICENCES[][3] = {
 	{ "SDL 3", "Sam Lantinga", "zlib" },
 	{ "GLEW", "Milan Ikits, Marcelo Magallon", "BSD / MIT" },
 	{ "Jansson", "Petri Lehtinen", "MIT" },
+	{ "miniz", "Rich Geldreich, RAD Game Tools, Valve", "MIT" },
+	{ "LZMA SDK", "Igor Pavlov", "public domain" },
 	{ "Gamepad drawings", "AL2009man, Gamepad-Asset-Pack", "MIT" },
 };
 
