@@ -17,8 +17,8 @@
  */
 
 /* The bar over the game and the library (mock-up v3, Atelier), in the
- * palette of the menu: the rune in its gold and ODIN, the six menus, the
- * game and its speed at the right.
+ * palette of the menu: the six menus, the game and its speed at the right;
+ * the rune and the name of Odin are those of the window.
  * The menu open has the accent under its name. */
 
 #include "odin/menu.hpp"
@@ -43,21 +43,17 @@ namespace odin {
 namespace {
 
 /* In points: the room around a name of the bar, between two, around the
- * items of a menu; the side of the rune and the room after ODIN; the cut
- * of the corners of a menu; the line of the accent under the menu open */
+ * items of a menu; the cut of the corners of a menu; the line of the
+ * accent under the menu open */
 constexpr float NAME_WIDE = 7.0f;
 constexpr float NAME_HIGH = 5.0f;
 constexpr float NAME_GAP = 10.0f;
 constexpr float ITEMS_INSIDE = 5.0f;
 constexpr float ITEM_HIGH = 3.0f;
-constexpr float RUNE = 14.0f;
-constexpr float AFTER_LOGO = 12.0f;
 constexpr float MENU_CUT = 6.0f;
 constexpr float ACCENT = 2.0f;
 /* The bar lets the game show through, a little */
 constexpr float BAR_ALPHA = 0.96f;
-/* ODIN, its letters that share of the font apart */
-constexpr float LOGO_SPACING = 0.3f;
 
 constexpr const char *NAMES[] = { "FILE", "INPUT", "VIDEO", "AUDIO", "DEBUG", "ABOUT" };
 constexpr const char *SIDES[] = { "Off", "Blur", "Bezel" };
@@ -156,19 +152,11 @@ Menu::bar(BarState &state)
 	if (ImGui::BeginMainMenuBar()) {
 		ImDrawList *const list = ImGui::GetWindowDrawList();
 		const ImVec2 top = ImGui::GetWindowPos(), size = ImGui::GetWindowSize();
-		const float bottom = top.y + size.y, rune = kit.px(RUNE), logo_size = ImGui::GetFontSize();
-		const float logo_spacing = logo_size * LOGO_SPACING;
-		const float x = ImGui::GetCursorScreenPos().x;
+		const float bottom = top.y + size.y;
 		int open = -1;
 
 		list->AddLine({ top.x, bottom - kit.stroke() / 2.0f }, { top.x + size.x, bottom - kit.stroke() / 2.0f }, p.line,
 		              kit.stroke());
-		/* ᚨ ODIN */
-		MenuKit::icon(list, MenuKit::Icon::RUNE, { x, top.y + (size.y - rune) / 2.0f }, rune, LOGO_GOLD);
-		MenuKit::write(list, { x + rune + kit.px(4.0f), top.y + (size.y - line) / 2.0f }, p.ink, "ODIN", logo_size,
-		               logo_spacing);
-		ImGui::SetCursorScreenPos({ x + rune + kit.px(4.0f) + MenuKit::measure("ODIN", logo_size, logo_spacing) +
-		                            kit.px(AFTER_LOGO), ImGui::GetCursorScreenPos().y });
 
 		for (int m = 0; m < static_cast<int>(std::size(NAMES)); m++) {
 			const float at = ImGui::GetCursorScreenPos().x + std::trunc(style.ItemSpacing.x * 0.5f);
