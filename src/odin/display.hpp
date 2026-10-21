@@ -91,7 +91,6 @@ public:
 		bool fullscreen;
 		bool show_speed;	/* the frames a second in the title */
 		Vsync vsync;
-		std::string title;	/* of the game, on its loading screen */
 	};
 
 	/* A display that shows fewer frames a second would hold the board
@@ -101,13 +100,20 @@ public:
 	 * display: the late ones catch up. */
 	static constexpr float LEAST_REFRESH = 59.92f;
 
-	/* The window of a board, which it becomes the screen of; nothing,
-	 * with the reason on stderr, if it cannot be opened. The board and
-	 * the keyboard outlive it. */
-	static std::unique_ptr<Display> make(Hikaru &board, const Keyboard &keys, const Options &options);
+	/* The window, black until a board is attached; nothing, with the
+	 * reason on stderr, if it cannot be opened. The keyboard outlives it. */
+	static std::unique_ptr<Display> make(const Keyboard &keys, const Options &options);
 	~Display();
 	Display(const Display &) = delete;
 	Display &operator=(const Display &) = delete;
+
+	/* The window becomes the screen of a board, the programs of its game
+	 * prepared behind the loading screen with its title; detach before
+	 * the board goes. Then the window is black again. */
+	void attach(Hikaru &board, const std::string &title);
+	void detach();
+	/* Black again, the board detached, when the window has to be drawn */
+	void show_black();
 
 	/* A frame of the board: begin_frame before the board runs it,
 	 * end_frame once it has, with its number, and whether it ended after
@@ -161,8 +167,7 @@ public:
 	bool load_pictures(StateFile &state) override;
 
 private:
-	Display(Hikaru &board, const Keyboard &keys, const Options &options, SDL_Window *window,
-	        SDL_GLContext context);
+	Display(const Keyboard &keys, const Options &options, SDL_Window *window, SDL_GLContext context);
 
 	void set_window(unsigned times, bool fullscreen);
 	void prepare_programs(const std::string &title);
@@ -179,7 +184,7 @@ private:
 	void show_speed();
 	void print_speed();
 
-	Hikaru &m_board;
+	Hikaru *m_board;	/* none: the window is black */
 	const Keyboard &m_keys;
 	SDL_Window *m_window;
 	std::string m_program_list;
@@ -189,7 +194,6 @@ private:
 	/* Made when it opens first */
 	std::unique_ptr<Menu> m_menu;
 	bool m_menu_shown;
-	std::string m_title;
 	std::string m_gpu;
 	bool m_show_speed;
 	Vsync m_vsync;

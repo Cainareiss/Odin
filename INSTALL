@@ -19,7 +19,8 @@ RUNNING
 
  $ bin/odin -R <ROM directory> -r <game>
 
-(-R may be left out once the menu, page Paths, keeps the folder: roms in
+(Without options, Odin opens its window, black, and waits; Ctrl+Q quits.
+-R may be left out once the menu, page Paths, keeps the folder: roms in
 [paths] of odin.ini.) The games are those of odin-games.json: airtrix, braveff, pharrier, podrace,
 sgnascar and von4. The file is looked for in the current directory, then in
 $HOME, then in ~/.local/share/odin. The ROM directory holds one directory

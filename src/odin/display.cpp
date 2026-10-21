@@ -149,20 +149,19 @@ open_window(SDL_Window *&window, SDL_GLContext &context)
 } /* namespace */
 
 std::unique_ptr<Display>
-Display::make(Hikaru &board, const Keyboard &keys, const Options &options)
+Display::make(const Keyboard &keys, const Options &options)
 {
 	SDL_Window *window = nullptr;
 	SDL_GLContext context = nullptr;
 
 	if (!open_window(window, context))
 		return nullptr;
-	return std::unique_ptr<Display>(new Display(board, keys, options, window, context));
+	return std::unique_ptr<Display>(new Display(keys, options, window, context));
 }
 
-Display::Display(Hikaru &board, const Keyboard &keys, const Options &options, SDL_Window *window,
-                 SDL_GLContext context)
-	: m_board(board), m_keys(keys), m_window(window), m_context(context), m_menu_shown(false),
-	  m_title(options.title), m_show_speed(options.show_speed), m_vsync(Vsync::OFF),
+Display::Display(const Keyboard &keys, const Options &options, SDL_Window *window, SDL_GLContext context)
+	: m_board(nullptr), m_keys(keys), m_window(window), m_context(context), m_menu_shown(false),
+	  m_show_speed(options.show_speed), m_vsync(options.vsync),
 	  m_wait_on_time(false), m_wait_late(false), m_waits(false),
 	  m_frame(0), m_scale(options.scale), m_anisotropy(options.anisotropy), m_logged(false),
 	  m_picture_fb(0), m_picture_width(Renderer::WIDTH), m_picture_height(Renderer::HEIGHT),
@@ -173,12 +172,29 @@ Display::Display(Hikaru &board, const Keyboard &keys, const Options &options, SD
 	  m_stats(env_flag("ODIN_STATS")), m_draw_ns(0), m_wait_frame_ns(0), m_wait_write_ns(0), m_drawn(0),
 	  m_title_since(0), m_title_frames(0)
 {
-	Renderer::Memory memory;
-	Renderer::Options looks;
-
 	m_gpu = reinterpret_cast<const char *>(glGetString(GL_RENDERER));
 	if (const int every = env_int("ODIN_SCREENSHOT_EVERY", 0); every > 0)
 		m_shot_every = static_cast<unsigned>(every);
+
+	/* The context goes to the drawing thread for good. */
+	SDL_GL_MakeCurrent(m_window, nullptr);
+	m_drawing = std::make_unique<Worker>();
+	m_drawing->run([this] {
+		SDL_GL_MakeCurrent(m_window, m_context);
+		SDL_GL_SetSwapInterval(0);
+	});
+	if (options.window >= 2 || options.fullscreen)
+		set_window(options.window ? options.window : 1, options.fullscreen);
+	show_black();
+}
+
+/* The renderer is made on the drawing thread, where the context is; the
+ * loading screen does not wait for the display. */
+void
+Display::attach(Hikaru &board, const std::string &title)
+{
+	Renderer::Memory memory;
+	Renderer::Options looks;
 
 	memory.fb = board.framebuffer_ram();
 	memory.texram[0] = board.texture_ram(0);
@@ -198,22 +214,53 @@ Display::Display(Hikaru &board, const Keyboard &keys, const Options &options, SD
 	find_program_lists(board.game_name(), looks.programs_seed, looks.programs_kept);
 	m_program_list = looks.programs_kept;
 
-	m_renderer = std::make_unique<Renderer>(memory, looks);
-	m_renderer->set_gpu(&board.gpu());
-
-	/* The context goes to the drawing thread for good. */
-	SDL_GL_MakeCurrent(m_window, nullptr);
-	m_drawing = std::make_unique<Worker>();
-	m_drawing->run([this] {
-		SDL_GL_MakeCurrent(m_window, m_context);
+	run([&] {
+		m_renderer = std::make_unique<Renderer>(memory, looks);
+		m_renderer->set_gpu(&board.gpu());
 		SDL_GL_SetSwapInterval(0);
+		m_waits = false;
 	});
-	if (options.window >= 2 || options.fullscreen)
-		set_window(options.window ? options.window : 1, options.fullscreen);
-	prepare_programs(options.title);
-	set_vsync(options.vsync);
+	m_board = &board;
+	m_frame = 0;
+	m_picture_fb = 0;
+	m_picture_width = Renderer::WIDTH;
+	m_picture_height = Renderer::HEIGHT;
+	m_speed_since = m_speed_last = m_speed_longest = 0;
+	m_title_since = 0;
+	prepare_programs(title);
+	set_vsync(m_vsync);
+	board.set_screen(this);
+}
 
-	m_board.set_screen(this);
+void
+Display::detach()
+{
+	if (!m_board)
+		return;
+	m_board->set_screen(nullptr);
+	run([this] { m_renderer.reset(); });
+	m_board = nullptr;
+	m_picture_fb = 0;
+	m_program_list.clear();
+	SDL_SetWindowTitle(m_window, "Odin");
+	show_black();
+}
+
+void
+Display::show_black()
+{
+	int w, h;
+
+	if (m_board)
+		return;
+	SDL_GetWindowSizeInPixels(m_window, &w, &h);
+	run([this, w, h] {
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		glViewport(0, 0, w, h);
+		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT);
+		SDL_GL_SwapWindow(m_window);
+	});
 }
 
 /* The programs of the lists of the game are compiled before its first
@@ -255,7 +302,8 @@ Display::prepare_programs(const std::string &title)
 
 Display::~Display()
 {
-	m_board.set_screen(nullptr);
+	if (m_board)
+		m_board->set_screen(nullptr);
 
 	/* The context comes back: the renderer is destroyed with it. */
 	run([this] { SDL_GL_MakeCurrent(m_window, nullptr); });
@@ -303,7 +351,7 @@ void
 Display::open_menu()
 {
 	if (!m_menu)
-		m_menu = std::make_unique<Menu>(m_window, m_title);
+		m_menu = std::make_unique<Menu>(m_window);
 	m_menu->open();
 	run([this] { m_menu->freeze(m_picture_fb, m_picture_width, m_picture_height); });
 	m_menu_shown = true;

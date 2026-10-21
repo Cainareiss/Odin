@@ -208,8 +208,8 @@ under_tabs(ImDrawList *list, float left, float right, float y, float thick, ImU3
 
 } /* namespace */
 
-Menu::Menu(SDL_Window *window, const std::string &title)
-	: m_window(window), m_title(title), m_imgui(nullptr), m_scale(0.0f), m_page(INPUT), m_cursor_shown(true),
+Menu::Menu(SDL_Window *window)
+	: m_window(window), m_imgui(nullptr), m_scale(0.0f), m_page(INPUT), m_cursor_shown(true),
 	  m_gl(false), m_vao(0), m_blur(0), m_show(0), m_blur_step(-1), m_show_light(-1),
 	  m_blur_tex{}, m_blur_fb{}, m_blur_w(0), m_blur_h(0), m_frozen(false)
 {

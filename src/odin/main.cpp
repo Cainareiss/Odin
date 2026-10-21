@@ -96,7 +96,7 @@ struct Options {
 	std::string sound_device;
 	unsigned volume = 100;
 	bool background = true;
-	odin::Display::Options display = { 1, 1, 0, false, true, odin::Display::Vsync::OFF, {} };
+	odin::Display::Options display = { 1, 1, 0, false, true, odin::Display::Vsync::OFF };
 	/* [display] vsync: the display gets it when the frames are paced */
 	odin::Display::Vsync vsync = VSYNC;
 	/* What the command line says of the display: odin.ini does not change it */
@@ -108,7 +108,7 @@ struct Options {
 
 const char HELP[] = "Usage: %s [options]\n"
 "	-R <path>	Path to the ROM directory\n"
-"	-r <string>	Name of the game to run\n"
+"	-r <string>	Name of the game to run (none: Odin opens and waits)\n"
 "	-n <num>	Stop after the frame num\n"
 "	-l <path>	Load a state at startup\n"
 "	-s <num>[,...]	Save <game>-<num>.odinstate after these frames\n"
@@ -127,12 +127,12 @@ const char HELP[] = "Usage: %s [options]\n"
 /* False when there is nothing to run: the help was shown. */
 enum class Parsed { RUN, HELP_ASKED, WRONG };
 
-/* The help is shown for -h, without options and for an option that is not
- * right. */
+/* The help is shown for -h and for an option that is not right. Without
+ * options Odin opens its window and waits. */
 Parsed
 parse_options(int argc, char **argv, Options &options)
 {
-	int opt = (argc < 2) ? 'h' : 0;
+	int opt = 0;
 	bool wrong = false;
 
 	while (opt != 'h' && (opt = getopt(argc, argv, "R:r:n:l:s:ux:a:w:fo:vh?")) != -1) {
@@ -542,9 +542,9 @@ public:
 			show_game(0);
 	}
 
-	/* Runs the frames until the user quits or the last one asked is
-	 * done. */
-	void run();
+	/* Runs the frames until the user quits (true) or the last one asked
+	 * is done (false). */
+	bool run();
 
 private:
 	/* After an event the menu draws this many pictures, one in so many
@@ -1708,12 +1708,12 @@ Session::limit_frame_rate()
 		std::this_thread::sleep_until(m_next);
 }
 
-void
+bool
 Session::run()
 {
 	while (!process_events()) {
 		if (m_options.num_frames > 0 && m_board.frame() >= m_options.num_frames)
-			return;
+			return false;
 		if (m_display.menu_shown()) {
 			wait_in_menu();
 			continue;
@@ -1738,73 +1738,67 @@ Session::run()
 		if (!m_options.unthrottled)
 			limit_frame_rate();
 	}
+	return true;
 }
 
-} /* namespace */
-
-int
-main(int argc, char **argv)
+/* No game: the window black until it closes or the hotkey quits; the one
+ * of the whole display works */
+void
+wait_without_game(odin::Display &display, const odin::Settings &settings)
 {
-	Options options;
-	odin::GameList games;
+	const odin::Hotkeys hotkeys(settings);
+	SDL_Event event;
 
-	/* With the OpenGL driver of Intel loaded, a process of Windows ends
-	 * without what its buffers still hold: it goes out here. */
-	std::atexit([] { std::fflush(nullptr); });
+	while (SDL_WaitEvent(&event)) {
+		if (event.type == SDL_EVENT_QUIT)
+			return;
+		if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat) {
+			const auto action = hotkeys.key_action(event.key.key, event.key.mod);
 
-	/* What Odin says goes to odin.log too, from its first line */
-	if (const std::string log = odin::LogFile::path(); odin::LogFile::start(log))
-		options.log_file = log;
+			if (action == odin::Hotkeys::Action::QUIT)
+				return;
+			if (action == odin::Hotkeys::Action::FULLSCREEN)
+				display.toggle_fullscreen();
+		}
+		if (event.type == SDL_EVENT_WINDOW_EXPOSED || event.type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED)
+			display.show_black();
+	}
+}
 
-	std::printf("Odin, Copyright(C) 2026 Réda Chérif-Touil\n");
-	std::printf("A hard fork of Valkyrie, Copyright(C) 2011-2013 Stefano Teso\n");
-	std::printf("Released under the GPL3 License.\n");
+/* Why a game ends: the user quits, its last frame is done, or it cannot
+ * run */
+enum class Ended { QUIT, LAST_FRAME, FAILED };
 
-	if (const Parsed parsed = parse_options(argc, argv, options); parsed != Parsed::RUN)
-		return parsed == Parsed::HELP_ASKED ? 0 : 1;
+/* A game in the window, from its power-on, or from the state of -l, to its
+ * end. The options of the command line and odin.ini hold for it, what it
+ * changes of them for itself does not stay. */
+Ended
+play(const Options &given, const std::string &name, const odin::GameList &games, odin::Settings &settings,
+     const std::string &settings_file, odin::Display &display, odin::Keyboard &keys)
+{
+	Options options = given;
 
-	if (!load_game_list(games)) {
-		std::fprintf(stderr, "ERROR: failed to load the game list\n");
-		return 1;
+	if (!games.has(name)) {
+		std::fprintf(stderr, "ERROR: failed to load '%s': game name not in game list\n", name.c_str());
+		return Ended::FAILED;
 	}
 
-	odin::Settings settings;
-	const std::string settings_file = odin::Settings::user_file();
-	if (!settings_file.empty() && settings.load(settings_file)) {
-		std::printf("settings: '%s'\n", settings_file.c_str());
-		settings.know(known_settings(games));
-		settings.complete(settings_file);
-	}
-	read_paths(settings, options);
-	read_display(settings, options);
-	read_sound(settings, options);
-
-	if (!games.has(options.game)) {
-		std::fprintf(stderr, "ERROR: failed to load '%s': game name not in game list\n", options.game.c_str());
-		return 1;
-	}
-
-	const std::optional<odin::Game> game = games.load_game(options.rom_path, options.game);
+	const std::optional<odin::Game> game = games.load_game(options.rom_path, name);
 	if (!game) {
-		std::fprintf(stderr, "ERROR: failed to load '%s': can't load game files\n", options.game.c_str());
-		return 1;
+		std::fprintf(stderr, "ERROR: failed to load '%s': can't load game files\n", name.c_str());
+		return Ended::FAILED;
 	}
 	if (game->machine != "hikaru") {
-		std::fprintf(stderr, "ERROR: failed to load '%s': a game of the %s, not of the Hikaru\n",
-		             options.game.c_str(), game->machine.c_str());
-		return 1;
+		std::fprintf(stderr, "ERROR: failed to load '%s': a game of the %s, not of the Hikaru\n", name.c_str(),
+		             game->machine.c_str());
+		return Ended::FAILED;
 	}
 
 	const std::unique_ptr<odin::Hikaru> board = odin::Hikaru::make(*game, options.verbose);
 	if (!board)
-		return 1;
+		return Ended::FAILED;
 
-	odin::Keyboard keys;
-	options.display.title = game->title;
-	options.display.vsync = options.unthrottled ? odin::Display::Vsync::OFF : options.vsync;
-	const std::unique_ptr<odin::Display> display = odin::Display::make(*board, keys, options.display);
-	if (!display)
-		return 1;
+	display.attach(*board, game->title);
 	odin::Controls controls(keys, game->controls, game->outputs, settings, game->name);
 	board->set_panel(&controls);
 
@@ -1875,13 +1869,91 @@ main(int argc, char **argv)
 		else
 			std::fprintf(stderr, "ERROR: failed to load state '%s'\n", options.state_path.c_str());
 	}
+	Ended ended = Ended::FAILED;
+
 	if (started) {
 		std::printf("Running\n");
-		Session(options, *game, *board, *display, keys, controls, audio.get(), std::move(outputs), network, settings,
-		        settings_file, games).run();
+		ended = Session(options, *game, *board, display, keys, controls, audio.get(), std::move(outputs), network,
+		                settings, settings_file, games).run() ? Ended::QUIT : Ended::LAST_FRAME;
 	}
 
 	std::printf("Finalizing\n");
 	board->power_off();
-	return started ? 0 : 1;
+	display.detach();
+	return ended;
+}
+
+} /* namespace */
+
+int
+main(int argc, char **argv)
+{
+	Options options;
+	odin::GameList games;
+
+	/* With the OpenGL driver of Intel loaded, a process of Windows ends
+	 * without what its buffers still hold: it goes out here. */
+	std::atexit([] { std::fflush(nullptr); });
+
+	/* What Odin says goes to odin.log too, from its first line */
+	if (const std::string log = odin::LogFile::path(); odin::LogFile::start(log))
+		options.log_file = log;
+
+	std::printf("Odin, Copyright(C) 2026 Réda Chérif-Touil\n");
+	std::printf("A hard fork of Valkyrie, Copyright(C) 2011-2013 Stefano Teso\n");
+	std::printf("Released under the GPL3 License.\n");
+
+	if (const Parsed parsed = parse_options(argc, argv, options); parsed != Parsed::RUN)
+		return parsed == Parsed::HELP_ASKED ? 0 : 1;
+
+	if (!load_game_list(games)) {
+		std::fprintf(stderr, "ERROR: failed to load the game list\n");
+		return 1;
+	}
+
+	odin::Settings settings;
+	const std::string settings_file = odin::Settings::user_file();
+	if (!settings_file.empty() && settings.load(settings_file)) {
+		std::printf("settings: '%s'\n", settings_file.c_str());
+		settings.know(known_settings(games));
+		settings.complete(settings_file);
+	}
+	read_paths(settings, options);
+	read_display(settings, options);
+	read_sound(settings, options);
+
+	odin::Keyboard keys;
+	options.display.vsync = options.unthrottled ? odin::Display::Vsync::OFF : options.vsync;
+	const std::unique_ptr<odin::Display> display = odin::Display::make(keys, options.display);
+	if (!display)
+		return 1;
+
+	/* ODIN_GAMES_TEST=<game>,...: these games after the first, each from
+	 * its power-on to its frame -n, in the same window */
+	std::vector<std::string> next;
+	const char *const games_test = std::getenv("ODIN_GAMES_TEST");
+	for (std::string list = games_test ? games_test : ""; !list.empty();) {
+		const size_t comma = list.find(',');
+
+		next.push_back(list.substr(0, comma));
+		list = comma == std::string::npos ? "" : list.substr(comma + 1);
+	}
+
+	std::string name = options.game;
+	for (size_t played = 0;; played++) {
+		if (name.empty()) {
+			wait_without_game(*display, settings);
+			return 0;
+		}
+
+		const Ended ended = play(options, name, games, settings, settings_file, *display, keys);
+
+		if (ended == Ended::FAILED)
+			return 1;
+		if (ended == Ended::QUIT || played >= next.size())
+			return 0;
+		name = next[played];
+		options.state_path.clear();
+		options.save_frames.clear();
+	}
 }

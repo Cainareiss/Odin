@@ -226,7 +226,7 @@ struct MenuState {
  * let go of where the context is (release) before it is destroyed. */
 class Menu {
 public:
-	Menu(SDL_Window *window, const std::string &title);
+	explicit Menu(SDL_Window *window);
 	~Menu();
 	Menu(const Menu &) = delete;
 	Menu &operator=(const Menu &) = delete;
@@ -287,7 +287,6 @@ private:
 	void size_blur(unsigned w, unsigned h);
 
 	SDL_Window *m_window;
-	std::string m_title;
 	ImGuiContext *m_imgui;
 	/* The style at a scale of 1, and the scale of the display now */
 	ImGuiStyle m_style;
