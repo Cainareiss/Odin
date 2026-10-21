@@ -793,6 +793,10 @@ Menu::page_paths(MenuKit &kit, MenuState &state) const
 	              shown_path(state.roms, "not set").c_str(), change, nullptr,
 	              state.roms_given ? "set by the command line: -R" : nullptr))
 		state.choose = MenuState::Folder::ROMS;
+	if (kit.value("BIOS", "hikaru, mie, jvs13551 as MAME keeps them · at the next launch",
+	              shown_path(state.bios, "the folder of the games").c_str(), change, nullptr,
+	              state.bios_given ? "set by the command line: -B" : nullptr))
+		state.choose = MenuState::Folder::BIOS;
 	kit.end_group();
 
 	kit.begin_group("SAVES");

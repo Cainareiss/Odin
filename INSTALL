@@ -25,22 +25,22 @@ RUNNING
 sgnascar and von4. The file is looked for in the current directory, then in
 $HOME, then in ~/.local/share/odin. The ROM directory holds each game as
 MAME keeps it: a directory, a zip or a 7z of the name of the game, with the
-files odin-games.json lists for it. The files a game shares with others,
-in the sets of MAME hikaru (the BIOS), mie, jvs13551 and 18wheelr, are
-looked for in the BIOS directory (-B <path>, bios in [paths]), then in the
-ROM directory: hikaru.zip, hikaru.7z or a directory hikaru; they may be in
-the directory or the archive of the game too. A file is the one of its size and of the
-CRC MAME gives it: in an archive by its CRC, whatever its name; in a
-directory by its name, with or without dashes, in any case, else by its
-CRC. One found by its name with another CRC is said, and taken (another
-dump of the chip). When a file is missing, Odin says which, and the set
-of MAME that holds it. The directories may have names in any language (on
-Windows, 10 version 1903 or later). The programs of the I/O boards of PODRACE (315-6215.bin) and NASCAR
-(epr-21868.ic7, from the 18wheelr set of MAME) may be left out: an
-imitation of the board answers then, made from that program and checked
-against it. The games play the same without them, and NASCAR sends its
-wheel (the force feedback) the same orders; with them the board runs its
-own program, a little slower.
+files odin-games.json lists for it. The files a game shares with others, in
+the sets of MAME hikaru (the BIOS), mie, jvs13551 and 18wheelr, are looked
+for in the BIOS directory (-B <path>, bios in [paths], page Paths), then in
+the ROM directory: hikaru.zip, hikaru.7z or a directory hikaru; they may be
+in the directory or the archive of the game too. A file is the one of its
+size and of the CRC MAME gives it: in an archive by its CRC, whatever its
+name; in a directory by its name, with or without dashes, in any case, else
+by its CRC. One found by its name with another CRC is said, and taken
+(another dump of the chip). When a file is missing, Odin says which, and the
+set of MAME that holds it. The directories may have names in any language
+(on Windows, 10 version 1903 or later). The programs of the I/O boards of
+PODRACE (315-6215.bin) and NASCAR (epr-21868.ic7, from the 18wheelr set of
+MAME) may be left out: an imitation of the board answers then, made from
+that program and checked against it. The games play the same without them,
+and NASCAR sends its wheel (the force feedback) the same orders; with them
+the board runs its own program, a little slower.
 
 Options:
 

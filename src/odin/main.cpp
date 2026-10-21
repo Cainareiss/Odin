@@ -487,6 +487,8 @@ public:
 		state.kept = !settings_file.empty();
 		state.roms = options.rom_path;
 		state.roms_given = options.given.roms;
+		state.bios = options.bios_path;
+		state.bios_given = options.given.bios;
 		state.saves = odin::SaveFolder::root(options.saves);
 		const char *const saves = std::getenv("ODIN_SAVES");
 		state.saves_given = saves && saves[0];
@@ -1449,6 +1451,7 @@ Session::draw_menu()
 
 		state.no_picker = false;
 		m_dialog.ask(m_display.window(), folder == odin::MenuState::Folder::ROMS ? state.roms :
+		             folder == odin::MenuState::Folder::BIOS ? (state.bios.empty() ? state.roms : state.bios) :
 		             folder == odin::MenuState::Folder::SAVES ? state.saves : state.states, static_cast<int>(folder));
 		state.choose = odin::MenuState::Folder::NONE;
 		m_menu_pictures = MENU_PICTURES;
@@ -1634,9 +1637,9 @@ Session::keep(const char *section, const char *key, const std::optional<std::str
 		m_settings.change(m_settings_file, section, key, value);
 }
 
-/* The folder of the games and that of the saves wait for the next launch;
- * the save states go to theirs now. A folder of their own by default is
- * no line in odin.ini. */
+/* The folders of the games, of the BIOS and of the saves wait for the next
+ * launch; the save states go to theirs now. A folder of their own by
+ * default is no line in odin.ini. */
 void
 Session::take_folder()
 {
@@ -1659,6 +1662,10 @@ Session::take_folder()
 	case Folder::ROMS:
 		state.roms = folder;
 		keep("paths", "roms", folder);
+		break;
+	case Folder::BIOS:
+		state.bios = folder;
+		keep("paths", "bios", folder);
 		break;
 	case Folder::SAVES:
 		state.saves = folder;
