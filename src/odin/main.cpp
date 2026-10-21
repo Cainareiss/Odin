@@ -50,6 +50,7 @@
 #include "odin/menu.hpp"
 #include "odin/menu_nav.hpp"
 #include "odin/outputs_network.hpp"
+#include "odin/rom_files.hpp"
 #include "odin/save_folder.hpp"
 #include "odin/seats.hpp"
 #include "odin/settings.hpp"
@@ -73,7 +74,9 @@ vsync_named(const std::string &name)
 }
 
 struct Options {
-	std::string rom_path;
+	/* The folders of the games and of the sets of files they share (the
+	 * BIOS...), rom_files.hpp */
+	std::string rom_path, bios_path;
 	/* The folder of the saves of the games and that of the save states
 	 * odin.ini gives (empty: by default) */
 	std::string saves, states;
@@ -102,12 +105,13 @@ struct Options {
 	/* What the command line says of the display: odin.ini does not change it */
 	struct {
 		bool scale = false, anisotropy = false, window = false, fullscreen = false, unthrottled = false;
-		bool roms = false, verbose = false;
+		bool roms = false, bios = false, verbose = false;
 	} given;
 };
 
 const char HELP[] = "Usage: %s [options]\n"
 "	-R <path>	Path to the ROM directory\n"
+"	-B <path>	Path to the BIOS directory (hikaru.zip...); none: the ROM directory\n"
 "	-r <string>	Name of the game to run (none: Odin opens and waits)\n"
 "	-n <num>	Stop after the frame num\n"
 "	-l <path>	Load a state at startup\n"
@@ -135,11 +139,15 @@ parse_options(int argc, char **argv, Options &options)
 	int opt = 0;
 	bool wrong = false;
 
-	while (opt != 'h' && (opt = getopt(argc, argv, "R:r:n:l:s:ux:a:w:fo:vh?")) != -1) {
+	while (opt != 'h' && (opt = getopt(argc, argv, "R:B:r:n:l:s:ux:a:w:fo:vh?")) != -1) {
 		switch (opt) {
 		case 'R':
 			options.rom_path = optarg;
 			options.given.roms = true;
+			break;
+		case 'B':
+			options.bios_path = optarg;
+			options.given.bios = true;
 			break;
 		case 'r':
 			options.game = optarg;
@@ -265,6 +273,9 @@ read_paths(const odin::Settings &settings, Options &options)
 		if (key == "roms" && !value.empty()) {
 			if (!options.given.roms)
 				options.rom_path = value;
+		} else if (key == "bios" && !value.empty()) {
+			if (!options.given.bios)
+				options.bios_path = value;
 		} else if (key == "saves" && !value.empty()) {
 			options.saves = value;
 		} else if (key == "states" && !value.empty()) {
@@ -396,7 +407,7 @@ known_settings(const odin::GameList &games)
 
 		out.push_back({ "hotkeys", Hotkeys::id(action), Hotkeys::line(Hotkeys::standard(action)) });
 	}
-	out.insert(out.end(), { { "outputs", "network", "off" }, { "paths", "roms", "" },
+	out.insert(out.end(), { { "outputs", "network", "off" }, { "paths", "roms", "" }, { "paths", "bios", "" },
 	                        { "paths", "saves", odin::SaveFolder::root() }, { "paths", "states", default_states() },
 	                        { "log", "verbose", "off" }, { "menu", "classic", "off" },
 	                        { "menu", "animations", "on" } });
@@ -1795,7 +1806,24 @@ play(const Options &given, const std::string &name, const odin::GameList &games,
 		return Ended::FAILED;
 	}
 
-	const std::optional<odin::Game> game = games.load_game(options.rom_path, name);
+	/* The archives are let go of once the files are read */
+	const std::optional<odin::Game> game = [&] {
+		odin::RomFiles files(options.rom_path, options.bios_path);
+		std::optional<odin::Game> loaded = games.load_game(files, name);
+
+		if (loaded)
+			return loaded;
+		for (const odin::RomFiles::File &file : games.missing(files, name)) {
+			char crc[16] = "";
+
+			if (file.crc)
+				std::snprintf(crc, sizeof(crc), ", CRC %08X", *file.crc);
+			std::fprintf(stderr, "ERROR: '%s': %s (%llu bytes%s) is missing; MAME keeps it in %s.zip\n", name.c_str(),
+			             file.name.c_str(), static_cast<unsigned long long>(file.size), crc,
+			             (file.set.empty() ? name : file.set).c_str());
+		}
+		return loaded;
+	}();
 	if (!game) {
 		std::fprintf(stderr, "ERROR: failed to load '%s': can't load game files\n", name.c_str());
 		return Ended::FAILED;

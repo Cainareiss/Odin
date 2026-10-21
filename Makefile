@@ -39,7 +39,7 @@ OBJ := \
 	src/odin/menu_kit.o \
 	src/odin/menu_nav.o \
 	src/odin/menu_pictures.o \
-	src/odin/archive.o \
+	src/odin/rom_files.o \
 	src/odin/folder_dialog.o \
 	src/odin/pad_view.o \
 	src/odin/pad_drawings.o \
@@ -159,7 +159,7 @@ src/miniz/%.o: src/miniz/%.c
 src/lzma/%.o: src/lzma/%.c
 	$(CC) -c $< -o $@ $(ARCHIVE_FLAGS)
 
-src/odin/archive.o: CXXFLAGS += -isystem src/miniz -isystem src/lzma
+src/odin/rom_files.o: CXXFLAGS += -isystem src/miniz -isystem src/lzma
 
 # The pictures of the menu, put in the binary as their files are
 src/odin/menu_pictures.o: src/odin/menu_pictures.S $(wildcard src/odin/pictures/*.png)

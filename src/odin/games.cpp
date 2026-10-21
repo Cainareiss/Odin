@@ -20,6 +20,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <initializer_list>
 #include <utility>
@@ -27,44 +28,55 @@
 #include <jansson.h>
 
 #include "odin/bytes.hpp"
+#include "odin/rom_files.hpp"
 
 namespace odin {
 
 namespace {
 
-/* The whole file, if it is there and has that size. */
-std::optional<std::vector<uint8_t>>
-read_file(const std::string &path, size_t size)
-{
-	std::FILE *const file = std::fopen(path.c_str(), "rb");
-	std::optional<std::vector<uint8_t>> out;
-
-	if (!file)
-		return out;
-	std::vector<uint8_t> bytes(size);
-	/* One byte more than the size told would be a longer file. */
-	if (std::fread(bytes.data(), 1, size, file) == size && std::fgetc(file) == EOF)
-		out = std::move(bytes);
-	std::fclose(file);
-	return out;
-}
-
-/* A file of a section: {"name": ..., "size": ...} */
-std::optional<std::vector<uint8_t>>
-load_datum(const json_t *datum, const std::string &dir)
+/* A file of a section: {"name": ..., "size": ..., "crc": "<8 hexadecimal
+ * digits>", "set": ...}, the CRC and the set MAME keeps it in when the
+ * list tells them */
+std::optional<RomFiles::File>
+file_of(const json_t *datum)
 {
 	const char *const name = json_string_value(json_object_get(datum, "name"));
-	const size_t size = static_cast<size_t>(json_integer_value(json_object_get(datum, "size")));
+	const json_int_t size = json_integer_value(json_object_get(datum, "size"));
+	const char *const crc = json_string_value(json_object_get(datum, "crc"));
+	const char *const set = json_string_value(json_object_get(datum, "set"));
 
-	if (!name || !size)
+	if (!name || size <= 0)
 		return std::nullopt;
-	const std::string path = dir + "/" + name;
-	std::printf("Loading %u bytes from '%s'\n", static_cast<unsigned>(size), path.c_str());
-	return read_file(path, size);
+
+	RomFiles::File file = { name, static_cast<uint64_t>(size), std::nullopt, set ? set : "" };
+
+	if (crc) {
+		char *end = nullptr;
+		const unsigned long value = std::strtoul(crc, &end, 16);
+
+		if (std::strlen(crc) != 8 || *end)
+			return std::nullopt;
+		file.crc = static_cast<uint32_t>(value);
+	}
+	return file;
 }
 
 std::optional<std::vector<uint8_t>>
-load_section(const json_t *section, const std::string &dir)
+load_datum(const json_t *datum, RomFiles &files, const std::string &game)
+{
+	const std::optional<RomFiles::File> file = file_of(datum);
+	std::string where;
+
+	if (!file)
+		return std::nullopt;
+	std::optional<std::vector<uint8_t>> bytes = files.read(game, *file, where);
+	if (bytes)
+		std::printf("Loading %u bytes from '%s'\n", static_cast<unsigned>(file->size), where.c_str());
+	return bytes;
+}
+
+std::optional<std::vector<uint8_t>>
+load_section(const json_t *section, RomFiles &files, const std::string &game)
 {
 	const char *const name = json_string_value(json_object_get(section, "name"));
 	const char *const type = json_string_value(json_object_get(section, "type"));
@@ -84,7 +96,7 @@ load_section(const json_t *section, const std::string &dir)
 			if (json_integer_value(json_object_get(json_array_get(data, i), "size")) != size)
 				return std::nullopt;
 		for (size_t i = 0; i < num; i++)
-			if (auto file = load_datum(json_array_get(data, i), dir))
+			if (auto file = load_datum(json_array_get(data, i), files, game))
 				return file;
 		return std::nullopt;
 	}
@@ -96,7 +108,7 @@ load_section(const json_t *section, const std::string &dir)
 		if (!amnt || (step != 1 && step != 2 && step != 4 && step != 8))
 			return std::nullopt;
 		for (size_t i = 0; i < num; i++) {
-			const auto file = load_datum(json_array_get(data, i), dir);
+			const auto file = load_datum(json_array_get(data, i), files, game);
 
 			if (!file)
 				return std::nullopt;
@@ -112,7 +124,7 @@ load_section(const json_t *section, const std::string &dir)
 	}
 	if (!std::strcmp(type, "concatenate")) {
 		for (size_t i = 0; i < num; i++) {
-			const auto file = load_datum(json_array_get(data, i), dir);
+			const auto file = load_datum(json_array_get(data, i), files, game);
 
 			if (!file)
 				return std::nullopt;
@@ -491,8 +503,39 @@ GameList::titles(const std::string &machine) const
 	return out;
 }
 
+std::vector<RomFiles::File>
+GameList::missing(RomFiles &files, const std::string &name) const
+{
+	const json_t *const sections = json_object_get(find(name), "sections");
+	std::vector<RomFiles::File> out;
+
+	for (size_t i = 0; i < json_array_size(sections); i++) {
+		const json_t *const section = json_array_get(sections, i);
+		const json_t *const data = json_object_get(section, "data");
+		const char *const type = json_string_value(json_object_get(section, "type"));
+		const bool any = type && !std::strcmp(type, "alternative");
+		std::vector<RomFiles::File> gone;
+
+		if (json_is_true(json_object_get(section, "optional")))
+			continue;
+		for (size_t j = 0; j < json_array_size(data); j++) {
+			const std::optional<RomFiles::File> file = file_of(json_array_get(data, j));
+
+			if (!file)
+				gone.push_back({ "?", 0, std::nullopt, "" });
+			else if (files.find(name, *file).empty())
+				gone.push_back(*file);
+		}
+		/* One of the files of an alternative is enough */
+		if (any && gone.size() < json_array_size(data))
+			continue;
+		out.insert(out.end(), gone.begin(), any && !gone.empty() ? gone.begin() + 1 : gone.end());
+	}
+	return out;
+}
+
 std::optional<Game>
-GameList::load_game(const std::string &rom_dir, const std::string &name) const
+GameList::load_game(RomFiles &files, const std::string &name) const
 {
 	std::optional<Game> game = describe(name);
 	const json_t *const sections = json_object_get(find(name), "sections");
@@ -514,7 +557,7 @@ GameList::load_game(const std::string &rom_dir, const std::string &name) const
 				return std::nullopt;
 			}
 		}
-		auto bytes = load_section(section, rom_dir + "/" + name);
+		auto bytes = load_section(section, files, name);
 
 		/* "optional": true, a section the game runs without */
 		if (!bytes && json_is_true(json_object_get(section, "optional"))) {

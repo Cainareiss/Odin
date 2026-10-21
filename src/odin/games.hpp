@@ -28,6 +28,7 @@
 #include <vector>
 
 #include "odin/roles.hpp"
+#include "odin/rom_files.hpp"
 
 struct json_t;
 
@@ -245,10 +246,13 @@ public:
 	/* What the list tells of a game, without its files: nothing when it is
 	 * not in the list, or not right */
 	std::optional<Game> describe(const std::string &name) const;
-	/* The game with its files, read from <rom_dir>/<name>/. Nothing when
-	 * the game is not in the list, a file is missing or has another size
-	 * than the list tells. */
-	std::optional<Game> load_game(const std::string &rom_dir, const std::string &name) const;
+	/* The files of a game that are nowhere (rom_files.hpp): one of an
+	 * alternative, all those of the other sections, but those of a
+	 * section it runs without */
+	std::vector<RomFiles::File> missing(RomFiles &files, const std::string &name) const;
+	/* The game with its files. Nothing when the game is not in the list, a
+	 * file is missing or has another size than the list tells. */
+	std::optional<Game> load_game(RomFiles &files, const std::string &name) const;
 
 private:
 	static constexpr unsigned VERSION = 1;

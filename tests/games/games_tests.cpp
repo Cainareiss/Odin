@@ -21,13 +21,19 @@
  * cabinet, and what is refused. The chips of the list of the repo are checked
  * too: run it from the repo.
  *
- * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
- *            -I src tests/games/games_tests.cpp src/odin/games.cpp src/odin/roles.cpp -ljansson \
- *            -o games_tests
+ * The objects of miniz and the LZMA SDK are those make builds.
+ * Build: g++ -std=c++20 -O2 -flto=auto -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
+ *            -I src -isystem src/miniz -isystem src/lzma tests/games/games_tests.cpp src/odin/games.cpp \
+ *            src/odin/roles.cpp src/odin/rom_files.cpp src/miniz/miniz.o src/lzma/7zAlloc.o src/lzma/7zArcIn.o \
+ *            src/lzma/7zBuf.o src/lzma/7zBuf2.o src/lzma/7zCrc.o src/lzma/7zCrcOpt.o src/lzma/7zDec.o \
+ *            src/lzma/7zFile.o src/lzma/7zStream.o src/lzma/Bcj2.o src/lzma/Bra.o src/lzma/Bra86.o \
+ *            src/lzma/BraIA64.o src/lzma/CpuArch.o src/lzma/Delta.o src/lzma/Lzma2Dec.o src/lzma/LzmaDec.o \
+ *            src/lzma/Ppmd7.o src/lzma/Ppmd7Dec.o -ljansson -o games_tests
  * It writes its files in the folder given as its argument, or the current
  * one. Exit status is 0 when every check passes. */
 
 #include "odin/games.hpp"
+#include "odin/rom_files.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -230,11 +236,15 @@ void test_games(const std::string &dir)
 	}
 
 	GameList list;
+	odin::RomFiles files(roms, "");
 
 	check(list.load(dir + "/games_test.json"), "the list loads");
 	check(list.has("toy") && !list.has("other"), "a game is in the list or not");
+	check(list.missing(files, "toy").empty(), "nothing missing of a game whose files are there");
+	const std::vector<odin::RomFiles::File> gone = list.missing(files, "needed");
+	check(gone.size() == 1 && gone[0].name == "missing.bin" && gone[0].size == 4, "the file missing of one");
 
-	const std::optional<Game> toy = list.load_game(roms, "toy");
+	const std::optional<Game> toy = list.load_game(files, "toy");
 	check(toy && toy->name == "toy" && toy->machine == "hikaru", "a game loads with its name and its machine");
 	if (toy) {
 		check(toy->sections.size() == 4 && toy->sections[0].first == "bootrom" &&
@@ -248,7 +258,7 @@ void test_games(const std::string &dir)
 		check(toy->io_board == "837-13551", "without \"io\", the I/O board is the 837-13551");
 	}
 
-	const std::optional<Game> wheel = list.load_game(roms, "wheel");
+	const std::optional<Game> wheel = list.load_game(files, "wheel");
 	check(wheel && wheel->title == "Wheel ~ Test: 2!", "the title the list tells");
 	check(toy && toy->title == "toy", "without \"title\", the name");
 	check(wheel && wheel->io_board == "837-13741", "the I/O board the list tells");
@@ -326,9 +336,9 @@ void test_games(const std::string &dir)
 	if (toy)
 		check(toy->outputs.empty(), "without \"outputs\", none");
 
-	check(!list.load_game(roms, "other"), "a game that is not in the list does not load");
-	check(!list.load_game(roms, "short"), "nor one whose file has another size than told");
-	check(!list.load_game(roms, "odd"), "nor one with a section of a type that is not known");
+	check(!list.load_game(files, "other"), "a game that is not in the list does not load");
+	check(!list.load_game(files, "short"), "nor one whose file has another size than told");
+	check(!list.load_game(files, "odd"), "nor one with a section of a type that is not known");
 
 	const std::optional<Game> told = list.describe("wheel"), shorter = list.describe("short");
 
@@ -342,19 +352,21 @@ void test_games(const std::string &dir)
 	check(titles.size() == 1 && titles[0].first == "wheel" && titles[0].second == "Wheel ~ Test: 2!",
 	      "the names and titles of the games of a machine that have controls, in the order of the list");
 	check(list.titles("naomi").empty(), "none of another machine");
-	check(!list.load_game(roms, "unequal"), "nor one whose alternative files have different sizes");
-	check(!list.load_game(roms, "stepless"), "nor one that interleaves without telling by how many bytes");
-	check(!list.load_game(roms, "misfit"), "nor one whose EPROMs are not of the size its ROM board takes");
-	check(!list.load_game(roms, "needed"), "nor one a file of a section of which is not there");
-	const std::optional<Game> spare = list.load_game(roms, "spare"), kept = list.load_game(roms, "kept");
+	check(!list.load_game(files, "unequal"), "nor one whose alternative files have different sizes");
+	check(!list.load_game(files, "stepless"), "nor one that interleaves without telling by how many bytes");
+	check(!list.load_game(files, "misfit"), "nor one whose EPROMs are not of the size its ROM board takes");
+	check(!list.load_game(files, "needed"), "nor one a file of a section of which is not there");
+	const std::optional<Game> spare = list.load_game(files, "spare"), kept = list.load_game(files, "kept");
 	check(spare && spare->section("io_rom").empty() && is(spare->section("bootrom"), "BOOT"),
 	      "an optional section not there: left out, the game loads");
 	check(kept && is(kept->section("io_rom"), "A0A1"), "there: loaded");
-	const std::optional<Game> fit = list.load_game(roms, "fit");
+	const std::optional<Game> fit = list.load_game(files, "fit");
 	check(fit && fit->rom_board && fit->rom_board->eprom_mb == 2 && !fit->rom_board->crypt_key &&
 	      !fit->rom_board->has_actel && fit->section("eprom").size() == 4 << 20,
 	      "EPROMs of 2 MB on a board that takes them, without a guard chip");
-	check(!list.load_game(dir + "/no_such_folder", "toy"), "nor one whose files are not there");
+	odin::RomFiles nowhere(dir + "/no_such_folder", "");
+
+	check(!list.load_game(nowhere, "toy"), "nor one whose files are not there");
 }
 
 void test_roles()
@@ -385,6 +397,7 @@ void test_roles()
 void test_bad_controls(const std::string &dir)
 {
 	const std::string roms = dir + "/games_test_roms";
+	odin::RomFiles rom_files(roms, "");
 	const std::string path = dir + "/games_test_bad.json";
 	const std::string files = R"("sections": [ { "name": "bootrom", "type": "alternative",
 	    "data": [ { "name": "boot.bin", "size": 4 } ] } ])";
@@ -395,7 +408,7 @@ void test_bad_controls(const std::string &dir)
 		write(path, std::string(R"({ "version": 1, "roms": [ { "name": "good", "mach": "hikaru",)") +
 		      R"( "controls": [ { "name": "A", "id": "a", "switch": "1P START", "role": "start" } ], )" + files +
 		      R"( }, { "name": "bad", "mach": "hikaru", )" + bad + ", " + files + " } ] }");
-		if (list.load(path) && list.load_game(roms, "good") && !list.load_game(roms, "bad"))
+		if (list.load(path) && list.load_game(rom_files, "good") && !list.load_game(rom_files, "bad"))
 			return true;
 		std::printf("not refused: %s\n", bad.c_str());
 		return false;
@@ -414,7 +427,7 @@ void test_bad_controls(const std::string &dir)
 	write(path, std::string(R"({ "version": 1, "roms": [ { "name": "good", "mach": "hikaru", "controls": [)") +
 	      R"( { "name": "GAS", "id": "gas", "analog": 0, "low": "released", "role": "accel" },)" +
 	      R"( { "name": "A", "id": "gas_left", "switch": "1P START", "role": "start" } ], )" + files + " } ] }");
-	check(pedal.load(path) && pedal.load_game(roms, "good"), "a pedal has no halves: <id>_left is free");
+	check(pedal.load(path) && pedal.load_game(rom_files, "good"), "a pedal has no halves: <id>_left is free");
 
 	const std::string chip = std::string(256, '0');
 	const std::string bad_chips[] = {
@@ -452,7 +465,7 @@ void test_bad_controls(const std::string &dir)
 
 		write(path, std::string(R"({ "version": 1, "roms": [ { "name": "good", "mach": "hikaru",)") +
 		      R"( "option_speakers": true, "option_level": )" + level + ", " + files + " } ] }");
-		const auto good = ends.load(path) ? ends.load_game(roms, "good") : std::nullopt;
+		const auto good = ends.load(path) ? ends.load_game(rom_files, "good") : std::nullopt;
 		check(good && good->option_level == std::stod(level), "-60 and 12 dB are levels");
 	}
 }
@@ -574,7 +587,9 @@ void test_lists(const std::string &dir)
 	check(!list.load(path), "and one with a game that has no machine");
 	write(path, "not json");
 	check(!list.load(path), "and what is not JSON");
-	check(!list.has("toy") && !list.load_game(dir, "toy"), "a list that did not load has no game");
+	odin::RomFiles rom_files(dir, "");
+
+	check(!list.has("toy") && !list.load_game(rom_files, "toy"), "a list that did not load has no game");
 }
 
 } /* namespace */

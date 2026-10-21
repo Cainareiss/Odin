@@ -16,23 +16,27 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* Unit tests for the archives: a zip and a 7z, each under its own name and
- * the other's, list their files with the size and CRC32 they hold and read
- * them back whole; a damaged one is refused, as is a file that is no
- * archive or none at all.
+/* Unit tests for the files of the games. The archives: a zip and a 7z,
+ * each under its own name and the other's, list their files with the size
+ * and CRC32 they hold and read them back whole; a name of a 7z in several
+ * alphabets; a damaged one is refused, as is a file that is no archive or
+ * none at all. Where a file of a game is found, in folders of names in
+ * several alphabets: in the folder of the game by its name, loosely
+ * written, or by its CRC; in the archive of the game; in the archive or the
+ * folder of its set, in the folder of the BIOS or of the ROMs; nowhere.
  *
  * The objects of miniz and the LZMA SDK are those make builds.
  * Build: g++ -std=c++20 -O2 -flto=auto -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
- *            -I src -isystem src/miniz -isystem src/lzma tests/archive/archive_tests.cpp src/odin/archive.cpp \
+ *            -I src -isystem src/miniz -isystem src/lzma tests/rom_files/rom_files_tests.cpp src/odin/rom_files.cpp \
  *            src/miniz/miniz.o src/lzma/7zAlloc.o src/lzma/7zArcIn.o src/lzma/7zBuf.o \
  *            src/lzma/7zBuf2.o src/lzma/7zCrc.o src/lzma/7zCrcOpt.o src/lzma/7zDec.o src/lzma/7zFile.o \
  *            src/lzma/7zStream.o src/lzma/Bcj2.o src/lzma/Bra.o src/lzma/Bra86.o src/lzma/BraIA64.o \
  *            src/lzma/CpuArch.o src/lzma/Delta.o src/lzma/Lzma2Dec.o src/lzma/LzmaDec.o \
- *            src/lzma/Ppmd7.o src/lzma/Ppmd7Dec.o -o archive_tests
+ *            src/lzma/Ppmd7.o src/lzma/Ppmd7Dec.o -o rom_files_tests
  * It writes its files in the folder given as its argument, or the current
  * one. Exit status is 0 when every check passes. */
 
-#include "odin/archive.hpp"
+#include "odin/rom_files.hpp"
 
 #include <cstdint>
 #include <cstdio>
@@ -45,6 +49,7 @@
 namespace {
 
 using odin::Archive;
+using odin::RomFiles;
 
 int g_checks, g_failures;
 
@@ -136,6 +141,25 @@ const std::vector<uint8_t> SEVEN_ZIP = {
 	0x00, 0x00, 0x0c, 0x76, 0x0a, 0x01, 0xd9, 0x2a, 0xab, 0x45, 0x00, 0x00
 };
 
+/* note.txt as puce-éè-игры-ゲーム.bin, as `7z a -t7z -mx=9` packs it: a name
+ * in several alphabets */
+const std::vector<uint8_t> SEVEN_ZIP_NAMES = {
+	0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c, 0x00, 0x04, 0x77, 0x07, 0x5f, 0x5d,
+	0x0b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x72, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0xa4, 0x82, 0xe3, 0x1a, 0x01, 0x00, 0x06, 0x48,
+	0x69, 0x6b, 0x61, 0x72, 0x75, 0x0a, 0x00, 0x01, 0x04, 0x06, 0x00, 0x01,
+	0x09, 0x0b, 0x00, 0x07, 0x0b, 0x01, 0x00, 0x01, 0x21, 0x21, 0x01, 0x00,
+	0x0c, 0x07, 0x00, 0x08, 0x0a, 0x01, 0x5b, 0xb4, 0xe3, 0x4d, 0x00, 0x00,
+	0x05, 0x01, 0x19, 0x0c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x11, 0x2b, 0x00, 0x70, 0x00, 0x75, 0x00, 0x63,
+	0x00, 0x65, 0x00, 0x2d, 0x00, 0xe9, 0x00, 0xe8, 0x00, 0x2d, 0x00, 0x38,
+	0x04, 0x33, 0x04, 0x40, 0x04, 0x4b, 0x04, 0x2d, 0x00, 0xb2, 0x30, 0xfc,
+	0x30, 0xe0, 0x30, 0x2e, 0x00, 0x62, 0x00, 0x69, 0x00, 0x6e, 0x00, 0x00,
+	0x00, 0x19, 0x00, 0x14, 0x0a, 0x01, 0x00, 0x00, 0x00, 0x81, 0x92, 0xb1,
+	0x7a, 0xdc, 0x01, 0x15, 0x06, 0x01, 0x00, 0x20, 0x80, 0xa4, 0x81, 0x00,
+	0x00
+};
+
 void test_listing(Archive &archive, const char *what)
 {
 	const auto &entries = archive.entries();
@@ -198,6 +222,23 @@ void test_kinds(const std::string &dir)
 		std::filesystem::remove(path, error);
 }
 
+/* The names of a 7z are UTF-16: read as UTF-8 */
+void test_names(const std::string &dir)
+{
+	const std::string seven = dir + "/archive-test-names.7z";
+	std::error_code error;
+
+	write_file(seven, SEVEN_ZIP_NAMES);
+	if (auto archive = Archive::open(seven)) {
+		check(archive->entries().size() == 1 && archive->entries()[0].name == "puce-éè-игры-ゲーム.bin",
+		      "a name of a 7z in several alphabets, in UTF-8");
+		check(archive->read(0) == NOTE, "the file of that name read back");
+	} else {
+		check(false, "the 7z of names opens");
+	}
+	std::filesystem::remove(seven, error);
+}
+
 void test_refused(const std::string &dir)
 {
 	const std::string text = dir + "/archive-test.txt", zip = dir + "/archive-test-bad.zip";
@@ -237,6 +278,101 @@ void test_refused(const std::string &dir)
 		std::filesystem::remove(path, error);
 }
 
+void make_folder(const std::string &path)
+{
+	std::error_code error;
+
+	std::filesystem::create_directories(path, error);
+}
+
+void test_finding(const std::string &dir)
+{
+	const std::string top = dir + "/rom-files-test-éèë-игры-ゲーム", roms = top + "/roms", bios = top + "/bios";
+	const std::vector<uint8_t> bytes = chip();
+	const RomFiles::File chip_file = { "chip.bin", 5000, CHIP_CRC, "" };
+	const RomFiles::File note_file = { "note.txt", NOTE.size(), NOTE_CRC, "" };
+	std::error_code error;
+	std::string where;
+
+	std::filesystem::remove_all(top, error);
+	make_folder(roms + "/toy");
+	make_folder(bios);
+
+	{
+		RomFiles files(roms, bios);
+
+		check(files.find("toy", chip_file).empty(), "nowhere yet");
+		check(!files.read("toy", chip_file, where), "nothing read from nowhere");
+	}
+
+	/* The folder of the game: by its name, loosely, by its CRC */
+	write_file(roms + "/toy/chip.bin", bytes);
+	{
+		RomFiles files(roms, bios);
+		const auto read = files.read("toy", chip_file, where);
+
+		check(read && *read == bytes && where == roms + "/toy/chip.bin", "in the folder of the game, by its name");
+	}
+	std::filesystem::rename(roms + "/toy/chip.bin", roms + "/toy/CH-IP.BIN", error);
+	{
+		RomFiles files(roms, bios);
+
+		check(files.find("toy", chip_file) == roms + "/toy/CH-IP.BIN", "by its name, dashes and case aside");
+	}
+	std::filesystem::rename(roms + "/toy/CH-IP.BIN", roms + "/toy/renamed.ic1", error);
+	write_file(roms + "/toy/same-size.bin", std::vector<uint8_t>(5000, 0x55));
+	{
+		RomFiles files(roms, bios);
+		const auto read = files.read("toy", chip_file, where);
+
+		check(read && *read == bytes && where == roms + "/toy/renamed.ic1", "renamed, by its CRC among those of its size");
+	}
+	std::filesystem::remove_all(roms + "/toy", error);
+
+	/* The archive of the game, the file under another name and in a folder */
+	mz_zip_add_mem_to_archive_file_in_place((roms + "/toy.zip").c_str(), "set/epr-1.ic29", bytes.data(), bytes.size(),
+	                                        nullptr, 0, MZ_BEST_COMPRESSION);
+	{
+		RomFiles files(roms, bios);
+		const auto read = files.read("toy", chip_file, where);
+
+		check(read && *read == bytes && where == roms + "/toy.zip: set/epr-1.ic29", "in the zip of the game, by its CRC");
+		check(files.find("toy", { "chip.bin", 5000, 0x12345678, "" }).empty(), "not with another CRC");
+		check(files.find("toy", { "epr-1.ic29", 5000, std::nullopt, "" }) == roms + "/toy.zip: set/epr-1.ic29",
+		      "by its name when the list tells no CRC");
+	}
+
+	/* The archives and the folders of its set: the BIOS first, then the ROMs */
+	const RomFiles::File boot = { "note.txt", NOTE.size(), NOTE_CRC, "base" };
+	const RomFiles::File seven = { "chip.bin", 5000, CHIP_CRC, "base7" };
+
+	make_folder(roms + "/base");
+	write_file(roms + "/base/note.txt", NOTE);
+	{
+		RomFiles files(roms, bios);
+
+		check(files.find("toy", note_file).empty(), "a file of a set is not the game's");
+		check(files.find("other", boot) == roms + "/base/note.txt", "in the folder of its set beside the games");
+	}
+	mz_zip_add_mem_to_archive_file_in_place((bios + "/base.zip").c_str(), "note.txt", NOTE.data(), NOTE.size(), nullptr, 0,
+	                                        MZ_BEST_COMPRESSION);
+	{
+		RomFiles files(roms, bios);
+		const auto read = files.read("other", boot, where);
+
+		check(read && *read == NOTE && where == bios + "/base.zip: note.txt", "in the zip of its set, the BIOS first");
+	}
+	write_file(roms + "/base7.7z", SEVEN_ZIP);
+	{
+		RomFiles files(roms, "");
+		const auto read = files.read("other", seven, where);
+
+		check(read && *read == bytes && where == roms + "/base7.7z: chip.bin", "in the 7z of its set, without a BIOS folder");
+	}
+
+	std::filesystem::remove_all(top, error);
+}
+
 } /* namespace */
 
 int main(int argc, char **argv)
@@ -244,7 +380,9 @@ int main(int argc, char **argv)
 	const std::string dir = argc > 1 ? argv[1] : ".";
 
 	test_kinds(dir);
+	test_names(dir);
 	test_refused(dir);
+	test_finding(dir);
 
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures ? 1 : 0;
