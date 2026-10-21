@@ -715,6 +715,11 @@ public:
 	odin::BarState::Ask do_bar(odin::BarState &bar);
 	/* ODIN_MENU_TEST: the menu opens after that frame */
 	bool tested_at(unsigned frame) const { return m_menu_test && frame % m_menu_test == 0; }
+	/* The library: what the buttons of the menu an event starts ask
+	 * there; the name of the one that presses on the gamepad of player 1,
+	 * else 2 (empty: no gamepad) */
+	std::vector<odin::MenuNav::Action> nav(const SDL_Event &event) { return m_nav.event(event); }
+	std::string press_name() const;
 
 	const odin::MenuState &state() const { return m_menu_state; }
 	const odin::Hotkeys &hotkeys() const { return m_hotkeys; }
@@ -965,6 +970,19 @@ MenuSession::event(const SDL_Event &event)
 		m_display.menu_event(event);
 	m_menu_pictures = MENU_PICTURES;
 	return Asked::NONE;
+}
+
+std::string
+MenuSession::press_name() const
+{
+	const unsigned player = m_controls.pad_name(0).empty() ? 1 : 0;
+
+	if (m_controls.pad_name(player).empty())
+		return {};
+	for (const odin::HostInput &in : m_nav.inputs(odin::MenuNav::PRESS))
+		if (in.kind == odin::HostInput::Kind::PAD)
+			return odin::Menu::input_name(in.pad, m_controls.pad_type(player));
+	return {};
 }
 
 /* For its next picture */
@@ -2427,6 +2445,15 @@ library(const Options &command, const odin::GameList &games, odin::Settings &set
 				action = hotkeys.pad_action(combo >= 0 ? combo : odin::Hotkeys::NO_PAD);
 				if (controls.guide_tapped())
 					action = hotkeys.pad_action(odin::Hotkeys::GUIDE_ALONE);
+				/* The buttons of the menu choose and play, as the arrows
+				 * and Enter */
+				for (const odin::MenuNav::Action nav : menus.nav(event)) {
+					using Nav = odin::MenuNav;
+
+					state.nav.across += nav == Nav::RIGHT ? 1 : nav == Nav::LEFT ? -1 : 0;
+					state.nav.down += nav == Nav::DOWN ? 1 : nav == Nav::UP ? -1 : 0;
+					state.nav.press = state.nav.press || nav == Nav::PRESS;
+				}
 			} else if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat) {
 				action = hotkeys.key_action(event.key.key, event.key.mod);
 			}
@@ -2447,6 +2474,7 @@ library(const Options &command, const odin::GameList &games, odin::Settings &set
 			continue;
 		}
 
+		state.press = menus.press_name();
 		menus.fill_bar(bar);
 		bar.game = false;
 		if (SDL_GetTicks() >= note_until)

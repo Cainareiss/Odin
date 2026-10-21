@@ -19,8 +19,8 @@
 /* The library: the games to choose from when Odin starts without one, as
  * the game picker of sm2-emu lays them out (mock-up v2), in the palette of
  * the menu, under the bar. Tiles at the left, the game chosen framed; its
- * sheet at the right. Arrows choose, Enter or a click on the game chosen
- * plays it. */
+ * sheet at the right. Arrows or a gamepad choose, Enter, its button that
+ * presses or a click on the game chosen plays it. */
 
 #include "odin/menu.hpp"
 
@@ -28,6 +28,7 @@
 #include <cfloat>
 #include <cmath>
 #include <string>
+#include <utility>
 
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_sdl3.h"
@@ -156,12 +157,12 @@ Menu::build_library(LibraryState &state, BarState &bar_state)
 
 	list->AddRectFilled({ 0.0f, below }, room, palette.screen);
 
-	/* The head: what to do, the keys at its right, the line of the accent
-	 * under them */
-	const char keys[] = "Enter: play    Ctrl+Q: quit";
+	/* The head: what to do, the keys at its right (and the button of the
+	 * gamepad), the line of the accent under them */
+	const std::string keys = "Enter" + (state.press.empty() ? "" : " or " + state.press) + ": play    Ctrl+Q: quit";
 
 	MenuKit::write(list, { margin, below + margin }, palette.cabinet, "SELECT A GAME", size, size * TITLE_SPACING);
-	list->AddText({ room.x - margin - ImGui::CalcTextSize(keys).x, below + margin }, palette.faint, keys);
+	list->AddText({ room.x - margin - ImGui::CalcTextSize(keys.c_str()).x, below + margin }, palette.faint, keys.c_str());
 
 	const float under = below + margin + line + kit.px(8.0f);
 
@@ -185,22 +186,20 @@ Menu::build_library(LibraryState &state, BarState &bar_state)
 	tile_w = std::floor(tile_w);
 	tile_h = std::floor(tile_h);
 
-	/* The arrows move the choice, as the tiles lie; Enter plays. With a
-	 * menu of the bar open, they are its own. */
-	if (count && !bar_state.open) {
-		const auto pressed = [](ImGuiKey key) { return ImGui::IsKeyPressed(key, true); };
-		int chosen = state.selected;
+	/* The arrows and the gamepad move the choice, as the tiles lie; Enter
+	 * or its button plays. With a menu of the bar open, they are its own. */
+	if (const LibraryState::Nav nav = std::exchange(state.nav, {}); count && !bar_state.open) {
+		const auto pressed = [](ImGuiKey key) { return ImGui::IsKeyPressed(key, true) ? 1 : 0; };
+		const int across = pressed(ImGuiKey_RightArrow) - pressed(ImGuiKey_LeftArrow) + nav.across;
+		const int down = pressed(ImGuiKey_DownArrow) - pressed(ImGuiKey_UpArrow) + nav.down;
+		int chosen = state.selected + across;
 
-		if (pressed(ImGuiKey_RightArrow))
-			chosen++;
-		if (pressed(ImGuiKey_LeftArrow))
-			chosen--;
-		if (pressed(ImGuiKey_DownArrow) && chosen + COLUMNS < count)
+		if (down > 0 && chosen + COLUMNS < count)
 			chosen += COLUMNS;
-		if (pressed(ImGuiKey_UpArrow) && chosen >= COLUMNS)
+		if (down < 0 && chosen >= COLUMNS)
 			chosen -= COLUMNS;
 		state.selected = std::clamp(chosen, 0, count - 1);
-		if (pressed(ImGuiKey_Enter) || pressed(ImGuiKey_KeypadEnter))
+		if (pressed(ImGuiKey_Enter) || pressed(ImGuiKey_KeypadEnter) || nav.press)
 			play_chosen(state);
 	}
 
@@ -261,8 +260,9 @@ Menu::build_library(LibraryState &state, BarState &bar_state)
 	 * to choose; how to play it at its foot */
 	const ImVec2 sa = { room.x - margin - sheet_w, top }, sb = { room.x - margin, bottom };
 	const float inside = kit.px(SHEET_INSIDE), x = sa.x + inside, width = sheet_w - 2.0f * inside;
-	const char play[] = "Enter or a second click: play", enter[] = "Enter";
-	const float foot = sb.y - inside - ImGui::GetFont()->CalcTextSizeA(size, FLT_MAX, width, play).y;
+	const std::string play = "Enter" + (state.press.empty() ? "" : ", " + state.press) + " or a second click: play";
+	const char enter[] = "Enter";
+	const float foot = sb.y - inside - ImGui::GetFont()->CalcTextSizeA(size, FLT_MAX, width, play.c_str()).y;
 	float y = sa.y + inside;
 
 	kit.frame(list, sa, sb, kit.px(SHEET_CUT), palette.body, 0);

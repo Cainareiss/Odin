@@ -58,8 +58,11 @@ std::string shown_path(const std::string &path, const char *none);
  * click starts it): the games of the list, each with the files it lacks
  * (none: it can be played), the one chosen; the folders of the games and
  * of the BIOS, whether the command line gives them; a folder to ask the
- * system for; the game to play, and why the one before did not start. The
- * thread of the board keeps it and does what changed (main.cpp). */
+ * system for; the game to play, and why the one before did not start; what
+ * the gamepad asked since the last picture (menu_nav.hpp: the choice moved
+ * across and down, the game chosen played) and the name of its button that
+ * plays (empty: no gamepad). The thread of the board keeps it and does what
+ * changed (main.cpp). */
 struct LibraryState {
 	struct Game {
 		std::string name, title;
@@ -74,6 +77,11 @@ struct LibraryState {
 	bool choosing = false;
 	std::optional<std::string> play;
 	std::string failed;
+	struct Nav {
+		int across = 0, down = 0;
+		bool press = false;
+	} nav;
+	std::string press;
 };
 
 /* The bar at the top of the window, over the game that goes on and over the

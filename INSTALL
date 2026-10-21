@@ -23,12 +23,13 @@ RUNNING
 [paths] of odin.ini.) Without -r, as a double click starts it, Odin opens
 its library: the games of the list, those whose files are missing said so
 with the files and the sets of MAME that hold them, and buttons to choose
-the folders of the games and of the BIOS (kept in [paths]); the arrows or a
-click choose a game, Enter or a second click plays it, and when it ends (but
-by Ctrl+Q, which quits) the library comes back, as it does after Close game
-of the bar from any game. The bar is over the library at all times, and the
-menu (Escape, F10 or Guide) opens there as in a game, its page Input on the
-game chosen. The pictures of the games
+the folders of the games and of the BIOS (kept in [paths]); the arrows, the
+D-pad or the stick of a gamepad, or a click choose a game, Enter, A of the
+gamepad (as [menu] press says) or a second click plays it, and when it ends
+(but by Ctrl+Q, which quits) the library comes back, as it does after Close
+game of the bar from any game. The bar is over the library at all times,
+and the menu (Escape, F10 or Guide) opens there as in a game, its page Input
+on the game chosen. The pictures of the games
 are in the folder of the artwork (artwork/ in the data folder of Odin,
 beside saves/; artwork in [paths], page Paths; ODIN_ARTWORK=<folder> another
 one, none none), named after the game in MAME, in any case:
