@@ -38,20 +38,22 @@ namespace {
 
 /* In points: the margin of the window, the gap between the tiles and
  * before the sheet, what is inside a tile and the sheet; the share of the
- * width the sheet takes; a tile as a flyer is (132 by 180), four on a row
- * at most; the cuts of the corners */
+ * width the sheet takes; a tile as the screen of the game is (4:3), three
+ * on a row at most; the cuts of the corners */
 constexpr float MARGIN = 16.0f;
 constexpr float GAP = 12.0f;
 constexpr float TILE_INSIDE = 7.0f;
 constexpr float SHEET_INSIDE = 14.0f;
 constexpr float SHEET_SHARE = 0.31f;
-constexpr float TILE_W = 132.0f;
-constexpr float TILE_H = 180.0f;
-constexpr int COLUMNS = 4;
+constexpr float TILE_W = 4.0f;
+constexpr float TILE_H = 3.0f;
+constexpr int COLUMNS = 3;
 constexpr float TILE_CUT = 5.0f;
 constexpr float SHEET_CUT = 8.0f;
-/* The back of a tile, darker than the window (mock-up v2) */
+/* The back of a tile, darker than the window (mock-up v2); a game that
+ * cannot be played: its picture that dim */
 constexpr ImU32 TILE_BACK = IM_COL32(0x1D, 0x1D, 0x1B, 0xFF);
+constexpr ImU32 DIMMED = IM_COL32(0xFF, 0xFF, 0xFF, 0x50);
 /* The title of the head, its letters a fifth of the font apart; the line
  * of the accent under the head, its opacity, the share of it that fades
  * at each end; the title of the sheet, larger than the font */
@@ -81,6 +83,36 @@ wrapped(ImDrawList *list, ImVec2 at, float width, float size, ImU32 colour, cons
 }
 
 } /* namespace */
+
+void
+Menu::add_library_picture(const std::string &game, SDL_Surface *rgba)
+{
+	m_library_handed.emplace_back(game, rgba);
+}
+
+void
+Menu::upload_library_pictures()
+{
+	for (const auto &[game, rgba] : m_library_handed) {
+		const auto old = m_library_pictures.find(game);
+		GLuint texture = 0;
+
+		if (old != m_library_pictures.end())
+			glDeleteTextures(1, &old->second.texture);
+		glGenTextures(1, &texture);
+		glBindTexture(GL_TEXTURE_2D, texture);
+		glPixelStorei(GL_UNPACK_ROW_LENGTH, rgba->pitch / 4);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, rgba->w, rgba->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba->pixels);
+		glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+		glGenerateMipmap(GL_TEXTURE_2D);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+		glBindTexture(GL_TEXTURE_2D, 0);
+		m_library_pictures[game] = { texture, static_cast<float>(rgba->w), static_cast<float>(rgba->h) };
+		SDL_DestroySurface(rgba);
+	}
+	m_library_handed.clear();
+}
 
 void
 Menu::open_library()
@@ -183,12 +215,33 @@ Menu::build_library(LibraryState &state)
 
 		const bool chosen = i == state.selected, playable = game.missing.empty();
 
-		kit.frame(list, a, b, kit.px(TILE_CUT), TILE_BACK, 0);
+		const auto picture = m_library_pictures.find(game.name);
+		const float cut = kit.px(TILE_CUT);
+
+		kit.frame(list, a, b, cut, TILE_BACK, 0);
 		list->PushClipRect(a, b, true);
-		wrapped(list, { a.x + inside, a.y + inside }, tile_w - 2.0f * inside, size, playable ? palette.dim : palette.faint,
-		        game.title);
-		if (!playable)
+		if (picture != m_library_pictures.end()) {
+			/* Its picture whole in the tile, the corners cut again over
+			 * it */
+			const float k = std::min(tile_w / picture->second.w, tile_h / picture->second.h);
+			const ImVec2 pa = { std::round(a.x + (tile_w - picture->second.w * k) / 2.0f),
+				            std::round(a.y + (tile_h - picture->second.h * k) / 2.0f) };
+
+			list->AddImage(ImTextureRef(static_cast<ImTextureID>(picture->second.texture)), pa,
+			               { pa.x + std::round(picture->second.w * k), pa.y + std::round(picture->second.h * k) },
+			               { 0.0f, 0.0f }, { 1.0f, 1.0f }, playable ? IM_COL32_WHITE : DIMMED);
+			list->AddTriangleFilled(a, { a.x + cut, a.y }, { a.x, a.y + cut }, palette.screen);
+			list->AddTriangleFilled({ b.x, a.y }, { b.x, a.y + cut }, { b.x - cut, a.y }, palette.screen);
+			list->AddTriangleFilled(b, { b.x - cut, b.y }, { b.x, b.y - cut }, palette.screen);
+			list->AddTriangleFilled({ a.x, b.y }, { a.x, b.y - cut }, { a.x + cut, b.y }, palette.screen);
+		} else {
+			wrapped(list, { a.x + inside, a.y + inside }, tile_w - 2.0f * inside, size,
+			        playable ? palette.dim : palette.faint, game.title);
+		}
+		if (!playable) {
+			list->AddRectFilled({ a.x, b.y - inside - line - kit.px(4.0f) }, b, MenuKit::alpha(TILE_BACK, 0.85f));
 			MenuKit::small_caps(list, { a.x + inside, b.y - inside - line }, palette.accent, "MISSING");
+		}
 		list->PopClipRect();
 		kit.frame(list, a, b, kit.px(TILE_CUT), 0, chosen ? palette.action : hovered ? palette.dim : palette.outline,
 		          chosen ? 3.0f : 1.0f);

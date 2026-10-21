@@ -465,7 +465,7 @@ public:
 	        const std::string &settings_file, const odin::GameList &games)
 		: m_options(options), m_game(game), m_board(board), m_display(display), m_keys(keys), m_controls(controls),
 		  m_audio(audio), m_outputs(std::move(outputs)), m_settings(settings), m_settings_file(settings_file),
-		  m_games(games), m_hotkeys(settings), m_nav(settings), m_paused(false),
+		  m_games(games), m_hotkeys(settings), m_nav(settings), m_paused(false), m_touched(!options.state_path.empty()),
 		  m_next(),
 		  m_menu_pictures(0), m_menu_drawn(0),
 		  m_menu_test(static_cast<unsigned>(std::max(odin::env_int("ODIN_MENU_TEST", 0), 0)))
@@ -607,6 +607,7 @@ private:
 	void press_escape();
 	void load_or_save_state(bool load);
 	void save_state_at_frame();
+	void capture_title();
 	void limit_frame_rate();
 
 	const Options &m_options;
@@ -651,6 +652,9 @@ private:
 	odin::FolderDialog m_dialog;
 	bool m_menu_opened = false;
 	bool m_paused;
+	/* A key or a button was pressed, or a state loaded: the game may no
+	 * longer be at its title at its title_frame */
+	bool m_touched;
 	std::chrono::steady_clock::time_point m_next;	/* when the next frame is due */
 	unsigned m_menu_pictures;	/* still to draw */
 	Uint64 m_menu_drawn;		/* when the last one was */
@@ -690,6 +694,9 @@ Session::process_events()
 	bool quit = false;
 
 	while (SDL_PollEvent(&event)) {
+		if (event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
+		    event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN || event.type == SDL_EVENT_JOYSTICK_BUTTON_DOWN)
+			m_touched = true;
 		if (event.type == m_dialog.event()) {
 			take_folder();
 			continue;
@@ -1680,6 +1687,23 @@ Session::take_folder()
 	}
 }
 
+/* The picture of its title for the library, once: at its title_frame, the
+ * game left to itself since power-on, when none is kept yet */
+void
+Session::capture_title()
+{
+	const std::string folder = odin::library_folder();
+	std::error_code error;
+
+	if (!m_game.title_frame || m_board.frame() != m_game.title_frame || m_touched || folder.empty())
+		return;
+
+	const std::string path = folder + "/" + m_game.name + ".png";
+
+	if (!std::filesystem::exists(path, error) && m_display.save_picture(path))
+		std::printf("library: the title of %s kept in '%s'\n", m_game.name.c_str(), path.c_str());
+}
+
 /* ODIN_MENU_TEST: Escape pressed and released */
 void
 Session::press_escape()
@@ -1763,6 +1787,7 @@ Session::frames()
 			m_audio->play(m_board.sound(false), m_board.sound(true));
 		m_display.end_frame(m_board.frame(), std::chrono::steady_clock::now() > m_next + FRAME);
 		save_state_at_frame();
+		capture_title();
 		if (m_menu_test && m_board.frame() % m_menu_test == 0)
 			press_escape();
 		if (!m_options.unthrottled)
@@ -1822,6 +1847,18 @@ library(Options &options, const odin::GameList &games, odin::Settings &settings,
 	state.failed = failed;
 	display.open_library();
 	SDL_ShowCursor();
+
+	/* The pictures of the games: the title Odin kept of each */
+	if (const std::string folder = odin::library_folder(); !folder.empty()) {
+		for (const odin::LibraryState::Game &game : state.games) {
+			SDL_Surface *const png = SDL_LoadPNG((folder + "/" + game.name + ".png").c_str());
+			SDL_Surface *const rgba = png ? SDL_ConvertSurface(png, SDL_PIXELFORMAT_RGBA32) : nullptr;
+
+			SDL_DestroySurface(png);
+			if (rgba)
+				display.add_library_picture(game.name, rgba);
+		}
+	}
 	for (;;) {
 		SDL_Event event;
 

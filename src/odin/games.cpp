@@ -689,6 +689,13 @@ GameList::describe(const std::string &name) const
 		}
 		game.drive_first_output = static_cast<unsigned>(json_integer_value(first));
 	}
+	if (const json_t *const frame = json_object_get(rom, "title_frame")) {
+		if (!json_is_integer(frame) || json_integer_value(frame) < 1) {
+			std::fprintf(stderr, "ERROR: game '%s': \"title_frame\" is not a frame\n", name.c_str());
+			return std::nullopt;
+		}
+		game.title_frame = static_cast<unsigned>(json_integer_value(frame));
+	}
 	if (json_t *const board = json_object_get(rom, "rom_board")) {
 		game.rom_board = parse_rom_board(board);
 		if (!game.rom_board) {

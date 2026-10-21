@@ -196,6 +196,10 @@ struct Game {
 	 * command on eight outputs from there (drive_board.hpp): "drive_board"
 	 * in the list, {"first_output": 1 to 25}; 0 when it does not say. */
 	unsigned drive_first_output = 0;
+	/* The frame of its attract, from power-on, that shows its title: the
+	 * picture of the game the library shows. "title_frame" in the list; 0
+	 * when it does not say. */
+	unsigned title_frame = 0;
 	/* Its ROM board: "rom_board" in the list; none when it does not say,
 	 * as for the BOOTROM alone. */
 	std::optional<GameRomBoard> rom_board;

@@ -25,7 +25,9 @@
 #include <chrono>
 #include <cinttypes>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
+#include <system_error>
 
 #include "odin/env.hpp"
 #include "odin/keyboard.hpp"
@@ -387,6 +389,41 @@ Display::open_library()
 		run([this] { m_menu->freeze(0, 0, 0); });
 	}
 	m_menu->open_library();
+}
+
+void
+Display::add_library_picture(const std::string &game, SDL_Surface *rgba)
+{
+	m_menu->add_library_picture(game, rgba);
+}
+
+bool
+Display::save_picture(const std::string &path)
+{
+	const int w = static_cast<int>(m_picture_width), h = static_cast<int>(m_picture_height);
+	SDL_Surface *const shot = w && h ? SDL_CreateSurface(w, h, SDL_PIXELFORMAT_RGB24) : nullptr;
+	std::vector<uint8_t> pixels(size_t{m_picture_width} * m_picture_height * 3);
+	std::error_code error;
+	bool saved = false;
+
+	if (!shot)
+		return false;
+	run([this, &pixels] { read_picture(pixels.data()); });
+	/* read_picture gives the bottom line first */
+	for (int y = 0; y < h; y++)
+		std::memcpy(static_cast<uint8_t *>(shot->pixels) + static_cast<size_t>(y) * static_cast<size_t>(shot->pitch),
+		            &pixels[static_cast<size_t>(h - 1 - y) * static_cast<size_t>(w) * 3], static_cast<size_t>(w) * 3);
+
+	SDL_Surface *const small = w > 640 ? SDL_ScaleSurface(shot, 640, 480, SDL_SCALEMODE_LINEAR) : shot;
+
+	std::filesystem::create_directories(std::filesystem::path(path).parent_path(), error);
+	saved = small && SDL_SavePNG(small, path.c_str());
+	if (!saved)
+		std::fprintf(stderr, "ERROR: picture: '%s' cannot be written: %s\n", path.c_str(), SDL_GetError());
+	if (small != shot)
+		SDL_DestroySurface(small);
+	SDL_DestroySurface(shot);
+	return saved;
 }
 
 void

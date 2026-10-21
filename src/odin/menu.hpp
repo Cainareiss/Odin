@@ -20,6 +20,7 @@
 #define ODIN_MENU_HPP
 
 #include <array>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -274,6 +275,9 @@ public:
 	 * game) forgotten */
 	void open_library();
 	void build_library(LibraryState &state);
+	/* A picture of a game for its tile, RGBA, taken (destroyed once made a
+	 * texture at the next picture drawn); one before it replaced */
+	void add_library_picture(const std::string &game, SDL_Surface *rgba);
 	/* A list dropped open, which Escape closes before the menu */
 	bool popup_open() const;
 
@@ -297,6 +301,9 @@ private:
 
 	void follow_scale();
 	void add_fonts();
+	/* The drawing thread: the pictures handed over to the library made
+	 * textures */
+	void upload_library_pictures();
 	void navigate(MenuState &state);
 	void page_input(MenuKit &kit, MenuState &state) const;
 	void page_display(MenuKit &kit, MenuState &state) const;
@@ -346,6 +353,14 @@ private:
 	bool m_frozen;
 	/* The pictures as textures */
 	std::array<GLuint, PICTURES> m_pictures{};
+	/* The library: the pictures of the games handed over, then as
+	 * textures with their sizes */
+	struct LibraryPicture {
+		GLuint texture;
+		float w, h;
+	};
+	std::vector<std::pair<std::string, SDL_Surface *>> m_library_handed;
+	std::map<std::string, LibraryPicture> m_library_pictures;
 };
 
 } /* namespace odin */

@@ -33,6 +33,10 @@ namespace odin {
  * ~/Library/Application Support on macOS, XDG_DATA_HOME or ~/.local/share
  * elsewhere. Empty when it cannot be told. */
 std::string user_data_dir();
+/* The pictures of the games in the library (<game>.png): ODIN_LIBRARY,
+ * else library in the data folder of Odin (beside saves/); empty with
+ * ODIN_LIBRARY=none */
+std::string library_folder();
 
 /* The folder where a game keeps what its board holds without power, one
  * file for each memory. Nothing is read or written when there is none. */

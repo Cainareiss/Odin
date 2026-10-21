@@ -25,7 +25,10 @@ its library: the games of the list, those whose files are missing said so
 with the files and the sets of MAME that hold them, and buttons to choose
 the folders of the games and of the BIOS (kept in [paths]); the arrows or a
 click choose a game, Enter or a second click plays it, and when it ends (but
-by Ctrl+Q, which quits) the library comes back. The games are those of
+by Ctrl+Q, which quits) the library comes back. The picture of a game there
+is its title, which Odin keeps (library/ in its data folder beside saves/;
+ODIN_LIBRARY=<folder> another one, none none) the first time the game shows
+it with no key or button pressed since its power-on. The games are those of
 odin-games.json, by the names of their MAME sets: airtrix, braveff,
 pharrier, sgnascar, swracer and von4. The file is looked for in the current
 directory, then in $HOME, then in ~/.local/share/odin. The ROM directory

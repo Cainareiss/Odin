@@ -244,6 +244,8 @@ Menu::Menu(SDL_Window *window)
 
 Menu::~Menu()
 {
+	for (const auto &[game, rgba] : m_library_handed)
+		SDL_DestroySurface(rgba);
 	ImGui::SetCurrentContext(m_imgui);
 	ImGui_ImplSDL3_Shutdown();
 	ImGui::DestroyContext(m_imgui);
@@ -968,6 +970,7 @@ Menu::freeze(GLuint picture_fb, unsigned w, unsigned h)
 void
 Menu::draw(unsigned window_w, unsigned window_h)
 {
+	upload_library_pictures();
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glDisable(GL_SCISSOR_TEST);
 	glDisable(GL_DEPTH_TEST);
@@ -1016,6 +1019,9 @@ Menu::release()
 	glDeleteVertexArrays(1, &m_vao);
 	glDeleteTextures(PICTURES, m_pictures.data());
 	m_pictures = {};
+	for (const auto &[game, picture] : m_library_pictures)
+		glDeleteTextures(1, &picture.texture);
+	m_library_pictures.clear();
 	m_gl = false;
 }
 

@@ -161,6 +161,12 @@ public:
 	 * built from the state and shown once a picture */
 	void open_library();
 	void draw_library(LibraryState &state);
+	/* A picture of a game for the library, RGBA (the menu takes it), after
+	 * it is opened */
+	void add_library_picture(const std::string &game, SDL_Surface *rgba);
+	/* The picture of the last frame in a PNG file, no larger than 640 by
+	 * 480 (the folder made): false, said on stderr, when it cannot be */
+	bool save_picture(const std::string &path);
 	bool menu_popup_open() const;
 
 	/* Hikaru::Screen */

@@ -50,6 +50,17 @@ user_data_dir()
 }
 
 std::string
+library_folder()
+{
+	const char *const chosen = std::getenv("ODIN_LIBRARY");
+	const std::string data = user_data_dir();
+
+	if (chosen && chosen[0])
+		return std::strcmp(chosen, "none") ? chosen : "";
+	return data.empty() ? data : data + "/odin/library";
+}
+
+std::string
 SaveFolder::root(const std::string &chosen)
 {
 	const char *const given = std::getenv("ODIN_SAVES");
