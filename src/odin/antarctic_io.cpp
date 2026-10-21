@@ -175,7 +175,7 @@ namespace odin {
  * from the latter.
  *
  * They read 0 here: nothing says what each counts exactly. The libraries of
- * AIRTRIX, BRAVEFF, PODRACE and SGNASCAR copy the eleven to their memory at
+ * AIRTRIX, BRAVEFF, SWRACER and SGNASCAR copy the eleven to their memory at
  * every list; a debug text is all that is seen made of them (BRAVEFF
  * @0C040A66), and the six attract loops send the same lists when they read
  * 1000000.
@@ -495,7 +495,7 @@ Antarctic::copy_texture(uint32_t bus_addr, uint32_t size, const odin_texhead_t &
 	/* The pyramid goes down to 1x1 (X360 825C6A00) and its levels
 	 * alternate between the two banks: the pages BRAVEFF writes to the
 	 * texture RAM itself hold the half-size copy of a bank 0 texture in
-	 * bank 1, and PODRACE keeps textures where the level 1 of the same
+	 * bank 1, and SWRACER keeps textures where the level 1 of the same
 	 * bank would land. The X360 port keeps the levels in the texhead
 	 * bank (825C68D8). */
 	odin_tex_coords(&texhead, &dstx, &dsty);

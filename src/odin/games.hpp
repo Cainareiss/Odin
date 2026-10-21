@@ -189,7 +189,7 @@ struct Game {
 	 * levels of the list come from levels measured in a race. */
 	double option_level = 0;
 	/* The sound of the optional board feeds a vibration device of player 1
-	 * (the control panel of PODRACE): "option_vibration" in the list,
+	 * (the control panel of SWRACER): "option_vibration" in the list,
 	 * false when it does not say. */
 	bool option_vibration = false;
 	/* The output of TX0 of the drive board of its cabinet, which takes a

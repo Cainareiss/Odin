@@ -1682,7 +1682,7 @@ Antarctic::op_lightset_recall(const uint32_t *inst)
  *	go in dots. PHARRIER draws the shadow of the player with C and 4 in
  *	turn, BRAVEFF its smoke: both cabinets show what lies behind them.
  *
- *	PODRACE sends -7 to -1 on 16 bits for the far scenery it brings in:
+ *	SWRACER sends -7 to -1 on 16 bits for the far scenery it brings in:
  *	the low five bits are taken (HEURISTIC), 1/8 to 7/8 of the pixels.
  *
  *	A subroutine returns with the pattern it was called with (HEURISTIC:
@@ -1717,7 +1717,7 @@ Antarctic::op_mesh_set(const uint32_t *inst)
 		m_s.pattern = (inst[0] >> 16) & 0x1F;
 		break;
 	case 9:
-		/* 2^(log - 0x8D): the sky dome of PODRACE has 0x8E. */
+		/* 2^(log - 0x8D): the sky dome of SWRACER has 0x8E. */
 		log = (inst[0] >> 16) & 0xFF;
 		m_s.poly.static_mesh_precision = std::ldexp(1.0f, static_cast<int>(log) - 0x8D);
 		break;

@@ -19,28 +19,29 @@ RUNNING
 
  $ bin/odin -R <ROM directory> -r <game>
 
-(Without options, Odin opens its window, black, and waits; Ctrl+Q quits.
--R may be left out once the menu, page Paths, keeps the folder: roms in
-[paths] of odin.ini.) The games are those of odin-games.json: airtrix, braveff, pharrier, podrace,
-sgnascar and von4. The file is looked for in the current directory, then in
-$HOME, then in ~/.local/share/odin. The ROM directory holds each game as
-MAME keeps it: a directory, a zip or a 7z of the name of the game, with the
-files odin-games.json lists for it. The files a game shares with others, in
-the sets of MAME hikaru (the BIOS), mie, jvs13551 and 18wheelr, are looked
-for in the BIOS directory (-B <path>, bios in [paths], page Paths), then in
-the ROM directory: hikaru.zip, hikaru.7z or a directory hikaru; they may be
-in the directory or the archive of the game too. A file is the one of its
-size and of the CRC MAME gives it: in an archive by its CRC, whatever its
-name; in a directory by its name, with or without dashes, in any case, else
-by its CRC. One found by its name with another CRC is said, and taken
-(another dump of the chip). When a file is missing, Odin says which, and the
-set of MAME that holds it. The directories may have names in any language
-(on Windows, 10 version 1903 or later). The programs of the I/O boards of
-PODRACE (315-6215.bin) and NASCAR (epr-21868.ic7, from the 18wheelr set of
-MAME) may be left out: an imitation of the board answers then, made from
-that program and checked against it. The games play the same without them,
-and NASCAR sends its wheel (the force feedback) the same orders; with them
-the board runs its own program, a little slower.
+(Without options, Odin opens its window, black, and waits; Ctrl+Q quits. -R
+may be left out once the menu, page Paths, keeps the folder: roms in [paths]
+of odin.ini.) The games are those of odin-games.json, by the names of their
+MAME sets: airtrix, braveff, pharrier, sgnascar, swracer and von4. The file
+is looked for in the current directory, then in $HOME, then in
+~/.local/share/odin. The ROM directory holds each game as MAME keeps it: a
+directory, a zip or a 7z of the name of the game, with the files
+odin-games.json lists for it. The files a game shares with others, in the
+sets of MAME hikaru (the BIOS), mie, jvs13551 and 18wheelr, are looked for
+in the BIOS directory (-B <path>, bios in [paths], page Paths), then in the
+ROM directory: hikaru.zip, hikaru.7z or a directory hikaru; they may be in
+the directory or the archive of the game too. A file is the one of its size
+and of the CRC MAME gives it: in an archive by its CRC, whatever its name;
+in a directory by its name, with or without dashes, in any case, else by its
+CRC. One found by its name with another CRC is said, and taken (another dump
+of the chip). When a file is missing, Odin says which, and the set of MAME
+that holds it. The directories may have names in any language (on Windows,
+10 version 1903 or later). The programs of the I/O boards of SWRACER
+(315-6215.bin) and NASCAR (epr-21868.ic7, from the 18wheelr set of MAME) may
+be left out: an imitation of the board answers then, made from that program
+and checked against it. The games play the same without them, and NASCAR
+sends its wheel (the force feedback) the same orders; with them the board
+runs its own program, a little slower.
 
 Options:
 
@@ -126,10 +127,10 @@ background:
 device of the control panel, not speakers: the pad of player 1 shakes as
 hard as its sound; the page Audio plays it in the speakers too, where the
 user wants it ("mode = mix", -13 dB by default, or "mode = quad" in
-[sound.podrace]). In NASCAR the pad of player 1 shakes with the shocks
+[sound.swracer]). In NASCAR the pad of player 1 shakes with the shocks
 the game gives the wheel, not with the hold and the damping that follow
 the moves of the wheel (experimental; Vibration in the advanced options
-of the page Input, or "vibration = off" in [players.podrace] or
+of the page Input, or "vibration = off" in [players.swracer] or
 [players.sgnascar], stops it).
 
 The mouse aims for player 1 in Brave: the sight where it points on the

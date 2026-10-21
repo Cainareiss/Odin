@@ -97,7 +97,7 @@ public:
 
 	/* The local bus of the ROM board is 32 bits wide. HEURISTIC: bit 3 of
 	 * +26, as the programs set it: FC for the 32-bit FPGA of SGNASCAR, F4
-	 * and F6 for the 315-5881 that AIRTRIX, PODRACE and PHARRIER reach 16
+	 * and F6 for the 315-5881 that AIRTRIX, SWRACER and PHARRIER reach 16
 	 * bits at a time, FD then F4 for the two halves of the probe of the
 	 * BOOTROM (ROM 0x1F3A). */
 	bool wide_local_bus() const { return (reg(0x26, 1) & 0x08) != 0; }

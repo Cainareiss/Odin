@@ -18,7 +18,7 @@ Speed: the frames are held at 60 per second (-u lifts the limit). On a
 Ryzen 5 5600X with a GeForce RTX 3080 the whole demo loops, from power-on
 and without the limit, never fall under 60 in any second: the slowest second
 runs at 64 frames per second in PHARRIER, 70 in AIRTRIX and BRAVEFF, 74 in
-VON4, 96 in SGNASCAR and 112 in PODRACE (two runs each). A run resumed from
+VON4, 96 in SGNASCAR and 112 in SWRACER (two runs each). A run resumed from
 a saved state reads higher for its first seconds: the card lowers its clock
 some 3.5 s after the program starts. In a heavy scene of PHARRIER a
 frame takes 13 ms: the master SH-4 4.2 (1 to 2 million instructions run a
@@ -88,7 +88,7 @@ with a line that names their format (LIST_HEADER in renderer_programs.cpp):
 its number goes up when MeshVariant::key changes, and shaders/ is then made
 again (the six loops with an empty XDG_CACHE_HOME). What is left, in a
 heavy scene of each game at 60 frames per second: no frame late in
-PHARRIER, PODRACE and VON4, one or two in 30 s in AIRTRIX, BRAVEFF and
+PHARRIER, SWRACER and VON4, one or two in 30 s in AIRTRIX, BRAVEFF and
 SGNASCAR, 4 to 8 ms late. In BRAVEFF (frame 3407) and SGNASCAR (8843,
 9701) they are the same frames at each run and the drawing is not waited
 for: frames the machine itself takes 20 to 24 ms to run. Which chip of it
@@ -250,7 +250,7 @@ lists those the host uses ("outputs" in odin-games.json, read in its
 OUTPUT TEST); the nozzle vibration of BRAVEFF (outputs 2 and 5) shakes
 the pad of its player (both motors at C000 while it is on: a choice of
 the emulator); the lamps and the locks (the board of AIRTRIX, the boost
-lever of PODRACE) go to other programs as MAME's network output gives
+lever of SWRACER) go to other programs as MAME's network output gives
 them ([outputs] network = on in odin.ini; outputs_network.cpp), on
 127.0.0.1 only where MAME takes every address; not yet the drive board of
 NASCAR. AIRTRIX turns its output 4 off once after all six are
@@ -337,10 +337,10 @@ the main board, sample period for sample period (hikaru.cpp, HEURISTIC:
 Air Trix and Virtual-On open EXTS on the main board and play their music
 on the optional one, and the Air Trix cabinet has that board but main
 speakers only; no schematic says it). The other way round, SGNASCAR,
-PHARRIER and PODRACE leave EXTS shut and play on the optional board for
+PHARRIER and SWRACER leave EXTS shut and play on the optional board for
 speakers of its own (their US manuals, SOUND TEST: OPTION SPEAKER, the
 backrest speakers and the bass shaker of NASCAR, the backrest speakers and
-woofers of PHARRIER, the woofer and shaker of PODRACE): "option_speakers"
+woofers of PHARRIER, the woofer and shaker of SWRACER): "option_speakers"
 in odin-games.json, and the default sound mixes the two boards for them
 (-o mix), the optional one at its "option_level" (audio_out.hpp, HEURISTIC:
 the volumes of the switch unit of the cabinet set the balance, through an
@@ -349,7 +349,7 @@ about 30 degrees lower than FRONT at the factory: 8 dB if that volume
 spans some 80 dB over the travel, as the electronic volumes such linear
 knobs drive do; -22 dB, from levels measured in a race, hid the sounds of
 the menus, and -8 was a little loud to the ear: -12, notes MARKDOWN/69).
-PODRACE has
+SWRACER has
 no such speakers: its optional board feeds the vibration device of the
 control panel (deluxe manual, VIBRATION volume, SOUND TEST "OPTION SPEAKER
 LEFT and RIGHT function the same"; deluxe wiring; on the U.S. mini deluxe
@@ -405,12 +405,12 @@ kept" and bit 2 "+8 kept". Only its ROM BOARD TEST page reads them: 04
 numbers the EPROMs from IC 29, else IC 35 (0x4B86); 08 puts the mask ROMs
 from IC 19, a page in two (0x4D56, 0x4F96). The names of the chips of the
 sets give the answer each board must get: 04 for AIRTRIX, BRAVEFF,
-PHARRIER, PODRACE and VON4 (EPROMs IC29...), 08 for SGNASCAR (EPROMs
+PHARRIER, SWRACER and VON4 (EPROMs IC29...), 08 for SGNASCAR (EPROMs
 IC35, mask ROMs IC19...). SGNASCAR gets it (its FPGA keeps +C, gives its
 ID 4252 at +8); the others from the 64 KB RAM of the local bus, two 8-bit
 SRAMs on both boards MAME draws, whose 32-bit access on a wide bus keeps
 the low half only (rom_board.cpp, memctl.hpp wide_local_bus); the ROM
-BOARD TEST pages of AIRTRIX and PODRACE then give the numbers and the
+BOARD TEST pages of AIRTRIX and SWRACER then give the numbers and the
 CRCs MAME read on these boards. BRAVEFF never probes. HEURISTIC: bit 3 of
 +0x26 makes the local bus 32 bits wide (FC where SGNASCAR reads its FPGA
 in 32 bits, F4 or F6 where the games reach the 315-5881 in 16 bits, FD
@@ -448,7 +448,7 @@ the port for the values 3, 6 and 7 and means plain texturing here
 The mipmap levels of a texture alternate between the two texture banks,
 as Valkyrie had it, where the X360 port keeps them in the texhead bank:
 the pages BRAVEFF writes to the texture RAM itself hold the half-size
-copy of each bank 0 texture in bank 1, and PODRACE keeps the textures of
+copy of each bank 0 texture in bank 1, and SWRACER keeps the textures of
 the Watto shot of its intro where the level 1 of the same bank would
 land (they stay intact on the cabinet). The levels go down to the one
 whose smaller side is one texel (HEURISTIC: the games upload no further;
@@ -508,7 +508,7 @@ float bit patterns; with the exact reciprocal the hall-lit scenes of
 AIRTRIX are 8 to 12 % darker than the cabinet).
 The back of a polygon drawn on both faces (vertex bit 23) is lit with the
 reversed normal (HEURISTIC, read from two cabinets: the SEGA logo of
-PODRACE is as bright from behind as from the front and dark when its
+SWRACER is as bright from behind as from the front and dark when its
 back turns away from the light, which rules out the absolute value of
 N . L; the inner faces of the PHARRIER letters). The back is told by the
 winding: turning the normals toward the eye instead darkens the veils of
@@ -737,7 +737,7 @@ which no code tells: it waits for a measure (the load of a cabinet from
 power-on).
 The copy follows the table at 0x390 of the EPROMs: from bank 10 at +400
 to 0C010000, a length of 200000 (BRAVEFF) to 7F0000 (VON4), 01FF0000 for
-PODRACE and SGNASCAR. Window 03 is 16 MB: theirs runs on past it, through
+SWRACER and SGNASCAR. Window 03 is 16 MB: theirs runs on past it, through
 the 64 registers of the bridge (04000000) and 04000040-04FF03FF, into
 0D00FC40-0DFFFFFF of the master RAM (4 178 160 reads of 8 bytes past the
 registers; the loop changes no bank, 0x0C00B8A2). HEURISTIC: what the
@@ -787,7 +787,7 @@ that is done. What else differs between the two boards is not known.
 Counters: the eleven registers 15002800 to 15002848 (primitives of each
 type, texture heads, materials and lights, by the names of the debug menu
 of PHARRIER) read 0, nothing says what each counts exactly. AIRTRIX,
-BRAVEFF, PODRACE and SGNASCAR copy them to their memory at every list; a
+BRAVEFF, SWRACER and SGNASCAR copy them to their memory at every list; a
 debug text is all that is seen made of them, and the six attract loops
 send the same lists when the counters read 1000000. Read as 0 too, for
 want of a source: 1A000020 (once at start, 12 times in BRAVEFF) and
@@ -988,7 +988,7 @@ with a short list launched a few hundred instructions before they close
 their interrupts and start again from their entry point without the
 initialisation, and they wait there for the end of that list (SGNASCAR
 @0C075640, the wait @0C0705BC); told at the end of the line it came too late
-and AIRTRIX, BRAVEFF, PODRACE and SGNASCAR stayed black. A list the slave
+and AIRTRIX, BRAVEFF, SWRACER and SGNASCAR stayed black. A list the slave
 launches would start with the next slice (none seen). A launch clears the
 stacks, the bases and the scratch objects (Valkyrie did at every vertical
 blanking; HEURISTIC either way, the six attract loops send the same lists).
@@ -1003,8 +1003,8 @@ A normal goes through the 3x3 of its modelview, as the position does: US
 patent 6,714,690 of SEGA says the geometry processor multiplies both by the
 same matrix, the translation switched off for a normal. Valkyrie took the
 inverse transposed, which differs when an object is stretched: the droid of
-the PODRACE attract was 1.6 times darker than on the cabinet at its chest,
-1.1 now; four other zones of PODRACE and PHARRIER moved by a level or two,
+the SWRACER attract was 1.6 times darker than on the cabinet at its chest,
+1.1 now; four other zones of SWRACER and PHARRIER moved by a level or two,
 none away. AIRTRIX, SGNASCAR and VON4 hardly use such matrices. A modelview
 whose 3x3 is null needs no special case any more (a sprite placed by the
 last row alone: PHARRIER sends one 21431 times a loop).
@@ -1153,9 +1153,9 @@ the cabinets: the combo labels and the message frames of AIRTRIX come and
 go in dots, the shadow of the PHARRIER player and the smoke of the BRAVEFF
 fire show what lies behind them (both games swap two halves of the pixels
 every frame). Not seen on footage: von4, which the port draws this way,
-and PODRACE, whose far rocks now come in little by little.
+and SWRACER, whose far rocks now come in little by little.
 HEURISTIC: the pattern is laid from the top left pixel of the screen, as
-the port lays its texture; the low five bits of the word are taken (PODRACE
+the port lays its texture; the low five bits of the word are taken (SWRACER
 sends -7 to -1); a subroutine returns with the pattern it was called with,
 since BRAVEFF sets one in a model of its burning hall and never clears it
 and its cabinet shows what follows whole, but what the chip saves
@@ -1165,7 +1165,7 @@ nothing here uses).
 The depth buffer holds log2 (1 + eye depth) / 24, written per pixel: the
 projected depth of a near plane at 0.1 or 0.01 was too coarse (black
 patches on the cars of the SGNASCAR entry list, the shadow of the AIRTRIX
-combo labels drawn over them, the cover of a PODRACE engine over its fan).
+combo labels drawn over them, the cover of a SWRACER engine over its fan).
 The depth format of the hardware and its use of the 421 range are not
 known. The top three bits of the 421, which Valkyrie read as a depth
 function, number the viewports here: those of a lower number are drawn
@@ -1290,7 +1290,7 @@ References:
  http://www.youtube.com/watch?v=VCVnNBkeRX8
 
 
-PODRACE
+SWRACER
 -------
 
 Attract mode works.

@@ -329,7 +329,7 @@
 			]
 		},
 		{
-			"name" : "podrace",
+			"name" : "swracer",
 			"title" : "Star Wars Racer Arcade",
 			"mach" : "hikaru",
 			"rom_board" : { "eprom_mb" : 4, "315-5881" : "2903DAD5" },

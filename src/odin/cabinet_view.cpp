@@ -884,7 +884,7 @@ drawing_of(const std::string &game)
 {
 	static constexpr std::pair<const char *, Drawing> DRAWINGS[] = {
 		{ "sgnascar", nascar }, { "braveff", brave }, { "pharrier", harriers },
-		{ "podrace", racer }, { "airtrix", air_trix }, { "von4", virtual_on },
+		{ "swracer", racer }, { "airtrix", air_trix }, { "von4", virtual_on },
 	};
 
 	for (const auto &[name, drawing] : DRAWINGS)

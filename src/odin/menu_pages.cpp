@@ -237,7 +237,7 @@ struct Boards {
 constexpr Boards BOARDS[] = {
 	{ "sgnascar", "front speakers (FRONT)", "seat-back speakers (REAR)", "; as the REAR knob of the cabinet" },
 	{ "pharrier", "monitor speakers and woofer", "seat-back speakers (REAR)", "" },
-	{ "podrace", "seat speakers and woofer", "shaker of the panel (VIBRATION)",
+	{ "swracer", "seat speakers and woofer", "shaker of the panel (VIBRATION)",
 	  "; the cabinet feeds it to the shaker only" },
 };
 constexpr Boards OTHER_BOARDS = { "", "main speakers", "optional speakers", "" };
