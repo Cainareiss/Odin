@@ -689,6 +689,15 @@ GameList::describe(const std::string &name) const
 		}
 		game.drive_first_output = static_cast<unsigned>(json_integer_value(first));
 	}
+	if (const json_t *const reader = json_object_get(rom, "card_reader")) {
+		const char *const model = json_string_value(reader);
+
+		if (!model || std::strcmp(model, "CRP-1231BR-10")) {
+			std::fprintf(stderr, "ERROR: game '%s': \"card_reader\" is not \"CRP-1231BR-10\"\n", name.c_str());
+			return std::nullopt;
+		}
+		game.card_reader = model;
+	}
 	if (const json_t *const frame = json_object_get(rom, "title_frame")) {
 		if (!json_is_integer(frame) || json_integer_value(frame) < 1) {
 			std::fprintf(stderr, "ERROR: game '%s': \"title_frame\" is not a frame\n", name.c_str());

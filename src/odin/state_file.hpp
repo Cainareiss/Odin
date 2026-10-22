@@ -47,8 +47,9 @@ public:
 	 * 14: the SH-4 as its core keeps it, and none of the words the
 	 * board of Valkyrie kept;
 	 * 15: the card reader keeps where its card is and its tracks as on
-	 * the card */
-	static constexpr unsigned VERSION = 15;
+	 * the card;
+	 * 16: a card reader only for a cabinet that has one */
+	static constexpr unsigned VERSION = 16;
 
 	enum class Mode {
 		SAVE,

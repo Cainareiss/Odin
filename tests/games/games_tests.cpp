@@ -109,7 +109,7 @@ const char LIST[] = R"({
         { "name": "eprom", "type": "interleave", "amnt": 2, "data": [
             { "name": "a.bin", "size": 4 }, { "name": "b.bin", "size": 4 } ] } ] },
     { "name": "wheel", "title": "Wheel ~ Test: 2!", "mach": "hikaru", "io": "837-13741", "option_speakers": true, "option_level": -22.5,
-      "option_vibration": true, "drive_board": { "first_output": 15 }, "title_frame": 4100,
+      "option_vibration": true, "drive_board": { "first_output": 15 }, "title_frame": 4100, "card_reader": "CRP-1231BR-10",
       "rom_board": { "eprom_mb": 4, "315-5881": "291b02C7", "actel": { "key": "56DEDF33", "id": "4252" } },
       "mie_eeprom": "4242520001aBCDEF0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ff",
       "controls": [
@@ -267,6 +267,8 @@ void test_games(const std::string &dir)
 	check(wheel && wheel->option_vibration, "the vibration device the optional board feeds, the list tells");
 	check(wheel && wheel->drive_first_output == 15, "the output of TX0 of the drive board, the list tells");
 	check(wheel && wheel->title_frame == 4100, "the frame of its title, the list tells");
+	check(wheel && wheel->card_reader == "CRP-1231BR-10" && toy && toy->card_reader.empty(),
+	      "the card reader the list tells; none when it does not say");
 	check(wheel && wheel->rom_board && wheel->rom_board->eprom_mb == 4 && wheel->rom_board->crypt_key == 0x291B02C7 &&
 	      wheel->rom_board->has_actel && wheel->rom_board->actel_key == 0x56DEDF33 &&
 	      wheel->rom_board->actel_id == 0x4252, "the ROM board the list tells, its keys in small or capital figures");
@@ -452,6 +454,8 @@ void test_bad_controls(const std::string &dir)
 	      refuses(R"("drive_board": { "first_output": 0 })") && refuses(R"("drive_board": { "first_output": 26 })") &&
 	      refuses(R"("drive_board": { "first_output": "15" })"),
 	      "and one whose \"drive_board\" has no first output of 1 to 25");
+	check(refuses(R"("card_reader": "CRP-1231LR-10NAB")") && refuses(R"("card_reader": true)"),
+	      "and one whose \"card_reader\" is not a CRP-1231BR-10");
 	check(refuses(R"("title_frame": 0)") && refuses(R"("title_frame": -5)") && refuses(R"("title_frame": "4100")"),
 	      "and one whose \"title_frame\" is not a frame");
 	check(refuses(R"("option_vibration": "yes")") && refuses(R"("option_vibration": 1)"),

@@ -196,6 +196,10 @@ struct Game {
 	 * command on eight outputs from there (drive_board.hpp): "drive_board"
 	 * in the list, {"first_output": 1 to 25}; 0 when it does not say. */
 	unsigned drive_first_output = 0;
+	/* The card reader of its cabinet, on the serial block of the MIE:
+	 * "card_reader" in the list, "CRP-1231BR-10" (card_reader.hpp); empty
+	 * when it does not say (no reader). */
+	std::string card_reader;
 	/* The frame of its attract, from power-on, that shows its title: the
 	 * picture of the game the library shows. "title_frame" in the list; 0
 	 * when it does not say. */

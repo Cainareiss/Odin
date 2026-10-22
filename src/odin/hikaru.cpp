@@ -396,8 +396,9 @@ Hikaru::~Hikaru()
 /* The MIE: the chip, its ROM and its board.
  *
  * The CRP-1231BR-10 card reader (card_reader.hpp) goes on its serial
- * block: ODIN_CARD=none leaves the line open, ODIN_CARD=reader (default)
- * attaches it, ODIN_CARD_FILE=<path> is the player's card (its three
+ * block when the cabinet has one ("card_reader" in the list):
+ * ODIN_CARD=none leaves the line open, ODIN_CARD=reader attaches it to any
+ * game (a test), ODIN_CARD_FILE=<path> is the player's card (its three
  * tracks as on the card, 216 bytes; 207, their data only, is read too),
  * ODIN_CARD_TRACE=1 logs every frame on the line to stderr. */
 /* The drive board as far as the SH-4 ran: the command the game puts on
@@ -486,14 +487,15 @@ Hikaru::build_mie()
 
 	const char *const card = std::getenv("ODIN_CARD");
 
+	if (card && std::strcmp(card, "none") && std::strcmp(card, "reader"))
+		std::fprintf(stderr, "ERROR: MIE: ODIN_CARD=%s unknown, taken as the list says\n", card);
 	if (card && !std::strcmp(card, "none")) {
 		std::printf("MIE: card reader: none (ODIN_CARD=none)\n");
+	} else if (m_game.card_reader.empty() && !(card && !std::strcmp(card, "reader"))) {
+		/* none on its cabinet */
 	} else {
 		const char *const file = std::getenv("ODIN_CARD_FILE");
 		const char *const trace = std::getenv("ODIN_CARD_TRACE");
-
-		if (card && std::strcmp(card, "reader"))
-			std::fprintf(stderr, "ERROR: MIE: ODIN_CARD=%s unknown, using the reader\n", card);
 		const bool loaded = m_mie->attach_card(file, (trace && std::atoi(trace)) ? stderr : nullptr);
 		if (file)
 			std::printf("MIE: card reader CRP-1231BR-10 (its replies), card file '%s'%s\n",
