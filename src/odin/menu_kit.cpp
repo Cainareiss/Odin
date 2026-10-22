@@ -24,6 +24,7 @@
 #include <cmath>
 #include <numbers>
 #include <utility>
+#include <vector>
 
 namespace odin {
 
@@ -504,6 +505,15 @@ MenuKit::icon(ImDrawList *list, Icon icon, ImVec2 at, float side, ImU32 colour)
 		list->AddLine(p(12, 18), p(12, 21), colour, w);
 		list->AddLine(p(3, 12), p(6, 12), colour, w);
 		list->AddLine(p(18, 12), p(21, 12), colour, w);
+		break;
+	case Icon::LINK:
+		/* Four cabinets, each linked to the next round a ring */
+		for (const ImVec2 c : { ImVec2{ 6, 6 }, ImVec2{ 18, 6 }, ImVec2{ 18, 18 }, ImVec2{ 6, 18 } })
+			list->AddRect(p(c.x - 2.5f, c.y - 2.5f), p(c.x + 2.5f, c.y + 2.5f), colour, 0.0f, 0, w);
+		list->AddLine(p(9.5f, 6), p(14.5f, 6), colour, w);
+		list->AddLine(p(18, 9.5f), p(18, 14.5f), colour, w);
+		list->AddLine(p(14.5f, 18), p(9.5f, 18), colour, w);
+		list->AddLine(p(6, 14.5f), p(6, 9.5f), colour, w);
 		break;
 	case Icon::LAMP:
 		/* The bulb over its top, from its left foot to its right one */
@@ -1227,6 +1237,49 @@ MenuKit::value(const char *name, const char *about, const char *value, const cha
 	ImGui::Dummy({ width, h });
 	ImGui::PopID();
 	return clicked;
+}
+
+bool
+MenuKit::edit(const char *name, const char *about, std::string &text, const char *hint, size_t most,
+              const char *locked)
+{
+	ImGui::PushID(name);
+
+	const float pad = px(ROW_PAD), field_h = ImGui::GetFrameHeight();
+	float width;
+	const ImVec2 at = begin_row(width);
+	const float field_w = std::min(px(230.0f), width / 2.0f);
+	const Placed placed = place(at, width, field_w, field_h, name, about, locked);
+	const ImVec2 a = { at.x + width - pad - field_w, placed.top }, b = { a.x + field_w, a.y + field_h };
+	std::vector<char> buffer(most + 1, 0);
+	bool done = false;
+
+	/* The gamepad: A puts the keyboard in the field */
+	if (focus(at, { at.x + width, at.y + placed.h }) && pressed() && !locked)
+		ImGui::SetKeyboardFocusHere();
+	text.copy(buffer.data(), std::min(text.size(), most));
+	ImGui::SetCursorScreenPos({ a.x + px(6.0f), a.y });
+	ImGui::SetNextItemWidth(field_w - px(12.0f));
+	ImGui::PushStyleColor(ImGuiCol_FrameBg, 0);
+	ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, 0);
+	ImGui::PushStyleColor(ImGuiCol_FrameBgActive, 0);
+	ImGui::PushStyleColor(ImGuiCol_Text, locked ? m_palette.faint : m_palette.ink);
+	ImGui::PushStyleColor(ImGuiCol_TextDisabled, m_palette.faint);
+	ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, alpha(m_palette.action, CHOSEN_FILL));
+	if (ImGui::InputTextWithHint("##field", hint, buffer.data(), buffer.size(),
+	                             locked ? ImGuiInputTextFlags_ReadOnly : ImGuiInputTextFlags_CharsNoBlank))
+		text = buffer.data();
+	done = ImGui::IsItemDeactivatedAfterEdit();
+
+	const bool active = ImGui::IsItemActive(), hovered = ImGui::IsItemHovered();
+
+	ImGui::PopStyleColor(6);
+	frame(ImGui::GetWindowDrawList(), a, b, px(CONTROL_CUT), 0,
+	      active ? m_palette.action : hovered && !locked ? alpha(m_palette.action, ACTION_LINE) : m_palette.outline);
+	ImGui::SetCursorScreenPos(at);
+	ImGui::Dummy({ width, placed.h });
+	ImGui::PopID();
+	return done;
 }
 
 bool

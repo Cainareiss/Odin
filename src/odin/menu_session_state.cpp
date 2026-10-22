@@ -162,6 +162,20 @@ MenuSession::draw_menu()
 		m_outputs->welcome();
 		state.programs = m_outputs->clients();
 	}
+	/* The network board of the game that runs, as it is linked now */
+	state.link_running = m_board != nullptr;
+	if (m_board) {
+		const Hikaru::LinkStatus link = m_board->link_status();
+
+		state.link_board_now = link.board;
+		state.link_linked = link.linked;
+		state.link_failed = link.failed;
+		state.link_previous = link.previous;
+		state.link_next_plugged = link.next;
+	} else {
+		state.link_board_now = state.link_linked = state.link_failed = false;
+		state.link_previous = state.link_next_plugged = false;
+	}
 	/* The gamepads and the joysticks plugged in and their players; those of
 	 * a game that does not run as its settings would seat them */
 	const auto list = [this](std::vector<MenuState::Plugged> &out, const std::vector<Controls::Plugged> &plugged,
@@ -433,6 +447,14 @@ MenuSession::apply(const MenuState &was)
 			keep(section, "trigger_threshold", line(now.tuning.trigger_threshold, all.trigger_threshold));
 		m_controls.retune();
 	}
+	/* The network board: for the games that start from now */
+	if (now.link_board != was.link_board)
+		keep("network", "board", now.link_board == 0 ? std::nullopt :
+		     std::optional<std::string>(NetLinkSettings::board_name(static_cast<NetLinkSettings::Board>(now.link_board))));
+	if (now.link_port != was.link_port)
+		keep("network", "port", number(now.link_port, NetCable::PORT));
+	if (now.link_next != was.link_next)
+		keep("network", "next", now.link_next.empty() ? std::nullopt : std::optional<std::string>(now.link_next));
 	/* The programs of lamps: the port opened or closed now, for the game
 	 * that runs */
 	if (now.network != was.network) {

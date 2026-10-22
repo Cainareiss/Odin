@@ -439,6 +439,12 @@ Display::menu_popup_open() const
 	return m_menu && m_menu->popup_open();
 }
 
+bool
+Display::menu_typing() const
+{
+	return m_menu && m_menu->typing();
+}
+
 /* The menu made as the library makes it, its renderer first; the bar takes
  * the pointer and the hints of the mouse as the menu does */
 void

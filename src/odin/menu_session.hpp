@@ -60,6 +60,7 @@ std::optional<Opened> open_archive(const FolderDialog::Answer &answer, const Gam
 /* [outputs] network: the outputs sent to the programs of lamps. The last
  * line says. */
 bool network_on(const Settings &settings);
+NetLinkSettings link_settings(const Settings &settings);
 
 /* ODIN_MENU_TEST: Escape pressed and released */
 void press_escape();

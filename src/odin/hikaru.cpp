@@ -224,7 +224,7 @@ actel_of(const Game &game)
 } /* namespace */
 
 std::unique_ptr<Hikaru>
-Hikaru::make(const Game &game, bool verbose)
+Hikaru::make(const Game &game, bool verbose, const NetLinkSettings &link)
 {
 	const std::optional<GameRomBoard> &board = game.rom_board;
 	const size_t mie = game.section("mie").size();
@@ -254,10 +254,10 @@ Hikaru::make(const Game &game, bool verbose)
 	const RomBoard::Config rombd = RomBoard::config_of(board ? board->eprom_mb : 0,
 	                                                   board ? board->crypt_key : std::nullopt);
 
-	return std::unique_ptr<Hikaru>(new Hikaru(game, rombd, verbose));
+	return std::unique_ptr<Hikaru>(new Hikaru(game, rombd, verbose, link));
 }
 
-Hikaru::Hikaru(const Game &game, const RomBoard::Config &rombd, bool verbose)
+Hikaru::Hikaru(const Game &game, const RomBoard::Config &rombd, bool verbose, const NetLinkSettings &link)
 	: m_game(game), m_verbose(verbose), m_screen(nullptr), m_panel(nullptr), m_clock(sh4_clock()), m_frame(0),
 	  m_resetting(true), m_current(MASTER),
 	  m_ram{std::vector<uint8_t>(32 * MB), std::vector<uint8_t>(32 * MB)},
@@ -281,7 +281,7 @@ Hikaru::Hikaru(const Game &game, const RomBoard::Config &rombd, bool verbose)
 	std::printf("%s\n", text_at(m_bootrom, 0xD4).c_str());
 
 	build_mie();
-	build_netbd();
+	build_netbd(link);
 
 	if (const std::span<const uint8_t> image = game.section("eeprom"); !image.empty()) {
 		m_eeprom.load(image);
@@ -442,81 +442,79 @@ Hikaru::run_drive(uint32_t cycles)
 		                   static_cast<uint8_t>(m_wheel_seen >> 8));
 }
 
-/* The network board, as the cabinet may have one: ODIN_NETBD=loop puts
- * one whose ring is closed on itself (a test: the games see it, as on a
- * cabinet with its optical cable looped back); ODIN_NETBD=ring one linked
- * to other Odins (netbd_ring.hpp): the previous cabinet comes in on port
- * ODIN_NETBD_PORT (13404), the next is ODIN_NETBD_NEXT, "address" or
- * "address:port" (this computer on the same port: a ring of one). Without
- * it, page 0E answers nothing and the games find no board. */
+/* The network board, as the cabinet may have one: a game that can be
+ * linked ("link" in the list) has the one [network] of odin.ini asks for
+ * (NetLinkSettings): its optical ring closed on itself (loop: the games
+ * see it, as on a cabinet with its cable looped back) or linked to other
+ * Odins (ring). Without it, page 0E answers nothing and the games find no
+ * board. ODIN_NETBD (none, loop, ring), ODIN_NETBD_PORT and
+ * ODIN_NETBD_NEXT, for the tests, put one in any game instead. */
 void
-Hikaru::build_netbd()
+Hikaru::build_netbd(NetLinkSettings link)
 {
-	const char *const netbd = std::getenv("ODIN_NETBD");
+	if (const char *const board = std::getenv("ODIN_NETBD")) {
+		const char *const port = std::getenv("ODIN_NETBD_PORT");
+		const char *const next = std::getenv("ODIN_NETBD_NEXT");
 
-	if (!netbd || !std::strcmp(netbd, "none"))
-		return;
-
-	const bool ring = !std::strcmp(netbd, "ring");
-
-	if (!ring && std::strcmp(netbd, "loop")) {
-		std::fprintf(stderr, "ERROR: ODIN_NETBD=%s unknown (none, loop, ring): no network board\n", netbd);
-		return;
-	}
-
-	uint16_t port = NetCable::PORT;
-	std::string next = "127.0.0.1";
-	uint16_t next_port = 0;
-	auto port_named = [](const char *text, uint16_t &out) {
-		char *end;
-		const unsigned long value = std::strtoul(text, &end, 10);
-
-		if (*text == 0 || *end != 0 || value == 0 || value > 65535)
-			return false;
-		out = static_cast<uint16_t>(value);
-		return true;
-	};
-
-	if (const char *const text = std::getenv("ODIN_NETBD_PORT"); ring && text && !port_named(text, port)) {
-		std::fprintf(stderr, "ERROR: ODIN_NETBD_PORT=%s is not a port: no network board\n", text);
-		return;
-	}
-	if (const char *const text = std::getenv("ODIN_NETBD_NEXT"); ring && text) {
-		next = text;
-		if (const size_t colon = next.rfind(':'); colon != std::string::npos) {
-			if (!port_named(next.c_str() + colon + 1, next_port)) {
-				std::fprintf(stderr, "ERROR: ODIN_NETBD_NEXT=%s: not a port after ':': no network board\n", text);
-				return;
-			}
-			next.resize(colon);
+		link = {};
+		if (!NetLinkSettings::board_named(board, link.board) ||
+		    (port && !NetLinkSettings::port_named(port, link.port))) {
+			std::fprintf(stderr, "ERROR: ODIN_NETBD=%s ODIN_NETBD_PORT=%s: not right (none, loop or ring; a port):"
+			             " no network board\n", board, port ? port : "");
+			return;
 		}
+		link.next = next ? next : "";
+	} else if (!m_game.link) {
+		return;
 	}
-	if (next_port == 0)
-		next_port = port;
+	if (link.board == NetLinkSettings::Board::NONE)
+		return;
 
+	std::string host;
+	uint16_t next_port;
+
+	if (!link.next_cabinet(host, next_port)) {
+		std::fprintf(stderr, "ERROR: network board: the next cabinet '%s' is not an address or address:port:"
+		             " no network board\n", link.next.c_str());
+		return;
+	}
 	m_netbd = std::make_unique<NetBoard837_13404>();
 	m_netbd->reset();
 	/* ODIN_TURNS=0, a test: its 68000 runs every turn of its waits. The
 	 * memory and the pictures must be the same. */
 	m_netbd->set_waits_counted(env_flag("ODIN_TURNS", true));
-	if (ring) {
+	if (link.board == NetLinkSettings::Board::RING) {
 		m_netbd_runner = std::make_unique<NetBoardRunner>(*m_netbd);
-		m_netbd_cable = std::make_unique<NetCable>(*m_netbd_runner, m_game.name, port, next, next_port);
+		m_netbd_cable = std::make_unique<NetCable>(*m_netbd_runner, m_game.name, link.port, host, next_port);
 		m_netbd->set_link(m_netbd_cable.get());
 		if (!m_netbd_cable->start()) {
 			m_netbd_cable.reset();
 			m_netbd_runner.reset();
 			m_netbd.reset();
+			m_netbd_failed = true;
 			std::fprintf(stderr, "ERROR: no network board\n");
 			return;
 		}
 		m_netbd_runner->start();
-		std::printf("network board: 837-13404, linked to other cabinets (ODIN_NETBD=ring)\n");
+		std::printf("network board: 837-13404, linked to other cabinets\n");
 		return;
 	}
 	m_netbd_link = std::make_unique<NetLoop>(*m_netbd);
 	m_netbd->set_link(m_netbd_link.get());
-	std::printf("network board: 837-13404, its ring closed on itself (ODIN_NETBD=loop)\n");
+	std::printf("network board: 837-13404, its ring closed on itself\n");
+}
+
+Hikaru::LinkStatus
+Hikaru::link_status() const
+{
+	LinkStatus status;
+
+	status.board = m_netbd != nullptr;
+	status.failed = m_netbd_failed;
+	status.linked = m_netbd_cable != nullptr;
+	status.previous = m_netbd_cable && m_netbd_cable->previous_linked();
+	status.next = m_netbd_cable && m_netbd_cable->next_linked();
+	return status;
 }
 
 /* The clock of the network board as far as the SH-4 ran, owed: the board

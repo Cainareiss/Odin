@@ -82,7 +82,7 @@ play(const Options &given, const std::string &name, const GameList &games, Setti
 		return Ended::FAILED;
 	}
 
-	const std::unique_ptr<Hikaru> board = Hikaru::make(*game, options.verbose);
+	const std::unique_ptr<Hikaru> board = Hikaru::make(*game, options.verbose, link_settings(settings));
 	if (!board)
 		return Ended::FAILED;
 

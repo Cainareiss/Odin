@@ -92,10 +92,10 @@ constexpr float LINE_UNDER = 2.0f;
 constexpr float LINE_ROOM = 9.0f;
 
 /* The tabs of the pages, in the order of Menu::Page */
-constexpr const char *TABS[] = { "Input", "Display", "Audio", "Hotkeys", "Outputs", "Paths", "About" };
+constexpr const char *TABS[] = { "Input", "Display", "Audio", "Hotkeys", "Outputs", "Link", "Paths", "About" };
 constexpr MenuKit::Icon TAB_ICONS[] = { MenuKit::Icon::INPUT, MenuKit::Icon::DISPLAY, MenuKit::Icon::AUDIO,
-	                                MenuKit::Icon::HOTKEYS, MenuKit::Icon::OUTPUTS, MenuKit::Icon::FOLDER,
-	                                MenuKit::Icon::ABOUT };
+	                                MenuKit::Icon::HOTKEYS, MenuKit::Icon::OUTPUTS, MenuKit::Icon::LINK,
+	                                MenuKit::Icon::FOLDER, MenuKit::Icon::ABOUT };
 /* A window this many times wider than high takes the large menu; a
  * narrower one has the names of the tabs not chosen left out */
 constexpr float WIDE = 1.5f;
@@ -307,6 +307,13 @@ Menu::popup_open() const
 {
 	ImGui::SetCurrentContext(m_imgui);
 	return ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel);
+}
+
+bool
+Menu::typing() const
+{
+	ImGui::SetCurrentContext(m_imgui);
+	return ImGui::GetIO().WantTextInput;
 }
 
 /* What a gamepad asks: the page or the game before or after (the games of
@@ -528,6 +535,8 @@ Menu::build(MenuState &state)
 		page_hotkeys(kit, state);
 	else if (m_page == OUTPUTS)
 		page_outputs(kit, state);
+	else if (m_page == LINK)
+		page_link(kit, state);
 	else if (m_page == PATHS)
 		page_paths(kit, state);
 	else
@@ -922,6 +931,9 @@ Menu::help(int page, const MenuState &state)
 		       hotkeys_help(state) + " Until Odin closes (ODIN_CONFIG=none).";
 	case OUTPUTS:
 		return state.kept ? "" : "Until Odin closes (ODIN_CONFIG=none).";
+	case LINK:
+		return state.kept ? "A game takes these settings when it starts." :
+		                    "A game takes these settings when it starts, until Odin closes (ODIN_CONFIG=none).";
 	case PATHS:
 		if (state.no_picker)
 			return "No folder picker here: set the folders in [paths] of odin.ini.";

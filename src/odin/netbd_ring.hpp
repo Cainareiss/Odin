@@ -120,6 +120,9 @@ public:
 	void stop();
 	/* From the thread of the board: queued for the next cabinet */
 	void send(const NetFrame &frame) override;
+	/* The cable plugged in at each end (any thread) */
+	bool previous_linked() const { return m_previous; }
+	bool next_linked() const { return m_linked; }
 
 private:
 	struct Outgoing {
@@ -140,10 +143,32 @@ private:
 	intptr_t m_listener;
 	std::atomic<bool> m_stop{ false };
 	std::atomic<bool> m_linked{ false };
+	std::atomic<bool> m_previous{ false };
 	std::mutex m_outbox_lock;
 	std::condition_variable m_outbox_ready;
 	std::deque<Outgoing> m_outbox;
 	std::thread m_receiver, m_sender;
+};
+
+/* How this cabinet is linked: [network] of odin.ini. none: no board;
+ * loop: its optical ring closed on itself; ring: linked to other Odins,
+ * the previous one coming in on `port`, the next one at `next`
+ * ("address" or "address:port", port 13404 by default; empty: this
+ * computer on the same port, a ring of one). The text forms are those of
+ * odin.ini. */
+struct NetLinkSettings {
+	enum class Board { NONE, LOOP, RING };
+
+	Board board = Board::NONE;
+	uint16_t port = NetCable::PORT;
+	std::string next;
+
+	static const char *board_name(Board board);
+	static bool board_named(const std::string &text, Board &out);
+	static bool port_named(const std::string &text, uint16_t &out);
+	/* The address and the port of the next cabinet; false when `next` is
+	 * not one */
+	bool next_cabinet(std::string &host, uint16_t &next_port) const;
 };
 
 } /* namespace odin */

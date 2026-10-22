@@ -195,7 +195,7 @@ public:
 	 * back, a cross, a start and its bar, an arrow back; the rune ᚨ */
 	enum class Icon {
 		NONE, PAD, INPUT, DISPLAY, AUDIO, KEYBOARD, HOTKEYS, OUTPUTS, FOLDER, ABOUT, LAMP, RUMBLE, LOCK, MUTE,
-		LIST, SWAP, DEFAULTS, CLEAR, MAP, UNDO, RUNE, SETTINGS, WHEEL,
+		LIST, SWAP, DEFAULTS, CLEAR, MAP, UNDO, RUNE, SETTINGS, WHEEL, LINK,
 	};
 	static void icon(ImDrawList *list, Icon icon, ImVec2 at, float side, ImU32 colour);
 
@@ -283,6 +283,12 @@ public:
 	 * command line sets says so (`locked`), with no button */
 	bool value(const char *name, const char *about, const char *value, const char *action, const char *word = nullptr,
 	           const char *locked = nullptr);
+	/* A row with a field at its right that the keyboard writes in, `most`
+	 * characters at most, `hint` faint while it is empty (A of the gamepad
+	 * puts the keyboard in it): true when the writing ends, by Enter or
+	 * leaving the field, with the text changed */
+	bool edit(const char *name, const char *about, std::string &text, const char *hint, size_t most,
+	          const char *locked = nullptr);
 	/* The same, its button opening a list under it: true when one is
 	 * chosen */
 	bool value_list(const char *name, const char *about, const char *value, const char *action,

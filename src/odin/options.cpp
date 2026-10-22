@@ -33,6 +33,7 @@
 #include "odin/hotkeys.hpp"
 #include "odin/menu.hpp"
 #include "odin/menu_nav.hpp"
+#include "odin/netbd_ring.hpp"
 #include "odin/save_folder.hpp"
 
 namespace odin {
@@ -394,7 +395,9 @@ known_settings(const GameList &games)
 
 		out.push_back({ "hotkeys", Hotkeys::id(action), Hotkeys::line(Hotkeys::standard(action)) });
 	}
-	out.insert(out.end(), { { "outputs", "network", "off" }, { "paths", "roms", "" }, { "paths", "bios", "" },
+	out.insert(out.end(), { { "outputs", "network", "off" }, { "network", "board", "none" },
+	                        { "network", "port", std::to_string(NetCable::PORT) }, { "network", "next", "" },
+	                        { "paths", "roms", "" }, { "paths", "bios", "" },
 	                        { "paths", "saves", SaveFolder::root() }, { "paths", "states", default_states() },
 	                        { "paths", "artwork", artwork_folder() },
 	                        { "log", "verbose", "off" }, { "menu", "classic", "off" },

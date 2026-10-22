@@ -165,8 +165,11 @@ loop|ring): a cabinet has none by default (page 0E answers nothing, the
 games find no board); loop puts one whose optical ring is closed on itself
 (VON4 with COMMUNICATION MODE MASTER in the BOOTROM settings: CONNECTION
 OK, THIS IS THE #1 SITE OF 1; MARKDOWN/98); ring links Odins by TCP
-(src/odin/netbd_ring.cpp: the previous cabinet comes in on port
-ODIN_NETBD_PORT, 13404, the next is ODIN_NETBD_NEXT, address[:port]).
+(src/odin/netbd_ring.cpp: the previous cabinet comes in on a port, 13404
+by default, the next is address[:port]). [network] of odin.ini and the
+page Link of the menu set it for the games marked "link" in the list
+(VON4, SGNASCAR, SWRACER, PHARRIER); ODIN_NETBD, ODIN_NETBD_PORT and
+ODIN_NETBD_NEXT put one in any game for the tests.
 Four VON4 linked on one computer (Japan; seats A to D in GAME ASSIGNMENTS;
 one MASTER, three SLAVE) reach the title, each THE #n SITE OF 4; the game
 allows 2 sites in U.S.A. Linked, each board runs on a thread of its own on
@@ -190,8 +193,11 @@ clock the SH-4 owes it; a turn of a wait of its 68000 (reads only, the
 CPU the same after it) is billed without being run up to the next event
 (ODIN_TURNS=0 runs every turn: the same pictures and memories). A state
 keeps it with the frames on their way to it; one without it still loads,
-the board starting again. Not done: the settings of the link in odin.ini and
-the menu, Windows (its timers), the program of PHARRIER (not found yet).
+the board starting again. SGNASCAR links and its two attracts run together; SWRACER links,
+then wants a seat of its own on each cabinet (GAME ASSIGNMENTS of its test
+menu). Not done: PHARRIER uploads m3_comm.asm 1.2 (1998), older than the
+program the board is deduced from, and its slave says GAME ID IS NOT
+COHERENT; Windows (its timers).
 
 JVS (src/odin/jvs.cpp: the cable and the protocol of the standard). The
 I/O boards are imitations made from their programs: jvs_837_13551.cpp

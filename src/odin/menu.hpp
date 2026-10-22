@@ -196,6 +196,20 @@ struct MenuState {
 	bool network = false, network_failed = false;
 	size_t programs = 0;
 
+	/* Link: the network board of the games that link cabinets, at the
+	 * next launch ([network]): none, alone (its optical ring closed on
+	 * itself) or linked to other Odins; the port the previous cabinet
+	 * comes in on; the next cabinet as kept and as being written (not an
+	 * address: not kept); ODIN_NETBD sets them. Then the game that runs:
+	 * it links cabinets, it has the board, linked, its port taken, each
+	 * end of the cable plugged in. */
+	int link_board = 0;
+	unsigned link_port = 13404;
+	std::string link_next, link_next_typed;
+	bool link_next_bad = false, link_given = false;
+	bool link_game = false, link_running = false, link_board_now = false, link_linked = false, link_failed = false;
+	bool link_previous = false, link_next_plugged = false;
+
 	/* Paths: the folders of the games, of the files they share (the BIOS:
 	 * empty, that of the games) and of their saves, at the next launch
 	 * (those the command line or ODIN_SAVES gives are shown, not changed),
@@ -344,7 +358,7 @@ public:
 	static constexpr const char *SIDES_SHOWN[] = { "Off", "Blur", "Bezel" };
 
 	/* The pages, in the order of their tabs */
-	enum Page { INPUT, DISPLAY, AUDIO, HOTKEYS, OUTPUTS, PATHS, ABOUT, PAGES };
+	enum Page { INPUT, DISPLAY, AUDIO, HOTKEYS, OUTPUTS, LINK, PATHS, ABOUT, PAGES };
 
 	explicit Menu(SDL_Window *window);
 	~Menu();
@@ -375,6 +389,8 @@ public:
 	void add_library_picture(const std::string &game, SDL_Surface *rgba);
 	/* A list dropped open, which Escape closes before the menu */
 	bool popup_open() const;
+	/* The keyboard writes in a field of the menu */
+	bool typing() const;
 
 	/* The drawing thread: the picture of the last frame, from its
 	 * framebuffer, becomes the background (0: there is none yet, black),
@@ -417,6 +433,7 @@ private:
 	void page_audio(MenuKit &kit, MenuState &state) const;
 	void page_hotkeys(MenuKit &kit, MenuState &state) const;
 	void page_outputs(MenuKit &kit, MenuState &state) const;
+	void page_link(MenuKit &kit, MenuState &state) const;
 	void page_paths(MenuKit &kit, MenuState &state) const;
 	void page_about(MenuKit &kit) const;
 	/* What the pages say at the bottom; Input, at that place, that wide

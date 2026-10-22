@@ -200,6 +200,10 @@ struct Game {
 	 * "card_reader" in the list, "CRP-1231BR-10" (card_reader.hpp); empty
 	 * when it does not say (no reader). */
 	std::string card_reader;
+	/* The game links cabinets through the network board 837-13404 in
+	 * page 0E (netbd_837_13404.hpp): "link" in the list, false when it
+	 * does not say (the cabinet has no board). */
+	bool link = false;
 	/* The frame of its attract, from power-on, that shows its title: the
 	 * picture of the game the library shows. "title_frame" in the list; 0
 	 * when it does not say. */

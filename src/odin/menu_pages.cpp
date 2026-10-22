@@ -33,6 +33,7 @@
 #include "imgui/imgui.h"
 #include "odin/env.hpp"
 #include "odin/menu_kit.hpp"
+#include "odin/netbd_ring.hpp"
 
 namespace odin {
 
@@ -771,6 +772,73 @@ Menu::page_outputs(MenuKit &kit, MenuState &state) const
 	kit.end_group();
 
 	end_settings(kit, top, room);
+}
+
+/* Link: the network board of the games that link cabinets (Virtual-On,
+ * NASCAR, Racer, Planet Harrier), as the next game started takes it; how
+ * the game that runs is linked now */
+void
+Menu::page_link(MenuKit &kit, MenuState &state) const
+{
+	static constexpr const char *LINK_BOARDS[] = { "Off", "Alone", "Linked" };
+	static constexpr unsigned PORTS = 8;
+	const char *const locked = state.link_given ? "set by ODIN_NETBD" : nullptr;
+
+	kit.begin_group("CABINET LINK");
+	kit.choice("Network board", "the cabinets of Virtual-On, NASCAR, Racer, Planet Harrier · Alone: its cable "
+	           "looped back", LINK_BOARDS, state.link_board, locked);
+	if (state.link_board == static_cast<int>(NetLinkSettings::Board::RING)) {
+		std::vector<std::string> ports;
+		int chosen = -1;
+
+		for (unsigned p = 0; p < PORTS; p++)
+			ports.push_back(std::to_string(NetCable::PORT + p));
+		if (state.link_port < NetCable::PORT || state.link_port >= NetCable::PORT + PORTS)
+			ports.push_back(std::to_string(state.link_port));
+		for (size_t p = 0; p < ports.size(); p++)
+			if (ports[p] == std::to_string(state.link_port))
+				chosen = static_cast<int>(p);
+		if (!locked && kit.dropdown("Port of this cabinet", "the cabinet before it comes in there · each cabinet of "
+		                            "one computer takes its own", ports, chosen) && chosen >= 0)
+			state.link_port = static_cast<unsigned>(std::stoul(ports[static_cast<size_t>(chosen)]));
+		if (locked)
+			kit.text("Port of this cabinet", locked, std::to_string(state.link_port).c_str());
+
+		const char *const about = state.link_next_bad ? "not an address, or :port after it: not kept" :
+		                          "its address, :port after it when not 13404 · empty: this cabinet again";
+
+		if (kit.edit("Next cabinet", about, state.link_next_typed, "address:port", 63, locked)) {
+			NetLinkSettings tried;
+			std::string host;
+			uint16_t port;
+
+			tried.port = static_cast<uint16_t>(state.link_port);
+			tried.next = state.link_next_typed;
+			state.link_next_bad = !tried.next_cabinet(host, port);
+			if (!state.link_next_bad)
+				state.link_next = state.link_next_typed;
+		}
+	}
+	kit.end_group();
+
+	if (state.link_running) {
+		const char *board = state.link_failed ? "its port is taken by another program: none" :
+		                    !state.link_board_now ? (state.link_game ? "none" : "this game links no cabinets") :
+		                    state.link_linked ? "linked to other cabinets" : "alone, its cable looped back";
+
+		kit.begin_group("THE GAME THAT RUNS");
+		kit.text("Network board", "", board);
+		if (state.link_linked) {
+			kit.text("Cabinet before", "its frames come in", state.link_previous ? "plugged in" : "waiting");
+			kit.text("Cabinet after", "this cabinet's frames go out", state.link_next_plugged ? "plugged in" : "waiting");
+		}
+		kit.end_group();
+	}
+	kit.paragraph("LINKING CABINETS",
+	              "Each cabinet is an Odin with the board Linked, the next one of each the cabinet after it, the "
+	              "next one of the last the first. On one computer each takes its own port, and its own odin.ini "
+	              "(ODIN_CONFIG) for its own saves. In the BIOS menu (SYSTEM ASSIGNMENTS, COMMUNICATION MODE) one "
+	              "cabinet is MASTER, the others SLAVE; in the test menu of the game each takes its own seat.");
 }
 
 /* Paths: where the games are, where Odin writes, its own files */

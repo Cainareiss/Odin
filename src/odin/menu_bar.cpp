@@ -198,6 +198,8 @@ Menu::bar(BarState &state)
 					ask(Ask::SETTINGS, HOTKEYS);
 				if (item("Outputs..."))
 					ask(Ask::SETTINGS, OUTPUTS);
+				if (item("Cabinet link..."))
+					ask(Ask::SETTINGS, LINK);
 				break;
 			case 2:
 				if (item("Full screen", key(Action::FULLSCREEN), state.fullscreen))

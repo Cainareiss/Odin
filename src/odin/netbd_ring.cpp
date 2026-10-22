@@ -267,16 +267,19 @@ NetCable::receive_loop()
 			if (from != NONE)
 				close_socket(from);
 			from = in;
+			m_previous = true;
 			std::printf("network board: the previous cabinet is linked\n");
 		} else if ((ready & 2) && from != NONE && !receive_frames(from)) {
 			close_socket(from);
 			from = NONE;
+			m_previous = false;
 			if (!m_stop)
 				std::printf("network board: the previous cabinet is gone\n");
 		}
 	}
 	if (from != NONE)
 		close_socket(from);
+	m_previous = false;
 }
 
 /* The next cabinet, tried every half second until it answers; the frames
@@ -348,6 +351,57 @@ NetCable::send_loop()
 	m_linked = false;
 	if (to != NONE)
 		close_socket(to);
+}
+
+const char *
+NetLinkSettings::board_name(Board board)
+{
+	return board == Board::LOOP ? "loop" : board == Board::RING ? "ring" : "none";
+}
+
+bool
+NetLinkSettings::board_named(const std::string &text, Board &out)
+{
+	for (const Board board : { Board::NONE, Board::LOOP, Board::RING })
+		if (text == board_name(board)) {
+			out = board;
+			return true;
+		}
+	return false;
+}
+
+bool
+NetLinkSettings::port_named(const std::string &text, uint16_t &out)
+{
+	unsigned long value = 0;
+
+	if (text.empty() || text.size() > 5)
+		return false;
+	for (const char c : text) {
+		if (c < '0' || c > '9')
+			return false;
+		value = value * 10 + static_cast<unsigned long>(c - '0');
+	}
+	if (value == 0 || value > 65535)
+		return false;
+	out = static_cast<uint16_t>(value);
+	return true;
+}
+
+bool
+NetLinkSettings::next_cabinet(std::string &host, uint16_t &next_port) const
+{
+	const size_t colon = next.rfind(':');
+
+	host = next.substr(0, colon);
+	next_port = next.empty() ? port : NetCable::PORT;
+	if (colon != std::string::npos && !port_named(next.substr(colon + 1), next_port))
+		return false;
+	if (host.find_first_of(" \t:") != std::string::npos)
+		return false;
+	if (host.empty())
+		host = "127.0.0.1";
+	return true;
 }
 
 } /* namespace odin */

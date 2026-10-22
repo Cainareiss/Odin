@@ -698,6 +698,13 @@ GameList::describe(const std::string &name) const
 		}
 		game.card_reader = model;
 	}
+	if (const json_t *const link = json_object_get(rom, "link")) {
+		if (!json_is_boolean(link)) {
+			std::fprintf(stderr, "ERROR: game '%s': \"link\" is not true or false\n", name.c_str());
+			return std::nullopt;
+		}
+		game.link = json_is_true(link);
+	}
 	if (const json_t *const frame = json_object_get(rom, "title_frame")) {
 		if (!json_is_integer(frame) || json_integer_value(frame) < 1) {
 			std::fprintf(stderr, "ERROR: game '%s': \"title_frame\" is not a frame\n", name.c_str());

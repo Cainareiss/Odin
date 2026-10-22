@@ -194,6 +194,8 @@ public:
 	 * one with no see-through middle) */
 	const PictureHole &picture_hole() const { return m_hole; }
 	bool menu_popup_open() const;
+	/* The keyboard writes in a field of the menu */
+	bool menu_typing() const;
 	/* The bar at the top of the window (menu.hpp: BarState), over the
 	 * frames of the game that goes on: shown or hidden, the events of the
 	 * mouse for it, kept until it is built at the end of the next frame.

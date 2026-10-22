@@ -149,6 +149,30 @@ off, and shows the outputs of each game light):
 or "<id> = 0" as each output of the game changes, its id in
 odin-games.json, and "mame_stop = 1" at the end.)
 
+Virtual-On Force, NASCAR, Star Wars Racer Arcade and Planet Harriers link
+cabinets with the network board 837-13404. Each cabinet is an Odin; the
+optical cable of each goes to the next cabinet, the one of the last to the
+first, through the network of the computers (the menu, page Link, or
+odin.ini):
+
+ [network]
+ board = ring
+ port = 13404
+ next = 192.168.1.20
+
+board: none (no board, as by default), loop (the cable looped back on the
+same cabinet), ring (linked to other Odins). port: where the cabinet
+before comes in; two Odins of one computer each take their own (13404,
+13405...). next: the address of the cabinet after, ":port" after it when
+it is not 13404; empty, this cabinet again. Two Odins of one computer
+each have their own odin.ini, so their own saves: ODIN_CONFIG=<file>
+before odin, its [paths] saves another folder. In the BIOS menu (SYSTEM
+ASSIGNMENTS, COMMUNICATION MODE) one cabinet is MASTER, the others SLAVE;
+in the test menu of the game each takes its own seat (Virtual-On in
+U.S.A. links 2 cabinets at most). The program of the board needs a frame
+round the ring in less than about 15 ms: a network by cable, not by
+radio, and no further than the local network.
+
 NASCAR and Planet Harriers have a second sound board for speakers of
 their own (the backrest of the seat). Odin plays the two boards on two
 speakers, the second one at the level odin-games.json gives it

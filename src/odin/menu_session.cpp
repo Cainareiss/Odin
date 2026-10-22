@@ -72,6 +72,34 @@ network_on(const Settings &settings)
 	return network;
 }
 
+/* [network]: the network board of the games that link cabinets
+ * (NetLinkSettings). The last line says; a line not right is left out. */
+NetLinkSettings
+link_settings(const Settings &settings)
+{
+	NetLinkSettings link;
+
+	for (const auto &[key, value] : settings.section("network")) {
+		if (key == "board" && NetLinkSettings::board_named(value, link.board))
+			continue;
+		if (key == "port" && NetLinkSettings::port_named(value, link.port))
+			continue;
+		if (key == "next") {
+			NetLinkSettings tried = link;
+			std::string host;
+			uint16_t port;
+
+			tried.next = value;
+			if (tried.next_cabinet(host, port)) {
+				link.next = value;
+				continue;
+			}
+		}
+		std::fprintf(stderr, "ERROR: settings: [network]: not right: %s = %s\n", key.c_str(), value.c_str());
+	}
+	return link;
+}
+
 /* ODIN_MENU_TEST: Escape pressed and released */
 void
 press_escape()
@@ -136,6 +164,14 @@ MenuSession::MenuSession(const Options &options, Display &display, Keyboard &key
 	state.verbose_given = options.given.verbose;
 	state.network = network;
 	state.network_failed = network && game && !m_outputs;
+
+	const NetLinkSettings link = link_settings(settings);
+
+	state.link_board = static_cast<int>(link.board);
+	state.link_port = link.port;
+	state.link_next = state.link_next_typed = link.next;
+	state.link_given = std::getenv("ODIN_NETBD") != nullptr;
+	state.link_game = game && game->link;
 	state.device = options.sound_device;
 	state.volume = options.volume;
 	state.background = options.background;
@@ -216,7 +252,8 @@ MenuSession::event(const SDL_Event &event)
 	case SDL_EVENT_KEY_DOWN:
 	case SDL_EVENT_KEY_UP:
 		m_keys.set(event.key.key, event.key.down);
-		if (event.key.down && !event.key.repeat)
+		/* The keys write in a field of the menu, Escape leaving it */
+		if (event.key.down && !event.key.repeat && !m_display.menu_typing())
 			action = m_hotkeys.key_action(event.key.key, event.key.mod);
 		/* Escape closes a list dropped open first, then the advanced
 		 * options */

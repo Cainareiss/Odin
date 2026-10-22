@@ -91,7 +91,7 @@ public:
 
 	/* The board of a game, or nothing, with the reason on stderr, if the
 	 * game cannot run on it. The game outlives the board. */
-	static std::unique_ptr<Hikaru> make(const Game &game, bool verbose);
+	static std::unique_ptr<Hikaru> make(const Game &game, bool verbose, const NetLinkSettings &link = {});
 
 	~Hikaru();
 	Hikaru(const Hikaru &) = delete;
@@ -116,6 +116,12 @@ public:
 	const std::vector<int16_t> &sound(bool optional) const { return m_sound[optional ? SLAVE : MASTER]->samples(); }
 	/* The outputs of the I/O board of the cabinet (MieBoard::io_outputs) */
 	std::span<const uint8_t> io_outputs() const { return m_mie->io_outputs(); }
+	/* The network board and its cable: whether it has one, linked to
+	 * other Odins, the port it could not open, each end plugged in */
+	struct LinkStatus {
+		bool board = false, linked = false, failed = false, previous = false, next = false;
+	};
+	LinkStatus link_status() const;
 	/* The torque the drive board of the cabinet tells its motor, -MOST
 	 * (all to the left) to MOST (all to the right), when it runs its
 	 * program (drive_rom; drive_838_13366.hpp); nothing else */
@@ -169,11 +175,11 @@ private:
 		unsigned m_which;
 	};
 
-	Hikaru(const Game &game, const RomBoard::Config &rombd, bool verbose);
+	Hikaru(const Game &game, const RomBoard::Config &rombd, bool verbose, const NetLinkSettings &link);
 
 	/* hikaru.cpp */
 	void build_mie();
-	void build_netbd();
+	void build_netbd(NetLinkSettings link);
 	void build_sound(unsigned which);
 	void reset_sound(unsigned which);
 	void update_irqs();
@@ -287,6 +293,7 @@ private:
 	 * the other cabinets (netbd_ring.hpp) */
 	std::unique_ptr<NetBoardRunner> m_netbd_runner;
 	std::unique_ptr<NetCable> m_netbd_cable;
+	bool m_netbd_failed = false;	/* its port could not be opened */
 	std::unique_ptr<HikaruGpu> m_gpu;
 	std::unique_ptr<SoundBoard> m_sound[2];
 	std::unique_ptr<WavFile> m_wav;	/* ODIN_WAV: the sound of the main board */
