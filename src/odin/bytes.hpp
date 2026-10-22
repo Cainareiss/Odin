@@ -19,6 +19,7 @@
 #ifndef ODIN_BYTES_HPP
 #define ODIN_BYTES_HPP
 
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -89,6 +90,27 @@ store_bytes(uint8_t *at, unsigned size, uint64_t value)
 		std::memcpy(at, &value, size);
 		break;
 	}
+}
+
+/* A word read as the float it holds */
+inline float
+f32(uint32_t word)
+{
+	return std::bit_cast<float>(word);
+}
+
+/* FNV-1a, 64 bits: the hash of nothing, and a hash going on with those
+ * bytes */
+inline constexpr uint64_t FNV_START = 0xCBF29CE484222325ull;
+
+inline uint64_t
+fnv1a(uint64_t hash, const void *data, size_t size)
+{
+	const uint8_t *const bytes = static_cast<const uint8_t *>(data);
+
+	for (size_t i = 0; i < size; i++)
+		hash = (hash ^ bytes[i]) * 0x100000001B3ull;
+	return hash;
 }
 
 /* Whether two objects hold the same bytes. It is compiled in place whatever

@@ -113,16 +113,6 @@ const std::pair<Role, const char *> MOUSE_DEFAULTS[] = {
 	{ Role::BUTTON1, "left" }, { Role::BUTTON2, "right" }, { Role::START, "middle" },
 };
 
-std::string_view
-trimmed(std::string_view text)
-{
-	while (!text.empty() && (text.front() == ' ' || text.front() == '\t'))
-		text.remove_prefix(1);
-	while (!text.empty() && (text.back() == ' ' || text.back() == '\t'))
-		text.remove_suffix(1);
-	return text;
-}
-
 /* What a line takes: what is pressed or not (a key, a button, half a
  * stick, a trigger), the whole axis of a pad, or both (a pedal) */
 enum class Takes { PRESSED, AXIS, BOTH };

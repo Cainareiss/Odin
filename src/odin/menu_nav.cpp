@@ -50,16 +50,6 @@ constexpr Standard STANDARD[MenuNav::ACTIONS] = {
 	{ "game_after", "pad:righttrigger" },
 };
 
-std::string_view
-trimmed(std::string_view text)
-{
-	while (!text.empty() && (text.front() == ' ' || text.front() == '\t'))
-		text.remove_prefix(1);
-	while (!text.empty() && (text.back() == ' ' || text.back() == '\t'))
-		text.remove_suffix(1);
-	return text;
-}
-
 /* "key:Up, pad:dpup": nothing when one is neither a key nor an input of a
  * gamepad that is pressed or not (not a whole stick, nor held with
  * another button: Guide makes the shortcuts) */

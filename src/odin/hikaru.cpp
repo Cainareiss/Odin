@@ -143,6 +143,7 @@
 #include <cstring>
 #include <optional>
 
+#include "odin/bytes.hpp"
 #include "odin/env.hpp"
 
 namespace odin {
@@ -1112,13 +1113,8 @@ void
 Hikaru::trace_slice(unsigned which)
 {
 	Sh4State st;
-	uint64_t hash = 0xCBF29CE484222325ull;
-	const auto add = [&hash](const void *data, size_t size) {
-		const uint8_t *const bytes = static_cast<const uint8_t *>(data);
-
-		for (size_t i = 0; i < size; i++)
-			hash = (hash ^ bytes[i]) * 0x100000001B3ull;
-	};
+	uint64_t hash = FNV_START;
+	const auto add = [&hash](const void *data, size_t size) { hash = fnv1a(hash, data, size); };
 
 	m_sh[which]->save(st);
 	add(st.r, sizeof(st.r));

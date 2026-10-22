@@ -23,6 +23,7 @@
  * antarctic_ops.cpp for what they do. */
 
 #include "odin/antarctic_disasm.hpp"
+#include "odin/bytes.hpp"
 
 #include <array>
 #include <bit>
@@ -55,12 +56,6 @@ struct Out {
 		unhandled = true;
 	}
 };
-
-float
-f32(uint32_t word)
-{
-	return std::bit_cast<float>(word);
-}
 
 uint32_t
 jump_address(uint32_t pc, const uint32_t *inst)

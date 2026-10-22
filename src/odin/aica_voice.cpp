@@ -105,12 +105,6 @@ constexpr auto LFO_STEP = [] {
 	return steps;
 }();
 
-uint32_t
-reg(const uint8_t *slot, uint32_t offset)
-{
-	return static_cast<uint32_t>(slot[offset] | (slot[offset + 1] << 8));
-}
-
 int32_t
 adpcm(uint32_t code, int32_t last, uint32_t &step)
 {
@@ -127,8 +121,8 @@ adpcm(uint32_t code, int32_t last, uint32_t &step)
 uint32_t
 effective_rate(uint32_t rate, const uint8_t *slot)
 {
-	const uint32_t decay = reg(slot, REG_DECAY);
-	const uint32_t pitch = reg(slot, REG_PITCH);
+	const uint32_t decay = aica_reg(slot, REG_DECAY);
+	const uint32_t pitch = aica_reg(slot, REG_PITCH);
 	const uint32_t krs = (decay >> 10) & 0xF;
 	uint32_t effective = rate * 2;
 
@@ -162,7 +156,7 @@ steps(uint32_t rate, uint32_t odometer)
 uint32_t
 loop_end(uint32_t play, const uint8_t *slot)
 {
-	const uint32_t lea = reg(slot, REG_LEA);
+	const uint32_t lea = aica_reg(slot, REG_LEA);
 
 	return ((play >> 7) & 3) == ADPCM_STREAM ? (lea + 3) & ~3u : lea;
 }
@@ -200,7 +194,7 @@ AicaVoice::key_on(const uint8_t *slot, const WaveMemory &memory, uint32_t &noise
 	m_state.level = ATTACK_START;
 	m_state.segment = ATTACK;
 	m_state.playing = 1;
-	m_state.cutoff = reg(slot, REG_FLV0) & 0x1FFF;
+	m_state.cutoff = aica_reg(slot, REG_FLV0) & 0x1FFF;
 	m_state.cutoff_segment = ATTACK;
 	fetch(slot, memory, noise);
 }
@@ -210,8 +204,8 @@ AicaVoice::output(const uint8_t *slot, uint32_t &noise)
 {
 	const int32_t f = static_cast<int32_t>((m_state.phase >> 4) & 0x3FFF);
 	const int32_t s = filter(slot, ((m_state.next * f + m_state.sample * (0x4000 - f)) >> 14) * 16);
-	const uint32_t level = reg(slot, REG_LEVEL);
-	const uint32_t lfo = reg(slot, REG_LFO);
+	const uint32_t level = aica_reg(slot, REG_LEVEL);
+	const uint32_t lfo = aica_reg(slot, REG_LFO);
 
 	if (level & LEVEL_OFF)
 		return s;
@@ -251,7 +245,7 @@ AicaVoice::output(const uint8_t *slot, uint32_t &noise)
 int32_t
 AicaVoice::filter(const uint8_t *slot, int32_t sample)
 {
-	const uint32_t level = reg(slot, REG_LEVEL);
+	const uint32_t level = aica_reg(slot, REG_LEVEL);
 	const uint32_t q = level & 0x1F;
 
 	if (level & LEVEL_NO_FILTER)
@@ -259,7 +253,7 @@ AicaVoice::filter(const uint8_t *slot, int32_t sample)
 
 	bool open = q == 4;
 	for (uint32_t n = 0; n < 5 && open; n++)
-		open = (reg(slot, REG_FLV0 + n * 4) & 0x1FFF) >= 0x1FF8;
+		open = (aica_reg(slot, REG_FLV0 + n * 4) & 0x1FFF) >= 0x1FF8;
 	if (open)
 		return sample;
 
@@ -302,7 +296,7 @@ AicaVoice::step(const uint8_t *slot, const WaveMemory &memory, uint32_t odometer
 	if (!m_state.playing)
 		return;
 
-	const uint32_t lfo = reg(slot, REG_LFO);
+	const uint32_t lfo = aica_reg(slot, REG_LFO);
 
 	m_state.phase += increment(slot, noise);
 	/* LFORE holds the LFO at its start (manual, 4.2.6) */
@@ -340,8 +334,8 @@ AicaVoice::monitor(bool clear)
 uint32_t
 AicaVoice::increment(const uint8_t *slot, uint32_t &noise) const
 {
-	const uint32_t pitch = reg(slot, REG_PITCH);
-	const uint32_t lfo = reg(slot, REG_LFO);
+	const uint32_t pitch = aica_reg(slot, REG_PITCH);
+	const uint32_t lfo = aica_reg(slot, REG_LFO);
 	const uint32_t base = ((pitch & 0x3FF) | 0x400) << (((pitch >> 11) & 0xF) ^ 8);
 	const uint32_t depth = (lfo >> 5) & 7;
 
@@ -378,8 +372,8 @@ AicaVoice::increment(const uint8_t *slot, uint32_t &noise) const
 void
 AicaVoice::envelope(const uint8_t *slot, uint32_t odometer)
 {
-	const uint32_t rates = reg(slot, REG_RATES);
-	const uint32_t decay = reg(slot, REG_DECAY);
+	const uint32_t rates = aica_reg(slot, REG_RATES);
+	const uint32_t decay = aica_reg(slot, REG_DECAY);
 	uint32_t rate;
 
 	switch (m_state.segment) {
@@ -428,8 +422,8 @@ AicaVoice::envelope(const uint8_t *slot, uint32_t odometer)
 void
 AicaVoice::cutoff_envelope(const uint8_t *slot, uint32_t odometer)
 {
-	const uint32_t rates = reg(slot, REG_CUTOFF_RATES);
-	const uint32_t release = reg(slot, REG_CUTOFF_RELEASE);
+	const uint32_t rates = aica_reg(slot, REG_CUTOFF_RATES);
+	const uint32_t release = aica_reg(slot, REG_CUTOFF_RELEASE);
 	static constexpr uint32_t TARGET[4] = { 1, 2, 3, 4 };
 	uint32_t rate;
 
@@ -456,7 +450,7 @@ AicaVoice::cutoff_envelope(const uint8_t *slot, uint32_t odometer)
 		return;
 
 	const uint32_t size = effective >= 0x30 ? FAST_DECAY[effective - 0x30][odometer & 3] : 1;
-	const uint32_t target = reg(slot, REG_FLV0 + TARGET[m_state.cutoff_segment] * 4) & 0x1FFF;
+	const uint32_t target = aica_reg(slot, REG_FLV0 + TARGET[m_state.cutoff_segment] * 4) & 0x1FFF;
 	uint32_t &cutoff = m_state.cutoff;
 
 	if (cutoff < target)
@@ -470,12 +464,12 @@ AicaVoice::cutoff_envelope(const uint8_t *slot, uint32_t odometer)
 bool
 AicaVoice::advance(const uint8_t *slot)
 {
-	const uint32_t play = reg(slot, REG_PLAY);
-	const uint32_t lsa = reg(slot, REG_LSA);
+	const uint32_t play = aica_reg(slot, REG_PLAY);
+	const uint32_t lsa = aica_reg(slot, REG_LSA);
 	const uint32_t lea = loop_end(play, slot);
 	uint32_t ca = m_state.position + 1;
 
-	if ((reg(slot, REG_DECAY) & DECAY_LINK) && m_state.segment == ATTACK && ca >= lsa)
+	if ((aica_reg(slot, REG_DECAY) & DECAY_LINK) && m_state.segment == ATTACK && ca >= lsa)
 		m_state.segment = DECAY1;
 	if (ca >= lea) {
 		if (lsa > lea) {
@@ -501,10 +495,10 @@ AicaVoice::advance(const uint8_t *slot)
 void
 AicaVoice::fetch(const uint8_t *slot, const WaveMemory &memory, uint32_t &noise)
 {
-	const uint32_t play = reg(slot, REG_PLAY);
+	const uint32_t play = aica_reg(slot, REG_PLAY);
 	const uint32_t format = (play >> 7) & 3;
-	const uint32_t sa = ((play & 0x7F) << 16) | reg(slot, REG_SA);
-	const uint32_t lsa = reg(slot, REG_LSA);
+	const uint32_t sa = ((play & 0x7F) << 16) | aica_reg(slot, REG_SA);
+	const uint32_t lsa = aica_reg(slot, REG_LSA);
 	const uint32_t lea = loop_end(play, slot);
 	const uint32_t ca = m_state.position;
 	/* The sample after the last one of a loop is its first */

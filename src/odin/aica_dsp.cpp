@@ -38,12 +38,6 @@ enum : uint32_t {
 	REG_EXTS = 0x45C0
 };
 
-uint32_t
-reg(const uint8_t *regs, uint32_t offset)
-{
-	return static_cast<uint32_t>(regs[offset] | (regs[offset + 1] << 8));
-}
-
 int32_t
 sign24(int32_t value)
 {
@@ -116,7 +110,7 @@ AicaDsp::program_written(const uint8_t *regs)
 	m_size = 0;
 	for (uint32_t i = 0; i < 128; i++) {
 		const uint32_t at = REG_MPRO + i * 16;
-		const bool empty = !(reg(regs, at) | reg(regs, at + 4) | reg(regs, at + 8) | reg(regs, at + 12));
+		const bool empty = !(aica_reg(regs, at) | aica_reg(regs, at + 4) | aica_reg(regs, at + 8) | aica_reg(regs, at + 12));
 
 		if (!empty || !after_empty)
 			m_order[m_size++] = static_cast<uint8_t>(i);
@@ -138,15 +132,15 @@ AicaDsp::run(const uint8_t *regs, const WaveMemory &memory)
 	}
 	/* An empty program writes nothing: only the counter moves */
 	if (m_size) {
-		const uint32_t ring = reg(regs, REG_RING);
+		const uint32_t ring = aica_reg(regs, REG_RING);
 		const uint32_t base = (ring & 0xFFF) << 11;
 		const uint32_t length = (8192u << ((ring >> 13) & 3)) - 1;
 
 		for (uint32_t n = 0; n < m_size; n++) {
 			const uint32_t i = m_order[n];
 			const uint32_t at = REG_MPRO + i * 16;
-			const uint32_t w0 = reg(regs, at), w1 = reg(regs, at + 4);
-			const uint32_t w2 = reg(regs, at + 8), w3 = reg(regs, at + 12);
+			const uint32_t w0 = aica_reg(regs, at), w1 = aica_reg(regs, at + 4);
+			const uint32_t w2 = aica_reg(regs, at + 8), w3 = aica_reg(regs, at + 12);
 			const uint32_t ira = (w1 >> 7) & 0x3F;
 			const uint32_t shift = (w2 >> 4) & 3;
 
@@ -172,7 +166,7 @@ AicaDsp::run(const uint8_t *regs, const WaveMemory &memory)
 				y = s.frc;
 				break;
 			case 1:
-				y = static_cast<int16_t>(reg(regs, REG_COEF + i * 4)) >> 3;
+				y = static_cast<int16_t>(aica_reg(regs, REG_COEF + i * 4)) >> 3;
 				break;
 			case 2:
 				y = s.y >> 11;
@@ -195,7 +189,7 @@ AicaDsp::run(const uint8_t *regs, const WaveMemory &memory)
 			if (w2 & 0x40)
 				s.frc = shift == 3 ? shifted & 0xFFF : shifted >> 11;
 			if ((w2 & 0x6000) && (i & 1)) {
-				uint32_t addr = reg(regs, REG_MADRS + ((w3 >> 9) & 0x3F) * 4);
+				uint32_t addr = aica_reg(regs, REG_MADRS + ((w3 >> 9) & 0x3F) * 4);
 
 				if (w3 & 0x100)
 					addr += static_cast<uint32_t>(s.adrs) & 0xFFF;

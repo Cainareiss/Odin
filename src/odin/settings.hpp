@@ -28,6 +28,9 @@
 
 namespace odin {
 
+/* A text without the spaces, tabs and \r (a line of Windows) at its ends */
+std::string_view trimmed(std::string_view text);
+
 /* The settings of the user, odin.ini: "[section]" lines, then
  * "key = value" lines; a line that starts with # or ; is a comment. A key
  * keeps the order of the file. Each key Odin knows is in the file: as a

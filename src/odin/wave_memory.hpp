@@ -25,6 +25,13 @@
 
 namespace odin {
 
+/* A register of the AICA among its bytes: 16 bits, the low byte first */
+inline uint32_t
+aica_reg(const uint8_t *regs, uint32_t offset)
+{
+	return static_cast<uint32_t>(regs[offset] | (regs[offset + 1] << 8));
+}
+
 /* The wave memory as the voices and the effect processor of the AICA read
  * and write it; `mask` is its size less one. The board may watch some pages
  * of it: while its ARM7 counts the turns of a program without running them

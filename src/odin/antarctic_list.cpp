@@ -23,6 +23,7 @@
  * command processor made and to compare two builds. */
 
 #include "odin/antarctic_list.hpp"
+#include "odin/bytes.hpp"
 
 #include <cinttypes>
 #include <cstdio>
@@ -31,17 +32,9 @@ namespace {
 
 /* FNV-1a, 64 bits */
 struct Hash {
-	uint64_t value = 0xCBF29CE484222325ull;
+	uint64_t value = odin::FNV_START;
 
-	void bytes(const void *data, size_t size)
-	{
-		const uint8_t *b = static_cast<const uint8_t *>(data);
-
-		while (size--) {
-			value ^= *b++;
-			value *= 0x100000001B3ull;
-		}
-	}
+	void bytes(const void *data, size_t size) { value = odin::fnv1a(value, data, size); }
 	template <typename T> void add(const T &field) { bytes(&field, sizeof(field)); }
 };
 

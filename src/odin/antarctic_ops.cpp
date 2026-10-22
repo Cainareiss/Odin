@@ -25,19 +25,13 @@
  * gives each opcode its function. */
 
 #include "odin/antarctic.hpp"
+#include "odin/bytes.hpp"
 
 #include <bit>
 #include <cmath>
 #include <cstring>
 
 namespace odin {
-
-/* A word of an instruction read as a float */
-static float
-f32(uint32_t word)
-{
-	return std::bit_cast<float>(word);
-}
 
 /* Puts the low `width` bits of value in the field of a word at `shift` */
 static void

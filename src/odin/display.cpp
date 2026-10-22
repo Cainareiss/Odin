@@ -33,6 +33,7 @@
 
 #include <jansson.h>
 
+#include "odin/bytes.hpp"
 #include "odin/env.hpp"
 #include "odin/keyboard.hpp"
 #include "odin/logo.hpp"
@@ -942,18 +943,12 @@ Display::screenshot()
 void
 Display::print_fingerprint()
 {
-	uint64_t fp = 0xCBF29CE484222325ull;
-
 	if (!m_fingerprint)
 		return;
 
 	m_pixels.resize(size_t{m_picture_width} * m_picture_height * 3);
 	read_picture(m_pixels.data());
-	for (const uint8_t byte : m_pixels) {
-		fp ^= byte;
-		fp *= 0x100000001B3ull;
-	}
-	std::fprintf(stderr, "PICFP frame=%u fp=%016" PRIx64 "\n", m_frame, fp);
+	std::fprintf(stderr, "PICFP frame=%u fp=%016" PRIx64 "\n", m_frame, fnv1a(FNV_START, m_pixels.data(), m_pixels.size()));
 }
 
 void

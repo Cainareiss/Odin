@@ -33,8 +33,6 @@
 
 namespace odin {
 
-namespace {
-
 std::string_view
 trimmed(std::string_view text)
 {
@@ -44,6 +42,8 @@ trimmed(std::string_view text)
 		text.remove_suffix(1);
 	return text;
 }
+
+namespace {
 
 /* The word on top of odin.ini */
 constexpr std::string_view HEADER[] = {
