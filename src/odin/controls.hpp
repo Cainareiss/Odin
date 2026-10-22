@@ -126,6 +126,9 @@ public:
 	 * "<identity> <name>"), read by those pointers (nullptr: none) */
 	bool wants_guns() const { return !m_guns[0].empty() || !m_guns[1].empty(); }
 	void set_pointers(Pointers *pointers) { m_pointers = pointers; }
+	Pointers *pointers() const { return m_pointers; }
+	/* The light gun a player wants now (its identity; empty: none) */
+	void want_gun(unsigned player, const std::string &identity) { m_guns[player & 1] = identity; }
 	/* The pads feel the rumble outputs (the nozzle of Brave): unless the
 	 * user turns the vibration off */
 	void feel_outputs(bool on) { m_rumble = on; }

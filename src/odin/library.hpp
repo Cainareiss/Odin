@@ -37,7 +37,8 @@ namespace odin {
  * all times; the menu opens over it as over a game, its page Input on the
  * game chosen. What they change is kept in odin.ini and taken at once. */
 Opened library(const Options &command, const GameList &games, Settings &settings, const std::string &settings_file,
-               Display &display, Keyboard &keys, const std::string &last, const std::string &failed);
+               Display &display, Keyboard &keys, Pointers *pointers, const std::string &last,
+               const std::string &failed);
 
 } /* namespace odin */
 

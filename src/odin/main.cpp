@@ -21,6 +21,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <memory>
 #include <string>
 #include <vector>
@@ -44,7 +45,7 @@ namespace {
  * does not stay. */
 Ended
 play(const Options &given, const std::string &name, const GameList &games, Settings &settings,
-     const std::string &settings_file, Display &display, Keyboard &keys, Opened &opened)
+     const std::string &settings_file, Display &display, Keyboard &keys, Pointers *pointers, Opened &opened)
 {
 	Options options = given;
 
@@ -86,13 +87,9 @@ play(const Options &given, const std::string &name, const GameList &games, Setti
 		return Ended::FAILED;
 
 	display.attach(*board, game->title);
-	/* The light guns read one by one, when the settings give a player one */
-	std::unique_ptr<Pointers> pointers;
 	Controls controls(keys, game->controls, game->outputs, settings, game->name);
 
-	if (controls.wants_guns())
-		pointers = std::make_unique<Pointers>(display.window());
-	controls.set_pointers(pointers.get());
+	controls.set_pointers(pointers);
 	board->set_panel(&controls);
 
 	const bool network = network_on(settings);
@@ -209,6 +206,12 @@ main(int argc, char **argv)
 	const std::unique_ptr<odin::Display> display = odin::Display::make(keys, options.display);
 	if (!display)
 		return 1;
+	/* The light guns and the mice, each read on its own (held only for the
+	 * game that names them); none with ODIN_CONTROLLERS=none, as the
+	 * gamepads and the mouse */
+	const char *const controllers = std::getenv("ODIN_CONTROLLERS");
+	const std::unique_ptr<odin::Pointers> pointers =
+		controllers && !std::strcmp(controllers, "none") ? nullptr : std::make_unique<odin::Pointers>(display->window());
 
 	/* ODIN_GAMES_TEST=<game>,...: these games after the first, each from
 	 * its power-on to its frame -n, in the same window */
@@ -231,7 +234,7 @@ main(int argc, char **argv)
 	bool chosen = name.empty();
 	for (size_t played = 0;; played++) {
 		if (name.empty()) {
-			opened = odin::library(command, games, settings, settings_file, *display, keys, last, failed);
+			opened = odin::library(command, games, settings, settings_file, *display, keys, pointers.get(), last, failed);
 			if (opened.game.empty())
 				return 0;
 			name = opened.game;
@@ -244,7 +247,8 @@ main(int argc, char **argv)
 			launch.rom_path = opened.folder;
 		opened = {};
 
-		const odin::Ended ended = odin::play(launch, name, games, settings, settings_file, *display, keys, opened);
+		const odin::Ended ended =
+			odin::play(launch, name, games, settings, settings_file, *display, keys, pointers.get(), opened);
 
 		/* -l and -s were for the first game */
 		command.state_path.clear();

@@ -234,6 +234,19 @@ struct MenuState {
 	};
 	std::vector<Plugged> plugged;
 	std::optional<std::pair<std::string, std::string>> want;
+	/* The light guns and mice read one by one (pointers.hpp) that were
+	 * seen: identity, name, plugged in, aiming (else moving); that of each
+	 * player in the game shown (its identity; empty: none) and whether the
+	 * player has a sight there; the one asked for a player (no identity:
+	 * none) */
+	struct Gun {
+		std::string identity, name;
+		bool present = false, aims = false;
+	};
+	std::vector<Gun> guns;
+	std::array<std::string, 2> gun;
+	std::array<bool, 2> sights{};
+	std::optional<std::pair<unsigned, Gun>> want_gun;
 	/* The player shown, and the inputs of each player: of the gamepad, else
 	 * of the keyboard (and the mouse, shown); what the gamepad of each player
 	 * does now; the controls as a list rather than on the drawing */

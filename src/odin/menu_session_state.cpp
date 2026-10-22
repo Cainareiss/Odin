@@ -200,6 +200,32 @@ MenuSession::draw_menu()
 	/* What moves says so as it is drawn */
 	state.moving = false;
 
+	/* The light guns seen (one chosen and never plugged in since Odin
+	 * started, as the settings name it), that of each player in the game
+	 * shown, the players with a sight there */
+	state.guns.clear();
+	if (Pointers *const pointers = m_controls.pointers()) {
+		pointers->poll();
+		for (const Pointers::Device &device : pointers->devices())
+			state.guns.push_back({ device.identity, device.name, device.present, device.absolute });
+	}
+	state.gun = {};
+	for (const auto &[key, value] : m_settings.section("players." + game_shown())) {
+		if (key != "gun1" && key != "gun2")
+			continue;
+
+		const size_t space = value.find(' ');
+		const std::string identity = value.substr(0, space);
+
+		state.gun[key[3] - '1'] = identity;
+		if (std::none_of(state.guns.begin(), state.guns.end(),
+		                 [&identity](const MenuState::Gun &gun) { return gun.identity == identity; }))
+			state.guns.push_back({ identity, space == std::string::npos ? identity : value.substr(space + 1), false, true });
+	}
+	state.sights = {};
+	for (const GameControl &control : panel_shown().controls())
+		if (control.role == Role::GUN_X)
+			state.sights[control.player & 1] = true;
 	const MenuState was = state;
 
 	m_display.draw_menu(state);
@@ -223,6 +249,18 @@ MenuSession::draw_menu()
 		m_menu_pictures = MENU_PICTURES;
 	}
 	/* The gamepad a player wants for the game: [players.<game>] p1 or p2 */
+	/* The light gun a player wants for the game shown: kept, and taken at
+	 * once by the game that runs */
+	if (state.want_gun) {
+		const auto &[player, gun] = *state.want_gun;
+
+		keep("players." + game_shown(), player ? "gun2" : "gun1",
+		     gun.identity.empty() ? std::nullopt : std::optional<std::string>(gun.identity + " " + gun.name));
+		if (!m_other)
+			m_controls.want_gun(player, gun.identity);
+		state.want_gun.reset();
+		m_menu_pictures = MENU_PICTURES;
+	}
 	if (state.want) {
 		const auto &[guid, name] = *state.want;
 		const std::string section = "players." + game_shown(), key = state.player ? "p2" : "p1";

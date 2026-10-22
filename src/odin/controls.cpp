@@ -420,8 +420,10 @@ Controls::update()
 void
 Controls::follow_guns()
 {
-	if (!m_pointers)
+	if (!m_pointers || !wants_guns()) {
+		m_gun_seen = {};
 		return;
+	}
 
 	std::vector<std::string> held;
 	int w = 0, h = 0;

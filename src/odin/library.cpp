@@ -81,7 +81,7 @@ library_pictures(Display &display, const LibraryState &state, const std::string 
  * game chosen. What they change is kept in odin.ini and taken at once. */
 Opened
 library(const Options &command, const GameList &games, Settings &settings, const std::string &settings_file,
-        Display &display, Keyboard &keys, const std::string &last, const std::string &failed)
+        Display &display, Keyboard &keys, Pointers *pointers, const std::string &last, const std::string &failed)
 {
 	using Ask = BarState::Ask;
 	/* Some 60 pictures a second, between the events */
@@ -89,6 +89,8 @@ library(const Options &command, const GameList &games, Settings &settings, const
 	Options options = with_settings(command, settings);
 	/* The gamepads of the menu: the controls of no game */
 	Controls controls(keys, {}, {}, settings, {});
+
+	controls.set_pointers(pointers);
 	MenuSession menus(options, display, keys, controls, settings, settings_file, games, nullptr, nullptr, nullptr,
 	                  nullptr, network_on(settings));
 	LibraryState state;

@@ -895,6 +895,42 @@ devices_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width, bool t
 	return at.y + h;
 }
 
+/* The light gun of each player with a sight, under their device: none, or
+ * one of those seen (one unplugged stays listed). Its bottom. */
+float
+guns_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width, bool two)
+{
+	static constexpr char FOOT[] = "A light gun or a mouse read on its own aims for its player alone.";
+	const float h = kit.picker_height(), spacing = kit.px(10.0f);
+	const unsigned players = two ? 2 : 1;
+	const float each = (width - spacing * static_cast<float>(players - 1)) / static_cast<float>(players);
+	/* Under the picker of the device, past the name of the player */
+	const float past = two ? ImGui::CalcTextSize("P1").x + kit.px(8.0f) : 0.0f;
+
+	for (unsigned player = 0; player < players; player++) {
+		if (!state.sights[player])
+			continue;
+
+		std::vector<MenuKit::Item> items = {
+			{ "No light gun", player ? "player 2 does not aim" : "the mouse aims", {}, MenuKit::Icon::NONE, false },
+		};
+		int chosen = 0;
+
+		for (const MenuState::Gun &gun : state.guns) {
+			if (gun.identity == state.gun[player])
+				chosen = static_cast<int>(items.size());
+			items.push_back({ gun.name, gun.aims ? "light gun" : "mouse", gun.present ? "" : "UNPLUGGED",
+			                  MenuKit::Icon::NONE, !gun.present });
+		}
+		ImGui::PushID(static_cast<int>(player));
+		if (kit.picker("gun", { at.x + static_cast<float>(player) * (each + spacing) + past, at.y }, each - past, items,
+		               chosen, MenuKit::Icon::NONE, FOOT))
+			state.want_gun = std::pair(player, chosen ? state.guns[static_cast<size_t>(chosen) - 1] : MenuState::Gun());
+		ImGui::PopID();
+	}
+	return at.y + h;
+}
+
 /* The width of a label column: its longest name, within bounds */
 float
 column_width(const MenuKit &kit, std::span<const Label> labels, float box)
@@ -1702,6 +1738,8 @@ Menu::page_input(MenuKit &kit, MenuState &state) const
 
 	y = games_row(kit, state, { top.x, y }, width, true) + gap;
 	y = devices_row(kit, state, { top.x, y }, width, two) + gap;
+	if (state.sights[0] || state.sights[1])
+		y = guns_row(kit, state, { top.x, y }, width, two) + gap;
 
 	const std::vector<InputRow> rows = input_rows(state);
 	/* A window wide enough (16:9) has the cabinet beside the device; a
