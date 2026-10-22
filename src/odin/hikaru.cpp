@@ -449,8 +449,12 @@ Hikaru::build_mie()
 	const char *const drive = std::getenv("ODIN_DRIVE");
 
 	if (m_game.drive_first_output && m_game.section("drive_rom").size() == Drive838_13366::ROM_SIZE &&
-	    !(drive && !std::strcmp(drive, "imitation")))
+	    !(drive && !std::strcmp(drive, "imitation"))) {
 		m_drive = std::make_unique<Drive838_13366>(m_game.section("drive_rom"));
+		/* ODIN_TURNS=0, a test: its program runs every turn of its
+		 * waits. The states must be the same. */
+		m_drive->set_waits_counted(env_flag("ODIN_TURNS", true));
+	}
 	for (const GameControl &control : m_game.controls)
 		if (control.type == GameControl::Type::ANALOG && control.role == Role::STEER && control.player == 0)
 			m_steer_channel = control.analog;

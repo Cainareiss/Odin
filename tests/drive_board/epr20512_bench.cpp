@@ -22,7 +22,8 @@
  * CC for 1 s each, then its state), the game mode C7 and its state EF, the
  * torque of each command 80 + n to the left and 80 - n to the right, a
  * command taken only once stable, the position of the wheel as a reply
- * (D5), and its wheel centred by the motor at its start.
+ * (D5), its wheel centred by the motor at its start, and its waits
+ * counted without being run.
  *
  * Not run with the unit tests: it needs the EPROM.
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
@@ -33,6 +34,7 @@
 
 #include "odin/drive_838_13366.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <vector>
 
@@ -146,6 +148,48 @@ int main(int argc, char **argv)
 	until_reply(held, 0xCD, 11000, 0xFF, 0x60);
 	check(until_reply(held, 0xE9, 20000, 0xFF, 0x60) > 15000 && held.torque() == 0,
 	      "a wheel held off its centre: E9 after three tries of 5 s, no torque");
+
+	/* Its main loop counted without being run while it waits (MARKDOWN/94
+	 * § D): a board that runs every turn, given the same calls of every
+	 * length and the commands of a race, has the same state after each */
+	{
+		Drive838_13366 counted(rom), every(rom);
+		uint32_t seed = 2026;
+		uint8_t command = 0xFF, wheel = 0x80;
+		bool same = true;
+		const auto next = [&seed](uint32_t most) {
+			seed = seed * 1103515245u + 12345u;
+			return (seed >> 8) % most;
+		};
+
+		every.set_waits_counted(false);
+		while (counted.clocks() < 40 * Drive838_13366::CLOCK_HZ && same) {
+			const uint64_t length = 1 + next(next(16) == 0 ? 80000 : 600);
+			const uint64_t ms = counted.clocks() / MS;
+
+			if (ms < 12000)
+				command = 0xFF;
+			else if (ms < 13000)
+				command = 0xC1;
+			else if (ms < 14000)
+				command = 0xC7;
+			else if (next(400) == 0)
+				command = static_cast<uint8_t>(next(4) == 0 ? 0xD5 : next(0x80));
+			if (next(30) == 0)
+				wheel = static_cast<uint8_t>(std::clamp<int>(wheel + static_cast<int>(next(41)) - 20, 0, 255));
+			counted.run_until(counted.clocks() + length, command, wheel);
+			every.run_until(every.clocks() + length, command, wheel);
+
+			Drive838_13366::State a, b;
+
+			counted.save(a);
+			every.save(b);
+			same = a == b;
+		}
+		check(same, "its waits counted: the same states as a board that runs every turn, 40 s");
+		std::printf("waits counted: %.1f %% of its clocks\n",
+		            100.0 * static_cast<double>(counted.waits_counted()) / static_cast<double>(counted.clocks()));
+	}
 
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures ? 1 : 0;

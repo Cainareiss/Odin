@@ -44,6 +44,11 @@ three instructions out of four: once a turn has left every register as it
 was, R aside, with nothing written, no port used and R not read, the turns
 left before the end of the line are counted without being run
 (Mie::wait_check; the MIE costs 1.5 to 1.8 times less).
+The program of the drive board of NASCAR goes round its main loop between
+two NMI, its calls writing only their returns on the stack: a turn back
+with the CPU as it was, R aside, no port used, R not read, the NMI not
+taken and every byte it wrote back as it was is counted the same way
+(Drive838_13366::wait_check; the board costs 1.8 times less).
 ODIN_TURNS=0 runs every turn: the memory, the states and the pictures must
 be the same. What is left of the sound boards is mostly what each of the
 1 470 samples of a frame costs by itself, turns counted or not.

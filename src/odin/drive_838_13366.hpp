@@ -70,6 +70,8 @@ public:
 		uint8_t adc_value, adc_bits;
 		uint8_t motor_register, motor_value, torque_value;
 		uint8_t lamps;
+
+		bool operator==(const State &) const = default;
 	};
 
 	/* `rom`: the 64 KB of epr-20512 */
@@ -92,6 +94,12 @@ public:
 	void save(State &out) const;
 	void load(const State &in);
 
+	/* Off, a test: every turn of its main loop runs, none is counted
+	 * without being run (MARKDOWN/94 § D). The states must be the same. */
+	void set_waits_counted(bool on);
+	/* The clocks counted so since it was made */
+	uint64_t waits_counted() const { return m_wait_cycles; }
+
 private:
 	/* Z80Bus */
 	uint8_t read8(uint16_t addr) override;
@@ -103,10 +111,57 @@ private:
 	/* The clocks between two NMI as the CTC is set; 0: none come */
 	uint64_t nmi_period() const;
 
+	/* One instruction, or the turns that wait before `to` and one */
+	void step(uint64_t to);
+	void wait_mark();
+	void wait_check();
+	void wait_record();
+	void bill(uint64_t to);
+
 	std::array<uint8_t, ROM_SIZE> m_rom;
 	State m_state;
 	Z80 m_cpu;
 	uint8_t m_wheel = 0x80;
+
+	/* Between two NMI its program goes round its main loop (067A),
+	 * reading only its RAM. A turn waits when it comes back where it
+	 * started with the CPU as it was (R aside), without a port used, R
+	 * read or the NMI taken, every byte it wrote back as it was (the
+	 * returns of its calls on the stack): every further turn is the same
+	 * until the NMI. */
+	static constexpr unsigned MAX_TURN = 64;	/* instructions */
+	static constexpr unsigned MAX_WRITTEN = 8;	/* bytes of RAM */
+	/* The search: the CPU and the clocks at the mark, the instructions
+	 * since, the bytes written with their value at the mark; `again`, a
+	 * turn has come back and the next one is recorded to be proven */
+	struct Wait {
+		Z80State cpu;
+		uint64_t clock;
+		unsigned steps;
+		bool touched;
+		bool again;
+		uint32_t refresh;
+		unsigned written;
+		std::array<uint16_t, MAX_WRITTEN> addr;
+		std::array<uint8_t, MAX_WRITTEN> was;
+	};
+	/* The turn proven, before its instruction n: the CPU, the clocks and
+	 * the M1 cycles from its start, the bytes it writes; the CPU before
+	 * instruction `at` */
+	struct Proof {
+		bool on;
+		unsigned length, at;
+		uint64_t period;
+		uint32_t refresh;
+		std::array<uint64_t, MAX_TURN> offset;
+		std::array<uint32_t, MAX_TURN> m1;
+		std::array<Z80State, MAX_TURN> cpu;
+		std::array<std::array<uint8_t, MAX_WRITTEN>, MAX_TURN> ram;
+	};
+	Wait m_wait{};
+	Proof m_proof{};
+	bool m_waits_counted = true;
+	uint64_t m_wait_cycles = 0;
 };
 
 } /* namespace odin */

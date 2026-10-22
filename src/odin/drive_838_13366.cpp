@@ -39,6 +39,16 @@ Drive838_13366::reset()
 	m_state.torque_value = 0x80;
 	m_state.lamps = 0xFF;
 	m_cpu.reset();
+	m_proof.on = false;
+	wait_mark();
+}
+
+void
+Drive838_13366::set_waits_counted(bool on)
+{
+	m_waits_counted = on;
+	m_proof.on = false;
+	wait_mark();
 }
 
 /* The CTC of the board as its program sets it (01F7): channel 0 a timer
@@ -93,16 +103,153 @@ Drive838_13366::run_until(uint64_t clock, uint8_t command, uint8_t wheel)
 
 	s.command = command;
 	m_wheel = wheel;
+	/* The end of channel 1 looked at after each instruction: the program
+	 * may set the CTC on the way */
 	while (s.clocks < clock) {
-		const uint64_t to = s.next_nmi ? std::min(clock, s.next_nmi) : clock;
-
-		if (to > s.clocks)
-			s.clocks += m_cpu.run(static_cast<uint32_t>(to - s.clocks));
+		step(s.next_nmi ? std::min(clock, s.next_nmi) : clock);
 		if (s.next_nmi && s.clocks >= s.next_nmi) {
 			m_cpu.set_nmi();
 			s.next_nmi += nmi_period();
+			m_proof.on = false;
+			m_wait.touched = true;
 		}
 	}
+}
+
+/* Whole instructions until `to` is reached, as Z80::run does. On a turn
+ * proven to wait, the instructions that start before the one that reaches
+ * `to` are counted without being run: the CPU put as it is before that
+ * one, R advanced by their M1 cycles, the bytes the turn writes as they
+ * are there; that one is run. */
+void
+Drive838_13366::step(uint64_t to)
+{
+	State &s = m_state;
+
+	if (m_waits_counted && m_proof.on) {
+		bill(to);
+		s.clocks += m_cpu.step();
+		m_proof.at = m_proof.at + 1 == m_proof.length ? 0 : m_proof.at + 1;
+		return;
+	}
+	if (m_waits_counted && m_wait.again && m_wait.steps < MAX_TURN)
+		wait_record();
+	s.clocks += m_cpu.step();
+	if (!m_waits_counted)
+		return;
+	m_wait.steps++;
+	if (m_cpu.pc() == m_wait.cpu.pc)
+		wait_check();
+	else if (m_wait.steps > MAX_TURN)
+		wait_mark();
+}
+
+void
+Drive838_13366::wait_mark()
+{
+	m_cpu.save(m_wait.cpu);
+	m_wait.clock = m_state.clocks;
+	m_wait.steps = 0;
+	m_wait.touched = false;
+	m_wait.again = false;
+	m_wait.written = 0;
+	m_cpu.forget_refresh_read();
+}
+
+/* Before instruction n of the turn being proven */
+void
+Drive838_13366::wait_record()
+{
+	const unsigned n = m_wait.steps;
+	Z80State &cpu = m_proof.cpu[n];
+
+	m_cpu.save(cpu);
+	m_proof.offset[n] = m_state.clocks - m_wait.clock;
+	m_proof.m1[n] = n ? m_proof.m1[n - 1] + ((cpu.r - m_proof.cpu[n - 1].r) & 0x7Fu) : 0;
+	for (unsigned i = 0; i < m_wait.written; i++)
+		m_proof.ram[n][i] = m_state.ram[m_wait.addr[i] - RAM_BASE];
+}
+
+/* Back at the mark: a turn that waits is recorded once more, then
+ * proven if that turn is the same */
+void
+Drive838_13366::wait_check()
+{
+	const State &s = m_state;
+	Z80State now;
+
+	m_cpu.save(now);
+
+	const uint8_t r = now.r;
+
+	now.r = static_cast<uint8_t>((r & 0x80) | (m_wait.cpu.r & 0x7F));
+
+	bool waits = !m_wait.touched && !m_cpu.refresh_read() && m_wait.steps <= MAX_TURN && now == m_wait.cpu;
+
+	for (unsigned i = 0; waits && i < m_wait.written; i++)
+		waits = s.ram[m_wait.addr[i] - RAM_BASE] == m_wait.was[i];
+	if (!waits) {
+		wait_mark();
+		return;
+	}
+
+	const uint64_t period = s.clocks - m_wait.clock;
+	const uint32_t refresh = (r - m_wait.cpu.r) & 0x7Fu;
+
+	if (!m_wait.again) {
+		m_wait.again = true;
+		m_proof.length = m_wait.steps;
+		m_proof.period = period;
+		m_wait.refresh = refresh;
+		m_wait.cpu.r = r;
+		m_wait.clock = s.clocks;
+		m_wait.steps = 0;
+		return;
+	}
+
+	const unsigned last = m_wait.steps - 1;
+	const uint32_t m1 = m_proof.m1[last] + ((r - m_proof.cpu[last].r) & 0x7Fu);
+
+	if (m_wait.steps != m_proof.length || period != m_proof.period || (m1 & 0x7F) != m_wait.refresh) {
+		wait_mark();
+		return;
+	}
+	m_proof.on = true;
+	m_proof.at = 0;
+	m_proof.refresh = m1;
+	m_wait.again = false;
+}
+
+/* To the last start of an instruction of the turn before `to` */
+void
+Drive838_13366::bill(uint64_t to)
+{
+	State &s = m_state;
+	Proof &p = m_proof;
+	const uint64_t from = p.offset[p.at];
+	const uint64_t last = from + (to - s.clocks - 1);
+	const uint64_t into = last % p.period;
+	unsigned n = p.length - 1;
+
+	while (p.offset[n] > into)
+		n--;
+
+	const uint64_t billed = last - into + p.offset[n] - from;
+
+	if (!billed)
+		return;
+
+	const uint64_t m1 = (last - into) / p.period * p.refresh + p.m1[n] - p.m1[p.at];
+	Z80State land = p.cpu[n];
+	const uint8_t r = m_cpu.r();
+
+	land.r = static_cast<uint8_t>((r & 0x80) | ((r + m1) & 0x7F));
+	m_cpu.load(land);
+	for (unsigned i = 0; i < m_wait.written; i++)
+		s.ram[m_wait.addr[i] - RAM_BASE] = p.ram[n][i];
+	s.clocks += billed;
+	p.at = n;
+	m_wait_cycles += billed;
 }
 
 int
@@ -117,11 +264,32 @@ Drive838_13366::read8(uint16_t addr)
 	return addr >= RAM_BASE ? m_state.ram[addr - RAM_BASE] : m_rom[addr];
 }
 
+/* While a turn is looked at, the bytes it writes and their value at
+ * its mark (a turn proven writes the same ones) */
 void
 Drive838_13366::write8(uint16_t addr, uint8_t value)
 {
-	if (addr >= RAM_BASE)
-		m_state.ram[addr - RAM_BASE] = value;
+	if (addr < RAM_BASE)
+		return;
+
+	uint8_t &byte = m_state.ram[addr - RAM_BASE];
+
+	if (!m_proof.on && !m_wait.touched) {
+		unsigned i = 0;
+
+		while (i < m_wait.written && m_wait.addr[i] != addr)
+			i++;
+		if (i == m_wait.written) {
+			if (m_wait.again || i == MAX_WRITTEN) {
+				m_wait.touched = true;
+			} else {
+				m_wait.addr[i] = addr;
+				m_wait.was[i] = byte;
+				m_wait.written++;
+			}
+		}
+	}
+	byte = value;
 }
 
 uint8_t
@@ -129,6 +297,8 @@ Drive838_13366::in8(uint16_t port)
 {
 	State &s = m_state;
 
+	m_proof.on = false;
+	m_wait.touched = true;
 	switch (port & 0xFF) {
 	case 0x20:
 		return DIP1;
@@ -156,6 +326,8 @@ Drive838_13366::out8(uint16_t port, uint8_t value)
 {
 	State &s = m_state;
 
+	m_proof.on = false;
+	m_wait.touched = true;
 	switch (port & 0xFF) {
 	case 0x10:
 	case 0x11:
@@ -210,6 +382,8 @@ Drive838_13366::load(const State &in)
 {
 	m_state = in;
 	m_cpu.load(in.cpu);
+	m_proof.on = false;
+	wait_mark();
 }
 
 } /* namespace odin */
