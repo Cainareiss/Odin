@@ -843,8 +843,7 @@ namespace {
 float
 devices_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width, bool two)
 {
-	static constexpr char FOOT[] = "Pick the gamepad you play this game with; each game keeps its own. "
-	                               "The keyboard and mouse always play.";
+	static constexpr char FOOT[] = "Each game keeps its own gamepad. The keyboard and mouse always play.";
 	ImDrawList *const list = ImGui::GetWindowDrawList();
 	const MenuPalette &palette = kit.palette();
 	const float h = kit.picker_height(), spacing = kit.px(10.0f);
@@ -1797,7 +1796,7 @@ Menu::page_input(MenuKit &kit, MenuState &state) const
 float
 Menu::input_foot(const MenuKit &kit, MenuState &state, ImVec2 at, float width, float height, bool draw)
 {
-	static constexpr char REST[] = "Touch a button or move a stick: its control lights. Click a name to change it.";
+	static constexpr char REST[] = "Press or move a control: it lights. Click a name to change it.";
 	const float line = ImGui::GetTextLineHeight();
 
 	if (!draw)

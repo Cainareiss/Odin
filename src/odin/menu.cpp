@@ -549,7 +549,7 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 
 	kit.begin_group("ENGINE");
 	watch(PREVIEW_CARD, [&] {
-		kit.text("Graphics card", "the one the system gives Odin, with OpenGL 4.3", state.gpu.c_str());
+		kit.text("Graphics card", "chosen by the system", state.gpu.c_str());
 	});
 	kit.end_group();
 
@@ -557,7 +557,7 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 	static constexpr const char *SCALES[] = { "1×", "2×", "3×", "4×", "5×", "6×" };
 	int scale = static_cast<int>(state.scale) - 1;
 
-	std::snprintf(about, sizeof(about), "internal resolution %u × %u%s", 640 * state.scale, 480 * state.scale,
+	std::snprintf(about, sizeof(about), "drawn at %u × %u%s", 640 * state.scale, 480 * state.scale,
 	              state.scale == 1 ? " · as the cabinet" : "");
 	watch(PREVIEW_UPSCALE, [&] {
 		if (kit.choice("Upscaling", about, SCALES, scale, state.scale_given ? "set by the command line: -x" : nullptr))
@@ -568,8 +568,8 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 	int filter = index_of(ANISOTROPY, state.anisotropy);
 
 	watch(PREVIEW_FILTER, [&] {
-		if (kit.choice("Texture filter", "anisotropic; the cabinet has none. Shows on far floors and roads (NASCAR, "
-		               "Virtual-On), hardly elsewhere", FILTERS, filter,
+		if (kit.choice("Texture filter", "anisotropic, the cabinet has none; seen on far roads and floors (NASCAR, "
+		               "Virtual-On)", FILTERS, filter,
 		               state.anisotropy_given ? "set by the command line: -a" : nullptr))
 			state.anisotropy = ANISOTROPY[filter];
 	});
@@ -579,7 +579,7 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 	static constexpr const char *MODES[] = { "Window", "Full screen" };
 	int mode = state.fullscreen ? 1 : 0;
 
-	std::snprintf(about, sizeof(about), "full screen at the size of the display, detected: %u × %u · F11 or Alt+Enter",
+	std::snprintf(about, sizeof(about), "full screen at %u × %u, the display's size · F11 or Alt+Enter",
 	              state.display_w, state.display_h);
 	watch(PREVIEW_SCREEN, [&] {
 		if (kit.choice("Display", about, MODES, mode, state.fullscreen_given ? "set by the command line: -f" : nullptr))
@@ -605,14 +605,14 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 
 	static constexpr const char *SYNCS[] = { "off", "on", "adaptive" };
 	static constexpr const char *SYNCS_ABOUT[] = {
-		"the frames do not wait for the display: one may be torn",
-		"each frame waits for the display: none is torn, a late one costs the game time",
-		"the frames on time wait for the display; a late one shows at once and may be torn",
+		"frames do not wait for the display: one may tear",
+		"each frame waits for the display: no tearing, a late one slows the game",
+		"frames on time wait; a late one shows at once and may tear",
 	};
 	int sync = static_cast<int>(state.vsync);
 	const char *const said = state.vsync_off ? state.vsync_off :
 	                         state.refresh_short && state.vsync == 1 ?
-	                         "off: this display shows fewer frames a second than the 60 of the cabinet" :
+	                         "off: this display shows fewer than the cabinet's 60 frames a second" :
 	                         SYNCS_ABOUT[state.vsync];
 
 	if (state.refresh > 0.0f)
@@ -628,8 +628,8 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 	int sides = static_cast<int>(state.sides);
 
 	watch(PREVIEW_SCREEN, [&] {
-		if (kit.choice("Bezel", "where the window is wider than the game: black, the game blurred, or its "
-		               "picture in Artwork (swracer_bezel.png, page Paths)", SIDES, sides))
+		if (kit.choice("Bezel", "beside the game in a wide window: black, the game blurred, or its picture from "
+		               "Artwork (page Paths)", SIDES, sides))
 			state.sides = static_cast<unsigned>(sides);
 	});
 	kit.end_group();
@@ -639,7 +639,7 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 	int pace = state.unthrottled ? 1 : 0;
 
 	watch(PREVIEW_SCREEN, [&] {
-		if (kit.choice("Pace", "unlimited: as fast as the machine, without sound · at the next launch", PACES, pace,
+		if (kit.choice("Pace", "unlimited: as fast as the computer, no sound · at the next launch", PACES, pace,
 		               state.unthrottled_given ? "set by the command line: -u" : nullptr))
 			state.unthrottled = pace == 1;
 	});
@@ -766,7 +766,7 @@ Menu::preview(const MenuKit &kit, const MenuState &state, int which, ImVec2 a, I
 
 		std::snprintf(chosen, sizeof(chosen), "%u×", scale);
 		pair("UPSCALING", UPSCALE, scale > 1 ? static_cast<int>(UPSCALE + scale - 1) : -1, "1× · THE CABINET", chosen,
-		     "Real captures of Odin: Brave Fire Fighters, the same picture at each scale.");
+		     "Captured in Odin: Brave Fire Fighters, the same picture at each scale.");
 		break;
 	}
 	case PREVIEW_FILTER: {
@@ -774,7 +774,7 @@ Menu::preview(const MenuKit &kit, const MenuState &state, int which, ImVec2 a, I
 		static constexpr const char *NAMES[] = { "NONE", "2×", "4×", "8×", "16×" };
 
 		pair("TEXTURE FILTER", FILTER, filter > 0 ? FILTER + filter : -1, "NONE · THE CABINET", NAMES[filter],
-		     "Real captures of Odin: Planet Harriers, the road far off, at 1×.");
+		     "Captured in Odin: Planet Harriers, the far road, at 1×.");
 		break;
 	}
 	case PREVIEW_VSYNC: {
@@ -782,8 +782,8 @@ Menu::preview(const MenuKit &kit, const MenuState &state, int which, ImVec2 a, I
 
 		pair("VERTICAL SYNC", WHOLE, state.vsync == 0 ? TORN : WHOLE, "WHOLE · THE CABINET",
 		     NAMES[std::min(state.vsync, 2u)],
-		     "Real captures of Odin: Brave Fire Fighters, two frames that follow; torn, the display shows the top "
-		     "of the first and the bottom of the second.");
+		     "Captured in Odin: Brave Fire Fighters, two frames in a row; torn, the top of one meets the bottom of "
+		     "the next.");
 		break;
 	}
 	case PREVIEW_SCREEN: {
@@ -851,21 +851,21 @@ Menu::picture(ImDrawList *list, int which, ImVec2 a, ImVec2 b, float shown) cons
 std::string
 Menu::help(int page, const MenuState &state)
 {
-	const char *const kept = state.kept ? "." : ", until Odin closes: ODIN_CONFIG=none keeps nothing.";
+	const char *const kept = state.kept ? "." : ", until Odin closes (ODIN_CONFIG=none).";
 
 	switch (page) {
 	case DISPLAY:
 		return std::string("These settings hold for every game") + kept;
 	case AUDIO:
-		return std::string("Sound only: vibration is set in Input") + kept;
+		return std::string("Sound only; vibration is in Input") + kept;
 	case HOTKEYS:
 		return state.hotkey_catching || state.kept ? hotkeys_help(state) :
-		       hotkeys_help(state) + " Until Odin closes: ODIN_CONFIG=none keeps nothing.";
+		       hotkeys_help(state) + " Until Odin closes (ODIN_CONFIG=none).";
 	case OUTPUTS:
-		return state.kept ? "" : "Until Odin closes: ODIN_CONFIG=none keeps nothing.";
+		return state.kept ? "" : "Until Odin closes (ODIN_CONFIG=none).";
 	case PATHS:
 		if (state.no_picker)
-			return "This system gives Odin no folder picker: [paths] of odin.ini takes the folders.";
+			return "No folder picker here: set the folders in [paths] of odin.ini.";
 		return state.choosing ? "Pick the folder in the window of the system." :
 		                        std::string("These paths hold for every game") + kept;
 	default:

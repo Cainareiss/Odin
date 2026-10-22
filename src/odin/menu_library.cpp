@@ -260,7 +260,7 @@ Menu::build_library(LibraryState &state, BarState &bar_state)
 	 * to choose; how to play it at its foot */
 	const ImVec2 sa = { room.x - margin - sheet_w, top }, sb = { room.x - margin, bottom };
 	const float inside = kit.px(SHEET_INSIDE), x = sa.x + inside, width = sheet_w - 2.0f * inside;
-	const std::string play = "Enter" + (state.press.empty() ? "" : ", " + state.press) + " or a second click: play";
+	const std::string play = "Enter" + (state.press.empty() ? "" : ", " + state.press) + " or click again: play";
 	const char enter[] = "Enter";
 	const float foot = sb.y - inside - ImGui::GetFont()->CalcTextSizeA(size, FLT_MAX, width, play.c_str()).y;
 	float y = sa.y + inside;
@@ -281,8 +281,7 @@ Menu::build_library(LibraryState &state, BarState &bar_state)
 			             "It did not start: odin.log tells why.") + line;
 		if (state.roms.empty()) {
 			y += wrapped(list, { x, y }, width, size, palette.ink,
-			             "Odin plays the games from the folder that holds them, as MAME keeps them: a folder, a zip or "
-			             "a 7z of the name of each game.") + line;
+			             "Choose your games folder: one folder, zip or 7z per game, named as in MAME.") + line;
 		} else if (!game.missing.empty()) {
 			y += wrapped(list, { x, y }, width, size, palette.ink, "Files missing:") + kit.px(4.0f);
 			for (const std::string &file : game.missing)
@@ -294,7 +293,7 @@ Menu::build_library(LibraryState &state, BarState &bar_state)
 		}
 		if (!game.missing.empty()) {
 			/* The folders to choose, unless the command line gives them */
-			const char roms[] = "Folder of the games...", bios[] = "Folder of the BIOS...";
+			const char roms[] = "Games folder...", bios[] = "BIOS folder...";
 
 			if (!state.roms_given && !state.choosing) {
 				if (kit.button(roms, { x, y }, false))

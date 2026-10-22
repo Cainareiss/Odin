@@ -174,7 +174,7 @@ output_tiles(const MenuKit &kit, const MenuState &state, const Box &box)
 	const size_t columns = std::max<size_t>(1, static_cast<size_t>((width + gap) / (kit.px(TILE_LEAST) + gap)));
 	const size_t rows = (state.outputs.size() + columns - 1) / columns;
 	const float tile_w = (width - static_cast<float>(columns - 1) * gap) / static_cast<float>(columns);
-	const char caption[] = "The cabinet's outputs: they light when the game turns them on.";
+	const char caption[] = "The cabinet's outputs, lit when the game turns them on.";
 	float names = 0.0f;
 
 	for (const MenuState::Output &output : state.outputs)
@@ -236,9 +236,9 @@ struct Boards {
 };
 
 constexpr Boards BOARDS[] = {
-	{ "sgnascar", "front speakers (FRONT)", "seat-back speakers (REAR)", "; as the REAR knob of the cabinet" },
-	{ "pharrier", "monitor speakers and woofer", "seat-back speakers (REAR)", "" },
-	{ "swracer", "seat speakers and woofer", "shaker of the panel (VIBRATION)",
+	{ "sgnascar", "front (FRONT)", "seat backs (REAR)", "; as the REAR knob of the cabinet" },
+	{ "pharrier", "monitor speakers + woofer", "seat backs (REAR)", "" },
+	{ "swracer", "seat + woofer", "panel shaker (VIBRATION)",
 	  "; the cabinet feeds it to the shaker only" },
 };
 constexpr Boards OTHER_BOARDS = { "", "main speakers", "optional speakers", "" };
@@ -455,7 +455,7 @@ Menu::page_audio(MenuKit &kit, MenuState &state) const
 		device = static_cast<int>(devices.size());
 		devices.push_back(state.device);
 	}
-	if (kit.value_list("Device", "the sound of Odin plays there", devices[static_cast<size_t>(device)].c_str(),
+	if (kit.value_list("Device", "where Odin's sound plays", devices[static_cast<size_t>(device)].c_str(),
 	                   "Change...", devices, device, state.silent))
 		state.device = device == 0 ? "" : devices[static_cast<size_t>(device)];
 
@@ -463,7 +463,7 @@ Menu::page_audio(MenuKit &kit, MenuState &state) const
 	char shown[16];
 
 	std::snprintf(shown, sizeof(shown), "%u %%", state.volume);
-	if (kit.slider("Volume", "of the sound of Odin alone; 0 is none", volume, 0.0f, 100.0f, 1.0f, shown, state.silent))
+	if (kit.slider("Volume", "Odin's sound only; 0 is silent", volume, 0.0f, 100.0f, 1.0f, shown, state.silent))
 		state.volume = static_cast<unsigned>(std::lround(volume));
 
 	static constexpr const char *KEEP_MUTE[] = { "Keep", "Mute" };
@@ -474,10 +474,9 @@ Menu::page_audio(MenuKit &kit, MenuState &state) const
 		state.background = background == 0;
 	kit.end_group();
 
-	kit.paragraph("SOUND BOARDS", "Both: the main and the optional board mixed on two speakers. Four: the two "
-	              "boards apart, on a four-channel output. Main: without the optional board. By default as the "
-	              "cabinet: the optional board of Racer shakes its panel and is heard nowhere; the shaking is set "
-	              "in Input.");
+	kit.paragraph("SOUND BOARDS", "Main: the main board alone. Both: the two boards mixed on two speakers. Four: "
+	              "each board on its own pair, four channels. By default as the cabinet: Racer's optional board only "
+	              "shakes its panel (set in Input).");
 	for (MenuState::SoundGame &game : state.sound_games) {
 		std::string title = game.title;
 		char about[160];
@@ -505,7 +504,7 @@ Menu::page_audio(MenuKit &kit, MenuState &state) const
 /* The actions of Odin as the page Hotkeys says them, in the order of
  * Hotkeys::Action */
 constexpr const char *HOTKEY_NAMES[Hotkeys::ACTIONS] = {
-	"Open / close the menu (the game pauses)", "Pause", "Save the state", "Load the state", "Full screen", "Quit",
+	"Menu (pauses the game)", "Pause", "Save state", "Load state", "Full screen", "Quit",
 };
 
 /* The modifiers as their caps say them */
@@ -632,7 +631,7 @@ hotkeys_keyboard(const MenuKit &kit, const MenuState &state, const Box &box, con
 		others_w += kit.key_size(name.c_str()).x + gap;
 
 	const char caption[] = "Light outline: Odin's keys. Touch them: they light.";
-	const char guide[] = "held = the controller's hotkey, as on Batocera";
+	const char guide[] = "held: the hotkey, as on Batocera";
 	const float text_w = std::min(width, kit.px(260.0f));
 	const float caption_h = centred({}, width, size, caption, 0);
 	const float guide_w = kit.pill_size(guide_name.c_str()).x, guide_text_w = text_w - guide_w - kit.px(8.0f);
@@ -745,13 +744,13 @@ std::string
 Menu::hotkeys_help(const MenuState &state)
 {
 	if (!state.hotkey_catching)
-		return "Everything can be reassigned: click a key or a combination to change it.";
+		return "Click a key or a combination to change it.";
 
 	const std::string name = HOTKEY_NAMES[state.hotkey_catching->first];
 
 	if (state.hotkey_catching->second == Hotkeys::KEYS)
-		return name + ": hold Guide and press a button, or tap Guide alone. Esc lets it be.";
-	return name + ": press the key you want, with Ctrl, Alt or Shift held if you like. Esc lets it be.";
+		return name + ": hold Guide and press a button, or tap Guide alone. Esc cancels.";
+	return name + ": press the new key, with Ctrl, Alt or Shift if you like. Esc cancels.";
 }
 
 /* Outputs: those of the cabinet of the game shown, lit as the game lights
@@ -798,8 +797,8 @@ Menu::page_paths(MenuKit &kit, MenuState &state) const
 	              shown_path(state.bios, "the folder of the games").c_str(), change, nullptr,
 	              state.bios_given ? "set by the command line: -B" : nullptr))
 		state.choose = MenuState::Folder::BIOS;
-	if (kit.value("Artwork", "pictures of the games, named by MAME: swracer_logo.png in the library, "
-	              "swracer_bezel.png around the game; Odin keeps swracer_title.png",
+	if (kit.value("Artwork", "named as in MAME: swracer_logo.png (library), swracer_bezel.png (around the game); "
+	              "Odin saves swracer_title.png",
 	              shown_path(state.artwork, "none").c_str(), change, nullptr,
 	              state.artwork_given ? "set by ODIN_ARTWORK" : nullptr))
 		state.choose = MenuState::Folder::ARTWORK;
@@ -811,25 +810,25 @@ Menu::page_paths(MenuKit &kit, MenuState &state) const
 	              state.saves_given ? "set by ODIN_SAVES" : nullptr))
 		state.choose = MenuState::Folder::SAVES;
 	if (kit.value("Save states", "F4 saves the game where it is, F1 takes it back",
-	              shown_path(state.states, "the folder Odin was started from").c_str(), change))
+	              shown_path(state.states, "where Odin was started").c_str(), change))
 		state.choose = MenuState::Folder::STATES;
 	kit.end_group();
 
 	kit.begin_group("ODIN FILES");
 	kit.value("Configuration", "odin.ini, written by this menu",
 	          shown_path(state.settings_file, "none: ODIN_CONFIG=none").c_str(), nullptr, "READ ONLY");
-	kit.value("Shader lists", "the 3D programs each game draws with, made ready when it starts",
+	kit.value("Shader lists", "each game's 3D programs, prepared when it starts",
 	          shown_path(state.shader_lists, "none").c_str(), nullptr, "READ ONLY");
 	kit.end_group();
 
 	kit.begin_group("LOG");
-	kit.value("Log file", "what Odin says, kept from its last launch; the one before in odin-previous.log",
+	kit.value("Log file", "Odin's messages from its last launch; the one before: odin-previous.log",
 	          shown_path(state.log_file, "none: ODIN_LOG=none").c_str(), nullptr, "READ ONLY");
 
 	int verbose = state.verbose ? 0 : 1;
 
-	if (kit.choice("Detailed log", "each access of the board, in the terminal and the log file; Odin runs far "
-	               "slower · at the next launch", ON_OFF, verbose, state.verbose_given ? "set by the command line: -v" : nullptr))
+	if (kit.choice("Detailed log", "every access of the board, in the terminal and the log; far slower · at the "
+	               "next launch", ON_OFF, verbose, state.verbose_given ? "set by the command line: -v" : nullptr))
 		state.verbose = verbose == 0;
 	kit.end_group();
 }
