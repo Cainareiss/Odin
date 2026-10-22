@@ -31,11 +31,12 @@
 
 namespace odin {
 
-/* What travels on the fibre: the bytes of one transmission, and the clock
- * of the sending board at which the last of them has left it. */
+/* What travels on the fibre: the bytes of one transmission, and the clocks
+ * of the sending board at which the first and the last of them leave it. */
 struct NetFrame {
 	std::vector<uint8_t> data;
-	uint64_t end;
+	uint64_t start = 0;
+	uint64_t end = 0;
 };
 
 /* Where a board sends its frames: the next board of the ring. */
@@ -77,7 +78,8 @@ public:
 	uint64_t clocks() const { return m_clock; }
 
 	void set_link(NetLink *next) { m_next = next; }
-	/* A frame from the previous board, `latency` clocks after it left. */
+	/* A frame from the previous board, `latency` clocks after it left; not
+	 * before one received earlier. */
 	void receive(const NetFrame &frame, uint64_t latency);
 
 	/* What a save state keeps of it; the frames on their way to it apart
@@ -99,12 +101,19 @@ public:
 	};
 	void save(State &out) const;
 	void load(const State &in);
-	/* The frames on their way to it, each when it comes, its end, its
-	 * size and its bytes; false for bytes that are not that */
+	/* The frames waiting in it (their count, then each its size and its
+	 * bytes), then those on their way to it (each when it comes, its end,
+	 * its size and its bytes); false for bytes that are not that */
 	std::vector<uint8_t> frames_save() const;
 	bool frames_load(std::span<const uint8_t> bytes);
 
 	bool running() const { return m_running; }
+	/* The clock of its next event: its counter, the end of a frame it
+	 * sends, a frame that comes (UINT64_MAX: none) */
+	uint64_t next_event() const;
+	/* Its 68000 did more than wait in its last run: it may answer before
+	 * its next event */
+	bool busy() const { return m_running && !m_quiet; }
 	/* ODIN_TURNS=0, a test: the program runs every turn of its waits.
 	 * The memories and the states must be the same. */
 	void set_waits_counted(bool on)
@@ -118,6 +127,13 @@ public:
 	/* For tests: everything the board keeps, hashed (FNV-1a) */
 	uint64_t fingerprint() const;
 	uint16_t leds() const { return m_leds; }
+	/* What went out and came in since it was made (ODIN_STATS=1); held:
+	 * came while its 68000 did not receive and waited for it; lost: came
+	 * while its 68000 was held in reset */
+	struct Counts {
+		uint64_t sent, received, held, lost;
+	};
+	const Counts &counts() const { return m_counts; }
 	const M68000 &cpu() const { return m_cpu; }
 
 	/* M68000Bus */
@@ -168,7 +184,6 @@ private:
 	void start_transmit();
 	void deliver(const NetFrame &frame);
 	void schedule_timer();
-	uint64_t next_event() const;
 	uint8_t &comm(unsigned bank, uint32_t offset) { return m_comm[bank][offset & (COMM_SIZE - 1)]; }
 	/* The clock of the board now, also in the middle of a run of the
 	 * 68000 (a register it writes, a frame it sends) */
@@ -210,8 +225,10 @@ private:
 	uint64_t m_clock;
 	uint64_t m_cpu_base;		/* cycles of the 68000 at clock 0 */
 	std::deque<Arrival> m_arrivals;
+	std::deque<NetFrame> m_held;	/* came while not receiving */
 	NetLink *m_next;
 
+	Counts m_counts{};
 	Proof m_proof{};
 	bool m_waits_counted = true;
 	bool m_recording = false;	/* a turn being proven */

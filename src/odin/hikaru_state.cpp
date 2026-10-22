@@ -91,6 +91,10 @@ Hikaru::save_items(StateFile &state)
 	RomBoard::Config rombd;
 	bool ok;
 
+	if (m_netbd_runner) {
+		std::fprintf(stderr, "ERROR: save state: not with the network board linked to other cabinets\n");
+		return false;
+	}
 	std::strncpy(name, m_game.name.c_str(), sizeof(name) - 1);
 	if (!state.put(name) || !state.put(m_frame)) {
 		std::fprintf(stderr, "ERROR: save state: cannot save header\n");
@@ -164,6 +168,10 @@ Hikaru::load_items(StateFile &state)
 	RomBoard::Config rombd;
 	bool ok;
 
+	if (m_netbd_runner) {
+		std::fprintf(stderr, "ERROR: load state: not with the network board linked to other cabinets\n");
+		return false;
+	}
 	ok = state.get(name);
 	if (ok && std::strncmp(name, m_game.name.c_str(), sizeof(name))) {
 		std::fprintf(stderr, "ERROR: load state: made with the game '%.32s'\n", name);

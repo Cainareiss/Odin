@@ -35,6 +35,7 @@
 
 #include "odin/drive_838_13366.hpp"
 #include "odin/netbd_837_13404.hpp"
+#include "odin/netbd_ring.hpp"
 #include "odin/eeprom_93c46.hpp"
 #include "odin/games.hpp"
 #include "odin/hikaru_gpu.hpp"
@@ -142,6 +143,7 @@ private:
 	void run_drive(uint32_t cycles);
 	void run_netbd(uint32_t cycles);
 	void netbd_sync();
+	std::unique_lock<std::mutex> netbd_meet();
 	/* The SH-4 are told apart by their rank here */
 	enum : unsigned {
 		MASTER,
@@ -281,6 +283,10 @@ private:
 	uint64_t m_netbd_acc = 0;
 	uint64_t m_netbd_owed = 0;
 	std::unique_ptr<NetLink> m_netbd_link;
+	/* ODIN_NETBD=ring: the board on a thread of its own, and its cable to
+	 * the other cabinets (netbd_ring.hpp) */
+	std::unique_ptr<NetBoardRunner> m_netbd_runner;
+	std::unique_ptr<NetCable> m_netbd_cable;
 	std::unique_ptr<HikaruGpu> m_gpu;
 	std::unique_ptr<SoundBoard> m_sound[2];
 	std::unique_ptr<WavFile> m_wav;	/* ODIN_WAV: the sound of the main board */

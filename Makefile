@@ -105,6 +105,7 @@ OBJ := \
 	src/odin/d71054.o \
 	src/odin/drive_838_13366.o \
 	src/odin/netbd_837_13404.o \
+	src/odin/netbd_ring.o \
 	src/odin/m68000.o \
 	src/odin/m68000_ops.o \
 	src/odin/tlcs90.o \

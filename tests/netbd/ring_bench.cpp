@@ -24,19 +24,28 @@
  * 0C1B8A04, 0C1B8CF4): registers, upload, settings 0200-020E, run, then
  * one part a frame once linked. Node 0 is the master.
  *
- * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow -I src \
- *            tests/netbd/ring_bench.cpp src/odin/netbd_837_13404.cpp src/odin/m68000.cpp \
- *            src/odin/m68000_ops.cpp -o ring_bench
+ * RING_REALTIME=1: each board on its own thread on the clock of the
+ * computer (NetBoardRunner, as Odins linked by the network run them), the
+ * hosts played at 60 frames a second of that clock; RING_REALTIME=tcp: the
+ * same, the frames through NetCable on this computer (ports 13504...).
+ *
+ * Build: g++ -std=c++20 -O2 -pthread -Wall -Wextra -Wpedantic -Wconversion -Wshadow -I src \
+ *            tests/netbd/ring_bench.cpp src/odin/netbd_837_13404.cpp src/odin/netbd_ring.cpp \
+ *            src/odin/sockets.cpp src/odin/m68000.cpp src/odin/m68000_ops.cpp -o ring_bench
  * Use:   ring_bench program.bin [nodes [seconds [start delay of node n, in frames]]]
  * Exit status is 0 when every node links and receives every other part. */
 
 #include "odin/netbd_837_13404.hpp"
+#include "odin/netbd_ring.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <memory>
+#include <mutex>
+#include <thread>
 #include <vector>
 
 namespace {
@@ -44,6 +53,8 @@ namespace {
 constexpr uint64_t FRAME = odin::NetBoard837_13404::CLOCK_HZ / 60;
 constexpr uint64_t SLICE = 100;		/* clocks */
 uint64_t g_latency = 100;		/* clocks of a hop, at least SLICE (RING_LATENCY) */
+uint64_t g_jitter = 0;			/* up to this many clocks more, drawn for each frame (RING_JITTER) */
+uint64_t g_draw = 1;
 uint32_t g_part = 0x40;			/* the size of each node's part (RING_PART) */
 constexpr uint32_t GAME_ID = 0x56344F46, VERSION = 0x00010000;
 
@@ -57,14 +68,30 @@ public:
 	odin::NetBoard837_13404 *to = nullptr;
 	void send(const odin::NetFrame &frame) override
 	{
+		if (g_jitter) {
+			g_draw = g_draw * 6364136223846793005ull + 1442695040888963407ull;
+			if (!g_dark || g_lit)
+				to->receive(frame, g_latency + (g_draw >> 33) % (g_jitter + 1));
+			return;
+		}
 		if (!g_dark || g_lit)
 			to->receive(frame, g_latency);
 	}
 };
 
+/* RING_REALTIME: to the thread of the next board, as it comes */
+class RealHop : public odin::NetLink {
+public:
+	odin::NetBoardRunner *to = nullptr;
+	void send(const odin::NetFrame &frame) override { to->arrive(frame.data, frame.end - frame.start); }
+};
+
 struct Node {
 	odin::NetBoard837_13404 board;
 	Hop hop;
+	RealHop real_hop;
+	std::unique_ptr<odin::NetBoardRunner> runner;
+	std::unique_ptr<odin::NetCable> cable;
 	unsigned index = 0;
 	uint64_t start = 0;		/* the frame its host starts it */
 	bool started = false;
@@ -173,6 +200,8 @@ int main(int argc, char **argv)
 	const char *turns = std::getenv("RING_TURNS");
 	const bool counted = !(turns && !std::strcmp(turns, "0"));
 	const bool fp_every = std::getenv("RING_FP") != nullptr;
+	if (const char *j = std::getenv("RING_JITTER"))
+		g_jitter = std::strtoull(j, nullptr, 0);
 	if (const char *l = std::getenv("RING_LATENCY"))
 		g_latency = std::max<uint64_t>(SLICE, std::strtoull(l, nullptr, 0));
 	if (const char *p = std::getenv("RING_PART"))
@@ -188,12 +217,49 @@ int main(int argc, char **argv)
 		ring.back()->board.set_waits_counted(counted);
 		ring.back()->board.reset();
 	}
+	const bool realtime = std::getenv("RING_REALTIME") != nullptr;
 	for (unsigned i = 0; i < nodes; i++) {
 		ring[i]->hop.to = &ring[(i + 1) % nodes]->board;
 		ring[i]->board.set_link(&ring[i]->hop);
+		if (realtime)
+			ring[i]->runner = std::make_unique<odin::NetBoardRunner>(ring[i]->board);
+	}
+	const bool tcp = realtime && !std::strcmp(std::getenv("RING_REALTIME"), "tcp");
+	if (realtime) {
+		for (unsigned i = 0; i < nodes; i++) {
+			ring[i]->real_hop.to = ring[(i + 1) % nodes]->runner.get();
+			ring[i]->board.set_link(&ring[i]->real_hop);
+			if (tcp) {
+				ring[i]->cable = std::make_unique<odin::NetCable>(*ring[i]->runner, "ring_bench",
+				                                                  static_cast<uint16_t>(13504 + i), "127.0.0.1",
+				                                                  static_cast<uint16_t>(13504 + (i + 1) % nodes));
+				ring[i]->board.set_link(ring[i]->cable.get());
+				if (!ring[i]->cable->start())
+					return 2;
+			}
+		}
+		for (auto &n : ring)
+			n->runner->start();
 	}
 	const uint64_t frames = static_cast<uint64_t>(seconds) * 60;
-	for (uint64_t f = 0; f < frames; f++) {
+	const auto began = std::chrono::steady_clock::now();
+	for (uint64_t f = 0; realtime && f < frames; f++) {
+		for (auto &n : ring) {
+			const std::lock_guard<std::mutex> hold(n->runner->board_lock());
+			if (!n->started && f >= n->start)
+				start(*n, program);
+			if (n->started)
+				frame(*n, f, nodes);
+		}
+		std::this_thread::sleep_until(began + std::chrono::microseconds((f + 1) * 1000000 / 60));
+	}
+	for (auto &n : ring)
+		if (n->runner)
+			n->runner->stop();
+	for (auto &n : ring)
+		if (n->cable)
+			n->cable->stop();
+	for (uint64_t f = 0; !realtime && f < frames; f++) {
 		bool all = true;
 		for (auto &n : ring) {
 			if (!n->started && f >= n->start)
@@ -246,6 +312,11 @@ int main(int argc, char **argv)
 		if (n->linked)
 			std::printf(" at frame %llu, count %u id %u, %u frames", static_cast<unsigned long long>(n->linked_frame),
 			            n->count, n->id, n->frames_ok);
+		std::printf("; frames sent %llu received %llu held %llu lost %llu",
+		            static_cast<unsigned long long>(n->board.counts().sent),
+		            static_cast<unsigned long long>(n->board.counts().received),
+		            static_cast<unsigned long long>(n->board.counts().held),
+		            static_cast<unsigned long long>(n->board.counts().lost));
 		std::printf("; fingerprint %016llX; parts seen:", static_cast<unsigned long long>(n->board.fingerprint()));
 		for (unsigned k = 0; k < nodes; k++) {
 			std::printf(" %u", n->seen[k]);

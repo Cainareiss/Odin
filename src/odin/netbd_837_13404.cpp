@@ -74,6 +74,7 @@ NetBoard837_13404::reset()
 	m_host_regs.fill(0);
 	m_running = false;
 	m_arrivals.clear();
+	m_held.clear();
 	m_proof.on = false;
 	m_quiet = false;
 	update_ipl();
@@ -223,7 +224,14 @@ NetBoard837_13404::frames_save() const
 		const uint8_t *b = static_cast<const uint8_t *>(p);
 		out.insert(out.end(), b, b + n);
 	};
+	const uint32_t held = static_cast<uint32_t>(m_held.size());
 
+	put(&held, sizeof(held));
+	for (const NetFrame &frame : m_held) {
+		const uint32_t size = static_cast<uint32_t>(frame.data.size());
+		put(&size, sizeof(size));
+		put(frame.data.data(), size);
+	}
 	for (const Arrival &a : m_arrivals) {
 		const uint32_t size = static_cast<uint32_t>(a.frame.data.size());
 		put(&a.at, sizeof(a.at));
@@ -246,7 +254,24 @@ NetBoard837_13404::frames_load(std::span<const uint8_t> bytes)
 		return true;
 	};
 
+	uint32_t held = 0;
+
 	m_arrivals.clear();
+	m_held.clear();
+	if (!bytes.empty() && !get(&held, sizeof(held)))
+		return false;
+	for (uint32_t i = 0; i < held; i++) {
+		NetFrame frame;
+		uint32_t size;
+		if (!get(&size, sizeof(size)) || bytes.size() - at < size) {
+			m_held.clear();
+			return false;
+		}
+		frame.data.assign(bytes.begin() + static_cast<std::ptrdiff_t>(at),
+		                  bytes.begin() + static_cast<std::ptrdiff_t>(at + size));
+		at += size;
+		m_held.push_back(std::move(frame));
+	}
 	while (at < bytes.size()) {
 		Arrival a;
 		uint32_t size;
@@ -389,18 +414,32 @@ NetBoard837_13404::run_until(uint64_t clock)
 void
 NetBoard837_13404::receive(const NetFrame &frame, uint64_t latency)
 {
-	m_arrivals.push_back({frame, frame.end + latency});
-	event_at(frame.end + latency);
+	const uint64_t at = std::max(frame.end + latency, m_arrivals.empty() ? 0 : m_arrivals.back().at);
+
+	m_arrivals.push_back({frame, at});
+	event_at(at);
 }
 
 /* A frame in while receiving: into the bank of the 68000 at the receive
- * address, as much as the receive size allows. HEURISTIC: a frame that
- * comes while not receiving is lost (no repeater). */
+ * address, as much as the receive size allows. HEURISTIC: one that comes
+ * while its 68000 is held in reset is lost; one that comes while it runs
+ * but does not receive waits in the chip, and comes in when it receives
+ * (MARKDOWN/98 section 17: on the bench no frame waits, Odins linked by a
+ * network may be late by more than the 1.3 ms the program leaves in a
+ * turn, and a lost frame would stop the ring). */
 void
 NetBoard837_13404::deliver(const NetFrame &frame)
 {
-	if (!m_rx_armed)
+	if (!m_rx_armed) {
+		if (m_running) {
+			m_held.push_back(frame);
+			m_counts.held++;
+		} else {
+			m_counts.lost++;
+		}
 		return;
+	}
+	m_counts.received++;
 	const size_t n = std::min<size_t>(frame.data.size(), m_rx_size);
 	for (size_t i = 0; i < n; i++)
 		comm(m_bank, static_cast<uint32_t>(m_rx_addr + i)) = frame.data[i];
@@ -417,9 +456,11 @@ NetBoard837_13404::start_transmit()
 	frame.data.resize(m_tx_size);
 	for (uint32_t i = 0; i < m_tx_size; i++)
 		frame.data[i] = comm(m_bank, m_tx_addr + i);
-	m_tx_end = now() + (m_tx_size + FRAME_OVERHEAD) * BYTE_CLOCKS;
+	frame.start = now();
+	m_tx_end = frame.start + (m_tx_size + FRAME_OVERHEAD) * BYTE_CLOCKS;
 	frame.end = m_tx_end;
 	m_tx_busy = true;
+	m_counts.sent++;
 	event_at(m_tx_end);
 	if (m_next)
 		m_next->send(frame);
@@ -473,6 +514,11 @@ NetBoard837_13404::io_write(uint32_t reg, uint8_t value)
 	case IO_RX_GO:
 		if (value == 0x8C && m_io[IO_RX_CTRL] == 0x80) {
 			m_rx_armed = true;
+			if (!m_held.empty()) {
+				const NetFrame frame = std::move(m_held.front());
+				m_held.pop_front();
+				deliver(frame);
+			}
 		} else if (value == 0) {
 			m_rx_armed = false;
 			lower(IRQ6);
@@ -683,6 +729,7 @@ NetBoard837_13404::host_write(uint32_t offset, unsigned size, uint32_t value)
 			const bool run = v != 0;
 			m_proof.on = false;
 			if (run && !m_running) {
+				m_held.clear();
 				m_irq = 0;
 				m_cpu.reset();
 				m_cpu_base = m_cpu.cycles() - m_clock;

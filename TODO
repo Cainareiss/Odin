@@ -161,10 +161,20 @@ factory: 69 zeros here) and the cleaning card of command A0 (given at
 once).
 
 Network board 837-13404 (src/odin/netbd_837_13404.cpp, ODIN_NETBD=none|
-loop): a cabinet has none by default (page 0E answers nothing, the games
-find no board); loop puts one whose optical ring is closed on itself
+loop|ring): a cabinet has none by default (page 0E answers nothing, the
+games find no board); loop puts one whose optical ring is closed on itself
 (VON4 with COMMUNICATION MODE MASTER in the BOOTROM settings: CONNECTION
-OK, THIS IS THE #1 SITE OF 1; MARKDOWN/98). Its 68000 (src/odin/m68000.cpp,
+OK, THIS IS THE #1 SITE OF 1; MARKDOWN/98); ring links Odins by TCP
+(src/odin/netbd_ring.cpp: the previous cabinet comes in on port
+ODIN_NETBD_PORT, 13404, the next is ODIN_NETBD_NEXT, address[:port]).
+Four VON4 linked on one computer (Japan; seats A to D in GAME ASSIGNMENTS;
+one MASTER, three SLAVE) reach the title, each THE #n SITE OF 4; the game
+allows 2 sites in U.S.A. Linked, each board runs on a thread of its own on
+the clock of the computer, as on a cabinet: the program needs a frame
+round the ring well within a turn of 16.4 ms (14.7 ms of it are the parts
+of four sites at 10 Mbit/s), so the boards cannot wait for each other at
+each frame; the games are then not the same from a run to the next, and
+the states are refused. Its 68000 (src/odin/m68000.cpp,
 checked against the SingleStepTests 680x0 suite) runs the program the
 game uploads (m3_comm.asm 1.3: the same in VON4, SGNASCAR and SWRACER).
 HEURISTIC, deduced from that program and judged by it on a ring of 1 to
@@ -172,15 +182,16 @@ HEURISTIC, deduced from that program and judged by it on a ring of 1 to
 15-bit counter of 0.5 us ticks reaches the count in 40000+C0, the counter
 set back to 0 with an IRQ5 by a write of 40000+E0; a frame goes out when
 1D = 8C (read at its start, 10 Mbit/s) and comes in when 17 = 8C, else is
-lost; the receive and send status read 05; the host sees the bank of the
+held until it receives (lost while its 68000 is in reset); the receive
+and send status read 05; the host sees the bank of the
 communication RAM the 68000 does not use, a byte at the offset XOR 3. The
 board runs when the host reaches page 0E and at the end of a frame, to the
 clock the SH-4 owes it; a turn of a wait of its 68000 (reads only, the
 CPU the same after it) is billed without being run up to the next event
 (ODIN_TURNS=0 runs every turn: the same pictures and memories). A state
 keeps it with the frames on their way to it; one without it still loads,
-the board starting again. Not done: several Odins linked, the program of
-PHARRIER (not found yet).
+the board starting again. Not done: the settings of the link in odin.ini and
+the menu, Windows (its timers), the program of PHARRIER (not found yet).
 
 JVS (src/odin/jvs.cpp: the cable and the protocol of the standard). The
 I/O boards are imitations made from their programs: jvs_837_13551.cpp
