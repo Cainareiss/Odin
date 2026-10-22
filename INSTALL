@@ -245,7 +245,9 @@ and the controls of the page Input as a list rather than on the drawing
  classic = on
 
 (animations = off: in a small window the row of the games, a name
-between dots, changes at once rather than moving.)
+between dots, changes at once rather than moving; theme = runasteinn,
+edda, raf or heimdall: the colours of the menu, the bar and the library,
+page Display.)
 
 In the menu, LB and RB of a gamepad change the page, LT and RT the game
 (on the page Input they are tested as the controls they work: there the

@@ -98,6 +98,7 @@ void
 Menu::build_bar(BarState &state)
 {
 	ImGui::SetCurrentContext(m_imgui);
+	use_palette(state.theme);
 	follow_scale();
 	ImGui_ImplSDL3_NewFrame();
 	add_fonts();
@@ -111,7 +112,7 @@ void
 Menu::bar(BarState &state)
 {
 	using Ask = BarState::Ask;
-	const MenuKit kit(RUNASTEINN, m_scale);
+	const MenuKit kit(*m_palette, m_scale);
 	const MenuPalette &p = kit.palette();
 	ImGuiStyle &style = ImGui::GetStyle();
 	const ImVec2 safe = style.DisplaySafeAreaPadding;

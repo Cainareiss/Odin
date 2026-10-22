@@ -141,6 +141,22 @@ colour(ImU32 c)
 	return ImGui::ColorConvertU32ToFloat4(c);
 }
 
+/* Dear ImGui's colours from the palette: its texts and scroll bars. The
+ * frame of the menu is the kit's (MenuFocus); Dear ImGui's only in a list
+ * dropped open (MenuKit::list_popup). */
+void
+colour_style(ImGuiStyle &style, const MenuPalette &palette)
+{
+	style.Colors[ImGuiCol_Text] = colour(palette.ink);
+	style.Colors[ImGuiCol_TextDisabled] = colour(palette.faint);
+	style.Colors[ImGuiCol_ChildBg] = colour(0);
+	style.Colors[ImGuiCol_ScrollbarBg] = colour(0);
+	style.Colors[ImGuiCol_ScrollbarGrab] = colour(palette.outline);
+	style.Colors[ImGuiCol_ScrollbarGrabHovered] = colour(palette.dim);
+	style.Colors[ImGuiCol_ScrollbarGrabActive] = colour(palette.ink);
+	style.Colors[ImGuiCol_NavCursor] = colour(0);
+}
+
 /* Which of the values is the one; -1 for none */
 template <typename T, size_t N>
 int
@@ -227,23 +243,13 @@ Menu::Menu(SDL_Window *window)
 
 	/* The kit draws the widgets; the windows only hold them */
 	ImGuiStyle &style = ImGui::GetStyle();
-	const MenuPalette &palette = RUNASTEINN;
 	style.WindowBorderSize = 0.0f;
 	style.ChildBorderSize = 0.0f;
 	style.WindowPadding = { PADDING, PADDING };
 	style.ItemSpacing = { 0.0f, 0.0f };
 	style.ScrollbarSize = 8.0f;
 	style.ScrollbarRounding = 0.0f;
-	style.Colors[ImGuiCol_Text] = colour(palette.ink);
-	style.Colors[ImGuiCol_TextDisabled] = colour(palette.faint);
-	style.Colors[ImGuiCol_ChildBg] = colour(0);
-	style.Colors[ImGuiCol_ScrollbarBg] = colour(0);
-	style.Colors[ImGuiCol_ScrollbarGrab] = colour(palette.outline);
-	style.Colors[ImGuiCol_ScrollbarGrabHovered] = colour(palette.dim);
-	style.Colors[ImGuiCol_ScrollbarGrabActive] = colour(palette.ink);
-	/* The frame of the menu is the kit's (MenuFocus); Dear ImGui's only in a
-	 * list dropped open (MenuKit::list_popup) */
-	style.Colors[ImGuiCol_NavCursor] = colour(0);
+	colour_style(style, *m_palette);
 	m_style = style;
 
 	ImGui_ImplSDL3_InitForOpenGL(window, nullptr);
@@ -368,6 +374,18 @@ Menu::navigate(MenuState &state)
  * letters, drawn by pixels, grow by a whole factor in the pixels of the
  * display (LETTERS_UP), so that each stays a square of whole pixels. */
 void
+Menu::use_palette(unsigned theme)
+{
+	const MenuPalette *const palette = THEMES[theme < std::size(THEMES) ? theme : 0].palette;
+
+	if (palette == m_palette)
+		return;
+	m_palette = palette;
+	colour_style(m_style, *palette);
+	colour_style(ImGui::GetStyle(), *palette);
+}
+
+void
 Menu::follow_scale()
 {
 	int w = 0, h = 0;
@@ -428,6 +446,7 @@ void
 Menu::build(MenuState &state)
 {
 	ImGui::SetCurrentContext(m_imgui);
+	use_palette(state.theme);
 	follow_scale();
 	navigate(state);
 	ImGui_ImplSDL3_NewFrame();
@@ -435,7 +454,7 @@ Menu::build(MenuState &state)
 	ImGui::NewFrame();
 	close_bar_menus();
 
-	MenuKit kit(RUNASTEINN, m_scale, &m_focus);
+	MenuKit kit(*m_palette, m_scale, &m_focus);
 	const MenuPalette &palette = kit.palette();
 	const ImVec2 room = ImGui::GetIO().DisplaySize;
 	const ImVec2 size = menu_size(room.x, room.y).first;
@@ -668,6 +687,22 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 		if (kit.choice("Show the speed", "frames per second in the title", ON_OFF, speed))
 			state.show_speed = speed == 0;
 	});
+	kit.end_group();
+
+	/* Each palette by four of its colours: the screen, a drawing, the ink,
+	 * the accent */
+	kit.begin_group("THEME");
+	std::vector<MenuKit::Item> themes;
+	int theme = static_cast<int>(state.theme);
+
+	for (const MenuTheme &one : THEMES) {
+		const MenuPalette &p = *one.palette;
+
+		themes.push_back({ one.name, one.about, one.kind, MenuKit::Icon::NONE, false,
+		                   { p.screen, p.part, p.ink, p.accent } });
+	}
+	if (kit.dropdown("Palette", "the colours of the menu, the bar and the library", themes, theme))
+		state.theme = static_cast<unsigned>(theme);
 	kit.end_group();
 	ImGui::Dummy({ 0.0f, kit.px(4.0f) });
 	ImGui::EndChild();

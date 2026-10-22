@@ -103,8 +103,10 @@ struct BarState {
 	/* Said on the command line: shown, not changed; no sound to set */
 	bool roms_given = false, bios_given = false, verbose_given = false, silent = false;
 	/* A state of the game kept, to load; a game runs (not in the library:
-	 * nothing to close, save, load or pause) */
+	 * nothing to close, save, load or pause); the palette (MenuState::theme),
+	 * of the library under the bar too */
 	bool saved = false, game = true;
+	unsigned theme = 0;
 	/* The first key of each action of Odin (Hotkeys::Action), as odin.ini
 	 * says it */
 	std::array<std::string, Hotkeys::ACTIONS> keys;
@@ -256,6 +258,9 @@ struct MenuState {
 	 * menu), the one shown at the last picture; while something moves the
 	 * menu draws on */
 	bool animations = true, moving = false;
+	/* The palette of the menu, the bar and the library ([menu] theme): one
+	 * of THEMES (menu_kit.hpp) */
+	unsigned theme = 0;
 	std::optional<size_t> games_was;
 	size_t games_from = 0;
 	double games_since = 0.0;
@@ -365,6 +370,8 @@ private:
 
 	void follow_scale();
 	void add_fonts();
+	/* The palette of that theme (THEMES), Dear ImGui's colours with it */
+	void use_palette(unsigned theme);
 	/* The bar and its menus, in the frame of Dear ImGui built now; at the
 	 * start of a frame, the menus of a bar hidden since the last one
 	 * closed */
@@ -408,6 +415,7 @@ private:
 	ImGuiStyle m_style;
 	float m_scale, m_density = 1.0f;
 	int m_page;
+	const MenuPalette *m_palette = &RUNASTEINN;
 	/* The frame the gamepad moves on the page; Close game pressed once */
 	MenuFocus m_focus;
 	bool m_closing = false;

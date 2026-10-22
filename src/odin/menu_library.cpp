@@ -52,9 +52,7 @@ constexpr float TILE_H = 3.0f;
 constexpr int COLUMNS = 3;
 constexpr float TILE_CUT = 5.0f;
 constexpr float SHEET_CUT = 8.0f;
-/* The back of a tile, darker than the window (mock-up v2); a game that
- * cannot be played: its picture that dim */
-constexpr ImU32 TILE_BACK = IM_COL32(0x1D, 0x1D, 0x1B, 0xFF);
+/* A game that cannot be played: its picture that dim */
 constexpr ImU32 DIMMED = IM_COL32(0xFF, 0xFF, 0xFF, 0x50);
 /* The title of the head, its letters a fifth of the font apart; the line
  * of the accent under the head, its opacity, the share of it that fades
@@ -132,6 +130,7 @@ void
 Menu::build_library(LibraryState &state, BarState &bar_state)
 {
 	ImGui::SetCurrentContext(m_imgui);
+	use_palette(bar_state.theme);
 	follow_scale();
 	ImGui_ImplSDL3_NewFrame();
 	add_fonts();
@@ -139,7 +138,7 @@ Menu::build_library(LibraryState &state, BarState &bar_state)
 	close_bar_menus();
 	bar(bar_state);
 
-	const MenuKit kit(RUNASTEINN, m_scale);
+	const MenuKit kit(*m_palette, m_scale);
 	const MenuPalette &palette = kit.palette();
 	const ImVec2 room = ImGui::GetIO().DisplaySize;
 	const float margin = kit.px(MARGIN), gap = kit.px(GAP), line = ImGui::GetTextLineHeight();
@@ -226,7 +225,7 @@ Menu::build_library(LibraryState &state, BarState &bar_state)
 		const auto picture = m_library_pictures.find(game.name);
 		const float cut = kit.px(TILE_CUT);
 
-		kit.frame(list, a, b, cut, TILE_BACK, 0);
+		kit.frame(list, a, b, cut, palette.tile, 0);
 		list->PushClipRect(a, b, true);
 		if (picture != m_library_pictures.end()) {
 			/* Its picture whole in the tile, the corners cut again over
@@ -247,7 +246,7 @@ Menu::build_library(LibraryState &state, BarState &bar_state)
 			        playable ? palette.dim : palette.faint, game.title);
 		}
 		if (!playable) {
-			list->AddRectFilled({ a.x, b.y - inside - line - kit.px(4.0f) }, b, MenuKit::alpha(TILE_BACK, 0.85f));
+			list->AddRectFilled({ a.x, b.y - inside - line - kit.px(4.0f) }, b, MenuKit::alpha(palette.tile, 0.85f));
 			MenuKit::small_caps(list, { a.x + inside, b.y - inside - line }, palette.accent, "MISSING");
 		}
 		list->PopClipRect();

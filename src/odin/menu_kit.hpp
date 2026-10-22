@@ -20,9 +20,11 @@
 #define ODIN_MENU_KIT_HPP
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "imgui/imgui.h"
@@ -38,11 +40,15 @@ namespace odin {
  * drawings: the body of a gamepad and a part on it, their strokes (the
  * details take the outline of a control), an arrow on a part; the lavender
  * of the cabinet (and of the titles of the groups), its strokes and its
- * details. */
+ * details; the back of a tile of the library. Each is made of a few
+ * colours of the mock-up: the screen, the two of the drawings, the ink and
+ * its two tones, the accent and the ink on it, the action, the cabinet and
+ * the page; the lines and the outlines are the ink, fainter. */
 struct MenuPalette {
 	ImU32 screen, frame, ink, dim, faint, line, outline, hover, accent, on_accent, action, on_action, danger;
 	ImU32 body, part, stroke, arrow;
 	ImU32 cabinet, cabinet_stroke, cabinet_detail;
+	ImU32 tile;
 };
 
 /* The gold of the logo (logo.hpp) */
@@ -59,7 +65,73 @@ inline constexpr MenuPalette RUNASTEINN = {
 	IM_COL32(0x2F, 0x2F, 0x2C, 0xFF), IM_COL32(0x38, 0x38, 0x34, 0xFF), IM_COL32(0xEE, 0xEA, 0xE2, 0x9E),
 	IM_COL32(0xEE, 0xEA, 0xE2, 0x73),
 	IM_COL32(0xBD, 0xB5, 0xD0, 0xFF), IM_COL32(0xBD, 0xB5, 0xD0, 0xCC), IM_COL32(0xBD, 0xB5, 0xD0, 0x66),
+	IM_COL32(0x1D, 0x1D, 0x1B, 0xFF),
 };
+
+/* Edda: vellum and the red ink of manuscripts, the one light palette */
+inline constexpr MenuPalette EDDA = {
+	IM_COL32(0xFB, 0xF6, 0xE9, 0xFF), IM_COL32(0xFB, 0xF6, 0xE9, 0xCC),
+	IM_COL32(0x23, 0x1C, 0x16, 0xFF), IM_COL32(0x5C, 0x53, 0x4A, 0xFF), IM_COL32(0x80, 0x77, 0x6C, 0xFF),
+	IM_COL32(0x23, 0x1C, 0x16, 0x29), IM_COL32(0x23, 0x1C, 0x16, 0x38), IM_COL32(0x23, 0x1C, 0x16, 0x10),
+	IM_COL32(0xB0, 0x2A, 0x1F, 0xFF), IM_COL32(0xFF, 0xF8, 0xF0, 0xFF), IM_COL32(0x3E, 0x5F, 0x9F, 0xFF),
+	IM_COL32(0xFB, 0xF6, 0xE9, 0xFF), IM_COL32(0xB3, 0x26, 0x1E, 0xFF),
+	IM_COL32(0xF3, 0xEC, 0xDC, 0xFF), IM_COL32(0xE9, 0xE0, 0xCC, 0xFF), IM_COL32(0x23, 0x1C, 0x16, 0x9E),
+	IM_COL32(0x23, 0x1C, 0x16, 0x73),
+	IM_COL32(0x59, 0x40, 0x2E, 0xFF), IM_COL32(0x59, 0x40, 0x2E, 0xCC), IM_COL32(0x59, 0x40, 0x2E, 0x66),
+	IM_COL32(0xEF, 0xE7, 0xD6, 0xFF),
+};
+
+/* Raf: the amber glow of old terminals */
+inline constexpr MenuPalette RAF = {
+	IM_COL32(0x11, 0x0B, 0x04, 0xFF), IM_COL32(0x11, 0x0B, 0x04, 0xCC),
+	IM_COL32(0xFF, 0xB5, 0x47, 0xFF), IM_COL32(0xC9, 0x8A, 0x2E, 0xFF), IM_COL32(0x8F, 0x62, 0x1F, 0xFF),
+	IM_COL32(0xFF, 0xB5, 0x47, 0x29), IM_COL32(0xFF, 0xB5, 0x47, 0x38), IM_COL32(0xFF, 0xB5, 0x47, 0x10),
+	IM_COL32(0xFF, 0xF1, 0xD0, 0xFF), IM_COL32(0x1A, 0x0F, 0x02, 0xFF), IM_COL32(0xC8, 0xB5, 0x90, 0xFF),
+	IM_COL32(0x11, 0x0B, 0x04, 0xFF), IM_COL32(0xEF, 0x5A, 0x50, 0xFF),
+	IM_COL32(0x1A, 0x12, 0x08, 0xFF), IM_COL32(0x22, 0x18, 0x0B, 0xFF), IM_COL32(0xFF, 0xB5, 0x47, 0x9E),
+	IM_COL32(0xFF, 0xB5, 0x47, 0x73),
+	IM_COL32(0xED, 0xCF, 0x6F, 0xFF), IM_COL32(0xED, 0xCF, 0x6F, 0xCC), IM_COL32(0xED, 0xCF, 0x6F, 0x66),
+	IM_COL32(0x0B, 0x07, 0x02, 0xFF),
+};
+
+/* Heimdall: black, white and yellow, as legible as can be; its lines and
+ * outlines clearer than the others' */
+inline constexpr MenuPalette HEIMDALL = {
+	IM_COL32(0x08, 0x08, 0x08, 0xFF), IM_COL32(0x08, 0x08, 0x08, 0xCC),
+	IM_COL32(0xFF, 0xFF, 0xFF, 0xFF), IM_COL32(0xD2, 0xD2, 0xD2, 0xFF), IM_COL32(0xA8, 0xA8, 0xA8, 0xFF),
+	IM_COL32(0xFF, 0xFF, 0xFF, 0x66), IM_COL32(0xFF, 0xFF, 0xFF, 0x73), IM_COL32(0xFF, 0xFF, 0xFF, 0x10),
+	IM_COL32(0xFF, 0xD6, 0x00, 0xFF), IM_COL32(0x00, 0x00, 0x00, 0xFF), IM_COL32(0x67, 0xC3, 0xE5, 0xFF),
+	IM_COL32(0x08, 0x08, 0x08, 0xFF), IM_COL32(0xEF, 0x5A, 0x50, 0xFF),
+	IM_COL32(0x12, 0x12, 0x12, 0xFF), IM_COL32(0x1C, 0x1C, 0x1C, 0xFF), IM_COL32(0xFF, 0xFF, 0xFF, 0x9E),
+	IM_COL32(0xFF, 0xFF, 0xFF, 0x73),
+	IM_COL32(0xC4, 0xB6, 0xD8, 0xFF), IM_COL32(0xC4, 0xB6, 0xD8, 0xCC), IM_COL32(0xC4, 0xB6, 0xD8, 0x66),
+	IM_COL32(0x00, 0x00, 0x00, 0xFF),
+};
+
+/* The themes the user picks from (page Display, [menu] theme of
+ * odin.ini): the word there, the name shown, its kind and what it is, its
+ * palette */
+struct MenuTheme {
+	const char *key, *name, *kind, *about;
+	const MenuPalette *palette;
+};
+
+inline constexpr MenuTheme THEMES[] = {
+	{ "runasteinn", "Rúnasteinn", "", "granite and the red ochre of runestones", &RUNASTEINN },
+	{ "edda", "Edda", "paper", "vellum and the red ink of manuscripts", &EDDA },
+	{ "raf", "Raf", "retro", "the amber glow of old terminals", &RAF },
+	{ "heimdall", "Heimdall", "high contrast", "black, white and yellow: most legible", &HEIMDALL },
+};
+
+/* The theme of that word of odin.ini; -1 for none */
+inline int
+theme_named(std::string_view key)
+{
+	for (size_t t = 0; t < std::size(THEMES); t++)
+		if (key == THEMES[t].key)
+			return static_cast<int>(t);
+	return -1;
+}
 
 /* The frame of focus a gamepad moves on a page (menu_nav.hpp): the item it
  * is on, in the order the page draws them (-1: none, until a button moves
@@ -221,21 +293,24 @@ public:
 	 * "press...". What is clicked: 0 to 2, -1 for none. */
 	int shortcut(const char *name, std::span<const std::vector<std::string>> keys, std::span<const std::string> pad,
 	             int catching);
+	/* A line of such a list: its name with an icon before it, or colours
+	 * in squares (a palette: none when see-through), what it is under it,
+	 * dimmer, a word at its right (in a pill when `strong`) */
+	struct Item {
+		std::string name, about, tag;
+		Icon icon = Icon::NONE;
+		bool strong = false;
+		std::array<ImU32, 4> colours{};
+	};
 	/* A row with a list that drops down from its right: true when the
 	 * choice changed */
 	bool dropdown(const char *name, const char *about, std::span<const std::string> labels, int &chosen);
+	bool dropdown(const char *name, const char *about, std::span<const Item> items, int &chosen);
 	/* The same list from a box alone at that place, that wide, an icon
 	 * before what is chosen; its height */
 	bool picker(const char *id, ImVec2 at, float width, std::span<const std::string> labels, int &chosen,
 	            Icon icon = Icon::NONE) const;
 	float picker_height() const;
-	/* A line of such a list: its name with an icon before it, what it is
-	 * under it, dimmer, a word at its right (in a pill when `strong`) */
-	struct Item {
-		std::string name, about, tag;
-		Icon icon = Icon::NONE;
-		bool strong = false;
-	};
 	/* The same with those lines, and a text at the foot of the list */
 	bool picker(const char *id, ImVec2 at, float width, std::span<const Item> items, int &chosen, Icon icon,
 	            const char *foot) const;
@@ -278,8 +353,14 @@ private:
 	/* A button drawn and clicked, the gamepad aside */
 	bool press_button(const char *label, ImVec2 at, bool on, Icon icon, Tone tone) const;
 	/* The list that drops from a box or a button, at that place, as wide
-	 * at least */
-	bool list_popup(ImVec2 at, float width, std::span<const Item> items, int &chosen, const char *foot = nullptr) const;
+	 * at least; over it (`above`: its top) where the window ends first */
+	bool list_popup(ImVec2 at, float width, std::span<const Item> items, int &chosen, const char *foot = nullptr,
+	                float above = -1.0f) const;
+	/* The colours of a line of a list, from that place on a line: their
+	 * width first (0: none), and what is left before the name */
+	float colours_width(const Item &item) const;
+	float before_name(const Item &item, Icon icon_shown) const;
+	void colours(ImDrawList *list, ImVec2 at, const Item &item) const;
 
 	const MenuPalette &m_palette;
 	float m_scale;

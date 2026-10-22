@@ -459,7 +459,7 @@ known_settings(const odin::GameList &games)
 	                        { "paths", "saves", odin::SaveFolder::root() }, { "paths", "states", default_states() },
 	                        { "paths", "artwork", odin::artwork_folder() },
 	                        { "log", "verbose", "off" }, { "menu", "classic", "off" },
-	                        { "menu", "animations", "on" } });
+	                        { "menu", "animations", "on" }, { "menu", "theme", odin::THEMES[0].key } });
 	for (size_t a = 0; a < odin::MenuNav::ACTIONS; a++) {
 		const auto action = static_cast<odin::MenuNav::Action>(a);
 
@@ -687,6 +687,8 @@ public:
 				state.classic = value == "on";
 			else if (key == "animations" && (value == "on" || value == "off"))
 				state.animations = value == "on";
+			else if (key == "theme" && odin::theme_named(value) >= 0)
+				state.theme = static_cast<unsigned>(odin::theme_named(value));
 			else if (!odin::MenuNav::knows(key))
 				std::fprintf(stderr, "ERROR: settings: [menu]: not right: %s = %s\n", key.c_str(), value.c_str());
 		}
@@ -1149,6 +1151,7 @@ MenuSession::fill_bar(odin::BarState &bar) const
 	bar.roms_given = state.roms_given;
 	bar.bios_given = state.bios_given;
 	bar.silent = state.silent != nullptr;
+	bar.theme = state.theme;
 	for (size_t a = 0; a < odin::Hotkeys::ACTIONS; a++) {
 		const odin::HotKey &key = m_hotkeys.of(static_cast<odin::Hotkeys::Action>(a)).keys[0];
 
@@ -1869,6 +1872,8 @@ MenuSession::apply(const odin::MenuState &was)
 	}
 	if (now.classic != was.classic && !m_settings_file.empty())
 		m_settings.change(m_settings_file, "menu", "classic", on_off(now.classic, false));
+	if (now.theme != was.theme)
+		keep("menu", "theme", now.theme ? std::optional<std::string>(odin::THEMES[now.theme].key) : std::nullopt);
 	if (now.verbose != was.verbose)
 		keep("log", "verbose", on_off(now.verbose, false));
 	/* The sound: at once for the game that runs */
