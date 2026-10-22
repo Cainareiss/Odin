@@ -173,9 +173,13 @@ HEURISTIC, deduced from that program and judged by it on a ring of 1 to
 set back to 0 with an IRQ5 by a write of 40000+E0; a frame goes out when
 1D = 8C (read at its start, 10 Mbit/s) and comes in when 17 = 8C, else is
 lost; the receive and send status read 05; the host sees the bank of the
-communication RAM the 68000 does not use, a byte at the offset XOR 3. Not
-done: the states (a state with the board is refused), several Odins
-linked, its waits counted, the program of PHARRIER (not found yet).
+communication RAM the 68000 does not use, a byte at the offset XOR 3. The
+board runs when the host reaches page 0E and at the end of a frame, to the
+clock the SH-4 owes it; a turn of a wait of its 68000 (reads only, the
+CPU the same after it) is billed without being run up to the next event
+(ODIN_TURNS=0 runs every turn: the same pictures and memories). Not done:
+the states (a state with the board is refused), several Odins linked,
+the program of PHARRIER (not found yet).
 
 JVS (src/odin/jvs.cpp: the cable and the protocol of the standard). The
 I/O boards are imitations made from their programs: jvs_837_13551.cpp

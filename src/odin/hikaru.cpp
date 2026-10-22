@@ -446,12 +446,20 @@ Hikaru::build_netbd()
 	}
 	m_netbd = std::make_unique<NetBoard837_13404>();
 	m_netbd->reset();
+	/* ODIN_TURNS=0, a test: its 68000 runs every turn of its waits. The
+	 * memory and the pictures must be the same. */
+	m_netbd->set_waits_counted(env_flag("ODIN_TURNS", true));
 	m_netbd_link = std::make_unique<NetLoop>(*m_netbd);
 	m_netbd->set_link(m_netbd_link.get());
 	std::printf("network board: 837-13404, its ring closed on itself (ODIN_NETBD=loop)\n");
 }
 
-/* The network board as far as the SH-4 ran */
+/* The clock of the network board as far as the SH-4 ran, owed: the board
+ * only meets the host in page 0E, so it runs to it when the host reaches
+ * it (netbd_sync) and at the end of the frame. A clock, not a number of
+ * clocks: a run ends on an instruction a little after its clock, which
+ * the next run does not add again. It is then where it would be run at
+ * every slice, in longer runs where its waits are counted. */
 void
 Hikaru::run_netbd(uint32_t cycles)
 {
@@ -460,8 +468,13 @@ Hikaru::run_netbd(uint32_t cycles)
 	const uint64_t clocks = m_netbd_acc / m_clock;
 
 	m_netbd_acc -= clocks * m_clock;
-	if (clocks)
-		m_netbd->run_until(m_netbd->clocks() + clocks);
+	m_netbd_owed += clocks;
+}
+
+void
+Hikaru::netbd_sync()
+{
+	m_netbd->run_until(m_netbd_owed);
 }
 
 void
@@ -650,6 +663,7 @@ Hikaru::reset()
 	if (m_netbd) {
 		m_netbd->reset();
 		m_netbd_acc = 0;
+		m_netbd_owed = m_netbd->clocks();
 	}
 	m_gpu->reset();
 	reset_sound(MASTER);
@@ -972,6 +986,8 @@ Hikaru::run_frame()
 	}
 	begin_frame();
 	m_frame++;
+	if (m_netbd)
+		netbd_sync();
 
 	if (m_wav)
 		m_wav->write(m_sound[MASTER]->samples());

@@ -35,6 +35,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <memory>
 #include <vector>
 
@@ -169,6 +170,9 @@ int main(int argc, char **argv)
 	const bool verbose = std::getenv("RING_VERBOSE") != nullptr;
 	const bool trace = std::getenv("RING_TRACE") != nullptr;
 	g_dark = std::getenv("RING_DARK") != nullptr;
+	const char *turns = std::getenv("RING_TURNS");
+	const bool counted = !(turns && !std::strcmp(turns, "0"));
+	const bool fp_every = std::getenv("RING_FP") != nullptr;
 	if (const char *l = std::getenv("RING_LATENCY"))
 		g_latency = std::max<uint64_t>(SLICE, std::strtoull(l, nullptr, 0));
 	if (const char *p = std::getenv("RING_PART"))
@@ -181,6 +185,7 @@ int main(int argc, char **argv)
 		ring.back()->start = i * delay;
 		ring.back()->seen.assign(nodes, 0);
 		ring.back()->verbose = verbose;
+		ring.back()->board.set_waits_counted(counted);
 		ring.back()->board.reset();
 	}
 	for (unsigned i = 0; i < nodes; i++) {
@@ -197,6 +202,10 @@ int main(int argc, char **argv)
 				frame(*n, f, nodes);
 			all = all && n->started && n->status != 0x7FFF;
 		}
+		if (fp_every)
+			for (auto &n : ring)
+				std::printf("fp frame %llu node %u %016llX pc %06X\n", static_cast<unsigned long long>(f), n->index,
+				            static_cast<unsigned long long>(n->board.fingerprint()), n->board.cpu().pc());
 		if (all && !g_lit) {
 			g_lit = true;
 			if (g_dark)
@@ -237,7 +246,7 @@ int main(int argc, char **argv)
 		if (n->linked)
 			std::printf(" at frame %llu, count %u id %u, %u frames", static_cast<unsigned long long>(n->linked_frame),
 			            n->count, n->id, n->frames_ok);
-		std::printf("; parts seen:");
+		std::printf("; fingerprint %016llX; parts seen:", static_cast<unsigned long long>(n->board.fingerprint()));
 		for (unsigned k = 0; k < nodes; k++) {
 			std::printf(" %u", n->seen[k]);
 			if (k != n->index && n->seen[k] == 0)

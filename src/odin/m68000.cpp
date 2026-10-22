@@ -24,7 +24,7 @@ namespace odin {
 
 M68000::M68000(M68000Bus &bus)
 	: m_bus(bus), m_d{}, m_a{}, m_other_sp(0), m_pc(0), m_au(0), m_sr(SR_S | SR_I), m_ir(0), m_irc(0), m_ird(0),
-	  m_ipl(0), m_nmi_edge(false), m_stopped(false), m_halted(false), m_cycles(0)
+	  m_ipl(0), m_nmi_edge(false), m_stopped(false), m_halted(false), m_cycles(0), m_run_end(0)
 {
 }
 
@@ -542,9 +542,9 @@ uint32_t
 M68000::run(uint32_t cycles)
 {
 	const uint64_t start = m_cycles;
-	const uint64_t end = start + cycles;
 
-	while (m_cycles < end)
+	m_run_end = start + cycles;
+	while (m_cycles < m_run_end)
 		step();
 	return static_cast<uint32_t>(m_cycles - start);
 }

@@ -768,6 +768,7 @@ Hikaru::bus_read(uint32_t bus_addr, unsigned size, uint64_t &value)
 		return sound_read(SLAVE, bus_addr, size, value);
 	} else if (m_netbd && bus_addr >= 0x0E000000 && bus_addr <= 0x0E03FFFF) {
 		/* The network board (netbd_837_13404.hpp) */
+		netbd_sync();
 		if (size == 8)
 			value = m_netbd->host_read(offs, 4) | static_cast<uint64_t>(m_netbd->host_read(offs + 4, 4)) << 32;
 		else
@@ -914,6 +915,7 @@ Hikaru::bus_write(uint32_t bus_addr, unsigned size, uint64_t value)
 	} else if (bus_addr >= 0x0D000000 && bus_addr <= 0x0DFFFFFF) {
 		return sound_write(SLAVE, bus_addr, size, value);
 	} else if (m_netbd && bus_addr >= 0x0E000000 && bus_addr <= 0x0E03FFFF) {
+		netbd_sync();
 		if (size == 8) {
 			m_netbd->host_write(offs, 4, static_cast<uint32_t>(value));
 			m_netbd->host_write(offs + 4, 4, static_cast<uint32_t>(value >> 32));

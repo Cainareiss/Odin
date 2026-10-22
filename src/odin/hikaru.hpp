@@ -141,6 +141,7 @@ public:
 private:
 	void run_drive(uint32_t cycles);
 	void run_netbd(uint32_t cycles);
+	void netbd_sync();
 	/* The SH-4 are told apart by their rank here */
 	enum : unsigned {
 		MASTER,
@@ -271,9 +272,12 @@ private:
 	int m_steer_channel = -1;
 	/* The network board 837-13404 in bus page 0E, when ODIN_NETBD asks
 	 * for it (a cabinet has none by default): its clocks still to run
-	 * times the clock of the SH-4, and where its frames go */
+	 * times the clock of the SH-4, the clock it is owed (it runs to it
+	 * when the host reaches it and at the end of a frame), and where its
+	 * frames go */
 	std::unique_ptr<NetBoard837_13404> m_netbd;
 	uint64_t m_netbd_acc = 0;
+	uint64_t m_netbd_owed = 0;
 	std::unique_ptr<NetLink> m_netbd_link;
 	std::unique_ptr<HikaruGpu> m_gpu;
 	std::unique_ptr<SoundBoard> m_sound[2];

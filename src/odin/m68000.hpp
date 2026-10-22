@@ -87,6 +87,20 @@ public:
 	void save(M68000State &out) const;
 	void load(const M68000State &in);
 
+	/* Clocks a machine bills without running them: turns of a wait it
+	 * proved the program goes round, nothing changing. */
+	void skip(uint64_t clocks) { m_cycles += clocks; }
+	/* Whether the next step takes an interrupt */
+	bool interrupt_pending() const { return m_nmi_edge || m_ipl > ((m_sr & SR_I) >> 8); }
+	/* For a machine that sets an event in the middle of a run (a write of
+	 * its program starts a timer): the run ends on the first instruction
+	 * that starts at or after `cycles` (as cycles() counts them). */
+	void end_run_at(uint64_t cycles)
+	{
+		if (cycles < m_run_end)
+			m_run_end = cycles;
+	}
+
 	uint64_t cycles() const { return m_cycles; }
 	uint32_t pc() const { return m_pc; }
 	uint16_t sr() const { return m_sr; }
@@ -231,6 +245,7 @@ private:
 	bool m_nmi_edge;
 	bool m_stopped, m_halted;
 	uint64_t m_cycles;
+	uint64_t m_run_end;	/* where the run in progress stops */
 };
 
 } /* namespace odin */

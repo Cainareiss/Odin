@@ -78,9 +78,18 @@ public:
 	void receive(const NetFrame &frame, uint64_t latency);
 
 	bool running() const { return m_running; }
+	/* ODIN_TURNS=0, a test: the program runs every turn of its waits.
+	 * The memories and the states must be the same. */
+	void set_waits_counted(bool on)
+	{
+		m_waits_counted = on;
+		m_proof.on = false;
+	}
 	/* For tests: a byte of the communication RAM, and the bank of the 68000 */
 	uint8_t comm_byte(unsigned bank, uint32_t offset) const { return m_comm[bank & 1][offset & (COMM_SIZE - 1)]; }
 	unsigned bank() const { return m_bank; }
+	/* For tests: everything the board keeps, hashed (FNV-1a) */
+	uint64_t fingerprint() const;
 	uint16_t leds() const { return m_leds; }
 	const M68000 &cpu() const { return m_cpu; }
 
@@ -102,6 +111,24 @@ private:
 
 	enum Irq : unsigned { IRQ2 = 1u << 2, IRQ4 = 1u << 4, IRQ5 = 1u << 5, IRQ6 = 1u << 6 };
 
+	/* A wait: a turn of a few instructions that only reads the RAM, with
+	 * the CPU the same at its end, goes round the same way until an
+	 * interrupt or a change of what it reads. */
+	static constexpr unsigned MAX_TURN = 16;
+	static constexpr unsigned MAX_READS = 16;
+	struct Read {
+		uint32_t addr;
+		uint8_t size;
+		uint16_t value;
+	};
+	struct Proof {
+		bool on;
+		M68000State cpu;	/* at the start of the turn */
+		uint64_t length;	/* its clocks */
+		unsigned reads;
+		std::array<Read, MAX_READS> read;
+	};
+
 	struct Arrival {
 		NetFrame frame;
 		uint64_t at;
@@ -118,6 +145,21 @@ private:
 	void schedule_timer();
 	uint64_t next_event() const;
 	uint8_t &comm(unsigned bank, uint32_t offset) { return m_comm[bank][offset & (COMM_SIZE - 1)]; }
+	/* The clock of the board now, also in the middle of a run of the
+	 * 68000 (a register it writes, a frame it sends) */
+	uint64_t now() const { return m_running ? m_cpu.cycles() - m_cpu_base : m_clock; }
+	/* An event set at board clock `at` while the 68000 may be running:
+	 * its run stops there, so the event is not taken late. */
+	void event_at(uint64_t at)
+	{
+		if (m_running)
+			m_cpu.end_run_at(at + m_cpu_base);
+	}
+	void wait_count(uint64_t stop);
+	bool wait_prove(uint64_t stop);
+	bool reads_same() const;
+	uint16_t peek(uint32_t addr, unsigned size) const;
+	void note_read(uint32_t addr, unsigned size, uint16_t value);
 
 	M68000 m_cpu;
 	std::vector<uint8_t> m_ram;
@@ -141,8 +183,17 @@ private:
 	bool m_running;			/* host register C0: the 68000 out of reset */
 
 	uint64_t m_clock;
+	uint64_t m_cpu_base;		/* cycles of the 68000 at clock 0 */
 	std::deque<Arrival> m_arrivals;
 	NetLink *m_next;
+
+	Proof m_proof{};
+	bool m_waits_counted = true;
+	bool m_recording = false;	/* a turn being proven */
+	bool m_touched = false;		/* a write or a register since the mark */
+	bool m_quiet = false;		/* the last run touched nothing */
+	unsigned m_recorded = 0;
+	std::array<Read, MAX_READS> m_record{};
 };
 
 } /* namespace odin */

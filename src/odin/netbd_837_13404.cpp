@@ -49,7 +49,7 @@ NetBoard837_13404::NetBoard837_13404()
 	: m_cpu(*this), m_ram(RAM_SIZE), m_comm{std::vector<uint8_t>(COMM_SIZE), std::vector<uint8_t>(COMM_SIZE)},
 	  m_bank(0), m_io{}, m_rx_addr(0), m_rx_size(0), m_tx_addr(0), m_tx_size(0), m_status0(0), m_status1(0),
 	  m_rx_armed(false), m_tx_busy(false), m_tx_end(0), m_timer(0), m_timer_zero(0), m_timer_next(0), m_leds(0), m_irq(0),
-	  m_host_regs{}, m_running(false), m_clock(0), m_next(nullptr)
+	  m_host_regs{}, m_running(false), m_clock(0), m_cpu_base(0), m_next(nullptr)
 {
 }
 
@@ -73,6 +73,8 @@ NetBoard837_13404::reset()
 	m_host_regs.fill(0);
 	m_running = false;
 	m_arrivals.clear();
+	m_proof.on = false;
+	m_quiet = false;
 	update_ipl();
 }
 
@@ -99,11 +101,13 @@ NetBoard837_13404::schedule_timer()
 {
 	const uint64_t turn = 0x8000 * TICK;
 	const uint64_t at = (m_timer & 0x7FFFu) * TICK;
-	const uint64_t since = (m_clock - m_timer_zero) % turn;
-	uint64_t next = m_clock - since + at;
-	if (next <= m_clock)
+	const uint64_t t = now();
+	const uint64_t since = (t - m_timer_zero) % turn;
+	uint64_t next = t - since + at;
+	if (next <= t)
 		next += turn;
 	m_timer_next = next;
+	event_at(next);
 }
 
 uint64_t
@@ -117,16 +121,142 @@ NetBoard837_13404::next_event() const
 	return t;
 }
 
+uint64_t
+NetBoard837_13404::fingerprint() const
+{
+	uint64_t h = 0xCBF29CE484222325ull;
+	auto mix = [&h](const void *p, size_t n) {
+		const uint8_t *b = static_cast<const uint8_t *>(p);
+		for (size_t i = 0; i < n; i++) {
+			h ^= b[i];
+			h *= 0x100000001B3ull;
+		}
+	};
+	M68000State cpu;
+
+	m_cpu.save(cpu);
+	mix(m_ram.data(), m_ram.size());
+	mix(m_comm[0].data(), COMM_SIZE);
+	mix(m_comm[1].data(), COMM_SIZE);
+	mix(cpu.d.data(), sizeof(cpu.d));
+	mix(cpu.a.data(), sizeof(cpu.a));
+	const uint32_t regs[] = {cpu.other_sp, cpu.pc, cpu.sr, cpu.ir, cpu.irc, cpu.ipl, cpu.nmi_edge, cpu.stopped,
+	                         cpu.halted};
+	mix(regs, sizeof(regs));
+	mix(m_io.data(), m_io.size());
+	const uint64_t words[] = {m_bank, m_rx_addr, m_rx_size, m_tx_addr, m_tx_size, m_status0, m_status1,
+	                          m_rx_armed, m_tx_busy, m_tx_end, m_timer, m_timer_zero, m_timer_next, m_irq, m_clock,
+	                          m_cpu.cycles()};
+	mix(words, sizeof(words));
+	return h;
+}
+
+/* The bytes and words the turn read, as they are now (no side effect) */
+uint16_t
+NetBoard837_13404::peek(uint32_t addr, unsigned size) const
+{
+	const uint32_t off = addr & 0xFFFF;
+	const std::vector<uint8_t> &mem = ((addr >> 18) & 3) == MAP_RAM ? m_ram : m_comm[m_bank];
+
+	if (size == 1)
+		return mem[off];
+	return static_cast<uint16_t>((mem[off] << 8) | mem[(off + 1) & 0xFFFF]);
+}
+
+bool
+NetBoard837_13404::reads_same() const
+{
+	for (unsigned i = 0; i < m_proof.reads; i++)
+		if (peek(m_proof.read[i].addr, m_proof.read[i].size) != m_proof.read[i].value)
+			return false;
+	return true;
+}
+
+void
+NetBoard837_13404::note_read(uint32_t addr, unsigned size, uint16_t value)
+{
+	if (m_recorded < MAX_READS)
+		m_record[m_recorded] = {addr, static_cast<uint8_t>(size), value};
+	m_recorded++;
+}
+
+/* One turn run with its reads noted, as long as it ends before `stop`
+ * (where the run would stop anyway): proven when it read only RAM, wrote
+ * nothing, came back to its first instruction with the CPU the same. */
+bool
+NetBoard837_13404::wait_prove(uint64_t stop)
+{
+	M68000State start, now;
+	uint64_t spent = 0;
+	bool proven = false;
+
+	m_cpu.save(start);
+	m_recording = true;
+	m_recorded = 0;
+	m_touched = false;
+	for (unsigned i = 0; i < MAX_TURN && m_clock + spent < stop; i++) {
+		spent += m_cpu.step();
+		if (m_touched || m_recorded > MAX_READS)
+			break;
+		if (m_cpu.pc() == start.pc) {
+			m_cpu.save(now);
+			proven = now == start;
+			break;
+		}
+	}
+	m_recording = false;
+	m_clock += spent;
+	m_proof.on = proven;
+	if (proven) {
+		m_proof.cpu = start;
+		m_proof.length = spent;
+		m_proof.reads = m_recorded;
+		m_proof.read = m_record;
+	}
+	return proven;
+}
+
+/* The turns of a proven wait up to `stop`, billed without running; the
+ * last one is run, so the run ends on the instruction it would have. */
+void
+NetBoard837_13404::wait_count(uint64_t stop)
+{
+	M68000State now;
+
+	if (m_cpu.interrupt_pending())
+		return;
+	m_cpu.save(now);
+	if (!m_proof.on || !(now == m_proof.cpu) || !reads_same()) {
+		if (!wait_prove(stop) || m_clock >= stop)
+			return;
+		m_cpu.save(now);
+		if (!(now == m_proof.cpu))
+			return;
+	}
+	const uint64_t turns = (stop - m_clock) / m_proof.length;
+	if (turns > 1) {
+		const uint64_t clocks = (turns - 1) * m_proof.length;
+		m_cpu.skip(clocks);
+		m_clock += clocks;
+	}
+}
+
 void
 NetBoard837_13404::run_until(uint64_t clock)
 {
 	while (m_clock < clock) {
 		const uint64_t stop = std::min(clock, next_event());
 		if (stop > m_clock) {
-			if (m_running)
-				m_clock += m_cpu.run(static_cast<uint32_t>(std::min<uint64_t>(stop - m_clock, 1u << 30)));
-			else
+			if (m_running) {
+				if (m_waits_counted && m_quiet)
+					wait_count(stop);
+				m_touched = false;
+				if (stop > m_clock)
+					m_clock += m_cpu.run(static_cast<uint32_t>(std::min<uint64_t>(stop - m_clock, 1u << 30)));
+				m_quiet = !m_touched;
+			} else {
 				m_clock = stop;
+			}
 		}
 		while (!m_arrivals.empty() && m_arrivals.front().at <= m_clock) {
 			const NetFrame frame = std::move(m_arrivals.front().frame);
@@ -148,6 +278,7 @@ void
 NetBoard837_13404::receive(const NetFrame &frame, uint64_t latency)
 {
 	m_arrivals.push_back({frame, frame.end + latency});
+	event_at(frame.end + latency);
 }
 
 /* A frame in while receiving: into the bank of the 68000 at the receive
@@ -174,9 +305,10 @@ NetBoard837_13404::start_transmit()
 	frame.data.resize(m_tx_size);
 	for (uint32_t i = 0; i < m_tx_size; i++)
 		frame.data[i] = comm(m_bank, m_tx_addr + i);
-	m_tx_end = m_clock + (m_tx_size + FRAME_OVERHEAD) * BYTE_CLOCKS;
+	m_tx_end = now() + (m_tx_size + FRAME_OVERHEAD) * BYTE_CLOCKS;
 	frame.end = m_tx_end;
 	m_tx_busy = true;
+	event_at(m_tx_end);
 	if (m_next)
 		m_next->send(frame);
 }
@@ -278,7 +410,7 @@ NetBoard837_13404::ctrl_write(uint32_t reg, uint16_t value)
 		schedule_timer();
 		break;
 	case 0xE0:
-		m_timer_zero = m_clock;
+		m_timer_zero = now();
 		raise(IRQ5);
 		schedule_timer();
 		break;
@@ -293,38 +425,57 @@ uint16_t
 NetBoard837_13404::read16(uint32_t addr, unsigned)
 {
 	const uint32_t off = addr & 0xFFFF;
+	uint16_t v;
+
 	switch ((addr >> 18) & 3) {
 	case MAP_RAM:
-		return static_cast<uint16_t>((m_ram[off] << 8) | m_ram[off + 1]);
+		v = static_cast<uint16_t>((m_ram[off] << 8) | m_ram[off + 1]);
+		break;
 	case MAP_CTRL:
+		m_touched = true;
 		return (addr & 0xFF) == 0 ? static_cast<uint16_t>(m_bank) : 0;
 	case MAP_COMM:
-		return static_cast<uint16_t>((comm(m_bank, off) << 8) | comm(m_bank, off + 1));
+		v = static_cast<uint16_t>((comm(m_bank, off) << 8) | comm(m_bank, off + 1));
+		break;
 	default:
+		m_touched = true;
 		return static_cast<uint16_t>((io_read(addr & 0xFE) << 8) | io_read((addr & 0xFE) + 1));
 	}
+	if (m_recording)
+		note_read(addr, 2, v);
+	return v;
 }
 
 uint8_t
 NetBoard837_13404::read8(uint32_t addr, unsigned)
 {
 	const uint32_t off = addr & 0xFFFF;
+	uint8_t v;
+
 	switch ((addr >> 18) & 3) {
 	case MAP_RAM:
-		return m_ram[off];
+		v = m_ram[off];
+		break;
 	case MAP_CTRL:
+		m_touched = true;
 		return (addr & 0xFF) == 1 ? static_cast<uint8_t>(m_bank) : 0;
 	case MAP_COMM:
-		return comm(m_bank, off);
+		v = comm(m_bank, off);
+		break;
 	default:
+		m_touched = true;
 		return io_read(addr & 0xFF);
 	}
+	if (m_recording)
+		note_read(addr, 1, v);
+	return v;
 }
 
 void
 NetBoard837_13404::write16(uint32_t addr, uint16_t value, unsigned)
 {
 	const uint32_t off = addr & 0xFFFF;
+	m_touched = true;
 	switch ((addr >> 18) & 3) {
 	case MAP_RAM:
 		m_ram[off] = static_cast<uint8_t>(value >> 8);
@@ -348,6 +499,7 @@ void
 NetBoard837_13404::write8(uint32_t addr, uint8_t value, unsigned)
 {
 	const uint32_t off = addr & 0xFFFF;
+	m_touched = true;
 	switch ((addr >> 18) & 3) {
 	case MAP_RAM:
 		m_ram[off] = value;
@@ -417,9 +569,11 @@ NetBoard837_13404::host_write(uint32_t offset, unsigned size, uint32_t value)
 		m_host_regs[(reg >> 1) & 0x7F] = v;
 		if (reg == 0xC0) {	/* the 68000 runs while nonzero */
 			const bool run = v != 0;
+			m_proof.on = false;
 			if (run && !m_running) {
 				m_irq = 0;
 				m_cpu.reset();
+				m_cpu_base = m_cpu.cycles() - m_clock;
 				update_ipl();
 				m_timer = 0;
 				m_timer_zero = m_clock;
