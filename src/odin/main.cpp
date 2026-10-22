@@ -737,6 +737,8 @@ public:
 	odin::BarState::Ask do_bar(odin::BarState &bar);
 	/* ODIN_MENU_TEST: the menu opens after that frame */
 	bool tested_at(unsigned frame) const { return m_menu_test && frame % m_menu_test == 0; }
+	/* Close game was pressed again in the menu, taken */
+	bool closing() { return std::exchange(m_closing, false); }
 	/* The library: what the buttons of the menu an event starts ask
 	 * there; the name of the one that presses on the gamepad of player 1,
 	 * else 2 (empty: no gamepad) */
@@ -840,7 +842,7 @@ private:
 	 * changes the folders */
 	std::string m_states;
 	odin::FolderDialog m_dialog;
-	bool m_menu_opened = false;
+	bool m_menu_opened = false, m_closing = false;
 	/* A size of the window from the hands of the user, not kept yet */
 	bool m_custom_waits = false;
 	unsigned m_menu_pictures = 0;	/* still to draw */
@@ -1801,6 +1803,8 @@ MenuSession::draw_menu()
 		m_undo_until = SDL_GetTicks() + UNDO_MS;
 	} else if (state.ask == odin::MenuState::Ask::UNDO) {
 		undo();
+	} else if (state.ask == odin::MenuState::Ask::CLOSE_GAME) {
+		m_closing = true;
 	} else if ((state.ask == odin::MenuState::Ask::PART_DEFAULTS || state.ask == odin::MenuState::Ask::PART_CLEAR) &&
 	           state.picked) {
 		change_part(*state.picked, state.ask == odin::MenuState::Ask::PART_DEFAULTS);
@@ -2359,6 +2363,8 @@ Session::frames()
 			return Ended::LAST_FRAME;
 		if (m_display.menu_shown()) {
 			m_menus.wait();
+			if (m_menus.closing())
+				m_end = Ended::CLOSED;
 			continue;
 		}
 		follow_bar();

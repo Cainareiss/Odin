@@ -268,6 +268,7 @@ Menu::open(int page)
 	for (const auto &[name, value] : MENU_HINTS)
 		SDL_SetHint(name, value);
 	m_cursor_shown = SDL_CursorVisible();
+	m_closing = false;
 	if (page >= 0 && page < PAGES && page != m_page) {
 		m_page = page;
 		m_focus = {};
@@ -337,6 +338,7 @@ Menu::navigate(MenuState &state)
 				m_focus.at = ((m_focus.at + nav.move) % m_focus.last + m_focus.last) % m_focus.last;
 				m_focus.moved = true;
 				m_focus.part = 0;
+				m_closing = false;
 			}
 			m_focus.side = nav.side;
 			m_focus.press = nav.press;
@@ -469,13 +471,21 @@ Menu::build(MenuState &state)
 
 	/* What the page says at the bottom, beside the keys, on as many lines
 	 * as it takes, under a line: the page above it. Input says it with
-	 * the names and inputs of its controls. */
+	 * the names and inputs of its controls. While an input is caught,
+	 * Input says what to do there, keys and all. Over a game, Close game
+	 * before the keys: the last place of the frame of the gamepad, up from
+	 * the first; pressed once, it asks to be pressed again. */
+	static constexpr char CLOSE[] = "Close game", AGAIN[] = "Press again";
 	const char *const keys = state.library ? "Esc: back to the library    Ctrl+Q: quit" :
 	                                         "Esc: back to the game    Ctrl+Q: quit";
-	const float keys_w = ImGui::CalcTextSize(keys).x, help_w = std::max(0.0f, w - 3.0f * pad - keys_w);
+	const bool keys_shown = m_page != INPUT || !state.catching, closable = keys_shown && !state.library;
+	const ImVec2 close = closable ? kit.button_size(m_closing ? AGAIN : CLOSE) : ImVec2{};
+	const float close_w = closable ? std::max(kit.button_size(CLOSE).x, kit.button_size(AGAIN).x) + pad : 0.0f;
+	const float keys_w = ImGui::CalcTextSize(keys).x, help_w = std::max(0.0f, w - 3.0f * pad - keys_w - close_w);
 	const std::string help = m_page == INPUT ? std::string() : this->help(m_page, state);
 	const float help_h = m_page == INPUT ? 0.0f : ImGui::CalcTextSize(help.c_str(), nullptr, false, help_w).y;
-	const float foot = m_page == INPUT ? input_foot(kit, state, {}, help_w, 0.0f, false) : std::max(line, help_h);
+	const float foot = m_page == INPUT ? input_foot(kit, state, {}, help_w, 0.0f, false) :
+	                                     std::max({ line, help_h, close.y });
 	const float foot_top = b.y - foot_pad - foot;
 
 	ImGui::BeginChild("page", { 0.0f, foot_top - foot_pad - ImGui::GetCursorScreenPos().y }, ImGuiChildFlags_None,
@@ -501,9 +511,6 @@ Menu::build(MenuState &state)
 	if (m_page != INPUT)
 		state.advanced = false;
 
-	/* While an input is caught, Input says what to do there, keys and all */
-	const bool keys_shown = m_page != INPUT || !state.catching;
-
 	list->AddLine({ a.x, foot_top - foot_pad }, { b.x, foot_top - foot_pad }, palette.line, kit.stroke());
 	if (m_page == INPUT)
 		input_foot(kit, state, { a.x + pad, foot_top }, keys_shown ? help_w : w - 2.0f * pad, foot, true);
@@ -512,6 +519,16 @@ Menu::build(MenuState &state)
 		              palette.dim, help.c_str(), nullptr, help_w);
 	if (keys_shown)
 		list->AddText({ b.x - pad - keys_w, foot_top + (foot - line) / 2.0f }, palette.faint, keys);
+	if (closable) {
+		const ImVec2 at = { b.x - 2.0f * pad - keys_w - close.x, foot_top + (foot - close.y) / 2.0f };
+
+		if (kit.button(m_closing ? AGAIN : CLOSE, at, false, MenuKit::Icon::NONE, MenuKit::Tone::DANGER)) {
+			if (m_closing)
+				state.ask = MenuState::Ask::CLOSE_GAME;
+			m_closing = !m_closing;
+		}
+		m_focus.last = m_focus.count;
+	}
 
 	ImGui::End();
 	ImGui::Render();

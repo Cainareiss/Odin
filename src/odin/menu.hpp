@@ -279,7 +279,8 @@ struct MenuState {
 	uint64_t mapping_since = 0;
 	/* How far the button that presses is held toward Skip, 0 to 1 */
 	float skip_hold = 0.0f;
-	enum class Ask { NONE, DEFAULTS, CLEAR, UNDO, PART_DEFAULTS, PART_CLEAR } ask = Ask::NONE;
+	/* Close game, at the foot of the menu over a game, pressed twice */
+	enum class Ask { NONE, DEFAULTS, CLEAR, UNDO, PART_DEFAULTS, PART_CLEAR, CLOSE_GAME } ask = Ask::NONE;
 	bool undo = false;
 
 	/* What the gamepad asked since the last picture (menu_nav.hpp): the
@@ -407,8 +408,9 @@ private:
 	ImGuiStyle m_style;
 	float m_scale, m_density = 1.0f;
 	int m_page;
-	/* The frame the gamepad moves on the page */
+	/* The frame the gamepad moves on the page; Close game pressed once */
 	MenuFocus m_focus;
+	bool m_closing = false;
 	/* What Odin had where Dear ImGui changes it while the menu is open:
 	 * two hints of the mouse, the pointer shown or hidden */
 	std::array<std::optional<std::string>, 2> m_hints;

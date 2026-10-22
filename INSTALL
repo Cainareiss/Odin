@@ -181,7 +181,9 @@ the game) has been done with the mouse.
 
 Gamepads: one for each player, in the order they are plugged in, or the
 one chosen for the game in the menu (Input). SELECT (SHARE) puts in a
-coin for the player of the pad. Guide alone opens the menu; Guide held
+coin for the player of the pad. Guide alone opens the menu; at its foot,
+Close game (up from its first row), pressed twice, goes back to the
+library, as the mouse and the keyboard can there too. Guide held
 with Back pauses, with RB saves the state, with LB loads it, with Start
 quits (a button pressed with Guide is not the game's), with the left stick
 pressed is SERVICE, with the right one TEST. Start, the D-pad, A, B,
