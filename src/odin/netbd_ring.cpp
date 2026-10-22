@@ -26,15 +26,40 @@
 #include <cstdio>
 #include <cstring>
 
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#ifndef CREATE_WAITABLE_TIMER_HIGH_RESOLUTION
+#define CREATE_WAITABLE_TIMER_HIGH_RESOLUTION 0x2	/* Windows 10 1803 */
+#endif
+#endif
+
 namespace odin {
 
 using namespace sockets;
 
-NetBoardRunner::NetBoardRunner(NetBoard837_13404 &board) : m_board(board) {}
+NetBoardRunner::NetBoardRunner(NetBoard837_13404 &board) : m_board(board)
+{
+#ifdef _WIN32
+	m_timer = CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
+	if (!m_timer)
+		m_timer = CreateWaitableTimerW(nullptr, TRUE, nullptr);
+	m_arrived = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+#endif
+}
 
 NetBoardRunner::~NetBoardRunner()
 {
 	stop();
+#ifdef _WIN32
+	if (m_timer)
+		CloseHandle(m_timer);
+	if (m_arrived)
+		CloseHandle(m_arrived);
+#endif
 }
 
 void
@@ -61,6 +86,10 @@ NetBoardRunner::stop()
 		m_stop = true;
 	}
 	m_wake.notify_one();
+#ifdef _WIN32
+	if (m_arrived)
+		SetEvent(m_arrived);
+#endif
 	if (m_thread.joinable())
 		m_thread.join();
 }
@@ -74,6 +103,10 @@ NetBoardRunner::arrive(std::vector<uint8_t> data, uint64_t start, uint64_t durat
 		m_inbox.push_back({ std::move(data), start, duration, Clock::now() });
 	}
 	m_wake.notify_one();
+#ifdef _WIN32
+	if (m_arrived)
+		SetEvent(m_arrived);
+#endif
 }
 
 uint64_t
@@ -133,13 +166,46 @@ NetBoardRunner::run()
 
 		if (next != UINT64_MAX && next > now)
 			wake = std::min(wake, wall_clock(next));
-
-		std::unique_lock<std::mutex> hold(m_inbox_lock);
-
-		m_wake.wait_until(hold, wake, [this] { return !m_inbox.empty() || m_stop; });
-		taken.swap(m_inbox);
+		wait(taken, wake);
 	}
 }
+
+#ifdef _WIN32
+void
+NetBoardRunner::wait(std::vector<Incoming> &taken, Clock::time_point wake)
+{
+	std::unique_lock<std::mutex> hold(m_inbox_lock);
+
+	if (m_inbox.empty() && !m_stop) {
+		hold.unlock();
+
+		const int64_t left = std::chrono::duration_cast<std::chrono::nanoseconds>(wake - Clock::now()).count();
+
+		if (left > 0) {
+			LARGE_INTEGER due;
+
+			due.QuadPart = -std::max<LONGLONG>(1, left / 100);
+			HANDLE both[2] = { m_arrived, m_timer };
+
+			if (m_arrived && m_timer && SetWaitableTimer(m_timer, &due, 0, nullptr, nullptr, FALSE))
+				WaitForMultipleObjects(2, both, FALSE, INFINITE);
+			else
+				Sleep(static_cast<DWORD>(left / 1000000));
+		}
+		hold.lock();
+	}
+	taken.swap(m_inbox);
+}
+#else
+void
+NetBoardRunner::wait(std::vector<Incoming> &taken, Clock::time_point wake)
+{
+	std::unique_lock<std::mutex> hold(m_inbox_lock);
+
+	m_wake.wait_until(hold, wake, [this] { return !m_inbox.empty() || m_stop; });
+	taken.swap(m_inbox);
+}
+#endif
 
 namespace {
 

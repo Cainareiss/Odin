@@ -95,6 +95,8 @@ private:
 	};
 
 	void run();
+	/* Until `wake`, a frame or stop; the frames come into `taken` */
+	void wait(std::vector<Incoming> &taken, Clock::time_point wake);
 	uint64_t board_clock(Clock::time_point t) const;
 	Clock::time_point wall_clock(uint64_t clock) const;
 
@@ -102,6 +104,13 @@ private:
 	std::mutex m_board_lock;
 	std::mutex m_inbox_lock;
 	std::condition_variable m_wake;
+#ifdef _WIN32
+	/* MinGW's timed waits last 15.6 ms at least, even for 20 us
+	 * (MARKDOWN/98 section 18): a timer of high resolution (0.8 ms on the
+	 * laptop) and an event set when a frame comes, as HANDLEs */
+	void *m_timer = nullptr;
+	void *m_arrived = nullptr;
+#endif
 	std::vector<Incoming> m_inbox;
 	std::atomic<bool> m_stop{ false };
 	std::thread m_thread;
