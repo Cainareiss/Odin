@@ -144,6 +144,7 @@
 #include <optional>
 
 #include "odin/bytes.hpp"
+#include "odin/drive_board.hpp"
 #include "odin/env.hpp"
 
 namespace odin {
@@ -398,15 +399,63 @@ Hikaru::~Hikaru()
  * ODIN_CARD=none leaves the line open, ODIN_CARD=reader (default) attaches
  * it, ODIN_CARD_FILE=<path> is the card image (three tracks, 207 bytes),
  * ODIN_CARD_TRACE=1 logs every frame on the line to stderr. */
+/* The drive board as far as the SH-4 ran: the command the game puts on
+ * the outputs of the I/O board, the wheel where the board last saw it
+ * (the same potentiometer as the converter of the I/O board) */
+void
+Hikaru::run_drive(uint32_t cycles)
+{
+	m_drive_acc += static_cast<uint64_t>(cycles) * Drive838_13366::CLOCK_HZ;
+
+	const uint64_t clocks = m_drive_acc / m_clock;
+
+	m_drive_acc -= clocks * m_clock;
+	if (clocks)
+		m_drive->run_until(m_drive->clocks() + clocks, DriveBoard::command(io_outputs(), m_game.drive_first_output),
+		                   static_cast<uint8_t>(m_wheel_seen >> 8));
+}
+
 void
 Hikaru::build_mie()
 {
 	m_mie = std::make_unique<MieBoard>(m_game.section("mie"), m_mie_ram, m_clock, [this](MieBoard::Inputs &inputs) {
 		if (m_panel)
 			m_panel->read_inputs(inputs);
+		if (m_steer_channel >= 0)
+			m_wheel_seen = inputs.jvs_analog[m_steer_channel];
+		/* The reply of the drive board on PUSH3-PUSH6 of both players, low
+		 * when set: bit 0 on PUSH3 of player 1 to bit 7 on PUSH6 of player 2
+		 * (MARKDOWN/94) */
+		if (m_drive) {
+			const uint8_t reply = m_drive->reply();
+
+			for (unsigned player = 0; player < 2; player++) {
+				const unsigned bits = ~reply >> (4 * player);
+				uint16_t &word = inputs.jvs_player[player];
+
+				word &= 0xFF0F;
+				for (unsigned bit = 0; bit < 4; bit++)
+					if ((bits >> bit) & 1)
+						word |= static_cast<uint16_t>(0x0080 >> bit);
+			}
+		}
 	}, m_game.io_board, m_game.section("io_rom"));
 	std::printf("I/O board %s: %s\n", m_game.io_board.c_str(),
 	            m_mie->runs_io_program() ? "its program run (io_rom)" : "its imitation");
+
+	/* The drive board 838-13366 of NASCAR (drive_838_13366.hpp): without
+	 * its program, the host takes the force of each command as it comes
+	 * (drive_board.hpp) */
+	const char *const drive = std::getenv("ODIN_DRIVE");
+
+	if (m_game.drive_first_output && m_game.section("drive_rom").size() == Drive838_13366::ROM_SIZE &&
+	    !(drive && !std::strcmp(drive, "imitation")))
+		m_drive = std::make_unique<Drive838_13366>(m_game.section("drive_rom"));
+	for (const GameControl &control : m_game.controls)
+		if (control.type == GameControl::Type::ANALOG && control.role == Role::STEER && control.player == 0)
+			m_steer_channel = control.analog;
+	if (m_game.drive_first_output)
+		std::printf("drive board: %s\n", m_drive ? "its program run (drive_rom)" : "its imitation");
 	m_mie->set_port_d([this](uint8_t pins) { set_resets(pins); });
 	m_mie->set_log(stderr);
 	/* ODIN_TURNS=0, a test: the program of the MIE runs every turn of its
@@ -539,6 +588,10 @@ Hikaru::reset()
 	m_memctl[SLAVE].reset();
 	m_mscomm.fill(0);
 	m_mie->reset();
+	if (m_drive) {
+		m_drive->reset();
+		m_drive_acc = 0;
+	}
 	m_gpu->reset();
 	reset_sound(MASTER);
 	reset_sound(SLAVE);
@@ -770,6 +823,8 @@ Hikaru::run_cycles(int cycles)
 	m_mie->run(static_cast<uint32_t>(ran));
 	/* Its program may have written the mask of the interrupts. */
 	update_irqs();
+	if (m_drive)
+		run_drive(static_cast<uint32_t>(ran));
 	took(PART_MIE);
 
 	/* The two sound boards, unless their reset line is low */

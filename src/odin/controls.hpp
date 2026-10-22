@@ -20,6 +20,8 @@
 #define ODIN_CONTROLS_HPP
 
 #include <array>
+#include <memory>
+#include <optional>
 #include <span>
 #include <utility>
 #include <vector>
@@ -33,6 +35,7 @@
 #include "odin/keyboard.hpp"
 #include "odin/picture.hpp"
 #include "odin/pointers.hpp"
+#include "odin/wheel_force.hpp"
 
 namespace odin {
 
@@ -130,10 +133,14 @@ public:
 	 * pad of player 1 also
 	 * as hard as the vibration device the sound of the optional board
 	 * feeds, when it feels it and no mute output is on, or as the shocks
-	 * the drive board is told, when it feels them. */
-	void show(std::span<const uint8_t> outputs, std::span<const int16_t> option_sound);
-	/* No pad shakes (the emulation stops); the light guns are the
-	 * desktop's again */
+	 * the drive board is told, when it feels them. The wheel of player 1,
+	 * when it has force feedback, turns with the torque of the drive board
+	 * (`drive_torque`, when the board runs its program), else with the
+	 * force of the command the game gives it. */
+	void show(std::span<const uint8_t> outputs, std::span<const int16_t> option_sound,
+	          std::optional<int> drive_torque = std::nullopt);
+	/* No pad shakes and the wheel lets go (the emulation stops); the light
+	 * guns are the desktop's again */
 	void quiet();
 	/* The light gun of each player ([players.<game>] gun1 and gun2,
 	 * "<identity> <name>"), read by those pointers (nullptr: none) */
@@ -148,10 +155,15 @@ public:
 	/* EXPERIMENTAL: the pad of player 1 feels the sound of the optional
 	 * board, as the vibration device of the cabinet it feeds */
 	void feel_option_board(bool on) { m_felt = on; }
-	/* EXPERIMENTAL: the pad of player 1 feels the shocks among the forces
-	 * the drive board is told, TX0 on that output (0: none), not what the
-	 * moves of the wheel give; the stronger of the two */
-	void feel_drive_board(unsigned first_output) { m_drive_output = first_output; }
+	/* The drive board, TX0 on that output (0: none): the wheel of player 1
+	 * turns as it is told; EXPERIMENTAL, the pad of player 1 feels the
+	 * shocks among those forces, not what the moves of the wheel give; the
+	 * stronger of the two */
+	void feel_drive_board(unsigned first_output)
+	{
+		m_drive_output = first_output;
+		m_force.reset();
+	}
 	/* All three as the cabinet of that game shakes, or none (`on` false) */
 	void feel_game(const Game &game, bool on)
 	{
@@ -200,6 +212,8 @@ private:
 		std::vector<uint8_t> hats;	/* as SDL gives them */
 	};
 
+	/* The wheel of player 1 turns with the drive board, when it can */
+	void turn_wheel(int torque);
 	/* What a pad gives the game of its axes */
 	static void shape(Pad &pad);
 	void open(SDL_JoystickID id);
@@ -241,6 +255,9 @@ private:
 	std::vector<Joy> m_joys;	/* plugged in, in the order they came */
 	std::array<SDL_JoystickID, 2> m_joy_seats{};
 	std::array<std::string, 2> m_joys_wanted;
+	/* The force of the wheel of player 1, made at its first torque (none:
+	 * not tried yet, or the joystick changed) */
+	std::unique_ptr<WheelForce> m_force;
 	/* The light gun of each player: its identity, where it aims and its
 	 * buttons, whether it has aimed */
 	Pointers *m_pointers = nullptr;

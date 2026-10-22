@@ -66,7 +66,13 @@ SWRACER (315-6215.bin) and NASCAR (epr-21868.ic7, from the 18wheelr set of
 MAME) may be left out: an imitation of the board answers then, made from
 that program and checked against it. The games play the same without them,
 and NASCAR sends its wheel (the force feedback) the same orders; with them
-the board runs its own program, a little slower.
+the board runs its own program, a little slower. So does the program of the
+drive board of NASCAR, the board that drives the motor of its wheel
+(epr-20512.bin, from the srally2 set of MAME): with it, a wheel with force
+feedback turns as that board tells its motor, the board starting with the
+game (about 11 s, when it turns the wheel back to its centre by itself, as
+on the cabinet) and answering it; without it (or with ODIN_DRIVE=imitation),
+the wheel takes the force of each order of the game at once.
 
 Options:
 
@@ -217,6 +223,15 @@ from one wheel to another; for a Logitech G29 on Linux:
 The wheel stays with the driver of the system: SDL's own driver of the
 Logitech wheels, which would turn their centring spring off, is off
 unless SDL_JOYSTICK_HIDAPI_LG4FF=1 is in the environment.
+
+In NASCAR the wheel of player 1, when it has force feedback, turns as the
+game tells the drive board of the cabinet (see the programs above): on
+Linux through its event node (the user in the group input, or the rules of
+the system that let joysticks be written to), elsewhere through SDL. While
+the game runs, the wheel's own centring spring is off and its gain at its
+highest, as SDL leaves them; the force lets go when the menu opens, and
+stops with the vibration of the page Input ("vibration = off" in
+[players.sgnascar]).
 
 Gamepads: one for each player, in the order they are plugged in, or the
 one chosen for the game in the menu (Input). SELECT (SHARE) puts in a

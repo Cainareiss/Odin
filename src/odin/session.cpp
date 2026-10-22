@@ -417,7 +417,7 @@ Session::frames()
 		m_display.begin_frame();
 		m_controls.update();
 		m_board.run_frame();
-		m_controls.show(m_board.io_outputs(), m_board.sound(true));
+		m_controls.show(m_board.io_outputs(), m_board.sound(true), m_board.drive_torque());
 		if (OutputsNetwork *const outputs = m_menus.outputs())
 			outputs->show(m_board.io_outputs());
 		if (m_audio)

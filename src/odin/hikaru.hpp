@@ -26,12 +26,14 @@
 #include <cstdint>
 #include <cstdio>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <unordered_set>
 #include <utility>
 #include <vector>
 
+#include "odin/drive_838_13366.hpp"
 #include "odin/eeprom_93c46.hpp"
 #include "odin/games.hpp"
 #include "odin/hikaru_gpu.hpp"
@@ -112,6 +114,10 @@ public:
 	const std::vector<int16_t> &sound(bool optional) const { return m_sound[optional ? SLAVE : MASTER]->samples(); }
 	/* The outputs of the I/O board of the cabinet (MieBoard::io_outputs) */
 	std::span<const uint8_t> io_outputs() const { return m_mie->io_outputs(); }
+	/* The torque the drive board of the cabinet tells its motor, -MOST
+	 * (all to the left) to MOST (all to the right), when it runs its
+	 * program (drive_rom; drive_838_13366.hpp); nothing else */
+	std::optional<int> drive_torque() const { return m_drive ? std::optional(m_drive->torque()) : std::nullopt; }
 
 	/* Before the power-on: what the board keeps without power comes from
 	 * the files of this folder, over the images that come with the game,
@@ -132,6 +138,7 @@ public:
 	bool load_state(const std::string &path);
 
 private:
+	void run_drive(uint32_t cycles);
 	/* The SH-4 are told apart by their rank here */
 	enum : unsigned {
 		MASTER,
@@ -251,6 +258,14 @@ private:
 	 * 4 CS, 5 DO */
 	Eeprom93c46 m_eeprom;
 	std::unique_ptr<MieBoard> m_mie;
+	/* The drive board on outputs 15-22 of the I/O board, when its program
+	 * is there (ODIN_DRIVE=imitation leaves it out): its clocks still to
+	 * run times the clock of the SH-4; the wheel as the board last saw
+	 * it, on the channel of the control that steers (-1: none) */
+	std::unique_ptr<Drive838_13366> m_drive;
+	uint64_t m_drive_acc = 0;
+	uint16_t m_wheel_seen = 0x8000;
+	int m_steer_channel = -1;
 	std::unique_ptr<HikaruGpu> m_gpu;
 	std::unique_ptr<SoundBoard> m_sound[2];
 	std::unique_ptr<WavFile> m_wav;	/* ODIN_WAV: the sound of the main board */

@@ -76,6 +76,7 @@ Controls::~Controls()
 		SDL_ShowCursor();
 	if (!m_on)
 		return;
+	m_force.reset();
 	for (Pad &pad : m_pads)
 		SDL_CloseGamepad(pad.handle);
 	for (Joy &joy : m_joys)
@@ -141,6 +142,8 @@ Controls::reseat()
 	for (unsigned player = 0; player < 2; player++) {
 		if (joy_seats[player] == m_joy_seats[player])
 			continue;
+		if (player == 0)
+			m_force.reset();
 		m_joy_seats[player] = joy_seats[player];
 		if (const Joy *const now = joystick(player))
 			std::printf("joystick: '%s' for player %u\n", SDL_GetJoystickName(now->handle), player + 1);
@@ -447,7 +450,22 @@ Controls::event(const SDL_Event &event)
 }
 
 void
-Controls::show(std::span<const uint8_t> outputs, std::span<const int16_t> option_sound)
+Controls::turn_wheel(int torque)
+{
+	const Joy *const joy = joystick(0);
+
+	if (!joy || !m_drive_output || !m_rumble) {
+		if (m_force)
+			m_force->release();
+		return;
+	}
+	if (!m_force)
+		m_force = std::make_unique<WheelForce>(joy->handle);
+	m_force->push(static_cast<double>(torque) / DriveBoard::MOST);
+}
+
+void
+Controls::show(std::span<const uint8_t> outputs, std::span<const int16_t> option_sound, std::optional<int> drive_torque)
 {
 	const Uint64 now = SDL_GetTicks();
 
@@ -459,6 +477,8 @@ Controls::show(std::span<const uint8_t> outputs, std::span<const int16_t> option
 	/* A shock shakes at once and dies away as a shake does; what the moves
 	 * of the wheel give is no shock */
 	const int force = m_drive_output ? DriveBoard::force_of(DriveBoard::command(outputs, m_drive_output)) : 0;
+
+	turn_wheel(drive_torque.value_or(force));
 	const uint16_t wheel = m_wheel_channel < 0 ? 0 : m_panel.analog_channel(static_cast<size_t>(m_wheel_channel));
 
 	m_wheel_moves[m_wheel_move++ % m_wheel_moves.size()] = std::abs(wheel - m_wheel_was) / 65535.0;
@@ -496,6 +516,8 @@ Controls::show(std::span<const uint8_t> outputs, std::span<const int16_t> option
 void
 Controls::quiet()
 {
+	if (m_force)
+		m_force->release();
 	for (Pad &pad : m_pads)
 		if (pad.rumbling) {
 			SDL_RumbleGamepad(pad.handle, 0, 0, 0);

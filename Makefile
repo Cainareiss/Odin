@@ -62,6 +62,7 @@ OBJ := \
 	src/odin/hotkeys.o \
 	src/odin/controls.o \
 	src/odin/pointers.o \
+	src/odin/wheel_force.o \
 	src/odin/evdev.o \
 	src/odin/rawinput.o \
 	src/odin/outputs_network.o \
@@ -101,6 +102,7 @@ OBJ := \
 	src/odin/tmp90ph44.o \
 	src/odin/io_837_13741.o \
 	src/odin/d71054.o \
+	src/odin/drive_838_13366.o \
 	src/odin/tlcs90.o \
 	src/odin/card_reader.o \
 	src/odin/sound_board.o \

@@ -255,12 +255,19 @@ them ([outputs] network = on in odin.ini; outputs_network.cpp), on
 127.0.0.1 only where MAME takes every address; not yet the drive board of
 NASCAR. AIRTRIX turns its output 4 off once after all six are
 lit in its OUTPUT TEST, the screen still saying ON: not known why.
-The drive board of NASCAR (838-13366, on outputs 15-22 of the 837-13741
-and answering on switches 2-5 of both players) is to come in two ways:
-an imitation of its program by default, and, as an option of the user
-(an option of the interface once there is one), its program run when its
-ROM is given (the drive board of Sega Rally 2, epr-20512 in MAME, if that
-is the program of this board: to be proved).
+The drive board of NASCAR (838-13366, on outputs 15-22 of the 837-13741,
+answering on PUSH3-PUSH6 of both players) runs its program when its ROM
+is given (epr-20512, the board and program of Sega Rally 2, srally2 in
+MAME; drive_838_13366.cpp, read in that program and in the game, 22/10/2026,
+MARKDOWN/94): its torque turns the wheel of player 1 (wheel_force.cpp).
+Without it the wheel takes the force of each command at once (the torque
+the program gives a command in its game mode C7), and the game gets no
+reply (it needs none: only CC-CF stop it sending an unchanged command).
+Not known: the program of the motor board behind it (838-12912: its
+spring FC, the register FD, the curve of FE to the torque of the motor),
+nor the strength of that motor against a host wheel (FE 41 / BF, 63 steps,
+is taken as the most the wheel gives); the clock of its Z80 (8 MHz as in
+Supermodel, the counters of its program at 500 Hz agree).
 Controls (src/odin/roles.cpp, bindings.cpp, control_panel.cpp,
 controls.cpp): each control of a cabinet has an id and a role in
 odin-games.json; it is worked by the keys and pad inputs of its role
@@ -282,8 +289,7 @@ reaches the edge of the screen before the mouse. The mouse counts once it
 has moved more than 2 pixels from where the system first put it (the
 system tells where it is when the window opens under it). To come: the
 light guns (evdev.cpp, rawinput.cpp) and their recoil or rumble on the
-nozzle outputs of BRAVEFF (XGunner, RetroShooter 3...), wheels and their
-pedals, the drive board and its force (drive_board_838_13366.cpp).
+nozzle outputs of BRAVEFF (XGunner, RetroShooter 3...).
 Without a gamepad a control rests: a stick or a lever centred, a pedal let
 go (the gas and brake of SGNASCAR read 00 in its INPUT TEST). A key moves
 an analog control 1000 a frame toward the end it pushes to, and lets it

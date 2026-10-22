@@ -490,6 +490,14 @@
 					]
 				},
 				{
+					"name" : "drive_rom",
+					"type" : "alternative",
+					"optional" : true,
+					"data" : [
+						{ "name" : "epr-20512.bin", "size" : 65536, "crc" : "cf64350d", "set" : "srally2" }
+					]
+				},
+				{
 					"name" : "eeprom",
 					"type" : "alternative",
 					"data" : [

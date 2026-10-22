@@ -131,6 +131,10 @@ Hikaru::save_items(StateFile &state)
 	     put_chip<SchedulerState>(state, m_sched) &&
 	     state.put(m_line) && state.put(m_dots_per_line) && state.put(m_lines_per_frame) &&
 	     state.put(m_lines_shown) && state.put(m_line_rest);
+	/* The drive board, when it runs its program: last, a state without it
+	 * still loads */
+	if (ok && m_drive)
+		ok = put_chip<Drive838_13366::State>(state, *m_drive);
 	if (!ok)
 		std::fprintf(stderr, "ERROR: save state: cannot save machine\n");
 	return ok;
@@ -199,6 +203,10 @@ Hikaru::load_items(StateFile &state)
 	if (!ok) {
 		std::fprintf(stderr, "ERROR: load state: cannot load machine\n");
 		return false;
+	}
+	if (m_drive && !get_chip<Drive838_13366::State>(state, *m_drive)) {
+		std::printf("load state: no drive board in it: the board starts again\n");
+		m_drive->reset();
 	}
 
 	/* What the board works out from its chips */
