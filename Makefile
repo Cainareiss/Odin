@@ -66,6 +66,7 @@ OBJ := \
 	src/odin/evdev.o \
 	src/odin/rawinput.o \
 	src/odin/outputs_network.o \
+	src/odin/sockets.o \
 	src/odin/control_panel.o \
 	src/odin/bindings.o \
 	src/odin/settings.o \

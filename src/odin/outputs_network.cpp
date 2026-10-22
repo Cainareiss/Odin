@@ -20,98 +20,11 @@
 
 #include <cstdio>
 
-#ifdef _WIN32
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#else
-#include <arpa/inet.h>
-#include <cerrno>
-#include <fcntl.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <sys/socket.h>
-#include <unistd.h>
-#endif
+#include "odin/sockets.hpp"
 
 namespace odin {
 
-namespace {
-
-/* The sockets of the host, the same way on each */
-#ifdef _WIN32
-using Socket = SOCKET;
-const intptr_t NONE = static_cast<intptr_t>(INVALID_SOCKET);
-
-bool
-network_up()
-{
-	static const bool up = [] {
-		WSADATA data;
-
-		return WSAStartup(MAKEWORD(2, 2), &data) == 0;
-	}();
-	return up;
-}
-
-void close_socket(intptr_t s) { closesocket(static_cast<Socket>(s)); }
-
-bool
-nonblocking(intptr_t s)
-{
-	u_long on = 1;
-
-	return ioctlsocket(static_cast<Socket>(s), FIONBIO, &on) == 0;
-}
-
-bool would_block() { return WSAGetLastError() == WSAEWOULDBLOCK; }
-
-long
-send_some(intptr_t s, const char *data, size_t size)
-{
-	return send(static_cast<Socket>(s), data, static_cast<int>(size), 0);
-}
-
-long
-receive_some(intptr_t s, char *data, size_t size)
-{
-	return recv(static_cast<Socket>(s), data, static_cast<int>(size), 0);
-}
-#else
-using Socket = int;
-const intptr_t NONE = -1;
-
-bool network_up() { return true; }
-
-void close_socket(intptr_t s) { close(static_cast<Socket>(s)); }
-
-bool
-nonblocking(intptr_t s)
-{
-	const int flags = fcntl(static_cast<Socket>(s), F_GETFL, 0);
-
-	return flags >= 0 && fcntl(static_cast<Socket>(s), F_SETFL, flags | O_NONBLOCK) == 0;
-}
-
-bool would_block() { return errno == EAGAIN || errno == EWOULDBLOCK; }
-
-long
-send_some(intptr_t s, const char *data, size_t size)
-{
-#ifdef MSG_NOSIGNAL
-	return send(static_cast<Socket>(s), data, size, MSG_NOSIGNAL);
-#else
-	return send(static_cast<Socket>(s), data, size, 0);
-#endif
-}
-
-long
-receive_some(intptr_t s, char *data, size_t size)
-{
-	return recv(static_cast<Socket>(s), data, size, 0);
-}
-#endif
-
-} /* namespace */
+using namespace sockets;
 
 std::unique_ptr<OutputsNetwork>
 OutputsNetwork::open(const std::string &game, const std::vector<GameOutput> &outputs)
@@ -121,22 +34,9 @@ OutputsNetwork::open(const std::string &game, const std::vector<GameOutput> &out
 		return nullptr;
 	}
 
-	const intptr_t listener = static_cast<intptr_t>(socket(AF_INET, SOCK_STREAM, 0));
-	sockaddr_in address{};
+	const intptr_t listener = listen_on(PORT, true);
 
-	address.sin_family = AF_INET;
-	address.sin_port = htons(PORT);
-	address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-#ifndef _WIN32
-	/* Odin run again at once takes the port back */
-	const int on = 1;
-
-	if (listener != NONE)
-		setsockopt(static_cast<Socket>(listener), SOL_SOCKET, SO_REUSEADDR, &on, sizeof on);
-#endif
-	if (listener == NONE ||
-	    bind(static_cast<Socket>(listener), reinterpret_cast<const sockaddr *>(&address), sizeof address) != 0 ||
-	    listen(static_cast<Socket>(listener), 8) != 0 || !nonblocking(listener)) {
+	if (listener == NONE || !nonblocking(listener)) {
 		std::fprintf(stderr, "ERROR: outputs: port %u of 127.0.0.1 cannot be opened\n", PORT);
 		if (listener != NONE)
 			close_socket(listener);
@@ -189,8 +89,7 @@ void
 OutputsNetwork::accept_all()
 {
 	for (;;) {
-		const intptr_t client = static_cast<intptr_t>(accept(static_cast<Socket>(m_listener), nullptr, nullptr));
-		const int on = 1;
+		const intptr_t client = accept_client(m_listener);
 
 		if (client == NONE)
 			break;
@@ -198,12 +97,6 @@ OutputsNetwork::accept_all()
 			close_socket(client);
 			continue;
 		}
-		setsockopt(static_cast<Socket>(client), IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<const char *>(&on),
-		           sizeof on);
-#ifdef SO_NOSIGPIPE
-		/* Where send has no MSG_NOSIGNAL: a client gone does not stop Odin */
-		setsockopt(static_cast<Socket>(client), SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof on);
-#endif
 		m_clients.push_back({ client, "mame_start = " + m_game + "\r" });
 	}
 }
