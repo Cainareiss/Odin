@@ -201,8 +201,7 @@ Pen::shape(std::vector<ImVec2> points, bool closed, Ink ink, float width, float 
 		ImU32 fill = ink == Ink::BODY ? palette.body : ink == Ink::PART ? palette.part : palette.accent;
 
 		if (alpha < 1.0f)
-			fill = (fill & ~IM_COL32_A_MASK) |
-			       (static_cast<ImU32>(alpha * static_cast<float>(fill >> IM_COL32_A_SHIFT)) << IM_COL32_A_SHIFT);
+			fill = MenuKit::alpha(fill, alpha);
 		m_list->AddConcavePolyFilled(points.data(), static_cast<int>(points.size()), fill);
 	}
 	if (ink != Ink::LIT || !closed)
@@ -284,10 +283,8 @@ Pen::arc(float x, float y, float r, float from, float to, Ink ink, float width, 
 	if (m_measuring)
 		return;
 
-	ImU32 colour = ink == Ink::LIT || lit() ? m_kit.palette().accent : m_kit.palette().cabinet_detail;
-
-	colour = (colour & ~IM_COL32_A_MASK) |
-	         (static_cast<ImU32>(alpha * static_cast<float>(colour >> IM_COL32_A_SHIFT)) << IM_COL32_A_SHIFT);
+	const ImU32 colour =
+		MenuKit::alpha(ink == Ink::LIT || lit() ? m_kit.palette().accent : m_kit.palette().cabinet_detail, alpha);
 	m_list->AddPolyline(points.data(), static_cast<int>(points.size()), colour, ImDrawFlags_None, width * m_scale);
 }
 

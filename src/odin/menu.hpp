@@ -313,6 +313,10 @@ struct MenuState {
  * let go of where the context is (release) before it is destroyed. */
 class Menu {
 public:
+	/* The words of a choice of two, and of what is around the picture */
+	static constexpr const char *ON_OFF[] = { "on", "off" };
+	static constexpr const char *SIDES_SHOWN[] = { "Off", "Blur", "Bezel" };
+
 	/* The pages, in the order of their tabs */
 	enum Page { INPUT, DISPLAY, AUDIO, HOTKEYS, OUTPUTS, PATHS, ABOUT, PAGES };
 
@@ -330,16 +334,14 @@ public:
 	void close();
 	void event(const SDL_Event &event);
 	void build(MenuState &state);
+	/* The keys and the mouse held before forgotten: the bar shown, the
+	 * library opened (a key let go in a game) */
+	void forget_input();
 	/* The bar alone over the game (menu_bar.cpp), opened and closed as the
-	 * menu is: shown, the keys and the mouse held before forgotten; built
-	 * from the state; hidden, its menus closed */
-	void show_bar();
+	 * menu is: built from the state; hidden, its menus closed */
 	void build_bar(BarState &state);
 	void hide_bar();
-	/* The library, over the whole window under the bar (menu_library.cpp);
-	 * each time it opens, the keys and the mouse held before it (a key let
-	 * go in a game) forgotten */
-	void open_library();
+	/* The library, over the whole window under the bar (menu_library.cpp) */
 	void build_library(LibraryState &state, BarState &bar);
 	/* A picture of a game for its tile, RGBA, taken (destroyed once made a
 	 * texture at the next picture drawn); one before it replaced, or
@@ -372,6 +374,7 @@ private:
 	void add_fonts();
 	/* The palette of that theme (THEMES), Dear ImGui's colours with it */
 	void use_palette(unsigned theme);
+	void begin_frame(unsigned theme, MenuState *state = nullptr);
 	/* The bar and its menus, in the frame of Dear ImGui built now; at the
 	 * start of a frame, the menus of a bar hidden since the last one
 	 * closed */

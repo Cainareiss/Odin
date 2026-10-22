@@ -56,13 +56,6 @@ constexpr float ACCENT = 2.0f;
 constexpr float BAR_ALPHA = 0.96f;
 
 constexpr const char *NAMES[] = { "FILE", "INPUT", "VIDEO", "AUDIO", "DEBUG", "ABOUT" };
-constexpr const char *SIDES[] = { "Off", "Blur", "Bezel" };
-
-ImVec4
-colour(ImU32 c)
-{
-	return ImGui::ColorConvertU32ToFloat4(c);
-}
 
 /* An item that asks something: true when clicked */
 bool
@@ -74,7 +67,7 @@ item(const char *label, const std::string &key = {}, bool checked = false, bool 
 } /* namespace */
 
 void
-Menu::show_bar()
+Menu::forget_input()
 {
 	ImGui::SetCurrentContext(m_imgui);
 	ImGui::GetIO().ClearInputKeys();
@@ -97,13 +90,7 @@ Menu::close_bar_menus()
 void
 Menu::build_bar(BarState &state)
 {
-	ImGui::SetCurrentContext(m_imgui);
-	use_palette(state.theme);
-	follow_scale();
-	ImGui_ImplSDL3_NewFrame();
-	add_fonts();
-	ImGui::NewFrame();
-	close_bar_menus();
+	begin_frame(state.theme);
 	bar(state);
 	ImGui::Render();
 }
@@ -124,23 +111,18 @@ Menu::bar(BarState &state)
 	};
 
 	style.DisplaySafeAreaPadding = { 0.0f, 0.0f };
-	ImGui::PushStyleColor(ImGuiCol_WindowBg, colour(0));
-	ImGui::PushStyleColor(ImGuiCol_MenuBarBg, colour(MenuKit::alpha(p.screen, BAR_ALPHA)));
-	ImGui::PushStyleColor(ImGuiCol_PopupBg, colour(0));
-	ImGui::PushStyleColor(ImGuiCol_Border, colour(0));
-	ImGui::PushStyleColor(ImGuiCol_Header, colour(p.hover));
-	ImGui::PushStyleColor(ImGuiCol_HeaderHovered, colour(p.hover));
-	ImGui::PushStyleColor(ImGuiCol_HeaderActive, colour(p.hover));
-	ImGui::PushStyleColor(ImGuiCol_Text, colour(p.ink));
-	ImGui::PushStyleColor(ImGuiCol_TextDisabled, colour(p.faint));
-	ImGui::PushStyleColor(ImGuiCol_Separator, colour(p.line));
-	ImGui::PushStyleColor(ImGuiCol_CheckMark, colour(p.accent));
-	ImGui::PushStyleColor(ImGuiCol_FrameBg, colour(p.hover));
-	ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, colour(p.hover));
-	ImGui::PushStyleColor(ImGuiCol_FrameBgActive, colour(p.hover));
-	ImGui::PushStyleColor(ImGuiCol_SliderGrab, colour(p.accent));
-	ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, colour(p.accent));
-	ImGui::PushStyleColor(ImGuiCol_NavCursor, colour(0));
+	const std::pair<ImGuiCol, ImU32> colours[] = {
+		{ ImGuiCol_WindowBg, IM_COL32_BLACK_TRANS }, { ImGuiCol_MenuBarBg, MenuKit::alpha(p.screen, BAR_ALPHA) },
+		{ ImGuiCol_PopupBg, IM_COL32_BLACK_TRANS }, { ImGuiCol_Border, IM_COL32_BLACK_TRANS },
+		{ ImGuiCol_Header, p.hover }, { ImGuiCol_HeaderHovered, p.hover }, { ImGuiCol_HeaderActive, p.hover },
+		{ ImGuiCol_Text, p.ink }, { ImGuiCol_TextDisabled, p.faint }, { ImGuiCol_Separator, p.line },
+		{ ImGuiCol_CheckMark, p.accent }, { ImGuiCol_FrameBg, p.hover }, { ImGuiCol_FrameBgHovered, p.hover },
+		{ ImGuiCol_FrameBgActive, p.hover }, { ImGuiCol_SliderGrab, p.accent },
+		{ ImGuiCol_SliderGrabActive, p.accent }, { ImGuiCol_NavCursor, IM_COL32_BLACK_TRANS },
+	};
+
+	for (const auto &[which, colour] : colours)
+		ImGui::PushStyleColor(which, colour);
 	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, { kit.px(NAME_WIDE), kit.px(NAME_HIGH) });
 	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { kit.px(NAME_GAP), kit.px(ITEM_HIGH) });
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { std::round(kit.px(ITEMS_INSIDE)), std::round(kit.px(ITEMS_INSIDE)) });
@@ -163,7 +145,7 @@ Menu::bar(BarState &state)
 			const float at = ImGui::GetCursorScreenPos().x + std::trunc(style.ItemSpacing.x * 0.5f);
 			const float w = ImGui::CalcTextSize(NAMES[m]).x;
 
-			ImGui::PushStyleColor(ImGuiCol_Text, colour(p.dim));
+			ImGui::PushStyleColor(ImGuiCol_Text, p.dim);
 			const bool shown = ImGui::BeginMenu(NAMES[m]);
 			ImGui::PopStyleColor();
 			if (!shown)
@@ -219,8 +201,8 @@ Menu::bar(BarState &state)
 					          { ImGui::GetWindowPos().x + ImGui::GetWindowWidth(),
 					            ImGui::GetWindowPos().y + ImGui::GetWindowHeight() },
 					          kit.px(MENU_CUT), p.screen, p.outline);
-					for (unsigned s = 0; s < std::size(SIDES); s++)
-						if (item(SIDES[s], {}, state.sides == s))
+					for (unsigned s = 0; s < std::size(SIDES_SHOWN); s++)
+						if (item(SIDES_SHOWN[s], {}, state.sides == s))
 							state.sides = s;
 					ImGui::EndMenu();
 				}
@@ -286,7 +268,7 @@ Menu::bar(BarState &state)
 		ImGui::EndMainMenuBar();
 	}
 	ImGui::PopStyleVar(8);
-	ImGui::PopStyleColor(17);
+	ImGui::PopStyleColor(static_cast<int>(std::size(colours)));
 	style.DisplaySafeAreaPadding = safe;
 	state.wants_mouse = ImGui::GetIO().WantCaptureMouse;
 }

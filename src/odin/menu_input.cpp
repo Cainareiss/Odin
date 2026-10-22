@@ -224,16 +224,6 @@ labels(const std::vector<HostInput> &inputs, int kind)
 	return out;
 }
 
-/* The ASCII letters in capitals, for a name of the page */
-std::string
-capitals(std::string text)
-{
-	for (char &c : text)
-		if (c >= 'a' && c <= 'z')
-			c = static_cast<char>(c - 'a' + 'A');
-	return text;
-}
-
 bool
 same(const std::optional<MenuSlot> &a, const MenuSlot &b)
 {
@@ -306,9 +296,9 @@ input_rows(const MenuState &state)
 				rows.back().half = pad;
 				break;
 			}
-			add(control.name + " " + capitals(left + 1), { i, 1, control.role }, bindings.part(c, 1), lit, true);
+			add(control.name + " " + MenuKit::capitals(left + 1), { i, 1, control.role }, bindings.part(c, 1), lit, true);
 			rows.back().half = pad;
-			add(control.name + " " + capitals(right + 1), { i, 2, control.role }, bindings.part(c, 2), lit, true);
+			add(control.name + " " + MenuKit::capitals(right + 1), { i, 2, control.role }, bindings.part(c, 2), lit, true);
 			rows.back().half = pad;
 			break;
 		}
@@ -683,7 +673,7 @@ Menu::games_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width, bo
 	std::vector<std::string> names;
 
 	for (const auto &[name, title] : state.games)
-		names.push_back(capitals(title));
+		names.push_back(MenuKit::capitals(title));
 
 	static const std::string none;
 	const std::string &before = focusable ? none : state.pills[2], &after = focusable ? none : state.pills[3];
@@ -1104,7 +1094,7 @@ sort_rows(const MenuState &state, std::span<const InputRow> rows, const PadDrawi
 			std::string name = rows[r].name;
 
 			if (input.pad.with >= 0)
-				name += " + " + capitals(pad_label({ PadInput::Type::BUTTON, static_cast<uint8_t>(input.pad.with) }, kind));
+				name += " + " + MenuKit::capitals(pad_label({ PadInput::Type::BUTTON, static_cast<uint8_t>(input.pad.with) }, kind));
 			if (part < 0) {
 				out.elsewhere.push_back({ r, std::move(name) + " · " + label(input, kind) });
 				continue;
@@ -1173,8 +1163,7 @@ draw_label(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows,
 		                  kit.px(HOT_WIDTH));
 		list->AddCircleFilled(l.line.back(), kit.px(DOT), palette.accent);
 	} else {
-		const float alpha = static_cast<float>(palette.stroke >> IM_COL32_A_SHIFT) * REST_ALPHA;
-		const ImU32 rest = (palette.stroke & ~IM_COL32_A_MASK) | (static_cast<ImU32>(alpha) << IM_COL32_A_SHIFT);
+		const ImU32 rest = MenuKit::alpha(palette.stroke, REST_ALPHA);
 
 		MenuKit::dashes(list, l.line, false, rest, kit.stroke(), kit.px(DASH_ON), kit.px(DASH_OFF));
 		list->AddCircleFilled(l.line.back(), kit.px(DOT), rest);
@@ -1617,7 +1606,6 @@ void
 advanced_box(const MenuKit &kit, MenuState &state, ImVec2 a, ImVec2 b)
 {
 	using Icon = MenuKit::Icon;
-	static constexpr const char *ON_OFF[] = { "on", "off" };
 	static constexpr char NO_SHAKE[] = "this game does not shake";
 	static constexpr char FOOT[] = "Game settings hold for this game; device settings follow it everywhere.";
 	ImDrawList *const list = ImGui::GetWindowDrawList();
@@ -1638,7 +1626,7 @@ advanced_box(const MenuKit &kit, MenuState &state, ImVec2 a, ImVec2 b)
 
 	/* The vibration, with what shakes on the cabinet under it */
 	{
-		const ImVec2 cells = kit.segments_size(ON_OFF);
+		const ImVec2 cells = kit.segments_size(Menu::ON_OFF);
 		const float h = std::max(line + (state.shake_from.empty() ? 0.0f : kit.px(2.0f) + note), cells.y);
 
 		list->AddText({ lo.x, y }, state.can_shake ? palette.ink : palette.faint, "Vibration (experimental)");
@@ -1653,7 +1641,7 @@ advanced_box(const MenuKit &kit, MenuState &state, ImVec2 a, ImVec2 b)
 
 			int shake = state.shake ? 0 : 1;
 
-			if (kit.segments({ hi.x - cells.x, y + (h - cells.y) / 2.0f }, ON_OFF, shake))
+			if (kit.segments({ hi.x - cells.x, y + (h - cells.y) / 2.0f }, Menu::ON_OFF, shake))
 				state.shake = shake == 0;
 		}
 		y += h + apart;
@@ -1680,7 +1668,7 @@ advanced_box(const MenuKit &kit, MenuState &state, ImVec2 a, ImVec2 b)
 	percent("Stick dead zone", state.tuning.dead_zone, PadTuning::MOST_DEAD_ZONE);
 	percent("Trigger threshold", state.tuning.trigger_threshold, PadTuning::MOST_TRIGGER_THRESHOLD);
 
-	const float foot_h = ImGui::GetFont()->CalcTextSizeA(note, FLT_MAX, hi.x - lo.x, FOOT).y;
+	const float foot_h = MenuKit::wrapped_h(FOOT, note, hi.x - lo.x);
 
 	list->AddText(ImGui::GetFont(), note, { lo.x, hi.y - foot_h }, palette.faint, FOOT, nullptr, hi.x - lo.x);
 	if (kit.button("Close", { hi.x - close.x, lo.y }, false, Icon::CLEAR))

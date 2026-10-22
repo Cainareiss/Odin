@@ -385,6 +385,22 @@ Menu::use_palette(unsigned theme)
 	colour_style(ImGui::GetStyle(), *palette);
 }
 
+/* A frame of Dear ImGui begun in the palette of that theme, at the scale
+ * of the window; the gamepad's buttons for the menu taken before it */
+void
+Menu::begin_frame(unsigned theme, MenuState *state)
+{
+	ImGui::SetCurrentContext(m_imgui);
+	use_palette(theme);
+	follow_scale();
+	if (state)
+		navigate(*state);
+	ImGui_ImplSDL3_NewFrame();
+	add_fonts();
+	ImGui::NewFrame();
+	close_bar_menus();
+}
+
 void
 Menu::follow_scale()
 {
@@ -445,14 +461,7 @@ Menu::add_fonts()
 void
 Menu::build(MenuState &state)
 {
-	ImGui::SetCurrentContext(m_imgui);
-	use_palette(state.theme);
-	follow_scale();
-	navigate(state);
-	ImGui_ImplSDL3_NewFrame();
-	add_fonts();
-	ImGui::NewFrame();
-	close_bar_menus();
+	begin_frame(state.theme, &state);
 
 	MenuKit kit(*m_palette, m_scale, &m_focus);
 	const MenuPalette &palette = kit.palette();
@@ -660,12 +669,11 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 			state.vsync = static_cast<unsigned>(sync);
 	});
 
-	static constexpr const char *SIDES[] = { "Off", "Blur", "Bezel" };
 	int sides = static_cast<int>(state.sides);
 
 	watch(PREVIEW_SCREEN, [&] {
 		if (kit.choice("Bezel", "beside the game in a wide window: black, the game blurred, or its picture from "
-		               "Artwork (page Paths)", SIDES, sides))
+		               "Artwork (page Paths)", SIDES_SHOWN, sides))
 			state.sides = static_cast<unsigned>(sides);
 	});
 	kit.end_group();
@@ -680,7 +688,6 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 			state.unthrottled = pace == 1;
 	});
 
-	static constexpr const char *ON_OFF[] = { "on", "off" };
 	int speed = state.show_speed ? 0 : 1;
 
 	watch(PREVIEW_SCREEN, [&] {
@@ -760,7 +767,7 @@ Menu::preview(const MenuKit &kit, const MenuState &state, int which, ImVec2 a, I
 	const auto pair = [&](const char *title, int cabinet, int chosen, const char *cabinet_name, const std::string &chosen_name,
 	                      const char *source) {
 		const float apart = kit.px(12.0f), under = caps + kit.px(16.0f);
-		const float source_h = ImGui::GetFont()->CalcTextSizeA(note, FLT_MAX, width, source).y;
+		const float source_h = MenuKit::wrapped_h(source, note, width);
 		const float room = hi.y - lo.y - caps - kit.px(10.0f) - source_h - kit.px(12.0f);
 		const float beside = std::min((width - apart) / 2.0f * 0.75f, room - under);
 		const float stacked = std::min(width * 0.75f, (room - 2.0f * under - apart) / 2.0f);
@@ -803,7 +810,7 @@ Menu::preview(const MenuKit &kit, const MenuState &state, int which, ImVec2 a, I
 	case PREVIEW_CARD: {
 		const char *const name = state.gpu.empty() ? "not known yet" : state.gpu.c_str();
 		const float big = MenuKit::font(1.3f);
-		const float name_h = ImGui::GetFont()->CalcTextSizeA(big, FLT_MAX, width, name).y;
+		const float name_h = MenuKit::wrapped_h(name, big, width);
 		float y = lo.y + std::max(0.0f, (hi.y - lo.y - caps - name_h - note - kit.px(22.0f)) / 2.0f);
 
 		caps_centred(mid, y, "GRAPHICS CARD");
@@ -855,7 +862,7 @@ Menu::preview(const MenuKit &kit, const MenuState &state, int which, ImVec2 a, I
 			              static_cast<unsigned>(ww), static_cast<unsigned>(wh), static_cast<unsigned>(sw),
 			              static_cast<unsigned>(sh), ww > sw || wh > sh ? ": bigger than it." : ".");
 
-		const float caption_h = ImGui::GetFont()->CalcTextSizeA(note, FLT_MAX, width, caption).y;
+		const float caption_h = MenuKit::wrapped_h(caption, note, width);
 		const float k = std::min(width / sw, (hi.y - lo.y - caps - caption_h - kit.px(26.0f)) / sh);
 		float y = lo.y + std::max(0.0f, (hi.y - lo.y - caps - caption_h - kit.px(26.0f) - sh * k) / 2.0f);
 

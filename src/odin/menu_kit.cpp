@@ -91,13 +91,6 @@ fill_cell(ImDrawList *list, ImVec2 a, ImVec2 b, float cut, bool first, bool last
 	list->AddConvexPolyFilled(points.data(), n, colour);
 }
 
-/* The height of a text at that size, on as many lines as that width takes */
-float
-wrapped_h(const char *text, float size, float width)
-{
-	return ImGui::GetFont()->CalcTextSizeA(size, FLT_MAX, width, text).y;
-}
-
 /* The character at p (UTF-8) and its length in bytes */
 unsigned
 decode(const char *p, int &length)
@@ -966,13 +959,13 @@ MenuKit::list_popup(ImVec2 at, float width, std::span<const Item> items, int &ch
 		at.y = std::max(margin, above - tall);
 	ImGui::SetNextWindowPos({ std::max(margin, std::min(at.x, room - margin - longest)), at.y });
 	ImGui::SetNextWindowSizeConstraints({ longest, 0.0f }, { longest, ImGui::GetIO().DisplaySize.y });
-	ImGui::PushStyleColor(ImGuiCol_PopupBg, ImGui::ColorConvertU32ToFloat4(p.screen));
-	ImGui::PushStyleColor(ImGuiCol_Border, ImGui::ColorConvertU32ToFloat4(p.stroke));
-	ImGui::PushStyleColor(ImGuiCol_Header, ImGui::ColorConvertU32ToFloat4(0));
-	ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImGui::ColorConvertU32ToFloat4(p.hover));
-	ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImGui::ColorConvertU32ToFloat4(p.hover));
-	ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(p.ink));
-	ImGui::PushStyleColor(ImGuiCol_NavCursor, ImGui::ColorConvertU32ToFloat4(p.accent));
+	ImGui::PushStyleColor(ImGuiCol_PopupBg, p.screen);
+	ImGui::PushStyleColor(ImGuiCol_Border, p.stroke);
+	ImGui::PushStyleColor(ImGuiCol_Header, IM_COL32_BLACK_TRANS);
+	ImGui::PushStyleColor(ImGuiCol_HeaderHovered, p.hover);
+	ImGui::PushStyleColor(ImGuiCol_HeaderActive, p.hover);
+	ImGui::PushStyleColor(ImGuiCol_Text, p.ink);
+	ImGui::PushStyleColor(ImGuiCol_NavCursor, p.accent);
 	/* In whole pixels: the window is, and a fraction more would scroll */
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { pad, pad });
 	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { 0.0f, spacing });
@@ -1164,9 +1157,9 @@ MenuKit::tip(const char *text) const
 {
 	const MenuPalette &p = m_palette;
 
-	ImGui::PushStyleColor(ImGuiCol_PopupBg, ImGui::ColorConvertU32ToFloat4(p.screen));
-	ImGui::PushStyleColor(ImGuiCol_Border, ImGui::ColorConvertU32ToFloat4(p.stroke));
-	ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(p.ink));
+	ImGui::PushStyleColor(ImGuiCol_PopupBg, p.screen);
+	ImGui::PushStyleColor(ImGuiCol_Border, p.stroke);
+	ImGui::PushStyleColor(ImGuiCol_Text, p.ink);
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { std::round(px(6.0f)), std::round(px(3.0f)) });
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, stroke());
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);

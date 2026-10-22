@@ -209,6 +209,19 @@ public:
 	                  float spacing = 0.0f);
 	/* A text cut to that width, three dots where it is cut */
 	static std::string fitted(const std::string &text, float width, float size = 0.0f);
+	/* The height of a text at that size, on as many lines as that width
+	 * takes; the ASCII letters of a text in capitals */
+	static float wrapped_h(const char *text, float size, float width)
+	{
+		return ImGui::GetFont()->CalcTextSizeA(size, FLT_MAX, width, text).y;
+	}
+	static std::string capitals(std::string text)
+	{
+		for (char &c : text)
+			if (c >= 'a' && c <= 'z')
+				c = static_cast<char>(c - 'a' + 'A');
+		return text;
+	}
 
 	/* An item the frame of focus moves on, from a to b, the frame that much
 	 * outside it (inside: below 0): true when the frame is on it; then what

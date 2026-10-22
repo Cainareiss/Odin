@@ -557,7 +557,7 @@ Display::show_bar(bool on)
 	m_bar_shown = on;
 	m_bar_events.clear();
 	if (on) {
-		m_menu->show_bar();
+		m_menu->forget_input();
 		m_menu->open();
 	} else {
 		m_menu->hide_bar();
@@ -608,7 +608,7 @@ Display::open_library()
 		m_menu = std::make_unique<Menu>(m_window);
 		run([this] { m_menu->freeze(0, 0, 0); });
 	}
-	m_menu->open_library();
+	m_menu->forget_input();
 }
 
 void

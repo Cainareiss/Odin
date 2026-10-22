@@ -119,23 +119,9 @@ Menu::upload_library_pictures()
 }
 
 void
-Menu::open_library()
-{
-	ImGui::SetCurrentContext(m_imgui);
-	ImGui::GetIO().ClearInputKeys();
-	ImGui::GetIO().ClearInputMouse();
-}
-
-void
 Menu::build_library(LibraryState &state, BarState &bar_state)
 {
-	ImGui::SetCurrentContext(m_imgui);
-	use_palette(bar_state.theme);
-	follow_scale();
-	ImGui_ImplSDL3_NewFrame();
-	add_fonts();
-	ImGui::NewFrame();
-	close_bar_menus();
+	begin_frame(bar_state.theme);
 	bar(bar_state);
 
 	const MenuKit kit(*m_palette, m_scale);
@@ -261,7 +247,7 @@ Menu::build_library(LibraryState &state, BarState &bar_state)
 	const float inside = kit.px(SHEET_INSIDE), x = sa.x + inside, width = sheet_w - 2.0f * inside;
 	const std::string play = "Enter" + (state.press.empty() ? "" : ", " + state.press) + " or click again: play";
 	const char enter[] = "Enter";
-	const float foot = sb.y - inside - ImGui::GetFont()->CalcTextSizeA(size, FLT_MAX, width, play.c_str()).y;
+	const float foot = sb.y - inside - MenuKit::wrapped_h(play.c_str(), size, width);
 	float y = sa.y + inside;
 
 	kit.frame(list, sa, sb, kit.px(SHEET_CUT), palette.body, 0);

@@ -38,8 +38,6 @@ namespace odin {
 
 namespace {
 
-constexpr const char *ON_OFF[] = { "on", "off" };
-
 /* A page in two: what it shows in a box at the left, its settings at the
  * right, as 1 to 1.15 (mock-up v50); the room between them, below the row
  * of the games, the cut of the corners of the box and the room inside */
@@ -370,11 +368,7 @@ route_card(const MenuKit &kit, const MenuState::SoundGame &game, ImVec2 at, floa
 	const ImVec2 o = { at.x + (width - ROUTE_W * k) / 2.0f, at.y + pad + line + kit.px(4.0f) };
 	const auto p = [&](float x, float y) { return ImVec2{ o.x + x * k, o.y + y * k }; };
 	const bool option = game.played != 0, four = game.played == 2;
-	std::string title = game.title;
-
-	for (char &c : title)
-		if (c >= 'a' && c <= 'z')
-			c = static_cast<char>(c - 'a' + 'A');
+	const std::string title = MenuKit::capitals(game.title);
 	const float small = MenuKit::font(MenuKit::SMALL);
 
 	kit.frame(list, at, { at.x + width, at.y + h }, kit.px(BOX_CUT), 0, palette.line);
@@ -478,12 +472,9 @@ Menu::page_audio(MenuKit &kit, MenuState &state) const
 	              "each board on its own pair, four channels. By default as the cabinet: Racer's optional board only "
 	              "shakes its panel (set in Input).");
 	for (MenuState::SoundGame &game : state.sound_games) {
-		std::string title = game.title;
+		const std::string title = MenuKit::capitals(game.title);
 		char about[160];
 
-		for (char &c : title)
-			if (c >= 'a' && c <= 'z')
-				c = static_cast<char>(c - 'a' + 'A');
 		ImGui::PushID(game.name.c_str());
 		kit.begin_group(title.c_str());
 		kit.choice("Played", "", PLAYED, game.played, game.locked ? "set by the command line: -o" : nullptr);
@@ -635,7 +626,7 @@ hotkeys_keyboard(const MenuKit &kit, const MenuState &state, const Box &box, con
 	const float text_w = std::min(width, kit.px(260.0f));
 	const float caption_h = centred({}, width, size, caption, 0);
 	const float guide_w = kit.pill_size(guide_name.c_str()).x, guide_text_w = text_w - guide_w - kit.px(8.0f);
-	const float guide_h = std::max(cap_h, ImGui::GetFont()->CalcTextSizeA(size, FLT_MAX, guide_text_w, guide).y);
+	const float guide_h = std::max(cap_h, MenuKit::wrapped_h(guide, size, guide_text_w));
 	const float all_h = cap_h + gap + (others.empty() ? 0.0f : cap_h + gap) + kit.px(6.0f) + caption_h +
 	                    kit.px(10.0f) + guide_h;
 	in_box(kit, box, all_h, [&](float y) {
