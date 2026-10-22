@@ -40,6 +40,7 @@ namespace {
 using odin::Bindings;
 using odin::GameControl;
 using odin::HostInput;
+using odin::JoyInput;
 using odin::MouseInput;
 using odin::PadInput;
 using odin::Role;
@@ -64,6 +65,11 @@ bool is_key(const HostInput &input, SDL_Keycode key)
 bool is_pad(const HostInput &input, PadInput::Type type, unsigned index)
 {
 	return input.kind == HostInput::Kind::PAD && input.pad.type == type && input.pad.index == index;
+}
+
+bool is_joy(const HostInput &input, JoyInput::Type type, unsigned index)
+{
+	return input.kind == HostInput::Kind::JOY && input.joy.type == type && input.joy.index == index;
 }
 
 void test_settings(const std::string &dir)
@@ -189,11 +195,13 @@ void test_defaults()
 	      "without key");
 	check(is_key(Bindings::defaults(Role::UP, 1)[0], SDLK_R) && is_key(Bindings::defaults(Role::BUTTON6, 1)[0], SDLK_T) &&
 	      is_key(Bindings::defaults(Role::BUTTON4, 0)[0], SDLK_Z), "the other keys as INSTALL tells them");
-	check(Bindings::defaults(Role::STEER, 0).size() == 1 &&
+	check(Bindings::defaults(Role::STEER, 0).size() == 2 &&
 	      is_pad(Bindings::defaults(Role::STEER, 0)[0], PadInput::Type::AXIS, SDL_GAMEPAD_AXIS_LEFTX) &&
+	      is_joy(Bindings::defaults(Role::STEER, 0)[1], JoyInput::Type::AXIS, 0) &&
+	      Bindings::defaults(Role::ACCEL, 0).size() == 1 && Bindings::defaults(Role::STICK_X, 0).size() == 1 &&
 	      is_pad(Bindings::defaults(Role::ACCEL, 0)[0], PadInput::Type::AXIS, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) &&
 	      is_pad(Bindings::defaults(Role::STICK2_Y, 1)[0], PadInput::Type::AXIS, SDL_GAMEPAD_AXIS_RIGHTY),
-	      "the axes: steering on the left stick, gas on the right trigger");
+	      "the axes: steering on the left stick and the first axis of a joystick, gas on the right trigger");
 	check(is_pad(Bindings::defaults(Role::GEAR_UP, 0)[1], PadInput::Type::BUTTON, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER) &&
 	      is_pad(Bindings::defaults(Role::BUTTON7, 0)[1], PadInput::Type::AXIS, SDL_GAMEPAD_AXIS_LEFT_TRIGGER) &&
 	      is_pad(Bindings::defaults(Role::STICK_UP, 0)[1], PadInput::Type::AXIS_NEGATIVE, SDL_GAMEPAD_AXIS_LEFTY),
@@ -265,8 +273,8 @@ void test_analog_lines()
 	      "<id>_left: a key and a button");
 	check(mine.toward(0, true).size() == 1 && is_key(mine.toward(0, true)[0], SDLK_RIGHT),
 	      "<id>_right as it was: the whole axis of a stick is refused there");
-	check(mine.of(0).size() == 1 && is_pad(mine.of(0)[0], PadInput::Type::AXIS, SDL_GAMEPAD_AXIS_LEFTX),
-	      "the axis of the wheel kept");
+	check(mine.of(0).size() == 2 && is_pad(mine.of(0)[0], PadInput::Type::AXIS, SDL_GAMEPAD_AXIS_LEFTX) &&
+	      is_joy(mine.of(0)[1], JoyInput::Type::AXIS, 0), "the axes of the wheel kept");
 	check(mine.of(1).size() == 1 && is_pad(mine.of(1)[0], PadInput::Type::AXIS, SDL_GAMEPAD_AXIS_LEFT_TRIGGER) &&
 	      mine.toward(1, true).size() == 2 && is_key(mine.toward(1, true)[0], SDLK_SPACE) &&
 	      is_pad(mine.toward(1, true)[1], PadInput::Type::BUTTON, SDL_GAMEPAD_BUTTON_SOUTH),
@@ -474,7 +482,9 @@ void test_text()
 {
 	for (const char *text : { "key:Left Ctrl", "key:Z", "key:F2", "key:Return", "pad:a", "pad:start", "pad:-lefty",
 	                          "pad:+rightx", "pad:lefty:invert", "pad:righttrigger", "pad:leftshoulder",
-	                          "mouse:left", "mouse:middle", "mouse:right", "mouse:x", "mouse:y", "mouse:off" }) {
+	                          "mouse:left", "mouse:middle", "mouse:right", "mouse:x", "mouse:y", "mouse:off",
+	                          "joy:button0", "joy:button24", "joy:axis0", "joy:axis2:invert", "joy:-axis1", "joy:+axis3",
+	                          "joy:hat0_up", "joy:hat1_right", "joy:hat0_down", "joy:hat0_left" }) {
 		const auto input = HostInput::parse(text);
 
 		check(input && input->text() == text && HostInput::parse(input->text()) == input, text);
@@ -561,6 +571,56 @@ void test_lines_to_write()
 	check(line.key == "test" && line.value == "key:F2", "TEST changed");
 }
 
+/* The inputs of a joystick by their numbers, as EmulationStation gives
+ * them; a pedal line takes a whole axis and buttons */
+void test_joystick()
+{
+	const auto gas = HostInput::parse("joy:axis2:invert");
+
+	check(gas && is_joy(*gas, JoyInput::Type::AXIS, 2) && gas->joy.inverted && gas->is_axis() && !gas->joy.is_digital(),
+	      "joy:axis2:invert: a whole axis turned over, an axis of a channel");
+	check(HostInput::parse("joy:button12") && is_joy(*HostInput::parse("joy:button12"), JoyInput::Type::BUTTON, 12) &&
+	      HostInput::parse("joy:button12")->joy.is_digital() && !HostInput::parse("joy:button12")->is_axis(),
+	      "joy:button12: a button, pressed or not");
+	check(is_joy(*HostInput::parse("joy:-axis1"), JoyInput::Type::AXIS_NEGATIVE, 1) &&
+	      is_joy(*HostInput::parse("joy:+axis1"), JoyInput::Type::AXIS_POSITIVE, 1) &&
+	      HostInput::parse("joy:-axis1")->joy.is_digital(), "half an axis, either way: pressed or not");
+	check(HostInput::parse("joy:hat0_left") && HostInput::parse("joy:hat0_left")->joy.way == SDL_HAT_LEFT &&
+	      HostInput::parse("joy:hat2_down")->joy.index == 2, "a way of a hat");
+	for (const char *wrong : { "joy:", "joy:button", "joy:button256", "joy:button01", "joy:button-1", "joy:button1x",
+	                           "joy:axis", "joy:axis1:inverted", "joy:-axis1:invert", "joy:axisx", "joy:hat0",
+	                           "joy:hat0_middle", "joy:hat_up", "joy:a0", "joy:b4", "joy:+button1" })
+		check(!HostInput::parse(wrong), wrong);
+
+	Settings settings;
+	GameControl pedal = control("gas", GameControl::Type::ANALOG, Role::ACCEL, 0);
+
+	pedal.low = GameControl::Low::RELEASED;
+
+	const std::vector<GameControl> panel = { pedal, control("view", GameControl::Type::BUTTON, Role::BUTTON4, 0),
+	                                         control("wheel", GameControl::Type::ANALOG, Role::STEER, 0) };
+
+	settings.parse("[controls.sgnascar]\n"
+	               "gas = joy:axis2:invert, joy:button7\n"
+	               "view = joy:button3, joy:hat0_up\n"
+	               "wheel = joy:axis0, pad:leftx\n", "test");
+	const Bindings mine(panel, settings, "sgnascar");
+
+	check(mine.of(0).size() == 1 && is_joy(mine.of(0)[0], JoyInput::Type::AXIS, 2) && mine.toward(0, true).size() == 1 &&
+	      is_joy(mine.toward(0, true)[0], JoyInput::Type::BUTTON, 7), "a pedal: the axis, and the button that presses it");
+	check(mine.line(0, 0, mine.of(0)).value == "joy:axis2:invert, joy:button7", "and written back on its line");
+	check(mine.of(1).size() == 2 && is_joy(mine.of(1)[1], JoyInput::Type::HAT, 0), "a button: a button and a hat");
+	check(mine.of(2).size() == 2 && mine.line(2, 0, mine.of(2)).value == "joy:axis0, pad:leftx",
+	      "the wheel in its own order, not the defaults");
+
+	settings = Settings();
+	settings.parse("[controls.sgnascar]\nview = joy:axis2\nwheel = joy:button1\n", "test");
+	const Bindings wrong(panel, settings, "sgnascar");
+
+	check(wrong.of(1) == Bindings(panel, Settings(), "sgnascar").of(1) && wrong.of(2).size() == 2,
+	      "a whole axis on a button, a button on an axis: refused");
+}
+
 int main(int argc, char **argv)
 {
 	const std::string dir = (argc > 1) ? argv[1] : std::filesystem::temp_directory_path().string();
@@ -576,6 +636,7 @@ int main(int argc, char **argv)
 	test_own_pad();
 	test_text();
 	test_lines_to_write();
+	test_joystick();
 
 	std::printf("\n%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures ? 1 : 0;

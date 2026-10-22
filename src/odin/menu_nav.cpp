@@ -62,7 +62,7 @@ parsed(std::string_view text)
 		const size_t comma = text.find(',');
 		const auto input = HostInput::parse(trimmed(text.substr(0, comma)));
 
-		if (!input || input->kind == HostInput::Kind::MOUSE ||
+		if (!input || input->kind == HostInput::Kind::MOUSE || input->kind == HostInput::Kind::JOY ||
 		    (input->kind == HostInput::Kind::PAD && (!input->pad.is_digital() || input->pad.with >= 0)))
 			return std::nullopt;
 		out.push_back(*input);

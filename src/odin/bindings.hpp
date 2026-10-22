@@ -67,35 +67,63 @@ struct MouseInput {
 	bool is_axis() const { return type == Type::X || type == Type::Y; }
 };
 
+/* An input of a joystick that is no gamepad (a wheel, its pedals, its
+ * shifter, a flight stick), by its numbers in SDL's joystick API, those
+ * EmulationStation gives it on Batocera: "button12"; an axis whole,
+ * "axis0", or turned over, "axis2:invert" (a pedal at rest at the top of
+ * its axis); half an axis, "-axis1", "+axis1"; a way of a hat, "hat0_up",
+ * "_down", "_left", "_right". */
+struct JoyInput {
+	enum class Type { BUTTON, AXIS, AXIS_NEGATIVE, AXIS_POSITIVE, HAT };
+
+	Type type;
+	uint8_t index;
+	bool inverted = false;	/* a whole axis, turned over */
+	uint8_t way = 0;	/* of a hat: SDL_HAT_UP, _RIGHT, _DOWN or _LEFT */
+
+	/* A button, half an axis or a way of a hat: pressed or not */
+	bool is_digital() const { return type != Type::AXIS; }
+};
+
 /* What the host gives: a key, by the name SDL gives it ("Left Ctrl",
- * "Z", "F2"), an input of the gamepad of the player, or of the mouse. */
+ * "Z", "F2"), an input of the gamepad of the player, of their joystick, or
+ * of the mouse. */
 struct HostInput {
-	enum class Kind { KEY, PAD, MOUSE };
+	enum class Kind { KEY, PAD, MOUSE, JOY };
 
 	Kind kind;
 	SDL_Keycode key;
 	PadInput pad;
 	MouseInput mouse;
+	JoyInput joy;
 
 	/* "key:Left Ctrl", "pad:a", "pad:-lefty", "pad:lefty:invert",
-	 * "pad:guide+leftstick", "mouse:left", "mouse:x"; nothing for what is
-	 * not one */
+	 * "pad:guide+leftstick", "mouse:left", "mouse:x", "joy:axis0",
+	 * "joy:button4"; nothing for what is not one */
 	static std::optional<HostInput> parse(std::string_view text);
 	/* And back: what parse reads; a list with ", " between */
 	std::string text() const;
 	static std::string text(const std::vector<HostInput> &inputs);
 	bool operator==(const HostInput &other) const { return text() == other.text(); }
-	/* The axis of a pad or where the mouse points: a channel */
+	/* The axis of a pad or of a joystick, or where the mouse points: a
+	 * channel */
 	bool is_axis() const
 	{
-		return kind == Kind::PAD ? pad.type == PadInput::Type::AXIS : kind == Kind::MOUSE && mouse.is_axis();
+		switch (kind) {
+		case Kind::PAD: return pad.type == PadInput::Type::AXIS;
+		case Kind::JOY: return joy.type == JoyInput::Type::AXIS;
+		case Kind::MOUSE: return mouse.is_axis();
+		case Kind::KEY: break;
+		}
+		return false;
 	}
 };
 
 /* The inputs that work each control of a panel (any one of them) and each
  * control of the cabinet: the defaults of their roles (the keys as INSTALL
- * tells them and the gamepad of the player, or the keys and the inputs of
- * the gamepad the list of games gives a button), then the lines of
+ * tells them, the gamepad of the player and the first axis of their
+ * joystick for the wheel, or the keys and the inputs of the gamepad the
+ * list of games gives a button), then the lines of
  * [controls.<game>] in the settings, "<id> = key:Left Ctrl, pad:a" (a lever
  * has "<id>_down" and "<id>_up"; an analog control the axes of a pad, and
  * what moves it one way or the other on the halves of its way, "<id>_left"

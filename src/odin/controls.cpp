@@ -47,12 +47,16 @@ Controls::Controls(Keyboard &keys, const std::vector<GameControl> &controls, con
 			m_wanted[key[1] - '1'] = value.substr(0, value.find(' '));
 		} else if (key == "gun1" || key == "gun2") {
 			m_guns[key[3] - '1'] = value.substr(0, value.find(' '));
+		} else if (key == "joy1" || key == "joy2") {
+			m_joys_wanted[key[3] - '1'] = value.substr(0, value.find(' '));
 		} else if (key != "vibration" || (value != "on" && value != "off")) {	/* vibration: main.cpp, menu_session.cpp */
 			std::fprintf(stderr, "ERROR: settings: [players.%s]: not right: %s = %s\n", game.c_str(), key.c_str(),
 			             value.c_str());
 		}
 	}
-	/* The pads already there come as added events. */
+	/* The pads and joysticks already there come as added events; the
+	 * environment may still turn SDL's driver of the Logitech wheels on */
+	SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_LG4FF, "0");
 	if (!SDL_InitSubSystem(SDL_INIT_GAMEPAD)) {
 		std::fprintf(stderr, "ERROR: no gamepads: %s\n", SDL_GetError());
 		return;
@@ -74,6 +78,8 @@ Controls::~Controls()
 		return;
 	for (Pad &pad : m_pads)
 		SDL_CloseGamepad(pad.handle);
+	for (Joy &joy : m_joys)
+		SDL_CloseJoystick(joy.handle);
 	SDL_QuitSubSystem(SDL_INIT_GAMEPAD);
 }
 
@@ -101,15 +107,44 @@ Controls::seat(unsigned player) const
 	return nullptr;
 }
 
+Controls::Joy *
+Controls::find_joystick(SDL_JoystickID id)
+{
+	for (Joy &joy : m_joys)
+		if (id && joy.id == id)
+			return &joy;
+	return nullptr;
+}
+
+const Controls::Joy *
+Controls::joystick(unsigned player) const
+{
+	for (const Joy &joy : m_joys)
+		if (m_joy_seats[player & 1] && joy.id == m_joy_seats[player & 1])
+			return &joy;
+	return nullptr;
+}
+
 void
 Controls::reseat()
 {
-	std::vector<OpenPad> pads;
+	std::vector<OpenPad> pads, joys;
 
 	for (const Pad &pad : m_pads)
 		pads.push_back({ pad.id, pad.guid });
+	for (const Joy &joy : m_joys)
+		joys.push_back({ joy.id, joy.guid });
 
 	const std::array<SDL_JoystickID, 2> seats = seat_pads(pads, m_wanted, m_seats);
+	const std::array<SDL_JoystickID, 2> joy_seats = seat_pads(joys, m_joys_wanted, m_joy_seats);
+
+	for (unsigned player = 0; player < 2; player++) {
+		if (joy_seats[player] == m_joy_seats[player])
+			continue;
+		m_joy_seats[player] = joy_seats[player];
+		if (const Joy *const now = joystick(player))
+			std::printf("joystick: '%s' for player %u\n", SDL_GetJoystickName(now->handle), player + 1);
+	}
 
 	for (unsigned player = 0; player < 2; player++) {
 		if (seats[player] == m_seats[player])
@@ -146,6 +181,28 @@ void
 Controls::want(unsigned player, const std::string &guid)
 {
 	m_wanted[player & 1] = guid;
+	reseat();
+}
+
+std::vector<Controls::Plugged>
+Controls::joysticks() const
+{
+	std::vector<Plugged> out;
+
+	for (const Joy &joy : m_joys) {
+		const char *const name = SDL_GetJoystickName(joy.handle);
+
+		out.push_back({ name ? name : "", joy.guid, static_cast<int>(SDL_GetJoystickType(joy.handle)), joy.id,
+		                joy.id == m_joy_seats[0] ? 0 : joy.id == m_joy_seats[1] ? 1 : -1,
+		                SDL_GetJoystickConnectionState(joy.handle) });
+	}
+	return out;
+}
+
+void
+Controls::want_joystick(unsigned player, const std::string &guid)
+{
+	m_joys_wanted[player & 1] = guid;
 	reseat();
 }
 
@@ -193,6 +250,68 @@ Controls::close(SDL_JoystickID id)
 	std::printf("pad: '%s' unplugged\n", SDL_GetGamepadName(pad->handle));
 	SDL_CloseGamepad(pad->handle);
 	m_pads.erase(m_pads.begin() + (pad - m_pads.data()));
+	reseat();
+}
+
+/* Its axes where SDL has them, from the value it read when it opened it
+ * (evdev); an axis with none waits for its first move, at rest until
+ * then */
+void
+Controls::open_joystick(SDL_JoystickID id)
+{
+	if (SDL_IsGamepad(id) || find_joystick(id))
+		return;
+
+	SDL_Joystick *const handle = SDL_OpenJoystick(id);
+
+	if (!handle) {
+		std::fprintf(stderr, "ERROR: joystick %u: %s\n", static_cast<unsigned>(id), SDL_GetError());
+		return;
+	}
+
+	Joy joy;
+	char guid[33];
+	const int axes = std::max(SDL_GetNumJoystickAxes(handle), 0);
+	const int buttons = std::max(SDL_GetNumJoystickButtons(handle), 0);
+	const int hats = std::max(SDL_GetNumJoystickHats(handle), 0);
+
+	SDL_GUIDToString(SDL_GetJoystickGUIDForID(id), guid, sizeof(guid));
+	joy.handle = handle;
+	joy.id = id;
+	joy.guid = guid;
+	joy.state.axes.assign(static_cast<size_t>(axes), 0);
+	joy.state.known.assign(static_cast<size_t>(axes), false);
+	for (int axis = 0; axis < axes; axis++) {
+		Sint16 first = 0;
+
+		if (SDL_GetJoystickAxisInitialState(handle, axis, &first)) {
+			joy.state.axes[static_cast<size_t>(axis)] = SDL_GetJoystickAxis(handle, axis);
+			joy.state.known[static_cast<size_t>(axis)] = true;
+		}
+	}
+	for (int button = 0; button < buttons; button++)
+		joy.state.buttons.push_back(SDL_GetJoystickButton(handle, button));
+	for (int hat = 0; hat < hats; hat++)
+		joy.hats.push_back(SDL_GetJoystickHat(handle, hat));
+	joy.state.hats = joy.hats;
+	joy.fresh.assign(static_cast<size_t>(buttons), false);
+	joy.release.assign(static_cast<size_t>(buttons), false);
+	m_joys.push_back(std::move(joy));
+	std::printf("joystick: '%s' plugged, %d axes, %d buttons, %d hats\n", SDL_GetJoystickName(handle), axes, buttons,
+	            hats);
+	reseat();
+}
+
+void
+Controls::close_joystick(SDL_JoystickID id)
+{
+	Joy *const joy = find_joystick(id);
+
+	if (!joy)
+		return;
+	std::printf("joystick: '%s' unplugged\n", SDL_GetJoystickName(joy->handle));
+	SDL_CloseJoystick(joy->handle);
+	m_joys.erase(m_joys.begin() + (joy - m_joys.data()));
 	reseat();
 }
 
@@ -255,6 +374,36 @@ Controls::event(const SDL_Event &event)
 	case SDL_EVENT_WINDOW_MOUSE_LEAVE:
 		m_mouse.off = true;
 		return false;
+	case SDL_EVENT_JOYSTICK_ADDED:
+		open_joystick(event.jdevice.which);
+		return true;
+	case SDL_EVENT_JOYSTICK_REMOVED:
+		close_joystick(event.jdevice.which);
+		return true;
+	case SDL_EVENT_JOYSTICK_AXIS_MOTION:
+		if (Joy *const joy = find_joystick(event.jaxis.which); joy && event.jaxis.axis < joy->state.axes.size()) {
+			joy->state.axes[event.jaxis.axis] = event.jaxis.value;
+			joy->state.known[event.jaxis.axis] = true;
+		}
+		return true;
+	case SDL_EVENT_JOYSTICK_BUTTON_DOWN:
+	case SDL_EVENT_JOYSTICK_BUTTON_UP:
+		if (Joy *const joy = find_joystick(event.jbutton.which); joy && event.jbutton.button < joy->fresh.size()) {
+			const size_t b = event.jbutton.button;
+			bool held = joy->state.buttons[b], fresh = joy->fresh[b], release = joy->release[b];
+
+			press(held, fresh, release, event.jbutton.down);
+			joy->state.buttons[b] = held;
+			joy->fresh[b] = fresh;
+			joy->release[b] = release;
+		}
+		return true;
+	case SDL_EVENT_JOYSTICK_HAT_MOTION:
+		if (Joy *const joy = find_joystick(event.jhat.which); joy && event.jhat.hat < joy->hats.size()) {
+			joy->hats[event.jhat.hat] = event.jhat.value;
+			joy->state.hats[event.jhat.hat] |= event.jhat.value;
+		}
+		return true;
 	case SDL_EVENT_GAMEPAD_ADDED:
 		open(event.gdevice.which);
 		return true;
@@ -358,8 +507,10 @@ Controls::host() const
 	HostState host;
 
 	host.keys = &m_keys.held();
-	for (unsigned player = 0; player < 2; player++)
+	for (unsigned player = 0; player < 2; player++) {
 		host.pads[player] = seat(player) ? &seat(player)->state : nullptr;
+		host.joys[player] = joystick(player) ? &joystick(player)->state : nullptr;
+	}
 	host.mice[0] = m_gun_seen[0] ? &m_gun_aims[0] : m_mouse_seen ? &m_mouse : nullptr;
 	host.mice[1] = m_gun_seen[1] ? &m_gun_aims[1] : nullptr;
 	return host;
@@ -464,6 +615,14 @@ Controls::settle()
 				pad.state.buttons[button] = pad.state.shortcut[button] = false;
 		pad.fresh = {};
 		pad.release = {};
+	}
+	for (Joy &joy : m_joys) {
+		for (size_t button = 0; button < joy.release.size(); button++)
+			if (joy.release[button])
+				joy.state.buttons[button] = false;
+		joy.fresh.assign(joy.fresh.size(), false);
+		joy.release.assign(joy.release.size(), false);
+		joy.state.hats = joy.hats;
 	}
 	for (unsigned button = 0; button < 3; button++)
 		if (m_mouse_release[button])

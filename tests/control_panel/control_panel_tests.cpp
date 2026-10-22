@@ -40,6 +40,7 @@ namespace {
 using odin::ControlPanel;
 using odin::GameControl;
 using odin::HostState;
+using odin::JoyState;
 using odin::JvsSwitch;
 using odin::MieBoard;
 using odin::MouseState;
@@ -739,6 +740,103 @@ void test_now()
 	check(panel.now(host, gear).position == 1 && panel.now(host, gear).on, "after the update: on 1, worked");
 }
 
+/* A wheel read as a joystick, its pedals at the top of their axes at
+ * rest (a G29 on Linux: wheel 0, clutch 1, gas 2, brake 3, 25 buttons, a
+ * hat): steers on its first axis by default; its gas and its buttons as
+ * the settings give them */
+void test_joystick()
+{
+	Settings settings;
+
+	settings.parse("[controls.sgnascar]\n"
+	               "gas = joy:axis2:invert\n"
+	               "view = joy:button3, joy:hat0_up\n"
+	               "gear_up = joy:button4\n"
+	               "fog = joy:+axis1\n", "test");
+
+	ControlPanel panel(cabinet(), settings, "sgnascar");
+	const auto index = [&panel](const char *id) {
+		for (size_t c = 0; c < panel.controls().size(); c++)
+			if (panel.controls()[c].id == id)
+				return c;
+		return panel.controls().size();
+	};
+	const std::vector<SDL_Keycode> none;
+	JoyState wheel;
+	HostState host;
+	MieBoard::Inputs inputs = {};
+	const auto update = [&] {
+		panel.update(host);
+		panel.fill(inputs);
+	};
+
+	wheel.axes = { -335, 32767, 32767, 32767 };
+	wheel.known = { true, true, true, true };
+	wheel.buttons.assign(25, false);
+	wheel.hats = { 0 };
+	host.keys = &none;
+	host.joys[0] = &wheel;
+	update();
+	check(inputs.jvs_analog[0] == 0x8000 && inputs.jvs_analog[1] == 0x0000,
+	      "at rest, off its centre: the wheel and the gas take nothing before they move");
+	wheel.axes[0] = -16384;
+	wheel.axes[2] = -1;
+	update();
+	check(inputs.jvs_analog[0] == 0x4000, "the wheel half way left: its channel half way down");
+	check(inputs.jvs_analog[1] == 0x8000, "the gas half way down, turned over: half its channel");
+	check(panel.touched(host, index("gas")) && panel.touched(host, index("wheel")), "both worked, from half their way");
+	check(std::abs(panel.now(host, index("gas")).value - 0.5f) < 0.001f &&
+	      std::abs(panel.now(host, index("wheel")).value + 0.5f) < 0.001f, "and drawn there");
+	wheel.axes[2] = -32768;
+	update();
+	check(inputs.jvs_analog[1] == 0xFFFF && panel.now(host, index("gas")).value == 1.0f, "the gas all the way down");
+	wheel.axes[2] = 32767;
+	update();
+	check(inputs.jvs_analog[1] == 0x0000 && !panel.touched(host, index("gas")), "let go: back to its very rest");
+
+	wheel.buttons[3] = true;
+	update();
+	check(inputs.jvs_player[0] & 0x1000, "button 3: VIEW");
+	wheel.buttons[3] = false;
+	wheel.hats[0] = SDL_HAT_UP | SDL_HAT_LEFT;
+	update();
+	check(inputs.jvs_player[0] & 0x1000, "the hat up, and left with it: VIEW");
+	wheel.hats[0] = 0;
+	wheel.buttons[4] = true;
+	update();
+	check(panel.now(host, index("gear")).position == 1, "button 4: a gear up");
+	check(!(inputs.jvs_player[1] & 0x0080), "a control of player 2: not by the joystick of player 1");
+
+	JoyState other = wheel;
+
+	other.axes[1] = 20000;
+	host.joys = { nullptr, &other };
+	update();
+	check(inputs.jvs_player[1] & 0x0080, "half an axis of the joystick of player 2: FOG");
+	other.axes[1] = 10000;
+	update();
+	check(!(inputs.jvs_player[1] & 0x0080), "less than half: not pressed");
+
+	ControlPanel unknown(cabinet(), Settings(), "sgnascar");
+	JoyState still;
+
+	still.axes = { -20000 };
+	still.known = { false };
+	host.joys = { &still, nullptr };
+	unknown.update(host);
+	unknown.fill(inputs);
+	check(inputs.jvs_analog[0] == 0x8000, "an axis SDL has no value of yet: nothing");
+	still.known = { true };
+	still.axes = { -20000 };
+	unknown.update(host);
+	unknown.fill(inputs);
+	check(inputs.jvs_analog[0] == 0x8000, "its first value, far from the centre: still nothing");
+	still.axes = { -8000 };
+	unknown.update(host);
+	unknown.fill(inputs);
+	check(inputs.jvs_analog[0] == 0x8000 - 8000, "its first value, then a move: the wheel");
+}
+
 int main()
 {
 	test_standard_panel();
@@ -756,6 +854,7 @@ int main()
 	test_tuning();
 	test_touched();
 	test_now();
+	test_joystick();
 
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures ? 1 : 0;

@@ -19,6 +19,8 @@
 #include "odin/bindings.hpp"
 
 #include <algorithm>
+#include <cctype>
+#include <charconv>
 #include <cstdio>
 #include <initializer_list>
 #include <iterator>
@@ -113,6 +115,15 @@ const std::pair<Role, const char *> MOUSE_DEFAULTS[] = {
 	{ Role::BUTTON1, "left" }, { Role::BUTTON2, "right" }, { Role::START, "middle" },
 };
 
+/* A joystick that is no gamepad: its first axis steers. It is that of
+ * the wheel on every wheel of the mapping of EmulationStation (Batocera's
+ * es_input.cfg: "joystick1left" on axis 0 for all 29), whose pedals and
+ * buttons change from one wheel to another: the user takes those on the
+ * page Input, Batocera from its mapping. */
+const std::pair<Role, const char *> JOY_DEFAULTS[] = {
+	{ Role::STEER, "axis0" },
+};
+
 /* What a line takes: what is pressed or not (a key, a button, half a
  * stick, a trigger), the whole axis of a pad, or both (a pedal) */
 enum class Takes { PRESSED, AXIS, BOTH };
@@ -127,8 +138,9 @@ parse_list(std::string_view value, Takes takes)
 	while (!trimmed(value).empty()) {
 		const size_t comma = value.find(',');
 		const auto input = HostInput::parse(trimmed(value.substr(0, comma)));
-		const bool pressed = input && (input->kind == HostInput::Kind::PAD ? input->pad.is_digital()
-		                                                                    : !input->is_axis());
+		const bool pressed = input && (input->kind == HostInput::Kind::PAD ? input->pad.is_digital() :
+		                               input->kind == HostInput::Kind::JOY ? input->joy.is_digital() :
+		                                                                     !input->is_axis());
 
 		if (!input || (takes == Takes::PRESSED && !pressed) || (takes == Takes::AXIS && !input->is_axis()))
 			return std::nullopt;
@@ -151,8 +163,8 @@ cabinet_index(Role role)
 }
 
 /* The inputs of a button: the keys, then the inputs of the gamepad, of its
- * role or those the list of games gives it in their place; a name that is
- * not one is said on stderr */
+ * role or those the list of games gives it in their place, then those of
+ * the joystick of its role; a name that is not one is said on stderr */
 std::vector<HostInput>
 own_inputs(const std::vector<HostInput> &of_role, const GameControl &control, const std::string &game)
 {
@@ -175,6 +187,8 @@ own_inputs(const std::vector<HostInput> &of_role, const GameControl &control, co
 				             kind == Kind::KEY ? "key" : "button of a gamepad", name.c_str());
 		}
 	}
+	std::copy_if(of_role.begin(), of_role.end(), std::back_inserter(out),
+	             [](const HostInput &input) { return input.kind == Kind::JOY; });
 	return out;
 }
 
@@ -183,6 +197,87 @@ bool
 is_pedal(const GameControl &control)
 {
 	return control.type == GameControl::Type::ANALOG && !GameControl::half(control.low, false);
+}
+
+constexpr std::pair<std::string_view, uint8_t> HAT_WAYS[] = {
+	{ "_up", SDL_HAT_UP }, { "_right", SDL_HAT_RIGHT }, { "_down", SDL_HAT_DOWN }, { "_left", SDL_HAT_LEFT },
+};
+
+/* A number of an input of a joystick, 0 to 255, alone at the start of
+ * the text: what follows it, nothing when there is no number */
+std::optional<std::string_view>
+joy_number(std::string_view text, uint8_t &number)
+{
+	const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), number);
+
+	if (error != std::errc() || end == text.data() || (text.size() > 1 && text.front() == '0' &&
+	                                                    std::isdigit(static_cast<unsigned char>(text[1]))))
+		return std::nullopt;
+	return text.substr(static_cast<size_t>(end - text.data()));
+}
+
+/* "button12", "axis0", "axis2:invert", "-axis1", "+axis1", "hat0_up" */
+std::optional<HostInput>
+parse_joy(std::string_view text)
+{
+	HostInput out{};
+	JoyInput &joy = out.joy;
+
+	out.kind = HostInput::Kind::JOY;
+	if (text.substr(0, 6) == "button") {
+		joy.type = JoyInput::Type::BUTTON;
+		if (joy_number(text.substr(6), joy.index) != std::string_view())
+			return std::nullopt;
+		return out;
+	}
+	if (text.substr(0, 3) == "hat") {
+		const auto way = joy_number(text.substr(3), joy.index);
+
+		joy.type = JoyInput::Type::HAT;
+		for (const auto &[name, bit] : HAT_WAYS)
+			if (way == name)
+				joy.way = bit;
+		if (!joy.way)
+			return std::nullopt;
+		return out;
+	}
+	joy.type = JoyInput::Type::AXIS;
+	if (!text.empty() && (text.front() == '-' || text.front() == '+')) {
+		joy.type = text.front() == '-' ? JoyInput::Type::AXIS_NEGATIVE : JoyInput::Type::AXIS_POSITIVE;
+		text.remove_prefix(1);
+	}
+	if (text.substr(0, 4) != "axis")
+		return std::nullopt;
+
+	const auto rest = joy_number(text.substr(4), joy.index);
+
+	joy.inverted = rest == ":invert";
+	if (!rest || (!rest->empty() && (!joy.inverted || joy.type != JoyInput::Type::AXIS)))
+		return std::nullopt;
+	return out;
+}
+
+std::string
+joy_text(const JoyInput &joy)
+{
+	const std::string index = std::to_string(joy.index);
+
+	switch (joy.type) {
+	case JoyInput::Type::BUTTON:
+		return "button" + index;
+	case JoyInput::Type::HAT:
+		for (const auto &[name, bit] : HAT_WAYS)
+			if (joy.way == bit)
+				return "hat" + index + std::string(name);
+		return "hat" + index;
+	case JoyInput::Type::AXIS_NEGATIVE:
+		return "-axis" + index;
+	case JoyInput::Type::AXIS_POSITIVE:
+		return "+axis" + index;
+	case JoyInput::Type::AXIS:
+		break;
+	}
+	return "axis" + index + (joy.inverted ? ":invert" : "");
 }
 
 } /* namespace */
@@ -222,6 +317,8 @@ HostInput::parse(std::string_view text)
 			}
 		return std::nullopt;
 	}
+	if (text.substr(0, 4) == "joy:")
+		return parse_joy(text.substr(4));
 	if (text.substr(0, 4) != "pad:")
 		return std::nullopt;
 	text.remove_prefix(4);
@@ -286,6 +383,8 @@ HostInput::text() const
 		                                mouse.type == MouseInput::Type::Y   ? "y" :
 		                                mouse.type == MouseInput::Type::OFF ? "off" :
 		                                                                      BUTTONS[mouse.button % 3]);
+	case Kind::JOY:
+		return "joy:" + joy_text(joy);
 	case Kind::PAD:
 		break;
 	}
@@ -332,6 +431,9 @@ Bindings::defaults(Role role, unsigned player)
 		if (const auto input = entry.pad ? HostInput::parse(std::string("pad:") + entry.pad) : std::nullopt)
 			out.push_back(*input);
 	}
+	for (const auto &[of, name] : JOY_DEFAULTS)
+		if (of == role)
+			out.push_back(*HostInput::parse(std::string("joy:") + name));
 	return out;
 }
 

@@ -159,6 +159,11 @@ library(const Options &command, const GameList &games, Settings &settings, const
 			std::optional<Hotkeys::Action> action;
 			const Hotkeys &hotkeys = menus.hotkeys();
 
+			/* The joysticks plugged in and out, for the page Input */
+			if (event.type == SDL_EVENT_JOYSTICK_ADDED || event.type == SDL_EVENT_JOYSTICK_REMOVED) {
+				controls.event(event);
+				continue;
+			}
 			if (event.type == SDL_EVENT_GAMEPAD_ADDED || event.type == SDL_EVENT_GAMEPAD_REMOVED ||
 			    event.type == SDL_EVENT_GAMEPAD_AXIS_MOTION || event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN ||
 			    event.type == SDL_EVENT_GAMEPAD_BUTTON_UP) {

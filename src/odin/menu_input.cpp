@@ -180,6 +180,24 @@ pad_label(const PadInput &pad, int kind)
 	return pad.inverted ? out + " (inverted)" : out;
 }
 
+/* "Axis 2 (inverted)", "Axis 1 −", "Button 4", "Hat 0 ↑" */
+std::string
+joy_label(const JoyInput &joy)
+{
+	const std::string index = std::to_string(joy.index);
+
+	switch (joy.type) {
+	case JoyInput::Type::BUTTON: return "Button " + index;
+	case JoyInput::Type::AXIS_NEGATIVE: return "Axis " + index + " −";
+	case JoyInput::Type::AXIS_POSITIVE: return "Axis " + index + " +";
+	case JoyInput::Type::HAT:
+		return "Hat " + index + (joy.way == SDL_HAT_UP ? " ↑" : joy.way == SDL_HAT_DOWN ? " ↓" :
+		                         joy.way == SDL_HAT_LEFT ? " ←" : " →");
+	case JoyInput::Type::AXIS: break;
+	}
+	return "Axis " + index + (joy.inverted ? " (inverted)" : "");
+}
+
 std::string
 label(const HostInput &input, int kind)
 {
@@ -202,6 +220,8 @@ label(const HostInput &input, int kind)
 			return pad_label(with, kind) + " + " + pad_label(input.pad, kind);
 		}
 		return pad_label(input.pad, kind);
+	case HostInput::Kind::JOY:
+		return joy_label(input.joy);
 	case HostInput::Kind::MOUSE:
 		break;
 	}
@@ -253,7 +273,9 @@ input_rows(const MenuState &state)
 	std::vector<InputRow> rows;
 	std::optional<InputRow> service;
 	const auto add = [&](std::string name, MenuSlot slot, std::vector<HostInput> inputs, bool lit, bool catchable) {
-		std::erase_if(inputs, [pad](const HostInput &in) { return (in.kind == HostInput::Kind::PAD) != pad; });
+		std::erase_if(inputs, [pad](const HostInput &in) {
+			return in.kind == HostInput::Kind::JOY || (in.kind == HostInput::Kind::PAD) != pad;
+		});
 		rows.push_back({ std::move(name), slot, std::move(inputs), lit, catchable });
 	};
 	/* After the controls in `touched`: COIN1, COIN2, TEST */

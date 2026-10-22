@@ -194,6 +194,28 @@ keeps the mouse. On Linux the guns chosen stop moving the pointer of the
 desktop while the game runs, and move it again in the menu.
 ODIN_CONTROLLERS=none leaves them out too.
 
+A wheel, its pedals or another joystick that is no gamepad (a flight
+stick): one for each player, in the order they are plugged in, or the one
+of "joy1 = <GUID> <name>" (joy2: player 2) in [players.<game>]. Odin's log
+names each one ("joystick: '<name>' plugged, 4 axes, 25 buttons, 1
+hats"). It is read all of its way, without a dead zone, by the numbers
+SDL gives its inputs, those EmulationStation gives them on Batocera:
+joy:axis0 an axis (the first one steers by default: that of a wheel),
+joy:axis2:invert an axis turned over (a pedal at rest at the top of its
+axis), joy:-axis1 and joy:+axis1 its halves, joy:button4 a button,
+joy:hat0_up a way of a hat. The pedals and the buttons change from one
+wheel to another; for a Logitech G29 on Linux:
+
+ [controls.sgnascar]
+ gas_pedal = key:Up, pad:righttrigger, joy:axis2:invert
+ brake_pedal = key:Down, pad:lefttrigger, joy:axis3:invert
+ gear_up = key:C, pad:rightshoulder, joy:button4
+ gear_down = key:X, pad:leftshoulder, joy:button5
+
+The wheel stays with the driver of the system: SDL's own driver of the
+Logitech wheels, which would turn their centring spring off, is off
+unless SDL_JOYSTICK_HIDAPI_LG4FF=1 is in the environment.
+
 Gamepads: one for each player, in the order they are plugged in, or the
 one chosen for the game in the menu (Input). SELECT (SHARE) puts in a
 coin for the player of the pad. Guide alone opens the menu; at its foot,

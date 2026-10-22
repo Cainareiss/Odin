@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -75,12 +76,24 @@ struct MouseState {
 	std::array<bool, 3> buttons{};
 };
 
-/* What the host holds now: the keys down, the pad and the mouse of each
- * player (nullptr: none): player 1's light gun, else the mouse of the
- * system; player 2's light gun. */
+/* A joystick that is no gamepad (a wheel) as the host sees it now, all
+ * of its way and no dead zone: its axes as SDL gives them, its buttons,
+ * its hats (SDL_HAT_UP...); which axes have a value (SDL tells the first
+ * one when it opens it, else its first move) */
+struct JoyState {
+	std::vector<int16_t> axes;
+	std::vector<bool> known;
+	std::vector<bool> buttons;
+	std::vector<uint8_t> hats;
+};
+
+/* What the host holds now: the keys down, the pad, the joystick and the
+ * mouse of each player (nullptr: none): player 1's light gun, else the
+ * mouse of the system; player 2's light gun. */
 struct HostState {
 	const std::vector<SDL_Keycode> *keys = nullptr;
 	std::array<const PadState *, 2> pads{};
+	std::array<const JoyState *, 2> joys{};
 	std::array<const MouseState *, 2> mice{};
 };
 
@@ -141,8 +154,10 @@ public:
 
 	/* The channel for that value of an axis, the low values on the way the
 	 * game wants them: a stick from -32768 (left or up), a trigger from 0
-	 * (let go). */
+	 * (let go); an axis of a joystick from -32768, a pedal too (let go
+	 * there, or at 32767 turned over). */
 	static uint16_t channel(const PadInput &input, GameControl::Low low, int16_t value);
+	static uint16_t channel(const JoyInput &input, GameControl::Low low, int16_t value);
 	/* The channel of a control nothing moves: a stick or a lever centred,
 	 * a pedal let go. */
 	static uint16_t rest(GameControl::Low low);
@@ -155,6 +170,9 @@ public:
 
 private:
 	bool held(const HostState &host, const HostInput &input, unsigned player) const;
+	/* The channel an axis of the joystick of the player gives that control
+	 * (nothing: no such axis, or no value yet) */
+	static std::optional<uint16_t> joy_channel(const JoyState *joy, const JoyInput &input, GameControl::Low low);
 	bool pressed(const HostState &host, const std::vector<HostInput> &inputs, unsigned player) const;
 	uint16_t analog(const HostState &host, size_t control);
 

@@ -37,14 +37,19 @@
 namespace odin {
 
 /* The control panel of the cabinet as the host works it: the keyboard, a
- * gamepad for each player and the mouse, once it has moved on the window
+ * gamepad and a joystick that is no gamepad (a wheel) for each player and
+ * the mouse, once it has moved on the window
  * more than MOUSE_MOVED pixels from where the system first put it (the
  * system tells where it is when the window opens under it). The gamepads
  * are opened and closed as they are plugged in and out; each player has
  * the one they want for the game ([players.<game>] of the settings, "p1 =
  * <GUID> <name>": the first of that make and model), else the first free
- * one, and keeps it while others come and go (seats.hpp).
- * ODIN_CONTROLLERS=none leaves the gamepads and the mouse out. In a
+ * one, and keeps it while others come and go (seats.hpp); a joystick the
+ * same ("joy1 = <GUID> <name>"). SDL's own driver of the Logitech wheels
+ * is kept off: it would turn the centring spring of the wheel off and set
+ * its rotation as soon as it sees it (SDL 3.4, Linux); the wheel stays
+ * with the driver of the system. ODIN_CONTROLLERS=none leaves the
+ * gamepads, the joysticks and the mouse out. In a
  * game where player 1 has a sight, the pointer of the system is hidden on
  * the window. */
 class Controls : public Hikaru::Panel {
@@ -55,7 +60,8 @@ public:
 	Controls(const Controls &) = delete;
 	Controls &operator=(const Controls &) = delete;
 
-	/* An event of a gamepad or of the mouse; false for any other. */
+	/* An event of a gamepad, of a joystick or of the mouse; false for any
+	 * other. */
 	bool event(const SDL_Event &event);
 	/* The mouse aims in the game (a sight of player 1): no pointer */
 	bool aims() const { return m_cursor_hidden; }
@@ -110,6 +116,11 @@ public:
 	/* The gamepad a player wants: its GUID, empty for the first free one;
 	 * it takes its seat at once */
 	void want(unsigned player, const std::string &guid);
+	/* The joysticks plugged in that are no gamepads, in the order they
+	 * came, as the gamepads (kind: their SDL_JoystickType), and the one a
+	 * player wants */
+	std::vector<Plugged> joysticks() const;
+	void want_joystick(unsigned player, const std::string &guid);
 
 	void read_inputs(MieBoard::Inputs &inputs) override { m_panel.fill(inputs); }
 	/* The outputs of the board after a frame: the pad of a player shakes
@@ -176,14 +187,29 @@ private:
 		bool guide_alone = false;	/* Guide held, no other button since */
 	};
 
+	/* A joystick, all of its way: its buttons as those of a pad, a way of
+	 * a hat taken within a frame on until that frame has run */
+	struct Joy {
+		SDL_Joystick *handle = nullptr;
+		SDL_JoystickID id = 0;
+		std::string guid;
+		JoyState state;
+		std::vector<bool> fresh, release;
+		std::vector<uint8_t> hats;	/* as SDL gives them */
+	};
+
 	/* What a pad gives the game of its axes */
 	static void shape(Pad &pad);
 	void open(SDL_JoystickID id);
 	void close(SDL_JoystickID id);
+	void open_joystick(SDL_JoystickID id);
+	void close_joystick(SDL_JoystickID id);
 	Pad *find(SDL_JoystickID id);
 	Pad *seat(unsigned player);
 	const Pad *seat(unsigned player) const;
-	/* Each player takes the gamepad seats.hpp gives them */
+	Joy *find_joystick(SDL_JoystickID id);
+	const Joy *joystick(unsigned player) const;
+	/* Each player takes the gamepad and the joystick seats.hpp gives them */
 	void reseat();
 	HostState host() const;
 
@@ -210,6 +236,9 @@ private:
 	std::vector<Pad> m_pads;	/* plugged in, in the order they came */
 	std::array<SDL_JoystickID, 2> m_seats{};	/* that of each player, 0: none */
 	std::array<std::string, 2> m_wanted;
+	std::vector<Joy> m_joys;	/* plugged in, in the order they came */
+	std::array<SDL_JoystickID, 2> m_joy_seats{};
+	std::array<std::string, 2> m_joys_wanted;
 	/* The light gun of each player: its identity, where it aims and its
 	 * buttons, whether it has aimed */
 	Pointers *m_pointers = nullptr;

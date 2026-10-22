@@ -243,6 +243,12 @@ MenuSession::event(const SDL_Event &event)
 		break;
 	}
 	case SDL_EVENT_WINDOW_MOUSE_LEAVE:
+	case SDL_EVENT_JOYSTICK_ADDED:
+	case SDL_EVENT_JOYSTICK_REMOVED:
+	case SDL_EVENT_JOYSTICK_AXIS_MOTION:
+	case SDL_EVENT_JOYSTICK_BUTTON_DOWN:
+	case SDL_EVENT_JOYSTICK_BUTTON_UP:
+	case SDL_EVENT_JOYSTICK_HAT_MOTION:
 		m_controls.event(event);
 		break;
 	default:
