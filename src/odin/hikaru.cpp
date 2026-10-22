@@ -154,6 +154,17 @@ namespace {
 constexpr uint32_t KB = 1024;
 constexpr uint32_t MB = 1024 * 1024;
 
+/* A network board whose ring is closed on itself: its frames come back to
+ * it. HEURISTIC: 10 us on the fibre and in the board around it. */
+class NetLoop : public NetLink {
+public:
+	explicit NetLoop(NetBoard837_13404 &board) : m_board(board) {}
+	void send(const NetFrame &frame) override { m_board.receive(frame, NetBoard837_13404::CLOCK_HZ / 100000); }
+
+private:
+	NetBoard837_13404 &m_board;
+};
+
 /* The dot clock of the 31 kHz screen, which draws the 818 dots of a line.
  * HEURISTIC: the value of MAME (hikaru.cpp, 51894580 / 2), which does not
  * say where it comes from; no game sets or reads it. It gives 60.08 frames
@@ -270,6 +281,7 @@ Hikaru::Hikaru(const Game &game, const RomBoard::Config &rombd, bool verbose)
 	std::printf("%s\n", text_at(m_bootrom, 0xD4).c_str());
 
 	build_mie();
+	build_netbd();
 
 	if (const std::span<const uint8_t> image = game.section("eeprom"); !image.empty()) {
 		m_eeprom.load(image);
@@ -415,6 +427,41 @@ Hikaru::run_drive(uint32_t cycles)
 	if (clocks)
 		m_drive->run_until(m_drive->clocks() + clocks, DriveBoard::command(io_outputs(), m_game.drive_first_output),
 		                   static_cast<uint8_t>(m_wheel_seen >> 8));
+}
+
+/* The network board, as the cabinet may have one: ODIN_NETBD=loop puts
+ * one whose ring is closed on itself (a test: the games see it, as on a
+ * cabinet with its optical cable looped back). Without it, page 0E answers
+ * nothing and the games find no board. */
+void
+Hikaru::build_netbd()
+{
+	const char *const netbd = std::getenv("ODIN_NETBD");
+
+	if (!netbd || !std::strcmp(netbd, "none"))
+		return;
+	if (std::strcmp(netbd, "loop")) {
+		std::fprintf(stderr, "ERROR: ODIN_NETBD=%s unknown (none, loop): no network board\n", netbd);
+		return;
+	}
+	m_netbd = std::make_unique<NetBoard837_13404>();
+	m_netbd->reset();
+	m_netbd_link = std::make_unique<NetLoop>(*m_netbd);
+	m_netbd->set_link(m_netbd_link.get());
+	std::printf("network board: 837-13404, its ring closed on itself (ODIN_NETBD=loop)\n");
+}
+
+/* The network board as far as the SH-4 ran */
+void
+Hikaru::run_netbd(uint32_t cycles)
+{
+	m_netbd_acc += static_cast<uint64_t>(cycles) * NetBoard837_13404::CLOCK_HZ;
+
+	const uint64_t clocks = m_netbd_acc / m_clock;
+
+	m_netbd_acc -= clocks * m_clock;
+	if (clocks)
+		m_netbd->run_until(m_netbd->clocks() + clocks);
 }
 
 void
@@ -599,6 +646,10 @@ Hikaru::reset()
 	if (m_drive) {
 		m_drive->reset();
 		m_drive_acc = 0;
+	}
+	if (m_netbd) {
+		m_netbd->reset();
+		m_netbd_acc = 0;
 	}
 	m_gpu->reset();
 	reset_sound(MASTER);
@@ -833,6 +884,8 @@ Hikaru::run_cycles(int cycles)
 	update_irqs();
 	if (m_drive)
 		run_drive(static_cast<uint32_t>(ran));
+	if (m_netbd)
+		run_netbd(static_cast<uint32_t>(ran));
 	took(PART_MIE);
 
 	/* The two sound boards, unless their reset line is low */

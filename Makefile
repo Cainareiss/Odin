@@ -103,6 +103,9 @@ OBJ := \
 	src/odin/io_837_13741.o \
 	src/odin/d71054.o \
 	src/odin/drive_838_13366.o \
+	src/odin/netbd_837_13404.o \
+	src/odin/m68000.o \
+	src/odin/m68000_ops.o \
 	src/odin/tlcs90.o \
 	src/odin/card_reader.o \
 	src/odin/sound_board.o \

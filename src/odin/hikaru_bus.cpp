@@ -766,6 +766,12 @@ Hikaru::bus_read(uint32_t bus_addr, unsigned size, uint64_t &value)
 		return sound_read(MASTER, bus_addr, size, value);
 	} else if (bus_addr >= 0x0D000000 && bus_addr <= 0x0DFFFFFF) {
 		return sound_read(SLAVE, bus_addr, size, value);
+	} else if (m_netbd && bus_addr >= 0x0E000000 && bus_addr <= 0x0E03FFFF) {
+		/* The network board (netbd_837_13404.hpp) */
+		if (size == 8)
+			value = m_netbd->host_read(offs, 4) | static_cast<uint64_t>(m_netbd->host_read(offs + 4, 4)) << 32;
+		else
+			value = m_netbd->host_read(offs, size);
 	} else if (bus_addr >= 0x0E000000 && bus_addr <= 0x0E00FFFF) {
 		/* Network board: none */
 		log = true;
@@ -907,6 +913,13 @@ Hikaru::bus_write(uint32_t bus_addr, unsigned size, uint64_t value)
 		return sound_write(MASTER, bus_addr, size, value);
 	} else if (bus_addr >= 0x0D000000 && bus_addr <= 0x0DFFFFFF) {
 		return sound_write(SLAVE, bus_addr, size, value);
+	} else if (m_netbd && bus_addr >= 0x0E000000 && bus_addr <= 0x0E03FFFF) {
+		if (size == 8) {
+			m_netbd->host_write(offs, 4, static_cast<uint32_t>(value));
+			m_netbd->host_write(offs + 4, 4, static_cast<uint32_t>(value >> 32));
+		} else {
+			m_netbd->host_write(offs, size, static_cast<uint32_t>(value));
+		}
 	} else if (bus_addr >= 0x0E000000 && bus_addr <= 0x0E00FFFF) {
 		log = true;
 	} else if (bus_addr >= 0x40000000 && bus_addr <= 0x41FFFFFF) {

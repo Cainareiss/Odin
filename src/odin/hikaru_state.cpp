@@ -85,6 +85,10 @@ Hikaru::save_items(StateFile &state)
 	RomBoard::Config rombd;
 	bool ok;
 
+	if (m_netbd) {
+		std::fprintf(stderr, "ERROR: save state: the network board (ODIN_NETBD) is not in the states yet\n");
+		return false;
+	}
 	std::strncpy(name, m_game.name.c_str(), sizeof(name) - 1);
 	if (!state.put(name) || !state.put(m_frame)) {
 		std::fprintf(stderr, "ERROR: save state: cannot save header\n");
@@ -147,6 +151,10 @@ Hikaru::load_items(StateFile &state)
 	RomBoard::Config rombd;
 	bool ok;
 
+	if (m_netbd) {
+		std::fprintf(stderr, "ERROR: load state: the network board (ODIN_NETBD) is not in the states yet\n");
+		return false;
+	}
 	ok = state.get(name);
 	if (ok && std::strncmp(name, m_game.name.c_str(), sizeof(name))) {
 		std::fprintf(stderr, "ERROR: load state: made with the game '%.32s'\n", name);

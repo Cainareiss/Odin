@@ -160,6 +160,23 @@ HEURISTIC: track 1 of a new card from its stocker (recorded at the
 factory: 69 zeros here) and the cleaning card of command A0 (given at
 once).
 
+Network board 837-13404 (src/odin/netbd_837_13404.cpp, ODIN_NETBD=none|
+loop): a cabinet has none by default (page 0E answers nothing, the games
+find no board); loop puts one whose optical ring is closed on itself
+(VON4 with COMMUNICATION MODE MASTER in the BOOTROM settings: CONNECTION
+OK, THIS IS THE #1 SITE OF 1; MARKDOWN/98). Its 68000 (src/odin/m68000.cpp,
+checked against the SingleStepTests 680x0 suite) runs the program the
+game uploads (m3_comm.asm 1.3: the same in VON4, SGNASCAR and SWRACER).
+HEURISTIC, deduced from that program and judged by it on a ring of 1 to
+8 boards (tests/netbd/ring_bench.cpp): the 68000 at 10 MHz; IRQ5 when a
+15-bit counter of 0.5 us ticks reaches the count in 40000+C0, the counter
+set back to 0 with an IRQ5 by a write of 40000+E0; a frame goes out when
+1D = 8C (read at its start, 10 Mbit/s) and comes in when 17 = 8C, else is
+lost; the receive and send status read 05; the host sees the bank of the
+communication RAM the 68000 does not use, a byte at the offset XOR 3. Not
+done: the states (a state with the board is refused), several Odins
+linked, its waits counted, the program of PHARRIER (not found yet).
+
 JVS (src/odin/jvs.cpp: the cable and the protocol of the standard). The
 I/O boards are imitations made from their programs: jvs_837_13551.cpp
 from 315-6215 (a TMP90PH44, run in its place when the PROM is there,
