@@ -38,6 +38,8 @@ OBJ := \
 	src/odin/session.o \
 	src/odin/library.o \
 	src/odin/display.o \
+	src/odin/display_bezel.o \
+	src/odin/display_window.o \
 	src/odin/menu.o \
 	src/odin/menu_input.o \
 	src/odin/menu_pages.o \
