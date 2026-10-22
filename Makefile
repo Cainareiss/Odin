@@ -31,6 +31,10 @@ CXXFLAGS := -std=c++20 -pthread -I src -Wall -Wextra -Wpedantic -Wconversion -Ws
 # The front end, the board, then its chips
 OBJ := \
 	src/odin/main.o \
+	src/odin/options.o \
+	src/odin/menu_session.o \
+	src/odin/session.o \
+	src/odin/library.o \
 	src/odin/display.o \
 	src/odin/menu.o \
 	src/odin/menu_input.o \

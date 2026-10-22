@@ -62,7 +62,7 @@ std::string shown_path(const std::string &path, const char *none);
  * the gamepad asked since the last picture (menu_nav.hpp: the choice moved
  * across and down, the game chosen played) and the name of its button that
  * plays (empty: no gamepad). The thread of the board keeps it and does what
- * changed (main.cpp). */
+ * changed (library.cpp). */
 struct LibraryState {
 	struct Game {
 		std::string name, title;
@@ -88,7 +88,7 @@ struct LibraryState {
  * library (mock-up v3, Atelier): FILE, INPUT, VIDEO, AUDIO, DEBUG and
  * ABOUT, each a menu. What
  * they show and what was asked there; the thread of the board keeps it
- * and does what was asked (main.cpp). */
+ * and does what was asked (session.cpp, library.cpp). */
 struct BarState {
 	/* At the right: the game and its frames a second, or a word that says
 	 * what went wrong */
@@ -122,7 +122,7 @@ struct BarState {
 };
 
 /* What the pages of the menu show and change. The thread of the board
- * keeps it and does what changed (main.cpp). */
+ * keeps it and does what changed (menu_session.cpp). */
 struct MenuState {
 	/* Display: the 3D that many times finer, the texture filter (1 for
 	 * none), the window at start that many times the screen, the whole
@@ -303,7 +303,7 @@ struct MenuState {
 };
 
 /* The menu of Odin, drawn with Dear ImGui over the picture of the last
- * frame, frozen and blurred, while the game is paused (main.cpp); its bar
+ * frame, frozen and blurred, while the game is paused (session.cpp); its bar
  * over the frames of the game that goes on, and the library.
  *
  * It is made at its first opening: nothing of it runs before. Two threads

@@ -45,7 +45,7 @@ Controls::Controls(Keyboard &keys, const std::vector<GameControl> &controls, con
 	for (const auto &[key, value] : settings.section("players." + game)) {
 		if (key == "p1" || key == "p2") {
 			m_wanted[key[1] - '1'] = value.substr(0, value.find(' '));
-		} else if (key != "vibration" || (value != "on" && value != "off")) {	/* vibration: main.cpp */
+		} else if (key != "vibration" || (value != "on" && value != "off")) {	/* vibration: main.cpp, menu_session.cpp */
 			std::fprintf(stderr, "ERROR: settings: [players.%s]: not right: %s = %s\n", game.c_str(), key.c_str(),
 			             value.c_str());
 		}
