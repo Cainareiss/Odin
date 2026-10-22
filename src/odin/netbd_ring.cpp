@@ -66,12 +66,12 @@ NetBoardRunner::stop()
 }
 
 void
-NetBoardRunner::arrive(std::vector<uint8_t> data, uint64_t duration)
+NetBoardRunner::arrive(std::vector<uint8_t> data, uint64_t start, uint64_t duration)
 {
 	{
 		const std::lock_guard<std::mutex> hold(m_inbox_lock);
 
-		m_inbox.push_back({ std::move(data), duration, Clock::now() });
+		m_inbox.push_back({ std::move(data), start, duration, Clock::now() });
 	}
 	m_wake.notify_one();
 }
@@ -94,6 +94,7 @@ void
 NetBoardRunner::run()
 {
 	std::vector<Incoming> taken;
+	std::vector<int64_t> sorted;
 
 	while (!m_stop) {
 		uint64_t next, now;
@@ -102,10 +103,23 @@ NetBoardRunner::run()
 			const std::lock_guard<std::mutex> hold(m_board_lock);
 
 			for (Incoming &in : taken) {
+				const uint64_t came = board_clock(in.when);
 				NetFrame frame;
 
+				m_gaps.push_back(static_cast<int64_t>(came - in.start));
+				if (m_gaps.size() > GAPS)
+					m_gaps.pop_front();
+
+				sorted.assign(m_gaps.begin(), m_gaps.end());
+				std::sort(sorted.begin(), sorted.end());
+
+				const int64_t fastest = sorted.front();
+				const uint64_t spread = std::min<uint64_t>(
+					static_cast<uint64_t>(sorted[sorted.size() * 9 / 10] - fastest), STEADY);
+				const uint64_t steady = in.start + static_cast<uint64_t>(fastest) + spread;
+
 				frame.data = std::move(in.data);
-				frame.end = std::max(board_clock(in.when), m_board.clocks());
+				frame.end = std::max({ steady, came, m_board.clocks() });
 				m_board.receive(frame, in.duration);
 			}
 			taken.clear();
@@ -136,7 +150,8 @@ struct Header {
 };
 
 constexpr uint32_t HELLO = 0x4F4C4548;	/* "HELO" */
-constexpr uint32_t FRAME = 0x4D415246;	/* "FRAM": the clocks it took to leave, then its bytes */
+constexpr uint32_t FRAME = 0x4D415246;	/* "FRAM": the clocks it took to leave, the clock it began to,
+					 * then its bytes */
 
 struct Hello {
 	char game[32];
@@ -204,7 +219,7 @@ NetCable::send(const NetFrame &frame)
 
 	if (m_outbox.size() >= MOST_WAITING)
 		return;
-	m_outbox.push_back({ frame.data, frame.end - frame.start });
+	m_outbox.push_back({ frame.data, frame.start, frame.end - frame.start });
 	m_outbox_ready.notify_one();
 }
 
@@ -232,16 +247,17 @@ NetCable::receive_frames(intptr_t from)
 {
 	Header header{};
 	uint32_t duration;
+	uint64_t start;
 	std::vector<uint8_t> data;
 
 	if (!receive_all(from, &header, sizeof header, m_stop) || header.kind != FRAME ||
-	    header.size < sizeof duration || header.size > sizeof duration + 0x10000 ||
-	    !receive_all(from, &duration, sizeof duration, m_stop))
+	    header.size < sizeof duration + sizeof start || header.size > sizeof duration + sizeof start + 0x10000 ||
+	    !receive_all(from, &duration, sizeof duration, m_stop) || !receive_all(from, &start, sizeof start, m_stop))
 		return false;
-	data.resize(header.size - sizeof duration);
+	data.resize(header.size - sizeof duration - sizeof start);
 	if (!receive_all(from, data.data(), data.size(), m_stop))
 		return false;
-	m_runner.arrive(std::move(data), duration);
+	m_runner.arrive(std::move(data), start, duration);
 	return true;
 }
 
@@ -332,12 +348,14 @@ NetCable::send_loop()
 		}
 		for (const Outgoing &out : taken) {
 			const uint32_t duration = static_cast<uint32_t>(out.duration);
-			const Header header{ FRAME, static_cast<uint32_t>(sizeof duration + out.data.size()) };
+			const size_t head = sizeof(Header) + sizeof duration + sizeof out.start;
+			const Header header{ FRAME, static_cast<uint32_t>(head - sizeof(Header) + out.data.size()) };
 
-			message.resize(sizeof header + sizeof duration + out.data.size());
+			message.resize(head + out.data.size());
 			std::memcpy(message.data(), &header, sizeof header);
 			std::memcpy(message.data() + sizeof header, &duration, sizeof duration);
-			std::memcpy(message.data() + sizeof header + sizeof duration, out.data.data(), out.data.size());
+			std::memcpy(message.data() + sizeof header + sizeof duration, &out.start, sizeof out.start);
+			std::memcpy(message.data() + head, out.data.data(), out.data.size());
 			if (!send_all(to, message.data(), message.size())) {
 				m_linked = false;
 				close_socket(to);

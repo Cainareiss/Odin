@@ -183,7 +183,7 @@ game uploads (m3_comm.asm 1.3: the same in VON4, SGNASCAR and SWRACER).
 HEURISTIC, deduced from that program and judged by it on a ring of 1 to
 8 boards (tests/netbd/ring_bench.cpp): the 68000 at 10 MHz; IRQ5 when a
 15-bit counter of 0.5 us ticks reaches the count in 40000+C0, the counter
-set back to 0 with an IRQ5 by a write of 40000+E0; a frame goes out when
+set back to 0 by a write of 40000+E0 (below); a frame goes out when
 1D = 8C (read at its start, 10 Mbit/s) and comes in when 17 = 8C, else is
 held until it receives (lost while its 68000 is in reset); the receive
 and send status read 05; the host sees the bank of the
@@ -195,9 +195,14 @@ CPU the same after it) is billed without being run up to the next event
 keeps it with the frames on their way to it; one without it still loads,
 the board starting again. SGNASCAR links and its two attracts run together; SWRACER links,
 then wants a seat of its own on each cabinet (GAME ASSIGNMENTS of its test
-menu). Not done: PHARRIER uploads m3_comm.asm 1.2 (1998), older than the
-program the board is deduced from, and its slave says GAME ID IS NOT
-COHERENT; Windows (its timers).
+menu); PHARRIER uploads m3_comm.asm 1.2 (1998), which switches the bank in
+IRQ5: four of it link (THE NODE ID 1/4 to 4/4, STATUS 00000000), as long
+as the small frame goes round in less than the 1 ms its master leaves.
+HEURISTIC: a write of 40000+E0 gives the IRQ5 at once only when the count
+gave none since the write before (one IRQ5 a frame on a slave); a frame
+of a cabinet linked by the network comes in as late after the fastest
+recent one as 9 in 10 of them came (0.2 ms at most), as a fibre takes the
+same time for each. Not done: Windows (its timers).
 
 JVS (src/odin/jvs.cpp: the cable and the protocol of the standard). The
 I/O boards are imitations made from their programs: jvs_837_13551.cpp

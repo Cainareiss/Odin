@@ -49,7 +49,7 @@ enum : uint32_t {
 NetBoard837_13404::NetBoard837_13404()
 	: m_cpu(*this), m_ram(RAM_SIZE), m_comm{std::vector<uint8_t>(COMM_SIZE), std::vector<uint8_t>(COMM_SIZE)},
 	  m_bank(0), m_io{}, m_rx_addr(0), m_rx_size(0), m_tx_addr(0), m_tx_size(0), m_status0(0), m_status1(0),
-	  m_rx_armed(false), m_tx_busy(false), m_tx_end(0), m_timer(0), m_timer_zero(0), m_timer_next(0), m_leds(0), m_irq(0),
+	  m_rx_armed(false), m_tx_busy(false), m_tx_end(0), m_timer(0), m_ticked(false), m_timer_zero(0), m_timer_next(0), m_leds(0), m_irq(0),
 	  m_host_regs{}, m_running(false), m_clock(0), m_cpu_base(0), m_next(nullptr)
 {
 }
@@ -69,6 +69,7 @@ NetBoard837_13404::reset()
 	m_timer = 0;
 	m_timer_zero = 0;
 	m_timer_next = UINT64_MAX;
+	m_ticked = false;
 	m_leds = 0;
 	m_irq = 0;
 	m_host_regs.fill(0);
@@ -94,10 +95,12 @@ NetBoard837_13404::update_ipl()
 }
 
 /* HEURISTIC: a 15-bit counter turns all the time; IRQ5 comes each time it
- * reaches the value of 40000+C0, and a write of 40000+E0 sets it back to 0
- * with an IRQ5 at once: the IRQ5 the slave asks for right after each frame
- * it syncs on (note 98 section 10). C0 = 7FFF or 7C18 puts the IRQ5 late in
- * the turn, once per turn. */
+ * reaches the value of 40000+C0; a write of 40000+E0 sets it back to 0,
+ * with an IRQ5 at once when the count gave none since the write before
+ * (MARKDOWN/98 section 18). So a slave that syncs on the frames of the
+ * master gets one IRQ5 a frame: at the frame when it comes before its
+ * count (the slave of m3_comm 1.3 wants an IRQ5 there, A6+16 < 2), at its
+ * count otherwise (the program 1.2 switches its bank in IRQ5). */
 void
 NetBoard837_13404::schedule_timer()
 {
@@ -147,7 +150,7 @@ NetBoard837_13404::fingerprint() const
 	mix(regs, sizeof(regs));
 	mix(m_io.data(), m_io.size());
 	const uint64_t words[] = {m_bank, m_rx_addr, m_rx_size, m_tx_addr, m_tx_size, m_status0, m_status1,
-	                          m_rx_armed, m_tx_busy, m_tx_end, m_timer, m_timer_zero, m_timer_next, m_irq, m_clock,
+	                          m_rx_armed, m_tx_busy, m_tx_end, m_timer, m_timer_zero, m_timer_next, m_ticked, m_irq, m_clock,
 	                          m_cpu.cycles()};
 	mix(words, sizeof(words));
 	return h;
@@ -168,6 +171,7 @@ NetBoard837_13404::save(State &out) const
 	out.tx_end = m_tx_end;
 	out.timer_zero = m_timer_zero;
 	out.timer_next = m_timer_next;
+	out.ticked = m_ticked;
 	out.bank = m_bank;
 	out.irq = m_irq;
 	out.rx_addr = m_rx_addr;
@@ -197,6 +201,7 @@ NetBoard837_13404::load(const State &in)
 	m_tx_end = in.tx_end;
 	m_timer_zero = in.timer_zero;
 	m_timer_next = in.timer_next;
+	m_ticked = in.ticked != 0;
 	m_bank = in.bank & 1;
 	m_irq = in.irq;
 	m_rx_addr = in.rx_addr;
@@ -402,6 +407,7 @@ NetBoard837_13404::run_until(uint64_t clock)
 		}
 		if (m_timer_next <= m_clock) {
 			raise(IRQ5);
+			m_ticked = true;
 			schedule_timer();
 		}
 		if (m_tx_busy && m_tx_end <= m_clock) {
@@ -568,8 +574,10 @@ NetBoard837_13404::ctrl_write(uint32_t reg, uint16_t value)
 		schedule_timer();
 		break;
 	case 0xE0:
+		if (!m_ticked)
+			raise(IRQ5);
+		m_ticked = false;
 		m_timer_zero = now();
-		raise(IRQ5);
 		schedule_timer();
 		break;
 	default:
@@ -736,6 +744,7 @@ NetBoard837_13404::host_write(uint32_t offset, unsigned size, uint32_t value)
 				update_ipl();
 				m_timer = 0;
 				m_timer_zero = m_clock;
+				m_ticked = false;
 				raise(IRQ5);
 				schedule_timer();
 			}

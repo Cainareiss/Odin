@@ -33,7 +33,8 @@
  *            tests/netbd/ring_bench.cpp src/odin/netbd_837_13404.cpp src/odin/netbd_ring.cpp \
  *            src/odin/sockets.cpp src/odin/m68000.cpp src/odin/m68000_ops.cpp -o ring_bench
  * Use:   ring_bench program.bin [nodes [seconds [start delay of node n, in frames]]]
- * Exit status is 0 when every node links and receives every other part. */
+ * Exit status is 0 when every node links and, after it, sees every other
+ * part in 9 frames out of 10 at least. */
 
 #include "odin/netbd_837_13404.hpp"
 #include "odin/netbd_ring.hpp"
@@ -83,7 +84,7 @@ public:
 class RealHop : public odin::NetLink {
 public:
 	odin::NetBoardRunner *to = nullptr;
-	void send(const odin::NetFrame &frame) override { to->arrive(frame.data, frame.end - frame.start); }
+	void send(const odin::NetFrame &frame) override { to->arrive(frame.data, frame.start, frame.end - frame.start); }
 };
 
 struct Node {
@@ -320,7 +321,7 @@ int main(int argc, char **argv)
 		std::printf("; fingerprint %016llX; parts seen:", static_cast<unsigned long long>(n->board.fingerprint()));
 		for (unsigned k = 0; k < nodes; k++) {
 			std::printf(" %u", n->seen[k]);
-			if (k != n->index && n->seen[k] == 0)
+			if (k != n->index && n->seen[k] * 10 < n->frames_ok * 9)
 				ok = false;
 		}
 		std::printf("\n");

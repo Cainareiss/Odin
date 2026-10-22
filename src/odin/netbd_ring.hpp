@@ -70,9 +70,19 @@ public:
 	void stop();
 	/* Held by another thread (the host) to touch the board */
 	std::mutex &board_lock() { return m_board_lock; }
-	/* A frame from the previous cabinet as it comes in, and the clocks it
-	 * took to leave the other board (any thread) */
-	void arrive(std::vector<uint8_t> data, uint64_t duration);
+	/* A frame from the previous cabinet as it comes in: its bytes, the
+	 * clock of the other board when it began to leave it and the clocks it
+	 * took to (any thread) */
+	void arrive(std::vector<uint8_t> data, uint64_t start, uint64_t duration);
+
+	/* HEURISTIC: a frame comes in as late after the fastest of the last
+	 * GAPS as 9 in 10 of them came, STEADY clocks (0.2 ms) at most; one
+	 * later than that comes as it comes. A fibre takes the same time for
+	 * each frame, and the programs time the frames of the master to a few
+	 * microseconds (MARKDOWN/98 section 18); a network does not, and each
+	 * hop it takes longer is taken from the turn of the ring. */
+	static constexpr uint64_t STEADY = 2000;
+	static constexpr size_t GAPS = 128;
 
 private:
 	using Clock = std::chrono::steady_clock;
@@ -80,7 +90,7 @@ private:
 
 	struct Incoming {
 		std::vector<uint8_t> data;
-		uint64_t duration;
+		uint64_t start, duration;
 		Clock::time_point when;
 	};
 
@@ -97,6 +107,7 @@ private:
 	std::thread m_thread;
 	Clock::time_point m_start;
 	uint64_t m_clock_at_start = 0;
+	std::deque<int64_t> m_gaps;	/* clock here less clock there, as frames came */
 };
 
 /* The optical cable as TCP: frames come in from the previous cabinet on
@@ -107,7 +118,7 @@ private:
 class NetCable : public NetLink {
 public:
 	static constexpr uint16_t PORT = 13404;
-	static constexpr uint32_t VERSION = 1;
+	static constexpr uint32_t VERSION = 2;
 
 	NetCable(NetBoardRunner &runner, const std::string &game, uint16_t port, const std::string &next_host,
 	         uint16_t next_port);
@@ -127,7 +138,7 @@ public:
 private:
 	struct Outgoing {
 		std::vector<uint8_t> data;
-		uint64_t duration;
+		uint64_t start, duration;
 	};
 
 	void receive_loop();

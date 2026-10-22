@@ -95,7 +95,7 @@ public:
 		uint32_t bank, irq;
 		uint16_t rx_addr, rx_size, tx_addr, tx_size;
 		uint16_t status0, status1, timer, leds;
-		uint8_t rx_armed, tx_busy, running;
+		uint8_t rx_armed, tx_busy, running, ticked;
 
 		bool operator==(const State &) const = default;
 	};
@@ -214,6 +214,7 @@ private:
 	uint64_t m_tx_end;
 
 	uint16_t m_timer;		/* 40000+C0: the count that gives IRQ5 */
+	bool m_ticked;			/* that count gave IRQ5 since 40000+E0 */
 	uint64_t m_timer_zero;		/* the clock at which the count was 0 */
 	uint64_t m_timer_next;
 	uint16_t m_leds;
