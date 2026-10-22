@@ -33,6 +33,8 @@ OBJ := \
 	src/odin/main.o \
 	src/odin/options.o \
 	src/odin/menu_session.o \
+	src/odin/menu_session_input.o \
+	src/odin/menu_session_state.o \
 	src/odin/session.o \
 	src/odin/library.o \
 	src/odin/display.o \
