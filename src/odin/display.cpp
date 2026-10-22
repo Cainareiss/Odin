@@ -572,6 +572,31 @@ Display::bar_event(const SDL_Event &event)
 		m_bar_events.push_back(event);
 }
 
+/* The bar given the events of the mouse kept for it and built, when it is
+ * shown: whether it is */
+bool
+Display::build_bar(BarState *bar)
+{
+	if (!bar || !m_bar_shown)
+		return false;
+	for (const SDL_Event &event : m_bar_events)
+		m_menu->event(event);
+	m_bar_events.clear();
+	m_menu->build_bar(*bar);
+	return true;
+}
+
+/* Over the picture of the game: the bezel, the game blurred at its sides,
+ * the bar */
+void
+Display::draw_over(unsigned w, unsigned h, bool bar)
+{
+	draw_bezel(w, h);
+	draw_blur(w, h);
+	if (bar)
+		m_menu->draw_bar(w, h);
+}
+
 void
 Display::show_again(BarState *bar)
 {
@@ -580,21 +605,15 @@ Display::show_again(BarState *bar)
 	if (!m_renderer)
 		return;
 	finish();
-	if (bar && m_bar_shown) {
-		for (const SDL_Event &event : m_bar_events)
-			m_menu->event(event);
-		m_bar_events.clear();
-		m_menu->build_bar(*bar);
-	}
+
+	const bool over = build_bar(bar);
+
 	SDL_GetWindowSizeInPixels(m_window, &w, &h);
-	m_drawing->run([this, w, h, over = bar && m_bar_shown] {
+	m_drawing->run([this, w, h, over] {
 		const auto ww = static_cast<unsigned>(w), wh = static_cast<unsigned>(h);
 
 		m_renderer->show_again(ww, wh, m_hole);
-		draw_bezel(ww, wh);
-		draw_blur(ww, wh);
-		if (over)
-			m_menu->draw_bar(ww, wh);
+		draw_over(ww, wh, over);
 		SDL_GL_SwapWindow(m_window);
 	});
 }
@@ -855,14 +874,7 @@ Display::end_frame(unsigned frame, bool late, BarState *bar)
 	m_logged = m_renderer->frame_is_logged();
 	m_message = m_renderer->message();
 	/* Built while the drawing thread rests, drawn over the frame */
-	const bool over = bar && m_bar_shown;
-
-	if (over) {
-		for (const SDL_Event &event : m_bar_events)
-			m_menu->event(event);
-		m_bar_events.clear();
-		m_menu->build_bar(*bar);
-	}
+	const bool over = build_bar(bar);
 
 	m_drawing->post([this, late, w, h, over] { draw(late, static_cast<unsigned>(w), static_cast<unsigned>(h), over); });
 	m_held = m_late;
@@ -886,10 +898,7 @@ Display::draw(bool late, unsigned window_w, unsigned window_h, bool bar)
 	m_renderer->set_anisotropy(m_anisotropy);
 	m_renderer->draw_frame();
 	m_picture_fb = m_renderer->frame_picture(m_picture_width, m_picture_height);
-	draw_bezel(window_w, window_h);
-	draw_blur(window_w, window_h);
-	if (bar)
-		m_menu->draw_bar(window_w, window_h);
+	draw_over(window_w, window_h, bar);
 
 	screenshot();
 	print_fingerprint();

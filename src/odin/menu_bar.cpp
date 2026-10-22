@@ -99,6 +99,7 @@ void
 Menu::bar(BarState &state)
 {
 	using Ask = BarState::Ask;
+	using Action = Hotkeys::Action;
 	const MenuKit kit(*m_palette, m_scale);
 	const MenuPalette &p = kit.palette();
 	ImGuiStyle &style = ImGui::GetStyle();
@@ -108,6 +109,14 @@ Menu::bar(BarState &state)
 	const auto ask = [&state](Ask what, int page = -1) {
 		state.ask = what;
 		state.page = page;
+	};
+	/* The first key of an action, as odin.ini says it */
+	const auto key = [&state](Action action) -> const std::string & { return state.keys[static_cast<size_t>(action)]; };
+	/* A menu: a frame with its corners cut, behind its items */
+	const auto framed = [&kit, &p] {
+		const ImVec2 a = ImGui::GetWindowPos(), b = { a.x + ImGui::GetWindowWidth(), a.y + ImGui::GetWindowHeight() };
+
+		kit.frame(ImGui::GetWindowDrawList(), a, b, kit.px(MENU_CUT), p.screen, p.outline);
 	};
 
 	style.DisplaySafeAreaPadding = { 0.0f, 0.0f };
@@ -154,10 +163,7 @@ Menu::bar(BarState &state)
 			list->AddLine({ at - style.ItemSpacing.x, bottom - kit.px(ACCENT) / 2.0f },
 			              { at + w + style.ItemSpacing.x, bottom - kit.px(ACCENT) / 2.0f }, p.accent, kit.px(ACCENT));
 
-			/* The menu: a frame with its corners cut, behind its items */
-			const ImVec2 a = ImGui::GetWindowPos(), b = { a.x + ImGui::GetWindowWidth(), a.y + ImGui::GetWindowHeight() };
-
-			kit.frame(ImGui::GetWindowDrawList(), a, b, kit.px(MENU_CUT), p.screen, p.outline);
+			framed();
 			switch (m) {
 			case 0:
 				if (item("Open..."))
@@ -165,10 +171,10 @@ Menu::bar(BarState &state)
 				if (item("Close game", {}, false, state.game))
 					ask(Ask::CLOSE);
 				ImGui::Separator();
-				if (item("Save state", state.keys[static_cast<size_t>(Hotkeys::Action::SAVE_STATE)], false,
+				if (item("Save state", key(Action::SAVE_STATE), false,
 				         state.game))
 					ask(Ask::SAVE_STATE);
-				if (item("Load state", state.keys[static_cast<size_t>(Hotkeys::Action::LOAD_STATE)], false,
+				if (item("Load state", key(Action::LOAD_STATE), false,
 				         state.game && state.saved))
 					ask(Ask::LOAD_STATE);
 				ImGui::Separator();
@@ -179,10 +185,10 @@ Menu::bar(BarState &state)
 				if (item("Paths..."))
 					ask(Ask::SETTINGS, PATHS);
 				ImGui::Separator();
-				if (item("Settings...", state.keys[static_cast<size_t>(Hotkeys::Action::MENU)]))
+				if (item("Settings...", key(Action::MENU)))
 					ask(Ask::SETTINGS);
 				ImGui::Separator();
-				if (item("Quit", state.keys[static_cast<size_t>(Hotkeys::Action::QUIT)]))
+				if (item("Quit", key(Action::QUIT)))
 					ask(Ask::QUIT);
 				break;
 			case 1:
@@ -194,13 +200,10 @@ Menu::bar(BarState &state)
 					ask(Ask::SETTINGS, OUTPUTS);
 				break;
 			case 2:
-				if (item("Full screen", state.keys[static_cast<size_t>(Hotkeys::Action::FULLSCREEN)], state.fullscreen))
+				if (item("Full screen", key(Action::FULLSCREEN), state.fullscreen))
 					ask(Ask::FULLSCREEN);
 				if (ImGui::BeginMenu("Bezel")) {
-					kit.frame(ImGui::GetWindowDrawList(), ImGui::GetWindowPos(),
-					          { ImGui::GetWindowPos().x + ImGui::GetWindowWidth(),
-					            ImGui::GetWindowPos().y + ImGui::GetWindowHeight() },
-					          kit.px(MENU_CUT), p.screen, p.outline);
+					framed();
 					for (unsigned s = 0; s < std::size(SIDES_SHOWN); s++)
 						if (item(SIDES_SHOWN[s], {}, state.sides == s))
 							state.sides = s;
@@ -229,7 +232,7 @@ Menu::bar(BarState &state)
 				break;
 			}
 			case 4:
-				if (item("Pause", state.keys[static_cast<size_t>(Hotkeys::Action::PAUSE)], state.paused, state.game))
+				if (item("Pause", key(Action::PAUSE), state.paused, state.game))
 					ask(Ask::PAUSE);
 				if (item("Log each access (next game)", {}, state.verbose, !state.verbose_given))
 					state.verbose = !state.verbose;

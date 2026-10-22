@@ -232,6 +232,8 @@ private:
 	void make_bezel(SDL_Surface *rgba);
 	void draw_bezel(unsigned window_w, unsigned window_h);
 	void draw_blur(unsigned window_w, unsigned window_h);
+	void draw_over(unsigned w, unsigned h, bool bar);
+	bool build_bar(BarState *bar);
 	void read_picture(uint8_t *pixels);
 	void screenshot();
 	void print_fingerprint();
