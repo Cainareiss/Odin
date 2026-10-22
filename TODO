@@ -177,9 +177,10 @@ communication RAM the 68000 does not use, a byte at the offset XOR 3. The
 board runs when the host reaches page 0E and at the end of a frame, to the
 clock the SH-4 owes it; a turn of a wait of its 68000 (reads only, the
 CPU the same after it) is billed without being run up to the next event
-(ODIN_TURNS=0 runs every turn: the same pictures and memories). Not done:
-the states (a state with the board is refused), several Odins linked,
-the program of PHARRIER (not found yet).
+(ODIN_TURNS=0 runs every turn: the same pictures and memories). A state
+keeps it with the frames on their way to it; one without it still loads,
+the board starting again. Not done: several Odins linked, the program of
+PHARRIER (not found yet).
 
 JVS (src/odin/jvs.cpp: the cable and the protocol of the standard). The
 I/O boards are imitations made from their programs: jvs_837_13551.cpp

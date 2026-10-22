@@ -21,6 +21,7 @@
 #include "odin/netbd_837_13404.hpp"
 
 #include <algorithm>
+#include <cstring>
 
 namespace odin {
 
@@ -149,6 +150,117 @@ NetBoard837_13404::fingerprint() const
 	                          m_cpu.cycles()};
 	mix(words, sizeof(words));
 	return h;
+}
+
+/* Saved between two runs: the 68000 is between two instructions. What
+ * proves its waits is not kept, it is proven again. */
+void
+NetBoard837_13404::save(State &out) const
+{
+	m_cpu.save(out.cpu);
+	std::copy(m_ram.begin(), m_ram.end(), out.ram.begin());
+	for (unsigned b = 0; b < 2; b++)
+		std::copy(m_comm[b].begin(), m_comm[b].end(), out.comm[b].begin());
+	out.io = m_io;
+	out.host_regs = m_host_regs;
+	out.clock = m_clock;
+	out.tx_end = m_tx_end;
+	out.timer_zero = m_timer_zero;
+	out.timer_next = m_timer_next;
+	out.bank = m_bank;
+	out.irq = m_irq;
+	out.rx_addr = m_rx_addr;
+	out.rx_size = m_rx_size;
+	out.tx_addr = m_tx_addr;
+	out.tx_size = m_tx_size;
+	out.status0 = m_status0;
+	out.status1 = m_status1;
+	out.timer = m_timer;
+	out.leds = m_leds;
+	out.rx_armed = m_rx_armed;
+	out.tx_busy = m_tx_busy;
+	out.running = m_running;
+}
+
+void
+NetBoard837_13404::load(const State &in)
+{
+	m_cpu.load(in.cpu);
+	std::copy(in.ram.begin(), in.ram.end(), m_ram.begin());
+	for (unsigned b = 0; b < 2; b++)
+		std::copy(in.comm[b].begin(), in.comm[b].end(), m_comm[b].begin());
+	m_io = in.io;
+	m_host_regs = in.host_regs;
+	m_clock = in.clock;
+	m_cpu_base = m_cpu.cycles() - m_clock;
+	m_tx_end = in.tx_end;
+	m_timer_zero = in.timer_zero;
+	m_timer_next = in.timer_next;
+	m_bank = in.bank & 1;
+	m_irq = in.irq;
+	m_rx_addr = in.rx_addr;
+	m_rx_size = in.rx_size;
+	m_tx_addr = in.tx_addr;
+	m_tx_size = in.tx_size;
+	m_status0 = in.status0;
+	m_status1 = in.status1;
+	m_timer = in.timer;
+	m_leds = in.leds;
+	m_rx_armed = in.rx_armed != 0;
+	m_tx_busy = in.tx_busy != 0;
+	m_running = in.running != 0;
+	m_arrivals.clear();
+	m_proof.on = false;
+	m_quiet = false;
+	update_ipl();
+}
+
+std::vector<uint8_t>
+NetBoard837_13404::frames_save() const
+{
+	std::vector<uint8_t> out;
+	auto put = [&out](const void *p, size_t n) {
+		const uint8_t *b = static_cast<const uint8_t *>(p);
+		out.insert(out.end(), b, b + n);
+	};
+
+	for (const Arrival &a : m_arrivals) {
+		const uint32_t size = static_cast<uint32_t>(a.frame.data.size());
+		put(&a.at, sizeof(a.at));
+		put(&a.frame.end, sizeof(a.frame.end));
+		put(&size, sizeof(size));
+		put(a.frame.data.data(), size);
+	}
+	return out;
+}
+
+bool
+NetBoard837_13404::frames_load(std::span<const uint8_t> bytes)
+{
+	size_t at = 0;
+	auto get = [&bytes, &at](void *p, size_t n) {
+		if (bytes.size() - at < n)
+			return false;
+		std::memcpy(p, bytes.data() + at, n);
+		at += n;
+		return true;
+	};
+
+	m_arrivals.clear();
+	while (at < bytes.size()) {
+		Arrival a;
+		uint32_t size;
+		if (!get(&a.at, sizeof(a.at)) || !get(&a.frame.end, sizeof(a.frame.end)) || !get(&size, sizeof(size)) ||
+		    bytes.size() - at < size) {
+			m_arrivals.clear();
+			return false;
+		}
+		a.frame.data.assign(bytes.begin() + static_cast<std::ptrdiff_t>(at),
+		                    bytes.begin() + static_cast<std::ptrdiff_t>(at + size));
+		at += size;
+		m_arrivals.push_back(std::move(a));
+	}
+	return true;
 }
 
 /* The bytes and words the turn read, as they are now (no side effect) */

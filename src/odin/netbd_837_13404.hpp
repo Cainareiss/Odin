@@ -26,6 +26,7 @@
 #include <array>
 #include <cstdint>
 #include <deque>
+#include <span>
 #include <vector>
 
 namespace odin {
@@ -56,6 +57,8 @@ class NetBoard837_13404 : public M68000Bus {
 public:
 	/* HEURISTIC: 40 MHz / 4; the 68000 is a 12 MHz part. */
 	static constexpr uint32_t CLOCK_HZ = 10'000'000;
+	static constexpr uint32_t RAM_SIZE = 0x10000;
+	static constexpr uint32_t COMM_SIZE = 0x10000;
 
 	NetBoard837_13404();
 
@@ -76,6 +79,30 @@ public:
 	void set_link(NetLink *next) { m_next = next; }
 	/* A frame from the previous board, `latency` clocks after it left. */
 	void receive(const NetFrame &frame, uint64_t latency);
+
+	/* What a save state keeps of it; the frames on their way to it apart
+	 * (frames_save), as they have no fixed size */
+	struct State {
+		M68000State cpu;
+		std::array<uint8_t, RAM_SIZE> ram;
+		std::array<std::array<uint8_t, COMM_SIZE>, 2> comm;
+		std::array<uint8_t, 0x100> io;
+		std::array<uint16_t, 0x80> host_regs;
+		uint64_t clock;
+		uint64_t tx_end, timer_zero, timer_next;
+		uint32_t bank, irq;
+		uint16_t rx_addr, rx_size, tx_addr, tx_size;
+		uint16_t status0, status1, timer, leds;
+		uint8_t rx_armed, tx_busy, running;
+
+		bool operator==(const State &) const = default;
+	};
+	void save(State &out) const;
+	void load(const State &in);
+	/* The frames on their way to it, each when it comes, its end, its
+	 * size and its bytes; false for bytes that are not that */
+	std::vector<uint8_t> frames_save() const;
+	bool frames_load(std::span<const uint8_t> bytes);
 
 	bool running() const { return m_running; }
 	/* ODIN_TURNS=0, a test: the program runs every turn of its waits.
@@ -100,8 +127,6 @@ public:
 	void write8(uint32_t addr, uint8_t value, unsigned fc) override;
 
 private:
-	static constexpr uint32_t RAM_SIZE = 0x10000;
-	static constexpr uint32_t COMM_SIZE = 0x10000;
 	/* HEURISTIC: one tick of the 15-bit counter of IRQ5, 0.5 us, so that
 	 * a turn of it (8000 ticks, 16.4 ms) is about a frame. */
 	static constexpr uint64_t TICK = 5;

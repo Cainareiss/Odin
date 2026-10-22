@@ -72,4 +72,30 @@ StateFile::get(void *data, uint32_t size)
 	return std::fread(data, 1, size, m_file) == size && !std::ferror(m_file);
 }
 
+uint32_t
+StateFile::next_size()
+{
+	uint32_t stored;
+
+	if (!m_file || m_mode != Mode::LOAD)
+		return 0;
+	const long at = std::ftell(m_file);
+	if (at < 0 || std::fread(&stored, 1, sizeof(stored), m_file) != sizeof(stored))
+		stored = 0;
+	if (at < 0 || std::fseek(m_file, at, SEEK_SET) != 0)
+		return 0;
+	return stored;
+}
+
+bool
+StateFile::skip()
+{
+	uint32_t stored;
+
+	if (!m_file || m_mode != Mode::LOAD)
+		return false;
+	return std::fread(&stored, 1, sizeof(stored), m_file) == sizeof(stored) &&
+	       std::fseek(m_file, static_cast<long>(stored), SEEK_CUR) == 0;
+}
+
 } /* namespace odin */

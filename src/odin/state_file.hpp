@@ -70,6 +70,10 @@ public:
 	 * size. */
 	bool put(const void *data, uint32_t size);
 	bool get(void *data, uint32_t size);
+	/* The size of the next item, left to be read; 0 at the end of the
+	 * state. An item of a board the state may not have is known by it. */
+	uint32_t next_size();
+	bool skip();
 
 	/* A plain thing as one item */
 	template <typename T>

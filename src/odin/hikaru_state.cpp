@@ -76,6 +76,12 @@ get_chip(StateFile &state, Chip &chip)
 	return true;
 }
 
+/* The network board and the clock the host owes it */
+struct NetbdItem {
+	NetBoard837_13404::State board;
+	uint64_t acc, owed;
+};
+
 } /* namespace */
 
 bool
@@ -85,10 +91,6 @@ Hikaru::save_items(StateFile &state)
 	RomBoard::Config rombd;
 	bool ok;
 
-	if (m_netbd) {
-		std::fprintf(stderr, "ERROR: save state: the network board (ODIN_NETBD) is not in the states yet\n");
-		return false;
-	}
 	std::strncpy(name, m_game.name.c_str(), sizeof(name) - 1);
 	if (!state.put(name) || !state.put(m_frame)) {
 		std::fprintf(stderr, "ERROR: save state: cannot save header\n");
@@ -135,10 +137,21 @@ Hikaru::save_items(StateFile &state)
 	     put_chip<SchedulerState>(state, m_sched) &&
 	     state.put(m_line) && state.put(m_dots_per_line) && state.put(m_lines_per_frame) &&
 	     state.put(m_lines_shown) && state.put(m_line_rest);
-	/* The drive board, when it runs its program: last, a state without it
-	 * still loads */
+	/* The boards a cabinet may not have, last, each known by the size of
+	 * its item: a state without one of them still loads. The drive board
+	 * when it runs its program, the network board and the frames on their
+	 * way to it. */
 	if (ok && m_drive)
 		ok = put_chip<Drive838_13366::State>(state, *m_drive);
+	if (ok && m_netbd) {
+		const auto item = std::make_unique<NetbdItem>();
+
+		std::memset(item.get(), 0, sizeof(NetbdItem));
+		m_netbd->save(item->board);
+		item->acc = m_netbd_acc;
+		item->owed = m_netbd_owed;
+		ok = state.put(*item) && put_bytes(state, m_netbd->frames_save());
+	}
 	if (!ok)
 		std::fprintf(stderr, "ERROR: save state: cannot save machine\n");
 	return ok;
@@ -151,10 +164,6 @@ Hikaru::load_items(StateFile &state)
 	RomBoard::Config rombd;
 	bool ok;
 
-	if (m_netbd) {
-		std::fprintf(stderr, "ERROR: load state: the network board (ODIN_NETBD) is not in the states yet\n");
-		return false;
-	}
 	ok = state.get(name);
 	if (ok && std::strncmp(name, m_game.name.c_str(), sizeof(name))) {
 		std::fprintf(stderr, "ERROR: load state: made with the game '%.32s'\n", name);
@@ -212,9 +221,34 @@ Hikaru::load_items(StateFile &state)
 		std::fprintf(stderr, "ERROR: load state: cannot load machine\n");
 		return false;
 	}
-	if (m_drive && !get_chip<Drive838_13366::State>(state, *m_drive)) {
+	/* A board the state does not have starts again (from the reset
+	 * above); one the cabinet does not have is passed */
+	if (state.next_size() == sizeof(Drive838_13366::State))
+		ok = m_drive ? get_chip<Drive838_13366::State>(state, *m_drive) : state.skip();
+	else if (m_drive)
 		std::printf("load state: no drive board in it: the board starts again\n");
-		m_drive->reset();
+	if (ok && state.next_size() == sizeof(NetbdItem)) {
+		if (m_netbd) {
+			const auto item = std::make_unique<NetbdItem>();
+			std::vector<uint8_t> frames;
+
+			ok = state.get(*item);
+			if (ok) {
+				m_netbd->load(item->board);
+				m_netbd_acc = item->acc;
+				m_netbd_owed = item->owed;
+				frames.resize(state.next_size());
+				ok = get_bytes(state, frames) && m_netbd->frames_load(frames);
+			}
+		} else {
+			ok = state.skip() && state.skip();
+		}
+	} else if (ok && m_netbd) {
+		std::printf("load state: no network board in it: the board starts again\n");
+	}
+	if (!ok) {
+		std::fprintf(stderr, "ERROR: load state: cannot load the drive or network board\n");
+		return false;
 	}
 	if (m_drive)
 		m_drive_owed = m_drive->clocks();

@@ -104,6 +104,15 @@ void test_save_and_load(const std::string &dir)
 		check(state.get(back) && state.get(back5, sizeof(back5)) && back5[4] == 5, "both items in their order");
 		check(!state.get(back), "nothing after the last item");
 	}
+	{
+		StateFile state(path, StateFile::Mode::LOAD);
+		uint8_t back5[5] = {};
+
+		check(state.next_size() == 4 && state.next_size() == 4, "the size of the next item, left to be read");
+		check(state.skip() && state.next_size() == 5, "an item passed");
+		check(state.get(back5, sizeof(back5)) && back5[0] == 1, "the item after it read");
+		check(state.next_size() == 0 && !state.skip(), "no size and nothing to pass after the last item");
+	}
 	std::remove(path.c_str());
 }
 

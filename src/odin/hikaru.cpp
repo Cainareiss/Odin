@@ -1166,6 +1166,18 @@ Hikaru::power_off()
 			std::fwrite(memory.bytes.data(), 1, memory.bytes.size(), file);
 			std::fclose(file);
 		}
+		/* The network board, as a state keeps it */
+		if (m_netbd) {
+			const auto board = std::make_unique<NetBoard837_13404::State>();
+			const std::string path = m_game.name + "-netbd.bin";
+
+			std::memset(board.get(), 0, sizeof(*board));
+			m_netbd->save(*board);
+			if (std::FILE *const file = std::fopen(path.c_str(), "wb")) {
+				std::fwrite(board.get(), 1, sizeof(*board), file);
+				std::fclose(file);
+			}
+		}
 	}
 
 	for (const auto &[name, bytes] : kept_memories())
