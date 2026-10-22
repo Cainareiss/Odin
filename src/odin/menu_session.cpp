@@ -328,11 +328,21 @@ MenuSession::open(int page)
 	m_controls.quiet();
 	if (m_audio)
 		m_audio->pause(true);
-	/* The page Input shows the gamepad of the player when there is one,
-	 * until the user picks a device */
-	if (!m_menu_opened)
-		for (unsigned player = 0; player < 2; player++)
-			m_menu_state.gamepad[player] = !m_controls.pad_name(player).empty();
+	/* The page Input shows the device of each player, until the user picks
+	 * one: their joystick in a game with a wheel, else their gamepad, else
+	 * their joystick, else the keyboard */
+	if (!m_menu_opened) {
+		using Device = MenuState::Device;
+		const bool wheel = m_game && std::any_of(m_game->controls.begin(), m_game->controls.end(),
+		                                         [](const GameControl &control) { return control.role == Role::STEER; });
+
+		for (unsigned player = 0; player < 2; player++) {
+			const bool pad = !m_controls.pad_name(player).empty(), joystick = m_controls.joystick_id(player) != 0;
+
+			m_menu_state.input_device[player] = joystick && (wheel || !pad) ? Device::JOYSTICK :
+			                                    pad                         ? Device::PAD : Device::KEYBOARD;
+		}
+	}
 	m_menu_opened = true;
 	m_display.open_menu(page);
 	m_menu_pictures = MENU_PICTURES;

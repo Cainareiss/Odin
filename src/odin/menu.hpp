@@ -234,6 +234,10 @@ struct MenuState {
 	};
 	std::vector<Plugged> plugged;
 	std::optional<std::pair<std::string, std::string>> want;
+	/* The joysticks that are no gamepads (a wheel), the same (kind: their
+	 * SDL_JoystickType), and the one asked for the player shown */
+	std::vector<Plugged> joysticks;
+	std::optional<std::pair<std::string, std::string>> want_joystick;
 	/* The light guns and mice read one by one (pointers.hpp) that were
 	 * seen: identity, name, plugged in, aiming (else moving); that of each
 	 * player in the game shown (its identity; empty: none) and whether the
@@ -247,11 +251,13 @@ struct MenuState {
 	std::array<std::string, 2> gun;
 	std::array<bool, 2> sights{};
 	std::optional<std::pair<unsigned, Gun>> want_gun;
-	/* The player shown, and the inputs of each player: of the gamepad, else
-	 * of the keyboard (and the mouse, shown); what the gamepad of each player
-	 * does now; the controls as a list rather than on the drawing */
+	/* The player shown, and the inputs of each player shown: of the
+	 * keyboard (and the mouse), of the gamepad or of the joystick; what the
+	 * gamepad of each player does now; the controls as a list rather than
+	 * on the drawing */
+	enum class Device : uint8_t { KEYBOARD, PAD, JOYSTICK };
 	unsigned player = 0;
-	std::array<bool, 2> gamepad{};
+	std::array<Device, 2> input_device{};
 	std::array<PadState, 2> pad_states{};
 	/* The keys held now */
 	std::vector<SDL_Keycode> keys_held;
@@ -284,7 +290,14 @@ struct MenuState {
 	/* In a window not wide enough for both, the cabinet in place of the
 	 * device */
 	bool cabinet_shown = false;
-	bool on_pad() const { return gamepad[player & 1]; }
+	bool on_pad() const { return input_device[player & 1] == Device::PAD; }
+	bool on_joystick() const { return input_device[player & 1] == Device::JOYSTICK; }
+	/* The kind of input of the device shown (the mouse goes with the
+	 * keyboard) */
+	HostInput::Kind shown_kind() const
+	{
+		return on_pad() ? HostInput::Kind::PAD : on_joystick() ? HostInput::Kind::JOY : HostInput::Kind::KEY;
+	}
 	/* The part whose next input is caught, and those caught after it, in
 	 * turn; the part the frame of the gamepad is on (drawn as if caught);
 	 * what the page asks of the inputs of the player and the device shown,

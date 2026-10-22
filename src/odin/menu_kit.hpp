@@ -195,7 +195,7 @@ public:
 	 * back, a cross, a start and its bar, an arrow back; the rune ᚨ */
 	enum class Icon {
 		NONE, PAD, INPUT, DISPLAY, AUDIO, KEYBOARD, HOTKEYS, OUTPUTS, FOLDER, ABOUT, LAMP, RUMBLE, LOCK, MUTE,
-		LIST, SWAP, DEFAULTS, CLEAR, MAP, UNDO, RUNE, SETTINGS,
+		LIST, SWAP, DEFAULTS, CLEAR, MAP, UNDO, RUNE, SETTINGS, WHEEL,
 	};
 	static void icon(ImDrawList *list, Icon icon, ImVec2 at, float side, ImU32 colour);
 

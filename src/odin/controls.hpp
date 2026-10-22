@@ -121,6 +121,8 @@ public:
 	 * player wants */
 	std::vector<Plugged> joysticks() const;
 	void want_joystick(unsigned player, const std::string &guid);
+	/* The id of the joystick of a player (0: none) */
+	SDL_JoystickID joystick_id(unsigned player) const { return joystick(player) ? m_joy_seats[player & 1] : 0; }
 
 	void read_inputs(MieBoard::Inputs &inputs) override { m_panel.fill(inputs); }
 	/* The outputs of the board after a frame: the pad of a player shakes

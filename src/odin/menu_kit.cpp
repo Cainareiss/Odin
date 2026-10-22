@@ -464,6 +464,13 @@ MenuKit::icon(ImDrawList *list, Icon icon, ImVec2 at, float side, ImU32 colour)
 			list->AddLine(p(5.5f, 13.5f), p(8.5f, 13.5f), colour, w);
 		}
 		break;
+	case Icon::WHEEL:
+		list->AddCircle(p(12, 12), 9.0f * k, colour, 0, w);
+		list->AddCircle(p(12, 12), 2.5f * k, colour, 0, w);
+		list->AddLine(p(3, 12), p(9.5f, 12), colour, w);
+		list->AddLine(p(14.5f, 12), p(21, 12), colour, w);
+		list->AddLine(p(12, 14.5f), p(12, 21), colour, w);
+		break;
 	case Icon::DISPLAY:
 		list->AddRect(p(3, 5), p(21, 17), colour, 2.0f * k, ImDrawFlags_None, w);
 		list->AddLine(p(8, 21), p(16, 21), colour, w);

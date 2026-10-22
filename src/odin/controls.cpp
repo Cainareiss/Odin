@@ -281,11 +281,13 @@ Controls::open_joystick(SDL_JoystickID id)
 	joy.guid = guid;
 	joy.state.axes.assign(static_cast<size_t>(axes), 0);
 	joy.state.known.assign(static_cast<size_t>(axes), false);
+	joy.state.rest.assign(static_cast<size_t>(axes), 0);
 	for (int axis = 0; axis < axes; axis++) {
 		Sint16 first = 0;
 
 		if (SDL_GetJoystickAxisInitialState(handle, axis, &first)) {
-			joy.state.axes[static_cast<size_t>(axis)] = SDL_GetJoystickAxis(handle, axis);
+			joy.state.axes[static_cast<size_t>(axis)] = joy.state.rest[static_cast<size_t>(axis)] =
+				SDL_GetJoystickAxis(handle, axis);
 			joy.state.known[static_cast<size_t>(axis)] = true;
 		}
 	}
@@ -382,6 +384,8 @@ Controls::event(const SDL_Event &event)
 		return true;
 	case SDL_EVENT_JOYSTICK_AXIS_MOTION:
 		if (Joy *const joy = find_joystick(event.jaxis.which); joy && event.jaxis.axis < joy->state.axes.size()) {
+			if (!joy->state.known[event.jaxis.axis])
+				joy->state.rest[event.jaxis.axis] = event.jaxis.value;
 			joy->state.axes[event.jaxis.axis] = event.jaxis.value;
 			joy->state.known[event.jaxis.axis] = true;
 		}

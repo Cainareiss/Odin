@@ -79,12 +79,14 @@ struct MouseState {
 /* A joystick that is no gamepad (a wheel) as the host sees it now, all
  * of its way and no dead zone: its axes as SDL gives them, its buttons,
  * its hats (SDL_HAT_UP...); which axes have a value (SDL tells the first
- * one when it opens it, else its first move) */
+ * one when it opens it, else its first move), and that first value, where
+ * the axis rested */
 struct JoyState {
 	std::vector<int16_t> axes;
 	std::vector<bool> known;
 	std::vector<bool> buttons;
 	std::vector<uint8_t> hats;
+	std::vector<int16_t> rest;
 };
 
 /* What the host holds now: the keys down, the pad, the joystick and the

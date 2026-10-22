@@ -261,20 +261,22 @@ struct InputRow {
 };
 
 /* The controls of the player in the order of the game, then the coin, the
- * SERVICE of the player and TEST (player 1): an axis on a gamepad only (or
- * the mouse that aims) */
+ * SERVICE of the player and TEST (player 1): an axis on a gamepad or a
+ * joystick only (or the mouse that aims) */
 std::vector<InputRow>
 input_rows(const MenuState &state)
 {
 	const ControlPanel &panel = *state.panel;
 	const Bindings &bindings = panel.bindings();
 	const std::vector<GameControl> &controls = panel.controls();
-	const bool pad = state.on_pad();
+	/* A gamepad or a joystick has axes: the whole of an analog control */
+	const HostInput::Kind kind = state.shown_kind();
+	const bool pad = kind != HostInput::Kind::KEY;
 	std::vector<InputRow> rows;
 	std::optional<InputRow> service;
 	const auto add = [&](std::string name, MenuSlot slot, std::vector<HostInput> inputs, bool lit, bool catchable) {
-		std::erase_if(inputs, [pad](const HostInput &in) {
-			return in.kind == HostInput::Kind::JOY || (in.kind == HostInput::Kind::PAD) != pad;
+		std::erase_if(inputs, [kind](const HostInput &in) {
+			return (in.kind == HostInput::Kind::MOUSE ? HostInput::Kind::KEY : in.kind) != kind;
 		});
 		rows.push_back({ std::move(name), slot, std::move(inputs), lit, catchable });
 	};
@@ -855,7 +857,7 @@ namespace {
 float
 devices_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width, bool two)
 {
-	static constexpr char FOOT[] = "Each game keeps its own gamepad. The keyboard and mouse always play.";
+	static constexpr char FOOT[] = "Each game keeps its own devices. The keyboard and mouse always play.";
 	ImDrawList *const list = ImGui::GetWindowDrawList();
 	const MenuPalette &palette = kit.palette();
 	const float h = kit.picker_height(), spacing = kit.px(10.0f);
@@ -869,20 +871,28 @@ devices_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width, bool t
 			{ "Keyboard and mouse", "Keyboard + mouse", {}, MenuKit::Icon::KEYBOARD, false },
 		};
 		int device = 0;
+		const auto add = [&](const std::vector<MenuState::Plugged> &plugged, MenuState::Device shown, bool pads) {
+			for (size_t i = 0; i < plugged.size(); i++) {
+				const MenuState::Plugged &one = plugged[i];
+				const auto before = std::count_if(plugged.begin(), plugged.begin() + static_cast<std::ptrdiff_t>(i),
+				                                  [&one](const MenuState::Plugged &other) { return other.name == one.name; });
+				const auto type = static_cast<SDL_JoystickType>(one.kind);
 
-		for (size_t i = 0; i < state.plugged.size(); i++) {
-			const MenuState::Plugged &pad = state.plugged[i];
-			const auto before = std::count_if(state.plugged.begin(), state.plugged.begin() + static_cast<std::ptrdiff_t>(i),
-			                                  [&pad](const MenuState::Plugged &other) { return other.name == pad.name; });
+				if (state.input_device[player] == shown && one.player == static_cast<int>(player))
+					device = static_cast<int>(devices.size());
+				devices.push_back({ before ? one.name + " (" + std::to_string(before + 1) + ")" : one.name,
+				                    pads ? std::string("Controller · ") + pad_drawing_name(one.kind) :
+				                    type == SDL_JOYSTICK_TYPE_WHEEL        ? "Wheel" :
+				                    type == SDL_JOYSTICK_TYPE_FLIGHT_STICK ? "Flight stick" : "Joystick",
+				                    one.connection == SDL_JOYSTICK_CONNECTION_WIRED    ? "WIRED" :
+				                    one.connection == SDL_JOYSTICK_CONNECTION_WIRELESS ? "WIRELESS" : "",
+				                    pads || type != SDL_JOYSTICK_TYPE_WHEEL ? MenuKit::Icon::PAD : MenuKit::Icon::WHEEL,
+				                    true });
+			}
+		};
 
-			if (state.gamepad[player] && pad.player == static_cast<int>(player))
-				device = static_cast<int>(devices.size());
-			devices.push_back({ before ? pad.name + " (" + std::to_string(before + 1) + ")" : pad.name,
-			                    std::string("Controller · ") + pad_drawing_name(pad.kind),
-			                    pad.connection == SDL_JOYSTICK_CONNECTION_WIRED    ? "WIRED" :
-			                    pad.connection == SDL_JOYSTICK_CONNECTION_WIRELESS ? "WIRELESS" : "",
-			                    MenuKit::Icon::PAD, true });
-		}
+		add(state.plugged, MenuState::Device::PAD, true);
+		add(state.joysticks, MenuState::Device::JOYSTICK, false);
 
 		float x = at.x + static_cast<float>(player) * (each + spacing);
 		float w = each;
@@ -901,16 +911,20 @@ devices_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width, bool t
 			x += size.x + kit.px(8.0f);
 			w -= size.x + kit.px(8.0f);
 		}
-		const MenuKit::Icon kind = device ? MenuKit::Icon::PAD : MenuKit::Icon::KEYBOARD;
+		const MenuKit::Icon kind = devices[static_cast<size_t>(device)].icon;
 
 		if (kit.picker("device", { x, at.y }, w, devices, device, kind, FOOT)) {
-			const size_t chosen = static_cast<size_t>(device);
+			const size_t chosen = static_cast<size_t>(device), pads = state.plugged.size();
 
 			state.player = player;
-			state.gamepad[player] = device != 0;
+			state.input_device[player] = chosen == 0 ? MenuState::Device::KEYBOARD :
+			                             chosen <= pads ? MenuState::Device::PAD : MenuState::Device::JOYSTICK;
 			state.catching.reset();
-			if (chosen >= 1 && chosen - 1 < state.plugged.size())
+			if (chosen >= 1 && chosen <= pads)
 				state.want = std::pair(state.plugged[chosen - 1].guid, state.plugged[chosen - 1].name);
+			else if (chosen > pads && chosen - pads - 1 < state.joysticks.size())
+				state.want_joystick = std::pair(state.joysticks[chosen - pads - 1].guid,
+				                                state.joysticks[chosen - pads - 1].name);
 		}
 		ImGui::PopID();
 	}
@@ -1449,8 +1463,8 @@ keyboard_box(const MenuKit &kit, const MenuState &state, std::span<const InputRo
 std::string
 prompt(const MenuState &state, const MenuSlot &slot)
 {
-	const bool pad = state.on_pad();
-	const std::string thing = pad ? "button" : "key";
+	const bool joystick = state.on_joystick();
+	const std::string thing = state.on_pad() || joystick ? "button" : "key";
 	const GameControl *const control = slot.control >= 0 ? &state.panel->controls()[static_cast<size_t>(slot.control)] :
 	                                   nullptr;
 
@@ -1463,7 +1477,9 @@ prompt(const MenuState &state, const MenuSlot &slot)
 	const bool vertical = control->low == GameControl::Low::UP || control->low == GameControl::Low::DOWN;
 
 	if (slot.part == 0)
-		return two_ways ? "Move a stick along it, or press a button for each way" : "Press the trigger or pedal you want";
+		return two_ways ? joystick ? "Move an axis along it, or press a button for each way" :
+		                             "Move a stick along it, or press a button for each way" :
+		                  "Press the trigger or pedal you want";
 	if (!two_ways)
 		return "Press the " + thing + " you want";
 	return "The " + thing + " for " + (slot.part == 1 ? (vertical ? "forward" : "left") : (vertical ? "back" : "right"));
@@ -1799,10 +1815,11 @@ Menu::page_input(MenuKit &kit, MenuState &state) const
 	const float bar_w = b.x - a.x - kit.px(20.0f);
 	const float bar_top = cabinet || options ? b.y : b.y - buttons_bar(kit, state, rows, bar_at, bar_w, false);
 	const ImVec2 inside = { b.x, bar_top };
-	/* The buttons in the corner of the box: Classic for a gamepad, the
-	 * swap of the device and the cabinet in a narrow window */
+	/* The buttons in the corner of the box: Classic for a gamepad or the
+	 * keyboard (a joystick has a list alone), the swap of the device and the
+	 * cabinet in a narrow window */
 	const char *const swap = cabinet ? "Controller" : "Cabinet";
-	const bool classic = !cabinet && !options;
+	const bool classic = !cabinet && !options && !state.on_joystick();
 	const ImVec2 classic_size = kit.button_size("Classic", Icon::LIST), swap_size = kit.button_size(swap, Icon::SWAP);
 	const float corner = classic || !wide ? std::max(classic_size.y, swap_size.y) + kit.px(5.0f) : 0.0f;
 
@@ -1811,7 +1828,7 @@ Menu::page_input(MenuKit &kit, MenuState &state) const
 		cabinet_box(kit, state, a, b, false);
 	else if (options)
 		advanced_box(kit, state, a, b);
-	else if (state.classic)
+	else if (state.classic || state.on_joystick())
 		list_box(kit, state, rows, a, inside, corner);
 	else if (state.on_pad())
 		pad_box(kit, state, rows, a, inside, corner);

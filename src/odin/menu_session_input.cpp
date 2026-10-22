@@ -24,7 +24,9 @@ namespace odin {
 
 /* The page Input waits for an input: Escape lets it go; a key, or on a
  * gamepad a button (Guide held, then another: both), a stick or a trigger
- * from half its way, is the one. True when the event was taken. */
+ * from half its way, or on a joystick a button, a hat or an axis from half
+ * its way off where it rested, is the one. True when the event was
+ * taken. */
 bool
 MenuSession::catch_input(const SDL_Event &event)
 {
@@ -46,9 +48,9 @@ MenuSession::catch_input(const SDL_Event &event)
 			state.mapping.reset();
 			return true;
 		}
-		/* A gamepad is caught: the keys of quitting and of the whole display
-		 * work as in the rest of the menu */
-		if (state.on_pad()) {
+		/* A gamepad or a joystick is caught: the keys of quitting and of the
+		 * whole display work as in the rest of the menu */
+		if (state.on_pad() || state.on_joystick()) {
 			const auto action = m_hotkeys.key_action(event.key.key, event.key.mod);
 
 			return action != Hotkeys::Action::QUIT && action != Hotkeys::Action::FULLSCREEN;
@@ -109,9 +111,112 @@ MenuSession::catch_input(const SDL_Event &event)
 		catch_pad(axis, axis ? event.gaxis.axis : event.gbutton.button, value);
 		return true;
 	}
+	case SDL_EVENT_JOYSTICK_AXIS_MOTION:
+	case SDL_EVENT_JOYSTICK_BUTTON_DOWN:
+	case SDL_EVENT_JOYSTICK_BUTTON_UP:
+	case SDL_EVENT_JOYSTICK_HAT_MOTION:
+	case SDL_EVENT_JOYSTICK_ADDED:
+	case SDL_EVENT_JOYSTICK_REMOVED: {
+		/* Where the axis was before this move */
+		const JoyState *const joy = m_controls.host_state().joys[state.player & 1];
+		const size_t axis = event.jaxis.axis;
+		const int was = event.type == SDL_EVENT_JOYSTICK_AXIS_MOTION && joy && axis < joy->axes.size() ? joy->axes[axis] : 0;
+
+		m_controls.event(event);
+		if (state.on_joystick())
+			catch_joystick(event, was);
+		return true;
+	}
 	default:
 		return false;
 	}
+}
+
+/* A button on an analog control goes on its half: of a pedal, or of each
+ * way in turn */
+void
+MenuSession::button_on_analog()
+{
+	MenuState &state = m_menu_state;
+
+	if (state.catching->control < 0 || state.catching->part != 0)
+		return;
+
+	const auto c = static_cast<size_t>(state.catching->control);
+	const GameControl &control = panel_shown().controls()[c];
+
+	if (control.type == GameControl::Type::ANALOG) {
+		const bool two_ways = GameControl::half(control.low, false);
+		const MenuSlot other_way = { state.catching->control, 2, state.catching->role };
+
+		state.catching->part = two_ways ? 1 : 2;
+		if (two_ways)
+			state.catch_next.insert(state.catch_next.begin(), other_way);
+	}
+}
+
+/* An input of the joystick of the player caught: a button pressed, a way
+ * of a hat, an axis moving away from where it rested, from half its way
+ * (one coming back, a pedal let go after it was caught, is none): whole
+ * on an analog control, turned over for a pedal pressed toward the bottom
+ * of its axis (a G29), else its half */
+void
+MenuSession::catch_joystick(const SDL_Event &event, int was)
+{
+	MenuState &state = m_menu_state;
+	const SDL_JoystickID mine = m_controls.joystick_id(state.player);
+	const JoyState *const joy = m_controls.host_state().joys[state.player & 1];
+	HostInput input{};
+	JoyInput &in = input.joy;
+
+	if (!state.catching || !mine || !joy)
+		return;
+	input.kind = HostInput::Kind::JOY;
+	switch (event.type) {
+	case SDL_EVENT_JOYSTICK_BUTTON_DOWN:
+		if (event.jbutton.which != mine)
+			return;
+		in.type = JoyInput::Type::BUTTON;
+		in.index = event.jbutton.button;
+		button_on_analog();
+		break;
+	case SDL_EVENT_JOYSTICK_HAT_MOTION: {
+		const uint8_t value = event.jhat.value;
+
+		if (event.jhat.which != mine || !value)
+			return;
+		in.type = JoyInput::Type::HAT;
+		in.index = event.jhat.hat;
+		in.way = static_cast<uint8_t>(value & -value);
+		button_on_analog();
+		break;
+	}
+	case SDL_EVENT_JOYSTICK_AXIS_MOTION: {
+		const size_t axis = event.jaxis.axis;
+
+		if (event.jaxis.which != mine || axis >= joy->rest.size())
+			return;
+
+		const int moved = event.jaxis.value - joy->rest[axis];
+
+		if (std::abs(moved) < ControlPanel::PRESSED || std::abs(moved) <= std::abs(was - joy->rest[axis]))
+			return;
+		in.index = event.jaxis.axis;
+		in.type = moved < 0 ? JoyInput::Type::AXIS_NEGATIVE : JoyInput::Type::AXIS_POSITIVE;
+		const GameControl *const control =
+			state.catching->control >= 0 ? &panel_shown().controls()[static_cast<size_t>(state.catching->control)] :
+			                               nullptr;
+
+		if (control && control->type == GameControl::Type::ANALOG && state.catching->part == 0) {
+			in.type = JoyInput::Type::AXIS;
+			in.inverted = !GameControl::half(control->low, false) && moved < 0;
+		}
+		break;
+	}
+	default:
+		return;
+	}
+	caught(input);
 }
 
 /* Whether a button of a gamepad presses in the menu (menu_nav.hpp) */
@@ -144,21 +249,8 @@ MenuSession::catch_pad(bool axis, int index, int value)
 	/* A stick on a part that is pressed: its half */
 	if (axis && index < SDL_GAMEPAD_AXIS_LEFT_TRIGGER && state.catching->part != 0)
 		input.pad.type = value < 0 ? PadInput::Type::AXIS_NEGATIVE : PadInput::Type::AXIS_POSITIVE;
-	/* A button on an analog control goes on its half: of a pedal, or of
-	 * each way in turn */
-	if (!axis && state.catching->control >= 0 && state.catching->part == 0) {
-		const auto c = static_cast<size_t>(state.catching->control);
-		const GameControl &control = panel_shown().controls()[c];
-
-		if (control.type == GameControl::Type::ANALOG) {
-			const bool two_ways = GameControl::half(control.low, false);
-			const MenuSlot other_way = { state.catching->control, 2, state.catching->role };
-
-			state.catching->part = two_ways ? 1 : 2;
-			if (two_ways)
-				state.catch_next.insert(state.catch_next.begin(), other_way);
-		}
-	}
+	if (!axis)
+		button_on_analog();
 	caught(input);
 }
 
@@ -286,7 +378,7 @@ MenuSession::change_inputs(bool to_defaults)
 std::vector<HostInput>
 MenuSession::kind_changed(std::vector<HostInput> inputs, const std::vector<HostInput> &standard, bool to_defaults) const
 {
-	const auto kind = m_menu_state.on_pad() ? HostInput::Kind::PAD : HostInput::Kind::KEY;
+	const auto kind = m_menu_state.shown_kind();
 
 	std::erase_if(inputs, [kind](const HostInput &in) { return in.kind == kind; });
 	if (to_defaults)

@@ -157,6 +157,8 @@ private:
 	bool navigate(MenuNav::Action action);
 	bool presses(int button) const;
 	void catch_pad(bool axis, int index, int value);
+	void catch_joystick(const SDL_Event &event, int was);
+	void button_on_analog();
 	void draw_menu();
 	void apply(const MenuState &was);
 	std::vector<HostInput> kind_changed(std::vector<HostInput> inputs, const std::vector<HostInput> &standard,
