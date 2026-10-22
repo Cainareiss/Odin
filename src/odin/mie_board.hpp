@@ -161,11 +161,10 @@ public:
 	 * bit 7 of the first byte. */
 	std::span<const uint8_t> io_outputs() const { return m_line ? m_line->outputs() : m_io->outputs(); }
 
-	/* Puts a CRP-1231 card reader on the serial block of the MIE.
-	 * card_file (may be nullptr) holds the three tracks of the card and
-	 * is loaded into the reader when it exists; trace (may be nullptr)
-	 * gets a line per frame. True when a card was loaded, false when the
-	 * reader starts empty. */
+	/* Puts a CRP-1231BR-10 card reader on the serial block of the MIE.
+	 * card_file (may be nullptr) holds the three tracks of the player's
+	 * card, given to the reader when it waits for one; trace (may be
+	 * nullptr) gets a line per frame. True when the player has a card. */
 	bool attach_card(const char *card_file, FILE *trace);
 
 	void save(State &out);

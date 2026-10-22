@@ -20,6 +20,7 @@
 
 #include "odin/card_reader.hpp"
 
+#include <algorithm>
 #include <format>
 #include <utility>
 
@@ -27,82 +28,111 @@ namespace odin {
 
 namespace {
 
-/* Layout of a master frame: STX LEN CMD 00 00 00 params ETX XOR. */
+/* Frame: STX LEN CMD 00 00 00 params ETX BCC; reply: STX LEN CMD st1 st2
+ * st3 data ETX BCC */
 constexpr uint32_t FRAME_PARAMS = 6;
 constexpr uint32_t FRAME_OVERHEAD = 8;
-/* Response: STX LEN CMD st1 st2 st3 data ETX XOR. */
-constexpr uint32_t RESPONSE_OVERHEAD = 8;
+constexpr uint32_t REPLY_DATA = 6;
+constexpr uint32_t LEN_MIN = 6;
 
-/* Read and write parameters (Flycast: mode, parity, track). */
-constexpr uint32_t PARAM_MODE = 0;
-constexpr uint32_t PARAM_TRACK = 2;
-constexpr uint32_t PARAM_DATA = 3;
-constexpr uint8_t MODE_CAPTURE = '2';
+/* The sensors each position covers (FUN_0000287e) */
+constexpr std::array<uint8_t, 10> SENSORS = { 0x00, 0x01, 0x03, 0x07, 0x06, 0x0E, 0x0C, 0x1C, 0x18, 0x10 };
 
-constexpr uint8_t ST2_OK = '0';
-constexpr uint8_t ST3_OK = '0';
-constexpr uint8_t ST3_CARD_WAIT = '4';
-constexpr uint8_t ST3_NO_CARD_IN_BOX = '5';
+/* What the decoders say of a track (FUN_000040d4, FUN_00004336,
+ * FUN_0000457e): read, no start (blank), no end, LRC, parity */
+enum Track : uint8_t { GOOD = 'O', BLANK = 'S', NO_END = 'E', LRC = 'L', PARITY = 'P' };
 
-constexpr uint32_t TRACE_BYTES = 32;
+/* Track selector of 33 and 53: '0'-'2' one track, '3' T1 T2, '4' T1 T3,
+ * '5' T2 T3, '6' all three; bit n = track n + 1, 0 not one */
+uint8_t tracks_of(uint8_t selector)
+{
+	static constexpr std::array<uint8_t, 7> MASK = { 1, 2, 4, 3, 5, 6, 7 };
+
+	return selector >= '0' && selector <= '6' ? MASK[selector - '0'] : 0;
+}
+
+bool even_parity(uint8_t byte)
+{
+	return (__builtin_popcount(byte) & 1) == 0;
+}
 
 } /* namespace */
 
 CardReader::CardReader(std::string card_file)
-	: m_card_file(std::move(card_file)), m_card_present(false), m_door_open(false),
-	  m_stocker_full(true), m_rx_count(0), m_response_size(0), m_tx_head(0), m_tx_count(0),
-	  m_log(nullptr), m_trace(nullptr), m_frame_logged(false), m_idle_logged(false)
+	: m_card_file(std::move(card_file)), m_card{}, m_position(NONE), m_in_hand(false), m_dispensed(false),
+	  m_ejected(false), m_shutter_open(false), m_stocker_full(true), m_retries(4), m_phase(IDLE), m_rx{},
+	  m_rx_count(0), m_command{}, m_command_size(0), m_second{}, m_second_size(0), m_reply{}, m_reply_size(0),
+	  m_reply_sent(false), m_tx{}, m_tx_head(0), m_tx_count(0), m_log(nullptr), m_trace(nullptr),
+	  m_frame_logged(false)
 {
-	m_card.fill(0);
 	m_cmd_logged.fill(false);
 	reset();
 }
 
-/* A card inside the mechanism stays there through a reset. */
+/* FUN_000020ee: four tries, the shutter as its sensors are (closed at
+ * power-up here), the boot reply in the buffer for a bare ENQ */
 void CardReader::reset()
 {
-	m_door_open = false;
+	m_ejected = false;
+	m_shutter_open = false;
+	m_retries = 4;
+	m_phase = IDLE;
 	m_rx_count = 0;
-	m_response_size = 0;
+	m_command_size = 0;
+	m_second_size = 0;
 	m_tx_head = 0;
 	m_tx_count = 0;
+	reply(CMD_INIT, '0', '0');
 }
 
 uint8_t CardReader::frame_xor(std::span<const uint8_t> bytes)
 {
 	uint8_t x = 0;
-	for (uint8_t b : bytes) {
+
+	for (uint8_t b : bytes)
 		x = static_cast<uint8_t>(x ^ b);
-	}
 	return x;
 }
 
-/* The line, byte by byte. Outside a frame the master sends ENQ for the
- * response, NAK for it again, ACK to close the exchange (firmware
- * FUN_000074dc state 2, FUN_00008418). */
+uint8_t CardReader::status1() const
+{
+	return static_cast<uint8_t>(SENSORS[m_position] | (m_stocker_full ? 0x20 : 0) | (m_shutter_open ? 0x80 : 0x40));
+}
+
+/* The line, byte by byte (FUN_000077fa). Outside a frame: ENQ runs the
+ * command ACKed, or sends the reply again (FUN_00007fce), as NAK does;
+ * STX starts a frame, which replaces one ACKed; anything else is let
+ * go. */
 void CardReader::receive(uint8_t byte)
 {
 	if (m_rx_count == 0) {
 		if (byte == ENQ || byte == NAK) {
-			if (m_trace) {
+			bool answer = true;
+
+			if (m_trace)
 				std::fputs(byte == ENQ ? "card: rx ENQ\n" : "card: rx NAK\n", m_trace);
-			}
-			send_response();
+			if (m_phase == ACKED && byte == NAK)
+				return;
+			if (m_phase == ACKED)
+				run(std::span<const uint8_t>(m_command.data(), m_command_size));
+			else if (byte == ENQ && m_phase == WAITING && m_second_size)
+				answer = second_frame(std::span<const uint8_t>(m_second.data(), m_second_size));
+			else if (m_phase == WAITING && m_in_hand)
+				read(std::span<const uint8_t>(m_command.data() + FRAME_PARAMS, 3));
+			else if (m_phase == WAITING)
+				reply(CMD_READ, '0', '4');
+			if (answer)
+				send_reply();
 			return;
 		}
-		if (byte == ACK) {
+		if (byte != STX)
 			return;
-		}
-		if (byte != STX) {
-			if (m_log && !m_idle_logged) {
-				m_idle_logged = true;
-				std::fputs(std::format("card: unexpected byte {:02x} outside a frame\n", byte).c_str(), m_log);
-			}
-			return;
-		}
+		m_second_size = 0;
 	}
 	m_rx[m_rx_count++] = byte;
-	if (m_rx_count >= 2 && m_rx_count == static_cast<uint32_t>(m_rx[1]) + 2) {
+	if (m_rx_count == 2 && byte < LEN_MIN) {
+		m_rx_count = 0;
+	} else if (m_rx_count >= 2 && m_rx_count == static_cast<uint32_t>(m_rx[1]) + 2) {
 		frame_complete();
 		m_rx_count = 0;
 	} else if (m_rx_count == FRAME_MAX) {
@@ -121,10 +151,11 @@ bool CardReader::has_byte()
 
 uint8_t CardReader::take_byte()
 {
-	if (m_tx_count <= m_tx_head) {
+	if (m_tx_count <= m_tx_head)
 		return 0;
-	}
+
 	const uint8_t v = m_tx[m_tx_head++];
+
 	if (m_tx_head == m_tx_count) {
 		m_tx_head = 0;
 		m_tx_count = 0;
@@ -134,238 +165,488 @@ uint8_t CardReader::take_byte()
 
 void CardReader::send(uint8_t byte)
 {
-	if (m_tx_count < m_tx.size()) {
+	if (m_tx_count < m_tx.size())
 		m_tx[m_tx_count++] = byte;
-	}
 }
 
-/* ETX in place and XOR right: the command runs and ACK goes back
- * (firmware FUN_0000830c, FUN_000083f4). */
+/* ETX in place and the BCC right: ACK, and the frame waits for its ENQ;
+ * while a read waits for a card it is a second frame, kept when it is
+ * one the program looks at then (FUN_00007ed2, FUN_000077fa states 7-8) */
 void CardReader::frame_complete()
 {
 	const std::span<const uint8_t> frame(m_rx.data(), m_rx_count);
+
 	trace_frame("rx", frame);
-	const uint8_t x = frame_xor(frame.subspan(1, m_rx_count - 2));
-	if (frame[m_rx_count - 2] != ETX || x != frame[m_rx_count - 1]) {
+	if (frame[m_rx_count - 2] != ETX || frame_xor(frame.subspan(1, m_rx_count - 2)) != frame[m_rx_count - 1]) {
 		if (m_log && !m_frame_logged) {
 			m_frame_logged = true;
-			std::fputs(std::format("card: bad frame, xor {:02x} expected {:02x}\n",
-			                       frame[m_rx_count - 1], x).c_str(), m_log);
+			std::fputs(std::format("card: bad frame, BCC {:02x}\n", frame[m_rx_count - 1]).c_str(), m_log);
 		}
 		send(NAK);
-		if (m_trace) {
+		if (m_trace)
 			std::fputs("card: tx NAK\n", m_trace);
+		return;
+	}
+	send(ACK);
+	if (m_trace)
+		std::fputs("card: tx ACK\n", m_trace);
+	if (m_phase == WAITING) {
+		const uint8_t cmd = frame[2];
+
+		if (cmd == CMD_CANCEL || cmd == CMD_STATUS || cmd == CMD_INIT || cmd == 0x1C || cmd == 0xE0 || cmd == 0xFF) {
+			m_second_size = std::min<uint32_t>(m_rx_count, static_cast<uint32_t>(m_second.size()));
+			std::copy_n(m_rx.begin(), m_second_size, m_second.begin());
 		}
 		return;
 	}
-	execute(frame);
-	send(ACK);
-	if (m_trace) {
-		std::fputs("card: tx ACK\n", m_trace);
-	}
+	std::copy_n(m_rx.begin(), m_rx_count, m_command.begin());
+	m_command_size = m_rx_count;
+	m_phase = ACKED;
 }
 
-/* Flycast track selector for read and write: '0'-'2' one track,
- * '3' 1+2, '4' 1+3, '5' 2+3, '6' all three. Bit n = track n+1. */
-uint8_t CardReader::track_mask(uint8_t selector) const
-{
-	switch (selector) {
-	case '0': return 0x1;
-	case '1': return 0x2;
-	case '2': return 0x4;
-	case '3': return 0x3;
-	case '4': return 0x5;
-	case '5': return 0x6;
-	case '6': return 0x7;
-	default: return 0;
-	}
-}
-
-void CardReader::execute(std::span<const uint8_t> frame)
+/* The ENQ after a second frame, while a read waits for a card
+ * (FUN_000077fa state 9, FUN_000060d0): 40 cancels it (no card is in),
+ * 20 gets the reply of the read again, 10 / 1C / E0 replace it, FF stops
+ * the program and its watchdog resets the reader, with no reply. False:
+ * nothing to send. */
+bool CardReader::second_frame(std::span<const uint8_t> frame)
 {
 	const uint8_t cmd = frame[2];
-	const uint32_t nparams = frame.size() > FRAME_OVERHEAD ? static_cast<uint32_t>(frame.size()) - FRAME_OVERHEAD : 0;
-	const std::span<const uint8_t> params = frame.subspan(FRAME_PARAMS, nparams);
-	const std::span<const uint8_t> none;
+	std::array<uint8_t, 16> copy;
 
+	std::copy(frame.begin(), frame.end(), copy.begin());
+	m_second_size = 0;
+	if (cmd == CMD_CANCEL) {
+		m_phase = IDLE;
+		reply(CMD_CANCEL, '0', '0');
+	} else if (cmd == CMD_STATUS) {
+		reply(CMD_READ, '0', '4');
+	} else if (cmd == 0xFF) {
+		reset();
+		return false;
+	} else {
+		run(std::span<const uint8_t>(copy.data(), frame.size()));
+	}
+	return true;
+}
+
+/* The command ACKed, on its ENQ, whose reply it builds (the command
+ * dispatch FUN_00002492, MARKDOWN/96c § 1) */
+void CardReader::run(std::span<const uint8_t> frame)
+{
+	uint8_t cmd = frame[2];
+	const uint32_t count = frame.size() > FRAME_OVERHEAD ? static_cast<uint32_t>(frame.size()) - FRAME_OVERHEAD : 0;
+	std::array<uint8_t, FRAME_MAX> copy;
+	std::span<const uint8_t> params(copy.data(), count);
+
+	std::copy_n(frame.begin() + FRAME_PARAMS, count, copy.begin());
+	m_phase = IDLE;
+	if (cmd == 0x1C || cmd == 0xE0) {
+		if (cmd == 0xE0 && count)
+			copy[0] = '0';
+		cmd = CMD_INIT;
+	}
 	switch (cmd) {
 	case CMD_INIT:
-	case CMD_GET_STATE:
-	case CMD_CANCEL:
-	case CMD_PRINT_SETTINGS:
-	case CMD_REGISTER_FONT:
+		/* '1' ejects a card, refused with the shutter closed */
+		if (!count || (params[0] != '0' && params[0] != '1') ||
+		    (params[0] == '1' && m_position != NONE && !m_shutter_open)) {
+			refuse(cmd);
+			break;
+		}
+		if (params[0] == '1' && m_position != NONE)
+			eject();
+		reply(cmd, '0', '0');
+		break;
+	case CMD_STATUS:
+		reply(cmd, '0', '0');
+		break;
+	case CMD_READ:
+		read(params);
+		break;
+	case CMD_WRITE:
+		write(params);
+		break;
+	case CMD_FONT:
+		/* A glyph for slot 1-0x14 (kept by the reader for its prints;
+		 * nothing is printed here) */
+		if (!count || params[0] < 1 || params[0] > FONT_SLOTS)
+			refuse(cmd);
+		else
+			reply(cmd, '0', '0');
+		break;
 	case CMD_PRINT:
-	case CMD_ERASE_PRINT:
+		if (m_position == NONE || m_position == S1)
+			refuse(cmd);
+		else
+			reply(cmd, '0', '0');
+		break;
+	case CMD_EJECT:
+		if (m_position == NONE || !m_shutter_open) {
+			refuse(cmd);
+			break;
+		}
+		eject();
+		reply(cmd, '0', '0');
+		break;
 	case CMD_CLEAN:
-		respond(cmd, ST3_OK, none);
-		return;
-	case CMD_DOOR:
-		m_door_open = nparams >= 1 && params[0] == '1';
-		respond(cmd, ST3_OK, none);
-		return;
+		/* HEURISTIC: the cleaning card is given at once (on a cabinet the
+		 * operator inserts it, the reader waiting with st3 '4') */
+		if (!m_shutter_open || m_ejected) {
+			refuse(cmd);
+			break;
+		}
+		log_once(cmd, "cleaning card given at once");
+		reply(cmd, '0', '0');
+		break;
 	case CMD_DISPENSE:
-		/* A blank card from the stocker lands at the head. */
+		/* A card from the stocker stops at S3S4S5; nothing is written on
+		 * it. HEURISTIC: its track 1 recorded by the factory, 69 zeros
+		 * (the game reads 'V': only track 1 good); tracks 2 and 3 blank */
 		if (!m_stocker_full) {
-			respond(cmd, ST3_NO_CARD_IN_BOX, none);
-			return;
+			reply(cmd, '0', '5');
+			break;
+		}
+		if (m_position != NONE && m_position != S5) {
+			refuse(cmd);
+			break;
 		}
 		m_card.fill(0);
-		m_card_present = true;
-		m_door_open = false;
-		respond(cmd, ST3_OK, none);
-		return;
-	case CMD_EJECT:
-		m_card_present = false;
-		respond(cmd, ST3_OK, none);
-		return;
-	case CMD_READ: {
-		if (!m_card_present || m_door_open) {
-			respond(cmd, m_card_present ? ST3_OK : ST3_CARD_WAIT, none);
-			return;
+		m_card[0] = 0xFF;
+		m_card[TRACK_DATA + 1] = 0xFF;
+		m_card[TRACK_DATA + 2] = 0xFF;
+		m_position = S3S4S5;
+		m_dispensed = true;
+		reply(cmd, '0', '0');
+		break;
+	case CMD_RETRIES:
+		if (!count || params[0] < '1' || params[0] > '9') {
+			refuse(cmd);
+			break;
 		}
-		std::array<uint8_t, CARD_SIZE> out;
-		uint32_t size = 0;
-		const uint8_t mask = nparams > PARAM_TRACK ? track_mask(params[PARAM_TRACK]) : 0;
-		if (nparams > PARAM_MODE && params[PARAM_MODE] != MODE_CAPTURE) {
-			for (uint32_t t = 0; t < TRACKS; t++) {
-				if (mask & (1u << t)) {
-					for (uint32_t i = 0; i < TRACK_SIZE; i++) {
-						out[size++] = m_card[t * TRACK_SIZE + i];
-					}
-				}
-			}
+		m_retries = static_cast<uint8_t>(params[0] - '0');
+		reply(cmd, '0', '0');
+		break;
+	case CMD_SHUTTER:
+		/* Refused when it is already as asked; any other parameter
+		 * than '1' closes it */
+		if ((count && params[0] == '1') == m_shutter_open) {
+			refuse(cmd);
+			break;
 		}
-		respond(cmd, ST3_OK, std::span<const uint8_t>(out.data(), size));
-		return;
-	}
-	case CMD_WRITE: {
-		if (!m_card_present) {
-			respond(cmd, ST3_CARD_WAIT, none);
-			return;
-		}
-		const uint8_t mask = nparams > PARAM_TRACK ? track_mask(params[PARAM_TRACK]) : 0;
-		uint32_t pos = PARAM_DATA;
-		for (uint32_t t = 0; t < TRACKS; t++) {
-			if ((mask & (1u << t)) && pos + TRACK_SIZE <= nparams) {
-				for (uint32_t i = 0; i < TRACK_SIZE; i++) {
-					m_card[t * TRACK_SIZE + i] = params[pos + i];
-				}
-				pos += TRACK_SIZE;
-			}
-		}
-		save_card();
-		respond(cmd, ST3_OK, none);
-		return;
-	}
+		m_shutter_open = !m_shutter_open;
+		reply(cmd, '0', '0');
+		break;
+	case CMD_CANCEL:
+		/* Not a command at rest: it only cancels a read that waits */
+		refuse(cmd);
+		break;
 	default:
+		log_once(cmd, "not answered as the program does: refused");
+		refuse(cmd);
 		break;
 	}
-	if (m_log && !m_cmd_logged[cmd]) {
-		m_cmd_logged[cmd] = true;
-		std::fputs(std::format("card: unknown command {:02x}, {} parameter bytes, answered OK\n",
-		                       cmd, nparams).c_str(), m_log);
-	}
-	respond(cmd, ST3_OK, none);
+	if (m_phase != WAITING)
+		m_command_size = 0;
 }
 
-uint8_t CardReader::status1() const
+/* 33 mode parity track (FUN_00005d0a, the read op FUN_00009602): the card
+ * taken in and read, tracks T1 T2 T3 in order, 69 bytes each */
+void CardReader::read(std::span<const uint8_t> params)
 {
-	return static_cast<uint8_t>(((m_door_open ? 2u : 1u) << 6) | (m_stocker_full ? 0x20u : 0u) |
-	                            (m_card_present ? 0x18u : 0u));
-}
+	const uint8_t mask = params.size() >= 3 ? tracks_of(params[2]) : 0;
 
-/* Builds the response the next ENQ fetches. */
-void CardReader::respond(uint8_t cmd, uint8_t st3, std::span<const uint8_t> data)
-{
-	if (data.size() > FRAME_MAX - RESPONSE_OVERHEAD) {
-		data = data.first(FRAME_MAX - RESPONSE_OVERHEAD);
-	}
-	uint32_t n = 0;
-	m_response[n++] = STX;
-	m_response[n++] = static_cast<uint8_t>(RESPONSE_OVERHEAD - 2 + data.size());
-	m_response[n++] = cmd;
-	m_response[n++] = status1();
-	m_response[n++] = ST2_OK;
-	m_response[n++] = st3;
-	for (uint8_t b : data) {
-		m_response[n++] = b;
-	}
-	m_response[n++] = ETX;
-	m_response[n] = frame_xor(std::span<const uint8_t>(m_response.data() + 1, n - 1));
-	m_response_size = n + 1;
-}
-
-void CardReader::send_response()
-{
-	if (m_response_size == 0) {
-		if (m_log && !m_idle_logged) {
-			m_idle_logged = true;
-			std::fputs("card: ENQ before any command\n", m_log);
-		}
+	if (params.size() < 3 || params[0] < '0' || params[0] > '2' || (params[1] != '0' && params[1] != '1') ||
+	    !mask || m_ejected) {
+		m_phase = IDLE;
+		refuse(CMD_READ);
 		return;
 	}
-	for (uint32_t i = 0; i < m_response_size; i++) {
-		send(m_response[i]);
+	if (params[0] != '0')
+		log_once(CMD_READ, "read mode other than '0' answered as '0'");
+	if (m_position == NONE) {
+		if (!m_shutter_open) {
+			m_phase = IDLE;
+			refuse(CMD_READ);
+			return;
+		}
+		if (!m_in_hand || !hold_card()) {
+			/* Until a card comes: st3 '4' on each ENQ */
+			m_phase = WAITING;
+			reply(CMD_READ, '0', '4');
+			return;
+		}
+		m_in_hand = false;
+		m_dispensed = false;
+		m_position = S1;
 	}
-	trace_frame("tx", std::span<const uint8_t>(m_response.data(), m_response_size));
+	m_phase = IDLE;
+
+	const bool seven = params[1] == '0';
+	std::array<uint8_t, DATA_SIZE> data{};
+	std::array<uint8_t, TRACKS> status{};
+	uint32_t size = 0;
+	unsigned good = 0, selected = 0;
+
+	for (uint32_t t = 0; t < TRACKS; t++) {
+		const uint8_t *const raw = m_card.data() + t * TRACK_SIZE;
+
+		if (!(mask & (1u << t)))
+			continue;
+		selected++;
+		if (raw[0] != 0xFF) {
+			status[t] = BLANK;
+		} else if (raw[TRACK_DATA + 1] != 0xFF) {
+			status[t] = NO_END;
+		} else if (frame_xor(std::span<const uint8_t>(raw + 1, TRACK_DATA + 1)) != raw[TRACK_DATA + 2]) {
+			status[t] = LRC;
+		} else {
+			status[t] = GOOD;
+			for (uint32_t i = 1; seven && i <= TRACK_DATA; i++)
+				if (!even_parity(raw[i]))
+					status[t] = PARITY;
+		}
+		good += status[t] == GOOD;
+		for (uint32_t i = 0; i < TRACK_DATA; i++)
+			data[size++] = status[t] == BLANK ? 0 : static_cast<uint8_t>(seven ? raw[1 + i] & 0x7F : raw[1 + i]);
+	}
+	if (good == selected) {
+		/* Read on its way in: the card left at S4S5 */
+		m_position = S4S5;
+		reply(CMD_READ, '0', '0', std::span<const uint8_t>(data.data(), size));
+		return;
+	}
+	/* Read again on its way out, then the tries C1 gives, all the same
+	 * here: the card left at S1S2. One track, or none good: '1' without
+	 * the data; else the letter of the tracks that failed (FUN_00008230) */
+	m_position = S1S2;
+	if (selected == 1 || good == 0) {
+		reply(CMD_READ, '1', '0');
+		return;
+	}
+
+	const bool bad1 = (mask & 1) && status[0] != GOOD;
+	const bool bad2 = (mask & 2) && status[1] != GOOD;
+	const bool bad3 = (mask & 4) && status[2] != GOOD;
+	uint8_t letter;
+
+	if (bad1 && bad2)
+		letter = 'T';
+	else if (bad1 && bad3)
+		letter = 'U';
+	else if (bad2 && bad3)
+		letter = 'V';
+	else if (bad1)
+		letter = 'Q';
+	else if (bad2)
+		letter = 'R';
+	else
+		letter = 'S';
+	reply(CMD_READ, letter, '0', std::span<const uint8_t>(data.data(), size));
+}
+
+/* 53 mode parity track data (FUN_0000652c, the write op FUN_0000974a): the
+ * tracks written as the program records them, the card left at S4S5. The
+ * length of the frame is not checked against the tracks. */
+void CardReader::write(std::span<const uint8_t> params)
+{
+	const uint8_t mask = params.size() >= 3 ? tracks_of(params[2]) : 0;
+
+	if (params.size() < 3 || params[0] != '0' || (params[1] != '0' && params[1] != '1') || !mask) {
+		if (params.size() >= 1 && params[0] == '1')
+			log_once(CMD_WRITE, "variable length write refused");
+		refuse(CMD_WRITE);
+		return;
+	}
+
+	const bool seven = params[1] == '0';
+	const std::span<const uint8_t> data = params.subspan(3);
+
+	if (seven && std::any_of(data.begin(), data.end(), [](uint8_t b) { return b >= 0x80; })) {
+		refuse(CMD_WRITE);
+		return;
+	}
+	if (m_position == NONE || m_position == S1 || m_position == S5) {
+		refuse(CMD_WRITE);
+		return;
+	}
+
+	uint32_t from = 0;
+
+	for (uint32_t t = 0; t < TRACKS; t++) {
+		uint8_t *const raw = m_card.data() + t * TRACK_SIZE;
+
+		if (!(mask & (1u << t)))
+			continue;
+		raw[0] = 0xFF;
+		for (uint32_t i = 0; i < TRACK_DATA; i++, from++) {
+			const uint8_t b = from < data.size() ? data[from] : 0;
+
+			raw[1 + i] = seven && !even_parity(b) ? static_cast<uint8_t>(b | 0x80) : b;
+		}
+		raw[TRACK_DATA + 1] = 0xFF;
+		raw[TRACK_DATA + 2] = frame_xor(std::span<const uint8_t>(raw + 1, TRACK_DATA + 1));
+	}
+	m_position = S4S5;
+	save_card();
+	reply(CMD_WRITE, '0', '0');
+}
+
+/* The card pushed out to the slot (FUN_0000abe4) and taken back by the
+ * player: kept in the file, a new card beside it when the player already
+ * has one */
+void CardReader::eject()
+{
+	m_position = S1;
+	m_ejected = true;
+	save_card();
+	m_position = NONE;
+	m_in_hand = !m_card_file.empty();
+	m_dispensed = false;
+}
+
+/* The reply, kept until an ENQ asks for it; a reply that sees no card
+ * clears the mark an eject leaves (FUN_00009418) */
+void CardReader::reply(uint8_t cmd, uint8_t st2, uint8_t st3, std::span<const uint8_t> data)
+{
+	data = data.first(std::min<size_t>(data.size(), FRAME_MAX - FRAME_OVERHEAD));
+
+	uint32_t n = 0;
+
+	m_reply[n++] = STX;
+	m_reply[n++] = static_cast<uint8_t>(REPLY_DATA + data.size());
+	m_reply[n++] = cmd;
+	m_reply[n++] = status1();
+	m_reply[n++] = st2;
+	m_reply[n++] = st3;
+	for (uint8_t b : data)
+		m_reply[n++] = b;
+	m_reply[n++] = ETX;
+	m_reply[n] = frame_xor(std::span<const uint8_t>(m_reply.data() + 1, n - 1));
+	m_reply_size = n + 1;
+	m_reply_sent = false;
+	if (m_position == NONE)
+		m_ejected = false;
+}
+
+/* The reply on the line; sent once already, as the sensors are now, st2
+ * '0' and st3 '0' unless '3' (FUN_00007fce) */
+void CardReader::send_reply()
+{
+	if (m_reply_sent) {
+		const uint32_t n = m_reply_size - 1;
+
+		m_reply[3] = status1();
+		m_reply[4] = '0';
+		if (m_reply[5] != '3')
+			m_reply[5] = '0';
+		m_reply[n] = frame_xor(std::span<const uint8_t>(m_reply.data() + 1, n - 1));
+		if (m_position == NONE)
+			m_ejected = false;
+	}
+	for (uint32_t i = 0; i < m_reply_size; i++)
+		send(m_reply[i]);
+	m_reply_sent = true;
+	trace_frame("tx", std::span<const uint8_t>(m_reply.data(), m_reply_size));
 }
 
 void CardReader::trace_frame(const char *dir, std::span<const uint8_t> bytes) const
 {
-	if (!m_trace) {
+	static constexpr size_t SHOWN = 32;
+
+	if (!m_trace)
 		return;
-	}
+
 	std::string line = std::format("card: {} ({} bytes)", dir, bytes.size());
-	const size_t shown = bytes.size() < TRACE_BYTES ? bytes.size() : TRACE_BYTES;
-	for (size_t i = 0; i < shown; i++) {
+	const size_t shown = std::min(bytes.size(), SHOWN);
+
+	for (size_t i = 0; i < shown; i++)
 		line += std::format(" {:02x}", bytes[i]);
-	}
-	if (shown < bytes.size()) {
+	if (shown < bytes.size())
 		line += " ...";
-	}
 	line += '\n';
 	std::fputs(line.c_str(), m_trace);
 }
 
-bool CardReader::insert_card()
+void CardReader::log_once(uint8_t cmd, const char *what)
 {
-	if (m_card_file.empty()) {
+	if (!m_log || m_cmd_logged[cmd])
+		return;
+	m_cmd_logged[cmd] = true;
+	std::fputs(std::format("card: command {:02x}: {}\n", cmd, what).c_str(), m_log);
+}
+
+/* The card of the file into the reader's buffer: the three tracks as on the
+ * card, or their 69 bytes each, recorded */
+bool CardReader::hold_card()
+{
+	if (m_card_file.empty())
 		return false;
-	}
-	FILE *f = std::fopen(m_card_file.c_str(), "rb");
+
+	FILE *const f = std::fopen(m_card_file.c_str(), "rb");
+
 	if (!f) {
+		m_in_hand = false;
 		return false;
 	}
-	const size_t n = std::fread(m_card.data(), 1, m_card.size(), f);
+
+	std::array<uint8_t, CARD_SIZE + 1> bytes;
+	const size_t n = std::fread(bytes.data(), 1, bytes.size(), f);
+
 	std::fclose(f);
-	if (n != m_card.size() && m_log) {
-		std::fputs(std::format("card: file '{}' holds {} bytes, {} expected\n",
-		                       m_card_file, n, m_card.size()).c_str(), m_log);
+	if (n == CARD_SIZE) {
+		std::copy_n(bytes.begin(), CARD_SIZE, m_card.begin());
+	} else if (n == DATA_SIZE) {
+		for (uint32_t t = 0; t < TRACKS; t++) {
+			uint8_t *const raw = m_card.data() + t * TRACK_SIZE;
+
+			raw[0] = 0xFF;
+			std::copy_n(bytes.begin() + t * TRACK_DATA, TRACK_DATA, raw + 1);
+			raw[TRACK_DATA + 1] = 0xFF;
+			raw[TRACK_DATA + 2] = frame_xor(std::span<const uint8_t>(raw + 1, TRACK_DATA + 1));
+		}
+	} else {
+		if (m_log)
+			std::fputs(std::format("card: file '{}' holds {} bytes, {} or {} expected\n", m_card_file, n,
+			                       CARD_SIZE, DATA_SIZE).c_str(), m_log);
+		m_in_hand = false;
+		return false;
 	}
-	m_card_present = true;
-	m_door_open = false;
+	m_in_hand = true;
 	return true;
 }
 
-void CardReader::eject_card()
-{
-	m_card_present = false;
-}
-
+/* The card into its file; a card from the stocker beside the player's
+ * own (`<file>.new`), never over it */
 bool CardReader::save_card()
 {
-	if (m_card_file.empty()) {
+	if (m_card_file.empty())
 		return false;
-	}
-	FILE *f = std::fopen(m_card_file.c_str(), "wb");
-	if (!f) {
-		if (m_log) {
-			std::fputs(std::format("card: can't write '{}'\n", m_card_file).c_str(), m_log);
+
+	std::string path = m_card_file;
+
+	if (m_dispensed) {
+		if (FILE *const own = std::fopen(m_card_file.c_str(), "rb")) {
+			std::fclose(own);
+			path += ".new";
+		} else {
+			m_dispensed = false;	/* the player had none: it is theirs */
 		}
+	}
+
+	FILE *const f = std::fopen(path.c_str(), "wb");
+
+	if (!f) {
+		if (m_log)
+			std::fputs(std::format("card: can't write '{}'\n", path).c_str(), m_log);
 		return false;
 	}
+
 	const size_t n = std::fwrite(m_card.data(), 1, m_card.size(), f);
+
 	std::fclose(f);
+	if (m_log && path != m_card_file)
+		std::fputs(std::format("card: the new card kept in '{}'\n", path).c_str(), m_log);
 	return n == m_card.size();
 }
 
@@ -373,30 +654,50 @@ void CardReader::save(CardReaderState &out) const
 {
 	out.card = m_card;
 	out.rx = m_rx;
-	out.response = m_response;
+	out.command = m_command;
+	out.second = m_second;
+	out.reply = m_reply;
 	out.tx = m_tx;
 	out.rx_count = m_rx_count;
-	out.response_size = m_response_size;
+	out.command_size = m_command_size;
+	out.second_size = m_second_size;
+	out.reply_size = m_reply_size;
 	out.tx_head = m_tx_head;
 	out.tx_count = m_tx_count;
-	out.card_present = m_card_present;
-	out.door_open = m_door_open;
+	out.position = m_position;
+	out.in_hand = m_in_hand;
+	out.dispensed = m_dispensed;
+	out.ejected = m_ejected;
+	out.shutter_open = m_shutter_open;
 	out.stocker_full = m_stocker_full;
+	out.retries = m_retries;
+	out.phase = m_phase;
+	out.reply_sent = m_reply_sent;
 }
 
 void CardReader::load(const CardReaderState &in)
 {
 	m_card = in.card;
 	m_rx = in.rx;
-	m_response = in.response;
+	m_command = in.command;
+	m_second = in.second;
+	m_reply = in.reply;
 	m_tx = in.tx;
 	m_rx_count = in.rx_count;
-	m_response_size = in.response_size;
+	m_command_size = in.command_size;
+	m_second_size = in.second_size;
+	m_reply_size = in.reply_size;
 	m_tx_head = in.tx_head;
 	m_tx_count = in.tx_count;
-	m_card_present = in.card_present != 0;
-	m_door_open = in.door_open != 0;
+	m_position = in.position <= S5 ? static_cast<Position>(in.position) : NONE;
+	m_in_hand = in.in_hand != 0;
+	m_dispensed = in.dispensed != 0;
+	m_ejected = in.ejected != 0;
+	m_shutter_open = in.shutter_open != 0;
 	m_stocker_full = in.stocker_full != 0;
+	m_retries = in.retries;
+	m_phase = in.phase <= WAITING ? static_cast<Phase>(in.phase) : IDLE;
+	m_reply_sent = in.reply_sent != 0;
 }
 
 } /* namespace odin */

@@ -18,8 +18,10 @@
  * 02110-1301, USA.
  */
 
-/* Checks of the CRP-1231 card reader (frame XOR, ACK, ENQ, responses,
- * card data) and of the MIE serial adapter block driven from its ports
+/* Checks of the CRP-1231BR-10 card reader (its replies as its program
+ * gives them, MARKDOWN/96c: frames, ACK, ENQ, refusals, the read that waits,
+ * blank tracks, the stocker, the player's card file) and of the MIE serial
+ * adapter block driven from its ports
  * the way the Z80 code von4 uploads does it: routine 0x90E1 sends a
  * frame byte by byte, 0x913C reads one byte through the 0x80/0x81
  * requests, 0x9199 reads a frame, 0x92BC sends ENQ and checks the
@@ -30,7 +32,8 @@
  *            -O2 -I src tests/mie/card_test.cpp src/odin/card_reader.cpp \
  *            src/odin/mie.cpp src/odin/z80.cpp src/odin/z80_ops.cpp \
  *            src/odin/jvs.cpp -o card_test
- * An optional argument names a scratch file for the card image check.
+ * An optional argument names a scratch file for the checks of the card
+ * file.
  * Exit status is 0 when every check passes. */
 
 #include "odin/card_reader.hpp"
@@ -38,6 +41,7 @@
 
 #include <array>
 #include <cstdio>
+#include <string>
 #include <vector>
 
 namespace {
@@ -57,10 +61,17 @@ void check(bool ok, const char *what)
 
 using Bytes = std::vector<uint8_t>;
 
-/* st1 sensor bytes: shutter closed, stocker full, card or not. */
+/* st1 as the reader gives it: the sensors a position covers, the
+ * stocker full, the shutter closed or open */
+constexpr uint8_t SENSORS[10] = { 0x00, 0x01, 0x03, 0x07, 0x06, 0x0E, 0x0C, 0x1C, 0x18, 0x10 };
+
+uint8_t st1(odin::CardReader::Position at, bool open, bool stocker = true)
+{
+	return static_cast<uint8_t>(SENSORS[at] | (stocker ? 0x20 : 0) | (open ? 0x80 : 0x40));
+}
+
+using P = odin::CardReader::Position;
 constexpr uint8_t ST1_EMPTY = 0x60;
-constexpr uint8_t ST1_CARD = 0x78;
-constexpr uint8_t ST1_OPEN_CARD = 0xB8;
 
 /* Master frame as the game's constructor (0x0C183E96) builds it. */
 Bytes frame(uint8_t cmd, const Bytes &params)
@@ -81,6 +92,12 @@ Bytes drain(odin::CardReader &r)
 	return out;
 }
 
+Bytes enq(odin::CardReader &r)
+{
+	r.receive(0x05);
+	return drain(r);
+}
+
 /* Frame in, ACK out, ENQ in, response out. */
 Bytes exchange(odin::CardReader &r, const Bytes &f, bool &acked)
 {
@@ -89,20 +106,64 @@ Bytes exchange(odin::CardReader &r, const Bytes &f, bool &acked)
 	}
 	const Bytes ack = drain(r);
 	acked = ack == Bytes({ 0x06 });
-	r.receive(0x05);
-	return drain(r);
+	return enq(r);
 }
 
-bool response_ok(const Bytes &resp, uint8_t cmd, uint8_t st1, uint8_t st2, uint8_t st3, size_t data)
+bool response_ok(const Bytes &resp, uint8_t cmd, uint8_t s1, uint8_t st2, uint8_t st3, size_t data)
 {
 	if (resp.size() != data + 8 || resp[0] != 0x02 || resp[1] != data + 6 || resp[2] != cmd ||
-	    resp[3] != st1 || resp[4] != st2 || resp[5] != st3 || resp[resp.size() - 2] != 0x03) {
+	    resp[3] != s1 || resp[4] != st2 || resp[5] != st3 || resp[resp.size() - 2] != 0x03) {
 		return false;
 	}
 	return resp.back() == odin::CardReader::frame_xor(std::span<const uint8_t>(resp.data() + 1, resp.size() - 2));
 }
 
-void test_reader(const char *card_file)
+/* 207 bytes the game could write: three tracks of 69 */
+Bytes tracks(uint8_t base)
+{
+	Bytes out;
+	for (uint32_t i = 0; i < 3 * 0x45; i++) {
+		out.push_back(static_cast<uint8_t>(base + (i % 26)));
+	}
+	return out;
+}
+
+Bytes with(Bytes head, const Bytes &tail)
+{
+	head.insert(head.end(), tail.begin(), tail.end());
+	return head;
+}
+
+Bytes data_of(const Bytes &resp)
+{
+	return Bytes(resp.begin() + 6, resp.end() - 2);
+}
+
+bool write_file(const std::string &path, const Bytes &bytes)
+{
+	FILE *f = std::fopen(path.c_str(), "wb");
+	if (!f) {
+		return false;
+	}
+	const bool ok = std::fwrite(bytes.data(), 1, bytes.size(), f) == bytes.size();
+	std::fclose(f);
+	return ok;
+}
+
+Bytes read_file(const std::string &path)
+{
+	Bytes out(300);
+	FILE *f = std::fopen(path.c_str(), "rb");
+	if (!f) {
+		return {};
+	}
+	out.resize(std::fread(out.data(), 1, out.size(), f));
+	std::fclose(f);
+	return out;
+}
+
+/* The replies of crp1231br10_ver0107.ic2 (MARKDOWN/96c) */
+void test_reader(const char *scratch)
 {
 	/* XOR of the frames the game sent (host writes to A200 in the
 	 * trace): cancel, door closed, init. */
@@ -112,91 +173,223 @@ void test_reader(const char *card_file)
 
 	odin::CardReader r;
 	bool acked = false;
-	Bytes resp = exchange(r, frame(0x10, { '0' }), acked);
-	check(acked, "init: ACK");
-	check(resp == Bytes({ 0x02, 0x06, 0x10, 0x60, '0', '0', 0x03, 0x75 }), "init: response, no card");
-	r.receive(0x05);
-	check(drain(r) == resp, "ENQ again: same response");
+	Bytes resp = enq(r);
+	check(resp == Bytes({ 0x02, 0x06, 0x10, 0x60, '0', '0', 0x03, 0x75 }), "a bare ENQ at power-up: the boot reply");
+
+	/* At rest 40 is not a command; a reply sent again has st3 back to
+	 * '0' (FUN_00007fce) */
+	resp = exchange(r, frame(0x40, {}), acked);
+	check(acked && response_ok(resp, 0x40, ST1_EMPTY, '0', '2', 0), "cancel at rest: refused");
+	check(response_ok(enq(r), 0x40, ST1_EMPTY, '0', '0', 0), "ENQ again: the reply with st3 back to '0'");
 	r.receive(0x06);
 	check(drain(r).empty(), "ACK from the master: silent");
-
-	/* Bad XOR: NAK, no new response. */
-	Bytes bad = frame(0x40, {});
+	Bytes bad = frame(0x20, {});
 	bad.back() = static_cast<uint8_t>(bad.back() ^ 0x01);
 	for (uint8_t b : bad) {
 		r.receive(b);
 	}
 	check(drain(r) == Bytes({ 0x15 }), "bad xor: NAK");
 	r.receive(0x15);
-	check(drain(r) == resp, "NAK from the master: response again");
-
-	resp = exchange(r, frame(0x40, {}), acked);
-	check(acked && response_ok(resp, 0x40, ST1_EMPTY, '0', '0', 0), "cancel");
-	resp = exchange(r, frame(0xD0, { '0' }), acked);
-	check(acked && response_ok(resp, 0xD0, ST1_EMPTY, '0', '0', 0), "door closed");
-
-	/* Read without a card: waiting for one. */
-	resp = exchange(r, frame(0x33, { '0', '1', '6' }), acked);
-	check(acked && response_ok(resp, 0x33, ST1_EMPTY, '0', '4', 0), "read, no card");
-	resp = exchange(r, frame(0x53, { '0', '1', '0' }), acked);
-	check(acked && response_ok(resp, 0x53, ST1_EMPTY, '0', '4', 0), "write, no card");
-
-	/* Dispense: a blank card at the head. */
-	resp = exchange(r, frame(0xB0, {}), acked);
-	check(acked && response_ok(resp, 0xB0, ST1_CARD, '0', '0', 0) && r.card_present(), "dispense");
-	resp = exchange(r, frame(0x33, { '0', '1', '6' }), acked);
-	check(acked && response_ok(resp, 0x33, ST1_CARD, '0', '0', 3 * 0x45), "read all tracks");
-	bool blank = true;
-	for (size_t i = 6; i < resp.size() - 2; i++) {
-		blank = blank && resp[i] == 0;
+	check(response_ok(drain(r), 0x40, ST1_EMPTY, '0', '0', 0), "NAK from the master: the reply again");
+	for (uint8_t b : frame(0x20, {})) {
+		r.receive(b);
 	}
-	check(blank, "dispensed card is blank");
+	check(drain(r) == Bytes({ 0x06 }), "status ACKed");
+	r.receive(0x15);
+	check(drain(r).empty(), "NAK before the ENQ of a frame: nothing");
+	check(response_ok(enq(r), 0x20, ST1_EMPTY, '0', '0', 0), "status on its ENQ");
 
-	/* Write track 1, read it back alone and with track 3. */
-	Bytes params = { '0', '1', '0' };
-	for (uint32_t i = 0; i < 0x45; i++) {
-		params.push_back(static_cast<uint8_t>(0x41 + (i % 26)));
-	}
-	resp = exchange(r, frame(0x53, params), acked);
-	check(acked && response_ok(resp, 0x53, ST1_CARD, '0', '0', 0), "write track 1");
-	resp = exchange(r, frame(0x33, { '0', '1', '0' }), acked);
-	check(acked && response_ok(resp, 0x33, ST1_CARD, '0', '0', 0x45) &&
-	      Bytes(resp.begin() + 6, resp.end() - 2) == Bytes(params.begin() + 3, params.end()), "read track 1");
-	resp = exchange(r, frame(0x33, { '0', '1', '4' }), acked);
-	check(acked && response_ok(resp, 0x33, ST1_CARD, '0', '0', 2 * 0x45) && resp[6] == 'A' && resp[6 + 0x45] == 0,
-	      "read tracks 1 and 3");
-	/* Capture mode: no data. */
-	resp = exchange(r, frame(0x33, { '2', '1', '6' }), acked);
-	check(acked && response_ok(resp, 0x33, ST1_CARD, '0', '0', 0), "read, capture mode");
-
-	/* Door open: the card stays, no data. */
-	resp = exchange(r, frame(0xD0, { '1' }), acked);
-	check(acked && response_ok(resp, 0xD0, ST1_OPEN_CARD, '0', '0', 0), "door open");
-	resp = exchange(r, frame(0x33, { '0', '1', '0' }), acked);
-	check(acked && response_ok(resp, 0x33, ST1_OPEN_CARD, '0', '0', 0), "read with the door open");
+	/* Shutter: refused when already as asked */
 	resp = exchange(r, frame(0xD0, { '0' }), acked);
+	check(acked && response_ok(resp, 0xD0, ST1_EMPTY, '0', '2', 0), "close a closed shutter: refused");
+	/* Shutter closed, no card: read and write refused at once */
+	resp = exchange(r, frame(0x33, { '0', '1', '6' }), acked);
+	check(response_ok(resp, 0x33, ST1_EMPTY, '0', '2', 0), "read, shutter closed, no card: refused");
+	resp = exchange(r, frame(0x53, with({ '0', '1', '6' }, tracks('A'))), acked);
+	check(response_ok(resp, 0x53, ST1_EMPTY, '0', '2', 0), "write, no card: refused");
 	resp = exchange(r, frame(0x80, {}), acked);
-	check(acked && response_ok(resp, 0x80, ST1_EMPTY, '0', '0', 0) && !r.card_present(), "eject");
+	check(response_ok(resp, 0x80, ST1_EMPTY, '0', '2', 0), "eject, no card: refused");
+	resp = exchange(r, frame(0x7C, { '0', '0', 1 }), acked);
+	check(response_ok(resp, 0x7C, ST1_EMPTY, '0', '2', 0), "print, no card: refused");
 
-	/* Unknown command: answered OK. */
-	resp = exchange(r, frame(0xC8, {}), acked);
-	check(acked && response_ok(resp, 0xC8, ST1_EMPTY, '0', '0', 0), "unknown command");
+	/* Dispense: a new card at S3S4S5, its track 1 alone recorded */
+	resp = exchange(r, frame(0xB0, { '1' }), acked);
+	check(response_ok(resp, 0xB0, st1(P::S3S4S5, false), '0', '0', 0) && r.position() == P::S3S4S5, "dispense");
+	resp = exchange(r, frame(0xB0, { '1' }), acked);
+	check(response_ok(resp, 0xB0, st1(P::S3S4S5, false), '0', '2', 0), "dispense with a card in: refused");
+	resp = exchange(r, frame(0x33, { '0', '1', '6' }), acked);
+	check(response_ok(resp, 0x33, st1(P::S1S2, false), 'V', '0', 3 * 0x45) && data_of(resp) == Bytes(3 * 0x45, 0),
+	      "read a new card: 'V' (tracks 2 and 3 blank), 207 zeros, the card at S1S2");
+	resp = exchange(r, frame(0x33, { '0', '1', '1' }), acked);
+	check(response_ok(resp, 0x33, st1(P::S1S2, false), '1', '0', 0), "read its blank track 2 alone: '1', no data");
+	resp = exchange(r, frame(0x33, { '0', '1', '5' }), acked);
+	check(response_ok(resp, 0x33, st1(P::S1S2, false), '1', '0', 0), "tracks 2 and 3, both blank: '1'");
+	resp = exchange(r, frame(0x33, { '0', '1', '3' }), acked);
+	check(response_ok(resp, 0x33, st1(P::S1S2, false), 'R', '0', 2 * 0x45), "tracks 1 and 2: 'R' (track 2 bad)");
 
-	/* A reset keeps the card inside. */
-	exchange(r, frame(0xB0, {}), acked);
-	r.reset();
-	check(r.card_present() && !r.has_byte(), "reset keeps the card");
+	/* Write the three tracks, read them back */
+	const Bytes three = tracks('A');
+	resp = exchange(r, frame(0x53, with({ '0', '1', '6' }, three)), acked);
+	check(response_ok(resp, 0x53, st1(P::S4S5, false), '0', '0', 0) && r.position() == P::S4S5, "write: the card at S4S5");
+	resp = exchange(r, frame(0x33, { '0', '1', '6' }), acked);
+	check(response_ok(resp, 0x33, st1(P::S4S5, false), '0', '0', 3 * 0x45) && data_of(resp) == three, "read back");
+	resp = exchange(r, frame(0x33, { '0', '1', '4' }), acked);
+	check(response_ok(resp, 0x33, st1(P::S4S5, false), '0', '0', 2 * 0x45) &&
+	      data_of(resp) == with(Bytes(three.begin(), three.begin() + 0x45), Bytes(three.begin() + 0x8A, three.end())),
+	      "read tracks 1 and 3");
+	const uint8_t *raw = r.card().data();
+	check(raw[0] == 0xFF && raw[1] == 'A' && raw[0x46] == 0xFF &&
+	      raw[0x47] == odin::CardReader::frame_xor(std::span<const uint8_t>(raw + 1, 0x46)), "a track as on the card: FF, 69 bytes, FF, LRC");
 
-	if (card_file) {
-		odin::CardReader w(card_file);
-		exchange(w, frame(0xB0, {}), acked);
-		exchange(w, frame(0x53, params), acked);
-		odin::CardReader v(card_file);
-		check(!v.card_present() && v.insert_card() && v.card_present() && v.card()[0] == 'A' &&
-		      v.card()[0x44] == static_cast<uint8_t>(0x41 + (0x44 % 26)) && v.card()[0x45] == 0,
-		      "card file written then inserted");
-		std::remove(card_file);
+	/* 7 bits with parity: even parity on each byte, masked on reading */
+	resp = exchange(r, frame(0x53, with({ '0', '0', '0' }, Bytes(three.begin(), three.begin() + 0x45))), acked);
+	check(response_ok(resp, 0x53, st1(P::S4S5, false), '0', '0', 0) && r.card()[1] == 'A' && r.card()[3] == ('C' | 0x80),
+	      "write 7 bits: the parity bit makes each byte even");
+	resp = exchange(r, frame(0x33, { '0', '0', '0' }), acked);
+	check(response_ok(resp, 0x33, st1(P::S4S5, false), '0', '0', 0x45) && data_of(resp) == Bytes(three.begin(), three.begin() + 0x45),
+	      "read 7 bits: the bytes again");
+	resp = exchange(r, frame(0x53, { '0', '0', '0', 0x80 }), acked);
+	check(response_ok(resp, 0x53, st1(P::S4S5, false), '0', '2', 0), "write 7 bits of a byte above 7F: refused");
+	resp = exchange(r, frame(0x33, { '0', '1', '7' }), acked);
+	check(response_ok(resp, 0x33, st1(P::S4S5, false), '0', '2', 0), "read of track 7: refused");
+	resp = exchange(r, frame(0x33, { '0', '2', '6' }), acked);
+	check(response_ok(resp, 0x33, st1(P::S4S5, false), '0', '2', 0), "read with parity 2: refused");
+
+	/* Commands without the mechanism */
+	check(response_ok(exchange(r, frame(0xC1, { '1' }), acked), 0xC1, st1(P::S4S5, false), '0', '0', 0) &&
+	      response_ok(exchange(r, frame(0xC1, { '0' }), acked), 0xC1, st1(P::S4S5, false), '0', '2', 0),
+	      "retries: 1 taken, 0 refused");
+	check(response_ok(exchange(r, frame(0x7A, with({ 1 }, Bytes(72, 0x55))), acked), 0x7A, st1(P::S4S5, false), '0', '0', 0) &&
+	      response_ok(exchange(r, frame(0x7A, with({ 0x15 }, Bytes(72, 0x55))), acked), 0x7A, st1(P::S4S5, false), '0', '2', 0),
+	      "font: slot 1 taken, 15 refused");
+	check(response_ok(exchange(r, frame(0x7C, { '0', '0', 1, 0x41, 0x0D }), acked), 0x7C, st1(P::S4S5, false), '0', '0', 0),
+	      "print on a card inside");
+	check(response_ok(exchange(r, frame(0xC8, {}), acked), 0xC8, st1(P::S4S5, false), '0', '2', 0),
+	      "a command it does not answer here: refused");
+
+	/* Init: '1' ejects, refused with the shutter closed; '0' keeps it */
+	check(response_ok(exchange(r, frame(0x10, { '1' }), acked), 0x10, st1(P::S4S5, false), '0', '2', 0),
+	      "init '1' with a card and the shutter closed: refused");
+	check(response_ok(exchange(r, frame(0x10, { '2' }), acked), 0x10, st1(P::S4S5, false), '0', '2', 0), "init '2': refused");
+	check(response_ok(exchange(r, frame(0x10, { '0' }), acked), 0x10, st1(P::S4S5, false), '0', '0', 0) &&
+	      r.position() == P::S4S5, "init '0': the card stays");
+	check(response_ok(exchange(r, frame(0x80, {}), acked), 0x80, st1(P::S4S5, false), '0', '2', 0),
+	      "eject, shutter closed: refused");
+	check(response_ok(exchange(r, frame(0xA0, {}), acked), 0xA0, st1(P::S4S5, false), '0', '2', 0),
+	      "cleaning, shutter closed: refused");
+	check(response_ok(exchange(r, frame(0xD0, { '1' }), acked), 0xD0, st1(P::S4S5, true), '0', '0', 0) && r.shutter_open(),
+	      "open the shutter");
+	check(response_ok(exchange(r, frame(0xD0, { '1' }), acked), 0xD0, st1(P::S4S5, true), '0', '2', 0),
+	      "open an open shutter: refused");
+	check(response_ok(exchange(r, frame(0x80, {}), acked), 0x80, st1(P::NONE, true), '0', '0', 0) && r.position() == P::NONE &&
+	      !r.card_in_hand(), "eject: the card taken (no file: not kept)");
+
+	/* A read that waits for a card: '4' on each ENQ; 20 gets it again,
+	 * 40 cancels it */
+	resp = exchange(r, frame(0x33, { '0', '1', '6' }), acked);
+	check(response_ok(resp, 0x33, st1(P::NONE, true), '0', '4', 0), "read, shutter open, no card: waits ('4')");
+	check(response_ok(enq(r), 0x33, st1(P::NONE, true), '0', '4', 0), "still '4' on the next ENQ");
+	check(response_ok(exchange(r, frame(0x20, {}), acked), 0x33, st1(P::NONE, true), '0', '4', 0) && acked,
+	      "a 20 while it waits: the reply of the read");
+	odin::CardReaderState waiting;
+	r.save(waiting);
+	check(response_ok(exchange(r, frame(0x40, {}), acked), 0x40, st1(P::NONE, true), '0', '0', 0) && acked,
+	      "a 40 while it waits: cancelled");
+	check(response_ok(exchange(r, frame(0x20, {}), acked), 0x20, st1(P::NONE, true), '0', '0', 0), "then at rest");
+	r.load(waiting);
+	check(response_ok(enq(r), 0x33, st1(P::NONE, true), '0', '4', 0), "state loaded: waiting again");
+	for (uint8_t b : frame(0xFF, {})) {
+		r.receive(b);
 	}
+	check(drain(r) == Bytes({ 0x06 }) && enq(r).empty(), "an FF while it waits: ACK, then no reply (the reader resets)");
+	check(response_ok(enq(r), 0x10, st1(P::NONE, false), '0', '0', 0), "then its boot reply, the shutter closed");
+	check(response_ok(exchange(r, frame(0xA0, {}), acked), 0xA0, st1(P::NONE, false), '0', '2', 0) &&
+	      response_ok(exchange(r, frame(0xD0, { '1' }), acked), 0xD0, st1(P::NONE, true), '0', '0', 0) &&
+	      response_ok(exchange(r, frame(0xA0, {}), acked), 0xA0, st1(P::NONE, true), '0', '0', 0),
+	      "cleaning with the shutter open");
+
+	/* Stocker empty */
+	r.set_stocker(false);
+	check(response_ok(exchange(r, frame(0xB0, { '1' }), acked), 0xB0, st1(P::NONE, true, false), '0', '5', 0),
+	      "dispense, stocker empty: '5'");
+	r.set_stocker(true);
+
+	/* A reset keeps a card inside */
+	exchange(r, frame(0xB0, { '1' }), acked);
+	r.reset();
+	check(r.position() == P::S3S4S5 && !r.has_byte() && response_ok(enq(r), 0x10, st1(P::S3S4S5, false), '0', '0', 0),
+	      "reset keeps the card, boot reply");
+
+	if (!scratch) {
+		return;
+	}
+
+	/* The player's card: given when a read waits, taken back on eject,
+	 * kept in its file */
+	const std::string file = std::string(scratch) + ".card";
+	const Bytes old = tracks('a');
+	check(write_file(file, old), "(a card of 207 bytes, data only)");
+	odin::CardReader p(file);
+	check(p.hold_card() && p.card_in_hand(), "the player holds the card of the file");
+	exchange(p, frame(0xD0, { '1' }), acked);
+	resp = exchange(p, frame(0x33, { '0', '1', '6' }), acked);
+	check(response_ok(resp, 0x33, st1(P::S4S5, true), '0', '0', 3 * 0x45) && data_of(resp) == old && !p.card_in_hand(),
+	      "a read takes the card from the player: its 207 bytes read as recorded");
+	resp = exchange(p, frame(0x53, with({ '0', '1', '6' }, three)), acked);
+	check(response_ok(resp, 0x53, st1(P::S4S5, true), '0', '0', 0) && read_file(file).size() == 216,
+	      "write: the file kept as on the card, 216 bytes");
+	resp = exchange(p, frame(0x80, {}), acked);
+	check(response_ok(resp, 0x80, st1(P::NONE, true), '0', '0', 0) && p.card_in_hand(), "eject: back in the player's hand");
+	resp = exchange(p, frame(0x33, { '0', '1', '6' }), acked);
+	check(response_ok(resp, 0x33, st1(P::S4S5, true), '0', '0', 3 * 0x45) && data_of(resp) == three,
+	      "read again: what was written");
+	exchange(p, frame(0x80, {}), acked);
+
+	/* A new card when the player has one: kept beside it */
+	exchange(p, frame(0xB0, { '1' }), acked);
+	exchange(p, frame(0x53, with({ '0', '1', '6' }, tracks('0'))), acked);
+	exchange(p, frame(0x80, {}), acked);
+	const Bytes own = read_file(file), fresh = read_file(file + ".new");
+	check(own.size() == 216 && own[1] == 'A' && fresh.size() == 216 && fresh[1] == '0' && p.card_in_hand(),
+	      "a new card beside the player's own (.new), the own card untouched");
+	std::remove((file + ".new").c_str());
+
+	/* No card yet: the new card becomes the player's */
+	std::remove(file.c_str());
+	odin::CardReader q(file);
+	check(!q.hold_card(), "(no card file)");
+	exchange(q, frame(0xB0, { '1' }), acked);
+	exchange(q, frame(0x53, with({ '0', '1', '6' }, tracks('k'))), acked);
+	exchange(q, frame(0xD0, { '1' }), acked);
+	exchange(q, frame(0x80, {}), acked);
+	check(read_file(file).size() == 216 && read_file(file)[1] == 'k' && read_file(file + ".new").empty() &&
+	      q.card_in_hand(), "a new card for a player without one: theirs, in the file");
+	std::remove(file.c_str());
+
+	/* A new card ejected before anything is written on it: kept as it
+	 * is, by an init '1' (the shutter open) */
+	odin::CardReader n(file);
+	exchange(n, frame(0xD0, { '1' }), acked);
+	exchange(n, frame(0xB0, { '1' }), acked);
+	resp = exchange(n, frame(0x10, { '1' }), acked);
+	const Bytes kept = read_file(file);
+	check(response_ok(resp, 0x10, st1(P::NONE, true), '0', '0', 0) && n.position() == P::NONE && n.card_in_hand() &&
+	      kept.size() == 216 && kept[0] == 0xFF && kept[0x48] == 0, "init '1' ejects; the new card kept as it is");
+
+	/* A track whose LRC is wrong does not read */
+	Bytes broken = kept;
+	broken.resize(216);
+	broken[0] = 0xFF;
+	broken[0x48] = 0xFF;
+	broken[0x48 + 0x46] = 0xFF;
+	broken[0x48 + 0x47] = 0x01;
+	check(write_file(file, broken), "(a card whose track 2 has a wrong LRC)");
+	odin::CardReader l(file);
+	l.hold_card();
+	exchange(l, frame(0xD0, { '1' }), acked);
+	resp = exchange(l, frame(0x33, { '0', '1', '6' }), acked);
+	check(response_ok(resp, 0x33, st1(P::S1S2, true), 'V', '0', 3 * 0x45), "a wrong LRC on track 2: not read ('V')");
+	std::remove(file.c_str());
 }
 
 /* The chip with its bus granted to the host: the CPU stops, the
@@ -441,29 +634,33 @@ void test_ports()
 	b.mie().host_write_port(PORT_CONTROL, 0x01);
 	b.mie().host_write_port(0x0B, 0);
 	check(b.mie().host_read_port(PORT_STATUS) == 0 && !b.wait_reply(), "write to 0x0B resets the block");
-	/* The reader did get the STX; a cancel frame then resyncs it: the
-	 * frame is rejected on its XOR and the next one is clean. */
+	/* The reader did get the STX; the frame after it, read with LEN 02,
+	 * is dropped without a word (LEN below 6: FUN_000077fa state 3) and
+	 * the next one is clean. */
 	check(b.send_frame(frame(0x40, {})) == RESULT_OK, "send: frame after a stray byte");
-	check(b.read_byte(v) == RESULT_OK && v == 0x15, "stray STX: NAK");
+	check(b.read_byte(v) == RESULT_NOTHING, "stray STX: the frame dropped, nothing on the line");
 
-	/* The game's first three exchanges. */
+	/* The game's first three exchanges: 40 and D0 '0' refused at rest
+	 * (the shutter already closed), 10 '0' done */
 	const Bytes init[3] = { frame(0x40, {}), frame(0xD0, { '0' }), frame(0x10, { '0' }) };
 	const uint8_t cmds[3] = { 0x40, 0xD0, 0x10 };
+	const uint8_t st3s[3] = { '2', '2', '0' };
 	for (uint32_t i = 0; i < 3; i++) {
 		check(b.send_frame(init[i]) == RESULT_OK, "send: frame with echo per byte");
 		check(b.read_byte(v) == RESULT_OK && v == 0x06, "read byte: ACK");
 		check(b.read_byte(v) == RESULT_NOTHING, "read byte: nothing more before ENQ");
 		check(b.send_enq() == RESULT_OK, "ENQ echoed");
-		check(b.read_frame(got) == RESULT_OK && response_ok(got, cmds[i], ST1_EMPTY, '0', '0', 0), "read frame: response");
+		check(b.read_frame(got) == RESULT_OK && response_ok(got, cmds[i], ST1_EMPTY, '0', st3s[i], 0),
+		      "read frame: response");
 	}
 	check(b.read_frame(got) == RESULT_NOTHING, "read frame: nothing after the response");
 
-	/* Read of a dispensed card through the ports: 207 data bytes. */
-	check(b.send_frame(frame(0xB0, {})) == RESULT_OK && b.read_byte(v) == RESULT_OK && v == 0x06 &&
+	/* Read of a dispensed card through the ports: 'V', 207 data bytes. */
+	check(b.send_frame(frame(0xB0, { '1' })) == RESULT_OK && b.read_byte(v) == RESULT_OK && v == 0x06 &&
 	      b.send_enq() == RESULT_OK && b.read_frame(got) == RESULT_OK, "dispense through the ports");
 	check(b.send_frame(frame(0x33, { '0', '1', '6' })) == RESULT_OK && b.read_byte(v) == RESULT_OK && v == 0x06 &&
 	      b.send_enq() == RESULT_OK && b.read_frame(got) == RESULT_OK &&
-	      response_ok(got, 0x33, ST1_CARD, '0', '0', 3 * 0x45), "read all tracks through the ports");
+	      response_ok(got, 0x33, st1(P::S1S2, false), 'V', '0', 3 * 0x45), "read all tracks through the ports");
 
 	/* Loopback test, 255 bytes. */
 	Bytes pattern;

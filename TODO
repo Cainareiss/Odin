@@ -146,10 +146,19 @@ Ports 0x40/0x60/0x80/0x81, touched by the mask ROM init, are logged as
 unknown. The serial adapter block (ports 0x09-0x0E) is modelled from
 the Z80 code von4 uploads; its reply delays are HEURISTIC (mie.cpp
 SERIAL_SEND_CYCLES, SERIAL_REQUEST_CYCLES), measure them on a board.
-The CRP-1231 card reader on that line (src/odin/card_reader.cpp,
-ODIN_CARD=none|reader) is an HLE stand-in: the LLE path is an H8/300H
-core running the dumped firmware (MAME wangmid, crp1231lr10_ver0110.ic2).
-Status byte st1 'V' that von4 tests on command 0x33 is not understood.
+The card reader on that line (src/odin/card_reader.cpp,
+ODIN_CARD=none|reader) is the CRP-1231BR-10 of Virtual-On Force (von4
+reads its status as that model gives it, binary; its program and
+YACardEmu agree, MARKDOWN/96): it answers each command as its program
+does (crp1231br10_ver0107.ic2, MAME initd; MARKDOWN/96c), at once, the
+program not run. The LR-10NAB program of MAME's wangmid is another model
+(its status is a character). Not done: the time its mechanism takes (busy
+replies, no reply while it reads or writes a track), its prints, a
+player who inserts and takes the card from the menu (ODIN_CARD_FILE: the
+card given when a read waits for one, taken back once ejected).
+HEURISTIC: track 1 of a new card from its stocker (recorded at the
+factory: 69 zeros here) and the cleaning card of command A0 (given at
+once).
 
 JVS (src/odin/jvs.cpp: the cable and the protocol of the standard). The
 I/O boards are imitations made from their programs: jvs_837_13551.cpp

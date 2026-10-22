@@ -395,9 +395,10 @@ Hikaru::~Hikaru()
 
 /* The MIE: the chip, its ROM and its board.
  *
- * The CRP-1231 card reader (card_reader.hpp) goes on its serial block:
- * ODIN_CARD=none leaves the line open, ODIN_CARD=reader (default) attaches
- * it, ODIN_CARD_FILE=<path> is the card image (three tracks, 207 bytes),
+ * The CRP-1231BR-10 card reader (card_reader.hpp) goes on its serial
+ * block: ODIN_CARD=none leaves the line open, ODIN_CARD=reader (default)
+ * attaches it, ODIN_CARD_FILE=<path> is the player's card (its three
+ * tracks as on the card, 216 bytes; 207, their data only, is read too),
  * ODIN_CARD_TRACE=1 logs every frame on the line to stderr. */
 /* The drive board as far as the SH-4 ran: the command the game puts on
  * the outputs of the I/O board, the wheel where the board last saw it
@@ -495,10 +496,10 @@ Hikaru::build_mie()
 			std::fprintf(stderr, "ERROR: MIE: ODIN_CARD=%s unknown, using the reader\n", card);
 		const bool loaded = m_mie->attach_card(file, (trace && std::atoi(trace)) ? stderr : nullptr);
 		if (file)
-			std::printf("MIE: card reader CRP-1231 (HLE), card file '%s'%s\n",
-			            file, loaded ? "" : " not found: no card");
+			std::printf("MIE: card reader CRP-1231BR-10 (its replies), card file '%s'%s\n",
+			            file, loaded ? "" : " not found: the player has no card");
 		else
-			std::printf("MIE: card reader CRP-1231 (HLE), no card file\n");
+			std::printf("MIE: card reader CRP-1231BR-10 (its replies), no card file\n");
 	}
 
 	std::printf("MIE: LLE (315-6146 ROM + uploaded Z80 program)\n");

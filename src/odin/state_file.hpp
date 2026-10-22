@@ -45,8 +45,10 @@ public:
 	 * and the request of the transmitter of UART 1;
 	 * 13: it keeps the chip of the 837-13741 and its line;
 	 * 14: the SH-4 as its core keeps it, and none of the words the
-	 * board of Valkyrie kept */
-	static constexpr unsigned VERSION = 14;
+	 * board of Valkyrie kept;
+	 * 15: the card reader keeps where its card is and its tracks as on
+	 * the card */
+	static constexpr unsigned VERSION = 15;
 
 	enum class Mode {
 		SAVE,
