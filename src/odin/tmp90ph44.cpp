@@ -102,7 +102,7 @@ Tmp90ph44::run(uint32_t states)
 			done += static_cast<uint32_t>(turn(end));
 		else if (m_proof.on)
 			m_proof.at = m_proof.at + 1 == m_proof.length ? 0 : m_proof.at + 1;
-		else if (m_cpu.pc() <= from)
+		else if (m_waits_counted && m_cpu.pc() <= from)
 			jumped_back();
 	}
 	m_trial.on = false;

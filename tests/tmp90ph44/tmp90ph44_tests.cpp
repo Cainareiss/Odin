@@ -263,6 +263,16 @@ void test_idle()
 	check(once.states() == stepped.states() && a == b && once.peek(0xFF00) == 3 && stepped.peek(0xFF00) == 3,
 	      "and the same: each interrupt taken on the same instruction");
 
+	/* Its waits switched off: every turn run in one call, the same end */
+	Tmp90ph44 every(rom.bytes, board);
+	odin::Tlcs90State c;
+
+	every.set_waits_counted(false);
+	every.run(TOTAL);
+	every.cpu().save(c);
+	check(every.skipped() == 0 && every.states() == once.states() && c == a && every.peek(0xFF00) == 3,
+	      "its waits switched off: none billed, the same");
+
 	/* Loops that are not idle */
 	check(billed({ 0x3E, 0xBF, 0xFF, 0x87, 0x01, 0xC8, 0xFC }, 20000) == 0, "INC (FF01) in a loop: not billed");
 	check(billed({ 0x80, 0xC8, 0xFD }, 20000) == 0, "INC B in a loop: not billed");

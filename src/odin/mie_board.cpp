@@ -285,6 +285,16 @@ MieBoard::irq_out() const
 }
 
 void
+MieBoard::set_waits_counted(bool on)
+{
+	m_mie.set_waits_counted(on);
+	if (m_line_13551)
+		m_line_13551->chip().set_waits_counted(on);
+	if (m_line_13741)
+		m_line_13741->chip().set_waits_counted(on);
+}
+
+void
 MieBoard::set_log(FILE *out)
 {
 	m_log = out;

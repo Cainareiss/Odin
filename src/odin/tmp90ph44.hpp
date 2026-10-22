@@ -119,6 +119,14 @@ public:
 	uint64_t states() const { return m_states; }
 	/* The states run() billed without running them */
 	uint64_t skipped() const { return m_skipped; }
+	/* Off, a test: no loop is tried, every turn runs. The states must be
+	 * the same. */
+	void set_waits_counted(bool on)
+	{
+		m_waits_counted = on;
+		m_trial.on = false;
+		m_proof.on = false;
+	}
 
 private:
 	enum : uint16_t { VEC_WD = 0x20, VEC_T1 = 0x28, VEC_T3 = 0x38, VEC_RX = 0x60, VEC_TX = 0x68 };
@@ -199,6 +207,7 @@ private:
 		std::array<Tlcs90State, MAX_TURN> cpu{};
 	} m_proof;
 	std::array<uint16_t, 4> m_back{};	/* the last places jumped back to */
+	bool m_waits_counted = true;
 	struct Cool {
 		uint16_t pc;
 		uint64_t until;

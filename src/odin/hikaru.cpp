@@ -462,8 +462,9 @@ Hikaru::build_mie()
 		std::printf("drive board: %s\n", m_drive ? "its program run (drive_rom)" : "its imitation");
 	m_mie->set_port_d([this](uint8_t pins) { set_resets(pins); });
 	m_mie->set_log(stderr);
-	/* ODIN_TURNS=0, a test: the program of the MIE runs every turn of its
-	 * waits. The memory and the states must be the same. */
+	/* ODIN_TURNS=0, a test: the programs of the MIE and of the chip of its
+	 * I/O board run every turn of their waits. The memory and the states
+	 * must be the same. */
 	m_mie->set_waits_counted(env_flag("ODIN_TURNS", true));
 
 	/* ODIN_MIE_TRACE=<path>: the bus of the Z80 for ODIN_MIE_TRACE_N
