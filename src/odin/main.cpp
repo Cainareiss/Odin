@@ -86,7 +86,13 @@ play(const Options &given, const std::string &name, const GameList &games, Setti
 		return Ended::FAILED;
 
 	display.attach(*board, game->title);
+	/* The light guns read one by one, when the settings give a player one */
+	std::unique_ptr<Pointers> pointers;
 	Controls controls(keys, game->controls, game->outputs, settings, game->name);
+
+	if (controls.wants_guns())
+		pointers = std::make_unique<Pointers>(display.window());
+	controls.set_pointers(pointers.get());
 	board->set_panel(&controls);
 
 	const bool network = network_on(settings);

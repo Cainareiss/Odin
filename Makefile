@@ -61,6 +61,9 @@ OBJ := \
 	src/odin/version.o \
 	src/odin/hotkeys.o \
 	src/odin/controls.o \
+	src/odin/pointers.o \
+	src/odin/evdev.o \
+	src/odin/rawinput.o \
 	src/odin/outputs_network.o \
 	src/odin/control_panel.o \
 	src/odin/bindings.o \

@@ -322,8 +322,8 @@ void test_mouse()
 	check(is_mouse(aims.of(3).back(), Type::BUTTON, 0) && is_mouse(aims.of(4).back(), Type::BUTTON, 2) &&
 	      is_mouse(aims.of(5).back(), Type::BUTTON, 1) && is_key(aims.of(3)[0], SDLK_LCTRL),
 	      "water on the left button, fog on the right, START on the middle, the keys kept");
-	check(!is_mouse(aims.of(6).back(), Type::BUTTON, 0) && aims.of(7).size() == 1,
-	      "player 2: no mouse");
+	check(is_mouse(aims.of(6).back(), Type::BUTTON, 0) && aims.of(7).size() == 2 && is_mouse(aims.of(7)[1], Type::X),
+	      "player 2 with a sight: the mouse of their light gun, as player 1");
 
 	const Bindings plain({ control("bullet", GameControl::Type::BUTTON, Role::BUTTON1, 0) }, Settings(), "pharrier");
 

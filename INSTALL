@@ -179,6 +179,19 @@ the keys, a stick and the mouse, the last that moved works a control. The
 sight meets the pointer once NOZZLE SENSOR SETTING (in the test menu of
 the game) has been done with the mouse.
 
+A light gun (or a second mouse) for each player, read on its own (evdev
+on Linux: the user in the group input; Raw Input on Windows):
+
+ [players.braveff]
+ gun1 = vidpid:1209:0001 GUN4IR
+ gun2 = uniq:A1B2C3D4E5 Sinden Lightgun
+
+its identity as Odin's log says it ("pointer: <name> = <node> (aims,
+<identity>)"): its serial, else VID:PID, else its port. It aims as the
+mouse does, with its buttons, for its player alone; player 1 without one
+keeps the mouse. On Linux the guns chosen stop moving the pointer of the
+desktop while the game runs, and move it again in the menu.
+
 Gamepads: one for each player, in the order they are plugged in, or the
 one chosen for the game in the menu (Input). SELECT (SHARE) puts in a
 coin for the player of the pad. Guide alone opens the menu; at its foot,

@@ -45,6 +45,8 @@ Controls::Controls(Keyboard &keys, const std::vector<GameControl> &controls, con
 	for (const auto &[key, value] : settings.section("players." + game)) {
 		if (key == "p1" || key == "p2") {
 			m_wanted[key[1] - '1'] = value.substr(0, value.find(' '));
+		} else if (key == "gun1" || key == "gun2") {
+			m_guns[key[3] - '1'] = value.substr(0, value.find(' '));
 		} else if (key != "vibration" || (value != "on" && value != "off")) {	/* vibration: main.cpp, menu_session.cpp */
 			std::fprintf(stderr, "ERROR: settings: [players.%s]: not right: %s = %s\n", game.c_str(), key.c_str(),
 			             value.c_str());
@@ -346,6 +348,8 @@ Controls::quiet()
 			SDL_RumbleGamepad(pad.handle, 0, 0, 0);
 			pad.rumbling = 0;
 		}
+	if (m_pointers)
+		m_pointers->hold({});
 }
 
 HostState
@@ -356,7 +360,8 @@ Controls::host() const
 	host.keys = &m_keys.held();
 	for (unsigned player = 0; player < 2; player++)
 		host.pads[player] = seat(player) ? &seat(player)->state : nullptr;
-	host.mouse = m_mouse_seen ? &m_mouse : nullptr;
+	host.mice[0] = m_gun_seen[0] ? &m_gun_aims[0] : m_mouse_seen ? &m_mouse : nullptr;
+	host.mice[1] = m_gun_seen[1] ? &m_gun_aims[1] : nullptr;
 	return host;
 }
 
@@ -404,8 +409,47 @@ Controls::pad_type(unsigned player) const
 void
 Controls::update()
 {
+	follow_guns();
 	m_panel.update(host());
 	settle();
+}
+
+/* Where the light guns aim on the picture, as the mouse does, and their
+ * buttons: one pressed and let go within the frame is down for it; held
+ * from the desktop while the game runs */
+void
+Controls::follow_guns()
+{
+	if (!m_pointers)
+		return;
+
+	std::vector<std::string> held;
+	int w = 0, h = 0;
+
+	for (const std::string &gun : m_guns)
+		if (!gun.empty())
+			held.push_back(gun);
+	m_pointers->poll();
+	m_pointers->hold(held);
+	SDL_GetWindowSizeInPixels(m_pointers->window(), &w, &h);
+	for (unsigned player = 0; player < 2; player++) {
+		const std::optional<Pointers::Aim> aim =
+			m_guns[player].empty() ? std::nullopt : m_pointers->take(m_guns[player]);
+		MouseState &now = m_gun_aims[player];
+
+		m_gun_seen[player] = aim.has_value();
+		if (!aim)
+			continue;
+
+		const PicturePoint point = picture_point(static_cast<int>(aim->x), static_cast<int>(aim->y),
+		                                         static_cast<unsigned>(w), static_cast<unsigned>(h), m_hole);
+
+		now.x = point.x;
+		now.y = point.y;
+		now.off = point.x < 0.0 || point.x >= 1.0 || point.y < 0.0 || point.y >= 1.0;
+		for (unsigned button = 0; button < now.buttons.size(); button++)
+			now.buttons[button] = ((aim->buttons | aim->pressed) >> button) & 1;
+	}
 }
 
 void

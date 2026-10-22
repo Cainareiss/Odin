@@ -75,12 +75,13 @@ struct MouseState {
 	std::array<bool, 3> buttons{};
 };
 
-/* What the host holds now: the keys down, the pad of each player and the
- * mouse (nullptr: none). */
+/* What the host holds now: the keys down, the pad and the mouse of each
+ * player (nullptr: none): player 1's light gun, else the mouse of the
+ * system; player 2's light gun. */
 struct HostState {
 	const std::vector<SDL_Keycode> *keys = nullptr;
 	std::array<const PadState *, 2> pads{};
-	const MouseState *mouse = nullptr;
+	std::array<const MouseState *, 2> mice{};
 };
 
 /* Where a control is now, for the drawing of the cabinet: worked or not;
@@ -170,10 +171,10 @@ private:
 	std::vector<std::array<bool, 2>> m_levers_were;	/* GEAR_DOWN, GEAR_UP at the last update */
 	std::array<bool, 2> m_coins_were;
 	std::array<bool, 2> m_coins;			/* gone in, not read yet */
-	bool m_mouse_aims;				/* the mouse worked all its channels at the last update */
-	bool m_mouse_moved;				/* it has moved at this update */
-	bool m_mouse_seen;
-	double m_mouse_x, m_mouse_y;			/* where it was when it last moved */
+	/* The mouse of each player: it worked all its channels at the last
+	 * update, it has moved at this one, where it was when it last moved */
+	std::array<bool, 2> m_mouse_aims, m_mouse_moved, m_mouse_seen;
+	std::array<double, 2> m_mouse_x, m_mouse_y;
 };
 
 } /* namespace odin */

@@ -422,6 +422,9 @@ known_settings(const GameList &games)
 			out.push_back({ "controls." + name, key, value });
 		out.push_back({ "players." + name, "p1", "" });
 		out.push_back({ "players." + name, "p2", "" });
+		for (const GameControl &control : game->controls)
+			if (control.role == Role::GUN_X)
+				out.push_back({ "players." + name, control.player ? "gun2" : "gun1", "" });
 		if (game->shakes())
 			out.push_back({ "players." + name, "vibration", "on" });
 	}

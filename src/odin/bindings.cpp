@@ -354,9 +354,13 @@ Bindings::keys_toward(Role role, unsigned player, bool positive)
 Bindings::Bindings(const std::vector<GameControl> &panel, const Settings &settings, const std::string &game)
 	: m_panel(panel), m_controls(panel.size())
 {
-	const bool aims = std::any_of(panel.begin(), panel.end(), [](const GameControl &control) {
-		return control.role == Role::GUN_X && control.player == 0;
-	});
+	/* The players with a sight: the mouse aims for them (player 2 with
+	 * their light gun) */
+	std::array<bool, 2> aims{};
+
+	for (const GameControl &control : panel)
+		if (control.role == Role::GUN_X)
+			aims[control.player & 1] = true;
 
 	for (size_t c = 0; c < panel.size(); c++) {
 		const GameControl &control = panel[c];
@@ -368,7 +372,7 @@ Bindings::Bindings(const std::vector<GameControl> &panel, const Settings &settin
 		}
 		m_controls[c][0] = own_inputs(defaults(control.role, control.player), control, game);
 		for (const auto &[role, name] : MOUSE_DEFAULTS)
-			if (aims && control.player == 0 && role == control.role)
+			if (aims[control.player & 1] && role == control.role)
 				m_controls[c][0].push_back(*HostInput::parse(std::string("mouse:") + name));
 		if (control.type == GameControl::Type::ANALOG) {
 			m_controls[c][1] = keys_toward(control.role, control.player, false);

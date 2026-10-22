@@ -62,14 +62,15 @@ void check(bool ok, const char *what)
 
 /* The inputs of a panel after one update */
 MieBoard::Inputs after(ControlPanel &panel, const std::vector<SDL_Keycode> &keys, const PadState *pad1 = nullptr,
-                       const PadState *pad2 = nullptr, const MouseState *mouse = nullptr)
+                       const PadState *pad2 = nullptr, const MouseState *mouse = nullptr,
+                       const MouseState *mouse2 = nullptr)
 {
 	HostState host;
 	MieBoard::Inputs inputs = {};
 
 	host.keys = &keys;
 	host.pads = { pad1, pad2 };
-	host.mouse = mouse;
+	host.mice = { mouse, mouse2 };
 	panel.update(host);
 	panel.fill(inputs);
 	return inputs;
@@ -509,6 +510,39 @@ void test_mouse()
 	      "no mouse, as a pad unplugged: the keys at rest, its buttons up");
 }
 
+/* The light gun of player 2 aims for player 2 alone, with the buttons of
+ * player 1's mouse: WATER on PUSH1, OUT OF SCREEN on PUSH2, FOG on PUSH3 */
+void test_gun_of_player_2()
+{
+	ControlPanel panel({ analog("1P SIGHT X", 0, GameControl::Low::LEFT, Role::GUN_X),
+	                     analog("1P SIGHT Y", 1, GameControl::Low::UP, Role::GUN_Y),
+	                     button("1P WATER", { 0, 0x0200 }, Role::BUTTON1),
+	                     analog("2P SIGHT X", 2, GameControl::Low::LEFT, Role::GUN_X, 1),
+	                     analog("2P SIGHT Y", 3, GameControl::Low::UP, Role::GUN_Y, 1),
+	                     button("2P OUT OF SCREEN", { 1, 0x0100 }, Role::GUN_OFFSCREEN, 1),
+	                     button("2P WATER", { 1, 0x0200 }, Role::BUTTON1, 1),
+	                     button("2P FOG", { 1, 0x0080 }, Role::BUTTON2, 1) },
+	                   Settings(), "braveff");
+	MouseState gun;
+
+	gun.x = 0.25;
+	gun.y = 0.75;
+	gun.buttons = { true, false, true };
+	MieBoard::Inputs inputs = after(panel, {}, nullptr, nullptr, nullptr, &gun);
+	check(inputs.jvs_analog[2] == 0x4000 && inputs.jvs_analog[3] == 0xBFFF && inputs.jvs_player[1] == 0x0280,
+	      "the gun of player 2: its sight, water and fog");
+	check(inputs.jvs_analog[0] == 0x8000 && inputs.jvs_player[0] == 0, "player 1 at rest");
+	gun.buttons = {};
+	gun.off = true;
+	check(after(panel, {}, nullptr, nullptr, nullptr, &gun).jvs_player[1] == 0x0100,
+	      "off the picture: OUT OF SCREEN of player 2");
+	MouseState mouse;
+
+	mouse.buttons = { true, false, false };
+	inputs = after(panel, {}, nullptr, nullptr, &mouse, nullptr);
+	check(inputs.jvs_player[0] == 0x0200 && inputs.jvs_player[1] == 0, "the mouse of player 1 is not player 2's");
+}
+
 /* The mouse is one pointer: moving it across takes the Y of the sight too */
 void test_mouse_one_pointer()
 {
@@ -715,6 +749,7 @@ int main()
 	test_bindings_from_settings();
 	test_channel();
 	test_mouse();
+	test_gun_of_player_2();
 	test_mouse_one_pointer();
 	test_picture();
 	test_pressed();

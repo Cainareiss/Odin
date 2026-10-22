@@ -32,6 +32,7 @@
 #include "odin/hikaru.hpp"
 #include "odin/keyboard.hpp"
 #include "odin/picture.hpp"
+#include "odin/pointers.hpp"
 
 namespace odin {
 
@@ -63,6 +64,7 @@ public:
 	void set_picture_hole(const PictureHole &hole) { m_hole = hole; }
 	/* Once a frame, before it runs. */
 	void update();
+	void follow_guns();
 	/* While the menu is open: what was let go of is let go of, as a frame
 	 * would */
 	void settle();
@@ -117,8 +119,13 @@ public:
 	 * feeds, when it feels it and no mute output is on, or as the shocks
 	 * the drive board is told, when it feels them. */
 	void show(std::span<const uint8_t> outputs, std::span<const int16_t> option_sound);
-	/* No pad shakes (the emulation stops) */
+	/* No pad shakes (the emulation stops); the light guns are the
+	 * desktop's again */
 	void quiet();
+	/* The light gun of each player ([players.<game>] gun1 and gun2,
+	 * "<identity> <name>"), read by those pointers (nullptr: none) */
+	bool wants_guns() const { return !m_guns[0].empty() || !m_guns[1].empty(); }
+	void set_pointers(Pointers *pointers) { m_pointers = pointers; }
 	/* The pads feel the rumble outputs (the nozzle of Brave): unless the
 	 * user turns the vibration off */
 	void feel_outputs(bool on) { m_rumble = on; }
@@ -200,6 +207,12 @@ private:
 	std::vector<Pad> m_pads;	/* plugged in, in the order they came */
 	std::array<SDL_JoystickID, 2> m_seats{};	/* that of each player, 0: none */
 	std::array<std::string, 2> m_wanted;
+	/* The light gun of each player: its identity, where it aims and its
+	 * buttons, whether it has aimed */
+	Pointers *m_pointers = nullptr;
+	std::array<std::string, 2> m_guns;
+	std::array<MouseState, 2> m_gun_aims{};
+	std::array<bool, 2> m_gun_seen{};
 	MouseState m_mouse;
 	bool m_mouse_seen;		/* it has moved on the window */
 	bool m_mouse_placed;		/* the system has told where it is */
