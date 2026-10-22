@@ -216,6 +216,8 @@ Hikaru::load_items(StateFile &state)
 		std::printf("load state: no drive board in it: the board starts again\n");
 		m_drive->reset();
 	}
+	if (m_drive)
+		m_drive_owed = m_drive->clocks();
 
 	/* What the board works out from its chips */
 	quiet_windows();

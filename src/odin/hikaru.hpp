@@ -264,10 +264,12 @@ private:
 	std::unique_ptr<MieBoard> m_mie;
 	/* The drive board on outputs 15-22 of the I/O board, when its program
 	 * is there (ODIN_DRIVE=imitation leaves it out): its clocks still to
-	 * run times the clock of the SH-4; the wheel as the board last saw
-	 * it, on the channel of the control that steers (-1: none) */
+	 * run times the clock of the SH-4, the clock it is owed; the wheel as
+	 * the board last saw it, on the channel of the control that steers
+	 * (-1: none) */
 	std::unique_ptr<Drive838_13366> m_drive;
 	uint64_t m_drive_acc = 0;
+	uint64_t m_drive_owed = 0;
 	uint16_t m_wheel_seen = 0x8000;
 	int m_steer_channel = -1;
 	/* The network board 837-13404 in bus page 0E, when ODIN_NETBD asks

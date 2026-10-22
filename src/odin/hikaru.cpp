@@ -424,8 +424,12 @@ Hikaru::run_drive(uint32_t cycles)
 	const uint64_t clocks = m_drive_acc / m_clock;
 
 	m_drive_acc -= clocks * m_clock;
+	m_drive_owed += clocks;
+	/* A clock, not a number of clocks: a run ends on an instruction a
+	 * little after its clock, which the next run does not add again (it
+	 * ran 1.8 % fast that way) */
 	if (clocks)
-		m_drive->run_until(m_drive->clocks() + clocks, DriveBoard::command(io_outputs(), m_game.drive_first_output),
+		m_drive->run_until(m_drive_owed, DriveBoard::command(io_outputs(), m_game.drive_first_output),
 		                   static_cast<uint8_t>(m_wheel_seen >> 8));
 }
 
@@ -659,6 +663,7 @@ Hikaru::reset()
 	if (m_drive) {
 		m_drive->reset();
 		m_drive_acc = 0;
+		m_drive_owed = m_drive->clocks();
 	}
 	if (m_netbd) {
 		m_netbd->reset();
