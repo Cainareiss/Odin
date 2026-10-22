@@ -145,7 +145,7 @@ struct AntarcticState {
  * table. When a mesh is drawn, the current scratch objects affect its
  * rendering.
  *
- * What comes out is the display list of the frame (antarctic_list.h).
+ * What comes out is the display list of the frame (antarctic_list.hpp).
  *
  * The chip also moves the textures the game leaves on the bus into the
  * texture RAM. Its registers are at 15000000 for the master SH-4: see
@@ -235,7 +235,8 @@ public:
 	void set_log(FILE *out) { m_log = out; }
 
 private:
-	/* antarctic.cpp: the program */
+	/* antarctic.cpp: the program (its table of instructions in
+	 * antarctic_ops.cpp) */
 
 	/* What an instruction does to the program counter and to the mesh
 	 * being pushed */

@@ -59,7 +59,7 @@
  * is not critical (their mappings don't seem to change.)
  *
  * What is mapped to the apertures is determined by the  MMIOs. See
- * get_bank_for_addr () for the details. Each byte in the MMIOs (+10, +14,
+ * window_bank () for the details. Each byte in the MMIOs (+10, +14,
  * and +18 are confirmed) controls a 16 MB aperture. See @0C006688.
  *
  *

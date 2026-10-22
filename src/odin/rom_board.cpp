@@ -219,7 +219,7 @@
  * the string is found at bank 18, then the base is 8; it's 0 otherwise.
  *
  * What IC is mapped to what entry is determined by bits 2 and 3 of 0C00F01C.
- * See memctl_get () and @0C004B32. 
+ * See @0C004B32.
  */
 
 namespace odin {

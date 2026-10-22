@@ -105,7 +105,7 @@ HikaruGpu::set_reset_lines(bool gp_res, bool pci1_res)
  *
  * IRQs are signalled to the main SH-4 through IRL2: priority 7, INTEVT 0x300,
  * vector 0x220. At the same time, bit 6 of the master SH-4 Port A is low
- * (see hikaru_update_irqs in hikaru.c).
+ * (see Hikaru::update_irqs).
  *
  * The two registers 15000088 and 1A000018 signal 8 and 4 different IRQs
  * causes, respectively. When any of the IRQs in 1A000018 is raised, bit 7 of

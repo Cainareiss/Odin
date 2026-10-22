@@ -36,10 +36,10 @@ struct Sh4Op;
  * the block to go to. A simple instruction is not called: the block works
  * on the registers of the CPU itself, with the few steps further down.
  *
- * Only this class knows the host: sh4.cpp says what a block does, with the
- * functions below. On a host it does not write for, or that refuses the
- * memory, usable() is false and the SH-4 keeps to its reader. Written for
- * x86-64 (HostCode). */
+ * Only this class knows the host: sh4_translate.cpp says what a block
+ * does, with the functions below. On a host it does not write for, or that
+ * refuses the memory, usable() is false and the SH-4 keeps to its reader.
+ * Written for x86-64 (HostCode). */
 class Sh4Host : public HostCode {
 public:
 	using Call = uintptr_t (*)(Sh4 &, const Sh4Op *);

@@ -377,6 +377,8 @@ private:
 	bool run_cut(Block &b, uint32_t from, uint32_t limit);
 	void chain_stale(uint32_t pc);
 	uintptr_t link_stale(uint32_t pc);
+
+	/* sh4_translate.cpp: a block made host code */
 	void translate(Block &b);
 	/* `pairs`: FPSCR.SZ where the instruction is, as the block is seen to have it */
 	bool translate_op(const Sh4Op *ops, uint32_t i, std::vector<LongWay> &ways, bool pairs);
@@ -387,12 +389,18 @@ private:
 	bool translate_jump(const Block &b, const Sh4Op &op, uint32_t i, std::vector<LongWay> &ways);
 	static uintptr_t linked(Sh4 &c, uint32_t pc);
 	void pairs_through(const Block &b, std::array<bool, BLOCK_MAX + 3> &pairs) const;
+
+	/* sh4.cpp: the waits, the interrupts, the registers that change the
+	 * run, the cut of a block, a run between two events of the on-chip
+	 * modules */
 	void wait_mark();
 	void wait_check();
 	void take_irq();
 	void update_irqs();
 	void set_sr(uint32_t value);
 	void set_fpscr(uint32_t value);
+	static void op_cut(Sh4 &c, const Sh4Op *op);
+	int32_t run_part(int32_t cycles, int32_t &used);
 	void swap_r_banks();
 	void swap_f_banks();
 	[[noreturn]] void fatal(const char *what, uint32_t value) const;
@@ -410,7 +418,6 @@ private:
 	static Sh4Host::Call called(void (*run)(Sh4 &, const Sh4Op *));
 	static Inline inlined(void (*run)(Sh4 &, const Sh4Op *));
 	static void op_next(Sh4 &c, const Sh4Op *op);
-	static void op_cut(Sh4 &c, const Sh4Op *op);
 	static void op_leave(Sh4 &c, const Sh4Op *op);
 	static void pair_delay_loop(const Sh4Op &before, uint32_t before_pc, Sh4Op &op);
 	static bool taken(const Sh4Op &op, uint32_t t);
@@ -441,7 +448,6 @@ private:
 	void tmu_sync(uint64_t now);
 	void tmu_update_irq(uint32_t ch);
 	int32_t tmu_next_irq() const;
-	int32_t run_part(int32_t cycles, int32_t &used);
 	uint32_t store_queue_addr(uint32_t addr) const;
 
 	uint32_t pc_of(const Sh4Op *op) const { return m_blk->pc + 2u * op->idx; }
