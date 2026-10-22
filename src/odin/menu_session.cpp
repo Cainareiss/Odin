@@ -178,14 +178,10 @@ MenuSession::MenuSession(const Options &options, Display &display, Keyboard &key
 
 		sound.level = sound.standard = static_cast<float>(described->option_level);
 		for (const auto &[key, value] : settings.section("sound." + name)) {
-			char *end = nullptr;
-			const double db = std::strtod(value.c_str(), &end);
-
 			if (key == "mode" && mode_named(value))
 				sound.played = played_of(*mode_named(value));
-			else if (key == "option_level" && !value.empty() && !*end && db >= Game::LOWEST_LEVEL &&
-			         db <= Game::HIGHEST_LEVEL)
-				sound.level = static_cast<float>(db);
+			else if (key == "option_level" && level_named(value))
+				sound.level = static_cast<float>(*level_named(value));
 		}
 		if (runs && options.sound_asked) {
 			sound.played = options.sound ? played_of(*options.sound) : -1;
@@ -746,10 +742,7 @@ MenuSession::keep_hotkeys()
 		const std::optional<std::string> line = binding == Hotkeys::standard(action) ? std::nullopt :
 		                                        std::optional(Hotkeys::line(binding));
 
-		if (m_settings_file.empty())
-			m_settings.set("hotkeys", Hotkeys::id(action), line);
-		else
-			m_settings.change(m_settings_file, "hotkeys", Hotkeys::id(action), line);
+		keep("hotkeys", Hotkeys::id(action), line);
 	}
 }
 
@@ -869,10 +862,7 @@ MenuSession::keep_binding(const Bindings::Line &line, const std::string &game)
 {
 	const std::string section = "controls." + (game.empty() ? game_shown() : game);
 
-	if (m_settings_file.empty())
-		m_settings.set(section, line.key, line.value);
-	else
-		m_settings.change(m_settings_file, section, line.key, line.value);
+	keep(section, line.key, line.value);
 	m_controls.rebind(m_settings);
 	if (m_other)
 		m_other.emplace(m_other_controls, m_settings, game_shown());
@@ -990,10 +980,7 @@ MenuSession::draw_menu()
 	state.can_shake = m_other ? m_other_shakes : m_game && m_game->shakes();
 	state.shake_from = m_other ? m_other_shakers[state.player & 1] :
 	                   m_game ? m_game->shaker(state.player & 1) : std::string();
-	state.shake = true;
-	for (const auto &[key, value] : m_settings.section("players." + game_shown()))
-		if (key == "vibration" && (value == "on" || value == "off"))
-			state.shake = value == "on";
+	state.shake = vibration_on(m_settings, game_shown());
 	/* The outputs of the game shown, lit as the board left them */
 	state.outputs.clear();
 	for (const GameOutput &output : m_other || !m_game ? m_other_outputs : m_game->outputs)
@@ -1070,10 +1057,7 @@ MenuSession::draw_menu()
 
 		if (!m_other)
 			m_controls.want(state.player, guid);
-		if (m_settings_file.empty())
-			m_settings.set(section, key, value);
-		else
-			m_settings.change(m_settings_file, section, key, value);
+		keep(section, key, value);
 		state.want.reset();
 		m_menu_pictures = MENU_PICTURES;
 	}
@@ -1178,12 +1162,10 @@ MenuSession::apply(const MenuState &was)
 		const bool runs = m_game && game.name == m_game->name && m_audio;
 
 		if (game.played != before.played) {
-			static constexpr const char *MODES[] = { "main", "mix", "quad" };
-
 			if (runs)
 				m_audio->change(mode_of(game.played), now.device);
-			keep(section.c_str(), "mode", game.played == game.cabinet_played || game.played < 0 ? std::nullopt :
-			                              std::optional<std::string>(MODES[game.played]));
+			keep(section, "mode", game.played == game.cabinet_played || game.played < 0 ? std::nullopt :
+			                      std::optional<std::string>(MODE_NAMES[game.played]));
 		}
 		if (game.level != before.level) {
 			char db[16];
@@ -1191,20 +1173,16 @@ MenuSession::apply(const MenuState &was)
 			std::snprintf(db, sizeof(db), "%g", static_cast<double>(game.level));
 			if (runs)
 				m_audio->set_option_level(game.level);
-			keep(section.c_str(), "option_level", game.level == game.standard ? std::nullopt :
-			                                      std::optional<std::string>(db));
+			keep(section, "option_level", game.level == game.standard ? std::nullopt : std::optional<std::string>(db));
 		}
 	}
 	/* The vibration of the game shown: at once for the game that runs */
 	if (now.shake != was.shake && now.can_shake) {
 		const std::string section = "players." + game_shown();
 
-		if (!m_other && m_game) {
-			m_controls.feel_option_board(now.shake && m_game->option_vibration);
-			m_controls.feel_drive_board(now.shake ? m_game->drive_first_output : 0);
-			m_controls.feel_outputs(now.shake);
-		}
-		keep(section.c_str(), "vibration", on_off(now.shake, true));
+		if (!m_other && m_game)
+			m_controls.feel_game(*m_game, now.shake);
+		keep(section, "vibration", on_off(now.shake, true));
 	}
 	/* The dead zone and the trigger threshold of the gamepad shown: of its
 	 * make and model, a line of their own where they differ from
@@ -1219,9 +1197,9 @@ MenuSession::apply(const MenuState &was)
 		};
 
 		if (now.tuning.dead_zone != was.tuning.dead_zone)
-			keep(section.c_str(), "dead_zone", line(now.tuning.dead_zone, all.dead_zone));
+			keep(section, "dead_zone", line(now.tuning.dead_zone, all.dead_zone));
 		if (now.tuning.trigger_threshold != was.tuning.trigger_threshold)
-			keep(section.c_str(), "trigger_threshold", line(now.tuning.trigger_threshold, all.trigger_threshold));
+			keep(section, "trigger_threshold", line(now.tuning.trigger_threshold, all.trigger_threshold));
 		m_controls.retune();
 	}
 	/* The programs of lamps: the port opened or closed now, for the game
@@ -1278,7 +1256,7 @@ MenuSession::keep_custom()
 
 /* In odin.ini; with none, for the time Odin runs */
 void
-MenuSession::keep(const char *section, const char *key, const std::optional<std::string> &value)
+MenuSession::keep(const std::string &section, const std::string &key, const std::optional<std::string> &value)
 {
 	if (m_settings_file.empty())
 		m_settings.set(section, key, value);

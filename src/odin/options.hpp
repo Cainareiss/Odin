@@ -95,13 +95,22 @@ Parsed parse_options(int argc, char **argv, Options &options);
  * gone, its value by default again) */
 Options with_settings(const Options &command, const Settings &settings);
 
-/* How [sound.<game>] says to play the two boards: main, mix or quad */
+/* How [sound.<game>] says to play the two boards, as played_of counts
+ * them, and the mode of such a name */
+inline constexpr const char *MODE_NAMES[] = { "main", "mix", "quad" };
 std::optional<AudioOut::Mode> mode_named(const std::string &name);
+/* [sound.<game>] option_level: the optional board in the mix, in dB, as far
+ * as the list allows (Game::LOWEST_LEVEL to HIGHEST_LEVEL) */
+std::optional<double> level_named(const std::string &value);
+/* [players.<game>] vibration: the pads shake unless it says off (the last
+ * line says) */
+bool vibration_on(const Settings &settings, const std::string &game);
 
 /* The way of playing of the page Audio: 0 the main board, 1 both, 2 four
  * channels, -1 the optional board alone */
 int played_of(AudioOut::Mode mode);
 
+/* And back */
 AudioOut::Mode mode_of(int played);
 
 /* The folder of the save states by default: <data>/odin/states, else the

@@ -129,6 +129,13 @@ public:
 	 * the drive board is told, TX0 on that output (0: none), not what the
 	 * moves of the wheel give; the stronger of the two */
 	void feel_drive_board(unsigned first_output) { m_drive_output = first_output; }
+	/* All three as the cabinet of that game shakes, or none (`on` false) */
+	void feel_game(const Game &game, bool on)
+	{
+		feel_option_board(on && game.option_vibration);
+		feel_drive_board(on ? game.drive_first_output : 0);
+		feel_outputs(on);
+	}
 
 	static constexpr int MOUSE_MOVED = 2;
 	/* The strength of both motors of a pad that shakes (the nozzle of

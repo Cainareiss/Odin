@@ -219,22 +219,16 @@ parse_options(int argc, char **argv, Options &options)
 			}
 			break;
 		case 'o': {
-			static const std::pair<const char *, AudioOut::Mode> modes[] = {
-				{ "main", AudioOut::Mode::MAIN }, { "option", AudioOut::Mode::OPTION },
-				{ "mix", AudioOut::Mode::MIX }, { "quad", AudioOut::Mode::QUAD } };
-			bool known = false;
-			for (const auto &[name, mode] : modes) {
-				if (std::string(optarg) == name) {
-					options.sound = mode;
-					known = true;
-				}
-			}
-			if (std::string(optarg) == "off") {
+			const std::string mode = optarg;
+
+			if (mode == "off")
 				options.sound.reset();
-				known = true;
-			}
+			else if (mode == "option")
+				options.sound = AudioOut::Mode::OPTION;
+			else if (mode_named(mode))
+				options.sound = mode_named(mode);
 			options.sound_asked = true;
-			if (!known) {
+			if (mode != "off" && mode != "option" && !mode_named(mode)) {
 				opt = 'h';
 				wrong = true;
 			}
@@ -291,21 +285,37 @@ with_settings(const Options &command, const Settings &settings)
 	return options;
 }
 
-/* How [sound.<game>] says to play the two boards: main, mix or quad */
 std::optional<AudioOut::Mode>
 mode_named(const std::string &name)
 {
-	if (name == "main")
-		return AudioOut::Mode::MAIN;
-	if (name == "mix")
-		return AudioOut::Mode::MIX;
-	if (name == "quad")
-		return AudioOut::Mode::QUAD;
+	for (int played = 0; played < static_cast<int>(std::size(MODE_NAMES)); played++)
+		if (name == MODE_NAMES[played])
+			return mode_of(played);
 	return std::nullopt;
 }
 
-/* The way of playing of the page Audio: 0 the main board, 1 both, 2 four
- * channels, -1 the optional board alone */
+std::optional<double>
+level_named(const std::string &value)
+{
+	char *end = nullptr;
+	const double db = std::strtod(value.c_str(), &end);
+
+	if (value.empty() || *end || db < Game::LOWEST_LEVEL || db > Game::HIGHEST_LEVEL)
+		return std::nullopt;
+	return db;
+}
+
+bool
+vibration_on(const Settings &settings, const std::string &game)
+{
+	bool on = true;
+
+	for (const auto &[key, value] : settings.section("players." + game))
+		if (key == "vibration" && (value == "on" || value == "off"))
+			on = value == "on";
+	return on;
+}
+
 int
 played_of(AudioOut::Mode mode)
 {

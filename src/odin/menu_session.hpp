@@ -163,7 +163,7 @@ private:
 	                                    bool to_defaults) const;
 	void change_part(const MenuSlot &slot, bool to_defaults);
 	void keep(const char *key, const std::optional<std::string> &value);
-	void keep(const char *section, const char *key, const std::optional<std::string> &value);
+	void keep(const std::string &section, const std::string &key, const std::optional<std::string> &value);
 	/* [display] window: the size of Custom, or how many times the screen;
 	 * the size the user gave the window by hand, Custom from now on
 	 * (followed at each picture of the menu, kept in odin.ini when Odin is

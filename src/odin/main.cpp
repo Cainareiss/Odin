@@ -102,17 +102,10 @@ play(const Options &given, const std::string &name, const GameList &games, Setti
 	/* The optional board in the mix: the list, or the last lines of
 	 * [sound.<game>]; the pads shake unless [players.<game>] says off */
 	double option_level = game->option_level;
-	bool vibration = true;
-	for (const auto &[key, value] : settings.section("players." + game->name))
-		if (key == "vibration" && (value == "on" || value == "off"))
-			vibration = value == "on";
+	const bool vibration = vibration_on(settings, game->name);
 	for (const auto &[key, value] : settings.section("sound." + game->name)) {
-		char *end = nullptr;
-		const double db = std::strtod(value.c_str(), &end);
-
-		if (key == "option_level" && !value.empty() && !*end && db >= Game::LOWEST_LEVEL &&
-		    db <= Game::HIGHEST_LEVEL)
-			option_level = db;
+		if (key == "option_level" && level_named(value))
+			option_level = *level_named(value);
 		else if (key == "mode" && mode_named(value))
 			continue;
 		else
@@ -130,9 +123,7 @@ play(const Options &given, const std::string &name, const GameList &games, Setti
 		audio->set_volume(static_cast<float>(options.volume) / 100.0f);
 	if (audio && options.sound == AudioOut::Mode::MIX && option_level != 0)
 		std::printf("sound: the optional board at %+g dB in the mix\n", option_level);
-	controls.feel_option_board(vibration && game->option_vibration);
-	controls.feel_drive_board(vibration ? game->drive_first_output : 0);
-	controls.feel_outputs(vibration);
+	controls.feel_game(*game, vibration);
 	if (vibration && (game->option_vibration || game->drive_first_output))
 		std::printf("controls: the pad of player 1 shakes as the%s%s of the cabinet (experimental)\n",
 		            game->option_vibration ? " vibration device" : "",
