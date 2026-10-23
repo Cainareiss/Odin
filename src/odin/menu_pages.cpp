@@ -247,9 +247,10 @@ link_tiles(const MenuKit &kit, const MenuState &state, const Box &box, bool on)
 		return;
 	}
 
-	const size_t columns = std::min<size_t>(count, std::max<size_t>(1, static_cast<size_t>((width + gap) /
-	                                                                                          (kit.px(TILE_LEAST) + gap))));
-	const size_t rows = (count + columns - 1) / columns;
+	/* As many in each row as the rows take: 4 as 2 and 2, not 3 and 1 */
+	const size_t most = std::min<size_t>(count, std::max<size_t>(1, static_cast<size_t>((width + gap) /
+	                                                                                       (kit.px(TILE_LEAST) + gap))));
+	const size_t rows = (count + most - 1) / most, columns = (count + rows - 1) / rows;
 	const float tile_w = (width - static_cast<float>(columns - 1) * gap) / static_cast<float>(columns);
 	const float line = ImGui::GetTextLineHeight();
 	const float tile_h = 2.0f * pad + line + 2.0f * tiny * 1.3f;
