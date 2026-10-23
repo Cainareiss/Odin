@@ -87,7 +87,7 @@ struct MeshProgram {
 		GLint projection;
 		GLint modelview;
 		GLint modelview2;
-		GLint depth_scale;
+		GLint depth_scale, sort_scale;
 		Light lights[4];
 		GLint ambient;
 		GLint fog, fog_color;
@@ -103,7 +103,7 @@ struct MeshProgram {
 		uint32_t drawing = ~0u;
 		uint32_t vp_index, ls_index, ls_vp_index;
 		uint32_t mv_index, mv2_index;
-		float alpha_ref, depth_scale;
+		float alpha_ref, depth_scale, sort_scale;
 		int weigh_by_alpha;
 		uint32_t pattern;
 	};

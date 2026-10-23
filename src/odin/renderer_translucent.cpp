@@ -24,15 +24,19 @@
  * cabinet the faces of a SEGA letter, alpha 0.8 and drawn on both sides,
  * show the faces behind them and none over them, from any angle; the glass
  * of an AIRTRIX street lamp glows over its frame; a wall of fire of BRAVEFF
- * keeps its texture. How the hardware orders them is not known (HEURISTIC):
- * whole triangles sorted on their centroid break those letters, and writing
- * the depth drops layers that the cabinet shows. The X360 port reverses its
- * list of objects instead (825B3EB0). Neither writes the depth here.
+ * keeps its texture. The patents of the hardware peel them the deepest
+ * first whatever the order they were sent in, with a depth register of
+ * their own (US 6 320 580, US 6 680 741); how they break a tie is not
+ * written (HEURISTIC: in the order sent). Whole triangles sorted on their
+ * centroid break those letters, and writing the depth drops layers that
+ * the cabinet shows. The X360 port reverses its list of objects instead
+ * (825B3EB0). Neither writes the depth here.
  *
  * The meshes are drawn once. A fragment that is not behind the other types
  * goes to the list of its pixel with its colour, its depth, the blend mode
  * of its material and its rank in the display list; then every pixel
- * blends its list (shaders::SORT_FRAGMENT). */
+ * blends its list (shaders::SORT_FRAGMENT). The 101 of a mesh moves it one
+ * way against the other types and another in that list (depth_bias.hpp). */
 
 #include "odin/renderer.hpp"
 #include "odin/renderer_gl.hpp"

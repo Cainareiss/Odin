@@ -1636,14 +1636,19 @@ Antarctic::op_lightset_recall(const uint32_t *inst)
 
 /* 101	Mesh: Set Depth Bias
  *
- *	-----BBB BBBBBBBB -------o oooooooo
+ *	-----FBB BBBBBBBB -------o oooooooo
  *
- * B = Bias, signed: positive brings the mesh nearer, negative moves it away
+ * F = Flag, B = Bias. Held as the 11 bits F:B signed; the renderer reads
+ *     them one way against the other polygon types and another among the
+ *     translucent ones (depth_bias.hpp, HEURISTIC).
  *
- *	SGNASCAR stacks the coplanar layers of its track on 0x400 to 0x403,
- *	0x500 to 0x503, 0x600 and 0x700 (-1024 to -256) under the meshes
- *	without a bias; PHARRIER sends its stars at 0x400 and 0x500; the
- *	decals and the shadows of AIRTRIX go from 2 to 0x3D6.
+ *	The X360 port decodes F apart and B as one unsigned number
+ *	(8252E428), then never uses them. SGNASCAR sends only values with F:
+ *	its track and walls at 0x400 to 0x403, more layers at 0x500 to 0x503
+ *	and 0x600, the shadows of its cars at 0x700. PHARRIER sends its
+ *	stars at 0x400, the halos of its planets at 0x500, and 0x406, 0x1F4
+ *	and 0x3FF; AIRTRIX its decals, glows and shadows at 10 to 0x3D6,
+ *	BRAVEFF its decals at 20 to 102, VON4 2 and 10, SWRACER none.
  *
  * See @0C008040, PH:@0C016418, PH:@0C016446.
  *

@@ -137,6 +137,8 @@ R"glsl(layout(std430, binding = 1) buffer count_t {
 uniform sampler2D	u_solid_depth;
 uniform uint		u_order;
 uniform uint		u_blend_mode;
+uniform float		u_depth_scale;
+uniform float		u_sort_scale;
 #endif
 
 in vec4 p_position;
@@ -352,7 +354,11 @@ main (void)
 	uint n = atomicAdd (u_count, 1u);
 	if (n < uint (u_nodes.length ())) {
 		u_nodes[n].color = clamp (fragColor, 0.0, 1.0);
-		u_nodes[n].depth = frag_depth;
+		/* Sorted on the depth the 101 gives among translucent
+		 * fragments, not the one it gives against the other types
+		 * (depth_bias.hpp). */
+		u_nodes[n].depth = log2 (1.0 + u_sort_scale / (gl_FragCoord.w * u_depth_scale)) *
+		                   (1.0 / 24.0);
 		u_nodes[n].next = imageAtomicExchange (u_heads, pixel, n + 1u);
 		u_nodes[n].order = u_order + uint (gl_PrimitiveID);
 		u_nodes[n].mode = u_blend_mode;

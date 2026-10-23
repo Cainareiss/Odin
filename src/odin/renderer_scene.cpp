@@ -22,6 +22,7 @@
 /* A display list drawn: its viewports, its polygon types, its meshes. */
 
 #include "odin/renderer.hpp"
+#include "odin/depth_bias.hpp"
 #include "odin/renderer_gl.hpp"
 
 #include <cmath>
@@ -434,7 +435,7 @@ Renderer::draw_mesh(const odin_mesh_t &mesh)
 		held.drawing = m_drawing;
 		held.vp_index = held.ls_index = held.ls_vp_index = NONE;
 		held.mv_index = held.mv2_index = NONE;
-		held.alpha_ref = held.depth_scale = NAN;
+		held.alpha_ref = held.depth_scale = held.sort_scale = NAN;
 		held.weigh_by_alpha = -1;
 		held.pattern = NONE;
 	}
@@ -457,17 +458,21 @@ Renderer::draw_mesh(const odin_mesh_t &mesh)
 	upload_texture(mesh);
 	upload_lightset(mesh);
 
-	/* The 101 bias moves the mesh by a fraction of its own depth, nearer
-	 * when positive (HEURISTIC, 1/65536 per unit: four times as much and
-	 * a light shaft of AIRTRIX covers the skater). It is signed and holds
-	 * for the opaque types too: the lettering and the painted lines of
-	 * the SGNASCAR track lie on layers of -1024 to -256, the shadow of the
-	 * AIRTRIX skater is opaque. */
-	const float depth_scale = m_pass.depth_bias ?
-		1.0f - mesh.depth_bias * (1.0f / 65536.0f) : 1.0f;
+	/* The 101 moves the mesh by a fraction of its own depth, one way
+	 * against the other types and another among the translucent
+	 * fragments (depth_bias.hpp). It holds for the opaque types too: the
+	 * lettering and the painted lines of the SGNASCAR track, the shadow
+	 * of the AIRTRIX skater. */
+	const int bias = m_pass.depth_bias ? static_cast<int>(mesh.depth_bias) : 0;
+	const float depth_scale = depth_bias::test_scale(bias);
 	if (held.depth_scale != depth_scale) {
 		held.depth_scale = depth_scale;
 		glUniform1f(locs.depth_scale, depth_scale);
+	}
+	const float sort_scale = depth_bias::sort_scale(bias);
+	if (m_pass.collect && held.sort_scale != sort_scale) {
+		held.sort_scale = sort_scale;
+		glUniform1f(locs.sort_scale, sort_scale);
 	}
 
 	for (unsigned i = 0; i < mesh.num_instances; i++)

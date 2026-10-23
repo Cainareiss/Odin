@@ -1102,17 +1102,17 @@ A write to the texture RAM drops every decoded texture of its bank. The
 levels a texture keeps in the other bank are not followed: a texture whose
 smaller levels alone are rewritten would keep the old ones (no case known).
 
-The 101 bias is a signed 11-bit number that moves a mesh of any type but
-the background by bias / 65536 of its own depth, nearer when positive
-(HEURISTIC, read from three cabinets: four times as much and a light shaft
-of AIRTRIX covers the skater; the lettering of the wall and the painted
-lines of the SGNASCAR track, on layers of -1024 to -256, show as on the
-cabinet; the shadow of the AIRTRIX skater, opaque, comes out of the floor;
-the stars of PHARRIER, at -1024, stay behind its asteroids). The unit of
-the hardware is not known. Where it is wrong: the shadows under the cars of
-SGNASCAR, black translucent meshes at -256, show on the parts of the track
-that are at -768 or -1024 and are hidden on those at 0, in the banked turn
-as in the last shot of the attract; the cabinet shows them everywhere.
+The 101 moves a mesh of any type but the background by a fraction of its
+own depth, read two ways (depth_bias.hpp, HEURISTIC): against the other
+types bits 25:16 unsigned, nearer, 5.6 / 65536 a unit, bit 26 left out;
+among the translucent fragments bits 26:16 signed, 1 / 65536 a unit. Both
+read from the cabinets of three games: the car shadows of SGNASCAR (0x700)
+over its banked track (0x400) they lie as much as 6 % behind, its walls
+(0x401) before the stands, the halos of the PHARRIER planets (0x500)
+behind the planets, the shadows and lamp glows of AIRTRIX (2 to 0x3D6).
+Not known: what the hardware does with bit 26 against the other types, the
+true units, and why two readings (the patents describe no depth offset;
+the X360 port decodes the 101 and never uses it).
 
 The 161 with bit 18 loads a second modelview and a vertex with bit 12 of
 its header follows it (the AIRTRIX trails and skater joints). Bits 13 and
