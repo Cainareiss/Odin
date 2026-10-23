@@ -174,7 +174,6 @@ MenuSession::MenuSession(const Options &options, Display &display, Keyboard &key
 	state.link_next = state.link_next_typed = link.next;
 	state.link_cabinet = link.cabinet;
 	state.link_given = std::getenv("ODIN_NETBD") != nullptr;
-	state.link_game = game && game->link.cabinets;
 	state.device = options.sound_device;
 	state.volume = options.volume;
 	state.background = options.background;
@@ -213,6 +212,11 @@ MenuSession::MenuSession(const Options &options, Display &display, Keyboard &key
 		state.sound_games.push_back(sound);
 	}
 	state.games = games.titles("hikaru");
+	for (const auto &[name, title] : state.games) {
+		const std::optional<Game> listed = games.describe(name);
+
+		state.game_links.push_back(listed && listed->link.cabinets);
+	}
 	for (const auto &[key, value] : settings.section("menu")) {
 		if (key == "classic" && (value == "on" || value == "off"))
 			state.classic = value == "on";

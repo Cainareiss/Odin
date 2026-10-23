@@ -201,8 +201,8 @@ struct MenuState {
 	 * itself) or linked to other Odins; the port the previous cabinet
 	 * comes in on; the next cabinet as kept and as being written (not an
 	 * address: not kept); ODIN_NETBD sets them. Then the game that runs:
-	 * it links cabinets, it has the board, linked, its port taken, each
-	 * end of the cable plugged in. */
+	 * it runs, it has the board, linked, its port taken, each end of the
+	 * cable plugged in. */
 	int link_board = 0;
 	unsigned link_port = 13404;
 	unsigned link_cabinet = 1;	/* which cabinet of the link this Odin is, 1 the master */
@@ -214,7 +214,7 @@ struct MenuState {
 	int link_shown_seat = SEAT_NONE;
 	std::string link_next, link_next_typed;
 	bool link_next_bad = false, link_given = false;
-	bool link_game = false, link_running = false, link_board_now = false, link_linked = false, link_failed = false;
+	bool link_running = false, link_board_now = false, link_linked = false, link_failed = false;
 	bool link_previous = false, link_next_plugged = false;
 
 	/* Paths: the folders of the games, of the files they share (the BIOS:
@@ -235,6 +235,8 @@ struct MenuState {
 	 * are shown and the one that runs, another one asked */
 	std::vector<std::pair<std::string, std::string>> games;
 	size_t shown = 0, running = 0;
+	/* Each game of `games` links cabinets: the page Link lists those alone */
+	std::vector<bool> game_links;
 	std::optional<size_t> show;
 	/* The panel of the cabinet of the game shown (its controls and their
 	 * inputs), which are worked now (the controls, then COIN1, COIN2 and
@@ -301,7 +303,7 @@ struct MenuState {
 	/* The palette of the menu, the bar and the library ([menu] theme): one
 	 * of THEMES (menu_kit.hpp) */
 	unsigned theme = 0;
-	std::optional<size_t> games_was;
+	std::optional<size_t> games_was;	/* games by their place in `games` */
 	size_t games_from = 0;
 	double games_since = 0.0;
 	/* What the left of the page Display shows (Menu::Preview), what it
@@ -452,8 +454,12 @@ private:
 	/* A button of a gamepad of that kind (pad_drawing.hpp), as its maker
 	 * prints it */
 	static std::string button_name(int button, int kind);
-	/* The row of the games of the pages Input and Outputs: its bottom */
-	static float games_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width, bool focusable = false);
+	/* The games of the row of the pages Input, Outputs and Link, by their
+	 * place in MenuState::games: all of them, or those that link cabinets */
+	static std::vector<size_t> row_games(const MenuState &state, bool links_only);
+	/* That row: its bottom */
+	static float games_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width, bool focusable = false,
+	                       bool links_only = false);
 	void start_gl();
 	void size_blur(unsigned w, unsigned h);
 	/* The background from that framebuffer and buffer, w by h */

@@ -331,10 +331,14 @@ Menu::navigate(MenuState &state)
 		m_focus.at = 0;
 		nav = {};
 	}
-	if (const int n = static_cast<int>(state.games.size()); nav.game && n && m_page == OUTPUTS) {
-		const int shown = static_cast<int>(std::min(state.shown, state.games.size() - 1));
+	if (nav.game && (m_page == OUTPUTS || m_page == LINK)) {
+		const std::vector<size_t> games = row_games(state, m_page == LINK);
+		const int n = static_cast<int>(games.size());
+		const auto at = std::find(games.begin(), games.end(), state.shown);
+		const int shown = at == games.end() ? 0 : static_cast<int>(at - games.begin());
 
-		state.show = static_cast<size_t>((shown + nav.game % n + n) % n);
+		if (n)
+			state.show = games[static_cast<size_t>((shown + nav.game % n + n) % n)];
 	}
 	m_focus.side = 0;
 	m_focus.press = false;
