@@ -35,8 +35,8 @@ namespace odin {
 
 /* Why a game ends: the user quits Odin, its last frame is done, it cannot
  * run, the user closes it or opens another one (Open... of the bar), or
- * its cabinet is to be switched off and on: the seat of a link taken
- * (Hikaru::restart_asked) */
+ * its cabinet is to be switched off and on: Reset, or the seat of a link
+ * taken (Hikaru::restart_asked) */
 enum class Ended { QUIT, LAST_FRAME, FAILED, CLOSED, OPENED, RESTART };
 
 /* A game being run: its board, with the window, the keyboard and the

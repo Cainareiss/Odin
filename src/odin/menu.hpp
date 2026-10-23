@@ -112,7 +112,7 @@ struct BarState {
 	std::array<std::string, Hotkeys::ACTIONS> keys;
 	/* What was asked; the page of the settings asked (Menu::Page, -1: the
 	 * one shown last) */
-	enum class Ask { NONE, OPEN, CLOSE, SAVE_STATE, LOAD_STATE, ROMS, BIOS, SETTINGS, FULLSCREEN, PAUSE, QUIT };
+	enum class Ask { NONE, OPEN, CLOSE, RESET, SAVE_STATE, LOAD_STATE, ROMS, BIOS, SETTINGS, FULLSCREEN, PAUSE, QUIT };
 	Ask ask = Ask::NONE;
 	int page = -1;
 	/* The mouse is on the bar or a menu of it is open: its buttons are the

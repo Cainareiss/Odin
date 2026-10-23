@@ -67,6 +67,8 @@ void test_standard()
 	check(is(keys.key_action(SDLK_RETURN, SDL_KMOD_RALT), Action::FULLSCREEN), "Alt+Enter, either Alt");
 	check(!keys.key_action(SDLK_RETURN, SDL_KMOD_NONE), "Enter alone: nothing");
 	check(is(keys.key_action(SDLK_Q, SDL_KMOD_RCTRL), Action::QUIT), "Ctrl+Q: quit");
+	check(is(keys.key_action(SDLK_R, SDL_KMOD_LCTRL), Action::RESET), "Ctrl+R: reset");
+	check(!keys.key_action(SDLK_R, SDL_KMOD_NONE), "R alone: the game's");
 	check(!keys.key_action(SDLK_Q, SDL_KMOD_NONE), "Q alone (a key of player 2): nothing");
 	check(is(keys.pad_action(Hotkeys::GUIDE_ALONE), Action::MENU), "Guide tapped: the menu");
 	check(is(keys.pad_action(SDL_GAMEPAD_BUTTON_BACK), Action::PAUSE), "Guide+Back: pause");
@@ -92,6 +94,7 @@ void test_text()
 	check(!Hotkeys::key_of("NoSuchKey"), "an unknown key refused");
 	check(Hotkeys::line(Hotkeys::standard(Action::MENU)) == "Escape, F10, pad:guide", "the line of the menu");
 	check(Hotkeys::line(Hotkeys::standard(Action::QUIT)) == "Ctrl+Q, pad:guide+start", "the line of quit");
+	check(Hotkeys::line(Hotkeys::standard(Action::RESET)) == "Ctrl+R", "the line of reset");
 	check(Hotkeys::line(Hotkeys::standard(Action::FULLSCREEN)) == "F11, Alt+Return", "no button: none said");
 	for (size_t a = 0; a < Hotkeys::ACTIONS; a++) {
 		const Hotkeys::Binding &standard = Hotkeys::standard(static_cast<Action>(a));

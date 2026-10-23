@@ -170,6 +170,8 @@ Menu::bar(BarState &state)
 					ask(Ask::OPEN);
 				if (item("Close game", {}, false, state.game))
 					ask(Ask::CLOSE);
+				if (item("Reset", key(Action::RESET), false, state.game))
+					ask(Ask::RESET);
 				ImGui::Separator();
 				if (item("Save state", key(Action::SAVE_STATE), false,
 				         state.game))

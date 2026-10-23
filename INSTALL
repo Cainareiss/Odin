@@ -99,28 +99,30 @@ the options say the same and come first; no vsync at an unlimited pace,
 nor vsync = on on a display slower than 60 frames a second),
 Ctrl+Q quits, P pauses, F4 saves <game>.odinstate and F1 loads it, in
 ~/.local/share/odin/states (states in [paths] of odin.ini, page Paths),
-F11 or Alt+Enter takes the whole display. The page Hotkeys of the menu
-changes these keys and the buttons below, kept in [hotkeys] of odin.ini:
+Ctrl+R resets (the cabinet switched off and on), F11 or Alt+Enter takes
+the whole display. The page Hotkeys of the menu changes these keys and the
+buttons below, kept in [hotkeys] of odin.ini:
 
  [hotkeys]
  pause = Pause, pad:guide+y
 
-(menu, pause, save_state, load_state, fullscreen and quit: two keys at
-most, Ctrl+Q written so, and a button held with Guide, pad:guide+<button>,
-or pad:guide for Guide alone; none for nothing.)
+(menu, pause, save_state, load_state, reset, fullscreen and quit: two keys
+at most, Ctrl+Q written so, and a button held with Guide,
+pad:guide+<button>, or pad:guide for Guide alone; none for nothing.)
 
 In a game, the mouse moved over the window shows the bar at its top a
 while, the game going on under it; in a game the mouse aims in (Brave Fire
 Fighters), only from the top edge of the window. FILE: Open... plays the
 zip or the 7z of a game, the game of its name in MAME, from its directory;
-Close game goes back to the library; the state of the game saved and
-loaded, the folders of the games and of the BIOS, the menu (Settings...),
-Quit. INPUT, VIDEO, AUDIO and ABOUT open the pages of the menu; VIDEO also
-takes the whole display and sets the bezel and the speed in the title,
-AUDIO the volume and the sound in the background; DEBUG pauses the game and
-has the board say each access (at the next game). What the bar changes is
-kept in odin.ini as the menu keeps it. In the library, Close game, the
-states and Pause are greyed out.
+Close game goes back to the library, Reset switches the cabinet off and
+on; the state of the game saved and loaded, the folders of the games and
+of the BIOS, the menu (Settings...), Quit. INPUT, VIDEO, AUDIO and ABOUT
+open the pages of the menu; VIDEO also takes the whole display and sets
+the bezel and the speed in the title, AUDIO the volume and the sound in
+the background; DEBUG pauses the game and has the board say each access
+(at the next game). What the bar changes is kept in odin.ini as the menu
+keeps it. In the library, Close game, Reset, the states and Pause are
+greyed out.
 
 0 is TEST and 9 SERVICE, the buttons of the cabinet: they open and work
 the menu of the BOOTROM and the test menus of the games (both together

@@ -56,8 +56,8 @@ struct HotKey {
  * one. */
 class Hotkeys {
 public:
-	enum class Action : uint8_t { MENU, PAUSE, SAVE_STATE, LOAD_STATE, FULLSCREEN, QUIT };
-	static constexpr size_t ACTIONS = 6;
+	enum class Action : uint8_t { MENU, PAUSE, SAVE_STATE, LOAD_STATE, RESET, FULLSCREEN, QUIT };
+	static constexpr size_t ACTIONS = 7;
 	static constexpr size_t KEYS = 2;
 	/* The gamepad of an action: none, Guide tapped alone, or a button with
 	 * Guide held (an SDL_GamepadButton) */

@@ -164,6 +164,9 @@ Session::act(Hotkeys::Action action)
 	case Action::LOAD_STATE:
 		load_or_save_state(true);
 		break;
+	case Action::RESET:
+		m_end = Ended::RESTART;
+		break;
 	case Action::FULLSCREEN:
 		m_display.toggle_fullscreen();
 		break;
@@ -276,6 +279,9 @@ Session::do_bar()
 	switch (m_menus.do_bar(m_bar)) {
 	case Ask::CLOSE:
 		m_end = Ended::CLOSED;
+		break;
+	case Ask::RESET:
+		act(Hotkeys::Action::RESET);
 		break;
 	case Ask::SAVE_STATE:
 		load_or_save_state(false);

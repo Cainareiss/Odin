@@ -565,7 +565,7 @@ Menu::page_audio(MenuKit &kit, MenuState &state) const
 /* The actions of Odin as the page Hotkeys says them, in the order of
  * Hotkeys::Action */
 constexpr const char *HOTKEY_NAMES[Hotkeys::ACTIONS] = {
-	"Menu (pauses the game)", "Pause", "Save state", "Load state", "Full screen", "Quit",
+	"Menu (pauses the game)", "Pause", "Save state", "Load state", "Reset", "Full screen", "Quit",
 };
 
 /* The modifiers as their caps say them */
