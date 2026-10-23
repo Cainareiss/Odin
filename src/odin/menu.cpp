@@ -133,6 +133,7 @@ constexpr const char *LICENCES[][3] = {
 	{ "LZMA SDK", "Igor Pavlov", "public domain" },
 	{ "Gamepad drawings", "AL2009man, Gamepad-Asset-Pack", "MIT" },
 	{ "Cozette", "the-moonwitch", "MIT" },
+	{ "Lola Retro (CRT filter)", "Zoki", "MIT" },
 };
 
 ImVec4
@@ -689,6 +690,30 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 		if (kit.choice("Bezel", "beside the game in a wide window: black, the game blurred, or its picture from "
 		               "Artwork (page Paths)", SIDES_SHOWN, sides))
 			state.sides = static_cast<unsigned>(sides);
+	});
+	kit.end_group();
+
+	/* The screens of the cabinets (filters/lola-retro, Odin's presets on
+	 * the shaders of Lola Retro); another filter odin.ini names is shown
+	 * by its name */
+	kit.begin_group("FILTER");
+	static constexpr const char *SCREENS[] = { "None", "Monitor 29\" (31 kHz)", "Projector 50\" (31 kHz)" };
+	static constexpr const char *PRESETS[] = { "", "lola-retro/sega-monitor-29", "lola-retro/sega-projector-50" };
+	std::vector<std::string> screens(std::begin(SCREENS), std::end(SCREENS));
+	int screen = -1;
+
+	for (size_t s = 0; s < std::size(PRESETS); s++)
+		if (state.filter == PRESETS[s])
+			screen = static_cast<int>(s);
+	if (screen < 0) {
+		screens.push_back(state.filter);
+		screen = static_cast<int>(screens.size()) - 1;
+	}
+	watch(PREVIEW_SCREEN, [&] {
+		if (kit.dropdown("CRT screen", "the screen of the cabinets, after Sega's manuals (Lola Retro): Planet "
+		                 "Harriers and NASCAR a monitor, the others a projector; asks much of the graphics card",
+		                 screens, screen) && screen >= 0 && static_cast<size_t>(screen) < std::size(PRESETS))
+			state.filter = PRESETS[screen];
 	});
 	kit.end_group();
 

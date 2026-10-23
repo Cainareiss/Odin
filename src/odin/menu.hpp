@@ -136,6 +136,9 @@ struct MenuState {
 	/* Around the picture where the window is wider (Display::Sides: 0
 	 * black, 1 the picture blurred, 2 the bezel of the game) */
 	unsigned sides = 2;
+	/* The filter of the picture by its name ([display] filter); empty:
+	 * none */
+	std::string filter;
 	bool fullscreen = false, unthrottled = false, show_speed = true;
 	/* Said on the command line: shown, not changed */
 	bool scale_given = false, anisotropy_given = false, window_given = false, fullscreen_given = false,

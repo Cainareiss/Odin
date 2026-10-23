@@ -130,6 +130,7 @@ MenuSession::MenuSession(const Options &options, Display &display, Keyboard &key
 
 	state.scale = options.display.scale;
 	state.anisotropy = options.display.anisotropy;
+	state.filter = options.display.filter;
 	state.window = options.display.window ? options.display.window : 1;
 	state.custom_w = options.display.window_w;
 	state.custom_h = options.display.window_h;

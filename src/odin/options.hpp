@@ -71,7 +71,7 @@ struct Options {
 	std::string sound_device;
 	unsigned volume = 100;
 	bool background = true;
-	Display::Options display = { 1, 1, 0, false, true, Display::Vsync::OFF, 0, 0 };
+	Display::Options display = { 1, 1, 0, false, true, Display::Vsync::OFF, 0, 0, "" };
 	/* [display] vsync: the display gets it when the frames are paced */
 	Display::Vsync vsync = VSYNC;
 	/* [display] bezel: around the picture */

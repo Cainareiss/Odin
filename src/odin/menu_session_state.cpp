@@ -353,6 +353,10 @@ MenuSession::apply(const MenuState &was)
 		m_display.set_scale(now.scale);
 		keep("scale", number(now.scale, 1));
 	}
+	if (now.filter != was.filter) {
+		m_display.set_filter(now.filter);
+		keep("filter", now.filter.empty() ? std::nullopt : std::optional<std::string>(now.filter));
+	}
 	if (now.anisotropy != was.anisotropy) {
 		m_display.set_anisotropy(now.anisotropy);
 		keep("anisotropy", number(now.anisotropy, 1));

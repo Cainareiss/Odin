@@ -159,6 +159,16 @@ Renderer::build_compose()
 }
 
 void
+Renderer::set_filter(const std::string &preset)
+{
+	if (preset == m_filter_preset)
+		return;
+	m_filter_preset = preset;
+	m_filter = preset.empty() ? nullptr : PictureFilter::load(preset);
+	m_filter_frames = 0;
+}
+
+void
 Renderer::build_presenter()
 {
 	m_presenter = gl::compile_program(shaders::WHOLE_PICTURE_VERTEX, shaders::PRESENT_FRAGMENT);
@@ -569,6 +579,24 @@ Renderer::present(unsigned window_w, unsigned window_h, const PictureHole &hole)
 	if (w != window_w || h != window_h) {
 		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
+	}
+
+	/* A filter takes the picture at the size of the screen of the
+	 * hardware, a finer one brought down to it as below */
+	if (m_filter) {
+		glBindFramebuffer(GL_FRAMEBUFFER, m_filter->frame(WIDTH, HEIGHT));
+		glViewport(0, 0, WIDTH, HEIGHT);
+		glUseProgram(m_presenter);
+		glUniform4f(m_presenter_rect, 0.0f, 0.0f, static_cast<float>(m_scale), static_cast<float>(m_scale));
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, m_frame_color);
+		glBindVertexArray(m_quad_vao);
+		glDrawArrays(GL_TRIANGLES, 0, 3);
+		glBindVertexArray(0);
+		glBindTexture(GL_TEXTURE_2D, 0);
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		m_filter->draw(x, y, w, h, m_filter_frames++);
+		return;
 	}
 
 	if (w == width() && h == height()) {

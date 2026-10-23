@@ -151,3 +151,5 @@ Not allowed:
   MIT licence, written at the top of `src/odin/pad_drawings_al2009man.cpp`.
 - The font of the menu, Cozette (a part of it, `src/odin/fonts/cozette.ttf`),
   keeps its MIT licence (`src/odin/fonts/LICENSE-cozette`).
+- The CRT filters of Lola Retro (`filters/lola-retro`, its port for 86Box
+  as it comes) keep their MIT licence (`filters/lola-retro/LICENSE`).

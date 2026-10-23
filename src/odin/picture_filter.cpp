@@ -1,0 +1,433 @@
+/*
+ * Odin
+ * Copyright (C) 2026 Réda Chérif-Touil
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#include "odin/picture_filter.hpp"
+
+#include "odin/picture_preset.hpp"
+
+#include <cstdio>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
+
+namespace odin {
+
+namespace {
+
+std::string
+read_text(const std::filesystem::path &path, bool &ok)
+{
+	std::ifstream file(path, std::ios::binary);
+
+	ok = static_cast<bool>(file);
+	return ok ? std::string(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()) : std::string();
+}
+
+std::string
+key_or(const std::map<std::string, std::string> &keys, const std::string &name, const std::string &otherwise)
+{
+	const auto key = keys.find(name);
+
+	return key == keys.end() ? otherwise : key->second;
+}
+
+/* The power of two a size takes, as 86Box rounds the whole number of
+ * pixels up */
+float
+power_of_two(float size)
+{
+	const unsigned whole = static_cast<unsigned>(size);
+	unsigned power = 1;
+
+	while (power < whole)
+		power <<= 1;
+	return static_cast<float>(power);
+}
+
+GLuint
+build_shader(GLenum type, const std::string &text, const std::string &name)
+{
+	const GLuint shader = glCreateShader(type);
+	const char *const source = text.c_str();
+	GLint status;
+
+	glShaderSource(shader, 1, &source, nullptr);
+	glCompileShader(shader);
+	glGetShaderiv(shader, GL_COMPILE_STATUS, &status);
+	if (!status) {
+		char log[1024];
+
+		glGetShaderInfoLog(shader, sizeof(log), nullptr, log);
+		std::fprintf(stderr, "ERROR: filter: %s (%s) does not build: %s\n", name.c_str(),
+		             type == GL_VERTEX_SHADER ? "vertex" : "fragment", log);
+		glDeleteShader(shader);
+		return 0;
+	}
+	return shader;
+}
+
+/* The program of a pass; 0, said on stderr, when it does not build */
+GLuint
+build_program(const std::string &source, const std::string &name)
+{
+	const GLuint vertex = build_shader(GL_VERTEX_SHADER, odin::preset::part(source, "VERTEX"), name);
+	const GLuint fragment = vertex ? build_shader(GL_FRAGMENT_SHADER, odin::preset::part(source, "FRAGMENT"), name) : 0;
+	GLuint program = 0;
+	GLint status = GL_FALSE;
+
+	if (vertex && fragment) {
+		program = glCreateProgram();
+		glAttachShader(program, vertex);
+		glAttachShader(program, fragment);
+		glLinkProgram(program);
+		glGetProgramiv(program, GL_LINK_STATUS, &status);
+	}
+	if (program && !status) {
+		char log[1024];
+
+		glGetProgramInfoLog(program, sizeof(log), nullptr, log);
+		std::fprintf(stderr, "ERROR: filter: %s does not link: %s\n", name.c_str(), log);
+		glDeleteProgram(program);
+		program = 0;
+	}
+	glDeleteShader(vertex);
+	glDeleteShader(fragment);
+	return program;
+}
+
+/* A texture of 86Box is RGB: here RGBA, which every driver draws into, its
+ * alpha kept at 1 (cleared so, never written: draw) */
+void
+make_texture(GLuint &texture, GLuint &fb, unsigned w, unsigned h, bool is_float)
+{
+	if (!texture)
+		glGenTextures(1, &texture);
+	glBindTexture(GL_TEXTURE_2D, texture);
+	glTexImage2D(GL_TEXTURE_2D, 0, is_float ? GL_RGBA32F : GL_RGBA8, static_cast<GLsizei>(w),
+	             static_cast<GLsizei>(h), 0, GL_RGBA, is_float ? GL_FLOAT : GL_UNSIGNED_BYTE, nullptr);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	if (!fb)
+		glGenFramebuffers(1, &fb);
+	glBindFramebuffer(GL_FRAMEBUFFER, fb);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture, 0);
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+} /* namespace */
+
+std::unique_ptr<PictureFilter>
+PictureFilter::load(const std::string &preset)
+{
+	bool ok;
+	const std::string text = read_text(preset, ok);
+
+	if (!ok) {
+		std::fprintf(stderr, "ERROR: filter: cannot read '%s'\n", preset.c_str());
+		return nullptr;
+	}
+
+	std::unique_ptr<PictureFilter> filter(new PictureFilter());
+
+	if (!filter->build(preset, odin::preset::read_keys(text)))
+		return nullptr;
+	std::printf("filter: '%s', %zu passes\n", preset.c_str(), filter->m_passes.size());
+	return filter;
+}
+
+bool
+PictureFilter::build(const std::string &preset, const std::map<std::string, std::string> &keys)
+{
+	const std::filesystem::path folder = std::filesystem::path(preset).parent_path();
+	const int count = std::atoi(key_or(keys, "shaders", "0").c_str());
+	std::vector<std::string> sources;
+	std::vector<std::pair<std::string, float>> parameters;
+
+	if (count <= 0) {
+		std::fprintf(stderr, "ERROR: filter: '%s' has no passes\n", preset.c_str());
+		return false;
+	}
+	m_passes.resize(static_cast<size_t>(count));
+	for (int i = 0; i < count; i++) {
+		const std::string n = std::to_string(i);
+		const std::filesystem::path file = folder / key_or(keys, "shader" + n, "");
+		const std::string wrap = key_or(keys, "wrap_mode" + n, "");
+		Pass &pass = m_passes[static_cast<size_t>(i)];
+		bool ok;
+
+		sources.push_back(read_text(file, ok));
+		if (!ok) {
+			std::fprintf(stderr, "ERROR: filter: cannot read '%s'\n", file.string().c_str());
+			return false;
+		}
+		odin::preset::declared(sources.back(), parameters);
+		/* What it draws: read as the next pass says, with its own wrap */
+		pass.out.linear = odin::preset::key_on(keys, "filter_linear" + std::to_string(i + 1));
+		pass.out.is_float = odin::preset::key_on(keys, "float_framebuffer" + n);
+		pass.out.wrap = wrap == "repeat" ? GL_REPEAT : wrap == "mirrored_repeat" ? GL_MIRRORED_REPEAT :
+		                wrap == "clamp_to_edge" ? GL_CLAMP_TO_EDGE : GL_CLAMP_TO_BORDER;
+		for (size_t axis = 0; axis < 2; axis++) {
+			const std::string ax = axis ? "y" : "x";
+			const std::string type = key_or(keys, "scale_type" + n, key_or(keys, "scale_type_" + ax + n, "source"));
+
+			pass.scale_type[axis] = type == "viewport" ? Scale::VIEWPORT : type == "absolute" ? Scale::ABSOLUTE :
+			                        Scale::SOURCE;
+			pass.scale[axis] = std::strtof(key_or(keys, "scale" + n, key_or(keys, "scale_" + ax + n, "1.0")).c_str(),
+			                               nullptr);
+		}
+	}
+
+	Pass &last = m_passes.back();
+
+	last.window = last.scale_type[0] == Scale::SOURCE && last.scale_type[1] == Scale::SOURCE &&
+	              last.scale[0] == 1.0f && last.scale[1] == 1.0f;
+	if (!last.window) {
+		std::fprintf(stderr, "ERROR: filter: the last pass of '%s' has a scale: not taken\n", preset.c_str());
+		return false;
+	}
+	/* The values the preset sets */
+	for (std::string names = key_or(keys, "parameters", ""); !names.empty();) {
+		const size_t end = names.find(';');
+		const std::string name = names.substr(0, end);
+
+		for (auto &[have, value] : parameters)
+			if (have == name)
+				value = std::strtof(key_or(keys, name, "0").c_str(), nullptr);
+		names = end == std::string::npos ? std::string() : names.substr(end + 1);
+	}
+
+	static constexpr GLfloat QUAD[16] = {};
+
+	for (size_t i = 0; i < m_passes.size(); i++) {
+		Pass &pass = m_passes[i];
+		const std::string name = key_or(keys, "shader" + std::to_string(i), "");
+		const auto uniform = [&pass](const std::string &uniform_name) {
+			return glGetUniformLocation(pass.program, uniform_name.c_str());
+		};
+
+		pass.program = build_program(sources[i], name);
+		if (!pass.program)
+			return false;
+		pass.texture = uniform("Texture");
+		pass.input_size = uniform("InputSize");
+		pass.texture_size = uniform("TextureSize");
+		pass.output_size = uniform("OutputSize");
+		pass.frame_count = uniform("FrameCount");
+		pass.frame_direction = uniform("FrameDirection");
+		pass.mvp = uniform("MVPMatrix");
+		pass.orig_texture = uniform("OrigTexture");
+		pass.orig_input_size = uniform("OrigInputSize");
+		pass.orig_texture_size = uniform("OrigTextureSize");
+		for (size_t k = 1; k <= i; k++) {
+			const std::string before = "Pass" + std::to_string(k);
+
+			pass.passes.push_back({ uniform(before + "Texture"), uniform(before + "TextureSize"),
+			                        uniform(before + "InputSize") });
+		}
+		for (const auto &[parameter, value] : parameters)
+			if (const GLint at = uniform(parameter); at >= 0)
+				pass.parameters.emplace_back(at, value);
+
+		/* Four corners: VertexCoord, then TexCoord, set by size() */
+		const GLint vertex = glGetAttribLocation(pass.program, "VertexCoord");
+		const GLint tex = glGetAttribLocation(pass.program, "TexCoord");
+
+		glGenVertexArrays(1, &pass.vao);
+		glGenBuffers(1, &pass.vbo);
+		glBindVertexArray(pass.vao);
+		glBindBuffer(GL_ARRAY_BUFFER, pass.vbo);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(QUAD), QUAD, GL_DYNAMIC_DRAW);
+		if (vertex >= 0) {
+			glEnableVertexAttribArray(static_cast<GLuint>(vertex));
+			glVertexAttribPointer(static_cast<GLuint>(vertex), 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), nullptr);
+		}
+		if (tex >= 0) {
+			glEnableVertexAttribArray(static_cast<GLuint>(tex));
+			glVertexAttribPointer(static_cast<GLuint>(tex), 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat),
+			                      reinterpret_cast<const void *>(2 * sizeof(GLfloat)));
+		}
+		glBindVertexArray(0);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+	}
+	return true;
+}
+
+PictureFilter::~PictureFilter()
+{
+	for (Pass &pass : m_passes) {
+		glDeleteProgram(pass.program);
+		glDeleteVertexArrays(1, &pass.vao);
+		glDeleteBuffers(1, &pass.vbo);
+		glDeleteFramebuffers(1, &pass.out.fb);
+		glDeleteTextures(1, &pass.out.texture);
+	}
+	glDeleteFramebuffers(1, &m_frame.fb);
+	glDeleteTextures(1, &m_frame.texture);
+	for (const auto &[kind, sampler] : m_samplers)
+		glDeleteSamplers(1, &sampler);
+}
+
+GLuint
+PictureFilter::frame(unsigned w, unsigned h)
+{
+	if (m_frame_size[0] != w || m_frame_size[1] != h) {
+		m_frame_size = { w, h };
+		m_frame.size = { static_cast<float>(w), static_cast<float>(h) };
+		m_frame.texture_size = { power_of_two(m_frame.size[0]), power_of_two(m_frame.size[1]) };
+		make_texture(m_frame.texture, m_frame.fb, static_cast<unsigned>(m_frame.texture_size[0]),
+		             static_cast<unsigned>(m_frame.texture_size[1]), false);
+		m_window = {};
+	}
+	return m_frame.fb;
+}
+
+/* The size of each pass for a window w by h, its texture and its corners */
+void
+PictureFilter::size(unsigned w, unsigned h)
+{
+	const float window[2] = { static_cast<float>(w), static_cast<float>(h) };
+	const Picture *in = &m_frame;
+
+	m_window = { w, h };
+	for (Pass &pass : m_passes) {
+		for (size_t axis = 0; axis < 2; axis++)
+			pass.out.size[axis] = pass.scale_type[axis] == Scale::VIEWPORT ? window[axis] * pass.scale[axis] :
+			                      pass.scale_type[axis] == Scale::ABSOLUTE ? pass.scale[axis] :
+			                      in->size[axis] * pass.scale[axis];
+		if (!pass.window) {
+			const std::array<float, 2> texture_size = { power_of_two(pass.out.size[0]),
+			                                            power_of_two(pass.out.size[1]) };
+
+			if (texture_size != pass.out.texture_size || !pass.out.texture) {
+				pass.out.texture_size = texture_size;
+				make_texture(pass.out.texture, pass.out.fb, static_cast<unsigned>(texture_size[0]),
+				             static_cast<unsigned>(texture_size[1]), pass.out.is_float);
+			}
+		}
+
+		/* TexCoord spans the picture of the input */
+		const GLfloat u = in->size[0] / in->texture_size[0], v = in->size[1] / in->texture_size[1];
+		const GLfloat corners[16] = { -1, -1, 0, 0, -1, 1, 0, v, 1, -1, u, 0, 1, 1, u, v };
+
+		glBindBuffer(GL_ARRAY_BUFFER, pass.vbo);
+		glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(corners), corners);
+		in = &pass.out;
+	}
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+
+GLuint
+PictureFilter::sampler(bool linear, GLint wrap)
+{
+	GLuint &held = m_samplers[{ linear, wrap }];
+
+	if (!held) {
+		static constexpr GLfloat BLACK[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+
+		glGenSamplers(1, &held);
+		glSamplerParameteri(held, GL_TEXTURE_MIN_FILTER, linear ? GL_LINEAR : GL_NEAREST);
+		glSamplerParameteri(held, GL_TEXTURE_MAG_FILTER, linear ? GL_LINEAR : GL_NEAREST);
+		glSamplerParameteri(held, GL_TEXTURE_WRAP_S, wrap);
+		glSamplerParameteri(held, GL_TEXTURE_WRAP_T, wrap);
+		glSamplerParameterfv(held, GL_TEXTURE_BORDER_COLOR, BLACK);
+	}
+	return held;
+}
+
+void
+PictureFilter::draw(int x, int y, unsigned w, unsigned h, unsigned count)
+{
+	static constexpr GLfloat IDENTITY[16] = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
+	const Picture *in = &m_frame;
+	GLuint units = 0;
+	/* What the drawing of the frames left on: back faces culled */
+	const GLboolean culling = glIsEnabled(GL_CULL_FACE);
+
+	glDisable(GL_CULL_FACE);
+	if (m_window[0] != w || m_window[1] != h)
+		size(w, h);
+	for (size_t i = 0; i < m_passes.size(); i++) {
+		const Pass &pass = m_passes[i];
+		/* The last reads its input linear, as 86Box does with its own
+		 * filter setting */
+		const bool linear = pass.window || in->linear;
+		GLuint unit = 0;
+		const auto bind = [&](GLint uniform, const Picture &picture, bool picture_linear) {
+			glActiveTexture(GL_TEXTURE0 + unit);
+			glBindTexture(GL_TEXTURE_2D, picture.texture);
+			glBindSampler(unit, sampler(picture_linear, picture.wrap));
+			if (uniform >= 0)
+				glUniform1i(uniform, static_cast<GLint>(unit));
+			unit++;
+		};
+
+		glUseProgram(pass.program);
+		bind(pass.texture, *in, linear);
+		glUniform2f(pass.input_size, in->size[0], in->size[1]);
+		glUniform2f(pass.texture_size, in->texture_size[0], in->texture_size[1]);
+		glUniform2f(pass.output_size, static_cast<float>(w), static_cast<float>(h));
+		glUniform1i(pass.frame_count, static_cast<GLint>(count));
+		glUniform1i(pass.frame_direction, 1);
+		glUniformMatrix4fv(pass.mvp, 1, GL_FALSE, IDENTITY);
+		for (const auto &[at, value] : pass.parameters)
+			glUniform1f(at, value);
+		if (i > 0) {
+			bind(pass.orig_texture, m_frame, m_frame.linear);
+			glUniform2f(pass.orig_input_size, m_frame.size[0], m_frame.size[1]);
+			glUniform2f(pass.orig_texture_size, m_frame.texture_size[0], m_frame.texture_size[1]);
+			for (size_t k = 0; k < i; k++) {
+				const Picture &drawn = m_passes[k].out, &read = k ? m_passes[k - 1].out : m_frame;
+
+				bind(pass.passes[k][0], drawn, &drawn == in ? linear : drawn.linear);
+				glUniform2f(pass.passes[k][1], read.texture_size[0], read.texture_size[1]);
+				glUniform2f(pass.passes[k][2], read.size[0], read.size[1]);
+			}
+		}
+
+		if (pass.window) {
+			glBindFramebuffer(GL_FRAMEBUFFER, 0);
+			glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+			glViewport(x, y, static_cast<GLsizei>(w), static_cast<GLsizei>(h));
+		} else {
+			glBindFramebuffer(GL_FRAMEBUFFER, pass.out.fb);
+			glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+			glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+			glClear(GL_COLOR_BUFFER_BIT);
+			glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE);
+			glViewport(0, 0, static_cast<GLsizei>(pass.out.size[0]), static_cast<GLsizei>(pass.out.size[1]));
+		}
+		glBindVertexArray(pass.vao);
+		glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+		units = std::max(units, unit);
+		in = &pass.out;
+	}
+	for (GLuint unit = 0; unit < units; unit++) {
+		glActiveTexture(GL_TEXTURE0 + unit);
+		glBindTexture(GL_TEXTURE_2D, 0);
+		glBindSampler(unit, 0);
+	}
+	glActiveTexture(GL_TEXTURE0);
+	glBindVertexArray(0);
+	glUseProgram(0);
+	if (culling)
+		glEnable(GL_CULL_FACE);
+}
+
+} /* namespace odin */

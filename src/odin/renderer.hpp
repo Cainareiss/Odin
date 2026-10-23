@@ -34,6 +34,7 @@
 
 #include "odin/antarctic_list.hpp"
 #include "odin/eurasia_layers.hpp"
+#include "odin/picture_filter.hpp"
 #include "odin/picture.hpp"
 #include "odin/renderer_programs.hpp"
 #include "odin/renderer_textures.hpp"
@@ -118,6 +119,10 @@ public:
 	void set_scale(unsigned scale);
 	/* Anisotropic filtering of the textures, 1 for none as on the board */
 	void set_anisotropy(unsigned level) { m_textures.set_anisotropy(level); }
+	/* The picture through the filter of that preset (picture_filter.hpp)
+	 * into the window; none with an empty path, or when it does not
+	 * build (said once on stderr). Built when the path changes. */
+	void set_filter(const std::string &preset);
 
 	/* A display list was launched. */
 	void launch() { m_launched = 1; }
@@ -338,6 +343,10 @@ private:
 	/* How many times finer than the screen of the hardware the buffers
 	 * below are */
 	unsigned m_scale;
+	/* The filter of the picture, its preset, the frames it has drawn */
+	std::unique_ptr<PictureFilter> m_filter;
+	std::string m_filter_preset;
+	unsigned m_filter_frames = 0;
 	/* Where a list is drawn: a colour buffer and a depth buffer */
 	GLuint m_scene_fb, m_scene_color, m_scene_depth;
 	/* The depth the polygon types other than the translucent left */

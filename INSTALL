@@ -110,6 +110,21 @@ buttons below, kept in [hotkeys] of odin.ini:
 at most, Ctrl+Q written so, and a button held with Guide,
 pad:guide+<button>, or pad:guide for Guide alone; none for nothing.)
 
+The picture can go through a CRT filter, off by default: page Display,
+FILTER, or in [display] of odin.ini
+
+ [display]
+ filter = lola-retro/sega-monitor-29
+
+none, lola-retro/sega-monitor-29 (the 29-inch 31 kHz monitor of Planet
+Harriers and NASCAR Arcade) or lola-retro/sega-projector-50 (the 50-inch
+31 kHz projector of the other deluxe cabinets), after Sega's manuals, on
+the shaders of Lola Retro (by Zoki, MIT); or one of Lola's own monitors,
+lola-retro/pc-monitor-vga and its -good, -premium, -premium-plus,
+-extreme and -flat. It draws the 640 x 480 picture of the board as the
+tube shows it and asks much of the graphics card (a weak one cannot keep
+60 frames a second). Its files are in filters/, where odin-games.json is.
+
 In a game, the mouse moved over the window shows the bar at its top a
 while, the game going on under it; in a game the mouse aims in (Brave Fire
 Fighters), only from the top edge of the window. FILE: Open... plays the

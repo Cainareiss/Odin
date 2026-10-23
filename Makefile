@@ -141,6 +141,8 @@ OBJ := \
 	src/odin/renderer_state.o \
 	src/odin/renderer_debug.o \
 	src/odin/renderer_gl.o \
+	src/odin/picture_filter.o \
+	src/odin/picture_preset.o \
 	src/odin/loading_screen.o
 
 # Dear ImGui as it comes, for the menu: built without our warnings

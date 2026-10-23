@@ -119,6 +119,8 @@ read_display(const Settings &settings, Options &options)
 			options.display.show_speed = on;
 		} else if (key == "vsync" && vsync_named(value)) {
 			options.vsync = *vsync_named(value);
+		} else if (key == "filter" && !value.empty()) {
+			options.display.filter = value == "none" ? std::string() : value;
 		} else if (key == "bezel" && std::find(std::begin(SIDES_NAMES), std::end(SIDES_NAMES), value) !=
 		                                     std::end(SIDES_NAMES)) {
 			options.sides = static_cast<Display::Sides>(
@@ -386,7 +388,7 @@ known_settings(const GameList &games)
 		{ "display", "scale", "1" }, { "display", "anisotropy", "1" }, { "display", "window", "1" },
 		{ "display", "fullscreen", "off" }, { "display", "vsync", VSYNCS[static_cast<unsigned>(VSYNC)] },
 		{ "display", "bezel", SIDES_NAMES[static_cast<unsigned>(SIDES)] },
-		{ "display", "unthrottled", "off" }, { "display", "show_speed", "on" },
+		{ "display", "unthrottled", "off" }, { "display", "show_speed", "on" }, { "display", "filter", "none" },
 		{ "sound", "device", "" }, { "sound", "volume", "100" }, { "sound", "background", "on" },
 	};
 

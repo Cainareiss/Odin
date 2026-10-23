@@ -102,6 +102,9 @@ public:
 		/* The window of that size in points instead, the one the user gave
 		 * it by hand (0: as `window` says) */
 		unsigned window_w, window_h;
+		/* The filter of the picture by its name in odin.ini (a preset
+		 * filters/<name>.glslp: picture_filter.hpp); empty: none */
+		std::string filter;
 	};
 
 	/* A display that shows fewer frames a second would hold the board
@@ -139,6 +142,8 @@ public:
 	/* What the menu sets, the board waiting meanwhile. The window takes
 	 * `times` the screen unless it is on the whole display. */
 	void set_scale(unsigned scale);
+	/* The filter of the picture by its name; empty: none */
+	void set_filter(const std::string &name);
 	void set_anisotropy(unsigned level);
 	bool fullscreen() const;
 	void set_fullscreen(bool on);
@@ -272,6 +277,7 @@ private:
 	 * size. */
 	unsigned m_frame;
 	unsigned m_scale, m_anisotropy;
+	std::string m_filter;	/* the path of its preset */
 	bool m_logged;
 	GLuint m_picture_fb;
 	GLuint m_bezel = 0, m_bezel_program = 0, m_bezel_vao = 0, m_bezel_light = 0;

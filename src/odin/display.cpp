@@ -74,6 +74,25 @@ find_program_lists(const std::string &game, std::string &seed, std::string &kept
 	kept = dir + "/" + game + ".txt";
 }
 
+/* The preset of a filter of the picture by its name: filters/<name>.glslp
+ * where the list of the games is, else in the data of Odin in the home
+ * of the user; empty, said on stderr, when it is in neither */
+std::string
+find_filter(const std::string &name)
+{
+	const std::string home = home_dir();
+	std::error_code error;
+
+	if (name.empty())
+		return {};
+	for (const std::string &path : { "filters/" + name + ".glslp",
+	                                  home.empty() ? std::string() : home + "/.local/share/odin/filters/" + name + ".glslp" })
+		if (!path.empty() && std::filesystem::exists(path, error))
+			return path;
+	std::fprintf(stderr, "ERROR: filter: '%s' not found (filters/%s.glslp)\n", name.c_str(), name.c_str());
+	return {};
+}
+
 /* The logo in the bar of the window and in the task bar: the rune in its
  * gold, its lines bolder than the menu draws them, nearly as high as the
  * picture; each pixel as opaque as the lines cover it */
@@ -208,7 +227,7 @@ Display::Display(const Keyboard &keys, const Options &options, SDL_Window *windo
 	: m_board(nullptr), m_keys(keys), m_window(window), m_context(context), m_menu_shown(false),
 	  m_show_speed(options.show_speed), m_vsync(options.vsync),
 	  m_wait_on_time(false), m_wait_late(false), m_waits(false),
-	  m_frame(0), m_scale(options.scale), m_anisotropy(options.anisotropy), m_logged(false),
+	  m_frame(0), m_scale(options.scale), m_anisotropy(options.anisotropy), m_filter(find_filter(options.filter)), m_logged(false),
 	  m_picture_fb(0), m_picture_width(Renderer::WIDTH), m_picture_height(Renderer::HEIGHT),
 	  m_late(env_flag("ODIN_LATE_DRAW")), m_held(false), m_late_draw(0),
 	  m_shot_prefix(std::getenv("ODIN_SCREENSHOT")), m_shot_every(60),
@@ -641,6 +660,7 @@ Display::draw(bool late, unsigned window_w, unsigned window_h, bool bar)
 
 	m_renderer->set_scale(m_scale);
 	m_renderer->set_anisotropy(m_anisotropy);
+	m_renderer->set_filter(m_filter);
 	m_renderer->draw_frame();
 	m_picture_fb = m_renderer->frame_picture(m_picture_width, m_picture_height);
 	draw_over(window_w, window_h, bar);
@@ -763,6 +783,13 @@ Display::set_scale(unsigned scale)
 {
 	finish();
 	m_scale = scale;
+}
+
+void
+Display::set_filter(const std::string &name)
+{
+	finish();
+	m_filter = find_filter(name);
 }
 
 void
