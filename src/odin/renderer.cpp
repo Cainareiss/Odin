@@ -305,7 +305,10 @@ Renderer::take_frame(unsigned frame, unsigned window_w, unsigned window_h, const
 		if (shows_layer(i))
 			take_layer(i);
 
-	std::printf("FRAMEBUFFER 781=%08X 181=%08X\n", m_frame.fb.w781, m_frame.fb.w181);
+	/* With the fingerprints only: each frame on the output costs, and
+	 * fills the log */
+	if (m_options.list_fp)
+		std::printf("FRAMEBUFFER 781=%08X 181=%08X\n", m_frame.fb.w781, m_frame.fb.w181);
 	if (m_frame.launched && (m_options.list_fp || m_options.list_dump >= 0))
 		print_list_fingerprint();
 }

@@ -86,7 +86,8 @@ public:
 	struct Options {
 		bool log;		/* the objects of every mesh, on stdout */
 		int log_frame;		/* that log for this frame only */
-		bool list_fp;		/* a fingerprint of each list, on stderr */
+		bool list_fp;		/* a fingerprint of each list, on stderr, and
+					 * the framebuffer of each frame, on stdout */
 		int list_dump;		/* with a line for each mesh of this frame, or -1 */
 		bool lists_test;	/* no room for the translucent fragments at first */
 		bool times;		/* what each part of the drawings cost, on stderr at the end */
