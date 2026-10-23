@@ -19,9 +19,11 @@
  */
 
 #include "odin/aica.hpp"
+#include "odin/repeats.hpp"
 
 #include <algorithm>
 #include <cassert>
+#include <cstdio>
 #include <ctime>
 
 namespace odin {
@@ -658,11 +660,15 @@ Aica::load(const AicaState &in)
 void
 Aica::log_unknown(char rw, uint32_t offset, uint32_t size, uint32_t value)
 {
+	static const char FORMAT[] = "aica: unknown register %c offset %04X size %u value %08X\n";
+	char line[96];
+
 	if (!m_log || m_unknown_logged >= 64)
 		return;
 	m_unknown_logged++;
-	fprintf(m_log, "aica: unknown register %c offset %04X size %u value %08X\n",
-	        rw, offset, size, value);
+	std::snprintf(line, sizeof(line), FORMAT, rw, offset, size, value);
+	if (m_log != stderr || repeats::say(FORMAT, line))
+		std::fputs(line, m_log);
 }
 
 } /* namespace odin */

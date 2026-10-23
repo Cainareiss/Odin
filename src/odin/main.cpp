@@ -33,6 +33,7 @@
 #include "odin/library.hpp"
 #include "odin/log_file.hpp"
 #include "odin/options.hpp"
+#include "odin/repeats.hpp"
 #include "odin/session.hpp"
 #include "odin/settings.hpp"
 
@@ -49,6 +50,7 @@ play(const Options &given, const std::string &name, const GameList &games, Setti
 {
 	Options options = given;
 
+	repeats::begin(options.verbose);
 	if (!games.has(name)) {
 		std::fprintf(stderr, "ERROR: failed to load '%s': game name not in game list\n", name.c_str());
 		return Ended::FAILED;
@@ -161,6 +163,7 @@ play(const Options &given, const std::string &name, const GameList &games, Setti
 		ended = Ended::FAILED;
 	}
 	display.detach();
+	repeats::end();
 	return ended;
 }
 
@@ -204,6 +207,7 @@ main(int argc, char **argv)
 	}
 	odin::Options command = options;
 	options = odin::with_settings(command, settings);
+	odin::repeats::begin(options.verbose);
 
 	odin::Keyboard keys;
 	options.display.vsync = options.unthrottled ? odin::Display::Vsync::OFF : options.vsync;

@@ -18,6 +18,8 @@
 
 #include "odin/bindings.hpp"
 
+#include "odin/repeats.hpp"
+
 #include <algorithm>
 #include <cctype>
 #include <charconv>
@@ -183,7 +185,7 @@ own_inputs(const std::vector<HostInput> &of_role, const GameControl &control, co
 			if (input && (kind == Kind::KEY || input->pad.is_digital()))
 				out.push_back(*input);
 			else
-				std::fprintf(stderr, "ERROR: controls: %s: %s: not a %s: %s\n", game.c_str(), control.id.c_str(),
+				repeats::print(stderr, "ERROR: controls: %s: %s: not a %s: %s\n", game.c_str(), control.id.c_str(),
 				             kind == Kind::KEY ? "key" : "button of a gamepad", name.c_str());
 		}
 	}
@@ -519,7 +521,7 @@ Bindings::Bindings(const std::vector<GameControl> &panel, const Settings &settin
 		const auto inputs = target ? parse_list(value, takes) : std::nullopt;
 
 		if (!inputs) {
-			std::fprintf(stderr, "ERROR: controls: [controls.%s]: not right: %s = %s\n", game.c_str(),
+			repeats::print(stderr, "ERROR: controls: [controls.%s]: not right: %s = %s\n", game.c_str(),
 			             key.c_str(), value.c_str());
 			continue;
 		}

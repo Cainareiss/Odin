@@ -19,6 +19,7 @@
  */
 
 #include "odin/mie.hpp"
+#include "odin/repeats.hpp"
 
 #include <algorithm>
 #include <format>
@@ -1280,8 +1281,12 @@ void Mie::log_unknown(char rw, const char *space, uint32_t addr, uint32_t value)
 	if (!m_log) {
 		return;
 	}
-	std::fputs(std::format("{}: unknown {} {} {:04x} pc {:04x} value {:02x}\n", m_external ? "i/o board" : "mie",
-	                       space, rw, addr, m_cpu.pc(), value).c_str(), m_log);
+	static const char KIND[] = "unknown";
+	const std::string line = std::format("{}: unknown {} {} {:04x} pc {:04x} value {:02x}\n",
+	                                     m_external ? "i/o board" : "mie", space, rw, addr, m_cpu.pc(), value);
+
+	if (m_log != stderr || repeats::say(KIND, line))
+		std::fputs(line.c_str(), m_log);
 }
 
 void Mie::save(MieState &out) const

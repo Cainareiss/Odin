@@ -28,6 +28,7 @@
 #include <jansson.h>
 
 #include "odin/bytes.hpp"
+#include "odin/repeats.hpp"
 #include "odin/rom_files.hpp"
 
 namespace odin {
@@ -70,7 +71,8 @@ load_datum(const json_t *datum, RomFiles &files, const std::string &game)
 	if (!file)
 		return std::nullopt;
 	std::optional<std::vector<uint8_t>> bytes = files.read(game, *file, where);
-	if (bytes)
+	/* A line for each file in the detailed log only: tens of them */
+	if (bytes && repeats::detailed())
 		std::printf("Loading %u bytes from '%s'\n", static_cast<unsigned>(file->size), where.c_str());
 	return bytes;
 }
@@ -86,7 +88,8 @@ load_section(const json_t *section, RomFiles &files, const std::string &game)
 
 	if (!name || !type || !num)
 		return std::nullopt;
-	std::printf("Loading section %s, %s\n", name, type);
+	if (repeats::detailed())
+		std::printf("Loading section %s, %s\n", name, type);
 
 	if (!std::strcmp(type, "alternative")) {
 		/* They stand for one another: the same size. */

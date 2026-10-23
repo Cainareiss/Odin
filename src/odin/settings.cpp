@@ -18,6 +18,7 @@
 
 #include "odin/settings.hpp"
 
+#include "odin/repeats.hpp"
 #include "odin/save_folder.hpp"
 
 #include <algorithm>
@@ -163,7 +164,7 @@ Settings::parse(std::string_view text, const std::string &origin)
 		const std::string_view key = trimmed(line.substr(0, equal));
 
 		if (equal == std::string_view::npos || key.empty()) {
-			std::fprintf(stderr, "ERROR: settings: %s:%u: not a setting: %.*s\n", origin.c_str(), number,
+			repeats::print(stderr, "ERROR: settings: %s:%u: not a setting: %.*s\n", origin.c_str(), number,
 			             static_cast<int>(line.size()), line.data());
 			continue;
 		}

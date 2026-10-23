@@ -147,6 +147,7 @@
 #include "odin/cabinet_settings.hpp"
 #include "odin/drive_board.hpp"
 #include "odin/env.hpp"
+#include "odin/repeats.hpp"
 
 namespace odin {
 
@@ -1368,10 +1369,15 @@ Hikaru::board_string() const
 
 /* A message goes out whole, in one write: the drawing thread writes to
  * stderr too, and a formatted print to a stream without a buffer is a
- * system call for each of its pieces on some hosts. */
+ * system call for each of its pieces on some hosts. One that repeats is
+ * told once, whatever the program was doing (repeats.hpp); `kind` is the
+ * format it comes from. */
 void
-Hikaru::tell_error(const std::string &where, const char *what)
+Hikaru::tell_error(const char *kind, const std::string &where, const char *what)
 {
+	if (!repeats::say(kind, what))
+		return;
+
 	const std::string line = "ERROR: " + where + " : " + what + "\n";
 
 	std::fputs(line.c_str(), stderr);
@@ -1388,7 +1394,7 @@ Hikaru::cpu_error(const char *fmt, ...)
 	va_start(args, fmt);
 	std::vsnprintf(what, sizeof(what), fmt, args);
 	va_end(args);
-	tell_error(cpu_string(m_current), what);
+	tell_error(fmt, cpu_string(m_current), what);
 }
 
 void
@@ -1400,7 +1406,7 @@ Hikaru::board_error(const char *fmt, ...)
 	va_start(args, fmt);
 	std::vsnprintf(what, sizeof(what), fmt, args);
 	va_end(args);
-	tell_error(board_string(), what);
+	tell_error(fmt, board_string(), what);
 }
 
 /* With -v: an access to what is worth watching */

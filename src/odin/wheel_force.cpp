@@ -18,6 +18,8 @@
 
 #include "odin/wheel_force.hpp"
 
+#include "odin/repeats.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -189,14 +191,14 @@ WheelForce::push(double force)
 		ff_effect effect = constant(b.effect, -level);
 
 		if (ioctl(b.fd, EVIOCSFF, &effect) < 0)
-			std::fprintf(stderr, "ERROR: wheel force: %s\n", std::strerror(errno));
+			repeats::print(stderr, "ERROR: wheel force: %s\n", std::strerror(errno));
 		return;
 	}
 #endif
 	SDL_HapticEffect effect = sdl_constant(-level);
 
 	if (!SDL_UpdateHapticEffect(b.haptic, b.effect, &effect))
-		std::fprintf(stderr, "ERROR: wheel force: %s\n", SDL_GetError());
+		repeats::print(stderr, "ERROR: wheel force: %s\n", SDL_GetError());
 }
 
 } /* namespace odin */

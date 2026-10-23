@@ -1011,9 +1011,12 @@ chip, 315-6087 (eurasia.hpp): the screen, the layers, the blitter.
 GPU_LOG_CP=1 prints each instruction as it is executed (antarctic_disasm.cpp),
 GPU_LOG_IDMA=1 each texture transfer, GPU_LOG_DMA=1 each blit.
 ODIN_LIST_FP=1 prints a fingerprint of the list of each frame, to compare two
-builds; ODIN_LIST_DUMP=<frame> adds one line for each mesh of that frame.
+builds, and the framebuffer each frame shows; ODIN_LIST_DUMP=<frame> adds one
+line for each mesh of that frame.
 ODIN_PICTURE_FP=1 prints a fingerprint of the picture of each frame.
 ODIN_SPEED=1 prints the frames a second of each 60 frames.
+ODIN_LOG_REPEATS=1 keeps the lines that repeat, which a game tells once and
+a kind of message eight times at most (repeats.hpp), as -v does.
 
 The renderer (src/odin/renderer.hpp, OpenGL 4.3) stands for the chips that
 plot the polygons. A frame, the two 3D buffers and the composition with the

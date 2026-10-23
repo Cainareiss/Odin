@@ -24,11 +24,13 @@
 
 #include "odin/renderer.hpp"
 #include "odin/hikaru_gpu.hpp"
+#include "odin/repeats.hpp"
 
 #include <cinttypes>
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
+#include <string>
 
 namespace odin {
 
@@ -159,16 +161,18 @@ Renderer::print_list_fingerprint() const
 	             m_frame.number, fp, meshes, tris);
 }
 
+/* What repeats at every frame is told once (repeats.hpp) */
 void
 Renderer::error(const char *fmt, ...)
 {
+	char what[512];
 	va_list args;
 
-	std::fputs("ERROR: ", stderr);
 	va_start(args, fmt);
-	std::vfprintf(stderr, fmt, args);
+	std::vsnprintf(what, sizeof(what), fmt, args);
 	va_end(args);
-	std::fputc('\n', stderr);
+	if (repeats::say(fmt, what))
+		std::fputs(("ERROR: " + std::string(what) + "\n").c_str(), stderr);
 }
 
 void

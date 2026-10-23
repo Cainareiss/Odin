@@ -20,6 +20,7 @@
 
 #include "odin/netbd_ring.hpp"
 
+#include "odin/repeats.hpp"
 #include "odin/sockets.hpp"
 
 #include <algorithm>
@@ -301,7 +302,7 @@ NetCable::hello_ok(intptr_t from)
 		return false;
 	hello.game[sizeof hello.game - 1] = 0;
 	if (hello.version != VERSION || m_game != hello.game) {
-		std::fprintf(stderr, "ERROR: network board: the previous cabinet runs %s (cable %u), this one %s (cable %u)\n",
+		repeats::print(stderr, "ERROR: network board: the previous cabinet runs %s (cable %u), this one %s (cable %u)\n",
 		             hello.game, hello.version, m_game.c_str(), VERSION);
 		return false;
 	}
@@ -403,7 +404,7 @@ NetCable::send_loop()
 			}
 			m_linked = true;
 			said = false;
-			std::printf("network board: linked to the next cabinet at %s:%u\n", m_next_host.c_str(), m_next_port);
+			repeats::print(stdout, "network board: linked to the next cabinet at %s:%u\n", m_next_host.c_str(), m_next_port);
 		}
 		{
 			std::unique_lock<std::mutex> hold(m_outbox_lock);
@@ -426,7 +427,7 @@ NetCable::send_loop()
 				m_linked = false;
 				close_socket(to);
 				to = NONE;
-				std::printf("network board: the next cabinet is gone\n");
+				repeats::print(stdout, "network board: the next cabinet is gone\n");
 				break;
 			}
 		}

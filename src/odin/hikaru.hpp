@@ -203,7 +203,7 @@ private:
 	void slave_idle_loop();
 	std::string cpu_string(unsigned which) const;
 	std::string board_string() const;
-	void tell_error(const std::string &where, const char *what);
+	void tell_error(const char *kind, const std::string &where, const char *what);
 	void cpu_error(const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 	void board_error(const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 	void log_access(const char *name, char rw, unsigned size, uint32_t addr, uint64_t value);

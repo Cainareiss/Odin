@@ -24,6 +24,7 @@
 
 #include "odin/antarctic_list.hpp"
 #include "odin/bytes.hpp"
+#include "odin/repeats.hpp"
 
 #include <cinttypes>
 #include <cstdio>
@@ -168,7 +169,7 @@ odin_tex_coords(const odin_texhead_t *th, uint32_t *x, uint32_t *y)
 		 *
 		 * Note how the params to 2C1 and 4C1 are swapped.
 		 */
-		std::fprintf(stderr, "ERROR: GPU: invalid slot %X,%X\n", slotx, sloty);
+		odin::repeats::print(stderr, "ERROR: GPU: invalid slot %X,%X\n", slotx, sloty);
 		*x = 0;
 		*y = 0;
 	} else {

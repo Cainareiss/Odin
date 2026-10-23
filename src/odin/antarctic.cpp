@@ -30,6 +30,7 @@
 #include <string>
 
 #include "odin/antarctic_disasm.hpp"
+#include "odin/repeats.hpp"
 
 namespace odin {
 
@@ -77,18 +78,22 @@ Antarctic::fatal(const char *what, uint32_t value) const
 	std::abort();
 }
 
+/* A list sends the same thing at every frame: on stderr, what repeats is
+ * told once (repeats.hpp) */
 void
 Antarctic::error(const char *fmt, ...) const
 {
+	char what[512];
 	va_list args;
 
 	if (!m_log)
 		return;
-	std::fputs("ERROR: ", m_log);
 	va_start(args, fmt);
-	std::vfprintf(m_log, fmt, args);
+	std::vsnprintf(what, sizeof(what), fmt, args);
 	va_end(args);
-	std::fputc('\n', m_log);
+	if (m_log == stderr && !repeats::say(fmt, what))
+		return;
+	std::fputs(("ERROR: " + std::string(what) + "\n").c_str(), m_log);
 }
 
 /*

@@ -1052,15 +1052,16 @@ Hikaru::Bus::unanswered(bool is_write, uint32_t addr, uint32_t size, uint64_t va
 {
 	const uint64_t access = addr | (static_cast<uint64_t>(size) << 32) | (static_cast<uint64_t>(is_write) << 40) |
 	                        (static_cast<uint64_t>(m_which) << 41);
+	static const char WRITE[] = "unhandled W%u @%08X = %" PRIX64 " (told once)", READ[] = "unhandled R%u @%08X (told once)";
 	char text[80];
 
 	if (!m_board.m_unanswered_told.insert(access).second)
 		return;
 	if (is_write)
-		std::snprintf(text, sizeof(text), "unhandled W%u @%08X = %" PRIX64 " (told once)", 8 * size, addr, value);
+		std::snprintf(text, sizeof(text), WRITE, 8 * size, addr, value);
 	else
-		std::snprintf(text, sizeof(text), "unhandled R%u @%08X (told once)", 8 * size, addr);
-	m_board.tell_error(m_board.cpu_string(m_which), text);
+		std::snprintf(text, sizeof(text), READ, 8 * size, addr);
+	m_board.tell_error(is_write ? WRITE : READ, m_board.cpu_string(m_which), text);
 }
 
 /* The instruction at the address the board looks at is about to run: the
