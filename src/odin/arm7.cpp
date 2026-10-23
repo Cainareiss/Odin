@@ -551,8 +551,16 @@ void Arm7::settle()
 	while (m_turn_next_read < m_turn_num_reads && m_turn_reads[m_turn_next_read].index < m_turn_origin) {
 		m_turn_next_read++;
 	}
+	/* The instructions in the memory run as run_decoded() runs them,
+	 * through the same reads as step() */
 	for (uint32_t i = 0; i < count; i++) {
-		step();
+		const uint32_t addr = m_pc & ~3u;
+
+		if (m_decoded_on && addr < m_ram.size && (addr & m_ram.mask) < (DECODED_PAGES << DECODED_PAGE)) {
+			step_decoded();
+		} else {
+			step();
+		}
 	}
 	m_instructions = instructions;
 	m_turn = Turn::Idle;
