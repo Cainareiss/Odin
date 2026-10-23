@@ -333,6 +333,48 @@ parse_hex_number(const json_t *value, size_t bytes)
 	return number;
 }
 
+/* "link" of a game (Game::Link) */
+bool
+parse_link(const json_t *link, Game::Link &out)
+{
+	const json_t *const cabinets = json_object_get(link, "cabinets");
+
+	if (!json_is_object(link) || !json_is_integer(cabinets) || json_integer_value(cabinets) < 2 ||
+	    json_integer_value(cabinets) > 8)
+		return false;
+	out.cabinets = static_cast<unsigned>(json_integer_value(cabinets));
+
+	const json_t *const seat = json_object_get(link, "seat");
+
+	if (!seat)
+		return true;
+
+	const char *const in = json_string_value(json_object_get(seat, "in"));
+	const auto byte = parse_hex_number(json_object_get(seat, "byte"), 2);
+	const auto small = [seat](const char *key, unsigned fallback, unsigned most) -> std::optional<unsigned> {
+		const json_t *const value = json_object_get(seat, key);
+
+		if (!value)
+			return fallback;
+		if (!json_is_integer(value) || json_integer_value(value) < 0 || json_integer_value(value) > most)
+			return std::nullopt;
+		return static_cast<unsigned>(json_integer_value(value));
+	};
+	const auto shift = small("shift", 0, 7), bits = small("bits", 8, 8), first = small("first", 0, 255);
+	const json_t *const letter = json_object_get(seat, "letter");
+
+	if (!in || (std::strcmp(in, "mie") && std::strcmp(in, "backup")) || !byte || !shift || !bits || !first ||
+	    *bits == 0 || *shift + *bits > 8 || (letter && !json_is_boolean(letter)))
+		return false;
+	out.seat_in = std::strcmp(in, "mie") ? Game::Link::In::BACKUP : Game::Link::In::MIE;
+	out.seat_byte = *byte;
+	out.seat_shift = *shift;
+	out.seat_bits = *bits;
+	out.seat_first = *first;
+	out.seat_letter = letter && json_is_true(letter);
+	return true;
+}
+
 /* "rom_board" of a game (GameRomBoard) */
 std::optional<GameRomBoard>
 parse_rom_board(json_t *board)
@@ -699,11 +741,11 @@ GameList::describe(const std::string &name) const
 		game.card_reader = model;
 	}
 	if (const json_t *const link = json_object_get(rom, "link")) {
-		if (!json_is_boolean(link)) {
-			std::fprintf(stderr, "ERROR: game '%s': \"link\" is not true or false\n", name.c_str());
+		if (!parse_link(link, game.link)) {
+			std::fprintf(stderr, "ERROR: game '%s': \"link\" is not {\"cabinets\": 2 to 8, \"seat\": {\"in\": \"mie\" "
+			             "or \"backup\", \"byte\": \"hhhh\", \"shift\", \"bits\", \"first\", \"letter\"}}\n", name.c_str());
 			return std::nullopt;
 		}
-		game.link = json_is_true(link);
 	}
 	if (const json_t *const frame = json_object_get(rom, "title_frame")) {
 		if (!json_is_integer(frame) || json_integer_value(frame) < 1) {

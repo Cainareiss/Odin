@@ -202,6 +202,75 @@ output_tiles(const MenuKit &kit, const MenuState &state, const Box &box)
 	});
 }
 
+/* What Odin sets in the game shown for this cabinet (Hikaru::take_cabinet) */
+std::string
+link_set(const MenuState &state, bool on)
+{
+	if (!on)
+		return "NO LINK";
+	if (state.link_cabinet > state.link_shown_cabinets)
+		return "only " + std::to_string(state.link_shown_cabinets) + " cabinets: choose 1 to " +
+		       std::to_string(state.link_shown_cabinets);
+
+	std::string set = state.link_cabinet == 1 ? "master" : "slave";
+
+	if (state.link_shown_seat == MenuState::SEAT_LETTER)
+		set += ", seat " + std::string(1, static_cast<char>('A' + state.link_cabinet - 1));
+	else if (state.link_shown_seat == MenuState::SEAT_NUMBER)
+		set += ", seat " + std::to_string(state.link_cabinet);
+	return set;
+}
+
+/* The cabinets of a link of the game shown (4 when it links none) as
+ * tiles: each its number, master or slave, its seat; this Odin's with the
+ * accent when the link is on. The frames go from each to the next, from
+ * the last back to the first. */
+void
+link_tiles(const MenuKit &kit, const MenuState &state, const Box &box, bool on)
+{
+	const MenuPalette &palette = kit.palette();
+	const unsigned count = state.link_shown_cabinets ? state.link_shown_cabinets : 4;
+	const float inside = kit.px(BOX_INSIDE), gap = kit.px(TILE_GAP), pad = kit.px(TILE_PAD);
+	const float width = box.b.x - box.a.x - 2.0f * inside, size = MenuKit::font(MenuKit::SMALL);
+	const float tiny = MenuKit::font(MenuKit::TINY);
+	const size_t columns = std::min<size_t>(count, std::max<size_t>(1, static_cast<size_t>((width + gap) /
+	                                                                                          (kit.px(TILE_LEAST) + gap))));
+	const size_t rows = (count + columns - 1) / columns;
+	const float tile_w = (width - static_cast<float>(columns - 1) * gap) / static_cast<float>(columns);
+	const float line = ImGui::GetTextLineHeight();
+	const float tile_h = 2.0f * pad + line + 2.0f * tiny * 1.3f;
+	const char caption[] = "Each cabinet sends its frames to the next one, the last back to cabinet 1.";
+	const float tiles_h = static_cast<float>(rows) * tile_h + static_cast<float>(rows - 1) * gap;
+	const float caption_h = centred({}, width, size, caption, 0);
+
+	in_box(kit, box, tiles_h + gap + caption_h, [&](float top) {
+		ImDrawList *const list = ImGui::GetWindowDrawList();
+
+		for (unsigned n = 1; n <= count; n++) {
+			const size_t i = n - 1;
+			const bool mine = on && n == state.link_cabinet;
+			const ImVec2 a = { box.a.x + inside + static_cast<float>(i % columns) * (tile_w + gap),
+			                   top + static_cast<float>(i / columns) * (tile_h + gap) };
+			const std::string number = "Cabinet " + std::to_string(n);
+			std::string seat = n == 1 ? "master" : "slave";
+
+			if (state.link_shown_seat == MenuState::SEAT_LETTER)
+				seat += " · seat " + std::string(1, static_cast<char>('A' + n - 1));
+			else if (state.link_shown_seat == MenuState::SEAT_NUMBER)
+				seat += " · seat " + std::to_string(n);
+			kit.frame(list, a, { a.x + tile_w, a.y + tile_h }, kit.px(BOX_CUT), mine ? palette.hover : 0,
+			          mine ? palette.accent : palette.line);
+			centred({ a.x + pad, a.y + pad }, tile_w - 2.0f * pad, MenuKit::font(1.0f), number.c_str(),
+			        mine ? palette.accent : palette.ink);
+			centred({ a.x + pad, a.y + pad + line }, tile_w - 2.0f * pad, tiny, seat.c_str(), palette.dim);
+			if (mine)
+				centred({ a.x + pad, a.y + pad + line + tiny * 1.3f }, tile_w - 2.0f * pad, tiny, "this Odin",
+				        palette.accent);
+		}
+		centred({ box.a.x + inside, top + tiles_h + gap }, width, size, caption, palette.faint);
+	});
+}
+
 
 } /* namespace */
 
@@ -774,40 +843,53 @@ Menu::page_outputs(MenuKit &kit, MenuState &state) const
 	end_settings(kit, top, room);
 }
 
-/* Link: the network board of the games that link cabinets (Virtual-On,
- * NASCAR, Racer, Planet Harrier), as the next game started takes it; how
- * the game that runs is linked now */
+/* Link: which cabinet of a link of Odins this one is, as the next game
+ * started takes it (Hikaru::take_cabinet): on the left the cabinets of
+ * the game shown in their ring, on the right the settings, what Odin sets
+ * in the game, how the game that runs is linked now */
 void
 Menu::page_link(MenuKit &kit, MenuState &state) const
 {
-	static constexpr const char *LINK_BOARDS[] = { "Off", "Alone", "Linked" };
+	static constexpr const char *OFF_ON[] = { "Off", "On" };
 	static constexpr unsigned PORTS = 8;
 	const char *const locked = state.link_given ? "set by ODIN_NETBD" : nullptr;
+	const bool looped = state.link_board == static_cast<int>(NetLinkSettings::Board::LOOP);
+	const bool on = state.link_board == static_cast<int>(NetLinkSettings::Board::RING);
+	ImVec2 top = ImGui::GetCursorScreenPos(), room = ImGui::GetContentRegionAvail();
+	const float row = games_row(kit, state, top, room.x) + kit.px(ROW_GAP);
+
+	room.y -= row - top.y;
+	top.y = row;
+
+	const Box box = left_box(kit, top, room);
+
+	link_tiles(kit, state, box, on);
+	begin_settings(kit, box, top, room);
 
 	kit.begin_group("CABINET LINK");
-	kit.choice("Network board", "the cabinets of Virtual-On, NASCAR, Racer, Planet Harrier · Alone: its cable "
-	           "looped back", LINK_BOARDS, state.link_board, locked);
-	if (state.link_board == static_cast<int>(NetLinkSettings::Board::RING)) {
-		std::vector<std::string> ports;
-		int chosen = -1;
+	int chosen = on ? 1 : looped ? -1 : 0;
 
-		for (unsigned p = 0; p < PORTS; p++)
-			ports.push_back(std::to_string(NetCable::PORT + p));
-		if (state.link_port < NetCable::PORT || state.link_port >= NetCable::PORT + PORTS)
-			ports.push_back(std::to_string(state.link_port));
-		for (size_t p = 0; p < ports.size(); p++)
-			if (ports[p] == std::to_string(state.link_port))
-				chosen = static_cast<int>(p);
-		if (!locked && kit.dropdown("Port of this cabinet", "the cabinet before it comes in there · each cabinet of "
-		                            "one computer takes its own", ports, chosen) && chosen >= 0)
-			state.link_port = static_cast<unsigned>(std::stoul(ports[static_cast<size_t>(chosen)]));
+	if (kit.choice("Link cabinets", looped ? "now alone, its cable looped back (odin.ini, board = loop)" :
+	               "Virtual-On, NASCAR, Racer, Planet Harrier, each Odin of the link on its own computer",
+	               OFF_ON, chosen, locked) && chosen >= 0)
+		state.link_board = static_cast<int>(chosen ? NetLinkSettings::Board::RING : NetLinkSettings::Board::NONE);
+	if (on) {
+		std::vector<std::string> numbers;
+		int cabinet = static_cast<int>(state.link_cabinet) - 1;
+
+		for (unsigned n = 1; n <= NetLinkSettings::MOST_CABINETS; n++)
+			numbers.push_back(n == 1 ? "1 · master" : std::to_string(n));
 		if (locked)
-			kit.text("Port of this cabinet", locked, std::to_string(state.link_port).c_str());
+			kit.text("This cabinet", locked, cabinet >= 0 ? numbers[static_cast<size_t>(cabinet)].c_str() : "as it is");
+		else if (kit.dropdown("This cabinet", "each Odin of the link its own number; 1 leads the others", numbers,
+		                      cabinet) && cabinet >= 0)
+			state.link_cabinet = static_cast<unsigned>(cabinet) + 1;
 
-		const char *const about = state.link_next_bad ? "not an address, or :port after it: not kept" :
-		                          "its address, :port after it when not 13404 · empty: this cabinet again";
+		const std::string about = state.link_next_bad ? "not an address, or :port after it: not kept" :
+		                          "the address of the computer of cabinet " + std::to_string(state.link_cabinet + 1) +
+		                          "; the last cabinet writes that of cabinet 1";
 
-		if (kit.edit("Next cabinet", about, state.link_next_typed, "address:port", 63, locked)) {
+		if (kit.edit("Next cabinet", about.c_str(), state.link_next_typed, "192.168.1.20", 63, locked)) {
 			NetLinkSettings tried;
 			std::string host;
 			uint16_t port;
@@ -818,9 +900,39 @@ Menu::page_link(MenuKit &kit, MenuState &state) const
 			if (!state.link_next_bad)
 				state.link_next = state.link_next_typed;
 		}
+
+		std::vector<std::string> ports;
+		int port = -1;
+
+		for (unsigned p = 0; p < PORTS; p++)
+			ports.push_back(std::to_string(NetCable::PORT + p));
+		if (state.link_port < NetCable::PORT || state.link_port >= NetCable::PORT + PORTS)
+			ports.push_back(std::to_string(state.link_port));
+		for (size_t p = 0; p < ports.size(); p++)
+			if (ports[p] == std::to_string(state.link_port))
+				port = static_cast<int>(p);
+		if (locked)
+			kit.text("Port", locked, std::to_string(state.link_port).c_str());
+		else if (kit.dropdown("Port", "13404, unless two Odins share this computer: each its own, and the next "
+		                      "cabinet as address:port", ports, port) && port >= 0)
+			state.link_port = static_cast<unsigned>(std::stoul(ports[static_cast<size_t>(port)]));
 	}
 	kit.end_group();
 
+	if (!state.link_shown_title.empty()) {
+		kit.begin_group("THE GAME SHOWN");
+		kit.text("Game", "", state.link_shown_title.c_str());
+		if (!state.link_shown_cabinets) {
+			kit.text("Cabinets", "", "this game links none");
+		} else {
+			const std::string most = "up to " + std::to_string(state.link_shown_cabinets);
+
+			kit.text("Cabinets", "it links", most.c_str());
+			kit.text("Odin sets", on ? "as its BIOS and test menus would, when it starts" : "the link off",
+			         link_set(state, on).c_str());
+		}
+		kit.end_group();
+	}
 	if (state.link_running) {
 		const char *board = state.link_failed ? "its port is taken by another program: none" :
 		                    !state.link_board_now ? (state.link_game ? "none" : "this game links no cabinets") :
@@ -829,16 +941,19 @@ Menu::page_link(MenuKit &kit, MenuState &state) const
 		kit.begin_group("THE GAME THAT RUNS");
 		kit.text("Network board", "", board);
 		if (state.link_linked) {
-			kit.text("Cabinet before", "its frames come in", state.link_previous ? "plugged in" : "waiting");
-			kit.text("Cabinet after", "this cabinet's frames go out", state.link_next_plugged ? "plugged in" : "waiting");
+			kit.text("Cabinet before", "its frames come in", state.link_previous ? "connected" : "waiting");
+			kit.text("Cabinet after", "this cabinet's frames go out", state.link_next_plugged ? "connected" : "waiting");
 		}
 		kit.end_group();
 	}
-	kit.paragraph("LINKING CABINETS",
-	              "Each cabinet is an Odin with the board Linked, the next one of each the cabinet after it, the "
-	              "next one of the last the first. On one computer each takes its own port, and its own odin.ini "
-	              "(ODIN_CONFIG) for its own saves. In the BIOS menu (SYSTEM ASSIGNMENTS, COMMUNICATION MODE) one "
-	              "cabinet is MASTER, the others SLAVE; in the test menu of the game each takes its own seat.");
+	kit.paragraph("HOW TO LINK",
+	              "1. Put Odin and the game on each computer, all on one network by cable: WiFi is too slow.\n"
+	              "2. On each, turn the link on and give it its own cabinet number: 1, 2, 3...\n"
+	              "3. In Next cabinet, write the address of the computer of the next number; the last one writes "
+	              "that of cabinet 1.\n"
+	              "4. Start the same game on every cabinet. Odin sets the master, the slaves and the seats; a game "
+	              "that has never run starts once more to take its seat.");
+	end_settings(kit, top, room);
 }
 
 /* Paths: where the games are, where Odin writes, its own files */

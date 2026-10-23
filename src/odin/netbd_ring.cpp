@@ -455,6 +455,15 @@ NetLinkSettings::board_named(const std::string &text, Board &out)
 }
 
 bool
+NetLinkSettings::cabinet_named(const std::string &text, unsigned &out)
+{
+	if (text.size() != 1 || text[0] < '1' || text[0] > static_cast<char>('0' + MOST_CABINETS))
+		return false;
+	out = static_cast<unsigned>(text[0] - '0');
+	return true;
+}
+
+bool
 NetLinkSettings::port_named(const std::string &text, uint16_t &out)
 {
 	unsigned long value = 0;

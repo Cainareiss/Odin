@@ -392,6 +392,8 @@ Session::frames()
 	while (!process_events()) {
 		if (m_end)
 			return *m_end;
+		if (m_board.restart_asked())
+			return Ended::RESTART;
 		if (m_options.num_frames > 0 && m_board.frame() >= m_options.num_frames)
 			return Ended::LAST_FRAME;
 		if (m_display.menu_shown()) {

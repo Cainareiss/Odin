@@ -205,6 +205,13 @@ struct MenuState {
 	 * end of the cable plugged in. */
 	int link_board = 0;
 	unsigned link_port = 13404;
+	unsigned link_cabinet = 1;	/* which cabinet of the link this Odin is, 1 the master */
+	/* The game shown: its title, the most cabinets it links (0: none),
+	 * how its menu shows a seat */
+	enum : int { SEAT_NONE, SEAT_NUMBER, SEAT_LETTER };
+	std::string link_shown_title;
+	unsigned link_shown_cabinets = 0;
+	int link_shown_seat = SEAT_NONE;
 	std::string link_next, link_next_typed;
 	bool link_next_bad = false, link_given = false;
 	bool link_game = false, link_running = false, link_board_now = false, link_linked = false, link_failed = false;

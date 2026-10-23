@@ -69,6 +69,8 @@ MenuSession::show_game(size_t game)
 	m_other_outputs = other->outputs;
 	m_other_shakes = other->shakes();
 	m_other_shakers = { other->shaker(0), other->shaker(1) };
+	m_other_link = other->link;
+	m_other_title = other->title;
 	m_other.emplace(m_other_controls, m_settings, other->name);
 }
 
@@ -154,6 +156,13 @@ MenuSession::draw_menu()
 	state.shake_from = m_other ? m_other_shakers[state.player & 1] :
 	                   m_game ? m_game->shaker(state.player & 1) : std::string();
 	state.shake = vibration_on(m_settings, game_shown());
+	/* How the game shown links cabinets */
+	const Game::Link shown_link = m_other ? m_other_link : m_game ? m_game->link : Game::Link{};
+
+	state.link_shown_title = m_other ? m_other_title : m_game ? m_game->title : std::string();
+	state.link_shown_cabinets = shown_link.cabinets;
+	state.link_shown_seat = shown_link.seat_in == Game::Link::In::NONE ? MenuState::SEAT_NONE :
+	                        shown_link.seat_letter ? MenuState::SEAT_LETTER : MenuState::SEAT_NUMBER;
 	/* The outputs of the game shown, lit as the board left them */
 	state.outputs.clear();
 	for (const GameOutput &output : m_other || !m_game ? m_other_outputs : m_game->outputs)
@@ -455,6 +464,8 @@ MenuSession::apply(const MenuState &was)
 		keep("network", "port", number(now.link_port, NetCable::PORT));
 	if (now.link_next != was.link_next)
 		keep("network", "next", now.link_next.empty() ? std::nullopt : std::optional<std::string>(now.link_next));
+	if (now.link_cabinet != was.link_cabinet)
+		keep("network", "cabinet", number(now.link_cabinet, 1));
 	/* The programs of lamps: the port opened or closed now, for the game
 	 * that runs */
 	if (now.network != was.network) {

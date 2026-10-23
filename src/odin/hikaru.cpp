@@ -144,6 +144,7 @@
 #include <optional>
 
 #include "odin/bytes.hpp"
+#include "odin/cabinet_settings.hpp"
 #include "odin/drive_board.hpp"
 #include "odin/env.hpp"
 
@@ -444,7 +445,8 @@ Hikaru::run_drive(uint32_t cycles)
 }
 
 /* The network board, as the cabinet may have one: a game that can be
- * linked ("link" in the list) has the one [network] of odin.ini asks for
+ * linked ("link" in the list) has the one [network] of odin.ini asks for,
+ * and its settings are those of the cabinet chosen there (take_cabinet)
  * (NetLinkSettings): its optical ring closed on itself (loop: the games
  * see it, as on a cabinet with its cable looped back) or linked to other
  * Odins (ring). Without it, page 0E answers nothing and the games find no
@@ -465,9 +467,15 @@ Hikaru::build_netbd(NetLinkSettings link)
 			return;
 		}
 		link.next = next ? next : "";
-	} else if (!m_game.link) {
+		link.cabinet = 0;
+		if (const char *const cabinet = std::getenv("ODIN_NETBD_CABINET");
+		    cabinet && !NetLinkSettings::cabinet_named(cabinet, link.cabinet))
+			std::fprintf(stderr, "ERROR: ODIN_NETBD_CABINET=%s: not 1 to %u: settings left as they are\n", cabinet,
+			             NetLinkSettings::MOST_CABINETS);
+	} else if (!m_game.link.cabinets) {
 		return;
 	}
+	m_link = link;
 	if (link.board == NetLinkSettings::Board::NONE)
 		return;
 
@@ -503,6 +511,68 @@ Hikaru::build_netbd(NetLinkSettings link)
 	m_netbd_link = std::make_unique<NetLoop>(*m_netbd);
 	m_netbd->set_link(m_netbd_link.get());
 	std::printf("network board: 837-13404, its ring closed on itself\n");
+}
+
+/* What the operator sets in the menus for a link, set at power-on for
+ * the cabinet [network] chooses (Game::Link): COMMUNICATION MODE of the
+ * BOOTROM (SYSTEM ASSIGNMENTS: NO LINK 0, MASTER 1, SLAVE 2), cabinet 1
+ * the master, and the seat of the game. A game that makes its block of
+ * settings at its first power-on gets its seat once it has made it, then
+ * the cabinet is switched off and on (end of run_frame), as the operator
+ * would after the test menu. Cabinet 0 (ODIN_NETBD without
+ * ODIN_NETBD_CABINET, the tests) leaves the settings as they are. */
+void
+Hikaru::take_cabinet()
+{
+	const unsigned cabinet = m_link.board == NetLinkSettings::Board::LOOP ? 1 : m_link.cabinet;
+	const std::span<uint8_t> chip = m_mie->eeprom().data();
+
+	if (cabinet == 0 || !m_game.link.cabinets)
+		return;
+	if (m_link.board == NetLinkSettings::Board::NONE) {
+		if (chip[cabinet::COMMUNICATION_MODE] != 0) {
+			cabinet::set_mie(chip, cabinet::COMMUNICATION_MODE, 0, 8, 0);
+			std::printf("network board: none, the cabinet set back to NO LINK\n");
+		}
+		return;
+	}
+	cabinet::set_mie(chip, cabinet::COMMUNICATION_MODE, 0, 8, cabinet == 1 ? cabinet::MASTER : cabinet::SLAVE);
+	std::printf("network board: cabinet %u of the link, the %s\n", cabinet, cabinet == 1 ? "master" : "slave");
+	if (m_game.link.seat_in == Game::Link::In::NONE)
+		return;
+	if (cabinet > m_game.link.cabinets) {
+		std::fprintf(stderr, "ERROR: network board: %s links %u cabinets at most: cabinet %u keeps the seat it had\n",
+		             m_game.title.c_str(), m_game.link.cabinets, cabinet);
+		return;
+	}
+	if (take_seat())
+		return;
+	/* Switched off with no folder to keep it, the seat would be lost */
+	if (kept_path("nvram").empty()) {
+		std::fprintf(stderr, "ERROR: network board: no save folder to keep the seat of cabinet %u in\n", cabinet);
+		return;
+	}
+	m_seat_owed = true;
+	std::printf("network board: the seat waits for the settings the game makes at its first power-on\n");
+}
+
+/* The seat of the cabinet in its settings; false when the game has not
+ * made its block of settings yet */
+bool
+Hikaru::take_seat()
+{
+	const Game::Link &link = m_game.link;
+	const unsigned cabinet = m_link.board == NetLinkSettings::Board::LOOP ? 1 : m_link.cabinet;
+	const unsigned seat = link.seat_first + cabinet - 1;
+	const bool taken = link.seat_in == Game::Link::In::MIE ?
+	                   cabinet::set_mie(m_mie->eeprom().data(), link.seat_byte, link.seat_shift, link.seat_bits, seat) :
+	                   cabinet::set_backup(m_bram, link.seat_byte, link.seat_shift, link.seat_bits, seat);
+
+	if (taken && link.seat_letter)
+		std::printf("network board: seat %c\n", static_cast<char>('A' + cabinet - 1));
+	else if (taken)
+		std::printf("network board: seat %u\n", cabinet);
+	return taken;
 }
 
 Hikaru::LinkStatus
@@ -1067,6 +1137,13 @@ Hikaru::run_frame()
 	m_frame++;
 	if (m_netbd)
 		netbd_sync();
+	/* The game made its block of settings: the cabinet takes its seat and
+	 * is to be switched off and on (take_cabinet) */
+	if (m_seat_owed && cabinet::backup_at_rest(m_bram) && take_seat()) {
+		m_seat_owed = false;
+		m_restart_asked = true;
+		std::printf("network board: the cabinet in its seat, switched off and on\n");
+	}
 
 	if (m_wav)
 		m_wav->write(m_sound[MASTER]->samples());
@@ -1214,9 +1291,10 @@ Hikaru::keep_in(const SaveFolder &saves)
 		std::copy(m_game.mie_eeprom.begin(), m_game.mie_eeprom.end(), m_mie->eeprom().data().begin());
 		std::printf("mie_eeprom: the settings of a new cabinet\n");
 	}
+	take_cabinet();
 }
 
-void
+bool
 Hikaru::power_off()
 {
 	const struct {
@@ -1258,9 +1336,12 @@ Hikaru::power_off()
 		}
 	}
 
+	bool kept = true;
+
 	for (const auto &[name, bytes] : kept_memories())
 		if (const std::string path = kept_path(name); !path.empty())
-			write_kept(path, bytes);
+			kept = write_kept(path, bytes) && kept;
+	return kept;
 }
 
 std::string

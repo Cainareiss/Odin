@@ -209,6 +209,8 @@ private:
 	std::vector<GameOutput> m_other_outputs;
 	bool m_other_shakes = false;
 	std::array<std::string, 2> m_other_shakers;
+	Game::Link m_other_link;
+	std::string m_other_title;
 	std::optional<ControlPanel> m_other;
 	MenuState m_menu_state;
 	/* The inputs as Clear mapping found them, and until when Undo puts them back */

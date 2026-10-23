@@ -201,9 +201,21 @@ struct Game {
 	 * when it does not say (no reader). */
 	std::string card_reader;
 	/* The game links cabinets through the network board 837-13404 in
-	 * page 0E (netbd_837_13404.hpp): "link" in the list, false when it
-	 * does not say (the cabinet has no board). */
-	bool link = false;
+	 * page 0E (netbd_837_13404.hpp): "link" in the list, {"cabinets": the
+	 * most it links, "seat": where each cabinet keeps its own}; 0
+	 * cabinets when it does not say (the cabinet has no board). The seat
+	 * of cabinet n is first + n - 1, in bits shift to shift + bits - 1 of
+	 * a byte of the settings of the BOOTROM in the 93C46 of the MIE
+	 * ("in": "mie") or of the block of the game in the backup RAM
+	 * ("backup"), as its test menu writes it (cabinet_settings.hpp). */
+	struct Link {
+		enum class In { NONE, MIE, BACKUP };
+
+		unsigned cabinets = 0;
+		In seat_in = In::NONE;
+		unsigned seat_byte = 0, seat_shift = 0, seat_bits = 8, seat_first = 0;
+		bool seat_letter = false;	/* the menu shows it as A, B... */
+	} link;
 	/* The frame of its attract, from power-on, that shows its title: the
 	 * picture of the game the library shows. "title_frame" in the list; 0
 	 * when it does not say. */

@@ -75,6 +75,18 @@ void test_port()
 	      "nothing that is not a port of 1 to 65535");
 }
 
+void test_cabinet()
+{
+	unsigned cabinet = 5;
+
+	check(NetLinkSettings::cabinet_named("1", cabinet) && cabinet == 1 && NetLinkSettings::cabinet_named("8", cabinet) &&
+	      cabinet == 8, "cabinets 1 to 8");
+	check(!NetLinkSettings::cabinet_named("0", cabinet) && !NetLinkSettings::cabinet_named("9", cabinet) &&
+	      !NetLinkSettings::cabinet_named("10", cabinet) && !NetLinkSettings::cabinet_named("", cabinet) &&
+	      !NetLinkSettings::cabinet_named("a", cabinet) && cabinet == 8, "nothing else, and nothing changed");
+	check(NetLinkSettings{}.cabinet == 1, "cabinet 1 unless odin.ini says");
+}
+
 void test_next()
 {
 	NetLinkSettings link;
@@ -124,6 +136,7 @@ int main()
 {
 	test_board();
 	test_port();
+	test_cabinet();
 	test_next();
 	test_cable();
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);

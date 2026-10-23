@@ -109,7 +109,8 @@ const char LIST[] = R"({
         { "name": "eprom", "type": "interleave", "amnt": 2, "data": [
             { "name": "a.bin", "size": 4 }, { "name": "b.bin", "size": 4 } ] } ] },
     { "name": "wheel", "title": "Wheel ~ Test: 2!", "mach": "hikaru", "io": "837-13741", "option_speakers": true, "option_level": -22.5,
-      "option_vibration": true, "drive_board": { "first_output": 15 }, "title_frame": 4100, "card_reader": "CRP-1231BR-10", "link": true,
+      "option_vibration": true, "drive_board": { "first_output": 15 }, "title_frame": 4100, "card_reader": "CRP-1231BR-10",
+      "link": { "cabinets": 8, "seat": { "in": "backup", "byte": "14E3", "shift": 2, "bits": 4, "first": 1 } },
       "rom_board": { "eprom_mb": 4, "315-5881": "291b02C7", "actel": { "key": "56DEDF33", "id": "4252" } },
       "mie_eeprom": "4242520001aBCDEF0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ff",
       "controls": [
@@ -269,7 +270,12 @@ void test_games(const std::string &dir)
 	check(wheel && wheel->title_frame == 4100, "the frame of its title, the list tells");
 	check(wheel && wheel->card_reader == "CRP-1231BR-10" && toy && toy->card_reader.empty(),
 	      "the card reader the list tells; none when it does not say");
-	check(wheel && wheel->link && toy && !toy->link, "the game links cabinets when the list tells; not when it does not say");
+	check(wheel && wheel->link.cabinets == 8 && toy && toy->link.cabinets == 0,
+	      "the game links cabinets when the list tells, as many as it tells; not when it does not say");
+	check(wheel && wheel->link.seat_in == odin::Game::Link::In::BACKUP && wheel->link.seat_byte == 0x14E3 &&
+	      wheel->link.seat_shift == 2 && wheel->link.seat_bits == 4 && wheel->link.seat_first == 1 &&
+	      !wheel->link.seat_letter && toy && toy->link.seat_in == odin::Game::Link::In::NONE,
+	      "where each cabinet keeps its seat, the list tells");
 	check(wheel && wheel->rom_board && wheel->rom_board->eprom_mb == 4 && wheel->rom_board->crypt_key == 0x291B02C7 &&
 	      wheel->rom_board->has_actel && wheel->rom_board->actel_key == 0x56DEDF33 &&
 	      wheel->rom_board->actel_id == 0x4252, "the ROM board the list tells, its keys in small or capital figures");
@@ -461,7 +467,19 @@ void test_bad_controls(const std::string &dir)
 	      "and one whose \"title_frame\" is not a frame");
 	check(refuses(R"("option_vibration": "yes")") && refuses(R"("option_vibration": 1)"),
 	      "and one whose \"option_vibration\" is not true or false");
-	check(refuses(R"("link": "yes")") && refuses(R"("link": 4)"), "and one whose \"link\" is not true or false");
+	check(refuses(R"("link": true)") && refuses(R"("link": 4)") && refuses(R"("link": {})") &&
+	      refuses(R"("link": { "cabinets": 1 })") && refuses(R"("link": { "cabinets": 9 })") &&
+	      refuses(R"("link": { "cabinets": "4" })") &&
+	      refuses(R"("link": { "cabinets": 4, "seat": { "byte": "0007" } })") &&
+	      refuses(R"("link": { "cabinets": 4, "seat": { "in": "ram", "byte": "0007" } })") &&
+	      refuses(R"("link": { "cabinets": 4, "seat": { "in": "mie", "byte": "07" } })") &&
+	      refuses(R"("link": { "cabinets": 4, "seat": { "in": "mie", "byte": "001E", "shift": 6, "bits": 4 } })") &&
+	      refuses(R"("link": { "cabinets": 4, "seat": { "in": "mie", "byte": "001E", "bits": 0 } })") &&
+	      refuses(R"("link": { "cabinets": 4, "seat": { "in": "mie", "byte": "001E", "letter": "yes" } })"),
+	      "and one whose \"link\" is not cabinets of 2 to 8 and, if it says, where the seat is");
+	check(!refuses(R"("link": { "cabinets": 2 })") &&
+	      !refuses(R"("link": { "cabinets": 4, "seat": { "in": "mie", "byte": "001E", "letter": true } })"),
+	      "cabinets alone, or a seat in the chip of the MIE, are not");
 	check(refuses(R"("option_level": -3)") && refuses(R"("option_speakers": false, "option_level": -3)") &&
 	      refuses(R"("option_speakers": true, "option_level": "-3")") &&
 	      refuses(R"("option_speakers": true, "option_level": -60.5)") &&

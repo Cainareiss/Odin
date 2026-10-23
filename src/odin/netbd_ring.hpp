@@ -179,13 +179,21 @@ private:
 struct NetLinkSettings {
 	enum class Board { NONE, LOOP, RING };
 
+	/* The most cabinets a game links (Game::Link) */
+	static constexpr unsigned MOST_CABINETS = 8;
+
 	Board board = Board::NONE;
 	uint16_t port = NetCable::PORT;
 	std::string next;
+	/* Which cabinet of the link this one is, 1 the master: its game is
+	 * set so as it starts (Hikaru::take_cabinet); 0 leaves its settings
+	 * as they are (the tests) */
+	unsigned cabinet = 1;
 
 	static const char *board_name(Board board);
 	static bool board_named(const std::string &text, Board &out);
 	static bool port_named(const std::string &text, uint16_t &out);
+	static bool cabinet_named(const std::string &text, unsigned &out);
 	/* The address and the port of the next cabinet; false when `next` is
 	 * not one */
 	bool next_cabinet(std::string &host, uint16_t &next_port) const;

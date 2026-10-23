@@ -155,7 +155,11 @@ play(const Options &given, const std::string &name, const GameList &games, Setti
 	}
 
 	std::printf("Finalizing\n");
-	board->power_off();
+	/* Started again with the settings lost, it would ask again */
+	if (!board->power_off() && board->restart_asked()) {
+		std::fprintf(stderr, "ERROR: '%s': its settings could not be kept: not started again\n", name.c_str());
+		ended = Ended::FAILED;
+	}
 	display.detach();
 	return ended;
 }
@@ -247,8 +251,16 @@ main(int argc, char **argv)
 			launch.rom_path = opened.folder;
 		opened = {};
 
-		const odin::Ended ended =
+		odin::Ended ended =
 			odin::play(launch, name, games, settings, settings_file, *display, keys, pointers.get(), opened);
+
+		/* The cabinet switched off and on: the game from its power-on */
+		while (ended == odin::Ended::RESTART) {
+			launch.state_path.clear();
+			launch.save_frames.clear();
+			ended = odin::play(launch, name, games, settings, settings_file, *display, keys, pointers.get(),
+			                   opened);
+		}
 
 		/* -l and -s were for the first game */
 		command.state_path.clear();

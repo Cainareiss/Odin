@@ -84,6 +84,8 @@ link_settings(const Settings &settings)
 			continue;
 		if (key == "port" && NetLinkSettings::port_named(value, link.port))
 			continue;
+		if (key == "cabinet" && NetLinkSettings::cabinet_named(value, link.cabinet))
+			continue;
 		if (key == "next") {
 			NetLinkSettings tried = link;
 			std::string host;
@@ -170,8 +172,9 @@ MenuSession::MenuSession(const Options &options, Display &display, Keyboard &key
 	state.link_board = static_cast<int>(link.board);
 	state.link_port = link.port;
 	state.link_next = state.link_next_typed = link.next;
+	state.link_cabinet = link.cabinet;
 	state.link_given = std::getenv("ODIN_NETBD") != nullptr;
-	state.link_game = game && game->link;
+	state.link_game = game && game->link.cabinets;
 	state.device = options.sound_device;
 	state.volume = options.volume;
 	state.background = options.background;

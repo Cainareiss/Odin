@@ -397,6 +397,7 @@ known_settings(const GameList &games)
 	}
 	out.insert(out.end(), { { "outputs", "network", "off" }, { "network", "board", "none" },
 	                        { "network", "port", std::to_string(NetCable::PORT) }, { "network", "next", "" },
+	                        { "network", "cabinet", "1" },
 	                        { "paths", "roms", "" }, { "paths", "bios", "" },
 	                        { "paths", "saves", SaveFolder::root() }, { "paths", "states", default_states() },
 	                        { "paths", "artwork", artwork_folder() },

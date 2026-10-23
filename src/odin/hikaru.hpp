@@ -134,10 +134,15 @@ public:
 	/* Power-on */
 	void reset();
 	void run_frame();
-	/* Power-off: what the board keeps without power goes to the disk; and
-	 * with ODIN_DUMPS=1, for looking at them (the tests), the memories to
-	 * <game>-<memory>.bin in the current folder. */
-	void power_off();
+	/* The cabinet is to be switched off and on: the game made its
+	 * settings at its first power-on, and its seat is now in them
+	 * (take_cabinet) */
+	bool restart_asked() const { return m_restart_asked; }
+	/* Power-off: what the board keeps without power goes to the disk (false,
+	 * said on stderr, when some could not); and with ODIN_DUMPS=1, for
+	 * looking at them (the tests), the memories to <game>-<memory>.bin in
+	 * the current folder. */
+	bool power_off();
 
 	/* False, with the reason on stderr, if the state could not be written
 	 * or is not one of this game and build; the board is then as after a
@@ -180,6 +185,8 @@ private:
 	/* hikaru.cpp */
 	void build_mie();
 	void build_netbd(NetLinkSettings link);
+	void take_cabinet();
+	bool take_seat();
 	void build_sound(unsigned which);
 	void reset_sound(unsigned which);
 	void update_irqs();
@@ -294,6 +301,12 @@ private:
 	std::unique_ptr<NetBoardRunner> m_netbd_runner;
 	std::unique_ptr<NetCable> m_netbd_cable;
 	bool m_netbd_failed = false;	/* its port could not be opened */
+	/* [network] of odin.ini, ODIN_NETBD* over it (build_netbd) */
+	NetLinkSettings m_link;
+	/* The seat of this cabinet waits for the block of settings the game
+	 * makes in its backup RAM at its first power-on (take_cabinet) */
+	bool m_seat_owed = false;
+	bool m_restart_asked = false;
 	std::unique_ptr<HikaruGpu> m_gpu;
 	std::unique_ptr<SoundBoard> m_sound[2];
 	std::unique_ptr<WavFile> m_wav;	/* ODIN_WAV: the sound of the main board */

@@ -159,19 +159,24 @@ odin.ini):
  board = ring
  port = 13404
  next = 192.168.1.20
+ cabinet = 1
 
 board: none (no board, as by default), loop (the cable looped back on the
 same cabinet), ring (linked to other Odins). port: where the cabinet
 before comes in; two Odins of one computer each take their own (13404,
 13405...). next: the address of the cabinet after, ":port" after it when
-it is not 13404; empty, this cabinet again. Two Odins of one computer
-each have their own odin.ini, so their own saves: ODIN_CONFIG=<file>
-before odin, its [paths] saves another folder. In the BIOS menu (SYSTEM
-ASSIGNMENTS, COMMUNICATION MODE) one cabinet is MASTER, the others SLAVE;
-in the test menu of the game each takes its own seat (Virtual-On in
-U.S.A. links 2 cabinets at most). The program of the board needs a frame
-round the ring in less than about 15 ms: a network by cable, not by
-radio, and no further than the local network.
+it is not 13404; empty, this cabinet again. cabinet: which cabinet of the
+link this one is, 1 to 8, each its own. Odin sets the game as the BIOS
+menu and the test menu of the game would: cabinet 1 MASTER, the others
+SLAVE (SYSTEM ASSIGNMENTS, COMMUNICATION MODE), and the seat of the
+cabinet (Virtual-On A, B...; Racer and NASCAR 1, 2...); a game that has
+never run on that computer starts once more to take its seat, and with
+board = none it goes back to NO LINK. Two Odins of one computer each have
+their own odin.ini, so their own saves: ODIN_CONFIG=<file> before odin,
+its [paths] saves another folder. Virtual-On in U.S.A. links 2 cabinets
+at most. The program of the board needs a frame round the ring in less
+than about 15 ms: a network by cable, not by radio, and no further than
+the local network.
 
 NASCAR and Planet Harriers have a second sound board for speakers of
 their own (the backrest of the seat). Odin plays the two boards on two
