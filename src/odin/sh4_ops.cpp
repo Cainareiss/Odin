@@ -36,6 +36,71 @@
 
 namespace odin {
 
+namespace {
+
+/* The products FMAC, FIPR and FTRV fuse with a sum, rounded once as
+ * std::fma rounds them. A build for hosts that have FMA does it in one
+ * instruction; a build for any x86-64 has these built twice, once for FMA,
+ * taken when the host has it, else with the library: the same results. */
+[[gnu::always_inline]] inline float
+fused_mac(uint32_t a, uint32_t b, uint32_t c)
+{
+	return std::fma(std::bit_cast<float>(a), std::bit_cast<float>(b), std::bit_cast<float>(c));
+}
+
+[[gnu::always_inline]] inline float
+fused_ipr(const uint32_t *a, const uint32_t *b)
+{
+	const auto f = [](uint32_t w) { return std::bit_cast<float>(w); };
+	float sum = f(a[1]) * f(b[1]);
+
+	sum = std::fma(f(a[0]), f(b[0]), sum);
+	sum = std::fma(f(a[2]), f(b[2]), sum);
+	sum = std::fma(f(a[3]), f(b[3]), sum);
+	return sum;
+}
+
+/* The vector v by the matrix x, one column of x per component of v */
+[[gnu::always_inline]] inline void
+fused_trv(uint32_t *v, const uint32_t *x)
+{
+	const auto f = [](uint32_t w) { return std::bit_cast<float>(w); };
+	const float v0 = f(v[0]), v1 = f(v[1]), v2 = f(v[2]), v3 = f(v[3]);
+
+	for (uint32_t i = 0; i < 4; i++) {
+		float sum = v1 * f(x[4 + i]);
+
+		sum = std::fma(v0, f(x[i]), sum);
+		sum = std::fma(v2, f(x[8 + i]), sum);
+		sum = std::fma(v3, f(x[12 + i]), sum);
+		v[i] = std::bit_cast<uint32_t>(sum);
+	}
+}
+
+#if defined(__FMA__) || !(defined(__x86_64__) || defined(_M_X64))
+float mac(uint32_t a, uint32_t b, uint32_t c) { return fused_mac(a, b, c); }
+float ipr(const uint32_t *a, const uint32_t *b) { return fused_ipr(a, b); }
+void trv(uint32_t *v, const uint32_t *x) { fused_trv(v, x); }
+#else
+[[gnu::target("fma")]] float mac_fma(uint32_t a, uint32_t b, uint32_t c) { return fused_mac(a, b, c); }
+[[gnu::target("fma")]] float ipr_fma(const uint32_t *a, const uint32_t *b) { return fused_ipr(a, b); }
+[[gnu::target("fma")]] void trv_fma(uint32_t *v, const uint32_t *x) { fused_trv(v, x); }
+[[gnu::noinline]] float mac_any(uint32_t a, uint32_t b, uint32_t c) { return fused_mac(a, b, c); }
+[[gnu::noinline]] float ipr_any(const uint32_t *a, const uint32_t *b) { return fused_ipr(a, b); }
+[[gnu::noinline]] void trv_any(uint32_t *v, const uint32_t *x) { fused_trv(v, x); }
+
+const bool HAS_FMA = [] {
+	__builtin_cpu_init();
+	return __builtin_cpu_supports("fma") != 0;
+}();
+
+float mac(uint32_t a, uint32_t b, uint32_t c) { return HAS_FMA ? mac_fma(a, b, c) : mac_any(a, b, c); }
+float ipr(const uint32_t *a, const uint32_t *b) { return HAS_FMA ? ipr_fma(a, b) : ipr_any(a, b); }
+void trv(uint32_t *v, const uint32_t *x) { HAS_FMA ? trv_fma(v, x) : trv_any(v, x); }
+#endif
+
+} /* namespace */
+
 /* How an instruction hands over to what comes next. The reader does it by
  * a tail call: the instructions of a block follow one another without
  * coming back. */
@@ -1409,7 +1474,7 @@ struct Sh4OpsT {
 	static Ret fmac(Sh4 &c, const Op *op)
 	{
 		need(c, op, !(c.m_r.fpscr & Sh4::FPSCR_PR), "FMAC in double precision");
-		c.m_r.fr[op->n] = bits(std::fma(f32(c.m_r.fr[op->m]), f32(c.m_r.fr[0]), f32(c.m_r.fr[op->n])));
+		c.m_r.fr[op->n] = bits(mac(c.m_r.fr[op->m], c.m_r.fr[0], c.m_r.fr[op->n]));
 		return go(c, op);
 	}
 	static Ret fsqrt(Sh4 &c, const Op *op)
@@ -1446,30 +1511,16 @@ struct Sh4OpsT {
 	}
 	static Ret fipr(Sh4 &c, const Op *op)
 	{
-		const uint32_t *a = &c.m_r.fr[op->n], *b = &c.m_r.fr[op->m];
 		need_fpu(c, op);
-		float sum = f32(a[1]) * f32(b[1]);
-		sum = std::fma(f32(a[0]), f32(b[0]), sum);
-		sum = std::fma(f32(a[2]), f32(b[2]), sum);
-		sum = std::fma(f32(a[3]), f32(b[3]), sum);
-		c.m_r.fr[op->n + 3] = bits(sum);
+		c.m_r.fr[op->n + 3] = bits(ipr(&c.m_r.fr[op->n], &c.m_r.fr[op->m]));
 		return go(c, op);
 	}
 	/* The vector FRn..FRn+3 by the matrix in XF0..XF15, one column of the
 	 * matrix per component of the vector. */
 	static Ret ftrv(Sh4 &c, const Op *op)
 	{
-		uint32_t *v = &c.m_r.fr[op->n];
-		const uint32_t *x = c.m_r.xf;
-		float v0 = f32(v[0]), v1 = f32(v[1]), v2 = f32(v[2]), v3 = f32(v[3]);
 		need_fpu(c, op);
-		for (uint32_t i = 0; i < 4; i++) {
-			float sum = v1 * f32(x[4 + i]);
-			sum = std::fma(v0, f32(x[i]), sum);
-			sum = std::fma(v2, f32(x[8 + i]), sum);
-			sum = std::fma(v3, f32(x[12 + i]), sum);
-			v[i] = bits(sum);
-		}
+		trv(&c.m_r.fr[op->n], c.m_r.xf);
 		return go(c, op);
 	}
 	static Ret fcmpeq(Sh4 &c, const Op *op)
