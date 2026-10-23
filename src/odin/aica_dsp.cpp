@@ -98,7 +98,7 @@ void
 AicaDsp::reset()
 {
 	m_state = {};
-	m_order = {};
+	m_steps = {};
 	m_size = 0;
 }
 
@@ -112,8 +112,27 @@ AicaDsp::program_written(const uint8_t *regs)
 		const uint32_t at = REG_MPRO + i * 16;
 		const bool empty = !(aica_reg(regs, at) | aica_reg(regs, at + 4) | aica_reg(regs, at + 8) | aica_reg(regs, at + 12));
 
-		if (!empty || !after_empty)
-			m_order[m_size++] = static_cast<uint8_t>(i);
+		if (!empty || !after_empty) {
+			const uint32_t w0 = aica_reg(regs, at), w1 = aica_reg(regs, at + 4);
+			const uint32_t w2 = aica_reg(regs, at + 8), w3 = aica_reg(regs, at + 12);
+			Step &step = m_steps[m_size++];
+			const auto bit = [](uint32_t word, uint32_t mask, uint32_t flag) { return (word & mask) ? flag : 0u; };
+
+			step.i = static_cast<uint8_t>(i);
+			step.ira = static_cast<uint8_t>((w1 >> 7) & 0x3F);
+			step.iwa = static_cast<uint8_t>((w1 >> 1) & 0x1F);
+			step.tra = static_cast<uint8_t>((w0 >> 9) & 0x7F);
+			step.twa = static_cast<uint8_t>((w0 >> 1) & 0x7F);
+			step.shift = static_cast<uint8_t>((w2 >> 4) & 3);
+			step.ysel = static_cast<uint8_t>((w1 >> 13) & 3);
+			step.masa = static_cast<uint8_t>((w3 >> 9) & 0x3F);
+			step.ewa = static_cast<uint8_t>((w2 >> 8) & 0xF);
+			step.flags = bit(w1, 0x40, IWT) | bit(w0, 0x100, TWT) | bit(w1, 0x8000, XSEL) | bit(w2, 2, BZERO) |
+			             bit(w2, 1, BACC) | bit(w2, 4, NEGB) | bit(w2, 8, YRL) | bit(w2, 0x40, FRCL) |
+			             ((w2 & 0x6000) && (i & 1) ? MEMORY : 0u) | bit(w2, 0x2000, MRD) | bit(w2, 0x4000, MWT) |
+			             bit(w2, 0x8000, TABLE) | bit(w3, 0x100, ADREB) | bit(w3, 0x80, NXADR) |
+			             bit(w3, 0x8000, NOFL) | bit(w2, 0x80, ADRL) | bit(w2, 0x1000, EWT);
+		}
 		after_empty = empty;
 		busy |= !empty;
 	}
@@ -137,12 +156,8 @@ AicaDsp::run(const uint8_t *regs, const WaveMemory &memory)
 		const uint32_t length = (8192u << ((ring >> 13) & 3)) - 1;
 
 		for (uint32_t n = 0; n < m_size; n++) {
-			const uint32_t i = m_order[n];
-			const uint32_t at = REG_MPRO + i * 16;
-			const uint32_t w0 = aica_reg(regs, at), w1 = aica_reg(regs, at + 4);
-			const uint32_t w2 = aica_reg(regs, at + 8), w3 = aica_reg(regs, at + 12);
-			const uint32_t ira = (w1 >> 7) & 0x3F;
-			const uint32_t shift = (w2 >> 4) & 3;
+			const Step &step = m_steps[n];
+			const uint32_t i = step.i, ira = step.ira, shift = step.shift, flags = step.flags;
 
 			/* The input, read before the step writes MEMS */
 			int32_t input = 0;
@@ -152,16 +167,16 @@ AicaDsp::run(const uint8_t *regs, const WaveMemory &memory)
 				input = s.inputs[ira - 0x20];
 			else if (ira < 0x32)
 				input = s.exts[ira - 0x30] * 256;
-			if (w1 & 0x40)
-				s.mems[(w1 >> 1) & 0x1F] = s.reads[i & 3];
+			if (flags & IWT)
+				s.mems[step.iwa] = s.reads[i & 3];
 
-			const int32_t temp = s.temp[((w0 >> 9) + s.mdec) & 0x7F];
-			int32_t b = (w2 & 2) ? 0 : (w2 & 1) ? s.acc : temp;
-			if (w2 & 4)
+			const int32_t temp = s.temp[(step.tra + s.mdec) & 0x7F];
+			int32_t b = (flags & BZERO) ? 0 : (flags & BACC) ? s.acc : temp;
+			if (flags & NEGB)
 				b = -b;
-			const int32_t x = (w1 & 0x8000) ? input : temp;
+			const int32_t x = (flags & XSEL) ? input : temp;
 			int32_t y;
-			switch ((w1 >> 13) & 3) {
+			switch (step.ysel) {
 			case 0:
 				y = s.frc;
 				break;
@@ -175,7 +190,7 @@ AicaDsp::run(const uint8_t *regs, const WaveMemory &memory)
 				y = (s.y >> 4) & 0xFFF;
 				break;
 			}
-			if (w2 & 8)
+			if (flags & YRL)
 				s.y = input;
 
 			/* The sum of the step before, as SHIFT gives it: doubled
@@ -184,33 +199,33 @@ AicaDsp::run(const uint8_t *regs, const WaveMemory &memory)
 			shifted = shift < 2 ? std::clamp(shifted, -0x800000, 0x7FFFFF) : sign24(shifted);
 			s.acc = static_cast<int32_t>((static_cast<int64_t>(x) * y) >> 12) + b;
 
-			if (w0 & 0x100)
-				s.temp[((w0 >> 1) + s.mdec) & 0x7F] = shifted;
-			if (w2 & 0x40)
+			if (flags & TWT)
+				s.temp[(step.twa + s.mdec) & 0x7F] = shifted;
+			if (flags & FRCL)
 				s.frc = shift == 3 ? shifted & 0xFFF : shifted >> 11;
-			if ((w2 & 0x6000) && (i & 1)) {
-				uint32_t addr = aica_reg(regs, REG_MADRS + ((w3 >> 9) & 0x3F) * 4);
+			if (flags & MEMORY) {
+				uint32_t addr = aica_reg(regs, REG_MADRS + step.masa * 4u);
 
-				if (w3 & 0x100)
+				if (flags & ADREB)
 					addr += static_cast<uint32_t>(s.adrs) & 0xFFF;
-				if (w3 & 0x80)
+				if (flags & NXADR)
 					addr++;
-				addr = (w2 & 0x8000) ? addr & 0xFFFF : (addr + s.mdec) & length;
+				addr = (flags & TABLE) ? addr & 0xFFFF : (addr + s.mdec) & length;
 
 				const uint32_t byte = base + addr * 2;
-				if (w2 & 0x2000) {
+				if (flags & MRD) {
 					const int32_t word = static_cast<int16_t>(memory.read16(byte));
-					s.reads[(i + 2) & 3] = (w3 & 0x8000) ? word * 256 : unpack(static_cast<uint16_t>(word));
+					s.reads[(i + 2) & 3] = (flags & NOFL) ? word * 256 : unpack(static_cast<uint16_t>(word));
 				}
-				if (w2 & 0x4000) {
-					const uint32_t word = (w3 & 0x8000) ? static_cast<uint32_t>(shifted >> 8) : pack(shifted);
+				if (flags & MWT) {
+					const uint32_t word = (flags & NOFL) ? static_cast<uint32_t>(shifted >> 8) : pack(shifted);
 					memory.write16(byte, static_cast<uint16_t>(word));
 				}
 			}
-			if (w2 & 0x80)
+			if (flags & ADRL)
 				s.adrs = (shift == 3 ? shifted >> 12 : input >> 16) & 0xFFF;
-			if (w2 & 0x1000)
-				s.efreg[(w2 >> 8) & 0xF] = static_cast<int16_t>(shifted >> 8);
+			if (flags & EWT)
+				s.efreg[step.ewa] = static_cast<int16_t>(shifted >> 8);
 		}
 	}
 	s.mdec--;

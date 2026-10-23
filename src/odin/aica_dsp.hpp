@@ -82,12 +82,24 @@ public:
 	}
 
 private:
+	/* A step of the program, its fields taken out of its four words once,
+	 * when the program is written */
+	struct Step {
+		uint32_t flags;
+		uint8_t i, ira, iwa, tra, twa, shift, ysel, masa, ewa;
+	};
+	enum : uint32_t {
+		IWT = 1 << 0, TWT = 1 << 1, XSEL = 1 << 2, BZERO = 1 << 3, BACC = 1 << 4, NEGB = 1 << 5,
+		YRL = 1 << 6, FRCL = 1 << 7, MEMORY = 1 << 8, MRD = 1 << 9, MWT = 1 << 10, TABLE = 1 << 11,
+		ADREB = 1 << 12, NXADR = 1 << 13, NOFL = 1 << 14, ADRL = 1 << 15, EWT = 1 << 16
+	};
+
 	State m_state;
 	/* The steps run() runs, in order: each step of the program that does
 	 * something, and the first of each run of empty steps. An empty step
 	 * sets ACC from TEMP[MDEC] and FRC alone and writes nothing, so a run
 	 * of them ends as one of them does. None: the program is empty. */
-	std::array<uint8_t, 128> m_order;
+	std::array<Step, 128> m_steps;
 	uint32_t m_size;
 };
 
