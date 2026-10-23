@@ -380,10 +380,12 @@ void main (void) {
  * The arithmetic is that of an 8-bit colour buffer, each result rounded
  * to the nearest before the next (HEURISTIC: the precision of the blender
  * of the hardware is not known); the colour is held as 0 to 255 so that
- * every host computes the same. KEPT of them are put in order at a time. */
+ * every host computes the same. KEPT of them are put in order at a time,
+ * the same order whatever KEPT is: 8 costs the Intel HD 520 and the
+ * Radeon RX 6600 the least (half and two thirds of 32). */
 const char *const SORT_FRAGMENT = R"glsl(#version 430
 
-#define KEPT 32
+#define KEPT 8
 
 )glsl"
 FRAGMENT_LISTS
