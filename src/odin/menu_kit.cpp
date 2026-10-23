@@ -877,7 +877,8 @@ MenuKit::dropdown(const char *name, const char *about, std::span<const Item> ite
 		longest = std::max(longest, before_name(item, Icon::NONE) + measure(item.name.c_str()));
 
 	const ImVec2 at = begin_row(width);
-	const float control = std::min(longest + 3.0f * wide + caret, width / 2.0f);
+	/* A pixel more: the longest would be cut by the rounding of picker() */
+	const float control = std::min(longest + 3.0f * wide + caret + px(1.0f), width / 2.0f);
 	const Placed placed = place(at, width, control, control_h, name, about, nullptr);
 	const bool changed =
 		picker("box", { at.x + width - pad - control, placed.top }, control, items, chosen, Icon::NONE, nullptr);
