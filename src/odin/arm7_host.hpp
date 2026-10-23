@@ -52,9 +52,12 @@ public:
 	/* The host code of the block at PC, or 0 for the way back to C++ */
 	using Link = uintptr_t (*)(Arm7 &);
 	/* Where the host code finds the state of the CPU, in bytes from it;
-	 * `r` is r0 of the active registers. */
+	 * `r` is r0 of the active registers, `kept` the byte that is not 0
+	 * while a turn is kept and `failed` the count of the instructions
+	 * whose condition failed (see Arm7::run_translated). */
 	struct Places {
-		int32_t r, pc, op_pc, cpsr, cycles, instructions, irq_line, fiq_line, ram_base, stale, stale_block;
+		int32_t r, pc, op_pc, cpsr, cycles, instructions, irq_line, fiq_line, ram_base, stale, stale_block, kept,
+		        failed;
 	};
 
 	Arm7Host(const Places &places, Link link);
@@ -79,7 +82,7 @@ public:
 	 * to the next one */
 	void spent(uint32_t pc, uint32_t cycles);
 	/* B or BL in place, then on to `target`: to the host code at `direct`
-	 * when it is not 0, else to the block found then. */
+	 * when it is not 0 and no turn is kept, else to the block found then. */
 	void branch(uint32_t pc, uint32_t target, bool link, uint32_t direct);
 	/* The instruction at `pc` whose condition failed: the fetch alone. */
 	void failed(Jump skip, uint32_t pc);

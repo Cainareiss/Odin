@@ -53,7 +53,7 @@ void Arm7::set_translate(bool on)
 		const Arm7Host::Places places{from_cpu(&m_r[0]), from_cpu(&m_pc), from_cpu(&m_op_pc), from_cpu(&m_cpsr),
 		                              from_cpu(&m_cycles), from_cpu(&m_instructions), from_cpu(&m_irq_line),
 		                              from_cpu(&m_fiq_line), from_cpu(&m_ram.base), from_cpu(&m_host_stale),
-		                              from_cpu(&m_host_stale_block)};
+		                              from_cpu(&m_host_stale_block), from_cpu(&m_turn_kept), from_cpu(&m_failed)};
 
 		m_host = std::make_unique<Arm7Host>(places, &Arm7::linked);
 	}
@@ -70,13 +70,20 @@ void Arm7::drop_blocks()
 	for (std::unique_ptr<uint32_t[]> &page : m_blocks) {
 		page.reset();
 	}
+	for (std::unique_ptr<uint8_t[]> &page : m_block_words) {
+		page.reset();
+	}
 }
 
 /* run_decoded() with the blocks of the memory run as host code where they
- * may, which does the same, instruction for instruction. A turn kept is
- * left to run_decoded(); an instruction whose word is not the one its
- * block was written for runs from what was decoded, and its block is
- * written again the next time. */
+ * may, which does the same, instruction for instruction. With a turn kept,
+ * run() looks at it where run_decoded() would, at its start and where the
+ * program left it: the host code then takes no direct link, and linked()
+ * counts the instructions away from the turn as run_decoded() does, those
+ * whose condition failed too, and comes back here at these places; a block
+ * with one of them past its first instruction runs from what was decoded.
+ * An instruction whose word is not the one its block was written for runs
+ * from what was decoded, and its block is written again the next time. */
 uint32_t Arm7::run_translated(uint32_t done, uint32_t cycles)
 {
 	bool stale = false;
@@ -90,21 +97,32 @@ uint32_t Arm7::run_translated(uint32_t done, uint32_t cycles)
 		if (addr >= m_ram.size || at >= (DECODED_PAGES << DECODED_PAGE)) {
 			break;
 		}
-		if (m_turn_kept) {
-			return run_decoded(done, cycles);
+		if (m_turn_kept && turn_watched()) {
+			return done;
 		}
 		if (!stale) {
 			if (const uint32_t place = host_block(addr, at)) {
+				if (m_turn_kept && turn_inside(addr, at)) {
+					return run_decoded(done, cycles);
+				}
+				m_turn_mark = m_instructions + m_failed;
+
 				m_host_stale = false;
 				done = m_host->run(*this, place, done, cycles);
 				if (m_host_stale) {
 					drop_block(m_host_stale_block);
 				}
 				stale = m_host_stale;
+				if (m_turn_kept) {
+					turn_away(m_instructions + m_failed - m_turn_mark);
+				}
 				continue;
 			}
 		}
 		stale = false;
+		if (m_turn_kept) {
+			turn_away(1);
+		}
 		done += step_decoded();
 	}
 	return done;
@@ -136,8 +154,26 @@ uint32_t Arm7::host_block(uint32_t addr, uint32_t at)
 	}
 	if (!page) {
 		page = std::make_unique<uint32_t[]>(PAGE_WORDS);
+		m_block_words[at >> DECODED_PAGE] = std::make_unique<uint8_t[]>(PAGE_WORDS);
 	}
-	return page[(at >> 2) & (PAGE_WORDS - 1)] = translate(addr);
+
+	uint32_t words = 0;
+	const uint32_t place = translate(addr, words);
+
+	m_block_words[at >> DECODED_PAGE][(at >> 2) & (PAGE_WORDS - 1)] = static_cast<uint8_t>(words);
+	return page[(at >> 2) & (PAGE_WORDS - 1)] = place;
+}
+
+/* A place run() looks at for the turn kept, inside the block at `addr`
+ * (`at` in the memory) past its first instruction: run_decoded() sees the
+ * program reach it there. */
+bool Arm7::turn_inside(uint32_t addr, uint32_t at) const
+{
+	const uint8_t *const words = m_block_words[at >> DECODED_PAGE].get();
+	const uint32_t end = addr + 4u * (words ? words[(at >> 2) & (PAGE_WORDS - 1)] : 0u);
+	const auto inside = [addr, end](uint32_t pc) { return pc > addr && pc < end; };
+
+	return inside(m_turn_start.pc) || (m_turn_left && inside(m_turn_left_state.pc));
 }
 
 /* The place of the block written for `addr`, 0 for none */
@@ -155,7 +191,7 @@ uint32_t Arm7::block_at(uint32_t addr) const
 /* The instructions from `addr` on, up to one after which the program
  * never goes on, the end of the page or BLOCK_MAX of them. Data
  * processing, LDR, STR, B and BL are done in place, the others called. */
-uint32_t Arm7::translate(uint32_t addr)
+uint32_t Arm7::translate(uint32_t addr, uint32_t &words)
 {
 	Arm7Host &host = *m_host;
 	const uint32_t place = host.begin(addr);
@@ -211,6 +247,7 @@ uint32_t Arm7::translate(uint32_t addr)
 			break;
 		}
 	}
+	words = (pc - addr) / 4;
 	host.end(pc);
 	return place;
 }
@@ -552,7 +589,21 @@ uintptr_t Arm7::linked(Arm7 &c)
 	const uint32_t *page = c.m_blocks[at >> DECODED_PAGE].get();
 	const uint32_t place = page ? page[(at >> 2) & (PAGE_WORDS - 1)] : 0;
 
-	return place ? c.m_host->address(place) : 0;
+	if (!place) {
+		return 0;
+	}
+	/* A turn kept: the instructions of the blocks before counted, then
+	 * back to run_translated() where it looks */
+	if (c.m_turn_kept) {
+		const uint64_t now = c.m_instructions + c.m_failed;
+
+		c.turn_away(now - c.m_turn_mark);
+		c.m_turn_mark = now;
+		if (c.m_turn_kept && (c.turn_watched() || c.turn_inside(c.m_pc, at))) {
+			return 0;
+		}
+	}
+	return c.m_host->address(place);
 }
 
 } /* namespace odin */

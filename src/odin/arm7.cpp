@@ -59,8 +59,8 @@ constexpr std::array<uint16_t, 16> COND_PASS = [] {
 } /* namespace */
 
 Arm7::Arm7(Arm7Bus &bus)
-	: m_bus(bus), m_ram{nullptr, 0, 0}, m_trace(nullptr), m_decoded_on(true), m_translate(false), m_host_stale(false),
-	  m_host_stale_block(0), m_turn(Turn::Off), m_turn_limit(TURN_MAX),
+	: m_bus(bus), m_ram{nullptr, 0, 0}, m_trace(nullptr), m_failed(0), m_turn_mark(0), m_decoded_on(true),
+	  m_translate(false), m_host_stale(false), m_host_stale_block(0), m_turn(Turn::Off), m_turn_limit(TURN_MAX),
 	  m_turn_counter(TURN_NO_COUNTER), m_turn_delta(0), m_turn_laps(0), m_turn_kept(false),
 	  m_turn_trail_full(false), m_turn_one_mode(false), m_turn_try(0), m_turn_misses(0), m_turn_origin(0),
 	  m_turn_left(false), m_turn_resumable(false), m_turn_left_at(0), m_turn_left_state{}, m_turn_recorded(0),
@@ -179,12 +179,10 @@ uint32_t Arm7::run_decoded(uint32_t done, uint32_t cycles)
 			break;
 		}
 		if (m_turn_kept) {
-			if (m_pc == m_turn_start.pc || (m_turn_left && m_pc == m_turn_left_state.pc)) {
+			if (turn_watched()) {
 				break;
 			}
-			if (--m_turn_try == 0 || m_turn_misses == TURN_ROUND) {
-				m_turn_kept = false;
-			}
+			turn_away(1);
 		}
 		if ((at >> DECODED_PAGE) != at_page) {
 			at_page = at >> DECODED_PAGE;

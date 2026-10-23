@@ -60,7 +60,11 @@ void Arm7Host::clear()
 	move32(RAX, R12);
 	way_out();
 
+	/* The instructions run so far in the CPU, for the link to count */
 	m_follow = m_used;
+	byte(0x4C);					/* add [instructions], r15 */
+	field(0x01, R15 & 7, m_places.instructions);
+	bytes({0x45, 0x31, 0xFF});			/* xor r15d, r15d */
 	bytes({0x48, 0x89, static_cast<uint8_t>(0xC0 | (RBX << 3) | ARG[0])});	/* mov the first argument, rbx */
 	call_to(reinterpret_cast<uintptr_t>(m_link));
 	bytes({0x48, 0x85, 0xC0, 0x0F, JZ});		/* test rax, rax / jz back */
@@ -181,6 +185,12 @@ void Arm7Host::branch(uint32_t pc, uint32_t target, bool link, uint32_t direct)
 	store_value(m_places.pc, target);
 	bytes({0x45, 0x39, 0xF4, 0x0F, JNC});		/* cmp r12d, r14d / jae back */
 	jump_to(m_leave);
+	if (direct) {
+		field(0x80, 7, m_places.kept);		/* cmp byte [kept], 0 / jnz follow */
+		byte(0);
+		bytes({0x0F, JNZ});
+		jump_to(m_follow);
+	}
 	jump_back(direct ? direct : m_follow);
 }
 
@@ -192,6 +202,8 @@ void Arm7Host::failed(Jump skip, uint32_t pc)
 
 	bind(skip);
 	op_ri(0, R12, 1);
+	byte(0x48);					/* inc qword [failed] */
+	field(0xFF, 0, m_places.failed);
 	cycles_spent(pc);
 	bind(on);
 }

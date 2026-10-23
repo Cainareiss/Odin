@@ -259,7 +259,8 @@ private:
 	uint32_t run_translated(uint32_t done, uint32_t cycles);
 	uint32_t host_block(uint32_t addr, uint32_t at);
 	uint32_t block_at(uint32_t addr) const;
-	uint32_t translate(uint32_t addr);
+	uint32_t translate(uint32_t addr, uint32_t &words);
+	bool turn_inside(uint32_t addr, uint32_t at) const;
 	void data_in_place(uint32_t pc, uint32_t op);
 	bool transfer_in_place(uint32_t pc, uint32_t op, Run does);
 	bool block_in_place(uint32_t pc, uint32_t op, Run does);
@@ -287,17 +288,22 @@ private:
 	uint32_t m_op_pc;
 	uint32_t m_cycles;
 	uint64_t m_instructions;
+	/* Of the host code, the instructions whose condition failed; with
+	 * m_instructions, the count a turn kept last took (turn_away) */
+	uint64_t m_failed, m_turn_mark;
 
 	bool m_decoded_on;
 	std::array<std::unique_ptr<Decoded[]>, DECODED_PAGES> m_decoded;
 
 	/* Host code, once asked for; for each instruction of the memory, the
-	 * place of the block that starts there, 0 for none. A block left
-	 * because a word changed sets m_host_stale and gives its address. */
+	 * place of the block that starts there, 0 for none, and how many
+	 * instructions it has. A block left because a word changed sets
+	 * m_host_stale and gives its address. */
 	std::unique_ptr<Arm7Host> m_host;
 	bool m_translate, m_host_stale;
 	uint32_t m_host_stale_block;
 	std::array<std::unique_ptr<uint32_t[]>, DECODED_PAGES> m_blocks;
+	std::array<std::unique_ptr<uint8_t[]>, DECODED_PAGES> m_block_words;
 
 	/* Turns counted without being run, see set_turn_replay(). */
 	enum class Turn : uint8_t { Off, Idle, Record, Replay, Settle };
@@ -351,6 +357,21 @@ private:
 	bool turn_rejoin();
 	bool turn_resume();
 	void turn_leave();
+	/* Where run() looks at a turn kept: its start, or where the program
+	 * left it */
+	bool turn_watched() const
+	{
+		return m_pc == m_turn_start.pc || (m_turn_left && m_pc == m_turn_left_state.pc);
+	}
+	/* `ran` instructions away from the turn kept */
+	void turn_away(uint64_t ran)
+	{
+		if (ran >= m_turn_try || m_turn_misses == TURN_ROUND) {
+			m_turn_kept = false;
+		} else {
+			m_turn_try -= static_cast<uint32_t>(ran);
+		}
+	}
 	uint32_t turn_settle_read();
 	bool turn_registers_same(const Arm7State &as) const;
 	void turn_trail(uint32_t offset, uint32_t value, uint32_t size, bool store);
