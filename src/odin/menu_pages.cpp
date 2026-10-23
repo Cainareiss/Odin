@@ -80,14 +80,15 @@ begin_settings(const MenuKit &kit, const Box &box, ImVec2 top, ImVec2 room)
 	                  ImGuiWindowFlags_NoBackground);
 }
 
-/* The page under them is as high as the room: it does not scroll */
+/* The page under them is as high as the room, with the room Menu::draw
+ * leaves under a page: it does not scroll */
 void
 end_settings(const MenuKit &kit, ImVec2 top, ImVec2 room)
 {
 	ImGui::Dummy({ 0.0f, kit.px(4.0f) });
 	ImGui::EndChild();
 	ImGui::SetCursorScreenPos(top);
-	ImGui::Dummy({ room.x, room.y - kit.px(4.0f) });
+	ImGui::Dummy({ room.x, room.y - kit.px(4.0f) - ImGui::GetStyle().ItemSpacing.y });
 }
 
 /* A text on as many lines as that width takes, each in its middle, from

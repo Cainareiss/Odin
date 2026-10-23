@@ -484,8 +484,9 @@ Menu::build(MenuState &state)
 
 	ImGui::SetNextWindowPos(a);
 	ImGui::SetNextWindowSize(size);
+	/* The frame stays where it is; its pages scroll */
 	ImGui::Begin("Odin", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
-	             ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBackground);
+	             ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollWithMouse);
 
 	ImDrawList *const list = ImGui::GetWindowDrawList();
 
