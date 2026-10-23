@@ -313,11 +313,12 @@ int main(int argc, char **argv)
 		if (n->linked)
 			std::printf(" at frame %llu, count %u id %u, %u frames", static_cast<unsigned long long>(n->linked_frame),
 			            n->count, n->id, n->frames_ok);
-		std::printf("; frames sent %llu received %llu held %llu lost %llu",
+		std::printf("; frames sent %llu received %llu held %llu lost %llu stale %llu",
 		            static_cast<unsigned long long>(n->board.counts().sent),
 		            static_cast<unsigned long long>(n->board.counts().received),
 		            static_cast<unsigned long long>(n->board.counts().held),
-		            static_cast<unsigned long long>(n->board.counts().lost));
+		            static_cast<unsigned long long>(n->board.counts().lost),
+		            static_cast<unsigned long long>(n->board.counts().stale));
 		std::printf("; fingerprint %016llX; parts seen:", static_cast<unsigned long long>(n->board.fingerprint()));
 		for (unsigned k = 0; k < nodes; k++) {
 			std::printf(" %u", n->seen[k]);

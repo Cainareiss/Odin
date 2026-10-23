@@ -410,8 +410,9 @@ Hikaru::~Hikaru()
 	}
 	if (m_stats && m_netbd)
 		std::fprintf(stderr, "network board: %" PRIu64 " frames sent, %" PRIu64 " received (%" PRIu64
-		             " waited for its 68000), %" PRIu64 " lost (in reset)\n", m_netbd->counts().sent,
-		             m_netbd->counts().received, m_netbd->counts().held, m_netbd->counts().lost);
+		             " waited for its 68000), %" PRIu64 " lost (in reset), %" PRIu64 " lost (waited too long)\n",
+		             m_netbd->counts().sent, m_netbd->counts().received, m_netbd->counts().held,
+		             m_netbd->counts().lost, m_netbd->counts().stale);
 }
 
 /* The MIE: the chip, its ROM and its board.

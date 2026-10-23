@@ -232,10 +232,10 @@ NetBoard837_13404::frames_save() const
 	const uint32_t held = static_cast<uint32_t>(m_held.size());
 
 	put(&held, sizeof(held));
-	for (const NetFrame &frame : m_held) {
-		const uint32_t size = static_cast<uint32_t>(frame.data.size());
+	for (const Held &h : m_held) {
+		const uint32_t size = static_cast<uint32_t>(h.frame.data.size());
 		put(&size, sizeof(size));
-		put(frame.data.data(), size);
+		put(h.frame.data.data(), size);
 	}
 	for (const Arrival &a : m_arrivals) {
 		const uint32_t size = static_cast<uint32_t>(a.frame.data.size());
@@ -275,7 +275,7 @@ NetBoard837_13404::frames_load(std::span<const uint8_t> bytes)
 		frame.data.assign(bytes.begin() + static_cast<std::ptrdiff_t>(at),
 		                  bytes.begin() + static_cast<std::ptrdiff_t>(at + size));
 		at += size;
-		m_held.push_back(std::move(frame));
+		m_held.push_back({ std::move(frame), m_clock });
 	}
 	while (at < bytes.size()) {
 		Arrival a;
@@ -429,16 +429,17 @@ NetBoard837_13404::receive(const NetFrame &frame, uint64_t latency)
 /* A frame in while receiving: into the bank of the 68000 at the receive
  * address, as much as the receive size allows. HEURISTIC: one that comes
  * while its 68000 is held in reset is lost; one that comes while it runs
- * but does not receive waits in the chip, and comes in when it receives
- * (MARKDOWN/98 section 17: on the bench no frame waits, Odins linked by a
- * network may be late by more than the 1.3 ms the program leaves in a
- * turn, and a lost frame would stop the ring). */
+ * but does not receive waits in the chip, and comes in when it receives,
+ * if it waited HELD_MOST at most (MARKDOWN/98 section 17: on the bench no
+ * frame waits, Odins linked by a network may be late by more than the
+ * 1.3 ms the program leaves in a turn, and a lost frame would stop the
+ * ring). */
 void
 NetBoard837_13404::deliver(const NetFrame &frame)
 {
 	if (!m_rx_armed) {
 		if (m_running) {
-			m_held.push_back(frame);
+			m_held.push_back({ frame, now() });
 			m_counts.held++;
 		} else {
 			m_counts.lost++;
@@ -520,8 +521,12 @@ NetBoard837_13404::io_write(uint32_t reg, uint8_t value)
 	case IO_RX_GO:
 		if (value == 0x8C && m_io[IO_RX_CTRL] == 0x80) {
 			m_rx_armed = true;
+			while (!m_held.empty() && now() - m_held.front().came > HELD_MOST) {
+				m_held.pop_front();
+				m_counts.stale++;
+			}
 			if (!m_held.empty()) {
-				const NetFrame frame = std::move(m_held.front());
+				const NetFrame frame = std::move(m_held.front().frame);
 				m_held.pop_front();
 				deliver(frame);
 			}

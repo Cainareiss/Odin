@@ -129,9 +129,10 @@ public:
 	uint16_t leds() const { return m_leds; }
 	/* What went out and came in since it was made (ODIN_STATS=1); held:
 	 * came while its 68000 did not receive and waited for it; lost: came
-	 * while its 68000 was held in reset */
+	 * while its 68000 was held in reset; stale: waited longer than
+	 * HELD_MOST and was lost when its 68000 received */
 	struct Counts {
-		uint64_t sent, received, held, lost;
+		uint64_t sent, received, held, lost, stale;
 	};
 	const Counts &counts() const { return m_counts; }
 	const M68000 &cpu() const { return m_cpu; }
@@ -149,6 +150,13 @@ private:
 	/* HEURISTIC: 10 Mbit/s on the fibre, 2 bytes around each frame. */
 	static constexpr uint64_t BYTE_CLOCKS = 8;
 	static constexpr uint64_t FRAME_OVERHEAD = 2;
+	/* HEURISTIC: the longest a frame waits in the chip for the 68000 to
+	 * receive, 1 ms; an older one is lost, as a frame that comes while
+	 * the board does not receive. The waits that save a ring from the
+	 * jitter of Odins linked by a network are shorter than 0.05 ms; a
+	 * board started late had frames wait for seconds, came in out of
+	 * time and never joined (MARKDOWN/98 section 18). */
+	static constexpr uint64_t HELD_MOST = 10000;
 
 	enum Irq : unsigned { IRQ2 = 1u << 2, IRQ4 = 1u << 4, IRQ5 = 1u << 5, IRQ6 = 1u << 6 };
 
@@ -173,6 +181,10 @@ private:
 	struct Arrival {
 		NetFrame frame;
 		uint64_t at;
+	};
+	struct Held {
+		NetFrame frame;
+		uint64_t came;		/* the clock it came at */
 	};
 
 	uint8_t io_read(uint32_t reg);
@@ -226,7 +238,7 @@ private:
 	uint64_t m_clock;
 	uint64_t m_cpu_base;		/* cycles of the 68000 at clock 0 */
 	std::deque<Arrival> m_arrivals;
-	std::deque<NetFrame> m_held;	/* came while not receiving */
+	std::deque<Held> m_held;	/* came while not receiving */
 	NetLink *m_next;
 
 	Counts m_counts{};
