@@ -530,6 +530,9 @@ Menu::build(MenuState &state)
 	                                     std::max({ line, help_h, close.y });
 	const float foot_top = b.y - foot_pad - foot;
 
+	/* Each page its windows, and so where they are rolled: one page rolled
+	 * down does not open the next rolled down */
+	ImGui::PushID(m_page);
 	ImGui::BeginChild("page", { 0.0f, foot_top - foot_pad - ImGui::GetCursorScreenPos().y }, ImGuiChildFlags_None,
 	                  ImGuiWindowFlags_NoBackground);
 	if (m_page == INPUT)
@@ -550,6 +553,7 @@ Menu::build(MenuState &state)
 		page_about(kit);
 	ImGui::Dummy({ 0.0f, kit.px(4.0f) });
 	ImGui::EndChild();
+	ImGui::PopID();
 	m_focus.last = m_focus.count;
 	/* The advanced options of the page Input close with it */
 	if (m_page != INPUT)
