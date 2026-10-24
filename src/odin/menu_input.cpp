@@ -1400,10 +1400,10 @@ curve_to(std::vector<ImVec2> &points, ImVec2 c, ImVec2 q)
 
 /* The keyboard drawn (and the mouse): the keys of the controls of the
  * player clear, the others faint, a key held lit; a mouse button pressed
- * lit. Its controls change in Classic. */
+ * lit. A click on a key of a control catches the parts it works, in turn;
+ * a control without a key changes in Classic. */
 void
-keyboard_box(const MenuKit &kit, const MenuState &state, std::span<const InputRow> rows, ImVec2 a, ImVec2 b,
-             float corner)
+keyboard_box(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, ImVec2 a, ImVec2 b, float corner)
 {
 	ImDrawList *const list = ImGui::GetWindowDrawList();
 	const MenuPalette &palette = kit.palette();
@@ -1432,9 +1432,27 @@ keyboard_box(const MenuKit &kit, const MenuState &state, std::span<const InputRo
 		const float dy = down ? 1.5f : 0.0f;
 		const ImVec2 p = at(x, y + dy), q = at(x + w, y + dy + U - GAP - 1);
 		const float text = MenuKit::measure(dk.name, size);
+		bool hovered = false;
 
+		if (on) {
+			ImGui::SetCursorScreenPos(p);
+			ImGui::PushID(static_cast<int>(dk.key));
+			if (ImGui::InvisibleButton("key", { q.x - p.x, q.y - p.y })) {
+				std::vector<MenuSlot> parts;
+
+				for (const InputRow &row : rows)
+					if (row.catchable && std::any_of(row.inputs.begin(), row.inputs.end(), [&dk](const HostInput &in) {
+						    return in.kind == HostInput::Kind::KEY && in.key == dk.key;
+					    }))
+						parts.push_back(row.slot);
+				catch_parts(state, parts);
+			}
+			hovered = ImGui::IsItemHovered();
+			ImGui::PopID();
+		}
 		list->AddRectFilled(p, q, down ? palette.accent : palette.part, 4.0f * k);
-		list->AddRect(p, q, on ? palette.stroke : faint, 4.0f * k, ImDrawFlags_None, kit.px(1.0f));
+		list->AddRect(p, q, hovered ? palette.accent : on ? palette.stroke : faint, 4.0f * k, ImDrawFlags_None,
+		              kit.px(1.0f));
 		MenuKit::write(list, { (p.x + q.x - text) / 2.0f, (p.y + q.y - size) / 2.0f },
 		               down ? palette.on_accent : on ? palette.ink : palette.faint, dk.name, size);
 	};
@@ -1887,11 +1905,14 @@ Menu::page_input(MenuKit &kit, MenuState &state) const
 float
 Menu::input_foot(const MenuKit &kit, MenuState &state, ImVec2 at, float width, float height, bool draw)
 {
-	static constexpr char REST[] = "Press or move a control: it lights. Click a name to change it.";
+	/* How it works: on the keyboard drawn, its keys are clicked */
+	const char *const told = state.classic || state.on_pad() || state.on_joystick() ?
+	                         "Press or move a control: it lights. Click a name to change it." :
+	                         "Press or move a control: it lights. Click a key to change it.";
 	const float line = ImGui::GetTextLineHeight();
 
 	if (!draw)
-		return std::max({ line, kit.button_size("Stop").y, ImGui::CalcTextSize(REST, nullptr, false, width).y });
+		return std::max({ line, kit.button_size("Stop").y, ImGui::CalcTextSize(told, nullptr, false, width).y });
 	if (!state.panel)
 		return height;
 
@@ -2014,9 +2035,9 @@ Menu::input_foot(const MenuKit &kit, MenuState &state, ImVec2 at, float width, f
 		}
 		return height;
 	}
-	const float rest_h = ImGui::CalcTextSize(REST, nullptr, false, width).y;
+	const float rest_h = ImGui::CalcTextSize(told, nullptr, false, width).y;
 
-	list->AddText(ImGui::GetFont(), ImGui::GetFontSize(), { at.x, at.y + (height - rest_h) / 2.0f }, palette.dim, REST,
+	list->AddText(ImGui::GetFont(), ImGui::GetFontSize(), { at.x, at.y + (height - rest_h) / 2.0f }, palette.dim, told,
 	              nullptr, width);
 	return height;
 }
