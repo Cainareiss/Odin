@@ -2408,6 +2408,46 @@ void test_translated_loop_head()
 	check_eq("translated loop head: as step(), call by call", spent[0] == spent[1] && after[0] == after[1], 1);
 }
 
+/* Calls and returns as the sound drivers write them: STM of PC, a branch,
+ * LDM of PC, which goes on to the block it returns to. The same as step(),
+ * call by call. */
+void test_translated_return()
+{
+	g_current = "translated return";
+	constexpr uint32_t RAM = 0x1000;
+	const uint32_t code[] = {
+		0xE3A0DB02,	/* mov sp, #0x800 */
+		0xE3A00000,	/* mov r0, #0 */
+		0xE92D8000,	/* 08: stmdb sp!, {pc} */
+		0xE1A00000,	/* mov r0, r0 */
+		0xEA000002,	/* b 20 */
+		0xE3500064,	/* 14: cmp r0, #100 */
+		0x1AFFFFFA,	/* bne 08 */
+		0xEAFFFFFE,	/* 1C: b 1C */
+		0xE2800001,	/* 20: add r0, r0, #1 */
+		0xE8BD8000,	/* ldm sp!, {pc} */
+	};
+	std::vector<uint8_t> ram[2] = { std::vector<uint8_t>(RAM), std::vector<uint8_t>(RAM) };
+	LogBus bus[2];
+	Arm7 cores[2] = { Arm7(bus[0]), Arm7(bus[1]) };
+	std::vector<uint32_t> spent[2];
+	odin::Arm7State after[2];
+
+	set_way(cores[0], Way::Read);
+	set_way(cores[1], Way::Host);
+	for (uint32_t k = 0; k < 2; k++) {
+		std::memcpy(ram[k].data(), code, sizeof(code));
+		cores[k].set_ram({ram[k].data(), RAM, RAM - 1});
+		for (uint32_t c = 0; c < 60; c++) {
+			spent[k].push_back(cores[k].run(48));
+		}
+		cores[k].save(after[k]);
+	}
+	check_eq("translated return: the count", after[1].r[0], 100);
+	check_eq("translated return: at its end", after[1].pc, 0x1C);
+	check_eq("translated return: as step(), call by call", spent[0] == spent[1] && after[0] == after[1] && ram[0] == ram[1], 1);
+}
+
 /* Data processing done in place by host code does what step() does, one
  * instruction at a time: every operation with and without S, every form
  * of operand 2, the values around the edges of 32 bits, random flags and
@@ -2685,6 +2725,7 @@ int main(int argc, char **argv)
 	test_run_decoded();
 	test_translated();
 	test_translated_loop_head();
+	test_translated_return();
 	test_translated_data();
 	test_translated_transfer();
 	test_translated_block();

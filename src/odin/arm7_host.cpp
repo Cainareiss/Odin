@@ -177,6 +177,15 @@ void Arm7Host::spent(uint32_t pc, uint32_t cycles)
 	cycles_spent(pc);
 }
 
+void Arm7Host::went(uint32_t cycles)
+{
+	op_ri(0, R12, cycles);
+	count();
+	bytes({0x45, 0x39, 0xF4, 0x0F, JNC});		/* cmp r12d, r14d / jae back */
+	jump_to(m_leave);
+	jump_back(m_follow);
+}
+
 uint32_t Arm7Host::branch(uint32_t pc, uint32_t target, bool link, uint32_t direct)
 {
 	if (link) {
@@ -250,6 +259,11 @@ void Arm7Host::load_value(Reg reg, uint32_t value)
 void Arm7Host::store(uint32_t n, Reg reg)
 {
 	field(0x89, host(reg), m_places.r + static_cast<int32_t>(4 * n));
+}
+
+void Arm7Host::store_pc(Reg reg)
+{
+	field(0x89, host(reg), m_places.pc);
 }
 
 void Arm7Host::copy(Reg dst, Reg src)
@@ -433,6 +447,7 @@ void Arm7Host::check(uint32_t, uint32_t, uint32_t) {}
 HostCode::Jump Arm7Host::unless(uint16_t) { return Jump{0}; }
 void Arm7Host::call(uint32_t, uint32_t, Run) {}
 void Arm7Host::spent(uint32_t, uint32_t) {}
+void Arm7Host::went(uint32_t) {}
 uint32_t Arm7Host::branch(uint32_t, uint32_t, bool, uint32_t) { return 0; }
 void Arm7Host::link_to(uint32_t, uint32_t) {}
 void Arm7Host::failed(Jump, uint32_t) {}
@@ -440,6 +455,7 @@ void Arm7Host::end(uint32_t) {}
 void Arm7Host::load(Reg, uint32_t) {}
 void Arm7Host::load_value(Reg, uint32_t) {}
 void Arm7Host::store(uint32_t, Reg) {}
+void Arm7Host::store_pc(Reg) {}
 void Arm7Host::copy(Reg, Reg) {}
 void Arm7Host::alu(Alu, Reg, Reg) {}
 void Arm7Host::invert(Reg) {}

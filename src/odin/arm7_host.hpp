@@ -81,6 +81,8 @@ public:
 	/* After an instruction done in place that spent `cycles` and went on
 	 * to the next one */
 	void spent(uint32_t pc, uint32_t cycles);
+	/* After one that spent `cycles` and wrote PC: on to the block there */
+	void went(uint32_t cycles);
 	/* B or BL in place, then on to `target`: to the host code at `direct`
 	 * when it is not 0 and no turn is kept, else to the block found then.
 	 * Without `direct`, returns where link_to() puts the block of the
@@ -104,6 +106,7 @@ public:
 	void load(Reg reg, uint32_t n);
 	void load_value(Reg reg, uint32_t value);
 	void store(uint32_t n, Reg reg);
+	void store_pc(Reg reg);
 	void copy(Reg dst, Reg src);
 	void alu(Alu op, Reg dst, Reg src);
 	void invert(Reg reg);

@@ -537,8 +537,8 @@ bool Arm7::transfer_in_place(uint32_t pc, uint32_t op, Run does)
 
 /* Arm7::block_transfer() for this word in place, its words all in the memory
  * of the ARM7, else it is called: LDM and STM without S, the base not PC
- * and not in the list, PC not loaded, the list not empty. False, nothing
- * written, for any other. */
+ * and not in the list, the list not empty. A PC loaded, as a return does,
+ * goes on to its block. False, nothing written, for any other. */
 bool Arm7::block_in_place(uint32_t pc, uint32_t op, Run does)
 {
 	using Reg = Arm7Host::Reg;
@@ -548,8 +548,9 @@ bool Arm7::block_in_place(uint32_t pc, uint32_t op, Run does)
 	const uint32_t rn = (op >> 16) & 0xF, list = op & 0xFFFF;
 	const uint32_t span = 4 * static_cast<uint32_t>(std::popcount(list));
 
-	if (s || rn == 15 || list == 0 || (list & (1u << rn)) || (load && (list & 0x8000)) || (m_ram.size & 3) ||
-	    span > m_ram.size) {
+	const bool loads_pc = load && (list & 0x8000);
+
+	if (s || rn == 15 || list == 0 || (list & (1u << rn)) || (m_ram.size & 3) || span > m_ram.size) {
 		return false;
 	}
 	/* A = the first address, D = the base after the transfer */
@@ -568,7 +569,13 @@ bool Arm7::block_in_place(uint32_t pc, uint32_t op, Run does)
 		}
 		if (load) {
 			host.ram_load(Reg::B, false);
-			host.store(i, Reg::B);
+			if (i == 15) {
+				/* As load_pc() */
+				host.mask(Reg::B, ~3u);
+				host.store_pc(Reg::B);
+			} else {
+				host.store(i, Reg::B);
+			}
 		} else {
 			if (i == 15) {
 				host.load_value(Reg::B, pc + 12);
@@ -582,7 +589,11 @@ bool Arm7::block_in_place(uint32_t pc, uint32_t op, Run does)
 	if (writeback) {
 		host.store(rn, Reg::D);
 	}
-	host.spent(pc, span / 4 + (load ? 2 : 1));
+	if (loads_pc) {
+		host.went(span / 4 + 4);
+	} else {
+		host.spent(pc, span / 4 + (load ? 2 : 1));
+	}
 	const HostCode::Jump on = host.skip_ahead();
 	host.bind(outside);
 	host.call(pc, op, does);
