@@ -455,6 +455,25 @@ Bindings::keys_toward(Role role, unsigned player, bool positive)
 	return out;
 }
 
+std::vector<HostInput>
+Bindings::with_kind(const std::vector<HostInput> &inputs, const std::vector<HostInput> &standard, HostInput::Kind kind,
+                    bool to_defaults)
+{
+	const auto has = [](const std::vector<HostInput> &list, const HostInput &input) {
+		return std::find(list.begin(), list.end(), input) != list.end();
+	};
+	std::vector<HostInput> out;
+
+	if (to_defaults)
+		for (const HostInput &input : standard)
+			if (input.kind == kind || has(inputs, input))
+				out.push_back(input);
+	for (const HostInput &input : inputs)
+		if (input.kind != kind && !has(out, input))
+			out.push_back(input);
+	return out;
+}
+
 Bindings::Bindings(const std::vector<GameControl> &panel, const Settings &settings, const std::string &game)
 	: m_panel(panel), m_controls(panel.size())
 {

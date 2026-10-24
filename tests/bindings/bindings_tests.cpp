@@ -569,6 +569,22 @@ void test_lines_to_write()
 	check(line.key == "coin1" && !line.value, "a coin with its defaults");
 	line = plain.cabinet_line(Role::TEST, { key("key:F2") });
 	check(line.key == "test" && line.value == "key:F2", "TEST changed");
+
+	/* Defaults and Clear mapping of the page Input: the inputs of one kind
+	 * put back or taken away */
+	const std::vector<HostInput> coin = { key("key:5"), key("pad:back") };
+	const std::vector<HostInput> moved = Bindings::with_kind({ key("pad:back") }, coin, HostInput::Kind::KEY, true);
+
+	check(moved == coin && !plain.cabinet_line(Role::COIN1, moved).value,
+	      "the keys put back where the defaults have them: the defaults again, no line");
+	check(Bindings::with_kind({ key("pad:x") }, coin, HostInput::Kind::KEY, true) ==
+	              std::vector<HostInput>({ key("key:5"), key("pad:x") }),
+	      "another button of the gamepad kept after the keys");
+	check(Bindings::with_kind(coin, coin, HostInput::Kind::KEY, false) == std::vector<HostInput>({ key("pad:back") }),
+	      "the keys taken away, the rest as it was");
+	check(Bindings::with_kind({ key("key:Q"), key("pad:back") }, coin, HostInput::Kind::PAD, true) ==
+	              std::vector<HostInput>({ key("pad:back"), key("key:Q") }),
+	      "the gamepad's defaults, a key of the user kept");
 }
 
 /* The inputs of a joystick by their numbers, as EmulationStation gives

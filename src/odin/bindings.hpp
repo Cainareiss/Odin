@@ -180,6 +180,12 @@ public:
 	/* The keys that move an analog control of that role and player left
 	 * or up, right or down (positive), a pedal down (positive) */
 	static std::vector<HostInput> keys_toward(Role role, unsigned player, bool positive);
+	/* The inputs of a part without those of a kind (a device: keys, a
+	 * gamepad...), or with that kind's of its defaults in their place
+	 * (`standard`): then in the order of the defaults, those of the other
+	 * kinds after, so that a part put back whole is its defaults again */
+	static std::vector<HostInput> with_kind(const std::vector<HostInput> &inputs, const std::vector<HostInput> &standard,
+	                                        HostInput::Kind kind, bool to_defaults);
 
 private:
 	std::vector<GameControl> m_panel;

@@ -376,16 +376,10 @@ MenuSession::change_inputs(bool to_defaults)
 /* The inputs of a part without those of the device shown, or with those
  * of its defaults */
 std::vector<HostInput>
-MenuSession::kind_changed(std::vector<HostInput> inputs, const std::vector<HostInput> &standard, bool to_defaults) const
+MenuSession::kind_changed(const std::vector<HostInput> &inputs, const std::vector<HostInput> &standard,
+                          bool to_defaults) const
 {
-	const auto kind = m_menu_state.shown_kind();
-
-	std::erase_if(inputs, [kind](const HostInput &in) { return in.kind == kind; });
-	if (to_defaults)
-		for (const HostInput &in : standard)
-			if (in.kind == kind)
-				inputs.push_back(in);
-	return inputs;
+	return Bindings::with_kind(inputs, standard, m_menu_state.shown_kind(), to_defaults);
 }
 
 /* X and Y of a gamepad on the part picked: its inputs of the device shown

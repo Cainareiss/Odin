@@ -162,7 +162,7 @@ private:
 	void button_on_analog();
 	void draw_menu();
 	void apply(const MenuState &was);
-	std::vector<HostInput> kind_changed(std::vector<HostInput> inputs, const std::vector<HostInput> &standard,
+	std::vector<HostInput> kind_changed(const std::vector<HostInput> &inputs, const std::vector<HostInput> &standard,
 	                                    bool to_defaults) const;
 	void change_part(const MenuSlot &slot, bool to_defaults);
 	void keep(const char *key, const std::optional<std::string> &value);
