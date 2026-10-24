@@ -75,6 +75,23 @@ Renderer::build_lists()
 	}
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
+	/* The counts of a list are read once the next one is sent (see show):
+	 * the next one starts its own from zero. */
+	const GLsizeiptr readback = 3 * sizeof(m_lists.count);
+
+	glGenBuffers(1, &m_lists.readback);
+	glBindBuffer(GL_COPY_WRITE_BUFFER, m_lists.readback);
+	m_lists.counts = nullptr;
+	if (GLEW_ARB_buffer_storage) {
+		const GLbitfield flags = GL_MAP_READ_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT;
+
+		glBufferStorage(GL_COPY_WRITE_BUFFER, readback, nullptr, flags);
+		m_lists.counts = static_cast<const GLuint *>(glMapBufferRange(GL_COPY_WRITE_BUFFER, 0, readback, flags));
+	} else {
+		glBufferData(GL_COPY_WRITE_BUFFER, readback, nullptr, GL_STREAM_READ);
+	}
+	glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
+
 	glGetInteger64v(GL_MAX_SHADER_STORAGE_BLOCK_SIZE, &limit);
 	m_lists.limit = static_cast<uint32_t>(std::min<GLint64>(limit / NODE_SIZE, UINT32_MAX));
 	m_lists.full = false;
@@ -86,6 +103,10 @@ Renderer::build_lists()
 void
 Renderer::destroy_lists()
 {
+	if (m_last.copied)
+		glDeleteSync(m_last.copied);
+	m_last.copied = nullptr;
+	glDeleteBuffers(1, &m_lists.readback);
 	glDeleteBuffers(1, &m_lists.nodes);
 	glDeleteBuffers(8, m_lists.count);
 	glDeleteProgram(m_lists.program);
@@ -178,7 +199,20 @@ Renderer::draw_translucent(unsigned vpi, const odin_mesh_t *meshes, unsigned num
 		glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 		glMemoryBarrier(GL_ALL_BARRIER_BITS);
 		if (!m_again) {
+			/* The count goes where it waits for check_last_list. */
 			m_last.views |= 1u << vpi;
+			glBindBuffer(GL_COPY_READ_BUFFER, m_lists.count[vpi]);
+			glBindBuffer(GL_COPY_WRITE_BUFFER, m_lists.readback);
+			glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, 0,
+			                    static_cast<GLintptr>((m_last.slot * 8 + vpi) * sizeof(GLuint)),
+			                    sizeof(GLuint));
+			glBindBuffer(GL_COPY_READ_BUFFER, 0);
+			glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
+			if (m_lists.counts) {
+				if (m_last.copied)
+					glDeleteSync(m_last.copied);
+				m_last.copied = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+			}
 			break;
 		}
 		glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &used);

@@ -229,8 +229,9 @@ private:
 		unsigned buffer;	/* its 3D buffer */
 		int back;		/* the one blended into it, or -1 */
 		uint32_t rate;		/* 181 */
-		uint32_t slot;		/* its picture in the pipe */
+		uint32_t slot;		/* its picture in the pipe, and its counts */
 		uint32_t views;		/* that have such fragments */
+		GLsync copied;		/* its counts copied, or nullptr */
 	};
 	/* The texture each texhead of a list was drawn with, see tex_ids */
 	struct ListTextures {
@@ -258,6 +259,9 @@ private:
 	void show();
 	void draw_list();
 	void check_last_list();
+	bool too_many(Last &last);
+	void draw_again(const Last &last);
+	void keep_picture(const Last &last);
 	void compose();
 	void present(unsigned window_w, unsigned window_h, const PictureHole &hole);
 
@@ -405,6 +409,11 @@ private:
 		GLuint heads, heads_fb;	/* the last one of each pixel */
 		GLuint nodes;
 		GLuint count[8];	/* one per viewport */
+		/* The counts of each of the three last lists, copied once
+		 * collected; where the processor reads them, with
+		 * ARB_buffer_storage, else nullptr */
+		GLuint readback;
+		const GLuint *counts;
 		uint32_t max;		/* nodes */
 		uint32_t limit;		/* nodes the graphics card takes in a buffer */
 		bool full;		/* a list did not fit, and it was told */

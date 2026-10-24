@@ -374,51 +374,91 @@ Renderer::draw_list()
 	gl::check("a list");
 }
 
-/* The translucent fragments of the list drawn last were collected without
- * waiting for the graphics card to count them: the processor goes on with
- * the next frame while the card draws. The counts are read here, a frame
- * later, when the card is done. If the buffer of the fragments was too
- * small the list is drawn again, from what it was drawn from, before its
- * picture is shown or blended into the next one. Its 3D buffer takes the
- * picture then. */
+/* The translucent fragments of a list are collected without waiting for the
+ * graphics card to count them: the processor goes on with the next frame
+ * while the card draws. The counts are read a frame later, once the next
+ * list is sent (see show): the card has that one to draw meanwhile. True if
+ * they did not fit, and the buffer of the fragments is larger now. */
+bool
+Renderer::too_many(Last &last)
+{
+	GLuint used = 0;
+
+	m_times.part(DrawTimes::PART_LAST_LIST);
+	if (last.copied) {
+		GLenum waited;
+
+		do
+			waited = glClientWaitSync(last.copied, GL_SYNC_FLUSH_COMMANDS_BIT, 1000000000);
+		while (waited == GL_TIMEOUT_EXPIRED);
+		if (waited == GL_WAIT_FAILED)
+			fatal("waiting for the count of the translucent fragments");
+		glDeleteSync(last.copied);
+		last.copied = nullptr;
+	}
+	for (unsigned vpi = 0; vpi < 8; vpi++) {
+		const uint32_t at = last.slot * 8 + vpi;
+		GLuint count;
+
+		if (!(last.views & (1u << vpi)))
+			continue;
+		if (m_lists.counts) {
+			count = m_lists.counts[at];
+		} else {
+			glBindBuffer(GL_COPY_READ_BUFFER, m_lists.readback);
+			glGetBufferSubData(GL_COPY_READ_BUFFER, static_cast<GLintptr>(at * sizeof(GLuint)),
+			                   sizeof(GLuint), &count);
+			glBindBuffer(GL_COPY_READ_BUFFER, 0);
+		}
+		used = std::max(used, count);
+	}
+	m_times.fragments(used);
+	return used > m_lists.max && grow_lists(used);
+}
+
+/* Draws a list again, from what it was drawn from. */
+void
+Renderer::draw_again(const Last &last)
+{
+	odin_display_list_t *const current = m_list;
+	const Last drawn = m_last;
+
+	m_list = last.list;
+	m_last = last;
+	m_again = true;
+	forget_held();
+	draw_list();
+	forget_held();
+	m_again = false;
+	m_list = current;
+	m_last = drawn;
+	m_times.part(DrawTimes::PART_LAST_LIST);
+}
+
+/* The 3D buffer of a list takes its picture. */
+void
+Renderer::keep_picture(const Last &last)
+{
+	glCopyImageSubData(m_pipe[last.slot], GL_TEXTURE_2D, 0, 0, 0, 0,
+	                   m_buffers[last.buffer], GL_TEXTURE_2D, 0, 0, 0, 0,
+	                   static_cast<GLsizei>(width()), static_cast<GLsizei>(height()), 1);
+	gl::check("keeping a picture");
+}
+
+/* The list drawn last, counted now: drawn again if its fragments did not
+ * fit, before its picture is shown or blended into the next one. */
 void
 Renderer::check_last_list()
 {
-	odin_display_list_t *const list = m_last.list, *const current = m_list;
-	GLuint used = 0;
+	Last last = m_last;
 
-	if (!list)
+	if (!last.list)
 		return;
 	m_last.list = nullptr;
-	m_times.part(DrawTimes::PART_LAST_LIST);
-
-	for (unsigned vpi = 0; vpi < 8; vpi++) {
-		GLuint count;
-
-		if (!(m_last.views & (1u << vpi)))
-			continue;
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_lists.count[vpi]);
-		glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &count);
-		used = std::max(used, count);
-	}
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-	m_times.fragments(used);
-
-	if (used > m_lists.max && grow_lists(used)) {
-		m_list = list;
-		m_again = true;
-		forget_held();
-		draw_list();
-		forget_held();
-		m_again = false;
-		m_list = current;
-		m_times.part(DrawTimes::PART_LAST_LIST);
-	}
-
-	glCopyImageSubData(m_pipe[m_last.slot], GL_TEXTURE_2D, 0, 0, 0, 0,
-	                   m_buffers[m_last.buffer], GL_TEXTURE_2D, 0, 0, 0, 0,
-	                   static_cast<GLsizei>(width()), static_cast<GLsizei>(height()), 1);
-	gl::check("keeping a picture");
+	m_last.copied = nullptr;
+	if (too_many(last))
+		draw_again(last);
+	keep_picture(last);
 }
 
 /* The polygons reach the screen in two steps. The game libraries launch a
@@ -430,15 +470,23 @@ Renderer::check_last_list()
  *
  * On the RACER cabinet the SEGA logo stays two frames on the black of the
  * next scene, and the stars leave one frame before the text of the layers;
- * SGNASCAR keeps its white picture while it loads, with no list launched. */
+ * SGNASCAR keeps its white picture while it loads, with no list launched.
+ *
+ * The list before is counted once this one is sent. Its picture goes to its
+ * 3D buffer first, as when it was counted first: this one may blend with
+ * it. If its fragments did not fit it is drawn again, and so is this one,
+ * which blended with what it left. */
 void
 Renderer::show()
 {
 	const odin_fb_config_t &fb = m_frame.fb;
+	Last before = m_last;
 
 	m_times.part(DrawTimes::PART_LAST_LIST);
-	check_last_list();
-	m_textures.delete_dead();
+	m_last.list = nullptr;
+	m_last.copied = nullptr;
+	if (before.list)
+		keep_picture(before);
 
 	/* The picture plotted during the last frame. */
 	if (m_next >= 0) {
@@ -475,11 +523,26 @@ Renderer::show()
 		if (num > 0)
 			m_next = static_cast<int32_t>((num - 1) % 3);
 		m_num_lists = num + 1;
-
-		/* A picture that is on the screen already is checked now. */
-		if (m_last.slot == m_shown)
-			check_last_list();
 	}
+
+	if (before.list && too_many(before)) {
+		draw_again(before);
+		keep_picture(before);
+		/* Drawn again, this one has waited for its own counts. */
+		if (m_last.list) {
+			if (m_last.copied)
+				glDeleteSync(m_last.copied);
+			m_last.copied = nullptr;
+			draw_again(m_last);
+			m_last.views = 0;
+		}
+	}
+	/* What the list before was drawn with may go now. */
+	m_textures.delete_dead();
+
+	/* A picture that is on the screen already is checked now. */
+	if (m_last.list && m_last.slot == m_shown)
+		check_last_list();
 
 	compose();
 }
