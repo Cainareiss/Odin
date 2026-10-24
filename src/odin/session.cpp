@@ -23,7 +23,6 @@
 
 #include <cstdio>
 #include <filesystem>
-#include <thread>
 
 namespace odin {
 
@@ -376,7 +375,10 @@ Session::limit_frame_rate()
 	if (now - m_next > 2 * FRAME)
 		m_next = now;
 	else if (now < m_next)
-		std::this_thread::sleep_until(m_next);
+		/* Not std::this_thread::sleep_until: with MinGW it sleeps again
+		 * until a tick count of 15.6 ms steps has moved, up to 15 ms
+		 * late. SDL sleeps on a timer of high resolution there. */
+		SDL_DelayNS(static_cast<Uint64>(std::chrono::duration_cast<std::chrono::nanoseconds>(m_next - now).count()));
 }
 
 Ended
