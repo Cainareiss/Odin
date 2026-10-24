@@ -82,8 +82,13 @@ public:
 	 * to the next one */
 	void spent(uint32_t pc, uint32_t cycles);
 	/* B or BL in place, then on to `target`: to the host code at `direct`
-	 * when it is not 0 and no turn is kept, else to the block found then. */
-	void branch(uint32_t pc, uint32_t target, bool link, uint32_t direct);
+	 * when it is not 0 and no turn is kept, else to the block found then.
+	 * Without `direct`, returns where link_to() puts the block of the
+	 * target once it is written. */
+	uint32_t branch(uint32_t pc, uint32_t target, bool link, uint32_t direct);
+	/* The branch that branch() gave `at` for goes to the block at `place`
+	 * from now on, when no turn is kept. */
+	void link_to(uint32_t at, uint32_t place);
 	/* The instruction at `pc` whose condition failed: the fetch alone. */
 	void failed(Jump skip, uint32_t pc);
 	/* The end of the block, on to `next`, then its ways out. */

@@ -2370,6 +2370,44 @@ void test_translated()
 	check_eq("translated: host code full, then written again", cleared > 0, 1);
 }
 
+/* A loop whose head is in the middle of a block, as the sound drivers have
+ * them: its branch is written before any block starts there, and goes to
+ * the block of the head once it is written. The same as step(), call by
+ * call. */
+void test_translated_loop_head()
+{
+	g_current = "translated loop head";
+	constexpr uint32_t RAM = 0x1000;
+	const uint32_t code[] = {
+		0xE3A00000,	/* mov r0, #0 */
+		0xE3A01000,	/* mov r1, #0 */
+		0xE2800001,	/* 08: add r0, r0, #1 */
+		0xE0811000,	/* add r1, r1, r0 */
+		0xE35000C8,	/* cmp r0, #200 */
+		0x1AFFFFFB,	/* bne 08 */
+		0xEAFFFFFE,	/* 18: b 18 */
+	};
+	std::vector<uint8_t> ram[2] = { std::vector<uint8_t>(RAM), std::vector<uint8_t>(RAM) };
+	LogBus bus[2];
+	Arm7 cores[2] = { Arm7(bus[0]), Arm7(bus[1]) };
+	std::vector<uint32_t> spent[2];
+	odin::Arm7State after[2];
+
+	set_way(cores[0], Way::Read);
+	set_way(cores[1], Way::Host);
+	for (uint32_t k = 0; k < 2; k++) {
+		std::memcpy(ram[k].data(), code, sizeof(code));
+		cores[k].set_ram({ram[k].data(), RAM, RAM - 1});
+		for (uint32_t c = 0; c < 40; c++) {
+			spent[k].push_back(cores[k].run(64));
+		}
+		cores[k].save(after[k]);
+	}
+	check_eq("translated loop head: the sum", after[1].r[1], 20100);
+	check_eq("translated loop head: at its end", after[1].pc, 0x18);
+	check_eq("translated loop head: as step(), call by call", spent[0] == spent[1] && after[0] == after[1], 1);
+}
+
 /* Data processing done in place by host code does what step() does, one
  * instruction at a time: every operation with and without S, every form
  * of operand 2, the values around the edges of 32 bits, random flags and
@@ -2646,6 +2684,7 @@ int main(int argc, char **argv)
 	test_decoded();
 	test_run_decoded();
 	test_translated();
+	test_translated_loop_head();
 	test_translated_data();
 	test_translated_transfer();
 	test_translated_block();

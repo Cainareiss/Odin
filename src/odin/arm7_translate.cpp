@@ -67,6 +67,7 @@ void Arm7::drop_blocks()
 		return;
 	}
 	m_host->clear();
+	m_unlinked.clear();
 	for (std::unique_ptr<uint32_t[]> &page : m_blocks) {
 		page.reset();
 	}
@@ -161,7 +162,16 @@ uint32_t Arm7::host_block(uint32_t addr, uint32_t at)
 	const uint32_t place = translate(addr, words);
 
 	m_block_words[at >> DECODED_PAGE][(at >> 2) & (PAGE_WORDS - 1)] = static_cast<uint8_t>(words);
-	return page[(at >> 2) & (PAGE_WORDS - 1)] = place;
+	page[(at >> 2) & (PAGE_WORDS - 1)] = place;
+	/* The branches to it written before, its own among them, go
+	 * straight to it now, as those written after it do. */
+	if (const auto waiting = m_unlinked.find(addr); waiting != m_unlinked.end()) {
+		for (const uint32_t branch : waiting->second) {
+			m_host->link_to(branch, place);
+		}
+		m_unlinked.erase(waiting);
+	}
+	return place;
 }
 
 /* A place run() looks at for the turn kept, inside the block at `addr`
@@ -232,7 +242,9 @@ uint32_t Arm7::translate(uint32_t addr, uint32_t &words)
 				offset_words |= 0xFC000000;
 			}
 			const uint32_t target = pc + 8 + offset_words;
-			host.branch(pc, target, (op & (1u << 24)) != 0, block_at(target));
+			if (const uint32_t at = host.branch(pc, target, (op & (1u << 24)) != 0, block_at(target))) {
+				m_unlinked[target].push_back(at);
+			}
 			break;
 		}
 		default:

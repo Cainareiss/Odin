@@ -25,6 +25,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <memory>
+#include <unordered_map>
 
 #include "odin/arm7_host.hpp"
 #include <vector>
@@ -303,6 +304,9 @@ private:
 	bool m_translate, m_host_stale;
 	uint32_t m_host_stale_block;
 	std::array<std::unique_ptr<uint32_t[]>, DECODED_PAGES> m_blocks;
+	/* The branches written before the block of their target, by target:
+	 * where host_block() links them once it writes it */
+	std::unordered_map<uint32_t, std::vector<uint32_t>> m_unlinked;
 	std::array<std::unique_ptr<uint8_t[]>, DECODED_PAGES> m_block_words;
 
 	/* Turns counted without being run, see set_turn_replay(). */

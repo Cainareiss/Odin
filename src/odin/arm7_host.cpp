@@ -18,6 +18,8 @@
 
 #include "odin/arm7_host.hpp"
 
+#include <cstring>
+
 #if defined(__x86_64__) || defined(_M_X64)
 #define ODIN_ARM7_HOST_X86_64 1
 #endif
@@ -175,7 +177,7 @@ void Arm7Host::spent(uint32_t pc, uint32_t cycles)
 	cycles_spent(pc);
 }
 
-void Arm7Host::branch(uint32_t pc, uint32_t target, bool link, uint32_t direct)
+uint32_t Arm7Host::branch(uint32_t pc, uint32_t target, bool link, uint32_t direct)
 {
 	if (link) {
 		store_value(m_places.r + 4 * 14, pc + 4);
@@ -185,13 +187,21 @@ void Arm7Host::branch(uint32_t pc, uint32_t target, bool link, uint32_t direct)
 	store_value(m_places.pc, target);
 	bytes({0x45, 0x39, 0xF4, 0x0F, JNC});		/* cmp r12d, r14d / jae back */
 	jump_to(m_leave);
-	if (direct) {
-		field(0x80, 7, m_places.kept);		/* cmp byte [kept], 0 / jnz follow */
-		byte(0);
-		bytes({0x0F, JNZ});
-		jump_to(m_follow);
-	}
+	field(0x80, 7, m_places.kept);			/* cmp byte [kept], 0 / jnz follow */
+	byte(0);
+	bytes({0x0F, JNZ});
+	jump_to(m_follow);
+	/* The way on until the block of the target is written */
+	const uint32_t at = m_used + 1;
 	jump_back(direct ? direct : m_follow);
+	return direct ? 0 : at;
+}
+
+void Arm7Host::link_to(uint32_t at, uint32_t place)
+{
+	const uint32_t distance = place - (at + 4);
+
+	std::memcpy(m_code + at, &distance, 4);
 }
 
 void Arm7Host::failed(Jump skip, uint32_t pc)
@@ -423,7 +433,8 @@ void Arm7Host::check(uint32_t, uint32_t, uint32_t) {}
 HostCode::Jump Arm7Host::unless(uint16_t) { return Jump{0}; }
 void Arm7Host::call(uint32_t, uint32_t, Run) {}
 void Arm7Host::spent(uint32_t, uint32_t) {}
-void Arm7Host::branch(uint32_t, uint32_t, bool, uint32_t) {}
+uint32_t Arm7Host::branch(uint32_t, uint32_t, bool, uint32_t) { return 0; }
+void Arm7Host::link_to(uint32_t, uint32_t) {}
 void Arm7Host::failed(Jump, uint32_t) {}
 void Arm7Host::end(uint32_t) {}
 void Arm7Host::load(Reg, uint32_t) {}
