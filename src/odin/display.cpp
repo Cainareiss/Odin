@@ -95,17 +95,35 @@ find_filter(const std::string &name)
 	return {};
 }
 
+/* Whether the point x, y of the square of 24 is inside the bold rune:
+ * a line from it to the right crosses its outline an odd number of times */
+bool
+in_rune(float x, float y)
+{
+	constexpr size_t N = std::size(RUNE_OUTLINE_BOLD);
+	bool in = false;
+
+	for (size_t i = 0, j = N - 1; i < N; j = i++) {
+		const auto &[xi, yi] = RUNE_OUTLINE_BOLD[i];
+		const auto &[xj, yj] = RUNE_OUTLINE_BOLD[j];
+
+		if ((yi > y) != (yj > y) && x < xi + (y - yi) * (xj - xi) / (yj - yi))
+			in = !in;
+	}
+	return in;
+}
+
 /* The logo in the bar of the window and in the task bar: the rune in its
- * gold, its lines bolder than the menu draws them, nearly as high as the
- * picture; each pixel as opaque as the lines cover it */
+ * gold, bold, nearly as high as the picture; each pixel as opaque as the
+ * rune covers it, tried at SAMPLES by SAMPLES points */
 void
 set_icon(SDL_Window *window)
 {
-	constexpr int SIDE = 64;
-	constexpr float STROKE = 3.0f, HEIGHT = 0.92f;
-	/* The stem is 20 of the square of 24 high; the middle of the square
+	constexpr int SIDE = 64, SAMPLES = 8;
+	constexpr float HEIGHT = 0.92f;
+	/* The rune is 20 of the square of 24 high; the middle of the square
 	 * in the middle of the picture */
-	constexpr float K = SIDE * HEIGHT / 20.0f, FROM = SIDE / 2.0f - 12.0f * K, RADIUS = STROKE * K / 2.0f;
+	constexpr float K = SIDE * HEIGHT / 20.0f, FROM = SIDE / 2.0f - 12.0f * K;
 	SDL_Surface *const icon = SDL_CreateSurface(SIDE, SIDE, SDL_PIXELFORMAT_RGBA32);
 
 	if (!icon)
@@ -114,18 +132,18 @@ set_icon(SDL_Window *window)
 		auto *const row = static_cast<uint8_t *>(icon->pixels) + static_cast<size_t>(y) * static_cast<size_t>(icon->pitch);
 
 		for (int x = 0; x < SIDE; x++) {
-			const float px = static_cast<float>(x) + 0.5f, py = static_cast<float>(y) + 0.5f;
-			float nearest = SIDE;
+			int covered = 0;
 
-			for (const auto &[x1, y1, x2, y2] : RUNE_LINES) {
-				const float ax = FROM + x1 * K, ay = FROM + y1 * K, dx = (x2 - x1) * K, dy = (y2 - y1) * K;
-				const float t = std::clamp(((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy), 0.0f, 1.0f);
+			for (int sy = 0; sy < SAMPLES; sy++)
+				for (int sx = 0; sx < SAMPLES; sx++) {
+					const float px = static_cast<float>(x) + (static_cast<float>(sx) + 0.5f) / SAMPLES;
+					const float py = static_cast<float>(y) + (static_cast<float>(sy) + 0.5f) / SAMPLES;
 
-				nearest = std::min(nearest, std::hypot(px - ax - t * dx, py - ay - t * dy));
-			}
+					covered += in_rune((px - FROM) / K, (py - FROM) / K);
+				}
 			for (int c = 0; c < 3; c++)
 				row[x * 4 + c] = RUNE_GOLD[c];
-			row[x * 4 + 3] = static_cast<uint8_t>(std::lround(255.0f * std::clamp(RADIUS - nearest + 0.5f, 0.0f, 1.0f)));
+			row[x * 4 + 3] = static_cast<uint8_t>((covered * 255 + SAMPLES * SAMPLES / 2) / (SAMPLES * SAMPLES));
 		}
 	}
 	if (!SDL_SetWindowIcon(window, icon))

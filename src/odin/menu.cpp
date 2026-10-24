@@ -133,6 +133,7 @@ constexpr const char *LICENCES[][3] = {
 	{ "LZMA SDK", "Igor Pavlov", "public domain" },
 	{ "Gamepad drawings", "AL2009man, Gamepad-Asset-Pack", "MIT" },
 	{ "Cozette", "the-moonwitch", "MIT" },
+	{ "Junicode (the rune)", "Peter S. Baker", "OFL 1.1" },
 	{ "Lola Retro (CRT filter)", "Zoki", "MIT" },
 };
 

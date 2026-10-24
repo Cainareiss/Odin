@@ -599,8 +599,9 @@ MenuKit::icon(ImDrawList *list, Icon icon, ImVec2 at, float side, ImU32 colour)
 		list->PathStroke(colour, ImDrawFlags_None, w);
 		break;
 	case Icon::RUNE:
-		for (const auto &[x1, y1, x2, y2] : RUNE_LINES)
-			list->AddLine(p(x1, y1), p(x2, y2), colour, w);
+		for (const auto &[x, y] : RUNE_OUTLINE)
+			list->PathLineTo(p(x, y));
+		list->PathFillConcave(colour);
 		break;
 	}
 }
