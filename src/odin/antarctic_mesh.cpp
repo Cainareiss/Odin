@@ -26,6 +26,7 @@
 #include "odin/antarctic.hpp"
 #include "odin/bytes.hpp"
 
+#include <bit>
 #include <cstring>
 
 namespace odin {
@@ -86,8 +87,11 @@ Antarctic::List::clear()
 			num = 0;
 	view.total_meshes = 0;
 	verts.clear();
+	indices.clear();
 	view.verts.all = verts.data();
 	view.verts.num = 0;
+	view.indices.all = indices.data();
+	view.indices.num = 0;
 }
 
 odin_display_list_t *
@@ -96,6 +100,9 @@ Antarctic::begin_list()
 	m_building = (m_building + 1) % static_cast<unsigned>(m_lists.size());
 	m_list = m_lists[m_building].get();
 	m_list->clear();
+	/* A pivot may outlive the list it was listed in. */
+	for (Vertex &v : m_push.ring)
+		v.changed();
 	return &m_list->view;
 }
 
@@ -181,7 +188,7 @@ Antarctic::begin_mesh(uint32_t addr)
 	m_mesh->poly_alpha = m_s.poly.alpha;
 	m_mesh->polytype = type;
 	m_mesh->addr[0] = addr;
-	m_mesh->first = static_cast<uint32_t>(m_list->verts.size());
+	m_mesh->first_index = static_cast<uint32_t>(m_list->indices.size());
 
 	/* The last vertices stay and take the new material: a strip goes
 	 * on through a recall. The colour bars of the BOOTROM C.R.T. test
@@ -190,7 +197,7 @@ Antarctic::begin_mesh(uint32_t addr)
 	if (m_push.num_verts > 3)
 		m_push.num_verts = 3;
 	for (uint32_t i = 3 - m_push.num_verts; i < 3; i++)
-		copy_material(m_push.tmp[i]);
+		copy_material(tmp(i));
 	m_push.num_tris = 0;
 }
 
@@ -205,6 +212,8 @@ Antarctic::end_mesh(uint32_t addr)
 	m_mesh->num_tris = m_push.num_tris;
 	list.view.verts.all = list.verts.data();
 	list.view.verts.num = static_cast<uint32_t>(list.verts.size());
+	list.view.indices.all = list.indices.data();
+	list.view.indices.num = static_cast<uint32_t>(list.indices.size());
 
 	m_mesh->addr[1] = addr;
 	m_mesh = nullptr;
@@ -218,10 +227,11 @@ clampf(float x, float min_, float max_)
 }
 
 void
-Antarctic::copy_material(Vertex &dst) const
+Antarctic::copy_material(Vertex &dst)
 {
 	const odin_material_t &mat = m_s.mat.scratch;
 
+	dst.changed();
 	for (unsigned i = 0; i < 3; i++)
 		dst.body.diffuse[i] = mat.diffuse[i];
 
@@ -230,8 +240,13 @@ Antarctic::copy_material(Vertex &dst) const
 	 * (825B4DE8), the hardware does not: PHARRIER sends 600 in mode 2
 	 * for the syringe of its nurse and 736 in mode 1 for the selection
 	 * frame of its shop, and the cabinet shows both that much brighter. */
+	if (std::memcmp(m_push.ambient_of, mat.unknown, sizeof(mat.unknown)) != 0) {
+		std::memcpy(m_push.ambient_of, mat.unknown, sizeof(mat.unknown));
+		for (unsigned i = 0; i < 3; i++)
+			m_push.ambient[i] = mat.unknown[i] / 255.0f;
+	}
 	for (unsigned i = 0; i < 3; i++)
-		dst.body.ambient[i] = mat.unknown[i] / 255.0f;
+		dst.body.ambient[i] = m_push.ambient[i];
 
 	/* The 491 colour is in 1/64: PHARRIER sets 0x40 and SGNASCAR goes up
 	 * to 0x7F. The port multiplies it by 4 and wraps to 8 bits (825B4DE8),
@@ -244,7 +259,7 @@ Antarctic::copy_material(Vertex &dst) const
 }
 
 void
-Antarctic::copy_colors(Vertex &dst, const Vertex &src) const
+Antarctic::copy_colors(Vertex &dst, const Vertex &src)
 {
 	copy_material(dst);
 
@@ -260,8 +275,13 @@ void
 Antarctic::copy_texcoords(Vertex &dst, const Vertex &src) const
 {
 	const odin_texhead_t *th = &m_s.tex.scratch;
-	float w = static_cast<float>(16 << odin_tex_logw(th));
-	float h = static_cast<float>(16 << odin_tex_logh(th));
+	/* The texture is 16 << log texels a side, twice as many in I4: the
+	 * coordinates are divided by a power of two, the same as multiplied
+	 * by its inverse, which is exact. */
+	const unsigned i4 = odin_tex_format(th) == ODIN_FORMAT_I4 ? 1 : 0;
+	const auto inverse = [](unsigned log) { return std::bit_cast<float>((127u - log) << 23); };
+	const float inv_w = inverse(4 + odin_tex_logw(th) + i4);
+	const float inv_h = inverse(4 + odin_tex_logh(th) + i4);
 	/* Vertex UVs are 12.4 unless the texhead says whole texels; the 0D1
 	 * offset slot picked by the vertex is added in 1/16 texel (X360
 	 * 8252D710, 82538E70). */
@@ -270,18 +290,31 @@ Antarctic::copy_texcoords(Vertex &dst, const Vertex &src) const
 	float v = src.body.texcoords[1] * k;
 	const uint32_t sel = src.info.uv_offset();
 
-	if (odin_tex_format(th) == ODIN_FORMAT_I4) {
-		w *= 2;
-		h *= 2;
-	}
-
 	if (sel) {
-		u += m_s.texoffset[sel][0] / 16.0f;
-		v += m_s.texoffset[sel][1] / 16.0f;
+		u += m_s.texoffset[sel][0] * (1.0f / 16.0f);
+		v += m_s.texoffset[sel][1] * (1.0f / 16.0f);
 	}
 
-	dst.body.texcoords[0] = u / w;
-	dst.body.texcoords[1] = v / h;
+	dst.body.texcoords[0] = u * inv_w;
+	dst.body.texcoords[1] = v * inv_h;
+	dst.changed();
+}
+
+/* The index of a vertex in the list, which takes it the first time it is
+ * used as it is now. */
+uint32_t
+Antarctic::list_vertex(Vertex &v, unsigned back)
+{
+	std::vector<odin_vertex_body_t> &verts = m_list->verts;
+
+	if (v.listed[back] == NOT_LISTED) {
+		v.listed[back] = static_cast<uint32_t>(verts.size());
+		verts.push_back(v.body);
+		if (back)
+			for (unsigned j = 0; j < 3; j++)
+				verts.back().normal[j] = -verts.back().normal[j];
+	}
+	return v.listed[back];
 }
 
 /* The last three vertices make a triangle of the mesh. */
@@ -291,11 +324,13 @@ Antarctic::add_triangle()
 	if (m_push.num_verts < 3)
 		return;
 
-	const bool both_faces = m_push.tmp[2].info.nocull();
-	std::vector<odin_vertex_body_t> &verts = m_list->verts;
-	const odin_vertex_body_t *a = &m_push.tmp[0].body;
-	const odin_vertex_body_t *b = &m_push.tmp[1].body;
-	const odin_vertex_body_t *c = &m_push.tmp[2].body;
+	const bool both_faces = tmp(2).info.nocull();
+	std::vector<uint32_t> &indices = m_list->indices;
+	Vertex *const va = &tmp(0);
+	Vertex *vb = &tmp(1), *vc = &tmp(2);
+	const odin_vertex_body_t *a = &va->body;
+	const odin_vertex_body_t *b = &vb->body;
+	const odin_vertex_body_t *c = &vc->body;
 	float e1[3], e2[3], n[3];
 
 	/* Bits 19:18 select a UV offset, not two-sided lighting (X360
@@ -321,23 +356,20 @@ Antarctic::add_triangle()
 	 * vertex normals instead (825B6218), but the SGNASCAR cabinet
 	 * shows quads whose normals point away from the viewer (the
 	 * dark panels of its ENTRY DRIVERS screen). */
-	if (m_push.tmp[2].info.winding())
-		std::swap(b, c);
+	if (tmp(2).info.winding())
+		std::swap(vb, vc);
 
-	verts.push_back(*a);
-	verts.push_back(*b);
-	verts.push_back(*c);
+	indices.push_back(list_vertex(*va, 0));
+	indices.push_back(list_vertex(*vb, 0));
+	indices.push_back(list_vertex(*vc, 0));
 	m_push.num_tris += 1;
 
 	/* Both faces (bit 23): the triangle is emitted twice, the
 	 * second time for its back, lit with the reversed normals. */
 	if (both_faces) {
-		verts.push_back(*a);
-		verts.push_back(*c);
-		verts.push_back(*b);
-		for (size_t i = verts.size() - 3; i < verts.size(); i++)
-			for (unsigned j = 0; j < 3; j++)
-				verts[i].normal[j] = -verts[i].normal[j];
+		indices.push_back(list_vertex(*va, 1));
+		indices.push_back(list_vertex(*vc, 1));
+		indices.push_back(list_vertex(*vb, 1));
 		m_push.num_tris += 1;
 	}
 }
@@ -351,26 +383,37 @@ Antarctic::push_vertices(const Vertex *v, uint32_t flags, uint32_t num)
 		fatal("triangle bits not known", v->info.full);
 
 	if (num == 1) {
-		/* Note that tmp[2] always points to the last pushed vertex,
+		/* Note that tmp(2) always points to the last pushed vertex,
 		 * which for instructions 12x, 1Ax and 1Bx means the vertex
 		 * pushed by the instruction itself, and for instructions 0Ex
 		 * and 15x the vertex pushed by the previous "push"
 		 * instruction. */
 
-		/* If the incoming vertex includes the position, push it
-		 * in the temporary buffer, updating it according to the
-		 * p(osition)pivot bit. */
+		/* If the incoming vertex includes the position, it becomes
+		 * the last one, in the slot of the vertex it leaves out: the
+		 * oldest, or the one before the last when the p(osition)pivot
+		 * bit keeps the oldest. */
 		if (flags & PUSH_POS) {
-			/* Do not change the pivot if it is not required */
-			if (!v->info.ppivot())
-				m_push.tmp[0] = m_push.tmp[1];
-			m_push.tmp[1] = m_push.tmp[2];
-			std::memset(&m_push.tmp[2], 0, sizeof(Vertex));
+			uint8_t *const at = m_push.at;
+
+			if (!v->info.ppivot()) {
+				const uint8_t out = at[0];
+
+				at[0] = at[1];
+				at[1] = at[2];
+				at[2] = out;
+			} else {
+				std::swap(at[1], at[2]);
+			}
+			Vertex &last = tmp(2);
+
+			last.info.full = 0;
+			last.body = odin_vertex_body_t{};
 
 			/* Set the position, colors and alpha. */
 			for (unsigned i = 0; i < 3; i++)
-				m_push.tmp[2].body.position[i] = v->body.position[i];
-			copy_colors(m_push.tmp[2], *v);
+				last.body.position[i] = v->body.position[i];
+			copy_colors(last, *v);
 
 			/* Account for the added vertex. */
 			m_push.num_verts += 1;
@@ -379,32 +422,35 @@ Antarctic::push_vertices(const Vertex *v, uint32_t flags, uint32_t num)
 		/* Set the normal. */
 		if (flags & PUSH_NRM)
 			for (unsigned i = 0; i < 3; i++)
-				m_push.tmp[2].body.normal[i] = v->body.normal[i];
+				tmp(2).body.normal[i] = v->body.normal[i];
 
 		/* Bit 12 of the header: the vertex follows the second
 		 * modelview (161 with bit 18). Bits 13 and 14: it takes the
 		 * 3x3 and the last row of its modelview. The vertex shader
 		 * picks the matrix. */
 		if (flags & PUSH_POS)
-			m_push.tmp[2].body.second_mv = static_cast<uint8_t>(
+			tmp(2).body.second_mv = static_cast<uint8_t>(
 				(v->info.second_mv() ? 1 : 0) +
 				(v->info.rotate() ? 0 : 64) +
 				(v->info.translate() ? 0 : 128));
 
 		/* Set the texcoords. */
 		if (flags & PUSH_TXC)
-			copy_texcoords(m_push.tmp[2], *v);
+			copy_texcoords(tmp(2), *v);
+
+		/* Whatever came, the last vertex is not the one listed. */
+		tmp(2).changed();
 	} else {
 		if (m_push.num_verts < 3)
 			return;
 
 		for (unsigned i = 0; i < 3; i++)
-			copy_texcoords(m_push.tmp[2 - i], v[i]);
+			copy_texcoords(tmp(2 - i), v[i]);
 	}
 
 	/* Finish the previous triangle. */
 	if (v[0].info.tricap() == 7) {
-		m_push.tmp[2].info.full = v[0].info.full;
+		tmp(2).info.full = v[0].info.full;
 		add_triangle();
 	}
 }

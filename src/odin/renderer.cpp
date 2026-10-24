@@ -39,7 +39,7 @@ constexpr float INV255 = 1.0f / 255.0f;
 
 Renderer::Renderer(const Memory &memory, const Options &options)
 	: m_gpu(nullptr), m_fb(memory.fb), m_options(options), m_building(nullptr), m_list(nullptr),
-	  m_frame{}, m_textures(memory.texram), m_times(options.times), m_mesh_vao(0), m_mesh_vbo(0),
+	  m_frame{}, m_textures(memory.texram), m_times(options.times), m_mesh_vao(0), m_mesh_vbo(0), m_mesh_ibo(0),
 	  m_program(nullptr), m_variant_key(0), m_drawing(0),
 	  m_scissor_vp_index(~0u), m_bound_tex_index(~0u), m_pass{}, m_again(false),
 	  m_scale(1), m_num_lists(0), m_shown(2), m_next(-1), m_launched(0), m_last{},
@@ -75,6 +75,7 @@ Renderer::~Renderer()
 	if (m_mesh_vao) {
 		glDeleteVertexArrays(1, &m_mesh_vao);
 		glDeleteBuffers(1, &m_mesh_vbo);
+		glDeleteBuffers(1, &m_mesh_ibo);
 	}
 	glDeleteVertexArrays(1, &m_quad_vao);
 	glDeleteBuffers(1, &m_quad_vbo);
@@ -199,7 +200,7 @@ Renderer::prepare_programs(const std::function<void(unsigned, unsigned)> &progre
 
 	if (total)
 		progress(0, total);
-	upload_vertices(none, 3);
+	upload_vertices(none, 3, nullptr, 0);
 	for (unsigned i = 0; i < total; i++) {
 		/* Back from the loading screen, drawn in the window */
 		glBindVertexArray(m_mesh_vao);

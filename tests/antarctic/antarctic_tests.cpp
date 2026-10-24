@@ -98,7 +98,7 @@ struct Machine {
 	}
 	const odin_vertex_body_t &vertex(const odin_mesh_t &m, uint32_t index) const
 	{
-		return list->verts.all[m.first + index];
+		return list->verts.all[list->indices.all[m.first_index + index]];
 	}
 };
 
@@ -190,6 +190,7 @@ void test_strip()
 	      m.vertex(mesh, 2).position[0] == 1.0f, "the first triangle has the first three vertices");
 	check(m.vertex(mesh, 3).position[1] == 1.0f && m.vertex(mesh, 5).position[1] == 1.0f,
 	      "the second triangle starts from the second vertex");
+	check(m.list->verts.num == 4 && m.list->indices.num == 6, "the two triangles share two vertices");
 	check(m.vertex(mesh, 0).diffuse[0] == 0x10 && m.vertex(mesh, 0).diffuse[1] == 0x20 &&
 	      m.vertex(mesh, 0).diffuse[2] == 0x30, "the vertices take the 091 colour");
 	check(m.vertex(mesh, 0).alpha == 0xFF, "vertex alpha FF times polygon alpha FF");
@@ -210,8 +211,8 @@ void test_three_lists()
 	}
 	check(lists[0] != lists[1] && lists[1] != lists[2] && lists[2] != lists[0],
 	      "three frames in a row are built in three lists");
-	check(lists[0]->total_meshes == 1 && lists[0]->verts.all[2].position[1] == 0.0f &&
-	      lists[1]->total_meshes == 1 && lists[1]->verts.all[2].position[1] == 1.0f,
+	check(lists[0]->total_meshes == 1 && lists[0]->verts.all[lists[0]->indices.all[2]].position[1] == 0.0f &&
+	      lists[1]->total_meshes == 1 && lists[1]->verts.all[lists[1]->indices.all[2]].position[1] == 1.0f,
 	      "the lists of the last two frames stay as they are");
 
 	m.cp->reset();
@@ -238,6 +239,8 @@ void test_degenerate_and_both_faces()
 	        0xFF80EFAC, f(1.0f), f(0.0f), f(0.0f),	/* bit 23: both faces */
 	        END });
 	check(n.mesh(1, 0).num_tris == 2, "a triangle with bit 23 is listed for both faces");
+	check(n.list->verts.num == 6 && n.vertex(n.mesh(1, 0), 4).position[0] == 1.0f,
+	      "its back has vertices of its own, in the other order");
 }
 
 /* The colour bars of the BOOTROM C.R.T. test: one strip, a material

@@ -277,7 +277,8 @@ private:
 	void draw_polytype(unsigned vpi, unsigned polytype);
 	void draw_mesh(const odin_mesh_t &mesh);
 	void draw_instance(const odin_mesh_t &mesh, unsigned i);
-	void upload_vertices(const odin_vertex_body_t *vertices, uint32_t num);
+	void upload_vertices(const odin_vertex_body_t *vertices, uint32_t num,
+	                     const uint32_t *indices, uint32_t num_indices);
 	MeshVariant variant_of(const odin_mesh_t &mesh) const;
 	bool is_faded_by_depth(const odin_mesh_t &mesh) const;
 	void use_program(const odin_mesh_t &mesh);
@@ -328,9 +329,9 @@ private:
 	MeshPrograms m_programs;
 	DrawTimes m_times;
 
-	/* The meshes: their vertices, the program in use and what is set
-	 * for the list being drawn */
-	GLuint m_mesh_vao, m_mesh_vbo;
+	/* The meshes: their vertices and the indices of their triangles,
+	 * the program in use and what is set for the list being drawn */
+	GLuint m_mesh_vao, m_mesh_vbo, m_mesh_ibo;
 	MeshProgram *m_program;		/* nullptr: none of the mesh programs */
 	MeshVariant m_variant;		/* of m_program */
 	uint64_t m_variant_key;

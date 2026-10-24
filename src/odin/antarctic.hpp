@@ -346,9 +346,16 @@ private:
 		bool nocull() const { return (full & 0x00800000) != 0; }
 		uint32_t alpha() const { return full >> 24; }
 	};
+	/* Where a vertex is in the vertices of the list: as it is, and with
+	 * its normals reversed for the back of a triangle drawn on both
+	 * faces. NOT_LISTED until it is, and again once it changes. */
+	static constexpr uint32_t NOT_LISTED = ~0u;
 	struct Vertex {
 		VertexInfo info;
 		odin_vertex_body_t body;
+		uint32_t listed[2];
+
+		void changed() { listed[0] = listed[1] = NOT_LISTED; }
 	};
 	/* What a push instruction brings */
 	enum : uint32_t {
@@ -373,14 +380,16 @@ private:
 		uint32_t tables[4][8];
 		std::array<std::array<std::unique_ptr<odin_mesh_t[]>, 8>, 8> meshes;
 		std::vector<odin_vertex_body_t> verts;
+		std::vector<uint32_t> indices;
 	};
 
 	void begin_mesh(uint32_t addr);
 	void end_mesh(uint32_t addr);
 	void list_state(odin_mesh_t &mesh);
-	void copy_material(Vertex &dst) const;
-	void copy_colors(Vertex &dst, const Vertex &src) const;
+	void copy_material(Vertex &dst);
+	void copy_colors(Vertex &dst, const Vertex &src);
 	void copy_texcoords(Vertex &dst, const Vertex &src) const;
+	uint32_t list_vertex(Vertex &v, unsigned back);
 	void add_triangle();
 	void push_vertices(const Vertex *v, uint32_t flags, uint32_t num);
 
@@ -397,11 +406,17 @@ private:
 
 	/* The vertices on their way to triangles: the last three, and the
 	 * number of triangles of the mesh being built, which go straight to
-	 * the vertices of the list. Cleared when a list starts. */
+	 * the list. Cleared when a list starts. The three stay in their slots
+	 * of the ring: `at` tells which is which, the oldest first. */
 	struct {
 		uint32_t num_verts, num_tris;
-		Vertex tmp[3];
+		Vertex ring[3];
+		uint8_t at[3];
+		/* The 691 colour last made a vertex colour, and what it made */
+		uint16_t ambient_of[3];
+		float ambient[3];
 	} m_push;
+	Vertex &tmp(unsigned i) { return m_push.ring[m_push.at[i]]; }
 	odin_mesh_t *m_mesh;	/* being built, or nullptr */
 
 	/* The list being built is one of three, taken in turn */

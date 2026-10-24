@@ -213,7 +213,9 @@ typedef struct {
 
 static inline unsigned odin_lightset_mask (const odin_lightset_t *ls) { return (ls->flags >> ODIN_LIGHTSET_MASK_SHIFT) & 0xF; }
 
-/* 56 bytes, no padding: the renderer uploads the array as it is. */
+/* 56 bytes, no padding: the renderer uploads the array as it is. A vertex
+ * the triangles of a strip or a fan share is there once, as in the X360
+ * port (825B77E8). */
 typedef struct {
 	float position[3];	/* 0x00 */
 	uint8_t diffuse[3];	/* 0x0C */
@@ -227,7 +229,7 @@ typedef struct {
 } odin_vertex_body_t;
 
 typedef struct {
-	uint32_t first;		/* first vertex in the buffer of the frame */
+	uint32_t first_index;	/* of its first triangle, in the indices of the frame */
 	uint32_t num_tris;
 	uint32_t addr[2];
 	uint32_t vp_index;
@@ -270,11 +272,16 @@ typedef struct {
 	uint32_t		 num_meshes[8][8];
 	uint32_t		 total_meshes;
 
-	/* The vertices of all the meshes */
+	/* The vertices of all the meshes, and their triangles: three
+	 * indices each, in the order they are drawn */
 	struct {
 		odin_vertex_body_t	*all;
 		uint32_t		num;
 	} verts;
+	struct {
+		uint32_t		*all;
+		uint32_t		num;
+	} indices;
 } odin_display_list_t;
 
 #define ODIN_LIST_MAX_VIEWPORTS		4096

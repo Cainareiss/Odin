@@ -57,7 +57,14 @@ Antarctic::reset()
 	reg(0x84) = 0xFF;
 	m_push.num_verts = 0;
 	m_push.num_tris = 0;
-	std::memset(m_push.tmp, 0, sizeof(m_push.tmp));
+	std::memset(m_push.ring, 0, sizeof(m_push.ring));
+	for (Vertex &v : m_push.ring)
+		v.changed();
+	for (unsigned i = 0; i < 3; i++)
+		m_push.at[i] = static_cast<uint8_t>(i);
+	/* 0 makes 0.0 */
+	std::memset(m_push.ambient_of, 0, sizeof(m_push.ambient_of));
+	std::memset(m_push.ambient, 0, sizeof(m_push.ambient));
 	m_mesh = nullptr;
 	/* The other lists are the renderer's until their turn comes. */
 	m_list->clear();

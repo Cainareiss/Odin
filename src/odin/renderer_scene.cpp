@@ -405,8 +405,8 @@ Renderer::draw_instance(const odin_mesh_t &mesh, unsigned i)
 		glUniform1ui(m_program->locs.order, m_pass.order);
 		m_pass.order += mesh.num_tris;
 	}
-	glDrawArrays(GL_TRIANGLES, static_cast<GLint>(mesh.first),
-	             static_cast<GLsizei>(mesh.num_tris * 3));
+	glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(mesh.num_tris * 3), GL_UNSIGNED_INT,
+	               reinterpret_cast<const void *>(size_t{mesh.first_index} * sizeof(uint32_t)));
 }
 
 void
@@ -483,9 +483,11 @@ Renderer::draw_mesh(const odin_mesh_t &mesh)
 	gl::check("a mesh");
 }
 
-/* Uploads the vertices of a list, once, before its meshes are drawn. */
+/* Uploads the vertices of a list and the indices of its triangles, once,
+ * before its meshes are drawn. */
 void
-Renderer::upload_vertices(const odin_vertex_body_t *vertices, uint32_t num)
+Renderer::upload_vertices(const odin_vertex_body_t *vertices, uint32_t num,
+                          const uint32_t *indices, uint32_t num_indices)
 {
 	const auto attribute = [](GLuint index, GLint size, GLenum type, GLboolean normalized,
 	                          size_t offset) {
@@ -497,6 +499,7 @@ Renderer::upload_vertices(const odin_vertex_body_t *vertices, uint32_t num)
 	if (!m_mesh_vao) {
 		glGenVertexArrays(1, &m_mesh_vao);
 		glGenBuffers(1, &m_mesh_vbo);
+		glGenBuffers(1, &m_mesh_ibo);
 	}
 
 	glBindVertexArray(m_mesh_vao);
@@ -504,6 +507,11 @@ Renderer::upload_vertices(const odin_vertex_body_t *vertices, uint32_t num)
 	glBufferData(GL_ARRAY_BUFFER,
 	             static_cast<GLsizeiptr>(sizeof(odin_vertex_body_t) * num),
 	             vertices, GL_DYNAMIC_DRAW);
+	/* The vertex array keeps the buffer of the indices. */
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_mesh_ibo);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER,
+	             static_cast<GLsizeiptr>(sizeof(uint32_t) * num_indices),
+	             indices, GL_DYNAMIC_DRAW);
 
 	/* The locations of the mesh vertex shader */
 	attribute(0, 3, GL_FLOAT, GL_FALSE, offsetof(odin_vertex_body_t, position));
@@ -647,7 +655,7 @@ Renderer::draw_scene()
 		return;
 
 	m_times.part(DrawTimes::PART_VERTICES);
-	upload_vertices(m_list->verts.all, m_list->verts.num);
+	upload_vertices(m_list->verts.all, m_list->verts.num, m_list->indices.all, m_list->indices.num);
 
 	glViewport(0, 0, static_cast<GLsizei>(width()), static_cast<GLsizei>(height()));
 

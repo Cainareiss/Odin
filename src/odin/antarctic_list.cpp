@@ -122,8 +122,9 @@ odin_display_list_fingerprint(const odin_display_list_t *list,
 			modelviews.add(list->mv_list[m.mv_index + j].mtx);
 		modelviews.add(list->mv_list[m.mv2_index].mtx);
 
-		vertices.bytes(&list->verts.all[m.first],
-		               size_t{m.num_tris} * 3 * sizeof(odin_vertex_body_t));
+		/* The vertices of each triangle in turn, as they are drawn */
+		for (uint32_t k = 0; k < m.num_tris * 3; k++)
+			vertices.add(list->verts.all[list->indices.all[m.first_index + k]]);
 
 		const uint64_t viewport = hash_viewport(list->vp_list[m.vp_index]);
 		const uint64_t material = hash_material(list->mat_list[m.mat_index]);
