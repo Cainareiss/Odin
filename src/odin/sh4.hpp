@@ -534,6 +534,7 @@ private:
 	[[noreturn]] void fatal(const char *what, uint32_t value) const;
 
 	/* Memory, see read() and write() below. */
+	bool past_slice(int32_t bus) const;
 	bool read_slow(const Sh4Op *op, uint32_t addr, uint32_t size, uint64_t &value);
 	bool write_slow(const Sh4Op *op, uint32_t addr, uint32_t size, uint64_t value);
 	bool read_any(uint32_t addr, uint32_t size, uint64_t &value);

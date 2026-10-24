@@ -455,11 +455,23 @@ bool Sh4::write_any(uint32_t addr, uint32_t size, uint64_t value)
 	return m_bus.write(addr & PHYSICAL, size, value);
 }
 
+/* After `bus` cycles of the bus taken in a block: true when they take it
+ * past the end of its slice (a block cut where the slice ends, run_cut(),
+ * is there already). A quiet access then leaves it as a loud one does,
+ * and the run loop cuts what is left where the slice ends. */
+bool Sh4::past_slice(int32_t bus) const
+{
+	return bus > 0 && m_remaining < 0;
+}
+
 /* True when the program may go on in its block: an on-chip module
- * answered, and neither an interrupt nor the machine came into it. The
- * run loop clears m_event before a block. */
+ * answered, neither an interrupt nor the machine came into it, and the
+ * bus did not take it past its slice. The run loop clears m_event before
+ * a block. */
 bool Sh4::read_slow(const Sh4Op *op, uint32_t addr, uint32_t size, uint64_t &value)
 {
+	int32_t bus = 0;
+
 	/* The machine may look at PC while the bus answers. In a delay slot
 	 * it holds the target of the branch. */
 	if (!(op->flags & OP_SLOT)) {
@@ -468,7 +480,8 @@ bool Sh4::read_slow(const Sh4Op *op, uint32_t addr, uint32_t size, uint64_t &val
 	m_touched = true;
 	m_at = time_at(op);
 	if (addr < 0xE0000000 && !m_rd[addr >> PAGE_BITS]) {
-		m_remaining -= static_cast<int32_t>(mpx_cycles(addr, false));
+		bus = static_cast<int32_t>(mpx_cycles(addr, false));
+		m_remaining -= bus;
 	}
 	if (!read_any(addr, size, value)) {
 		value = 0;
@@ -478,11 +491,13 @@ bool Sh4::read_slow(const Sh4Op *op, uint32_t addr, uint32_t size, uint64_t &val
 	if (m_clock_note.on) [[unlikely]] {
 		clock_noted_slow(addr, size, value);
 	}
-	return !m_event;
+	return !m_event && !past_slice(bus);
 }
 
 bool Sh4::write_slow(const Sh4Op *op, uint32_t addr, uint32_t size, uint64_t value)
 {
+	int32_t bus = 0;
+
 	if (!(op->flags & OP_SLOT)) {
 		m_r.pc = pc_of(op);
 	}
@@ -492,13 +507,14 @@ bool Sh4::write_slow(const Sh4Op *op, uint32_t addr, uint32_t size, uint64_t val
 		m_clock_note.bad = true;
 	}
 	if (addr < 0xE0000000 && !m_wr[addr >> PAGE_BITS]) {
-		m_remaining -= static_cast<int32_t>(mpx_cycles(addr, true));
+		bus = static_cast<int32_t>(mpx_cycles(addr, true));
+		m_remaining -= bus;
 	}
 	if (!write_any(addr, size, value)) {
 		outside();
 		m_bus.unanswered(true, addr, size, value);
 	}
-	return !m_event;
+	return !m_event && !past_slice(bus);
 }
 
 /* Blocks */

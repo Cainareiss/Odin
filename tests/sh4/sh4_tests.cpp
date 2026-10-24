@@ -1324,6 +1324,39 @@ void test_quiet_page()
 		check(differ == 0, "program " + std::to_string(seed) + ": the same with the device quiet");
 	}
 	check(accesses > 5000, "the programs did use the device");
+	accesses = 0;
+	for (uint32_t seed = 1; seed <= 16; seed++) {
+		/* The same with the bus taking cycles for each access to the
+		 * device (MPX, AnW 3): a quiet access that takes the block past
+		 * the end of its slice ends the slice where a loud one does. */
+		Machine plain, quiet;
+		unsigned differ = 0;
+
+		for (Machine *m : { &plain, &quiet }) {
+			with_device(*m);
+			m->set_reg32(0xFF800000, 0xA3020008);
+			m->set_reg32(0xFF80000C, 0x00006000 | (3u << 7));
+			random_program(*m, 300 + 40 * (seed % 8), seed * 104729u);
+		}
+		quiet.cpu.map_quiet(DEVICE >> Sh4::PAGE_BITS);
+		for (uint32_t done = 0, series = seed; done < 40000 && differ == 0;) {
+			series = series * 1664525u + 1013904223u;
+			const uint32_t cycles = 1 + (series >> 8) % 900;
+			const int32_t over_plain = plain.cpu.run(static_cast<int32_t>(cycles));
+			const int32_t over_quiet = quiet.cpu.run(static_cast<int32_t>(cycles));
+			const Sh4State a = plain.state(), b = quiet.state();
+
+			done += cycles;
+			if (over_plain != over_quiet || std::memcmp(&a, &b, sizeof(a)) != 0 || plain.ram != quiet.ram ||
+			    plain.onchip != quiet.onchip || plain.seen != quiet.seen ||
+			    plain.device.size() != quiet.device.size()) {
+				differ++;
+			}
+		}
+		accesses += quiet.device.size();
+		check(differ == 0, "program " + std::to_string(seed) + ": the same with the device quiet and the bus slow");
+	}
+	check(accesses > 5000, "the programs did use the slow device");
 	{
 		/* A loop that waits for a quiet device is run in full: mov.l
 		 * @r12, r0 / tst r0, r0 / bt the read; then mov #7, r1. The
