@@ -1345,6 +1345,51 @@ void test_quiet_page()
 	}
 }
 
+void test_others_write()
+{
+	g_test = "others write";
+	for (int k = 0; k < 5; k++) {
+		/* mov #1,r1 / add r1,r4 / dt r5 / bf back: each turn adds r1 to
+		 * r4. Then mov #2,r1 is put in its place by someone else, who
+		 * tells the CPU (k = 1), tells it of another page (k = 2), writes
+		 * a page the CPU holds as shared, without a word (k = 3), or
+		 * loads a state with the memory (k = 4).
+		 * The slices are long enough for the block to be kept, and end
+		 * in blocks decoded again (fewer cycles than a block may take). */
+		Machine m;
+
+		if (k == 3) {
+			m.cpu.map_shared(CODE >> Sh4::PAGE_BITS);
+		}
+		m.code(CODE, {0xE101, 0x341C, 0x4510, 0x8BFB, 0xAFFE, NOP});
+		Sh4State st = m.state();
+		st.r[5] = 1000;
+		m.cpu.load(st);
+		m.cpu.run(300);
+		const Sh4State first = m.state();
+		m.put16(CODE, 0xE102);
+		if (k == 1) {
+			m.cpu.written(CODE, 2);
+		} else if (k == 2) {
+			m.cpu.written(DATA, 0x100);
+		} else if (k == 4) {
+			m.cpu.load(first);
+		}
+		m.cpu.run(300);
+		const Sh4State second = m.state();
+		const uint32_t turns = first.r[5] - second.r[5], added = second.r[4] - first.r[4];
+
+		check(first.r[4] == 1000 - first.r[5] && turns > 50, "the first version went round");
+		if (k == 0 || k == 2) {
+			check(added < 2 * turns, std::string(k == 0 ? "not told" : "told of another page") +
+			                         ": the code as compared, until the end of the slice");
+		} else {
+			eq(k == 1 ? "told: each turn the new code" : k == 3 ? "a shared page: each turn the new code" :
+			   "a state loaded: each turn the new code", added, 2 * turns);
+		}
+	}
+}
+
 void test_hook()
 {
 	g_test = "hook";
@@ -1664,6 +1709,12 @@ void test_dmac_blocks()
 			same = m.spans[i].write && m.spans[i].addr == starts[i];
 		}
 		check(same, "RAM to the window: a span of the window asked for where each run starts");
+		same = m.spans_written.size() == starts.size();
+		for (size_t i = 0; same && i < starts.size(); i++) {
+			same = m.spans_written[i].addr == starts[i] &&
+			       m.spans_written[i].size == (i + 1 < starts.size() ? starts[i + 1] : dst + bytes) - starts[i];
+		}
+		check(same, "RAM to the window: the bus told of each run written into a span");
 		eq("RAM to the window: SAR2", m.reg32(0xFFA00020), src + bytes);
 		eq("RAM to the window: DAR2", m.reg32(0xFFA00024), dst + bytes);
 		eq("RAM to the window: TCR2", m.reg32(0xFFA00028), 0);
@@ -2148,6 +2199,7 @@ int main(int argc, char **argv)
 	test_blocks_resumed();
 	test_blocks_found_again();
 	test_quiet_page();
+	test_others_write();
 	test_hook();
 	test_save_load();
 	test_store_queues();

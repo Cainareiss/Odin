@@ -94,6 +94,7 @@ public:
 	unsigned window_by_bus = 0;	/* accesses to the window the bus took */
 	size_t span_limit = 0;		/* the longest span of the window, 0 for none */
 	std::vector<Access> spans;	/* the spans asked for: write, address */
+	std::vector<Access> spans_written;	/* told after a write into a span: address, size */
 	std::vector<uint32_t> seen;	/* what a test notes */
 	unsigned ram_by_bus = 0;	/* accesses to the RAM the bus took */
 	uint32_t rom = 0;		/* a page of the RAM whose writes the bus drops */
@@ -172,6 +173,10 @@ public:
 	}
 	std::span<const uint8_t> read_span(uint32_t addr) override { return window_span(false, addr); }
 	std::span<uint8_t> write_span(uint32_t addr) override { return window_span(true, addr); }
+	void span_written(uint32_t addr, size_t size) override
+	{
+		spans_written.push_back({true, addr, static_cast<uint32_t>(size), 0});
+	}
 	std::span<uint8_t> window_span(bool is_write, uint32_t addr)
 	{
 		if (!span_limit || addr < WINDOW || addr >= WINDOW + window.size()) {

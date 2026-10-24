@@ -301,6 +301,9 @@ uint32_t Sh4::dmac_copy(uint32_t sar, uint32_t dar, uint32_t unit, uint32_t coun
 			std::memcpy(to.data() + i, &value, piece);
 		}
 	}
+	if (!wp) {
+		m_bus.span_written(dar & PHYSICAL, bytes);
+	}
 	return n;
 }
 

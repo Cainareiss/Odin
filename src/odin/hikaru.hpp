@@ -170,6 +170,7 @@ private:
 		bool write(uint32_t addr, uint32_t size, uint64_t value) override;
 		std::span<const uint8_t> read_span(uint32_t addr) override;
 		std::span<uint8_t> write_span(uint32_t addr) override;
+		void span_written(uint32_t addr, size_t size) override;
 		uint16_t port_a_read() override;
 		void port_a_write(uint16_t pins) override;
 		void unanswered(bool is_write, uint32_t addr, uint32_t size, uint64_t value) override;
@@ -230,6 +231,7 @@ private:
 	void texram_store(unsigned bank, uint32_t offs, unsigned size, uint64_t value, bool twiddled);
 	std::span<const uint8_t> bus_span(uint32_t bus_addr) const;
 	std::span<uint8_t> bus_ram(uint32_t bus_addr);
+	void ram_written(uint32_t bus_addr, size_t size);
 	SoundBoard *wave_board(uint32_t bus_addr);
 	/* MemCtl::Host: the external bus */
 	bool bus_read(uint32_t bus_addr, unsigned size, uint64_t &value) override;

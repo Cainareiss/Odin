@@ -104,6 +104,13 @@ public:
 		(void)addr;
 		return {};
 	}
+	/* After `size` bytes were written into a span of write_span() from
+	 * addr on: whatever has them in its pages is told. */
+	virtual void span_written(uint32_t addr, size_t size)
+	{
+		(void)addr;
+		(void)size;
+	}
 	/* The 16 pins of port A. */
 	virtual uint16_t port_a_read() = 0;
 	virtual void port_a_write(uint16_t pins) = 0;
@@ -170,6 +177,13 @@ public:
 	/* The same for `count` pages from `first`, or, quiet false, those
 	 * pages no longer quiet. */
 	void set_quiet(uint32_t first, uint32_t count, bool quiet);
+	/* Others write that page in place too: the code compared on it is
+	 * compared again at each slice. Until the page is mapped again. */
+	void map_shared(uint32_t page);
+	/* Others wrote the plain memory of this CPU, `size` bytes from the
+	 * physical address `addr` on: the code compared there is compared
+	 * again before it runs. */
+	void written(uint32_t addr, size_t size);
 
 	/* Runs whole instructions for `cycles` cycles; a branch and its
 	 * delay slot are never split. Returns the cycles run past the end. */
@@ -739,6 +753,8 @@ private:
 	std::vector<const uint8_t *> m_rd;
 	std::vector<uint8_t *> m_wr;
 	std::vector<uint8_t> m_quiet;	/* by physical page, see map_quiet() */
+	std::vector<uint8_t> m_shared;	/* by physical page, see map_shared() */
+	bool m_shared_code;		/* code on a shared page compared in this epoch */
 
 	/* The blocks: page of the entry address, then its rank in the page.
 	 * m_ops and m_words never move: they are dropped before they would

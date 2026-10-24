@@ -75,7 +75,7 @@ Sh4::Sh4(Sh4Bus &bus, std::span<uint8_t> onchip, bool master, bool little_endian
 	  m_r{}, m_run(Sh4Run::Stopped), m_remaining(0), m_over(0),
 	  m_blk(nullptr), m_resumed(false), m_epoch(1), m_code_epoch(PHYSICAL_PAGES, 0),
 	  m_rd(1u << (32 - PAGE_BITS), nullptr), m_wr(1u << (32 - PAGE_BITS), nullptr),
-	  m_quiet(PHYSICAL_PAGES, 0),
+	  m_quiet(PHYSICAL_PAGES, 0), m_shared(PHYSICAL_PAGES, 0), m_shared_code(false),
 	  m_page_of(1u << (32 - PAGE_BITS), 0),
 	  m_near(NEAR_SIZE, Block{1, 0, 0, nullptr, nullptr, nullptr, 0, 0}),
 	  m_translate(false), m_hook_on(false), m_hook_addr(0),
@@ -153,6 +153,7 @@ void Sh4::map_page(uint32_t page, const uint8_t *read, uint8_t *write)
 		m_wr[mirror * PHYSICAL_PAGES + page] = write;
 	}
 	m_quiet[page] = 0;
+	m_shared[page] = 0;
 	if (read) {
 		share_page(read, page);
 	}
@@ -173,6 +174,28 @@ void Sh4::set_quiet(uint32_t first, uint32_t count, bool quiet)
 {
 	if (first < PHYSICAL_PAGES) {
 		std::fill_n(m_quiet.begin() + first, std::min(count, PHYSICAL_PAGES - first), quiet ? 1 : 0);
+	}
+}
+
+void Sh4::map_shared(uint32_t page)
+{
+	if (page < PHYSICAL_PAGES) {
+		m_shared[page] = 1;
+	}
+}
+
+void Sh4::written(uint32_t addr, size_t size)
+{
+	if (size == 0) {
+		return;
+	}
+	const uint32_t first = addr >> PAGE_BITS, last = static_cast<uint32_t>((addr + size - 1) >> PAGE_BITS);
+
+	for (uint32_t page = first; page <= last; page++) {
+		if (m_code_epoch[page & (PHYSICAL_PAGES - 1)] == m_epoch) {
+			new_epoch();
+			return;
+		}
 	}
 }
 
@@ -508,8 +531,14 @@ bool Sh4::wrote_code(const uint8_t *p, size_t size)
 void Sh4::guard_code(const Block &b)
 {
 	if (b.code) {
-		m_code_epoch[(b.pc >> PAGE_BITS) & (PHYSICAL_PAGES - 1)] = m_epoch;
-		m_code_epoch[((b.pc + b.words * 2u - 1) >> PAGE_BITS) & (PHYSICAL_PAGES - 1)] = m_epoch;
+		const uint32_t first = (b.pc >> PAGE_BITS) & (PHYSICAL_PAGES - 1);
+		const uint32_t last = ((b.pc + b.words * 2u - 1) >> PAGE_BITS) & (PHYSICAL_PAGES - 1);
+
+		m_code_epoch[first] = m_epoch;
+		m_code_epoch[last] = m_epoch;
+		if (m_shared[first] || m_shared[last]) {
+			m_shared_code = true;
+		}
 	}
 }
 
@@ -982,7 +1011,12 @@ int32_t Sh4::run_part(int32_t cycles, int32_t &used)
 	m_retime = false;
 	m_remaining = cycles - owed;
 	m_over = 0;
-	new_epoch();
+	/* Others write the shared pages in place, between the slices; what
+	 * they write elsewhere they tell, see written(). */
+	if (m_shared_code) {
+		m_shared_code = false;
+		new_epoch();
+	}
 	m_wait.period = 4;
 	m_wait.pass = 0;
 	m_wait.busy = 0;
@@ -1065,6 +1099,8 @@ void Sh4::save(Sh4State &out) const
  * FPSCR put them. */
 void Sh4::load(const Sh4State &in)
 {
+	/* The memories are loaded with it */
+	new_epoch();
 	clock_forget();
 	std::copy(std::begin(in.r), std::end(in.r), std::begin(m_r.r));
 	m_r.pc = in.pc;

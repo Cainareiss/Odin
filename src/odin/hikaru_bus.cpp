@@ -146,6 +146,19 @@ Hikaru::map_pages()
 	map(*m_sh[MASTER], 0x1B000000, 0x1B800000, m_fb, 0x007FFFFF, true, true);
 	map(*m_sh[SLAVE], 0x10001000, 0x10400000, m_cmdram, 0x003FFFFF, true, true);
 
+	/* Others write these in place too: the command RAM (the other SH-4,
+	 * the command processor), the frame buffer (the 2D chip) and the
+	 * backup RAM (the seat of a linked cabinet). What the bus writes in
+	 * the RAM of a SH-4, it tells: ram_written(). */
+	const auto shared = [page_size](Sh4 &cpu, uint32_t first, uint32_t last) {
+		for (uint32_t addr = first; addr < last; addr += page_size)
+			cpu.map_shared(addr / page_size);
+	};
+	shared(*m_sh[MASTER], 0x00C00000, 0x00C10000);
+	shared(*m_sh[MASTER], 0x14001000, 0x14400000);
+	shared(*m_sh[MASTER], 0x1B000000, 0x1B800000);
+	shared(*m_sh[SLAVE], 0x10001000, 0x10400000);
+
 	/* The window of the master on the MIE and its bus request register,
 	 * which the games poll all along: the MIE has no way to the memory
 	 * of the master, see mie_read() and mie_write(). */
@@ -893,7 +906,19 @@ Hikaru::bus_copy(uint32_t src, uint32_t dst, uint32_t words)
 		std::memcpy(&word, &from[4 * i], 4);
 		std::memcpy(&to[4 * i], &word, 4);
 	}
+	ram_written(dst, 4 * size_t{n});
 	return n;
+}
+
+/* The RAM of a SH-4 written by the bus: that CPU is told, see
+ * Sh4::written(). The command RAM is shared, see map_pages(). */
+void
+Hikaru::ram_written(uint32_t bus_addr, size_t size)
+{
+	if (bus_addr >= 0x40000000 && bus_addr <= 0x41FFFFFF)
+		m_sh[SLAVE]->written(0x0C000000 | (bus_addr & 0x01FFFFFF), size);
+	else if (bus_addr >= 0x70000000 && bus_addr <= 0x71FFFFFF)
+		m_sh[MASTER]->written(0x0C000000 | (bus_addr & 0x01FFFFFF), size);
 }
 
 bool
@@ -928,10 +953,12 @@ Hikaru::bus_write(uint32_t bus_addr, unsigned size, uint64_t value)
 		log = true;
 	} else if (bus_addr >= 0x40000000 && bus_addr <= 0x41FFFFFF) {
 		store(m_ram[SLAVE], bus_addr & 0x01FFFFFF, size, value);
+		ram_written(bus_addr, size);
 	} else if (bus_addr >= 0x48000000 && bus_addr <= 0x483FFFFF) {
 		store(m_cmdram, bus_addr & 0x003FFFFF, size, value);
 	} else if (bus_addr >= 0x70000000 && bus_addr <= 0x71FFFFFF) {
 		store(m_ram[MASTER], bus_addr & 0x01FFFFFF, size, value);
+		ram_written(bus_addr, size);
 	} else if (!m_rombd.write(bus_addr, size, value)) {
 		cpu_error("MEMCTL W%u %08X = %" PRIX64, size * 8, bus_addr, value);
 		return false;
@@ -974,6 +1001,13 @@ Hikaru::Bus::write_span(uint32_t addr)
 	if (m_which == MASTER && master_window(addr))
 		return m_board.m_memctl[MASTER].write_span(addr);
 	return {};
+}
+
+void
+Hikaru::Bus::span_written(uint32_t addr, size_t size)
+{
+	if (m_which == MASTER && master_window(addr))
+		m_board.ram_written((m_board.m_memctl[MASTER].window_page(addr) << 24) | (addr & 0xFFFFFF), size);
 }
 
 /*
