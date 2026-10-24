@@ -292,6 +292,7 @@ private:
 	void upload_lightset(const odin_mesh_t &mesh);
 	void set_material_blend(const odin_mesh_t &mesh);
 	void set_opaque_blend(const odin_mesh_t &mesh);
+	void set_blend(GLenum src, GLenum dst, GLenum src_alpha, GLenum dst_alpha);
 	std::vector<GLuint> &tex_ids();
 
 	/* renderer_translucent.cpp */
@@ -342,6 +343,9 @@ private:
 	uint32_t m_drawing;		/* counts the lists drawn, see forget_held */
 	uint32_t m_scissor_vp_index;	/* of the list being drawn */
 	uint32_t m_bound_tex_index;	/* of the list being drawn, on the unit 0 */
+	/* What the meshes have bound and set, ~0u when not known */
+	GLuint m_unit0_texture, m_unit0_sampler;
+	GLenum m_blend[4];
 	Pass m_pass;
 	/* The list is drawn again, see check_last_list */
 	bool m_again;

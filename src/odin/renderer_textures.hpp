@@ -25,6 +25,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <span>
+#include <unordered_map>
 #include <vector>
 
 #include <GL/glew.h>
@@ -59,6 +60,9 @@ public:
 
 	/* Wrap and filter of the texture bound on the active unit. */
 	static void set_sampling(const odin_texhead_t &th);
+	/* A sampler object with them, and the anisotropy: made once for each
+	 * that the texheads have. */
+	GLuint sampler(const odin_texhead_t &th);
 
 	/* A texture the graphics card may still be drawing with is not
 	 * deleted at once: the driver would wait for the card, and the list
@@ -111,6 +115,8 @@ private:
 	std::vector<GLuint> m_dead;
 	bool m_no_mipmaps;
 	unsigned m_anisotropy;
+	/* By wrap, filter and byte of the 0C1 */
+	std::unordered_map<uint32_t, GLuint> m_samplers;
 	FILE *m_log;
 };
 

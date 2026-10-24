@@ -329,16 +329,30 @@ Renderer::upload_texture(const odin_mesh_t &mesh)
 		const bool decoded = m_times.on() && !m_textures.holds(th);
 		const DrawTimes::Part part = decoded ? m_times.part(DrawTimes::PART_TEXTURES) : DrawTimes::NUM_PARTS;
 
+		/* A texture decoded is left bound. */
+		if (!m_textures.holds(th))
+			m_unit0_texture = ~0u;
 		id = m_textures.get(th);
 		tex_ids()[mesh.tex_index] = id;
 		if (decoded)
 			m_times.part(part);
 	}
 
-	glActiveTexture(GL_TEXTURE0 + 0);
-	glBindTexture(GL_TEXTURE_2D, id);
-	if (id)
-		TextureCache::set_sampling(th);
+	if (m_unit0_texture != id) {
+		m_unit0_texture = id;
+		glActiveTexture(GL_TEXTURE0 + 0);
+		glBindTexture(GL_TEXTURE_2D, id);
+	}
+	/* The sampling belongs to the texhead: two texheads may read the
+	 * same texture with another wrap or filter. */
+	if (id) {
+		const GLuint sampler = m_textures.sampler(th);
+
+		if (m_unit0_sampler != sampler) {
+			m_unit0_sampler = sampler;
+			glBindSampler(0, sampler);
+		}
+	}
 }
 
 void
@@ -424,8 +438,6 @@ Renderer::draw_mesh(const odin_mesh_t &mesh)
 	if (logging())
 		log_mesh(mesh);
 
-	glBindVertexArray(m_mesh_vao);
-
 	use_program(mesh);
 	const MeshProgram::Locations &locs = m_program->locs;
 	MeshProgram::Held &held = m_program->held;
@@ -478,9 +490,6 @@ Renderer::draw_mesh(const odin_mesh_t &mesh)
 	for (unsigned i = 0; i < mesh.num_instances; i++)
 		draw_instance(mesh, i);
 	m_times.mesh(mesh.num_tris * mesh.num_instances);
-
-	glBindVertexArray(0);
-	gl::check("a mesh");
 }
 
 /* Uploads the vertices of a list and the indices of its triangles, once,
@@ -549,8 +558,7 @@ Renderer::set_material_blend(const odin_mesh_t &mesh)
 		mode = odin_mat_blending_mode(&m_list->mat_list[mesh.mat_index]);
 	m_pass.blend_mode = mode;
 	m_pass.weigh_by_alpha = (mode == 0 || mode == 2);
-	glBlendFuncSeparate(factors[mode][0], factors[mode][1],
-	                    factors[mode][2], factors[mode][3]);
+	set_blend(factors[mode][0], factors[mode][1], factors[mode][2], factors[mode][3]);
 }
 
 /* The passes that do not blend replace the pixel and cover what is below the
@@ -559,10 +567,22 @@ void
 Renderer::set_opaque_blend(const odin_mesh_t &mesh)
 {
 	if (is_faded_by_depth(mesh))
-		glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA,
-		                    GL_ZERO, GL_ONE_MINUS_SRC_ALPHA);
+		set_blend(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE_MINUS_SRC_ALPHA);
 	else
-		glBlendFuncSeparate(GL_ONE, GL_ZERO, GL_ZERO, GL_ZERO);
+		set_blend(GL_ONE, GL_ZERO, GL_ZERO, GL_ZERO);
+}
+
+/* The blend factors, sent when they change */
+void
+Renderer::set_blend(GLenum src, GLenum dst, GLenum src_alpha, GLenum dst_alpha)
+{
+	if (m_blend[0] == src && m_blend[1] == dst && m_blend[2] == src_alpha && m_blend[3] == dst_alpha)
+		return;
+	m_blend[0] = src;
+	m_blend[1] = dst;
+	m_blend[2] = src_alpha;
+	m_blend[3] = dst_alpha;
+	glBlendFuncSeparate(src, dst, src_alpha, dst_alpha);
 }
 
 void
@@ -591,7 +611,8 @@ Renderer::draw_polytype(unsigned vpi, unsigned polytype)
 	 * The alpha of the color buffer holds what the 3D lets through: the
 	 * passes that do not blend write 0 there. */
 	glEnable(GL_BLEND);
-	glBlendFuncSeparate(GL_ONE, GL_ZERO, GL_ZERO, GL_ZERO);
+	m_blend[0] = ~0u;
+	set_blend(GL_ONE, GL_ZERO, GL_ZERO, GL_ZERO);
 	m_pass.weigh_by_alpha = false;
 
 	switch (polytype) {
@@ -626,6 +647,7 @@ Renderer::draw_polytype(unsigned vpi, unsigned polytype)
 		return;
 	}
 
+	glBindVertexArray(m_mesh_vao);
 	for (unsigned j = 0; j < num; j++) {
 		if (polytype == ODIN_POLYTYPE_BACKGROUND)
 			set_material_blend(meshes[j]);
@@ -633,6 +655,7 @@ Renderer::draw_polytype(unsigned vpi, unsigned polytype)
 			set_opaque_blend(meshes[j]);
 		draw_mesh(meshes[j]);
 	}
+	gl::check("a polygon type");
 }
 
 void
@@ -685,6 +708,10 @@ Renderer::draw_scene()
 			draw_polytype(vpi, polytype);
 	}
 
+	/* What the meshes left bound is the 2D drawing's then. */
+	glBindVertexArray(0);
+	glBindSampler(0, 0);
+	m_unit0_sampler = 0;
 	glDepthMask(GL_TRUE);
 	glDisable(GL_SCISSOR_TEST);
 	glFrontFace(GL_CCW);

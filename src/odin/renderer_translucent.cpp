@@ -191,6 +191,7 @@ Renderer::draw_translucent(unsigned vpi, const odin_mesh_t *meshes, unsigned num
 		glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
 
 		m_pass.order = 0;
+		glBindVertexArray(m_mesh_vao);
 		for (unsigned j = 0; j < num; j++) {
 			set_material_blend(meshes[j]);
 			draw_mesh(meshes[j]);

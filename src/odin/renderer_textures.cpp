@@ -69,6 +69,8 @@ TextureCache::~TextureCache()
 {
 	invalidate(-1);
 	delete_dead();
+	for (const auto &[key, id] : m_samplers)
+		glDeleteSamplers(1, &id);
 }
 
 void
@@ -128,6 +130,50 @@ TextureCache::set_sampling(const odin_texhead_t &th)
 	 * stands here. */
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_LOD_BIAS,
 	                -0.5f + static_cast<float>(odin_tex_bias(&th)) * 0.125f);
+}
+
+/* The same as set_sampling and the anisotropy of decode, in a sampler: bound
+ * on a unit it stands for them, one call where they are six. */
+GLuint
+TextureCache::sampler(const odin_texhead_t &th)
+{
+	const uint32_t key = (odin_tex_mirroru(&th) << 0) | (odin_tex_repeatu(&th) << 1) |
+	                     (odin_tex_mirrorv(&th) << 2) | (odin_tex_repeatv(&th) << 3) |
+	                     (odin_tex_filter(&th) << 4) | ((th.w0C1 >> 20 & 0xFF) << 6);
+	const auto found = m_samplers.find(key);
+
+	if (found != m_samplers.end())
+		return found->second;
+
+	GLuint id;
+
+	glGenSamplers(1, &id);
+	glSamplerParameteri(id, GL_TEXTURE_WRAP_S,
+	                    odin_tex_mirroru(&th) ? GL_MIRRORED_REPEAT :
+	                    odin_tex_repeatu(&th) ? GL_REPEAT : GL_CLAMP_TO_EDGE);
+	glSamplerParameteri(id, GL_TEXTURE_WRAP_T,
+	                    odin_tex_mirrorv(&th) ? GL_MIRRORED_REPEAT :
+	                    odin_tex_repeatv(&th) ? GL_REPEAT : GL_CLAMP_TO_EDGE);
+	switch (odin_tex_filter(&th)) {
+	case 0:
+		glSamplerParameteri(id, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glSamplerParameteri(id, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		break;
+	case 2:
+		glSamplerParameteri(id, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glSamplerParameteri(id, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		break;
+	default:
+		glSamplerParameteri(id, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glSamplerParameteri(id, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+		break;
+	}
+	glSamplerParameterf(id, GL_TEXTURE_LOD_BIAS,
+	                    -0.5f + static_cast<float>(odin_tex_bias(&th)) * 0.125f);
+	if (m_anisotropy > 1 && GLEW_EXT_texture_filter_anisotropic)
+		glSamplerParameterf(id, GL_TEXTURE_MAX_ANISOTROPY_EXT, static_cast<float>(m_anisotropy));
+	m_samplers.emplace(key, id);
+	return id;
 }
 
 /* A word holds a block of two by two texels: a texhead of w x h words is a
@@ -362,6 +408,9 @@ TextureCache::set_anisotropy(unsigned level)
 		return;
 	m_anisotropy = level;
 	invalidate(-1);
+	for (const auto &[key, id] : m_samplers)
+		glDeleteSamplers(1, &id);
+	m_samplers.clear();
 }
 
 void

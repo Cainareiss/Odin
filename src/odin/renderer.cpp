@@ -41,7 +41,8 @@ Renderer::Renderer(const Memory &memory, const Options &options)
 	: m_gpu(nullptr), m_fb(memory.fb), m_options(options), m_building(nullptr), m_list(nullptr),
 	  m_frame{}, m_textures(memory.texram), m_times(options.times), m_mesh_vao(0), m_mesh_vbo(0), m_mesh_ibo(0),
 	  m_program(nullptr), m_variant_key(0), m_drawing(0),
-	  m_scissor_vp_index(~0u), m_bound_tex_index(~0u), m_pass{}, m_again(false),
+	  m_scissor_vp_index(~0u), m_bound_tex_index(~0u), m_unit0_texture(~0u), m_unit0_sampler(~0u),
+	  m_blend{~0u, ~0u, ~0u, ~0u}, m_pass{}, m_again(false),
 	  m_scale(1), m_num_lists(0), m_shown(2), m_next(-1), m_launched(0), m_last{},
 	  m_layer_ram{std::vector<uint8_t>(size_t{WIDTH} * HEIGHT * 4),
 	              std::vector<uint8_t>(size_t{WIDTH} * HEIGHT * 4)},
@@ -263,6 +264,8 @@ Renderer::forget_held()
 	m_drawing++;
 	m_scissor_vp_index = ~0u;
 	m_bound_tex_index = ~0u;
+	m_unit0_texture = m_unit0_sampler = ~0u;
+	m_blend[0] = ~0u;
 }
 
 void
