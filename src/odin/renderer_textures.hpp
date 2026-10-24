@@ -80,17 +80,6 @@ public:
 	void set_log(FILE *out) { m_log = out; }
 
 private:
-	struct Texture {
-		GLuint id;
-		odin_texhead_t th;
-	};
-	/* The textures read at one slot */
-	using Slot = std::vector<Texture>;
-	/* Where a level of a texture lies */
-	struct Level {
-		uint32_t bank, x, y, w, h;
-	};
-
 	enum : uint32_t {
 		FIRST_SLOT_X = 0x80,
 		FIRST_SLOT_Y = 0xC0,
@@ -100,10 +89,24 @@ private:
 		MAX_LEVELS = 12
 	};
 
+	/* Where a level of a texture lies */
+	struct Level {
+		uint32_t bank, x, y, w, h;
+	};
+	struct Texture {
+		GLuint id;
+		odin_texhead_t th;
+		/* All of them, whether it was decoded with mipmaps or not */
+		unsigned num_levels;
+		Level levels[MAX_LEVELS];
+	};
+	/* The textures read at one slot */
+	using Slot = std::vector<Texture>;
+
 	/* The slot a texhead reads, if it reads one */
 	static bool slot_of(const odin_texhead_t &th, uint32_t &bank, size_t &index);
 	static unsigned levels_of(const odin_texhead_t &th, Level (&levels)[MAX_LEVELS]);
-	static bool reads(const odin_texhead_t &th, unsigned bank, uint32_t x, uint32_t y, uint32_t w, uint32_t h);
+	static bool reads(const Texture &t, unsigned bank, uint32_t x, uint32_t y, uint32_t w, uint32_t h);
 	GLuint decode(const odin_texhead_t &th) const;
 	std::vector<uint16_t> decode_i4(uint32_t bank, uint32_t w, uint32_t h,
 	                                uint32_t x0, uint32_t y0) const;
@@ -111,7 +114,9 @@ private:
 
 	std::span<const uint8_t> m_texram[2];
 	std::vector<Slot> m_slots[2];
-	bool m_is_clear[2];
+	/* The slots of each bank that hold a texture, in order: a bank has
+	 * 8 192 slots, and a write looks at the textures only. */
+	std::vector<uint32_t> m_used[2];
 	std::vector<GLuint> m_dead;
 	bool m_no_mipmaps;
 	unsigned m_anisotropy;

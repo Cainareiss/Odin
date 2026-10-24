@@ -58,7 +58,7 @@ i4_to_rgba4444(uint32_t texel)
 } /* namespace */
 
 TextureCache::TextureCache(const std::span<const uint8_t> texram[2])
-	: m_texram{texram[0], texram[1]}, m_is_clear{true, true}, m_no_mipmaps(false), m_anisotropy(1),
+	: m_texram{texram[0], texram[1]}, m_no_mipmaps(false), m_anisotropy(1),
 	  m_log(nullptr)
 {
 	for (auto &bank : m_slots)
@@ -225,16 +225,13 @@ TextureCache::levels_of(const odin_texhead_t &th, Level (&levels)[MAX_LEVELS])
 	return n;
 }
 
-/* A texture decoded from a texhead reads that texel. Every level counts,
- * whether the texture was decoded with mipmaps or not. */
+/* A texture reads a texel of the rectangle. Every level counts, whether
+ * the texture was decoded with mipmaps or not. */
 bool
-TextureCache::reads(const odin_texhead_t &th, unsigned bank, uint32_t x, uint32_t y, uint32_t w, uint32_t h)
+TextureCache::reads(const Texture &t, unsigned bank, uint32_t x, uint32_t y, uint32_t w, uint32_t h)
 {
-	Level levels[MAX_LEVELS];
-	const unsigned n = levels_of(th, levels);
-
-	for (unsigned i = 0; i < n; i++) {
-		const Level &l = levels[i];
+	for (unsigned i = 0; i < t.num_levels; i++) {
+		const Level &l = t.levels[i];
 
 		if (l.bank == bank && l.x < x + w && x < l.x + l.w && l.y < y + h && y < l.y + l.h)
 			return true;
@@ -382,23 +379,28 @@ TextureCache::get(const odin_texhead_t &th)
 	if (!id)
 		return 0;
 
-	slot.push_back({id, th});
-	m_is_clear[bank] = false;
+	if (slot.empty()) {
+		std::vector<uint32_t> &used = m_used[bank];
+
+		used.insert(std::lower_bound(used.begin(), used.end(), index), static_cast<uint32_t>(index));
+	}
+	Texture &held = slot.emplace_back(Texture{id, th, 0, {}});
+
+	held.num_levels = levels_of(th, held.levels);
 	return id;
 }
 
 void
 TextureCache::clear_bank(unsigned bank)
 {
-	if (m_is_clear[bank])
-		return;
-	m_is_clear[bank] = true;
+	for (const uint32_t index : m_used[bank]) {
+		Slot &slot = m_slots[bank][index];
 
-	for (Slot &slot : m_slots[bank]) {
 		for (const Texture &held : slot)
 			bury(held.id);
 		slot.clear();
 	}
+	m_used[bank].clear();
 }
 
 void
@@ -433,15 +435,17 @@ TextureCache::invalidate(unsigned bank, uint32_t x, uint32_t y, uint32_t w, uint
 	}
 	/* A texture of either bank may read this one at some level. */
 	for (unsigned b = 0; b < 2; b++) {
-		if (m_is_clear[b])
-			continue;
-		for (Slot &slot : m_slots[b])
+		std::erase_if(m_used[b], [&](uint32_t index) {
+			Slot &slot = m_slots[b][index];
+
 			std::erase_if(slot, [&](const Texture &held) {
-				if (!reads(held.th, bank, x, y, w, h))
+				if (!reads(held, bank, x, y, w, h))
 					return false;
 				bury(held.id);
 				return true;
 			});
+			return slot.empty();
+		});
 	}
 }
 
