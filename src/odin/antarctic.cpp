@@ -43,7 +43,6 @@ Antarctic::Antarctic(std::span<uint8_t> cmdram, std::span<uint8_t> ram_s,
 	  m_disasm(nullptr), m_log(stderr), m_transfer_log(nullptr),
 	  m_types_told(0)
 {
-	m_push.all.reset(new odin_vertex_body_t[MAX_VERTICES_PER_MESH]);
 	reset();
 }
 

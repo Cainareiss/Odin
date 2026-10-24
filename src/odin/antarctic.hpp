@@ -328,8 +328,6 @@ private:
 
 	/* antarctic_mesh.cpp: from vertices to the meshes of the list */
 
-	static constexpr uint32_t MAX_VERTICES_PER_MESH = 16384;
-
 	/* The header word of the instructions that push vertices */
 	struct VertexInfo {
 		uint32_t full;
@@ -398,11 +396,11 @@ private:
 	AntarcticState m_s;
 
 	/* The vertices on their way to triangles: the last three, and the
-	 * triangles of the mesh being built. Cleared when a list starts. */
+	 * number of triangles of the mesh being built, which go straight to
+	 * the vertices of the list. Cleared when a list starts. */
 	struct {
 		uint32_t num_verts, num_tris;
 		Vertex tmp[3];
-		std::unique_ptr<odin_vertex_body_t[]> all;
 	} m_push;
 	odin_mesh_t *m_mesh;	/* being built, or nullptr */
 

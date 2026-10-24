@@ -181,6 +181,7 @@ Antarctic::begin_mesh(uint32_t addr)
 	m_mesh->poly_alpha = m_s.poly.alpha;
 	m_mesh->polytype = type;
 	m_mesh->addr[0] = addr;
+	m_mesh->first = static_cast<uint32_t>(m_list->verts.size());
 
 	/* The last vertices stay and take the new material: a strip goes
 	 * on through a recall. The colour bars of the BOOTROM C.R.T. test
@@ -197,14 +198,11 @@ void
 Antarctic::end_mesh(uint32_t addr)
 {
 	List &list = *m_list;
-	const uint32_t num = m_push.num_tris * 3;
 
 	if (!m_mesh)
 		fatal("no mesh is open", addr);
 
 	m_mesh->num_tris = m_push.num_tris;
-	m_mesh->first = static_cast<uint32_t>(list.verts.size());
-	list.verts.insert(list.verts.end(), m_push.all.get(), m_push.all.get() + num);
 	list.view.verts.all = list.verts.data();
 	list.view.verts.num = static_cast<uint32_t>(list.verts.size());
 
@@ -293,16 +291,12 @@ Antarctic::add_triangle()
 	if (m_push.num_verts < 3)
 		return;
 
-	const uint32_t index = m_push.num_tris * 3;
 	const bool both_faces = m_push.tmp[2].info.nocull();
-	odin_vertex_body_t *dst = &m_push.all[index];
+	std::vector<odin_vertex_body_t> &verts = m_list->verts;
 	const odin_vertex_body_t *a = &m_push.tmp[0].body;
 	const odin_vertex_body_t *b = &m_push.tmp[1].body;
 	const odin_vertex_body_t *c = &m_push.tmp[2].body;
 	float e1[3], e2[3], n[3];
-
-	if (index + (both_faces ? 6 : 3) > MAX_VERTICES_PER_MESH)
-		fatal("too many triangles in a mesh", m_push.num_tris);
 
 	/* Bits 19:18 select a UV offset, not two-sided lighting (X360
 	 * port, 8252D590). */
@@ -330,20 +324,20 @@ Antarctic::add_triangle()
 	if (m_push.tmp[2].info.winding())
 		std::swap(b, c);
 
-	dst[0] = *a;
-	dst[1] = *b;
-	dst[2] = *c;
+	verts.push_back(*a);
+	verts.push_back(*b);
+	verts.push_back(*c);
 	m_push.num_tris += 1;
 
 	/* Both faces (bit 23): the triangle is emitted twice, the
 	 * second time for its back, lit with the reversed normals. */
 	if (both_faces) {
-		dst[3] = *a;
-		dst[4] = *c;
-		dst[5] = *b;
-		for (unsigned i = 3; i < 6; i++)
+		verts.push_back(*a);
+		verts.push_back(*c);
+		verts.push_back(*b);
+		for (size_t i = verts.size() - 3; i < verts.size(); i++)
 			for (unsigned j = 0; j < 3; j++)
-				dst[i].normal[j] = -dst[i].normal[j];
+				verts[i].normal[j] = -verts[i].normal[j];
 		m_push.num_tris += 1;
 	}
 }
@@ -380,8 +374,6 @@ Antarctic::push_vertices(const Vertex *v, uint32_t flags, uint32_t num)
 
 			/* Account for the added vertex. */
 			m_push.num_verts += 1;
-			if (m_push.num_verts >= MAX_VERTICES_PER_MESH)
-				fatal("too many vertices in a mesh", m_push.num_verts);
 		}
 
 		/* Set the normal. */
