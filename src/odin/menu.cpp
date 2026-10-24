@@ -327,10 +327,11 @@ Menu::navigate(MenuState &state)
 {
 	MenuState::Nav &nav = state.nav;
 
+	/* LB or RB: the frame on the first row under the tabs */
 	if (nav.page && m_page != INPUT) {
 		m_page = (m_page + PAGES + nav.page % PAGES) % PAGES;
 		m_focus = {};
-		m_focus.at = 0;
+		m_focus.at = 1;
 		nav = {};
 	}
 	if (nav.game && (m_page == OUTPUTS || m_page == LINK)) {
@@ -493,15 +494,15 @@ Menu::build(MenuState &state)
 	ImDrawList *const list = ImGui::GetWindowDrawList();
 
 	kit.frame(list, a, b, kit.px(CUT), palette.frame, palette.outline);
-	/* On the page Input the tabs are the first row of the frame, without
-	 * pills: left and right change the page there. A tab clicked: no frame
-	 * on the page shown */
-	const bool tabs_row = m_page == INPUT, by_pad = tabs_row && m_focus.at == 0 && m_focus.side;
+	/* The tabs are the first row of the frame: left and right change the
+	 * page there, the frame staying on them (the keyboard has no LB and
+	 * RB); on the page Input without the pills of LB and RB, which are
+	 * tested there as controls. A tab clicked: no frame on the page shown */
+	const bool pills = m_page != INPUT, by_pad = m_focus.at == 0 && m_focus.side;
 
 	m_focus.count = 0;
 	if (kit.tabs(TABS, TAB_ICONS, room.x < WIDE * room.y, m_page,
-	             tabs_row ? std::span<const std::string>() : std::span<const std::string>(state.pills.data(), 2),
-	             tabs_row)) {
+	             pills ? std::span<const std::string>(state.pills.data(), 2) : std::span<const std::string>(), true)) {
 		m_focus = {};
 		if (by_pad)
 			m_focus.at = 0;
