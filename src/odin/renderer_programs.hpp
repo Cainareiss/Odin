@@ -146,12 +146,23 @@ public:
 	/* Lists in a file the programs compiled from now on, after the ones
 	 * it lists already. */
 	void list_in(const std::string &path);
+	/* Keeps each program the driver links in that folder, and takes it
+	 * from there the next times (program_cache.hpp), when the driver can
+	 * give its programs; empty: none kept. */
+	void keep_in(const std::string &folder);
+	/* The programs made ready so far: read back from the folder, and
+	 * compiled */
+	unsigned read_back() const { return m_read_back; }
+	unsigned compiled() const { return m_compiled; }
 
 private:
-	static MeshProgram compile(const MeshVariant &variant);
+	MeshProgram compile(const MeshVariant &variant);
+	GLuint link(uint64_t key, const std::string &vertex, const std::string &fragment);
 
 	std::unordered_map<uint64_t, MeshProgram> m_programs;
 	std::FILE *m_list = nullptr;
+	std::string m_kept, m_driver;	/* the folder, and the driver the programs are made by */
+	unsigned m_read_back = 0, m_compiled = 0;
 };
 
 } /* namespace odin */

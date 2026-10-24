@@ -82,7 +82,8 @@ public:
 	/* For looking at what is drawn; everything is off at zero. And the
 	 * lists of the mesh programs of the game, see MeshPrograms: the
 	 * one that comes with Odin, and the one kept on this computer,
-	 * which takes the programs met later. Empty for none. */
+	 * which takes the programs met later; the folder the programs the
+	 * driver made are kept in. Empty for none. */
 	struct Options {
 		bool log;		/* the objects of every mesh, on stdout */
 		int log_frame;		/* that log for this frame only */
@@ -94,7 +95,7 @@ public:
 		bool debug_keys;	/* the keys change the debug switches */
 		bool (*key_down)(void *ctx, char key);
 		void *ctx;
-		std::string programs_seed, programs_kept;
+		std::string programs_seed, programs_kept, programs_made;
 	};
 
 	Renderer(const Memory &memory, const Options &options);

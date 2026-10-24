@@ -20,8 +20,10 @@
  */
 
 #include "odin/renderer_programs.hpp"
+#include "odin/program_cache.hpp"
 #include "odin/renderer_gl.hpp"
 #include "odin/renderer_shaders.hpp"
+#include "odin/save_folder.hpp"
 
 #include <cinttypes>
 #include <cstdio>
@@ -192,6 +194,78 @@ MeshPrograms::list_in(const std::string &path)
 	}
 }
 
+void
+MeshPrograms::keep_in(const std::string &folder)
+{
+	GLint formats = 0;
+
+	m_kept.clear();
+	glGetIntegerv(GL_NUM_PROGRAM_BINARY_FORMATS, &formats);
+	if (folder.empty() || formats <= 0)
+		return;
+	m_kept = folder;
+	m_driver.clear();
+	for (const GLenum name : { GL_VENDOR, GL_RENDERER, GL_VERSION, GL_SHADING_LANGUAGE_VERSION }) {
+		const GLubyte *const text = glGetString(name);
+
+		m_driver += text ? reinterpret_cast<const char *>(text) : "";
+		m_driver += '\n';
+	}
+}
+
+/* The program of these sources: the one kept for the key, when this driver
+ * made it from them and takes it back, else compiled and kept. */
+GLuint
+MeshPrograms::link(uint64_t key, const std::string &vertex, const std::string &fragment)
+{
+	if (m_kept.empty()) {
+		m_compiled++;
+		return gl::compile_program(vertex.c_str(), fragment.c_str());
+	}
+
+	char name[32];
+
+	std::snprintf(name, sizeof(name), "/%016" PRIx64 ".bin", key);
+	const std::string path = m_kept + name;
+
+	if (const std::optional<std::vector<uint8_t>> file = read_file(path)) {
+		if (const std::optional<KeptProgram> kept = program_from_file(*file, m_driver, vertex, fragment)) {
+			const GLuint id = glCreateProgram();
+			GLint status = GL_FALSE;
+
+			glProgramBinary(id, kept->format, kept->binary.data(), static_cast<GLsizei>(kept->binary.size()));
+			glGetProgramiv(id, GL_LINK_STATUS, &status);
+			if (status == GL_TRUE) {
+				m_read_back++;
+				return id;
+			}
+			/* A program the driver no longer takes: compiled again,
+			 * without the error a format it dropped leaves */
+			glDeleteProgram(id);
+			glGetError();
+		}
+	}
+
+	const GLuint id = gl::compile_program(vertex.c_str(), fragment.c_str(), true);
+	GLint size = 0;
+
+	m_compiled++;
+	glGetProgramiv(id, GL_PROGRAM_BINARY_LENGTH, &size);
+	if (size > 0) {
+		KeptProgram kept{0, std::vector<uint8_t>(static_cast<size_t>(size))};
+		GLsizei got = 0;
+		GLenum format = 0;
+
+		glGetProgramBinary(id, size, &got, &format, kept.binary.data());
+		if (got > 0) {
+			kept.format = format;
+			kept.binary.resize(static_cast<size_t>(got));
+			write_kept(path, program_file(m_driver, vertex, fragment, kept));
+		}
+	}
+	return id;
+}
+
 MeshProgram
 MeshPrograms::compile(const MeshVariant &variant)
 {
@@ -224,8 +298,7 @@ MeshPrograms::compile(const MeshVariant &variant)
 	define("HAS_PATTERN", variant.has_pattern);
 
 	MeshProgram program;
-	program.id = gl::compile_program((defines + shaders::MESH_VERTEX).c_str(),
-	                                 (defines + shaders::MESH_FRAGMENT).c_str());
+	program.id = link(variant.key(), defines + shaders::MESH_VERTEX, defines + shaders::MESH_FRAGMENT);
 
 	const auto find = [&](const char *name) {
 		return glGetUniformLocation(program.id, name);

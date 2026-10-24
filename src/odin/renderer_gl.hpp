@@ -30,8 +30,9 @@
 namespace odin::gl {
 
 /* Compiles and links a program. Aborts with what the driver says if it
- * cannot. */
-GLuint compile_program(const char *vertex, const char *fragment);
+ * cannot. `retrievable`: the driver is told glGetProgramBinary will be
+ * asked for it. */
+GLuint compile_program(const char *vertex, const char *fragment, bool retrievable = false);
 /* The location of a uniform the program must have. */
 GLint uniform(GLuint program, const char *name);
 /* Aborts if OpenGL has an error to tell; `stage` names where. */

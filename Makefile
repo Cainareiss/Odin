@@ -135,6 +135,7 @@ OBJ := \
 	src/odin/renderer_scene.o \
 	src/odin/renderer_translucent.o \
 	src/odin/renderer_programs.o \
+	src/odin/program_cache.o \
 	src/odin/renderer_shaders.o \
 	src/odin/renderer_textures.o \
 	src/odin/renderer_times.o \

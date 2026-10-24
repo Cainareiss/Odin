@@ -46,10 +46,11 @@ namespace {
 
 /* The lists of the mesh programs of a game (MeshPrograms): the one that
  * comes with Odin, in shaders/ where the list of the games is, and the one
- * kept for the user, in the cache of their home. A path is left empty when
- * there is no such file or no place for it. */
+ * kept for the user, in the cache of their home, with the folder of the
+ * programs the driver made beside it. A path is left empty when there is
+ * no such file or no place for it. */
 void
-find_program_lists(const std::string &game, std::string &seed, std::string &kept)
+find_program_lists(const std::string &game, std::string &seed, std::string &kept, std::string &made)
 {
 	const std::string home = home_dir();
 	const char *const cache = std::getenv("XDG_CACHE_HOME");
@@ -57,6 +58,7 @@ find_program_lists(const std::string &game, std::string &seed, std::string &kept
 	std::string dir;
 
 	kept.clear();
+	made.clear();
 	seed = "shaders/" + game + ".txt";
 	if (!std::filesystem::exists(seed, error) && !home.empty())
 		seed = home + "/.local/share/odin/shaders/" + game + ".txt";
@@ -69,9 +71,9 @@ find_program_lists(const std::string &game, std::string &seed, std::string &kept
 		dir = home + "/.cache";
 	else
 		return;
-	dir += "/odin/shaders";
-	std::filesystem::create_directories(dir, error);
-	kept = dir + "/" + game + ".txt";
+	std::filesystem::create_directories(dir + "/odin/shaders", error);
+	kept = dir + "/odin/shaders/" + game + ".txt";
+	made = dir + "/odin/programs";
 }
 
 /* The preset of a filter of the picture by its name: filters/<name>.glslp
@@ -279,7 +281,7 @@ Display::attach(Hikaru &board, const std::string &title)
 		return static_cast<const Keyboard *>(ctx)->down(static_cast<SDL_Keycode>(key));
 	};
 	looks.ctx = const_cast<Keyboard *>(&m_keys);
-	find_program_lists(board.game_name(), looks.programs_seed, looks.programs_kept);
+	find_program_lists(board.game_name(), looks.programs_seed, looks.programs_kept, looks.programs_made);
 	m_program_list = looks.programs_kept;
 
 	run([&] {

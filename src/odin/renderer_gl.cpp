@@ -50,7 +50,7 @@ compile_shader(GLenum type, const char *text)
 } /* namespace */
 
 GLuint
-compile_program(const char *vertex, const char *fragment)
+compile_program(const char *vertex, const char *fragment, bool retrievable)
 {
 	const GLuint vs = compile_shader(GL_VERTEX_SHADER, vertex);
 	const GLuint fs = compile_shader(GL_FRAGMENT_SHADER, fragment);
@@ -59,6 +59,8 @@ compile_program(const char *vertex, const char *fragment)
 
 	glAttachShader(id, vs);
 	glAttachShader(id, fs);
+	if (retrievable)
+		glProgramParameteri(id, GL_PROGRAM_BINARY_RETRIEVABLE_HINT, GL_TRUE);
 	glLinkProgram(id);
 	glGetProgramiv(id, GL_LINK_STATUS, &status);
 	if (status == GL_FALSE) {

@@ -20,6 +20,7 @@
  */
 
 #include "odin/renderer.hpp"
+#include "odin/env.hpp"
 #include "odin/hikaru_gpu.hpp"
 #include "odin/loading_screen.hpp"
 #include "odin/picture.hpp"
@@ -54,6 +55,7 @@ Renderer::Renderer(const Memory &memory, const Options &options)
 		textures.ids.assign(ODIN_LIST_MAX_TEXHEADS, 0);
 	}
 	init_debug();
+	m_programs.keep_in(options.programs_made);
 
 	build_compose();
 	build_presenter();
@@ -198,6 +200,7 @@ Renderer::prepare_programs(const std::function<void(unsigned, unsigned)> &progre
 	}
 
 	const unsigned total = static_cast<unsigned>(keys.size());
+	const uint64_t began = host_ns();
 
 	if (total)
 		progress(0, total);
@@ -211,6 +214,9 @@ Renderer::prepare_programs(const std::function<void(unsigned, unsigned)> &progre
 		progress(i + 1, total);
 	}
 	glUseProgram(0);
+	if (total)
+		std::printf("programs: %u ready in %.1f s, %u of them read back, %u compiled\n", total,
+		            static_cast<double>(host_ns() - began) / 1e9, m_programs.read_back(), m_programs.compiled());
 	if (!m_options.programs_kept.empty())
 		m_programs.list_in(m_options.programs_kept);
 
