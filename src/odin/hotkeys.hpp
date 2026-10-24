@@ -90,9 +90,10 @@ public:
 	bool takes(SDL_Keycode key) const;
 
 	/* A key (slot 0 or 1) or the gamepad of an action changed; the action
-	 * that had it before loses it. All back as by default. */
-	void set_key(Action action, size_t slot, HotKey key);
-	void set_pad(Action action, int pad);
+	 * that had it before loses it: that action, when another. All back as
+	 * by default. */
+	std::optional<Action> set_key(Action action, size_t slot, HotKey key);
+	std::optional<Action> set_pad(Action action, int pad);
 	void reset();
 
 	/* Ctrl, Alt, Shift and Gui of a state of the modifiers, either side */

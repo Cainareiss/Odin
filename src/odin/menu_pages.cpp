@@ -801,6 +801,8 @@ Menu::page_hotkeys(MenuKit &kit, MenuState &state) const
 
 		const int clicked = kit.shortcut(HOTKEY_NAMES[a], keys, pad, catching);
 
+		if (clicked >= 0)
+			state.hotkey_moved.reset();
 		if (clicked == 2)
 			state.hotkey_catching = { a, Hotkeys::KEYS };
 		else if (clicked >= 0)
@@ -811,6 +813,7 @@ Menu::page_hotkeys(MenuKit &kit, MenuState &state) const
 	if (kit.button("Defaults", false, MenuKit::Icon::DEFAULTS)) {
 		state.hotkeys_default = true;
 		state.hotkey_catching.reset();
+		state.hotkey_moved.reset();
 	}
 
 	end_settings(kit, top, room);
@@ -821,6 +824,23 @@ Menu::page_hotkeys(MenuKit &kit, MenuState &state) const
 std::string
 Menu::hotkeys_help(const MenuState &state)
 {
+	/* An action by its name, without what is said after it */
+	const auto named = [](size_t a) {
+		const std::string name = HOTKEY_NAMES[a];
+
+		return name.substr(0, name.find(" ("));
+	};
+
+	if (!state.hotkey_catching && state.hotkey_moved) {
+		const MenuState::HotkeyMoved &moved = *state.hotkey_moved;
+		const int type = state.pad_types[0];
+		const std::string guide = button_name(SDL_GAMEPAD_BUTTON_GUIDE, type);
+		const std::string what = moved.key ? Hotkeys::text(*moved.key) :
+		                         moved.pad == Hotkeys::GUIDE_ALONE ? guide :
+		                                                             guide + " + " + button_name(moved.pad, type);
+
+		return what + " went from " + named(moved.from) + " to " + named(moved.to) + ".";
+	}
 	if (!state.hotkey_catching)
 		return "Click a key or a combination to change it.";
 

@@ -373,6 +373,7 @@ MenuSession::open(int page)
 	m_controls.quiet();
 	if (m_audio)
 		m_audio->pause(true);
+	m_menu_state.hotkey_moved.reset();
 	/* The page Input shows the device of each player, until the user picks
 	 * one: their joystick in a game with a wheel, else their gamepad, else
 	 * their joystick, else the keyboard */

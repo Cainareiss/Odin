@@ -185,6 +185,15 @@ struct MenuState {
 	std::array<Hotkeys::Binding, Hotkeys::ACTIONS> hotkeys{};
 	std::optional<std::pair<size_t, size_t>> hotkey_catching;
 	bool hotkeys_default = false;
+	/* What the last key or buttons caught took from another action: from
+	 * it to the one changed, the key, else the button held with Guide (or
+	 * GUIDE_ALONE); said at the bottom of the page until the next change */
+	struct HotkeyMoved {
+		size_t from = 0, to = 0;
+		std::optional<HotKey> key;
+		int pad = Hotkeys::NO_PAD;
+	};
+	std::optional<HotkeyMoved> hotkey_moved;
 
 	/* Outputs: those of the cabinet of the game shown (their names, what
 	 * they are), lit while on in the game that runs; sent to the programs

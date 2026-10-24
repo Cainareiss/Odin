@@ -276,7 +276,11 @@ MenuSession::catch_hotkey(const SDL_Event &event)
 			return true;
 		}
 		if (slot < Hotkeys::KEYS && !Hotkeys::is_modifier(event.key.key)) {
-			m_hotkeys.set_key(action, slot, { event.key.key, event.key.mod });
+			const HotKey key{ event.key.key, Hotkeys::modifiers(event.key.mod) };
+
+			state.hotkey_moved.reset();
+			if (const auto from = m_hotkeys.set_key(action, slot, key))
+				state.hotkey_moved = { static_cast<size_t>(*from), static_cast<size_t>(action), key, Hotkeys::NO_PAD };
 			state.hotkey_catching.reset();
 			keep_hotkeys();
 		}
@@ -290,7 +294,11 @@ MenuSession::catch_hotkey(const SDL_Event &event)
 		const bool tapped = m_controls.guide_tapped();
 
 		if (slot == Hotkeys::KEYS && (combo >= 0 || tapped)) {
-			m_hotkeys.set_pad(action, combo >= 0 ? combo : Hotkeys::GUIDE_ALONE);
+			const int pad = combo >= 0 ? combo : Hotkeys::GUIDE_ALONE;
+
+			state.hotkey_moved.reset();
+			if (const auto from = m_hotkeys.set_pad(action, pad))
+				state.hotkey_moved = { static_cast<size_t>(*from), static_cast<size_t>(action), std::nullopt, pad };
 			state.hotkey_catching.reset();
 			keep_hotkeys();
 		} else if (std::find(nav.begin(), nav.end(), MenuNav::BACK) != nav.end()) {

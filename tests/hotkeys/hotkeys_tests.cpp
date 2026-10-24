@@ -112,18 +112,22 @@ void test_changes()
 {
 	Hotkeys keys;
 
-	keys.set_key(Action::PAUSE, 0, { SDLK_F10, SDL_KMOD_NONE });
+	check(is(keys.set_key(Action::PAUSE, 0, { SDLK_F10, SDL_KMOD_NONE }), Action::MENU), "F10 taken from the menu");
 	check(is(keys.key_action(SDLK_F10, SDL_KMOD_NONE), Action::PAUSE), "F10 given to pause");
 	check(keys.of(Action::MENU).keys[1].key == SDLK_UNKNOWN && keys.of(Action::MENU).keys[0].key == SDLK_ESCAPE,
 	      "the menu lost it, keeps Escape");
 	check(!keys.key_action(SDLK_P, SDL_KMOD_NONE), "P is nothing now");
+	check(!keys.set_key(Action::SAVE_STATE, 1, { SDLK_S, SDL_KMOD_LCTRL }), "a key no action had: taken from none");
+	check(!keys.set_key(Action::SAVE_STATE, 0, { SDLK_S, SDL_KMOD_CTRL }) &&
+	              keys.of(Action::SAVE_STATE).keys[1].key == SDLK_UNKNOWN,
+	      "its own key moved to its other place: taken from none");
 	keys.set_key(Action::SAVE_STATE, 1, { SDLK_S, SDL_KMOD_LCTRL });
 	check(keys.of(Action::SAVE_STATE).keys[1] == HotKey{ SDLK_S, SDL_KMOD_CTRL }, "a modifier kept of either side");
 	check(is(keys.key_action(SDLK_S, SDL_KMOD_RCTRL), Action::SAVE_STATE), "Ctrl+S saves");
 	keys.set_key(Action::LOAD_STATE, 1, { SDLK_S, SDL_KMOD_NONE });
 	check(is(keys.key_action(SDLK_S, SDL_KMOD_CTRL), Action::SAVE_STATE), "the key with most of its own held first");
 	check(is(keys.key_action(SDLK_S, SDL_KMOD_NONE), Action::LOAD_STATE), "S alone loads");
-	keys.set_pad(Action::FULLSCREEN, SDL_GAMEPAD_BUTTON_BACK);
+	check(is(keys.set_pad(Action::FULLSCREEN, SDL_GAMEPAD_BUTTON_BACK), Action::PAUSE), "Guide+Back taken from pause");
 	check(is(keys.pad_action(SDL_GAMEPAD_BUTTON_BACK), Action::FULLSCREEN), "Guide+Back given to the whole display");
 	check(keys.of(Action::PAUSE).pad == Hotkeys::NO_PAD, "pause lost it");
 	keys.reset();

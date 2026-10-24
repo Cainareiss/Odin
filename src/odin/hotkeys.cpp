@@ -130,26 +130,38 @@ Hotkeys::takes(SDL_Keycode key) const
 	return false;
 }
 
-void
+std::optional<Hotkeys::Action>
 Hotkeys::set_key(Action action, size_t slot, HotKey key)
 {
+	std::optional<Action> from;
+
 	if (slot >= KEYS)
-		return;
+		return from;
 	key.mods = modifiers(key.mods);
-	for (Binding &binding : m_bindings)
-		for (HotKey &k : binding.keys)
-			if (key.key != SDLK_UNKNOWN && k == key)
+	for (size_t a = 0; a < ACTIONS; a++)
+		for (HotKey &k : m_bindings[a].keys)
+			if (key.key != SDLK_UNKNOWN && k == key) {
 				k = {};
+				if (a != static_cast<size_t>(action))
+					from = static_cast<Action>(a);
+			}
 	m_bindings[static_cast<size_t>(action)].keys[slot] = key;
+	return from;
 }
 
-void
+std::optional<Hotkeys::Action>
 Hotkeys::set_pad(Action action, int pad)
 {
-	for (Binding &binding : m_bindings)
-		if (pad != NO_PAD && binding.pad == pad)
-			binding.pad = NO_PAD;
+	std::optional<Action> from;
+
+	for (size_t a = 0; a < ACTIONS; a++)
+		if (pad != NO_PAD && m_bindings[a].pad == pad) {
+			m_bindings[a].pad = NO_PAD;
+			if (a != static_cast<size_t>(action))
+				from = static_cast<Action>(a);
+		}
 	m_bindings[static_cast<size_t>(action)].pad = pad;
+	return from;
 }
 
 void
