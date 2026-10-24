@@ -79,7 +79,7 @@ Sh4::Sh4(Sh4Bus &bus, std::span<uint8_t> onchip, bool master, bool little_endian
 	  m_page_of(1u << (32 - PAGE_BITS), 0),
 	  m_near(NEAR_SIZE, Block{1, 0, 0, nullptr, nullptr, nullptr, 0, 0}),
 	  m_translate(false), m_hook_on(false), m_hook_addr(0),
-	  m_wait{}, m_touched(false), m_event(false),
+	  m_wait{}, m_touched(false), m_timer_read(false), m_clock_on(true), m_clock_note{}, m_event(false),
 	  m_intc{}, m_dmac_running{}, m_tmu_running{}, m_tmu_counter{},
 	  m_cycles(0), m_at(0), m_tmu_time(0), m_slice(0), m_retime(false), m_cut(false), m_ran(0),
 	  m_clock_mode(clock_mode),
@@ -104,6 +104,7 @@ void Sh4::fatal(const char *what, uint32_t value) const
 void Sh4::reset(bool hard)
 {
 	m_run = m_master ? Sh4Run::Running : Sh4Run::Stopped;
+	clock_forget();
 
 	m_r = {};
 	m_r.pc = 0xA0000000;
@@ -451,6 +452,9 @@ bool Sh4::read_slow(const Sh4Op *op, uint32_t addr, uint32_t size, uint64_t &val
 		outside();
 		m_bus.unanswered(false, addr, size, 0);
 	}
+	if (m_clock_note.on) [[unlikely]] {
+		clock_noted_slow(addr, size, value);
+	}
 	return !m_event;
 }
 
@@ -461,6 +465,9 @@ bool Sh4::write_slow(const Sh4Op *op, uint32_t addr, uint32_t size, uint64_t val
 	}
 	m_touched = true;
 	m_at = time_at(op);
+	if (m_clock_note.on) [[unlikely]] {
+		m_clock_note.bad = true;
+	}
 	if (addr < 0xE0000000 && !m_wr[addr >> PAGE_BITS]) {
 		m_remaining -= static_cast<int32_t>(mpx_cycles(addr, true));
 	}
@@ -905,7 +912,9 @@ void Sh4::wait_mark()
 	m_wait.regs = m_r;
 	m_wait.remaining = m_remaining;
 	m_wait.countdown = m_wait.period;
+	m_wait.moved = false;
 	m_touched = false;
+	m_timer_read = false;
 }
 
 /* Back at the mark with the same registers, no write and only plain memory
@@ -915,6 +924,9 @@ void Sh4::wait_mark()
 void Sh4::wait_check()
 {
 	int32_t turn = m_wait.remaining - m_remaining;
+	/* A turn looked at may have run, or a part of it: the PC before */
+	const uint32_t pc = m_r.pc;
+	uint32_t mark = pc;
 
 	if (turn <= 0) {
 		return;
@@ -923,17 +935,23 @@ void Sh4::wait_check()
 		m_wait.pass--;
 		return;
 	}
-	if (!m_touched && m_r == m_wait.regs) {
+	if (!m_wait.moved && !m_touched && m_r == m_wait.regs) {
 		int32_t left = (m_remaining - 1) % turn + 1;
 		m_skipped += static_cast<uint32_t>(m_remaining - left);
 		m_remaining = left;
-	} else {
+	} else if (m_clock_on && clock_wait(mark)) {
+		/* Its next turn is looked at too. */
+		m_wait.busy = 0;
+	} else if (mark == pc) {
 		if (m_wait.busy < 6) {
 			m_wait.busy++;
 		}
 		m_wait.pass = (1u << m_wait.busy) - 1;
 	}
 	wait_mark();
+	if (mark != pc) {
+		clock_mark(mark);
+	}
 }
 
 /* A slice is cut where a timer raises its interrupt, for the interrupt to
@@ -1047,6 +1065,7 @@ void Sh4::save(Sh4State &out) const
  * FPSCR put them. */
 void Sh4::load(const Sh4State &in)
 {
+	clock_forget();
 	std::copy(std::begin(in.r), std::end(in.r), std::begin(m_r.r));
 	m_r.pc = in.pc;
 	m_r.sr = in.sr & ~SR_T;

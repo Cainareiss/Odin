@@ -93,6 +93,7 @@ OBJ := \
 	src/odin/sh4_translate.o \
 	src/odin/sh4_ops.o \
 	src/odin/sh4_onchip.o \
+	src/odin/sh4_clock.o \
 	src/odin/mie_board.o \
 	src/odin/mie.o \
 	src/odin/z80.o \

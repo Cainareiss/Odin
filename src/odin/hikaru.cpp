@@ -362,6 +362,9 @@ Hikaru::Hikaru(const Game &game, const RomBoard::Config &rombd, bool verbose, co
 			if (!m_sh[which]->translates())
 				std::fprintf(stderr, "sh4: no host code on this machine, the blocks are read\n");
 		}
+		/* ODIN_TURNS=0, a test: the loops that wait on a timer run
+		 * every turn. */
+		m_sh[which]->set_clock_waits(env_flag("ODIN_TURNS", true));
 		/* ODIN_SH4_TRACE=<prefix>: one line per slice in <prefix>-m.txt
 		 * and <prefix>-s.txt, the PC and a hash of the registers. */
 		if (const char *prefix = std::getenv("ODIN_SH4_TRACE")) {

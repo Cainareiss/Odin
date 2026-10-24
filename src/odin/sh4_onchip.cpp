@@ -552,6 +552,38 @@ void Sh4::tmu_sync(uint64_t now)
 	m_tmu_time = now;
 }
 
+/* What TCNT of the channel would read at `when`, the timers left as they
+ * are: tmu_sync() and tmu_count() for that channel, without their effects.
+ * Counted up to a date in one go or in several, a channel ends the same. */
+uint32_t Sh4::tmu_count_at(uint32_t ch, uint64_t when) const
+{
+	const uint64_t counter = m_tmu_counter[ch];
+
+	if (!m_tmu_running[ch] || when <= m_tmu_time) {
+		return static_cast<uint32_t>(counter);
+	}
+	const uint64_t period = tmu_period(ch);
+	uint64_t counts = periods(when, period) - periods(m_tmu_time, period);
+
+	if (counts <= counter) {
+		return static_cast<uint32_t>(counter - counts);
+	}
+	const uint64_t reload = reg_get(4, tcor(ch));
+
+	counts -= counter + 1;
+	return static_cast<uint32_t>(reload - counts % (reload + 1));
+}
+
+uint64_t Sh4::tmu_counts_between(uint32_t ch, uint64_t from, uint64_t to) const
+{
+	if (!m_tmu_running[ch] || to <= from) {
+		return 0;
+	}
+	const uint64_t period = tmu_period(ch);
+
+	return periods(to, period) - periods(from, period);
+}
+
 /* The cycles from the start of the slice to the next underflow that raises
  * an interrupt. */
 int32_t Sh4::tmu_next_irq() const
@@ -626,6 +658,7 @@ bool Sh4::onchip_read(uint32_t addr, uint32_t size, uint64_t &value)
 		sized(4);
 		tmu_sync(m_at);
 		value = m_tmu_counter[(reg - TMU_TCNT0) / 12];
+		m_timer_read = true;
 		return true;
 	case TMU_TCR0:
 	case TMU_TCR0 + 12:

@@ -201,6 +201,9 @@ public:
 	 * has none. To be set before anything runs. */
 	void set_translate(bool on);
 	bool translates() const { return m_translate; }
+	/* Whether the turns of a loop that waits on a timer are counted
+	 * without being run (see clock_wait()); on by default. */
+	void set_clock_waits(bool on);
 
 	/* The state between two calls of run(). */
 	void save(Sh4State &out) const;
@@ -395,6 +398,117 @@ private:
 	 * modules */
 	void wait_mark();
 	void wait_check();
+
+	/* sh4_clock.cpp: the loops that wait on a timer. The registers such a
+	 * loop is followed through, a bit each: R0 to R15, these, then FR0 to
+	 * FR15. */
+	static constexpr uint32_t USE_T = 16, USE_PR = 17, USE_FPUL = 18, USE_FR = 19;
+	/* How what an instruction writes moves when one input moves one way,
+	 * the other inputs the same: Rn op Rm or FRn op FRm, Rn for one alone
+	 * (see clock_ordered()). None: no way that is known. */
+	enum class Order : uint8_t {
+		None, Same, Add, Sub, Neg, ShiftLeft, ShiftRight, ToFloat, ToInt,
+		FMul, FAdd, FSub, FDiv, FNeg,
+		Above, AtLeast, Greater, GreaterEq, NotNegative, Positive, FGreater
+	};
+	/* What an instruction reads and writes of them (sh4_ops.cpp), for the
+	 * forms these loops are made of; false for any other. */
+	struct Uses {
+		uint64_t reads, writes;
+		uint64_t loaded;	/* what it loads from the memory */
+		bool memory;		/* it reads or writes the memory */
+		bool choice;		/* a conditional branch: T chooses */
+		bool on_t;		/* such a branch goes when T is set */
+		bool target;		/* a branch to the address a register holds */
+		bool twice;		/* Rn op Rn, FRn op FRn: one register for both */
+		Order order;
+		uint8_t shift;		/* of ShiftLeft and ShiftRight */
+	};
+	static bool uses(const Sh4Op &op, Uses &out);
+	/* An instruction of a turn of such a loop: the read of the timer, one
+	 * whose input comes from that read, a choice made on such an input,
+	 * or one that does the same at every turn. */
+	enum class ClockRole : uint8_t { Same, Read, Follows, Choice };
+	static constexpr uint8_t NO_USE = 0xFF;
+	struct ClockStep {
+		Sh4Op op;
+		Uses use;
+		ClockRole role;
+		uint32_t t;		/* the T of a choice */
+		uint64_t timed;		/* the registers that come from the read, before it */
+		/* Of an instruction that follows the read: its input from the
+		 * read, its other input, what it writes; the other input read
+		 * again from the memory at `fresh_addr` when fresh is set */
+		uint8_t from, other, to;
+		bool fresh, from_n;	/* from_n: the input from the read is Rn or FRn */
+		uint32_t fresh_addr, fresh_size;
+		Sh4Host::Call call;
+		Regs before;
+	};
+	struct ClockAccess {
+		uint32_t addr, size;
+		uint64_t value;
+		uint32_t step;		/* of the turn being noted */
+	};
+	/* A turn that only reads the timer, kept for the next times the loop
+	 * is at its start */
+	struct ClockTurn {
+		Regs start;
+		uint64_t live;		/* registers it reads before it writes them */
+		uint64_t timed;		/* from the read at its end: written before read */
+		uint32_t length;	/* cycles */
+		uint32_t read_at;	/* the cycle of the read */
+		uint32_t channel;	/* of the timer */
+		std::vector<ClockStep> steps;	/* the read, what follows it and the choices */
+		std::vector<std::pair<uint32_t, uint16_t>> code;	/* every instruction */
+		std::vector<ClockAccess> reads, writes;	/* of the plain memory, to be the same */
+	};
+	/* What a turn gave for one value of the timer: for each of its steps,
+	 * the input from the time, the other input, what it wrote */
+	struct ClockValues {
+		std::vector<std::array<uint32_t, 3>> step;
+		uint32_t timed[64];
+		bool same;
+	};
+	/* What the turn being noted does, see clock_note() */
+	struct ClockNote {
+		bool on, bad;
+		uint32_t step;		/* the instruction running */
+		uint32_t reads_of_timer, read_step, channel;
+		uint64_t read_time;
+		std::vector<ClockAccess> reads, writes;
+	};
+	/* A start where no such turn was found: looked at again after `wait`
+	 * more times, twice as late each time */
+	struct ClockMiss {
+		uint32_t pc, wait, backoff;
+	};
+	bool clock_wait(uint32_t &mark);
+	void clock_forget();
+	void clock_kept();
+	ClockMiss &clock_miss(uint32_t pc);
+	void clock_mark(uint32_t pc);
+	bool clock_note(ClockTurn &turn);
+	bool clock_step(std::vector<ClockStep> &steps, std::vector<std::pair<uint32_t, uint16_t>> &code);
+	bool clock_follow(ClockTurn &turn, std::vector<ClockStep> &steps);
+	bool clock_still(const ClockTurn &turn) const;
+	bool clock_turn(const ClockTurn &turn, uint32_t value, ClockValues &out);
+	static bool clock_ordered(const ClockTurn &turn, const ClockValues &a, const ClockValues &b);
+	bool clock_skip(const ClockTurn &turn);
+	void clock_noted_read(uint32_t addr, uint32_t size, const void *at);
+	void clock_noted_write(uint32_t addr, uint32_t size, const void *old, const void *value);
+	void clock_noted_slow(uint32_t addr, uint32_t size, uint64_t value);
+	static uint32_t &use_of(Regs &r, uint32_t i);
+	/* The end of an instruction run alone for clock_note(): on at `imm`,
+	 * no other block after it */
+	static void op_noted(Sh4 &c, const Sh4Op *op);
+	/* The same registers but those of `free` */
+	static bool same_but(const Regs &a, const Regs &b, uint64_t free);
+	/* TCNT of a channel at a date, and the counts from a date to another,
+	 * without counting the timers (sh4_onchip.cpp) */
+	uint32_t tmu_count_at(uint32_t ch, uint64_t when) const;
+	uint64_t tmu_counts_between(uint32_t ch, uint64_t from, uint64_t to) const;
+
 	void take_irq();
 	void update_irqs();
 	void set_sr(uint32_t value);
@@ -559,6 +673,9 @@ private:
 		const uint8_t *p = m_rd[addr >> PAGE_BITS];
 		if (p && !(addr & (sizeof(T) - 1))) [[likely]] {
 			std::memcpy(&value, p + (addr & (PAGE_SIZE - 1)), sizeof(T));
+			if (m_clock_note.on) [[unlikely]] {
+				clock_noted_read(addr, sizeof(T), &value);
+			}
 			return true;
 		}
 		uint64_t wide = 0;
@@ -576,6 +693,9 @@ private:
 		m_touched = true;
 		if (p && !(addr & (sizeof(T) - 1))) [[likely]] {
 			p += addr & (PAGE_SIZE - 1);
+			if (m_clock_note.on) [[unlikely]] {
+				clock_noted_write(addr, sizeof(T), p, &value);
+			}
 			std::memcpy(p, &value, sizeof(T));
 			if (m_code_epoch[(addr >> PAGE_BITS) & (PHYSICAL_PAGES - 1)] != m_epoch) [[likely]] {
 				return true;
@@ -645,10 +765,24 @@ private:
 		int32_t countdown;	/* blocks before the next mark */
 		int32_t period;
 		uint32_t pass, busy;
+		/* Put where a turn is counted from before the program got
+		 * there: the registers are not those there */
+		bool moved;
 	} m_wait;
 	/* Since the mark: a write, a read outside plain memory or an
 	 * interrupt */
 	bool m_touched;
+	/* Since the mark: a read of a TCNT (see clock_wait()) */
+	bool m_timer_read;
+
+	/* Loops that wait on a timer, see clock_wait() */
+	bool m_clock_on;
+	ClockNote m_clock_note;
+	std::vector<ClockTurn> m_clock_turns;	/* the last ones found */
+	ClockValues m_clock_values[2];
+	std::vector<ClockMiss> m_clock_misses;
+	/* Each instruction of those turns: where its turn starts */
+	std::unordered_map<uint32_t, uint32_t> m_clock_inside;
 	/* Something the run loop looks at before a block may have changed:
 	 * an interrupt, the run state, or the machine was called. */
 	bool m_event;

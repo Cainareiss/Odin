@@ -1939,6 +1939,87 @@ Sh4Host::Call Sh4::called(void (*run)(Sh4 &, const Sh4Op *))
 	return both.at(run);
 }
 
+/* The registers the forms that loops waiting on a timer are made of read
+ * and write, as the instructions above use them (see sh4_clock.cpp); those
+ * of the FPU with FPSCR.PR and SZ clear, which a turn is checked for. */
+bool Sh4::uses(const Sh4Op &op, Uses &out)
+{
+	enum : uint32_t {
+		RN_R = 1u << 0, RN_W = 1u << 1, RM_R = 1u << 2, RM_W = 1u << 3, R0_R = 1u << 4, R0_W = 1u << 5,
+		T_R = 1u << 6, T_W = 1u << 7, PR_R = 1u << 8, PR_W = 1u << 9, FPUL_R = 1u << 10, FPUL_W = 1u << 11,
+		FN_R = 1u << 12, FN_W = 1u << 13, FM_R = 1u << 14,
+		MEM = 1u << 15, TO_RN = 1u << 16, TO_PR = 1u << 17, TO_FN = 1u << 18,	/* where a load goes */
+		CHOICE = 1u << 19, TARGET = 1u << 20, ON_T = 1u << 21
+	};
+	using S = Sh4Ops;
+	constexpr uint32_t ALU = RN_R | RM_R | RN_W, CMP = RN_R | RM_R | T_W, ONE = RM_R | RN_W;
+	constexpr uint32_t LOAD = RM_R | RN_W | MEM | TO_RN, STORE = RM_R | RN_R | MEM;
+	constexpr uint32_t FALU = FN_R | FM_R | FN_W;
+	using O = Order;
+	struct Form {
+		uint32_t f;
+		Order order = O::None;
+		uint8_t shift = 0;
+	};
+	static const std::unordered_map<void (*)(Sh4 &, const Sh4Op *), Form> forms = {
+		{S::mov, {ONE, O::Same}}, {S::movi, {RN_W}}, {S::mova, {R0_W}}, {S::movt, {T_R | RN_W}},
+		{S::movli, {RN_W | MEM | TO_RN}}, {S::movwi, {RN_W | MEM | TO_RN}},
+		{S::movll, {LOAD}}, {S::movll4, {LOAD}}, {S::movll0, {LOAD | R0_R}}, {S::movlp, {LOAD | RM_W}},
+		{S::movls, {STORE}}, {S::movls4, {STORE}}, {S::movls0, {STORE | R0_R}}, {S::movlm, {STORE | RN_W}},
+		{S::stsmpr, {PR_R | RN_R | RN_W | MEM}}, {S::ldsmpr, {RN_R | RN_W | PR_W | MEM | TO_PR}},
+		{S::add, {ALU, O::Add}}, {S::addi, {RN_R | RN_W, O::Add}}, {S::sub, {ALU, O::Sub}},
+		{S::and_, {ALU}}, {S::or_, {ALU}}, {S::xor_, {ALU}},
+		{S::andi, {R0_R | R0_W}}, {S::ori, {R0_R | R0_W}}, {S::xori, {R0_R | R0_W}},
+		{S::not_, {ONE}}, {S::neg, {ONE, O::Neg}}, {S::extsb, {ONE}}, {S::extsw, {ONE}}, {S::extub, {ONE}},
+		{S::extuw, {ONE}},
+		{S::shll, {RN_R | RN_W | T_W}}, {S::shlr, {RN_R | RN_W | T_W}}, {S::shar, {RN_R | RN_W | T_W}},
+		{S::shll2, {RN_R | RN_W, O::ShiftLeft, 2}}, {S::shlr2, {RN_R | RN_W, O::ShiftRight, 2}},
+		{S::shll8, {RN_R | RN_W, O::ShiftLeft, 8}}, {S::shlr8, {RN_R | RN_W, O::ShiftRight, 8}},
+		{S::shll16, {RN_R | RN_W, O::ShiftLeft, 16}}, {S::shlr16, {RN_R | RN_W, O::ShiftRight, 16}},
+		{S::shld, {ALU}}, {S::shad, {ALU}}, {S::dt, {RN_R | RN_W | T_W}},
+		{S::cmpeq, {CMP}}, {S::cmphs, {CMP, O::AtLeast}}, {S::cmpge, {CMP, O::GreaterEq}},
+		{S::cmphi, {CMP, O::Above}}, {S::cmpgt, {CMP, O::Greater}},
+		{S::cmppz, {RN_R | T_W, O::NotNegative}}, {S::cmppl, {RN_R | T_W, O::Positive}}, {S::cmpim, {R0_R | T_W}},
+		{S::tst, {CMP}}, {S::tsti, {R0_R | T_W}}, {S::clrt, {T_W}}, {S::sett, {T_W}}, {S::nop, {0}},
+		{S::bt, {T_R | CHOICE | ON_T}}, {S::bf, {T_R | CHOICE}}, {S::bts, {T_R | CHOICE | ON_T}},
+		{S::bfs, {T_R | CHOICE}},
+		{S::bra, {0}}, {S::bsr, {PR_W}}, {S::jmp, {RN_R | TARGET}}, {S::jsr, {RN_R | PR_W | TARGET}},
+		{S::rts, {PR_R | TARGET}},
+		{S::ldsfpul, {RN_R | FPUL_W, O::Same}}, {S::stsfpul, {FPUL_R | RN_W, O::Same}},
+		{S::flt, {FPUL_R | FN_W, O::ToFloat}}, {S::ftrc, {FN_R | FPUL_W, O::ToInt}},
+		{S::fsts, {FPUL_R | FN_W, O::Same}}, {S::flds, {FN_R | FPUL_W, O::Same}},
+		{S::fmov, {FM_R | FN_W, O::Same}}, {S::fmov_load, {RM_R | FN_W | MEM | TO_FN}},
+		{S::fldi0, {FN_W}}, {S::fldi1, {FN_W}}, {S::fneg, {FN_R | FN_W, O::FNeg}}, {S::fabs_, {FN_R | FN_W}},
+		{S::fadd, {FALU, O::FAdd}}, {S::fsub, {FALU, O::FSub}}, {S::fmul, {FALU, O::FMul}},
+		{S::fdiv, {FALU, O::FDiv}},
+		{S::fcmpeq, {FN_R | FM_R | T_W}}, {S::fcmpgt, {FN_R | FM_R | T_W, O::FGreater}},
+	};
+	const auto found = forms.find(op.run);
+
+	if (found == forms.end()) {
+		return false;
+	}
+	const uint32_t f = found->second.f;
+	const uint64_t rn = uint64_t{1} << op.n, rm = uint64_t{1} << op.m, r0 = 1, t = uint64_t{1} << USE_T;
+	const uint64_t pr = uint64_t{1} << USE_PR, fpul = uint64_t{1} << USE_FPUL;
+	const uint64_t fn = uint64_t{1} << (USE_FR + op.n), fm = uint64_t{1} << (USE_FR + op.m);
+
+	out = {};
+	out.reads = ((f & RN_R) ? rn : 0) | ((f & RM_R) ? rm : 0) | ((f & R0_R) ? r0 : 0) | ((f & T_R) ? t : 0) |
+	            ((f & PR_R) ? pr : 0) | ((f & FPUL_R) ? fpul : 0) | ((f & FN_R) ? fn : 0) | ((f & FM_R) ? fm : 0);
+	out.writes = ((f & RN_W) ? rn : 0) | ((f & RM_W) ? rm : 0) | ((f & R0_W) ? r0 : 0) | ((f & T_W) ? t : 0) |
+	             ((f & PR_W) ? pr : 0) | ((f & FPUL_W) ? fpul : 0) | ((f & FN_W) ? fn : 0);
+	out.loaded = ((f & TO_RN) ? rn : 0) | ((f & TO_PR) ? pr : 0) | ((f & TO_FN) ? fn : 0);
+	out.memory = (f & MEM) != 0;
+	out.choice = (f & CHOICE) != 0;
+	out.on_t = (f & ON_T) != 0;
+	out.target = (f & TARGET) != 0;
+	out.twice = op.n == op.m && (((f & RN_R) && (f & RM_R)) || ((f & FN_R) && (f & FM_R)));
+	out.order = found->second.order;
+	out.shift = found->second.shift;
+	return true;
+}
+
 /* What host code does itself in place of a call to the instruction. */
 Sh4::Inline Sh4::inlined(void (*run)(Sh4 &, const Sh4Op *))
 {

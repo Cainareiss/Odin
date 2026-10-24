@@ -25,7 +25,7 @@
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
  *            -ffp-contract=off -I src tests/sh4/sh4_tests.cpp src/odin/sh4.cpp \
  *            src/odin/sh4_ops.cpp src/odin/sh4_onchip.cpp src/odin/sh4_host.cpp src/odin/sh4_translate.cpp \
- *            src/odin/sh4_fsca.cpp src/odin/host_code.cpp -o sh4_tests
+ *            src/odin/sh4_fsca.cpp src/odin/sh4_clock.cpp src/odin/host_code.cpp -o sh4_tests
  * Use:   sh4_tests [-v]
  * Exit status is 0 when every check passes. */
 
@@ -1757,6 +1757,375 @@ void test_dmac_blocks()
 	}
 }
 
+/* Displacements of a branch and of a PC-relative load or mova at `from` */
+uint16_t disp8(uint32_t from, uint32_t to) { return static_cast<uint16_t>(((to - from - 4) >> 1) & 0xFF); }
+uint16_t disp12(uint32_t from, uint32_t to) { return static_cast<uint16_t>(((to - from - 4) >> 1) & 0xFFF); }
+uint16_t pool(uint32_t from, uint32_t to) { return static_cast<uint16_t>((to - ((from & ~3u) + 4)) >> 2); }
+
+constexpr uint32_t TCNT0 = 0xFFD8000C;
+
+/* The first instructions at CODE start timer channel 0: TCOR0 and TCNT0
+ * from `tcor`, TCR0 `tcr`, IPRA `ipra`, then TSTR. The program goes on at
+ * CODE + 0x0C. mov.l r5,@r1 / mov.l r5,@(4,r1) / mov.w r0,@(8,r1) /
+ * mov.w r6,@r3 / add #-4,r1 / mov.b r7,@r1 */
+void start_timer(Machine &m, Sh4State &st, uint32_t tcor, uint32_t tcr, uint32_t ipra)
+{
+	m.code(CODE, {0x2152, 0x1151, 0x8114, 0x2361, 0x71FC, 0x2170});
+	st.r[0] = tcr;
+	st.r[1] = 0xFFD80008;
+	st.r[3] = 0xFFD00004;
+	st.r[5] = tcor;
+	st.r[6] = ipra;
+	st.r[7] = 1;
+}
+
+/* The wait of PHARRIER (MARKDOWN/101), on TCNT0 at Pck/16, TCOR0 = 120:
+ * the date kept in a table, a call that works out the counts since it,
+ * through the FPU and a second call, until they are over 99; then a new
+ * date. With `irq`, the underflow interrupts and its handler counts in
+ * R13. R10 counts the waits. */
+void pharrier_wait(Machine &m, bool irq)
+{
+	constexpr uint32_t O = CODE + 0x0C, F = CODE + 0x100, G = CODE + 0x180, H = RAM + 0x6600;
+	Sh4State st = m.state();
+
+	start_timer(m, st, 120, irq ? 0x21 : 0x01, irq ? 0xF000 : 0);
+	/* mov.l &table,r3 / mov.l &TCNT0,r2 / mov.l @r2,r0 / mov.l r0,@r3; then the wait: jsr @r11 /
+	 * mov #0,r4 / cmp/hi r9,r0 / bf/s back / mov #79,r1; add #1,r10 / bra to the date / nop */
+	m.code(O, {static_cast<uint16_t>(0xD300 | pool(O, O + 0x1C)), static_cast<uint16_t>(0xD200 | pool(O + 2, O + 0x20)),
+	           0x6022, 0x2302, 0x4B0B, 0xE400, 0x3096, static_cast<uint16_t>(0x8F00 | disp8(O + 0x0E, O + 0x08)),
+	           0xE14F, 0x7A01, static_cast<uint16_t>(0xA000 | disp12(O + 0x14, O)), NOP});
+	m.put32(O + 0x1C, DATA);
+	m.put32(O + 0x20, TCNT0);
+	/* mov.l r14,@-r15 / mov r4,r0 / sts.l pr,@-r15 / mov r15,r14 / mov.l &table,r1 / shll2 r0 /
+	 * mov.l &TCNT0,r2 / mov.l @(r0,r1),r0 / mov.l @r2,r1 / bra / sub r1,r0 / cmp/pz r0 / bf/s wrapped /
+	 * lds r0,fpul / bra on / float fpul,fr4; wrapped: add #121,r0 / lds r0,fpul / float fpul,fr4 / nop;
+	 * on: mova k,r0 / fmov.s @r0,fr1 / mov.l &G,r1 / jsr @r1 / fmul fr1,fr4 / mov r14,r15 /
+	 * lds.l @r15+,pr / rts / mov.l @r15+,r14 */
+	m.code(F, {0x2FE6, 0x6043, 0x4F22, 0x6EF3, static_cast<uint16_t>(0xD100 | pool(F + 0x08, F + 0x60)), 0x4008,
+	           static_cast<uint16_t>(0xD200 | pool(F + 0x0C, F + 0x64)), 0x001E, 0x6122,
+	           static_cast<uint16_t>(0xA000 | disp12(F + 0x12, F + 0x16)), 0x3018, 0x4011,
+	           static_cast<uint16_t>(0x8F00 | disp8(F + 0x18, F + 0x20)), 0x405A,
+	           static_cast<uint16_t>(0xA000 | disp12(F + 0x1C, F + 0x28)), 0xF42D,
+	           0x7079, 0x405A, 0xF42D, NOP,
+	           static_cast<uint16_t>(0xC700 | pool(F + 0x28, F + 0x68)), 0xF108,
+	           static_cast<uint16_t>(0xD100 | pool(F + 0x2C, F + 0x6C)), 0x410B, 0xF412, 0x6FE3, 0x4F26, 0x000B,
+	           0x6EF6});
+	m.put32(F + 0x60, DATA);
+	m.put32(F + 0x64, TCNT0);
+	m.put32(F + 0x68, bits(0.5f));
+	m.put32(F + 0x6C, G);
+	/* mova 2^31,r0 / fmov.s @r0,fr1 / mov.l r14,@-r15 / fcmp/gt fr4,fr1 / bf/s big / mov r15,r14 /
+	 * ftrc fr4,fpul / bra out / sts fpul,r0; big: mov #-1,r0; out: mov r14,r15 / rts / mov.l @r15+,r14 */
+	m.code(G, {static_cast<uint16_t>(0xC700 | pool(G, G + 0x20)), 0xF108, 0x2FE6, 0xF145,
+	           static_cast<uint16_t>(0x8F00 | disp8(G + 0x08, G + 0x12)), 0x6EF3, 0xF43D,
+	           static_cast<uint16_t>(0xA000 | disp12(G + 0x0E, G + 0x14)), 0x005A, 0xE0FF, 0x6FE3, 0x000B,
+	           0x6EF6});
+	m.put32(G + 0x20, bits(2147483648.0f));
+	/* The handler, in bank 1: mov.l &TCR0,r1 / mov #0x21,r0 / mov.w r0,@r1 (UNF cleared) / add #1,r13 /
+	 * rte / nop */
+	m.code(H, {static_cast<uint16_t>(0xD100 | pool(H, H + 0x10)), 0xE021, 0x2101, 0x7D01, 0x002B, NOP});
+	m.put32(H + 0x10, 0xFFD80010);
+	st.vbr = H - 0x600;
+	st.r[9] = 49;
+	st.r[11] = F;
+	m.cpu.load(st);
+}
+
+/* A wait whose value goes through fmul fr4,fr4 (TCOR0 = 0x10000, Pck/16):
+ * as long as (counts since the date - 50.0)^2 is over 400, then a new date.
+ * A square does not move one way: the turn is not counted. mov.l @r2,r3;
+ * wait: mov.l @r2,r1 / mov r3,r0 / sub r1,r0 / lds r0,fpul /
+ * float fpul,fr4 / fsub fr2,fr4 / fmul fr4,fr4 / fcmp/gt fr1,fr4 / bt wait;
+ * add #1,r10 / bra to the date / nop */
+void square_wait(Machine &m)
+{
+	constexpr uint32_t W = CODE + 0x0E;
+	Sh4State st = m.state();
+
+	start_timer(m, st, 0x10000, 0x01, 0);
+	m.code(CODE + 0x0C, {0x6322, 0x6122, 0x6033, 0x3018, 0x405A, 0xF42D, 0xF421, 0xF442, 0xF415,
+	                     static_cast<uint16_t>(0x8900 | disp8(W + 0x10, W)), 0x7A01,
+	                     static_cast<uint16_t>(0xA000 | disp12(W + 0x14, CODE + 0x0C)), NOP});
+	st.r[2] = TCNT0;
+	st.fr[1] = bits(400.0f);
+	st.fr[2] = bits(50.0f);
+	m.cpu.load(st);
+}
+
+/* A long turn, 45 cycles: about three counts of Pck/4 and, its length
+ * odd, a read on every cycle of a count in time. It leaves TCNT0 in FPUL
+ * while that is over 0x200 (TCOR0 = 0x400); out of the wait, what the last
+ * turn left there is added up in R12: the registers of the last turn
+ * counted are those that turn would have left. A delay out of the wait,
+ * drawn from R3 (R3 = R3 * R11 + R13), moves the reads across the counts.
+ * wait: mov.l @r2,r1 / cmp/hi r9,r1 / bf out / lds r1,fpul / 39 nop /
+ * bra wait / nop; out: sts fpul,r0 / add r0,r12 / add #1,r10 /
+ * mul.l r11,r3 / sts macl,r3 / add r13,r3 / mov r3,r0 / shlr16 r0 /
+ * and #15,r0 / add #1,r0 / dt r0 / bf back to dt / bra wait / nop */
+void leaving_wait(Machine &m)
+{
+	constexpr uint32_t W = CODE + 0x0C, OUT = W + 0x60;
+	Sh4State st = m.state();
+
+	start_timer(m, st, 0x400, 0x00, 0);
+	m.code(W, {0x6122, 0x3196, static_cast<uint16_t>(0x8B00 | disp8(W + 4, OUT)), 0x415A});
+	m.code(W + 0x56, {static_cast<uint16_t>(0xA000 | disp12(W + 0x56, W)), NOP});
+	m.code(OUT, {0x005A, 0x3C0C, 0x7A01, 0x03B7, 0x031A, 0x33DC, 0x6033, 0x4029, 0xC90F, 0x7001, 0x4010, 0x8BFD,
+	             static_cast<uint16_t>(0xA000 | disp12(OUT + 0x18, W)), NOP});
+	st.r[2] = TCNT0;
+	st.r[9] = 0x200;
+	st.r[11] = 1664525;
+	st.r[13] = 1013904223;
+	m.cpu.load(st);
+}
+
+/* A wait on the counts since a date in the memory (Pck/16, TCOR0 =
+ * 0x10000), whose way also goes by that date: one more pair of nop when it
+ * is odd. The load of the date is taken by mov r0,r5: compared, not
+ * loaded again, so a turn found for a date is not counted for another.
+ * mov.l @r2,r3 / mov.l r3,@r6; wait: mov.l @r6,r0 / mov r0,r5 /
+ * mov.l @r2,r1 / sub r1,r0 / cmp/hi r9,r0 / bt out / mov r5,r0 / tst #1,r0 /
+ * bt even / nop / nop; even: bra wait / nop; out: add #1,r10 /
+ * bra to the date / nop */
+void dated_wait(Machine &m)
+{
+	constexpr uint32_t W = CODE + 0x10, OUT = W + 0x1A;
+	Sh4State st = m.state();
+
+	start_timer(m, st, 0x10000, 0x01, 0);
+	m.code(CODE + 0x0C, {0x6322, 0x2632, 0x6062, 0x6503, 0x6122, 0x3018, 0x3096,
+	                     static_cast<uint16_t>(0x8900 | disp8(W + 0x0A, OUT)), 0x6053, 0xC801,
+	                     static_cast<uint16_t>(0x8900 | disp8(W + 0x10, W + 0x16)), NOP, NOP,
+	                     static_cast<uint16_t>(0xA000 | disp12(W + 0x16, W)), NOP, 0x7A01,
+	                     static_cast<uint16_t>(0xA000 | disp12(OUT + 2, CODE + 0x0C)), NOP});
+	st.r[2] = TCNT0;
+	st.r[6] = DATA + 0x200;
+	st.r[9] = 40;
+	m.cpu.load(st);
+}
+
+/* A wait while TCNT0 is over a bound (Pck/4, TCOR0 = 0x200), then one on
+ * the underflow; the bound one count higher at each, in R9 or in the
+ * memory: a turn found for a bound is not counted for another. In R9, the
+ * turn stores R7 where the bound goes out of it: a turn found for a word
+ * there is not counted for another either. wait: mov.l @r2,r1 /
+ * mov.l @r6,r9 or mov.l r7,@r6 / cmp/hi r9,r1 / bt wait; add #1,r10;
+ * under: mov.w @r8,r0 (TCR0) / shlr8 r0 / tst #1,r0 / bt under /
+ * mov #0,r0 / mov.w r0,@r8 / add #1,r9 / mov.l r9,@r6 / bra wait / nop */
+void bound_wait(Machine &m, bool in_memory)
+{
+	constexpr uint32_t W = CODE + 0x0C;
+	Sh4State st = m.state();
+
+	start_timer(m, st, 0x200, 0x00, 0);
+	m.code(W, {0x6122, static_cast<uint16_t>(in_memory ? 0x6962 : 0x2672), 0x3196,
+	           static_cast<uint16_t>(0x8900 | disp8(W + 6, W)), 0x7A01, 0x6081, 0x4019, 0xC801,
+	           static_cast<uint16_t>(0x8900 | disp8(W + 0x10, W + 0x0A)), 0xE000, 0x2801, 0x7901, 0x2692,
+	           static_cast<uint16_t>(0xA000 | disp12(W + 0x1A, W)), NOP});
+	m.put32(DATA + 0x300, 0x40);
+	st.r[2] = TCNT0;
+	st.r[6] = DATA + 0x300;
+	st.r[8] = 0xFFD80010;
+	st.r[9] = 0x40;
+	m.cpu.load(st);
+}
+
+/* A wait that stores R7 while TCNT0 is over 0x100 (Pck/4, TCOR0 = 0x200);
+ * the wait on the underflow after it stores R10 there: a turn found for a
+ * word there is not counted for another. wait: mov.l @r2,r1 /
+ * cmp/hi r9,r1 / bf out / mov.l r7,@(4,r6) / bra wait / nop; out:
+ * add #1,r10; under: mov.w @r8,r0 / shlr8 r0 / tst #1,r0 / bt under /
+ * mov #0,r0 / mov.w r0,@r8 / mov.l r10,@(4,r6) / bra wait / nop */
+void storing_wait(Machine &m)
+{
+	constexpr uint32_t W = CODE + 0x0C;
+	Sh4State st = m.state();
+
+	start_timer(m, st, 0x200, 0x00, 0);
+	m.code(W, {0x6122, 0x3196, static_cast<uint16_t>(0x8B00 | disp8(W + 4, W + 0x0C)), 0x1671,
+	           static_cast<uint16_t>(0xA000 | disp12(W + 8, W)), NOP, 0x7A01, 0x6081, 0x4019, 0xC801,
+	           static_cast<uint16_t>(0x8900 | disp8(W + 0x14, W + 0x0E)), 0xE000, 0x2801, 0x16A1,
+	           static_cast<uint16_t>(0xA000 | disp12(W + 0x1C, W)), NOP});
+	st.r[2] = TCNT0;
+	st.r[6] = DATA + 0x300;
+	st.r[8] = 0xFFD80010;
+	st.r[9] = 0x100;
+	m.cpu.load(st);
+}
+
+/* The wait on a saw below, that stores R7 while it waits; out of it, what
+ * is there is added up in R12 and R10 stored there: a turn found for a word
+ * there is not counted for another. With `interrupted`, channel 1 (TCOR1 =
+ * 50, Pck/4) interrupts too, and its handler stores there a count of its
+ * own (R2 of bank 1). wait: mov.l @r2,r1 / mov r1,r0 / shll16 r0 /
+ * shll8 r0 / cmp/hi r9,r0 / bt out / mov.l r7,@(4,r6) / bra wait / nop;
+ * out: mov.l @(4,r6),r0 / add r0,r12 / add #1,r10 / mov.l r10,@(4,r6) /
+ * bra wait / nop */
+void reading_wait(Machine &m, bool interrupted)
+{
+	const uint32_t W = interrupted ? CODE + 0x16 : CODE + 0x0C;
+	constexpr uint32_t H = RAM + 0x6600;
+	Sh4State st = m.state();
+
+	start_timer(m, st, 0x30000, 0x00, interrupted ? 0x0F00 : 0);
+	if (interrupted) {
+		/* mov.l r11,@r4 (TCOR1) / mov.l r11,@(4,r4) (TCNT1) / mov #0x20,r0 / mov.w r0,@(8,r4) (TCR1) /
+		 * mov.b r13,@r1 (TSTR = 3) */
+		m.code(CODE + 0x0C, {0x24B2, 0x14B1, 0xE020, 0x8144, 0x21D0});
+		/* mov.l &word,r1 / add #1,r2 / mov.l r2,@r1 / mov.l &TCR1,r1 / mov #0x20,r0 / mov.w r0,@r1 /
+		 * rte / nop */
+		m.code(H, {static_cast<uint16_t>(0xD100 | pool(H, H + 0x14)), 0x7201, 0x2122,
+		           static_cast<uint16_t>(0xD100 | pool(H + 6, H + 0x18)), 0xE020, 0x2101, 0x002B, NOP});
+		m.put32(H + 0x14, DATA + 0x304);
+		m.put32(H + 0x18, 0xFFD8001C);
+		st.vbr = H - 0x600;
+		st.r[4] = 0xFFD80014;
+		st.r[11] = 50;
+		st.r[13] = 3;
+	}
+	m.code(W, {0x6122, 0x6013, 0x4028, 0x4018, 0x3096, static_cast<uint16_t>(0x8900 | disp8(W + 0x0A, W + 0x12)),
+	           0x1671, static_cast<uint16_t>(0xA000 | disp12(W + 0x0E, W)), NOP, 0x5061, 0x3C0C, 0x7A01, 0x16A1,
+	           static_cast<uint16_t>(0xA000 | disp12(W + 0x1A, W)), NOP});
+	st.r[2] = TCNT0;
+	st.r[6] = DATA + 0x300;
+	st.r[9] = 0xF0000000;
+	m.cpu.load(st);
+}
+
+/* A wait on TCNT0 << 24 (Pck/4, TCOR0 = 0x30000): over 0xF0000000 for 15
+ * counts in 256, a saw. The turns are counted only between two of its
+ * teeth. wait: mov.l @r2,r1 / mov r1,r0 / shll16 r0 / shll8 r0 /
+ * cmp/hi r9,r0 / bf wait; add #1,r10 / bra wait / nop */
+void saw_wait(Machine &m)
+{
+	constexpr uint32_t W = CODE + 0x0C;
+	Sh4State st = m.state();
+
+	start_timer(m, st, 0x30000, 0x00, 0);
+	m.code(W, {0x6122, 0x6013, 0x4028, 0x4018, 0x3096, static_cast<uint16_t>(0x8B00 | disp8(W + 0x0A, W)), 0x7A01,
+	           static_cast<uint16_t>(0xA000 | disp12(W + 0x0E, W)), NOP});
+	st.r[2] = TCNT0;
+	st.r[9] = 0xF0000000;
+	m.cpu.load(st);
+}
+
+/* Waits whose turns are not counted, at Pck/4. One counts its turns, in
+ * the memory or in R12, while TCNT0 is over 0x200 (TCOR0 = 0x400):
+ * mov.l @r2,r1 / mov.l @r6,r7 / add #1,r7 / mov.l r7,@r6 / mov #0,r7 or
+ * add #1,r12 / cmp/hi r9,r1 / bt wait; add #1,r10 / bra wait / nop. */
+void counting_wait(Machine &m, bool in_memory)
+{
+	constexpr uint32_t W = CODE + 0x0C;
+	Sh4State st = m.state();
+
+	start_timer(m, st, 0x400, 0x00, 0);
+	if (in_memory) {
+		m.code(W, {0x6122, 0x6762, 0x7701, 0x2672, 0xE700, 0x3196, static_cast<uint16_t>(0x8900 | disp8(W + 0x0C, W)),
+		           0x7A01, static_cast<uint16_t>(0xA000 | disp12(W + 0x10, W)), NOP});
+	} else {
+		m.code(W, {0x6122, 0x7C01, 0x3196, static_cast<uint16_t>(0x8900 | disp8(W + 6, W)), 0x7A01,
+		           static_cast<uint16_t>(0xA000 | disp12(W + 0x0A, W)), NOP});
+	}
+	st.r[2] = TCNT0;
+	st.r[6] = DATA + 0x100;
+	st.r[9] = 0x200;
+	m.cpu.load(st);
+}
+
+/* The other adds up what it reads until the sum is over 0x200000 (TCOR0 =
+ * 0x10000): mov.l @r2,r1 / add r1,r0 / cmp/hi r9,r0 / bf wait; add #1,r10 /
+ * bra wait / mov #0,r0 */
+void summing_wait(Machine &m)
+{
+	constexpr uint32_t W = CODE + 0x0C;
+	Sh4State st = m.state();
+
+	start_timer(m, st, 0x10000, 0x00, 0);
+	m.code(W, {0x6122, 0x301C, 0x3096, static_cast<uint16_t>(0x8B00 | disp8(W + 0x06, W)), 0x7A01,
+	           static_cast<uint16_t>(0xA000 | disp12(W + 0x0A, W)), 0xE000});
+	st.r[2] = TCNT0;
+	st.r[9] = 0x200000;
+	m.cpu.load(st);
+}
+
+/* Loops that wait on a timer (sh4_clock.cpp): one machine counts the turns
+ * it can without running them, the other runs them all, read and as host
+ * code, in slices of every length. After each slice the two must be the
+ * same: registers, on-chip state, memory, the cycles run over and the
+ * cycles in all, run or counted. */
+void test_clock_waits()
+{
+	g_test = "clock waits";
+	struct Wait {
+		const char *name;
+		std::function<void(Machine &)> set;
+		bool counted;	/* some turns are */
+		std::function<uint32_t(const Sh4State &)> interrupts = nullptr;	/* the count its handler keeps */
+	};
+	const Wait waits[] = {
+		{"the wait of PHARRIER", [](Machine &m) { pharrier_wait(m, false); }, true},
+		{"the wait of PHARRIER, the timer interrupting", [](Machine &m) { pharrier_wait(m, true); }, true,
+		 [](const Sh4State &st) { return st.r[13]; }},
+		{"a wait on a saw", saw_wait, true},
+		{"a wait left with what its last turn left", leaving_wait, true},
+		{"a wait whose date also chooses its way", dated_wait, true},
+		{"a wait on a bound in a register, that stores", [](Machine &m) { bound_wait(m, false); }, true},
+		{"a wait on a bound in the memory", [](Machine &m) { bound_wait(m, true); }, true},
+		{"a wait that stores, the program storing there between waits", storing_wait, true},
+		{"a wait that stores, read out of it", [](Machine &m) { reading_wait(m, false); }, true},
+		{"a wait that stores, read out of it, an interrupt storing there",
+		 [](Machine &m) { reading_wait(m, true); }, true, [](const Sh4State &st) { return st.rbank[2]; }},
+		{"a wait through a square", square_wait, false},
+		{"a wait that counts its turns in the memory", [](Machine &m) { counting_wait(m, true); }, false},
+		{"a wait that counts its turns in a register", [](Machine &m) { counting_wait(m, false); }, false},
+		{"a wait that adds up what it reads", summing_wait, false},
+	};
+	const auto same = [](const Machine &a, const Machine &b) {
+		const Sh4State x = a.state(), y = b.state();
+
+		return std::memcmp(&x, &y, sizeof(x)) == 0 && a.ram == b.ram && a.onchip == b.onchip &&
+		       a.cpu.instructions() + a.cpu.skipped() == b.cpu.instructions() + b.cpu.skipped();
+	};
+
+	for (const Wait &w : waits) {
+		for (const bool host : {false, true}) {
+			for (const uint32_t longest : {200u, 3000u, 30000u}) {
+				const std::string what = std::string(w.name) + (host ? ", as host code" : ", read") +
+				                         ", slices up to " + std::to_string(longest);
+				Machine on, off;
+				uint32_t series = longest, slices = 0, differ = 0;
+
+				on.cpu.set_translate(host);
+				off.cpu.set_translate(host);
+				off.cpu.set_clock_waits(false);
+				w.set(on);
+				w.set(off);
+				const uint32_t total = longest < 10000 ? 300000 : 3000000;
+
+				for (uint32_t done = 0; done < total && differ == 0; slices++) {
+					series = series * 1664525u + 1013904223u;
+					const uint32_t cycles = 1 + (series >> 8) % longest;
+					const int32_t over_on = on.cpu.run(static_cast<int32_t>(cycles));
+					const int32_t over_off = off.cpu.run(static_cast<int32_t>(cycles));
+
+					differ += over_on != over_off || !same(on, off);
+					done += cycles;
+				}
+				check(differ == 0, what + ": the same after each slice");
+				check(on.state().r[10] > 4, what + ": waits went by");
+				if (w.interrupts) {
+					check(w.interrupts(on.state()) > 2, what + ": the timer interrupted");
+				}
+				if (longest > 2 * 128 + 64) {
+					check(w.counted == (on.cpu.skipped() > off.cpu.skipped()),
+					      what + (w.counted ? ": turns counted" : ": no turn counted"));
+				}
+			}
+		}
+	}
+}
+
 } /* namespace */
 
 int main(int argc, char **argv)
@@ -1784,6 +2153,7 @@ int main(int argc, char **argv)
 	test_store_queues();
 	test_mpx_time();
 	test_dmac_blocks();
+	test_clock_waits();
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures == 0 ? 0 : 1;
 }
