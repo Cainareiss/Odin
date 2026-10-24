@@ -79,6 +79,7 @@ Antarctic::List::clear()
 	view.num_mvs = 0;
 	view.num_instances = 0;
 	view.mv2_index = ~0u;
+	mv_index = ~0u;
 	view.num_mats = 0;
 	view.num_texs = 0;
 	view.num_lss = 0;
@@ -147,10 +148,18 @@ Antarctic::list_state(odin_mesh_t &mesh)
 	}
 	mesh.ls_index = l.num_lss - 1;
 
-	mesh.mv_index = l.num_mvs;
+	/* The modelview as well, when it changes; second modelviews may be
+	 * listed in between. */
+	odin_modelview_t mv;
+
+	get_modelview(mv);
+	if (m_list->mv_index >= l.num_mvs || !same_bytes(l.mv_list[m_list->mv_index], mv)) {
+		m_list->mv_index = l.num_mvs;
+		l.mv_list[l.num_mvs++] = mv;
+	}
+	mesh.mv_index = m_list->mv_index;
 	mesh.num_instances = 1;
 	l.num_instances = 1;
-	get_modelview(l.mv_list[l.num_mvs++]);
 
 	/* The second modelview (161 with bit 18) is listed when it changes. */
 	if (l.mv2_index >= ODIN_LIST_MAX_MODELVIEWS ||

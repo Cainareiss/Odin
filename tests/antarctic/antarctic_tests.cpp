@@ -294,6 +294,7 @@ void test_objects_listed_once()
 	        0x00010104,
 	        0x00051064, 0x00000001, 0x00000000, 0x00000000,
 	        0x00051043,
+	        0x00030161, f(0.0f), f(0.0f), f(-5.0f),	/* the last row of the modelview */
 	        0x00011083,
 	        VERTEX_CLOSING(0.0f, -5.0f), VERTEX_CLOSING(1.0f, -5.0f),
 	        END });
@@ -315,6 +316,9 @@ void test_objects_listed_once()
 	      "and so does a light that changes");
 	check(m.list->ls_tables[fourth.ls_index][0][6] == 0x0400 && m.list->ls_tables[fourth.ls_index][0][7] == 0x0200 &&
 	      m.list->ls_tables[first.ls_index][0][6] == 0, "with its points, the even one from the upper half");
+	check(first.mv_index == fourth.mv_index && fifth.mv_index != fourth.mv_index && m.list->num_mvs == 3 &&
+	      m.list->mv_list[fifth.mv_index].mtx[3][2] == -5.0f,
+	      "the modelview is listed once, and again when it changes");
 }
 
 /* The grid of the BOOTROM C.R.T. test: the 0E8 names its texhead, and its

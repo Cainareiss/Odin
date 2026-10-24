@@ -378,6 +378,8 @@ private:
 		std::unique_ptr<uint16_t[][4][16]> ls_tables;
 		/* The 194 words of the lightset listed last */
 		uint32_t tables[4][8];
+		/* The modelview listed last for a mesh */
+		uint32_t mv_index;
 		std::array<std::array<std::unique_ptr<odin_mesh_t[]>, 8>, 8> meshes;
 		std::vector<odin_vertex_body_t> verts;
 		std::vector<uint32_t> indices;
