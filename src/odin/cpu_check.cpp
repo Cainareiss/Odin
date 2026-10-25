@@ -50,7 +50,9 @@ check_processor()
 	__builtin_cpu_init();
 	if (__builtin_cpu_supports(ODIN_CPU_LEVEL))
 		return;
-	std::fprintf(stderr, "Odin: %s\n", ODIN_CPU_NEEDS);
+	/* Not fprintf: where it is fortified (_FORTIFY_SOURCE, Ubuntu), it
+	 * is inlined, built for the processor of the build */
+	std::fputs("Odin: " ODIN_CPU_NEEDS "\n", stderr);
 	SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Odin", ODIN_CPU_NEEDS, nullptr);
 	std::_Exit(1);
 }
