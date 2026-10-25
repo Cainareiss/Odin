@@ -22,6 +22,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -111,6 +112,38 @@ build_program(const std::string &source, const std::string &name)
 	return program;
 }
 
+/* Black, its alpha at 1 */
+void
+clear_texture(GLuint fb)
+{
+	glBindFramebuffer(GL_FRAMEBUFFER, fb);
+	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+/* Each parameter a constant of the source: its value does not change while
+ * the filter is used, and the driver then leaves out the work it turns off
+ * (the crt pass of Lola Retro on an HD 520: 115 ms a picture with uniforms,
+ * 6 ms so). One declared otherwise stays a uniform. */
+void
+with_constants(std::string &source, const std::vector<std::pair<std::string, float>> &parameters)
+{
+	for (const auto &[name, value] : parameters) {
+		const std::string uniform = "uniform float " + name + ";";
+		char literal[32];
+
+		std::snprintf(literal, sizeof(literal), "%.9g", static_cast<double>(value));
+
+		const std::string constant = "const float " + name + " = " + literal +
+		                             (std::strpbrk(literal, ".e") ? "" : ".0") + ";";
+
+		for (size_t at = source.find(uniform); at != std::string::npos; at = source.find(uniform, at))
+			source.replace(at, uniform.size(), constant);
+	}
+}
+
 /* A texture of 86Box is RGB: here RGBA, which every driver draws into, its
  * alpha kept at 1 (cleared so, never written: draw) */
 void
@@ -126,9 +159,8 @@ make_texture(GLuint &texture, GLuint &fb, unsigned w, unsigned h, bool is_float)
 		glGenFramebuffers(1, &fb);
 	glBindFramebuffer(GL_FRAMEBUFFER, fb);
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture, 0);
-	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-	glClear(GL_COLOR_BUFFER_BIT);
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	clear_texture(fb);
 }
 
 } /* namespace */
@@ -222,6 +254,7 @@ PictureFilter::build(const std::string &preset, const std::map<std::string, std:
 			return glGetUniformLocation(pass.program, uniform_name.c_str());
 		};
 
+		with_constants(sources[i], parameters);
 		pass.program = build_program(sources[i], name);
 		if (!pass.program)
 			return false;
@@ -298,7 +331,9 @@ PictureFilter::frame(unsigned w, unsigned h)
 	return m_frame.fb;
 }
 
-/* The size of each pass for a window w by h, its texture and its corners */
+/* The size of each pass for a window w by h, its texture and its corners;
+ * the textures black again (a smaller picture leaves nothing of the larger
+ * around it) */
 void
 PictureFilter::size(unsigned w, unsigned h)
 {
@@ -319,6 +354,8 @@ PictureFilter::size(unsigned w, unsigned h)
 				pass.out.texture_size = texture_size;
 				make_texture(pass.out.texture, pass.out.fb, static_cast<unsigned>(texture_size[0]),
 				             static_cast<unsigned>(texture_size[1]), pass.out.is_float);
+			} else {
+				clear_texture(pass.out.fb);
 			}
 		}
 
@@ -406,10 +443,9 @@ PictureFilter::draw(int x, int y, unsigned w, unsigned h, unsigned count)
 			glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 			glViewport(x, y, static_cast<GLsizei>(w), static_cast<GLsizei>(h));
 		} else {
+			/* No pass leaves a pixel of its picture undrawn: no clear
+			 * (8192 by 512 floats for the beam of Lola Retro) */
 			glBindFramebuffer(GL_FRAMEBUFFER, pass.out.fb);
-			glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-			glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-			glClear(GL_COLOR_BUFFER_BIT);
 			glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE);
 			glViewport(0, 0, static_cast<GLsizei>(pass.out.size[0]), static_cast<GLsizei>(pass.out.size[1]));
 		}
