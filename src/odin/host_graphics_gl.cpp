@@ -16,7 +16,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* The graphics card of the host with OpenGL (host_graphics.hpp). */
+/* The graphics card of the host with OpenGL (host_graphics.hpp). Each step
+ * sets the state it draws with, its viewport too: none counts on what
+ * another one left. */
 
 #include "odin/host_graphics.hpp"
 
@@ -251,9 +253,7 @@ GlGraphics::draw_bezel(HostImage bezel, unsigned window_w, unsigned window_h)
 
 	const float k = std::min(ww / bezel.w, wh / bezel.h);
 	const GLsizei w = static_cast<GLsizei>(std::lround(bezel.w * k)), h = static_cast<GLsizei>(std::lround(bezel.h * k));
-	GLint viewport[4];
 
-	glGetIntegerv(GL_VIEWPORT, viewport);
 	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
 	glViewport((static_cast<GLsizei>(window_w) - w) / 2, (static_cast<GLsizei>(window_h) - h) / 2, w, h);
 	glEnable(GL_BLEND);
@@ -268,7 +268,6 @@ GlGraphics::draw_bezel(HostImage bezel, unsigned window_w, unsigned window_h)
 	glBindTexture(GL_TEXTURE_2D, 0);
 	glUseProgram(0);
 	glDisable(GL_BLEND);
-	glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
 }
 
 void
@@ -295,9 +294,6 @@ GlGraphics::draw_blurred_sides(HostPicture picture, PictureRect rect, unsigned w
 	}
 
 	/* The picture smaller, twice */
-	GLint viewport[4];
-
-	glGetIntegerv(GL_VIEWPORT, viewport);
 	glBindFramebuffer(GL_READ_FRAMEBUFFER, picture.id);
 	glReadBuffer(GL_COLOR_ATTACHMENT0);
 	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_sides_fb[0]);
@@ -334,7 +330,6 @@ GlGraphics::draw_blurred_sides(HostPicture picture, PictureRect rect, unsigned w
 	glBindVertexArray(0);
 	glBindTexture(GL_TEXTURE_2D, 0);
 	glUseProgram(0);
-	glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
 }
 
 void
