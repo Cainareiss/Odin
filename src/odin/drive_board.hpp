@@ -27,13 +27,14 @@
 namespace odin {
 
 /* The drive board of a cabinet, the motor of its wheel, as the outputs of
- * the I/O board command it; not yet the board itself. NASCAR: 838-13366
- * running EPR-20512, as Sega Rally 2. The command is a byte on eight
- * outputs, TX0 first, low when set (deluxe wiring: CN9 pins 25-32 of the
- * 837-13844; the decoding of Flycast, measured here: 00 at power-on, C1
- * and C7 to start, 40 at rest). Its commands (njz3, DRIVEBOARD.md): 00-3F
- * a force to the left (00 none), 40-7F to the right (40 none), 8X the
- * tests, C6, C7, CB, FF the others. */
+ * the I/O board command it: the command, and the force it asks for when
+ * the board itself does not run (no program, or ODIN_DRIVE=imitation;
+ * drive_838_13366 runs it). NASCAR: 838-13366 running EPR-20512, as Sega
+ * Rally 2. The command is a byte on eight outputs, TX0 first, low when set
+ * (deluxe wiring: CN9 pins 25-32 of the 837-13844; the decoding of
+ * Flycast, measured here: 00 at power-on, C1 and C7 to start, 40 at rest).
+ * Its commands (njz3, DRIVEBOARD.md): 00-3F a force to the left (00 none),
+ * 40-7F to the right (40 none), 8X the tests, C6, C7, CB, FF the others. */
 struct DriveBoard {
 	/* The strongest force each way */
 	static constexpr uint8_t MOST = 0x3F;
