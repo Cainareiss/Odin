@@ -78,6 +78,7 @@ OBJ := \
 	src/odin/save_folder.o \
 	src/odin/worker.o \
 	src/odin/hikaru.o \
+	src/odin/hikaru_netbd.o \
 	src/odin/hikaru_bus.o \
 	src/odin/hikaru_state.o \
 	src/odin/scheduler.o \
