@@ -326,6 +326,8 @@ MenuSession::draw_menu()
 		undo();
 	} else if (state.ask == MenuState::Ask::CLOSE_GAME) {
 		m_closing = true;
+	} else if (state.ask == MenuState::Ask::BACK) {
+		m_leaving = true;
 	} else if ((state.ask == MenuState::Ask::PART_DEFAULTS || state.ask == MenuState::Ask::PART_CLEAR) &&
 	           state.picked) {
 		change_part(*state.picked, state.ask == MenuState::Ask::PART_DEFAULTS);

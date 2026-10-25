@@ -200,6 +200,10 @@ library(const Options &command, const GameList &games, Settings &settings, const
 		}
 		if (display.menu_shown()) {
 			menus.wait();
+			if (menus.leaving()) {
+				menus.close();
+				display.open_library();
+			}
 			continue;
 		}
 

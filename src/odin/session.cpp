@@ -408,6 +408,8 @@ Session::frames()
 			m_menus.wait();
 			if (m_menus.closing())
 				m_end = Ended::CLOSED;
+			else if (m_menus.leaving())
+				close_menu();
 			continue;
 		}
 		follow_bar();

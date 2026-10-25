@@ -580,6 +580,15 @@ Menu::build(MenuState &state)
 	}
 
 	ImGui::End();
+	/* A click beside the frame goes back to the game or the library, as
+	 * Escape does: not the one that closes a list dropped open (it closes
+	 * after this picture), nor while a key, a button or a folder is asked
+	 * for */
+	if ((ImGui::IsMouseClicked(ImGuiMouseButton_Left) || ImGui::IsMouseClicked(ImGuiMouseButton_Right)) &&
+	    !ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow | ImGuiHoveredFlags_AllowWhenBlockedByPopup |
+	                            ImGuiHoveredFlags_AllowWhenBlockedByActiveItem) &&
+	    !popup_open() && !state.catching && !state.mapping && !state.hotkey_catching && !state.choosing)
+		state.ask = MenuState::Ask::BACK;
 	ImGui::Render();
 }
 

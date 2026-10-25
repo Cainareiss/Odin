@@ -347,8 +347,9 @@ struct MenuState {
 	uint64_t mapping_since = 0;
 	/* How far the button that presses is held toward Skip, 0 to 1 */
 	float skip_hold = 0.0f;
-	/* Close game, at the foot of the menu over a game, pressed twice */
-	enum class Ask { NONE, DEFAULTS, CLEAR, UNDO, PART_DEFAULTS, PART_CLEAR, CLOSE_GAME } ask = Ask::NONE;
+	/* Close game, at the foot of the menu over a game, pressed twice; back
+	 * to the game or the library, a click beside the frame */
+	enum class Ask { NONE, DEFAULTS, CLEAR, UNDO, PART_DEFAULTS, PART_CLEAR, CLOSE_GAME, BACK } ask = Ask::NONE;
 	bool undo = false;
 
 	/* What the gamepad asked since the last picture (menu_nav.hpp): the

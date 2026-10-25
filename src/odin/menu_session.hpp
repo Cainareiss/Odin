@@ -125,6 +125,9 @@ public:
 	bool tested_at(unsigned frame) const { return m_menu_test && frame % m_menu_test == 0; }
 	/* Close game was pressed again in the menu, taken */
 	bool closing() { return std::exchange(m_closing, false); }
+	/* A click beside the frame asked to go back to the game or the
+	 * library, taken */
+	bool leaving() { return std::exchange(m_leaving, false); }
 	/* The library: what the buttons of the menu an event starts ask
 	 * there; the name of the one that presses on the gamepad of player 1,
 	 * else 2 (empty: no gamepad) */
@@ -232,7 +235,7 @@ private:
 	 * changes the folders */
 	std::string m_states;
 	FolderDialog m_dialog;
-	bool m_menu_opened = false, m_closing = false;
+	bool m_menu_opened = false, m_closing = false, m_leaving = false;
 	/* A size of the window from the hands of the user, not kept yet */
 	bool m_custom_waits = false;
 	unsigned m_menu_pictures = 0;	/* still to draw */
