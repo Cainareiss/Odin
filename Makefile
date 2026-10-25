@@ -24,7 +24,12 @@ endif
 # Each object notes the headers it was built from, in a .d file next to it.
 DEP_FLAGS := -MMD -MP
 
-CXXFLAGS := -std=c++20 -pthread -I src -Wall -Wextra -Wpedantic -Wconversion -Wshadow $(PKG_CFLAGS) $(SDL_CFLAGS) $(OPT_FLAGS) $(PGO_FLAGS) $(DEP_FLAGS)
+# A product is fused with a sum only where the code says std::fma: every
+# processor, with FMA or without, then computes the same and draws the same
+# pictures (MARKDOWN/105 § 11).
+FP_FLAGS := -ffp-contract=off
+
+CXXFLAGS := -std=c++20 -pthread -I src -Wall -Wextra -Wpedantic -Wconversion -Wshadow $(PKG_CFLAGS) $(SDL_CFLAGS) $(OPT_FLAGS) $(FP_FLAGS) $(PGO_FLAGS) $(DEP_FLAGS)
 
 .PHONY: all install clean
 
@@ -163,7 +168,7 @@ IMGUI_OBJ := \
 	src/imgui/imgui_impl_sdl3.o \
 	src/imgui/imgui_impl_opengl3.o
 
-IMGUI_FLAGS := -std=c++20 -I src/imgui $(SDL_CFLAGS) $(OPT_FLAGS) $(PGO_FLAGS) $(DEP_FLAGS)
+IMGUI_FLAGS := -std=c++20 -I src/imgui $(SDL_CFLAGS) $(OPT_FLAGS) $(FP_FLAGS) $(PGO_FLAGS) $(DEP_FLAGS)
 
 # miniz and the 7z reader of the LZMA SDK as they come, for the archives of
 # the games: built without our warnings
@@ -174,7 +179,7 @@ ARCHIVE_OBJ := \
 	src/lzma/Bra.o src/lzma/Bra86.o src/lzma/BraIA64.o src/lzma/CpuArch.o src/lzma/Delta.o \
 	src/lzma/Lzma2Dec.o src/lzma/LzmaDec.o src/lzma/Ppmd7.o src/lzma/Ppmd7Dec.o
 
-ARCHIVE_FLAGS := $(OPT_FLAGS) $(PGO_FLAGS) $(DEP_FLAGS)
+ARCHIVE_FLAGS := $(OPT_FLAGS) $(FP_FLAGS) $(PGO_FLAGS) $(DEP_FLAGS)
 
 all: bin/odin
 
@@ -204,9 +209,6 @@ src/odin/menu_fonts.o: src/odin/menu_fonts.S src/odin/fonts/cozette.ttf
 	$(CXX) -c $< -o $@ -Wa,-I,src/odin
 
 -include $(patsubst %.o,%.d,$(OBJ) $(IMGUI_OBJ) $(ARCHIVE_OBJ))
-
-# A product is fused with a sum only where the code says std::fma.
-src/odin/sh4_ops.o: CXXFLAGS += -ffp-contract=off
 
 # The commit the binary is built from, for the menu; made again with each
 # commit
