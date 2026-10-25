@@ -28,6 +28,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include <GL/glew.h>
 
@@ -73,6 +74,13 @@ public:
 	void end_preparing() override;
 	unsigned programs_read_back() const override { return m_programs.read_back(); }
 	unsigned programs_compiled() const override { return m_programs.compiled(); }
+
+	bool has_stamps() const override;
+	uint32_t put_stamp() override;
+	bool reached(uint32_t stamp) override;
+	uint64_t stamp_time(uint32_t stamp) override;
+	void forget_stamp(uint32_t stamp, bool again) override;
+	void send_commands() override { glFlush(); }
 
 	void scene_to_pipe(unsigned slot) override;
 	void blend_scene_to_pipe(unsigned slot, unsigned buffer, uint32_t rate) override;
@@ -206,6 +214,9 @@ private:
 	} m_lists;
 	/* Each list of the pipe: its counts copied, or nullptr */
 	GLsync m_counted[3] = { nullptr, nullptr, nullptr };
+
+	/* The stamps not in use, to be put again */
+	std::vector<GLuint> m_stamps;
 };
 
 } /* namespace odin */

@@ -54,39 +54,19 @@ ms(uint64_t ns, uint64_t frames)
 
 } /* namespace */
 
-DrawTimes::DrawTimes(bool on)
-	: m_on(on), m_card(false), m_part(NUM_PARTS), m_within(false), m_frame(0), m_sums{},
-	  m_drawn(0), m_read(0), m_lists(0), m_fragments(0), m_fragments_worst(0)
+DrawTimes::DrawTimes(BoardDrawing &card, bool on)
+	: m_card(card), m_on(on), m_stamps(on && card.has_stamps()), m_part(NUM_PARTS), m_within(false),
+	  m_frame(0), m_sums{}, m_drawn(0), m_read(0), m_lists(0), m_fragments(0), m_fragments_worst(0)
 {
-	if (m_on) {
-		GLint bits = 0;
-
-		glGetQueryiv(GL_TIMESTAMP, GL_QUERY_COUNTER_BITS, &bits);
-		m_card = bits > 0;
-	}
 }
 
 DrawTimes::~DrawTimes()
 {
+	if (!m_stamps)
+		return;
 	for (std::vector<Mark> &frame : m_frames)
 		for (const Mark &mark : frame)
-			m_stamps.push_back(mark.stamp);
-	if (m_card && !m_stamps.empty())
-		glDeleteQueries(static_cast<GLsizei>(m_stamps.size()), m_stamps.data());
-}
-
-GLuint
-DrawTimes::new_stamp()
-{
-	GLuint id;
-
-	if (m_stamps.empty()) {
-		glGenQueries(1, &id);
-	} else {
-		id = m_stamps.back();
-		m_stamps.pop_back();
-	}
-	return id;
+			m_card.forget_stamp(mark.stamp, true);
 }
 
 void
@@ -109,10 +89,8 @@ DrawTimes::enter(Part part)
 	const Part before = m_part;
 	Mark mark = { part, host_ns(), 0 };
 
-	if (m_card) {
-		mark.stamp = new_stamp();
-		glQueryCounter(mark.stamp, GL_TIMESTAMP);
-	}
+	if (m_stamps)
+		mark.stamp = m_card.put_stamp();
 	m_frames[m_frame].push_back(mark);
 	m_part = part;
 	if (part < NUM_PARTS)
@@ -128,8 +106,8 @@ DrawTimes::end()
 	enter(NUM_PARTS);
 	m_within = false;
 	/* The card would get the last stamp with the next frame only. */
-	if (m_card)
-		glFlush();
+	if (m_stamps)
+		m_card.send_commands();
 
 	const std::vector<Mark> &frame = m_frames[m_frame];
 	std::array<uint64_t, NUM_PARTS> host{};
@@ -148,19 +126,16 @@ DrawTimes::end()
 void
 DrawTimes::read(std::vector<Mark> &frame)
 {
-	if (m_card && !frame.empty()) {
-		GLuint ready = 0;
+	if (m_stamps && !frame.empty()) {
+		const bool ready = m_card.reached(frame.back().stamp);
 
-		glGetQueryObjectuiv(frame.back().stamp, GL_QUERY_RESULT_AVAILABLE, &ready);
 		if (ready) {
 			std::array<uint64_t, NUM_PARTS> card{};
-			GLuint64 at = 0;
+			uint64_t at = m_card.stamp_time(frame[0].stamp);
 
-			glGetQueryObjectui64v(frame[0].stamp, GL_QUERY_RESULT, &at);
 			for (size_t i = 0; i + 1 < frame.size(); i++) {
-				GLuint64 next = 0;
+				const uint64_t next = m_card.stamp_time(frame[i + 1].stamp);
 
-				glGetQueryObjectui64v(frame[i + 1].stamp, GL_QUERY_RESULT, &next);
 				if (next > at)
 					card[frame[i].part] += next - at;
 				at = next;
@@ -170,13 +145,10 @@ DrawTimes::read(std::vector<Mark> &frame)
 				m_sums[i].card_worst = std::max(m_sums[i].card_worst, card[i]);
 			}
 			m_read++;
-			for (const Mark &mark : frame)
-				m_stamps.push_back(mark.stamp);
-		} else {
-			/* A stamp the card still owes is not asked again. */
-			for (const Mark &mark : frame)
-				glDeleteQueries(1, &mark.stamp);
 		}
+		/* A stamp the card still owes is not asked again. */
+		for (const Mark &mark : frame)
+			m_card.forget_stamp(mark.stamp, ready);
 	}
 	frame.clear();
 }
@@ -200,7 +172,7 @@ DrawTimes::tell() const
 		return;
 
 	std::fprintf(stderr, "drawing: %" PRIu64 " frames, a frame in ms: on the thread [its worst frame]", m_drawn);
-	if (m_card)
+	if (m_stamps)
 		std::fprintf(stderr, ", for the graphics card [its worst frame] over %" PRIu64 " frames\n", m_read);
 	else
 		std::fprintf(stderr, "; the graphics card tells no time\n");
@@ -214,7 +186,7 @@ DrawTimes::tell() const
 		card += sum.card;
 		std::fprintf(stderr, "drawing:  %-34s %7.3f [%7.3f]", NAMES[i],
 		             ms(sum.host, m_drawn), ms(sum.host_worst, 1));
-		if (m_card)
+		if (m_stamps)
 			std::fprintf(stderr, "  %7.3f [%7.3f]", ms(sum.card, m_read), ms(sum.card_worst, 1));
 		if (sum.meshes)
 			std::fprintf(stderr, "  %.0f meshes, %.0f triangles a frame",
@@ -229,7 +201,7 @@ DrawTimes::tell() const
 		std::fprintf(stderr, "\n");
 	}
 	std::fprintf(stderr, "drawing:  %-34s %7.3f          ", "all", ms(host, m_drawn));
-	if (m_card)
+	if (m_stamps)
 		std::fprintf(stderr, "  %7.3f", ms(card, m_read));
 	std::fprintf(stderr, "\n");
 }

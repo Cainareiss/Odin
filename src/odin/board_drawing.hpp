@@ -152,6 +152,18 @@ public:
 	virtual unsigned programs_read_back() const = 0;
 	virtual unsigned programs_compiled() const = 0;
 
+	/* Debug (ODIN_DRAW_TIMES, renderer_times.hpp): stamps the card puts in
+	 * its stream of commands, with the time it reaches each. Whether it
+	 * has such a clock; one put now; whether it has reached it; its time,
+	 * in ns, once reached; forgotten, to be put again or not; what was
+	 * asked of the card so far sent to it now. */
+	virtual bool has_stamps() const = 0;
+	virtual uint32_t put_stamp() = 0;
+	virtual bool reached(uint32_t stamp) = 0;
+	virtual uint64_t stamp_time(uint32_t stamp) = 0;
+	virtual void forget_stamp(uint32_t stamp, bool again) = 0;
+	virtual void send_commands() = 0;
+
 	/* The scene into a picture of the pipe: as it is, or blended with a
 	 * 3D buffer, which fades by `rate` (181) at each frame: the motion
 	 * blur of the cabinets */

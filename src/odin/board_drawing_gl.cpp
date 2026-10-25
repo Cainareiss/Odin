@@ -17,7 +17,7 @@
  */
 
 /* What the graphics card of the host does for the renderer, with OpenGL
- * (board_drawing.hpp): made, and its textures. */
+ * (board_drawing.hpp): made, its textures, the stamps of its clock. */
 
 #include "odin/board_drawing_gl.hpp"
 
@@ -131,6 +131,58 @@ GlBoardDrawing::make_sampler(const TextureSampling &sampling, unsigned anisotrop
 	if (anisotropy > 1 && GLEW_EXT_texture_filter_anisotropic)
 		glSamplerParameterf(id, GL_TEXTURE_MAX_ANISOTROPY_EXT, static_cast<float>(anisotropy));
 	return { id };
+}
+
+bool
+GlBoardDrawing::has_stamps() const
+{
+	GLint bits = 0;
+
+	glGetQueryiv(GL_TIMESTAMP, GL_QUERY_COUNTER_BITS, &bits);
+	return bits > 0;
+}
+
+uint32_t
+GlBoardDrawing::put_stamp()
+{
+	GLuint id;
+
+	if (m_stamps.empty()) {
+		glGenQueries(1, &id);
+	} else {
+		id = m_stamps.back();
+		m_stamps.pop_back();
+	}
+	glQueryCounter(id, GL_TIMESTAMP);
+	return id;
+}
+
+bool
+GlBoardDrawing::reached(uint32_t stamp)
+{
+	GLuint ready = 0;
+
+	glGetQueryObjectuiv(stamp, GL_QUERY_RESULT_AVAILABLE, &ready);
+	return ready != 0;
+}
+
+uint64_t
+GlBoardDrawing::stamp_time(uint32_t stamp)
+{
+	GLuint64 at = 0;
+
+	glGetQueryObjectui64v(stamp, GL_QUERY_RESULT, &at);
+	return at;
+}
+
+/* A stamp the card still owes is not put again. */
+void
+GlBoardDrawing::forget_stamp(uint32_t stamp, bool again)
+{
+	if (again)
+		m_stamps.push_back(stamp);
+	else
+		glDeleteQueries(1, &stamp);
 }
 
 } /* namespace odin */

@@ -76,6 +76,8 @@ GlBoardDrawing::~GlBoardDrawing()
 	glDeleteProgram(m_blender);
 	glDeleteProgram(m_compose);
 	glDeleteProgram(m_presenter);
+	if (!m_stamps.empty())
+		glDeleteQueries(static_cast<GLsizei>(m_stamps.size()), m_stamps.data());
 }
 
 void

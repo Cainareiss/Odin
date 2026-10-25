@@ -24,7 +24,7 @@
 #include <cstdint>
 #include <vector>
 
-#include <GL/glew.h>
+#include "odin/board_drawing.hpp"
 
 namespace odin {
 
@@ -35,9 +35,10 @@ namespace odin {
  *
  * The renderer names the part it enters; the time goes to that part until
  * it names another one. The time of the card is read from the stamps the
- * card puts in its stream of commands, a few frames later, when it has
- * them: nobody waits for it. A card that lies idle between two stamps, for
- * its commands to come, counts that time as well.
+ * card puts in its stream of commands (BoardDrawing::put_stamp), a few
+ * frames later, when it has them: nobody waits for it. A card that lies
+ * idle between two stamps, for its commands to come, counts that time as
+ * well.
  *
  * Nothing is measured, and nothing is asked of the card, unless it is on. */
 class DrawTimes {
@@ -61,15 +62,15 @@ public:
 		NUM_PARTS
 	};
 
-	explicit DrawTimes(bool on);
+	/* card: the one the renderer draws with, which outlives it */
+	DrawTimes(BoardDrawing &card, bool on);
 	~DrawTimes();
 	DrawTimes(const DrawTimes &) = delete;
 	DrawTimes &operator=(const DrawTimes &) = delete;
 
 	bool on() const { return m_on; }
 
-	/* The drawing of a frame, from begin to end. An OpenGL context must
-	 * be current, the same for every call. */
+	/* The drawing of a frame, from begin to end */
 	void begin();
 	void end();
 	/* From here the time goes to this part. Returns the part it went
@@ -98,7 +99,7 @@ private:
 	struct Mark {
 		Part part;	/* NUM_PARTS: the end of the frame */
 		uint64_t host;
-		GLuint stamp;
+		uint32_t stamp;
 	};
 	/* The frames whose stamps the card has not been asked for yet */
 	static constexpr unsigned HELD = 4;
@@ -109,16 +110,15 @@ private:
 	};
 
 	Part enter(Part part);
-	GLuint new_stamp();
 	void read(std::vector<Mark> &frame);
 
+	BoardDrawing &m_card;
 	bool m_on;
-	bool m_card;		/* the card has stamps */
+	bool m_stamps;		/* the card has stamps */
 	Part m_part;
 	bool m_within;		/* between begin and end */
 	std::array<std::vector<Mark>, HELD> m_frames;
 	unsigned m_frame;	/* the one being drawn */
-	std::vector<GLuint> m_stamps;	/* not in use */
 	std::array<Sum, NUM_PARTS> m_sums;
 	uint64_t m_drawn, m_read;	/* frames */
 	uint64_t m_lists, m_fragments;
