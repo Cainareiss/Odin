@@ -123,11 +123,12 @@ public:
 	/* The card of the file in the player's hand; false when the file
 	 * cannot be read */
 	bool hold_card();
+	/* For the tests: where the card is, the shutter, a full stocker; the
+	 * three tracks as on the card */
 	bool card_in_hand() const { return m_in_hand; }
 	Position position() const { return m_position; }
 	bool shutter_open() const { return m_shutter_open; }
 	void set_stocker(bool full) { m_stocker_full = full; }
-	/* The three tracks as on the card */
 	std::span<uint8_t> card() { return m_card; }
 
 	/* XOR of a frame slice, as the program checks it */

@@ -64,6 +64,7 @@ public:
 	StateFile &operator=(const StateFile &) = delete;
 
 	bool ok() const { return m_file != nullptr; }
+	/* For the tests */
 	bool loading() const { return m_mode == Mode::LOAD; }
 
 	/* One item. False when it could not be written, or read into that

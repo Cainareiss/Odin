@@ -70,7 +70,7 @@ public:
 
 	void reset();
 	/* The turns of a program that waits are counted without being run
-	 * (Arm7::set_turn_replay): on at first. Off is for a test: the
+	 * (Arm7::set_turn_replay): on at first. Off is for the tests: the
 	 * memory and the states must come out the same. */
 	void set_turn_replay(bool on) { m_arm.set_turn_replay(on); }
 	/* The ARM7 runs what it decoded once (Arm7::set_decoded): on at

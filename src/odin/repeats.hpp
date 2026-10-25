@@ -57,7 +57,8 @@ said()
 	return *s;
 }
 
-/* A game starts, or the library: nothing said yet */
+/* A game starts, or the library: nothing said yet. Every line is said with
+ * -v, and in debug with ODIN_LOG_REPEATS=1. */
 inline void
 begin(bool detailed)
 {

@@ -27,8 +27,8 @@
 
 namespace odin {
 
-/* One line for the instruction at pc: its address, its words and what it
- * does. in_mesh marks it with an M; unhandled is set when the instruction
+/* Debug (GPU_LOG_CP): one line for the instruction at pc, its address, its
+ * words and what it does. in_mesh marks it with an M; unhandled is set when the instruction
  * has bits whose meaning is not known. */
 std::string antarctic_disassemble(uint32_t pc, const uint32_t inst[8],
                                   bool in_mesh, bool &unhandled);

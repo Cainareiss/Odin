@@ -28,9 +28,9 @@
 
 namespace odin {
 
-/* A WAV file of 16-bit samples, written as they come. Its header always
- * tells the samples written so far, so that a run stopped at any time
- * leaves a file a player reads. */
+/* Debug (ODIN_WAV): a WAV file of 16-bit samples, written as they come.
+ * Its header always tells the samples written so far, so that a run
+ * stopped at any time leaves a file a player reads. */
 class WavFile {
 public:
 	WavFile(const std::string &path, uint32_t rate, uint16_t channels);

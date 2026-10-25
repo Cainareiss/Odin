@@ -19,8 +19,9 @@
  * along with Valkyrie.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* What helps to look at a scene: switches the keys change, a log of what
- * is drawn, the fingerprint of a list. */
+/* Debug: what helps to look at a scene, switches the keys change
+ * (ODIN_DEBUG_KEYS), a log of what is drawn (HR_LOG), the fingerprint of a
+ * list (ODIN_LIST_FP). */
 
 #include "odin/renderer.hpp"
 #include "odin/hikaru_gpu.hpp"

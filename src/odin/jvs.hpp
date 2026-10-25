@@ -196,6 +196,7 @@ public:
 	 * time to it (JvsHost::reply_cycles). */
 	uint32_t message(uint8_t dest, std::span<const uint8_t> in, std::span<uint8_t> out, uint32_t &cycles);
 	bool address_set_line() const;
+	/* For the tests */
 	uint8_t address() const { return m_address; }
 	/* The time to the reply of a frame whose checksum is wrong, with
 	 * `request_bytes` of data */

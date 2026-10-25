@@ -227,11 +227,11 @@ public:
 	const AntarcticState &state() const { return m_s; }
 	void load(const AntarcticState &in);
 
-	/* Each instruction is printed there as it is executed. */
+	/* Debug: each instruction printed there as it is executed (GPU_LOG_CP) */
 	void set_disasm(FILE *out) { m_disasm = out; }
-	/* Each texture transfer is told there (GPU_LOG_IDMA). */
+	/* Debug: each texture transfer told there (GPU_LOG_IDMA) */
 	void set_transfer_log(FILE *out) { m_transfer_log = out; }
-	/* What the chip cannot do is told there. */
+	/* What the chip cannot do is told there, stderr; the tests silence it */
 	void set_log(FILE *out) { m_log = out; }
 
 private:

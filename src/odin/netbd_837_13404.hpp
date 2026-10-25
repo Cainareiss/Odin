@@ -113,17 +113,19 @@ public:
 	/* Its 68000 did more than wait in its last run: it may answer before
 	 * its next event */
 	bool busy() const { return m_running && !m_quiet; }
-	/* ODIN_TURNS=0, a test: the program runs every turn of its waits.
-	 * The memories and the states must be the same. */
+	/* For the tests: ODIN_TURNS=0, the program runs every turn of its
+	 * waits. The memories and the states must be the same. */
 	void set_waits_counted(bool on)
 	{
 		m_waits_counted = on;
 		m_proof.on = false;
 	}
-	/* For tests: a byte of the communication RAM, and the bank of the 68000 */
+	/* For the tests: a byte of the communication RAM, and the bank of the
+	 * 68000 */
 	uint8_t comm_byte(unsigned bank, uint32_t offset) const { return m_comm[bank & 1][offset & (COMM_SIZE - 1)]; }
 	unsigned bank() const { return m_bank; }
-	/* For tests: everything the board keeps, hashed (FNV-1a) */
+	/* For the tests: everything the board keeps, hashed (FNV-1a); its
+	 * LEDs */
 	uint64_t fingerprint() const;
 	uint16_t leds() const { return m_leds; }
 	/* What went out and came in since it was made (ODIN_STATS=1); held:
@@ -134,6 +136,7 @@ public:
 		uint64_t sent, received, held, lost, stale;
 	};
 	const Counts &counts() const { return m_counts; }
+	/* For the tests */
 	const M68000 &cpu() const { return m_cpu; }
 
 	/* M68000Bus */

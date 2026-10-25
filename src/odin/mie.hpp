@@ -201,7 +201,7 @@ public:
 	 * the memory is not written (MARKDOWN/78). Off, every turn is run;
 	 * the two must give the same. */
 	void set_waits_counted(bool on) { m_waits_counted = on; }
-	/* Z80 clocks counted that way so far, for measuring. */
+	/* For the tests: the Z80 clocks counted that way so far */
 	uint64_t waits_counted() const { return m_wait_cycles; }
 
 	/* A GPIO port from the board: whether the chip drives its pins, and
@@ -217,6 +217,7 @@ public:
 	void attach_line(MieLine *line) { m_line = line; }
 	void line_received(uint8_t byte);
 	void set_line_addressed(bool addressed) { m_line_addressed = addressed; }
+	/* For the tests */
 	const Z80 &cpu() const { return m_cpu; }
 	/* Device on the serial adapter line; nullptr leaves the line open. */
 	void set_serial_device(MieSerialDevice *dev) { m_serial_device = dev; }

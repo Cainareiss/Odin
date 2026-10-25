@@ -104,8 +104,8 @@ public:
 	 * the last time it ran, decoded again when the word changed; not to
 	 * be used while a turn is recorded or settled, or with the trace. */
 	uint32_t step_decoded();
-	/* run() uses step_decoded() where it may (on by default); off is
-	 * for comparing with step(). */
+	/* run() uses step_decoded() where it may (on by default); off is for
+	 * the tests, to compare with step(). */
 	void set_decoded(bool on) { m_decoded_on = on; }
 	/* Where run() uses what was decoded, the blocks of the memory run as
 	 * host code instead (arm7_translate.cpp), when the host has it: the
@@ -119,6 +119,7 @@ public:
 
 	void set_ram(const Arm7Ram &ram);
 
+	/* The IRQ for the tests: the AICA drives the FIQ alone */
 	void set_irq(bool level);
 	void set_fiq(bool level);
 
@@ -150,7 +151,8 @@ public:
 	}
 	/* Runs the part of a turn that was only counted. */
 	void settle();
-	/* Turns run to be recorded and turns counted so far, for measuring. */
+	/* For the tests: the turns run to be recorded and the turns counted so
+	 * far */
 	uint64_t turns_recorded() const { return m_turn_recorded; }
 	uint64_t turns_counted() const { return m_turn_counted; }
 
@@ -161,13 +163,14 @@ public:
 	/* Trace lines go to `out`; nullptr turns tracing off. */
 	void set_trace(FILE *out);
 
+	/* pc, cpsr and reg for the tests */
 	uint32_t pc() const { return m_pc; }
 	uint32_t cpsr() const { return m_cpsr; }
 	uint32_t mode() const { return m_cpsr & 0x1F; }
 	uint32_t reg(uint32_t idx) const { return m_r[idx & 15]; }
 	void set_reg(uint32_t idx, uint32_t v);
 	uint32_t spsr() const;
-	/* Count of instructions whose condition passed since reset. */
+	/* For the tests: the instructions whose condition passed since reset */
 	uint64_t instructions() const { return m_instructions; }
 
 private:

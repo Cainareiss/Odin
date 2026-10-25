@@ -180,8 +180,8 @@ enum : uint32_t {
 };
 
 /* SH7091 at 200 MHz (2 x SH-4 @ 200 MHz, see the top of this file).
- * ODIN_SH4_MHZ lowers it for debugging only: every phase of a game then takes
- * fewer host seconds. */
+ * Debug: ODIN_SH4_MHZ lowers it, every phase of a game then takes fewer
+ * host seconds. */
 uint32_t
 sh4_clock()
 {
@@ -329,6 +329,8 @@ Hikaru::Hikaru(const Game &game, const RomBoard::Config &rombd, bool verbose, co
 			board->m_screen->before_texture_write(bank, x, y, w, h);
 	};
 	m_gpu = std::make_unique<HikaruGpu>(memory, hooks);
+	/* Debug: the instructions of the GPU, its texture transfers and its
+	 * DMA, on stdout */
 	m_gpu->antarctic().set_disasm(env_flag("GPU_LOG_CP") ? stdout : nullptr);
 	m_gpu->antarctic().set_transfer_log(env_flag("GPU_LOG_IDMA") ? stdout : nullptr);
 	m_gpu->eurasia().set_log(env_flag("GPU_LOG_DMA") ? stdout : nullptr);
@@ -341,6 +343,7 @@ Hikaru::Hikaru(const Game &game, const RomBoard::Config &rombd, bool verbose, co
 	 * board, and the Air Trix cabinet has the board but main speakers
 	 * only. */
 	m_sound[MASTER]->set_source(m_sound[SLAVE].get());
+	/* Debug: ODIN_WAV=<path>, the sound of the main board in a WAV file */
 	if (const char *path = std::getenv("ODIN_WAV")) {
 		m_wav = std::make_unique<WavFile>(path, Aica::SAMPLE_RATE, 2);
 		if (!m_wav->ok())
@@ -354,19 +357,20 @@ Hikaru::Hikaru(const Game &game, const RomBoard::Config &rombd, bool verbose, co
 	for (unsigned which : { MASTER, SLAVE }) {
 		m_sh[which] = std::make_unique<Sh4>(m_bus[which], std::span<uint8_t>(m_iregs[which]),
 		                                    which == MASTER, true, 5);
-		/* The kept blocks run as host code where the host allows it;
-		 * ODIN_SH4_TRANSLATE=0 has them read, for comparing. The memory
-		 * and the states are the same either way. */
+		/* The kept blocks run as host code where the host allows it. For
+		 * the tests: ODIN_SH4_TRANSLATE=0 has them read; the memory and
+		 * the states are the same either way. */
 		if (env_flag("ODIN_SH4_TRANSLATE", true)) {
 			m_sh[which]->set_translate(true);
 			if (!m_sh[which]->translates())
 				std::fprintf(stderr, "sh4: no host code on this machine, the blocks are read\n");
 		}
-		/* ODIN_TURNS=0, a test: the loops that wait on a timer run
-		 * every turn. */
+		/* For the tests: ODIN_TURNS=0, the loops that wait on a timer
+		 * run every turn. */
 		m_sh[which]->set_clock_waits(env_flag("ODIN_TURNS", true));
-		/* ODIN_SH4_TRACE=<prefix>: one line per slice in <prefix>-m.txt
-		 * and <prefix>-s.txt, the PC and a hash of the registers. */
+		/* Debug: ODIN_SH4_TRACE=<prefix>, one line per slice in
+		 * <prefix>-m.txt and <prefix>-s.txt, the PC and a hash of the
+		 * registers. */
 		if (const char *prefix = std::getenv("ODIN_SH4_TRACE")) {
 			const std::string path = std::string(prefix) + (which == MASTER ? "-m.txt" : "-s.txt");
 
@@ -454,8 +458,8 @@ Hikaru::run_drive(uint32_t cycles)
  * (NetLinkSettings): its optical ring closed on itself (loop: the games
  * see it, as on a cabinet with its cable looped back) or linked to other
  * Odins (ring). Without it, page 0E answers nothing and the games find no
- * board. ODIN_NETBD (none, loop, ring), ODIN_NETBD_PORT and
- * ODIN_NETBD_NEXT, for the tests, put one in any game instead. */
+ * board. For the tests: ODIN_NETBD (none, loop, ring), ODIN_NETBD_PORT,
+ * ODIN_NETBD_NEXT and ODIN_NETBD_CABINET put one in any game instead. */
 void
 Hikaru::build_netbd(NetLinkSettings link)
 {
@@ -493,8 +497,8 @@ Hikaru::build_netbd(NetLinkSettings link)
 	}
 	m_netbd = std::make_unique<NetBoard837_13404>();
 	m_netbd->reset();
-	/* ODIN_TURNS=0, a test: its 68000 runs every turn of its waits. The
-	 * memory and the pictures must be the same. */
+	/* For the tests: ODIN_TURNS=0, its 68000 runs every turn of its
+	 * waits. The memory and the pictures must be the same. */
 	m_netbd->set_waits_counted(env_flag("ODIN_TURNS", true));
 	if (link.board == NetLinkSettings::Board::RING) {
 		m_netbd_runner = std::make_unique<NetBoardRunner>(*m_netbd);
@@ -663,8 +667,8 @@ Hikaru::build_mie()
 	if (m_game.drive_first_output && m_game.section("drive_rom").size() == Drive838_13366::ROM_SIZE &&
 	    !(drive && !std::strcmp(drive, "imitation"))) {
 		m_drive = std::make_unique<Drive838_13366>(m_game.section("drive_rom"));
-		/* ODIN_TURNS=0, a test: its program runs every turn of its
-		 * waits. The states must be the same. */
+		/* For the tests: ODIN_TURNS=0, its program runs every turn of
+		 * its waits. The states must be the same. */
 		m_drive->set_waits_counted(env_flag("ODIN_TURNS", true));
 	}
 	for (const GameControl &control : m_game.controls)
@@ -674,13 +678,14 @@ Hikaru::build_mie()
 		std::printf("drive board: %s\n", m_drive ? "its program run (drive_rom)" : "its imitation");
 	m_mie->set_port_d([this](uint8_t pins) { set_resets(pins); });
 	m_mie->set_log(stderr);
-	/* ODIN_TURNS=0, a test: the programs of the MIE and of the chip of its
-	 * I/O board run every turn of their waits. The memory and the states
-	 * must be the same. */
+	/* For the tests: ODIN_TURNS=0, the programs of the MIE and of the chip
+	 * of its I/O board run every turn of their waits. The memory and the
+	 * states must be the same. */
 	m_mie->set_waits_counted(env_flag("ODIN_TURNS", true));
 
-	/* ODIN_MIE_TRACE=<path>: the bus of the Z80 for ODIN_MIE_TRACE_N
-	 * instructions, from the first time its PC is ODIN_MIE_TRACE_START */
+	/* Debug: ODIN_MIE_TRACE=<path>, the bus of the Z80 for
+	 * ODIN_MIE_TRACE_N instructions, from the first time its PC is
+	 * ODIN_MIE_TRACE_START */
 	if (const char *path = std::getenv("ODIN_MIE_TRACE")) {
 		const unsigned count = static_cast<unsigned>(env_int("ODIN_MIE_TRACE_N", 300000));
 		const char *const start = std::getenv("ODIN_MIE_TRACE_START");
@@ -705,6 +710,7 @@ Hikaru::build_mie()
 		/* none on its cabinet */
 	} else {
 		const char *const file = std::getenv("ODIN_CARD_FILE");
+		/* Debug: ODIN_CARD_TRACE=1, what the reader says and is told */
 		const char *const trace = std::getenv("ODIN_CARD_TRACE");
 		const bool loaded = m_mie->attach_card(file, (trace && std::atoi(trace)) ? stderr : nullptr);
 		if (file)
@@ -723,18 +729,19 @@ Hikaru::build_sound(unsigned which)
 {
 	m_sound[which] = std::make_unique<SoundBoard>(m_sound_ram[which], m_clock, [this](bool) { update_irqs(); });
 	m_sound[which]->set_log(stderr);
-	/* ODIN_TURNS=0, a test: the programs of the sound boards run every
-	 * turn of their waits. The memory and the states must be the same. */
+	/* For the tests: ODIN_TURNS=0, the programs of the sound boards run
+	 * every turn of their waits. The memory and the states must be the
+	 * same. */
 	m_sound[which]->set_turn_replay(env_flag("ODIN_TURNS", true));
-	/* ODIN_ARM7_DECODED=0: the ARM7 decodes every instruction it runs,
-	 * to compare with. */
+	/* For the tests: ODIN_ARM7_DECODED=0, the ARM7 decodes every
+	 * instruction it runs. */
 	m_sound[which]->set_arm_decoded(env_flag("ODIN_ARM7_DECODED", true));
-	/* The blocks of the ARM7 run as host code where the host allows it;
-	 * ODIN_ARM7_TRANSLATE=0 has them read, for comparing. The memory and
+	/* The blocks of the ARM7 run as host code where the host allows it.
+	 * For the tests: ODIN_ARM7_TRANSLATE=0 has them read; the memory and
 	 * the sound are the same either way. */
 	m_sound[which]->set_arm_translate(env_flag("ODIN_ARM7_TRANSLATE", true));
 
-	/* ODIN_ARM7_TRACE=<prefix> writes <prefix>-m.txt / <prefix>-s.txt */
+	/* Debug: ODIN_ARM7_TRACE=<prefix> writes <prefix>-m.txt / <prefix>-s.txt */
 	if (const char *prefix = std::getenv("ODIN_ARM7_TRACE")) {
 		const std::string path = std::string(prefix) + (which == MASTER ? "-m.txt" : "-s.txt");
 
@@ -1312,6 +1319,7 @@ Hikaru::power_off()
 	};
 
 	settle();
+	/* For the tests: ODIN_DUMPS=1, each memory in <game>-<memory>.bin */
 	if (env_flag("ODIN_DUMPS")) {
 		for (const auto &memory : memories) {
 			const std::string path = m_game.name + "-" + memory.name + ".bin";

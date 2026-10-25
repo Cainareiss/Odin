@@ -76,6 +76,8 @@ public:
 	void load(const X76f100State &in);
 	std::span<uint8_t> data() { return m_image; }
 
+	/* Debug: its commands, passwords and accesses out of bounds told there
+	 * (no switch sets it) */
 	void set_log(FILE *out) { m_log = out; }
 
 private:

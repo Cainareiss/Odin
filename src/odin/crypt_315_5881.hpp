@@ -92,6 +92,8 @@ public:
 	uint32_t bus_read(uint32_t offset, unsigned size);
 	void bus_write(uint32_t offset, unsigned size, uint32_t value);
 
+	/* Debug: the subkey and the addresses the program writes told there;
+	 * only the tests set it */
 	void set_log(FILE *out) { m_log = out; }
 
 	void save(Crypt315_5881State &out) const;

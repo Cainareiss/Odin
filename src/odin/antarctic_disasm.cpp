@@ -19,8 +19,8 @@
  * along with Valkyrie.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* The text of each instruction of the command processor. See
- * antarctic_ops.cpp for what they do. */
+/* Debug (GPU_LOG_CP): the text of each instruction of the command
+ * processor. See antarctic_ops.cpp for what they do. */
 
 #include "odin/antarctic_disasm.hpp"
 #include "odin/bytes.hpp"

@@ -28,9 +28,10 @@
 
 namespace odin {
 
-/* What the drawing of a frame costs, part by part, for looking at where the
- * time of the renderer goes: the time its thread spends in each part, and
- * the time the graphics card takes for what the part asks of it.
+/* Debug (ODIN_DRAW_TIMES): what the drawing of a frame costs, part by part,
+ * for looking at where the time of the renderer goes: the time its thread
+ * spends in each part, and the time the graphics card takes for what the
+ * part asks of it.
  *
  * The renderer names the part it enters; the time goes to that part until
  * it names another one. The time of the card is read from the stamps the

@@ -330,10 +330,10 @@ private:
 	/* The accesses nothing answered that were told, see Bus::unanswered */
 	std::unordered_set<uint64_t> m_unanswered_told;
 
-	/* Traces and counts asked by the environment */
+	/* Debug: traces and counts asked by the environment */
 	FILE *m_mie_trace;
 	FILE *m_sh_trace[2];
-	/* ODIN_STATS=1: the host time each part of the board took in its
+	/* Debug: ODIN_STATS=1, the host time each part of the board took in its
 	 * slices, told at the end and for every 60 frames. The first two are
 	 * the SH-4. */
 	enum : unsigned {

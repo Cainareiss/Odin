@@ -79,7 +79,9 @@ public:
 		std::span<const uint8_t> fb;		/* framebuffer RAM, 8 MB */
 		std::span<const uint8_t> texram[2];	/* texture RAM, two banks of 4 MB */
 	};
-	/* For looking at what is drawn; everything is off at zero. And the
+	/* Debug: for looking at what is drawn (HR_LOG, HR_LOG_FRAME,
+	 * ODIN_LIST_FP, ODIN_LIST_DUMP, ODIN_DRAW_TIMES, ODIN_DEBUG_KEYS;
+	 * ODIN_LISTS_TEST for the tests); everything is off at zero. And the
 	 * lists of the mesh programs of the game, see MeshPrograms: the
 	 * one that comes with Odin, and the one kept on this computer,
 	 * which takes the programs met later; the folder the programs the

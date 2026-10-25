@@ -103,8 +103,8 @@ public:
 	static bool knows_io_board(const std::string &name);
 	/* The chip of the I/O board runs its program */
 	bool runs_io_program() const { return m_line != nullptr; }
-	/* A test: that chip so many clocks of the Z80 ahead of the MIE, at
-	 * most LINE_PIECE; less must give the same. */
+	/* For the tests: that chip so many clocks of the Z80 ahead of the MIE,
+	 * at most LINE_PIECE; less must give the same. */
 	void set_line_piece(uint32_t clocks) { m_line_piece = std::min(clocks, LINE_PIECE); }
 
 	void reset();
@@ -145,7 +145,8 @@ public:
 	bool irq_out() const;
 
 	void set_log(FILE *out);
-	/* See Mie::set_waits_counted: the MIE and the chip of its I/O board */
+	/* See Mie::set_waits_counted: the MIE and the chip of its I/O board;
+	 * the clocks counted, for the tests */
 	void set_waits_counted(bool on);
 	uint64_t waits_counted() const { return m_mie.waits_counted(); }
 	/* Z80 bus trace for max_instructions instructions from the first

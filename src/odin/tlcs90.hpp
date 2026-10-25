@@ -74,7 +74,8 @@ public:
 
 	void save(Tlcs90State &out) const;
 	void load(const Tlcs90State &in);
-	/* One line per instruction to `out`; nullptr turns it off. */
+	/* Debug: one line per instruction to `out` (no switch sets it); nullptr
+	 * turns it off. */
 	void set_trace(FILE *out) { m_trace = out; }
 	/* The memory below `end` never changes (a ROM): its instructions are
 	 * decoded once, the address of a memory operand at a register taken
@@ -82,6 +83,7 @@ public:
 	void set_fixed(uint16_t end) { m_decoded.assign(end, {}); }
 
 	uint16_t pc() const { return m_pc; }
+	/* For the tests */
 	uint16_t sp() const { return m_sp; }
 	uint8_t a() const { return m_r[A]; }
 	uint8_t f() const { return m_f; }

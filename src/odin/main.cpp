@@ -221,8 +221,8 @@ main(int argc, char **argv)
 	const std::unique_ptr<odin::Pointers> pointers =
 		controllers && !std::strcmp(controllers, "none") ? nullptr : std::make_unique<odin::Pointers>(display->window());
 
-	/* ODIN_GAMES_TEST=<game>,...: these games after the first, each from
-	 * its power-on to its frame -n, in the same window */
+	/* For the tests: ODIN_GAMES_TEST=<game>,..., these games after the
+	 * first, each from its power-on to its frame -n, in the same window */
 	std::vector<std::string> next;
 	const char *const games_test = std::getenv("ODIN_GAMES_TEST");
 	for (std::string list = games_test ? games_test : ""; !list.empty();) {

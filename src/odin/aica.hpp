@@ -118,6 +118,7 @@ public:
 	int16_t left() const { return m_left; }
 	int16_t right() const { return m_right; }
 
+	/* For the tests */
 	bool arm_in_reset() const { return m_arm_reset; }
 	/* The interrupt line to the host CPU. */
 	bool main_irq() const { return m_main_irq; }

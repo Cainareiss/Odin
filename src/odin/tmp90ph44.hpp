@@ -113,14 +113,15 @@ public:
 	void save(Tmp90ph44State &out) const;
 	void load(const Tmp90ph44State &in);
 
+	/* For the tests: the CPU, a byte of the memory as the CPU sees it (the
+	 * registers as written) */
 	Tlcs90 &cpu() { return m_cpu; }
-	/* A byte of the memory as the CPU sees it, the registers as written */
 	uint8_t peek(uint16_t addr) const;
 	uint64_t states() const { return m_states; }
-	/* The states run() billed without running them */
+	/* For the tests: the states run() billed without running them */
 	uint64_t skipped() const { return m_skipped; }
-	/* Off, a test: no loop is tried, every turn runs. The states must be
-	 * the same. */
+	/* For the tests: off, no loop is tried, every turn runs. The states
+	 * must be the same. */
 	void set_waits_counted(bool on)
 	{
 		m_waits_counted = on;

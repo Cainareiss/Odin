@@ -121,7 +121,7 @@ public:
 	 * asked, what the menu does: the rest is the caller's */
 	void fill_bar(BarState &bar) const;
 	BarState::Ask do_bar(BarState &bar);
-	/* ODIN_MENU_TEST: the menu opens after that frame */
+	/* For the tests: ODIN_MENU_TEST, the menu opens after that frame */
 	bool tested_at(unsigned frame) const { return m_menu_test && frame % m_menu_test == 0; }
 	/* Close game was pressed again in the menu, taken */
 	bool closing() { return std::exchange(m_closing, false); }

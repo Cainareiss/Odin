@@ -103,6 +103,7 @@ public:
 
 	uint64_t cycles() const { return m_cycles; }
 	uint32_t pc() const { return m_pc; }
+	/* For the tests */
 	uint16_t sr() const { return m_sr; }
 	uint32_t d(unsigned n) const { return m_d[n & 7]; }
 	uint32_t a(unsigned n) const { return m_a[n & 7]; }

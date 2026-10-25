@@ -73,15 +73,18 @@ public:
 	bool refresh_read() const { return m_r_read; }
 	void forget_refresh_read() { m_r_read = false; }
 	void set_nmi() { m_nmi_pending = true; }
+	/* For the tests */
 	bool halted() const { return m_halted; }
 
 	void save(Z80State &out) const;
 	void load(const Z80State &in);
 
-	/* Trace lines go to `out`; nullptr turns tracing off. */
+	/* Debug (ODIN_MIE_TRACE): trace lines go to `out`; nullptr turns
+	 * tracing off. */
 	void set_trace(FILE *out) { m_trace = out; }
 
 	uint16_t pc() const { return m_pc; }
+	/* bc and de for the tests */
 	uint16_t bc() const { return pair(m_b, m_c); }
 	uint16_t de() const { return pair(m_d, m_e); }
 	uint16_t hl() const { return pair(m_h, m_l); }

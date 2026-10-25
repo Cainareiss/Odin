@@ -92,10 +92,11 @@ public:
 	void save(State &out) const;
 	void load(const State &in);
 
-	/* Off, a test: every turn of its main loop runs, none is counted
-	 * without being run (MARKDOWN/94 § D). The states must be the same. */
+	/* For the tests: off, every turn of its main loop runs, none is
+	 * counted without being run (MARKDOWN/94 § D). The states must be the
+	 * same. */
 	void set_waits_counted(bool on);
-	/* The clocks counted so since it was made */
+	/* For the tests: the clocks counted so since it was made */
 	uint64_t waits_counted() const { return m_wait_cycles; }
 
 private:
