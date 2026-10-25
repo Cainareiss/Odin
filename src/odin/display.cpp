@@ -33,6 +33,7 @@
 
 #include "odin/bytes.hpp"
 #include "odin/env.hpp"
+#include "odin/hikaru.hpp"
 #include "odin/keyboard.hpp"
 #include "odin/logo.hpp"
 #include "odin/menu.hpp"

@@ -35,7 +35,7 @@ struct json_t;
 namespace odin {
 
 /* A switch of a player on the JVS I/O board: the player, 0 or 1, and its
- * bit in the word of that player (see MieBoard::Inputs). */
+ * bit in the word of that player (see CabinetInputs). */
 struct JvsSwitch {
 	uint8_t player;
 	uint16_t mask;

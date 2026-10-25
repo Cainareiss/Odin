@@ -40,12 +40,12 @@ namespace odin {
 
 namespace {
 
-std::optional<Display::Vsync>
+std::optional<DisplayVsync>
 vsync_named(const std::string &name)
 {
 	for (unsigned i = 0; i < std::size(VSYNCS); i++)
 		if (name == VSYNCS[i])
-			return static_cast<Display::Vsync>(i);
+			return static_cast<DisplayVsync>(i);
 	return std::nullopt;
 }
 
@@ -123,7 +123,7 @@ read_display(const Settings &settings, Options &options)
 			options.display.filter = value == "none" ? std::string() : value;
 		} else if (key == "bezel" && std::find(std::begin(SIDES_NAMES), std::end(SIDES_NAMES), value) !=
 		                                     std::end(SIDES_NAMES)) {
-			options.sides = static_cast<Display::Sides>(
+			options.sides = static_cast<DisplaySides>(
 				std::find(std::begin(SIDES_NAMES), std::end(SIDES_NAMES), value) - std::begin(SIDES_NAMES));
 		} else {
 			std::fprintf(stderr, "ERROR: settings: [display]: not right: %s = %s\n", key.c_str(), value.c_str());

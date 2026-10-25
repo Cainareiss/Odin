@@ -27,17 +27,17 @@
 #include <vector>
 
 #include "odin/audio_out.hpp"
-#include "odin/display.hpp"
+#include "odin/display_options.hpp"
 #include "odin/games.hpp"
 #include "odin/settings.hpp"
 
 namespace odin {
 
 /* How the frames wait for the display by default, and the names of odin.ini */
-inline constexpr Display::Vsync VSYNC = Display::Vsync::OFF;
+inline constexpr DisplayVsync VSYNC = DisplayVsync::OFF;
 inline constexpr const char *VSYNCS[] = { "off", "on", "adaptive" };
 /* Around the picture by default, and the names of odin.ini */
-inline constexpr Display::Sides SIDES = Display::Sides::BEZEL;
+inline constexpr DisplaySides SIDES = DisplaySides::BEZEL;
 inline constexpr const char *SIDES_NAMES[] = { "off", "blur", "image" };
 
 /* What Odin runs with: the command line, and odin.ini where it says
@@ -71,11 +71,11 @@ struct Options {
 	std::string sound_device;
 	unsigned volume = 100;
 	bool background = true;
-	Display::Options display = { 1, 1, 0, false, true, Display::Vsync::OFF, 0, 0, "" };
+	DisplayOptions display = { 1, 1, 0, false, true, DisplayVsync::OFF, 0, 0, "" };
 	/* [display] vsync: the display gets it when the frames are paced */
-	Display::Vsync vsync = VSYNC;
+	DisplayVsync vsync = VSYNC;
 	/* [display] bezel: around the picture */
-	Display::Sides sides = SIDES;
+	DisplaySides sides = SIDES;
 	/* What the command line says of the display: odin.ini does not change it */
 	struct {
 		bool scale = false, anisotropy = false, window = false, fullscreen = false, unthrottled = false;

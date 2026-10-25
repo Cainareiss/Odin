@@ -39,6 +39,7 @@
 #include "odin/eeprom_93c46.hpp"
 #include "odin/games.hpp"
 #include "odin/hikaru_gpu.hpp"
+#include "odin/hikaru_host.hpp"
 #include "odin/memctl.hpp"
 #include "odin/mie_board.hpp"
 #include "odin/rom_board.hpp"
@@ -60,34 +61,10 @@ class StateFile;
  * processor sees, hikaru_state.cpp for the save states. */
 class Hikaru : private MemCtl::Host {
 public:
-	/* What is around the board. The screen draws what the graphics chips
-	 * leave. */
-	class Screen {
-	public:
-		virtual ~Screen() = default;
-		/* A display list was launched. */
-		virtual void list_launched() = 0;
-		/* A rectangle of texels of a bank of the texture RAM, 2048 x 1024
-		 * texels, is about to be written. */
-		virtual void before_texture_write(unsigned bank, uint32_t x, uint32_t y, uint32_t w, uint32_t h) = 0;
-		/* The memories of the board are about to change as a whole, on
-		 * a reset or for a state: what is being drawn from them must
-		 * be over. */
-		virtual void before_memory_changes() = 0;
-		/* They have: what was decoded from them is stale. */
-		virtual void memory_changed() = 0;
-		/* The pictures the screen keeps from a frame to the next, as
-		 * items of a state. */
-		virtual bool save_pictures(StateFile &state) = 0;
-		virtual bool load_pictures(StateFile &state) = 0;
-	};
-	/* And the control panel: the switches of the board and the controls
-	 * of the cabinet as they are now. */
-	class Panel {
-	public:
-		virtual ~Panel() = default;
-		virtual void read_inputs(MieBoard::Inputs &inputs) = 0;
-	};
+	/* What is around the board: its screen and the control panel of the
+	 * cabinet (hikaru_host.hpp) */
+	using Screen = HikaruScreen;
+	using Panel = HikaruPanel;
 
 	/* The board of a game, or nothing, with the reason on stderr, if the
 	 * game cannot run on it. The game outlives the board. */

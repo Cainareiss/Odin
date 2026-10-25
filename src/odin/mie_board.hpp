@@ -33,6 +33,7 @@
 
 #include "odin/card_reader.hpp"
 #include "odin/eeprom_93c46.hpp"
+#include "odin/hikaru_host.hpp"
 #include "odin/io_837_13551.hpp"
 #include "odin/io_837_13741.hpp"
 #include "odin/jvs.hpp"
@@ -56,17 +57,8 @@ namespace odin {
  * port F. C is the mask of what reaches IRL2 of the main SH-4. */
 class MieBoard : public MieHost, public JvsInputs {
 public:
-	/* What the cabinet feeds the board. JVS bit order: system byte bit 7
-	 * TEST; player word high byte bit 7 START, 6 SERVICE, 5 UP, 4 DOWN,
-	 * 3 LEFT, 2 RIGHT, 1 PUSH1, 0 PUSH2; analog channels 0x8000 centre. */
-	struct Inputs {
-		int mainboard_test;	/* SW7 on the main board */
-		int mainboard_service;	/* SW8 */
-		uint8_t jvs_system;
-		uint16_t jvs_player[2];
-		uint16_t jvs_analog[8];
-		int jvs_coin[2];	/* 1 = a coin went through since the last call */
-	};
+	/* What the cabinet feeds the board (hikaru_host.hpp) */
+	using Inputs = CabinetInputs;
 
 	/* The whole board. Plain data. */
 	struct State {

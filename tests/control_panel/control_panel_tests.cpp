@@ -42,7 +42,7 @@ using odin::GameControl;
 using odin::HostState;
 using odin::JoyState;
 using odin::JvsSwitch;
-using odin::MieBoard;
+using odin::CabinetInputs;
 using odin::MouseState;
 using odin::PadInput;
 using odin::PadState;
@@ -62,12 +62,12 @@ void check(bool ok, const char *what)
 }
 
 /* The inputs of a panel after one update */
-MieBoard::Inputs after(ControlPanel &panel, const std::vector<SDL_Keycode> &keys, const PadState *pad1 = nullptr,
+CabinetInputs after(ControlPanel &panel, const std::vector<SDL_Keycode> &keys, const PadState *pad1 = nullptr,
                        const PadState *pad2 = nullptr, const MouseState *mouse = nullptr,
                        const MouseState *mouse2 = nullptr)
 {
 	HostState host;
-	MieBoard::Inputs inputs = {};
+	CabinetInputs inputs = {};
 
 	host.keys = &keys;
 	host.pads = { pad1, pad2 };
@@ -78,7 +78,7 @@ MieBoard::Inputs after(ControlPanel &panel, const std::vector<SDL_Keycode> &keys
 }
 
 /* The standard panel with these keys held */
-MieBoard::Inputs held(std::initializer_list<SDL_Keycode> keys)
+CabinetInputs held(std::initializer_list<SDL_Keycode> keys)
 {
 	ControlPanel panel({}, Settings(), "bootrom");
 
@@ -136,7 +136,7 @@ std::vector<GameControl> cabinet()
 
 void test_standard_panel()
 {
-	const MieBoard::Inputs none = held({});
+	const CabinetInputs none = held({});
 	bool centred = true;
 
 	for (const uint16_t channel : none.jvs_analog)
@@ -170,7 +170,7 @@ void test_standard_panel()
 	      "the keys held together add up, each player its own word");
 
 	ControlPanel panel({}, Settings(), "bootrom");
-	MieBoard::Inputs before = {};
+	CabinetInputs before = {};
 	panel.fill(before);
 	check(before.jvs_analog[5] == 0x8000 && before.jvs_player[0] == 0, "before any update: nothing pressed");
 }
@@ -178,7 +178,7 @@ void test_standard_panel()
 void test_coins()
 {
 	ControlPanel panel({}, Settings(), "bootrom");
-	MieBoard::Inputs inputs = {};
+	CabinetInputs inputs = {};
 
 	inputs = after(panel, {SDLK_5});
 	check(inputs.jvs_coin[0] == 1 && inputs.jvs_coin[1] == 0, "5 is a coin in the first slot");
@@ -239,7 +239,7 @@ void test_game()
 	check(after(panel, {SDLK_S}).jvs_player[1] == 0x0080 && after(panel, {SDLK_LALT}).jvs_player[1] == 0,
 	      "FOG belongs to player 2: his button2 (S), not that of player 1");
 
-	MieBoard::Inputs inputs = after(panel, {});
+	CabinetInputs inputs = after(panel, {});
 	check(inputs.jvs_analog[0] == 0x8000 && inputs.jvs_analog[3] == 0x8000 && inputs.jvs_analog[4] == 0x8000 &&
 	      inputs.jvs_analog[2] == 0x8000, "no pad: wheel, lever and aim centred, a channel of no control at 8000");
 	check(inputs.jvs_analog[1] == 0x0000, "no pad: gas let go");
@@ -478,7 +478,7 @@ void test_mouse()
 	check(after(panel, {}, nullptr, nullptr, &mouse).jvs_analog[0] == 0x8000, "the mouse in the middle: 8000");
 	mouse.x = 0.0;
 	mouse.y = 1.0;
-	MieBoard::Inputs inputs = after(panel, {}, nullptr, nullptr, &mouse);
+	CabinetInputs inputs = after(panel, {}, nullptr, nullptr, &mouse);
 	check(inputs.jvs_analog[0] == 0x0000 && inputs.jvs_analog[1] == 0xFFFF,
 	      "the left and the bottom of the picture: 0000 and FFFF");
 	mouse.x = 1.0;
@@ -529,7 +529,7 @@ void test_gun_of_player_2()
 	gun.x = 0.25;
 	gun.y = 0.75;
 	gun.buttons = { true, false, true };
-	MieBoard::Inputs inputs = after(panel, {}, nullptr, nullptr, nullptr, &gun);
+	CabinetInputs inputs = after(panel, {}, nullptr, nullptr, nullptr, &gun);
 	check(inputs.jvs_analog[2] == 0x4000 && inputs.jvs_analog[3] == 0xBFFF && inputs.jvs_player[1] == 0x0280,
 	      "the gun of player 2: its sight, water and fog");
 	check(inputs.jvs_analog[0] == 0x8000 && inputs.jvs_player[0] == 0, "player 1 at rest");
@@ -558,7 +558,7 @@ void test_mouse_one_pointer()
 	pad.axes[SDL_GAMEPAD_AXIS_LEFTY] = 20000;
 	check(after(panel, {}, &pad, nullptr, &mouse).jvs_analog[1] == 0x8000 + 20000, "the stick takes Y");
 	mouse.x = 0.25;
-	MieBoard::Inputs inputs = after(panel, {}, &pad, nullptr, &mouse);
+	CabinetInputs inputs = after(panel, {}, &pad, nullptr, &mouse);
 	check(inputs.jvs_analog[0] == 0x4000 && inputs.jvs_analog[1] == 0x8000,
 	      "the mouse moved across only: it takes X and Y back");
 	mouse.off = true;
@@ -764,7 +764,7 @@ void test_joystick()
 	const std::vector<SDL_Keycode> none;
 	JoyState wheel;
 	HostState host;
-	MieBoard::Inputs inputs = {};
+	CabinetInputs inputs = {};
 	const auto update = [&] {
 		panel.update(host);
 		panel.fill(inputs);

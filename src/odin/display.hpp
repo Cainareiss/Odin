@@ -34,11 +34,13 @@
 #include <GL/glew.h>
 #include <SDL3/SDL.h>
 
-#include "odin/hikaru.hpp"
+#include "odin/display_options.hpp"
+#include "odin/hikaru_host.hpp"
 #include "odin/picture.hpp"
 
 namespace odin {
 
+class Hikaru;
 class Keyboard;
 class Menu;
 struct BarState;
@@ -53,7 +55,7 @@ class Worker;
  * The frames are drawn on a thread of their own, which holds the OpenGL
  * context: the board runs a frame while the one before is drawn. What a
  * drawing reads of the board is told in renderer.hpp; the board waits for
- * the drawing before it changes any of it (Hikaru::Screen). Everything else
+ * the drawing before it changes any of it (HikaruScreen). Everything else
  * here is called from the thread that runs the board.
  *
  * The environment asks for what is measured on the pictures:
@@ -81,31 +83,12 @@ class Worker;
  * and for the looks at what is drawn, see Renderer::Options: HR_LOG,
  * HR_LOG_FRAME, ODIN_LIST_FP, ODIN_LIST_DUMP, ODIN_LISTS_TEST,
  * ODIN_DEBUG_KEYS. */
-class Display : public Hikaru::Screen {
+class Display : public HikaruScreen {
 public:
-	/* How the frames wait for the display: not at all (one may be torn),
-	 * each of them, or those on time (a late one is shown at once, so
-	 * that the game keeps its 60 a second) */
-	enum class Vsync : uint8_t { OFF, ON, ADAPTIVE };
-	/* Around the picture where the window is wider than it: black, the
-	 * picture itself blurred and dimmer, or the bezel of the game (black
-	 * without one) */
-	enum class Sides : uint8_t { OFF, BLUR, BEZEL };
-
-	struct Options {
-		unsigned scale;		/* the 3D that many times finer than the screen, 1 to 6 */
-		unsigned anisotropy;	/* of the texture filter, 1 for none as on the board */
-		unsigned window;	/* the window that many times the screen */
-		bool fullscreen;
-		bool show_speed;	/* the frames a second in the title */
-		Vsync vsync;
-		/* The window of that size in points instead, the one the user gave
-		 * it by hand (0: as `window` says) */
-		unsigned window_w, window_h;
-		/* The filter of the picture by its name in odin.ini (a preset
-		 * filters/<name>.glslp: picture_filter.hpp); empty: none */
-		std::string filter;
-	};
+	/* What the user chooses of it (display_options.hpp) */
+	using Vsync = DisplayVsync;
+	using Sides = DisplaySides;
+	using Options = DisplayOptions;
 
 	/* A display that shows fewer frames a second would hold the board
 	 * back where each frame waits for it: the game slower than the 60 of
@@ -213,7 +196,7 @@ public:
 	/* The frames shown in the last second (0: not known yet) */
 	float fps() const { return m_fps; }
 
-	/* Hikaru::Screen */
+	/* HikaruScreen */
 	void list_launched() override;
 	void before_texture_write(unsigned bank, uint32_t x, uint32_t y, uint32_t w, uint32_t h) override;
 	void before_memory_changes() override { finish(); }

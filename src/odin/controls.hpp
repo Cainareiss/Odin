@@ -31,7 +31,7 @@
 #include "odin/bindings.hpp"
 #include "odin/control_panel.hpp"
 #include "odin/games.hpp"
-#include "odin/hikaru.hpp"
+#include "odin/hikaru_host.hpp"
 #include "odin/keyboard.hpp"
 #include "odin/picture.hpp"
 #include "odin/pointers.hpp"
@@ -55,7 +55,7 @@ namespace odin {
  * gamepads, the joysticks and the mouse out. In a
  * game where player 1 has a sight, the pointer of the system is hidden on
  * the window. */
-class Controls : public Hikaru::Panel {
+class Controls : public HikaruPanel {
 public:
 	Controls(Keyboard &keys, const std::vector<GameControl> &controls, const std::vector<GameOutput> &outputs,
 	         const Settings &settings, const std::string &game);
@@ -123,7 +123,7 @@ public:
 	/* The id of the joystick of a player (0: none) */
 	SDL_JoystickID joystick_id(unsigned player) const { return joystick(player) ? m_joy_seats[player & 1] : 0; }
 
-	void read_inputs(MieBoard::Inputs &inputs) override { m_panel.fill(inputs); }
+	void read_inputs(CabinetInputs &inputs) override { m_panel.fill(inputs); }
 	/* The outputs of the board after a frame: the pad of a player shakes
 	 * while a rumble output of that player is on, when it feels them; the
 	 * pad of player 1 also

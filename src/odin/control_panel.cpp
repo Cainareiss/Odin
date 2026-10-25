@@ -43,7 +43,7 @@ button(const char *name, const char *id, uint8_t player, uint16_t mask, Role rol
 }
 
 /* START, the directions and PUSH1 to PUSH6 of both players, in the words
- * of MieBoard::Inputs */
+ * of CabinetInputs */
 std::vector<GameControl>
 standard_panel()
 {
@@ -73,10 +73,10 @@ standard_panel()
 
 /* Every control of the panel where it rests; a channel no control takes
  * at 8000 */
-MieBoard::Inputs
+CabinetInputs
 idle_inputs(const std::vector<GameControl> &panel)
 {
-	MieBoard::Inputs inputs = {};
+	CabinetInputs inputs = {};
 
 	for (uint16_t &channel : inputs.jvs_analog)
 		channel = 0x8000;
@@ -416,7 +416,7 @@ ControlPanel::analog(const HostState &host, size_t c)
 void
 ControlPanel::update(const HostState &host)
 {
-	MieBoard::Inputs inputs = idle_inputs(m_controls);
+	CabinetInputs inputs = idle_inputs(m_controls);
 
 	/* The mouse of a player is one pointer: when it moves, it takes every
 	 * channel of the player it is bound to */
@@ -494,7 +494,7 @@ ControlPanel::update(const HostState &host)
 }
 
 void
-ControlPanel::fill(MieBoard::Inputs &inputs)
+ControlPanel::fill(CabinetInputs &inputs)
 {
 	inputs = m_inputs;
 	for (unsigned slot = 0; slot < 2; slot++) {

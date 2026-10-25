@@ -30,7 +30,7 @@
 
 #include "odin/bindings.hpp"
 #include "odin/games.hpp"
-#include "odin/mie_board.hpp"
+#include "odin/hikaru_host.hpp"
 
 namespace odin {
 
@@ -137,7 +137,7 @@ public:
 	 * and a coin goes in on a press. */
 	void update(const HostState &host);
 	/* The inputs of the last update; a coin goes in once. */
-	void fill(MieBoard::Inputs &inputs);
+	void fill(CabinetInputs &inputs);
 	/* An analog channel as the last update left it */
 	uint16_t analog_channel(size_t channel) const { return m_inputs.jvs_analog[channel]; }
 
@@ -182,7 +182,7 @@ private:
 
 	std::vector<GameControl> m_controls;
 	Bindings m_bindings;
-	MieBoard::Inputs m_inputs;
+	CabinetInputs m_inputs;
 	std::vector<size_t> m_positions;		/* of each lever */
 	std::vector<uint16_t> m_keyed;			/* the channel where the keys have taken it */
 	std::vector<size_t> m_owner;			/* the input that works it: 0 the keys, then its axes */
