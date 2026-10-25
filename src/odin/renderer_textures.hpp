@@ -28,13 +28,12 @@
 #include <unordered_map>
 #include <vector>
 
-#include <GL/glew.h>
-
 #include "odin/antarctic_list.hpp"
+#include "odin/host_graphics.hpp"
 
 namespace odin {
 
-/* The textures of the texture RAM as OpenGL textures.
+/* The textures of the texture RAM, made by the graphics card of the host.
  *
  * A texture is decoded the first time a texhead is drawn and kept until its
  * bank of the texture RAM is written. The slots of a bank are 16 x 16 texels
@@ -44,12 +43,12 @@ namespace odin {
 class TextureCache {
 public:
 	/* texram: the two banks of the texture RAM, 4 MB each */
-	explicit TextureCache(const std::span<const uint8_t> texram[2]);
+	TextureCache(HostGraphics &graphics, const std::span<const uint8_t> texram[2]);
 	~TextureCache();
 
-	/* The texture of a texhead, decoded if it is not held; 0 if it
-	 * cannot be. It is left bound on the unit 0 when decoded. */
-	GLuint get(const odin_texhead_t &th);
+	/* The texture of a texhead, decoded if it is not held; none if it
+	 * cannot be. */
+	HostTexture get(const odin_texhead_t &th);
 	/* get would not decode it. */
 	bool holds(const odin_texhead_t &th) const;
 	/* The texture RAM of a bank has changed; every bank if negative. */
@@ -58,17 +57,17 @@ public:
 	 * any of them are dropped. */
 	void invalidate(unsigned bank, uint32_t x, uint32_t y, uint32_t w, uint32_t h);
 
-	/* A sampler object with the sampling of a texhead (sampling_of,
+	/* A sampler with the sampling of a texhead (sampling_of,
 	 * hikaru_draw.hpp) and the anisotropy: made once for each that the
 	 * texheads have. A texture is always read through one, which stands for
 	 * its own sampling. */
-	GLuint sampler(const odin_texhead_t &th);
+	HostSampler sampler(const odin_texhead_t &th);
 
 	/* A texture the graphics card may still be drawing with is not
 	 * deleted at once: the driver would wait for the card, and the list
 	 * drawn last may have to be drawn again with it. It goes when
 	 * delete_dead is called, at the next frame. */
-	void bury(GLuint id);
+	void bury(HostTexture texture);
 	void delete_dead();
 
 	/* The first level only, for looking at a scene */
@@ -94,7 +93,7 @@ private:
 		uint32_t bank, x, y, w, h;
 	};
 	struct Texture {
-		GLuint id;
+		HostTexture id;
 		odin_texhead_t th;
 		/* All of them, whether it was decoded with mipmaps or not */
 		unsigned num_levels;
@@ -107,21 +106,22 @@ private:
 	static bool slot_of(const odin_texhead_t &th, uint32_t &bank, size_t &index);
 	static unsigned levels_of(const odin_texhead_t &th, Level (&levels)[MAX_LEVELS]);
 	static bool reads(const Texture &t, unsigned bank, uint32_t x, uint32_t y, uint32_t w, uint32_t h);
-	GLuint decode(const odin_texhead_t &th) const;
+	HostTexture decode(const odin_texhead_t &th) const;
 	std::vector<uint16_t> decode_i4(uint32_t bank, uint32_t w, uint32_t h,
 	                                uint32_t x0, uint32_t y0) const;
 	void clear_bank(unsigned bank);
 
+	HostGraphics &m_graphics;
 	std::span<const uint8_t> m_texram[2];
 	std::vector<Slot> m_slots[2];
 	/* The slots of each bank that hold a texture, in order: a bank has
 	 * 8 192 slots, and a write looks at the textures only. */
 	std::vector<uint32_t> m_used[2];
-	std::vector<GLuint> m_dead;
+	std::vector<HostTexture> m_dead;
 	bool m_no_mipmaps;
 	unsigned m_anisotropy;
 	/* By wrap, filter and byte of the 0C1 */
-	std::unordered_map<uint32_t, GLuint> m_samplers;
+	std::unordered_map<uint32_t, HostSampler> m_samplers;
 	FILE *m_log;
 };
 

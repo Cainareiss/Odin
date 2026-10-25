@@ -251,7 +251,7 @@ Display::attach(Hikaru &board, const std::string &title)
 	m_program_list = looks.programs_kept;
 
 	run([&] {
-		m_renderer = std::make_unique<Renderer>(memory, looks);
+		m_renderer = std::make_unique<Renderer>(*m_graphics, memory, looks);
 		m_renderer->set_gpu(&board.gpu());
 		m_graphics->set_waits(false);
 		m_waits = false;

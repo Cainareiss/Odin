@@ -75,7 +75,7 @@ is_nonnegative(float x)
 
 /* The texture each texhead of the list was drawn with: a list drawn again
  * takes them back, see check_last_list. */
-std::vector<GLuint> &
+std::vector<HostTexture> &
 Renderer::tex_ids()
 {
 	for (ListTextures &textures : m_list_textures) {
@@ -296,7 +296,7 @@ Renderer::upload_modelview(const odin_mesh_t &mesh, unsigned i)
 void
 Renderer::upload_texture(const odin_mesh_t &mesh)
 {
-	GLuint id;
+	HostTexture texture;
 
 	if (!m_variant.has_texture)
 		return;
@@ -311,35 +311,35 @@ Renderer::upload_texture(const odin_mesh_t &mesh)
 	/* A list drawn again takes the textures it had: the texture RAM may
 	 * have changed since. */
 	if (m_again) {
-		id = tex_ids()[mesh.tex_index];
+		texture = tex_ids()[mesh.tex_index];
 	} else {
 		/* A texture that is decoded is a part of its own in the
 		 * times of the drawing. */
 		const bool decoded = m_times.on() && !m_textures.holds(th);
 		const DrawTimes::Part part = decoded ? m_times.part(DrawTimes::PART_TEXTURES) : DrawTimes::NUM_PARTS;
 
-		/* A texture decoded is left bound. */
+		/* A texture decoded is left bound (GlGraphics::make_texture). */
 		if (!m_textures.holds(th))
 			m_unit0_texture = ~0u;
-		id = m_textures.get(th);
-		tex_ids()[mesh.tex_index] = id;
+		texture = m_textures.get(th);
+		tex_ids()[mesh.tex_index] = texture;
 		if (decoded)
 			m_times.part(part);
 	}
 
-	if (m_unit0_texture != id) {
-		m_unit0_texture = id;
+	if (m_unit0_texture != texture.id) {
+		m_unit0_texture = texture.id;
 		glActiveTexture(GL_TEXTURE0 + 0);
-		glBindTexture(GL_TEXTURE_2D, id);
+		glBindTexture(GL_TEXTURE_2D, texture.id);
 	}
 	/* The sampling belongs to the texhead: two texheads may read the
 	 * same texture with another wrap or filter. */
-	if (id) {
-		const GLuint sampler = m_textures.sampler(th);
+	if (texture.id) {
+		const HostSampler sampler = m_textures.sampler(th);
 
-		if (m_unit0_sampler != sampler) {
-			m_unit0_sampler = sampler;
-			glBindSampler(0, sampler);
+		if (m_unit0_sampler != sampler.id) {
+			m_unit0_sampler = sampler.id;
+			glBindSampler(0, sampler.id);
 		}
 	}
 }

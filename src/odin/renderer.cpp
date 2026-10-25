@@ -32,9 +32,9 @@
 
 namespace odin {
 
-Renderer::Renderer(const Memory &memory, const Options &options)
+Renderer::Renderer(HostGraphics &graphics, const Memory &memory, const Options &options)
 	: m_gpu(nullptr), m_fb(memory.fb), m_options(options), m_building(nullptr), m_list(nullptr),
-	  m_frame{}, m_textures(memory.texram), m_times(options.times), m_mesh_vao(0), m_mesh_vbo(0), m_mesh_ibo(0),
+	  m_frame{}, m_textures(graphics, memory.texram), m_times(options.times), m_mesh_vao(0), m_mesh_vbo(0), m_mesh_ibo(0),
 	  m_program(nullptr), m_variant_key(0), m_drawing(0),
 	  m_scissor_vp_index(~0u), m_bound_tex_index(~0u), m_unit0_texture(~0u), m_unit0_sampler(~0u),
 	  m_blend{~0u, ~0u, ~0u, ~0u}, m_pass{}, m_again(false),
@@ -46,7 +46,7 @@ Renderer::Renderer(const Memory &memory, const Options &options)
 {
 	for (ListTextures &textures : m_list_textures) {
 		textures.list = nullptr;
-		textures.ids.assign(ODIN_LIST_MAX_TEXHEADS, 0);
+		textures.ids.assign(ODIN_LIST_MAX_TEXHEADS, {});
 	}
 	init_debug();
 	m_programs.keep_in(options.programs_made);
@@ -520,7 +520,7 @@ Renderer::show()
 		if (m_options.lists_test)
 			size_lists(1);
 
-		std::fill(tex_ids().begin(), tex_ids().end(), 0);
+		std::fill(tex_ids().begin(), tex_ids().end(), HostTexture{});
 		draw_list();
 
 		if (num > 0)

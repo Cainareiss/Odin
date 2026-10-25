@@ -102,7 +102,8 @@ public:
 		std::string programs_seed, programs_kept, programs_made;
 	};
 
-	Renderer(const Memory &memory, const Options &options);
+	/* graphics: the card it draws with, which outlives it */
+	Renderer(HostGraphics &graphics, const Memory &memory, const Options &options);
 	~Renderer();
 	Renderer(const Renderer &) = delete;
 	Renderer &operator=(const Renderer &) = delete;
@@ -235,7 +236,7 @@ private:
 	/* The texture each texhead of a list was drawn with, see tex_ids */
 	struct ListTextures {
 		const odin_display_list_t *list;
-		std::vector<GLuint> ids;
+		std::vector<HostTexture> ids;
 	};
 	/* What take_frame keeps of the machine for draw_frame, with the
 	 * list and the layers */
@@ -292,7 +293,7 @@ private:
 	void set_material_blend(const odin_mesh_t &mesh);
 	void set_opaque_blend(const odin_mesh_t &mesh);
 	void set_blend(MeshBlend blend);
-	std::vector<GLuint> &tex_ids();
+	std::vector<HostTexture> &tex_ids();
 
 	/* renderer_translucent.cpp */
 	void build_lists();

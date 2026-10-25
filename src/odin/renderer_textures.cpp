@@ -21,7 +21,6 @@
 
 #include "odin/renderer_textures.hpp"
 #include "odin/hikaru_draw.hpp"
-#include "odin/renderer_gl.hpp"
 
 #include <algorithm>
 #include <cstdlib>
@@ -58,8 +57,8 @@ i4_to_rgba4444(uint32_t texel)
 
 } /* namespace */
 
-TextureCache::TextureCache(const std::span<const uint8_t> texram[2])
-	: m_texram{texram[0], texram[1]}, m_no_mipmaps(false), m_anisotropy(1),
+TextureCache::TextureCache(HostGraphics &graphics, const std::span<const uint8_t> texram[2])
+	: m_graphics(graphics), m_texram{texram[0], texram[1]}, m_no_mipmaps(false), m_anisotropy(1),
 	  m_log(nullptr)
 {
 	for (auto &bank : m_slots)
@@ -70,15 +69,15 @@ TextureCache::~TextureCache()
 {
 	invalidate(-1);
 	delete_dead();
-	for (const auto &[key, id] : m_samplers)
-		glDeleteSamplers(1, &id);
+	for (const auto &[key, sampler] : m_samplers)
+		m_graphics.forget_sampler(sampler);
 }
 
 void
-TextureCache::bury(GLuint id)
+TextureCache::bury(HostTexture texture)
 {
-	if (id)
-		m_dead.push_back(id);
+	if (texture.id)
+		m_dead.push_back(texture);
 }
 
 void
@@ -86,15 +85,14 @@ TextureCache::delete_dead()
 {
 	if (m_dead.empty())
 		return;
-	glDeleteTextures(static_cast<GLsizei>(m_dead.size()), m_dead.data());
-	gl::check("deleting textures");
+	m_graphics.forget_textures(m_dead);
 	m_dead.clear();
 }
 
 /* The sampling belongs to the texhead, not to the texels: two texheads may
  * share a slot and differ only there, so the sampler is bound on every
  * bind, as the X360 port sets them (825C6C98, 825C6650). */
-GLuint
+HostSampler
 TextureCache::sampler(const odin_texhead_t &th)
 {
 	const uint32_t key = (odin_tex_mirroru(&th) << 0) | (odin_tex_repeatu(&th) << 1) |
@@ -105,37 +103,12 @@ TextureCache::sampler(const odin_texhead_t &th)
 	if (found != m_samplers.end())
 		return found->second;
 
-	const TextureSampling sampling = sampling_of(th);
-	const auto wrap = [](TextureSampling::Wrap w) -> GLint {
-		return w == TextureSampling::Wrap::MIRROR ? GL_MIRRORED_REPEAT :
-		       w == TextureSampling::Wrap::REPEAT ? GL_REPEAT : GL_CLAMP_TO_EDGE;
-	};
-	GLuint id;
-
-	glGenSamplers(1, &id);
-	glSamplerParameteri(id, GL_TEXTURE_WRAP_S, wrap(sampling.u));
-	glSamplerParameteri(id, GL_TEXTURE_WRAP_T, wrap(sampling.v));
-	switch (sampling.filter) {
-	case TextureSampling::Filter::NEAREST:
-		glSamplerParameteri(id, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		glSamplerParameteri(id, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-		break;
-	case TextureSampling::Filter::LINEAR:
-		glSamplerParameteri(id, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glSamplerParameteri(id, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		break;
-	case TextureSampling::Filter::TRILINEAR:
-		glSamplerParameteri(id, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glSamplerParameteri(id, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-		break;
-	}
-	glSamplerParameterf(id, GL_TEXTURE_LOD_BIAS, sampling.lod_bias);
 	/* The board has trilinear filtering alone (its patents); the
 	 * anisotropy is an option of ours. */
-	if (m_anisotropy > 1 && GLEW_EXT_texture_filter_anisotropic)
-		glSamplerParameterf(id, GL_TEXTURE_MAX_ANISOTROPY_EXT, static_cast<float>(m_anisotropy));
-	m_samplers.emplace(key, id);
-	return id;
+	const HostSampler sampler = m_graphics.make_sampler(sampling_of(th), m_anisotropy);
+
+	m_samplers.emplace(key, sampler);
+	return sampler;
 }
 
 /* A word holds a block of two by two texels: a texhead of w x h words is a
@@ -201,90 +174,53 @@ TextureCache::reads(const Texture &t, unsigned bank, uint32_t x, uint32_t y, uin
 	return false;
 }
 
-GLuint
+HostTexture
 TextureCache::decode(const odin_texhead_t &th) const
 {
-	static const GLint la8_swizzle[4] = { GL_RED, GL_RED, GL_RED, GL_GREEN };
 	const uint32_t format = odin_tex_format(&th);
 	Level levels[MAX_LEVELS];
 	const uint32_t all_levels = levels_of(th, levels);
 	const uint32_t num_levels = m_no_mipmaps ? 1 : all_levels;
-	uint32_t scale = 1;
-	GLenum internal, layout = GL_RGBA, type;
-	GLuint id;
+	Texels texels;
 
 	switch (format) {
 	case ODIN_FORMAT_ABGR1555:
-		internal = GL_RGB5_A1;
-		type = GL_UNSIGNED_SHORT_1_5_5_5_REV;
+		texels = Texels::ABGR1555;
 		break;
 	case ODIN_FORMAT_ABGR4444:
-		internal = GL_RGBA4;
-		type = GL_UNSIGNED_SHORT_4_4_4_4_REV;
+	case ODIN_FORMAT_I4:
+		texels = Texels::ABGR4444;
 		break;
 	case ODIN_FORMAT_LA8:
-		internal = GL_RGBA8;
-		layout = GL_RG;
-		type = GL_UNSIGNED_BYTE;
-		break;
-	case ODIN_FORMAT_I4:
-		/* Four texels in a word */
-		internal = GL_RGBA4;
-		type = GL_UNSIGNED_SHORT_4_4_4_4_REV;
-		scale = 2;
+		texels = Texels::LA8;
 		break;
 	default:
-		return 0;
+		return {};
 	}
 
-	const uint32_t w = levels[0].w, h = levels[0].h;
-
 	/* Each level then lies in its bank too. */
-	if (levels[0].x + w > BANK_WIDTH || levels[0].y + h > BANK_HEIGHT) {
+	if (levels[0].x + levels[0].w > BANK_WIDTH || levels[0].y + levels[0].h > BANK_HEIGHT) {
 		std::fprintf(stderr, "renderer: a texture outside its bank: %s\n",
 		             odin_texhead_str(&th));
 		std::abort();
 	}
 
-	glGenTextures(1, &id);
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, id);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, static_cast<GLint>(num_levels - 1));
-	if (format == ODIN_FORMAT_LA8)
-		glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, la8_swizzle);
+	/* Read where it lies in the bank; I4, made ABGR4444 first, four
+	 * texels in a word */
+	std::vector<uint16_t> i4[MAX_LEVELS];
+	TexelRect rects[MAX_LEVELS];
 
-	/* The levels are allocated at once: given one by one, a 64x64 texture
-	 * takes the NVIDIA driver 595 some 1.7 ms instead of 0.03. */
-	glTexStorage2D(GL_TEXTURE_2D, static_cast<GLsizei>(num_levels), internal,
-	               static_cast<GLsizei>(w * scale), static_cast<GLsizei>(h * scale));
-
-	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 	for (uint32_t level = 0; level < num_levels; level++) {
 		const Level &l = levels[level];
 
 		if (format == ODIN_FORMAT_I4) {
-			const std::vector<uint16_t> data = decode_i4(l.bank, l.w, l.h, l.x, l.y);
-
-			glTexSubImage2D(GL_TEXTURE_2D, static_cast<GLint>(level), 0, 0,
-			                static_cast<GLsizei>(l.w * 2), static_cast<GLsizei>(l.h * 2),
-			                layout, type, data.data());
+			i4[level] = decode_i4(l.bank, l.w, l.h, l.x, l.y);
+			rects[level] = { i4[level].data(), l.w * 2, 0, 0, l.w * 2, l.h * 2 };
 		} else {
-			/* Read where it lies in the bank */
-			glPixelStorei(GL_UNPACK_ROW_LENGTH, BANK_WIDTH);
-			glPixelStorei(GL_UNPACK_SKIP_ROWS, static_cast<GLint>(l.y));
-			glPixelStorei(GL_UNPACK_SKIP_PIXELS, static_cast<GLint>(l.x));
-			glTexSubImage2D(GL_TEXTURE_2D, static_cast<GLint>(level), 0, 0,
-			                static_cast<GLsizei>(l.w), static_cast<GLsizei>(l.h),
-			                layout, type, m_texram[l.bank].data());
+			rects[level] = { m_texram[l.bank].data(), BANK_WIDTH, l.x, l.y, l.w, l.h };
 		}
 	}
-
-	glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-	glPixelStorei(GL_UNPACK_SKIP_ROWS, 0);
-	glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0);
-	gl::check("decoding a texture");
-
-	return id;
+	return m_graphics.make_texture(texels, std::span(rects, num_levels));
 }
 
 bool
@@ -314,14 +250,14 @@ TextureCache::holds(const odin_texhead_t &th) const
 	return false;
 }
 
-GLuint
+HostTexture
 TextureCache::get(const odin_texhead_t &th)
 {
 	uint32_t bank;
 	size_t index;
 
 	if (!slot_of(th, bank, index))
-		return 0;
+		return {};
 
 	Slot &slot = m_slots[bank][index];
 	for (const Texture &held : slot)
@@ -330,19 +266,19 @@ TextureCache::get(const odin_texhead_t &th)
 
 	if (m_log)
 		std::fprintf(m_log, "\tHR: TEXUPLOAD %s\n", odin_texhead_str(&th));
-	const GLuint id = decode(th);
-	if (!id)
-		return 0;
+	const HostTexture texture = decode(th);
+	if (!texture.id)
+		return {};
 
 	if (slot.empty()) {
 		std::vector<uint32_t> &used = m_used[bank];
 
 		used.insert(std::lower_bound(used.begin(), used.end(), index), static_cast<uint32_t>(index));
 	}
-	Texture &held = slot.emplace_back(Texture{id, th, 0, {}});
+	Texture &held = slot.emplace_back(Texture{texture, th, 0, {}});
 
 	held.num_levels = levels_of(th, held.levels);
-	return id;
+	return texture;
 }
 
 void
@@ -365,8 +301,8 @@ TextureCache::set_anisotropy(unsigned level)
 		return;
 	/* The samplers alone hold it. */
 	m_anisotropy = level;
-	for (const auto &[key, id] : m_samplers)
-		glDeleteSamplers(1, &id);
+	for (const auto &[key, sampler] : m_samplers)
+		m_graphics.forget_sampler(sampler);
 	m_samplers.clear();
 }
 
