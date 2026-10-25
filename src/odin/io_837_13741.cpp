@@ -37,15 +37,11 @@ Io837_13741::reset()
 	m_ram.fill(0);
 	m_chip.reset();
 	m_timer.reset();
-	m_to_chip_count = m_to_mie_count = 0;
+	m_ways.to_chip_count = m_ways.to_mie_count = 0;
 	m_cycles = 0;
 	m_chip_start = 0;
 	m_addressed = false;
-	for (unsigned slot = 0; slot < 2; slot++) {
-		m_coin_phase[slot] = 0;
-		m_coin_until[slot] = 0;
-		m_coins[slot] = 0;
-	}
+	m_coins = {};
 	read_pins();
 }
 
@@ -79,19 +75,9 @@ Io837_13741::read_pins()
 			m_pins[6] = static_cast<uint8_t>(m_pins[6] & ~(1u << (4 + k)));
 	}
 
-	for (unsigned slot = 0; slot < 2; slot++) {
-		if (m_coin_phase[slot] && m_cycles >= m_coin_until[slot]) {
-			m_coin_phase[slot] = m_coin_phase[slot] == 1 ? 2 : 0;
-			m_coin_until[slot] = m_cycles + COIN_CYCLES;
-		}
-		if (!m_coin_phase[slot] && m_coins[slot]) {
-			m_coins[slot]--;
-			m_coin_phase[slot] = 1;
-			m_coin_until[slot] = m_cycles + COIN_CYCLES;
-		}
-		if (m_coin_phase[slot] == 1)
+	for (unsigned slot = 0; slot < 2; slot++)
+		if (m_coins.closed(slot, m_cycles, COIN_CYCLES))
 			m_pins[0] = static_cast<uint8_t>(m_pins[0] & ~(0x10u << slot));
-	}
 	for (uint8_t channel = 0; channel < 8; channel++)
 		m_analog[channel] = static_cast<uint8_t>(m_inputs.analog(channel) >> 8);
 }
@@ -108,10 +94,8 @@ Io837_13741::run_until(uint64_t tick)
 {
 	read_pins();
 	while (now() < tick) {
-		if (m_to_chip_count && m_to_chip[0].tick <= now()) {
-			m_chip.line_received(m_to_chip[0].value);
-			std::copy(m_to_chip.begin() + 1, m_to_chip.begin() + m_to_chip_count, m_to_chip.begin());
-			m_to_chip_count--;
+		if (m_ways.next_byte() <= now()) {
+			m_chip.line_received(m_ways.take_byte());
 			continue;
 		}
 		const uint64_t pulse = m_timer.next_pulse() == UINT64_MAX ? UINT64_MAX
@@ -121,27 +105,10 @@ Io837_13741::run_until(uint64_t tick)
 			m_timer.pulse_taken();
 			continue;
 		}
-		uint64_t to = std::min(tick, pulse);
+		const uint64_t to = std::min({ tick, pulse, m_ways.next_byte() });
 
-		if (m_to_chip_count)
-			to = std::min(to, m_to_chip[0].tick);
 		run_chip((to - now() + Mie::TICKS_PER_CYCLE - 1) / Mie::TICKS_PER_CYCLE);
 	}
-}
-
-void
-Io837_13741::deliver(Mie &mie, uint64_t tick)
-{
-	uint32_t n = 0;
-
-	for (; n < m_to_mie_count && m_to_mie[n].tick <= tick; n++) {
-		if (m_to_mie[n].kind == BYTE)
-			mie.line_received(m_to_mie[n].value);
-		else
-			mie.set_line_addressed(m_to_mie[n].value != 0);
-	}
-	std::copy(m_to_mie.begin() + n, m_to_mie.begin() + m_to_mie_count, m_to_mie.begin());
-	m_to_mie_count -= n;
 }
 
 /* A byte of the MIE, its start bit `ticks` into its run: the chip has it
@@ -149,17 +116,7 @@ Io837_13741::deliver(Mie &mie, uint64_t tick)
 void
 Io837_13741::line_sent(uint8_t byte, uint64_t ticks)
 {
-	const uint64_t due = m_run_start + ticks + CHAR_TICKS;
-
-	if (due < now()) {
-		std::fprintf(stderr, "FATAL: 837-13741: a byte of the MIE due where the chip has been: the chip too far ahead\n");
-		std::abort();
-	}
-	if (m_to_chip_count == m_to_chip.size()) {
-		std::fprintf(stderr, "FATAL: 837-13741: more bytes from the MIE than the line holds\n");
-		std::abort();
-	}
-	m_to_chip[m_to_chip_count++] = { due, BYTE, byte };
+	m_ways.byte_to_chip("837-13741", m_run_start + ticks + CHAR_TICKS, now(), byte);
 }
 
 /* A byte of the chip, its start bit `ticks` into its run: the MIE has it a
@@ -167,23 +124,7 @@ Io837_13741::line_sent(uint8_t byte, uint64_t ticks)
 void
 Io837_13741::chip_sent(uint8_t byte, uint64_t ticks)
 {
-	to_mie(m_chip_start + ticks + CHAR_TICKS, BYTE, byte);
-}
-
-/* In the order the MIE has them: the sense at once, a byte a character
- * after its start bit */
-void
-Io837_13741::to_mie(uint64_t tick, uint8_t kind, uint8_t value)
-{
-	if (m_to_mie_count == m_to_mie.size()) {
-		std::fprintf(stderr, "FATAL: 837-13741: more for the MIE than the line holds\n");
-		std::abort();
-	}
-	uint32_t n = m_to_mie_count++;
-
-	for (; n > 0 && m_to_mie[n - 1].tick > tick; n--)
-		m_to_mie[n] = m_to_mie[n - 1];
-	m_to_mie[n] = { tick, kind, value };
+	m_ways.for_mie("837-13741", m_chip_start + ticks + CHAR_TICKS, IoLineEvent::BYTE, byte);
 }
 
 uint8_t
@@ -234,7 +175,7 @@ Io837_13741::jvs_control_written(uint8_t value)
 
 	if (addressed != m_addressed) {
 		m_addressed = addressed;
-		to_mie(chip_now(), SENSE, addressed);
+		m_ways.for_mie("837-13741", chip_now(), IoLineEvent::SENSE, addressed);
 	}
 }
 
@@ -244,16 +185,16 @@ Io837_13741::save(State &out) const
 	m_chip.save(out.chip);
 	out.ram = m_ram;
 	m_timer.save(out.timer);
-	out.to_chip = m_to_chip;
-	out.to_mie = m_to_mie;
-	out.to_chip_count = m_to_chip_count;
-	out.to_mie_count = m_to_mie_count;
+	out.to_chip = m_ways.to_chip;
+	out.to_mie = m_ways.to_mie;
+	out.to_chip_count = m_ways.to_chip_count;
+	out.to_mie_count = m_ways.to_mie_count;
 	out.cycles = m_cycles;
 	out.addressed = m_addressed;
 	for (unsigned slot = 0; slot < 2; slot++) {
-		out.coin_phase[slot] = m_coin_phase[slot];
-		out.coin_until[slot] = m_coin_until[slot];
-		out.coins[slot] = m_coins[slot];
+		out.coin_phase[slot] = m_coins.phase[slot];
+		out.coin_until[slot] = m_coins.until[slot];
+		out.coins[slot] = m_coins.waiting[slot];
 	}
 }
 
@@ -263,23 +204,18 @@ Io837_13741::load(const State &in, Mie &mie)
 	m_chip.load(in.chip);
 	m_ram = in.ram;
 	m_timer.load(in.timer);
-	m_to_chip = in.to_chip;
-	m_to_mie = in.to_mie;
-	m_to_chip_count = in.to_chip_count;
-	m_to_mie_count = in.to_mie_count;
+	m_ways.to_chip = in.to_chip;
+	m_ways.to_mie = in.to_mie;
+	m_ways.to_chip_count = in.to_chip_count;
+	m_ways.to_mie_count = in.to_mie_count;
 	m_cycles = in.cycles;
 	m_addressed = in.addressed != 0;
 	for (unsigned slot = 0; slot < 2; slot++) {
-		m_coin_phase[slot] = in.coin_phase[slot];
-		m_coin_until[slot] = in.coin_until[slot];
-		m_coins[slot] = in.coins[slot];
+		m_coins.phase[slot] = in.coin_phase[slot];
+		m_coins.until[slot] = in.coin_until[slot];
+		m_coins.waiting[slot] = in.coins[slot];
 	}
-	/* The MIE sees the line as the events it has not had leave it */
-	bool told = m_addressed;
-	for (uint32_t n = m_to_mie_count; n-- > 0;)
-		if (m_to_mie[n].kind == SENSE)
-			told = m_to_mie[n].value == 0;
-	mie.set_line_addressed(told);
+	mie.set_line_addressed(m_ways.told(m_addressed));
 	read_pins();
 }
 

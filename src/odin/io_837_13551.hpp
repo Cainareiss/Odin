@@ -82,33 +82,27 @@ public:
 
 	/* What it keeps, plain data: the chip, the bytes on their way to it,
 	 * what it has for the MIE, its pins, its coins. */
-	struct Event {
-		uint64_t tick;
-		uint8_t kind;	/* BYTE, SENSE */
-		uint8_t value;
-	};
 	struct State {
 		Tmp90ph44State chip;
-		std::array<Event, 16> to_chip, to_mie;
+		std::array<IoLineEvent, IoLineWays::MOST> to_chip, to_mie;
 		uint32_t to_chip_count, to_mie_count;
 		std::array<uint8_t, 8> latch, driven;
 		uint8_t addressed;	/* as the chip drives P3 bit 2 */
-		uint8_t coin_phase[2];	/* 0 idle, 1 closed, 2 open */
+		uint8_t coin_phase[2];	/* IoLineCoins */
 		uint64_t coin_until[2];
 		uint32_t coins[2];	/* waiting */
 	};
-	enum : uint8_t { BYTE, SENSE };
 
 	Io837_13551(std::span<const uint8_t> prom, JvsInputs &inputs);
 
 	/* IoLineBoard */
 	void reset() override;
-	void inc_coin(uint8_t slot) override { m_coins[slot & 1]++; }
+	void inc_coin(uint8_t slot) override { m_coins.waiting[slot & 1]++; }
 	void run_until(uint64_t tick) override;
 	uint64_t now() const override { return m_chip.states() * TICKS_PER_STATE; }
 	void set_run_start(uint64_t tick) override { m_run_start = tick; }
-	uint64_t next_event() const override { return m_to_mie_count ? m_to_mie[0].tick : UINT64_MAX; }
-	void deliver(Mie &mie, uint64_t tick) override;
+	uint64_t next_event() const override { return m_ways.next_event(); }
+	void deliver(Mie &mie, uint64_t tick) override { m_ways.deliver(mie, tick); }
 	std::span<const uint8_t> outputs() const override { return m_outputs; }
 	Tmp90ph44 &chip() { return m_chip; }
 
@@ -128,19 +122,15 @@ public:
 
 private:
 	void read_pins();
-	void to_mie(uint8_t kind, uint8_t value);
 
 	JvsInputs &m_inputs;
 	Tmp90ph44 m_chip;
-	std::array<Event, 16> m_to_chip{}, m_to_mie{};
-	uint32_t m_to_chip_count = 0, m_to_mie_count = 0;
+	IoLineWays m_ways;
 	std::array<uint8_t, 8> m_latch{}, m_driven{}, m_pins{};
 	std::array<uint8_t, 4> m_outputs{};
 	uint8_t m_analog[8] = {};
 	bool m_addressed = false;
-	uint8_t m_coin_phase[2] = {};
-	uint64_t m_coin_until[2] = {};
-	uint32_t m_coins[2] = {};
+	IoLineCoins m_coins;
 	uint64_t m_run_start = 0;
 };
 

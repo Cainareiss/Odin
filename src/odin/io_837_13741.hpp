@@ -57,37 +57,31 @@ public:
 	 * 14.7456 MHz, both programs), in ticks */
 	static constexpr uint64_t CHAR_TICKS = 800000;
 
-	struct Event {
-		uint64_t tick;
-		uint8_t kind;	/* BYTE, SENSE */
-		uint8_t value;
-	};
 	/* What it keeps, plain data */
 	struct State {
 		MieState chip;
 		std::array<uint8_t, Mie::RAM_SIZE> ram;
 		D71054::State timer;
-		std::array<Event, 16> to_chip, to_mie;
+		std::array<IoLineEvent, IoLineWays::MOST> to_chip, to_mie;
 		uint32_t to_chip_count, to_mie_count;
 		uint64_t cycles;
 		uint8_t addressed;
-		uint8_t coin_phase[2];	/* 0 idle, 1 closed, 2 open */
+		uint8_t coin_phase[2];	/* IoLineCoins */
 		uint64_t coin_until[2];
 		uint32_t coins[2];
 	};
-	enum : uint8_t { BYTE, SENSE };
 
 	/* `eprom`: the 64 KB of epr-21868 */
 	Io837_13741(std::span<const uint8_t> eprom, JvsInputs &inputs);
 
 	/* IoLineBoard */
 	void reset() override;
-	void inc_coin(uint8_t slot) override { m_coins[slot & 1]++; }
+	void inc_coin(uint8_t slot) override { m_coins.waiting[slot & 1]++; }
 	void run_until(uint64_t tick) override;
 	uint64_t now() const override { return m_cycles * Mie::TICKS_PER_CYCLE; }
 	void set_run_start(uint64_t tick) override { m_run_start = tick; }
-	uint64_t next_event() const override { return m_to_mie_count ? m_to_mie[0].tick : UINT64_MAX; }
-	void deliver(Mie &mie, uint64_t tick) override;
+	uint64_t next_event() const override { return m_ways.next_event(); }
+	void deliver(Mie &mie, uint64_t tick) override { m_ways.deliver(mie, tick); }
 	std::span<const uint8_t> outputs() const override;
 	/* MieLine: a byte of the MIE */
 	void line_sent(uint8_t byte, uint64_t ticks) override;
@@ -120,15 +114,13 @@ private:
 	void run_chip(uint64_t cycles);
 	uint64_t chip_now() const { return m_chip_start + m_chip.run_ticks(); }
 	void chip_sent(uint8_t byte, uint64_t ticks);
-	void to_mie(uint64_t tick, uint8_t kind, uint8_t value);
 
 	JvsInputs &m_inputs;
 	std::array<uint8_t, Mie::RAM_SIZE> m_ram{};
 	Mie m_chip;
 	ChipLine m_chip_line;
 	D71054 m_timer;
-	std::array<Event, 16> m_to_chip{}, m_to_mie{};
-	uint32_t m_to_chip_count = 0, m_to_mie_count = 0;
+	IoLineWays m_ways;
 	uint64_t m_cycles = 0;
 	uint64_t m_chip_start = 0;	/* the tick the current run of the chip started at */
 	uint64_t m_run_start = 0;
@@ -136,9 +128,7 @@ private:
 	std::array<uint8_t, 8> m_pins{};
 	uint8_t m_analog[8] = {};
 	mutable std::array<uint8_t, 4> m_outputs{};	/* outputs(): from the latches */
-	uint8_t m_coin_phase[2] = {};
-	uint64_t m_coin_until[2] = {};
-	uint32_t m_coins[2] = {};
+	IoLineCoins m_coins;
 };
 
 } /* namespace odin */
