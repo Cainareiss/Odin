@@ -58,10 +58,10 @@ public:
 	 * any of them are dropped. */
 	void invalidate(unsigned bank, uint32_t x, uint32_t y, uint32_t w, uint32_t h);
 
-	/* Wrap and filter of the texture bound on the active unit. */
-	static void set_sampling(const odin_texhead_t &th);
-	/* A sampler object with them, and the anisotropy: made once for each
-	 * that the texheads have. */
+	/* A sampler object with the sampling of a texhead (sampling_of,
+	 * hikaru_draw.hpp) and the anisotropy: made once for each that the
+	 * texheads have. A texture is always read through one, which stands for
+	 * its own sampling. */
 	GLuint sampler(const odin_texhead_t &th);
 
 	/* A texture the graphics card may still be drawing with is not

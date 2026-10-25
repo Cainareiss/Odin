@@ -20,6 +20,7 @@
  */
 
 #include "odin/renderer_textures.hpp"
+#include "odin/hikaru_draw.hpp"
 #include "odin/renderer_gl.hpp"
 
 #include <algorithm>
@@ -90,50 +91,9 @@ TextureCache::delete_dead()
 	m_dead.clear();
 }
 
-/* They belong to the texhead, not to the texels: two texheads may share a
- * slot and differ only there, so this runs on every bind, as the X360 port
- * does (825C6C98, 825C6650). */
-void
-TextureCache::set_sampling(const odin_texhead_t &th)
-{
-	/* Mirror wins over repeat, else clamp. */
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S,
-	                odin_tex_mirroru(&th) ? GL_MIRRORED_REPEAT :
-	                odin_tex_repeatu(&th) ? GL_REPEAT : GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T,
-	                odin_tex_mirrorv(&th) ? GL_MIRRORED_REPEAT :
-	                odin_tex_repeatv(&th) ? GL_REPEAT : GL_CLAMP_TO_EDGE);
-
-	/* Filter of the 0C1 mode; mode 3 is left at the sampler defaults in
-	 * the port, trilinear here (HEURISTIC). */
-	switch (odin_tex_filter(&th)) {
-	case 0:
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-		break;
-	case 2:
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		break;
-	default:
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-		break;
-	}
-
-	/* The byte of the 0C1 moves the level. HEURISTIC: eighths of a level,
-	 * signed, on top of the -0.5 of the X360 port (825C6650), which
-	 * ignores the byte and filters with an anisotropy of 8 instead. The
-	 * floor of the VON4 arena sends D0 and its cabinet shows the finest
-	 * level where a pixel is 25 texels long: sixteenths do not reach it.
-	 * How the board picks the level is not known; the one of OpenGL
-	 * stands here. */
-	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_LOD_BIAS,
-	                -0.5f + static_cast<float>(odin_tex_bias(&th)) * 0.125f);
-}
-
-/* The same as set_sampling and the anisotropy of decode, in a sampler: bound
- * on a unit it stands for them, one call where they are six. */
+/* The sampling belongs to the texhead, not to the texels: two texheads may
+ * share a slot and differ only there, so the sampler is bound on every
+ * bind, as the X360 port sets them (825C6C98, 825C6650). */
 GLuint
 TextureCache::sampler(const odin_texhead_t &th)
 {
@@ -145,31 +105,33 @@ TextureCache::sampler(const odin_texhead_t &th)
 	if (found != m_samplers.end())
 		return found->second;
 
+	const TextureSampling sampling = sampling_of(th);
+	const auto wrap = [](TextureSampling::Wrap w) -> GLint {
+		return w == TextureSampling::Wrap::MIRROR ? GL_MIRRORED_REPEAT :
+		       w == TextureSampling::Wrap::REPEAT ? GL_REPEAT : GL_CLAMP_TO_EDGE;
+	};
 	GLuint id;
 
 	glGenSamplers(1, &id);
-	glSamplerParameteri(id, GL_TEXTURE_WRAP_S,
-	                    odin_tex_mirroru(&th) ? GL_MIRRORED_REPEAT :
-	                    odin_tex_repeatu(&th) ? GL_REPEAT : GL_CLAMP_TO_EDGE);
-	glSamplerParameteri(id, GL_TEXTURE_WRAP_T,
-	                    odin_tex_mirrorv(&th) ? GL_MIRRORED_REPEAT :
-	                    odin_tex_repeatv(&th) ? GL_REPEAT : GL_CLAMP_TO_EDGE);
-	switch (odin_tex_filter(&th)) {
-	case 0:
+	glSamplerParameteri(id, GL_TEXTURE_WRAP_S, wrap(sampling.u));
+	glSamplerParameteri(id, GL_TEXTURE_WRAP_T, wrap(sampling.v));
+	switch (sampling.filter) {
+	case TextureSampling::Filter::NEAREST:
 		glSamplerParameteri(id, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 		glSamplerParameteri(id, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 		break;
-	case 2:
+	case TextureSampling::Filter::LINEAR:
 		glSamplerParameteri(id, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 		glSamplerParameteri(id, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		break;
-	default:
+	case TextureSampling::Filter::TRILINEAR:
 		glSamplerParameteri(id, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 		glSamplerParameteri(id, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
 		break;
 	}
-	glSamplerParameterf(id, GL_TEXTURE_LOD_BIAS,
-	                    -0.5f + static_cast<float>(odin_tex_bias(&th)) * 0.125f);
+	glSamplerParameterf(id, GL_TEXTURE_LOD_BIAS, sampling.lod_bias);
+	/* The board has trilinear filtering alone (its patents); the
+	 * anisotropy is an option of ours. */
 	if (m_anisotropy > 1 && GLEW_EXT_texture_filter_anisotropic)
 		glSamplerParameterf(id, GL_TEXTURE_MAX_ANISOTROPY_EXT, static_cast<float>(m_anisotropy));
 	m_samplers.emplace(key, id);
@@ -287,13 +249,6 @@ TextureCache::decode(const odin_texhead_t &th) const
 	glGenTextures(1, &id);
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, id);
-	set_sampling(th);
-
-	/* The board has trilinear filtering alone (its patents); the
-	 * anisotropy is an option of ours. */
-	if (m_anisotropy > 1 && GLEW_EXT_texture_filter_anisotropic)
-		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT,
-		                static_cast<float>(m_anisotropy));
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, static_cast<GLint>(num_levels - 1));
 	if (format == ODIN_FORMAT_LA8)
 		glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, la8_swizzle);
@@ -408,8 +363,8 @@ TextureCache::set_anisotropy(unsigned level)
 {
 	if (level == m_anisotropy)
 		return;
+	/* The samplers alone hold it. */
 	m_anisotropy = level;
-	invalidate(-1);
 	for (const auto &[key, id] : m_samplers)
 		glDeleteSamplers(1, &id);
 	m_samplers.clear();
