@@ -171,12 +171,6 @@ WheelForce::~WheelForce()
 	}
 }
 
-const char *
-WheelForce::backend() const
-{
-	return m_backend->name;
-}
-
 void
 WheelForce::push(double force)
 {

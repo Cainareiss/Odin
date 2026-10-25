@@ -358,18 +358,6 @@ Pointers::~Pointers()
 		close(m_backend->notify);
 }
 
-const char *
-Pointers::backend()
-{
-	return "evdev";
-}
-
-bool
-Pointers::exclusive()
-{
-	return true;
-}
-
 void
 Pointers::poll()
 {

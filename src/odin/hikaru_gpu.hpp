@@ -114,9 +114,7 @@ public:
 	bool irq_line() const { return m_antarctic.irq_line(); }
 
 	Antarctic &antarctic() { return m_antarctic; }
-	const Antarctic &antarctic() const { return m_antarctic; }
 	Eurasia &eurasia() { return m_eurasia; }
-	const Eurasia &eurasia() const { return m_eurasia; }
 
 	/* Everything the chips keep, the word at 00400000 with them. Plain
 	 * data. */

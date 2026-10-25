@@ -61,9 +61,6 @@ public:
 	explicit Z80(Z80Bus &bus);
 
 	void reset();
-	/* Runs whole instructions until at least `cycles` T-states have
-	 * elapsed. Returns the T-states actually spent. */
-	uint32_t run(uint32_t cycles);
 	/* Services a pending interrupt, then runs one instruction. */
 	uint32_t step();
 
@@ -85,21 +82,10 @@ public:
 	void set_trace(FILE *out) { m_trace = out; }
 
 	uint16_t pc() const { return m_pc; }
-	uint16_t sp() const { return m_sp; }
-	uint16_t af() const { return pair(m_a, m_f); }
 	uint16_t bc() const { return pair(m_b, m_c); }
 	uint16_t de() const { return pair(m_d, m_e); }
 	uint16_t hl() const { return pair(m_h, m_l); }
-	uint16_t ix() const { return pair(m_ixh, m_ixl); }
-	uint16_t iy() const { return pair(m_iyh, m_iyl); }
-	uint16_t wz() const { return m_wz; }
-	uint8_t a() const { return m_a; }
-	uint8_t f() const { return m_f; }
-	uint8_t i() const { return m_i; }
 	uint8_t r() const { return m_r; }
-	uint8_t im() const { return m_im; }
-	bool iff1() const { return m_iff1; }
-	bool iff2() const { return m_iff2; }
 
 private:
 	static uint8_t u8(uint32_t v) { return static_cast<uint8_t>(v); }

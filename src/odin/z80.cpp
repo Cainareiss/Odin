@@ -67,14 +67,6 @@ void Z80::reset()
 	m_cycles = 0;
 }
 
-uint32_t Z80::run(uint32_t cycles)
-{
-	uint32_t done = 0;
-	while (done < cycles) {
-		done += step();
-	}
-	return done;
-}
 
 uint32_t Z80::step()
 {

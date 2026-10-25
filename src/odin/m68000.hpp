@@ -107,7 +107,6 @@ public:
 	uint32_t d(unsigned n) const { return m_d[n & 7]; }
 	uint32_t a(unsigned n) const { return m_a[n & 7]; }
 	bool stopped() const { return m_stopped; }
-	bool halted() const { return m_halted; }
 
 private:
 	enum : uint16_t {

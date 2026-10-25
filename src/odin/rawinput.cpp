@@ -355,18 +355,6 @@ Pointers::~Pointers()
 	}
 }
 
-const char *
-Pointers::backend()
-{
-	return "Raw Input";
-}
-
-bool
-Pointers::exclusive()
-{
-	return false;
-}
-
 void
 Pointers::poll()
 {

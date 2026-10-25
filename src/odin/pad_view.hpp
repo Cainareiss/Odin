@@ -39,7 +39,6 @@ class PadView {
 public:
 	PadView(const PadDrawing &drawing, ImVec2 a, ImVec2 b);
 
-	const PadDrawing &drawing() const { return m_drawing; }
 	/* Where a point of the drawing is on the screen */
 	ImVec2 at(float x, float y) const { return { m_origin.x + x * m_scale, m_origin.y + y * m_scale }; }
 	/* The box of a part on the screen, at rest: its corners */

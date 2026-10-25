@@ -40,8 +40,6 @@ public:
 	WheelForce(const WheelForce &) = delete;
 	WheelForce &operator=(const WheelForce &) = delete;
 
-	/* How it pushes ("evdev", "SDL haptic"); nullptr: the wheel cannot */
-	const char *backend() const;
 	/* -1 (all the way to the left) to 1 (all the way to the right) */
 	void push(double force);
 	/* No force: the emulation stops, the menu opens */

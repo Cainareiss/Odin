@@ -69,7 +69,6 @@ public:
 	void save(Eeprom93c46State &out) const;
 	void load(const Eeprom93c46State &in);
 	bool write_enabled() const { return m_write_enabled; }
-	bool busy() const { return m_busy_cycles != 0; }
 
 private:
 	enum class State : uint8_t {

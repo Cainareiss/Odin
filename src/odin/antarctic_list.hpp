@@ -128,8 +128,7 @@ static inline unsigned odin_mat_alpha_index (const odin_material_t *m) { return 
 enum {
 	ODIN_TEX_HAS_0C1 = 1 << 0,
 	ODIN_TEX_HAS_2C1 = 1 << 1,
-	ODIN_TEX_HAS_4C1 = 1 << 2,
-	ODIN_TEX_HAS_MIPMAP = 1 << 3
+	ODIN_TEX_HAS_4C1 = 1 << 2
 };
 
 typedef struct {

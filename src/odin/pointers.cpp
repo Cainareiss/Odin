@@ -33,18 +33,6 @@ Pointers::Pointers(SDL_Window *window) : m_window(window), m_backend(std::make_u
 
 Pointers::~Pointers() = default;
 
-const char *
-Pointers::backend()
-{
-	return nullptr;
-}
-
-bool
-Pointers::exclusive()
-{
-	return false;
-}
-
 void
 Pointers::poll()
 {

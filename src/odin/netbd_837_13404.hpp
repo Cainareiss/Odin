@@ -107,7 +107,6 @@ public:
 	std::vector<uint8_t> frames_save() const;
 	bool frames_load(std::span<const uint8_t> bytes);
 
-	bool running() const { return m_running; }
 	/* The clock of its next event: its counter, the end of a frame it
 	 * sends, a frame that comes (UINT64_MAX: none) */
 	uint64_t next_event() const;

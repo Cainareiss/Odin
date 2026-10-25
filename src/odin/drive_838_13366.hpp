@@ -88,8 +88,6 @@ public:
 	/* The torque it tells the motor board, -MOST (all to the left) to MOST
 	 * (all to the right); 0 with the motor at rest */
 	int torque() const;
-	/* Its lamps (port 2D) */
-	uint8_t lamps() const { return m_state.lamps; }
 
 	void save(State &out) const;
 	void load(const State &in);

@@ -85,10 +85,6 @@ public:
 	/* The dead zone and the trigger threshold of each gamepad read again
 	 * from the settings (control_panel.hpp: PadTuning) */
 	void retune();
-	/* Whether a control of the panel or a role of the cabinet is worked
-	 * now */
-	bool touched(size_t control) const { return m_panel.touched(host(), control); }
-	bool touched(Role role) const { return m_panel.touched(host(), role); }
 	/* Guide of a gamepad pressed and let go alone since the last call:
 	 * the menu (with another button, Guide is a shortcut) */
 	bool guide_tapped() { return std::exchange(m_guide_tapped, false); }

@@ -327,13 +327,10 @@ public:
 	bool dropdown(const char *name, const char *about, std::span<const std::string> labels, int &chosen);
 	bool dropdown(const char *name, const char *about, std::span<const Item> items, int &chosen);
 	/* The same list from a box alone at that place, that wide, an icon
-	 * before what is chosen; its height */
-	bool picker(const char *id, ImVec2 at, float width, std::span<const std::string> labels, int &chosen,
-	            Icon icon = Icon::NONE) const;
-	float picker_height() const;
-	/* The same with those lines, and a text at the foot of the list */
+	 * before what is chosen, a text at the foot of the list; its height */
 	bool picker(const char *id, ImVec2 at, float width, std::span<const Item> items, int &chosen, Icon icon,
 	            const char *foot) const;
+	float picker_height() const;
 
 	/* What a button is: plain (in the action colour, its outline fainter
 	 * until hovered), Undo (in the ink, its outline clearer, until

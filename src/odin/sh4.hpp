@@ -210,7 +210,6 @@ public:
 		m_run = state;
 		m_event = true;
 	}
-	Sh4Run run_state() const { return m_run; }
 	/* Whether the kept blocks run as host code; false on a host that
 	 * has none. To be set before anything runs. */
 	void set_translate(bool on);
@@ -242,7 +241,6 @@ public:
 	uint32_t pr() const { return m_r.pr; }
 	uint32_t gbr() const { return m_r.gbr; }
 	uint32_t sr() const { return m_r.sr | m_r.t; }
-	bool master() const { return m_master; }
 
 	/* Counts since the reset, for the measurements. */
 	uint64_t instructions() const { return m_instructions; }

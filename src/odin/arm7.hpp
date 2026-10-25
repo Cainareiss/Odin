@@ -111,7 +111,6 @@ public:
 	 * host code instead (arm7_translate.cpp), when the host has it: the
 	 * same, instruction for instruction. Off by default. */
 	void set_translate(bool on);
-	bool translates() const { return m_translate; }
 	/* For the measurements: the bytes of host code written */
 	uint32_t host_bytes() const { return m_host ? m_host->used() : 0; }
 	/* Takes a pending FIQ or IRQ without running an instruction.

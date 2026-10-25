@@ -898,12 +898,6 @@ MenuKit::picker_height() const
 	return ImGui::GetTextLineHeight() + 2.0f * px(CELL_HIGH);
 }
 
-bool
-MenuKit::picker(const char *id, ImVec2 at, float width, std::span<const std::string> labels, int &chosen,
-                Icon icon_shown) const
-{
-	return picker(id, at, width, plain(labels), chosen, icon_shown, nullptr);
-}
 
 bool
 MenuKit::picker(const char *id, ImVec2 at, float width, std::span<const Item> items, int &chosen, Icon icon_shown,

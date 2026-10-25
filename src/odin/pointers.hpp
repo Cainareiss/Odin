@@ -61,12 +61,6 @@ public:
 	Pointers(const Pointers &) = delete;
 	Pointers &operator=(const Pointers &) = delete;
 
-	/* How the devices are read here ("evdev", "Raw Input"; nullptr: they
-	 * are not); whether a device held for the game stops driving the
-	 * cursor of the desktop (evdev; Raw Input cannot) */
-	static const char *backend();
-	static bool exclusive();
-
 	/* The devices that came and went, and the events since the last call:
 	 * once a frame; the window they aim at */
 	void poll();

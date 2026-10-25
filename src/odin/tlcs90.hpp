@@ -88,8 +88,6 @@ public:
 	uint16_t bc() const { return r16(BC); }
 	uint16_t de() const { return r16(DE); }
 	uint16_t hl() const { return r16(HL); }
-	uint16_t ix() const { return m_ix; }
-	uint16_t iy() const { return m_iy; }
 	bool halted() const { return m_halted; }
 
 private:
