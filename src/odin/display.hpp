@@ -31,11 +31,11 @@
 #include <string>
 #include <vector>
 
-#include <GL/glew.h>
 #include <SDL3/SDL.h>
 
 #include "odin/display_options.hpp"
 #include "odin/hikaru_host.hpp"
+#include "odin/host_graphics.hpp"
 #include "odin/picture.hpp"
 
 namespace odin {
@@ -219,8 +219,8 @@ private:
 	void run(std::function<void()> job);
 	/* On the drawing thread, the bar over the frame when `bar` */
 	void draw(bool late, unsigned window_w, unsigned window_h, bool bar);
-	/* On the drawing thread: the bezel made a texture (none: forgotten),
-	 * then laid over the window */
+	/* On the drawing thread: the bezel made an image of the card (none:
+	 * forgotten), then laid over the window */
 	void set_bezel(const std::string &path);
 	void make_bezel(SDL_Surface *rgba);
 	void draw_bezel(unsigned window_w, unsigned window_h);
@@ -247,6 +247,8 @@ private:
 	bool m_fullscreen_asked = false;
 	std::string m_program_list;
 	SDL_GLContext m_context;
+	/* What it draws with, and the renderer of the board */
+	std::unique_ptr<HostGraphics> m_graphics;
 	std::unique_ptr<Renderer> m_renderer;
 	std::unique_ptr<Worker> m_drawing;
 	/* Made when it opens first */
@@ -263,20 +265,16 @@ private:
 
 	/* The frame given to the drawing thread: its number, the options it
 	 * is drawn with, whether its drawing writes a log, and the picture
-	 * the drawing leaves: the framebuffer it can be read from and its
-	 * size. */
+	 * the drawing leaves (none yet: the size of the screen of the board).
+	 * Around it: the bezel, or the sides blurred. */
 	unsigned m_frame;
 	unsigned m_scale, m_anisotropy;
 	std::string m_filter;	/* the path of its preset */
 	bool m_logged;
-	GLuint m_picture_fb;
-	GLuint m_bezel = 0, m_bezel_program = 0, m_bezel_vao = 0, m_bezel_light = 0;
-	/* The sides blurred: the picture made smaller twice */
+	HostPicture m_picture;
+	HostImage m_bezel;
 	std::atomic<Sides> m_sides{ Sides::OFF };
-	GLuint m_blur_fb[2] = {}, m_blur_tex[2] = {};
-	float m_bezel_w = 0.0f, m_bezel_h = 0.0f;
 	PictureHole m_hole;
-	unsigned m_picture_width, m_picture_height;
 	/* The debug switches as text, for the title */
 	std::string m_message;
 

@@ -31,6 +31,8 @@
 #include <filesystem>
 #include <system_error>
 
+#include <GL/glew.h>
+
 #include "odin/bytes.hpp"
 #include "odin/env.hpp"
 #include "odin/hikaru.hpp"
@@ -249,7 +251,7 @@ Display::Display(const Keyboard &keys, const Options &options, SDL_Window *windo
 	  m_show_speed(options.show_speed), m_vsync(options.vsync),
 	  m_wait_on_time(false), m_wait_late(false), m_waits(false),
 	  m_frame(0), m_scale(options.scale), m_anisotropy(options.anisotropy), m_filter(find_filter(options.filter)), m_logged(false),
-	  m_picture_fb(0), m_picture_width(Renderer::WIDTH), m_picture_height(Renderer::HEIGHT),
+	  m_picture{ 0, Renderer::WIDTH, Renderer::HEIGHT },
 	  m_late(env_flag("ODIN_LATE_DRAW")), m_held(false), m_late_draw(0),
 	  m_shot_prefix(std::getenv("ODIN_SCREENSHOT")), m_shot_every(60),
 	  m_fingerprint(env_flag("ODIN_PICTURE_FP")), m_window_fp(env_flag("ODIN_WINDOW_FP")), m_speed(env_flag("ODIN_SPEED")),
@@ -264,11 +266,12 @@ Display::Display(const Keyboard &keys, const Options &options, SDL_Window *windo
 		m_shot_every = static_cast<unsigned>(every);
 
 	/* The context goes to the drawing thread for good. */
+	m_graphics = HostGraphics::make_gl(m_window);
 	SDL_GL_MakeCurrent(m_window, nullptr);
 	m_drawing = std::make_unique<Worker>();
 	m_drawing->run([this] {
 		SDL_GL_MakeCurrent(m_window, m_context);
-		SDL_GL_SetSwapInterval(0);
+		m_graphics->set_waits(false);
 	});
 	if (options.window_w && options.window_h)
 		set_window_size(static_cast<int>(options.window_w), static_cast<int>(options.window_h), options.fullscreen);
@@ -306,14 +309,12 @@ Display::attach(Hikaru &board, const std::string &title)
 	run([&] {
 		m_renderer = std::make_unique<Renderer>(memory, looks);
 		m_renderer->set_gpu(&board.gpu());
-		SDL_GL_SetSwapInterval(0);
+		m_graphics->set_waits(false);
 		m_waits = false;
 	});
 	m_board = &board;
 	m_frame = 0;
-	m_picture_fb = 0;
-	m_picture_width = Renderer::WIDTH;
-	m_picture_height = Renderer::HEIGHT;
+	m_picture = { 0, Renderer::WIDTH, Renderer::HEIGHT };
 	m_speed_since = m_speed_last = m_speed_longest = 0;
 	m_title_since = 0;
 	m_fps = 0.0f;
@@ -330,7 +331,7 @@ Display::detach()
 	m_board->set_screen(nullptr);
 	run([this] { m_renderer.reset(); });
 	m_board = nullptr;
-	m_picture_fb = 0;
+	m_picture.id = 0;
 	m_program_list.clear();
 	SDL_SetWindowTitle(m_window, "Odin");
 	show_black();
@@ -345,10 +346,7 @@ Display::show_black()
 		return;
 	SDL_GetWindowSizeInPixels(m_window, &w, &h);
 	run([this, w, h] {
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
-		glViewport(0, 0, w, h);
-		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-		glClear(GL_COLOR_BUFFER_BIT);
+		m_graphics->clear_window(static_cast<unsigned>(w), static_cast<unsigned>(h));
 		present(static_cast<unsigned>(w), static_cast<unsigned>(h), "black");
 	});
 }
@@ -404,6 +402,7 @@ Display::~Display()
 		m_menu.reset();
 	}
 	m_renderer.reset();
+	m_graphics.reset();
 
 	if (m_stats)
 		std::fprintf(stderr, "screen: %u frames drawn in %.3f s on their thread; the board waited for them "
@@ -441,7 +440,7 @@ void
 Display::open_menu(int page)
 {
 	if (!m_menu)
-		m_menu = std::make_unique<Menu>(m_window);
+		m_menu = std::make_unique<Menu>(m_window, *m_graphics);
 	/* The menus of the bar closed, that of the library too */
 	show_bar(false);
 	m_menu->hide_bar();
@@ -449,7 +448,7 @@ Display::open_menu(int page)
 	/* Behind it, the last picture of the game, or the library as it was
 	 * drawn last */
 	if (m_board) {
-		run([this] { m_menu->freeze(m_picture_fb, m_picture_width, m_picture_height); });
+		run([this] { m_menu->freeze(m_picture); });
 	} else {
 		int w, h;
 
@@ -493,8 +492,8 @@ Display::show_bar(bool on)
 	if (on == m_bar_shown)
 		return;
 	if (on && !m_menu) {
-		m_menu = std::make_unique<Menu>(m_window);
-		run([this] { m_menu->freeze(0, 0, 0); });
+		m_menu = std::make_unique<Menu>(m_window, *m_graphics);
+		run([this] { m_menu->freeze({}); });
 	}
 	m_bar_shown = on;
 	m_bar_events.clear();
@@ -566,8 +565,8 @@ Display::open_library()
 {
 	/* Its renderer first: Dear ImGui builds on it */
 	if (!m_menu) {
-		m_menu = std::make_unique<Menu>(m_window);
-		run([this] { m_menu->freeze(0, 0, 0); });
+		m_menu = std::make_unique<Menu>(m_window, *m_graphics);
+		run([this] { m_menu->freeze({}); });
 	}
 	m_menu->forget_input();
 }
@@ -581,9 +580,9 @@ Display::add_library_picture(const std::string &game, SDL_Surface *rgba)
 bool
 Display::save_picture(const std::string &path)
 {
-	const int w = static_cast<int>(m_picture_width), h = static_cast<int>(m_picture_height);
+	const int w = static_cast<int>(m_picture.w), h = static_cast<int>(m_picture.h);
 	SDL_Surface *const shot = w && h ? SDL_CreateSurface(w, h, SDL_PIXELFORMAT_RGB24) : nullptr;
-	std::vector<uint8_t> pixels(size_t{m_picture_width} * m_picture_height * 3);
+	std::vector<uint8_t> pixels(size_t{m_picture.w} * m_picture.h * 3);
 	std::error_code error;
 	bool saved = false;
 
@@ -616,7 +615,7 @@ Display::draw_library(LibraryState &state, BarState &bar)
 	SDL_GetWindowSizeInPixels(m_window, &w, &h);
 	run([this, w, h] {
 		/* No picture of a game behind it */
-		m_menu->freeze(0, 0, 0);
+		m_menu->freeze({});
 		m_menu->draw(static_cast<unsigned>(w), static_cast<unsigned>(h));
 		present(static_cast<unsigned>(w), static_cast<unsigned>(h), "library");
 	});
@@ -683,13 +682,13 @@ Display::draw(bool late, unsigned window_w, unsigned window_h, bool bar)
 	m_renderer->set_anisotropy(m_anisotropy);
 	m_renderer->set_filter(m_filter);
 	m_renderer->draw_frame();
-	m_picture_fb = m_renderer->frame_picture(m_picture_width, m_picture_height);
+	m_picture = m_renderer->frame_picture();
 	draw_over(window_w, window_h, bar);
 
 	screenshot();
 	print_fingerprint();
 	if (const bool wait = late ? m_wait_late : m_wait_on_time; wait != m_waits) {
-		SDL_GL_SetSwapInterval(wait ? 1 : 0);
+		m_graphics->set_waits(wait);
 		m_waits = wait;
 	}
 	present(window_w, window_h, "game");
@@ -705,12 +704,7 @@ Display::draw(bool late, unsigned window_w, unsigned window_h, bool bar)
 void
 Display::read_picture(uint8_t *pixels)
 {
-	glBindFramebuffer(GL_READ_FRAMEBUFFER, m_picture_fb);
-	glReadBuffer(m_picture_fb ? GL_COLOR_ATTACHMENT0 : GL_BACK);
-	glPixelStorei(GL_PACK_ALIGNMENT, 1);
-	glReadPixels(0, 0, static_cast<GLsizei>(m_picture_width), static_cast<GLsizei>(m_picture_height),
-	             GL_RGB, GL_UNSIGNED_BYTE, pixels);
-	glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+	m_graphics->read(m_picture, m_picture.w, m_picture.h, pixels);
 }
 
 void
@@ -718,21 +712,17 @@ Display::present(unsigned window_w, unsigned window_h, const char *what)
 {
 	if (m_window_fp) {
 		m_window_pixels.resize(size_t{window_w} * window_h * 3);
-		glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-		glReadBuffer(GL_BACK);
-		glPixelStorei(GL_PACK_ALIGNMENT, 1);
-		glReadPixels(0, 0, static_cast<GLsizei>(window_w), static_cast<GLsizei>(window_h), GL_RGB, GL_UNSIGNED_BYTE,
-		             m_window_pixels.data());
+		m_graphics->read({}, window_w, window_h, m_window_pixels.data());
 		std::fprintf(stderr, "WINFP %s frame=%u size=%ux%u fp=%016" PRIx64 "\n", what, m_frame, window_w, window_h,
 		             fnv1a(FNV_START, m_window_pixels.data(), m_window_pixels.size()));
 	}
-	SDL_GL_SwapWindow(m_window);
+	m_graphics->show_window();
 }
 
 void
 Display::screenshot()
 {
-	const size_t w = m_picture_width, h = m_picture_height;
+	const size_t w = m_picture.w, h = m_picture.h;
 	char path[512];
 
 	if (!m_shot_prefix || (m_frame % m_shot_every) != 0)
@@ -757,7 +747,7 @@ Display::print_fingerprint()
 	if (!m_fingerprint)
 		return;
 
-	m_pixels.resize(size_t{m_picture_width} * m_picture_height * 3);
+	m_pixels.resize(size_t{m_picture.w} * m_picture.h * 3);
 	read_picture(m_pixels.data());
 	std::fprintf(stderr, "PICFP frame=%u fp=%016" PRIx64 "\n", m_frame, fnv1a(FNV_START, m_pixels.data(), m_pixels.size()));
 }

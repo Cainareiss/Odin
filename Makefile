@@ -40,6 +40,7 @@ OBJ := \
 	src/odin/display.o \
 	src/odin/display_bezel.o \
 	src/odin/display_window.o \
+	src/odin/host_graphics_gl.o \
 	src/odin/x11_window.o \
 	src/odin/menu.o \
 	src/odin/menu_input.o \

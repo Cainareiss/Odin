@@ -27,12 +27,10 @@
 #include <cstdio>
 
 #include "imgui/imgui.h"
-#include "imgui/imgui_impl_opengl3.h"
 #include "imgui/imgui_impl_sdl3.h"
 #include "odin/control_panel.hpp"
 #include "odin/menu_kit.hpp"
 #include "odin/picture.hpp"
-#include "odin/renderer_gl.hpp"
 #include "odin/system_fonts.hpp"
 #include "odin/version.hpp"
 
@@ -170,50 +168,8 @@ index_of(const T (&values)[N], T value)
 	return -1;
 }
 
-/* The blur: how far apart its taps are, in texels of the half picture,
- * how many times it goes back and forth, and how much light it keeps */
-constexpr float BLUR_STEP = 1.5f;
-constexpr unsigned BLUR_ROUNDS = 2;
+/* How much light the background keeps */
 constexpr float LIGHT = 0.55f;
-
-const char WHOLE_WINDOW_VERTEX[] = R"(#version 430 core
-out vec2 v_uv;
-void main()
-{
-	vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);
-	v_uv = p;
-	gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
-}
-)";
-
-/* Gauss on nine taps, sigma near 2 taps */
-const char BLUR_FRAGMENT[] = R"(#version 430 core
-in vec2 v_uv;
-out vec4 o_colour;
-uniform sampler2D u_picture;
-uniform vec2 u_step;
-const float WEIGHTS[5] = float[](0.2270270270, 0.1945945946, 0.1216216216, 0.0540540541, 0.0162162162);
-void main()
-{
-	vec3 c = texture(u_picture, v_uv).rgb * WEIGHTS[0];
-	for (int i = 1; i < 5; i++) {
-		c += texture(u_picture, v_uv + u_step * float(i)).rgb * WEIGHTS[i];
-		c += texture(u_picture, v_uv - u_step * float(i)).rgb * WEIGHTS[i];
-	}
-	o_colour = vec4(c, 1.0);
-}
-)";
-
-const char SHOW_FRAGMENT[] = R"(#version 430 core
-in vec2 v_uv;
-out vec4 o_colour;
-uniform sampler2D u_picture;
-uniform float u_light;
-void main()
-{
-	o_colour = vec4(texture(u_picture, v_uv).rgb * u_light, 1.0);
-}
-)";
 
 void
 set_hint(const char *name, const std::optional<std::string> &value)
@@ -226,10 +182,8 @@ set_hint(const char *name, const std::optional<std::string> &value)
 
 } /* namespace */
 
-Menu::Menu(SDL_Window *window)
-	: m_window(window), m_imgui(nullptr), m_scale(0.0f), m_page(INPUT), m_cursor_shown(true),
-	  m_gl(false), m_vao(0), m_blur(0), m_show(0), m_blur_step(-1), m_show_light(-1),
-	  m_blur_tex{}, m_blur_fb{}, m_blur_w(0), m_blur_h(0), m_frozen(false)
+Menu::Menu(SDL_Window *window, HostGraphics &graphics)
+	: m_window(window), m_graphics(graphics), m_imgui(nullptr), m_scale(0.0f), m_page(INPUT), m_cursor_shown(true)
 {
 	for (size_t i = 0; i < MENU_HINTS.size(); i++)
 		if (const char *const value = SDL_GetHint(MENU_HINTS[i].first))
@@ -956,8 +910,10 @@ Menu::preview(const MenuKit &kit, const MenuState &state, int which, ImVec2 a, I
 void
 Menu::picture(ImDrawList *list, int which, ImVec2 a, ImVec2 b, float shown) const
 {
-	if (m_pictures[static_cast<size_t>(which)])
-		list->AddImage(ImTextureRef(static_cast<ImTextureID>(m_pictures[static_cast<size_t>(which)])), a, b, { 0.0f, 0.0f },
+	const HostImage image = m_pictures[static_cast<size_t>(which)];
+
+	if (image.id)
+		list->AddImage(ImTextureRef(static_cast<ImTextureID>(m_graphics.ui_image(image))), a, b, { 0.0f, 0.0f },
 		               { 1.0f, 1.0f }, MenuKit::alpha(IM_COL32_WHITE, shown));
 }
 
@@ -1023,15 +979,9 @@ Menu::page_about(MenuKit &kit) const
 }
 
 void
-Menu::start_gl()
+Menu::start_drawing()
 {
-	ImGui_ImplOpenGL3_Init("#version 430 core");
-
-	glGenVertexArrays(1, &m_vao);
-	m_blur = gl::compile_program(WHOLE_WINDOW_VERTEX, BLUR_FRAGMENT);
-	m_blur_step = gl::uniform(m_blur, "u_step");
-	m_show = gl::compile_program(WHOLE_WINDOW_VERTEX, SHOW_FRAGMENT);
-	m_show_light = gl::uniform(m_show, "u_light");
+	m_graphics.start_ui();
 	/* The pictures: bigger than they are, in blocks, as Odin shows the
 	 * picture of a game; smaller, smoothed */
 	static_assert(std::size(PICTURE_FILES) == PICTURES);
@@ -1045,119 +995,40 @@ Menu::start_gl()
 			std::fprintf(stderr, "ERROR: menu: picture %zu: %s\n", p, SDL_GetError());
 			continue;
 		}
-		glGenTextures(1, &m_pictures[p]);
-		glBindTexture(GL_TEXTURE_2D, m_pictures[p]);
-		glPixelStorei(GL_UNPACK_ROW_LENGTH, rgba->pitch / 4);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, rgba->w, rgba->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba->pixels);
-		glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-		glGenerateMipmap(GL_TEXTURE_2D);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+		m_pictures[p] = m_graphics.make_image(*rgba, false);
 		SDL_DestroySurface(rgba);
 	}
-	glBindTexture(GL_TEXTURE_2D, 0);
-	m_gl = true;
-}
-
-/* The two textures of the blur, at the size of the half picture */
-void
-Menu::size_blur(unsigned w, unsigned h)
-{
-	if (w == m_blur_w && h == m_blur_h)
-		return;
-	glDeleteFramebuffers(2, m_blur_fb.data());
-	glDeleteTextures(2, m_blur_tex.data());
-	glGenTextures(2, m_blur_tex.data());
-	glGenFramebuffers(2, m_blur_fb.data());
-	for (unsigned i = 0; i < 2; i++) {
-		glBindTexture(GL_TEXTURE_2D, m_blur_tex[i]);
-		glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, static_cast<GLsizei>(w), static_cast<GLsizei>(h));
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		glBindFramebuffer(GL_FRAMEBUFFER, m_blur_fb[i]);
-		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_blur_tex[i], 0);
-	}
-	glBindTexture(GL_TEXTURE_2D, 0);
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	m_blur_w = w;
-	m_blur_h = h;
+	m_drawing = true;
 }
 
 void
-Menu::freeze(GLuint picture_fb, unsigned w, unsigned h)
+Menu::freeze(HostPicture picture)
 {
-	if (!m_gl)
-		start_gl();
-	m_frozen = picture_fb != 0 && w > 1 && h > 1;
+	if (!m_drawing)
+		start_drawing();
+	m_frozen = picture.id != 0 && picture.w > 1 && picture.h > 1;
 	m_frozen_window = false;
 	if (m_frozen)
-		blur(picture_fb, GL_COLOR_ATTACHMENT0, w, h);
+		m_graphics.blur_background(picture);
 }
 
 void
 Menu::freeze_window(unsigned window_w, unsigned window_h)
 {
-	if (!m_gl)
-		start_gl();
+	if (!m_drawing)
+		start_drawing();
 	m_frozen = m_frozen_window = false;
 	draw(window_w, window_h);
 	m_frozen = m_frozen_window = window_w > 1 && window_h > 1;
 	if (m_frozen)
-		blur(0, GL_BACK, window_w, window_h);
-}
-
-void
-Menu::blur(GLuint fb, GLenum buffer, unsigned w, unsigned h)
-{
-	const unsigned hw = w / 2, hh = h / 2;
-	const GLint iw = static_cast<GLint>(hw), ih = static_cast<GLint>(hh);
-
-	size_blur(hw, hh);
-	glDisable(GL_SCISSOR_TEST);
-	glDisable(GL_DEPTH_TEST);
-	glDisable(GL_BLEND);
-
-	/* Half the size: each texel the mean of four pixels */
-	glBindFramebuffer(GL_READ_FRAMEBUFFER, fb);
-	glReadBuffer(buffer);
-	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_blur_fb[0]);
-	glBlitFramebuffer(0, 0, static_cast<GLint>(w), static_cast<GLint>(h), 0, 0, iw, ih, GL_COLOR_BUFFER_BIT,
-	                  GL_LINEAR);
-
-	/* Across into the second texture, down back into the first */
-	const auto blur = [this](unsigned from, float x, float y) {
-		glBindFramebuffer(GL_FRAMEBUFFER, m_blur_fb[1 - from]);
-		glBindTexture(GL_TEXTURE_2D, m_blur_tex[from]);
-		glUniform2f(m_blur_step, x, y);
-		glDrawArrays(GL_TRIANGLES, 0, 3);
-	};
-	glViewport(0, 0, iw, ih);
-	glUseProgram(m_blur);
-	glBindVertexArray(m_vao);
-	glActiveTexture(GL_TEXTURE0);
-	for (unsigned round = 0; round < BLUR_ROUNDS; round++) {
-		blur(0, BLUR_STEP / static_cast<float>(hw), 0.0f);
-		blur(1, 0.0f, BLUR_STEP / static_cast<float>(hh));
-	}
-	glBindTexture(GL_TEXTURE_2D, 0);
-	glBindVertexArray(0);
-	glUseProgram(0);
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		m_graphics.blur_window(window_w, window_h);
 }
 
 void
 Menu::draw(unsigned window_w, unsigned window_h)
 {
 	upload_library_pictures();
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	glDisable(GL_SCISSOR_TEST);
-	glDisable(GL_DEPTH_TEST);
-	glDisable(GL_BLEND);
-	glViewport(0, 0, static_cast<GLsizei>(window_w), static_cast<GLsizei>(window_h));
-	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-	glClear(GL_COLOR_BUFFER_BIT);
+	m_graphics.clear_window(window_w, window_h);
 
 	/* The picture of the game over the whole window, its middle kept
 	 * where the window is of another shape (mock-up v50); the window as it
@@ -1165,57 +1036,36 @@ Menu::draw(unsigned window_w, unsigned window_h)
 	const PictureRect rect = picture_rect(window_w, window_h);
 	if (m_frozen && rect.w && rect.h) {
 		const double k = std::max(static_cast<double>(window_w) / rect.w, static_cast<double>(window_h) / rect.h);
-		const auto w = m_frozen_window ? static_cast<GLsizei>(window_w) : static_cast<GLsizei>(std::lround(rect.w * k));
-		const auto h = m_frozen_window ? static_cast<GLsizei>(window_h) : static_cast<GLsizei>(std::lround(rect.h * k));
+		const unsigned w = m_frozen_window ? window_w : static_cast<unsigned>(std::lround(rect.w * k));
+		const unsigned h = m_frozen_window ? window_h : static_cast<unsigned>(std::lround(rect.h * k));
 
-		glViewport((static_cast<GLint>(window_w) - w) / 2, (static_cast<GLint>(window_h) - h) / 2, w, h);
-		glUseProgram(m_show);
-		glUniform1f(m_show_light, LIGHT);
-		glBindVertexArray(m_vao);
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, m_blur_tex[0]);
-		glDrawArrays(GL_TRIANGLES, 0, 3);
-		glBindTexture(GL_TEXTURE_2D, 0);
-		glBindVertexArray(0);
-		glUseProgram(0);
-		glViewport(0, 0, static_cast<GLsizei>(window_w), static_cast<GLsizei>(window_h));
+		m_graphics.draw_background(window_w, window_h, w, h, LIGHT);
 	}
 
 	ImGui::SetCurrentContext(m_imgui);
-	ImGui_ImplOpenGL3_NewFrame();
-	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-	gl::check("the menu");
+	m_graphics.draw_ui(ImGui::GetDrawData(), window_w, window_h, "the menu");
 }
 
 void
 Menu::draw_bar(unsigned window_w, unsigned window_h)
 {
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	glViewport(0, 0, static_cast<GLsizei>(window_w), static_cast<GLsizei>(window_h));
 	ImGui::SetCurrentContext(m_imgui);
-	ImGui_ImplOpenGL3_NewFrame();
-	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-	gl::check("the bar");
+	m_graphics.draw_ui(ImGui::GetDrawData(), window_w, window_h, "the bar");
 }
 
 void
 Menu::release()
 {
-	if (!m_gl)
+	if (!m_drawing)
 		return;
 	ImGui::SetCurrentContext(m_imgui);
-	ImGui_ImplOpenGL3_Shutdown();
-	glDeleteFramebuffers(2, m_blur_fb.data());
-	glDeleteTextures(2, m_blur_tex.data());
-	glDeleteProgram(m_blur);
-	glDeleteProgram(m_show);
-	glDeleteVertexArrays(1, &m_vao);
-	glDeleteTextures(PICTURES, m_pictures.data());
-	m_pictures = {};
+	m_graphics.stop_ui();
+	for (HostImage &image : m_pictures)
+		m_graphics.forget_image(std::exchange(image, {}));
 	for (const auto &[game, picture] : m_library_pictures)
-		glDeleteTextures(1, &picture.texture);
+		m_graphics.forget_image(picture);
 	m_library_pictures.clear();
-	m_gl = false;
+	m_drawing = false;
 }
 
 } /* namespace odin */

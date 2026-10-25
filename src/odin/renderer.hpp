@@ -34,6 +34,7 @@
 
 #include "odin/antarctic_list.hpp"
 #include "odin/eurasia_layers.hpp"
+#include "odin/host_graphics.hpp"
 #include "odin/picture_filter.hpp"
 #include "odin/picture.hpp"
 #include "odin/renderer_programs.hpp"
@@ -168,14 +169,8 @@ public:
 		present(window_w, window_h, hole);
 	}
 
-	/* The picture of the last frame, whatever the size of the window:
-	 * the framebuffer it can be read from, and its size. */
-	GLuint frame_picture(unsigned &w, unsigned &h) const
-	{
-		w = width();
-		h = height();
-		return m_frame_fb;
-	}
+	/* The picture of the last frame, whatever the size of the window */
+	HostPicture frame_picture() const { return { m_frame_fb, width(), height() }; }
 
 	/* The debug switches as text, for the title of the window; empty
 	 * without the debug keys. */

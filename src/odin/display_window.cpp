@@ -142,7 +142,7 @@ Display::set_vsync(Vsync vsync)
 		m_wait_on_time = on_time;
 		m_wait_late = late;
 		m_waits = on_time;
-		if (!SDL_GL_SetSwapInterval(on_time ? 1 : 0))
+		if (!m_graphics->set_waits(on_time))
 			std::fprintf(stderr, "ERROR: screen: no vsync: '%s'\n", SDL_GetError());
 	});
 	if (vsync == Vsync::ON && !keeps_up)

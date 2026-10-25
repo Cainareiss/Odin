@@ -27,11 +27,11 @@
 #include <utility>
 #include <vector>
 
-#include <GL/glew.h>
 #include <SDL3/SDL.h>
 
 #include "imgui/imgui.h"
 #include "odin/control_panel.hpp"
+#include "odin/host_graphics.hpp"
 #include "odin/hotkeys.hpp"
 #include "odin/menu_kit.hpp"
 #include "odin/roles.hpp"
@@ -384,7 +384,8 @@ public:
 	/* The pages, in the order of their tabs */
 	enum Page { INPUT, DISPLAY, AUDIO, HOTKEYS, OUTPUTS, LINK, PATHS, ABOUT, PAGES };
 
-	explicit Menu(SDL_Window *window);
+	/* The window it is drawn in, and the card it is drawn with */
+	Menu(SDL_Window *window, HostGraphics &graphics);
 	~Menu();
 	Menu(const Menu &) = delete;
 	Menu &operator=(const Menu &) = delete;
@@ -407,20 +408,20 @@ public:
 	void hide_bar();
 	/* The library, over the whole window under the bar (menu_library.cpp) */
 	void build_library(LibraryState &state, BarState &bar);
-	/* A picture of a game for its tile, RGBA, taken (destroyed once made a
-	 * texture at the next picture drawn); one before it replaced, or
-	 * forgotten (none) */
+	/* A picture of a game for its tile, RGBA, taken (destroyed once made
+	 * an image of the card at the next picture drawn); one before it
+	 * replaced, or forgotten (none) */
 	void add_library_picture(const std::string &game, SDL_Surface *rgba);
 	/* A list dropped open, which Escape closes before the menu */
 	bool popup_open() const;
 	/* The keyboard writes in a field of the menu */
 	bool typing() const;
 
-	/* The drawing thread: the picture of the last frame, from its
-	 * framebuffer, becomes the background (0: there is none yet, black),
-	 * or the window as built last (the library), drawn again; then the
-	 * menu is drawn on it in the window. */
-	void freeze(GLuint picture_fb, unsigned w, unsigned h);
+	/* The drawing thread: the picture of the last frame becomes the
+	 * background (none: there is none yet, black), or the window as built
+	 * last (the library), drawn again; then the menu is drawn on it in the
+	 * window. */
+	void freeze(HostPicture picture);
 	void freeze_window(unsigned window_w, unsigned window_h);
 	void draw(unsigned window_w, unsigned window_h);
 	/* The bar built last over what the window shows */
@@ -447,7 +448,7 @@ private:
 	void bar(BarState &state);
 	void close_bar_menus();
 	/* The drawing thread: the pictures handed over to the library made
-	 * textures */
+	 * images of the card */
 	void upload_library_pictures();
 	void navigate(MenuState &state);
 	void page_input(MenuKit &kit, MenuState &state) const;
@@ -475,12 +476,11 @@ private:
 	/* That row: its bottom */
 	static float games_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width, bool focusable = false,
 	                       bool links_only = false);
-	void start_gl();
-	void size_blur(unsigned w, unsigned h);
-	/* The background from that framebuffer and buffer, w by h */
-	void blur(GLuint fb, GLenum buffer, unsigned w, unsigned h);
+	/* The drawing thread: Dear ImGui's drawing and the pictures, at first */
+	void start_drawing();
 
 	SDL_Window *m_window;
+	HostGraphics &m_graphics;
 	ImGuiContext *m_imgui;
 	/* Mapped while Dear ImGui reads them (add_fonts) */
 	std::unique_ptr<SystemFonts> m_fonts;
@@ -500,25 +500,16 @@ private:
 	/* The bar was hidden: its menus close at the next frame */
 	bool m_bar_hidden = false;
 
-	/* The background: the picture at half its size, blurred back and
-	 * forth between two textures, the result in the first */
-	bool m_gl;
-	GLuint m_vao, m_blur, m_show;
-	GLint m_blur_step, m_show_light;
-	std::array<GLuint, 2> m_blur_tex, m_blur_fb;
-	unsigned m_blur_w, m_blur_h;
-	/* There is one; it is the window, which it covers as it was */
-	bool m_frozen, m_frozen_window = false;
-	/* The pictures as textures */
-	std::array<GLuint, PICTURES> m_pictures{};
-	/* The library: the pictures of the games handed over, then as
-	 * textures with their sizes */
-	struct LibraryPicture {
-		GLuint texture;
-		float w, h;
-	};
+	/* The drawing has started; the background (HostGraphics) there is,
+	 * and it is the window, which it covers as it was */
+	bool m_drawing = false;
+	bool m_frozen = false, m_frozen_window = false;
+	/* The pictures as images of the card */
+	std::array<HostImage, PICTURES> m_pictures{};
+	/* The library: the pictures of the games handed over, then as images
+	 * of the card */
 	std::vector<std::pair<std::string, SDL_Surface *>> m_library_handed;
-	std::map<std::string, LibraryPicture> m_library_pictures;
+	std::map<std::string, HostImage> m_library_pictures;
 };
 
 } /* namespace odin */

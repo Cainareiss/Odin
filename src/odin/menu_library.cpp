@@ -95,24 +95,14 @@ Menu::upload_library_pictures()
 {
 	for (const auto &[game, rgba] : m_library_handed) {
 		const auto old = m_library_pictures.find(game);
-		GLuint texture = 0;
 
 		if (old != m_library_pictures.end()) {
-			glDeleteTextures(1, &old->second.texture);
+			m_graphics.forget_image(old->second);
 			m_library_pictures.erase(old);
 		}
 		if (!rgba)
 			continue;
-		glGenTextures(1, &texture);
-		glBindTexture(GL_TEXTURE_2D, texture);
-		glPixelStorei(GL_UNPACK_ROW_LENGTH, rgba->pitch / 4);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, rgba->w, rgba->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba->pixels);
-		glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-		glGenerateMipmap(GL_TEXTURE_2D);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-		glBindTexture(GL_TEXTURE_2D, 0);
-		m_library_pictures[game] = { texture, static_cast<float>(rgba->w), static_cast<float>(rgba->h) };
+		m_library_pictures[game] = m_graphics.make_image(*rgba, true);
 		SDL_DestroySurface(rgba);
 	}
 	m_library_handed.clear();
@@ -220,7 +210,7 @@ Menu::build_library(LibraryState &state, BarState &bar_state)
 			const ImVec2 pa = { std::round(a.x + (tile_w - picture->second.w * k) / 2.0f),
 				            std::round(a.y + (tile_h - picture->second.h * k) / 2.0f) };
 
-			list->AddImage(ImTextureRef(static_cast<ImTextureID>(picture->second.texture)), pa,
+			list->AddImage(ImTextureRef(static_cast<ImTextureID>(m_graphics.ui_image(picture->second))), pa,
 			               { pa.x + std::round(picture->second.w * k), pa.y + std::round(picture->second.h * k) },
 			               { 0.0f, 0.0f }, { 1.0f, 1.0f }, playable ? IM_COL32_WHITE : DIMMED);
 			list->AddTriangleFilled(a, { a.x + cut, a.y }, { a.x, a.y + cut }, palette.screen);
