@@ -361,28 +361,8 @@ Settings::complete(const std::string &path)
 bool
 Settings::write(const std::string &path, const std::string &out)
 {
-	std::error_code error;
-	const std::string temporary = path + ".new";
-
-	if (const std::filesystem::path folder = std::filesystem::path(path).parent_path(); !folder.empty())
-		std::filesystem::create_directories(folder, error);
-	{
-		std::ofstream file(temporary, std::ios::binary | std::ios::trunc);
-
-		file << out;
-		file.close();
-		if (!file) {
-			std::fprintf(stderr, "ERROR: settings: cannot write '%s'\n", temporary.c_str());
-			std::filesystem::remove(temporary, error);
-			return false;
-		}
-	}
-	std::filesystem::rename(temporary, path, error);
-	if (error) {
-		std::fprintf(stderr, "ERROR: settings: cannot replace '%s': %s\n", path.c_str(), error.message().c_str());
-		std::filesystem::remove(temporary, error);
+	if (!write_kept(path, std::span(reinterpret_cast<const uint8_t *>(out.data()), out.size())))
 		return false;
-	}
 	m_sections.clear();
 	parse(out, path);
 	return true;
