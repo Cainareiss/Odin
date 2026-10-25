@@ -215,6 +215,7 @@ install:
 	@( mkdir -pv $(HOME)/.local/share/odin/shaders )
 	@( cp -v odin-games.json $(HOME)/.local/share/odin )
 	@( cp -v shaders/*.txt $(HOME)/.local/share/odin/shaders )
+	@( cp -rv filters $(HOME)/.local/share/odin )
 
 clean:
 	find . -name '*.o' -o -name '*.d' | xargs rm -vf
