@@ -30,6 +30,7 @@
 #include <cstring>
 #include <filesystem>
 #include <system_error>
+#include <vector>
 
 #include "odin/bytes.hpp"
 #include "odin/env.hpp"
@@ -40,13 +41,14 @@
 #include "odin/menu.hpp"
 #include "odin/renderer.hpp"
 #include "odin/state_file.hpp"
+#include "odin/user_files.hpp"
 #include "odin/worker.hpp"
 
 namespace odin {
 
 namespace {
 
-/* The lists of the mesh programs of a game (MeshPrograms): the one that
+/* The lists of the mesh programs of a game (read_program_list): the one that
  * comes with Odin, in shaders/ where the list of the games is, and the one
  * kept for the user, in the cache of their home, with the folder of the
  * programs the driver made beside it. A path is left empty when there is
@@ -61,11 +63,18 @@ find_program_lists(const std::string &game, std::string &seed, std::string &kept
 
 	kept.clear();
 	made.clear();
-	seed = "shaders/" + game + ".txt";
-	if (!std::filesystem::exists(seed, error) && !home.empty())
-		seed = home + "/.local/share/odin/shaders/" + game + ".txt";
-	if (!std::filesystem::exists(seed, error))
-		seed.clear();
+	seed.clear();
+	std::vector<std::string> seeds = { "shaders/" + game + ".txt" };
+
+	for (const std::string &folder : program_data_folders())
+		seeds.push_back(folder + "/shaders/" + game + ".txt");
+	if (!home.empty())
+		seeds.push_back(home + "/.local/share/odin/shaders/" + game + ".txt");
+	for (const std::string &path : seeds)
+		if (std::filesystem::exists(path, error)) {
+			seed = path;
+			break;
+		}
 
 	if (cache && cache[0])
 		dir = cache;
@@ -79,19 +88,24 @@ find_program_lists(const std::string &game, std::string &seed, std::string &kept
 }
 
 /* The preset of a filter of the picture by its name: filters/<name>.glslp
- * where the list of the games is, else in the data of Odin in the home
- * of the user; empty, said on stderr, when it is in neither */
+ * where the list of the games is, else with the program, else in the data
+ * of Odin in the home of the user; empty, said on stderr, when it is in
+ * none */
 std::string
 find_filter(const std::string &name)
 {
 	const std::string home = home_dir();
 	std::error_code error;
+	std::vector<std::string> paths = { "filters/" + name + ".glslp" };
 
 	if (name.empty())
 		return {};
-	for (const std::string &path : { "filters/" + name + ".glslp",
-	                                  home.empty() ? std::string() : home + "/.local/share/odin/filters/" + name + ".glslp" })
-		if (!path.empty() && std::filesystem::exists(path, error))
+	for (const std::string &folder : program_data_folders())
+		paths.push_back(folder + "/filters/" + name + ".glslp");
+	if (!home.empty())
+		paths.push_back(home + "/.local/share/odin/filters/" + name + ".glslp");
+	for (const std::string &path : paths)
+		if (std::filesystem::exists(path, error))
 			return path;
 	std::fprintf(stderr, "ERROR: filter: '%s' not found (filters/%s.glslp)\n", name.c_str(), name.c_str());
 	return {};

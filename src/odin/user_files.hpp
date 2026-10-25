@@ -37,6 +37,14 @@ std::string user_data_dir();
  * such file), else the one chosen, else <name> in the folder of Odin in
  * user_data_dir(); empty when there is none */
 std::string user_path(const char *variable, const std::string &chosen, const char *name);
+/* The folder the program is in, that of the AppImage it runs from (APPIMAGE)
+ * else that of its executable; empty when it cannot be told. Its bios, roms
+ * and artwork folders are those of Odin where nothing else is chosen. */
+std::string program_folder();
+/* Where the data of Odin may come with the program (odin-games.json,
+ * shaders/, filters/): the folder of the program, then share/odin beside the
+ * folder of its executable (an AppImage, or an install in a prefix) */
+std::vector<std::string> program_data_folders();
 /* The folder of the pictures of the games, as MAME has one: ODIN_ARTWORK,
  * else the one chosen ([paths] artwork), else artwork in the data folder
  * of Odin (beside saves/); empty with ODIN_ARTWORK=none. A picture of a

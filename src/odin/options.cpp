@@ -26,6 +26,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <vector>
 
 #include <unistd.h>
 
@@ -133,7 +134,10 @@ read_display(const Settings &settings, Options &options)
 
 /* [paths] of odin.ini: the folder of the games where the command line
  * gives none, those of the saves and of the save states; [log]: the board
- * says each access where the command line does not. The last line says. */
+ * says each access where the command line does not. The last line says.
+ * Where neither chooses, the games, the BIOS and the pictures are the roms,
+ * bios and artwork folders of the folder of the program, when it has them:
+ * a folder made ready with Odin (program_folder). */
 void
 read_paths(const Settings &settings, Options &options)
 {
@@ -162,6 +166,19 @@ read_paths(const Settings &settings, Options &options)
 			std::fprintf(stderr, "ERROR: settings: [log]: not right: %s = %s\n", key.c_str(), value.c_str());
 		}
 	}
+
+	const std::string program = program_folder();
+	const auto beside = [&](std::string &folder, const char *name) {
+		std::error_code error;
+		const std::string path = program + "/" + name;
+
+		if (folder.empty() && !program.empty() && std::filesystem::is_directory(path, error))
+			folder = path;
+	};
+
+	beside(options.rom_path, "roms");
+	beside(options.bios_path, "bios");
+	beside(options.artwork, "artwork");
 }
 
 /* [sound] of odin.ini: the device, the volume, the sound in the
@@ -351,20 +368,21 @@ default_states()
 	return data.empty() ? data : data + "/odin/states";
 }
 
-/* The list of the games: in the folder Odin is started from, else in the
- * home of the user, else where `make install` puts it. */
+/* The list of the games: in the folder Odin is started from, else with the
+ * program (program_data_folders), else in the home of the user, else where
+ * `make install` puts it. */
 bool
 load_game_list(GameList &games)
 {
 	const std::string home = home_dir();
 	const std::string base = home.empty() ? "." : home;
 	std::error_code error;
-	const std::string paths[3] = {
-		"./odin-games.json",
-		base + "/odin-games.json",
-		base + "/.local/share/odin/odin-games.json",
-	};
+	std::vector<std::string> paths = { "./odin-games.json" };
 
+	for (const std::string &folder : program_data_folders())
+		paths.push_back(folder + "/odin-games.json");
+	paths.push_back(base + "/odin-games.json");
+	paths.push_back(base + "/.local/share/odin/odin-games.json");
 	for (const std::string &path : paths) {
 		if (!std::filesystem::exists(path, error))
 			continue;
@@ -373,8 +391,8 @@ load_game_list(GameList &games)
 		std::printf("loading game list from '%s'\n", path.c_str());
 		return true;
 	}
-	std::fprintf(stderr, "ERROR: no list of the games: '%s', '%s' nor '%s'\n",
-	             paths[0].c_str(), paths[1].c_str(), paths[2].c_str());
+	std::fprintf(stderr, "ERROR: no list of the games: '%s', nor with the program, '%s' nor '%s'\n",
+	             paths.front().c_str(), paths[paths.size() - 2].c_str(), paths.back().c_str());
 	return false;
 }
 

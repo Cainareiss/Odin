@@ -27,7 +27,59 @@
 #include <filesystem>
 #include <system_error>
 
+#if defined(_WIN32)
+#include <windows.h>
+#endif
+
 namespace odin {
+
+namespace {
+
+/* The folder of the executable of Odin; empty when it cannot be told */
+std::string
+executable_folder()
+{
+	std::error_code error;
+#if defined(_WIN32)
+	char path[MAX_PATH * 4];
+	const DWORD length = GetModuleFileNameA(nullptr, path, sizeof(path));
+
+	if (length == 0 || length >= sizeof(path))
+		return {};
+	return std::filesystem::path(path).parent_path().string();
+#elif defined(__APPLE__)
+	return {};
+#else
+	const std::filesystem::path exe = std::filesystem::read_symlink("/proc/self/exe", error);
+
+	return error ? std::string() : exe.parent_path().string();
+#endif
+}
+
+} /* namespace */
+
+std::string
+program_folder()
+{
+	const char *const appimage = std::getenv("APPIMAGE");
+
+	if (appimage && appimage[0])
+		return std::filesystem::path(appimage).parent_path().string();
+	return executable_folder();
+}
+
+std::vector<std::string>
+program_data_folders()
+{
+	const std::string program = program_folder(), exe = executable_folder();
+	std::vector<std::string> folders;
+
+	if (!program.empty())
+		folders.push_back(program);
+	if (!exe.empty())
+		folders.push_back((std::filesystem::path(exe).parent_path() / "share" / "odin").string());
+	return folders;
+}
 
 std::string
 user_data_dir()
