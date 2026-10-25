@@ -23,8 +23,6 @@
 
 #include <algorithm>
 #include <cstdio>
-#include <cstdlib>
-#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -124,12 +122,7 @@ read_text(const std::string &path)
 std::string
 Settings::user_file()
 {
-	const char *const chosen = std::getenv("ODIN_CONFIG");
-	const std::string data = user_data_dir();
-
-	if (chosen && chosen[0])
-		return std::strcmp(chosen, "none") ? chosen : std::string();
-	return data.empty() ? data : data + "/odin/odin.ini";
+	return user_path("ODIN_CONFIG", {}, "odin.ini");
 }
 
 bool

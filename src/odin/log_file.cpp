@@ -25,7 +25,6 @@
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
-#include <cstring>
 #include <filesystem>
 #include <functional>
 #include <mutex>
@@ -202,12 +201,7 @@ on_crash(int signal)
 std::string
 LogFile::path()
 {
-	const char *const chosen = std::getenv("ODIN_LOG");
-	const std::string data = user_data_dir();
-
-	if (chosen && chosen[0])
-		return std::strcmp(chosen, "none") ? chosen : "";
-	return data.empty() ? data : data + "/odin/odin.log";
+	return user_path("ODIN_LOG", {}, "odin.log");
 }
 
 std::string

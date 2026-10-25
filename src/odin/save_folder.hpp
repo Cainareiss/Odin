@@ -33,6 +33,10 @@ namespace odin {
  * ~/Library/Application Support on macOS, XDG_DATA_HOME or ~/.local/share
  * elsewhere. Empty when it cannot be told. */
 std::string user_data_dir();
+/* A file or a folder of the user: the variable when it is set (none: no
+ * such file), else the one chosen, else <name> in the folder of Odin in
+ * user_data_dir(); empty when there is none */
+std::string user_path(const char *variable, const std::string &chosen, const char *name);
 /* The folder of the pictures of the games, as MAME has one: ODIN_ARTWORK,
  * else the one chosen ([paths] artwork), else artwork in the data folder
  * of Odin (beside saves/); empty with ODIN_ARTWORK=none. A picture of a

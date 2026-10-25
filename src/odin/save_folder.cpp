@@ -51,16 +51,22 @@ user_data_dir()
 }
 
 std::string
-artwork_folder(const std::string &chosen)
+user_path(const char *variable, const std::string &chosen, const char *name)
 {
-	const char *const given = std::getenv("ODIN_ARTWORK");
+	const char *const given = std::getenv(variable);
 	const std::string data = user_data_dir();
 
 	if (given && given[0])
 		return std::strcmp(given, "none") ? given : "";
 	if (!chosen.empty())
 		return chosen;
-	return data.empty() ? data : data + "/odin/artwork";
+	return data.empty() ? data : data + "/odin/" + name;
+}
+
+std::string
+artwork_folder(const std::string &chosen)
+{
+	return user_path("ODIN_ARTWORK", chosen, "artwork");
 }
 
 std::string
@@ -88,14 +94,7 @@ artwork_file(const std::string &folder, const std::string &game, const std::stri
 std::string
 SaveFolder::root(const std::string &chosen)
 {
-	const char *const given = std::getenv("ODIN_SAVES");
-	const std::string data = user_data_dir();
-
-	if (given && given[0])
-		return std::strcmp(given, "none") ? given : "";
-	if (!chosen.empty())
-		return chosen;
-	return data.empty() ? data : data + "/odin/saves";
+	return user_path("ODIN_SAVES", chosen, "saves");
 }
 
 SaveFolder
