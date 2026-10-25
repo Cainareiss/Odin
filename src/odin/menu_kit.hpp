@@ -264,9 +264,10 @@ public:
 	/* A row: its name, what it does under it, and at its right a choice
 	 * among labels (true when it changed; -1 is none of them) or a text.
 	 * A row the command line sets says so (`locked`) and does not change;
-	 * a row that cannot change now is `off`. */
+	 * a row that cannot change now is `off`; a `warning`, in red, says what
+	 * the user must do in place of what it does. */
 	bool choice(const char *name, const char *about, std::span<const char *const> labels, int &chosen,
-	            const char *locked = nullptr, bool off = false);
+	            const char *locked = nullptr, bool off = false, const char *warning = nullptr);
 	/* The choice alone, at that place: its size first */
 	ImVec2 segments_size(std::span<const char *const> labels) const;
 	bool segments(ImVec2 at, std::span<const char *const> labels, int &chosen, bool still = false) const;
@@ -359,7 +360,8 @@ private:
 	/* The top of the row, its line above it when it is not the first of
 	 * its group, and the room left for its texts */
 	ImVec2 begin_row(float &width);
-	float texts(ImVec2 at, float width, const char *name, const char *about, const char *locked, bool off = false) const;
+	float texts(ImVec2 at, float width, const char *name, const char *about, const char *locked, bool off = false,
+	            const char *warning = nullptr) const;
 	/* The texts of a row drawn, and the place of its control, `control`
 	 * wide and `control_h` high: beside them, or under them where they
 	 * would have too little room. The height of the row and the top of
@@ -368,7 +370,7 @@ private:
 		float h, top;
 	};
 	Placed place(ImVec2 at, float width, float control, float control_h, const char *name, const char *about,
-	             const char *locked, bool off = false) const;
+	             const char *locked, bool off = false, const char *warning = nullptr) const;
 	/* A button drawn and clicked, the gamepad aside */
 	bool press_button(const char *label, ImVec2 at, bool on, Icon icon, Tone tone) const;
 	/* The list that drops from a box or a button, at that place, as wide

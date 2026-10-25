@@ -170,12 +170,14 @@ struct MenuState {
 	 * channels, 2 the four channels apart; -1 another way the command line
 	 * says, for the game that runs, which `locked` says) and how the cabinet
 	 * plays them; the level of the optional board in the two channels and
-	 * the one of the list, in dB */
+	 * the one of the list, in dB. Four channels chosen for the game that
+	 * runs on two, or two on four, wait for it to start again (`later`) */
 	struct SoundGame {
 		std::string name, title;
 		int played, cabinet_played;
 		float level, standard;
 		bool locked;
+		bool later = false;
 	};
 	std::vector<SoundGame> sound_games;
 

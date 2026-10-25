@@ -744,7 +744,8 @@ MenuKit::begin_row(float &width)
  * other in that width, the last two smaller and fainter; the name faint
  * too on a row that cannot change now (`off`): their height */
 float
-MenuKit::texts(ImVec2 at, float width, const char *name, const char *about, const char *locked, bool off) const
+MenuKit::texts(ImVec2 at, float width, const char *name, const char *about, const char *locked, bool off,
+               const char *warning) const
 {
 	ImDrawList *const list = ImGui::GetWindowDrawList();
 	ImFont *const face = ImGui::GetFont();
@@ -752,10 +753,11 @@ MenuKit::texts(ImVec2 at, float width, const char *name, const char *about, cons
 	float h = wrapped_h(name, ImGui::GetFontSize(), width);
 
 	list->AddText(face, ImGui::GetFontSize(), at, off ? m_palette.faint : m_palette.ink, name, nullptr, width);
-	for (const char *text : { about, locked }) {
+	for (const char *text : { warning ? warning : about, locked }) {
 		if (!text || !*text)
 			continue;
-		list->AddText(face, note, { at.x, at.y + h + space }, m_palette.faint, text, nullptr, width);
+		list->AddText(face, note, { at.x, at.y + h + space }, text == warning ? m_palette.danger : m_palette.faint, text,
+		              nullptr, width);
 		h += space + wrapped_h(text, note, width);
 	}
 	return h;
@@ -763,12 +765,12 @@ MenuKit::texts(ImVec2 at, float width, const char *name, const char *about, cons
 
 MenuKit::Placed
 MenuKit::place(ImVec2 at, float width, float control, float control_h, const char *name, const char *about,
-               const char *locked, bool off) const
+               const char *locked, bool off, const char *warning) const
 {
 	const float pad = px(ROW_PAD), beside = width - control - px(GAP) - 2.0f * pad;
 	const bool under = beside < px(TEXT_LEAST);
 	const float text_h = texts({ at.x + pad, at.y + pad }, under ? width - 2.0f * pad : beside, name, about, locked,
-	                           off);
+	                           off, warning);
 
 	if (under)
 		return { text_h + px(6.0f) + control_h + 2.0f * pad, at.y + pad + text_h + px(6.0f) };
@@ -780,7 +782,7 @@ MenuKit::place(ImVec2 at, float width, float control, float control_h, const cha
 
 bool
 MenuKit::choice(const char *name, const char *about, std::span<const char *const> labels, int &chosen,
-                const char *locked, bool off)
+                const char *locked, bool off, const char *warning)
 {
 	ImGui::PushID(name);
 
@@ -789,7 +791,7 @@ MenuKit::choice(const char *name, const char *about, std::span<const char *const
 	const int was = chosen, last = static_cast<int>(labels.size()) - 1;
 	float width;
 	const ImVec2 at = begin_row(width);
-	const Placed placed = place(at, width, control.x, control.y, name, about, locked, off);
+	const Placed placed = place(at, width, control.x, control.y, name, about, locked, off, warning);
 
 	/* The gamepad: left or right to the next label, A to the next one round */
 	if (focus(at, { at.x + width, at.y + placed.h }) && !locked && !off) {

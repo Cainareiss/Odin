@@ -564,7 +564,8 @@ Menu::page_audio(MenuKit &kit, MenuState &state) const
 
 		ImGui::PushID(game.name.c_str());
 		kit.begin_group(title.c_str());
-		kit.choice("Played", "", PLAYED, game.played, game.locked ? "set by the command line: -o" : nullptr);
+		kit.choice("Played", "", PLAYED, game.played, game.locked ? "set by the command line: -o" : nullptr, false,
+		           game.later ? "CLOSE THE GAME AND START IT AGAIN TO TAKE EFFECT" : nullptr);
 
 		const Boards &boards = boards_of(game.name);
 		const std::string level = decibels(game.level);

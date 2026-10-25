@@ -420,7 +420,13 @@ MenuSession::apply(const MenuState &was)
 		const bool runs = m_game && game.name == m_game->name && m_audio;
 
 		if (game.played != before.played) {
-			if (runs)
+			/* SDL keeps the device open on as many channels as it had:
+			 * four or two again take the game started again */
+			const bool four = mode_of(game.played) == AudioOut::Mode::QUAD;
+			const bool later = runs && four != (m_audio->mode() == AudioOut::Mode::QUAD);
+
+			m_menu_state.sound_games[g].later = later;
+			if (runs && !later)
 				m_audio->change(mode_of(game.played), now.device);
 			keep(section, "mode", game.played == game.cabinet_played || game.played < 0 ? std::nullopt :
 			                      std::optional<std::string>(MODE_NAMES[game.played]));
