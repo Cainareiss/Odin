@@ -25,6 +25,7 @@
 #include "odin/display.hpp"
 
 #include "odin/renderer.hpp"
+#include "odin/x11_window.hpp"
 
 namespace odin {
 
@@ -63,16 +64,26 @@ Display::set_window_size(int w, int h, bool fullscreen)
 	m_given_w = w;
 	m_given_h = h;
 	m_by_hand = false;
-	if (fullscreen)
+	if (fullscreen) {
 		SDL_SetWindowFullscreen(m_window, true);
+		m_fullscreen_asked = true;
+	}
 	/* Done before the size is read again: not taken for the user's */
 	SDL_SyncWindow(m_window);
 }
 
+/* On the whole display: as the system says, or asked and as large as the
+ * display (gamescope does not say it) */
 bool
 Display::fullscreen() const
 {
-	return (SDL_GetWindowFlags(m_window) & SDL_WINDOW_FULLSCREEN) != 0;
+	int w = 0, h = 0;
+	SDL_Rect whole{};
+
+	if (SDL_GetWindowFlags(m_window) & SDL_WINDOW_FULLSCREEN)
+		return true;
+	return m_fullscreen_asked && SDL_GetWindowSize(m_window, &w, &h) &&
+	       SDL_GetDisplayBounds(SDL_GetDisplayForWindow(m_window), &whole) && w >= whole.w && h >= whole.h;
 }
 
 void
@@ -159,16 +170,21 @@ Display::display_size(unsigned &w, unsigned &h) const
 }
 
 /* The size the user gave the window is taken before it goes; back from
- * the whole display, the window has its size again */
+ * the whole display, the window has its size again. A manager that never
+ * said the window was on the whole display is told it leaves it by Odin:
+ * SDL tells it nothing then */
 void
 Display::toggle_fullscreen()
 {
-	const bool on = (SDL_GetWindowFlags(m_window) & SDL_WINDOW_FULLSCREEN) != 0;
+	const bool on = fullscreen(), said = (SDL_GetWindowFlags(m_window) & SDL_WINDOW_FULLSCREEN) != 0;
 	unsigned w = 0, h = 0;
 
 	finish();
 	hand_size(w, h);
 	SDL_SetWindowFullscreen(m_window, !on);
+	if (on && !said)
+		x11_leave_fullscreen(m_window);
+	m_fullscreen_asked = !on;
 	if (on)
 		SDL_SetWindowSize(m_window, static_cast<int>(w), static_cast<int>(h));
 	SDL_SyncWindow(m_window);

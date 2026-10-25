@@ -5,8 +5,8 @@ LD := g++
 SDL_CFLAGS := `pkg-config --cflags sdl3`
 SDL_LDFLAGS := `pkg-config --libs sdl3`
 
-PKG_CFLAGS := `pkg-config --cflags gl glew jansson`
-PKG_LDFLAGS := `pkg-config --libs gl glew jansson`
+PKG_CFLAGS := `pkg-config --cflags gl glew jansson x11`
+PKG_LDFLAGS := `pkg-config --libs gl glew jansson x11`
 
 OPT_FLAGS := -O3 -fomit-frame-pointer -flto -march=native -fno-stack-protector
 #OPT_FLAGS := -O0 -g
@@ -40,6 +40,7 @@ OBJ := \
 	src/odin/display.o \
 	src/odin/display_bezel.o \
 	src/odin/display_window.o \
+	src/odin/x11_window.o \
 	src/odin/menu.o \
 	src/odin/menu_input.o \
 	src/odin/menu_pages.o \

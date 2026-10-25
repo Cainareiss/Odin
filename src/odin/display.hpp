@@ -255,6 +255,8 @@ private:
 	 * points; whether it is the user's */
 	int m_given_w = 0, m_given_h = 0;
 	bool m_by_hand = false;
+	/* Whether Odin asked last for the whole display */
+	bool m_fullscreen_asked = false;
 	std::string m_program_list;
 	SDL_GLContext m_context;
 	std::unique_ptr<Renderer> m_renderer;
