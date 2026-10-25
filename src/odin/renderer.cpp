@@ -34,7 +34,7 @@ namespace odin {
 
 Renderer::Renderer(HostGraphics &graphics, const Memory &memory, const Options &options)
 	: m_gpu(nullptr), m_fb(memory.fb), m_options(options), m_building(nullptr), m_list(nullptr),
-	  m_frame{}, m_textures(graphics, memory.texram), m_times(options.times), m_mesh_vao(0), m_mesh_vbo(0), m_mesh_ibo(0),
+	  m_frame{}, m_card(graphics.make_board_drawing()), m_textures(*m_card, memory.texram), m_times(options.times), m_mesh_vao(0), m_mesh_vbo(0), m_mesh_ibo(0),
 	  m_program(nullptr), m_variant_key(0), m_drawing(0),
 	  m_scissor_vp_index(~0u), m_bound_tex_index(~0u), m_unit0_texture(~0u), m_unit0_sampler(~0u),
 	  m_blend{~0u, ~0u, ~0u, ~0u}, m_pass{}, m_again(false),

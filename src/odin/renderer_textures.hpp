@@ -29,7 +29,7 @@
 #include <vector>
 
 #include "odin/antarctic_list.hpp"
-#include "odin/host_graphics.hpp"
+#include "odin/board_drawing.hpp"
 
 namespace odin {
 
@@ -42,8 +42,9 @@ namespace odin {
  * texture at the slot C8,D0 of the bank 1. */
 class TextureCache {
 public:
-	/* texram: the two banks of the texture RAM, 4 MB each */
-	TextureCache(HostGraphics &graphics, const std::span<const uint8_t> texram[2]);
+	/* card: what makes the textures; texram: the two banks of the
+	 * texture RAM, 4 MB each */
+	TextureCache(BoardDrawing &card, const std::span<const uint8_t> texram[2]);
 	~TextureCache();
 
 	/* The texture of a texhead, decoded if it is not held; none if it
@@ -111,7 +112,7 @@ private:
 	                                uint32_t x0, uint32_t y0) const;
 	void clear_bank(unsigned bank);
 
-	HostGraphics &m_graphics;
+	BoardDrawing &m_card;
 	std::span<const uint8_t> m_texram[2];
 	std::vector<Slot> m_slots[2];
 	/* The slots of each bank that hold a texture, in order: a bank has

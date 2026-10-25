@@ -33,6 +33,7 @@
 #include <GL/glew.h>
 
 #include "odin/antarctic_list.hpp"
+#include "odin/board_drawing.hpp"
 #include "odin/eurasia_layers.hpp"
 #include "odin/hikaru_draw.hpp"
 #include "odin/host_graphics.hpp"
@@ -330,6 +331,8 @@ private:
 	/* The command processor builds its lists in three buffers. */
 	ListTextures m_list_textures[3];
 
+	/* What the card of the host does for it */
+	std::unique_ptr<BoardDrawing> m_card;
 	TextureCache m_textures;
 	MeshPrograms m_programs;
 	DrawTimes m_times;

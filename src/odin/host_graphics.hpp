@@ -21,7 +21,6 @@
 
 #include <cstdint>
 #include <memory>
-#include <span>
 #include <string>
 
 #include "odin/picture.hpp"
@@ -32,7 +31,7 @@ struct SDL_Window;
 
 namespace odin {
 
-struct TextureSampling;
+class BoardDrawing;
 
 /* A picture the renderer drew, as the graphics card holds it (0: none),
  * and its size */
@@ -48,36 +47,14 @@ struct HostImage {
 	float w = 0.0f, h = 0.0f;
 };
 
-/* A texture the renderer draws the board with (0: none) */
-struct HostTexture {
-	uint32_t id = 0;
-};
-
-/* A way the renderer reads its textures (0: none) */
-struct HostSampler {
-	uint32_t id = 0;
-};
-
-/* The texels of a texture, 16 bits each as the texture RAM of the board
- * holds them (ODIN_FORMAT_*, antarctic_list.hpp): ABGR1555 and ABGR4444
- * a little-endian word each, LA8 a byte of light then one of alpha. */
-enum class Texels : uint8_t { ABGR1555, ABGR4444, LA8 };
-
-/* A level of a texture: the rectangle x, y, w by h of a picture `row`
- * texels wide that starts at `texels` */
-struct TexelRect {
-	const void *texels;
-	unsigned row, x, y, w, h;
-};
-
 /* The graphics card of the host: the one door between Odin and the
  * graphics API (MARKDOWN/105). What Odin asks of the card is said here in
  * its own words, never in those of the API: show the window, lay the bezel
  * over it, blur the sides of the game, the background and the images of
- * the menu, and the textures of the board. host_graphics_gl.cpp does it
- * with OpenGL. The pictures of the board are drawn by the renderer
- * (renderer.hpp), which hands its picture over as a HostPicture; it still
- * calls OpenGL itself for all but its textures (MARKDOWN/105, C3).
+ * the menu. host_graphics_gl.cpp does it with OpenGL. The pictures of the
+ * board are drawn by the renderer (renderer.hpp) through the BoardDrawing
+ * the card makes for it (board_drawing.hpp); it hands its picture over as
+ * a HostPicture.
  *
  * Everything runs on the thread that has taken the card, the drawing
  * thread (display.hpp), but making it, which takes it, and destroying it. */
@@ -131,15 +108,8 @@ public:
 	virtual void stop_ui() = 0;
 	virtual uint64_t ui_image(HostImage image) const = 0;
 
-	/* The textures of the renderer: one made of its levels, the largest
-	 * first, as large as the first, their texels read before it returns;
-	 * some forgotten */
-	virtual HostTexture make_texture(Texels texels, std::span<const TexelRect> levels) = 0;
-	virtual void forget_textures(std::span<const HostTexture> textures) = 0;
-	/* A way to read them with that sampling (hikaru_draw.hpp) and that
-	 * anisotropic filtering, 1 for none; forgotten */
-	virtual HostSampler make_sampler(const TextureSampling &sampling, unsigned anisotropy) = 0;
-	virtual void forget_sampler(HostSampler sampler) = 0;
+	/* What the card does for the renderer of a game */
+	virtual std::unique_ptr<BoardDrawing> make_board_drawing() = 0;
 };
 
 } /* namespace odin */

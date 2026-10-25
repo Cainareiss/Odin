@@ -57,8 +57,8 @@ i4_to_rgba4444(uint32_t texel)
 
 } /* namespace */
 
-TextureCache::TextureCache(HostGraphics &graphics, const std::span<const uint8_t> texram[2])
-	: m_graphics(graphics), m_texram{texram[0], texram[1]}, m_no_mipmaps(false), m_anisotropy(1),
+TextureCache::TextureCache(BoardDrawing &card, const std::span<const uint8_t> texram[2])
+	: m_card(card), m_texram{texram[0], texram[1]}, m_no_mipmaps(false), m_anisotropy(1),
 	  m_log(nullptr)
 {
 	for (auto &bank : m_slots)
@@ -70,7 +70,7 @@ TextureCache::~TextureCache()
 	invalidate(-1);
 	delete_dead();
 	for (const auto &[key, sampler] : m_samplers)
-		m_graphics.forget_sampler(sampler);
+		m_card.forget_sampler(sampler);
 }
 
 void
@@ -85,7 +85,7 @@ TextureCache::delete_dead()
 {
 	if (m_dead.empty())
 		return;
-	m_graphics.forget_textures(m_dead);
+	m_card.forget_textures(m_dead);
 	m_dead.clear();
 }
 
@@ -105,7 +105,7 @@ TextureCache::sampler(const odin_texhead_t &th)
 
 	/* The board has trilinear filtering alone (its patents); the
 	 * anisotropy is an option of ours. */
-	const HostSampler sampler = m_graphics.make_sampler(sampling_of(th), m_anisotropy);
+	const HostSampler sampler = m_card.make_sampler(sampling_of(th), m_anisotropy);
 
 	m_samplers.emplace(key, sampler);
 	return sampler;
@@ -220,7 +220,7 @@ TextureCache::decode(const odin_texhead_t &th) const
 			rects[level] = { m_texram[l.bank].data(), BANK_WIDTH, l.x, l.y, l.w, l.h };
 		}
 	}
-	return m_graphics.make_texture(texels, std::span(rects, num_levels));
+	return m_card.make_texture(texels, std::span(rects, num_levels));
 }
 
 bool
@@ -302,7 +302,7 @@ TextureCache::set_anisotropy(unsigned level)
 	/* The samplers alone hold it. */
 	m_anisotropy = level;
 	for (const auto &[key, sampler] : m_samplers)
-		m_graphics.forget_sampler(sampler);
+		m_card.forget_sampler(sampler);
 	m_samplers.clear();
 }
 

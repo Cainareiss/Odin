@@ -318,7 +318,7 @@ Renderer::upload_texture(const odin_mesh_t &mesh)
 		const bool decoded = m_times.on() && !m_textures.holds(th);
 		const DrawTimes::Part part = decoded ? m_times.part(DrawTimes::PART_TEXTURES) : DrawTimes::NUM_PARTS;
 
-		/* A texture decoded is left bound (GlGraphics::make_texture). */
+		/* A texture decoded is left bound (GlBoardDrawing::make_texture). */
 		if (!m_textures.holds(th))
 			m_unit0_texture = ~0u;
 		texture = m_textures.get(th);
