@@ -20,13 +20,9 @@
 
 #include <cstring>
 
-#if defined(__x86_64__) || defined(_M_X64)
-#define ODIN_ARM7_HOST_X86_64 1
-#endif
-
 namespace odin {
 
-#if defined(ODIN_ARM7_HOST_X86_64)
+#if defined(ODIN_HOST_X86_64)
 
 namespace {
 

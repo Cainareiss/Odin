@@ -17,23 +17,12 @@
  */
 
 #include "odin/picture_preset.hpp"
+#include "odin/settings.hpp"
 
 #include <algorithm>
 #include <cstdlib>
 
 namespace odin::preset {
-
-namespace {
-
-std::string
-trimmed(const std::string &text)
-{
-	const size_t a = text.find_first_not_of(" \t\r"), b = text.find_last_not_of(" \t\r");
-
-	return a == std::string::npos ? std::string() : text.substr(a, b - a + 1);
-}
-
-} /* namespace */
 
 std::map<std::string, std::string>
 read_keys(const std::string &text)
@@ -45,7 +34,7 @@ read_keys(const std::string &text)
 		size_t end = text.find('\n', at);
 
 		end = end == std::string::npos ? text.size() : end;
-		const std::string line = trimmed(text.substr(at, end - at));
+		const std::string line(trimmed(std::string_view(text).substr(at, end - at)));
 
 		at = end + 1;
 		if (line.empty() || line[0] == '#' || line[0] == ';')
@@ -62,7 +51,7 @@ read_keys(const std::string &text)
 		if (!value.empty() && value.front() == '"')
 			value.erase(0, 1);
 		value = value.substr(0, value.find('"'));
-		value = trimmed(value);
+		value = std::string(trimmed(value));
 		if (!value.empty())
 			keys.emplace(name, value);
 	}

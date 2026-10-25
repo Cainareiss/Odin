@@ -19,6 +19,7 @@
  */
 
 #include "odin/netbd_837_13404.hpp"
+#include "odin/bytes.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -129,14 +130,8 @@ NetBoard837_13404::next_event() const
 uint64_t
 NetBoard837_13404::fingerprint() const
 {
-	uint64_t h = 0xCBF29CE484222325ull;
-	auto mix = [&h](const void *p, size_t n) {
-		const uint8_t *b = static_cast<const uint8_t *>(p);
-		for (size_t i = 0; i < n; i++) {
-			h ^= b[i];
-			h *= 0x100000001B3ull;
-		}
-	};
+	uint64_t h = FNV_START;
+	auto mix = [&h](const void *p, size_t n) { h = fnv1a(h, p, n); };
 	M68000State cpu;
 
 	m_cpu.save(cpu);

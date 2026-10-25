@@ -29,7 +29,15 @@
 namespace odin {
 
 /* A text without the spaces, tabs and \r (a line of Windows) at its ends */
-std::string_view trimmed(std::string_view text);
+inline std::string_view
+trimmed(std::string_view text)
+{
+	while (!text.empty() && (text.front() == ' ' || text.front() == '\t' || text.front() == '\r'))
+		text.remove_prefix(1);
+	while (!text.empty() && (text.back() == ' ' || text.back() == '\t' || text.back() == '\r'))
+		text.remove_suffix(1);
+	return text;
+}
 
 /* The settings of the user, odin.ini: "[section]" lines, then
  * "key = value" lines; a line that starts with # or ; is a comment. A key

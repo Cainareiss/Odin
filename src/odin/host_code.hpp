@@ -22,6 +22,11 @@
 #include <cstdint>
 #include <initializer_list>
 
+/* The host the code is written for (HostCode, Sh4Host, Arm7Host) */
+#if defined(__x86_64__) || defined(_M_X64)
+#define ODIN_HOST_X86_64 1
+#endif
+
 namespace odin {
 
 /* Code written for the host while the program runs: memory the host may

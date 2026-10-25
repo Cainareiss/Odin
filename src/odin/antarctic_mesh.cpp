@@ -26,6 +26,7 @@
 #include "odin/antarctic.hpp"
 #include "odin/bytes.hpp"
 
+#include <algorithm>
 #include <bit>
 #include <cstring>
 
@@ -228,12 +229,6 @@ Antarctic::end_mesh(uint32_t addr)
 	m_mesh = nullptr;
 }
 
-static float
-clampf(float x, float min_, float max_)
-{
-	return (min_ > x) ? min_ :
-	       (max_ < x) ? max_ : x;
-}
 
 void
 Antarctic::copy_material(Vertex &dst)
@@ -274,9 +269,7 @@ Antarctic::copy_colors(Vertex &dst, const Vertex &src)
 
 	/* Vertex alpha times polygon alpha for every type (X360 8252D858);
 	 * the render pass decides what it means. */
-	const float alpha = clampf(m_s.poly.alpha *
-	                           (static_cast<float>(src.info.alpha()) * INV255),
-	                           0.0f, 1.0f);
+	const float alpha = std::clamp(m_s.poly.alpha * (static_cast<float>(src.info.alpha()) * INV255), 0.0f, 1.0f);
 	dst.body.alpha = static_cast<uint8_t>(alpha * 255.0f);
 }
 
