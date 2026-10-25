@@ -537,52 +537,46 @@ Renderer::upload_vertices(const odin_vertex_body_t *vertices, uint32_t num,
 	gl::check("the vertices");
 }
 
-/* Blend factors of the material (A81 bits 17:16), as the X360 port
- * applies them (825B4290): source alpha over the destination, the product,
- * source alpha added, the source as it is over the destination. Where the
- * source is weighted by its alpha the shader does it, before the clamp.
- * The translucent type is blended by the shader that sorts its fragments,
- * which does the same. */
+/* The blend of the material of the mesh (MeshBlend) */
 void
 Renderer::set_material_blend(const odin_mesh_t &mesh)
 {
-	static const GLenum factors[4][4] = {
-		{ GL_ONE,       GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE_MINUS_SRC_ALPHA },
-		{ GL_DST_COLOR, GL_ZERO,                GL_ZERO, GL_ZERO },
-		{ GL_ONE,       GL_ONE,                 GL_ZERO, GL_ONE_MINUS_SRC_ALPHA },
-		{ GL_ONE,       GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE_MINUS_SRC_ALPHA },
-	};
 	unsigned mode = 0;
 
 	if (mesh.mat_index < ODIN_LIST_MAX_MATERIALS)
 		mode = odin_mat_blending_mode(&m_list->mat_list[mesh.mat_index]);
 	m_pass.blend_mode = mode;
-	m_pass.weigh_by_alpha = (mode == 0 || mode == 2);
-	set_blend(factors[mode][0], factors[mode][1], factors[mode][2], factors[mode][3]);
+	m_pass.weigh_by_alpha = weighs_by_alpha(mode);
+	set_blend(material_blend(mode));
 }
 
-/* The passes that do not blend replace the pixel and cover what is below the
- * 3D; a mesh faded by the depth queue lets through what it does not hide. */
 void
 Renderer::set_opaque_blend(const odin_mesh_t &mesh)
 {
-	if (is_faded_by_depth(mesh))
-		set_blend(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE_MINUS_SRC_ALPHA);
-	else
-		set_blend(GL_ONE, GL_ZERO, GL_ZERO, GL_ZERO);
+	set_blend(is_faded_by_depth(mesh) ? MeshBlend::FADED : MeshBlend::REPLACE);
 }
 
-/* The blend factors, sent when they change */
+/* The blend factors of OpenGL, sent when they change */
 void
-Renderer::set_blend(GLenum src, GLenum dst, GLenum src_alpha, GLenum dst_alpha)
+Renderer::set_blend(MeshBlend blend)
 {
-	if (m_blend[0] == src && m_blend[1] == dst && m_blend[2] == src_alpha && m_blend[3] == dst_alpha)
+	static const GLenum factors[6][4] = {
+		/* REPLACE */     { GL_ONE,       GL_ZERO,                GL_ZERO, GL_ZERO },
+		/* FADED */       { GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE_MINUS_SRC_ALPHA },
+		/* ALPHA_OVER */  { GL_ONE,       GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE_MINUS_SRC_ALPHA },
+		/* PRODUCT */     { GL_DST_COLOR, GL_ZERO,                GL_ZERO, GL_ZERO },
+		/* ALPHA_ADDED */ { GL_ONE,       GL_ONE,                 GL_ZERO, GL_ONE_MINUS_SRC_ALPHA },
+		/* OVER */        { GL_ONE,       GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE_MINUS_SRC_ALPHA },
+	};
+	const GLenum *const f = factors[static_cast<unsigned>(blend)];
+
+	if (m_blend[0] == f[0] && m_blend[1] == f[1] && m_blend[2] == f[2] && m_blend[3] == f[3])
 		return;
-	m_blend[0] = src;
-	m_blend[1] = dst;
-	m_blend[2] = src_alpha;
-	m_blend[3] = dst_alpha;
-	glBlendFuncSeparate(src, dst, src_alpha, dst_alpha);
+	m_blend[0] = f[0];
+	m_blend[1] = f[1];
+	m_blend[2] = f[2];
+	m_blend[3] = f[3];
+	glBlendFuncSeparate(f[0], f[1], f[2], f[3]);
 }
 
 void
@@ -602,45 +596,30 @@ Renderer::draw_polytype(unsigned vpi, unsigned polytype)
 	if (logging())
 		log(" ==== DRAWING VP %u, POLYTYPE %u ====", vpi, polytype);
 
-	/* Render passes of the X360 port (825B2408, 825B3EB0): opaque and
-	 * shadow types write the depth without blending nor alpha test; the
-	 * transparent type is punch-through (alpha > 0.5, depth written, no
-	 * blending); background and translucent blend with the material mode,
-	 * keep the depth and drop alpha <= 1/255.
-	 *
-	 * The alpha of the color buffer holds what the 3D lets through: the
-	 * passes that do not blend write 0 there. */
+	/* The rules of the pass (pass_rules, hikaru_draw.hpp) */
+	const PassRules rules = pass_rules(polytype);
+
 	glEnable(GL_BLEND);
 	m_blend[0] = ~0u;
-	set_blend(GL_ONE, GL_ZERO, GL_ZERO, GL_ZERO);
+	set_blend(MeshBlend::REPLACE);
 	m_pass.weigh_by_alpha = false;
-
 	switch (polytype) {
 	case ODIN_POLYTYPE_TRANSPARENT:
 		m_times.part(DrawTimes::PART_PUNCH_THROUGH);
-		glDepthMask(GL_TRUE);
-		m_pass.depth_bias = true;
-		m_pass.alpha_ref = 0.5f;
 		break;
 	case ODIN_POLYTYPE_TRANSLUCENT:
 		m_times.part(DrawTimes::PART_COLLECT);
-		glDepthMask(GL_FALSE);
-		m_pass.depth_bias = true;
-		m_pass.alpha_ref = 1.0f / 255.0f;
 		break;
 	case ODIN_POLYTYPE_BACKGROUND:
 		m_times.part(DrawTimes::PART_BACKGROUND);
-		glDepthMask(GL_FALSE);
-		m_pass.depth_bias = false;
-		m_pass.alpha_ref = 1.0f / 255.0f;
 		break;
 	default:
 		m_times.part(polytype == ODIN_POLYTYPE_OPAQUE ? DrawTimes::PART_OPAQUE : DrawTimes::PART_SHADOWS);
-		glDepthMask(GL_TRUE);
-		m_pass.depth_bias = true;
-		m_pass.alpha_ref = -1.0f;
 		break;
 	}
+	glDepthMask(rules.depth_write ? GL_TRUE : GL_FALSE);
+	m_pass.depth_bias = rules.depth_bias;
+	m_pass.alpha_ref = rules.alpha_ref;
 
 	if (polytype == ODIN_POLYTYPE_TRANSLUCENT) {
 		draw_translucent(vpi, meshes, num);
@@ -649,7 +628,7 @@ Renderer::draw_polytype(unsigned vpi, unsigned polytype)
 
 	glBindVertexArray(m_mesh_vao);
 	for (unsigned j = 0; j < num; j++) {
-		if (polytype == ODIN_POLYTYPE_BACKGROUND)
+		if (rules.material_blend)
 			set_material_blend(meshes[j]);
 		else
 			set_opaque_blend(meshes[j]);

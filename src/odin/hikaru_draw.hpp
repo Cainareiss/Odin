@@ -75,6 +75,62 @@ sampling_of(const odin_texhead_t &th)
 	return s;
 }
 
+/* How a mesh goes over what is drawn. The passes that do not blend replace
+ * the pixel and cover what is below the 3D (they leave 0 in the alpha of
+ * the colour buffer, which holds what the 3D lets through); a mesh faded
+ * by the depth queue lets through what it does not hide. The blend modes
+ * of a material (A81 bits 17:16), as the X360 port applies them (825B4290):
+ * source alpha over the destination, the product, source alpha added, the
+ * source as it is over the destination. Where the source is weighted by
+ * its alpha the shader does it, before the clamp (weighs_by_alpha). The
+ * translucent type is blended by the shader that sorts its fragments,
+ * which does the same. */
+enum class MeshBlend : uint8_t { REPLACE, FADED, ALPHA_OVER, PRODUCT, ALPHA_ADDED, OVER };
+
+/* The blend of a mode of a material, 0 to 3 */
+inline MeshBlend
+material_blend(unsigned mode)
+{
+	constexpr MeshBlend MODES[4] = { MeshBlend::ALPHA_OVER, MeshBlend::PRODUCT, MeshBlend::ALPHA_ADDED, MeshBlend::OVER };
+
+	return MODES[mode & 3];
+}
+
+inline bool
+weighs_by_alpha(unsigned mode)
+{
+	return mode == 0 || mode == 2;
+}
+
+/* How the meshes of a polygon type are drawn: the render passes of the
+ * X360 port (825B2408, 825B3EB0). The opaque and shadow types write the
+ * depth without blending nor alpha test; the transparent type is
+ * punch-through (alpha > 0.5, depth written, no blending); the background
+ * and the translucent type blend with the mode of their material, keep the
+ * depth and drop alpha <= 1/255. The background alone is not moved by the
+ * depth bias of 101. */
+struct PassRules {
+	bool depth_write;
+	bool depth_bias;
+	float alpha_ref;	/* fragments at or below it are dropped; -1: none */
+	bool material_blend;	/* else REPLACE, or FADED by the depth queue */
+};
+
+inline PassRules
+pass_rules(unsigned polytype)
+{
+	switch (polytype) {
+	case ODIN_POLYTYPE_TRANSPARENT:
+		return { true, true, 0.5f, false };
+	case ODIN_POLYTYPE_TRANSLUCENT:
+		return { false, true, 1.0f / 255.0f, true };
+	case ODIN_POLYTYPE_BACKGROUND:
+		return { false, false, 1.0f / 255.0f, true };
+	default:
+		return { true, true, -1.0f, false };
+	}
+}
+
 } /* namespace odin */
 
 #endif /* ODIN_HIKARU_DRAW_HPP */

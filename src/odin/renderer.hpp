@@ -34,6 +34,7 @@
 
 #include "odin/antarctic_list.hpp"
 #include "odin/eurasia_layers.hpp"
+#include "odin/hikaru_draw.hpp"
 #include "odin/host_graphics.hpp"
 #include "odin/picture_filter.hpp"
 #include "odin/picture.hpp"
@@ -290,7 +291,7 @@ private:
 	void upload_lightset(const odin_mesh_t &mesh);
 	void set_material_blend(const odin_mesh_t &mesh);
 	void set_opaque_blend(const odin_mesh_t &mesh);
-	void set_blend(GLenum src, GLenum dst, GLenum src_alpha, GLenum dst_alpha);
+	void set_blend(MeshBlend blend);
 	std::vector<GLuint> &tex_ids();
 
 	/* renderer_translucent.cpp */
