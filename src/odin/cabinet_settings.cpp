@@ -19,6 +19,7 @@
  */
 
 #include "odin/cabinet_settings.hpp"
+#include "odin/bytes.hpp"
 
 #include <algorithm>
 
@@ -36,11 +37,6 @@ uint8_t with_bits(uint8_t byte, unsigned shift, unsigned bits, unsigned value)
 	const unsigned mask = ((1u << bits) - 1) << shift;
 
 	return static_cast<uint8_t>((byte & ~mask) | ((value << shift) & mask));
-}
-
-uint32_t word(std::span<const uint8_t> bytes, size_t at)
-{
-	return bytes[at] | bytes[at + 1] << 8 | bytes[at + 2] << 16 | static_cast<uint32_t>(bytes[at + 3]) << 24;
 }
 
 } /* namespace */
@@ -82,7 +78,7 @@ backup_block(std::span<const uint8_t> bram)
 	if (bram.size() < BACKUP_BLOCK)
 		return 0;
 
-	const uint32_t head = word(bram, BACKUP_HEAD + 4);
+	const uint32_t head = le32(&bram[BACKUP_HEAD + 4]);
 	const size_t size = head >> 16;
 
 	if (size == 0 || BACKUP_BLOCK + 2 * size > bram.size())

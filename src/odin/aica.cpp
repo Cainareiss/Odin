@@ -19,6 +19,7 @@
  */
 
 #include "odin/aica.hpp"
+#include "odin/bytes.hpp"
 #include "odin/repeats.hpp"
 
 #include <algorithm>
@@ -98,7 +99,7 @@ Aica::reset(bool power_on)
 uint16_t
 Aica::rd16(uint32_t offset) const
 {
-	return static_cast<uint16_t>(m_regs[offset] | (m_regs[offset + 1] << 8));
+	return le16(&m_regs[offset]);
 }
 
 void

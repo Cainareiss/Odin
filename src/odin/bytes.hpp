@@ -92,6 +92,21 @@ store_bytes(uint8_t *at, unsigned size, uint64_t value)
 	}
 }
 
+/* 16 and 32 bits from those bytes, the least significant first, whatever
+ * the order of the host */
+inline uint16_t
+le16(const uint8_t *at)
+{
+	return static_cast<uint16_t>(at[0] | at[1] << 8);
+}
+
+inline uint32_t
+le32(const uint8_t *at)
+{
+	return static_cast<uint32_t>(at[0]) | static_cast<uint32_t>(at[1]) << 8 | static_cast<uint32_t>(at[2]) << 16 |
+	       static_cast<uint32_t>(at[3]) << 24;
+}
+
 /* A word read as the float it holds */
 inline float
 f32(uint32_t word)

@@ -26,6 +26,7 @@
  * wait states are modelled, the bus owner adds them. */
 
 #include "odin/arm7.hpp"
+#include "odin/bytes.hpp"
 
 #include <algorithm>
 #include <bit>
@@ -194,7 +195,7 @@ uint32_t Arm7::run_decoded(uint32_t done, uint32_t cycles)
 
 		const uint8_t *p = m_ram.base + at;
 		Decoded &d = page[(at >> 2) & ((1u << (DECODED_PAGE - 2)) - 1)];
-		const uint32_t op = p[0] | (p[1] << 8) | (p[2] << 16) | (static_cast<uint32_t>(p[3]) << 24);
+		const uint32_t op = le32(p);
 		if (d.op != op || !d.run) {
 			d.op = op;
 			d.run = decode(op);
@@ -532,7 +533,7 @@ void Arm7::settle()
 	/* The count of the turns gets those that were only counted. */
 	if (m_turn_counter != TURN_NO_COUNTER && m_turn_laps) {
 		uint8_t *p = m_ram.base + m_turn_counter;
-		uint32_t count = p[0] | (p[1] << 8) | (p[2] << 16) | (static_cast<uint32_t>(p[3]) << 24);
+		uint32_t count = le32(p);
 		count += m_turn_laps * m_turn_delta;
 		p[0] = u8(count);
 		p[1] = u8(count >> 8);
@@ -926,7 +927,7 @@ uint32_t Arm7::step_decoded()
 			page = decoded_page(at >> DECODED_PAGE);
 		}
 		Decoded &d = page[(at >> 2) & ((1u << (DECODED_PAGE - 2)) - 1)];
-		op = p[0] | (p[1] << 8) | (p[2] << 16) | (static_cast<uint32_t>(p[3]) << 24);
+		op = le32(p);
 		if (d.op != op || !d.run) {
 			d.op = op;
 			d.run = decode(op);
@@ -1087,7 +1088,7 @@ uint32_t Arm7::fetch()
 	uint32_t op;
 	if (addr < m_ram.size) {
 		const uint8_t *p = m_ram.base + (addr & m_ram.mask);
-		op = p[0] | (p[1] << 8) | (p[2] << 16) | (static_cast<uint32_t>(p[3]) << 24);
+		op = le32(p);
 	} else if (m_turn == Turn::Settle) {
 		op = turn_settle_read();
 	} else {
@@ -1127,7 +1128,7 @@ uint16_t Arm7::rd16(uint32_t addr)
 	uint16_t v;
 	if (addr < m_ram.size) {
 		const uint8_t *p = m_ram.base + (addr & m_ram.mask);
-		v = static_cast<uint16_t>(p[0] | (p[1] << 8));
+		v = le16(p);
 	} else if (m_turn == Turn::Settle) {
 		v = u16(turn_settle_read());
 	} else {
@@ -1148,7 +1149,7 @@ uint32_t Arm7::rd32(uint32_t addr)
 	uint32_t v;
 	if (addr < m_ram.size) {
 		const uint8_t *p = m_ram.base + (addr & m_ram.mask);
-		v = p[0] | (p[1] << 8) | (p[2] << 16) | (static_cast<uint32_t>(p[3]) << 24);
+		v = le32(p);
 	} else if (m_turn == Turn::Settle) {
 		v = turn_settle_read();
 	} else {

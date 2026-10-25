@@ -17,6 +17,7 @@
  */
 
 #include "odin/program_cache.hpp"
+#include "odin/bytes.hpp"
 
 #include <cstdio>
 #include <cstring>
@@ -35,12 +36,6 @@ void put32(std::vector<uint8_t> &out, uint32_t value)
 {
 	for (unsigned i = 0; i < 4; i++)
 		out.push_back(static_cast<uint8_t>(value >> (8 * i)));
-}
-
-uint32_t get32(const uint8_t *at)
-{
-	return static_cast<uint32_t>(at[0]) | static_cast<uint32_t>(at[1]) << 8 |
-	       static_cast<uint32_t>(at[2]) << 16 | static_cast<uint32_t>(at[3]) << 24;
 }
 
 } /* namespace */
@@ -69,9 +64,9 @@ std::optional<KeptProgram> program_from_file(std::span<const uint8_t> file, cons
 	KeptProgram program;
 	uint32_t sizes[4];
 
-	program.format = get32(at);
+	program.format = le32(at);
 	for (unsigned i = 0; i < 4; i++)
-		sizes[i] = get32(at + 4 * (i + 1));
+		sizes[i] = le32(at + 4 * (i + 1));
 	if (static_cast<uint64_t>(sizes[0]) + sizes[1] + sizes[2] + sizes[3] != file.size() - HEAD_SIZE || !sizes[3])
 		return std::nullopt;
 

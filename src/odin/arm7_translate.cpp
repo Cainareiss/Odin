@@ -20,6 +20,7 @@
  * found, and when they are all forgotten. Arm7Host writes the steps. */
 
 #include "odin/arm7.hpp"
+#include "odin/bytes.hpp"
 
 #include <bit>
 
@@ -214,7 +215,7 @@ uint32_t Arm7::translate(uint32_t addr, uint32_t &words)
 			break;
 		}
 		const uint8_t *p = m_ram.base + offset;
-		const uint32_t op = p[0] | (p[1] << 8) | (p[2] << 16) | (static_cast<uint32_t>(p[3]) << 24);
+		const uint32_t op = le32(p);
 		const Run does = decode(op);
 		const uint16_t pass = condition_pass(op >> 28);
 		const bool conditional = pass != 0xFFFF;

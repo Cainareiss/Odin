@@ -22,6 +22,7 @@
  * outside plain memory. */
 
 #include "odin/sh4.hpp"
+#include "odin/bytes.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -36,12 +37,6 @@ constexpr uint32_t CCN_INTEVT = 0x000028;
 constexpr uint32_t INTC_ICR = 0xD00000;
 constexpr uint32_t DMAC_DMAOR = 0xA00040;
 
-uint16_t load16(const uint8_t *p)
-{
-	uint16_t v;
-	std::memcpy(&v, p, 2);
-	return v;
-}
 
 /* Table 19.5: where the handler is from VBR, and the code for INTEVT. The
  * priority of an external source is fixed, the one of an on-chip module
@@ -573,7 +568,7 @@ bool Sh4::same_code(Block &b)
 		}
 	}
 	for (; left > 0; left--, now += 2, was++) {
-		if (load16(now) != *was) {
+		if (le16(now) != *was) {
 			return false;
 		}
 	}
@@ -634,7 +629,7 @@ bool Sh4::decode_block(uint32_t pc, uint32_t limit, Block &b, std::vector<Sh4Op>
 	while (count < limit && count < room) {
 		uint32_t at = pc + 2 * count;
 		Sh4Op op;
-		Kind kind = decode(load16(code + 2 * count), at, op);
+		Kind kind = decode(le16(code + 2 * count), at, op);
 
 		op.idx = static_cast<uint8_t>(count);
 		if (count > 0) {
@@ -651,7 +646,7 @@ bool Sh4::decode_block(uint32_t pc, uint32_t limit, Block &b, std::vector<Sh4Op>
 				}
 				break;
 			}
-			if (bad_slot(decode(load16(code + 2 * (count + 1)), at + 2, slot), at + 2)) {
+			if (bad_slot(decode(le16(code + 2 * (count + 1)), at + 2, slot), at + 2)) {
 				op.flags |= OP_BAD_SLOT;
 			}
 			slot.idx = static_cast<uint8_t>(count + 1);
@@ -918,7 +913,7 @@ void Sh4::run_far(uint32_t pc, bool resumed)
 	}
 	b.copy = m_words.data() + m_words.size();
 	for (uint32_t i = 0; i < b.words; i++) {
-		m_words.push_back(load16(b.code + 2 * i));
+		m_words.push_back(le16(b.code + 2 * i));
 	}
 	b.checked = m_epoch;
 	guard_code(b);

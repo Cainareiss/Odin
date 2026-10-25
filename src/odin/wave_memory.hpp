@@ -21,6 +21,8 @@
 #ifndef ODIN_WAVE_MEMORY_HPP
 #define ODIN_WAVE_MEMORY_HPP
 
+#include "odin/bytes.hpp"
+
 #include <cstdint>
 
 namespace odin {
@@ -29,7 +31,7 @@ namespace odin {
 inline uint32_t
 aica_reg(const uint8_t *regs, uint32_t offset)
 {
-	return static_cast<uint32_t>(regs[offset] | (regs[offset + 1] << 8));
+	return le16(regs + offset);
 }
 
 /* The wave memory as the voices and the effect processor of the AICA read
