@@ -510,7 +510,6 @@ Antarctic::op_viewport_set(const uint32_t *inst)
 		break;
 	default:
 		fatal("instruction form not known", inst[0]);
-		break;
 	}
 }
 
@@ -642,7 +641,6 @@ Antarctic::op_viewport_recall(const uint32_t *inst)
 		break;
 	default:
 		fatal("instruction form not known", inst[0]);
-		break;
 	}
 }
 
@@ -781,7 +779,6 @@ Antarctic::op_vector(const uint32_t *inst)
 		break;
 	default:
 		fatal("instruction form not known", inst[0]);
-		break;
 	}
 }
 
@@ -1001,7 +998,6 @@ Antarctic::op_material_color(const uint32_t *inst)
 		break;
 	default:
 		fatal("instruction form not known", inst[0]);
-		break;
 	}
 }
 
@@ -1245,7 +1241,6 @@ Antarctic::op_texhead_set(const uint32_t *inst)
 		break;
 	default:
 		fatal("instruction form not known", inst[0]);
-		break;
 	}
 }
 
@@ -1484,7 +1479,6 @@ Antarctic::op_light_color(const uint32_t *inst)
 		break;
 	default:
 		fatal("instruction form not known", inst[0]);
-		break;
 	}
 }
 
@@ -1498,15 +1492,10 @@ Antarctic::op_light_color(const uint32_t *inst)
  * RACER alone sends them later: seven lists written by hand in its
  * program, each one flat quad that opens with 006 and an identity local
  * matrix and closes with 046, n clear. The 400 stars behind its opening
- * text are such lists, and they match the cabinet with both ignored. No
- * library emits them, and the decoder of the X360 port skips every word
- * of this type (8252E5C8).
+ * text are such lists, and they match the cabinet with both ignored (the
+ * table runs op_nop). No library emits them, and the decoder of the X360
+ * port skips every word of this type (8252E5C8).
  */
-
-void
-Antarctic::op_unknown_006(const uint32_t *)
-{
-}
 
 
 /* 046	Unknown
@@ -1517,11 +1506,6 @@ Antarctic::op_unknown_006(const uint32_t *)
  *
  * See 006.
  */
-
-void
-Antarctic::op_unknown_046(const uint32_t *)
-{
-}
 
 
 /* 104	Commit Light
@@ -1722,7 +1706,6 @@ Antarctic::op_mesh_set(const uint32_t *inst)
 		break;
 	default:
 		fatal("instruction form not known", inst[0]);
-		break;
 	}
 }
 
@@ -2034,7 +2017,6 @@ Antarctic::op_framebuffer(const uint32_t *inst)
 		break;
 	default:
 		fatal("instruction form not known", inst[0]);
-		break;
 	}
 }
 
@@ -2049,12 +2031,8 @@ Antarctic::op_framebuffer(const uint32_t *inst)
  * Always comes as the last instruction. Perhaps some kind of 'flush all'
  * or 'raise IRQ' command or something like that. If it is a 'flush all'
  * command, it may set some GPU ports not set by 1C2 (1A000024 perhaps.)
+ * Ignored: the table runs op_nop.
  */
-
-void
-Antarctic::op_unknown_088(const uint32_t *)
-{
-}
 
 
 /* 154	Mat: Set Alpha Threshold
@@ -2117,13 +2095,8 @@ Antarctic::op_light_table(const uint32_t *inst)
  *
  * l,L and u,U = where the two 3D buffers of unit 0 and of unit 1 lie in the
  * FB (the values of 1A000180, 1A000188 and of 1A000200, 1A000208).
- * See PH:@0C016308 for both.
+ * See PH:@0C016308 for both. Ignored: the table runs op_nop.
  */
-
-void
-Antarctic::op_unknown_1A1(const uint32_t *)
-{
-}
 
 /****************************************************************************
  Opcodes
@@ -2141,12 +2114,12 @@ Antarctic::insns()
 		{ 0x003, 0x003, &Antarctic::op_viewport_recall,		0 },
 		{ 0x004, 0x004, &Antarctic::op_viewport_commit,		0 },
 		{ 0x005, 0x005, &Antarctic::op_lod_test_sphere,		0 },
-		{ 0x006, 0x006, &Antarctic::op_unknown_006,		0 },
+		{ 0x006, 0x006, &Antarctic::op_nop,			0 },
 		{ 0x011, 0x011, &Antarctic::op_viewport_ambient,	0 },
 		{ 0x012, 0x012, &Antarctic::op_jump,			SETS_PC },
 		{ 0x021, 0x021, &Antarctic::op_viewport_set,		0 },
 		{ 0x043, 0x043, &Antarctic::op_lightset_recall,		0 },
-		{ 0x046, 0x046, &Antarctic::op_unknown_046,		0 },
+		{ 0x046, 0x046, &Antarctic::op_nop,			0 },
 		{ 0x051, 0x051, &Antarctic::op_light_color,		0 },
 		{ 0x052, 0x052, &Antarctic::op_call,			SETS_PC },
 		{ 0x055, 0x055, &Antarctic::op_lod_radius,		0 },
@@ -2160,7 +2133,7 @@ Antarctic::insns()
 		 * instruction in between. */
 		{ 0x083, 0x083, &Antarctic::op_material_recall,		0 },
 		{ 0x084, 0x084, &Antarctic::op_material_commit,		0 },
-		{ 0x088, 0x088, &Antarctic::op_unknown_088,		0 },
+		{ 0x088, 0x088, &Antarctic::op_nop,			0 },
 		{ 0x091, 0x091, &Antarctic::op_material_color,		KEEPS_MESH },
 		{ 0x095, 0x095, &Antarctic::op_lod_compare,		0 },
 		{ 0x0C1, 0x0C1, &Antarctic::op_texhead_set,		0 },
@@ -2179,7 +2152,7 @@ Antarctic::insns()
 		{ 0x181, 0x181, &Antarctic::op_framebuffer,		0 },
 		{ 0x191, 0x191, &Antarctic::op_viewport_clear,		0 },
 		{ 0x194, 0x194, &Antarctic::op_light_table,		0 },
-		{ 0x1A1, 0x1A1, &Antarctic::op_unknown_1A1,		0 },
+		{ 0x1A1, 0x1A1, &Antarctic::op_nop,			0 },
 		{ 0x1AC, 0x1AF, &Antarctic::op_push_position,		PUSHES },
 		{ 0x1B8, 0x1BF, &Antarctic::op_push_all,		PUSHES },
 		{ 0x1C2, 0x1C2, &Antarctic::op_end,			SETS_PC },

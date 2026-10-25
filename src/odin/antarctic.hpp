@@ -314,11 +314,6 @@ private:
 	void op_alpha_table(const uint32_t *inst);
 	void op_light_table(const uint32_t *inst);
 
-	void op_unknown_006(const uint32_t *inst);
-	void op_unknown_046(const uint32_t *inst);
-	void op_unknown_088(const uint32_t *inst);
-	void op_unknown_1A1(const uint32_t *inst);
-
 	uint32_t get_jump_address(const uint32_t *inst) const;
 	float get_lod_size() const;
 	bool is_lod_sphere_visible() const;
