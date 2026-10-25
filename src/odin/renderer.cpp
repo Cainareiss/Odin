@@ -550,73 +550,57 @@ Renderer::show()
 	compose();
 }
 
-/* The picture shown and the layers, composed into the picture of the frame.
- *
- * Only the unit 0 of the display chip is drawn (the unit 1 is probably the
- * second monitor), and only what the 781 and the 181 tell: the registers
- * of the display chip that set up the framebuffer are not used. */
+/* The picture shown and the layers, composed into the picture of the frame
+ * (Compose, hikaru_draw.hpp). The registers of the display chip that set
+ * up the framebuffer are not used. */
 void
 Renderer::compose()
 {
-	const odin_fb_config_t &fb = m_frame.fb;
-	const odin_layers_t &layers = m_frame.layers;
-	const uint32_t n1 = odin_fb_num_1(&fb), n2 = odin_fb_num_2(&fb);
-	const uint32_t rate = odin_fb_blend(&fb) ? odin_fb_alpha(&fb) : 0;
-	GLuint layer1 = 0, layer2 = 0;
-	float mult1 = 0.0f, mult2 = 0.0f;
-	/* Two 3D buffers were blended when their list was drawn. */
-	const float factor = (n1 < 2 && n2 < 2) ? 0.0f : static_cast<float>(rate) * (1.0f / 255);
+	GLuint layer[2] = { 0, 0 };
+	bool shown[2] = { false, false };
 
 	m_times.part(DrawTimes::PART_LAYERS);
 	set_2d_state();
 	glBindFramebuffer(GL_FRAMEBUFFER, m_frame_fb);
-
-	if (shows_layer(0))
-		layer1 = upload_layer(0, mult1);
-	if (shows_layer(1))
-		layer2 = upload_layer(1, mult2);
+	for (unsigned i = 0; i < 2; i++)
+		if ((shown[i] = shows_layer(i)))
+			layer[i] = upload_layer(i);
 	m_times.part(DrawTimes::PART_COMPOSE);
 
-	/* The two blender inputs: 0 and 1 are the 3D, 2 and 3 the 2D layers
-	 * (PHARRIER blends layer 2 in for its logo screens, 781 = 0704/0705). */
-	const GLuint shown = m_pipe[m_shown];
-	const GLuint f = (n1 < 2) ? shown : (n1 == 2) ? layer1 : layer2;
-	const GLuint b = (n2 < 2) ? shown : (n2 == 2) ? layer1 : layer2;
+	/* The two blender inputs: 0 and 1 are the 3D, 2 and 3 the 2D layers */
+	const Compose c = compose_of(m_frame.fb, m_frame.layers, shown);
+	const auto texture = [&](Compose::Source source) {
+		return source == Compose::Source::PICTURE ? m_pipe[m_shown] :
+		       source == Compose::Source::LAYER_1 ? layer[0] : layer[1];
+	};
 
 	glActiveTexture(GL_TEXTURE0 + 0);
-	glBindTexture(GL_TEXTURE_2D, f);
+	glBindTexture(GL_TEXTURE_2D, texture(c.front));
 	glActiveTexture(GL_TEXTURE0 + 1);
-	glBindTexture(GL_TEXTURE_2D, b);
+	glBindTexture(GL_TEXTURE_2D, texture(c.back));
 	glActiveTexture(GL_TEXTURE0 + 2);
-	glBindTexture(GL_TEXTURE_2D, (f != layer1 && b != layer1) ? layer1 : 0);
+	glBindTexture(GL_TEXTURE_2D, c.alone[0] ? layer[0] : 0);
 	glActiveTexture(GL_TEXTURE0 + 3);
-	glBindTexture(GL_TEXTURE_2D, (f != layer2 && b != layer2) ? layer2 : 0);
+	glBindTexture(GL_TEXTURE_2D, c.alone[1] ? layer[1] : 0);
 
 	glUniform1i(m_compose_locs.front, 0);
 	glUniform1i(m_compose_locs.back, 1);
 	glUniform1i(m_compose_locs.layer1, 2);
 	glUniform1i(m_compose_locs.layer2, 3);
-	glUniform1f(m_compose_locs.factor, factor);
-	/* Uniforms persist in the program: set them all, every frame. A
-	 * layer that is not uploaded this frame has mult 0 and no texture. */
-	glUniform1f(m_compose_locs.mult_f,
-	            (f == layer1 && layer1) ? mult1 : (f == layer2 && layer2) ? mult2 : 1.0f);
-	glUniform1f(m_compose_locs.mult_b,
-	            (b == layer1 && layer1) ? mult1 : (b == layer2 && layer2) ? mult2 : 1.0f);
-	glUniform1f(m_compose_locs.mult_1, (layer1 && f != layer1 && b != layer1) ? mult1 : 0.0f);
-	glUniform1f(m_compose_locs.mult_2, (layer2 && f != layer2 && b != layer2) ? mult2 : 0.0f);
-	glUniform1f(m_compose_locs.keyed_1, layers.layer[0][0].keyed ? 1.0f : 0.0f);
-	glUniform1f(m_compose_locs.keyed_2, layers.layer[0][1].keyed ? 1.0f : 0.0f);
-	glUniform1f(m_compose_locs.keyed_3d, layers.fb_keyed ? 1.0f : 0.0f);
-	glUniform1f(m_compose_locs.above_1, layers.layer[0][0].above ? 1.0f : 0.0f);
-	glUniform1f(m_compose_locs.above_2, layers.layer[0][1].above ? 1.0f : 0.0f);
-	glUniform1i(m_compose_locs.invert_f, (n1 >= 2) ? 1 : 0);
-	glUniform1i(m_compose_locs.invert_b, (n2 >= 2) ? 1 : 0);
-	glUniform4f(m_compose_locs.clear,
-	            static_cast<float>(fb.clear[0]) * INV255,
-	            static_cast<float>(fb.clear[1]) * INV255,
-	            static_cast<float>(fb.clear[2]) * INV255,
-	            static_cast<float>(fb.clear[3]) * INV255);
+	glUniform1f(m_compose_locs.factor, c.factor);
+	/* Uniforms persist in the program: set them all, every frame. */
+	glUniform1f(m_compose_locs.mult_f, c.mult_front);
+	glUniform1f(m_compose_locs.mult_b, c.mult_back);
+	glUniform1f(m_compose_locs.mult_1, c.mult_alone[0]);
+	glUniform1f(m_compose_locs.mult_2, c.mult_alone[1]);
+	glUniform1f(m_compose_locs.keyed_1, c.keyed[0] ? 1.0f : 0.0f);
+	glUniform1f(m_compose_locs.keyed_2, c.keyed[1] ? 1.0f : 0.0f);
+	glUniform1f(m_compose_locs.keyed_3d, c.keyed_3d ? 1.0f : 0.0f);
+	glUniform1f(m_compose_locs.above_1, c.above[0] ? 1.0f : 0.0f);
+	glUniform1f(m_compose_locs.above_2, c.above[1] ? 1.0f : 0.0f);
+	glUniform1i(m_compose_locs.invert_f, c.invert_front ? 1 : 0);
+	glUniform1i(m_compose_locs.invert_b, c.invert_back ? 1 : 0);
+	glUniform4f(m_compose_locs.clear, c.clear[0], c.clear[1], c.clear[2], c.clear[3]);
 
 	glBindVertexArray(m_quad_vao);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);

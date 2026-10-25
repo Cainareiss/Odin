@@ -305,7 +305,7 @@ private:
 	/* renderer_layers.cpp */
 	bool shows_layer(unsigned i) const;
 	void take_layer(unsigned i);
-	GLuint upload_layer(unsigned i, float &mult);
+	GLuint upload_layer(unsigned i);
 
 	/* renderer_debug.cpp */
 	void init_debug();

@@ -22,6 +22,7 @@
 #include <cstdint>
 
 #include "odin/antarctic_list.hpp"
+#include "odin/eurasia_layers.hpp"
 
 /* What the board asks to be drawn, worked out from its lists in plain data,
  * without a word of a graphics API (MARKDOWN/105): the rules of the board
@@ -200,6 +201,73 @@ pattern_bits(unsigned pattern)
 	};
 
 	return PATTERNS[pattern & 31];
+}
+
+/* How bright the colours of a 2D layer are shown: A2BGR10 four times (as
+ * Valkyrie had it; HEURISTIC) */
+inline float
+layer_brightness(const odin_layer_t &layer)
+{
+	return layer.format == ODIN_FORMAT_A2BGR10 ? 4.0f : 1.0f;
+}
+
+/* The picture of a frame composed from the 3D picture and the 2D layers of
+ * unit 0 of the display chip (the unit 1 is probably the second monitor),
+ * from what the 781 and the 181 tell alone: the two inputs of the blender,
+ * each the 3D picture or a layer (PHARRIER blends layer 2 in for its logo
+ * screens, 781 = 0704/0705), and their factor (two 3D buffers were blended
+ * when their list was drawn); a layer shown on its own where it is no
+ * input; what each is multiplied by; the keys, the layers above or below
+ * the 3D, the inputs read upside down (the layers), the colour the empty 3D
+ * lets through. A layer not shown has no part. */
+struct Compose {
+	enum class Source : uint8_t { PICTURE, LAYER_1, LAYER_2 };
+
+	Source front, back;
+	float factor;
+	bool alone[2];
+	float mult_front, mult_back, mult_alone[2];
+	bool keyed[2], keyed_3d, above[2];
+	bool invert_front, invert_back;
+	float clear[4];
+};
+
+inline Compose
+compose_of(const odin_fb_config_t &fb, const odin_layers_t &layers, const bool shown[2])
+{
+	const uint32_t n1 = odin_fb_num_1(&fb), n2 = odin_fb_num_2(&fb);
+	const uint32_t rate = odin_fb_blend(&fb) ? odin_fb_alpha(&fb) : 0;
+	const auto source = [](uint32_t n) {
+		return n < 2 ? Compose::Source::PICTURE : n == 2 ? Compose::Source::LAYER_1 : Compose::Source::LAYER_2;
+	};
+	const float mult[2] = { layer_brightness(layers.layer[0][0]), layer_brightness(layers.layer[0][1]) };
+	/* What an input is multiplied by: its layer's brightness, 1 for the
+	 * 3D or a layer not shown */
+	const auto mult_of = [&](Compose::Source s) {
+		return (s == Compose::Source::LAYER_1 && shown[0]) ? mult[0] :
+		       (s == Compose::Source::LAYER_2 && shown[1]) ? mult[1] : 1.0f;
+	};
+	Compose c;
+
+	c.front = source(n1);
+	c.back = source(n2);
+	c.factor = (n1 < 2 && n2 < 2) ? 0.0f : static_cast<float>(rate) * (1.0f / 255);
+	for (unsigned i = 0; i < 2; i++) {
+		const Compose::Source layer = i == 0 ? Compose::Source::LAYER_1 : Compose::Source::LAYER_2;
+
+		c.alone[i] = shown[i] && c.front != layer && c.back != layer;
+		c.mult_alone[i] = c.alone[i] ? mult[i] : 0.0f;
+		c.keyed[i] = layers.layer[0][i].keyed != 0;
+		c.above[i] = layers.layer[0][i].above != 0;
+	}
+	c.mult_front = mult_of(c.front);
+	c.mult_back = mult_of(c.back);
+	c.keyed_3d = layers.fb_keyed != 0;
+	c.invert_front = n1 >= 2;
+	c.invert_back = n2 >= 2;
+	for (unsigned k = 0; k < 4; k++)
+		c.clear[k] = static_cast<float>(fb.clear[k]) * INV255;
+	return c;
 }
 
 inline PassRules

@@ -68,10 +68,9 @@ Renderer::take_layer(unsigned i)
 }
 
 /* A 2D layer as its texture, bound on the unit 0. The texture is kept and
- * sent again only when the RAM of the layer or its format changed. `mult` is
- * what its colours are multiplied by on the screen. */
+ * sent again only when the RAM of the layer or its format changed. */
 GLuint
-Renderer::upload_layer(unsigned i, float &mult)
+Renderer::upload_layer(unsigned i)
 {
 	const odin_layer_t &layer = m_frame.layers.layer[0][i];
 	const uint8_t *const data = m_layer_ram[i].data();
@@ -84,9 +83,6 @@ Renderer::upload_layer(unsigned i, float &mult)
 
 	if (layer.format != ODIN_FORMAT_ABGR1555 && layer.format != ODIN_FORMAT_A2BGR10)
 		fatal("a layer of a format that is not known");
-	/* A2BGR10 colours are shown four times as bright (as Valkyrie had
-	 * it; HEURISTIC). */
-	mult = (layer.format == ODIN_FORMAT_A2BGR10) ? 4.0f : 1.0f;
 
 	glActiveTexture(GL_TEXTURE0 + 0);
 	if (m_layer_tex[i] == 0) {
