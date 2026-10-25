@@ -163,6 +163,10 @@ public:
 	/* What is left of the action colour on the outline of a control and of
 	 * the tab chosen; full on a button hovered or on */
 	static constexpr float ACTION_LINE = 0.6f;
+	/* The box of a page: the cut of its corners and the room inside it, in
+	 * points */
+	static constexpr float BOX_CUT = 5.0f;
+	static constexpr float BOX_INSIDE = 8.0f;
 
 	MenuKit(const MenuPalette &palette, float scale, MenuFocus *focus = nullptr)
 		: m_palette(palette), m_scale(scale), m_focus(focus)

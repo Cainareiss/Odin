@@ -40,9 +40,9 @@ namespace odin {
 
 namespace {
 
-/* The room of the page, in points: between its rows; the inside of the box
- * of the device; a label column at its widest and narrowest, a label from
- * the next, the room the leader lines keep from the box's edges */
+/* The room of the page, in points: between its rows; a label column at its
+ * widest and narrowest, a label from the next, the room the leader lines
+ * keep from the box's edges */
 constexpr float ROW_GAP = 6.0f;
 /* Start mapping waits so long for each control */
 constexpr uint64_t MAPPING_MS = 6000;
@@ -50,8 +50,6 @@ constexpr uint64_t MAPPING_MS = 6000;
  * device, which takes this share of the width (1.4 to 1) */
 constexpr float WIDE = 1.5f;
 constexpr float PAD_SHARE = 1.4f / 2.4f;
-constexpr float BOX_CUT = 5.0f;
-constexpr float BOX_INSIDE = 8.0f;
 constexpr float COLUMN_MIN = 90.0f;
 constexpr float LABEL_GAP = 19.0f;
 constexpr float LABEL_EDGE = 10.0f;
@@ -1017,7 +1015,7 @@ not_mapped(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows,
 	const MenuPalette &palette = kit.palette();
 	const char *const title = "NOT MAPPED";
 	const float line = ImGui::GetTextLineHeight(), wide = kit.px(9.0f), high = kit.px(2.0f);
-	const float h = line + 2.0f * high, gap = kit.px(6.0f), room = b.x - a.x - 2.0f * kit.px(BOX_INSIDE);
+	const float h = line + 2.0f * high, gap = kit.px(6.0f), room = b.x - a.x - 2.0f * kit.px(MenuKit::BOX_INSIDE);
 	const float tiny = MenuKit::font(MenuKit::TINY), letters = tiny * 0.12f;
 	/* The lines of chips: the title first, then each name */
 	std::vector<std::vector<std::pair<int, float>>> lines(1);
@@ -1040,7 +1038,7 @@ not_mapped(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows,
 	if (!draw)
 		return height;
 
-	float y = b.y - kit.px(BOX_INSIDE) - height + gap;
+	float y = b.y - kit.px(MenuKit::BOX_INSIDE) - height + gap;
 
 	for (const auto &chips : lines) {
 		float total = -gap;
@@ -1147,7 +1145,7 @@ cabinet_box(const MenuKit &kit, const MenuState &state, ImVec2 a, ImVec2 b, bool
 			             "service" : std::string_view(controls[static_cast<size_t>(slot->control)].id);
 	}
 
-	float top = a.y + kit.px(BOX_INSIDE);
+	float top = a.y + kit.px(MenuKit::BOX_INSIDE);
 
 	if (framed) {
 		const std::string &title = state.games[state.shown].second;
@@ -1155,7 +1153,7 @@ cabinet_box(const MenuKit &kit, const MenuState &state, ImVec2 a, ImVec2 b, bool
 
 		const float tiny = MenuKit::font(MenuKit::TINY), small = MenuKit::font(MenuKit::SMALL);
 
-		kit.frame(list, a, b, kit.px(BOX_CUT), 0, palette.line);
+		kit.frame(list, a, b, kit.px(MenuKit::BOX_CUT), 0, palette.line);
 		MenuKit::write(list, { a.x + pad, a.y + kit.px(6.0f) + small - tiny }, palette.cabinet, "THE CABINET", tiny,
 		               tiny * 0.14f);
 		MenuKit::write(list, { b.x - pad - MenuKit::measure(title.c_str(), small), a.y + kit.px(6.0f) }, palette.dim,
@@ -1331,7 +1329,7 @@ pad_box(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, Im
 	const PadDrawing &drawing = pad_drawing(kind);
 	Sorted sorted = sort_rows(state, rows, drawing, kind);
 	const float tray = not_mapped(kit, state, rows, sorted.empty, a, b, false);
-	const float column = column_width(kit, sorted.labels, b.x - a.x), inside = kit.px(BOX_INSIDE);
+	const float column = column_width(kit, sorted.labels, b.x - a.x), inside = kit.px(MenuKit::BOX_INSIDE);
 	const float bottom = b.y - kit.px(LABEL_EDGE) - tray;
 	const PadView view(drawing, { a.x + column, a.y + inside }, { b.x - column, b.y - inside - tray });
 	std::vector<std::pair<ImVec2, ImVec2>> parts;
@@ -1409,8 +1407,8 @@ keyboard_box(const MenuKit &kit, MenuState &state, std::span<const InputRow> row
 	const MenuPalette &palette = kit.palette();
 	/* The drawing of the mock-up, in its units: 640 by 220 from (0, 96) */
 	constexpr float W = 640.0f, H = 220.0f, TOP = 96.0f, U = 28.0f, X0 = 14.0f, Y0 = 130.0f, GAP = 3.0f;
-	const ImVec2 lo = { a.x + kit.px(BOX_INSIDE), a.y + corner + kit.px(BOX_INSIDE) };
-	const ImVec2 hi = { b.x - kit.px(BOX_INSIDE), b.y - kit.px(BOX_INSIDE) };
+	const ImVec2 lo = { a.x + kit.px(MenuKit::BOX_INSIDE), a.y + corner + kit.px(MenuKit::BOX_INSIDE) };
+	const ImVec2 hi = { b.x - kit.px(MenuKit::BOX_INSIDE), b.y - kit.px(MenuKit::BOX_INSIDE) };
 	const float k = std::max(0.0f, std::min((hi.x - lo.x) / W, (hi.y - lo.y) / H));
 	const ImVec2 o = { (lo.x + hi.x - W * k) / 2.0f, (lo.y + hi.y - H * k) / 2.0f - TOP * k };
 	const auto at = [&](float x, float y) { return ImVec2{ o.x + x * k, o.y + y * k }; };
@@ -1542,8 +1540,8 @@ list_box(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, I
 	const std::vector<Group> all = groups(state, rows);
 	const float line = ImGui::GetTextLineHeight(), gap = kit.px(28.0f), wide = kit.px(8.0f), high = kit.px(2.0f);
 	const float apart = kit.px(8.0f);
-	ImVec2 lo = { a.x + kit.px(14.0f), a.y + kit.px(BOX_INSIDE) + corner };
-	const ImVec2 hi = { b.x - kit.px(14.0f), b.y - kit.px(BOX_INSIDE) };
+	ImVec2 lo = { a.x + kit.px(14.0f), a.y + kit.px(MenuKit::BOX_INSIDE) + corner };
+	const ImVec2 hi = { b.x - kit.px(14.0f), b.y - kit.px(MenuKit::BOX_INSIDE) };
 	const size_t half = (all.size() + 1) / 2;
 	/* As high as the room leaves them, at most as in the mock-up; when
 	 * they do not fit, the list scrolls, its bar beside the columns */
@@ -1729,8 +1727,8 @@ advanced_box(const MenuKit &kit, MenuState &state, ImVec2 a, ImVec2 b)
 	ImDrawList *const list = ImGui::GetWindowDrawList();
 	const MenuPalette &palette = kit.palette();
 	const float line = ImGui::GetTextLineHeight(), note = MenuKit::font(MenuKit::NOTE), apart = kit.px(16.0f);
-	const ImVec2 lo = { a.x + kit.px(14.0f), a.y + kit.px(BOX_INSIDE) };
-	const ImVec2 hi = { b.x - kit.px(14.0f), b.y - kit.px(BOX_INSIDE) };
+	const ImVec2 lo = { a.x + kit.px(14.0f), a.y + kit.px(MenuKit::BOX_INSIDE) };
+	const ImVec2 hi = { b.x - kit.px(14.0f), b.y - kit.px(MenuKit::BOX_INSIDE) };
 	const ImVec2 close = kit.button_size("Close", Icon::CLEAR);
 	const std::string title = "Advanced options · Controller · " +
 	                          std::string(pad_drawing_name(state.pad_types[state.player & 1])) +
@@ -1867,7 +1865,7 @@ Menu::page_input(MenuKit &kit, MenuState &state) const
 	const ImVec2 classic_size = kit.button_size("Classic", Icon::LIST), swap_size = kit.button_size(swap, Icon::SWAP);
 	const float corner = classic || !wide ? std::max(classic_size.y, swap_size.y) + kit.px(5.0f) : 0.0f;
 
-	kit.frame(ImGui::GetWindowDrawList(), a, b, kit.px(BOX_CUT), 0, palette.line);
+	kit.frame(ImGui::GetWindowDrawList(), a, b, kit.px(MenuKit::BOX_CUT), 0, palette.line);
 	if (cabinet)
 		cabinet_box(kit, state, a, b, false);
 	else if (options)

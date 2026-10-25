@@ -40,13 +40,11 @@ namespace odin {
 namespace {
 
 /* A page in two: what it shows in a box at the left, its settings at the
- * right, as 1 to 1.15 (mock-up v50); the room between them, below the row
- * of the games, the cut of the corners of the box and the room inside */
+ * right, as 1 to 1.15 (mock-up v50); the room between them and below the
+ * row of the games */
 constexpr float LEFT_SHARE = 1.0f / 2.15f;
 constexpr float SPLIT_GAP = 10.0f;
 constexpr float ROW_GAP = 6.0f;
-constexpr float BOX_CUT = 5.0f;
-constexpr float BOX_INSIDE = 8.0f;
 
 /* An output: its width at the least, the side of its icon, the room in it
  * and between two (mock-up v50) */
@@ -66,7 +64,7 @@ left_box(const MenuKit &kit, ImVec2 top, ImVec2 room)
 {
 	const Box box = { top, { top.x + (room.x - kit.px(SPLIT_GAP)) * LEFT_SHARE, top.y + room.y } };
 
-	kit.frame(ImGui::GetWindowDrawList(), box.a, box.b, kit.px(BOX_CUT), 0, kit.palette().line);
+	kit.frame(ImGui::GetWindowDrawList(), box.a, box.b, kit.px(MenuKit::BOX_CUT), 0, kit.palette().line);
 	return box;
 }
 
@@ -126,7 +124,7 @@ template <typename Draw>
 void
 in_box(const MenuKit &kit, const Box &box, float high, Draw draw)
 {
-	const float inside = kit.px(BOX_INSIDE);
+	const float inside = kit.px(MenuKit::BOX_INSIDE);
 	const ImVec2 a = { box.a.x + 1.0f, box.a.y + 1.0f }, size = { box.b.x - box.a.x - 2.0f, box.b.y - box.a.y - 2.0f };
 
 	if (high <= size.y - 2.0f * inside) {
@@ -168,7 +166,7 @@ void
 output_tiles(const MenuKit &kit, const MenuState &state, const Box &box)
 {
 	const MenuPalette &palette = kit.palette();
-	const float inside = kit.px(BOX_INSIDE), gap = kit.px(TILE_GAP), pad = kit.px(TILE_PAD), side = kit.px(TILE_ICON);
+	const float inside = kit.px(MenuKit::BOX_INSIDE), gap = kit.px(TILE_GAP), pad = kit.px(TILE_PAD), side = kit.px(TILE_ICON);
 	const float width = box.b.x - box.a.x - 2.0f * inside, size = MenuKit::font(MenuKit::TINY);
 	const float small = MenuKit::font(MenuKit::SMALL);
 	const size_t columns = std::max<size_t>(1, static_cast<size_t>((width + gap) / (kit.px(TILE_LEAST) + gap)));
@@ -192,7 +190,7 @@ output_tiles(const MenuKit &kit, const MenuState &state, const Box &box)
 			const MenuState::Output &output = state.outputs[i];
 			const ImVec2 a = { box.a.x + inside + static_cast<float>(i % columns) * (tile_w + gap),
 			                   top + static_cast<float>(i / columns) * (tile_h + gap) };
-			kit.frame(list, a, { a.x + tile_w, a.y + tile_h }, kit.px(BOX_CUT), output.on ? palette.hover : 0,
+			kit.frame(list, a, { a.x + tile_w, a.y + tile_h }, kit.px(MenuKit::BOX_CUT), output.on ? palette.hover : 0,
 			               output.on ? palette.accent : palette.line);
 			MenuKit::icon(list, icon_of(output.role), { a.x + (tile_w - side) / 2.0f, a.y + pad }, side,
 			              output.on ? palette.accent : palette.stroke);
@@ -233,7 +231,7 @@ link_tiles(const MenuKit &kit, const MenuState &state, const Box &box, bool on)
 {
 	const MenuPalette &palette = kit.palette();
 	const unsigned count = state.link_shown_cabinets;
-	const float inside = kit.px(BOX_INSIDE), gap = kit.px(TILE_GAP), pad = kit.px(TILE_PAD);
+	const float inside = kit.px(MenuKit::BOX_INSIDE), gap = kit.px(TILE_GAP), pad = kit.px(TILE_PAD);
 	const float width = box.b.x - box.a.x - 2.0f * inside, size = MenuKit::font(MenuKit::SMALL);
 	const float tiny = MenuKit::font(MenuKit::TINY);
 
@@ -274,7 +272,7 @@ link_tiles(const MenuKit &kit, const MenuState &state, const Box &box, bool on)
 				seat += " · seat " + std::string(1, static_cast<char>('A' + n - 1));
 			else if (state.link_shown_seat == MenuState::SEAT_NUMBER)
 				seat += " · seat " + std::to_string(n);
-			kit.frame(list, a, { a.x + tile_w, a.y + tile_h }, kit.px(BOX_CUT), mine ? palette.hover : 0,
+			kit.frame(list, a, { a.x + tile_w, a.y + tile_h }, kit.px(MenuKit::BOX_CUT), mine ? palette.hover : 0,
 			          mine ? palette.action : palette.line);
 			centred({ a.x + pad, a.y + pad }, tile_w - 2.0f * pad, MenuKit::font(1.0f), number.c_str(),
 			        mine ? palette.action : on ? palette.ink : palette.faint);
@@ -458,7 +456,7 @@ route_card(const MenuKit &kit, const MenuState::SoundGame &game, ImVec2 at, floa
 	const std::string title = MenuKit::capitals(game.title);
 	const float small = MenuKit::font(MenuKit::SMALL);
 
-	kit.frame(list, at, { at.x + width, at.y + h }, kit.px(BOX_CUT), 0, palette.line);
+	kit.frame(list, at, { at.x + width, at.y + h }, kit.px(MenuKit::BOX_CUT), 0, palette.line);
 	MenuKit::write(list, { at.x + pad, at.y + pad + line - small }, palette.dim, title.c_str(), small, small * 0.12f);
 	route_box(kit, p(4, 6), p(144, 48), "Main board", "Main", boards.main, true);
 	route_box(kit, p(4, 62), p(144, 104), "Optional board", "Optional", boards.option, option);
@@ -480,7 +478,7 @@ route_card(const MenuKit &kit, const MenuState::SoundGame &game, ImVec2 at, floa
 void
 route_cards(const MenuKit &kit, const MenuState &state, const Box &box)
 {
-	const float inside = kit.px(BOX_INSIDE), gap = kit.px(TILE_GAP), size = MenuKit::font(MenuKit::SMALL);
+	const float inside = kit.px(MenuKit::BOX_INSIDE), gap = kit.px(TILE_GAP), size = MenuKit::font(MenuKit::SMALL);
 	const float width = std::min(box.b.x - box.a.x - 2.0f * inside, kit.px(ROUTE_W + 2.0f * CARD_PAD));
 	const float x = (box.a.x + box.b.x - width) / 2.0f;
 	std::string others;
@@ -655,7 +653,7 @@ void
 hotkeys_keyboard(const MenuKit &kit, const MenuState &state, const Box &box, const std::string &guide_name)
 {
 	const MenuPalette &palette = kit.palette();
-	const float inside = kit.px(BOX_INSIDE), gap = kit.px(3.0f), group = kit.px(6.0f), size = MenuKit::font(MenuKit::SMALL);
+	const float inside = kit.px(MenuKit::BOX_INSIDE), gap = kit.px(3.0f), group = kit.px(6.0f), size = MenuKit::font(MenuKit::SMALL);
 	const float width = box.b.x - box.a.x - 2.0f * inside, cap_h = kit.key_size("x").y;
 	std::vector<std::pair<SDL_Keycode, std::string>> others;
 	const auto used = [&](SDL_Keycode key) {
