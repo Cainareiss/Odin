@@ -31,8 +31,6 @@
 #include <filesystem>
 #include <system_error>
 
-#include <GL/glew.h>
-
 #include "odin/bytes.hpp"
 #include "odin/env.hpp"
 #include "odin/hikaru.hpp"
@@ -154,39 +152,18 @@ set_icon(SDL_Window *window)
 	SDL_DestroySurface(icon);
 }
 
-/* The window and its OpenGL 4.3 context, current on the calling thread. */
+/* The window and the card that draws in it (host_graphics.hpp), taken by
+ * the calling thread */
 bool
-open_window(SDL_Window *&window, SDL_GLContext &context)
+open_window(SDL_Window *&window, std::unique_ptr<HostGraphics> &graphics)
 {
-	int num_ms_buffers, num_samples;
-
 	if (!SDL_Init(SDL_INIT_VIDEO)) {
 		std::fprintf(stderr, "ERROR: could not initialize SDL: '%s'\n", SDL_GetError());
 		return false;
 	}
 
-	SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 8);
-	SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 8);
-	SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 8);
-	SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 8);
-	SDL_GL_SetAttribute(SDL_GL_BUFFER_SIZE, 0);
-	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-	SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 0);
-	SDL_GL_SetAttribute(SDL_GL_ACCUM_RED_SIZE, 0);
-	SDL_GL_SetAttribute(SDL_GL_ACCUM_GREEN_SIZE, 0);
-	SDL_GL_SetAttribute(SDL_GL_ACCUM_BLUE_SIZE, 0);
-	SDL_GL_SetAttribute(SDL_GL_ACCUM_ALPHA_SIZE, 0);
-	SDL_GL_SetAttribute(SDL_GL_STEREO, 0);
-	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 0);
-	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 0);
-	SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-
-	window = SDL_CreateWindow("Odin", Renderer::WIDTH, Renderer::HEIGHT, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+	HostGraphics::prepare_gl();
+	window = SDL_CreateWindow("Odin", Renderer::WIDTH, Renderer::HEIGHT, HostGraphics::window_flags_gl() | SDL_WINDOW_RESIZABLE);
 	if (!window) {
 		std::fprintf(stderr, "ERROR: could not create SDL window: '%s'\n", SDL_GetError());
 		return false;
@@ -196,41 +173,8 @@ open_window(SDL_Window *&window, SDL_GLContext &context)
 	set_icon(window);
 	SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
 
-	context = SDL_GL_CreateContext(window);
-	if (!context) {
-		std::fprintf(stderr, "ERROR: could not create GL context: '%s'\n", SDL_GetError());
-		return false;
-	}
-
-	/* The frames are paced by the board alone until set_vsync. */
-	SDL_GL_SetSwapInterval(0);
-
-	/* Under Wayland the context is EGL's: GLEW has the functions of OpenGL
-	 * then, only GLX is missing. */
-	glewExperimental = GL_TRUE;
-	if (const GLenum glew = glewInit(); glew != GLEW_OK && glew != GLEW_ERROR_NO_GLX_DISPLAY) {
-		std::fprintf(stderr, "ERROR: could not initialize glew (%u)\n", glew);
-		return false;
-	}
-
-	glDisable(GL_MULTISAMPLE);
-
-	SDL_GL_GetAttribute(SDL_GL_MULTISAMPLEBUFFERS, &num_ms_buffers);
-	SDL_GL_GetAttribute(SDL_GL_MULTISAMPLESAMPLES, &num_samples);
-
-	std::printf("renderer: GL vendor    = %s\n", glGetString(GL_VENDOR));
-	std::printf("renderer: GL renderer  = %s\n", glGetString(GL_RENDERER));
-	std::printf("renderer: GL version   = %s\n", glGetString(GL_VERSION));
-	std::printf("renderer: GLSL version = %s\n", glGetString(GL_SHADING_LANGUAGE_VERSION));
-	std::printf("renderer: %d samples on %d ms buffers\n", num_samples, num_ms_buffers);
-
-	glViewport(0, 0, Renderer::WIDTH, Renderer::HEIGHT);
-
-	/* What SDL and GLEW left: harmless, and in the way of the errors
-	 * looked for later. */
-	while (glGetError() != GL_NO_ERROR)
-		;
-	return true;
+	graphics = HostGraphics::make_gl(window, Renderer::WIDTH, Renderer::HEIGHT);
+	return graphics != nullptr;
 }
 
 } /* namespace */
@@ -239,15 +183,16 @@ std::unique_ptr<Display>
 Display::make(const Keyboard &keys, const Options &options)
 {
 	SDL_Window *window = nullptr;
-	SDL_GLContext context = nullptr;
+	std::unique_ptr<HostGraphics> graphics;
 
-	if (!open_window(window, context))
+	if (!open_window(window, graphics))
 		return nullptr;
-	return std::unique_ptr<Display>(new Display(keys, options, window, context));
+	return std::unique_ptr<Display>(new Display(keys, options, window, std::move(graphics)));
 }
 
-Display::Display(const Keyboard &keys, const Options &options, SDL_Window *window, SDL_GLContext context)
-	: m_board(nullptr), m_keys(keys), m_window(window), m_context(context), m_menu_shown(false),
+Display::Display(const Keyboard &keys, const Options &options, SDL_Window *window,
+                 std::unique_ptr<HostGraphics> graphics)
+	: m_board(nullptr), m_keys(keys), m_window(window), m_graphics(std::move(graphics)), m_menu_shown(false),
 	  m_show_speed(options.show_speed), m_vsync(options.vsync),
 	  m_wait_on_time(false), m_wait_late(false), m_waits(false),
 	  m_frame(0), m_scale(options.scale), m_anisotropy(options.anisotropy), m_filter(find_filter(options.filter)), m_logged(false),
@@ -259,18 +204,17 @@ Display::Display(const Keyboard &keys, const Options &options, SDL_Window *windo
 	  m_stats(env_flag("ODIN_STATS")), m_draw_ns(0), m_wait_frame_ns(0), m_wait_write_ns(0), m_drawn(0),
 	  m_title_since(0), m_title_frames(0)
 {
-	m_gpu = reinterpret_cast<const char *>(glGetString(GL_RENDERER));
+	m_gpu = m_graphics->name();
 	m_given_w = static_cast<int>(Renderer::WIDTH);
 	m_given_h = static_cast<int>(Renderer::HEIGHT);
 	if (const int every = env_int("ODIN_SCREENSHOT_EVERY", 0); every > 0)
 		m_shot_every = static_cast<unsigned>(every);
 
-	/* The context goes to the drawing thread for good. */
-	m_graphics = HostGraphics::make_gl(m_window);
-	SDL_GL_MakeCurrent(m_window, nullptr);
+	/* The card goes to the drawing thread for good. */
+	m_graphics->leave_thread();
 	m_drawing = std::make_unique<Worker>();
 	m_drawing->run([this] {
-		SDL_GL_MakeCurrent(m_window, m_context);
+		m_graphics->take_thread();
 		m_graphics->set_waits(false);
 	});
 	if (options.window_w && options.window_h)
@@ -393,16 +337,15 @@ Display::~Display()
 	if (m_board)
 		m_board->set_screen(nullptr);
 
-	/* The context comes back: the renderer is destroyed with it. */
-	run([this] { SDL_GL_MakeCurrent(m_window, nullptr); });
+	/* The card comes back: the renderer is destroyed with it. */
+	run([this] { m_graphics->leave_thread(); });
 	m_drawing.reset();
-	SDL_GL_MakeCurrent(m_window, m_context);
+	m_graphics->take_thread();
 	if (m_menu) {
 		m_menu->release();
 		m_menu.reset();
 	}
 	m_renderer.reset();
-	m_graphics.reset();
 
 	if (m_stats)
 		std::fprintf(stderr, "screen: %u frames drawn in %.3f s on their thread; the board waited for them "
@@ -410,7 +353,7 @@ Display::~Display()
 		             static_cast<double>(m_draw_ns) / 1e9, static_cast<double>(m_wait_frame_ns) / 1e9,
 		             static_cast<double>(m_wait_write_ns) / 1e9);
 
-	SDL_GL_DestroyContext(m_context);
+	m_graphics.reset();
 	SDL_DestroyWindow(m_window);
 	SDL_Quit();
 }

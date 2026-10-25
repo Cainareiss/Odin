@@ -208,7 +208,7 @@ public:
 	bool load_pictures(StateFile &state) override;
 
 private:
-	Display(const Keyboard &keys, const Options &options, SDL_Window *window, SDL_GLContext context);
+	Display(const Keyboard &keys, const Options &options, SDL_Window *window, std::unique_ptr<HostGraphics> graphics);
 
 	void set_window(unsigned times, bool fullscreen);
 	void set_window_size(int w, int h, bool fullscreen);
@@ -246,7 +246,6 @@ private:
 	/* Whether Odin asked last for the whole display */
 	bool m_fullscreen_asked = false;
 	std::string m_program_list;
-	SDL_GLContext m_context;
 	/* What it draws with, and the renderer of the board */
 	std::unique_ptr<HostGraphics> m_graphics;
 	std::unique_ptr<Renderer> m_renderer;

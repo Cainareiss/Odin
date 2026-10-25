@@ -23,6 +23,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdio>
 
 #include <GL/glew.h>
 #include <SDL3/SDL.h>
@@ -113,8 +114,15 @@ void main()
 
 class GlGraphics : public HostGraphics {
 public:
-	explicit GlGraphics(SDL_Window *window) : m_window(window) {}
+	GlGraphics(SDL_Window *window, SDL_GLContext context, std::string name)
+		: m_window(window), m_context(context), m_name(std::move(name))
+	{
+	}
 	~GlGraphics() override;
+
+	const std::string &name() const override { return m_name; }
+	void take_thread() override { SDL_GL_MakeCurrent(m_window, m_context); }
+	void leave_thread() override { SDL_GL_MakeCurrent(m_window, nullptr); }
 
 	void clear_window(unsigned window_w, unsigned window_h) override;
 	void show_window() override { SDL_GL_SwapWindow(m_window); }
@@ -144,6 +152,8 @@ private:
 	void blur(GLuint fb, GLenum buffer, unsigned w, unsigned h);
 
 	SDL_Window *m_window;
+	SDL_GLContext m_context;
+	std::string m_name;
 	GLuint m_image_program = 0, m_image_vao = 0;
 	GLint m_image_light = 0;
 	/* The sides blurred: the picture made smaller twice */
@@ -168,6 +178,7 @@ GlGraphics::~GlGraphics()
 	glDeleteProgram(m_blur);
 	glDeleteProgram(m_show);
 	glDeleteVertexArrays(1, &m_vao);
+	SDL_GL_DestroyContext(m_context);
 }
 
 void
@@ -450,10 +461,78 @@ GlGraphics::stop_ui()
 
 } /* namespace */
 
-std::unique_ptr<HostGraphics>
-HostGraphics::make_gl(SDL_Window *window)
+void
+HostGraphics::prepare_gl()
 {
-	return std::make_unique<GlGraphics>(window);
+	SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 8);
+	SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 8);
+	SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 8);
+	SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 8);
+	SDL_GL_SetAttribute(SDL_GL_BUFFER_SIZE, 0);
+	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+	SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 0);
+	SDL_GL_SetAttribute(SDL_GL_ACCUM_RED_SIZE, 0);
+	SDL_GL_SetAttribute(SDL_GL_ACCUM_GREEN_SIZE, 0);
+	SDL_GL_SetAttribute(SDL_GL_ACCUM_BLUE_SIZE, 0);
+	SDL_GL_SetAttribute(SDL_GL_ACCUM_ALPHA_SIZE, 0);
+	SDL_GL_SetAttribute(SDL_GL_STEREO, 0);
+	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 0);
+	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 0);
+	SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+}
+
+uint64_t
+HostGraphics::window_flags_gl()
+{
+	return SDL_WINDOW_OPENGL;
+}
+
+/* An OpenGL 4.3 context */
+std::unique_ptr<HostGraphics>
+HostGraphics::make_gl(SDL_Window *window, unsigned window_w, unsigned window_h)
+{
+	int num_ms_buffers, num_samples;
+	SDL_GLContext context = SDL_GL_CreateContext(window);
+
+	if (!context) {
+		std::fprintf(stderr, "ERROR: could not create GL context: '%s'\n", SDL_GetError());
+		return nullptr;
+	}
+
+	/* The frames are paced by the board alone until set_vsync. */
+	SDL_GL_SetSwapInterval(0);
+
+	/* Under Wayland the context is EGL's: GLEW has the functions of OpenGL
+	 * then, only GLX is missing. */
+	glewExperimental = GL_TRUE;
+	if (const GLenum glew = glewInit(); glew != GLEW_OK && glew != GLEW_ERROR_NO_GLX_DISPLAY) {
+		std::fprintf(stderr, "ERROR: could not initialize glew (%u)\n", glew);
+		return nullptr;
+	}
+
+	glDisable(GL_MULTISAMPLE);
+
+	SDL_GL_GetAttribute(SDL_GL_MULTISAMPLEBUFFERS, &num_ms_buffers);
+	SDL_GL_GetAttribute(SDL_GL_MULTISAMPLESAMPLES, &num_samples);
+
+	std::printf("renderer: GL vendor    = %s\n", glGetString(GL_VENDOR));
+	std::printf("renderer: GL renderer  = %s\n", glGetString(GL_RENDERER));
+	std::printf("renderer: GL version   = %s\n", glGetString(GL_VERSION));
+	std::printf("renderer: GLSL version = %s\n", glGetString(GL_SHADING_LANGUAGE_VERSION));
+	std::printf("renderer: %d samples on %d ms buffers\n", num_samples, num_ms_buffers);
+
+	glViewport(0, 0, static_cast<GLsizei>(window_w), static_cast<GLsizei>(window_h));
+
+	/* What SDL and GLEW left: harmless, and in the way of the errors
+	 * looked for later. */
+	while (glGetError() != GL_NO_ERROR)
+		;
+	return std::make_unique<GlGraphics>(window, context, reinterpret_cast<const char *>(glGetString(GL_RENDERER)));
 }
 
 } /* namespace odin */

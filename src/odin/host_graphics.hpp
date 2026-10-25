@@ -21,6 +21,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <string>
 
 #include "odin/picture.hpp"
 
@@ -52,13 +53,23 @@ struct HostImage {
  * board are still drawn by the renderer itself (renderer.hpp), which hands
  * its picture over as a HostPicture.
  *
- * Everything runs on the drawing thread (display.hpp) but make and the
- * destructor, with the context current where they run. */
+ * Everything runs on the thread that has taken the card, the drawing
+ * thread (display.hpp), but making it, which takes it, and destroying it. */
 class HostGraphics {
 public:
-	/* The one of OpenGL, for the window whose context is current */
-	static std::unique_ptr<HostGraphics> make_gl(SDL_Window *window);
+	/* OpenGL: what SDL must be told before the window is made, the flags
+	 * of the window; then the card for that window, made that size,
+	 * taken by the calling thread, or nothing, with the reason on stderr */
+	static void prepare_gl();
+	static uint64_t window_flags_gl();
+	static std::unique_ptr<HostGraphics> make_gl(SDL_Window *window, unsigned window_w, unsigned window_h);
 	virtual ~HostGraphics() = default;
+
+	/* The name of the card */
+	virtual const std::string &name() const = 0;
+	/* The calling thread takes the card, or lets it go for another */
+	virtual void take_thread() = 0;
+	virtual void leave_thread() = 0;
 
 	/* The window: all black; shown; waiting for the display or not from
 	 * the next one on (false: the display cannot be waited for) */
