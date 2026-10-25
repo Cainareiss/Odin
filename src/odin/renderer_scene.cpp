@@ -32,7 +32,6 @@ namespace odin {
 
 namespace {
 
-constexpr float INV255 = 1.0f / 255.0f;
 constexpr uint32_t NONE = ~0u;
 
 LightAttenuation
@@ -189,17 +188,11 @@ Renderer::upload_viewport(const odin_mesh_t &mesh)
 {
 	const odin_viewport_t &vp = m_list->vp_list[mesh.vp_index];
 	const MeshProgram::Locations &locs = m_program->locs;
-	/* The projection plane is clip.f pixels away on the screen for x and
-	 * clip.f2 pixels away for y. */
-	const float kx = vp.clip.n / vp.clip.f;
-	const float ky = vp.clip.n / vp.clip.f2;
 	float projection[4][4];
 
-	/* The clip window is cut by the scissor, whatever the program: whole
-	 * pixels of the screen of the hardware. A view turned over by a
-	 * distance below 0 shows the faces it would show the right way: the
-	 * rear-view mirror of SGNASCAR is such a view, its meshes wound as
-	 * ahead and nothing else told (021). */
+	/* The clip window and the winding of the view (view_turned_over,
+	 * hikaru_draw.hpp), whatever the program; OpenGL counts the lines from
+	 * the bottom. */
 	if (m_scissor_vp_index != mesh.vp_index) {
 		const GLint n = static_cast<GLint>(m_scale);
 
@@ -208,7 +201,7 @@ Renderer::upload_viewport(const odin_mesh_t &mesh)
 		          (static_cast<GLint>(HEIGHT) - static_cast<GLint>(vp.clip.t)) * n,
 		          static_cast<GLsizei>(vp.clip.r - vp.clip.l) * n,
 		          static_cast<GLsizei>(vp.clip.t - vp.clip.b) * n);
-		glFrontFace(kx * ky < 0.0f ? GL_CW : GL_CCW);
+		glFrontFace(view_turned_over(vp) ? GL_CW : GL_CCW);
 	}
 
 	if (m_program->held.vp_index == mesh.vp_index)
@@ -231,7 +224,13 @@ Renderer::upload_viewport(const odin_mesh_t &mesh)
 	 * sit 40 lines below the middle and stop under their banner; the
 	 * letterboxed robots of von4 fill the lines 39 to 360, as on the
 	 * cabinets. The BOOTROM menu has its centre on the top left corner
-	 * of the screen. The far plane is put at 1e5 (HEURISTIC). */
+	 * of the screen. The far plane is put at 1e5 (HEURISTIC). The
+	 * projection plane is clip.f pixels away on the screen for x and
+	 * clip.f2 pixels away for y. Worked out here, with the matrix: moved
+	 * elsewhere, the compiler fuses its products and sums otherwise and
+	 * the last bits of the picture change (MARKDOWN/105). */
+	const float kx = vp.clip.n / vp.clip.f;
+	const float ky = vp.clip.n / vp.clip.f2;
 	gl::frustum(projection,
 	            (0.0f - vp.offset.x) * kx,
 	            (static_cast<float>(WIDTH) - vp.offset.x) * kx,
@@ -240,29 +239,19 @@ Renderer::upload_viewport(const odin_mesh_t &mesh)
 	            vp.clip.n, 1e5f);
 	glUniformMatrix4fv(locs.projection, 1, GL_FALSE, &projection[0][0]);
 
-	if (m_variant.has_cue) {
-		/* 621 words without a colour: P = 1 / (end - start),
-		 * Q = near / start (PHARRIER library 0C015A3E). */
-		const float cue[2] = { vp.clip.n / vp.depth.near_by_edge, vp.depth.inv_range };
+	/* The depth queue and the fog of the view (hikaru_draw.hpp) */
 
+	if (m_variant.has_cue) {
+		float cue[2];
+
+		view_cue(vp, cue);
 		glUniform2fv(locs.fog, 1, cue);
 	}
 
 	if (m_variant.has_fog) {
-		/* 621 words: P = 1 / (end - start), Q = near / end (von4
-		 * library 0C716320); the port fogs linearly from start to end. */
-		const float p = vp.depth.inv_range, q = vp.depth.near_by_edge;
-		float fog[2] = { 0.0f, 0.0f };
-		const float fog_color[3] = {
-			static_cast<float>(vp.depth.mask[0]) * INV255,
-			static_cast<float>(vp.depth.mask[1]) * INV255,
-			static_cast<float>(vp.depth.mask[2]) * INV255
-		};
+		float fog[2], fog_color[3];
 
-		if (p > 0.0f && q > 0.0f) {
-			fog[0] = vp.clip.n / q - 1.0f / p;
-			fog[1] = p;
-		}
+		view_fog(vp, fog, fog_color);
 		glUniform2fv(locs.fog, 1, fog);
 		glUniform3fv(locs.fog_color, 1, fog_color);
 	}
@@ -376,12 +365,8 @@ Renderer::upload_lightset(const odin_mesh_t &mesh)
 		log("lightset [%u] mask=%X = %s", mesh.ls_index, odin_lightset_mask(&ls),
 		    odin_lightset_str(&ls));
 
-	if (!m_debug[DEBUG_NO_AMBIENT] && mesh.vp_index != NONE) {
-		const odin_viewport_t &vp = m_list->vp_list[mesh.vp_index];
-
-		for (unsigned c = 0; c < 3; c++)
-			color[c] = static_cast<float>(vp.color.ambient[c]) * INV255;
-	}
+	if (!m_debug[DEBUG_NO_AMBIENT] && mesh.vp_index != NONE)
+		view_ambient(m_list->vp_list[mesh.vp_index], color);
 	glUniform3fv(locs.ambient, 1, color);
 
 	for (unsigned i = 0; i < 4; i++) {
@@ -396,17 +381,15 @@ Renderer::upload_lightset(const odin_mesh_t &mesh)
 		glUniform3fv(at.position, 1, light.position);
 		glUniform3fv(at.direction, 1, light.direction);
 
-		for (unsigned c = 0; c < 3; c++)
-			color[c] = m_debug[DEBUG_NO_DIFFUSE] ? 0.0f :
-			           static_cast<float>(light.diffuse[c]) * INV255;
+		light_colour(light, color);
+		if (m_debug[DEBUG_NO_DIFFUSE])
+			color[0] = color[1] = color[2] = 0.0f;
 		glUniform3fv(at.color, 1, color);
-		glUniform1f(at.ambient, static_cast<float>(odin_light_ambient(&light)) * (1.0f / 16.0f));
+		glUniform1f(at.ambient, light_ambient(light));
 		glUniform2fv(at.extents, 1, light.attenuation);
 		glUniform3fv(at.spot, 1, light.spot);
 		glUniform2fv(at.cone, 1, cone);
-		/* The points of the table: 0x400 is 1.0 */
-		for (unsigned j = 0; j < 16; j++)
-			table[j] = static_cast<float>(m_list->ls_tables[mesh.ls_index][i][j]) * (1.0f / 1024.0f);
+		light_table(m_list->ls_tables[mesh.ls_index][i], table);
 		glUniform1fv(at.table, 16, table);
 	}
 }
@@ -426,15 +409,6 @@ Renderer::draw_instance(const odin_mesh_t &mesh, unsigned i)
 void
 Renderer::draw_mesh(const odin_mesh_t &mesh)
 {
-	/* The 32 patterns of the X360 port (823000D0), a bit a pixel, bit 0
-	 * at the top left. */
-	static const uint16_t patterns[32] = {
-		0xFFFF, 0xFBFE, 0xFAFA, 0x7ADA, 0x5A5A, 0x5258, 0x5050, 0x1040,
-		0x0000, 0x0401, 0x0505, 0x8525, 0xA5A5, 0xADA7, 0xAFAF, 0xEFBF,
-		0xFFFF, 0xFDF7, 0xF5F5, 0xE5B5, 0xA5A5, 0xA4A1, 0xA0A0, 0x8020,
-		0x0000, 0x0208, 0x0A0A, 0x1A4A, 0x5A5A, 0x5B5E, 0x5F5F, 0x7FDF,
-	};
-
 	if (logging())
 		log_mesh(mesh);
 
@@ -453,7 +427,7 @@ Renderer::draw_mesh(const odin_mesh_t &mesh)
 	}
 	if (m_variant.has_pattern && held.pattern != mesh.pattern) {
 		held.pattern = mesh.pattern;
-		glUniform1ui(locs.pattern, patterns[mesh.pattern]);
+		glUniform1ui(locs.pattern, pattern_bits(mesh.pattern));
 	}
 	if (held.alpha_ref != m_pass.alpha_ref) {
 		held.alpha_ref = m_pass.alpha_ref;

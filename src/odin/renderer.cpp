@@ -32,12 +32,6 @@
 
 namespace odin {
 
-namespace {
-
-constexpr float INV255 = 1.0f / 255.0f;
-
-} /* namespace */
-
 Renderer::Renderer(const Memory &memory, const Options &options)
 	: m_gpu(nullptr), m_fb(memory.fb), m_options(options), m_building(nullptr), m_list(nullptr),
 	  m_frame{}, m_textures(memory.texram), m_times(options.times), m_mesh_vao(0), m_mesh_vbo(0), m_mesh_ibo(0),

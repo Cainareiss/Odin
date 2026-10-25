@@ -73,8 +73,8 @@ class HikaruGpu;
 class Renderer {
 public:
 	/* The screen of the hardware, in pixels */
-	static constexpr unsigned WIDTH = 640;
-	static constexpr unsigned HEIGHT = 480;
+	static constexpr unsigned WIDTH = SCREEN_WIDTH;
+	static constexpr unsigned HEIGHT = SCREEN_HEIGHT;
 
 	/* The memories of the board the renderer reads */
 	struct Memory {

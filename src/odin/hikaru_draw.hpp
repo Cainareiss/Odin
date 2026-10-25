@@ -30,6 +30,11 @@
 
 namespace odin {
 
+/* The screen of the hardware, in pixels; a byte of a colour of the board
+ * as a share */
+inline constexpr unsigned SCREEN_WIDTH = 640, SCREEN_HEIGHT = 480;
+inline constexpr float INV255 = 1.0f / 255.0f;
+
 /* How a texture is read, as its texhead says: along u and v, its filter,
  * the level moved */
 struct TextureSampling {
@@ -115,6 +120,87 @@ struct PassRules {
 	float alpha_ref;	/* fragments at or below it are dropped; -1: none */
 	bool material_blend;	/* else REPLACE, or FADED by the depth queue */
 };
+
+/* A view of a list (021, 621, 011 words; odin_viewport_t). Its clip window
+ * is cut by the scissor, whole pixels of the screen of the hardware. A view
+ * turned over by a distance below 0 shows the faces it would show the
+ * right way: the rear-view mirror of SGNASCAR is such a view, its meshes
+ * wound as ahead and nothing else told (021). */
+inline bool
+view_turned_over(const odin_viewport_t &vp)
+{
+	return (vp.clip.n / vp.clip.f) * (vp.clip.n / vp.clip.f2) < 0.0f;
+}
+
+/* The depth queue of a view, 621 words without a colour: P = 1 / (end -
+ * start), Q = near / start (PHARRIER library 0C015A3E) */
+inline void
+view_cue(const odin_viewport_t &vp, float out[2])
+{
+	out[0] = vp.clip.n / vp.depth.near_by_edge;
+	out[1] = vp.depth.inv_range;
+}
+
+/* Its fog, 621 words: P = 1 / (end - start), Q = near / end (von4 library
+ * 0C716320); the port fogs linearly from start to end. Its colour. */
+inline void
+view_fog(const odin_viewport_t &vp, float fog[2], float colour[3])
+{
+	const float p = vp.depth.inv_range, q = vp.depth.near_by_edge;
+
+	fog[0] = fog[1] = 0.0f;
+	if (p > 0.0f && q > 0.0f) {
+		fog[0] = vp.clip.n / q - 1.0f / p;
+		fog[1] = p;
+	}
+	for (unsigned c = 0; c < 3; c++)
+		colour[c] = static_cast<float>(vp.depth.mask[c]) * INV255;
+}
+
+/* The ambient light of a view (011) */
+inline void
+view_ambient(const odin_viewport_t &vp, float out[3])
+{
+	for (unsigned c = 0; c < 3; c++)
+		out[c] = static_cast<float>(vp.color.ambient[c]) * INV255;
+}
+
+/* A light of a lightset as the shader takes it: its colour (051), its
+ * ambient part in sixteenths, the points of its table, 0x400 is 1.0 */
+inline void
+light_colour(const odin_light_t &light, float out[3])
+{
+	for (unsigned c = 0; c < 3; c++)
+		out[c] = static_cast<float>(light.diffuse[c]) * INV255;
+}
+
+inline float
+light_ambient(const odin_light_t &light)
+{
+	return static_cast<float>(odin_light_ambient(&light)) * (1.0f / 16.0f);
+}
+
+inline void
+light_table(const uint16_t points[16], float out[16])
+{
+	for (unsigned j = 0; j < 16; j++)
+		out[j] = static_cast<float>(points[j]) * (1.0f / 1024.0f);
+}
+
+/* The 32 patterns of the X360 port (823000D0) a mesh may be drawn with
+ * (501), a bit a pixel, bit 0 at the top left */
+inline uint16_t
+pattern_bits(unsigned pattern)
+{
+	constexpr uint16_t PATTERNS[32] = {
+		0xFFFF, 0xFBFE, 0xFAFA, 0x7ADA, 0x5A5A, 0x5258, 0x5050, 0x1040,
+		0x0000, 0x0401, 0x0505, 0x8525, 0xA5A5, 0xADA7, 0xAFAF, 0xEFBF,
+		0xFFFF, 0xFDF7, 0xF5F5, 0xE5B5, 0xA5A5, 0xA4A1, 0xA0A0, 0x8020,
+		0x0000, 0x0208, 0x0A0A, 0x1A4A, 0x5A5A, 0x5B5E, 0x5F5F, 0x7FDF,
+	};
+
+	return PATTERNS[pattern & 31];
+}
 
 inline PassRules
 pass_rules(unsigned polytype)
