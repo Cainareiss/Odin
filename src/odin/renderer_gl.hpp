@@ -22,8 +22,9 @@
 #ifndef ODIN_RENDERER_GL_HPP
 #define ODIN_RENDERER_GL_HPP
 
-/* What the renderer needs around OpenGL: a program from its two texts, a
- * check after a stage, and the projection it computes for the shaders. */
+/* What the renderer and the board drawing need around OpenGL: a program
+ * from its two texts, a check after a stage, textures and framebuffers to
+ * draw in, and the projection it computes for the shaders. */
 
 #include <GL/glew.h>
 
@@ -37,6 +38,13 @@ GLuint compile_program(const char *vertex, const char *fragment, bool retrievabl
 GLint uniform(GLuint program, const char *name);
 /* Aborts if OpenGL has an error to tell; `stage` names where. */
 void check(const char *stage);
+/* Says what went wrong on stderr and aborts. */
+[[noreturn]] void fatal(const char *what);
+
+/* A texture of one level read pixel for pixel; a framebuffer that draws
+ * to a texture. Each is left bound. */
+GLuint new_texture(GLenum format, unsigned w, unsigned h);
+GLuint new_framebuffer(GLuint color);
 
 /* The perspective projection of the box l..r by b..t at the distance n. */
 void frustum(float out[4][4], float l, float r, float b, float t, float n, float f);

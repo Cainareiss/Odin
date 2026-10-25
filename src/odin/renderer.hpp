@@ -25,6 +25,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <span>
 #include <string>
 #include <string_view>
@@ -37,7 +38,6 @@
 #include "odin/eurasia_layers.hpp"
 #include "odin/hikaru_draw.hpp"
 #include "odin/host_graphics.hpp"
-#include "odin/picture_filter.hpp"
 #include "odin/picture.hpp"
 #include "odin/renderer_programs.hpp"
 #include "odin/renderer_textures.hpp"
@@ -130,7 +130,7 @@ public:
 	/* The picture through the filter of that preset (picture_filter.hpp)
 	 * into the window; none with an empty path, or when it does not
 	 * build (said once on stderr). Built when the path changes. */
-	void set_filter(const std::string &preset);
+	void set_filter(const std::string &preset) { m_card->set_filter(preset); }
 
 	/* A display list was launched. */
 	void launch() { m_launched = 1; }
@@ -168,12 +168,11 @@ public:
 	 * (the board waits) */
 	void show_again(unsigned window_w, unsigned window_h, const PictureHole &hole)
 	{
-		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-		present(window_w, window_h, hole);
+		m_card->present(picture_rect(window_w, window_h, hole), window_w, window_h);
 	}
 
 	/* The picture of the last frame, whatever the size of the window */
-	HostPicture frame_picture() const { return { m_frame_fb, width(), height() }; }
+	HostPicture frame_picture() const { return m_card->frame_picture(); }
 
 	/* The debug switches as text, for the title of the window; empty
 	 * without the debug keys. */
@@ -186,7 +185,7 @@ public:
 	 * the hardware whatever the scale: one pixel of each scale x scale is
 	 * saved, and comes back as all of them. The textures are decoded
 	 * again from the texture RAM. */
-	static constexpr unsigned PICTURES = 5;
+	static constexpr unsigned PICTURES = BoardDrawing::KEPT;
 	static constexpr size_t PICTURE_SIZE = size_t{WIDTH} * HEIGHT * 4;
 	struct Counters {
 		uint32_t num_lists;
@@ -251,31 +250,16 @@ private:
 	};
 
 	/* renderer.cpp */
-	void build_blender();
-	void build_quad();
-	void build_compose();
-	void build_presenter();
 	void forget_held();
-	void set_2d_state();
 	void show();
 	void draw_list();
 	void check_last_list();
 	bool too_many(Last &last);
 	void draw_again(const Last &last);
-	void keep_picture(const Last &last);
 	void compose();
-	void present(unsigned window_w, unsigned window_h, const PictureHole &hole);
-
-	/* renderer_buffers.cpp */
+	/* The size of the buffers the lists are drawn in */
 	unsigned width() const { return WIDTH * m_scale; }
 	unsigned height() const { return HEIGHT * m_scale; }
-	void build_buffers();
-	void destroy_buffers(bool pictures_too);
-	static GLuint new_buffer_texture(GLenum format, unsigned w, unsigned h);
-	static GLuint new_framebuffer(GLuint color);
-	GLuint &picture(unsigned i) { return (i < 2) ? m_buffers[i] : m_pipe[i - 2]; }
-	void copy_picture(GLuint from, unsigned from_w, unsigned from_h,
-	                  GLuint to, unsigned to_w, unsigned to_h);
 
 	/* renderer_scene.cpp */
 	void draw_scene();
@@ -297,6 +281,8 @@ private:
 	std::vector<HostTexture> &tex_ids();
 
 	/* renderer_translucent.cpp */
+	void build_list_pictures();
+	void destroy_list_pictures();
 	void build_lists();
 	void destroy_lists();
 	void size_lists(uint32_t max);
@@ -307,7 +293,7 @@ private:
 	/* renderer_layers.cpp */
 	bool shows_layer(unsigned i) const;
 	void take_layer(unsigned i);
-	GLuint upload_layer(unsigned i);
+	void send_layer(unsigned i);
 
 	/* renderer_debug.cpp */
 	void init_debug();
@@ -354,60 +340,25 @@ private:
 	bool m_again;
 
 	/* How many times finer than the screen of the hardware the buffers
-	 * below are */
+	 * are */
 	unsigned m_scale;
-	/* The filter of the picture, its preset, the frames it has drawn */
-	std::unique_ptr<PictureFilter> m_filter;
-	std::string m_filter_preset;
-	unsigned m_filter_frames = 0;
-	/* Where a list is drawn: a colour buffer and a depth buffer */
-	GLuint m_scene_fb, m_scene_color, m_scene_depth;
 	/* The depth the polygon types other than the translucent left */
 	GLuint m_solid_depth;
-	/* The two 3D buffers of the hardware: the picture last blended into
-	 * each */
-	GLuint m_buffers[2];
-	/* The pictures of the last three lists, see show */
-	GLuint m_pipe[3], m_pipe_fb[3];
+	/* The pictures of the last three lists, in the pipe of m_card: see
+	 * show */
 	uint32_t m_num_lists;		/* lists drawn so far */
 	uint32_t m_shown;		/* the picture on the screen */
 	int32_t m_next;			/* the one it takes at the next frame, or -1 */
 	uint32_t m_launched;		/* a list was launched since the last frame taken */
 	Last m_last;
-	/* For copy_picture, and a picture of the size of the screen of the
-	 * hardware for the save states */
-	GLuint m_copy_fb[2];
-	GLuint m_state_picture;
 
-	/* Blends two 3D buffers, see draw_list */
-	GLuint m_blender;
-	GLint m_blender_rate;
-	/* The picture of the frame: the 3D and the layers, composed */
-	GLuint m_frame_fb, m_frame_color;
-	/* Brings it to the size of the window */
-	GLuint m_presenter;
-	GLint m_presenter_rect;
-	/* Composes the picture and the layers */
-	GLuint m_quad_vao, m_quad_vbo;
-	GLuint m_compose;
-	struct {
-		GLint front, back, layer1, layer2;
-		GLint factor;
-		GLint mult_f, mult_b, mult_1, mult_2;
-		GLint keyed_1, keyed_2, keyed_3d;
-		GLint above_1, above_2;
-		GLint invert_f, invert_b;
-		GLint clear;
-	} m_compose_locs;
 	/* The framebuffer RAM of the two layers as the frame left it,
 	 * WIDTH words a line, whether it changed since it was last sent to
-	 * its texture, and the pixels of a layer on their way there */
+	 * m_card, and the pixels of a layer on their way there */
 	std::vector<uint8_t> m_layer_ram[2];
 	bool m_layer_changed[2];
 	std::vector<uint16_t> m_layer_pixels;
-	/* The texture of each layer, kept from frame to frame, and the
-	 * format it holds (~0u before the first) */
-	GLuint m_layer_tex[2];
+	/* The format of each layer last sent (~0u before the first) */
 	uint32_t m_layer_format[2];
 
 	/* The translucent fragments, see renderer_translucent.cpp */

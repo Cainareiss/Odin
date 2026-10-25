@@ -20,10 +20,6 @@
  */
 
 #include "odin/renderer.hpp"
-#include "odin/renderer_gl.hpp"
-
-#include <cstring>
-#include <vector>
 
 namespace odin {
 
@@ -35,25 +31,7 @@ Renderer::save(std::span<uint8_t> pictures, Counters &counters)
 
 	/* The pictures are whole once the last list is counted. */
 	check_last_list();
-
-	/* The first pixel of each pixel of the hardware is kept. */
-	std::vector<uint8_t> whole(size_t{width()} * height() * 4);
-
-	glPixelStorei(GL_PACK_ALIGNMENT, 1);
-	for (unsigned i = 0; i < PICTURES; i++) {
-		uint8_t *out = &pictures[i * PICTURE_SIZE];
-
-		glBindTexture(GL_TEXTURE_2D, picture(i));
-		glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, whole.data());
-		for (unsigned y = 0; y < HEIGHT; y++) {
-			const uint8_t *row = &whole[size_t{y} * m_scale * width() * 4];
-
-			for (unsigned x = 0; x < WIDTH; x++, out += 4)
-				std::memcpy(out, row + size_t{x} * m_scale * 4, 4);
-		}
-	}
-	glBindTexture(GL_TEXTURE_2D, 0);
-	gl::check("saving the pictures");
+	m_card->read_kept(pictures);
 
 	counters.num_lists = m_num_lists;
 	counters.shown = m_shown;
@@ -67,15 +45,7 @@ Renderer::load(std::span<const uint8_t> pictures, const Counters &counters)
 	if (pictures.size() != PICTURES * PICTURE_SIZE)
 		fatal("a save state of another size");
 
-	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-	for (unsigned i = 0; i < PICTURES; i++) {
-		glBindTexture(GL_TEXTURE_2D, m_state_picture);
-		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, WIDTH, HEIGHT,
-		                GL_RGBA, GL_UNSIGNED_BYTE, &pictures[i * PICTURE_SIZE]);
-		copy_picture(m_state_picture, WIDTH, HEIGHT, picture(i), width(), height());
-	}
-	glBindTexture(GL_TEXTURE_2D, 0);
-	gl::check("loading the pictures");
+	m_card->write_kept(pictures);
 
 	m_num_lists = counters.num_lists;
 	m_shown = counters.shown;

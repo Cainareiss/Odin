@@ -58,6 +58,33 @@ constexpr GLenum UNIT_BELOW = 5;
 
 } /* namespace */
 
+/* The pictures of the lists, at the size of the buffers: the last fragment
+ * of each pixel, the colour under them, and the depth the other types left */
+void
+Renderer::build_list_pictures()
+{
+	const unsigned w = width(), h = height();
+
+	m_solid_depth = gl::new_texture(GL_DEPTH_COMPONENT24, w, h);
+	m_lists.heads = gl::new_texture(GL_R32UI, w, h);
+	m_lists.heads_fb = gl::new_framebuffer(m_lists.heads);
+	m_lists.below = gl::new_texture(GL_RGBA8, w, h);
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	gl::check("the pictures of the lists");
+}
+
+void
+Renderer::destroy_list_pictures()
+{
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glDeleteTextures(1, &m_solid_depth);
+	glDeleteFramebuffers(1, &m_lists.heads_fb);
+	glDeleteTextures(1, &m_lists.heads);
+	glDeleteTextures(1, &m_lists.below);
+}
+
 void
 Renderer::build_lists()
 {
@@ -186,7 +213,7 @@ Renderer::draw_translucent(unsigned vpi, const odin_mesh_t *meshes, unsigned num
 		glDisable(GL_SCISSOR_TEST);
 		glClearBufferuiv(GL_COLOR, 0, zero);
 		glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), zero);
-		glBindFramebuffer(GL_FRAMEBUFFER, m_scene_fb);
+		glBindFramebuffer(GL_FRAMEBUFFER, m_card->scene_framebuffer());
 		glEnable(GL_SCISSOR_TEST);
 		glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
 
@@ -230,11 +257,13 @@ Renderer::draw_translucent(unsigned vpi, const odin_mesh_t *meshes, unsigned num
 		glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0,
 		                    static_cast<GLsizei>(width()), static_cast<GLsizei>(height()));
 
+		/* One triangle over the whole picture, which takes no vertex:
+		 * drawn with the array of the meshes bound */
 		glUseProgram(m_lists.program);
 		m_program = nullptr;
 		glDisable(GL_BLEND);
 		glDisable(GL_SCISSOR_TEST);
-		glBindVertexArray(m_quad_vao);
+		glBindVertexArray(m_mesh_vao);
 		glDrawArrays(GL_TRIANGLES, 0, 3);
 		glBindVertexArray(0);
 		glEnable(GL_SCISSOR_TEST);

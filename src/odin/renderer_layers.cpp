@@ -20,7 +20,6 @@
  */
 
 #include "odin/renderer.hpp"
-#include "odin/renderer_gl.hpp"
 
 #include <cstring>
 
@@ -67,10 +66,9 @@ Renderer::take_layer(unsigned i)
 	}
 }
 
-/* A 2D layer as its texture, bound on the unit 0. The texture is kept and
- * sent again only when the RAM of the layer or its format changed. */
-GLuint
-Renderer::upload_layer(unsigned i)
+/* A 2D layer to m_card, when its RAM or its format changed. */
+void
+Renderer::send_layer(unsigned i)
 {
 	const odin_layer_t &layer = m_frame.layers.layer[0][i];
 	const uint8_t *const data = m_layer_ram[i].data();
@@ -84,21 +82,8 @@ Renderer::upload_layer(unsigned i)
 	if (layer.format != ODIN_FORMAT_ABGR1555 && layer.format != ODIN_FORMAT_A2BGR10)
 		fatal("a layer of a format that is not known");
 
-	glActiveTexture(GL_TEXTURE0 + 0);
-	if (m_layer_tex[i] == 0) {
-		glGenTextures(1, &m_layer_tex[i]);
-		glBindTexture(GL_TEXTURE_2D, m_layer_tex[i]);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
-	}
-	glBindTexture(GL_TEXTURE_2D, m_layer_tex[i]);
-	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-	glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
 	if (same_format && !m_layer_changed[i])
-		return m_layer_tex[i];
+		return;
 	m_layer_changed[i] = false;
 	m_layer_format[i] = layer.format;
 
@@ -118,22 +103,10 @@ Renderer::upload_layer(unsigned i)
 				dst[x * 2 + 1] = static_cast<uint16_t>(word);
 			}
 		}
-		if (same_format)
-			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, WIDTH, HEIGHT,
-			                GL_RGBA, GL_UNSIGNED_SHORT_1_5_5_5_REV, m_layer_pixels.data());
-		else
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB5_A1, WIDTH, HEIGHT, 0,
-			             GL_RGBA, GL_UNSIGNED_SHORT_1_5_5_5_REV, m_layer_pixels.data());
-	} else if (same_format) {
-		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, WIDTH, HEIGHT,
-		                GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, data);
+		m_card->set_layer(i, LayerTexels::ABGR1555, m_layer_pixels.data());
 	} else {
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB10_A2, WIDTH, HEIGHT, 0,
-		             GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, data);
+		m_card->set_layer(i, LayerTexels::A2BGR10, data);
 	}
-	gl::check("a layer");
-
-	return m_layer_tex[i];
 }
 
 } /* namespace odin */

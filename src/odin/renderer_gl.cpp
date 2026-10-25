@@ -111,6 +111,41 @@ check(const char *stage)
 	std::abort();
 }
 
+void
+fatal(const char *what)
+{
+	std::fprintf(stderr, "renderer: %s\n", what);
+	std::abort();
+}
+
+GLuint
+new_texture(GLenum format, unsigned w, unsigned h)
+{
+	GLuint id;
+
+	glGenTextures(1, &id);
+	glBindTexture(GL_TEXTURE_2D, id);
+	glTexStorage2D(GL_TEXTURE_2D, 1, format, static_cast<GLsizei>(w), static_cast<GLsizei>(h));
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	return id;
+}
+
+GLuint
+new_framebuffer(GLuint color)
+{
+	static const GLenum targets[1] = { GL_COLOR_ATTACHMENT0 };
+	GLuint id;
+
+	glGenFramebuffers(1, &id);
+	glBindFramebuffer(GL_FRAMEBUFFER, id);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, color, 0);
+	glDrawBuffers(1, targets);
+	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+		fatal("a framebuffer is not complete");
+	return id;
+}
+
 /* Taken from Mesa */
 void
 frustum(float out[4][4], float l, float r, float b, float t, float n, float f)

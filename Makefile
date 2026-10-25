@@ -42,6 +42,7 @@ OBJ := \
 	src/odin/display_window.o \
 	src/odin/host_graphics_gl.o \
 	src/odin/board_drawing_gl.o \
+	src/odin/board_pictures_gl.o \
 	src/odin/x11_window.o \
 	src/odin/menu.o \
 	src/odin/menu_input.o \
@@ -135,7 +136,6 @@ OBJ := \
 	src/odin/antarctic_io.o \
 	src/odin/eurasia.o \
 	src/odin/renderer.o \
-	src/odin/renderer_buffers.o \
 	src/odin/renderer_scene.o \
 	src/odin/renderer_translucent.o \
 	src/odin/renderer_programs.o \

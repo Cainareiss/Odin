@@ -17,15 +17,12 @@
  */
 
 /* What the graphics card of the host does for the renderer, with OpenGL
- * (board_drawing.hpp). */
+ * (board_drawing.hpp): made, and its textures. */
 
-#include "odin/board_drawing.hpp"
+#include "odin/board_drawing_gl.hpp"
 
 #include <vector>
 
-#include <GL/glew.h>
-
-#include "odin/hikaru_draw.hpp"
 #include "odin/renderer_gl.hpp"
 
 namespace odin {
@@ -45,13 +42,13 @@ constexpr GlTexels GL_TEXELS[] = {
 /* LA8: the light in the three colours */
 constexpr GLint LA8_SWIZZLE[4] = { GL_RED, GL_RED, GL_RED, GL_GREEN };
 
-class GlBoardDrawing : public BoardDrawing {
-public:
-	HostTexture make_texture(Texels texels, std::span<const TexelRect> levels) override;
-	void forget_textures(std::span<const HostTexture> textures) override;
-	HostSampler make_sampler(const TextureSampling &sampling, unsigned anisotropy) override;
-	void forget_sampler(HostSampler sampler) override { glDeleteSamplers(1, &sampler.id); }
-};
+} /* namespace */
+
+std::unique_ptr<BoardDrawing>
+BoardDrawing::make_gl()
+{
+	return std::make_unique<GlBoardDrawing>();
+}
 
 /* The texture is left bound on the unit 0, as the renderer knows
  * (Renderer::upload_texture). */
@@ -133,14 +130,6 @@ GlBoardDrawing::make_sampler(const TextureSampling &sampling, unsigned anisotrop
 	if (anisotropy > 1 && GLEW_EXT_texture_filter_anisotropic)
 		glSamplerParameterf(id, GL_TEXTURE_MAX_ANISOTROPY_EXT, static_cast<float>(anisotropy));
 	return { id };
-}
-
-} /* namespace */
-
-std::unique_ptr<BoardDrawing>
-BoardDrawing::make_gl()
-{
-	return std::make_unique<GlBoardDrawing>();
 }
 
 } /* namespace odin */
