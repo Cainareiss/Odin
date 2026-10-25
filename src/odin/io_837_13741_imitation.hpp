@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef ODIN_JVS_837_13741_HPP
-#define ODIN_JVS_837_13741_HPP
+#ifndef ODIN_IO_837_13741_IMITATION_HPP
+#define ODIN_IO_837_13741_IMITATION_HPP
 
 #include "odin/jvs.hpp"
 
@@ -32,12 +32,12 @@ namespace odin {
  * manual of NASCAR sets them: 2 players x 12 switches, 2 coin slots, 8
  * analog channels of 8 bits, 22 driver outputs. The addresses quoted are
  * those of epr-21868. */
-class Jvs837_13741 : public JvsIoBoard {
+class Io837_13741Imitation : public JvsIoBoard {
 public:
 	static constexpr uint8_t PLAYERS = 2;
 	static constexpr uint8_t OUTPUT_BYTES = 3;
 
-	explicit Jvs837_13741(JvsInputs &inputs) : JvsIoBoard(inputs) {}
+	explicit Io837_13741Imitation(JvsInputs &inputs) : JvsIoBoard(inputs) {}
 
 	uint32_t sum_error_cycles(size_t request_bytes) const override;
 
@@ -62,4 +62,4 @@ protected:
 
 } /* namespace odin */
 
-#endif /* ODIN_JVS_837_13741_HPP */
+#endif /* ODIN_IO_837_13741_IMITATION_HPP */

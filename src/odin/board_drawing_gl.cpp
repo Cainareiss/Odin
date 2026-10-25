@@ -23,7 +23,7 @@
 
 #include <vector>
 
-#include "odin/renderer_gl.hpp"
+#include "odin/gl_common.hpp"
 
 namespace odin {
 

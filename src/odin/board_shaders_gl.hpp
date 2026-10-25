@@ -19,8 +19,8 @@
  * along with Valkyrie.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef ODIN_RENDERER_SHADERS_HPP
-#define ODIN_RENDERER_SHADERS_HPP
+#ifndef ODIN_BOARD_SHADERS_GL_HPP
+#define ODIN_BOARD_SHADERS_GL_HPP
 
 /* The text of the shaders of the renderer. */
 
@@ -48,4 +48,4 @@ extern const char *const PRESENT_FRAGMENT;
 
 } /* namespace odin::shaders */
 
-#endif /* ODIN_RENDERER_SHADERS_HPP */
+#endif /* ODIN_BOARD_SHADERS_GL_HPP */

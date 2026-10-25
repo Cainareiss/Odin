@@ -20,7 +20,7 @@
 
 /* The program of the 837-13741, the I/O board of NASCAR (epr-21868, in the
  * 18wheelr set of MAME), run by the board of Odin (io_837_13741.cpp),
- * against its imitation (jvs_837_13741.cpp): the replies to the frames the
+ * against its imitation (io_837_13741_imitation.cpp): the replies to the frames the
  * MIE program sends, byte for byte, and the time the board takes to start
  * each reply. A MIE at the other end of the line only takes the bytes.
  *
@@ -28,13 +28,13 @@
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
  *            -I src tests/jvs/epr21868_bench.cpp src/odin/io_837_13741.cpp src/odin/d71054.cpp \
  *            src/odin/mie.cpp src/odin/z80.cpp src/odin/z80_ops.cpp src/odin/jvs.cpp \
- *            src/odin/jvs_837_13741.cpp -o epr21868_bench
+ *            src/odin/io_837_13741_imitation.cpp -o epr21868_bench
  * Run: epr21868_bench <epr-21868.ic7>. Exit status 0 when every reply is the
  * same. */
 
 #include "odin/io_837_13741.hpp"
 #include "odin/jvs.hpp"
-#include "odin/jvs_837_13741.hpp"
+#include "odin/io_837_13741_imitation.hpp"
 #include "odin/mie.hpp"
 
 #include <algorithm>
@@ -247,7 +247,7 @@ int main(int argc, char **argv)
 	Panel panel;
 	Inputs inputs(panel);
 	Board board(rom, inputs);
-	odin::Jvs837_13741 imitation(inputs);
+	odin::Io837_13741Imitation imitation(inputs);
 	odin::JvsHost host;
 	host.add_device(&imitation);
 	Bench bench{ board, host, 0, 0, 0, {} };

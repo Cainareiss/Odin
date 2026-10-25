@@ -126,7 +126,7 @@ public:
 	void set_scale(unsigned scale);
 	/* Anisotropic filtering of the textures, 1 for none as on the board */
 	void set_anisotropy(unsigned level) { m_textures.set_anisotropy(level); }
-	/* The picture through the filter of that preset (picture_filter.hpp)
+	/* The picture through the filter of that preset (picture_filter_gl.hpp)
 	 * into the window; none with an empty path, or when it does not
 	 * build (said once on stderr). Built when the path changes. */
 	void set_filter(const std::string &preset) { m_card->set_filter(preset); }
@@ -239,6 +239,8 @@ private:
 	};
 
 	/* renderer.cpp */
+	/* Says what went wrong on stderr and aborts. */
+	[[noreturn]] static void fatal(const char *what);
 	void forget_held();
 	void show();
 	void draw_list();
@@ -279,7 +281,6 @@ private:
 	void log(const char *fmt, ...) const __attribute__((format(printf, 2, 3)));
 	void log_mesh(const odin_mesh_t &mesh) const;
 	void print_list_fingerprint() const;
-	[[noreturn]] static void fatal(const char *what);
 
 	HikaruGpu *m_gpu;
 	std::span<const uint8_t> m_fb;

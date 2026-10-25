@@ -60,9 +60,9 @@ MieBoard::MieBoard(std::span<const uint8_t> rom, std::span<uint8_t> ram, uint32_
 	  m_irq_lines(0)
 {
 	if (io_board == "837-13741")
-		m_io = std::make_unique<Jvs837_13741>(*this);
+		m_io = std::make_unique<Io837_13741Imitation>(*this);
 	else
-		m_io = std::make_unique<Jvs837_13551>(*this);
+		m_io = std::make_unique<Io837_13551Imitation>(*this);
 
 	const char *const io = std::getenv("ODIN_IO");
 	const bool imitation = io && !std::strcmp(io, "imitation");

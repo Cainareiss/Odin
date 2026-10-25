@@ -19,7 +19,7 @@
  * along with Valkyrie.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "odin/renderer_shaders.hpp"
+#include "odin/board_shaders_gl.hpp"
 
 namespace odin::shaders {
 

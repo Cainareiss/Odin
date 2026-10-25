@@ -22,12 +22,12 @@
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
  *            -I src tests/program_cache/program_cache_tests.cpp src/odin/program_cache.cpp \
- *            src/odin/save_folder.cpp -o program_cache_tests
+ *            src/odin/user_files.cpp -o program_cache_tests
  * It writes its files in the folder given as its argument, or the current
  * one. Exit status is 0 when every check passes. */
 
 #include "odin/program_cache.hpp"
-#include "odin/save_folder.hpp"
+#include "odin/user_files.hpp"
 
 #include <cstdint>
 #include <cstdio>

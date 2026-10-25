@@ -183,7 +183,7 @@ public:
 	 * covers; through the filter if there is one */
 	virtual void present(PictureRect rect, unsigned window_w, unsigned window_h) = 0;
 	virtual HostPicture frame_picture() const = 0;
-	/* The filter of a preset (picture_filter.hpp), built when the path
+	/* The filter of a preset (picture_filter_gl.hpp), built when the path
 	 * changes; none with an empty path, or when it does not build (said
 	 * once on stderr) */
 	virtual void set_filter(const std::string &preset) = 0;

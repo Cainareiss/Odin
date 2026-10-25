@@ -24,7 +24,7 @@
 
 #include "odin/board_drawing_gl.hpp"
 #include "odin/depth_bias.hpp"
-#include "odin/renderer_gl.hpp"
+#include "odin/gl_common.hpp"
 #include "odin/repeats.hpp"
 
 #include <cmath>

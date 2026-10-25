@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef ODIN_SAVE_FOLDER_HPP
-#define ODIN_SAVE_FOLDER_HPP
+#ifndef ODIN_USER_FILES_HPP
+#define ODIN_USER_FILES_HPP
 
 #include <cstddef>
 #include <cstdint>
@@ -84,4 +84,4 @@ bool write_kept(const std::string &path, std::span<const uint8_t> bytes);
 
 } /* namespace odin */
 
-#endif /* ODIN_SAVE_FOLDER_HPP */
+#endif /* ODIN_USER_FILES_HPP */

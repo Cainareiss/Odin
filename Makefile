@@ -81,7 +81,7 @@ OBJ := \
 	src/odin/games.o \
 	src/odin/roles.o \
 	src/odin/state_file.o \
-	src/odin/save_folder.o \
+	src/odin/user_files.o \
 	src/odin/worker.o \
 	src/odin/hikaru.o \
 	src/odin/hikaru_netbd.o \
@@ -107,8 +107,8 @@ OBJ := \
 	src/odin/z80.o \
 	src/odin/z80_ops.o \
 	src/odin/jvs.o \
-	src/odin/jvs_837_13551.o \
-	src/odin/jvs_837_13741.o \
+	src/odin/io_837_13551_imitation.o \
+	src/odin/io_837_13741_imitation.o \
 	src/odin/io_837_13551.o \
 	src/odin/tmp90ph44.o \
 	src/odin/io_837_13741.o \
@@ -143,14 +143,14 @@ OBJ := \
 	src/odin/renderer_translucent.o \
 	src/odin/renderer_programs.o \
 	src/odin/program_cache.o \
-	src/odin/renderer_shaders.o \
+	src/odin/board_shaders_gl.o \
 	src/odin/renderer_textures.o \
 	src/odin/renderer_times.o \
 	src/odin/renderer_layers.o \
 	src/odin/renderer_state.o \
 	src/odin/renderer_debug.o \
-	src/odin/renderer_gl.o \
-	src/odin/picture_filter.o \
+	src/odin/gl_common.o \
+	src/odin/picture_filter_gl.o \
 	src/odin/picture_preset.o \
 	src/odin/loading_screen.o
 

@@ -35,7 +35,7 @@
 #include "odin/board_drawing.hpp"
 #include "odin/board_programs_gl.hpp"
 #include "odin/hikaru_draw.hpp"
-#include "odin/picture_filter.hpp"
+#include "odin/picture_filter_gl.hpp"
 
 namespace odin {
 

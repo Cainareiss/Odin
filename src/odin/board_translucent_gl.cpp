@@ -25,8 +25,8 @@
  * (shaders::SORT_FRAGMENT). */
 
 #include "odin/board_drawing_gl.hpp"
-#include "odin/renderer_gl.hpp"
-#include "odin/renderer_shaders.hpp"
+#include "odin/gl_common.hpp"
+#include "odin/board_shaders_gl.hpp"
 
 #include <algorithm>
 #include <cstdint>

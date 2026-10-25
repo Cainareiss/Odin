@@ -19,8 +19,8 @@
  * along with Valkyrie.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef ODIN_RENDERER_GL_HPP
-#define ODIN_RENDERER_GL_HPP
+#ifndef ODIN_GL_COMMON_HPP
+#define ODIN_GL_COMMON_HPP
 
 /* What the renderer and the board drawing need around OpenGL: a program
  * from its two texts, a check after a stage, textures and framebuffers to
@@ -51,4 +51,4 @@ void frustum(float out[4][4], float l, float r, float b, float t, float n, float
 
 } /* namespace odin::gl */
 
-#endif /* ODIN_RENDERER_GL_HPP */
+#endif /* ODIN_GL_COMMON_HPP */

@@ -7,8 +7,8 @@
  * Odin changes: Copyright (C) 2026 Réda Chérif-Touil
  */
 
-#ifndef ODIN_JVS_837_13551_HPP
-#define ODIN_JVS_837_13551_HPP
+#ifndef ODIN_IO_837_13551_IMITATION_HPP
+#define ODIN_IO_837_13551_IMITATION_HPP
 
 #include "odin/jvs.hpp"
 
@@ -22,11 +22,11 @@ namespace odin {
  * the program 315-6215, which is not run here: the node answers as that
  * program does, 2 players x 13 switches, 2 coin slots, 8 analog channels
  * of 8 bits, 6 driver outputs. */
-class Jvs837_13551 : public JvsIoBoard {
+class Io837_13551Imitation : public JvsIoBoard {
 public:
 	static constexpr uint8_t PLAYERS = 2;
 
-	explicit Jvs837_13551(JvsInputs &inputs) : JvsIoBoard(inputs) {}
+	explicit Io837_13551Imitation(JvsInputs &inputs) : JvsIoBoard(inputs) {}
 
 protected:
 	const char *device_id() const override;
@@ -46,4 +46,4 @@ protected:
 
 } /* namespace odin */
 
-#endif /* ODIN_JVS_837_13551_HPP */
+#endif /* ODIN_IO_837_13551_IMITATION_HPP */

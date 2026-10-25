@@ -16,7 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "odin/picture_filter.hpp"
+#include "odin/picture_filter_gl.hpp"
 
 #include "odin/picture_preset.hpp"
 

@@ -18,7 +18,7 @@
 
 /* The program of the 837-13551, the I/O board of five Hikaru games
  * (315-6215 in their sets), run by the TMP90PH44 of Odin, against its
- * imitation (jvs_837_13551.cpp): the replies to the frames the MIE program
+ * imitation (io_837_13551_imitation.cpp): the replies to the frames the MIE program
  * sends, byte for byte, the sense line to the host, the driver outputs,
  * and the time the board takes to start each reply.
  *
@@ -50,13 +50,13 @@
  * Not run with the unit tests: it needs the PROM.
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
  *            -I src tests/jvs/s6215_bench.cpp src/odin/tmp90ph44.cpp src/odin/tlcs90.cpp \
- *            src/odin/jvs.cpp src/odin/jvs_837_13551.cpp -o s6215_bench
+ *            src/odin/jvs.cpp src/odin/io_837_13551_imitation.cpp -o s6215_bench
  * Run: s6215_bench <315-6215.bin>. Exit status 0 when every reply, sense
  * line and output is the same. */
 
 #include "odin/io_837_13551.hpp"
 #include "odin/jvs.hpp"
-#include "odin/jvs_837_13551.hpp"
+#include "odin/io_837_13551_imitation.hpp"
 #include "odin/tmp90ph44.hpp"
 
 #include <algorithm>
@@ -353,7 +353,7 @@ struct Bench {
 	Tmp90ph44 &chip;
 	Board &board;
 	odin::JvsHost &host;
-	odin::Jvs837_13551 &imitation;
+	odin::Io837_13551Imitation &imitation;
 	unsigned same = 0, different = 0, raced = 0;
 	bool rx_open = false, in_tx = false, tx_open = false, race = false;
 
@@ -464,7 +464,7 @@ int main(int argc, char **argv)
 	Tmp90ph44 chip(rom, board);
 	board.attach(chip);
 	Inputs inputs(panel);
-	odin::Jvs837_13551 imitation(inputs);
+	odin::Io837_13551Imitation imitation(inputs);
 	odin::JvsHost host;
 	host.add_device(&imitation);
 	Bench bench{ rom, chip, board, host, imitation };

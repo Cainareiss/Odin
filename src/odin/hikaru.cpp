@@ -147,6 +147,7 @@
 #include "odin/cabinet_settings.hpp"
 #include "odin/drive_board.hpp"
 #include "odin/env.hpp"
+#include "odin/host_clock.hpp"
 #include "odin/repeats.hpp"
 
 namespace odin {

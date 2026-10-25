@@ -19,7 +19,7 @@
 #include "odin/settings.hpp"
 
 #include "odin/repeats.hpp"
-#include "odin/save_folder.hpp"
+#include "odin/user_files.hpp"
 
 #include <algorithm>
 #include <cstdio>

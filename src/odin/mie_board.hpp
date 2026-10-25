@@ -37,8 +37,8 @@
 #include "odin/io_837_13551.hpp"
 #include "odin/io_837_13741.hpp"
 #include "odin/jvs.hpp"
-#include "odin/jvs_837_13551.hpp"
-#include "odin/jvs_837_13741.hpp"
+#include "odin/io_837_13551_imitation.hpp"
+#include "odin/io_837_13741_imitation.hpp"
 #include "odin/mie.hpp"
 
 namespace odin {
@@ -85,8 +85,8 @@ public:
 	 * JVS cable, one that knows_io_board. io_rom: the program of the
 	 * 837-13551 (315-6215) or of the 837-13741 (epr-21868), which its chip
 	 * then runs on a line byte by byte; without it, or with
-	 * ODIN_IO=imitation, its imitation answers (jvs_837_13551.cpp,
-	 * jvs_837_13741.cpp). */
+	 * ODIN_IO=imitation, its imitation answers (io_837_13551_imitation.cpp,
+	 * io_837_13741_imitation.cpp). */
 	MieBoard(std::span<const uint8_t> rom, std::span<uint8_t> ram, uint32_t clock_hz,
 	         std::function<void(Inputs &)> read_inputs, const std::string &io_board = "837-13551",
 	         std::span<const uint8_t> io_rom = {});

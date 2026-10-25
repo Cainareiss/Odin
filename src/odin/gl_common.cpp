@@ -19,7 +19,7 @@
  * along with Valkyrie.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "odin/renderer_gl.hpp"
+#include "odin/gl_common.hpp"
 
 #include <cstdio>
 #include <cstdlib>

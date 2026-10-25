@@ -7,18 +7,18 @@
  * Odin changes: Copyright (C) 2026 Réda Chérif-Touil
  */
 
-#include "odin/jvs_837_13551.hpp"
+#include "odin/io_837_13551_imitation.hpp"
 
 namespace odin {
 
 /* Identification string reported by the 315-6215 firmware of the Type 1
  * board (MAME jvs13551.cpp ROM list). */
-const char *Jvs837_13551::device_id() const
+const char *Io837_13551Imitation::device_id() const
 {
 	return "SEGA ENTERPRISES,LTD.;I/O BD JVS;837-13551 ;Ver1.00;98/10";
 }
 
-int32_t Jvs837_13551::function_list(std::span<uint8_t> out)
+int32_t Io837_13551Imitation::function_list(std::span<uint8_t> out)
 {
 	static constexpr std::array<uint8_t, 16> list = {
 		jvs::FUNC_SWITCH_INPUT, PLAYERS, 13, 0,	/* 13 switches per player */
@@ -32,7 +32,7 @@ int32_t Jvs837_13551::function_list(std::span<uint8_t> out)
 	return static_cast<int32_t>(list.size());
 }
 
-int32_t Jvs837_13551::switches(std::span<uint8_t> out, uint8_t players, uint8_t bytes_per_player)
+int32_t Io837_13551Imitation::switches(std::span<uint8_t> out, uint8_t players, uint8_t bytes_per_player)
 {
 	if (players > PLAYERS || bytes_per_player > 2) {
 		return -1;
@@ -50,7 +50,7 @@ int32_t Jvs837_13551::switches(std::span<uint8_t> out, uint8_t players, uint8_t 
 
 /* JVS counts output bits from the most significant end: six outputs
  * live in bits 7..2 of the first byte. */
-bool Jvs837_13551::swoutputs(std::span<const uint8_t> values)
+bool Io837_13551Imitation::swoutputs(std::span<const uint8_t> values)
 {
 	if (values.size() != 1) {
 		return false;

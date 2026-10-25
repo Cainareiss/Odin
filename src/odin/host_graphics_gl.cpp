@@ -33,7 +33,7 @@
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_opengl3.h"
 #include "odin/board_drawing.hpp"
-#include "odin/renderer_gl.hpp"
+#include "odin/gl_common.hpp"
 
 namespace odin {
 

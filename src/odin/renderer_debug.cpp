@@ -161,11 +161,4 @@ Renderer::print_list_fingerprint() const
 	             m_frame.number, fp, meshes, tris);
 }
 
-void
-Renderer::fatal(const char *what)
-{
-	std::fprintf(stderr, "renderer: %s\n", what);
-	std::abort();
-}
-
 } /* namespace odin */

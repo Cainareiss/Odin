@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef ODIN_PICTURE_FILTER_HPP
-#define ODIN_PICTURE_FILTER_HPP
+#ifndef ODIN_PICTURE_FILTER_GL_HPP
+#define ODIN_PICTURE_FILTER_GL_HPP
 
 #include <array>
 #include <map>
@@ -105,4 +105,4 @@ private:
 
 } /* namespace odin */
 
-#endif /* ODIN_PICTURE_FILTER_HPP */
+#endif /* ODIN_PICTURE_FILTER_GL_HPP */

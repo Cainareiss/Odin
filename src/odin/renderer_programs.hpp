@@ -48,7 +48,7 @@ enum class LightAttenuation : unsigned {
 };
 
 /* What picks the program of a mesh. Each field is a define of the mesh
- * shaders (renderer_shaders.cpp). */
+ * shaders (board_shaders_gl.cpp). */
 struct MeshVariant {
 	struct Light {
 		bool on = false;

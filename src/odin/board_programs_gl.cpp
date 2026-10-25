@@ -23,9 +23,9 @@
 
 #include "odin/board_programs_gl.hpp"
 #include "odin/program_cache.hpp"
-#include "odin/renderer_gl.hpp"
-#include "odin/renderer_shaders.hpp"
-#include "odin/save_folder.hpp"
+#include "odin/gl_common.hpp"
+#include "odin/board_shaders_gl.hpp"
+#include "odin/user_files.hpp"
 
 #include <cinttypes>
 #include <cstdio>

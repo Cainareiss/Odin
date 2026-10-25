@@ -47,7 +47,7 @@ struct DisplayOptions {
 	 * by hand (0: as `window` says) */
 	unsigned window_w, window_h;
 	/* The filter of the picture by its name in odin.ini (a preset
-	 * filters/<name>.glslp: picture_filter.hpp); empty: none */
+	 * filters/<name>.glslp: picture_filter_gl.hpp); empty: none */
 	std::string filter;
 };
 

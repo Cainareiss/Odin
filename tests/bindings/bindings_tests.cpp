@@ -23,7 +23,7 @@
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
  *            -I src $(pkg-config --cflags sdl3) tests/bindings/bindings_tests.cpp src/odin/bindings.cpp \
- *            src/odin/settings.cpp src/odin/roles.cpp src/odin/save_folder.cpp $(pkg-config --libs sdl3) -o bindings_tests
+ *            src/odin/settings.cpp src/odin/roles.cpp src/odin/user_files.cpp $(pkg-config --libs sdl3) -o bindings_tests
  * It writes its file in the folder given as its argument, or the temporary
  * one. Exit status is 0 when every check passes. */
 

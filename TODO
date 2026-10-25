@@ -205,10 +205,10 @@ recent one as 9 in 10 of them came (0.2 ms at most), as a fibre takes the
 same time for each. Not done: Windows (its timers).
 
 JVS (src/odin/jvs.cpp: the cable and the protocol of the standard). The
-I/O boards are imitations made from their programs: jvs_837_13551.cpp
+I/O boards are imitations made from their programs: io_837_13551_imitation.cpp
 from 315-6215 (a TMP90PH44, run in its place when the PROM is there,
 below), and
-jvs_837_13741.cpp from epr-21868 (a 315-6146; the I/O board of NASCAR,
+io_837_13741_imitation.cpp from epr-21868 (a 315-6146; the I/O board of NASCAR,
 "io" in odin-games.json; the program is in the 18wheelr set of MAME). Both
 programs take the same commands, answer an unknown one with the reports
 before it, read on after a refused one, give analog channels of 8 bits
@@ -219,7 +219,7 @@ head of a frame to every node, which it reads for nothing else
 (SET_ADDRESS aside). HEURISTIC: the board is ready again at once, where
 the programs first test their memory (the MIE program waits 1.27 s
 before its next frame). The 837-13741 answers after the time its program
-takes (jvs_837_13741.cpp: a part for the frame, one for each command):
+takes (io_837_13741_imitation.cpp: a part for the frame, one for each command):
 tests/jvs/epr21868_bench.cpp runs epr-21868 on the board of Odin (below),
 against the imitation (2946 replies the same, 2F aside; the times the imitation
 gives half the time within 4 clocks); it needs the EPROM, not in the
@@ -685,7 +685,7 @@ backup RAM, the clock) is read at start and written on exit in a folder
 of the game, a file for each, named as MAME names them (main_eeprom,
 mie_eeprom, rombd_eeprom, nvram; and clock): <data>/odin/saves/<game>,
 <data> being %APPDATA% on Windows, ~/Library/Application Support on macOS,
-$XDG_DATA_HOME or ~/.local/share elsewhere (src/odin/save_folder.cpp).
+$XDG_DATA_HOME or ~/.local/share elsewhere (src/odin/user_files.cpp).
 ODIN_SAVES=<folder> takes <folder>/<game>, ODIN_SAVES=none reads and
 writes nothing: the tests use it. ODIN_MIE_EEPROM=<file> and
 ODIN_CLOCK_FILE=<file> keep these two elsewhere. Nothing is written
@@ -1021,9 +1021,11 @@ a kind of message eight times at most (repeats.hpp), as -v does.
 The renderer (src/odin/renderer.hpp, OpenGL 4.3) stands for the chips that
 plot the polygons. A frame, the two 3D buffers and the composition with the
 layers are in renderer.cpp, the passes of a list in renderer_scene.cpp, the
-translucent fragments in renderer_translucent.cpp, the programs and the text
-of their shaders in renderer_programs.cpp and renderer_shaders.cpp, the
-textures in renderer_textures.cpp, the 2D layers in renderer_layers.cpp.
+translucent fragments in renderer_translucent.cpp, the variants of the
+programs in renderer_programs.cpp, the textures in renderer_textures.cpp, the
+2D layers in renderer_layers.cpp; what the graphics card of the host does for
+them is behind BoardDrawing (board_drawing.hpp; with OpenGL the board_*_gl.cpp
+files, the text of the shaders in board_shaders_gl.cpp).
 HR_LOG=1 logs the objects of every mesh,
 HR_LOG_FRAME=<frame> those of one frame; ODIN_DEBUG_KEYS=1 gives the keys
 1 2 3 t u y l a d g a switch each (renderer_debug.cpp).

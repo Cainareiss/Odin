@@ -24,7 +24,7 @@
 #include <utility>
 #include <vector>
 
-/* The texts of a filter of the picture (picture_filter.hpp), read as 86Box
+/* The texts of a filter of the picture (picture_filter_gl.hpp), read as 86Box
  * reads them: the .glslp preset, and the GLSL file of each pass. */
 namespace odin::preset {
 

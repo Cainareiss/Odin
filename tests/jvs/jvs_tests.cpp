@@ -25,12 +25,12 @@
  *
  * Build: g++ -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
  *            -O2 -I src tests/jvs/jvs_tests.cpp src/odin/jvs.cpp \
- *            src/odin/jvs_837_13551.cpp src/odin/jvs_837_13741.cpp -o jvs_tests
+ *            src/odin/io_837_13551_imitation.cpp src/odin/io_837_13741_imitation.cpp -o jvs_tests
  * Exit status is 0 when every check passes. */
 
 #include "odin/jvs.hpp"
-#include "odin/jvs_837_13551.hpp"
-#include "odin/jvs_837_13741.hpp"
+#include "odin/io_837_13551_imitation.hpp"
+#include "odin/io_837_13741_imitation.hpp"
 
 #include <cstdio>
 #include <cstring>
@@ -127,7 +127,7 @@ void test_jvs()
 {
 	Inputs inputs;
 	odin::JvsHost host;
-	odin::Jvs837_13551 board(inputs);
+	odin::Io837_13551Imitation board(inputs);
 	host.add_device(&board);
 	bool ok = false;
 
@@ -288,7 +288,7 @@ void test_837_13741()
 {
 	Inputs inputs;
 	odin::JvsHost host;
-	odin::Jvs837_13741 board(inputs);
+	odin::Io837_13741Imitation board(inputs);
 	host.add_device(&board);
 	bool ok = false;
 

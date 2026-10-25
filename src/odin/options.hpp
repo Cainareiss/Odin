@@ -50,7 +50,7 @@ struct Options {
 	 * odin.ini gives (empty: by default) */
 	std::string saves, states;
 	/* The folder of the pictures of the games odin.ini gives (empty: by
-	 * default), save_folder.hpp */
+	 * default), user_files.hpp */
 	std::string artwork;
 	std::string game;
 	/* The file of what Odin says; empty: none */

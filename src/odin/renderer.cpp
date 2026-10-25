@@ -20,13 +20,14 @@
  */
 
 #include "odin/renderer.hpp"
-#include "odin/env.hpp"
+#include "odin/host_clock.hpp"
 #include "odin/hikaru_gpu.hpp"
 #include "odin/loading_screen.hpp"
 #include "odin/picture.hpp"
 
 #include <algorithm>
 #include <cstdio>
+#include <cstdlib>
 
 namespace odin {
 
@@ -357,6 +358,13 @@ Renderer::set_scale(unsigned scale)
 	m_scale = scale;
 	size_lists(room_at_start());
 	forget_held();
+}
+
+void
+Renderer::fatal(const char *what)
+{
+	std::fprintf(stderr, "renderer: %s\n", what);
+	std::abort();
 }
 
 } /* namespace odin */

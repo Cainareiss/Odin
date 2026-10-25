@@ -16,20 +16,20 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "odin/jvs_837_13741.hpp"
+#include "odin/io_837_13741_imitation.hpp"
 
 #include <array>
 
 namespace odin {
 
 /* Block 44BC */
-const char *Jvs837_13741::device_id() const
+const char *Io837_13741Imitation::device_id() const
 {
 	return "SEGA ENTERPRISES,LTD.;837-13741  I/O CONTROL BD2;Ver0.15;99/06";
 }
 
 /* Block 45AC, the list of the DIP switches all off */
-int32_t Jvs837_13741::function_list(std::span<uint8_t> out)
+int32_t Io837_13741Imitation::function_list(std::span<uint8_t> out)
 {
 	static constexpr std::array<uint8_t, 16> list = {
 		jvs::FUNC_SWITCH_INPUT, PLAYERS, 12, 0,
@@ -47,7 +47,7 @@ int32_t Jvs837_13741::function_list(std::span<uint8_t> out)
  * take 1 or 2 bytes each (1834, 18FD). The system byte has TEST and TILT
  * (bits 7 and 6, 0C2C), a player 8 switches then 4 in the high half of
  * the second byte (0C2C, 0CB3). */
-int32_t Jvs837_13741::switches(std::span<uint8_t> out, uint8_t players, uint8_t bytes_per_player)
+int32_t Io837_13741Imitation::switches(std::span<uint8_t> out, uint8_t players, uint8_t bytes_per_player)
 {
 	if (players > PLAYERS || (players == 0) != (bytes_per_player == 0) || bytes_per_player > 2)
 		return -1;
@@ -73,18 +73,18 @@ int32_t Jvs837_13741::switches(std::span<uint8_t> out, uint8_t players, uint8_t 
  * address and the length with it, the sum not), the rest; a command its own
  * part, by its parameters. A request ends when the stop bit of its last
  * byte does, a reply starts with the start bit of its first. */
-uint32_t Jvs837_13741::frame_cycles(size_t request_bytes, size_t reply_bytes) const
+uint32_t Io837_13741Imitation::frame_cycles(size_t request_bytes, size_t reply_bytes) const
 {
 	return static_cast<uint32_t>(941 + 26 * (request_bytes + 2) + 34 * (reply_bytes + 2));
 }
 
 /* 0708: status 3, the commands not read */
-uint32_t Jvs837_13741::sum_error_cycles(size_t request_bytes) const
+uint32_t Io837_13741Imitation::sum_error_cycles(size_t request_bytes) const
 {
 	return static_cast<uint32_t>(969 + 26 * (request_bytes + 2) + 34 * 3);
 }
 
-uint32_t Jvs837_13741::command_cycles(std::span<const uint8_t> command, Outcome outcome) const
+uint32_t Io837_13741Imitation::command_cycles(std::span<const uint8_t> command, Outcome outcome) const
 {
 	static constexpr std::array<uint16_t, 3> SWITCHES[3] = {
 		{ 716, 677, 677 }, { 892, 965, 1041 }, { 909, 1040, 1175 }
@@ -135,7 +135,7 @@ uint32_t Jvs837_13741::command_cycles(std::span<const uint8_t> command, Outcome 
 }
 
 /* 1DC9: 1 to 3 bytes, kept in 8910-8912 */
-bool Jvs837_13741::swoutputs(std::span<const uint8_t> values)
+bool Io837_13741Imitation::swoutputs(std::span<const uint8_t> values)
 {
 	if (values.empty() || values.size() > OUTPUT_BYTES)
 		return false;

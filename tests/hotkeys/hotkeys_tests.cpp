@@ -22,7 +22,7 @@
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
  *            -I src $(pkg-config --cflags sdl3) tests/hotkeys/hotkeys_tests.cpp src/odin/hotkeys.cpp \
- *            src/odin/settings.cpp src/odin/save_folder.cpp $(pkg-config --libs sdl3) -o hotkeys_tests
+ *            src/odin/settings.cpp src/odin/user_files.cpp $(pkg-config --libs sdl3) -o hotkeys_tests
  * Exit status is 0 when every check passes. */
 
 #include "odin/hotkeys.hpp"

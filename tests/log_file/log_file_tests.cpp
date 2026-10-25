@@ -23,7 +23,7 @@
  * last words before a crash are in it; the file by default and ODIN_LOG.
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow -pthread \
- *            -I src tests/log_file/log_file_tests.cpp src/odin/log_file.cpp src/odin/save_folder.cpp \
+ *            -I src tests/log_file/log_file_tests.cpp src/odin/log_file.cpp src/odin/user_files.cpp \
  *            -o log_file_tests
  * It writes its files in the folder given as its argument, or the current
  * one; its own report goes to stderr... of a terminal it takes back. Exit
