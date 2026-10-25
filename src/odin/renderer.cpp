@@ -24,7 +24,6 @@
 #include "odin/hikaru_gpu.hpp"
 #include "odin/loading_screen.hpp"
 #include "odin/picture.hpp"
-#include "odin/renderer_gl.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -33,11 +32,9 @@ namespace odin {
 
 Renderer::Renderer(HostGraphics &graphics, const Memory &memory, const Options &options)
 	: m_gpu(nullptr), m_fb(memory.fb), m_options(options), m_building(nullptr), m_list(nullptr),
-	  m_frame{}, m_card(graphics.make_board_drawing()), m_textures(*m_card, memory.texram), m_times(options.times), m_mesh_vao(0), m_mesh_vbo(0), m_mesh_ibo(0),
-	  m_program(nullptr), m_variant_key(0), m_drawing(0),
-	  m_scissor_vp_index(~0u), m_bound_tex_index(~0u), m_unit0_texture(~0u), m_unit0_sampler(~0u),
-	  m_blend{~0u, ~0u, ~0u, ~0u}, m_pass{}, m_again(false),
-	  m_scale(1), m_num_lists(0), m_shown(2), m_next(-1), m_launched(0), m_last{},
+	  m_frame{}, m_card(graphics.make_board_drawing()), m_textures(*m_card, memory.texram), m_times(options.times),
+	  m_bound_tex_index(~0u), m_draw{}, m_collect(false), m_again(false), m_fragments_max(0),
+	  m_fragments_full(false), m_scale(1), m_num_lists(0), m_shown(2), m_next(-1), m_launched(0), m_last{},
 	  m_layer_ram{std::vector<uint8_t>(size_t{WIDTH} * HEIGHT * 4),
 	              std::vector<uint8_t>(size_t{WIDTH} * HEIGHT * 4)},
 	  m_layer_changed{true, true}, m_layer_pixels(size_t{WIDTH} * HEIGHT),
@@ -48,45 +45,28 @@ Renderer::Renderer(HostGraphics &graphics, const Memory &memory, const Options &
 		textures.ids.assign(ODIN_LIST_MAX_TEXHEADS, {});
 	}
 	init_debug();
-	m_programs.keep_in(options.programs_made);
-
-	build_list_pictures();
-	build_lists();
-
-	glBindTexture(GL_TEXTURE_2D, 0);
-	gl::check("building the renderer");
+	m_card->keep_programs_in(options.programs_made);
+	size_lists(room_at_start());
 }
 
 Renderer::~Renderer()
 {
 	m_times.tell();
-
-	glBindVertexArray(0);
-	if (m_mesh_vao) {
-		glDeleteVertexArrays(1, &m_mesh_vao);
-		glDeleteBuffers(1, &m_mesh_vbo);
-		glDeleteBuffers(1, &m_mesh_ibo);
-	}
-
-	destroy_list_pictures();
-	destroy_lists();
-	glUseProgram(0);
 }
 
-/* Compiles the mesh programs the lists of the game name, those of Odin
- * then those of the player, and draws a triangle without area with each.
- * See MeshPrograms; on the thread that draws the frames. */
+/* Makes ready the mesh programs the lists of the game name, those of Odin
+ * then those of the player (BoardDrawing::prepare_program); on the thread
+ * that draws the frames. */
 void
 Renderer::prepare_programs(const std::function<void(unsigned, unsigned)> &progress)
 {
-	static const odin_vertex_body_t none[3] = {};
 	std::vector<uint64_t> keys;
 
 	for (const std::string *list : { &m_options.programs_seed, &m_options.programs_kept }) {
 		if (list->empty())
 			continue;
-		for (const uint64_t key : MeshPrograms::read_list(*list))
-			if (!m_programs.holds(key) && std::find(keys.begin(), keys.end(), key) == keys.end())
+		for (const uint64_t key : read_program_list(*list))
+			if (!m_card->holds_program(key) && std::find(keys.begin(), keys.end(), key) == keys.end())
 				keys.push_back(key);
 	}
 
@@ -95,25 +75,18 @@ Renderer::prepare_programs(const std::function<void(unsigned, unsigned)> &progre
 
 	if (total)
 		progress(0, total);
-	upload_vertices(none, 3, nullptr, 0);
+	m_card->begin_preparing();
 	for (unsigned i = 0; i < total; i++) {
-		/* Back from the loading screen, drawn in the window */
-		glBindVertexArray(m_mesh_vao);
-		glBindFramebuffer(GL_FRAMEBUFFER, m_card->scene_framebuffer());
-		m_programs.add(keys[i]);
-		glDrawArrays(GL_TRIANGLES, 0, 3);
+		m_card->prepare_program(keys[i]);
 		progress(i + 1, total);
 	}
-	glUseProgram(0);
+	m_card->end_preparing();
 	if (total)
 		std::printf("programs: %u ready in %.1f s, %u of them read back, %u compiled\n", total,
-		            static_cast<double>(host_ns() - began) / 1e9, m_programs.read_back(), m_programs.compiled());
+		            static_cast<double>(host_ns() - began) / 1e9, m_card->programs_read_back(),
+		            m_card->programs_compiled());
 	if (!m_options.programs_kept.empty())
-		m_programs.list_in(m_options.programs_kept);
-
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	glBindVertexArray(0);
-	gl::check("preparing the programs");
+		m_card->list_programs_in(m_options.programs_kept);
 }
 
 void
@@ -136,17 +109,11 @@ Renderer::draw_loading(std::string_view title, unsigned done, unsigned total, un
 	m_card->draw_loading(rects, window_w, window_h);
 }
 
-/* Nothing a program holds, nothing bound is of the list about to be
- * drawn. */
+/* No texture chosen is of the list about to be drawn. */
 void
 Renderer::forget_held()
 {
-	m_program = nullptr;
-	m_drawing++;
-	m_scissor_vp_index = ~0u;
 	m_bound_tex_index = ~0u;
-	m_unit0_texture = m_unit0_sampler = ~0u;
-	m_blend[0] = ~0u;
 }
 
 void
@@ -200,7 +167,6 @@ Renderer::draw_frame()
 	 * (picture_rect, which the mouse reads too) */
 	m_card->present(picture_rect(m_frame.window_w, m_frame.window_h, m_frame.hole), m_frame.window_w,
 	                m_frame.window_h);
-	gl::check("a frame");
 	m_times.part(DrawTimes::PART_SHOWN);
 
 	if (logging()) {
@@ -218,14 +184,12 @@ Renderer::draw_frame()
 void
 Renderer::draw_list()
 {
-	glBindFramebuffer(GL_FRAMEBUFFER, m_card->scene_framebuffer());
 	draw_scene();
 	m_times.part(DrawTimes::PART_BLENDER);
 	if (m_last.back >= 0)
 		m_card->blend_scene_to_pipe(m_last.slot, static_cast<unsigned>(m_last.back), m_last.rate);
 	else
 		m_card->scene_to_pipe(m_last.slot);
-	gl::check("a list");
 }
 
 /* The translucent fragments of a list are collected without waiting for the
@@ -236,38 +200,11 @@ Renderer::draw_list()
 bool
 Renderer::too_many(Last &last)
 {
-	GLuint used = 0;
-
 	m_times.part(DrawTimes::PART_LAST_LIST);
-	if (last.copied) {
-		GLenum waited;
+	const uint32_t used = m_card->counted_fragments(last.slot, last.views);
 
-		do
-			waited = glClientWaitSync(last.copied, GL_SYNC_FLUSH_COMMANDS_BIT, 1000000000);
-		while (waited == GL_TIMEOUT_EXPIRED);
-		if (waited == GL_WAIT_FAILED)
-			fatal("waiting for the count of the translucent fragments");
-		glDeleteSync(last.copied);
-		last.copied = nullptr;
-	}
-	for (unsigned vpi = 0; vpi < 8; vpi++) {
-		const uint32_t at = last.slot * 8 + vpi;
-		GLuint count;
-
-		if (!(last.views & (1u << vpi)))
-			continue;
-		if (m_lists.counts) {
-			count = m_lists.counts[at];
-		} else {
-			glBindBuffer(GL_COPY_READ_BUFFER, m_lists.readback);
-			glGetBufferSubData(GL_COPY_READ_BUFFER, static_cast<GLintptr>(at * sizeof(GLuint)),
-			                   sizeof(GLuint), &count);
-			glBindBuffer(GL_COPY_READ_BUFFER, 0);
-		}
-		used = std::max(used, count);
-	}
 	m_times.fragments(used);
-	return used > m_lists.max && grow_lists(used);
+	return used > m_fragments_max && grow_lists(used);
 }
 
 /* Draws a list again, from what it was drawn from. */
@@ -299,7 +236,6 @@ Renderer::check_last_list()
 	if (!last.list)
 		return;
 	m_last.list = nullptr;
-	m_last.copied = nullptr;
 	if (too_many(last))
 		draw_again(last);
 	m_card->keep_picture(last.slot, last.buffer);
@@ -328,7 +264,6 @@ Renderer::show()
 
 	m_times.part(DrawTimes::PART_LAST_LIST);
 	m_last.list = nullptr;
-	m_last.copied = nullptr;
 	/* The 3D buffer of a list takes its picture. */
 	if (before.list)
 		m_card->keep_picture(before.slot, before.buffer);
@@ -375,9 +310,7 @@ Renderer::show()
 		m_card->keep_picture(before.slot, before.buffer);
 		/* Drawn again, this one has waited for its own counts. */
 		if (m_last.list) {
-			if (m_last.copied)
-				glDeleteSync(m_last.copied);
-			m_last.copied = nullptr;
+			m_card->forget_counts(m_last.slot);
 			draw_again(m_last);
 			m_last.views = 0;
 		}
@@ -421,8 +354,6 @@ Renderer::set_scale(unsigned scale)
 
 	m_card->set_scale(scale);
 	m_scale = scale;
-	destroy_list_pictures();
-	build_list_pictures();
 	size_lists(room_at_start());
 	forget_held();
 }

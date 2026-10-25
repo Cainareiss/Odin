@@ -20,18 +20,19 @@
 #define ODIN_BOARD_DRAWING_HPP
 
 #include <cstdint>
+#include <cstdio>
 #include <memory>
 #include <span>
 #include <string>
 
+#include "odin/antarctic_list.hpp"
+#include "odin/hikaru_draw.hpp"
 #include "odin/host_graphics.hpp"
 #include "odin/loading_screen.hpp"
 #include "odin/picture.hpp"
+#include "odin/renderer_programs.hpp"
 
 namespace odin {
-
-struct Compose;
-struct TextureSampling;
 
 /* A texture the renderer draws the board with (0: none) */
 struct HostTexture {
@@ -59,13 +60,30 @@ struct TexelRect {
  * little-endian 32-bit word each */
 enum class LayerTexels : uint8_t { ABGR1555, A2BGR10 };
 
+/* How the renderer has a mesh drawn, by the rules of the board
+ * (hikaru_draw.hpp) */
+struct MeshDraw {
+	MeshVariant variant;	/* its program */
+	MeshBlend blend;
+	bool weigh_by_alpha;	/* the colour weighted by its alpha */
+	unsigned blend_mode;	/* A81, among the translucent fragments */
+	HostTexture texture;	/* with variant.has_texture */
+	HostSampler sampler;
+};
+
+/* What the drawing of a list is told besides the list: where the lines of
+ * its log go (HR_LOG; nullptr: none) and the switches of the debug keys */
+struct SceneDebug {
+	std::FILE *log;
+	bool no_ambient, no_diffuse;
+};
+
 /* What the graphics card of the host does for the renderer (renderer.hpp),
  * which draws the pictures of the board: the other side of the door of
  * host_graphics.hpp, said in the words of the board, never in those of the
  * API. HostGraphics makes one for each game, with the renderer, and it goes
- * with it. board_drawing_gl.cpp and board_pictures_gl.cpp do it with
- * OpenGL. The renderer still draws its meshes with OpenGL itself
- * (MARKDOWN/105, C3).
+ * with it. The board_*_gl.cpp files do it with OpenGL (MARKDOWN/105,
+ * C3).
  *
  * The pictures it holds are `scale` times the screen of the hardware each
  * way (SCREEN_WIDTH by SCREEN_HEIGHT, hikaru_draw.hpp):
@@ -87,9 +105,52 @@ public:
 	/* The pictures `scale` times finer, 1 at first; the kept ones carried
 	 * over, each pixel the nearest */
 	virtual void set_scale(unsigned scale) = 0;
-	/* Until C3 piece 3: the OpenGL framebuffer of the scene, which the
-	 * renderer still draws its meshes in */
-	virtual uint32_t scene_framebuffer() const = 0;
+
+	/* A display list drawn into the scene: its vertices sent and the
+	 * scene emptied; each of its views from an empty depth; a pass for
+	 * each polygon type, with its meshes; the end of it. The list is read
+	 * until end_scene. */
+	virtual void begin_scene(const odin_display_list_t &list, const SceneDebug &debug) = 0;
+	virtual void clear_depth() = 0;
+	virtual void begin_pass(const PassRules &rules) = 0;
+	virtual void draw_mesh(const odin_mesh_t &mesh, const MeshDraw &draw) = 0;
+	virtual void end_pass() = 0;
+	virtual void end_scene() = 0;
+
+	/* The translucent polygons of a view (renderer_translucent.cpp),
+	 * within its pass: begin_translucent; then their meshes drawn between
+	 * begin_collect and end_collect put their fragments in lists, and the
+	 * count of them is kept for counted_fragments under a picture of the
+	 * pipe, or waited for now; then end_translucent blends them over the
+	 * colour below, or not. */
+	virtual void begin_translucent() = 0;
+	virtual void begin_collect(unsigned view) = 0;
+	virtual void end_collect() = 0;
+	virtual void keep_count(unsigned view, unsigned slot) = 0;
+	virtual uint32_t count_now(unsigned view) = 0;
+	virtual void end_translucent(bool blend) = 0;
+	/* The most fragments a view of the list of that picture left, its
+	 * counts waited for and forgotten; or forgotten unread */
+	virtual uint32_t counted_fragments(unsigned slot, uint32_t views) = 0;
+	virtual void forget_counts(unsigned slot) = 0;
+	/* Room for `max` fragments, what it held lost; the most the card
+	 * takes */
+	virtual void size_fragments(uint32_t max) = 0;
+	virtual uint32_t fragment_limit() const = 0;
+
+	/* The programs of the meshes (MeshVariant): each one the driver links
+	 * kept in that folder, and taken from there the next times; listed in
+	 * a file from now on; one made ready (compiled and drawn once), between
+	 * begin_preparing and end_preparing; how many were read back from the
+	 * folder and compiled so far */
+	virtual void keep_programs_in(const std::string &folder) = 0;
+	virtual void list_programs_in(const std::string &path) = 0;
+	virtual bool holds_program(uint64_t key) const = 0;
+	virtual void begin_preparing() = 0;
+	virtual void prepare_program(uint64_t key) = 0;
+	virtual void end_preparing() = 0;
+	virtual unsigned programs_read_back() const = 0;
+	virtual unsigned programs_compiled() const = 0;
 
 	/* The scene into a picture of the pipe: as it is, or blended with a
 	 * 3D buffer, which fades by `rate` (181) at each frame: the motion

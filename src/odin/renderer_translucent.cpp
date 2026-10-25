@@ -39,105 +39,13 @@
  * way against the other types and another in that list (depth_bias.hpp). */
 
 #include "odin/renderer.hpp"
-#include "odin/renderer_gl.hpp"
-#include "odin/renderer_shaders.hpp"
+#include "odin/repeats.hpp"
 
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
 
 namespace odin {
-
-namespace {
-
-/* Bytes of a node_t of the shaders */
-constexpr GLsizeiptr NODE_SIZE = 32;
-/* The texture units of the colour below the fragments and of the depth of
- * the other types */
-constexpr GLenum UNIT_BELOW = 5;
-
-} /* namespace */
-
-/* The pictures of the lists, at the size of the buffers: the last fragment
- * of each pixel, the colour under them, and the depth the other types left */
-void
-Renderer::build_list_pictures()
-{
-	const unsigned w = width(), h = height();
-
-	m_solid_depth = gl::new_texture(GL_DEPTH_COMPONENT24, w, h);
-	m_lists.heads = gl::new_texture(GL_R32UI, w, h);
-	m_lists.heads_fb = gl::new_framebuffer(m_lists.heads);
-	m_lists.below = gl::new_texture(GL_RGBA8, w, h);
-
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	glBindTexture(GL_TEXTURE_2D, 0);
-	gl::check("the pictures of the lists");
-}
-
-void
-Renderer::destroy_list_pictures()
-{
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	glDeleteTextures(1, &m_solid_depth);
-	glDeleteFramebuffers(1, &m_lists.heads_fb);
-	glDeleteTextures(1, &m_lists.heads);
-	glDeleteTextures(1, &m_lists.below);
-}
-
-void
-Renderer::build_lists()
-{
-	GLint64 limit = 0;
-
-	m_lists.program = gl::compile_program(shaders::WHOLE_PICTURE_VERTEX, shaders::SORT_FRAGMENT);
-	glUseProgram(m_lists.program);
-	glUniform1i(gl::uniform(m_lists.program, "u_below"), UNIT_BELOW);
-	glUseProgram(0);
-
-	glGenBuffers(8, m_lists.count);
-	for (const GLuint count : m_lists.count) {
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, count);
-		glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(GLuint), nullptr, GL_DYNAMIC_COPY);
-	}
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-
-	/* The counts of a list are read once the next one is sent (see show):
-	 * the next one starts its own from zero. */
-	const GLsizeiptr readback = 3 * sizeof(m_lists.count);
-
-	glGenBuffers(1, &m_lists.readback);
-	glBindBuffer(GL_COPY_WRITE_BUFFER, m_lists.readback);
-	m_lists.counts = nullptr;
-	if (GLEW_ARB_buffer_storage) {
-		const GLbitfield flags = GL_MAP_READ_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT;
-
-		glBufferStorage(GL_COPY_WRITE_BUFFER, readback, nullptr, flags);
-		m_lists.counts = static_cast<const GLuint *>(glMapBufferRange(GL_COPY_WRITE_BUFFER, 0, readback, flags));
-	} else {
-		glBufferData(GL_COPY_WRITE_BUFFER, readback, nullptr, GL_STREAM_READ);
-	}
-	glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
-
-	glGetInteger64v(GL_MAX_SHADER_STORAGE_BLOCK_SIZE, &limit);
-	m_lists.limit = static_cast<uint32_t>(std::min<GLint64>(limit / NODE_SIZE, UINT32_MAX));
-	m_lists.full = false;
-
-	glGenBuffers(1, &m_lists.nodes);
-	size_lists(room_at_start());
-}
-
-void
-Renderer::destroy_lists()
-{
-	if (m_last.copied)
-		glDeleteSync(m_last.copied);
-	m_last.copied = nullptr;
-	glDeleteBuffers(1, &m_lists.readback);
-	glDeleteBuffers(1, &m_lists.nodes);
-	glDeleteBuffers(8, m_lists.count);
-	glDeleteProgram(m_lists.program);
-}
 
 /* A fragment a pixel of the buffers, and four a pixel of the screen of the
  * hardware at least: the six games fit in that at the scale 1, but for one
@@ -152,12 +60,8 @@ Renderer::room_at_start() const
 void
 Renderer::size_lists(uint32_t max)
 {
-	m_lists.max = max;
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_lists.nodes);
-	glBufferData(GL_SHADER_STORAGE_BUFFER, static_cast<GLsizeiptr>(max) * NODE_SIZE,
-	             nullptr, GL_DYNAMIC_COPY);
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-	gl::check("sizing the fragment lists");
+	m_fragments_max = max;
+	m_card->size_fragments(max);
 }
 
 /* More room, for `used` fragments at least. False if the graphics card has
@@ -165,14 +69,15 @@ Renderer::size_lists(uint32_t max)
 bool
 Renderer::grow_lists(uint32_t used)
 {
-	const uint32_t twice = (m_lists.max > m_lists.limit / 2) ? m_lists.limit : m_lists.max * 2;
-	const uint32_t wanted = std::min(std::max(used, twice), m_lists.limit);
+	const uint32_t limit = m_card->fragment_limit();
+	const uint32_t twice = (m_fragments_max > limit / 2) ? limit : m_fragments_max * 2;
+	const uint32_t wanted = std::min(std::max(used, twice), limit);
 
-	if (wanted <= m_lists.max) {
-		if (!m_lists.full)
-			error("no room for %u translucent fragments, the card takes %u",
-			      used, m_lists.limit);
-		m_lists.full = true;
+	if (wanted <= m_fragments_max) {
+		if (!m_fragments_full)
+			repeats::error("no room for %u translucent fragments, the card takes %u",
+			               used, limit);
+		m_fragments_full = true;
 		return false;
 	}
 	std::printf("renderer: more room for %u translucent fragments\n", used);
@@ -180,104 +85,37 @@ Renderer::grow_lists(uint32_t used)
 	return true;
 }
 
+/* Collect the fragments. Whether their buffer was large enough is known once
+ * the graphics card has drawn them: nobody waits for it here, the count is
+ * left for check_last_list. A list drawn again does wait, and collects once
+ * more if the buffer is too small. */
 void
 Renderer::draw_translucent(unsigned vpi, const odin_mesh_t *meshes, unsigned num)
 {
-	static const GLuint zero[4] = { 0, 0, 0, 0 };
-	GLuint used = 1;	/* not known yet */
+	uint32_t used = 1;	/* not known yet */
 
-	/* The depth the other types left. */
-	glActiveTexture(GL_TEXTURE0 + MeshPrograms::UNIT_SOLID_DEPTH);
-	glBindTexture(GL_TEXTURE_2D, m_solid_depth);
-	glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0,
-	                    static_cast<GLsizei>(width()), static_cast<GLsizei>(height()));
-	glActiveTexture(GL_TEXTURE0);
-
-	glBindImageTexture(0, m_lists.heads, 0, GL_FALSE, 0, GL_READ_WRITE, GL_R32UI);
-	glDisable(GL_DEPTH_TEST);
-
-	/* Collect the fragments. Whether their buffer was large enough is
-	 * known once the graphics card has drawn them: nobody waits for it
-	 * here, the count is left for check_last_list. A list drawn again
-	 * does wait, and collects once more if the buffer is too small.
-	 * Each viewport has its count: writing a part of a buffer the card
-	 * is using waits for the card as well.
-	 * The Intel driver 21.20.16.5174 wants a buffer that has grown bound
-	 * again, and does not always reset an atomic counter buffer: the
-	 * count is in a storage buffer. */
-	m_pass.collect = true;
+	m_card->begin_translucent();
+	m_collect = true;
 	for (;;) {
-		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, m_lists.nodes);
-		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, m_lists.count[vpi]);
-		glBindFramebuffer(GL_FRAMEBUFFER, m_lists.heads_fb);
-		glDisable(GL_SCISSOR_TEST);
-		glClearBufferuiv(GL_COLOR, 0, zero);
-		glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), zero);
-		glBindFramebuffer(GL_FRAMEBUFFER, m_card->scene_framebuffer());
-		glEnable(GL_SCISSOR_TEST);
-		glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-
-		m_pass.order = 0;
-		glBindVertexArray(m_mesh_vao);
+		m_card->begin_collect(vpi);
 		for (unsigned j = 0; j < num; j++) {
 			set_material_blend(meshes[j]);
 			draw_mesh(meshes[j]);
 		}
-
-		glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-		glMemoryBarrier(GL_ALL_BARRIER_BITS);
+		m_card->end_collect();
 		if (!m_again) {
-			/* The count goes where it waits for check_last_list. */
 			m_last.views |= 1u << vpi;
-			glBindBuffer(GL_COPY_READ_BUFFER, m_lists.count[vpi]);
-			glBindBuffer(GL_COPY_WRITE_BUFFER, m_lists.readback);
-			glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, 0,
-			                    static_cast<GLintptr>((m_last.slot * 8 + vpi) * sizeof(GLuint)),
-			                    sizeof(GLuint));
-			glBindBuffer(GL_COPY_READ_BUFFER, 0);
-			glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
-			if (m_lists.counts) {
-				if (m_last.copied)
-					glDeleteSync(m_last.copied);
-				m_last.copied = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
-			}
+			m_card->keep_count(vpi, m_last.slot);
 			break;
 		}
-		glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &used);
-		if (used <= m_lists.max || !grow_lists(used))
+		used = m_card->count_now(vpi);
+		if (used <= m_fragments_max || !grow_lists(used))
 			break;
 	}
-	m_pass.collect = false;
+	m_collect = false;
 
-	/* Blend them over the colour below. */
 	m_times.part(DrawTimes::PART_SORT);
-	if (used) {
-		glActiveTexture(GL_TEXTURE0 + UNIT_BELOW);
-		glBindTexture(GL_TEXTURE_2D, m_lists.below);
-		glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0,
-		                    static_cast<GLsizei>(width()), static_cast<GLsizei>(height()));
-
-		/* One triangle over the whole picture, which takes no vertex:
-		 * drawn with the array of the meshes bound */
-		glUseProgram(m_lists.program);
-		m_program = nullptr;
-		glDisable(GL_BLEND);
-		glDisable(GL_SCISSOR_TEST);
-		glBindVertexArray(m_mesh_vao);
-		glDrawArrays(GL_TRIANGLES, 0, 3);
-		glBindVertexArray(0);
-		glEnable(GL_SCISSOR_TEST);
-		glEnable(GL_BLEND);
-
-		glBindTexture(GL_TEXTURE_2D, 0);
-		glActiveTexture(GL_TEXTURE0);
-	}
-
-	glActiveTexture(GL_TEXTURE0 + MeshPrograms::UNIT_SOLID_DEPTH);
-	glBindTexture(GL_TEXTURE_2D, 0);
-	glActiveTexture(GL_TEXTURE0);
-	glEnable(GL_DEPTH_TEST);
-	gl::check("the translucent polygons");
+	m_card->end_translucent(used != 0);
 }
 
 } /* namespace odin */

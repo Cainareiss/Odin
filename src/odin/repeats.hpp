@@ -122,6 +122,22 @@ print(std::FILE *out, const char *fmt, ...)
 		std::fputs(line, out);
 }
 
+/* "ERROR: " and the line on stderr, unless it repeats */
+inline void error(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+
+inline void
+error(const char *fmt, ...)
+{
+	char what[512];
+	va_list args;
+
+	va_start(args, fmt);
+	std::vsnprintf(what, sizeof(what), fmt, args);
+	va_end(args);
+	if (say(fmt, what))
+		std::fputs(("ERROR: " + std::string(what) + "\n").c_str(), stderr);
+}
+
 /* A game ends: how many lines it left out */
 inline void
 end()

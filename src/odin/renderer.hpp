@@ -31,8 +31,6 @@
 #include <string_view>
 #include <vector>
 
-#include <GL/glew.h>
-
 #include "odin/antarctic_list.hpp"
 #include "odin/board_drawing.hpp"
 #include "odin/eurasia_layers.hpp"
@@ -47,8 +45,9 @@ namespace odin {
 
 class HikaruGpu;
 
-/* Draws what the graphics chips of the Hikaru hand over, with OpenGL 4.3:
- * it stands for the chips that plot the polygons (see hikaru_gpu.hpp).
+/* Draws what the graphics chips of the Hikaru hand over, through the card of
+ * the host (BoardDrawing, board_drawing.hpp): it stands for the chips that
+ * plot the polygons (see hikaru_gpu.hpp), and keeps their rules.
  *
  * The command processor leaves the display list of a frame, the display chip
  * the two 2D layers. The picture comes out in three steps:
@@ -69,8 +68,8 @@ class HikaruGpu;
  * on its way to the screen: a pixel of the hardware is scale x scale pixels
  * there. The window has a size of its own.
  *
- * An OpenGL 4.3 context must be current for every call, the constructor
- * included. */
+ * Every call is made on the thread that has taken the card
+ * (HostGraphics::take_thread), the constructor included. */
 class Renderer {
 public:
 	/* The screen of the hardware, in pixels */
@@ -85,7 +84,7 @@ public:
 	/* Debug: for looking at what is drawn (HR_LOG, HR_LOG_FRAME,
 	 * ODIN_LIST_FP, ODIN_LIST_DUMP, ODIN_DRAW_TIMES, ODIN_DEBUG_KEYS;
 	 * ODIN_LISTS_TEST for the tests); everything is off at zero. And the
-	 * lists of the mesh programs of the game, see MeshPrograms: the
+	 * lists of the mesh programs of the game, see read_program_list: the
 	 * one that comes with Odin, and the one kept on this computer,
 	 * which takes the programs met later; the folder the programs the
 	 * driver made are kept in. Empty for none. */
@@ -213,15 +212,6 @@ private:
 
 		NUM_DEBUG
 	};
-	/* How the meshes of the polygon type being drawn are drawn */
-	struct Pass {
-		float alpha_ref;	/* fragments at or below it are dropped */
-		bool depth_bias;	/* the 101 bias moves the mesh */
-		bool weigh_by_alpha;	/* the colour is weighted by its alpha */
-		bool collect;		/* the fragments go to the lists */
-		unsigned blend_mode;	/* A81, of the mesh */
-		uint32_t order;		/* triangles sent so far */
-	};
 	/* The list drawn last, until its translucent fragments are counted:
 	 * see check_last_list */
 	struct Last {
@@ -231,7 +221,6 @@ private:
 		uint32_t rate;		/* 181 */
 		uint32_t slot;		/* its picture in the pipe, and its counts */
 		uint32_t views;		/* that have such fragments */
-		GLsync copied;		/* its counts copied, or nullptr */
 	};
 	/* The texture each texhead of a list was drawn with, see tex_ids */
 	struct ListTextures {
@@ -265,26 +254,14 @@ private:
 	void draw_scene();
 	void draw_polytype(unsigned vpi, unsigned polytype);
 	void draw_mesh(const odin_mesh_t &mesh);
-	void draw_instance(const odin_mesh_t &mesh, unsigned i);
-	void upload_vertices(const odin_vertex_body_t *vertices, uint32_t num,
-	                     const uint32_t *indices, uint32_t num_indices);
 	MeshVariant variant_of(const odin_mesh_t &mesh) const;
 	bool is_faded_by_depth(const odin_mesh_t &mesh) const;
-	void use_program(const odin_mesh_t &mesh);
-	void upload_viewport(const odin_mesh_t &mesh);
-	void upload_modelview(const odin_mesh_t &mesh, unsigned i);
-	void upload_texture(const odin_mesh_t &mesh);
-	void upload_lightset(const odin_mesh_t &mesh);
+	void choose_texture(const odin_mesh_t &mesh);
 	void set_material_blend(const odin_mesh_t &mesh);
 	void set_opaque_blend(const odin_mesh_t &mesh);
-	void set_blend(MeshBlend blend);
 	std::vector<HostTexture> &tex_ids();
 
 	/* renderer_translucent.cpp */
-	void build_list_pictures();
-	void destroy_list_pictures();
-	void build_lists();
-	void destroy_lists();
 	void size_lists(uint32_t max);
 	bool grow_lists(uint32_t used);
 	uint32_t room_at_start() const;
@@ -302,7 +279,6 @@ private:
 	void log(const char *fmt, ...) const __attribute__((format(printf, 2, 3)));
 	void log_mesh(const odin_mesh_t &mesh) const;
 	void print_list_fingerprint() const;
-	static void error(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 	[[noreturn]] static void fatal(const char *what);
 
 	HikaruGpu *m_gpu;
@@ -320,30 +296,24 @@ private:
 	/* What the card of the host does for it */
 	std::unique_ptr<BoardDrawing> m_card;
 	TextureCache m_textures;
-	MeshPrograms m_programs;
 	DrawTimes m_times;
 
-	/* The meshes: their vertices and the indices of their triangles,
-	 * the program in use and what is set for the list being drawn */
-	GLuint m_mesh_vao, m_mesh_vbo, m_mesh_ibo;
-	MeshProgram *m_program;		/* nullptr: none of the mesh programs */
-	MeshVariant m_variant;		/* of m_program */
-	uint64_t m_variant_key;
-	uint32_t m_drawing;		/* counts the lists drawn, see forget_held */
-	uint32_t m_scissor_vp_index;	/* of the list being drawn */
-	uint32_t m_bound_tex_index;	/* of the list being drawn, on the unit 0 */
-	/* What the meshes have bound and set, ~0u when not known */
-	GLuint m_unit0_texture, m_unit0_sampler;
-	GLenum m_blend[4];
-	Pass m_pass;
+	/* The texhead of the list being drawn whose texture m_draw has, and
+	 * how the next mesh is drawn */
+	uint32_t m_bound_tex_index;
+	MeshDraw m_draw;
+	/* The translucent fragments are collected (draw_translucent) */
+	bool m_collect;
 	/* The list is drawn again, see check_last_list */
 	bool m_again;
+	/* Room for that many translucent fragments; a list did not fit, and
+	 * it was told */
+	uint32_t m_fragments_max;
+	bool m_fragments_full;
 
 	/* How many times finer than the screen of the hardware the buffers
 	 * are */
 	unsigned m_scale;
-	/* The depth the polygon types other than the translucent left */
-	GLuint m_solid_depth;
 	/* The pictures of the last three lists, in the pipe of m_card: see
 	 * show */
 	uint32_t m_num_lists;		/* lists drawn so far */
@@ -360,23 +330,6 @@ private:
 	std::vector<uint16_t> m_layer_pixels;
 	/* The format of each layer last sent (~0u before the first) */
 	uint32_t m_layer_format[2];
-
-	/* The translucent fragments, see renderer_translucent.cpp */
-	struct {
-		GLuint program;		/* blends them */
-		GLuint heads, heads_fb;	/* the last one of each pixel */
-		GLuint nodes;
-		GLuint count[8];	/* one per viewport */
-		/* The counts of each of the three last lists, copied once
-		 * collected; where the processor reads them, with
-		 * ARB_buffer_storage, else nullptr */
-		GLuint readback;
-		const GLuint *counts;
-		uint32_t max;		/* nodes */
-		uint32_t limit;		/* nodes the graphics card takes in a buffer */
-		bool full;		/* a list did not fit, and it was told */
-		GLuint below;		/* the colour under them */
-	} m_lists;
 
 	int m_debug[NUM_DEBUG];
 	bool m_debug_held[NUM_DEBUG];

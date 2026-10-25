@@ -50,8 +50,8 @@ BoardDrawing::make_gl()
 	return std::make_unique<GlBoardDrawing>();
 }
 
-/* The texture is left bound on the unit 0, as the renderer knows
- * (Renderer::upload_texture). */
+/* The texture is left bound on the unit 0: bind_texture binds the one of
+ * the next mesh again. */
 HostTexture
 GlBoardDrawing::make_texture(Texels texels, std::span<const TexelRect> levels)
 {
@@ -62,6 +62,7 @@ GlBoardDrawing::make_texture(Texels texels, std::span<const TexelRect> levels)
 	glGenTextures(1, &id);
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, id);
+	m_unit0_texture = ~0u;
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, num_levels - 1);
 	if (texels == Texels::LA8)
 		glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, LA8_SWIZZLE);

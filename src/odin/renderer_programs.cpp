@@ -20,41 +20,28 @@
  */
 
 #include "odin/renderer_programs.hpp"
-#include "odin/program_cache.hpp"
-#include "odin/renderer_gl.hpp"
-#include "odin/renderer_shaders.hpp"
-#include "odin/save_folder.hpp"
 
-#include <cinttypes>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 
 namespace odin {
 
-namespace {
-
-/* The first line of a list of programs. The number goes up when
- * MeshVariant::key changes: the lists made before are then left unread. */
-constexpr char LIST_HEADER[] = "odin mesh programs 1\n";
-
-/* The file, open after its first line, or nullptr if it is not a list. */
 std::FILE *
-open_list(const std::string &path)
+open_program_list(const std::string &path)
 {
-	char line[sizeof(LIST_HEADER)];
+	char line[sizeof(PROGRAM_LIST_HEADER)];
 	std::FILE *file = std::fopen(path.c_str(), "r");
 
 	if (!file)
 		return nullptr;
-	if (!std::fgets(line, sizeof(line), file) || std::strcmp(line, LIST_HEADER) != 0) {
+	if (!std::fgets(line, sizeof(line), file) || std::strcmp(line, PROGRAM_LIST_HEADER) != 0) {
 		std::fclose(file);
 		return nullptr;
 	}
 	return file;
 }
-
-} /* namespace */
 
 uint64_t
 MeshVariant::key() const
@@ -120,34 +107,10 @@ MeshVariant::from_key(uint64_t key)
 	return variant;
 }
 
-MeshPrograms::~MeshPrograms()
-{
-	if (m_list)
-		std::fclose(m_list);
-	glUseProgram(0);
-	for (const auto &[key, program] : m_programs)
-		glDeleteProgram(program.id);
-}
-
-MeshProgram &
-MeshPrograms::get(const MeshVariant &variant)
-{
-	const uint64_t key = variant.key();
-	const auto held = m_programs.find(key);
-
-	if (held != m_programs.end())
-		return held->second;
-	if (m_list) {
-		std::fprintf(m_list, "%016" PRIx64 "\n", key);
-		std::fflush(m_list);
-	}
-	return m_programs.emplace(key, compile(variant)).first->second;
-}
-
 std::vector<uint64_t>
-MeshPrograms::read_list(const std::string &path)
+read_program_list(const std::string &path)
 {
-	std::FILE *const file = open_list(path);
+	std::FILE *const file = open_program_list(path);
 	std::vector<uint64_t> keys;
 	char line[32];
 
@@ -164,180 +127,6 @@ MeshPrograms::read_list(const std::string &path)
 	}
 	std::fclose(file);
 	return keys;
-}
-
-void
-MeshPrograms::add(uint64_t key)
-{
-	const std::optional<MeshVariant> variant = MeshVariant::from_key(key);
-
-	if (variant && !m_programs.contains(key))
-		m_programs.emplace(key, compile(*variant));
-}
-
-void
-MeshPrograms::list_in(const std::string &path)
-{
-	std::FILE *const held = open_list(path);
-
-	if (m_list)
-		std::fclose(m_list);
-	if (held) {
-		std::fclose(held);
-		m_list = std::fopen(path.c_str(), "a");
-	} else {
-		m_list = std::fopen(path.c_str(), "w");
-		if (m_list) {
-			std::fputs(LIST_HEADER, m_list);
-			std::fflush(m_list);
-		}
-	}
-}
-
-void
-MeshPrograms::keep_in(const std::string &folder)
-{
-	GLint formats = 0;
-
-	m_kept.clear();
-	glGetIntegerv(GL_NUM_PROGRAM_BINARY_FORMATS, &formats);
-	if (folder.empty() || formats <= 0)
-		return;
-	m_kept = folder;
-	m_driver.clear();
-	for (const GLenum name : { GL_VENDOR, GL_RENDERER, GL_VERSION, GL_SHADING_LANGUAGE_VERSION }) {
-		const GLubyte *const text = glGetString(name);
-
-		m_driver += text ? reinterpret_cast<const char *>(text) : "";
-		m_driver += '\n';
-	}
-}
-
-/* The program of these sources: the one kept for the key, when this driver
- * made it from them and takes it back, else compiled and kept. */
-GLuint
-MeshPrograms::link(uint64_t key, const std::string &vertex, const std::string &fragment)
-{
-	if (m_kept.empty()) {
-		m_compiled++;
-		return gl::compile_program(vertex.c_str(), fragment.c_str());
-	}
-
-	char name[32];
-
-	std::snprintf(name, sizeof(name), "/%016" PRIx64 ".bin", key);
-	const std::string path = m_kept + name;
-
-	if (const std::optional<std::vector<uint8_t>> file = read_file(path)) {
-		if (const std::optional<KeptProgram> kept = program_from_file(*file, m_driver, vertex, fragment)) {
-			const GLuint id = glCreateProgram();
-			GLint status = GL_FALSE;
-
-			glProgramBinary(id, kept->format, kept->binary.data(), static_cast<GLsizei>(kept->binary.size()));
-			glGetProgramiv(id, GL_LINK_STATUS, &status);
-			if (status == GL_TRUE) {
-				m_read_back++;
-				return id;
-			}
-			/* A program the driver no longer takes: compiled again,
-			 * without the error a format it dropped leaves */
-			glDeleteProgram(id);
-			glGetError();
-		}
-	}
-
-	const GLuint id = gl::compile_program(vertex.c_str(), fragment.c_str(), true);
-	GLint size = 0;
-
-	m_compiled++;
-	glGetProgramiv(id, GL_PROGRAM_BINARY_LENGTH, &size);
-	if (size > 0) {
-		KeptProgram kept{0, std::vector<uint8_t>(static_cast<size_t>(size))};
-		GLsizei got = 0;
-		GLenum format = 0;
-
-		glGetProgramBinary(id, size, &got, &format, kept.binary.data());
-		if (got > 0) {
-			kept.format = format;
-			kept.binary.resize(static_cast<size_t>(got));
-			write_kept(path, program_file(m_driver, vertex, fragment, kept));
-		}
-	}
-	return id;
-}
-
-MeshProgram
-MeshPrograms::compile(const MeshVariant &variant)
-{
-	/* The pass that collects the fragments writes to buffers. */
-	std::string defines = variant.collect ? "#version 430\n" : "#version 140\n";
-	const auto define = [&](const char *name, unsigned value) {
-		defines += "#define ";
-		defines += name;
-		defines += ' ';
-		defines += std::to_string(value);
-		defines += '\n';
-	};
-
-	define("HAS_TEXTURE", variant.has_texture);
-	define("HAS_LIGHTING", variant.has_lighting);
-	define("SHADING_MODE", variant.shading_mode);
-	define("ALPHA_MODE", variant.alpha_mode);
-	define("TEX_MODE", variant.tex_mode);
-	for (unsigned i = 0; i < 4; i++) {
-		const MeshVariant::Light &light = variant.lights[i];
-		const std::string n = std::to_string(i);
-
-		define(("HAS_LIGHT" + n).c_str(), light.on);
-		define(("LIGHT" + n + "_TYPE").c_str(), static_cast<unsigned>(light.type));
-		define(("LIGHT" + n + "_ATT_TYPE").c_str(), static_cast<unsigned>(light.attenuation));
-	}
-	define("HAS_FOG", variant.has_fog);
-	define("HAS_CUE", variant.has_cue);
-	define("COLLECT", variant.collect);
-	define("HAS_PATTERN", variant.has_pattern);
-
-	MeshProgram program;
-	program.id = link(variant.key(), defines + shaders::MESH_VERTEX, defines + shaders::MESH_FRAGMENT);
-
-	const auto find = [&](const char *name) {
-		return glGetUniformLocation(program.id, name);
-	};
-	MeshProgram::Locations &locs = program.locs;
-
-	locs.projection = find("u_projection");
-	locs.modelview = find("u_modelview");
-	locs.modelview2 = find("u_modelview2");
-	locs.depth_scale = find("u_depth_scale");
-	locs.sort_scale = find("u_sort_scale");
-	for (unsigned i = 0; i < 4; i++) {
-		const std::string light = "u_lights[" + std::to_string(i) + "].";
-
-		locs.lights[i].position = find((light + "position").c_str());
-		locs.lights[i].direction = find((light + "direction").c_str());
-		locs.lights[i].color = find((light + "color").c_str());
-		locs.lights[i].ambient = find((light + "ambient").c_str());
-		locs.lights[i].extents = find((light + "extents").c_str());
-		locs.lights[i].spot = find((light + "spot").c_str());
-		locs.lights[i].cone = find((light + "cone").c_str());
-		locs.lights[i].table = find((light + "table").c_str());
-	}
-	locs.ambient = find("u_ambient");
-	locs.fog = find("u_fog");
-	locs.fog_color = find("u_fog_color");
-	locs.alpha_ref = find("u_alpha_ref");
-	locs.weigh_by_alpha = find("u_weigh_by_alpha");
-	locs.order = find("u_order");
-	locs.blend_mode = find("u_blend_mode");
-	locs.pattern = find("u_pattern");
-
-	/* The texture units never change. */
-	glUseProgram(program.id);
-	glUniform1i(find("u_texture"), UNIT_TEXTURE);
-	glUniform1i(find("u_solid_depth"), UNIT_SOLID_DEPTH);
-	gl::check("a mesh program");
-
-	return program;
 }
 
 } /* namespace odin */

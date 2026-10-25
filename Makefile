@@ -43,6 +43,9 @@ OBJ := \
 	src/odin/host_graphics_gl.o \
 	src/odin/board_drawing_gl.o \
 	src/odin/board_pictures_gl.o \
+	src/odin/board_programs_gl.o \
+	src/odin/board_scene_gl.o \
+	src/odin/board_translucent_gl.o \
 	src/odin/x11_window.o \
 	src/odin/menu.o \
 	src/odin/menu_input.o \

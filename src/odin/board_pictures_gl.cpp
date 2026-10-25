@@ -45,6 +45,10 @@ GlBoardDrawing::GlBoardDrawing()
 
 	glGenFramebuffers(2, m_copy_fb);
 	m_state_picture = gl::new_texture(GL_RGBA8, SCREEN_WIDTH, SCREEN_HEIGHT);
+
+	build_list_pictures();
+	build_lists();
+
 	glBindTexture(GL_TEXTURE_2D, 0);
 	gl::check("building the board drawing");
 }
@@ -52,6 +56,14 @@ GlBoardDrawing::GlBoardDrawing()
 GlBoardDrawing::~GlBoardDrawing()
 {
 	glBindVertexArray(0);
+	if (m_mesh_vao) {
+		glDeleteVertexArrays(1, &m_mesh_vao);
+		glDeleteBuffers(1, &m_mesh_vbo);
+		glDeleteBuffers(1, &m_mesh_ibo);
+	}
+	destroy_list_pictures();
+	destroy_lists();
+
 	glDeleteVertexArrays(1, &m_quad_vao);
 	glDeleteBuffers(1, &m_quad_vbo);
 
@@ -162,8 +174,11 @@ GlBoardDrawing::set_scale(unsigned scale)
 		old[i] = kept(i);
 	destroy_pictures(false);
 
+	destroy_list_pictures();
+
 	m_scale = scale;
 	build_pictures();
+	build_list_pictures();
 	for (unsigned i = 0; i < KEPT; i++)
 		copy_picture(old[i], old_w, old_h, kept(i), width(), height());
 	glDeleteTextures(KEPT, old);
@@ -268,6 +283,7 @@ GlBoardDrawing::scene_to_pipe(unsigned slot)
 	glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0,
 	                    static_cast<GLsizei>(width()), static_cast<GLsizei>(height()));
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	gl::check("a list");
 }
 
 /* The blender output is what the 3D buffer of the list keeps: the other one
@@ -293,6 +309,7 @@ GlBoardDrawing::blend_scene_to_pipe(unsigned slot, unsigned buffer, uint32_t rat
 
 	glUseProgram(0);
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	gl::check("a list");
 }
 
 void
@@ -394,6 +411,13 @@ GlBoardDrawing::compose(const Compose &c, unsigned shown, const bool layers[2])
 
 void
 GlBoardDrawing::present(PictureRect rect, unsigned window_w, unsigned window_h)
+{
+	show_picture(rect, window_w, window_h);
+	gl::check("a frame");
+}
+
+void
+GlBoardDrawing::show_picture(PictureRect rect, unsigned window_w, unsigned window_h)
 {
 	const unsigned w = rect.w, h = rect.h;
 

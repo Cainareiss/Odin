@@ -21,7 +21,9 @@
 
 /* The board drawing with OpenGL (board_drawing.hpp), for its own files
  * only: board_drawing_gl.cpp (the textures), board_pictures_gl.cpp (the
- * pictures and what goes from one to the next). */
+ * pictures and what goes from one to the next), board_scene_gl.cpp (the
+ * meshes of a list), board_translucent_gl.cpp (its translucent fragments),
+ * board_programs_gl.cpp (the programs of the meshes). */
 
 #include <memory>
 #include <optional>
@@ -30,6 +32,7 @@
 #include <GL/glew.h>
 
 #include "odin/board_drawing.hpp"
+#include "odin/board_programs_gl.hpp"
 #include "odin/hikaru_draw.hpp"
 #include "odin/picture_filter.hpp"
 
@@ -43,7 +46,33 @@ public:
 	GlBoardDrawing &operator=(const GlBoardDrawing &) = delete;
 
 	void set_scale(unsigned scale) override;
-	uint32_t scene_framebuffer() const override { return m_scene_fb; }
+
+	void begin_scene(const odin_display_list_t &list, const SceneDebug &debug) override;
+	void clear_depth() override;
+	void begin_pass(const PassRules &rules) override;
+	void draw_mesh(const odin_mesh_t &mesh, const MeshDraw &draw) override;
+	void end_pass() override;
+	void end_scene() override;
+
+	void begin_translucent() override;
+	void begin_collect(unsigned view) override;
+	void end_collect() override;
+	void keep_count(unsigned view, unsigned slot) override;
+	uint32_t count_now(unsigned view) override;
+	void end_translucent(bool blend) override;
+	uint32_t counted_fragments(unsigned slot, uint32_t views) override;
+	void forget_counts(unsigned slot) override;
+	void size_fragments(uint32_t max) override;
+	uint32_t fragment_limit() const override { return m_lists.limit; }
+
+	void keep_programs_in(const std::string &folder) override { m_programs.keep_in(folder); }
+	void list_programs_in(const std::string &path) override { m_programs.list_in(path); }
+	bool holds_program(uint64_t key) const override { return m_programs.holds(key); }
+	void begin_preparing() override;
+	void prepare_program(uint64_t key) override;
+	void end_preparing() override;
+	unsigned programs_read_back() const override { return m_programs.read_back(); }
+	unsigned programs_compiled() const override { return m_programs.compiled(); }
 
 	void scene_to_pipe(unsigned slot) override;
 	void blend_scene_to_pipe(unsigned slot, unsigned buffer, uint32_t rate) override;
@@ -76,6 +105,25 @@ private:
 	void build_compose();
 	void build_presenter();
 	void set_2d_state();
+	void show_picture(PictureRect rect, unsigned window_w, unsigned window_h);
+
+	/* board_scene_gl.cpp */
+	void log(const char *fmt, ...) const __attribute__((format(printf, 2, 3)));
+	void upload_vertices(const odin_vertex_body_t *vertices, uint32_t num,
+	                     const uint32_t *indices, uint32_t num_indices);
+	void use_program(const MeshVariant &variant);
+	void upload_viewport(const odin_mesh_t &mesh);
+	void upload_modelview(const odin_mesh_t &mesh, unsigned i);
+	void bind_texture(const MeshDraw &draw);
+	void upload_lightset(const odin_mesh_t &mesh);
+	void draw_instance(const odin_mesh_t &mesh, unsigned i);
+	void set_blend(MeshBlend blend);
+
+	/* board_translucent_gl.cpp */
+	void build_list_pictures();
+	void destroy_list_pictures();
+	void build_lists();
+	void destroy_lists();
 
 	unsigned m_scale = 1;
 	/* Where a list is drawn: a colour buffer and a depth buffer */
@@ -119,6 +167,45 @@ private:
 	std::unique_ptr<PictureFilter> m_filter;
 	std::string m_filter_preset;
 	unsigned m_filter_frames = 0;
+
+	/* The meshes: the list being drawn, its vertices and the indices of
+	 * its triangles, the programs, the one in use and what is set for the
+	 * list (~0u when not known) */
+	const odin_display_list_t *m_list = nullptr;
+	SceneDebug m_debug{};
+	GLuint m_mesh_vao = 0, m_mesh_vbo = 0, m_mesh_ibo = 0;
+	MeshPrograms m_programs;
+	MeshProgram *m_program = nullptr;	/* nullptr: none of the mesh programs */
+	MeshVariant m_variant;			/* of m_program */
+	uint64_t m_variant_key = 0;
+	uint32_t m_drawing = 0;			/* counts the lists drawn, see begin_scene */
+	uint32_t m_scissor_vp_index = ~0u;
+	GLuint m_unit0_texture = ~0u, m_unit0_sampler = ~0u;
+	GLenum m_blend[4] = { ~0u, ~0u, ~0u, ~0u };
+	/* How the meshes of the polygon type being drawn are drawn */
+	struct {
+		float alpha_ref;	/* fragments at or below it are dropped */
+		bool depth_bias;	/* the 101 bias moves the mesh */
+		uint32_t order;		/* triangles sent so far, while collecting */
+	} m_pass{};
+
+	/* The translucent fragments, see board_translucent_gl.cpp */
+	GLuint m_solid_depth;		/* the depth the other types left */
+	struct {
+		GLuint program;		/* blends them */
+		GLuint heads, heads_fb;	/* the last one of each pixel */
+		GLuint nodes;
+		GLuint count[8];	/* one per viewport */
+		/* The counts of each of the three last lists, copied once
+		 * collected; where the processor reads them, with
+		 * ARB_buffer_storage, else nullptr */
+		GLuint readback;
+		const GLuint *counts;
+		uint32_t limit;		/* nodes the graphics card takes in a buffer */
+		GLuint below;		/* the colour under them */
+	} m_lists;
+	/* Each list of the pipe: its counts copied, or nullptr */
+	GLsync m_counted[3] = { nullptr, nullptr, nullptr };
 };
 
 } /* namespace odin */

@@ -26,10 +26,7 @@
 #include <cstdio>
 #include <optional>
 #include <string>
-#include <unordered_map>
 #include <vector>
-
-#include <GL/glew.h>
 
 namespace odin {
 
@@ -76,94 +73,16 @@ struct MeshVariant {
 	static std::optional<MeshVariant> from_key(uint64_t key);
 };
 
-/* A compiled program of the mesh shaders */
-struct MeshProgram {
-	struct Light {
-		GLint position, direction, color, ambient;
-		GLint extents, spot, cone, table;
-	};
-	/* The locations of its uniforms, -1 for one the variant leaves out */
-	struct Locations {
-		GLint projection;
-		GLint modelview;
-		GLint modelview2;
-		GLint depth_scale, sort_scale;
-		Light lights[4];
-		GLint ambient;
-		GLint fog, fog_color;
-		GLint alpha_ref;
-		GLint weigh_by_alpha;
-		GLint order;
-		GLint blend_mode;
-		GLint pattern;
-	};
-	/* What it was given last, so as not to give it again: indices in
-	 * the display list being drawn, see Renderer::forget_held. */
-	struct Held {
-		uint32_t drawing = ~0u;
-		uint32_t vp_index, ls_index, ls_vp_index;
-		uint32_t mv_index, mv2_index;
-		float alpha_ref, depth_scale, sort_scale;
-		int weigh_by_alpha;
-		uint32_t pattern;
-	};
-
-	GLuint id;
-	Locations locs;
-	Held held;
-};
-
-/* The programs compiled so far, by variant.
- *
- * The first time a program is needed the graphics driver compiles it, and
- * the first time it draws the driver works on it again (NVIDIA 595: some
- * 20 ms, then 10 on the thread that draws): a stutter each time a game
- * shows something new. So the programs a game draws with are listed in a
- * file, which starts with a line that tells what it is and then has the
- * key of a program a line: listed programs are compiled, and draw once,
- * when the game starts. */
-class MeshPrograms {
-public:
-	/* The texture units the programs read, set once */
-	enum : GLint {
-		UNIT_TEXTURE = 0,
-		UNIT_SOLID_DEPTH = 6
-	};
-
-	~MeshPrograms();
-
-	/* The program of a variant, compiled the first time. A program just
-	 * compiled is left in use. */
-	MeshProgram &get(const MeshVariant &variant);
-
-	/* The programs a file lists, those of a variant MeshVariant knows, in
-	 * its order; none for a file that is not such a list. */
-	static std::vector<uint64_t> read_list(const std::string &path);
-	bool holds(uint64_t key) const { return m_programs.contains(key); }
-	/* Compiles the program of a key read_list gave, unless it is held,
-	 * and leaves it in use. */
-	void add(uint64_t key);
-	/* Lists in a file the programs compiled from now on, after the ones
-	 * it lists already. */
-	void list_in(const std::string &path);
-	/* Keeps each program the driver links in that folder, and takes it
-	 * from there the next times (program_cache.hpp), when the driver can
-	 * give its programs; empty: none kept. */
-	void keep_in(const std::string &folder);
-	/* The programs made ready so far: read back from the folder, and
-	 * compiled */
-	unsigned read_back() const { return m_read_back; }
-	unsigned compiled() const { return m_compiled; }
-
-private:
-	MeshProgram compile(const MeshVariant &variant);
-	GLuint link(uint64_t key, const std::string &vertex, const std::string &fragment);
-
-	std::unordered_map<uint64_t, MeshProgram> m_programs;
-	std::FILE *m_list = nullptr;
-	std::string m_kept, m_driver;	/* the folder, and the driver the programs are made by */
-	unsigned m_read_back = 0, m_compiled = 0;
-};
+/* The programs a list of programs names, those of a variant MeshVariant
+ * knows, in its order; none for a file that is not such a list. Such a file
+ * starts with PROGRAM_LIST_HEADER, then has the key of a program a line, in
+ * 16 hex digits (board_programs_gl.hpp keeps one). The number of the header
+ * goes up when MeshVariant::key changes: the lists made before are then left
+ * unread. */
+inline constexpr char PROGRAM_LIST_HEADER[] = "odin mesh programs 1\n";
+std::vector<uint64_t> read_program_list(const std::string &path);
+/* The file, open after its first line, or nullptr if it is not a list */
+std::FILE *open_program_list(const std::string &path);
 
 } /* namespace odin */
 
