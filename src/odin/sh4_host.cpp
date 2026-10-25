@@ -18,6 +18,7 @@
 
 #include "odin/sh4_host.hpp"
 
+#include "odin/env.hpp"
 #include "odin/sh4.hpp"
 
 #include <cstring>
@@ -47,9 +48,11 @@ constexpr uint8_t SET[] = { 0x94, 0x93, 0x97, 0x9D, 0x9F };	/* sete, setae, seta
 
 } /* namespace */
 
+/* For the tests: ODIN_SH4_NO_FMA=1 takes the way of the hosts without FMA,
+ * as sh4_ops.cpp does */
 Sh4Host::Sh4Host(uint32_t *words, const Memory &memory, const Places &places)
-	: HostCode(SIZE), m_words(words), m_memory(memory), m_places(places), m_fused(__builtin_cpu_supports("fma")),
-	  m_enter(nullptr)
+	: HostCode(SIZE), m_words(words), m_memory(memory), m_places(places),
+	  m_fused(__builtin_cpu_supports("fma") && !env_flag("ODIN_SH4_NO_FMA")), m_enter(nullptr)
 {
 	if (usable()) {
 		clear();

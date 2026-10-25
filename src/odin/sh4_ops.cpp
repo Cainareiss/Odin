@@ -28,6 +28,8 @@
  * a product is fused with a sum only where std::fma says so. */
 
 #include "odin/sh4.hpp"
+#include "odin/env.hpp"
+#include "odin/fma_by_double.hpp"
 #include "odin/sh4_fsca.hpp"
 
 #include <algorithm>
@@ -38,29 +40,39 @@ namespace odin {
 
 namespace {
 
-/* The products FMAC, FIPR and FTRV fuse with a sum, rounded once as
- * std::fma rounds them. A build for hosts that have FMA does it in one
- * instruction; a build for any x86-64 has these built twice, once for FMA,
- * taken when the host has it, else with the library: the same results. */
+/* The products FMAC, FIPR and FTRV fuse with a sum, rounded once. A build
+ * for hosts that have FMA does it in one instruction (std::fma); a build for
+ * any x86-64 has these built twice, once for FMA, taken when the host has
+ * it, else with fma_by_double: the same results on every host, whatever its
+ * library. */
+inline float
+fma_one(float x, float y, float z)
+{
+	return std::fma(x, y, z);
+}
+
+template <float (*FMA)(float, float, float)>
 [[gnu::always_inline]] inline float
 fused_mac(uint32_t a, uint32_t b, uint32_t c)
 {
-	return std::fma(std::bit_cast<float>(a), std::bit_cast<float>(b), std::bit_cast<float>(c));
+	return FMA(std::bit_cast<float>(a), std::bit_cast<float>(b), std::bit_cast<float>(c));
 }
 
+template <float (*FMA)(float, float, float)>
 [[gnu::always_inline]] inline float
 fused_ipr(const uint32_t *a, const uint32_t *b)
 {
 	const auto f = [](uint32_t w) { return std::bit_cast<float>(w); };
 	float sum = f(a[1]) * f(b[1]);
 
-	sum = std::fma(f(a[0]), f(b[0]), sum);
-	sum = std::fma(f(a[2]), f(b[2]), sum);
-	sum = std::fma(f(a[3]), f(b[3]), sum);
+	sum = FMA(f(a[0]), f(b[0]), sum);
+	sum = FMA(f(a[2]), f(b[2]), sum);
+	sum = FMA(f(a[3]), f(b[3]), sum);
 	return sum;
 }
 
 /* The vector v by the matrix x, one column of x per component of v */
+template <float (*FMA)(float, float, float)>
 [[gnu::always_inline]] inline void
 fused_trv(uint32_t *v, const uint32_t *x)
 {
@@ -70,28 +82,29 @@ fused_trv(uint32_t *v, const uint32_t *x)
 	for (uint32_t i = 0; i < 4; i++) {
 		float sum = v1 * f(x[4 + i]);
 
-		sum = std::fma(v0, f(x[i]), sum);
-		sum = std::fma(v2, f(x[8 + i]), sum);
-		sum = std::fma(v3, f(x[12 + i]), sum);
+		sum = FMA(v0, f(x[i]), sum);
+		sum = FMA(v2, f(x[8 + i]), sum);
+		sum = FMA(v3, f(x[12 + i]), sum);
 		v[i] = std::bit_cast<uint32_t>(sum);
 	}
 }
 
 #if defined(__FMA__) || !(defined(__x86_64__) || defined(_M_X64))
-float mac(uint32_t a, uint32_t b, uint32_t c) { return fused_mac(a, b, c); }
-float ipr(const uint32_t *a, const uint32_t *b) { return fused_ipr(a, b); }
-void trv(uint32_t *v, const uint32_t *x) { fused_trv(v, x); }
+float mac(uint32_t a, uint32_t b, uint32_t c) { return fused_mac<fma_one>(a, b, c); }
+float ipr(const uint32_t *a, const uint32_t *b) { return fused_ipr<fma_one>(a, b); }
+void trv(uint32_t *v, const uint32_t *x) { fused_trv<fma_one>(v, x); }
 #else
-[[gnu::target("fma")]] float mac_fma(uint32_t a, uint32_t b, uint32_t c) { return fused_mac(a, b, c); }
-[[gnu::target("fma")]] float ipr_fma(const uint32_t *a, const uint32_t *b) { return fused_ipr(a, b); }
-[[gnu::target("fma")]] void trv_fma(uint32_t *v, const uint32_t *x) { fused_trv(v, x); }
-[[gnu::noinline]] float mac_any(uint32_t a, uint32_t b, uint32_t c) { return fused_mac(a, b, c); }
-[[gnu::noinline]] float ipr_any(const uint32_t *a, const uint32_t *b) { return fused_ipr(a, b); }
-[[gnu::noinline]] void trv_any(uint32_t *v, const uint32_t *x) { fused_trv(v, x); }
+[[gnu::target("fma")]] float mac_fma(uint32_t a, uint32_t b, uint32_t c) { return fused_mac<fma_one>(a, b, c); }
+[[gnu::target("fma")]] float ipr_fma(const uint32_t *a, const uint32_t *b) { return fused_ipr<fma_one>(a, b); }
+[[gnu::target("fma")]] void trv_fma(uint32_t *v, const uint32_t *x) { fused_trv<fma_one>(v, x); }
+[[gnu::noinline]] float mac_any(uint32_t a, uint32_t b, uint32_t c) { return fused_mac<fma_by_double>(a, b, c); }
+[[gnu::noinline]] float ipr_any(const uint32_t *a, const uint32_t *b) { return fused_ipr<fma_by_double>(a, b); }
+[[gnu::noinline]] void trv_any(uint32_t *v, const uint32_t *x) { fused_trv<fma_by_double>(v, x); }
 
+/* For the tests: ODIN_SH4_NO_FMA=1 takes the way of the hosts without FMA */
 const bool HAS_FMA = [] {
 	__builtin_cpu_init();
-	return __builtin_cpu_supports("fma") != 0;
+	return __builtin_cpu_supports("fma") != 0 && !env_flag("ODIN_SH4_NO_FMA");
 }();
 
 float mac(uint32_t a, uint32_t b, uint32_t c) { return HAS_FMA ? mac_fma(a, b, c) : mac_any(a, b, c); }
