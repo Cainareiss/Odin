@@ -252,7 +252,7 @@ Display::Display(const Keyboard &keys, const Options &options, SDL_Window *windo
 	  m_picture_fb(0), m_picture_width(Renderer::WIDTH), m_picture_height(Renderer::HEIGHT),
 	  m_late(env_flag("ODIN_LATE_DRAW")), m_held(false), m_late_draw(0),
 	  m_shot_prefix(std::getenv("ODIN_SCREENSHOT")), m_shot_every(60),
-	  m_fingerprint(env_flag("ODIN_PICTURE_FP")), m_speed(env_flag("ODIN_SPEED")),
+	  m_fingerprint(env_flag("ODIN_PICTURE_FP")), m_window_fp(env_flag("ODIN_WINDOW_FP")), m_speed(env_flag("ODIN_SPEED")),
 	  m_speed_since(0), m_speed_last(0), m_speed_longest(0),
 	  m_stats(env_flag("ODIN_STATS")), m_draw_ns(0), m_wait_frame_ns(0), m_wait_write_ns(0), m_drawn(0),
 	  m_title_since(0), m_title_frames(0)
@@ -349,7 +349,7 @@ Display::show_black()
 		glViewport(0, 0, w, h);
 		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
-		SDL_GL_SwapWindow(m_window);
+		present(static_cast<unsigned>(w), static_cast<unsigned>(h), "black");
 	});
 }
 
@@ -381,7 +381,7 @@ Display::prepare_programs(const std::string &title)
 			const uint64_t wh = size;
 			m_renderer->draw_loading(title, done, total, static_cast<unsigned>(wh >> 32),
 			                         static_cast<unsigned>(wh));
-			SDL_GL_SwapWindow(m_window);
+			present(static_cast<unsigned>(wh >> 32), static_cast<unsigned>(wh), "loading");
 		});
 	});
 	while (!m_drawing->wait_for(std::chrono::milliseconds(16))) {
@@ -556,7 +556,7 @@ Display::show_again(BarState *bar)
 
 		m_renderer->show_again(ww, wh, m_hole);
 		draw_over(ww, wh, over);
-		SDL_GL_SwapWindow(m_window);
+		present(ww, wh, "again");
 	});
 }
 
@@ -618,7 +618,7 @@ Display::draw_library(LibraryState &state, BarState &bar)
 		/* No picture of a game behind it */
 		m_menu->freeze(0, 0, 0);
 		m_menu->draw(static_cast<unsigned>(w), static_cast<unsigned>(h));
-		SDL_GL_SwapWindow(m_window);
+		present(static_cast<unsigned>(w), static_cast<unsigned>(h), "library");
 	});
 }
 
@@ -631,7 +631,7 @@ Display::draw_menu(MenuState &state)
 	SDL_GetWindowSizeInPixels(m_window, &w, &h);
 	run([this, w, h] {
 		m_menu->draw(static_cast<unsigned>(w), static_cast<unsigned>(h));
-		SDL_GL_SwapWindow(m_window);
+		present(static_cast<unsigned>(w), static_cast<unsigned>(h), "menu");
 	});
 }
 
@@ -692,7 +692,7 @@ Display::draw(bool late, unsigned window_w, unsigned window_h, bool bar)
 		SDL_GL_SetSwapInterval(wait ? 1 : 0);
 		m_waits = wait;
 	}
-	SDL_GL_SwapWindow(m_window);
+	present(window_w, window_h, "game");
 	m_renderer->frame_shown();
 	if (m_stats) {
 		m_draw_ns += host_ns() - begin;
@@ -711,6 +711,22 @@ Display::read_picture(uint8_t *pixels)
 	glReadPixels(0, 0, static_cast<GLsizei>(m_picture_width), static_cast<GLsizei>(m_picture_height),
 	             GL_RGB, GL_UNSIGNED_BYTE, pixels);
 	glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+}
+
+void
+Display::present(unsigned window_w, unsigned window_h, const char *what)
+{
+	if (m_window_fp) {
+		m_window_pixels.resize(size_t{window_w} * window_h * 3);
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+		glReadBuffer(GL_BACK);
+		glPixelStorei(GL_PACK_ALIGNMENT, 1);
+		glReadPixels(0, 0, static_cast<GLsizei>(window_w), static_cast<GLsizei>(window_h), GL_RGB, GL_UNSIGNED_BYTE,
+		             m_window_pixels.data());
+		std::fprintf(stderr, "WINFP %s frame=%u size=%ux%u fp=%016" PRIx64 "\n", what, m_frame, window_w, window_h,
+		             fnv1a(FNV_START, m_window_pixels.data(), m_window_pixels.size()));
+	}
+	SDL_GL_SwapWindow(m_window);
 }
 
 void

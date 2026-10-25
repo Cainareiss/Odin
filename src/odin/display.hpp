@@ -65,6 +65,9 @@ class Worker;
  *  ODIN_PICTURE_FP=1		a line for the picture of each frame on
  *				stderr, FNV-1a 64 of its pixels, to compare
  *				two builds
+ *  ODIN_WINDOW_FP=1		the same for the whole window each time it
+ *				is shown: the game with its bezel or its
+ *				sides, the bar, the menu, the library
  *  ODIN_SPEED=1		a line every 60 frames on stderr: the frames
  *				a second over them and the longest of them
  *				in milliseconds
@@ -225,6 +228,8 @@ private:
 	void draw_over(unsigned w, unsigned h, bool bar);
 	bool build_bar(BarState *bar);
 	void read_picture(uint8_t *pixels);
+	/* The window drawn, shown; `what` it shows, for ODIN_WINDOW_FP */
+	void present(unsigned window_w, unsigned window_h, const char *what);
 	void screenshot();
 	void print_fingerprint();
 	/* After a frame */
@@ -282,11 +287,11 @@ private:
 	std::binary_semaphore m_late_draw;
 
 	/* Debug: what the environment asks for (ODIN_SCREENSHOT,
-	 * ODIN_SCREENSHOT_EVERY, ODIN_PICTURE_FP, ODIN_SPEED) */
+	 * ODIN_SCREENSHOT_EVERY, ODIN_PICTURE_FP, ODIN_WINDOW_FP, ODIN_SPEED) */
 	const char *m_shot_prefix;
 	unsigned m_shot_every;
-	bool m_fingerprint;
-	std::vector<uint8_t> m_pixels;
+	bool m_fingerprint, m_window_fp;
+	std::vector<uint8_t> m_pixels, m_window_pixels;
 	bool m_speed;
 	uint64_t m_speed_since, m_speed_last, m_speed_longest;
 	/* Debug: ODIN_STATS, the host time of the drawings on their thread,
