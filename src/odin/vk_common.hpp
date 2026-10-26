@@ -78,14 +78,15 @@ namespace odin::vk {
 	F(vkCmdSetViewport) F(vkCmdSetScissor) F(vkCmdDraw) \
 	F(vkCmdCopyImageToBuffer) F(vkCmdCopyBufferToImage) F(vkCmdBlitImage) \
 	F(vkCmdBindVertexBuffers) F(vkCmdBindIndexBuffer) F(vkCmdDrawIndexed) F(vkFreeDescriptorSets) \
-	F(vkCmdFillBuffer) F(vkCmdCopyBuffer) \
+	F(vkCmdFillBuffer) F(vkCmdCopyBuffer) F(vkCreateQueryPool) F(vkDestroyQueryPool) F(vkGetQueryPoolResults) \
 	F(vkCreatePipelineCache) F(vkDestroyPipelineCache) F(vkGetPipelineCacheData) F(vkMergePipelineCaches) \
 	G(vkQueueSubmit2, vkQueueSubmit2KHR) G(vkCmdPipelineBarrier2, vkCmdPipelineBarrier2KHR) \
 	G(vkCmdBeginRendering, vkCmdBeginRenderingKHR) G(vkCmdEndRendering, vkCmdEndRenderingKHR) \
 	G(vkCmdSetCullMode, vkCmdSetCullModeEXT) G(vkCmdSetFrontFace, vkCmdSetFrontFaceEXT) \
 	G(vkCmdSetDepthTestEnable, vkCmdSetDepthTestEnableEXT) \
 	G(vkCmdSetDepthWriteEnable, vkCmdSetDepthWriteEnableEXT) \
-	G(vkCmdSetDepthCompareOp, vkCmdSetDepthCompareOpEXT)
+	G(vkCmdSetDepthCompareOp, vkCmdSetDepthCompareOpEXT) \
+	G(vkResetQueryPool, vkResetQueryPoolEXT) G(vkCmdWriteTimestamp2, vkCmdWriteTimestamp2KHR)
 
 #define ODIN_VK_MEMBER(name) PFN_##name name = nullptr;
 #define ODIN_VK_MEMBER2(name, other) PFN_##name name = nullptr;
@@ -207,6 +208,11 @@ public:
 	/* Whether fragment shaders read gl_PrimitiveID (the geometry shaders
 	 * of the card) */
 	bool primitive_ids() const { return m_primitive_ids; }
+	/* Whether the queue writes the time, its stamps reset by the
+	 * processor; the bits of a stamp and its unit, in ns */
+	bool stamps() const { return m_stamp_bits > 0 && m_host_query_reset; }
+	uint32_t stamp_bits() const { return m_stamp_bits; }
+	float stamp_period() const { return m_properties.limits.timestampPeriod; }
 	/* How many errors the validation layer told (Debug) */
 	unsigned validation_errors() const { return m_errors; }
 
@@ -262,13 +268,14 @@ public:
 
 	/* A pass that samples `images` images, with `push` bytes of push
 	 * constants, drawn as a list or a strip of triangles into an image of
-	 * that format, nothing blended, nothing culled, no depth */
+	 * that format, nothing culled, no depth; nothing blended, or over what
+	 * is there by the alpha of what is drawn (`over`) */
 	Pass make_pass(const Spirv &vertex, const Spirv &fragment, unsigned images, uint32_t push,
-	               VkPrimitiveTopology topology, VkFormat format);
+	               VkPrimitiveTopology topology, VkFormat format, bool over = false);
 	/* The same with those bindings in its set */
 	Pass make_pass(const Spirv &vertex, const Spirv &fragment,
 	               const std::vector<VkDescriptorSetLayoutBinding> &bindings, uint32_t push,
-	               VkPrimitiveTopology topology, VkFormat format);
+	               VkPrimitiveTopology topology, VkFormat format, bool over = false);
 	void destroy_pass(Pass &pass);
 	/* A descriptor set of that layout, for the frame being written */
 	VkDescriptorSet frame_set(VkDescriptorSetLayout layout);
@@ -333,6 +340,8 @@ private:
 	bool m_gl_clip_space = false;
 	bool m_creation_feedback = false;
 	bool m_primitive_ids = false;
+	bool m_host_query_reset = false;
+	uint32_t m_stamp_bits = 0;
 	bool m_validation = false;
 	bool m_portability = false;
 	bool m_core13 = false;

@@ -66,6 +66,7 @@ struct Features {
 	VkPhysicalDeviceSynchronization2FeaturesKHR sync2{};
 	VkPhysicalDeviceExtendedDynamicStateFeaturesEXT dynamic{};
 	VkPhysicalDeviceDepthClipControlFeaturesEXT clip{};
+	VkPhysicalDeviceHostQueryResetFeatures reset{};
 	VkPhysicalDeviceFeatures2 all{};
 
 	explicit Features(bool core13)
@@ -75,6 +76,7 @@ struct Features {
 		sync2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR;
 		dynamic.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT;
 		clip.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_CLIP_CONTROL_FEATURES_EXT;
+		reset.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_QUERY_RESET_FEATURES;
 		all.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
 		if (core13) {
 			all.pNext = &v13;
@@ -88,6 +90,11 @@ struct Features {
 	{
 		clip.pNext = all.pNext;
 		all.pNext = &clip;
+	}
+	void with_reset()
+	{
+		reset.pNext = all.pNext;
+		all.pNext = &reset;
 	}
 	bool enough(bool core13) const
 	{
@@ -304,6 +311,11 @@ Context::choose_gpu(std::string &why)
 		const bool clip = has(extensions, VK_EXT_DEPTH_CLIP_CONTROL_EXTENSION_NAME);
 		if (clip)
 			features.with_clip();
+		/* Core in Vulkan 1.2 */
+		const bool reset_ext = api < VK_API_VERSION_1_2 && has(extensions, VK_EXT_HOST_QUERY_RESET_EXTENSION_NAME);
+		const bool reset = api >= VK_API_VERSION_1_2 || reset_ext;
+		if (reset)
+			features.with_reset();
 		m_fn.vkGetPhysicalDeviceFeatures2(gpu, &features.all);
 		if (!features.enough(core13))
 			continue;
@@ -334,6 +346,8 @@ Context::choose_gpu(std::string &why)
 		m_properties = props;
 		m_max_anisotropy = props.limits.maxSamplerAnisotropy;
 		m_gl_clip_space = clip && features.clip.depthClipControl;
+		m_host_query_reset = reset && features.reset.hostQueryReset;
+		m_stamp_bits = families[*family].timestampValidBits;
 		m_creation_feedback = core13 || has(extensions, VK_EXT_PIPELINE_CREATION_FEEDBACK_EXTENSION_NAME);
 		m_extensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 		/* Dear ImGui asks for this one by name, even under 1.3 */
@@ -347,6 +361,8 @@ Context::choose_gpu(std::string &why)
 			m_extensions.push_back("VK_KHR_portability_subset");
 		if (m_gl_clip_space)
 			m_extensions.push_back(VK_EXT_DEPTH_CLIP_CONTROL_EXTENSION_NAME);
+		if (m_host_query_reset && reset_ext)
+			m_extensions.push_back(VK_EXT_HOST_QUERY_RESET_EXTENSION_NAME);
 		if (!core13 && m_creation_feedback)
 			m_extensions.push_back(VK_EXT_PIPELINE_CREATION_FEEDBACK_EXTENSION_NAME);
 		m_api_version = api;
@@ -392,6 +408,10 @@ Context::make_device(std::string &why)
 	if (m_gl_clip_space) {
 		wanted.with_clip();
 		wanted.clip.depthClipControl = VK_TRUE;
+	}
+	if (m_host_query_reset) {
+		wanted.with_reset();
+		wanted.reset.hostQueryReset = VK_TRUE;
 	}
 
 	const VkDeviceCreateInfo info{ VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO, &wanted.all, 0, 1, &queue, 0, nullptr,
@@ -846,18 +866,18 @@ Context::barrier(VkCommandBuffer cb, Image &image, const Use &next, unsigned lev
 
 Pass
 Context::make_pass(const Spirv &vertex, const Spirv &fragment, unsigned images, uint32_t push,
-                   VkPrimitiveTopology topology, VkFormat format)
+                   VkPrimitiveTopology topology, VkFormat format, bool over)
 {
 	std::vector<VkDescriptorSetLayoutBinding> bindings;
 
 	for (uint32_t i = 0; i < images; i++)
 		bindings.push_back({ i, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr });
-	return make_pass(vertex, fragment, bindings, push, topology, format);
+	return make_pass(vertex, fragment, bindings, push, topology, format, over);
 }
 
 Pass
 Context::make_pass(const Spirv &vertex, const Spirv &fragment, const std::vector<VkDescriptorSetLayoutBinding> &bindings,
-                   uint32_t push, VkPrimitiveTopology topology, VkFormat format)
+                   uint32_t push, VkPrimitiveTopology topology, VkFormat format, bool over)
 {
 	Pass pass;
 	const VkDescriptorSetLayoutCreateInfo set{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO, nullptr, 0,
@@ -899,6 +919,12 @@ Context::make_pass(const Spirv &vertex, const Spirv &fragment, const std::vector
 	VkPipelineColorBlendAttachmentState write{};
 	write.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT |
 	                       VK_COLOR_COMPONENT_A_BIT;
+	/* As glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA) */
+	if (over) {
+		write.blendEnable = VK_TRUE;
+		write.srcColorBlendFactor = write.srcAlphaBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+		write.dstColorBlendFactor = write.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+	}
 	VkPipelineColorBlendStateCreateInfo blend{};
 	blend.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
 	blend.attachmentCount = 1;

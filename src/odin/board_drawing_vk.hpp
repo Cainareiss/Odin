@@ -75,11 +75,13 @@ public:
 	unsigned programs_read_back() const override { return m_read_back; }
 	unsigned programs_compiled() const override { return m_compiled; }
 
-	bool has_stamps() const override { return false; }
-	uint32_t put_stamp() override { return 0; }
-	bool reached(uint32_t) override { return true; }
-	uint64_t stamp_time(uint32_t) override { return 0; }
-	void forget_stamp(uint32_t, bool) override {}
+	bool has_stamps() const override { return m_card.stamps(); }
+	uint32_t put_stamp() override;
+	bool reached(uint32_t stamp) override;
+	uint64_t stamp_time(uint32_t stamp) override;
+	void forget_stamp(uint32_t stamp, bool again) override;
+	/* The commands of a frame go to the card at its end: its stamps are
+	 * read frames later (renderer_times.hpp) */
 	void send_commands() override {}
 
 	void scene_to_pipe(unsigned slot) override;
@@ -198,6 +200,12 @@ private:
 	uint32_t m_next_texture = 1, m_next_sampler = 1;
 	KeptSets m_texture_sets, m_sampler_sets;
 	KeptSet m_none_set, m_nearest_set;
+
+	/* The stamps of the clock of the card (Debug: ODIN_DRAW_TIMES): their
+	 * queries, made when first put, and those free to be put; a stamp is
+	 * its query plus one, 0 none */
+	VkQueryPool m_stamps = VK_NULL_HANDLE;
+	std::vector<uint32_t> m_free_stamps;
 
 	/* The meshes: their depth, shaders (the fragment shader of the
 	 * translucent ones apart), layout (the set of the list, then those of

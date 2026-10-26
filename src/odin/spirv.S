@@ -42,6 +42,13 @@ SPIRV(mesh_frag, "glsl/mesh.frag.spv")
 SPIRV(mesh_collect_frag, "glsl/mesh_collect.frag.spv")
 SPIRV(sort_frag, "glsl/sort.frag.spv")
 
+/* The window */
+SPIRV(image_vert, "glsl/image.vert.spv")
+SPIRV(image_frag, "glsl/image.frag.spv")
+SPIRV(whole_window_vert, "glsl/whole_window.vert.spv")
+SPIRV(blur_frag, "glsl/blur.frag.spv")
+SPIRV(show_frag, "glsl/show.frag.spv")
+
 #if !defined(_WIN32)
 	.section .note.GNU-stack, "", @progbits
 #endif

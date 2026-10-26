@@ -18,10 +18,19 @@
 
 /* The image, at that light (image.vert) */
 
+#ifdef VULKAN
+layout(set = 0, binding = 0) uniform sampler2D bezel;
+layout(push_constant) uniform Light {
+	float light;
+};
+layout(location = 0) in vec2 place;
+layout(location = 0) out vec4 colour;
+#else
 uniform sampler2D bezel;
 uniform float light;
 in vec2 place;
 out vec4 colour;
+#endif
 
 void main (void) {
 	colour = texture (bezel, place) * vec4 (light, light, light, 1.0);

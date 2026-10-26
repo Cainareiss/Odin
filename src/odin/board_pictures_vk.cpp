@@ -92,6 +92,7 @@ VkBoardDrawing::~VkBoardDrawing()
 	m_card.send_and_wait();
 	destroy_meshes();
 	destroy_lists();
+	m_fn.vkDestroyQueryPool(m_card.device(), m_stamps, nullptr);
 	for (vk::Image *image : { &m_state, &m_none, &m_layers[0], &m_layers[1] })
 		m_card.destroy_image(*image);
 	for (vk::Pass *pass : { &m_blender, &m_compose, &m_presenter })

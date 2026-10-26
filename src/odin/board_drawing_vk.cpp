@@ -283,4 +283,69 @@ VkBoardDrawing::forget_sampler(HostSampler s)
 	m_samplers.erase(found);
 }
 
+/* Debug: the stamps of ODIN_DRAW_TIMES, as glQueryCounter. None when all
+ * are out: the frame is left out. */
+uint32_t
+VkBoardDrawing::put_stamp()
+{
+	constexpr uint32_t STAMPS = 4096;
+
+	if (!m_stamps) {
+		const VkQueryPoolCreateInfo info{ VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO, nullptr, 0,
+		                                  VK_QUERY_TYPE_TIMESTAMP, STAMPS, 0 };
+
+		m_card.check(m_fn.vkCreateQueryPool(m_card.device(), &info, nullptr, &m_stamps), "the stamps");
+		m_fn.vkResetQueryPool(m_card.device(), m_stamps, 0, STAMPS);
+		for (uint32_t i = STAMPS; i > 0; i--)
+			m_free_stamps.push_back(i - 1);
+	}
+	if (m_free_stamps.empty())
+		return 0;
+	const uint32_t query = m_free_stamps.back();
+	m_free_stamps.pop_back();
+	m_fn.vkCmdWriteTimestamp2(m_card.commands(), VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, m_stamps, query);
+	return query + 1;
+}
+
+bool
+VkBoardDrawing::reached(uint32_t stamp)
+{
+	uint64_t at;
+
+	return stamp && m_fn.vkGetQueryPoolResults(m_card.device(), m_stamps, stamp - 1, 1, sizeof(at), &at, sizeof(at),
+	                                           VK_QUERY_RESULT_64_BIT) == VK_SUCCESS;
+}
+
+/* Once reached, in ns */
+uint64_t
+VkBoardDrawing::stamp_time(uint32_t stamp)
+{
+	const uint32_t bits = m_card.stamp_bits();
+	uint64_t at = 0;
+
+	if (stamp)
+		m_fn.vkGetQueryPoolResults(m_card.device(), m_stamps, stamp - 1, 1, sizeof(at), &at, sizeof(at),
+		                           VK_QUERY_RESULT_64_BIT);
+	if (bits < 64)
+		at &= (uint64_t{1} << bits) - 1;
+	return static_cast<uint64_t>(static_cast<double>(at) * m_card.stamp_period());
+}
+
+/* A stamp the card still owes is put again once the frame being written is
+ * done: the card wrote it then. */
+void
+VkBoardDrawing::forget_stamp(uint32_t stamp, bool again)
+{
+	if (!stamp)
+		return;
+	const auto free = [this, query = stamp - 1]() {
+		m_fn.vkResetQueryPool(m_card.device(), m_stamps, query, 1);
+		m_free_stamps.push_back(query);
+	};
+	if (again)
+		free();
+	else
+		m_card.later(free);
+}
+
 } /* namespace odin */

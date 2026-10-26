@@ -18,10 +18,19 @@
 
 /* Gauss on nine taps, sigma near 2 taps, along u_step */
 
+#ifdef VULKAN
+layout(location = 0) in vec2 v_uv;
+layout(location = 0) out vec4 o_colour;
+layout(set = 0, binding = 0) uniform sampler2D u_picture;
+layout(push_constant) uniform Step {
+	vec2 u_step;
+};
+#else
 in vec2 v_uv;
 out vec4 o_colour;
 uniform sampler2D u_picture;
 uniform vec2 u_step;
+#endif
 const float WEIGHTS[5] = float[](0.2270270270, 0.1945945946, 0.1216216216, 0.0540540541, 0.0162162162);
 void main()
 {

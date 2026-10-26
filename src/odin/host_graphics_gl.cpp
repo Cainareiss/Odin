@@ -40,17 +40,6 @@ namespace odin {
 
 namespace {
 
-/* The sides blurred: the picture made that small in two steps (each pixel
- * of the smaller the mean of what it covers, nearly), then that much
- * dimmer */
-constexpr GLsizei SIDES_W[2] = { 160, 40 }, SIDES_H[2] = { 120, 30 };
-constexpr float SIDES_LIGHT = 0.45f;
-
-/* The background of the menu: how far apart the taps of its blur are, in
- * texels of the half picture, and how many times it goes back and forth */
-constexpr float BLUR_STEP = 1.5f;
-constexpr unsigned BLUR_ROUNDS = 2;
-
 class GlGraphics : public HostGraphics {
 public:
 	GlGraphics(SDL_Window *window, SDL_GLContext context, std::string name)

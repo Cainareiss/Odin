@@ -20,11 +20,13 @@
  * itself: vk_common.hpp). Everything is drawn into the image of the window,
  * the top line first as Vulkan and Dear ImGui have it; show_window copies it
  * into the swap chain and shows it. The bezel, the sides blurred and the
- * blurred background of the menu are not drawn yet (MARKDOWN/106 § 9). */
+ * blurred background of the menu as host_graphics_gl.cpp draws them: what
+ * OpenGL counts from the bottom of the window is counted from the top. */
 
 #include "odin/host_graphics.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <unordered_map>
@@ -36,6 +38,7 @@
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_vulkan.h"
 #include "odin/board_drawing.hpp"
+#include "odin/spirv.hpp"
 #include "odin/vk_common.hpp"
 
 namespace odin {
@@ -87,12 +90,12 @@ public:
 	HostImage make_image(const SDL_Surface &rgba, bool smooth) override;
 	void forget_image(HostImage image) override;
 
-	void draw_bezel(HostImage, unsigned, unsigned) override {}
-	void draw_blurred_sides(HostPicture, PictureRect, unsigned, unsigned) override {}
+	void draw_bezel(HostImage bezel, unsigned window_w, unsigned window_h) override;
+	void draw_blurred_sides(HostPicture picture, PictureRect rect, unsigned window_w, unsigned window_h) override;
 
-	void blur_background(HostPicture) override {}
-	void blur_window(unsigned, unsigned) override {}
-	void draw_background(unsigned, unsigned, unsigned, unsigned, float) override {}
+	void blur_background(HostPicture picture) override;
+	void blur_window(unsigned window_w, unsigned window_h) override;
+	void draw_background(unsigned window_w, unsigned window_h, unsigned w, unsigned h, float light) override;
 	void start_ui() override;
 	void draw_ui(ImDrawData *data, unsigned window_w, unsigned window_h, const char *what) override;
 	void stop_ui() override;
@@ -104,6 +107,8 @@ private:
 	void make_swapchain();
 	void destroy_swapchain();
 	bool can_present(VkPresentModeKHR mode) const;
+	void make_passes();
+	void blur(vk::Image &from, unsigned w, unsigned h, bool turned);
 
 	SDL_Window *m_window;
 	std::unique_ptr<vk::Context> m_card;
@@ -122,12 +127,25 @@ private:
 	bool m_waits = false;
 	bool m_remake = true;
 
-	/* The images of the menu and the bezel, by number; the descriptor
-	 * of each that Dear ImGui draws with, made when first asked for */
+	/* The images of the menu and the bezel, by number, and whether each
+	 * is shown smoothly when larger; the descriptor of each that Dear
+	 * ImGui draws with, made when first asked for */
 	std::unordered_map<uint32_t, vk::Image> m_images;
+	std::unordered_map<uint32_t, bool> m_smooth;
 	uint32_t m_next_image = 1;
 	mutable std::unordered_map<uint32_t, VkDescriptorSet> m_ui_sets;
 	bool m_ui = false;
+
+	/* The bezel, the sides blurred, the background of the menu: their
+	 * passes (made when first needed), the samplers (linear and clamped;
+	 * the levels of an image, larger smooth or not), the picture made
+	 * smaller twice, the background at half the size blurred back and
+	 * forth (the result in the first) and whether it has its bottom line
+	 * first */
+	vk::Pass m_image_over, m_image, m_blur, m_show;
+	VkSampler m_linear = VK_NULL_HANDLE, m_levels[2] = {};
+	vk::Image m_sides[2], m_blurred[2];
+	bool m_blurred_turned = false;
 };
 
 VkGraphics::VkGraphics(SDL_Window *window, std::unique_ptr<vk::Context> card)
@@ -150,6 +168,15 @@ VkGraphics::~VkGraphics()
 	stop_ui();
 	for (auto &[id, image] : m_images)
 		m_card->destroy_image(image);
+	for (vk::Image *image : { &m_sides[0], &m_sides[1], &m_blurred[0], &m_blurred[1] })
+		if (image->image)
+			m_card->destroy_image(*image);
+	if (m_image.pipeline) {
+		for (vk::Pass *pass : { &m_image_over, &m_image, &m_blur, &m_show })
+			m_card->destroy_pass(*pass);
+		for (const VkSampler sampler : { m_linear, m_levels[0], m_levels[1] })
+			m_fn.vkDestroySampler(m_card->device(), sampler, nullptr);
+	}
 	destroy_swapchain();
 	for (const VkSemaphore free : m_free)
 		m_fn.vkDestroySemaphore(m_card->device(), free, nullptr);
@@ -337,10 +364,11 @@ VkGraphics::read(HostPicture picture, unsigned w, unsigned h, uint8_t *pixels)
 	}
 }
 
-/* Its levels made each from the one before, smoothly. Odin's own sampling
- * of it is Dear ImGui's (MARKDOWN/106 § 9): `smooth` is not followed yet. */
+/* Its levels made each from the one before, smoothly, as glGenerateMipmap
+ * does. The menu reads it as Dear ImGui does; the bezel as OpenGL would,
+ * `smooth` when larger. */
 HostImage
-VkGraphics::make_image(const SDL_Surface &rgba, bool)
+VkGraphics::make_image(const SDL_Surface &rgba, bool smooth)
 {
 	const unsigned w = static_cast<unsigned>(rgba.w), h = static_cast<unsigned>(rgba.h);
 	unsigned levels = 1;
@@ -382,6 +410,7 @@ VkGraphics::make_image(const SDL_Surface &rgba, bool)
 
 	const uint32_t id = m_next_image++;
 	m_images[id] = image;
+	m_smooth[id] = smooth;
 	return { id, static_cast<float>(w), static_cast<float>(h) };
 }
 
@@ -394,6 +423,7 @@ VkGraphics::forget_image(HostImage image)
 		return;
 	vk::Image gone = found->second;
 	m_images.erase(found);
+	m_smooth.erase(image.id);
 	m_card->later([card = m_card.get(), gone]() mutable { card->destroy_image(gone); });
 	if (const auto set = m_ui_sets.find(image.id); set != m_ui_sets.end()) {
 		const VkDescriptorSet descriptors = set->second;
@@ -401,6 +431,219 @@ VkGraphics::forget_image(HostImage image)
 		m_ui_sets.erase(set);
 		m_card->later([descriptors] { ImGui_ImplVulkan_RemoveTexture(descriptors); });
 	}
+}
+
+/* The passes and samplers of the bezel and the blurs, as OpenGL reads
+ * them: its textures repeat (the bezel), its framebuffers do not */
+void
+VkGraphics::make_passes()
+{
+	if (m_image.pipeline)
+		return;
+	m_image_over = m_card->make_pass(ODIN_SPIRV_OF(image_vert), ODIN_SPIRV_OF(image_frag), 1, sizeof(float),
+	                                 VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, UI_FORMAT, true);
+	m_image = m_card->make_pass(ODIN_SPIRV_OF(image_vert), ODIN_SPIRV_OF(image_frag), 1, sizeof(float),
+	                            VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, UI_FORMAT);
+	m_blur = m_card->make_pass(ODIN_SPIRV_OF(whole_window_vert), ODIN_SPIRV_OF(blur_frag), 1, 2 * sizeof(float),
+	                           VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, UI_FORMAT);
+	m_show = m_card->make_pass(ODIN_SPIRV_OF(whole_window_vert), ODIN_SPIRV_OF(show_frag), 1, 2 * sizeof(float),
+	                           VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, UI_FORMAT);
+
+	VkSamplerCreateInfo info{};
+	info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+	info.magFilter = info.minFilter = VK_FILTER_LINEAR;
+	info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+	info.addressModeU = info.addressModeV = info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	info.maxLod = 0.25f;
+	m_card->check(m_fn.vkCreateSampler(m_card->device(), &info, nullptr, &m_linear), "a sampler");
+	info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+	info.addressModeU = info.addressModeV = info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+	info.maxLod = VK_LOD_CLAMP_NONE;
+	for (unsigned smooth = 0; smooth < 2; smooth++) {
+		info.magFilter = smooth ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
+		m_card->check(m_fn.vkCreateSampler(m_card->device(), &info, nullptr, &m_levels[smooth]), "a sampler");
+	}
+}
+
+/* Over the window, the largest of its size that fits, in the middle */
+void
+VkGraphics::draw_bezel(HostImage bezel, unsigned window_w, unsigned window_h)
+{
+	const auto found = m_images.find(bezel.id);
+	const float ww = static_cast<float>(window_w), wh = static_cast<float>(window_h);
+
+	if (found == m_images.end())
+		return;
+	make_passes();
+
+	const float k = std::min(ww / bezel.w, wh / bezel.h);
+	const int w = static_cast<int>(std::lround(bezel.w * k)), h = static_cast<int>(std::lround(bezel.h * k));
+	const int x = (static_cast<int>(window_w) - w) / 2, below = (static_cast<int>(window_h) - h) / 2;
+	const VkCommandBuffer cb = m_card->commands();
+	vk::Image &window = m_card->window_image(window_w, window_h);
+	const VkViewport viewport{ static_cast<float>(x), static_cast<float>(static_cast<int>(window_h) - h - below),
+	                           static_cast<float>(w), static_cast<float>(h), 0.0f, 1.0f };
+	const float light = 1.0f;
+
+	m_card->begin_drawing(cb, window, { { 0, 0 }, { window_w, window_h } });
+	m_fn.vkCmdSetViewport(cb, 0, 1, &viewport);
+	m_card->bind_images(cb, m_image_over, { &found->second }, m_levels[m_smooth[bezel.id]]);
+	m_fn.vkCmdPushConstants(cb, m_image_over.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(light), &light);
+	m_fn.vkCmdDraw(cb, 3, 1, 0, 0);
+	m_card->end_drawing(cb);
+}
+
+/* The picture made smaller twice, then over the whole window, the side of
+ * the picture that fills it, drawn only around the picture (upside down,
+ * as OpenGL draws it: the picture has its bottom line first and image.vert
+ * turns it as an image of SDL) */
+void
+VkGraphics::draw_blurred_sides(HostPicture picture, PictureRect rect, unsigned window_w, unsigned window_h)
+{
+	vk::Image *const from = m_card->picture(picture.id);
+
+	if (!from)
+		return;
+	make_passes();
+	const VkCommandBuffer cb = m_card->commands();
+	for (unsigned i = 0; i < 2; i++)
+		if (!m_sides[i].image)
+			m_sides[i] = m_card->make_image(UI_FORMAT, static_cast<unsigned>(SIDES_W[i]),
+			                                static_cast<unsigned>(SIDES_H[i]), 1,
+			                                VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+			                                        VK_IMAGE_USAGE_TRANSFER_DST_BIT);
+	vk::Image *const steps[3] = { from, &m_sides[0], &m_sides[1] };
+	const int32_t widths[3] = { static_cast<int32_t>(picture.w), SIDES_W[0], SIDES_W[1] };
+	const int32_t heights[3] = { static_cast<int32_t>(picture.h), SIDES_H[0], SIDES_H[1] };
+	for (unsigned i = 0; i < 2; i++) {
+		const VkImageBlit blit{ { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 }, { { 0, 0, 0 }, { widths[i], heights[i], 1 } },
+		                        { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 },
+		                        { { 0, 0, 0 }, { widths[i + 1], heights[i + 1], 1 } } };
+
+		m_card->barrier(cb, *steps[i], vk::COPIED_FROM);
+		m_card->barrier(cb, *steps[i + 1], vk::COPIED_TO);
+		m_fn.vkCmdBlitImage(cb, steps[i]->image, steps[i]->layout, steps[i + 1]->image, steps[i + 1]->layout, 1, &blit,
+		                    VK_FILTER_LINEAR);
+	}
+	m_card->barrier(cb, m_sides[1], vk::SAMPLED);
+
+	const int ww = static_cast<int>(window_w), wh = static_cast<int>(window_h);
+	const double k = std::max(window_w / 4.0, window_h / 3.0);
+	const int cw = static_cast<int>(std::lround(4.0 * k)), ch = static_cast<int>(std::lround(3.0 * k));
+	const int below = (wh - ch) / 2;
+	const int px = static_cast<int>(rect.x), top = static_cast<int>(rect.y);
+	const int pr = px + static_cast<int>(rect.w), bottom = top + static_cast<int>(rect.h);
+	const int sides[4][4] = { { 0, 0, px, wh }, { pr, 0, ww - pr, wh }, { px, 0, pr - px, top },
+		                  { px, bottom, pr - px, wh - bottom } };
+	const VkViewport viewport{ static_cast<float>((ww - cw) / 2), static_cast<float>(wh - ch - below),
+	                           static_cast<float>(cw), static_cast<float>(ch), 0.0f, 1.0f };
+	vk::Image &window = m_card->window_image(window_w, window_h);
+
+	m_card->begin_drawing(cb, window, { { 0, 0 }, { window_w, window_h } });
+	m_fn.vkCmdSetViewport(cb, 0, 1, &viewport);
+	m_card->bind_images(cb, m_image, { &m_sides[1] }, m_linear);
+	m_fn.vkCmdPushConstants(cb, m_image.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(SIDES_LIGHT), &SIDES_LIGHT);
+	for (const auto &side : sides) {
+		if (side[2] <= 0 || side[3] <= 0)
+			continue;
+		const VkRect2D scissor{ { side[0], side[1] },
+			                { static_cast<uint32_t>(side[2]), static_cast<uint32_t>(side[3]) } };
+
+		m_fn.vkCmdSetScissor(cb, 0, 1, &scissor);
+		m_fn.vkCmdDraw(cb, 3, 1, 0, 0);
+	}
+	m_card->end_drawing(cb);
+}
+
+/* Half the size, each texel the mean of four pixels; then blurred across
+ * into the second image and down back into the first, BLUR_ROUNDS times */
+void
+VkGraphics::blur(vk::Image &from, unsigned w, unsigned h, bool turned)
+{
+	const unsigned hw = w / 2, hh = h / 2;
+
+	if (!from.image || hw == 0 || hh == 0)
+		return;
+	make_passes();
+	if (m_blurred[0].w != hw || m_blurred[0].h != hh) {
+		for (vk::Image &image : m_blurred) {
+			if (image.image) {
+				vk::Image old = image;
+
+				m_card->later([card = m_card.get(), old]() mutable { card->destroy_image(old); });
+			}
+			image = m_card->make_image(UI_FORMAT, hw, hh, 1,
+			                           VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
+			                                   VK_IMAGE_USAGE_TRANSFER_DST_BIT);
+		}
+	}
+	const VkCommandBuffer cb = m_card->commands();
+	const VkImageBlit blit{ { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 },
+	                        { { 0, 0, 0 }, { static_cast<int32_t>(w), static_cast<int32_t>(h), 1 } },
+	                        { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 },
+	                        { { 0, 0, 0 }, { static_cast<int32_t>(hw), static_cast<int32_t>(hh), 1 } } };
+
+	m_card->barrier(cb, from, vk::COPIED_FROM);
+	m_card->barrier(cb, m_blurred[0], vk::COPIED_TO);
+	m_fn.vkCmdBlitImage(cb, from.image, from.layout, m_blurred[0].image, m_blurred[0].layout, 1, &blit,
+	                    VK_FILTER_LINEAR);
+
+	const auto pass = [&](unsigned i, float x, float y) {
+		const float step[2] = { x, y };
+
+		m_card->barrier(cb, m_blurred[i], vk::SAMPLED);
+		m_card->begin_drawing(cb, m_blurred[1 - i], { { 0, 0 }, { hw, hh } });
+		m_card->bind_images(cb, m_blur, { &m_blurred[i] }, m_linear);
+		m_fn.vkCmdPushConstants(cb, m_blur.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(step), step);
+		m_fn.vkCmdDraw(cb, 3, 1, 0, 0);
+		m_card->end_drawing(cb);
+	};
+	for (unsigned round = 0; round < BLUR_ROUNDS; round++) {
+		pass(0, BLUR_STEP / static_cast<float>(hw), 0.0f);
+		pass(1, 0.0f, BLUR_STEP / static_cast<float>(hh));
+	}
+	m_blurred_turned = turned;
+}
+
+/* The picture of the game has its bottom line first, the window its top one */
+void
+VkGraphics::blur_background(HostPicture picture)
+{
+	if (vk::Image *const from = m_card->picture(picture.id))
+		blur(*from, picture.w, picture.h, true);
+}
+
+void
+VkGraphics::blur_window(unsigned window_w, unsigned window_h)
+{
+	blur(m_card->window_image(window_w, window_h), window_w, window_h, false);
+}
+
+/* The background, w by h in the middle of the window, at that light */
+void
+VkGraphics::draw_background(unsigned window_w, unsigned window_h, unsigned w, unsigned h, float light)
+{
+	if (!m_blurred[0].image)
+		return;
+	const int gw = static_cast<int>(w), gh = static_cast<int>(h);
+	const int below = (static_cast<int>(window_h) - gh) / 2;
+	const VkCommandBuffer cb = m_card->commands();
+	vk::Image &window = m_card->window_image(window_w, window_h);
+	const VkViewport viewport{ static_cast<float>((static_cast<int>(window_w) - gw) / 2),
+	                           static_cast<float>(static_cast<int>(window_h) - gh - below), static_cast<float>(gw),
+	                           static_cast<float>(gh), 0.0f, 1.0f };
+	const struct {
+		float light;
+		int32_t turn;
+	} push{ light, m_blurred_turned ? 1 : 0 };
+
+	m_card->barrier(cb, m_blurred[0], vk::SAMPLED);
+	m_card->begin_drawing(cb, window, { { 0, 0 }, { window_w, window_h } });
+	m_fn.vkCmdSetViewport(cb, 0, 1, &viewport);
+	m_card->bind_images(cb, m_show, { &m_blurred[0] }, m_linear);
+	m_fn.vkCmdPushConstants(cb, m_show.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
+	m_fn.vkCmdDraw(cb, 3, 1, 0, 0);
+	m_card->end_drawing(cb);
 }
 
 /* Dear ImGui finds the functions of Vulkan through the instance. */

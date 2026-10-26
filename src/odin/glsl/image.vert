@@ -19,11 +19,23 @@
 /* An image over the viewport it is given (the bezel, the sides blurred): a
  * triangle that covers it, the top of the image at the top */
 
+#ifdef VULKAN
+layout(location = 0) out vec2 place;
+#define VERTEX_ID gl_VertexIndex
+#else
 out vec2 place;
+#define VERTEX_ID gl_VertexID
+#endif
 
 void main (void) {
-	const vec2 corner = vec2 (gl_VertexID & 1, gl_VertexID >> 1) * 2.0;
+	const vec2 corner = vec2 (VERTEX_ID & 1, VERTEX_ID >> 1) * 2.0;
 
+#ifdef VULKAN
+	/* The window of Vulkan has its top line first: the same corner is the
+	 * top of the viewport there, the bottom with OpenGL */
+	place = corner;
+#else
 	place = vec2 (corner.x, 1.0 - corner.y);
+#endif
 	gl_Position = vec4 (corner * 2.0 - 1.0, 0.0, 1.0);
 }

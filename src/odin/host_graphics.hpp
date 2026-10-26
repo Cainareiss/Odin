@@ -47,6 +47,17 @@ struct HostImage {
 	float w = 0.0f, h = 0.0f;
 };
 
+/* The sides blurred: the picture made that small in two steps (each pixel
+ * of the smaller the mean of what it covers, nearly), then that much
+ * dimmer */
+inline constexpr int SIDES_W[2] = { 160, 40 }, SIDES_H[2] = { 120, 30 };
+inline constexpr float SIDES_LIGHT = 0.45f;
+
+/* The background of the menu: how far apart the taps of its blur are, in
+ * texels of the half picture, and how many times it goes back and forth */
+inline constexpr float BLUR_STEP = 1.5f;
+inline constexpr unsigned BLUR_ROUNDS = 2;
+
 /* The graphics card of the host: the one door between Odin and the
  * graphics API (MARKDOWN/105). What Odin asks of the card is said here in
  * its own words, never in those of the API: show the window, lay the bezel

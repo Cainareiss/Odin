@@ -21,7 +21,8 @@
 
 /* One triangle over the whole picture, without any vertex data */
 
-/* Vulkan (-DVULKAN, MARKDOWN/106): where the shader finds what it reads */
+/* Vulkan (glslang defines VULKAN, MARKDOWN/106): where the shader finds
+ * what it reads */
 #ifdef VULKAN
 #define VERTEX_ID gl_VertexIndex
 #else
