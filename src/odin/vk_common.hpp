@@ -1,0 +1,253 @@
+/*
+ * Odin
+ * Copyright (C) 2026 Réda Chérif-Touil
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#ifndef ODIN_VK_COMMON_HPP
+#define ODIN_VK_COMMON_HPP
+
+/* What the window (host_graphics_vk.cpp) and the board drawing
+ * (board_drawing_vk.cpp) share with Vulkan: its functions, loaded through
+ * SDL (Odin is not linked to the Vulkan loader); the instance, the card and
+ * its queue; memory, images and buffers; the commands of each frame, sent
+ * and waited for; the image of the window everything is drawn into before
+ * it is shown (MARKDOWN/106).
+ *
+ * Odin asks the card for what Vulkan 1.3 has: rendering without render
+ * passes, the second form of the barriers, the extended dynamic state; and
+ * fragment shaders that write to buffers (the translucent fragments). A card
+ * of Vulkan 1.1 or 1.2 that has them as extensions does too (MoltenVK). */
+
+#define VK_NO_PROTOTYPES
+#include <vulkan/vulkan.h>
+
+#include <cstdint>
+#include <functional>
+#include <memory>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
+struct SDL_Window;
+
+namespace odin::vk {
+
+/* The functions Odin calls, by the name Vulkan gives them; those of the
+ * device that came from an extension are found by either name. */
+#define ODIN_VK_GLOBAL(F) \
+	F(vkCreateInstance) F(vkEnumerateInstanceExtensionProperties) F(vkEnumerateInstanceLayerProperties) \
+	F(vkEnumerateInstanceVersion)
+#define ODIN_VK_INSTANCE(F) \
+	F(vkDestroyInstance) F(vkEnumeratePhysicalDevices) F(vkGetPhysicalDeviceProperties) \
+	F(vkGetPhysicalDeviceFeatures) F(vkGetPhysicalDeviceFeatures2) F(vkGetPhysicalDeviceQueueFamilyProperties) \
+	F(vkGetPhysicalDeviceMemoryProperties) F(vkGetPhysicalDeviceFormatProperties) \
+	F(vkEnumerateDeviceExtensionProperties) F(vkCreateDevice) F(vkGetDeviceProcAddr) F(vkDestroySurfaceKHR) \
+	F(vkGetPhysicalDeviceSurfaceSupportKHR) F(vkGetPhysicalDeviceSurfaceCapabilitiesKHR) \
+	F(vkGetPhysicalDeviceSurfaceFormatsKHR) F(vkGetPhysicalDeviceSurfacePresentModesKHR) \
+	F(vkCreateDebugUtilsMessengerEXT) F(vkDestroyDebugUtilsMessengerEXT)
+#define ODIN_VK_DEVICE(F, G) \
+	F(vkDestroyDevice) F(vkGetDeviceQueue) F(vkDeviceWaitIdle) F(vkQueueWaitIdle) \
+	F(vkCreateCommandPool) F(vkDestroyCommandPool) F(vkResetCommandPool) F(vkAllocateCommandBuffers) \
+	F(vkBeginCommandBuffer) F(vkEndCommandBuffer) F(vkCreateFence) F(vkDestroyFence) F(vkWaitForFences) \
+	F(vkResetFences) F(vkCreateSemaphore) F(vkDestroySemaphore) F(vkAllocateMemory) F(vkFreeMemory) \
+	F(vkMapMemory) F(vkCreateImage) F(vkDestroyImage) F(vkGetImageMemoryRequirements) F(vkBindImageMemory) \
+	F(vkCreateImageView) F(vkDestroyImageView) F(vkCreateBuffer) F(vkDestroyBuffer) \
+	F(vkGetBufferMemoryRequirements) F(vkBindBufferMemory) F(vkCreateSwapchainKHR) F(vkDestroySwapchainKHR) \
+	F(vkGetSwapchainImagesKHR) F(vkAcquireNextImageKHR) F(vkQueuePresentKHR) F(vkCmdClearColorImage) \
+	F(vkCmdClearAttachments) \
+	F(vkCmdCopyImageToBuffer) F(vkCmdCopyBufferToImage) F(vkCmdBlitImage) \
+	G(vkQueueSubmit2, vkQueueSubmit2KHR) G(vkCmdPipelineBarrier2, vkCmdPipelineBarrier2KHR) \
+	G(vkCmdBeginRendering, vkCmdBeginRenderingKHR) G(vkCmdEndRendering, vkCmdEndRenderingKHR)
+
+#define ODIN_VK_MEMBER(name) PFN_##name name = nullptr;
+#define ODIN_VK_MEMBER2(name, other) PFN_##name name = nullptr;
+struct Functions {
+	PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr = nullptr;
+	ODIN_VK_GLOBAL(ODIN_VK_MEMBER)
+	ODIN_VK_INSTANCE(ODIN_VK_MEMBER)
+	ODIN_VK_DEVICE(ODIN_VK_MEMBER, ODIN_VK_MEMBER2)
+};
+#undef ODIN_VK_MEMBER
+#undef ODIN_VK_MEMBER2
+
+/* An image of the card, its memory, a view of all its levels and the
+ * layout it was last left in */
+struct Image {
+	VkImage image = VK_NULL_HANDLE;
+	VkDeviceMemory memory = VK_NULL_HANDLE;
+	VkImageView view = VK_NULL_HANDLE;
+	VkFormat format = VK_FORMAT_UNDEFINED;
+	unsigned w = 0, h = 0, levels = 1;
+	VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
+};
+
+/* A buffer in memory the processor sees, mapped for good */
+struct Buffer {
+	VkBuffer buffer = VK_NULL_HANDLE;
+	VkDeviceMemory memory = VK_NULL_HANDLE;
+	VkDeviceSize size = 0;
+	uint8_t *bytes = nullptr;
+};
+
+/* What a stage of the card does with an image: where its layout is to go
+ * and which stages and accesses of it come before and after */
+struct Use {
+	VkImageLayout layout;
+	VkPipelineStageFlags2 stage;
+	VkAccessFlags2 access;
+};
+/* The uses the window and the board drawing make of their images */
+inline constexpr Use COPIED_TO = { VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
+	                           VK_ACCESS_2_TRANSFER_WRITE_BIT };
+inline constexpr Use COPIED_FROM = { VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
+	                             VK_ACCESS_2_TRANSFER_READ_BIT };
+inline constexpr Use DRAWN_IN = { VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+	                          VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+	                          VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT };
+inline constexpr Use SAMPLED = { VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+	                         VK_ACCESS_2_SHADER_SAMPLED_READ_BIT };
+
+/* The card for one window: made with the window, taken by the drawing
+ * thread (display.hpp), as OpenGL's context is. */
+class Context {
+public:
+	/* The frames the card may be working on while the next is written */
+	static constexpr unsigned FRAMES = 2;
+
+	/* The card for that window, or nothing with the reason in `why`. Debug:
+	 * ODIN_VK_VALIDATION=1, Vulkan's validation layer, its messages on
+	 * stderr. */
+	static std::unique_ptr<Context> make(SDL_Window *window, std::string &why);
+	~Context();
+	Context(const Context &) = delete;
+	Context &operator=(const Context &) = delete;
+
+	const Functions &fn() const { return m_fn; }
+	VkInstance instance() const { return m_instance; }
+	VkPhysicalDevice gpu() const { return m_gpu; }
+	VkDevice device() const { return m_device; }
+	VkQueue queue() const { return m_queue; }
+	uint32_t queue_family() const { return m_queue_family; }
+	uint32_t api_version() const { return m_api_version; }
+	VkSurfaceKHR surface() const { return m_surface; }
+	const std::string &name() const { return m_name; }
+	float max_anisotropy() const { return m_max_anisotropy; }
+	/* How many errors the validation layer told (Debug) */
+	unsigned validation_errors() const { return m_errors; }
+
+	/* The commands of the frame being written, begun when first asked
+	 * for; sent and waited for: what was written so far done, a new
+	 * command buffer begun; the frame given to the next one, after its
+	 * commands (submit) */
+	VkCommandBuffer commands();
+	unsigned frame() const { return m_frame; }
+	void send_and_wait();
+	struct Submit {
+		VkSemaphore wait = VK_NULL_HANDLE;	/* before the copy to the window */
+		VkSemaphore signal = VK_NULL_HANDLE;	/* once all is done */
+	};
+	void end_frame(const Submit &submit);
+	/* Something the card may still use, destroyed once the frames it
+	 * could be in are done (send_and_wait: at once) */
+	void later(std::function<void()> destroy);
+
+	/* An image of one sample, its memory and a view of its levels; a
+	 * buffer the processor reads and writes, mapped */
+	Image make_image(VkFormat format, unsigned w, unsigned h, unsigned levels, VkImageUsageFlags usage,
+	                 const VkComponentMapping &swizzle = {});
+	void destroy_image(Image &image);
+	Buffer make_buffer(VkDeviceSize size, VkBufferUsageFlags usage);
+	void destroy_buffer(Buffer &buffer);
+	/* A buffer for the processor to fill or read in the frame being
+	 * written, at least `size` bytes, kept until the card is done */
+	Buffer &staging(VkDeviceSize size);
+
+	/* The image from its last use to the next one, all its levels; the
+	 * levels from `level` on only (they are taken as one use) */
+	void barrier(VkCommandBuffer cb, Image &image, const Use &next, unsigned level = 0);
+
+	/* The image of the window: everything is drawn into it, then it is
+	 * copied to the swap chain (host_graphics_vk.cpp). Made again at the
+	 * size of the window. */
+	Image &window_image(unsigned w, unsigned h);
+	Image &window_image() { return m_window; }
+
+	/* The pictures of the board drawing that the window reads
+	 * (HostPicture: their number) */
+	void name_picture(uint32_t id, Image *image) { m_pictures[id] = image; }
+	void forget_picture(uint32_t id) { m_pictures.erase(id); }
+	Image *picture(uint32_t id) const;
+
+	/* Aborts with what went wrong */
+	[[noreturn]] void fatal(const char *what, VkResult result) const;
+	void check(VkResult result, const char *what) const
+	{
+		if (result != VK_SUCCESS)
+			fatal(what, result);
+	}
+
+private:
+	Context() = default;
+	bool load(std::string &why);
+	bool make_instance(std::string &why);
+	bool choose_gpu(std::string &why);
+	bool make_device(std::string &why);
+	uint32_t memory_type(uint32_t types, VkMemoryPropertyFlags flags) const;
+	static VKAPI_ATTR VkBool32 VKAPI_CALL message(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
+	                                              VkDebugUtilsMessageTypeFlagsEXT type,
+	                                              const VkDebugUtilsMessengerCallbackDataEXT *data, void *self);
+
+	Functions m_fn;
+	VkInstance m_instance = VK_NULL_HANDLE;
+	VkDebugUtilsMessengerEXT m_messenger = VK_NULL_HANDLE;
+	VkSurfaceKHR m_surface = VK_NULL_HANDLE;
+	VkPhysicalDevice m_gpu = VK_NULL_HANDLE;
+	uint32_t m_queue_family = 0;
+	VkDevice m_device = VK_NULL_HANDLE;
+	VkQueue m_queue = VK_NULL_HANDLE;
+	VkPhysicalDeviceMemoryProperties m_memory{};
+	uint32_t m_api_version = 0;
+	std::string m_name;
+	float m_max_anisotropy = 1.0f;
+	bool m_validation = false;
+	bool m_portability = false;
+	bool m_core13 = false;
+	unsigned m_errors = 0;
+	/* The extensions the device was made with */
+	std::vector<const char *> m_extensions;
+
+	struct Frame {
+		VkCommandPool pool = VK_NULL_HANDLE;
+		VkCommandBuffer cb = VK_NULL_HANDLE;
+		VkFence done = VK_NULL_HANDLE;
+		bool written = false;	/* its command buffer begun */
+		bool sent = false;	/* sent, its fence not waited for yet */
+		std::vector<std::function<void()>> later;
+		std::vector<Buffer> staging;
+		size_t staging_used = 0;
+	};
+	Frame m_frames[FRAMES];
+	unsigned m_frame = 0;
+	void wait(Frame &frame);
+	void submit(Frame &frame, const Submit &submit);
+
+	Image m_window;
+	std::unordered_map<uint32_t, Image *> m_pictures;
+};
+
+} /* namespace odin::vk */
+
+#endif /* ODIN_VK_COMMON_HPP */

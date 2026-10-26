@@ -51,7 +51,8 @@ struct HostImage {
  * graphics API (MARKDOWN/105). What Odin asks of the card is said here in
  * its own words, never in those of the API: show the window, lay the bezel
  * over it, blur the sides of the game, the background and the images of
- * the menu. host_graphics_gl.cpp does it with OpenGL. The pictures of the
+ * the menu. host_graphics_gl.cpp does it with OpenGL, host_graphics_vk.cpp
+ * with Vulkan. The pictures of the
  * board are drawn by the renderer (renderer.hpp) through the BoardDrawing
  * the card makes for it (board_drawing.hpp); it hands its picture over as
  * a HostPicture.
@@ -66,6 +67,10 @@ public:
 	static void prepare_gl();
 	static uint64_t window_flags_gl();
 	static std::unique_ptr<HostGraphics> make_gl(SDL_Window *window, unsigned window_w, unsigned window_h);
+	/* Vulkan: the flags of the window, then the card for it
+	 * (host_graphics_vk.cpp), or nothing with the reason on stderr */
+	static uint64_t window_flags_vk();
+	static std::unique_ptr<HostGraphics> make_vk(SDL_Window *window, unsigned window_w, unsigned window_h);
 	virtual ~HostGraphics() = default;
 
 	/* The name of the card */

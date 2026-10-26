@@ -34,6 +34,10 @@
 
 namespace odin {
 
+namespace vk {
+class Context;
+}
+
 /* A texture the renderer draws the board with (0: none) */
 struct HostTexture {
 	uint32_t id = 0;
@@ -83,7 +87,7 @@ struct SceneDebug {
  * host_graphics.hpp, said in the words of the board, never in those of the
  * API. HostGraphics makes one for each game, with the renderer, and it goes
  * with it. The board_*_gl.cpp files do it with OpenGL (MARKDOWN/105,
- * C3).
+ * C3), board_drawing_vk.cpp with Vulkan (MARKDOWN/106).
  *
  * The pictures it holds are `scale` times the screen of the hardware each
  * way (SCREEN_WIDTH by SCREEN_HEIGHT, hikaru_draw.hpp):
@@ -98,8 +102,10 @@ class BoardDrawing {
 public:
 	static constexpr unsigned KEPT = 5;
 
-	/* With OpenGL, on the thread its context is current on */
+	/* With OpenGL, on the thread its context is current on; with Vulkan,
+	 * on that card (vk_common.hpp) */
 	static std::unique_ptr<BoardDrawing> make_gl();
+	static std::unique_ptr<BoardDrawing> make_vk(vk::Context &card);
 	virtual ~BoardDrawing() = default;
 
 	/* The pictures `scale` times finer, 1 at first; the kept ones carried

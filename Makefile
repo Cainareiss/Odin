@@ -47,6 +47,9 @@ OBJ := \
 	src/odin/display_bezel.o \
 	src/odin/display_window.o \
 	src/odin/host_graphics_gl.o \
+	src/odin/host_graphics_vk.o \
+	src/odin/vk_common.o \
+	src/odin/board_drawing_vk.o \
 	src/odin/board_drawing_gl.o \
 	src/odin/board_pictures_gl.o \
 	src/odin/board_programs_gl.o \
@@ -167,9 +170,13 @@ IMGUI_OBJ := \
 	src/imgui/imgui_tables.o \
 	src/imgui/imgui_widgets.o \
 	src/imgui/imgui_impl_sdl3.o \
-	src/imgui/imgui_impl_opengl3.o
+	src/imgui/imgui_impl_opengl3.o \
+	src/imgui/imgui_impl_vulkan.o
 
-IMGUI_FLAGS := -std=c++20 -I src/imgui $(SDL_CFLAGS) $(OPT_FLAGS) $(FP_FLAGS) $(PGO_FLAGS) $(DEP_FLAGS)
+# Its Vulkan backend calls the functions Odin loads (vk_common.hpp), not
+# those of a linked loader
+VULKAN_FLAGS := -DIMGUI_IMPL_VULKAN_NO_PROTOTYPES
+IMGUI_FLAGS := -std=c++20 -I src/imgui $(SDL_CFLAGS) $(OPT_FLAGS) $(FP_FLAGS) $(PGO_FLAGS) $(DEP_FLAGS) $(VULKAN_FLAGS)
 
 # miniz and the 7z reader of the LZMA SDK as they come, for the archives of
 # the games: built without our warnings
@@ -200,6 +207,7 @@ src/lzma/%.o: src/lzma/%.c
 	$(CC) -c $< -o $@ $(ARCHIVE_FLAGS)
 
 src/odin/rom_files.o: CXXFLAGS += -isystem src/miniz -isystem src/lzma
+src/odin/host_graphics_vk.o: CXXFLAGS += $(VULKAN_FLAGS)
 
 # The pictures of the menu, put in the binary as their files are
 src/odin/menu_pictures.o: src/odin/menu_pictures.S $(wildcard src/odin/pictures/*.png)

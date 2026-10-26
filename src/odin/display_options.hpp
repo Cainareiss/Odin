@@ -24,7 +24,7 @@
 #include <string>
 
 /* What the user chooses of the screen (display.hpp), in a header of its own
- * so that the options do not take the window and OpenGL in. */
+ * so that the options do not take the window and the graphics API in. */
 
 namespace odin {
 
@@ -35,6 +35,8 @@ enum class DisplayVsync : uint8_t { OFF, ON, ADAPTIVE };
 /* Around the picture where the window is wider than it: black, the picture
  * itself blurred and dimmer, or the bezel of the game (black without one) */
 enum class DisplaySides : uint8_t { OFF, BLUR, BEZEL };
+/* What draws: OpenGL, or Vulkan (taken when Odin starts) */
+enum class DisplayApi : uint8_t { OPENGL, VULKAN };
 
 struct DisplayOptions {
 	unsigned scale;		/* the 3D that many times finer than the screen, 1 to 6 */
@@ -49,6 +51,7 @@ struct DisplayOptions {
 	/* The filter of the picture by its name in odin.ini (a preset
 	 * filters/<name>.glslp: picture_filter_gl.hpp); empty: none */
 	std::string filter;
+	DisplayApi api;
 };
 
 } /* namespace odin */

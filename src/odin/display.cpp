@@ -167,27 +167,49 @@ set_icon(SDL_Window *window)
 	SDL_DestroySurface(icon);
 }
 
+/* The window, made for the graphics API of those flags */
+SDL_Window *
+make_window(uint64_t flags)
+{
+	SDL_Window *const window = SDL_CreateWindow("Odin", Renderer::WIDTH, Renderer::HEIGHT, flags | SDL_WINDOW_RESIZABLE);
+
+	if (!window) {
+		std::fprintf(stderr, "ERROR: could not create SDL window: '%s'\n", SDL_GetError());
+		return nullptr;
+	}
+	/* Never smaller than the screen of the board: the menu is made for it */
+	SDL_SetWindowMinimumSize(window, Renderer::WIDTH, Renderer::HEIGHT);
+	set_icon(window);
+	SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+	return window;
+}
+
 /* The window and the card that draws in it (host_graphics.hpp), taken by
- * the calling thread */
+ * the calling thread: with Vulkan when odin.ini asks for it and the card
+ * has what Odin needs, else with OpenGL */
 bool
-open_window(SDL_Window *&window, std::unique_ptr<HostGraphics> &graphics)
+open_window(DisplayApi api, SDL_Window *&window, std::unique_ptr<HostGraphics> &graphics)
 {
 	if (!SDL_Init(SDL_INIT_VIDEO)) {
 		std::fprintf(stderr, "ERROR: could not initialize SDL: '%s'\n", SDL_GetError());
 		return false;
 	}
 
-	HostGraphics::prepare_gl();
-	window = SDL_CreateWindow("Odin", Renderer::WIDTH, Renderer::HEIGHT, HostGraphics::window_flags_gl() | SDL_WINDOW_RESIZABLE);
-	if (!window) {
-		std::fprintf(stderr, "ERROR: could not create SDL window: '%s'\n", SDL_GetError());
-		return false;
+	if (api == DisplayApi::VULKAN) {
+		window = make_window(HostGraphics::window_flags_vk());
+		if (window)
+			graphics = HostGraphics::make_vk(window, Renderer::WIDTH, Renderer::HEIGHT);
+		if (graphics)
+			return true;
+		std::fprintf(stderr, "ERROR: Vulkan cannot draw on this computer: OpenGL draws\n");
+		if (window)
+			SDL_DestroyWindow(window);
 	}
-	/* Never smaller than the screen of the board: the menu is made for it */
-	SDL_SetWindowMinimumSize(window, Renderer::WIDTH, Renderer::HEIGHT);
-	set_icon(window);
-	SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
 
+	HostGraphics::prepare_gl();
+	window = make_window(HostGraphics::window_flags_gl());
+	if (!window)
+		return false;
 	graphics = HostGraphics::make_gl(window, Renderer::WIDTH, Renderer::HEIGHT);
 	return graphics != nullptr;
 }
@@ -200,7 +222,7 @@ Display::make(const Keyboard &keys, const Options &options)
 	SDL_Window *window = nullptr;
 	std::unique_ptr<HostGraphics> graphics;
 
-	if (!open_window(window, graphics))
+	if (!open_window(options.api, window, graphics))
 		return nullptr;
 	return std::unique_ptr<Display>(new Display(keys, options, window, std::move(graphics)));
 }
@@ -213,7 +235,7 @@ Display::Display(const Keyboard &keys, const Options &options, SDL_Window *windo
 	  m_frame(0), m_scale(options.scale), m_anisotropy(options.anisotropy), m_filter(find_filter(options.filter)), m_logged(false),
 	  m_picture{ 0, Renderer::WIDTH, Renderer::HEIGHT },
 	  m_late(env_flag("ODIN_LATE_DRAW")), m_held(false), m_late_draw(0),
-	  m_shot_prefix(std::getenv("ODIN_SCREENSHOT")), m_shot_every(60),
+	  m_shot_prefix(std::getenv("ODIN_SCREENSHOT")), m_window_shot(std::getenv("ODIN_WINDOW_SHOT")), m_shot_every(60),
 	  m_fingerprint(env_flag("ODIN_PICTURE_FP")), m_window_fp(env_flag("ODIN_WINDOW_FP")), m_speed(env_flag("ODIN_SPEED")),
 	  m_speed_since(0), m_speed_last(0), m_speed_longest(0),
 	  m_stats(env_flag("ODIN_STATS")), m_draw_ns(0), m_wait_frame_ns(0), m_wait_write_ns(0), m_drawn(0),
@@ -668,13 +690,36 @@ Display::read_picture(uint8_t *pixels)
 void
 Display::present(unsigned window_w, unsigned window_h, const char *what)
 {
-	if (m_window_fp) {
+	const bool shot = m_window_shot && (m_frame % m_shot_every) == 0;
+
+	if (m_window_fp || shot) {
 		m_window_pixels.resize(size_t{window_w} * window_h * 3);
 		m_graphics->read({}, window_w, window_h, m_window_pixels.data());
+	}
+	if (m_window_fp)
 		std::fprintf(stderr, "WINFP %s frame=%u size=%ux%u fp=%016" PRIx64 "\n", what, m_frame, window_w, window_h,
 		             fnv1a(FNV_START, m_window_pixels.data(), m_window_pixels.size()));
+	if (shot) {
+		char path[512];
+
+		std::snprintf(path, sizeof(path), "%s-%s-%06u.ppm", m_window_shot, what, m_frame);
+		write_ppm(path, window_w, window_h, m_window_pixels.data());
 	}
 	m_graphics->show_window();
+}
+
+/* Bytes of red, green and blue, the bottom line first, as a PPM file */
+void
+Display::write_ppm(const char *path, size_t w, size_t h, const uint8_t *pixels)
+{
+	std::FILE *const file = std::fopen(path, "wb");
+
+	if (!file)
+		return;
+	std::fprintf(file, "P6\n%zu %zu\n255\n", w, h);
+	for (size_t y = 0; y < h; y++)
+		std::fwrite(&pixels[(h - 1 - y) * w * 3], 1, w * 3, file);
+	std::fclose(file);
 }
 
 void
@@ -690,13 +735,7 @@ Display::screenshot()
 
 	read_picture(pixels.data());
 	std::snprintf(path, sizeof(path), "%s-%06u.ppm", m_shot_prefix, m_frame);
-	std::FILE *const file = std::fopen(path, "wb");
-	if (!file)
-		return;
-	std::fprintf(file, "P6\n%zu %zu\n255\n", w, h);
-	for (size_t y = 0; y < h; y++)
-		std::fwrite(&pixels[(h - 1 - y) * w * 3], 1, w * 3, file);
-	std::fclose(file);
+	write_ppm(path, w, h, pixels.data());
 }
 
 void

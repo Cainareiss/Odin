@@ -39,6 +39,9 @@ inline constexpr const char *VSYNCS[] = { "off", "on", "adaptive" };
 /* Around the picture by default, and the names of odin.ini */
 inline constexpr DisplaySides SIDES = DisplaySides::BEZEL;
 inline constexpr const char *SIDES_NAMES[] = { "off", "blur", "image" };
+/* The graphics API by default, and the names of odin.ini */
+inline constexpr DisplayApi API = DisplayApi::OPENGL;
+inline constexpr const char *APIS[] = { "opengl", "vulkan" };
 
 /* What Odin runs with: the command line, and odin.ini where it says
  * nothing (with_settings) */
@@ -71,7 +74,7 @@ struct Options {
 	std::string sound_device;
 	unsigned volume = 100;
 	bool background = true;
-	DisplayOptions display = { 1, 1, 0, false, true, DisplayVsync::OFF, 0, 0, "" };
+	DisplayOptions display = { 1, 1, 0, false, true, DisplayVsync::OFF, 0, 0, "", API };
 	/* [display] vsync: the display gets it when the frames are paced */
 	DisplayVsync vsync = VSYNC;
 	/* [display] bezel: around the picture */

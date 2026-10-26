@@ -231,6 +231,7 @@ private:
 	/* The window drawn, shown; `what` it shows, for ODIN_WINDOW_FP */
 	void present(unsigned window_w, unsigned window_h, const char *what);
 	void screenshot();
+	static void write_ppm(const char *path, size_t w, size_t h, const uint8_t *pixels);
 	void print_fingerprint();
 	/* After a frame */
 	void show_speed();
@@ -284,8 +285,11 @@ private:
 	std::binary_semaphore m_late_draw;
 
 	/* Debug: what the environment asks for (ODIN_SCREENSHOT,
-	 * ODIN_SCREENSHOT_EVERY, ODIN_PICTURE_FP, ODIN_WINDOW_FP, ODIN_SPEED) */
-	const char *m_shot_prefix;
+	 * ODIN_SCREENSHOT_EVERY, ODIN_PICTURE_FP, ODIN_WINDOW_FP, ODIN_SPEED);
+	 * for the tests: ODIN_WINDOW_SHOT=<prefix>, the whole window as drawn
+	 * written to <prefix>-<what>-<frame>.ppm, each ODIN_SCREENSHOT_EVERY
+	 * frames */
+	const char *m_shot_prefix, *m_window_shot;
 	unsigned m_shot_every;
 	bool m_fingerprint, m_window_fp;
 	std::vector<uint8_t> m_pixels, m_window_pixels;
