@@ -1029,10 +1029,11 @@ files; the shaders in src/odin/glsl). Vulkan ([display] api = vulkan,
 MARKDOWN/106 of the notes): vk_common.cpp (the card, its memory and
 commands), host_graphics_vk.cpp (the window and the menu) and the
 board_*_vk.cpp files (the pictures, the textures, the meshes and their
-pipelines, kept in ~/.cache/odin/programs/vulkan-*.bin) draw the games but
-their translucent polygons; those, the stamps of ODIN_DRAW_TIMES, the bezel,
-the blurred backgrounds and the filter of the picture are the next steps.
-Debug: ODIN_VK_VALIDATION=1.
+pipelines, kept in ~/.cache/odin/programs/vulkan-*.bin, the translucent
+fragments) draw the games; a card without geometry shaders (MoltenVK) leaves
+out the translucent polygons (gl_PrimitiveID). The stamps of ODIN_DRAW_TIMES,
+the bezel, the blurred backgrounds and the filter of the picture are the next
+steps. Debug: ODIN_VK_VALIDATION=1.
 HR_LOG=1 logs the objects of every mesh,
 HR_LOG_FRAME=<frame> those of one frame; ODIN_DEBUG_KEYS=1 gives the keys
 1 2 3 t u y l a d g a switch each (renderer_debug.cpp).

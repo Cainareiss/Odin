@@ -52,6 +52,7 @@ OBJ := \
 	src/odin/board_drawing_vk.o \
 	src/odin/board_pictures_vk.o \
 	src/odin/board_scene_vk.o \
+	src/odin/board_translucent_vk.o \
 	src/odin/board_drawing_gl.o \
 	src/odin/board_pictures_gl.o \
 	src/odin/board_programs_gl.o \
@@ -228,9 +229,17 @@ src/odin/glsl_texts.o: src/odin/glsl_texts.S $(wildcard src/odin/glsl/*)
 # defines VULKAN), then put in the binary the same way
 GLSLANG := glslangValidator
 SPIRV := $(patsubst %,src/odin/glsl/%.spv,whole_picture.vert blend.frag compose.vert compose.frag present.frag \
-	mesh.vert mesh.frag)
+	mesh.vert mesh.frag mesh_collect.frag sort.frag)
 src/odin/glsl/%.spv: src/odin/glsl/%
 	{ echo '#version 450'; cat $<; } | $(GLSLANG) -V --stdin -S $(subst .,,$(suffix $<)) -o $@
+# The shaders of the translucent fragments: their lists first, in the set
+# LISTS_SET (board_translucent_vk.cpp); the meshes that collect them apart
+src/odin/glsl/sort.frag.spv: src/odin/glsl/sort.frag src/odin/glsl/fragment_lists.glsl
+	{ echo '#version 450'; echo '#define LISTS_SET 0'; cat src/odin/glsl/fragment_lists.glsl $<; } | \
+		$(GLSLANG) -V --stdin -S frag -o $@
+src/odin/glsl/mesh_collect.frag.spv: src/odin/glsl/mesh.frag src/odin/glsl/fragment_lists.glsl
+	{ echo '#version 450'; echo '#define COLLECT 1'; echo '#define LISTS_SET 3'; \
+		cat src/odin/glsl/fragment_lists.glsl $<; } | $(GLSLANG) -V --stdin -S frag -o $@
 src/odin/spirv.o: src/odin/spirv.S $(SPIRV)
 	$(CXX) -c $< -o $@ -Wa,-I,src/odin
 spirv: $(SPIRV)

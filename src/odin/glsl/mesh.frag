@@ -81,10 +81,18 @@ layout(std430, set = 0, binding = 2) readonly buffer lightsets_t {
 };
 layout(set = 1, binding = 0) uniform texture2D u_texels;
 layout(set = 2, binding = 0) uniform sampler u_sampling;
+#if COLLECT != 0
+layout(std430, set = 3, binding = 2) buffer count_t {
+	uint u_count;
+};
+layout(set = 3, binding = 3) uniform sampler2D u_solid_depth;
+#endif
 layout(push_constant) uniform mesh_t {
 	uint u_view, u_mv, u_mv2, u_lightset;
 	float u_depth_scale, u_alpha_ref, u_weigh_by_alpha;
 	uint u_pattern;
+	uint u_order, u_blend_mode;
+	float u_sort_scale;
 };
 #define u_lights u_lightsets[u_lightset].lights
 #define u_ambient u_views[u_view].ambient

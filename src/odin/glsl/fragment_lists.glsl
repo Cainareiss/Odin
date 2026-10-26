@@ -21,7 +21,8 @@
 
 /* The translucent fragments of a viewport, see renderer_translucent.cpp:
  * u_heads has the last one of each pixel and next the one before it, as
- * indices plus one; 0 ends a list. */
+ * indices plus one; 0 ends a list. With Vulkan, in the set LISTS_SET of
+ * the shader that comes after (board_translucent_vk.cpp). */
 
 struct node_t {
 	vec4 color;
@@ -30,7 +31,14 @@ struct node_t {
 	uint order;
 	uint mode;
 };
+#ifdef VULKAN
+layout(std430, set = LISTS_SET, binding = 0) buffer nodes_t {
+	node_t u_nodes[];
+};
+layout(set = LISTS_SET, binding = 1, r32ui) uniform uimage2D u_heads;
+#else
 layout(binding = 0, r32ui) uniform uimage2D u_heads;
 layout(std430, binding = 0) buffer nodes_t {
 	node_t u_nodes[];
 };
+#endif

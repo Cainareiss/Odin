@@ -385,6 +385,7 @@ Context::make_device(std::string &why)
 	wanted.all.features.samplerAnisotropy = had.all.features.samplerAnisotropy;
 	if (!had.all.features.samplerAnisotropy)
 		m_max_anisotropy = 1.0f;
+	wanted.all.features.geometryShader = m_primitive_ids = had.all.features.geometryShader;
 	wanted.v13.dynamicRendering = wanted.v13.synchronization2 = VK_TRUE;
 	wanted.rendering.dynamicRendering = wanted.sync2.synchronization2 = VK_TRUE;
 	wanted.dynamic.extendedDynamicState = VK_TRUE;
@@ -425,9 +426,10 @@ Context::make_device(std::string &why)
 
 		/* The passes of a frame: a few dozen at most; the lists drawn,
 		 * a few */
-		const VkDescriptorPoolSize sizes[2] = { { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1024 },
-			                                { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 256 } };
-		const VkDescriptorPoolCreateInfo descriptors{ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO, nullptr, 0, 256, 2,
+		const VkDescriptorPoolSize sizes[3] = { { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1024 },
+			                                { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 512 },
+			                                { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 128 } };
+		const VkDescriptorPoolCreateInfo descriptors{ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO, nullptr, 0, 256, 3,
 		                                              sizes };
 		check(m_fn.vkCreateDescriptorPool(m_device, &descriptors, nullptr, &frame.descriptors), "a descriptor pool");
 	}
@@ -518,6 +520,25 @@ Context::submit(Frame &frame, const Submit &submit)
 	check(m_fn.vkQueueSubmit2(m_queue, 1, &info, frame.done), "sending commands");
 	frame.written = frame.uploading = false;
 	frame.sent = true;
+	frame.number = ++m_sent;
+}
+
+/* The sendings run in order: once one sent at or after it is done, so is
+ * it. */
+void
+Context::wait_sent(uint64_t number)
+{
+	Frame *first = nullptr;
+
+	if (number > m_sent) {
+		send_and_wait();
+		return;
+	}
+	for (Frame &frame : m_frames)
+		if (frame.sent && frame.number >= number && (!first || frame.number < first->number))
+			first = &frame;
+	if (first)
+		wait(*first);
 }
 
 /* All the frames waited for: what one waited for may have been used by
@@ -703,6 +724,24 @@ Context::unplace(const Image &image)
 	free.emplace(start, size);
 }
 
+Buffer
+Context::make_card_buffer(VkDeviceSize size, VkBufferUsageFlags usage)
+{
+	Buffer buffer;
+	const VkBufferCreateInfo info{ VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, nullptr, 0, size, usage,
+	                               VK_SHARING_MODE_EXCLUSIVE, 0, nullptr };
+	VkMemoryRequirements needs;
+
+	check(m_fn.vkCreateBuffer(m_device, &info, nullptr, &buffer.buffer), "a buffer");
+	m_fn.vkGetBufferMemoryRequirements(m_device, buffer.buffer, &needs);
+	const VkMemoryAllocateInfo memory{ VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO, nullptr, needs.size,
+	                                   memory_type(needs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) };
+	check(m_fn.vkAllocateMemory(m_device, &memory, nullptr, &buffer.memory), "the memory of a buffer");
+	check(m_fn.vkBindBufferMemory(m_device, buffer.buffer, buffer.memory, 0), "the memory of a buffer");
+	buffer.size = size;
+	return buffer;
+}
+
 /* Memory the processor reads fast where the card has such */
 Buffer
 Context::make_buffer(VkDeviceSize size, VkBufferUsageFlags usage)
@@ -778,6 +817,17 @@ Context::stage(VkDeviceSize size, VkDeviceSize align)
 	return { buffer.buffer, 0, buffer.bytes };
 }
 
+void
+Context::memory_barrier(VkCommandBuffer cb, VkPipelineStageFlags2 stages, VkAccessFlags2 access,
+                        VkPipelineStageFlags2 next_stages, VkAccessFlags2 next_access)
+{
+	const VkMemoryBarrier2 barrier{ VK_STRUCTURE_TYPE_MEMORY_BARRIER_2, nullptr, stages, access, next_stages,
+	                                next_access };
+	const VkDependencyInfo info{ VK_STRUCTURE_TYPE_DEPENDENCY_INFO, nullptr, 0, 1, &barrier, 0, nullptr, 0, nullptr };
+
+	m_fn.vkCmdPipelineBarrier2(cb, &info);
+}
+
 /* What the image was last used for is not followed closely: every write
  * of the card before is waited for. */
 void
@@ -798,11 +848,18 @@ Pass
 Context::make_pass(const Spirv &vertex, const Spirv &fragment, unsigned images, uint32_t push,
                    VkPrimitiveTopology topology, VkFormat format)
 {
-	Pass pass;
 	std::vector<VkDescriptorSetLayoutBinding> bindings;
 
 	for (uint32_t i = 0; i < images; i++)
 		bindings.push_back({ i, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr });
+	return make_pass(vertex, fragment, bindings, push, topology, format);
+}
+
+Pass
+Context::make_pass(const Spirv &vertex, const Spirv &fragment, const std::vector<VkDescriptorSetLayoutBinding> &bindings,
+                   uint32_t push, VkPrimitiveTopology topology, VkFormat format)
+{
+	Pass pass;
 	const VkDescriptorSetLayoutCreateInfo set{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO, nullptr, 0,
 	                                           static_cast<uint32_t>(bindings.size()), bindings.data() };
 	check(m_fn.vkCreateDescriptorSetLayout(m_device, &set, nullptr, &pass.images), "the images of a pass");

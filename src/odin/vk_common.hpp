@@ -78,6 +78,7 @@ namespace odin::vk {
 	F(vkCmdSetViewport) F(vkCmdSetScissor) F(vkCmdDraw) \
 	F(vkCmdCopyImageToBuffer) F(vkCmdCopyBufferToImage) F(vkCmdBlitImage) \
 	F(vkCmdBindVertexBuffers) F(vkCmdBindIndexBuffer) F(vkCmdDrawIndexed) F(vkFreeDescriptorSets) \
+	F(vkCmdFillBuffer) F(vkCmdCopyBuffer) \
 	F(vkCreatePipelineCache) F(vkDestroyPipelineCache) F(vkGetPipelineCacheData) F(vkMergePipelineCaches) \
 	G(vkQueueSubmit2, vkQueueSubmit2KHR) G(vkCmdPipelineBarrier2, vkCmdPipelineBarrier2KHR) \
 	G(vkCmdBeginRendering, vkCmdBeginRenderingKHR) G(vkCmdEndRendering, vkCmdEndRenderingKHR) \
@@ -203,6 +204,9 @@ public:
 	bool gl_clip_space() const { return m_gl_clip_space; }
 	/* Whether a pipeline made tells if it came from the cache */
 	bool creation_feedback() const { return m_creation_feedback; }
+	/* Whether fragment shaders read gl_PrimitiveID (the geometry shaders
+	 * of the card) */
+	bool primitive_ids() const { return m_primitive_ids; }
 	/* How many errors the validation layer told (Debug) */
 	unsigned validation_errors() const { return m_errors; }
 
@@ -216,6 +220,10 @@ public:
 	VkCommandBuffer uploads();
 	unsigned frame() const { return m_frame; }
 	void send_and_wait();
+	/* The number the commands being written are sent under; that sending
+	 * done (sent and waited for first if it is this one) */
+	uint64_t sending() const { return m_sent + 1; }
+	void wait_sent(uint64_t number);
 	struct Submit {
 		VkSemaphore wait = VK_NULL_HANDLE;	/* before the copy to the window */
 		VkSemaphore signal = VK_NULL_HANDLE;	/* once all is done */
@@ -235,6 +243,8 @@ public:
 	                        const VkComponentMapping &swizzle = {});
 	void destroy_image(Image &image);
 	Buffer make_buffer(VkDeviceSize size, VkBufferUsageFlags usage);
+	/* A buffer in the memory of the card, not mapped */
+	Buffer make_card_buffer(VkDeviceSize size, VkBufferUsageFlags usage);
 	void destroy_buffer(Buffer &buffer);
 	/* A buffer for the processor to fill or read in the frame being
 	 * written, at least `size` bytes, kept until the card is done */
@@ -246,11 +256,18 @@ public:
 	/* The image from its last use to the next one, all its levels; the
 	 * levels from `level` on only (they are taken as one use) */
 	void barrier(VkCommandBuffer cb, Image &image, const Use &next, unsigned level = 0);
+	/* Those accesses of those stages done and seen by the next ones */
+	void memory_barrier(VkCommandBuffer cb, VkPipelineStageFlags2 stages, VkAccessFlags2 access,
+	                    VkPipelineStageFlags2 next_stages, VkAccessFlags2 next_access);
 
 	/* A pass that samples `images` images, with `push` bytes of push
 	 * constants, drawn as a list or a strip of triangles into an image of
 	 * that format, nothing blended, nothing culled, no depth */
 	Pass make_pass(const Spirv &vertex, const Spirv &fragment, unsigned images, uint32_t push,
+	               VkPrimitiveTopology topology, VkFormat format);
+	/* The same with those bindings in its set */
+	Pass make_pass(const Spirv &vertex, const Spirv &fragment,
+	               const std::vector<VkDescriptorSetLayoutBinding> &bindings, uint32_t push,
 	               VkPrimitiveTopology topology, VkFormat format);
 	void destroy_pass(Pass &pass);
 	/* A descriptor set of that layout, for the frame being written */
@@ -315,6 +332,7 @@ private:
 	VkFormat m_depth_format = VK_FORMAT_D32_SFLOAT;
 	bool m_gl_clip_space = false;
 	bool m_creation_feedback = false;
+	bool m_primitive_ids = false;
 	bool m_validation = false;
 	bool m_portability = false;
 	bool m_core13 = false;
@@ -330,6 +348,7 @@ private:
 		bool uploading = false;	/* the one of the uploads too */
 		bool sent = false;	/* sent, its fence not waited for yet */
 		bool again = false;	/* begun again, what it gave not taken back yet */
+		uint64_t number = 0;	/* of its last sending */
 		std::vector<std::function<void()>> later;
 		std::deque<Buffer> staging;	/* a deque: what staging gave stays put */
 		size_t staging_used = 0;
@@ -340,6 +359,7 @@ private:
 	};
 	Frame m_frames[FRAMES];
 	unsigned m_frame = 0;
+	uint64_t m_sent = 0;	/* sendings so far */
 	void wait(Frame &frame);
 	void submit(Frame &frame, const Submit &submit);
 

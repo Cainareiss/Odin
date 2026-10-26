@@ -135,17 +135,18 @@ VkBoardDrawing::log(const char *fmt, ...) const
 	std::fputc('\n', m_debug.log);
 }
 
-/* The shaders, the layout of the meshes, the sets of the texture and the
- * sampler of the meshes without one (made after m_none and m_nearest), an
- * empty cache */
+/* The shaders (the one of the translucent fragments where the card gives
+ * gl_PrimitiveID), the layout of the meshes, the sets of the texture and
+ * the sampler of the meshes without one (made after m_none and m_nearest),
+ * an empty cache */
 void
 VkBoardDrawing::build_meshes()
 {
 	const VkDevice device = m_card.device();
-	const vk::Spirv code[2] = { ODIN_SPIRV_OF(mesh_vert), ODIN_SPIRV_OF(mesh_frag) };
-	VkShaderModule *const modules[2] = { &m_mesh_vert, &m_mesh_frag };
+	const vk::Spirv code[3] = { ODIN_SPIRV_OF(mesh_vert), ODIN_SPIRV_OF(mesh_frag), ODIN_SPIRV_OF(mesh_collect_frag) };
+	VkShaderModule *const modules[3] = { &m_mesh_vert, &m_mesh_frag, &m_mesh_collect };
 
-	for (unsigned i = 0; i < 2; i++) {
+	for (unsigned i = 0; i < (m_card.primitive_ids() ? 3u : 2u); i++) {
 		const VkShaderModuleCreateInfo info{ VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO, nullptr, 0, code[i].bytes,
 		                                     code[i].code };
 		m_card.check(m_fn.vkCreateShaderModule(device, &info, nullptr, modules[i]), "a mesh shader");
@@ -164,9 +165,23 @@ VkBoardDrawing::build_meshes()
 	make_sets(m_texture_sets, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, VK_SHADER_STAGE_FRAGMENT_BIT);
 	make_sets(m_sampler_sets, VK_DESCRIPTOR_TYPE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
 
-	const VkDescriptorSetLayout sets[3] = { m_list_layout, m_texture_sets.layout, m_sampler_sets.layout };
+	/* The fragments, the last of each pixel, the count of the view, the
+	 * depth the other types left (glsl/fragment_lists.glsl, mesh.frag) */
+	const VkDescriptorSetLayoutBinding lists[4] = {
+		{ 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
+		{ 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
+		{ 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
+		{ 3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
+	};
+	const VkDescriptorSetLayoutCreateInfo collect{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO, nullptr, 0, 4,
+	                                               lists };
+	m_card.check(m_fn.vkCreateDescriptorSetLayout(device, &collect, nullptr, &m_collect_layout),
+	             "the set of the translucent fragments");
+
+	const VkDescriptorSetLayout sets[4] = { m_list_layout, m_texture_sets.layout, m_sampler_sets.layout,
+		                                m_collect_layout };
 	const VkPushConstantRange push{ VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(MeshPush) };
-	const VkPipelineLayoutCreateInfo layout{ VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO, nullptr, 0, 3, sets, 1,
+	const VkPipelineLayoutCreateInfo layout{ VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO, nullptr, 0, 4, sets, 1,
 	                                         &push };
 	m_card.check(m_fn.vkCreatePipelineLayout(device, &layout, nullptr, &m_mesh_layout), "the layout of the meshes");
 
@@ -202,8 +217,10 @@ VkBoardDrawing::destroy_meshes()
 	destroy_sets(m_sampler_sets);
 	m_fn.vkDestroyPipelineLayout(device, m_mesh_layout, nullptr);
 	m_fn.vkDestroyDescriptorSetLayout(device, m_list_layout, nullptr);
+	m_fn.vkDestroyDescriptorSetLayout(device, m_collect_layout, nullptr);
 	m_fn.vkDestroyShaderModule(device, m_mesh_vert, nullptr);
 	m_fn.vkDestroyShaderModule(device, m_mesh_frag, nullptr);
+	m_fn.vkDestroyShaderModule(device, m_mesh_collect, nullptr);
 }
 
 /* The cache of this card and of these mesh shaders in the folder, taken
@@ -282,10 +299,14 @@ VkBoardDrawing::write_cache()
 }
 
 /* The pipeline of the variant and the blend, made the first time. A variant
- * first met while drawing goes to the list of the programs of the game. */
+ * first met while drawing goes to the list of the programs of the game. The
+ * translucent fragments go to their lists, not to the colour: their blend
+ * is that of sort.frag, the pipeline is one whatever the blend. */
 VkPipeline
 VkBoardDrawing::pipeline(const MeshVariant &variant, MeshBlend blend)
 {
+	if (variant.collect)
+		blend = MeshBlend::REPLACE;
 	const uint64_t key = variant.key();
 	const uint64_t index = key * 8 + static_cast<unsigned>(blend);
 	const auto found = m_pipelines.find(index);
@@ -316,8 +337,8 @@ VkBoardDrawing::pipeline(const MeshVariant &variant, MeshBlend blend)
 	const VkPipelineShaderStageCreateInfo stages[2] = {
 		{ VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_VERTEX_BIT, m_mesh_vert,
 		  "main", &constants },
-		{ VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_FRAGMENT_BIT, m_mesh_frag,
-		  "main", &constants },
+		{ VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_FRAGMENT_BIT,
+		  variant.collect ? m_mesh_collect : m_mesh_frag, "main", &constants },
 	};
 
 	/* The locations of the mesh vertex shader, as board_scene_gl.cpp
@@ -359,9 +380,10 @@ VkBoardDrawing::pipeline(const MeshVariant &variant, MeshBlend blend)
 	depth.depthTestEnable = depth.depthWriteEnable = VK_TRUE;
 	depth.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
 	const VkBlendFactor *const f = BLENDS[static_cast<unsigned>(blend)];
+	const VkColorComponentFlags rgba = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT |
+	                                   VK_COLOR_COMPONENT_A_BIT;
 	const VkPipelineColorBlendAttachmentState mix{ VK_TRUE, f[0], f[1], VK_BLEND_OP_ADD, f[2], f[3], VK_BLEND_OP_ADD,
-		                                       VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-		                                               VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT };
+		                                       variant.collect ? 0u : rgba };
 	VkPipelineColorBlendStateCreateInfo blending{};
 	blending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
 	blending.attachmentCount = 1;
@@ -409,14 +431,13 @@ VkBoardDrawing::pipeline(const MeshVariant &variant, MeshBlend blend)
 }
 
 /* With the blend the variant is most often drawn with: faded by the depth
- * queue, else replacing (the others, the background's, when first met).
- * The translucent ones come with V4. */
+ * queue, else replacing (the others, the background's, when first met). */
 void
 VkBoardDrawing::prepare_program(uint64_t key)
 {
 	const std::optional<MeshVariant> variant = MeshVariant::from_key(key);
 
-	if (!variant || variant->collect || m_variants.contains(key))
+	if (!variant || (variant->collect && !m_card.primitive_ids()) || m_variants.contains(key))
 		return;
 	m_preparing = true;
 	pipeline(*variant, variant->has_cue ? MeshBlend::FADED : MeshBlend::REPLACE);
@@ -431,7 +452,6 @@ VkBoardDrawing::prepare_program(uint64_t key)
 void
 VkBoardDrawing::begin_scene(const odin_display_list_t &list, const SceneDebug &debug)
 {
-	const VkCommandBuffer cb = m_card.commands();
 	const VkDeviceSize align = std::max<VkDeviceSize>(m_card.limits().minStorageBufferOffsetAlignment, 16);
 	const auto bytes = [](size_t n, size_t each) { return static_cast<VkDeviceSize>(std::max<size_t>(n, 1) * each); };
 
@@ -442,29 +462,43 @@ VkBoardDrawing::begin_scene(const odin_display_list_t &list, const SceneDebug &d
 	const VkDeviceSize mv_bytes = bytes(list.num_mvs + 1, sizeof(odin_modelview_t));
 	const VkDeviceSize view_bytes = bytes(list.num_vps, sizeof(ViewData));
 	const VkDeviceSize ls_bytes = bytes(list.num_lss, sizeof(LightsetData));
-	const vk::Slice vertices = m_card.stage(vertex_bytes, 16);
-	const vk::Slice indices = m_card.stage(index_bytes, 16);
+	m_vertices = m_card.stage(vertex_bytes, 16);
+	m_indices = m_card.stage(index_bytes, 16);
 	const vk::Slice mvs = m_card.stage(mv_bytes, align);
 	m_views = m_card.stage(view_bytes, align);
 	m_lightsets = m_card.stage(ls_bytes, align);
 
-	std::memcpy(vertices.bytes, list.verts.all, sizeof(odin_vertex_body_t) * list.verts.num);
-	std::memcpy(indices.bytes, list.indices.all, sizeof(uint32_t) * list.indices.num);
+	std::memcpy(m_vertices.bytes, list.verts.all, sizeof(odin_vertex_body_t) * list.verts.num);
+	std::memcpy(m_indices.bytes, list.indices.all, sizeof(uint32_t) * list.indices.num);
 	std::memcpy(mvs.bytes, list.mv_list, sizeof(odin_modelview_t) * list.num_mvs);
 	m_identity = list.num_mvs;
 	std::memcpy(mvs.bytes + sizeof(odin_modelview_t) * m_identity, &IDENTITY, sizeof(IDENTITY));
 	m_view_written.assign(list.num_vps, false);
 	m_lightset_written.assign(list.num_lss, false);
 
-	const VkDescriptorSet set = m_card.frame_set(m_list_layout);
+	m_list_set = m_card.frame_set(m_list_layout);
 	const VkDescriptorBufferInfo buffers[3] = { { m_views.buffer, m_views.offset, view_bytes },
 		                                    { mvs.buffer, mvs.offset, mv_bytes },
 		                                    { m_lightsets.buffer, m_lightsets.offset, ls_bytes } };
 	VkWriteDescriptorSet writes[3];
 	for (uint32_t i = 0; i < 3; i++)
-		writes[i] = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, set, i, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-		              nullptr, &buffers[i], nullptr };
+		writes[i] = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, m_list_set, i, 0, 1,
+		              VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, nullptr, &buffers[i], nullptr };
 	m_fn.vkUpdateDescriptorSets(m_card.device(), 3, writes, 0, nullptr);
+
+	m_in_scene = true;
+	m_collecting = false;
+	m_pass.depth_write = true;
+	open_scene(true);
+}
+
+/* The scene drawn into, emptied first or as it was left: every state of the
+ * meshes set again (the commands may have been sent since, see count_now) */
+void
+VkBoardDrawing::open_scene(bool clear)
+{
+	const VkCommandBuffer cb = m_card.commands();
+	const VkAttachmentLoadOp load = clear ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
 
 	m_card.barrier(cb, m_scene, vk::DRAWN_IN);
 	m_card.barrier(cb, m_depth, vk::DEPTH_IN);
@@ -472,7 +506,7 @@ VkBoardDrawing::begin_scene(const odin_display_list_t &list, const SceneDebug &d
 	colour.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
 	colour.imageView = m_scene.view;
 	colour.imageLayout = m_scene.layout;
-	colour.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	colour.loadOp = load;
 	colour.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 	colour.clearValue.color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
 	VkRenderingAttachmentInfo depth = colour;
@@ -489,18 +523,29 @@ VkBoardDrawing::begin_scene(const odin_display_list_t &list, const SceneDebug &d
 	m_fn.vkCmdSetScissor(cb, 0, 1, &all);
 	m_fn.vkCmdSetCullMode(cb, VK_CULL_MODE_BACK_BIT);
 	m_fn.vkCmdSetFrontFace(cb, VK_FRONT_FACE_CLOCKWISE);
-	m_fn.vkCmdSetDepthTestEnable(cb, VK_TRUE);
-	m_fn.vkCmdSetDepthWriteEnable(cb, VK_TRUE);
+	/* The translucent fragments test their depth themselves */
+	m_fn.vkCmdSetDepthTestEnable(cb, m_collecting ? VK_FALSE : VK_TRUE);
+	m_fn.vkCmdSetDepthWriteEnable(cb, m_pass.depth_write && !m_collecting ? VK_TRUE : VK_FALSE);
 	m_fn.vkCmdSetDepthCompareOp(cb, VK_COMPARE_OP_LESS_OR_EQUAL);
-	m_fn.vkCmdBindVertexBuffers(cb, 0, 1, &vertices.buffer, &vertices.offset);
-	m_fn.vkCmdBindIndexBuffer(cb, indices.buffer, indices.offset, VK_INDEX_TYPE_UINT32);
-	const VkDescriptorSet first[3] = { set, m_none_set.set, m_nearest_set.set };
-	m_fn.vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, m_mesh_layout, 0, 3, first, 0, nullptr);
+	m_fn.vkCmdBindVertexBuffers(cb, 0, 1, &m_vertices.buffer, &m_vertices.offset);
+	m_fn.vkCmdBindIndexBuffer(cb, m_indices.buffer, m_indices.offset, VK_INDEX_TYPE_UINT32);
+	const VkDescriptorSet sets[4] = { m_list_set, m_none_set.set, m_nearest_set.set, m_collect_set };
+	m_fn.vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, m_mesh_layout, 0, m_collecting ? 4 : 3, sets,
+	                             0, nullptr);
 	m_bound_pipeline = VK_NULL_HANDLE;
 	m_bound_texture = 0;
 	m_bound_sampler = NONE;
 	m_scissor_vp_index = NONE;
-	m_drawing = true;
+	m_open = true;
+}
+
+void
+VkBoardDrawing::close_scene()
+{
+	if (!m_open)
+		return;
+	m_fn.vkCmdEndRendering(m_card.commands());
+	m_open = false;
 }
 
 void
@@ -509,24 +554,26 @@ VkBoardDrawing::clear_depth()
 	const VkClearAttachment depth{ VK_IMAGE_ASPECT_DEPTH_BIT, 0, { .depthStencil = { 1.0f, 0 } } };
 	const VkClearRect all{ { { 0, 0 }, { width(), height() } }, 0, 1 };
 
+	if (!m_open)
+		open_scene(false);
 	m_fn.vkCmdClearAttachments(m_card.commands(), 1, &depth, 1, &all);
 }
 
 void
 VkBoardDrawing::begin_pass(const PassRules &rules)
 {
-	m_fn.vkCmdSetDepthWriteEnable(m_card.commands(), rules.depth_write ? VK_TRUE : VK_FALSE);
 	m_pass.alpha_ref = rules.alpha_ref;
 	m_pass.depth_bias = rules.depth_bias;
+	m_pass.depth_write = rules.depth_write;
+	if (m_open)
+		m_fn.vkCmdSetDepthWriteEnable(m_card.commands(), rules.depth_write && !m_collecting ? VK_TRUE : VK_FALSE);
 }
 
 void
 VkBoardDrawing::end_scene()
 {
-	if (!m_drawing)
-		return;
-	m_fn.vkCmdEndRendering(m_card.commands());
-	m_drawing = false;
+	close_scene();
+	m_in_scene = false;
 }
 
 /* What a view gives the shaders: its projection (hikaru_draw.hpp), its depth
@@ -647,8 +694,11 @@ VkBoardDrawing::draw_mesh(const odin_mesh_t &mesh, const MeshDraw &draw)
 {
 	const MeshVariant &variant = draw.variant;
 
-	if (variant.collect)
+	/* Without gl_PrimitiveID, no translucent fragments (begin_collect) */
+	if (variant.collect && !m_collecting)
 		return;
+	if (!variant.collect && !m_open)
+		open_scene(false);
 	if (mesh.vp_index >= m_list->num_vps || (variant.has_lighting && mesh.ls_index >= m_list->num_lss)) {
 		repeats::error("a mesh outside its list: vp %u, ls %u", mesh.vp_index, mesh.ls_index);
 		return;
@@ -675,6 +725,8 @@ VkBoardDrawing::draw_mesh(const odin_mesh_t &mesh, const MeshDraw &draw)
 	m_push.alpha_ref = m_pass.alpha_ref;
 	m_push.weigh_by_alpha = draw.weigh_by_alpha ? 1.0f : 0.0f;
 	m_push.pattern = pattern_bits(mesh.pattern);
+	m_push.blend_mode = draw.blend_mode;
+	m_push.sort_scale = depth_bias::sort_scale(bias);
 
 	/* Something is drawn anyway with no modelview, as with OpenGL */
 	const bool none = mesh.mv_index == NONE;
@@ -689,6 +741,9 @@ VkBoardDrawing::draw_mesh(const odin_mesh_t &mesh, const MeshDraw &draw)
 		}
 		m_push.mv = mv;
 		m_push.mv2 = mesh.mv2_index < m_identity ? mesh.mv2_index : mv;
+		m_push.order = m_pass.order;
+		if (variant.collect)
+			m_pass.order += mesh.num_tris;
 		if (m_debug.log)
 			log("mv  = [%u+%u] %s", mesh.mv_index, i,
 			    odin_modelview_str(mv == m_identity ? &IDENTITY : &m_list->mv_list[mv]));

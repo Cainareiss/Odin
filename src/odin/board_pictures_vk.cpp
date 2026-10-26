@@ -80,6 +80,7 @@ VkBoardDrawing::VkBoardDrawing(vk::Context &card) : m_card(card), m_fn(card.fn()
 	                            VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
 	build_pictures();
 	build_meshes();
+	build_lists();
 	m_card.name_picture(FRAME_PICTURE, &m_frame);
 }
 
@@ -90,6 +91,7 @@ VkBoardDrawing::~VkBoardDrawing()
 	destroy_pictures(true);
 	m_card.send_and_wait();
 	destroy_meshes();
+	destroy_lists();
 	for (vk::Image *image : { &m_state, &m_none, &m_layers[0], &m_layers[1] })
 		m_card.destroy_image(*image);
 	for (vk::Pass *pass : { &m_blender, &m_compose, &m_presenter })
@@ -130,12 +132,13 @@ VkBoardDrawing::build_pictures()
 		clear(cb, picture, 1.0f);
 	}
 	m_frame = make_picture(width(), height());
+	build_list_pictures();
 }
 
 void
 VkBoardDrawing::destroy_pictures(bool kept_too)
 {
-	std::vector<vk::Image> gone = { m_scene, m_depth, m_frame };
+	std::vector<vk::Image> gone = { m_scene, m_depth, m_frame, m_solid_depth, m_heads, m_below };
 
 	if (kept_too)
 		gone.insert(gone.end(), std::begin(m_kept), std::end(m_kept));

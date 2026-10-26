@@ -31,9 +31,13 @@
 
 #define KEPT 8
 
+#ifdef VULKAN
+layout(set = LISTS_SET, binding = 2) uniform sampler2D u_below;
+layout(location = 0) out vec4 fragColor;
+#else
 uniform sampler2D u_below;
-
 out vec4 fragColor;
+#endif
 
 bool
 comes_before (float depth_a, uint order_a, float depth_b, uint order_b)

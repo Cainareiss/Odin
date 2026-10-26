@@ -42,6 +42,8 @@ layout(push_constant) uniform mesh_t {
 	uint u_view, u_mv, u_mv2, u_lightset;
 	float u_depth_scale, u_alpha_ref, u_weigh_by_alpha;
 	uint u_pattern;
+	uint u_order, u_blend_mode;
+	float u_sort_scale;
 };
 /* 0: the card clips z from 0 to w, not from -w to w as OpenGL */
 layout(constant_id = 0) const int GL_CLIP_SPACE = 1;

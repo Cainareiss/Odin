@@ -32,6 +32,8 @@ ODIN_SPIRV(compose_frag)
 ODIN_SPIRV(present_frag)
 ODIN_SPIRV(mesh_vert)
 ODIN_SPIRV(mesh_frag)
+ODIN_SPIRV(mesh_collect_frag)
+ODIN_SPIRV(sort_frag)
 #undef ODIN_SPIRV
 
 /* A shader of spirv.S by its name */

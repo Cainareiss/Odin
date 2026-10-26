@@ -22,7 +22,8 @@
 /* The board drawing with Vulkan (board_drawing.hpp), for its own files
  * only: board_drawing_vk.cpp (made; the textures and their samplers),
  * board_pictures_vk.cpp (the pictures and what goes from one to the next),
- * board_scene_vk.cpp (the meshes of a list, their pipelines). The pictures
+ * board_scene_vk.cpp (the meshes of a list, their pipelines),
+ * board_translucent_vk.cpp (their translucent fragments). The pictures
  * keep the lines in the order OpenGL gives them, the bottom one first:
  * drawn with the same coordinates, they hold the same bytes (MARKDOWN/106
  * § 2.2). */
@@ -50,21 +51,20 @@ public:
 	void begin_scene(const odin_display_list_t &list, const SceneDebug &debug) override;
 	void clear_depth() override;
 	void begin_pass(const PassRules &rules) override;
-	/* The translucent ones are not drawn yet (V4) */
 	void draw_mesh(const odin_mesh_t &mesh, const MeshDraw &draw) override;
 	void end_pass() override {}
 	void end_scene() override;
 
-	void begin_translucent() override {}
-	void begin_collect(unsigned) override {}
-	void end_collect() override {}
-	void keep_count(unsigned, unsigned) override {}
-	uint32_t count_now(unsigned) override { return 0; }
-	void end_translucent(bool) override {}
-	uint32_t counted_fragments(unsigned, uint32_t) override { return 0; }
-	void forget_counts(unsigned) override {}
-	void size_fragments(uint32_t) override {}
-	uint32_t fragment_limit() const override { return UINT32_MAX / 32; }
+	void begin_translucent() override;
+	void begin_collect(unsigned view) override;
+	void end_collect() override;
+	void keep_count(unsigned view, unsigned slot) override;
+	uint32_t count_now(unsigned view) override;
+	void end_translucent(bool blend) override;
+	uint32_t counted_fragments(unsigned slot, uint32_t views) override;
+	void forget_counts(unsigned slot) override { m_counted[slot] = 0; }
+	void size_fragments(uint32_t max) override;
+	uint32_t fragment_limit() const override;
 
 	void keep_programs_in(const std::string &folder) override;
 	void list_programs_in(const std::string &path) override { m_program_list.list_in(path); }
@@ -128,6 +128,8 @@ private:
 		uint32_t view, mv, mv2, lightset;
 		float depth_scale, alpha_ref, weigh_by_alpha;
 		uint32_t pattern;
+		uint32_t order, blend_mode;
+		float sort_scale;
 	};
 
 	/* The number of the picture of the frame, as the window reads it;
@@ -156,6 +158,8 @@ private:
 	/* board_scene_vk.cpp */
 	void build_meshes();
 	void destroy_meshes();
+	void open_scene(bool clear);
+	void close_scene();
 	void log(const char *fmt, ...) const __attribute__((format(printf, 2, 3)));
 	VkPipeline pipeline(const MeshVariant &variant, MeshBlend blend);
 	void read_cache(const std::string &path);
@@ -164,6 +168,11 @@ private:
 	void write_lightset(unsigned index);
 	void set_view(const odin_mesh_t &mesh);
 	void bind_texture(const MeshDraw &draw);
+
+	/* board_translucent_vk.cpp */
+	void build_lists();
+	void destroy_lists();
+	void build_list_pictures();
 
 	vk::Context &m_card;
 	const vk::Functions &m_fn;
@@ -190,14 +199,16 @@ private:
 	KeptSets m_texture_sets, m_sampler_sets;
 	KeptSet m_none_set, m_nearest_set;
 
-	/* The meshes: their depth, shaders, layout (the set of the list,
-	 * then those of the texture and the sampler), pipelines by variant
+	/* The meshes: their depth, shaders (the fragment shader of the
+	 * translucent ones apart), layout (the set of the list, then those of
+	 * the texture, the sampler and the translucent fragments), pipelines
+	 * by variant
 	 * and blend, the variants that have one, the cache of the pipelines
 	 * (its folder, the start of the names of the caches of the card, its
 	 * file), the list of the programs of the game */
 	vk::Image m_depth;
-	VkShaderModule m_mesh_vert = VK_NULL_HANDLE, m_mesh_frag = VK_NULL_HANDLE;
-	VkDescriptorSetLayout m_list_layout = VK_NULL_HANDLE;
+	VkShaderModule m_mesh_vert = VK_NULL_HANDLE, m_mesh_frag = VK_NULL_HANDLE, m_mesh_collect = VK_NULL_HANDLE;
+	VkDescriptorSetLayout m_list_layout = VK_NULL_HANDLE, m_collect_layout = VK_NULL_HANDLE;
 	VkPipelineLayout m_mesh_layout = VK_NULL_HANDLE;
 	std::unordered_map<uint64_t, VkPipeline> m_pipelines;
 	std::unordered_set<uint64_t> m_variants;
@@ -208,22 +219,42 @@ private:
 	bool m_preparing = false;
 
 	/* The list being drawn: its buffers (the views and the lightsets
-	 * written when first used), what is bound and pushed */
+	 * written when first used) and their set, what is bound and pushed */
 	const odin_display_list_t *m_list = nullptr;
 	SceneDebug m_debug{};
-	vk::Slice m_views{}, m_lightsets{};
+	vk::Slice m_vertices{}, m_indices{}, m_views{}, m_lightsets{};
+	VkDescriptorSet m_list_set = VK_NULL_HANDLE;
 	uint32_t m_identity = 0;	/* the modelview of none */
 	std::vector<bool> m_view_written, m_lightset_written;
 	VkPipeline m_bound_pipeline = VK_NULL_HANDLE;
 	uint32_t m_bound_texture = 0, m_bound_sampler = 0;
 	uint32_t m_scissor_vp_index = ~0u;
 	MeshPush m_push{};
-	bool m_drawing = false;		/* between begin_scene and end_scene */
+	/* Drawing into the scene: in a rendering of Vulkan now (copies and
+	 * barriers wait outside), between begin_scene and end_scene */
+	bool m_open = false, m_in_scene = false;
 	/* How the meshes of the polygon type being drawn are drawn */
 	struct {
 		float alpha_ref;	/* fragments at or below it are dropped */
 		bool depth_bias;	/* the 101 bias moves the mesh */
+		bool depth_write;
+		uint32_t order;		/* triangles sent so far, while collecting */
 	} m_pass{};
+
+	/* The translucent fragments, see board_translucent_vk.cpp: being
+	 * collected, and their set; the depth the other types left, the last
+	 * fragment of each pixel, the colour under them; the fragments, the
+	 * count of each view (each `m_count_stride` bytes), the counts the
+	 * processor reads, and for each list of the pipe the sending its
+	 * counts go with (0: none); the pass that blends them */
+	bool m_collecting = false;
+	VkDescriptorSet m_collect_set = VK_NULL_HANDLE;
+	vk::Image m_solid_depth, m_heads, m_below;
+	vk::Buffer m_nodes, m_counts, m_readback;
+	VkDeviceSize m_count_stride = 4;
+	uint64_t m_counted[3] = { 0, 0, 0 };
+	vk::Pass m_sorter;
+	bool m_said_no_lists = false;
 };
 
 } /* namespace odin */
