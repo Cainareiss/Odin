@@ -31,7 +31,7 @@
 #include <vector>
 
 #include "odin/gl_common.hpp"
-#include "odin/board_shaders_gl.hpp"
+#include "odin/glsl_texts.hpp"
 
 namespace odin {
 
@@ -189,7 +189,7 @@ GlBoardDrawing::set_scale(unsigned scale)
 void
 GlBoardDrawing::build_blender()
 {
-	m_blender = gl::compile_program(shaders::WHOLE_PICTURE_VERTEX, shaders::BLEND_FRAGMENT);
+	m_blender = gl::compile_program(odin_glsl_whole_picture_vert, odin_glsl_blend_frag);
 	m_blender_rate = gl::uniform(m_blender, "u_rate");
 	glUseProgram(m_blender);
 	glUniform1i(gl::uniform(m_blender, "u_drawn"), 0);
@@ -232,7 +232,7 @@ GlBoardDrawing::build_quad()
 void
 GlBoardDrawing::build_compose()
 {
-	m_compose = gl::compile_program(shaders::COMPOSE_VERTEX, shaders::COMPOSE_FRAGMENT);
+	m_compose = gl::compile_program(odin_glsl_compose_vert, odin_glsl_compose_frag);
 
 	m_compose_locs.front = gl::uniform(m_compose, "u_front");
 	m_compose_locs.back = gl::uniform(m_compose, "u_back");
@@ -256,7 +256,7 @@ GlBoardDrawing::build_compose()
 void
 GlBoardDrawing::build_presenter()
 {
-	m_presenter = gl::compile_program(shaders::WHOLE_PICTURE_VERTEX, shaders::PRESENT_FRAGMENT);
+	m_presenter = gl::compile_program(odin_glsl_whole_picture_vert, odin_glsl_present_frag);
 	m_presenter_rect = gl::uniform(m_presenter, "u_rect");
 	glUseProgram(m_presenter);
 	glUniform1i(gl::uniform(m_presenter, "u_picture"), 0);

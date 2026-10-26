@@ -34,36 +34,11 @@
 #include "imgui/imgui_impl_opengl3.h"
 #include "odin/board_drawing.hpp"
 #include "odin/gl_common.hpp"
+#include "odin/glsl_texts.hpp"
 
 namespace odin {
 
 namespace {
-
-/* An image over the viewport it is given (the bezel, the sides blurred): a
- * triangle that covers it, the top of the image at the top */
-const char *const IMAGE_VERTEX = R"glsl(#version 430
-
-out vec2 place;
-
-void main (void) {
-	const vec2 corner = vec2 (gl_VertexID & 1, gl_VertexID >> 1) * 2.0;
-
-	place = vec2 (corner.x, 1.0 - corner.y);
-	gl_Position = vec4 (corner * 2.0 - 1.0, 0.0, 1.0);
-}
-)glsl";
-
-const char *const IMAGE_FRAGMENT = R"glsl(#version 430
-
-uniform sampler2D bezel;
-uniform float light;
-in vec2 place;
-out vec4 colour;
-
-void main (void) {
-	colour = texture (bezel, place) * vec4 (light, light, light, 1.0);
-}
-)glsl";
 
 /* The sides blurred: the picture made that small in two steps (each pixel
  * of the smaller the mean of what it covers, nearly), then that much
@@ -75,45 +50,6 @@ constexpr float SIDES_LIGHT = 0.45f;
  * texels of the half picture, and how many times it goes back and forth */
 constexpr float BLUR_STEP = 1.5f;
 constexpr unsigned BLUR_ROUNDS = 2;
-
-const char WHOLE_WINDOW_VERTEX[] = R"(#version 430 core
-out vec2 v_uv;
-void main()
-{
-	vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);
-	v_uv = p;
-	gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
-}
-)";
-
-/* Gauss on nine taps, sigma near 2 taps */
-const char BLUR_FRAGMENT[] = R"(#version 430 core
-in vec2 v_uv;
-out vec4 o_colour;
-uniform sampler2D u_picture;
-uniform vec2 u_step;
-const float WEIGHTS[5] = float[](0.2270270270, 0.1945945946, 0.1216216216, 0.0540540541, 0.0162162162);
-void main()
-{
-	vec3 c = texture(u_picture, v_uv).rgb * WEIGHTS[0];
-	for (int i = 1; i < 5; i++) {
-		c += texture(u_picture, v_uv + u_step * float(i)).rgb * WEIGHTS[i];
-		c += texture(u_picture, v_uv - u_step * float(i)).rgb * WEIGHTS[i];
-	}
-	o_colour = vec4(c, 1.0);
-}
-)";
-
-const char SHOW_FRAGMENT[] = R"(#version 430 core
-in vec2 v_uv;
-out vec4 o_colour;
-uniform sampler2D u_picture;
-uniform float u_light;
-void main()
-{
-	o_colour = vec4(texture(u_picture, v_uv).rgb * u_light, 1.0);
-}
-)";
 
 class GlGraphics : public HostGraphics {
 public:
@@ -236,7 +172,7 @@ bool
 GlGraphics::image_program()
 {
 	if (!m_image_program) {
-		m_image_program = gl::compile_program(IMAGE_VERTEX, IMAGE_FRAGMENT);
+		m_image_program = gl::compile_program(odin_glsl_image_vert, odin_glsl_image_frag);
 		m_image_light = glGetUniformLocation(m_image_program, "light");
 		glGenVertexArrays(1, &m_image_vao);
 	}
@@ -432,9 +368,9 @@ GlGraphics::start_ui()
 	ImGui_ImplOpenGL3_Init("#version 430 core");
 
 	glGenVertexArrays(1, &m_vao);
-	m_blur = gl::compile_program(WHOLE_WINDOW_VERTEX, BLUR_FRAGMENT);
+	m_blur = gl::compile_program(odin_glsl_whole_window_vert, odin_glsl_blur_frag);
 	m_blur_step = gl::uniform(m_blur, "u_step");
-	m_show = gl::compile_program(WHOLE_WINDOW_VERTEX, SHOW_FRAGMENT);
+	m_show = gl::compile_program(odin_glsl_whole_window_vert, odin_glsl_show_frag);
 	m_show_light = gl::uniform(m_show, "u_light");
 	m_ui = true;
 }

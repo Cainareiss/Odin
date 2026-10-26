@@ -1,0 +1,274 @@
+/*
+ * Odin
+ * Copyright (C) 2026 Réda Chérif-Touil
+ *
+ * Valkyrie
+ * Copyright (C) 2011-2014, Stefano Teso
+ *
+ * Valkyrie is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Valkyrie is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Valkyrie.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+/* A mesh of the display list, after fragment_lists.glsl and the defines of
+ * its variant (board_programs_gl.cpp): each define is a constant the
+ * branches below test, which the compiler folds. */
+
+out vec4 fragColor;
+
+struct light_t {
+	vec3 position;
+	vec3 direction;
+	vec3 color;
+	float ambient;
+	vec2 extents;
+	vec3 spot;
+	vec2 cone;
+	float table[16];
+};
+
+uniform light_t		u_lights[4];
+uniform vec3		u_ambient;
+uniform sampler2D	u_texture;
+uniform vec2		u_fog;
+uniform vec3		u_fog_color;
+uniform float		u_alpha_ref;
+uniform float		u_weigh_by_alpha;
+uniform uint		u_pattern;
+
+layout(std430, binding = 1) buffer count_t {
+	uint u_count;
+};
+uniform sampler2D	u_solid_depth;
+uniform uint		u_order;
+uniform uint		u_blend_mode;
+uniform float		u_depth_scale;
+uniform float		u_sort_scale;
+
+in vec4 p_position;
+in vec3 p_normal;
+in vec3 p_diffuse;
+in vec4 p_specular;
+in vec3 p_color1;
+in vec3 p_ambient;
+in vec2 p_texcoords;
+in float p_alpha;
+
+void
+apply_light (inout vec3 diffuse,
+             inout vec3 specular,
+             in light_t light,
+             in int type,
+             in int att_type)
+{
+	vec3 normal = normalize (p_normal);
+	vec3 light_direction;
+	float distance, attenuation, n_dot_l, r_dot_v;
+
+	if (type == 3) {
+		diffuse += light.color;
+		return;
+	}
+
+	if (type == 0) {
+		distance = length (light.direction);
+		light_direction = light.direction / distance;
+	} else {
+		vec3 delta = light.position - p_position.xyz;
+		distance = length (delta);
+		light_direction = delta / distance;
+	}
+
+	/* X360 825C5BA0: sat (P d + P Q), sat (P d^2 + P Q). The port does
+	 * not attenuate the types 2 and 3; the hardware does, on 1 / d and
+	 * 1 / d^2 (the far red light of the PHARRIER logo scene, which
+	 * leaves the asteroids grey on the cabinet). */
+	if (att_type == 0)
+		attenuation = clamp (light.extents.x * (distance + light.extents.y), 0.0, 1.0);
+	else if (att_type == 1)
+		attenuation = clamp (light.extents.x * (distance * distance + light.extents.y), 0.0, 1.0);
+	else if (att_type == 2)
+		attenuation = clamp (light.extents.x * (1.0 / distance + light.extents.y), 0.0, 1.0);
+	else if (att_type == 3)
+		attenuation = clamp (light.extents.x * (1.0 / (distance * distance) + light.extents.y), 0.0, 1.0);
+	else
+		attenuation = 1.0;
+
+	/* The cone. sat ((L . axis - cos outer) * scale), the axis pointing
+	 * from the target to the light, is not the light itself as in the
+	 * X360 port (825C5498): it addresses the table of the light, whose
+	 * sixteen points go from the cutoff to the cone angle with straight
+	 * lines between them (US patent 6,333,742 of SEGA; the 194 loads
+	 * the table). HEURISTIC: the first point is taken at the cutoff,
+	 * the last at the cone angle, and nothing is lit beyond the cutoff,
+	 * which the patent says is deleted. */
+	if (type == 2) {
+		float where = 15.0 * clamp ((dot (light_direction, normalize (-light.spot)) - light.cone.x) * light.cone.y, 0.0, 1.0);
+		int point = min (int (where), 14);
+		attenuation *= (where > 0.0) ? mix (light.table[point], light.table[point + 1], where - float (point)) : 0.0;
+	}
+
+	n_dot_l = dot (normal, light_direction);
+	/* The ambient level of the 051 is a constant share of the colour,
+	 * cut by the distance and by the cone like the Lambert term
+	 * (HEURISTIC: the scale and the cuts are read from the cabinets). */
+	diffuse += attenuation * (max (n_dot_l, 0.0) + light.ambient) * light.color;
+
+	/* The reflected ray against the view. The vo3d pixel shader takes
+	 * the Blinn half vector, whose lobe is about four times as wide for
+	 * the same exponent: it washes out the PHARRIER logo seen from the
+	 * front, which the cabinet shows plain blue. */
+	r_dot_v = dot (reflect (-light_direction, normal), -normalize (p_position.xyz));
+	if (n_dot_l > 0.0 && r_dot_v > 0.0)
+		specular += attenuation * pow (r_dot_v, 255.0 * p_specular.a) * light.color;
+}
+
+void
+main (void)
+{
+	vec4 color;
+	vec3 base;
+	float alpha;
+	ivec2 pixel = ivec2 (gl_FragCoord.xy);
+
+	/* The depth buffer holds the logarithm of the eye depth: with the
+	 * near planes the games send, the projected depth cannot tell apart
+	 * surfaces that the cabinets do (the shadow of the AIRTRIX combo
+	 * labels lies 0.06 behind them at a depth of 560). */
+	if (HAS_PATTERN != 0) {
+		/* 501: bit 0 is the top left pixel of the 4 x 4 pattern. The pattern
+		 * is laid in the pixels drawn: at a finer scale its dots are finer
+		 * than those of the hardware, and hardly show. */
+		ivec2 dot = pixel & 3;
+		if (((u_pattern >> uint ((3 - dot.y) * 4 + dot.x)) & 1u) == 0u)
+			discard;
+	}
+	float frag_depth = log2 (1.0 + 1.0 / gl_FragCoord.w) * (1.0 / 24.0);
+	gl_FragDepth = frag_depth;
+
+	if (HAS_TEXTURE != 0) {
+		vec4 texel = texture (u_texture, p_texcoords);
+
+		if (ALPHA_MODE != 0) {
+			/* 881 bit a: the vertex alpha blends the texel over the 091 colour
+			 * (vo3d.0x01100). */
+			base = mix (p_diffuse, texel.rgb, p_alpha);
+			alpha = texel.a;
+		} else if (TEX_MODE == 1) {
+			/* The texel alpha blends the texel over the 091 colour, the polygon
+			 * alpha alone remains (vo3d.0x01010). */
+			base = mix (p_diffuse, texel.rgb, texel.a);
+			alpha = p_alpha;
+		} else if (TEX_MODE == 2) {
+			/* The texel modulates the 291 colour: the vo3d.0x01020 vertex
+			 * shader sends ve_polygon_color1, not color0. */
+			base = texel.rgb * p_color1;
+			alpha = texel.a * p_alpha;
+		} else if (TEX_MODE == 3) {
+			/* The 091 colour with the texel alpha (vo3d.0x01030). */
+			base = p_diffuse;
+			alpha = texel.a * p_alpha;
+		} else if (TEX_MODE == 4) {
+			/* The texel blends the 291 colour over the 091 colour (vo3d.0x01040). */
+			base = mix (p_diffuse, p_color1, texel.rgb);
+			alpha = texel.a * p_alpha;
+		} else {
+			base = texel.rgb;
+			alpha = texel.a * p_alpha;
+		}
+	} else if (ALPHA_MODE != 0) {
+		/* 881 bit a: the vertex alpha blends the 291 colour over the 091
+		 * colour (vo3d.0x00100). */
+		base = mix (p_diffuse, p_color1, p_alpha);
+		alpha = 1.0;
+	} else {
+		base = p_diffuse;
+		alpha = p_alpha;
+	}
+
+	if (HAS_LIGHTING != 0) {
+		/* vo3d: (ambient + diffuse + emission) * base + specular * material;
+		 * mode 1 has the ambient, mode 2 the emission, mode 3 neither and no
+		 * specular (X360 825B4DE8). */
+		vec3 diffuse  = vec3 (0.0);
+		vec3 specular = vec3 (0.0);
+		vec3 ambient  = (SHADING_MODE == 1) ? u_ambient * p_ambient : vec3 (0.0);
+		vec3 emission = (SHADING_MODE == 2) ? p_ambient : vec3 (0.0);
+
+		if (HAS_LIGHT0 != 0)
+			apply_light (diffuse, specular, u_lights[0], LIGHT0_TYPE, LIGHT0_ATT_TYPE);
+		if (HAS_LIGHT1 != 0)
+			apply_light (diffuse, specular, u_lights[1], LIGHT1_TYPE, LIGHT1_ATT_TYPE);
+		if (HAS_LIGHT2 != 0)
+			apply_light (diffuse, specular, u_lights[2], LIGHT2_TYPE, LIGHT2_ATT_TYPE);
+		if (HAS_LIGHT3 != 0)
+			apply_light (diffuse, specular, u_lights[3], LIGHT3_TYPE, LIGHT3_ATT_TYPE);
+
+		color = vec4 ((ambient + diffuse + emission) * base, alpha);
+		if (SHADING_MODE != 3) {
+			color.rgb += specular * p_specular.rgb * (255.0 / 64.0);
+		}
+	} else {
+		color = vec4 (base, alpha);
+	}
+
+	/* Alpha test of the render pass (X360 825B2408). */
+	if (color.a <= u_alpha_ref)
+		discard;
+
+	if (COLLECT != 0) {
+		/* A translucent fragment is kept unless it is behind the other
+		 * types, whose depth buffer has steps of 6e-8. */
+		if (frag_depth >= 1.0 ||
+		    frag_depth > texelFetch (u_solid_depth, pixel, 0).r + 3.0e-8)
+			discard;
+	}
+
+	if (HAS_FOG != 0) {
+		/* X360 vo3d: linear fog on the eye depth from start to end. */
+		float fog = clamp ((-p_position.z - u_fog.x) * u_fog.y, 0.0, 1.0);
+		fragColor = vec4 (mix (color.rgb, u_fog_color, fog), color.a);
+	} else {
+		fragColor = color;
+	}
+
+	if (HAS_CUE != 0) {
+		/* Depth queue without a colour: the pixel fades into what is behind
+		 * it, linearly on the eye depth from start to end. */
+		float cue = clamp ((-p_position.z - u_fog.x) * u_fog.y, 0.0, 1.0);
+		if (cue >= 1.0)
+			discard;
+		fragColor.a = 1.0 - cue;
+	}
+
+	/* A blended colour is weighted by its alpha before it is clamped: a
+	 * lit colour above 1 keeps its excess (the galaxy of the PHARRIER
+	 * logo scene, whose veils burn to white on the cabinet). The blend
+	 * function takes the source as it is then. */
+	if (u_weigh_by_alpha > 0.5)
+		fragColor.rgb *= fragColor.a;
+
+	if (COLLECT != 0) {
+		uint n = atomicAdd (u_count, 1u);
+		if (n < uint (u_nodes.length ())) {
+			u_nodes[n].color = clamp (fragColor, 0.0, 1.0);
+			/* Sorted on the depth the 101 gives among translucent
+			 * fragments, not the one it gives against the other types
+			 * (depth_bias.hpp). */
+			u_nodes[n].depth = log2 (1.0 + u_sort_scale / (gl_FragCoord.w * u_depth_scale)) *
+			                   (1.0 / 24.0);
+			u_nodes[n].next = imageAtomicExchange (u_heads, pixel, n + 1u);
+			u_nodes[n].order = u_order + uint (gl_PrimitiveID);
+			u_nodes[n].mode = u_blend_mode;
+		}
+	}
+}

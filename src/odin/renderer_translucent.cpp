@@ -35,7 +35,7 @@
  * The meshes are drawn once. A fragment that is not behind the other types
  * goes to the list of its pixel with its colour, its depth, the blend mode
  * of its material and its rank in the display list; then every pixel
- * blends its list (shaders::SORT_FRAGMENT). The 101 of a mesh moves it one
+ * blends its list (glsl/sort.frag). The 101 of a mesh moves it one
  * way against the other types and another in that list (depth_bias.hpp). */
 
 #include "odin/renderer.hpp"

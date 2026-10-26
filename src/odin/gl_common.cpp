@@ -28,13 +28,16 @@ namespace odin::gl {
 
 namespace {
 
+/* The shaders of Odin are GLSL 4.30 (glsl/): their texts come after this
+ * #version line. */
 GLuint
 compile_shader(GLenum type, const char *text)
 {
 	const GLuint id = glCreateShader(type);
+	const char *const texts[2] = { "#version 430\n", text };
 	GLint status;
 
-	glShaderSource(id, 1, &text, nullptr);
+	glShaderSource(id, 2, texts, nullptr);
 	glCompileShader(id);
 	glGetShaderiv(id, GL_COMPILE_STATUS, &status);
 	if (!status) {

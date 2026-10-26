@@ -22,11 +22,11 @@
 /* The translucent fragments of a view with OpenGL (board_drawing.hpp; the
  * rules they follow: renderer_translucent.cpp). A fragment goes to the list
  * of its pixel, in a storage buffer, then every pixel blends its list
- * (shaders::SORT_FRAGMENT). */
+ * (glsl/sort.frag). */
 
 #include "odin/board_drawing_gl.hpp"
 #include "odin/gl_common.hpp"
-#include "odin/board_shaders_gl.hpp"
+#include "odin/glsl_texts.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -74,7 +74,7 @@ GlBoardDrawing::build_lists()
 {
 	GLint64 limit = 0;
 
-	m_lists.program = gl::compile_program(shaders::WHOLE_PICTURE_VERTEX, shaders::SORT_FRAGMENT);
+	m_lists.program = gl::compile_program(odin_glsl_whole_picture_vert, odin_glsl_sort_frag);
 	glUseProgram(m_lists.program);
 	glUniform1i(gl::uniform(m_lists.program, "u_below"), UNIT_BELOW);
 	glUseProgram(0);

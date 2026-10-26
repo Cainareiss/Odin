@@ -30,7 +30,8 @@
 
 namespace odin::gl {
 
-/* Compiles and links a program. Aborts with what the driver says if it
+/* Compiles and links a program of two texts of glsl/ (glsl_texts.hpp),
+ * each after its #version line. Aborts with what the driver says if it
  * cannot. `retrievable`: the driver is told glGetProgramBinary will be
  * asked for it. */
 GLuint compile_program(const char *vertex, const char *fragment, bool retrievable = false);

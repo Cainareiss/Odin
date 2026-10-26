@@ -24,7 +24,7 @@
 #include "odin/board_programs_gl.hpp"
 #include "odin/program_cache.hpp"
 #include "odin/gl_common.hpp"
-#include "odin/board_shaders_gl.hpp"
+#include "odin/glsl_texts.hpp"
 #include "odin/user_files.hpp"
 
 #include <cinttypes>
@@ -160,8 +160,7 @@ MeshPrograms::link(uint64_t key, const std::string &vertex, const std::string &f
 MeshProgram
 MeshPrograms::compile(const MeshVariant &variant)
 {
-	/* The pass that collects the fragments writes to buffers. */
-	std::string defines = variant.collect ? "#version 430\n" : "#version 140\n";
+	std::string defines;
 	const auto define = [&](const char *name, unsigned value) {
 		defines += "#define ";
 		defines += name;
@@ -189,7 +188,7 @@ MeshPrograms::compile(const MeshVariant &variant)
 	define("HAS_PATTERN", variant.has_pattern);
 
 	MeshProgram program;
-	program.id = link(variant.key(), defines + shaders::MESH_VERTEX, defines + shaders::MESH_FRAGMENT);
+	program.id = link(variant.key(), defines + odin_glsl_mesh_vert, defines + odin_glsl_mesh_frag);
 
 	const auto find = [&](const char *name) {
 		return glGetUniformLocation(program.id, name);

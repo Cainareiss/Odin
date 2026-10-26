@@ -149,7 +149,7 @@ OBJ := \
 	src/odin/renderer_translucent.o \
 	src/odin/renderer_programs.o \
 	src/odin/program_cache.o \
-	src/odin/board_shaders_gl.o \
+	src/odin/glsl_texts.o \
 	src/odin/renderer_textures.o \
 	src/odin/renderer_times.o \
 	src/odin/renderer_layers.o \
@@ -207,6 +207,10 @@ src/odin/menu_pictures.o: src/odin/menu_pictures.S $(wildcard src/odin/pictures/
 
 # The font of the menu, the same way
 src/odin/menu_fonts.o: src/odin/menu_fonts.S src/odin/fonts/cozette.ttf
+	$(CXX) -c $< -o $@ -Wa,-I,src/odin
+
+# The texts of the shaders, the same way
+src/odin/glsl_texts.o: src/odin/glsl_texts.S $(wildcard src/odin/glsl/*)
 	$(CXX) -c $< -o $@ -Wa,-I,src/odin
 
 -include $(patsubst %.o,%.d,$(OBJ) $(IMGUI_OBJ) $(ARCHIVE_OBJ))

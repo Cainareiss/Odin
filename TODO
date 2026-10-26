@@ -1025,7 +1025,7 @@ translucent fragments in renderer_translucent.cpp, the variants of the
 programs in renderer_programs.cpp, the textures in renderer_textures.cpp, the
 2D layers in renderer_layers.cpp; what the graphics card of the host does for
 them is behind BoardDrawing (board_drawing.hpp; with OpenGL the board_*_gl.cpp
-files, the text of the shaders in board_shaders_gl.cpp).
+files; the shaders in src/odin/glsl).
 HR_LOG=1 logs the objects of every mesh,
 HR_LOG_FRAME=<frame> those of one frame; ODIN_DEBUG_KEYS=1 gives the keys
 1 2 3 t u y l a d g a switch each (renderer_debug.cpp).
