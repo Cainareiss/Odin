@@ -28,6 +28,8 @@
 
 #include <GL/glew.h>
 
+#include "odin/picture_preset.hpp"
+
 namespace odin {
 
 /* A filter of the picture as the GLSL presets of RetroArch make one (a
@@ -68,7 +70,7 @@ public:
 	void draw(int x, int y, unsigned w, unsigned h, unsigned count);
 
 private:
-	enum class Scale { SOURCE, VIEWPORT, ABSOLUTE };
+	using Scale = preset::Plan::Scale;
 
 	/* A texture a pass reads: what it holds, its size, the size of the
 	 * picture in it, how it is read */
@@ -93,7 +95,7 @@ private:
 	};
 
 	PictureFilter() = default;
-	bool build(const std::string &preset, const std::map<std::string, std::string> &keys);
+	bool build(const preset::Plan &plan);
 	void size(unsigned w, unsigned h);
 	GLuint sampler(bool linear, GLint wrap);
 

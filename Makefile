@@ -164,6 +164,7 @@ OBJ := \
 	src/odin/renderer_debug.o \
 	src/odin/gl_common.o \
 	src/odin/picture_filter_gl.o \
+	src/odin/picture_filter_vk.o \
 	src/odin/picture_preset.o \
 	src/odin/loading_screen.o
 
@@ -193,7 +194,7 @@ ARCHIVE_OBJ := \
 
 ARCHIVE_FLAGS := $(OPT_FLAGS) $(FP_FLAGS) $(PGO_FLAGS) $(DEP_FLAGS)
 
-all: bin/odin
+all: bin/odin spirv
 
 bin/odin: $(OBJ) $(IMGUI_OBJ) $(ARCHIVE_OBJ)
 	$(LD) $+ -o $@ $(CXXFLAGS) $(LDFLAGS)
@@ -242,7 +243,17 @@ src/odin/glsl/mesh_collect.frag.spv: src/odin/glsl/mesh.frag src/odin/glsl/fragm
 		cat src/odin/glsl/fragment_lists.glsl $<; } | $(GLSLANG) -V --stdin -S frag -o $@
 src/odin/spirv.o: src/odin/spirv.S $(SPIRV)
 	$(CXX) -c $< -o $@ -Wa,-I,src/odin
-spirv: $(SPIRV)
+# The filters of the picture for Vulkan: each pass of a preset in SPIR-V
+# beside it, its two parts (filter_spirv.awk, picture_filter_vk.cpp)
+FILTER_GLSL := $(wildcard filters/*/shaders/*.glsl)
+FILTER_SPIRV := $(FILTER_GLSL:=.vert.spv) $(FILTER_GLSL:=.frag.spv)
+filters/%.glsl.vert.spv: filters/%.glsl $(FILTER_GLSL) src/odin/filter_spirv.awk
+	awk -v part=VERTEX -f src/odin/filter_spirv.awk $(dir $<)*.glsl $< | \
+		$(GLSLANG) -V -R --amb --aml --sub vert 8 --stdin -S vert -o $@
+filters/%.glsl.frag.spv: filters/%.glsl $(FILTER_GLSL) src/odin/filter_spirv.awk
+	awk -v part=FRAGMENT -f src/odin/filter_spirv.awk $(dir $<)*.glsl $< | \
+		$(GLSLANG) -V -R --amb --aml --stdin -S frag -o $@
+spirv: $(SPIRV) $(FILTER_SPIRV)
 
 -include $(patsubst %.o,%.d,$(OBJ) $(IMGUI_OBJ) $(ARCHIVE_OBJ))
 

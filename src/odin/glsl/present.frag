@@ -27,7 +27,8 @@
  * not. u_rect: where the rectangle starts in the window, and the pixels of
  * the picture one pixel of the window covers each way. */
 
-/* Vulkan (-DVULKAN, MARKDOWN/106): where the shader finds what it reads */
+/* Vulkan (glslang defines VULKAN, MARKDOWN/106): where the shader finds
+ * what it reads */
 #ifdef VULKAN
 layout(set = 0, binding = 0) uniform sampler2D u_picture;
 layout(push_constant) uniform Present {
@@ -36,8 +37,9 @@ layout(push_constant) uniform Present {
 };
 layout(location = 0) out vec4 fragColor;
 /* The window has its top line first under Vulkan: y counted from the
- * bottom, as OpenGL counts it */
-#define FRAG_COORD vec2 (gl_FragCoord.x, u_window_h - gl_FragCoord.y)
+ * bottom, as OpenGL counts it; a picture (u_window_h 0) has its bottom
+ * one first already */
+#define FRAG_COORD vec2 (gl_FragCoord.x, u_window_h > 0.0 ? u_window_h - gl_FragCoord.y : gl_FragCoord.y)
 #else
 uniform sampler2D u_picture;
 uniform vec4 u_rect;

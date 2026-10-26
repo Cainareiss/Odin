@@ -28,12 +28,15 @@
  * drawn with the same coordinates, they hold the same bytes (MARKDOWN/106
  * § 2.2). */
 
+#include <memory>
 #include <optional>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
 #include "odin/board_drawing.hpp"
+#include "odin/picture_filter_vk.hpp"
 #include "odin/renderer_programs.hpp"
 #include "odin/vk_common.hpp"
 
@@ -92,7 +95,7 @@ public:
 	void compose(const Compose &compose, unsigned shown, const bool layers[2]) override;
 	void present(PictureRect rect, unsigned window_w, unsigned window_h) override;
 	HostPicture frame_picture() const override { return { FRAME_PICTURE, width(), height() }; }
-	void set_filter(const std::string &) override {}
+	void set_filter(const std::string &preset) override;
 	void draw_loading(std::span<const LoadingRect> rects, unsigned window_w, unsigned window_h) override;
 
 	void read_kept(std::span<uint8_t> pictures) override;
@@ -192,6 +195,10 @@ private:
 	/* The passes: the blender of the 3D buffers, the composition, the
 	 * picture brought to the size of the window */
 	vk::Pass m_blender, m_compose, m_presenter;
+	/* The filter of the picture, its preset, the frames it has drawn */
+	std::unique_ptr<VkPictureFilter> m_filter;
+	std::string m_filter_preset;
+	unsigned m_filter_frames = 0;
 
 	/* The textures and the samplers, by their number; the sets of
 	 * both; the texture and the sampler of the meshes without one */

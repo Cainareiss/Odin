@@ -446,10 +446,11 @@ Context::make_device(std::string &why)
 
 		/* The passes of a frame: a few dozen at most; the lists drawn,
 		 * a few */
-		const VkDescriptorPoolSize sizes[3] = { { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1024 },
+		const VkDescriptorPoolSize sizes[4] = { { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1024 },
 			                                { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 512 },
-			                                { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 128 } };
-		const VkDescriptorPoolCreateInfo descriptors{ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO, nullptr, 0, 256, 3,
+			                                { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 128 },
+			                                { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 128 } };
+		const VkDescriptorPoolCreateInfo descriptors{ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO, nullptr, 0, 256, 4,
 		                                              sizes };
 		check(m_fn.vkCreateDescriptorPool(m_device, &descriptors, nullptr, &frame.descriptors), "a descriptor pool");
 	}
@@ -810,7 +811,7 @@ Context::staging(VkDeviceSize size)
 		buffer = make_buffer(std::max<VkDeviceSize>(size, 1u << 20),
 		                     VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
 		                             VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
-		                             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+		                             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
 	}
 	return buffer;
 }

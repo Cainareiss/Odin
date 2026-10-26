@@ -19,7 +19,9 @@
 #ifndef ODIN_PICTURE_PRESET_HPP
 #define ODIN_PICTURE_PRESET_HPP
 
+#include <array>
 #include <map>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -52,6 +54,29 @@ std::string part(const std::string &source, const char *which);
  * default minimum maximum step), added to `parameters` unless there
  * already */
 void declared(const std::string &source, std::vector<std::pair<std::string, float>> &parameters);
+
+/* A preset read: each pass, its file (from the folder of the preset) and
+ * its text, how what it draws is read (filter_linear of the next pass, its
+ * own wrap_mode) and kept (float_framebuffer), its scale each way; the
+ * parameters the passes declare, at the values the preset gives them */
+struct Plan {
+	enum class Scale { SOURCE, VIEWPORT, ABSOLUTE };
+	enum class Wrap { BORDER, EDGE, REPEAT, MIRRORED };
+	struct Pass {
+		std::string file, source;
+		bool linear = false, is_float = false;
+		Wrap wrap = Wrap::BORDER;
+		std::array<Scale, 2> scale_type{ Scale::SOURCE, Scale::SOURCE };
+		std::array<float, 2> scale{ 1.0f, 1.0f };
+	};
+	std::vector<Pass> passes;
+	std::vector<std::pair<std::string, float>> parameters;
+};
+
+/* The plan of a preset file; nothing, said on stderr, when it or a pass
+ * cannot be read, it has no passes, or its last pass has a scale (it draws
+ * into the window) */
+std::optional<Plan> read_plan(const std::string &preset);
 
 } /* namespace odin::preset */
 

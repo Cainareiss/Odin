@@ -90,6 +90,7 @@ VkBoardDrawing::~VkBoardDrawing()
 	m_card.forget_picture(FRAME_PICTURE);
 	destroy_pictures(true);
 	m_card.send_and_wait();
+	m_filter.reset();
 	destroy_meshes();
 	destroy_lists();
 	m_fn.vkDestroyQueryPool(m_card.device(), m_stamps, nullptr);
@@ -311,6 +312,22 @@ VkBoardDrawing::present(PictureRect rect, unsigned window_w, unsigned window_h)
 	if (w != window_w || h != window_h)
 		clear(cb, window, 1.0f);
 
+	/* A filter takes the picture at the size of the screen of the
+	 * hardware, a finer one brought down to it as below */
+	if (m_filter) {
+		vk::Image &frame = m_filter->frame(SCREEN_WIDTH, SCREEN_HEIGHT);
+		const PresentPush push{ { 0.0f, 0.0f, static_cast<float>(m_scale), static_cast<float>(m_scale) }, 0.0f };
+
+		m_card.barrier(cb, m_frame, vk::SAMPLED);
+		m_card.begin_drawing(cb, frame, { { 0, 0 }, { SCREEN_WIDTH, SCREEN_HEIGHT } });
+		m_card.bind_images(cb, m_presenter, { &m_frame }, m_nearest);
+		m_fn.vkCmdPushConstants(cb, m_presenter.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
+		m_fn.vkCmdDraw(cb, 3, 1, 0, 0);
+		m_card.end_drawing(cb);
+		m_filter->draw(window, x, y, w, h, m_filter_frames++);
+		return;
+	}
+
 	if (w == width() && h == height()) {
 		const VkImageBlit blit{ { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 },
 		                        { { 0, 0, 0 }, { static_cast<int32_t>(w), static_cast<int32_t>(h), 1 } },
@@ -334,6 +351,22 @@ VkBoardDrawing::present(PictureRect rect, unsigned window_w, unsigned window_h)
 	m_fn.vkCmdPushConstants(cb, m_presenter.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
 	m_fn.vkCmdDraw(cb, 3, 1, 0, 0);
 	m_card.end_drawing(cb);
+}
+
+/* The filter before goes once the card is done with the frames it drew */
+void
+VkBoardDrawing::set_filter(const std::string &preset)
+{
+	if (preset == m_filter_preset)
+		return;
+	m_filter_preset = preset;
+	if (m_filter) {
+		std::shared_ptr<VkPictureFilter> old(std::move(m_filter));
+
+		m_card.later([old]() mutable { old.reset(); });
+	}
+	m_filter = preset.empty() ? nullptr : VkPictureFilter::load(m_card, preset);
+	m_filter_frames = 0;
 }
 
 /* The window black, then each rectangle at its shade (the window image has

@@ -20,9 +20,34 @@
 #include "odin/settings.hpp"
 
 #include <algorithm>
+#include <cstdio>
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 
 namespace odin::preset {
+
+namespace {
+
+std::string
+read_text(const std::filesystem::path &path, bool &ok)
+{
+	std::ifstream file(path, std::ios::binary);
+
+	ok = static_cast<bool>(file);
+	return ok ? std::string(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()) : std::string();
+}
+
+std::string
+key_or(const std::map<std::string, std::string> &keys, const std::string &name, const std::string &otherwise)
+{
+	const auto key = keys.find(name);
+
+	return key == keys.end() ? otherwise : key->second;
+}
+
+} /* namespace */
 
 std::map<std::string, std::string>
 read_keys(const std::string &text)
@@ -115,6 +140,74 @@ declared(const std::string &source, std::vector<std::pair<std::string, float>> &
 		if (!known && name.size() <= LONGEST_NAME && described > 0 && described <= LONGEST_NAME)
 			parameters.emplace_back(name, std::strtof(line.c_str() + close + 1, nullptr));
 	}
+}
+
+std::optional<Plan>
+read_plan(const std::string &preset)
+{
+	bool ok;
+	const std::string text = read_text(preset, ok);
+
+	if (!ok) {
+		std::fprintf(stderr, "ERROR: filter: cannot read '%s'\n", preset.c_str());
+		return std::nullopt;
+	}
+
+	const std::map<std::string, std::string> keys = read_keys(text);
+	const std::filesystem::path folder = std::filesystem::path(preset).parent_path();
+	const int count = std::atoi(key_or(keys, "shaders", "0").c_str());
+	Plan plan;
+
+	if (count <= 0) {
+		std::fprintf(stderr, "ERROR: filter: '%s' has no passes\n", preset.c_str());
+		return std::nullopt;
+	}
+	plan.passes.resize(static_cast<size_t>(count));
+	for (int i = 0; i < count; i++) {
+		const std::string n = std::to_string(i);
+		const std::string wrap = key_or(keys, "wrap_mode" + n, "");
+		Plan::Pass &pass = plan.passes[static_cast<size_t>(i)];
+
+		pass.file = (folder / key_or(keys, "shader" + n, "")).string();
+		pass.source = read_text(pass.file, ok);
+		if (!ok) {
+			std::fprintf(stderr, "ERROR: filter: cannot read '%s'\n", pass.file.c_str());
+			return std::nullopt;
+		}
+		declared(pass.source, plan.parameters);
+		/* What it draws: read as the next pass says, with its own wrap */
+		pass.linear = key_on(keys, "filter_linear" + std::to_string(i + 1));
+		pass.is_float = key_on(keys, "float_framebuffer" + n);
+		pass.wrap = wrap == "repeat" ? Plan::Wrap::REPEAT : wrap == "mirrored_repeat" ? Plan::Wrap::MIRRORED :
+		            wrap == "clamp_to_edge" ? Plan::Wrap::EDGE : Plan::Wrap::BORDER;
+		for (size_t axis = 0; axis < 2; axis++) {
+			const std::string ax = axis ? "y" : "x";
+			const std::string type = key_or(keys, "scale_type" + n, key_or(keys, "scale_type_" + ax + n, "source"));
+
+			pass.scale_type[axis] = type == "viewport" ? Plan::Scale::VIEWPORT :
+			                        type == "absolute" ? Plan::Scale::ABSOLUTE : Plan::Scale::SOURCE;
+			pass.scale[axis] = std::strtof(key_or(keys, "scale" + n, key_or(keys, "scale_" + ax + n, "1.0")).c_str(),
+			                               nullptr);
+		}
+	}
+
+	const Plan::Pass &last = plan.passes.back();
+	if (last.scale_type[0] != Plan::Scale::SOURCE || last.scale_type[1] != Plan::Scale::SOURCE ||
+	    last.scale[0] != 1.0f || last.scale[1] != 1.0f) {
+		std::fprintf(stderr, "ERROR: filter: the last pass of '%s' has a scale: not taken\n", preset.c_str());
+		return std::nullopt;
+	}
+	/* The values the preset sets */
+	for (std::string names = key_or(keys, "parameters", ""); !names.empty();) {
+		const size_t end = names.find(';');
+		const std::string name = names.substr(0, end);
+
+		for (auto &[have, value] : plan.parameters)
+			if (have == name)
+				value = std::strtof(key_or(keys, name, "0").c_str(), nullptr);
+		names = end == std::string::npos ? std::string() : names.substr(end + 1);
+	}
+	return plan;
 }
 
 } /* namespace odin::preset */

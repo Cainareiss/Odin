@@ -21,32 +21,11 @@
 #include "odin/picture_preset.hpp"
 
 #include <cstdio>
-#include <cstdlib>
 #include <cstring>
-#include <filesystem>
-#include <fstream>
-#include <iterator>
 
 namespace odin {
 
 namespace {
-
-std::string
-read_text(const std::filesystem::path &path, bool &ok)
-{
-	std::ifstream file(path, std::ios::binary);
-
-	ok = static_cast<bool>(file);
-	return ok ? std::string(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()) : std::string();
-}
-
-std::string
-key_or(const std::map<std::string, std::string> &keys, const std::string &name, const std::string &otherwise)
-{
-	const auto key = keys.find(name);
-
-	return key == keys.end() ? otherwise : key->second;
-}
 
 /* The power of two a size takes, as 86Box rounds the whole number of
  * pixels up */
@@ -168,94 +147,48 @@ make_texture(GLuint &texture, GLuint &fb, unsigned w, unsigned h, bool is_float)
 std::unique_ptr<PictureFilter>
 PictureFilter::load(const std::string &preset)
 {
-	bool ok;
-	const std::string text = read_text(preset, ok);
+	const std::optional<preset::Plan> plan = preset::read_plan(preset);
 
-	if (!ok) {
-		std::fprintf(stderr, "ERROR: filter: cannot read '%s'\n", preset.c_str());
+	if (!plan)
 		return nullptr;
-	}
 
 	std::unique_ptr<PictureFilter> filter(new PictureFilter());
 
-	if (!filter->build(preset, odin::preset::read_keys(text)))
+	if (!filter->build(*plan))
 		return nullptr;
 	std::printf("filter: '%s', %zu passes\n", preset.c_str(), filter->m_passes.size());
 	return filter;
 }
 
 bool
-PictureFilter::build(const std::string &preset, const std::map<std::string, std::string> &keys)
+PictureFilter::build(const preset::Plan &plan)
 {
-	const std::filesystem::path folder = std::filesystem::path(preset).parent_path();
-	const int count = std::atoi(key_or(keys, "shaders", "0").c_str());
-	std::vector<std::string> sources;
-	std::vector<std::pair<std::string, float>> parameters;
+	m_passes.resize(plan.passes.size());
+	for (size_t i = 0; i < plan.passes.size(); i++) {
+		const preset::Plan::Pass &from = plan.passes[i];
+		Pass &pass = m_passes[i];
 
-	if (count <= 0) {
-		std::fprintf(stderr, "ERROR: filter: '%s' has no passes\n", preset.c_str());
-		return false;
+		pass.out.linear = from.linear;
+		pass.out.is_float = from.is_float;
+		pass.out.wrap = from.wrap == preset::Plan::Wrap::REPEAT ? GL_REPEAT :
+		                from.wrap == preset::Plan::Wrap::MIRRORED ? GL_MIRRORED_REPEAT :
+		                from.wrap == preset::Plan::Wrap::EDGE ? GL_CLAMP_TO_EDGE : GL_CLAMP_TO_BORDER;
+		pass.scale_type = from.scale_type;
+		pass.scale = from.scale;
 	}
-	m_passes.resize(static_cast<size_t>(count));
-	for (int i = 0; i < count; i++) {
-		const std::string n = std::to_string(i);
-		const std::filesystem::path file = folder / key_or(keys, "shader" + n, "");
-		const std::string wrap = key_or(keys, "wrap_mode" + n, "");
-		Pass &pass = m_passes[static_cast<size_t>(i)];
-		bool ok;
-
-		sources.push_back(read_text(file, ok));
-		if (!ok) {
-			std::fprintf(stderr, "ERROR: filter: cannot read '%s'\n", file.string().c_str());
-			return false;
-		}
-		odin::preset::declared(sources.back(), parameters);
-		/* What it draws: read as the next pass says, with its own wrap */
-		pass.out.linear = odin::preset::key_on(keys, "filter_linear" + std::to_string(i + 1));
-		pass.out.is_float = odin::preset::key_on(keys, "float_framebuffer" + n);
-		pass.out.wrap = wrap == "repeat" ? GL_REPEAT : wrap == "mirrored_repeat" ? GL_MIRRORED_REPEAT :
-		                wrap == "clamp_to_edge" ? GL_CLAMP_TO_EDGE : GL_CLAMP_TO_BORDER;
-		for (size_t axis = 0; axis < 2; axis++) {
-			const std::string ax = axis ? "y" : "x";
-			const std::string type = key_or(keys, "scale_type" + n, key_or(keys, "scale_type_" + ax + n, "source"));
-
-			pass.scale_type[axis] = type == "viewport" ? Scale::VIEWPORT : type == "absolute" ? Scale::ABSOLUTE :
-			                        Scale::SOURCE;
-			pass.scale[axis] = std::strtof(key_or(keys, "scale" + n, key_or(keys, "scale_" + ax + n, "1.0")).c_str(),
-			                               nullptr);
-		}
-	}
-
-	Pass &last = m_passes.back();
-
-	last.window = last.scale_type[0] == Scale::SOURCE && last.scale_type[1] == Scale::SOURCE &&
-	              last.scale[0] == 1.0f && last.scale[1] == 1.0f;
-	if (!last.window) {
-		std::fprintf(stderr, "ERROR: filter: the last pass of '%s' has a scale: not taken\n", preset.c_str());
-		return false;
-	}
-	/* The values the preset sets */
-	for (std::string names = key_or(keys, "parameters", ""); !names.empty();) {
-		const size_t end = names.find(';');
-		const std::string name = names.substr(0, end);
-
-		for (auto &[have, value] : parameters)
-			if (have == name)
-				value = std::strtof(key_or(keys, name, "0").c_str(), nullptr);
-		names = end == std::string::npos ? std::string() : names.substr(end + 1);
-	}
+	m_passes.back().window = true;
 
 	static constexpr GLfloat QUAD[16] = {};
 
 	for (size_t i = 0; i < m_passes.size(); i++) {
 		Pass &pass = m_passes[i];
-		const std::string name = key_or(keys, "shader" + std::to_string(i), "");
+		std::string source = plan.passes[i].source;
 		const auto uniform = [&pass](const std::string &uniform_name) {
 			return glGetUniformLocation(pass.program, uniform_name.c_str());
 		};
 
-		with_constants(sources[i], parameters);
-		pass.program = build_program(sources[i], name);
+		with_constants(source, plan.parameters);
+		pass.program = build_program(source, plan.passes[i].file);
 		if (!pass.program)
 			return false;
 		pass.texture = uniform("Texture");
@@ -274,7 +207,7 @@ PictureFilter::build(const std::string &preset, const std::map<std::string, std:
 			pass.passes.push_back({ uniform(before + "Texture"), uniform(before + "TextureSize"),
 			                        uniform(before + "InputSize") });
 		}
-		for (const auto &[parameter, value] : parameters)
+		for (const auto &[parameter, value] : plan.parameters)
 			if (const GLint at = uniform(parameter); at >= 0)
 				pass.parameters.emplace_back(at, value);
 
