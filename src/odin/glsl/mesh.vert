@@ -20,12 +20,46 @@
  */
 
 /* A mesh of the display list, after the defines of its variant
- * (board_programs_gl.cpp) */
+ * (board_programs_gl.cpp). With Vulkan, the views and the modelviews of the
+ * list are in buffers, the numbers of the mesh's in push constants
+ * (board_scene_vk.cpp). */
 
+#ifdef VULKAN
+struct view_t {
+	mat4 projection;
+	vec2 fog;
+	vec2 cue;
+	vec3 fog_color;
+	vec3 ambient;
+};
+layout(std430, set = 0, binding = 0) readonly buffer views_t {
+	view_t u_views[];
+};
+layout(std430, set = 0, binding = 1) readonly buffer modelviews_t {
+	mat4 u_modelviews[];
+};
+layout(push_constant) uniform mesh_t {
+	uint u_view, u_mv, u_mv2, u_lightset;
+	float u_depth_scale, u_alpha_ref, u_weigh_by_alpha;
+	uint u_pattern;
+};
+/* 0: the card clips z from 0 to w, not from -w to w as OpenGL */
+layout(constant_id = 0) const int GL_CLIP_SPACE = 1;
+#define u_projection u_views[u_view].projection
+#define u_modelview u_modelviews[u_mv]
+#define u_modelview2 u_modelviews[u_mv2]
+/* A matrix times a vector, its columns summed from the first, as Mesa's
+ * OpenGL does: its SPIR-V path sums them from the last, which rounds
+ * otherwise (MARKDOWN/106 § 12) */
+vec4 mul (mat4 m, vec4 v) { return m[0] * v.x + m[1] * v.y + m[2] * v.z + m[3] * v.w; }
+vec3 mul (mat3 m, vec3 v) { return m[0] * v.x + m[1] * v.y + m[2] * v.z; }
+#else
 uniform mat4 u_projection;
 uniform mat4 u_modelview;
 uniform mat4 u_modelview2;
 uniform float u_depth_scale;
+#define mul(m, v) ((m) * (v))
+#endif
 
 layout(location = 0) in vec3 i_position;
 layout(location = 1) in vec3 i_normal;
@@ -37,6 +71,16 @@ layout(location = 6) in vec2 i_texcoords;
 layout(location = 7) in float i_alpha;
 layout(location = 8) in float i_second_mv;
 
+#ifdef VULKAN
+layout(location = 0) out vec4 p_position;
+layout(location = 1) out vec3 p_normal;
+layout(location = 2) out vec3 p_diffuse;
+layout(location = 3) out vec4 p_specular;
+layout(location = 4) out vec3 p_color1;
+layout(location = 5) out vec3 p_ambient;
+layout(location = 6) out vec2 p_texcoords;
+layout(location = 7) out float p_alpha;
+#else
 out vec4 p_position;
 out vec3 p_normal;
 out vec3 p_diffuse;
@@ -45,6 +89,7 @@ out vec3 p_color1;
 out vec3 p_ambient;
 out vec2 p_texcoords;
 out float p_alpha;
+#endif
 
 void main (void) {
 	/* 1: the second modelview, 64: without the 3x3, 128: without
@@ -53,28 +98,32 @@ void main (void) {
 	 * matrix, the translation switched off). */
 	int which = int (i_second_mv * 255.0 + 0.5);
 	if (which == 1) {
-		p_position = u_modelview2 * vec4 (i_position, 1.0);
-		p_normal = mat3 (u_modelview2) * i_normal;
+		p_position = mul (u_modelview2, vec4 (i_position, 1.0));
+		p_normal = mul (mat3 (u_modelview2), i_normal);
 	} else if (which == 0) {
-		p_position = u_modelview * vec4 (i_position, 1.0);
-		p_normal = mat3 (u_modelview) * i_normal;
+		p_position = mul (u_modelview, vec4 (i_position, 1.0));
+		p_normal = mul (mat3 (u_modelview), i_normal);
 	} else if ((which & 1) != 0) {
 		bool rotate = (which & 64) == 0;
-		vec3 pos = rotate ? mat3 (u_modelview2) * i_position : i_position;
+		vec3 pos = rotate ? mul (mat3 (u_modelview2), i_position) : i_position;
 		if ((which & 128) == 0)
 			pos += u_modelview2[3].xyz;
 		p_position = vec4 (pos, 1.0);
-		p_normal = rotate ? mat3 (u_modelview2) * i_normal : i_normal;
+		p_normal = rotate ? mul (mat3 (u_modelview2), i_normal) : i_normal;
 	} else {
 		bool rotate = (which & 64) == 0;
-		vec3 pos = rotate ? mat3 (u_modelview) * i_position : i_position;
+		vec3 pos = rotate ? mul (mat3 (u_modelview), i_position) : i_position;
 		if ((which & 128) == 0)
 			pos += u_modelview[3].xyz;
 		p_position = vec4 (pos, 1.0);
-		p_normal = rotate ? mat3 (u_modelview) * i_normal : i_normal;
+		p_normal = rotate ? mul (mat3 (u_modelview), i_normal) : i_normal;
 	}
 	/* The depth bias brings the whole position nearer: same pixel. */
-	gl_Position = u_projection * vec4 (p_position.xyz * u_depth_scale, 1.0);
+	gl_Position = mul (u_projection, vec4 (p_position.xyz * u_depth_scale, 1.0));
+#ifdef VULKAN
+	if (GL_CLIP_SPACE == 0)
+		gl_Position.z = (gl_Position.z + gl_Position.w) * 0.5;
+#endif
 
 	p_diffuse = i_diffuse;
 	p_ambient = i_ambient;

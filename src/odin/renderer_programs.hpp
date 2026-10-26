@@ -76,13 +76,30 @@ struct MeshVariant {
 /* The programs a list of programs names, those of a variant MeshVariant
  * knows, in its order; none for a file that is not such a list. Such a file
  * starts with PROGRAM_LIST_HEADER, then has the key of a program a line, in
- * 16 hex digits (board_programs_gl.hpp keeps one). The number of the header
+ * 16 hex digits (ProgramList keeps one). The number of the header
  * goes up when MeshVariant::key changes: the lists made before are then left
  * unread. */
 inline constexpr char PROGRAM_LIST_HEADER[] = "odin mesh programs 1\n";
 std::vector<uint64_t> read_program_list(const std::string &path);
 /* The file, open after its first line, or nullptr if it is not a list */
 std::FILE *open_program_list(const std::string &path);
+
+/* A list of programs kept up to date: the programs made from now on listed
+ * in the file, after the ones it lists already; a new list where there is
+ * none. Nothing is listed before list_in. */
+class ProgramList {
+public:
+	ProgramList() = default;
+	~ProgramList();
+	ProgramList(const ProgramList &) = delete;
+	ProgramList &operator=(const ProgramList &) = delete;
+
+	void list_in(const std::string &path);
+	void add(uint64_t key);
+
+private:
+	std::FILE *m_file = nullptr;
+};
 
 } /* namespace odin */
 

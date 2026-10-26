@@ -35,8 +35,6 @@ namespace odin {
 
 MeshPrograms::~MeshPrograms()
 {
-	if (m_list)
-		std::fclose(m_list);
 	glUseProgram(0);
 	for (const auto &[key, program] : m_programs)
 		glDeleteProgram(program.id);
@@ -50,10 +48,7 @@ MeshPrograms::get(const MeshVariant &variant)
 
 	if (held != m_programs.end())
 		return held->second;
-	if (m_list) {
-		std::fprintf(m_list, "%016" PRIx64 "\n", key);
-		std::fflush(m_list);
-	}
+	m_list.add(key);
 	return m_programs.emplace(key, compile(variant)).first->second;
 }
 
@@ -64,25 +59,6 @@ MeshPrograms::add(uint64_t key)
 
 	if (variant && !m_programs.contains(key))
 		m_programs.emplace(key, compile(*variant));
-}
-
-void
-MeshPrograms::list_in(const std::string &path)
-{
-	std::FILE *const held = open_program_list(path);
-
-	if (m_list)
-		std::fclose(m_list);
-	if (held) {
-		std::fclose(held);
-		m_list = std::fopen(path.c_str(), "a");
-	} else {
-		m_list = std::fopen(path.c_str(), "w");
-		if (m_list) {
-			std::fputs(PROGRAM_LIST_HEADER, m_list);
-			std::fflush(m_list);
-		}
-	}
 }
 
 void

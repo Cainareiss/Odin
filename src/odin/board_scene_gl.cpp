@@ -212,25 +212,7 @@ GlBoardDrawing::upload_viewport(const odin_mesh_t &mesh)
 	if (m_debug.log)
 		log("vp  = %s", odin_viewport_str(&vp));
 
-	/* The centre and the clip window are screen coordinates, y down: the
-	 * view is centred on the offset, reaches the four edges of the
-	 * screen and is cut by the window. The driver panels of SGNASCAR
-	 * sit 40 lines below the middle and stop under their banner; the
-	 * letterboxed robots of von4 fill the lines 39 to 360, as on the
-	 * cabinets. The BOOTROM menu has its centre on the top left corner
-	 * of the screen. The far plane is put at 1e5 (HEURISTIC). The
-	 * projection plane is clip.f pixels away on the screen for x and
-	 * clip.f2 pixels away for y. Worked out here, with the matrix: moved
-	 * elsewhere, the compiler fuses its products and sums otherwise and
-	 * the last bits of the picture change (MARKDOWN/105). */
-	const float kx = vp.clip.n / vp.clip.f;
-	const float ky = vp.clip.n / vp.clip.f2;
-	gl::frustum(projection,
-	            (0.0f - vp.offset.x) * kx,
-	            (static_cast<float>(SCREEN_WIDTH) - vp.offset.x) * kx,
-	            (vp.offset.y - static_cast<float>(SCREEN_HEIGHT)) * ky,
-	            vp.offset.y * ky,
-	            vp.clip.n, 1e5f);
+	view_projection(vp, projection);
 	glUniformMatrix4fv(locs.projection, 1, GL_FALSE, &projection[0][0]);
 
 	/* The depth queue and the fog of the view (hikaru_draw.hpp) */

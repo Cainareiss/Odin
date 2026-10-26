@@ -21,6 +21,7 @@
 
 #include "odin/renderer_programs.hpp"
 
+#include <cinttypes>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -127,6 +128,40 @@ read_program_list(const std::string &path)
 	}
 	std::fclose(file);
 	return keys;
+}
+
+ProgramList::~ProgramList()
+{
+	if (m_file)
+		std::fclose(m_file);
+}
+
+void
+ProgramList::list_in(const std::string &path)
+{
+	std::FILE *const held = open_program_list(path);
+
+	if (m_file)
+		std::fclose(m_file);
+	if (held) {
+		std::fclose(held);
+		m_file = std::fopen(path.c_str(), "a");
+	} else {
+		m_file = std::fopen(path.c_str(), "w");
+		if (m_file) {
+			std::fputs(PROGRAM_LIST_HEADER, m_file);
+			std::fflush(m_file);
+		}
+	}
+}
+
+void
+ProgramList::add(uint64_t key)
+{
+	if (!m_file)
+		return;
+	std::fprintf(m_file, "%016" PRIx64 "\n", key);
+	std::fflush(m_file);
 }
 
 } /* namespace odin */

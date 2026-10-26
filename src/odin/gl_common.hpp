@@ -47,9 +47,6 @@ void check(const char *stage);
 GLuint new_texture(GLenum format, unsigned w, unsigned h);
 GLuint new_framebuffer(GLuint color);
 
-/* The perspective projection of the box l..r by b..t at the distance n. */
-void frustum(float out[4][4], float l, float r, float b, float t, float n, float f);
-
 } /* namespace odin::gl */
 
 #endif /* ODIN_GL_COMMON_HPP */

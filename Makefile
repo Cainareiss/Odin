@@ -51,6 +51,7 @@ OBJ := \
 	src/odin/vk_common.o \
 	src/odin/board_drawing_vk.o \
 	src/odin/board_pictures_vk.o \
+	src/odin/board_scene_vk.o \
 	src/odin/board_drawing_gl.o \
 	src/odin/board_pictures_gl.o \
 	src/odin/board_programs_gl.o \
@@ -226,7 +227,8 @@ src/odin/glsl_texts.o: src/odin/glsl_texts.S $(wildcard src/odin/glsl/*)
 # The shaders of Vulkan: compiled to SPIR-V from the same files (glslang
 # defines VULKAN), then put in the binary the same way
 GLSLANG := glslangValidator
-SPIRV := $(patsubst %,src/odin/glsl/%.spv,whole_picture.vert blend.frag compose.vert compose.frag present.frag)
+SPIRV := $(patsubst %,src/odin/glsl/%.spv,whole_picture.vert blend.frag compose.vert compose.frag present.frag \
+	mesh.vert mesh.frag)
 src/odin/glsl/%.spv: src/odin/glsl/%
 	{ echo '#version 450'; cat $<; } | $(GLSLANG) -V --stdin -S $(subst .,,$(suffix $<)) -o $@
 src/odin/spirv.o: src/odin/spirv.S $(SPIRV)

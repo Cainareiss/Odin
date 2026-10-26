@@ -149,29 +149,4 @@ new_framebuffer(GLuint color)
 	return id;
 }
 
-/* Taken from Mesa */
-void
-frustum(float out[4][4], float l, float r, float b, float t, float n, float f)
-{
-	out[0][0] = (2.0f * n) / (r - l);
-	out[1][0] = 0.0f;
-	out[2][0] = (r + l) / (r - l);
-	out[3][0] = 0.0f;
-
-	out[0][1] = 0.0f;
-	out[1][1] = (2.0f * n) / (t - b);
-	out[2][1] = (t + b) / (t - b);
-	out[3][1] = 0.0f;
-
-	out[0][2] = 0.0f;
-	out[1][2] = 0.0f;
-	out[2][2] = - (f + n) / (f - n);
-	out[3][2] = - (2.0f * f * n) / (f - n);
-
-	out[0][3] = 0.0f;
-	out[1][3] = 0.0f;
-	out[2][3] = -1.0f;
-	out[3][3] = 0.0f;
-}
-
 } /* namespace odin::gl */

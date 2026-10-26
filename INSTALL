@@ -97,7 +97,8 @@ vsync = off, on or adaptive (the frames on time wait for the display, a
 late one does not), fullscreen, unthrottled and show_speed = on or off,
 api = opengl or vulkan (what draws, from the next start of Odin; Vulkan
 1.3, or 1.1 with the same as extensions, else OpenGL draws; Vulkan is
-being written: it shows the window and the menu, the games stay black);
+being written: it draws the games without their translucent polygons, the
+bezel, the blurred sides and the filter of the picture yet);
 the options say the same and come first; no vsync at an unlimited pace,
 nor vsync = on on a display slower than 60 frames a second),
 Ctrl+Q quits, P pauses, F4 saves <game>.odinstate and F1 loads it, in

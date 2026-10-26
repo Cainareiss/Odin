@@ -38,6 +38,7 @@
 #include <deque>
 #include <functional>
 #include <initializer_list>
+#include <map>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -76,8 +77,14 @@ namespace odin::vk {
 	F(vkCreateSampler) F(vkDestroySampler) F(vkCmdBindPipeline) F(vkCmdBindDescriptorSets) F(vkCmdPushConstants) \
 	F(vkCmdSetViewport) F(vkCmdSetScissor) F(vkCmdDraw) \
 	F(vkCmdCopyImageToBuffer) F(vkCmdCopyBufferToImage) F(vkCmdBlitImage) \
+	F(vkCmdBindVertexBuffers) F(vkCmdBindIndexBuffer) F(vkCmdDrawIndexed) F(vkFreeDescriptorSets) \
+	F(vkCreatePipelineCache) F(vkDestroyPipelineCache) F(vkGetPipelineCacheData) F(vkMergePipelineCaches) \
 	G(vkQueueSubmit2, vkQueueSubmit2KHR) G(vkCmdPipelineBarrier2, vkCmdPipelineBarrier2KHR) \
-	G(vkCmdBeginRendering, vkCmdBeginRenderingKHR) G(vkCmdEndRendering, vkCmdEndRenderingKHR)
+	G(vkCmdBeginRendering, vkCmdBeginRenderingKHR) G(vkCmdEndRendering, vkCmdEndRenderingKHR) \
+	G(vkCmdSetCullMode, vkCmdSetCullModeEXT) G(vkCmdSetFrontFace, vkCmdSetFrontFaceEXT) \
+	G(vkCmdSetDepthTestEnable, vkCmdSetDepthTestEnableEXT) \
+	G(vkCmdSetDepthWriteEnable, vkCmdSetDepthWriteEnableEXT) \
+	G(vkCmdSetDepthCompareOp, vkCmdSetDepthCompareOpEXT)
 
 #define ODIN_VK_MEMBER(name) PFN_##name name = nullptr;
 #define ODIN_VK_MEMBER2(name, other) PFN_##name name = nullptr;
@@ -90,13 +97,19 @@ struct Functions {
 #undef ODIN_VK_MEMBER
 #undef ODIN_VK_MEMBER2
 
-/* An image of the card, its memory, a view of all its levels and the
- * layout it was last left in */
+/* An image of the card, its memory (its own, or a part of a block shared
+ * with others), a view of all its levels, its aspects and the layout it
+ * was last left in */
 struct Image {
+	static constexpr uint32_t OWN_MEMORY = UINT32_MAX;
+
 	VkImage image = VK_NULL_HANDLE;
 	VkDeviceMemory memory = VK_NULL_HANDLE;
+	uint32_t block = OWN_MEMORY;
+	VkDeviceSize offset = 0, size = 0;	/* in the block */
 	VkImageView view = VK_NULL_HANDLE;
 	VkFormat format = VK_FORMAT_UNDEFINED;
+	VkImageAspectFlags aspects = VK_IMAGE_ASPECT_COLOR_BIT;
 	unsigned w = 0, h = 0, levels = 1;
 	VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
 };
@@ -107,6 +120,13 @@ struct Buffer {
 	VkDeviceMemory memory = VK_NULL_HANDLE;
 	VkDeviceSize size = 0;
 	uint8_t *bytes = nullptr;
+};
+
+/* A part of a buffer the processor fills, for the frame being written */
+struct Slice {
+	VkBuffer buffer;
+	VkDeviceSize offset;
+	uint8_t *bytes;
 };
 
 /* What a stage of the card does with an image: where its layout is to go
@@ -126,6 +146,11 @@ inline constexpr Use DRAWN_IN = { VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 	                          VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT };
 inline constexpr Use SAMPLED = { VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
 	                         VK_ACCESS_2_SHADER_SAMPLED_READ_BIT };
+inline constexpr Use DEPTH_IN = { VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+	                          VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT |
+	                                  VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+	                          VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+	                                  VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT };
 
 /* A shader as SPIR-V, in the binary (spirv.hpp) */
 struct Spirv {
@@ -165,7 +190,19 @@ public:
 	uint32_t api_version() const { return m_api_version; }
 	VkSurfaceKHR surface() const { return m_surface; }
 	const std::string &name() const { return m_name; }
+	const VkPhysicalDeviceProperties &properties() const { return m_properties; }
+	const VkPhysicalDeviceLimits &limits() const { return m_properties.limits; }
+	/* The most anisotropic filtering, 1 for none */
 	float max_anisotropy() const { return m_max_anisotropy; }
+	/* The depth of the board drawing: 24 bits where the card has them,
+	 * else 32-bit floats, as each card's OpenGL compares (MARKDOWN/106
+	 * § 2.1) */
+	VkFormat depth_format() const { return m_depth_format; }
+	/* Whether pipelines clip z from -w to w, as OpenGL does
+	 * (VK_EXT_depth_clip_control); else from 0 to w */
+	bool gl_clip_space() const { return m_gl_clip_space; }
+	/* Whether a pipeline made tells if it came from the cache */
+	bool creation_feedback() const { return m_creation_feedback; }
 	/* How many errors the validation layer told (Debug) */
 	unsigned validation_errors() const { return m_errors; }
 
@@ -174,6 +211,9 @@ public:
 	 * command buffer begun; the frame given to the next one, after its
 	 * commands (submit) */
 	VkCommandBuffer commands();
+	/* Commands sent before those of the frame each time they are sent:
+	 * copies asked for while the frame draws (the textures) */
+	VkCommandBuffer uploads();
 	unsigned frame() const { return m_frame; }
 	void send_and_wait();
 	struct Submit {
@@ -185,16 +225,23 @@ public:
 	 * could be in are done (send_and_wait: at once) */
 	void later(std::function<void()> destroy);
 
-	/* An image of one sample, its memory and a view of its levels; a
-	 * buffer the processor reads and writes, mapped */
+	/* An image of one sample, its memory and a view of its levels; the
+	 * same in a block of memory shared with other images (many small
+	 * ones: the textures); a buffer the processor reads and writes,
+	 * mapped */
 	Image make_image(VkFormat format, unsigned w, unsigned h, unsigned levels, VkImageUsageFlags usage,
 	                 const VkComponentMapping &swizzle = {});
+	Image make_placed_image(VkFormat format, unsigned w, unsigned h, unsigned levels, VkImageUsageFlags usage,
+	                        const VkComponentMapping &swizzle = {});
 	void destroy_image(Image &image);
 	Buffer make_buffer(VkDeviceSize size, VkBufferUsageFlags usage);
 	void destroy_buffer(Buffer &buffer);
 	/* A buffer for the processor to fill or read in the frame being
 	 * written, at least `size` bytes, kept until the card is done */
 	Buffer &staging(VkDeviceSize size);
+	/* A part of such a buffer, at an offset that is a multiple of
+	 * `align` */
+	Slice stage(VkDeviceSize size, VkDeviceSize align);
 
 	/* The image from its last use to the next one, all its levels; the
 	 * levels from `level` on only (they are taken as one use) */
@@ -206,6 +253,8 @@ public:
 	Pass make_pass(const Spirv &vertex, const Spirv &fragment, unsigned images, uint32_t push,
 	               VkPrimitiveTopology topology, VkFormat format);
 	void destroy_pass(Pass &pass);
+	/* A descriptor set of that layout, for the frame being written */
+	VkDescriptorSet frame_set(VkDescriptorSetLayout layout);
 	/* The images a pass samples, each through that sampler, in the frame
 	 * being written: they must be SAMPLED already */
 	void bind_images(VkCommandBuffer cb, const Pass &pass, std::initializer_list<const Image *> images,
@@ -242,6 +291,10 @@ private:
 	bool choose_gpu(std::string &why);
 	bool make_device(std::string &why);
 	uint32_t memory_type(uint32_t types, VkMemoryPropertyFlags flags) const;
+	Image make_image(VkFormat format, unsigned w, unsigned h, unsigned levels, VkImageUsageFlags usage,
+	                 const VkComponentMapping &swizzle, bool placed);
+	void place(Image &image);
+	void unplace(const Image &image);
 	static VKAPI_ATTR VkBool32 VKAPI_CALL message(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
 	                                              VkDebugUtilsMessageTypeFlagsEXT type,
 	                                              const VkDebugUtilsMessengerCallbackDataEXT *data, void *self);
@@ -255,9 +308,13 @@ private:
 	VkDevice m_device = VK_NULL_HANDLE;
 	VkQueue m_queue = VK_NULL_HANDLE;
 	VkPhysicalDeviceMemoryProperties m_memory{};
+	VkPhysicalDeviceProperties m_properties{};
 	uint32_t m_api_version = 0;
 	std::string m_name;
 	float m_max_anisotropy = 1.0f;
+	VkFormat m_depth_format = VK_FORMAT_D32_SFLOAT;
+	bool m_gl_clip_space = false;
+	bool m_creation_feedback = false;
 	bool m_validation = false;
 	bool m_portability = false;
 	bool m_core13 = false;
@@ -267,19 +324,33 @@ private:
 
 	struct Frame {
 		VkCommandPool pool = VK_NULL_HANDLE;
-		VkCommandBuffer cb = VK_NULL_HANDLE;
+		VkCommandBuffer cb = VK_NULL_HANDLE, uploads = VK_NULL_HANDLE;
 		VkFence done = VK_NULL_HANDLE;
 		bool written = false;	/* its command buffer begun */
+		bool uploading = false;	/* the one of the uploads too */
 		bool sent = false;	/* sent, its fence not waited for yet */
+		bool again = false;	/* begun again, what it gave not taken back yet */
 		std::vector<std::function<void()>> later;
 		std::deque<Buffer> staging;	/* a deque: what staging gave stays put */
 		size_t staging_used = 0;
+		/* The buffer stage cuts its slices from, and where */
+		size_t sliced = SIZE_MAX;
+		VkDeviceSize sliced_to = 0;
 		VkDescriptorPool descriptors = VK_NULL_HANDLE;	/* emptied with the frame */
 	};
 	Frame m_frames[FRAMES];
 	unsigned m_frame = 0;
 	void wait(Frame &frame);
 	void submit(Frame &frame, const Submit &submit);
+
+	/* The blocks of memory images share: their free parts, by offset */
+	struct Block {
+		VkDeviceMemory memory;
+		uint32_t type;
+		VkDeviceSize size;
+		std::map<VkDeviceSize, VkDeviceSize> free;
+	};
+	std::vector<Block> m_blocks;
 
 	Image m_window;
 	std::unordered_map<uint32_t, Image *> m_pictures;

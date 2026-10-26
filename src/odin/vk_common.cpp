@@ -58,12 +58,14 @@ extensions_below_13(uint32_t api)
 	return names;
 }
 
-/* The features of the card Odin needs, read or asked for in one chain */
+/* The features of the card Odin needs, read or asked for in one chain; the
+ * clip space of OpenGL, where the card has its extension */
 struct Features {
 	VkPhysicalDeviceVulkan13Features v13{};
 	VkPhysicalDeviceDynamicRenderingFeaturesKHR rendering{};
 	VkPhysicalDeviceSynchronization2FeaturesKHR sync2{};
 	VkPhysicalDeviceExtendedDynamicStateFeaturesEXT dynamic{};
+	VkPhysicalDeviceDepthClipControlFeaturesEXT clip{};
 	VkPhysicalDeviceFeatures2 all{};
 
 	explicit Features(bool core13)
@@ -72,6 +74,7 @@ struct Features {
 		rendering.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
 		sync2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR;
 		dynamic.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT;
+		clip.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_CLIP_CONTROL_FEATURES_EXT;
 		all.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
 		if (core13) {
 			all.pNext = &v13;
@@ -80,6 +83,11 @@ struct Features {
 			rendering.pNext = &sync2;
 			sync2.pNext = &dynamic;
 		}
+	}
+	void with_clip()
+	{
+		clip.pNext = all.pNext;
+		all.pNext = &clip;
 	}
 	bool enough(bool core13) const
 	{
@@ -140,6 +148,8 @@ Context::~Context()
 			m_fn.vkDestroyDescriptorPool(m_device, frame.descriptors, nullptr);
 		}
 		destroy_image(m_window);
+		for (const Block &block : m_blocks)
+			m_fn.vkFreeMemory(m_device, block.memory, nullptr);
 		m_fn.vkDestroyDevice(m_device, nullptr);
 	}
 	if (m_surface)
@@ -291,6 +301,9 @@ Context::choose_gpu(std::string &why)
 				continue;
 		}
 		Features features(core13);
+		const bool clip = has(extensions, VK_EXT_DEPTH_CLIP_CONTROL_EXTENSION_NAME);
+		if (clip)
+			features.with_clip();
 		m_fn.vkGetPhysicalDeviceFeatures2(gpu, &features.all);
 		if (!features.enough(core13))
 			continue;
@@ -318,7 +331,10 @@ Context::choose_gpu(std::string &why)
 		m_queue_family = *family;
 		m_core13 = core13;
 		m_name = props.deviceName;
+		m_properties = props;
 		m_max_anisotropy = props.limits.maxSamplerAnisotropy;
+		m_gl_clip_space = clip && features.clip.depthClipControl;
+		m_creation_feedback = core13 || has(extensions, VK_EXT_PIPELINE_CREATION_FEEDBACK_EXTENSION_NAME);
 		m_extensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 		/* Dear ImGui asks for this one by name, even under 1.3 */
 		if (has(extensions, VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME))
@@ -329,12 +345,30 @@ Context::choose_gpu(std::string &why)
 					m_extensions.push_back(e);
 		if (has(extensions, "VK_KHR_portability_subset"))
 			m_extensions.push_back("VK_KHR_portability_subset");
+		if (m_gl_clip_space)
+			m_extensions.push_back(VK_EXT_DEPTH_CLIP_CONTROL_EXTENSION_NAME);
+		if (!core13 && m_creation_feedback)
+			m_extensions.push_back(VK_EXT_PIPELINE_CREATION_FEEDBACK_EXTENSION_NAME);
 		m_api_version = api;
 	}
 	if (!m_gpu)
 		return false;
 	why.clear();
 	m_fn.vkGetPhysicalDeviceMemoryProperties(m_gpu, &m_memory);
+
+	/* The depth is also copied for the translucent fragments, and read */
+	const VkFormatFeatureFlags depth = VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT |
+	                                   VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT | VK_FORMAT_FEATURE_TRANSFER_SRC_BIT |
+	                                   VK_FORMAT_FEATURE_TRANSFER_DST_BIT;
+	for (const VkFormat format : { VK_FORMAT_X8_D24_UNORM_PACK32, VK_FORMAT_D24_UNORM_S8_UINT }) {
+		VkFormatProperties props;
+
+		m_fn.vkGetPhysicalDeviceFormatProperties(m_gpu, format, &props);
+		if ((props.optimalTilingFeatures & depth) == depth) {
+			m_depth_format = format;
+			break;
+		}
+	}
 	return true;
 }
 
@@ -349,9 +383,15 @@ Context::make_device(std::string &why)
 	m_fn.vkGetPhysicalDeviceFeatures2(m_gpu, &had.all);
 	wanted.all.features.fragmentStoresAndAtomics = VK_TRUE;
 	wanted.all.features.samplerAnisotropy = had.all.features.samplerAnisotropy;
+	if (!had.all.features.samplerAnisotropy)
+		m_max_anisotropy = 1.0f;
 	wanted.v13.dynamicRendering = wanted.v13.synchronization2 = VK_TRUE;
 	wanted.rendering.dynamicRendering = wanted.sync2.synchronization2 = VK_TRUE;
 	wanted.dynamic.extendedDynamicState = VK_TRUE;
+	if (m_gl_clip_space) {
+		wanted.with_clip();
+		wanted.clip.depthClipControl = VK_TRUE;
+	}
 
 	const VkDeviceCreateInfo info{ VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO, &wanted.all, 0, 1, &queue, 0, nullptr,
 	                               static_cast<uint32_t>(m_extensions.size()), m_extensions.data(), nullptr };
@@ -376,14 +416,19 @@ Context::make_device(std::string &why)
 
 		check(m_fn.vkCreateCommandPool(m_device, &pool, nullptr, &frame.pool), "a command pool");
 		const VkCommandBufferAllocateInfo buffer{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO, nullptr, frame.pool,
-		                                          VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1 };
-		check(m_fn.vkAllocateCommandBuffers(m_device, &buffer, &frame.cb), "a command buffer");
+		                                          VK_COMMAND_BUFFER_LEVEL_PRIMARY, 2 };
+		VkCommandBuffer cbs[2];
+		check(m_fn.vkAllocateCommandBuffers(m_device, &buffer, cbs), "a command buffer");
+		frame.cb = cbs[0];
+		frame.uploads = cbs[1];
 		check(m_fn.vkCreateFence(m_device, &fence, nullptr, &frame.done), "a fence");
 
-		/* The passes of a frame: a few dozen at most */
-		const VkDescriptorPoolSize size{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1024 };
-		const VkDescriptorPoolCreateInfo descriptors{ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO, nullptr, 0, 256, 1,
-		                                              &size };
+		/* The passes of a frame: a few dozen at most; the lists drawn,
+		 * a few */
+		const VkDescriptorPoolSize sizes[2] = { { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1024 },
+			                                { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 256 } };
+		const VkDescriptorPoolCreateInfo descriptors{ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO, nullptr, 0, 256, 2,
+		                                              sizes };
 		check(m_fn.vkCreateDescriptorPool(m_device, &descriptors, nullptr, &frame.descriptors), "a descriptor pool");
 	}
 	return true;
@@ -396,8 +441,7 @@ Context::fatal(const char *what, VkResult result) const
 	std::abort();
 }
 
-/* The frame is done: what waited for it goes, its staging buffers are free
- * again. */
+/* What was sent of the frame is done: what waited for it goes. */
 void
 Context::wait(Frame &frame)
 {
@@ -409,10 +453,11 @@ Context::wait(Frame &frame)
 	for (const auto &destroy : frame.later)
 		destroy();
 	frame.later.clear();
-	frame.staging_used = 0;
-	check(m_fn.vkResetDescriptorPool(m_device, frame.descriptors, 0), "a descriptor pool");
 }
 
+/* The commands of a frame may be sent several times (send_and_wait): its
+ * staging buffers and descriptors are free again only when it begins
+ * again, those given before stay whole for the commands that follow. */
 VkCommandBuffer
 Context::commands()
 {
@@ -423,6 +468,12 @@ Context::commands()
 		                                      VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, nullptr };
 
 		wait(frame);
+		if (frame.again) {
+			frame.again = false;
+			frame.staging_used = 0;
+			frame.sliced = SIZE_MAX;
+			check(m_fn.vkResetDescriptorPool(m_device, frame.descriptors, 0), "a descriptor pool");
+		}
 		check(m_fn.vkResetCommandPool(m_device, frame.pool, 0), "a command pool");
 		check(m_fn.vkBeginCommandBuffer(frame.cb, &begin), "a command buffer");
 		frame.written = true;
@@ -430,20 +481,42 @@ Context::commands()
 	return frame.cb;
 }
 
+VkCommandBuffer
+Context::uploads()
+{
+	Frame &frame = m_frames[m_frame];
+
+	commands();
+	if (!frame.uploading) {
+		const VkCommandBufferBeginInfo begin{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, nullptr,
+		                                      VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, nullptr };
+
+		check(m_fn.vkBeginCommandBuffer(frame.uploads, &begin), "a command buffer");
+		frame.uploading = true;
+	}
+	return frame.uploads;
+}
+
 void
 Context::submit(Frame &frame, const Submit &submit)
 {
-	const VkCommandBufferSubmitInfo cb{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO, nullptr, frame.cb, 0 };
+	const VkCommandBufferSubmitInfo cbs[2] = {
+		{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO, nullptr, frame.uploads, 0 },
+		{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO, nullptr, frame.cb, 0 },
+	};
 	const VkSemaphoreSubmitInfo wait{ VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO, nullptr, submit.wait, 0,
 	                                  VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT, 0 };
 	const VkSemaphoreSubmitInfo signal{ VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO, nullptr, submit.signal, 0,
 	                                    VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, 0 };
-	const VkSubmitInfo2 info{ VK_STRUCTURE_TYPE_SUBMIT_INFO_2, nullptr, 0, submit.wait ? 1u : 0u, &wait, 1, &cb,
+	const VkSubmitInfo2 info{ VK_STRUCTURE_TYPE_SUBMIT_INFO_2, nullptr, 0, submit.wait ? 1u : 0u, &wait,
+	                          frame.uploading ? 2u : 1u, frame.uploading ? &cbs[0] : &cbs[1],
 	                          submit.signal ? 1u : 0u, &signal };
 
+	if (frame.uploading)
+		check(m_fn.vkEndCommandBuffer(frame.uploads), "a command buffer");
 	check(m_fn.vkEndCommandBuffer(frame.cb), "a command buffer");
 	check(m_fn.vkQueueSubmit2(m_queue, 1, &info, frame.done), "sending commands");
-	frame.written = false;
+	frame.written = frame.uploading = false;
 	frame.sent = true;
 }
 
@@ -470,6 +543,7 @@ Context::end_frame(const Submit &s)
 	commands();
 	submit(m_frames[m_frame], s);
 	m_frame = (m_frame + 1) % FRAMES;
+	m_frames[m_frame].again = true;
 }
 
 void
@@ -491,25 +565,50 @@ Image
 Context::make_image(VkFormat format, unsigned w, unsigned h, unsigned levels, VkImageUsageFlags usage,
                     const VkComponentMapping &swizzle)
 {
+	return make_image(format, w, h, levels, usage, swizzle, false);
+}
+
+Image
+Context::make_placed_image(VkFormat format, unsigned w, unsigned h, unsigned levels, VkImageUsageFlags usage,
+                           const VkComponentMapping &swizzle)
+{
+	return make_image(format, w, h, levels, usage, swizzle, true);
+}
+
+Image
+Context::make_image(VkFormat format, unsigned w, unsigned h, unsigned levels, VkImageUsageFlags usage,
+                    const VkComponentMapping &swizzle, bool placed)
+{
 	Image image;
 	const VkImageCreateInfo info{ VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO, nullptr, 0, VK_IMAGE_TYPE_2D, format,
 	                              { w, h, 1 }, levels, 1, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, usage,
 	                              VK_SHARING_MODE_EXCLUSIVE, 0, nullptr, VK_IMAGE_LAYOUT_UNDEFINED };
-	VkMemoryRequirements needs;
 
 	check(m_fn.vkCreateImage(m_device, &info, nullptr, &image.image), "an image");
-	m_fn.vkGetImageMemoryRequirements(m_device, image.image, &needs);
-	const VkMemoryAllocateInfo memory{ VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO, nullptr, needs.size,
-	                                   memory_type(needs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) };
-	check(m_fn.vkAllocateMemory(m_device, &memory, nullptr, &image.memory), "the memory of an image");
-	check(m_fn.vkBindImageMemory(m_device, image.image, image.memory, 0), "the memory of an image");
+	if (placed) {
+		place(image);
+	} else {
+		VkMemoryRequirements needs;
+
+		m_fn.vkGetImageMemoryRequirements(m_device, image.image, &needs);
+		const VkMemoryAllocateInfo memory{ VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO, nullptr, needs.size,
+		                                   memory_type(needs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) };
+		check(m_fn.vkAllocateMemory(m_device, &memory, nullptr, &image.memory), "the memory of an image");
+		check(m_fn.vkBindImageMemory(m_device, image.image, image.memory, 0), "the memory of an image");
+	}
+
+	/* A depth image is seen through its depth alone */
+	if (format == VK_FORMAT_D24_UNORM_S8_UINT)
+		image.aspects = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+	else if (format == VK_FORMAT_X8_D24_UNORM_PACK32 || format == VK_FORMAT_D32_SFLOAT)
+		image.aspects = VK_IMAGE_ASPECT_DEPTH_BIT;
+	const VkImageAspectFlags seen = image.aspects & ~VK_IMAGE_ASPECT_STENCIL_BIT;
 
 	/* A view for the images shaders read or draw into; copies need none */
 	if (usage & (VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
 	             VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)) {
 		const VkImageViewCreateInfo view{ VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO, nullptr, 0, image.image,
-		                                  VK_IMAGE_VIEW_TYPE_2D, format, swizzle,
-		                                  { VK_IMAGE_ASPECT_COLOR_BIT, 0, levels, 0, 1 } };
+		                                  VK_IMAGE_VIEW_TYPE_2D, format, swizzle, { seen, 0, levels, 0, 1 } };
 		check(m_fn.vkCreateImageView(m_device, &view, nullptr, &image.view), "the view of an image");
 	}
 	image.format = format;
@@ -524,8 +623,84 @@ Context::destroy_image(Image &image)
 {
 	m_fn.vkDestroyImageView(m_device, image.view, nullptr);
 	m_fn.vkDestroyImage(m_device, image.image, nullptr);
-	m_fn.vkFreeMemory(m_device, image.memory, nullptr);
+	if (image.block != Image::OWN_MEMORY)
+		unplace(image);
+	else
+		m_fn.vkFreeMemory(m_device, image.memory, nullptr);
 	image = {};
+}
+
+/* The first free part of a block that holds the image, else a new block. A
+ * block holds images alone, all of optimal tiling: nothing else lies beside
+ * them (bufferImageGranularity). */
+void
+Context::place(Image &image)
+{
+	constexpr VkDeviceSize BLOCK = VkDeviceSize{32} << 20;
+	VkMemoryRequirements needs;
+
+	m_fn.vkGetImageMemoryRequirements(m_device, image.image, &needs);
+	const uint32_t type = memory_type(needs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	const auto up = [&](VkDeviceSize x) { return (x + needs.alignment - 1) / needs.alignment * needs.alignment; };
+
+	for (uint32_t b = 0; b < m_blocks.size(); b++) {
+		Block &block = m_blocks[b];
+
+		if (block.type != type)
+			continue;
+		for (auto part = block.free.begin(); part != block.free.end(); ++part) {
+			const VkDeviceSize start = part->first, end = part->first + part->second;
+			const VkDeviceSize at = up(start);
+
+			if (at + needs.size > end)
+				continue;
+			block.free.erase(part);
+			if (at > start)
+				block.free.emplace(start, at - start);
+			if (at + needs.size < end)
+				block.free.emplace(at + needs.size, end - at - needs.size);
+			image.block = b;
+			image.offset = at;
+			image.size = needs.size;
+			check(m_fn.vkBindImageMemory(m_device, image.image, block.memory, at), "the memory of an image");
+			return;
+		}
+	}
+
+	Block block{ VK_NULL_HANDLE, type, std::max(BLOCK, needs.size), {} };
+	const VkMemoryAllocateInfo memory{ VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO, nullptr, block.size, type };
+	check(m_fn.vkAllocateMemory(m_device, &memory, nullptr, &block.memory), "a block of memory for images");
+	if (needs.size < block.size)
+		block.free.emplace(needs.size, block.size - needs.size);
+	m_blocks.push_back(std::move(block));
+	image.block = static_cast<uint32_t>(m_blocks.size() - 1);
+	image.offset = 0;
+	image.size = needs.size;
+	check(m_fn.vkBindImageMemory(m_device, image.image, m_blocks.back().memory, 0), "the memory of an image");
+}
+
+/* The part of the image free again, joined to the free parts beside it */
+void
+Context::unplace(const Image &image)
+{
+	std::map<VkDeviceSize, VkDeviceSize> &free = m_blocks[image.block].free;
+	VkDeviceSize start = image.offset, size = image.size;
+	auto next = free.lower_bound(start);
+
+	if (next != free.begin()) {
+		const auto before = std::prev(next);
+
+		if (before->first + before->second == start) {
+			start = before->first;
+			size += before->second;
+			free.erase(before);
+		}
+	}
+	if (next != free.end() && start + size == next->first) {
+		size += next->second;
+		free.erase(next);
+	}
+	free.emplace(start, size);
 }
 
 /* Memory the processor reads fast where the card has such */
@@ -574,9 +749,33 @@ Context::staging(VkDeviceSize size)
 		if (buffer.buffer)
 			destroy_buffer(buffer);
 		buffer = make_buffer(std::max<VkDeviceSize>(size, 1u << 20),
-		                     VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+		                     VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+		                             VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
+		                             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
 	}
 	return buffer;
+}
+
+Slice
+Context::stage(VkDeviceSize size, VkDeviceSize align)
+{
+	constexpr VkDeviceSize SLICED = VkDeviceSize{4} << 20;
+	Frame &frame = m_frames[m_frame];
+
+	commands();
+	if (frame.sliced != SIZE_MAX) {
+		const Buffer &buffer = frame.staging[frame.sliced];
+		const VkDeviceSize at = (frame.sliced_to + align - 1) / align * align;
+
+		if (at + size <= buffer.size) {
+			frame.sliced_to = at + size;
+			return { buffer.buffer, at, buffer.bytes + at };
+		}
+	}
+	const Buffer &buffer = staging(std::max(size, SLICED));
+	frame.sliced = frame.staging_used - 1;
+	frame.sliced_to = size;
+	return { buffer.buffer, 0, buffer.bytes };
 }
 
 /* What the image was last used for is not followed closely: every write
@@ -588,7 +787,7 @@ Context::barrier(VkCommandBuffer cb, Image &image, const Use &next, unsigned lev
 	                                     VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT,
 	                                     next.stage, next.access, image.layout, next.layout,
 	                                     VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, image.image,
-	                                     { VK_IMAGE_ASPECT_COLOR_BIT, level, image.levels - level, 0, 1 } };
+	                                     { image.aspects, level, image.levels - level, 0, 1 } };
 	const VkDependencyInfo info{ VK_STRUCTURE_TYPE_DEPENDENCY_INFO, nullptr, 0, 0, nullptr, 0, nullptr, 1, &barrier };
 
 	m_fn.vkCmdPipelineBarrier2(cb, &info);
@@ -680,17 +879,26 @@ Context::destroy_pass(Pass &pass)
 	pass = {};
 }
 
+VkDescriptorSet
+Context::frame_set(VkDescriptorSetLayout layout)
+{
+	const VkDescriptorSetAllocateInfo allocate{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO, nullptr,
+	                                            m_frames[m_frame].descriptors, 1, &layout };
+	VkDescriptorSet set;
+
+	commands();
+	check(m_fn.vkAllocateDescriptorSets(m_device, &allocate, &set), "a descriptor set of the frame");
+	return set;
+}
+
 void
 Context::bind_images(VkCommandBuffer cb, const Pass &pass, std::initializer_list<const Image *> images,
                      VkSampler sampler)
 {
-	const VkDescriptorSetAllocateInfo allocate{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO, nullptr,
-	                                            m_frames[m_frame].descriptors, 1, &pass.images };
 	std::vector<VkDescriptorImageInfo> infos;
 	std::vector<VkWriteDescriptorSet> writes;
-	VkDescriptorSet set;
+	const VkDescriptorSet set = frame_set(pass.images);
 
-	check(m_fn.vkAllocateDescriptorSets(m_device, &allocate, &set), "the images of a pass");
 	infos.reserve(images.size());
 	for (const Image *image : images)
 		infos.push_back({ sampler, image->view, image->layout });

@@ -32,8 +32,6 @@ namespace odin {
 
 namespace {
 
-constexpr VkFormat PICTURE_FORMAT = VK_FORMAT_R8G8B8A8_UNORM;
-
 /* What the composition is pushed, as compose.frag has it */
 struct ComposePush {
 	float factor, mult_f, mult_b, mult_1, mult_2;
@@ -81,6 +79,7 @@ VkBoardDrawing::VkBoardDrawing(vk::Context &card) : m_card(card), m_fn(card.fn()
 	m_state = m_card.make_image(PICTURE_FORMAT, SCREEN_WIDTH, SCREEN_HEIGHT, 1,
 	                            VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
 	build_pictures();
+	build_meshes();
 	m_card.name_picture(FRAME_PICTURE, &m_frame);
 }
 
@@ -90,6 +89,7 @@ VkBoardDrawing::~VkBoardDrawing()
 	m_card.forget_picture(FRAME_PICTURE);
 	destroy_pictures(true);
 	m_card.send_and_wait();
+	destroy_meshes();
 	for (vk::Image *image : { &m_state, &m_none, &m_layers[0], &m_layers[1] })
 		m_card.destroy_image(*image);
 	for (vk::Pass *pass : { &m_blender, &m_compose, &m_presenter })
@@ -123,6 +123,8 @@ VkBoardDrawing::build_pictures()
 	const VkCommandBuffer cb = m_card.commands();
 
 	m_scene = make_picture(width(), height());
+	m_depth = m_card.make_image(m_card.depth_format(), width(), height(), 1,
+	                            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
 	for (vk::Image &picture : m_kept) {
 		picture = make_picture(width(), height());
 		clear(cb, picture, 1.0f);
@@ -133,7 +135,7 @@ VkBoardDrawing::build_pictures()
 void
 VkBoardDrawing::destroy_pictures(bool kept_too)
 {
-	std::vector<vk::Image> gone = { m_scene, m_frame };
+	std::vector<vk::Image> gone = { m_scene, m_depth, m_frame };
 
 	if (kept_too)
 		gone.insert(gone.end(), std::begin(m_kept), std::end(m_kept));
@@ -175,13 +177,6 @@ VkBoardDrawing::set_scale(unsigned scale)
 		for (vk::Image &image : old)
 			card->destroy_image(image);
 	});
-}
-
-/* The scene emptied (its meshes: V3) */
-void
-VkBoardDrawing::begin_scene(const odin_display_list_t &, const SceneDebug &)
-{
-	clear(m_card.commands(), m_scene, 1.0f);
 }
 
 void

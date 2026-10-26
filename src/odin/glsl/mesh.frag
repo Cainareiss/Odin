@@ -21,9 +21,11 @@
 
 /* A mesh of the display list, after fragment_lists.glsl and the defines of
  * its variant (board_programs_gl.cpp): each define is a constant the
- * branches below test, which the compiler folds. */
-
-out vec4 fragColor;
+ * branches below test, which the compiler folds. With Vulkan, the variant
+ * is in specialization constants instead, all but COLLECT: gl_PrimitiveID
+ * needs geometry shaders of the card even in code never run; the data of
+ * the list in buffers, the numbers of the mesh's in push constants
+ * (board_scene_vk.cpp). */
 
 struct light_t {
 	vec3 position;
@@ -35,6 +37,74 @@ struct light_t {
 	vec2 cone;
 	float table[16];
 };
+
+#ifdef VULKAN
+#ifndef COLLECT
+#define COLLECT 0
+#endif
+layout(constant_id = 1) const int HAS_TEXTURE = 0;
+layout(constant_id = 2) const int HAS_LIGHTING = 0;
+layout(constant_id = 3) const int SHADING_MODE = 0;
+layout(constant_id = 4) const int ALPHA_MODE = 0;
+layout(constant_id = 5) const int TEX_MODE = 0;
+layout(constant_id = 6) const int HAS_LIGHT0 = 0;
+layout(constant_id = 7) const int HAS_LIGHT1 = 0;
+layout(constant_id = 8) const int HAS_LIGHT2 = 0;
+layout(constant_id = 9) const int HAS_LIGHT3 = 0;
+layout(constant_id = 10) const int LIGHT0_TYPE = 0;
+layout(constant_id = 11) const int LIGHT1_TYPE = 0;
+layout(constant_id = 12) const int LIGHT2_TYPE = 0;
+layout(constant_id = 13) const int LIGHT3_TYPE = 0;
+layout(constant_id = 14) const int LIGHT0_ATT_TYPE = 0;
+layout(constant_id = 15) const int LIGHT1_ATT_TYPE = 0;
+layout(constant_id = 16) const int LIGHT2_ATT_TYPE = 0;
+layout(constant_id = 17) const int LIGHT3_ATT_TYPE = 0;
+layout(constant_id = 18) const int HAS_FOG = 0;
+layout(constant_id = 19) const int HAS_CUE = 0;
+layout(constant_id = 20) const int HAS_PATTERN = 0;
+
+struct view_t {
+	mat4 projection;
+	vec2 fog;
+	vec2 cue;
+	vec3 fog_color;
+	vec3 ambient;
+};
+struct lightset_t {
+	light_t lights[4];
+};
+layout(std430, set = 0, binding = 0) readonly buffer views_t {
+	view_t u_views[];
+};
+layout(std430, set = 0, binding = 2) readonly buffer lightsets_t {
+	lightset_t u_lightsets[];
+};
+layout(set = 1, binding = 0) uniform texture2D u_texels;
+layout(set = 2, binding = 0) uniform sampler u_sampling;
+layout(push_constant) uniform mesh_t {
+	uint u_view, u_mv, u_mv2, u_lightset;
+	float u_depth_scale, u_alpha_ref, u_weigh_by_alpha;
+	uint u_pattern;
+};
+#define u_lights u_lightsets[u_lightset].lights
+#define u_ambient u_views[u_view].ambient
+#define u_texture sampler2D (u_texels, u_sampling)
+#define u_fog (HAS_FOG != 0 ? u_views[u_view].fog : u_views[u_view].cue)
+#define u_fog_color u_views[u_view].fog_color
+/* As Mesa's OpenGL normalizes: its SPIR-V path divides by the length */
+#define normalize(v) ((v) * inversesqrt (dot ((v), (v))))
+
+layout(location = 0) in vec4 p_position;
+layout(location = 1) in vec3 p_normal;
+layout(location = 2) in vec3 p_diffuse;
+layout(location = 3) in vec4 p_specular;
+layout(location = 4) in vec3 p_color1;
+layout(location = 5) in vec3 p_ambient;
+layout(location = 6) in vec2 p_texcoords;
+layout(location = 7) in float p_alpha;
+layout(location = 0) out vec4 fragColor;
+#else
+out vec4 fragColor;
 
 uniform light_t		u_lights[4];
 uniform vec3		u_ambient;
@@ -62,6 +132,7 @@ in vec3 p_color1;
 in vec3 p_ambient;
 in vec2 p_texcoords;
 in float p_alpha;
+#endif
 
 void
 apply_light (inout vec3 diffuse,
@@ -225,13 +296,13 @@ main (void)
 	if (color.a <= u_alpha_ref)
 		discard;
 
-	if (COLLECT != 0) {
-		/* A translucent fragment is kept unless it is behind the other
-		 * types, whose depth buffer has steps of 6e-8. */
-		if (frag_depth >= 1.0 ||
-		    frag_depth > texelFetch (u_solid_depth, pixel, 0).r + 3.0e-8)
-			discard;
-	}
+#if COLLECT != 0
+	/* A translucent fragment is kept unless it is behind the other
+	 * types, whose depth buffer has steps of 6e-8. */
+	if (frag_depth >= 1.0 ||
+	    frag_depth > texelFetch (u_solid_depth, pixel, 0).r + 3.0e-8)
+		discard;
+#endif
 
 	if (HAS_FOG != 0) {
 		/* X360 vo3d: linear fog on the eye depth from start to end. */
@@ -257,18 +328,18 @@ main (void)
 	if (u_weigh_by_alpha > 0.5)
 		fragColor.rgb *= fragColor.a;
 
-	if (COLLECT != 0) {
-		uint n = atomicAdd (u_count, 1u);
-		if (n < uint (u_nodes.length ())) {
-			u_nodes[n].color = clamp (fragColor, 0.0, 1.0);
-			/* Sorted on the depth the 101 gives among translucent
-			 * fragments, not the one it gives against the other types
-			 * (depth_bias.hpp). */
-			u_nodes[n].depth = log2 (1.0 + u_sort_scale / (gl_FragCoord.w * u_depth_scale)) *
-			                   (1.0 / 24.0);
-			u_nodes[n].next = imageAtomicExchange (u_heads, pixel, n + 1u);
-			u_nodes[n].order = u_order + uint (gl_PrimitiveID);
-			u_nodes[n].mode = u_blend_mode;
-		}
+#if COLLECT != 0
+	uint n = atomicAdd (u_count, 1u);
+	if (n < uint (u_nodes.length ())) {
+		u_nodes[n].color = clamp (fragColor, 0.0, 1.0);
+		/* Sorted on the depth the 101 gives among translucent
+		 * fragments, not the one it gives against the other types
+		 * (depth_bias.hpp). */
+		u_nodes[n].depth = log2 (1.0 + u_sort_scale / (gl_FragCoord.w * u_depth_scale)) *
+		                   (1.0 / 24.0);
+		u_nodes[n].next = imageAtomicExchange (u_heads, pixel, n + 1u);
+		u_nodes[n].order = u_order + uint (gl_PrimitiveID);
+		u_nodes[n].mode = u_blend_mode;
 	}
+#endif
 }

@@ -20,15 +20,20 @@
 #define ODIN_BOARD_DRAWING_VK_HPP
 
 /* The board drawing with Vulkan (board_drawing.hpp), for its own files
- * only: board_drawing_vk.cpp (made; what comes with the next steps),
- * board_pictures_vk.cpp (the pictures and what goes from one to the next).
- * The pictures keep the lines in the order OpenGL gives them, the bottom one
- * first: drawn with the same coordinates, they hold the same bytes
- * (MARKDOWN/106 § 2.2). */
+ * only: board_drawing_vk.cpp (made; the textures and their samplers),
+ * board_pictures_vk.cpp (the pictures and what goes from one to the next),
+ * board_scene_vk.cpp (the meshes of a list, their pipelines). The pictures
+ * keep the lines in the order OpenGL gives them, the bottom one first:
+ * drawn with the same coordinates, they hold the same bytes (MARKDOWN/106
+ * § 2.2). */
 
 #include <optional>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
 #include "odin/board_drawing.hpp"
+#include "odin/renderer_programs.hpp"
 #include "odin/vk_common.hpp"
 
 namespace odin {
@@ -42,13 +47,13 @@ public:
 
 	void set_scale(unsigned scale) override;
 
-	/* The scene is emptied; its meshes are not drawn yet (V3) */
 	void begin_scene(const odin_display_list_t &list, const SceneDebug &debug) override;
-	void clear_depth() override {}
-	void begin_pass(const PassRules &) override {}
-	void draw_mesh(const odin_mesh_t &, const MeshDraw &) override {}
+	void clear_depth() override;
+	void begin_pass(const PassRules &rules) override;
+	/* The translucent ones are not drawn yet (V4) */
+	void draw_mesh(const odin_mesh_t &mesh, const MeshDraw &draw) override;
 	void end_pass() override {}
-	void end_scene() override {}
+	void end_scene() override;
 
 	void begin_translucent() override {}
 	void begin_collect(unsigned) override {}
@@ -61,14 +66,14 @@ public:
 	void size_fragments(uint32_t) override {}
 	uint32_t fragment_limit() const override { return UINT32_MAX / 32; }
 
-	void keep_programs_in(const std::string &) override {}
-	void list_programs_in(const std::string &) override {}
-	bool holds_program(uint64_t) const override { return false; }
+	void keep_programs_in(const std::string &folder) override;
+	void list_programs_in(const std::string &path) override { m_program_list.list_in(path); }
+	bool holds_program(uint64_t key) const override { return m_variants.contains(key); }
 	void begin_preparing() override {}
-	void prepare_program(uint64_t) override {}
+	void prepare_program(uint64_t key) override;
 	void end_preparing() override {}
-	unsigned programs_read_back() const override { return 0; }
-	unsigned programs_compiled() const override { return 0; }
+	unsigned programs_read_back() const override { return m_read_back; }
+	unsigned programs_compiled() const override { return m_compiled; }
 
 	bool has_stamps() const override { return false; }
 	uint32_t put_stamp() override { return 0; }
@@ -91,14 +96,44 @@ public:
 	void read_kept(std::span<uint8_t> pictures) override;
 	void write_kept(std::span<const uint8_t> pictures) override;
 
-	HostTexture make_texture(Texels, std::span<const TexelRect>) override { return { m_next_texture++ }; }
-	void forget_textures(std::span<const HostTexture>) override {}
-	HostSampler make_sampler(const TextureSampling &, unsigned) override { return { m_next_sampler++ }; }
-	void forget_sampler(HostSampler) override {}
+	HostTexture make_texture(Texels texels, std::span<const TexelRect> levels) override;
+	void forget_textures(std::span<const HostTexture> textures) override;
+	HostSampler make_sampler(const TextureSampling &sampling, unsigned anisotropy) override;
+	void forget_sampler(HostSampler sampler) override;
 
 private:
-	/* The number of the picture of the frame, as the window reads it */
+	/* Descriptor sets of one layout, each kept until it is freed, from
+	 * pools made as they fill */
+	struct KeptSets {
+		VkDescriptorType type = VK_DESCRIPTOR_TYPE_SAMPLER;
+		VkDescriptorSetLayout layout = VK_NULL_HANDLE;
+		std::vector<VkDescriptorPool> pools;
+	};
+	struct KeptSet {
+		VkDescriptorPool pool = VK_NULL_HANDLE;
+		VkDescriptorSet set = VK_NULL_HANDLE;
+	};
+	/* A texture, a sampler, each with the set the mesh shaders read it
+	 * through */
+	struct Texture {
+		vk::Image image;
+		KeptSet set;
+	};
+	struct Sampler {
+		VkSampler sampler;
+		KeptSet set;
+	};
+	/* What the mesh shaders are pushed (glsl/mesh.vert) */
+	struct MeshPush {
+		uint32_t view, mv, mv2, lightset;
+		float depth_scale, alpha_ref, weigh_by_alpha;
+		uint32_t pattern;
+	};
+
+	/* The number of the picture of the frame, as the window reads it;
+	 * the format of the pictures */
 	static constexpr uint32_t FRAME_PICTURE = 1;
+	static constexpr VkFormat PICTURE_FORMAT = VK_FORMAT_R8G8B8A8_UNORM;
 
 	unsigned width() const { return SCREEN_WIDTH * m_scale; }
 	unsigned height() const { return SCREEN_HEIGHT * m_scale; }
@@ -110,6 +145,25 @@ private:
 	/* A copy, each pixel the nearest */
 	void copy_picture(VkCommandBuffer cb, vk::Image &from, vk::Image &to);
 	void clear_window(unsigned window_w, unsigned window_h);
+
+	/* board_drawing_vk.cpp */
+	void make_sets(KeptSets &sets, VkDescriptorType type, VkShaderStageFlags stages);
+	KeptSet keep_set(KeptSets &sets);
+	void free_set(const KeptSet &set);
+	void destroy_sets(KeptSets &sets);
+	KeptSet image_set(const vk::Image &image);
+
+	/* board_scene_vk.cpp */
+	void build_meshes();
+	void destroy_meshes();
+	void log(const char *fmt, ...) const __attribute__((format(printf, 2, 3)));
+	VkPipeline pipeline(const MeshVariant &variant, MeshBlend blend);
+	void read_cache(const std::string &path);
+	void write_cache();
+	void write_view(unsigned index);
+	void write_lightset(unsigned index);
+	void set_view(const odin_mesh_t &mesh);
+	void bind_texture(const MeshDraw &draw);
 
 	vk::Context &m_card;
 	const vk::Functions &m_fn;
@@ -127,7 +181,49 @@ private:
 	/* The passes: the blender of the 3D buffers, the composition, the
 	 * picture brought to the size of the window */
 	vk::Pass m_blender, m_compose, m_presenter;
+
+	/* The textures and the samplers, by their number; the sets of
+	 * both; the texture and the sampler of the meshes without one */
+	std::unordered_map<uint32_t, Texture> m_textures;
+	std::unordered_map<uint32_t, Sampler> m_samplers;
 	uint32_t m_next_texture = 1, m_next_sampler = 1;
+	KeptSets m_texture_sets, m_sampler_sets;
+	KeptSet m_none_set, m_nearest_set;
+
+	/* The meshes: their depth, shaders, layout (the set of the list,
+	 * then those of the texture and the sampler), pipelines by variant
+	 * and blend, the variants that have one, the cache of the pipelines
+	 * (its folder, the start of the names of the caches of the card, its
+	 * file), the list of the programs of the game */
+	vk::Image m_depth;
+	VkShaderModule m_mesh_vert = VK_NULL_HANDLE, m_mesh_frag = VK_NULL_HANDLE;
+	VkDescriptorSetLayout m_list_layout = VK_NULL_HANDLE;
+	VkPipelineLayout m_mesh_layout = VK_NULL_HANDLE;
+	std::unordered_map<uint64_t, VkPipeline> m_pipelines;
+	std::unordered_set<uint64_t> m_variants;
+	VkPipelineCache m_cache = VK_NULL_HANDLE;
+	std::string m_cache_folder, m_cache_card, m_cache_path;
+	ProgramList m_program_list;
+	unsigned m_read_back = 0, m_compiled = 0;
+	bool m_preparing = false;
+
+	/* The list being drawn: its buffers (the views and the lightsets
+	 * written when first used), what is bound and pushed */
+	const odin_display_list_t *m_list = nullptr;
+	SceneDebug m_debug{};
+	vk::Slice m_views{}, m_lightsets{};
+	uint32_t m_identity = 0;	/* the modelview of none */
+	std::vector<bool> m_view_written, m_lightset_written;
+	VkPipeline m_bound_pipeline = VK_NULL_HANDLE;
+	uint32_t m_bound_texture = 0, m_bound_sampler = 0;
+	uint32_t m_scissor_vp_index = ~0u;
+	MeshPush m_push{};
+	bool m_drawing = false;		/* between begin_scene and end_scene */
+	/* How the meshes of the polygon type being drawn are drawn */
+	struct {
+		float alpha_ref;	/* fragments at or below it are dropped */
+		bool depth_bias;	/* the 101 bias moves the mesh */
+	} m_pass{};
 };
 
 } /* namespace odin */

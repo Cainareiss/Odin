@@ -37,6 +37,8 @@ SPIRV(blend_frag, "glsl/blend.frag.spv")
 SPIRV(compose_vert, "glsl/compose.vert.spv")
 SPIRV(compose_frag, "glsl/compose.frag.spv")
 SPIRV(present_frag, "glsl/present.frag.spv")
+SPIRV(mesh_vert, "glsl/mesh.vert.spv")
+SPIRV(mesh_frag, "glsl/mesh.frag.spv")
 
 #if !defined(_WIN32)
 	.section .note.GNU-stack, "", @progbits

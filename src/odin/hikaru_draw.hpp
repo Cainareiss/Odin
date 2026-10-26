@@ -133,6 +133,47 @@ view_turned_over(const odin_viewport_t &vp)
 	return (vp.clip.n / vp.clip.f) * (vp.clip.n / vp.clip.f2) < 0.0f;
 }
 
+/* The projection of a view, the matrix of glFrustum (its columns first;
+ * taken from Mesa). The centre and the clip window are screen coordinates,
+ * y down: the view is centred on the offset, reaches the four edges of the
+ * screen and is cut by the window. The driver panels of SGNASCAR sit 40
+ * lines below the middle and stop under their banner; the letterboxed
+ * robots of von4 fill the lines 39 to 360, as on the cabinets. The BOOTROM
+ * menu has its centre on the top left corner of the screen. The far plane
+ * is put at 1e5 (HEURISTIC). The projection plane is clip.f pixels away on
+ * the screen for x and clip.f2 pixels away for y. */
+inline void
+view_projection(const odin_viewport_t &vp, float out[4][4])
+{
+	const float kx = vp.clip.n / vp.clip.f;
+	const float ky = vp.clip.n / vp.clip.f2;
+	const float l = (0.0f - vp.offset.x) * kx;
+	const float r = (static_cast<float>(SCREEN_WIDTH) - vp.offset.x) * kx;
+	const float b = (vp.offset.y - static_cast<float>(SCREEN_HEIGHT)) * ky;
+	const float t = vp.offset.y * ky;
+	const float n = vp.clip.n, f = 1e5f;
+
+	out[0][0] = (2.0f * n) / (r - l);
+	out[1][0] = 0.0f;
+	out[2][0] = (r + l) / (r - l);
+	out[3][0] = 0.0f;
+
+	out[0][1] = 0.0f;
+	out[1][1] = (2.0f * n) / (t - b);
+	out[2][1] = (t + b) / (t - b);
+	out[3][1] = 0.0f;
+
+	out[0][2] = 0.0f;
+	out[1][2] = 0.0f;
+	out[2][2] = - (f + n) / (f - n);
+	out[3][2] = - (2.0f * f * n) / (f - n);
+
+	out[0][3] = 0.0f;
+	out[1][3] = 0.0f;
+	out[2][3] = -1.0f;
+	out[3][3] = 0.0f;
+}
+
 /* The depth queue of a view, 621 words without a colour: P = 1 / (end -
  * start), Q = near / start (PHARRIER library 0C015A3E) */
 inline void

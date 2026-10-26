@@ -101,7 +101,7 @@ public:
 	void add(uint64_t key);
 	/* Lists in a file the programs compiled from now on, after the ones
 	 * it lists already. */
-	void list_in(const std::string &path);
+	void list_in(const std::string &path) { m_list.list_in(path); }
 	/* Keeps each program the driver links in that folder, and takes it
 	 * from there the next times (program_cache.hpp), when the driver can
 	 * give its programs; empty: none kept. */
@@ -116,7 +116,7 @@ private:
 	GLuint link(uint64_t key, const std::string &vertex, const std::string &fragment);
 
 	std::unordered_map<uint64_t, MeshProgram> m_programs;
-	std::FILE *m_list = nullptr;
+	ProgramList m_list;
 	std::string m_kept, m_driver;	/* the folder, and the driver the programs are made by */
 	unsigned m_read_back = 0, m_compiled = 0;
 };
