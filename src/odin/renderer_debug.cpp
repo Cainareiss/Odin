@@ -130,19 +130,19 @@ Renderer::log_mesh(const odin_mesh_t &mesh) const
 	    static_cast<double>(mesh.poly_alpha), mesh.addr[0]);
 
 	log("RENDSTATE D @%p #instances = %u", static_cast<const void *>(&mesh), mesh.num_instances);
-	if (mesh.vp_index < ODIN_LIST_MAX_VIEWPORTS)
+	if (mesh.vp_index < m_list->num_vps)
 		log("RENDSTATE D %u vp:  %s", mesh.num,
 		    odin_viewport_str(&m_list->vp_list[mesh.vp_index]));
-	if (mesh.mv_index < ODIN_LIST_MAX_MODELVIEWS)
+	if (mesh.mv_index < m_list->num_mvs)
 		log("RENDSTATE D %u mv:  %s", mesh.num,
 		    odin_modelview_str(&m_list->mv_list[mesh.mv_index]));
-	if (mesh.mat_index < ODIN_LIST_MAX_MATERIALS)
+	if (mesh.mat_index < m_list->num_mats)
 		log("RENDSTATE D %u mat: %s", mesh.num,
 		    odin_material_str(&m_list->mat_list[mesh.mat_index]));
-	if (mesh.tex_index < ODIN_LIST_MAX_TEXHEADS)
+	if (mesh.tex_index < m_list->num_texs)
 		log("RENDSTATE D %u tex: %s", mesh.num,
 		    odin_texhead_str(&m_list->tex_list[mesh.tex_index]));
-	if (mesh.ls_index < ODIN_LIST_MAX_LIGHTSETS)
+	if (mesh.ls_index < m_list->num_lss)
 		log("RENDSTATE D %u ls:  %s", mesh.num,
 		    odin_lightset_str(&m_list->ls_list[mesh.ls_index]));
 }

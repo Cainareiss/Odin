@@ -44,7 +44,6 @@ Renderer::Renderer(HostGraphics &graphics, const Memory &memory, const Options &
 {
 	for (ListTextures &textures : m_list_textures) {
 		textures.list = nullptr;
-		textures.ids.assign(ODIN_LIST_MAX_TEXHEADS, {});
 	}
 	init_debug();
 	m_card->keep_programs_in(options.programs_made);

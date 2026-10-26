@@ -359,23 +359,31 @@ private:
 		PUSH_TXC = 1 << 2
 	};
 
-	/* The buffers behind a display list */
+	/* The buffers behind a display list. They grow as a frame asks (the
+	 * board reads its commands as they come, with no such limit; Brave
+	 * after its first boss lists more than Valkyrie's 4096 texheads) and
+	 * keep their size from frame to frame. */
 	struct List {
 		List();
 		void clear();
+		/* Room for the objects of one more mesh, two modelviews; for
+		 * one more mesh of that viewport and type */
+		void room();
+		void room_for_mesh(unsigned vp, unsigned type);
 
-		odin_display_list_t view;
-		std::unique_ptr<odin_viewport_t[]> vps;
-		std::unique_ptr<odin_modelview_t[]> mvs;
-		std::unique_ptr<odin_material_t[]> mats;
-		std::unique_ptr<odin_texhead_t[]> texs;
-		std::unique_ptr<odin_lightset_t[]> lss;
-		std::unique_ptr<uint16_t[][4][16]> ls_tables;
+		odin_display_list_t view{};
+		std::vector<odin_viewport_t> vps;
+		std::vector<odin_modelview_t> mvs;
+		std::vector<odin_material_t> mats;
+		std::vector<odin_texhead_t> texs;
+		std::vector<odin_lightset_t> lss;
+		/* The 194 table of the four lights of each lightset */
+		std::vector<uint16_t> ls_tables;
 		/* The 194 words of the lightset listed last */
 		uint32_t tables[4][8];
 		/* The modelview listed last for a mesh */
 		uint32_t mv_index;
-		std::array<std::array<std::unique_ptr<odin_mesh_t[]>, 8>, 8> meshes;
+		std::array<std::array<std::vector<odin_mesh_t>, 8>, 8> meshes;
 		std::vector<odin_vertex_body_t> verts;
 		std::vector<uint32_t> indices;
 	};

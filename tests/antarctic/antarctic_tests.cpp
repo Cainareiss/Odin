@@ -74,6 +74,10 @@ struct Machine {
 
 	void write(uint32_t addr, std::initializer_list<uint32_t> words)
 	{
+		write(addr, std::vector<uint32_t>(words));
+	}
+	void write(uint32_t addr, const std::vector<uint32_t> &words)
+	{
 		uint32_t offs = addr & 0x003FFFFF;
 
 		for (uint32_t word : words) {
@@ -83,6 +87,10 @@ struct Machine {
 	}
 	/* Runs the list at LIST for a frame. */
 	void run(std::initializer_list<uint32_t> words, uint32_t budget = 1000)
+	{
+		run(std::vector<uint32_t>(words), budget);
+	}
+	void run(const std::vector<uint32_t> &words, uint32_t budget)
 	{
 		write(LIST, words);
 		cp->set_log(nullptr);
@@ -319,6 +327,46 @@ void test_objects_listed_once()
 	check(first.mv_index == fourth.mv_index && fifth.mv_index != fourth.mv_index && m.list->num_mvs == 3 &&
 	      m.list->mv_list[fifth.mv_index].mtx[3][2] == -5.0f,
 	      "the modelview is listed once, and again when it changes");
+}
+
+/* A frame of more objects than Valkyrie's lists held (4096 materials and
+ * texheads, 8192 modelviews; Brave after its first boss lists 4096
+ * texheads, 26/10/2026): each mesh with a material, a texhead and a
+ * modelview of its own; the board has no such limit. */
+void test_many_objects()
+{
+	constexpr uint32_t MESHES = 10000;
+	std::vector<uint32_t> words = { OPAQUE,
+	                                0x00000083,
+	                                0x00000091, 0x000000FF, 0x00011084,	/* material 1: red */
+	                                0x00000091, 0x0000FF00, 0x00021084,	/* material 2: green */
+	                                0x000000C3,				/* texhead base 0 */
+	                                0xA81282C1, 0x000010C4,			/* texhead 0: 64x64 */
+	                                0xA8C0C2C1, 0x000110C4,			/* texhead 1: 16x16 */
+	                                VERTEX(0.0f, 0.0f), VERTEX(1.0f, 0.0f) };
+	for (uint32_t i = 0; i < MESHES; i++) {
+		const float y = -static_cast<float>(i + 1);
+
+		words.insert(words.end(), { 0x00030161, f(0.0f), f(0.0f), f(y),	/* its modelview */
+		                            i % 2 ? 0x00021083u : 0x00011083u,	/* its material */
+		                            i % 2 ? 0x000110C3u : 0x000010C3u,	/* its texhead */
+		                            VERTEX_CLOSING(0.0f, y), VERTEX_CLOSING(1.0f, y) });
+	}
+	words.push_back(END);
+
+	Machine m;
+	m.run(words, 1000000);
+	/* The two vertices before them open one more, of material 0 */
+	check(m.ended && m.list->num_meshes[0][1] == MESHES + 1, "ten thousand meshes in a frame");
+	check(m.list->num_mats == MESHES + 1 && m.list->num_texs == MESHES + 1 && m.list->num_mvs > 2 * 4096,
+	      "each with its material, its texhead and its modelview");
+
+	const odin_mesh_t &first = m.mesh(1, 1), &last = m.mesh(1, MESHES);
+	check(m.list->mat_list[first.mat_index].diffuse[0] == 0xFF && m.list->mat_list[last.mat_index].diffuse[1] == 0xFF &&
+	      m.list->tex_list[first.tex_index].w2C1 == 0xA81282C1 && m.list->tex_list[last.tex_index].w2C1 == 0xA8C0C2C1 &&
+	      m.list->mv_list[first.mv_index].mtx[3][2] == -1.0f &&
+	      m.list->mv_list[last.mv_index].mtx[3][2] == -static_cast<float>(MESHES),
+	      "the first and the last keep theirs");
 }
 
 /* The grid of the BOOTROM C.R.T. test: the 0E8 names its texhead, and its
@@ -649,6 +697,7 @@ int main()
 	test_degenerate_and_both_faces();
 	test_strip_through_recall();
 	test_objects_listed_once();
+	test_many_objects();
 	test_blending_mode_in_two_words();
 	test_texhead_of_0E8_and_second_modelview();
 	test_viewport_and_state();

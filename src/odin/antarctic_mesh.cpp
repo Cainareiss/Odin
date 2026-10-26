@@ -36,6 +36,15 @@ static constexpr float INV255 = 1.0f / 255.0f;
 
 namespace {
 
+/* At least `need` of them: twice as many as before when it grows */
+template <typename T>
+void
+grow(std::vector<T> &list, size_t need)
+{
+	if (list.size() < need)
+		list.resize(std::max({ need, list.size() * 2, size_t{64} }));
+}
+
 /* Lists an object, unless it is the one listed last: the meshes that follow
  * one another with the same object point to the same one, and the renderer
  * sends it once. Returns where it is. */
@@ -51,26 +60,36 @@ list_object(T *list, uint32_t &num, const T &object)
 } /* namespace */
 
 Antarctic::List::List()
-	: vps(new odin_viewport_t[ODIN_LIST_MAX_VIEWPORTS]),
-	  mvs(new odin_modelview_t[ODIN_LIST_MAX_MODELVIEWS]),
-	  mats(new odin_material_t[ODIN_LIST_MAX_MATERIALS]),
-	  texs(new odin_texhead_t[ODIN_LIST_MAX_TEXHEADS]),
-	  lss(new odin_lightset_t[ODIN_LIST_MAX_LIGHTSETS]),
-	  ls_tables(new uint16_t[ODIN_LIST_MAX_LIGHTSETS][4][16])
 {
-	view.vp_list = vps.get();
-	view.mv_list = mvs.get();
-	view.mat_list = mats.get();
-	view.tex_list = texs.get();
-	view.ls_list = lss.get();
-	view.ls_tables = ls_tables.get();
-	for (unsigned vp = 0; vp < 8; vp++) {
-		for (unsigned type = 0; type < 8; type++) {
-			meshes[vp][type].reset(new odin_mesh_t[ODIN_LIST_MAX_MESHES]);
-			view.mesh_list[vp][type] = meshes[vp][type].get();
-		}
-	}
 	clear();
+	room();
+	for (unsigned vp = 0; vp < 8; vp++)
+		for (unsigned type = 0; type < 8; type++)
+			room_for_mesh(vp, type);
+}
+
+void
+Antarctic::List::room()
+{
+	grow(vps, view.num_vps + 1);
+	grow(mvs, view.num_mvs + 2);
+	grow(mats, view.num_mats + 1);
+	grow(texs, view.num_texs + 1);
+	grow(lss, view.num_lss + 1);
+	grow(ls_tables, lss.size() * 4 * 16);
+	view.vp_list = vps.data();
+	view.mv_list = mvs.data();
+	view.mat_list = mats.data();
+	view.tex_list = texs.data();
+	view.ls_list = lss.data();
+	view.ls_tables = reinterpret_cast<uint16_t (*)[4][16]>(ls_tables.data());
+}
+
+void
+Antarctic::List::room_for_mesh(unsigned vp, unsigned type)
+{
+	grow(meshes[vp][type], view.num_meshes[vp][type] + 1);
+	view.mesh_list[vp][type] = meshes[vp][type].data();
 }
 
 void
@@ -116,13 +135,7 @@ Antarctic::list_state(odin_mesh_t &mesh)
 	odin_display_list_t &l = m_list->view;
 
 	std::memset(&mesh, 0, sizeof(mesh));
-
-	if (l.num_vps + 1 >= ODIN_LIST_MAX_VIEWPORTS ||
-	    l.num_mats + 1 >= ODIN_LIST_MAX_MATERIALS ||
-	    l.num_texs + 1 >= ODIN_LIST_MAX_TEXHEADS ||
-	    l.num_lss + 1 >= ODIN_LIST_MAX_LIGHTSETS ||
-	    l.num_mvs + 2 >= ODIN_LIST_MAX_MODELVIEWS)
-		fatal("too many objects in a frame", l.total_meshes);
+	m_list->room();
 
 	mesh.vp_index = list_object(l.vp_list, l.num_vps, m_s.vp.current);
 	mesh.mat_index = list_object(l.mat_list, l.num_mats, m_s.mat.scratch);
@@ -163,7 +176,7 @@ Antarctic::list_state(odin_mesh_t &mesh)
 	l.num_instances = 1;
 
 	/* The second modelview (161 with bit 18) is listed when it changes. */
-	if (l.mv2_index >= ODIN_LIST_MAX_MODELVIEWS ||
+	if (l.mv2_index >= l.num_mvs ||
 	    !same_bytes(l.mv_list[l.mv2_index], m_s.mv.second)) {
 		l.mv2_index = l.num_mvs;
 		l.mv_list[l.num_mvs++] = m_s.mv.second;
@@ -188,9 +201,7 @@ Antarctic::begin_mesh(uint32_t addr)
 
 	if (m_mesh)
 		fatal("a mesh is open already", addr);
-	if (index + 1 >= ODIN_LIST_MAX_MESHES)
-		fatal("too many meshes in a frame", index);
-
+	m_list->room_for_mesh(vp, type);
 	m_mesh = &l.mesh_list[vp][type][index];
 	l.num_meshes[vp][type] = index + 1;
 

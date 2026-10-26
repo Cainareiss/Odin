@@ -283,13 +283,6 @@ typedef struct {
 	} indices;
 } odin_display_list_t;
 
-#define ODIN_LIST_MAX_VIEWPORTS		4096
-#define ODIN_LIST_MAX_MODELVIEWS	8192
-#define ODIN_LIST_MAX_MATERIALS		4096
-#define ODIN_LIST_MAX_TEXHEADS		4096
-#define ODIN_LIST_MAX_LIGHTSETS		4096
-#define ODIN_LIST_MAX_MESHES		16384
-
 /* 181, 781 and 191: the framebuffer blender and the clear colour */
 typedef struct {
 	uint32_t w181;

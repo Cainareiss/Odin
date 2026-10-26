@@ -263,7 +263,7 @@ GlBoardDrawing::upload_modelview(const odin_mesh_t &mesh, unsigned i)
 		log("mv  = [%u+%u] %s", mesh.mv_index, i, odin_modelview_str(mv));
 	glUniformMatrix4fv(locs.modelview, 1, GL_FALSE, &mv->mtx[0][0]);
 
-	if (mesh.mv2_index < ODIN_LIST_MAX_MODELVIEWS)
+	if (mesh.mv2_index < m_list->num_mvs)
 		mv = &m_list->mv_list[mesh.mv2_index];
 	glUniformMatrix4fv(locs.modelview2, 1, GL_FALSE, &mv->mtx[0][0]);
 }

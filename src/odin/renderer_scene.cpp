@@ -73,8 +73,11 @@ Renderer::tex_ids()
 	for (ListTextures &textures : m_list_textures) {
 		if (!textures.list)
 			textures.list = m_list;
-		if (textures.list == m_list)
+		if (textures.list == m_list) {
+			if (textures.ids.size() < m_list->num_texs)
+				textures.ids.resize(m_list->num_texs);
 			return textures.ids;
+		}
 	}
 	fatal("a fourth display list");
 }
@@ -86,7 +89,7 @@ Renderer::tex_ids()
 bool
 Renderer::is_faded_by_depth(const odin_mesh_t &mesh) const
 {
-	if (mesh.vp_index >= ODIN_LIST_MAX_VIEWPORTS)
+	if (mesh.vp_index >= m_list->num_vps)
 		return false;
 	const odin_viewport_t &vp = m_list->vp_list[mesh.vp_index];
 
@@ -213,7 +216,7 @@ Renderer::set_material_blend(const odin_mesh_t &mesh)
 {
 	unsigned mode = 0;
 
-	if (mesh.mat_index < ODIN_LIST_MAX_MATERIALS)
+	if (mesh.mat_index < m_list->num_mats)
 		mode = odin_mat_blending_mode(&m_list->mat_list[mesh.mat_index]);
 	m_draw.blend_mode = mode;
 	m_draw.weigh_by_alpha = weighs_by_alpha(mode);
