@@ -35,7 +35,9 @@
 #include <vulkan/vulkan.h>
 
 #include <cstdint>
+#include <deque>
 #include <functional>
+#include <initializer_list>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -67,7 +69,12 @@ namespace odin::vk {
 	F(vkCreateImageView) F(vkDestroyImageView) F(vkCreateBuffer) F(vkDestroyBuffer) \
 	F(vkGetBufferMemoryRequirements) F(vkBindBufferMemory) F(vkCreateSwapchainKHR) F(vkDestroySwapchainKHR) \
 	F(vkGetSwapchainImagesKHR) F(vkAcquireNextImageKHR) F(vkQueuePresentKHR) F(vkCmdClearColorImage) \
-	F(vkCmdClearAttachments) \
+	F(vkCmdClearAttachments) F(vkCmdCopyImage) F(vkCreateShaderModule) F(vkDestroyShaderModule) \
+	F(vkCreatePipelineLayout) F(vkDestroyPipelineLayout) F(vkCreateGraphicsPipelines) F(vkDestroyPipeline) \
+	F(vkCreateDescriptorSetLayout) F(vkDestroyDescriptorSetLayout) F(vkCreateDescriptorPool) \
+	F(vkDestroyDescriptorPool) F(vkResetDescriptorPool) F(vkAllocateDescriptorSets) F(vkUpdateDescriptorSets) \
+	F(vkCreateSampler) F(vkDestroySampler) F(vkCmdBindPipeline) F(vkCmdBindDescriptorSets) F(vkCmdPushConstants) \
+	F(vkCmdSetViewport) F(vkCmdSetScissor) F(vkCmdDraw) \
 	F(vkCmdCopyImageToBuffer) F(vkCmdCopyBufferToImage) F(vkCmdBlitImage) \
 	G(vkQueueSubmit2, vkQueueSubmit2KHR) G(vkCmdPipelineBarrier2, vkCmdPipelineBarrier2KHR) \
 	G(vkCmdBeginRendering, vkCmdBeginRenderingKHR) G(vkCmdEndRendering, vkCmdEndRenderingKHR)
@@ -119,6 +126,20 @@ inline constexpr Use DRAWN_IN = { VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 	                          VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT };
 inline constexpr Use SAMPLED = { VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
 	                         VK_ACCESS_2_SHADER_SAMPLED_READ_BIT };
+
+/* A shader as SPIR-V, in the binary (spirv.hpp) */
+struct Spirv {
+	const uint32_t *code;
+	size_t bytes;
+};
+
+/* A pass drawn with one pair of shaders: the images its fragment shader
+ * samples (bindings 0, 1...), its push constants, and its pipeline */
+struct Pass {
+	VkDescriptorSetLayout images = VK_NULL_HANDLE;
+	VkPipelineLayout layout = VK_NULL_HANDLE;
+	VkPipeline pipeline = VK_NULL_HANDLE;
+};
 
 /* The card for one window: made with the window, taken by the drawing
  * thread (display.hpp), as OpenGL's context is. */
@@ -179,6 +200,21 @@ public:
 	 * levels from `level` on only (they are taken as one use) */
 	void barrier(VkCommandBuffer cb, Image &image, const Use &next, unsigned level = 0);
 
+	/* A pass that samples `images` images, with `push` bytes of push
+	 * constants, drawn as a list or a strip of triangles into an image of
+	 * that format, nothing blended, nothing culled, no depth */
+	Pass make_pass(const Spirv &vertex, const Spirv &fragment, unsigned images, uint32_t push,
+	               VkPrimitiveTopology topology, VkFormat format);
+	void destroy_pass(Pass &pass);
+	/* The images a pass samples, each through that sampler, in the frame
+	 * being written: they must be SAMPLED already */
+	void bind_images(VkCommandBuffer cb, const Pass &pass, std::initializer_list<const Image *> images,
+	                 VkSampler sampler);
+	/* Drawing into the image, in that rectangle of it (its viewport and
+	 * scissor), what it holds kept; then done */
+	void begin_drawing(VkCommandBuffer cb, Image &image, const VkRect2D &area);
+	void end_drawing(VkCommandBuffer cb) { m_fn.vkCmdEndRendering(cb); }
+
 	/* The image of the window: everything is drawn into it, then it is
 	 * copied to the swap chain (host_graphics_vk.cpp). Made again at the
 	 * size of the window. */
@@ -236,8 +272,9 @@ private:
 		bool written = false;	/* its command buffer begun */
 		bool sent = false;	/* sent, its fence not waited for yet */
 		std::vector<std::function<void()>> later;
-		std::vector<Buffer> staging;
+		std::deque<Buffer> staging;	/* a deque: what staging gave stays put */
 		size_t staging_used = 0;
+		VkDescriptorPool descriptors = VK_NULL_HANDLE;	/* emptied with the frame */
 	};
 	Frame m_frames[FRAMES];
 	unsigned m_frame = 0;

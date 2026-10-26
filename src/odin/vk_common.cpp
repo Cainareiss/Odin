@@ -137,6 +137,7 @@ Context::~Context()
 				destroy_buffer(buffer);
 			m_fn.vkDestroyFence(m_device, frame.done, nullptr);
 			m_fn.vkDestroyCommandPool(m_device, frame.pool, nullptr);
+			m_fn.vkDestroyDescriptorPool(m_device, frame.descriptors, nullptr);
 		}
 		destroy_image(m_window);
 		m_fn.vkDestroyDevice(m_device, nullptr);
@@ -378,6 +379,12 @@ Context::make_device(std::string &why)
 		                                          VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1 };
 		check(m_fn.vkAllocateCommandBuffers(m_device, &buffer, &frame.cb), "a command buffer");
 		check(m_fn.vkCreateFence(m_device, &fence, nullptr, &frame.done), "a fence");
+
+		/* The passes of a frame: a few dozen at most */
+		const VkDescriptorPoolSize size{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1024 };
+		const VkDescriptorPoolCreateInfo descriptors{ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO, nullptr, 0, 256, 1,
+		                                              &size };
+		check(m_fn.vkCreateDescriptorPool(m_device, &descriptors, nullptr, &frame.descriptors), "a descriptor pool");
 	}
 	return true;
 }
@@ -403,6 +410,7 @@ Context::wait(Frame &frame)
 		destroy();
 	frame.later.clear();
 	frame.staging_used = 0;
+	check(m_fn.vkResetDescriptorPool(m_device, frame.descriptors, 0), "a descriptor pool");
 }
 
 VkCommandBuffer
@@ -496,10 +504,14 @@ Context::make_image(VkFormat format, unsigned w, unsigned h, unsigned levels, Vk
 	check(m_fn.vkAllocateMemory(m_device, &memory, nullptr, &image.memory), "the memory of an image");
 	check(m_fn.vkBindImageMemory(m_device, image.image, image.memory, 0), "the memory of an image");
 
-	const VkImageViewCreateInfo view{ VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO, nullptr, 0, image.image,
-	                                  VK_IMAGE_VIEW_TYPE_2D, format, swizzle,
-	                                  { VK_IMAGE_ASPECT_COLOR_BIT, 0, levels, 0, 1 } };
-	check(m_fn.vkCreateImageView(m_device, &view, nullptr, &image.view), "the view of an image");
+	/* A view for the images shaders read or draw into; copies need none */
+	if (usage & (VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+	             VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)) {
+		const VkImageViewCreateInfo view{ VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO, nullptr, 0, image.image,
+		                                  VK_IMAGE_VIEW_TYPE_2D, format, swizzle,
+		                                  { VK_IMAGE_ASPECT_COLOR_BIT, 0, levels, 0, 1 } };
+		check(m_fn.vkCreateImageView(m_device, &view, nullptr, &image.view), "the view of an image");
+	}
 	image.format = format;
 	image.w = w;
 	image.h = h;
@@ -581,6 +593,132 @@ Context::barrier(VkCommandBuffer cb, Image &image, const Use &next, unsigned lev
 
 	m_fn.vkCmdPipelineBarrier2(cb, &info);
 	image.layout = next.layout;
+}
+
+Pass
+Context::make_pass(const Spirv &vertex, const Spirv &fragment, unsigned images, uint32_t push,
+                   VkPrimitiveTopology topology, VkFormat format)
+{
+	Pass pass;
+	std::vector<VkDescriptorSetLayoutBinding> bindings;
+
+	for (uint32_t i = 0; i < images; i++)
+		bindings.push_back({ i, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr });
+	const VkDescriptorSetLayoutCreateInfo set{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO, nullptr, 0,
+	                                           static_cast<uint32_t>(bindings.size()), bindings.data() };
+	check(m_fn.vkCreateDescriptorSetLayout(m_device, &set, nullptr, &pass.images), "the images of a pass");
+
+	const VkPushConstantRange range{ VK_SHADER_STAGE_FRAGMENT_BIT, 0, push };
+	const VkPipelineLayoutCreateInfo layout{ VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO, nullptr, 0, 1, &pass.images,
+	                                         push ? 1u : 0u, &range };
+	check(m_fn.vkCreatePipelineLayout(m_device, &layout, nullptr, &pass.layout), "the layout of a pass");
+
+	VkShaderModule modules[2];
+	const Spirv *const code[2] = { &vertex, &fragment };
+	for (unsigned i = 0; i < 2; i++) {
+		const VkShaderModuleCreateInfo info{ VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO, nullptr, 0, code[i]->bytes,
+		                                     code[i]->code };
+		check(m_fn.vkCreateShaderModule(m_device, &info, nullptr, &modules[i]), "a shader");
+	}
+	const VkPipelineShaderStageCreateInfo stages[2] = {
+		{ VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_VERTEX_BIT, modules[0],
+		  "main", nullptr },
+		{ VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_FRAGMENT_BIT, modules[1],
+		  "main", nullptr },
+	};
+	VkPipelineVertexInputStateCreateInfo input{};
+	input.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+	const VkPipelineInputAssemblyStateCreateInfo assembly{ VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+	                                                       nullptr, 0, topology, VK_FALSE };
+	const VkPipelineViewportStateCreateInfo viewport{ VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO, nullptr, 0, 1,
+	                                                  nullptr, 1, nullptr };
+	VkPipelineRasterizationStateCreateInfo raster{};
+	raster.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+	raster.polygonMode = VK_POLYGON_MODE_FILL;
+	raster.cullMode = VK_CULL_MODE_NONE;
+	raster.lineWidth = 1.0f;
+	VkPipelineMultisampleStateCreateInfo samples{};
+	samples.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+	samples.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+	VkPipelineColorBlendAttachmentState write{};
+	write.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT |
+	                       VK_COLOR_COMPONENT_A_BIT;
+	VkPipelineColorBlendStateCreateInfo blend{};
+	blend.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+	blend.attachmentCount = 1;
+	blend.pAttachments = &write;
+	const VkDynamicState states[2] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
+	const VkPipelineDynamicStateCreateInfo dynamic{ VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO, nullptr, 0, 2,
+	                                                states };
+	const VkPipelineRenderingCreateInfo rendering{ VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO, nullptr, 0, 1,
+	                                               &format, VK_FORMAT_UNDEFINED, VK_FORMAT_UNDEFINED };
+	VkGraphicsPipelineCreateInfo info{};
+	info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	info.pNext = &rendering;
+	info.stageCount = 2;
+	info.pStages = stages;
+	info.pVertexInputState = &input;
+	info.pInputAssemblyState = &assembly;
+	info.pViewportState = &viewport;
+	info.pRasterizationState = &raster;
+	info.pMultisampleState = &samples;
+	info.pColorBlendState = &blend;
+	info.pDynamicState = &dynamic;
+	info.layout = pass.layout;
+	check(m_fn.vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, 1, &info, nullptr, &pass.pipeline), "a pipeline");
+	for (const VkShaderModule module : modules)
+		m_fn.vkDestroyShaderModule(m_device, module, nullptr);
+	return pass;
+}
+
+void
+Context::destroy_pass(Pass &pass)
+{
+	m_fn.vkDestroyPipeline(m_device, pass.pipeline, nullptr);
+	m_fn.vkDestroyPipelineLayout(m_device, pass.layout, nullptr);
+	m_fn.vkDestroyDescriptorSetLayout(m_device, pass.images, nullptr);
+	pass = {};
+}
+
+void
+Context::bind_images(VkCommandBuffer cb, const Pass &pass, std::initializer_list<const Image *> images,
+                     VkSampler sampler)
+{
+	const VkDescriptorSetAllocateInfo allocate{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO, nullptr,
+	                                            m_frames[m_frame].descriptors, 1, &pass.images };
+	std::vector<VkDescriptorImageInfo> infos;
+	std::vector<VkWriteDescriptorSet> writes;
+	VkDescriptorSet set;
+
+	check(m_fn.vkAllocateDescriptorSets(m_device, &allocate, &set), "the images of a pass");
+	infos.reserve(images.size());
+	for (const Image *image : images)
+		infos.push_back({ sampler, image->view, image->layout });
+	for (uint32_t i = 0; i < infos.size(); i++)
+		writes.push_back({ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, set, i, 0, 1,
+		                   VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &infos[i], nullptr, nullptr });
+	m_fn.vkUpdateDescriptorSets(m_device, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
+	m_fn.vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, pass.pipeline);
+	m_fn.vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, pass.layout, 0, 1, &set, 0, nullptr);
+}
+
+void
+Context::begin_drawing(VkCommandBuffer cb, Image &image, const VkRect2D &area)
+{
+	const VkRenderingAttachmentInfo colour{ VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO, nullptr, image.view,
+	                                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_RESOLVE_MODE_NONE,
+	                                        VK_NULL_HANDLE, VK_IMAGE_LAYOUT_UNDEFINED, VK_ATTACHMENT_LOAD_OP_LOAD,
+	                                        VK_ATTACHMENT_STORE_OP_STORE, {} };
+	const VkRenderingInfo rendering{ VK_STRUCTURE_TYPE_RENDERING_INFO, nullptr, 0, { { 0, 0 }, { image.w, image.h } },
+	                                 1, 0, 1, &colour, nullptr, nullptr };
+	const VkViewport viewport{ static_cast<float>(area.offset.x), static_cast<float>(area.offset.y),
+	                           static_cast<float>(area.extent.width), static_cast<float>(area.extent.height), 0.0f,
+	                           1.0f };
+
+	barrier(cb, image, DRAWN_IN);
+	m_fn.vkCmdBeginRendering(cb, &rendering);
+	m_fn.vkCmdSetViewport(cb, 0, 1, &viewport);
+	m_fn.vkCmdSetScissor(cb, 0, 1, &area);
 }
 
 Image &

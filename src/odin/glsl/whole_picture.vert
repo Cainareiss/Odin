@@ -21,7 +21,14 @@
 
 /* One triangle over the whole picture, without any vertex data */
 
+/* Vulkan (-DVULKAN, MARKDOWN/106): where the shader finds what it reads */
+#ifdef VULKAN
+#define VERTEX_ID gl_VertexIndex
+#else
+#define VERTEX_ID gl_VertexID
+#endif
+
 void main (void) {
-	gl_Position = vec4 (vec2 (gl_VertexID & 1, gl_VertexID >> 1) * 4.0 - 1.0,
+	gl_Position = vec4 (vec2 (VERTEX_ID & 1, VERTEX_ID >> 1) * 4.0 - 1.0,
 	                    0.0, 1.0);
 }

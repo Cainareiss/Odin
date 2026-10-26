@@ -31,7 +31,7 @@ FP_FLAGS := -ffp-contract=off
 
 CXXFLAGS := -std=c++20 -pthread -I src -Wall -Wextra -Wpedantic -Wconversion -Wshadow $(PKG_CFLAGS) $(SDL_CFLAGS) $(OPT_FLAGS) $(FP_FLAGS) $(PGO_FLAGS) $(DEP_FLAGS)
 
-.PHONY: all install clean
+.PHONY: all install clean spirv
 
 # The front end, the board, then its chips
 OBJ := \
@@ -50,6 +50,7 @@ OBJ := \
 	src/odin/host_graphics_vk.o \
 	src/odin/vk_common.o \
 	src/odin/board_drawing_vk.o \
+	src/odin/board_pictures_vk.o \
 	src/odin/board_drawing_gl.o \
 	src/odin/board_pictures_gl.o \
 	src/odin/board_programs_gl.o \
@@ -153,6 +154,7 @@ OBJ := \
 	src/odin/renderer_programs.o \
 	src/odin/program_cache.o \
 	src/odin/glsl_texts.o \
+	src/odin/spirv.o \
 	src/odin/renderer_textures.o \
 	src/odin/renderer_times.o \
 	src/odin/renderer_layers.o \
@@ -221,6 +223,16 @@ src/odin/menu_fonts.o: src/odin/menu_fonts.S src/odin/fonts/cozette.ttf
 src/odin/glsl_texts.o: src/odin/glsl_texts.S $(wildcard src/odin/glsl/*)
 	$(CXX) -c $< -o $@ -Wa,-I,src/odin
 
+# The shaders of Vulkan: compiled to SPIR-V from the same files (glslang
+# defines VULKAN), then put in the binary the same way
+GLSLANG := glslangValidator
+SPIRV := $(patsubst %,src/odin/glsl/%.spv,whole_picture.vert blend.frag compose.vert compose.frag present.frag)
+src/odin/glsl/%.spv: src/odin/glsl/%
+	{ echo '#version 450'; cat $<; } | $(GLSLANG) -V --stdin -S $(subst .,,$(suffix $<)) -o $@
+src/odin/spirv.o: src/odin/spirv.S $(SPIRV)
+	$(CXX) -c $< -o $@ -Wa,-I,src/odin
+spirv: $(SPIRV)
+
 -include $(patsubst %.o,%.d,$(OBJ) $(IMGUI_OBJ) $(ARCHIVE_OBJ))
 
 # The commit the binary is built from, for the menu; made again with each
@@ -239,5 +251,5 @@ install:
 	@( cp -rv filters $(HOME)/.local/share/odin )
 
 clean:
-	find . -name '*.o' -o -name '*.d' | xargs rm -vf
+	find . -name '*.o' -o -name '*.d' -o -name '*.spv' | xargs rm -vf
 	rm -vf bin/*

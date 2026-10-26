@@ -21,6 +21,22 @@
 
 /* The picture shown and the 2D layers, composed */
 
+/* Vulkan (-DVULKAN, MARKDOWN/106): where the shader finds what it reads */
+#ifdef VULKAN
+layout(location = 0) out vec4 fragColor;
+layout(set = 0, binding = 0) uniform sampler2D u_front;
+layout(set = 0, binding = 1) uniform sampler2D u_back;
+layout(set = 0, binding = 2) uniform sampler2D u_layer1;
+layout(set = 0, binding = 3) uniform sampler2D u_layer2;
+layout(push_constant) uniform Compose {
+	float u_factor, u_mult_f, u_mult_b, u_mult_1, u_mult_2;
+	float u_keyed_1, u_keyed_2, u_keyed_3d, u_above_1, u_above_2;
+	int u_invert_f, u_invert_b;
+	vec4 u_clear;
+};
+
+layout(location = 0) in vec2 p_texcoords;
+#else
 out vec4 fragColor;
 uniform sampler2D u_front;
 uniform sampler2D u_back;
@@ -41,6 +57,7 @@ uniform int u_invert_b = 0;
 uniform vec4 u_clear = vec4 (0.0);
 
 in vec2 p_texcoords;
+#endif
 
 void main (void) {
 	vec2 p_texcoords_inv = vec2 (p_texcoords.s, 1 - p_texcoords.t);
