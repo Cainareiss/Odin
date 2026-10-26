@@ -43,10 +43,11 @@ of the game, the game in its hole: the part not opaque joined to its middle
 (the glass of a screen often is half so), or as the <game>_bezel.info of
 Batocera beside it says (swracer_logo.png, swracer_bezel.png). bezel in
 [display] (page Display) says what is around the game there: off, black;
-blur, the game blurred and dimmer; image, its bezel, black without one. The
-games are those of odin-games.json, by the names of their MAME sets:
-airtrix, braveff, pharrier, sgnascar, swracer and von4. The file is looked
-for in the current directory, then in $HOME, then in ~/.local/share/odin.
+blur, the light of its edges, softer and dimmer away from it; image, its
+bezel, black without one. The games are those of odin-games.json, by the
+names of their MAME sets: airtrix, braveff, pharrier, sgnascar, swracer and
+von4. The file is looked for in the current directory, then in $HOME, then
+in ~/.local/share/odin.
 The ROM directory holds each game as MAME keeps it: a directory, a zip or a
 7z of the name of the game, with the files odin-games.json lists for it. The
 files a game shares with others, in the sets of MAME hikaru (the BIOS), mie,

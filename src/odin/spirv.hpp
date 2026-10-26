@@ -39,6 +39,8 @@ ODIN_SPIRV(image_frag)
 ODIN_SPIRV(whole_window_vert)
 ODIN_SPIRV(blur_frag)
 ODIN_SPIRV(show_frag)
+ODIN_SPIRV(average_frag)
+ODIN_SPIRV(sides_frag)
 #undef ODIN_SPIRV
 
 /* A shader of spirv.S by its name */

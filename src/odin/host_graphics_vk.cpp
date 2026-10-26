@@ -47,6 +47,15 @@ namespace {
 
 constexpr VkFormat UI_FORMAT = VK_FORMAT_R8G8B8A8_UNORM;
 
+/* What the sides lit by the picture are pushed, as sides.frag has it */
+struct SidesPush {
+	float rect[4];
+	float band[2];
+	float light[2];
+	float window_h;
+};
+static_assert(sizeof(SidesPush) == 36);
+
 void
 imgui_check(VkResult result)
 {
@@ -136,15 +145,15 @@ private:
 	mutable std::unordered_map<uint32_t, VkDescriptorSet> m_ui_sets;
 	bool m_ui = false;
 
-	/* The bezel, the sides blurred, the background of the menu: their
-	 * passes (made when first needed), the samplers (linear and clamped;
-	 * the levels of an image, larger smooth or not), the picture made
-	 * smaller twice, the background at half the size blurred back and
-	 * forth (the result in the first) and whether it has its bottom line
-	 * first */
-	vk::Pass m_image_over, m_image, m_blur, m_show;
+	/* The bezel, the sides lit by the picture, the background of the
+	 * menu: their passes (made when first needed), the samplers (linear
+	 * and clamped; the levels of an image, larger smooth or not), the mean
+	 * of the picture at two sizes and the sides in a small image of the
+	 * window, the background at half the size blurred back and forth (the
+	 * result in the first) and whether it has its bottom line first */
+	vk::Pass m_image_over, m_image, m_blur, m_show, m_average, m_sides_lit;
 	VkSampler m_linear = VK_NULL_HANDLE, m_levels[2] = {};
-	vk::Image m_sides[2], m_blurred[2];
+	vk::Image m_sides[3], m_blurred[2];
 	bool m_blurred_turned = false;
 };
 
@@ -168,11 +177,11 @@ VkGraphics::~VkGraphics()
 	stop_ui();
 	for (auto &[id, image] : m_images)
 		m_card->destroy_image(image);
-	for (vk::Image *image : { &m_sides[0], &m_sides[1], &m_blurred[0], &m_blurred[1] })
+	for (vk::Image *image : { &m_sides[0], &m_sides[1], &m_sides[2], &m_blurred[0], &m_blurred[1] })
 		if (image->image)
 			m_card->destroy_image(*image);
 	if (m_image.pipeline) {
-		for (vk::Pass *pass : { &m_image_over, &m_image, &m_blur, &m_show })
+		for (vk::Pass *pass : { &m_image_over, &m_image, &m_blur, &m_show, &m_average, &m_sides_lit })
 			m_card->destroy_pass(*pass);
 		for (const VkSampler sampler : { m_linear, m_levels[0], m_levels[1] })
 			m_fn.vkDestroySampler(m_card->device(), sampler, nullptr);
@@ -448,6 +457,10 @@ VkGraphics::make_passes()
 	                           VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, UI_FORMAT);
 	m_show = m_card->make_pass(ODIN_SPIRV_OF(whole_window_vert), ODIN_SPIRV_OF(show_frag), 1, 2 * sizeof(float),
 	                           VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, UI_FORMAT);
+	m_average = m_card->make_pass(ODIN_SPIRV_OF(whole_window_vert), ODIN_SPIRV_OF(average_frag), 1,
+	                              2 * sizeof(int32_t), VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, UI_FORMAT);
+	m_sides_lit = m_card->make_pass(ODIN_SPIRV_OF(whole_window_vert), ODIN_SPIRV_OF(sides_frag), 2, sizeof(SidesPush),
+	                                VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, UI_FORMAT);
 
 	VkSamplerCreateInfo info{};
 	info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -506,43 +519,63 @@ VkGraphics::draw_blurred_sides(HostPicture picture, PictureRect rect, unsigned w
 		return;
 	make_passes();
 	const VkCommandBuffer cb = m_card->commands();
-	for (unsigned i = 0; i < 2; i++)
+	for (unsigned i = 0; i < 3; i++)
 		if (!m_sides[i].image)
 			m_sides[i] = m_card->make_image(UI_FORMAT, static_cast<unsigned>(SIDES_W[i]),
 			                                static_cast<unsigned>(SIDES_H[i]), 1,
-			                                VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-			                                        VK_IMAGE_USAGE_TRANSFER_DST_BIT);
-	vk::Image *const steps[3] = { from, &m_sides[0], &m_sides[1] };
-	const int32_t widths[3] = { static_cast<int32_t>(picture.w), SIDES_W[0], SIDES_W[1] };
-	const int32_t heights[3] = { static_cast<int32_t>(picture.h), SIDES_H[0], SIDES_H[1] };
+			                                VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+
+	/* The mean of the picture, then of that */
+	const vk::Image *const steps[2] = { from, &m_sides[0] };
+	const int32_t blocks[2][2] = { { static_cast<int32_t>(picture.w) / SIDES_W[0],
+		                         static_cast<int32_t>(picture.h) / SIDES_H[0] },
+		                       { SIDES_W[0] / SIDES_W[1], SIDES_H[0] / SIDES_H[1] } };
+	m_card->barrier(cb, *from, vk::SAMPLED);
 	for (unsigned i = 0; i < 2; i++) {
-		const VkImageBlit blit{ { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 }, { { 0, 0, 0 }, { widths[i], heights[i], 1 } },
-		                        { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 },
-		                        { { 0, 0, 0 }, { widths[i + 1], heights[i + 1], 1 } } };
-
-		m_card->barrier(cb, *steps[i], vk::COPIED_FROM);
-		m_card->barrier(cb, *steps[i + 1], vk::COPIED_TO);
-		m_fn.vkCmdBlitImage(cb, steps[i]->image, steps[i]->layout, steps[i + 1]->image, steps[i + 1]->layout, 1, &blit,
-		                    VK_FILTER_LINEAR);
+		m_card->begin_drawing(cb, m_sides[i],
+		                      { { 0, 0 }, { static_cast<uint32_t>(SIDES_W[i]), static_cast<uint32_t>(SIDES_H[i]) } });
+		m_card->bind_images(cb, m_average, { steps[i] }, m_linear);
+		m_fn.vkCmdPushConstants(cb, m_average.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(blocks[i]), blocks[i]);
+		m_fn.vkCmdDraw(cb, 3, 1, 0, 0);
+		m_card->end_drawing(cb);
+		m_card->barrier(cb, m_sides[i], vk::SAMPLED);
 	}
-	m_card->barrier(cb, m_sides[1], vk::SAMPLED);
 
+	/* The sides in the small image of the window, which counts y from
+	 * the bottom as OpenGL does */
 	const int ww = static_cast<int>(window_w), wh = static_cast<int>(window_h);
-	const double k = std::max(window_w / 4.0, window_h / 3.0);
-	const int cw = static_cast<int>(std::lround(4.0 * k)), ch = static_cast<int>(std::lround(3.0 * k));
-	const int below = (wh - ch) / 2;
 	const int px = static_cast<int>(rect.x), top = static_cast<int>(rect.y);
 	const int pr = px + static_cast<int>(rect.w), bottom = top + static_cast<int>(rect.h);
+	const float sx = static_cast<float>(SIDES_W[2]) / static_cast<float>(ww);
+	const float sy = static_cast<float>(SIDES_H[2]) / static_cast<float>(wh);
+	const float below = static_cast<float>(wh - bottom);
+	const SidesPush push{ { static_cast<float>(px) * sx, below * sy, static_cast<float>(rect.w) * sx,
+		                static_cast<float>(rect.h) * sy },
+		              { static_cast<float>(px) * sx, below * sy },
+		              { SIDES_NEAR, SIDES_FAR },
+		              static_cast<float>(SIDES_H[2]) };
+
+	m_card->begin_drawing(cb, m_sides[2],
+	                      { { 0, 0 }, { static_cast<uint32_t>(SIDES_W[2]), static_cast<uint32_t>(SIDES_H[2]) } });
+	m_card->bind_images(cb, m_sides_lit, { &m_sides[0], &m_sides[1] }, m_linear);
+	m_fn.vkCmdPushConstants(cb, m_sides_lit.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
+	m_fn.vkCmdDraw(cb, 3, 1, 0, 0);
+	m_card->end_drawing(cb);
+	m_card->barrier(cb, m_sides[2], vk::SAMPLED);
+
+	/* That image over the window (its top line first, as the window's),
+	 * only around the picture */
 	const int sides[4][4] = { { 0, 0, px, wh }, { pr, 0, ww - pr, wh }, { px, 0, pr - px, top },
 		                  { px, bottom, pr - px, wh - bottom } };
-	const VkViewport viewport{ static_cast<float>((ww - cw) / 2), static_cast<float>(wh - ch - below),
-	                           static_cast<float>(cw), static_cast<float>(ch), 0.0f, 1.0f };
+	const struct {
+		float light;
+		int32_t turn;
+	} stretch{ 1.0f, 0 };
 	vk::Image &window = m_card->window_image(window_w, window_h);
 
 	m_card->begin_drawing(cb, window, { { 0, 0 }, { window_w, window_h } });
-	m_fn.vkCmdSetViewport(cb, 0, 1, &viewport);
-	m_card->bind_images(cb, m_image, { &m_sides[1] }, m_linear);
-	m_fn.vkCmdPushConstants(cb, m_image.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(SIDES_LIGHT), &SIDES_LIGHT);
+	m_card->bind_images(cb, m_show, { &m_sides[2] }, m_linear);
+	m_fn.vkCmdPushConstants(cb, m_show.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(stretch), &stretch);
 	for (const auto &side : sides) {
 		if (side[2] <= 0 || side[3] <= 0)
 			continue;

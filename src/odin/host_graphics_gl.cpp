@@ -76,6 +76,9 @@ public:
 private:
 	/* The program of an image over a viewport, made when first drawn */
 	bool image_program();
+	/* Those of the sides lit by the picture, and the filtering sampler
+	 * they read with, made when first drawn */
+	bool sides_programs();
 	/* The two textures of the background, at the size of the half
 	 * picture; the background from that framebuffer and buffer, w by h */
 	void size_background(unsigned w, unsigned h);
@@ -86,8 +89,11 @@ private:
 	std::string m_name;
 	GLuint m_image_program = 0, m_image_vao = 0;
 	GLint m_image_light = 0;
-	/* The sides blurred: the picture made smaller twice */
-	GLuint m_sides_fb[2] = {}, m_sides_tex[2] = {};
+	/* The sides lit by the picture: its mean at two sizes, the sides in a
+	 * small image of the window, then that image over the window */
+	GLuint m_sides_fb[3] = {}, m_sides_tex[3] = {};
+	GLuint m_average = 0, m_sides = 0, m_stretch = 0, m_linear = 0;
+	GLint m_average_block = 0, m_sides_rect = 0, m_sides_band = 0, m_sides_light = 0;
 	/* The background of the menu: the picture at half its size, blurred
 	 * back and forth between two textures, the result in the first */
 	bool m_ui = false;
@@ -99,8 +105,12 @@ private:
 
 GlGraphics::~GlGraphics()
 {
-	glDeleteFramebuffers(2, m_sides_fb);
-	glDeleteTextures(2, m_sides_tex);
+	glDeleteFramebuffers(3, m_sides_fb);
+	glDeleteTextures(3, m_sides_tex);
+	glDeleteProgram(m_average);
+	glDeleteProgram(m_sides);
+	glDeleteProgram(m_stretch);
+	glDeleteSamplers(1, &m_linear);
 	glDeleteProgram(m_image_program);
 	glDeleteVertexArrays(1, &m_image_vao);
 	glDeleteFramebuffers(2, m_blur_fb.data());
@@ -168,6 +178,32 @@ GlGraphics::image_program()
 	return m_image_program != 0;
 }
 
+bool
+GlGraphics::sides_programs()
+{
+	if (!m_sides) {
+		m_average = gl::compile_program(odin_glsl_whole_window_vert, odin_glsl_average_frag);
+		m_average_block = gl::uniform(m_average, "u_block");
+		m_sides = gl::compile_program(odin_glsl_whole_window_vert, odin_glsl_sides_frag);
+		m_sides_rect = gl::uniform(m_sides, "u_rect");
+		m_sides_band = gl::uniform(m_sides, "u_band");
+		m_sides_light = gl::uniform(m_sides, "u_light");
+		glUseProgram(m_sides);
+		glUniform1i(gl::uniform(m_sides, "u_near"), 0);
+		glUniform1i(gl::uniform(m_sides, "u_far"), 1);
+		m_stretch = gl::compile_program(odin_glsl_whole_window_vert, odin_glsl_show_frag);
+		glUseProgram(m_stretch);
+		glUniform1f(gl::uniform(m_stretch, "u_light"), 1.0f);
+		glUseProgram(0);
+		glGenSamplers(1, &m_linear);
+		glSamplerParameteri(m_linear, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glSamplerParameteri(m_linear, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glSamplerParameteri(m_linear, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glSamplerParameteri(m_linear, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	}
+	return m_average != 0 && m_sides != 0 && m_stretch != 0;
+}
+
 void
 GlGraphics::draw_bezel(HostImage bezel, unsigned window_w, unsigned window_h)
 {
@@ -199,13 +235,14 @@ void
 GlGraphics::draw_blurred_sides(HostPicture picture, PictureRect rect, unsigned window_w, unsigned window_h)
 {
 	const GLint ww = static_cast<GLint>(window_w), wh = static_cast<GLint>(window_h);
+	GLint texture = 0;
 
-	if (!image_program())
+	if (!image_program() || !sides_programs())
 		return;
 	if (!m_sides_fb[0]) {
-		glGenFramebuffers(2, m_sides_fb);
-		glGenTextures(2, m_sides_tex);
-		for (unsigned i = 0; i < 2; i++) {
+		glGenFramebuffers(3, m_sides_fb);
+		glGenTextures(3, m_sides_tex);
+		for (unsigned i = 0; i < 3; i++) {
 			glBindTexture(GL_TEXTURE_2D, m_sides_tex[i]);
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, SIDES_W[i], SIDES_H[i], 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -218,32 +255,58 @@ GlGraphics::draw_blurred_sides(HostPicture picture, PictureRect rect, unsigned w
 		glBindTexture(GL_TEXTURE_2D, 0);
 	}
 
-	/* The picture smaller, twice */
-	glBindFramebuffer(GL_READ_FRAMEBUFFER, picture.id);
-	glReadBuffer(GL_COLOR_ATTACHMENT0);
-	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_sides_fb[0]);
-	glBlitFramebuffer(0, 0, static_cast<GLint>(picture.w), static_cast<GLint>(picture.h), 0, 0, SIDES_W[0],
-	                  SIDES_H[0], GL_COLOR_BUFFER_BIT, GL_LINEAR);
-	glBindFramebuffer(GL_READ_FRAMEBUFFER, m_sides_fb[0]);
-	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_sides_fb[1]);
-	glBlitFramebuffer(0, 0, SIDES_W[0], SIDES_H[0], 0, 0, SIDES_W[1], SIDES_H[1], GL_COLOR_BUFFER_BIT, GL_LINEAR);
-	glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+	/* The mean of the picture (the texture of its framebuffer), then of
+	 * that */
+	glBindFramebuffer(GL_FRAMEBUFFER, picture.id);
+	glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME,
+	                                      &texture);
+	const GLuint from[2] = { static_cast<GLuint>(texture), m_sides_tex[0] };
+	const GLint blocks[2][2] = { { static_cast<GLint>(picture.w) / SIDES_W[0], static_cast<GLint>(picture.h) / SIDES_H[0] },
+		                     { SIDES_W[0] / SIDES_W[1], SIDES_H[0] / SIDES_H[1] } };
 
-	/* Over the whole window, the side of the picture that fills it, and
-	 * drawn only around the picture */
-	const double k = std::max(window_w / 4.0, window_h / 3.0);
-	const GLsizei cw = static_cast<GLsizei>(std::lround(4.0 * k)), ch = static_cast<GLsizei>(std::lround(3.0 * k));
+	glDisable(GL_SCISSOR_TEST);
+	glUseProgram(m_average);
+	glBindVertexArray(m_image_vao);
+	glActiveTexture(GL_TEXTURE0);
+	glBindSampler(0, m_linear);
+	for (unsigned i = 0; i < 2; i++) {
+		glBindFramebuffer(GL_FRAMEBUFFER, m_sides_fb[i]);
+		glViewport(0, 0, SIDES_W[i], SIDES_H[i]);
+		glBindTexture(GL_TEXTURE_2D, from[i]);
+		glUniform2i(m_average_block, blocks[i][0], blocks[i][1]);
+		glDrawArrays(GL_TRIANGLES, 0, 3);
+	}
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	/* The sides in the small image of the window */
 	const GLint px = static_cast<GLint>(rect.x), py = wh - static_cast<GLint>(rect.y + rect.h);
+	const float sx = static_cast<float>(SIDES_W[2]) / static_cast<float>(ww);
+	const float sy = static_cast<float>(SIDES_H[2]) / static_cast<float>(wh);
+
+	glBindFramebuffer(GL_FRAMEBUFFER, m_sides_fb[2]);
+	glViewport(0, 0, SIDES_W[2], SIDES_H[2]);
+	glUseProgram(m_sides);
+	glUniform4f(m_sides_rect, static_cast<float>(px) * sx, static_cast<float>(py) * sy, static_cast<float>(rect.w) * sx,
+	            static_cast<float>(rect.h) * sy);
+	glUniform2f(m_sides_band, static_cast<float>(px) * sx, static_cast<float>(py) * sy);
+	glUniform2f(m_sides_light, SIDES_NEAR, SIDES_FAR);
+	glBindTexture(GL_TEXTURE_2D, m_sides_tex[0]);
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, m_sides_tex[1]);
+	glBindSampler(1, m_linear);
+	glDrawArrays(GL_TRIANGLES, 0, 3);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	glBindSampler(1, 0);
+	glActiveTexture(GL_TEXTURE0);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	/* That image over the window, only around the picture */
 	const GLint pr = px + static_cast<GLint>(rect.w), pt = py + static_cast<GLint>(rect.h);
 	const GLint sides[4][4] = { { 0, 0, px, wh }, { pr, 0, ww - pr, wh }, { px, 0, pr - px, py }, { px, pt, pr - px, wh - pt } };
 
-	glViewport((ww - cw) / 2, (wh - ch) / 2, cw, ch);
-	glUseProgram(m_image_program);
-	glUniform1f(m_image_light, SIDES_LIGHT);
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, m_sides_tex[1]);
-	glBindVertexArray(m_image_vao);
+	glViewport(0, 0, ww, wh);
+	glUseProgram(m_stretch);
+	glBindTexture(GL_TEXTURE_2D, m_sides_tex[2]);
 	glEnable(GL_SCISSOR_TEST);
 	for (const auto &side : sides) {
 		if (side[2] <= 0 || side[3] <= 0)
@@ -252,8 +315,9 @@ GlGraphics::draw_blurred_sides(HostPicture picture, PictureRect rect, unsigned w
 		glDrawArrays(GL_TRIANGLES, 0, 3);
 	}
 	glDisable(GL_SCISSOR_TEST);
-	glBindVertexArray(0);
 	glBindTexture(GL_TEXTURE_2D, 0);
+	glBindSampler(0, 0);
+	glBindVertexArray(0);
 	glUseProgram(0);
 }
 

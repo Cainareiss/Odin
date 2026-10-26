@@ -47,11 +47,13 @@ struct HostImage {
 	float w = 0.0f, h = 0.0f;
 };
 
-/* The sides blurred: the picture made that small in two steps (each pixel
- * of the smaller the mean of what it covers, nearly), then that much
- * dimmer */
-inline constexpr int SIDES_W[2] = { 160, 40 }, SIDES_H[2] = { 120, 30 };
-inline constexpr float SIDES_LIGHT = 0.45f;
+/* The sides lit by the picture (sides.frag): the mean of the picture at
+ * the first two sizes, each texel the mean of what it covers; the sides
+ * drawn at the third, whatever the window (they are smooth), then
+ * stretched over it; from the light near the picture to the far one at the
+ * edge of the window */
+inline constexpr int SIDES_W[3] = { 40, 20, 384 }, SIDES_H[3] = { 30, 15, 216 };
+inline constexpr float SIDES_NEAR = 0.6f, SIDES_FAR = 0.05f;
 
 /* The background of the menu: how far apart the taps of its blur are, in
  * texels of the half picture, and how many times it goes back and forth */

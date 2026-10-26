@@ -35,11 +35,12 @@ extern const char odin_glsl_whole_picture_vert[];
 extern const char odin_glsl_sort_frag[], odin_glsl_blend_frag[], odin_glsl_present_frag[];
 extern const char odin_glsl_compose_vert[], odin_glsl_compose_frag[];
 
-/* The window: an image over a viewport (the bezel, the sides blurred); one
- * triangle over the whole viewport and, for it, a blur and a picture at a
- * light (the background of the menu) */
+/* The window: an image over a viewport (the bezel); one triangle over the
+ * whole viewport and, for it, a blur and a picture at a light (the
+ * background of the menu), the mean of a picture and the sides it lights */
 extern const char odin_glsl_image_vert[], odin_glsl_image_frag[];
 extern const char odin_glsl_whole_window_vert[], odin_glsl_blur_frag[], odin_glsl_show_frag[];
+extern const char odin_glsl_average_frag[], odin_glsl_sides_frag[];
 
 }
 

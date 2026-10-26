@@ -48,6 +48,8 @@ SPIRV(image_frag, "glsl/image.frag.spv")
 SPIRV(whole_window_vert, "glsl/whole_window.vert.spv")
 SPIRV(blur_frag, "glsl/blur.frag.spv")
 SPIRV(show_frag, "glsl/show.frag.spv")
+SPIRV(average_frag, "glsl/average.frag.spv")
+SPIRV(sides_frag, "glsl/sides.frag.spv")
 
 #if !defined(_WIN32)
 	.section .note.GNU-stack, "", @progbits

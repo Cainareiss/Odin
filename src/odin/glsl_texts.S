@@ -48,6 +48,8 @@ TEXT(image_frag, "glsl/image.frag")
 TEXT(whole_window_vert, "glsl/whole_window.vert")
 TEXT(blur_frag, "glsl/blur.frag")
 TEXT(show_frag, "glsl/show.frag")
+TEXT(average_frag, "glsl/average.frag")
+TEXT(sides_frag, "glsl/sides.frag")
 
 #if !defined(_WIN32)
 	.section .note.GNU-stack, "", @progbits
