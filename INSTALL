@@ -3,8 +3,8 @@ BUILDING
 
 Odin is built on GNU/Linux with GCC (C++20), CMake 3.20+ and pkg-config.
 It needs SDL 3, GLEW, Jansson, the Vulkan headers, glslangValidator and an
-OpenGL 4.3 driver. SDL 3, GLEW, Jansson and the Vulkan headers not found by
-pkg-config are built from the submodules in 3rdparty/:
+OpenGL 4.3 driver (4.1 on macOS). SDL 3, GLEW, Jansson and the Vulkan
+headers not found by pkg-config are built from the submodules in 3rdparty/:
 
  $ git clone --recurse-submodules <repository> odin && cd odin
  $ cmake -B build

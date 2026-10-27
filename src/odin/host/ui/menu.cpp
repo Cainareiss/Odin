@@ -97,6 +97,14 @@ constexpr float LINE_ALPHA = 0.85f;
 constexpr float LINE_UNDER = 2.0f;
 constexpr float LINE_ROOM = 9.0f;
 
+/* The OpenGL Odin needs: 4.3, 4.1 on macOS (the translucent fragments
+ * peeled there) */
+#if defined(__APPLE__)
+constexpr const char *NEEDS_OPENGL = "Odin needs OpenGL 4.1";
+#else
+constexpr const char *NEEDS_OPENGL = "Odin needs OpenGL 4.3";
+#endif
+
 /* The tabs of the pages, in the order of Menu::Page */
 constexpr const char *TABS[] = { "Input", "Display", "Audio", "Hotkeys", "Outputs", "Link", "Paths", "About" };
 constexpr MenuKit::Icon TAB_ICONS[] = { MenuKit::Icon::INPUT, MenuKit::Icon::DISPLAY, MenuKit::Icon::AUDIO,
@@ -865,7 +873,7 @@ Menu::preview(const MenuKit &kit, const MenuState &state, int which, ImVec2 a, I
 		caps_centred(mid, y, "GRAPHICS CARD");
 		y += caps + kit.px(12.0f);
 		y += centred(y, name, palette.ink, big) + kit.px(10.0f);
-		centred(y, state.vulkan ? "Odin needs Vulkan 1.1" : "Odin needs OpenGL 4.3", palette.dim, note);
+		centred(y, state.vulkan ? "Odin needs Vulkan 1.1" : NEEDS_OPENGL, palette.dim, note);
 		break;
 	}
 	case PREVIEW_UPSCALE: {
