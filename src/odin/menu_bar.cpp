@@ -57,10 +57,17 @@ constexpr float MENU_CUT = 6.0f;
 constexpr float ACCENT = 2.0f;
 /* The bar lets the game show through, a little */
 constexpr float BAR_ALPHA = 0.96f;
-/* A note: from the bottom-left corner, the room around its words */
-constexpr float NOTE_MARGIN = 12.0f;
-constexpr float NOTE_WIDE = 10.0f;
-constexpr float NOTE_HIGH = 6.0f;
+/* A note: its letters the same share of the height of the window at every
+ * size (Reda, 27/10: in steps of whole pixels as the menus, it looked a
+ * third smaller at 1280 by 720 than at 1920 by 1080), never smaller than
+ * those of the menus; from the bottom-left corner, the room around its
+ * words and the cut of its corners, in letters */
+constexpr float NOTE_LETTERS = 0.024f;
+constexpr float NOTE_SMALLEST = 13.0f;
+constexpr float NOTE_MARGIN = 0.92f;
+constexpr float NOTE_WIDE = 0.77f;
+constexpr float NOTE_HIGH = 0.46f;
+constexpr float NOTE_CUT = 0.46f;
 
 constexpr const char *NAMES[] = { "FILE", "INPUT", "VIDEO", "AUDIO", "DEBUG", "ABOUT" };
 
@@ -139,15 +146,18 @@ Menu::note(const BarState &state, const MenuKit &kit)
 
 	const MenuPalette &p = kit.palette();
 	const ImVec2 room = ImGui::GetIO().DisplaySize;
-	const float margin = kit.px(NOTE_MARGIN), wide = kit.px(NOTE_WIDE), high = kit.px(NOTE_HIGH);
-	const std::string shown = MenuKit::fitted(state.note, room.x - 2.0f * (margin + wide));
-	const ImVec2 b = { margin + MenuKit::measure(shown.c_str()) + 2.0f * wide, room.y - margin };
-	const ImVec2 a = { margin, b.y - ImGui::GetTextLineHeight() - 2.0f * high };
+	const float size = std::max(NOTE_SMALLEST, std::round(room.y * NOTE_LETTERS));
+	const float margin = std::round(size * NOTE_MARGIN), wide = std::round(size * NOTE_WIDE);
+	const float high = std::round(size * NOTE_HIGH);
+	const std::string shown = MenuKit::fitted(state.note, room.x - 2.0f * (margin + wide), size);
+	const ImVec2 b = { margin + std::round(MenuKit::measure(shown.c_str(), size)) + 2.0f * wide, room.y - margin };
+	const ImVec2 a = { margin, b.y - size - 2.0f * high };
 	ImDrawList *const list = ImGui::GetForegroundDrawList();
 
-	kit.frame(list, a, b, kit.px(MENU_CUT), MenuKit::alpha(p.screen, state.note_alpha),
+	kit.frame(list, a, b, std::round(size * NOTE_CUT), MenuKit::alpha(p.screen, state.note_alpha),
 	          MenuKit::alpha(p.outline, state.note_alpha));
-	list->AddText({ a.x + wide, a.y + high }, MenuKit::alpha(p.ink, state.note_alpha), shown.c_str());
+	list->AddText(ImGui::GetFont(), size, { a.x + wide, a.y + high }, MenuKit::alpha(p.ink, state.note_alpha),
+	              shown.c_str());
 }
 
 void
