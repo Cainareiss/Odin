@@ -98,6 +98,9 @@ public:
 	 * of the game; empty when nothing is kept. */
 	CardReader *card_reader() { return m_mie->card_reader(); }
 	std::string cards_folder() const { return m_saves.none() ? std::string() : m_saves.path("cards"); }
+	/* The EPROMs of the ROM board as the bus sees them: the program of the
+	 * game, as the BOOTROM copies it from 0C000000 on */
+	std::span<const uint8_t> program() const { return m_game.section("eprom"); }
 	/* The network board and its cable: whether it has one, linked to
 	 * other Odins, the port it could not open, each end plugged in */
 	struct LinkStatus {

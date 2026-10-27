@@ -445,6 +445,10 @@ void test_reader(const char *scratch)
 	const auto bytes_of = [](const Card &card) { return Bytes(card.begin(), card.end()); };
 	const Card one = card_of('1'), two = card_of('2');
 	Card spoilt = two;
+	std::array<uint8_t, CardReader::DATA_SIZE> ones;
+
+	ones.fill('1');
+	check(CardReader::card_of(ones) == one && CardReader::whole_card(one), "207 bytes: the three tracks, their marks, their LRC");
 
 	spoilt[CardReader::TRACK_SIZE + CardReader::TRACK_DATA + 2] ^= 1;
 	std::remove(bak.c_str());

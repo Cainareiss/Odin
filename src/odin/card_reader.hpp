@@ -147,6 +147,8 @@ public:
 	static uint8_t frame_xor(std::span<const uint8_t> bytes);
 	/* A new card as the stocker has them (CMD_DISPENSE) */
 	static std::array<uint8_t, CARD_SIZE> blank_card();
+	/* The card of the 69 bytes of each track, as the program writes them */
+	static std::array<uint8_t, CARD_SIZE> card_of(std::span<const uint8_t, DATA_SIZE> data);
 	/* Each track blank or whole: its marks and its LRC as the program
 	 * writes them */
 	static bool whole_card(std::span<const uint8_t, CARD_SIZE> card);

@@ -26,6 +26,7 @@
 #include <cmath>
 #include <cstdio>
 #include <string>
+#include <string_view>
 #include <utility>
 
 #include "imgui/imgui.h"
@@ -204,6 +205,9 @@ Menu::bar(BarState &state)
 							}
 						ImGui::EndMenu();
 					}
+					if (!state.card_keys.empty() &&
+					    item("New card (Virtual-On)...", {}, false, where != Where::INSIDE && !at_slot))
+						m_new_card = true;
 					ImGui::Separator();
 				}
 				if (item("ROM folder...", {}, false, !state.roms_given))
@@ -300,10 +304,76 @@ Menu::bar(BarState &state)
 		state.bottom = bottom;
 		ImGui::EndMainMenuBar();
 	}
+	new_card(state, kit);
 	ImGui::PopStyleVar(8);
 	ImGui::PopStyleColor(static_cast<int>(std::size(colours)));
 	style.DisplaySafeAreaPadding = safe;
 	state.wants_mouse = ImGui::GetIO().WantCaptureMouse;
+}
+
+/* New card...: the pilot's name as the keyboard of the terminal of the game
+ * types it (BarState::card_keys, the space, capitals), then the card made
+ * (CARD_NEW). While it is open, the bar stays and the keys are its own. */
+void
+Menu::new_card(BarState &state, const MenuKit &kit)
+{
+	const MenuPalette &p = kit.palette();
+	/* The characters the field takes */
+	const ImGuiInputTextCallback typed = [](ImGuiInputTextCallbackData *data) {
+		const std::string &keys = *static_cast<const std::string *>(data->UserData);
+		const ImWchar c = data->EventChar;
+
+		return c == ' ' || (c < 0x80 && keys.find(static_cast<char>(c)) != std::string::npos) ? 0 : 1;
+	};
+
+	if (std::exchange(m_new_card, false)) {
+		m_card_name.fill(0);
+		ImGui::OpenPopup("New card");
+	}
+	ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Appearing, { 0.5f, 0.5f });
+	ImGui::PushStyleColor(ImGuiCol_Button, p.hover);
+	ImGui::PushStyleColor(ImGuiCol_ButtonHovered, p.outline);
+	ImGui::PushStyleColor(ImGuiCol_ButtonActive, p.accent);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { kit.px(14.0f), kit.px(12.0f) });
+	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { kit.px(8.0f), kit.px(8.0f) });
+	if (ImGui::BeginPopupModal("New card", nullptr,
+	                           ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove)) {
+		const ImVec2 a = ImGui::GetWindowPos(), b = { a.x + ImGui::GetWindowWidth(), a.y + ImGui::GetWindowHeight() };
+		std::string symbols;
+
+		for (const char c : state.card_keys)
+			if (!(c >= '0' && c <= '9') && !(c >= 'A' && c <= 'Z'))
+				symbols += c;
+		kit.frame(ImGui::GetWindowDrawList(), a, b, kit.px(MENU_CUT), p.screen, p.outline);
+		ImGui::TextUnformatted("New card (Virtual-On)");
+		ImGui::TextDisabled("The pilot's name, as the terminal of the game takes it:");
+		ImGui::TextDisabled("8 characters, A-Z, 0-9, space and %s", symbols.c_str());
+		if (ImGui::IsWindowAppearing())
+			ImGui::SetKeyboardFocusHere();
+		ImGui::SetNextItemWidth(kit.px(180.0f));
+
+		const bool entered = ImGui::InputText("##name", m_card_name.data(), m_card_name.size(),
+		                                      ImGuiInputTextFlags_CharsUppercase | ImGuiInputTextFlags_CallbackCharFilter |
+		                                              ImGuiInputTextFlags_EnterReturnsTrue,
+		                                      typed, &state.card_keys);
+		const std::string_view name(m_card_name.data());
+		const bool named = name.find_first_not_of(' ') != std::string_view::npos;
+
+		ImGui::BeginDisabled(!named);
+		if (ImGui::Button("Make card") || (entered && named)) {
+			state.card_name = name;
+			state.ask = BarState::Ask::CARD_NEW;
+			ImGui::CloseCurrentPopup();
+		}
+		ImGui::EndDisabled();
+		ImGui::SameLine();
+		if (ImGui::Button("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape, false))
+			ImGui::CloseCurrentPopup();
+		ImGui::EndPopup();
+		state.open = true;
+	}
+	ImGui::PopStyleVar(2);
+	ImGui::PopStyleColor(3);
 }
 
 } /* namespace odin */

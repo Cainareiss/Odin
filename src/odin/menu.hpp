@@ -116,12 +116,17 @@ struct BarState {
 	bool card_reader = false, card_slot_open = false;
 	int card_where = 0, card = -1;
 	std::vector<std::string> cards;
+	/* The characters of the name of a new card (empty: the game makes
+	 * none) */
+	std::string card_keys;
 	/* What was asked; the page of the settings asked (Menu::Page, -1: the
-	 * one shown last); the card chosen (CARD_CHOOSE, -1: none) */
-	enum class Ask { NONE, OPEN, CLOSE, RESET, SAVE_STATE, LOAD_STATE, CARD, CARD_CHOOSE, ROMS, BIOS, SETTINGS, FULLSCREEN,
-	                 PAUSE, QUIT };
+	 * one shown last); the card chosen (CARD_CHOOSE, -1: none); the name
+	 * of the new card (CARD_NEW) */
+	enum class Ask { NONE, OPEN, CLOSE, RESET, SAVE_STATE, LOAD_STATE, CARD, CARD_CHOOSE, CARD_NEW, ROMS, BIOS, SETTINGS,
+	                 FULLSCREEN, PAUSE, QUIT };
 	Ask ask = Ask::NONE;
 	int page = -1, card_chosen = -1;
+	std::string card_name;
 	/* The mouse is on the bar or a menu of it is open: its buttons are the
 	 * bar's, not the game's; the bottom of the bar, in points */
 	bool wants_mouse = false, open = false;
@@ -457,6 +462,7 @@ private:
 	 * start of a frame, the menus of a bar hidden since the last one
 	 * closed */
 	void bar(BarState &state);
+	void new_card(BarState &state, const MenuKit &kit);
 	void close_bar_menus();
 	/* The drawing thread: the pictures handed over to the library made
 	 * images of the card */
@@ -510,6 +516,10 @@ private:
 	bool m_cursor_shown;
 	/* The bar was hidden: its menus close at the next frame */
 	bool m_bar_hidden = false;
+	/* New card... was chosen: its window opens at the next frame; the name
+	 * typed there */
+	bool m_new_card = false;
+	std::array<char, 9> m_card_name{};
 
 	/* The drawing has started; the background (HostGraphics) there is,
 	 * and it is the window, which it covers as it was */

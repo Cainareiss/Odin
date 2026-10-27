@@ -22,10 +22,12 @@
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <string_view>
 #include <utility>
 
 #include "odin/env.hpp"
 #include "odin/user_files.hpp"
+#include "odin/von4_card.hpp"
 
 namespace odin {
 
@@ -237,8 +239,11 @@ MenuSession::MenuSession(const Options &options, Display &display, Keyboard &key
 	/* The BIOS alone, or no game: the page Input shows the first one */
 	if (state.running == state.games.size())
 		show_game(0);
-	/* The card in hand: the one of the settings (ODIN_CARD_FILE first) */
+	/* The card in hand: the one of the settings (ODIN_CARD_FILE first); new
+	 * cards, when the program of the game has what makes them */
 	if (game && board && board->card_reader()) {
+		if (const Von4Card maker(board->program()); maker.valid())
+			m_card_keys = maker.keys();
 		list_cards();
 		for (const auto &[key, value] : settings.section("players." + game->name))
 			if (key == "card" && !std::getenv("ODIN_CARD_FILE") &&
@@ -331,6 +336,69 @@ MenuSession::choose_card(int index)
 		return "The card is in the reader: take it back first";
 	keep("players." + m_game->name, "card", none ? std::nullopt : std::optional<std::string>(name));
 	return none ? "No card in hand" : "Card in hand: " + name;
+}
+
+namespace {
+
+/* A pilot's name as the name of its file: what a file of Windows cannot be
+ * named with as _, without the spaces at its ends, never the name of a
+ * device of Windows */
+std::string card_stem(const std::string &name)
+{
+	const size_t first = name.find_first_not_of(' '), last = name.find_last_not_of(' ');
+	std::string stem = first == std::string::npos ? std::string() : name.substr(first, last - first + 1);
+
+	for (char &c : stem)
+		if (std::string_view("<>:\"/\\|?*").find(c) != std::string_view::npos)
+			c = '_';
+	for (const char *device : { "CON", "PRN", "AUX", "NUL" })
+		if (stem == device)
+			stem += '_';
+	if (stem.size() == 4 && (stem.starts_with("COM") || stem.starts_with("LPT")) && stem[3] >= '0' && stem[3] <= '9')
+		stem += '_';
+	return stem;
+}
+
+} /* namespace */
+
+std::string
+MenuSession::new_card(const std::string &name)
+{
+	CardReader *const reader = m_board ? m_board->card_reader() : nullptr;
+	const Von4Card maker(m_board ? m_board->program() : std::span<const uint8_t>());
+
+	if (!reader || !maker.valid())
+		return "This game makes no new cards";
+
+	const std::optional<std::array<uint8_t, CardReader::CARD_SIZE>> card = maker.make(name);
+
+	if (!card)
+		return "Not a name the terminal of the game takes: " + name;
+
+	const std::string folder = m_board->cards_folder();
+	std::error_code error;
+
+	if (folder.empty())
+		return "No new card: no folder for the saves";
+	std::filesystem::create_directories(folder, error);
+
+	/* Under the pilot's name, the number after it of the first file that
+	 * is not there */
+	const std::string stem = card_stem(name);
+	std::string path = card_file(stem);
+
+	for (unsigned n = 2; std::filesystem::exists(path, error); n++)
+		path = card_file(stem + "-" + std::to_string(n));
+	if (!CardReader::write_card(path, *card, stderr))
+		return "No new card: " + path + " not written";
+	list_cards();
+
+	const std::string made = std::filesystem::path(path).stem().string();
+
+	if (!reader->choose(path))
+		return "New card " + made + " kept: take back the card in the reader to hold it";
+	keep("players." + m_game->name, "card", made);
+	return "New card in hand: " + made;
 }
 
 std::string
@@ -609,6 +677,7 @@ MenuSession::fill_bar(BarState &bar) const
 		bar.card_where = static_cast<int>(reader->where());
 		bar.card_slot_open = reader->shutter_open();
 		bar.cards = m_cards;
+		bar.card_keys = m_card_keys;
 		bar.card = reader->card_file().empty() || chosen == m_cards.end() ? -1 :
 		           static_cast<int>(chosen - m_cards.begin());
 	}

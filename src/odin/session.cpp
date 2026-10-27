@@ -113,6 +113,12 @@ Session::process_events()
 				m_display.bar_event(event);
 			continue;
 		}
+		/* What is typed, for a field of the bar (New card...) */
+		if ((event.type == SDL_EVENT_TEXT_INPUT || event.type == SDL_EVENT_TEXT_EDITING) && m_display.bar_shown() &&
+		    m_bar.open) {
+			m_display.bar_event(event);
+			continue;
+		}
 		if (bar_event(event))
 			continue;
 		if (m_controls.event(event)) {
@@ -302,6 +308,10 @@ Session::do_bar()
 		break;
 	case Ask::CARD_CHOOSE:
 		say(m_menus.choose_card(m_bar.card_chosen));
+		m_menus.card_news(true);
+		break;
+	case Ask::CARD_NEW:
+		say(m_menus.new_card(m_bar.card_name));
 		m_menus.card_news(true);
 		break;
 	case Ask::SETTINGS:

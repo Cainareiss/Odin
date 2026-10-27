@@ -626,6 +626,21 @@ std::array<uint8_t, CardReader::CARD_SIZE> CardReader::blank_card()
 	return card;
 }
 
+std::array<uint8_t, CardReader::CARD_SIZE> CardReader::card_of(std::span<const uint8_t, DATA_SIZE> data)
+{
+	std::array<uint8_t, CARD_SIZE> card;
+
+	for (uint32_t t = 0; t < TRACKS; t++) {
+		uint8_t *const raw = card.data() + t * TRACK_SIZE;
+
+		raw[0] = 0xFF;
+		std::copy_n(data.begin() + t * TRACK_DATA, TRACK_DATA, raw + 1);
+		raw[TRACK_DATA + 1] = 0xFF;
+		raw[TRACK_DATA + 2] = frame_xor(std::span<const uint8_t>(raw + 1, TRACK_DATA + 1));
+	}
+	return card;
+}
+
 bool CardReader::whole_card(std::span<const uint8_t, CARD_SIZE> card)
 {
 	for (uint32_t t = 0; t < TRACKS; t++) {
@@ -705,14 +720,7 @@ CardReader::Read CardReader::read_card_file(const std::string &path, std::array<
 	if (n == CARD_SIZE) {
 		std::copy_n(bytes.begin(), CARD_SIZE, card.begin());
 	} else if (n == DATA_SIZE) {
-		for (uint32_t t = 0; t < TRACKS; t++) {
-			uint8_t *const raw = card.data() + t * TRACK_SIZE;
-
-			raw[0] = 0xFF;
-			std::copy_n(bytes.begin() + t * TRACK_DATA, TRACK_DATA, raw + 1);
-			raw[TRACK_DATA + 1] = 0xFF;
-			raw[TRACK_DATA + 2] = frame_xor(std::span<const uint8_t>(raw + 1, TRACK_DATA + 1));
-		}
+		card = card_of(std::span<const uint8_t, DATA_SIZE>(bytes.data(), DATA_SIZE));
 	} else {
 		if (m_log)
 			std::fputs(std::format("card: file '{}' holds {} bytes, {} or {} expected\n", path, n, CARD_SIZE,

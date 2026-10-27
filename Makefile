@@ -132,6 +132,7 @@ OBJ := \
 	src/odin/m68000_ops.o \
 	src/odin/tlcs90.o \
 	src/odin/card_reader.o \
+	src/odin/von4_card.o \
 	src/odin/sound_board.o \
 	src/odin/aica.o \
 	src/odin/aica_dsp.o \

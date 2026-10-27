@@ -127,6 +127,10 @@ public:
 	 * card of the list in hand (-1: none). What the bar says of it. */
 	std::string card_in_out();
 	std::string choose_card(int index);
+	/* A new card of a pilot of that name, as the terminal of the game
+	 * makes it (Von4Card), kept under the name in the folder of the cards
+	 * and put in hand */
+	std::string new_card(const std::string &name);
 	/* What the reader did with a card since the last call, the game's
 	 * doing, to be said: the player's card taken in, a card out at the
 	 * slot; empty: nothing new. `quiet`: only seen (the player's own
@@ -250,6 +254,9 @@ private:
 	std::string m_states;
 	std::vector<std::string> m_cards;
 	std::optional<CardReader::Where> m_card_seen;
+	/* The characters of a new card's name (Von4Card::keys); empty: the
+	 * game makes none */
+	std::string m_card_keys;
 	FolderDialog m_dialog;
 	bool m_menu_opened = false, m_closing = false, m_leaving = false;
 	/* A size of the window from the hands of the user, not kept yet */
