@@ -22,7 +22,7 @@
 /* The translucent fragments of a viewport, see renderer_translucent.cpp:
  * u_heads has the last one of each pixel and next the one before it, as
  * indices plus one; 0 ends a list. With Vulkan, in the set LISTS_SET of
- * the shader that comes after (board_translucent_vk.cpp). */
+ * the shader that comes after (translucent_vk.cpp). */
 
 struct node_t {
 	vec4 color;

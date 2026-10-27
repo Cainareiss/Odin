@@ -16,16 +16,16 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* The translucent fragments of a view with Vulkan (board_drawing.hpp; the
- * rules they follow: renderer_translucent.cpp), as board_translucent_gl.cpp
+/* The translucent fragments of a view with Vulkan (drawing.hpp; the
+ * rules they follow: renderer_translucent.cpp), as translucent_gl.cpp
  * does it: a fragment goes to the list of its pixel, in a storage buffer,
  * then every pixel blends its list (glsl/sort.frag). The copies and the
  * barriers between those steps stay out of the rendering of the scene,
- * which is closed and opened again around them (board_scene_vk.cpp). The
+ * which is closed and opened again around them (scene_vk.cpp). The
  * meshes read gl_PrimitiveID: a card without geometry shaders (MoltenVK)
  * draws no translucent fragments. */
 
-#include "odin/host/renderer/hikaru/vk/board_drawing_vk.hpp"
+#include "odin/host/renderer/hikaru/vk/drawing_vk.hpp"
 #include "odin/host/gfx/spirv.hpp"
 
 #include <algorithm>

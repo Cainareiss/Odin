@@ -49,15 +49,15 @@ OBJ := \
 	src/odin/host/gfx/host_graphics_gl.o \
 	src/odin/host/gfx/host_graphics_vk.o \
 	src/odin/host/gfx/vk_common.o \
-	src/odin/host/renderer/hikaru/vk/board_drawing_vk.o \
-	src/odin/host/renderer/hikaru/vk/board_pictures_vk.o \
-	src/odin/host/renderer/hikaru/vk/board_scene_vk.o \
-	src/odin/host/renderer/hikaru/vk/board_translucent_vk.o \
-	src/odin/host/renderer/hikaru/gl/board_drawing_gl.o \
-	src/odin/host/renderer/hikaru/gl/board_pictures_gl.o \
-	src/odin/host/renderer/hikaru/gl/board_programs_gl.o \
-	src/odin/host/renderer/hikaru/gl/board_scene_gl.o \
-	src/odin/host/renderer/hikaru/gl/board_translucent_gl.o \
+	src/odin/host/renderer/hikaru/vk/drawing_vk.o \
+	src/odin/host/renderer/hikaru/vk/pictures_vk.o \
+	src/odin/host/renderer/hikaru/vk/scene_vk.o \
+	src/odin/host/renderer/hikaru/vk/translucent_vk.o \
+	src/odin/host/renderer/hikaru/gl/drawing_gl.o \
+	src/odin/host/renderer/hikaru/gl/pictures_gl.o \
+	src/odin/host/renderer/hikaru/gl/programs_gl.o \
+	src/odin/host/renderer/hikaru/gl/scene_gl.o \
+	src/odin/host/renderer/hikaru/gl/translucent_gl.o \
 	src/odin/host/video/x11_window.o \
 	src/odin/host/ui/menu.o \
 	src/odin/host/ui/menu_input.o \
@@ -236,7 +236,7 @@ SPIRV := $(patsubst %,src/odin/host/gfx/glsl/%.spv,whole_picture.vert blend.frag
 src/odin/host/gfx/glsl/%.spv: src/odin/host/gfx/glsl/%
 	{ echo '#version 450'; cat $<; } | $(GLSLANG) -V --stdin -S $(subst .,,$(suffix $<)) -o $@
 # The shaders of the translucent fragments: their lists first, in the set
-# LISTS_SET (board_translucent_vk.cpp); the meshes that collect them apart
+# LISTS_SET (translucent_vk.cpp); the meshes that collect them apart
 src/odin/host/gfx/glsl/sort.frag.spv: src/odin/host/gfx/glsl/sort.frag src/odin/host/gfx/glsl/fragment_lists.glsl
 	{ echo '#version 450'; echo '#define LISTS_SET 0'; cat src/odin/host/gfx/glsl/fragment_lists.glsl $<; } | \
 		$(GLSLANG) -V --stdin -S frag -o $@

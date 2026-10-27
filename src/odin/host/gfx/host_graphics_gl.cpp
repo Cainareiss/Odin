@@ -32,7 +32,7 @@
 
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_opengl3.h"
-#include "odin/host/renderer/hikaru/board_drawing.hpp"
+#include "odin/host/renderer/hikaru/drawing.hpp"
 #include "odin/host/gfx/gl_common.hpp"
 #include "odin/host/gfx/glsl_texts.hpp"
 

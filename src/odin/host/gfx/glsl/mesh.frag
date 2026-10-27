@@ -20,12 +20,12 @@
  */
 
 /* A mesh of the display list, after fragment_lists.glsl and the defines of
- * its variant (board_programs_gl.cpp): each define is a constant the
+ * its variant (programs_gl.cpp): each define is a constant the
  * branches below test, which the compiler folds. With Vulkan, the variant
  * is in specialization constants instead, all but COLLECT: gl_PrimitiveID
  * needs geometry shaders of the card even in code never run; the data of
  * the list in buffers, the numbers of the mesh's in push constants
- * (board_scene_vk.cpp). */
+ * (scene_vk.cpp). */
 
 struct light_t {
 	vec3 position;

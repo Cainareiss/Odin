@@ -20,7 +20,7 @@
 #define ODIN_VK_COMMON_HPP
 
 /* What the window (host_graphics_vk.cpp) and the board drawing
- * (board_drawing_vk.cpp) share with Vulkan: its functions, loaded through
+ * (drawing_vk.cpp) share with Vulkan: its functions, loaded through
  * SDL (Odin is not linked to the Vulkan loader); the instance, the card and
  * its queue; memory, images and buffers; the commands of each frame, sent
  * and waited for; the image of the window everything is drawn into before

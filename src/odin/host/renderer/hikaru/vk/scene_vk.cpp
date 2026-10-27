@@ -16,13 +16,13 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* The meshes of a display list with Vulkan (board_drawing.hpp), as
- * board_scene_gl.cpp draws them with OpenGL: the same rules of the board
+/* The meshes of a display list with Vulkan (drawing.hpp), as
+ * scene_gl.cpp draws them with OpenGL: the same rules of the board
  * (hikaru_draw.hpp), the data of the list in buffers the mesh shaders read
  * (glsl/mesh.*), a pipeline for each variant and blend, kept on disk by
  * Vulkan's cache of pipelines (MARKDOWN/106 § 12). */
 
-#include "odin/host/renderer/hikaru/vk/board_drawing_vk.hpp"
+#include "odin/host/renderer/hikaru/vk/drawing_vk.hpp"
 #include "odin/host/renderer/hikaru/depth_bias.hpp"
 #include "odin/host/gfx/program_cache.hpp"
 #include "odin/common/repeats.hpp"
@@ -91,7 +91,7 @@ struct Constants {
 constexpr uint32_t NUM_CONSTANTS = 22;
 static_assert(sizeof(Constants) == NUM_CONSTANTS * sizeof(int32_t));
 
-/* The blend factors of each MeshBlend, as board_scene_gl.cpp has them:
+/* The blend factors of each MeshBlend, as scene_gl.cpp has them:
  * colour source and destination, alpha source and destination */
 constexpr VkBlendFactor BLENDS[6][4] = {
 	/* REPLACE */     { VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ZERO, VK_BLEND_FACTOR_ZERO, VK_BLEND_FACTOR_ZERO },
@@ -349,7 +349,7 @@ VkBoardDrawing::pipeline(const MeshVariant &variant, MeshBlend blend)
 	};
 	const uint32_t num_stages = variant.native ? 3 : 2;
 
-	/* The locations of the mesh vertex shader, as board_scene_gl.cpp
+	/* The locations of the mesh vertex shader, as scene_gl.cpp
 	 * gives them: three bytes of a colour read as four, the shader
 	 * taking three (Vulkan does not ask every card for three bytes) */
 	const VkVertexInputBindingDescription binding{ 0, sizeof(odin_vertex_body_t), VK_VERTEX_INPUT_RATE_VERTEX };
@@ -454,7 +454,7 @@ VkBoardDrawing::prepare_program(uint64_t key)
 
 /* The vertices and the indices of the list, its modelviews and the one of
  * none after them; room for its views and lightsets, written when first
- * used; the scene and its depth emptied, as board_scene_gl.cpp does: an
+ * used; the scene and its depth emptied, as scene_gl.cpp does: an
  * empty 3D buffer lets everything through, the clear color comes in on the
  * screen (compose). */
 void
@@ -585,7 +585,7 @@ VkBoardDrawing::end_scene()
 }
 
 /* What a view gives the shaders: its projection (hikaru_draw.hpp), its depth
- * queue, its fog and its ambient light. The checks of board_scene_gl.cpp,
+ * queue, its fog and its ambient light. The checks of scene_gl.cpp,
  * once a list. */
 void
 VkBoardDrawing::write_view(unsigned index)
@@ -609,7 +609,7 @@ VkBoardDrawing::write_view(unsigned index)
 	std::memcpy(m_views.bytes + sizeof(ViewData) * index, &view, sizeof(view));
 }
 
-/* The lights of a lightset that are on, as board_scene_gl.cpp gives them */
+/* The lights of a lightset that are on, as scene_gl.cpp gives them */
 void
 VkBoardDrawing::write_lightset(unsigned index)
 {
@@ -725,7 +725,7 @@ VkBoardDrawing::draw_mesh(const odin_mesh_t &mesh, const MeshDraw &draw)
 		write_lightset(mesh.ls_index);
 
 	/* The 101 moves the mesh by a fraction of its own depth
-	 * (board_scene_gl.cpp, depth_bias.hpp). */
+	 * (scene_gl.cpp, depth_bias.hpp). */
 	const int bias = m_pass.depth_bias ? static_cast<int>(mesh.depth_bias) : 0;
 	m_push.view = mesh.vp_index;
 	m_push.lightset = variant.has_lighting ? mesh.ls_index : 0;

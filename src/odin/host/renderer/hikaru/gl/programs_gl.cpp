@@ -19,9 +19,9 @@
  * along with Valkyrie.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* The mesh programs with OpenGL (board_programs_gl.hpp). */
+/* The mesh programs with OpenGL (programs_gl.hpp). */
 
-#include "odin/host/renderer/hikaru/gl/board_programs_gl.hpp"
+#include "odin/host/renderer/hikaru/gl/programs_gl.hpp"
 #include "odin/host/gfx/program_cache.hpp"
 #include "odin/host/gfx/gl_common.hpp"
 #include "odin/host/gfx/glsl_texts.hpp"

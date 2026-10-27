@@ -16,10 +16,10 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* The board drawing with Vulkan (board_drawing.hpp): made, its textures and
+/* The board drawing with Vulkan (drawing.hpp): made, its textures and
  * their samplers. */
 
-#include "odin/host/renderer/hikaru/vk/board_drawing_vk.hpp"
+#include "odin/host/renderer/hikaru/vk/drawing_vk.hpp"
 
 #include <algorithm>
 #include <cstring>

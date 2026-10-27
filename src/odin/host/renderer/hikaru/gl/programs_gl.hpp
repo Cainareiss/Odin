@@ -22,7 +22,7 @@
 #ifndef ODIN_BOARD_PROGRAMS_GL_HPP
 #define ODIN_BOARD_PROGRAMS_GL_HPP
 
-/* The mesh programs of the board drawing with OpenGL (board_drawing_gl.hpp). */
+/* The mesh programs of the board drawing with OpenGL (drawing_gl.hpp). */
 
 #include <cstdint>
 #include <cstdio>

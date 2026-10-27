@@ -37,7 +37,7 @@
 
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_vulkan.h"
-#include "odin/host/renderer/hikaru/board_drawing.hpp"
+#include "odin/host/renderer/hikaru/drawing.hpp"
 #include "odin/host/gfx/spirv.hpp"
 #include "odin/host/gfx/vk_common.hpp"
 

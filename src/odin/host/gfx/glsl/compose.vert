@@ -24,7 +24,7 @@
 /* Vulkan (-DVULKAN, MARKDOWN/106): where the shader finds what it reads */
 #ifdef VULKAN
 /* The four corners of the window, as OpenGL has them in its vertex array
- * (board_pictures_gl.cpp, build_quad), drawn as a strip */
+ * (pictures_gl.cpp, build_quad), drawn as a strip */
 const vec3 CORNERS[4] = vec3[] (vec3 (1.0, 0.0, 0.0), vec3 (0.0, 0.0, 0.0), vec3 (1.0, 1.0, 0.0), vec3 (0.0, 1.0, 0.0));
 const vec2 TEXCOORDS[4] = vec2[] (vec2 (1.0, 1.0), vec2 (0.0, 1.0), vec2 (1.0, 0.0), vec2 (0.0, 0.0));
 #define i_position CORNERS[gl_VertexIndex]

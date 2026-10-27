@@ -20,9 +20,9 @@
  */
 
 /* A mesh of the display list, after the defines of its variant
- * (board_programs_gl.cpp). With Vulkan, the views and the modelviews of the
+ * (programs_gl.cpp). With Vulkan, the views and the modelviews of the
  * list are in buffers, the numbers of the mesh's in push constants
- * (board_scene_vk.cpp). */
+ * (scene_vk.cpp). */
 
 #ifdef VULKAN
 struct view_t {

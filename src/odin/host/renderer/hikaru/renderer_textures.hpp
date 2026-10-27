@@ -29,7 +29,7 @@
 #include <vector>
 
 #include "odin/machine/chips/antarctic/antarctic_list.hpp"
-#include "odin/host/renderer/hikaru/board_drawing.hpp"
+#include "odin/host/renderer/hikaru/drawing.hpp"
 
 namespace odin {
 

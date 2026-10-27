@@ -16,12 +16,12 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* The pictures of the board drawing with Vulkan (board_drawing.hpp) and
- * what goes from one to the next, as board_pictures_gl.cpp does it with
+/* The pictures of the board drawing with Vulkan (drawing.hpp) and
+ * what goes from one to the next, as pictures_gl.cpp does it with
  * OpenGL: the buffers the 3D is drawn in, the pictures kept from one frame
  * to the next, the picture of the frame and the window. */
 
-#include "odin/host/renderer/hikaru/vk/board_drawing_vk.hpp"
+#include "odin/host/renderer/hikaru/vk/drawing_vk.hpp"
 
 #include <cstring>
 #include <vector>
@@ -199,7 +199,7 @@ VkBoardDrawing::scene_to_pipe(unsigned slot)
 
 /* The blender output is what the 3D buffer of the list keeps: the other one
  * then holds every earlier frame, fading by the rate at each frame (the
- * motion blur of the cabinets, board_pictures_gl.cpp). */
+ * motion blur of the cabinets, pictures_gl.cpp). */
 void
 VkBoardDrawing::blend_scene_to_pipe(unsigned slot, unsigned buffer, uint32_t rate)
 {
@@ -259,7 +259,7 @@ VkBoardDrawing::set_layer(unsigned i, LayerTexels texels, const void *pixels)
 	m_fn.vkCmdCopyBufferToImage(cb, in.buffer, m_layers[i].image, m_layers[i].layout, 1, &region);
 }
 
-/* As board_pictures_gl.cpp: the two blender inputs, then the 2D layers */
+/* As pictures_gl.cpp: the two blender inputs, then the 2D layers */
 void
 VkBoardDrawing::compose(const Compose &c, unsigned shown, const bool layers[2])
 {
@@ -395,7 +395,7 @@ VkBoardDrawing::draw_loading(std::span<const LoadingRect> rects, unsigned window
 	m_card.end_drawing(cb);
 }
 
-/* As board_pictures_gl.cpp: the first pixel of each scale x scale, the
+/* As pictures_gl.cpp: the first pixel of each scale x scale, the
  * bottom line first */
 void
 VkBoardDrawing::read_kept(std::span<uint8_t> pictures)

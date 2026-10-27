@@ -32,7 +32,7 @@
 #include <vector>
 
 #include "odin/machine/chips/antarctic/antarctic_list.hpp"
-#include "odin/host/renderer/hikaru/board_drawing.hpp"
+#include "odin/host/renderer/hikaru/drawing.hpp"
 #include "odin/host/video/display_options.hpp"
 #include "odin/machine/chips/eurasia/eurasia_layers.hpp"
 #include "odin/machine/boards/hikaru/hikaru_draw.hpp"
@@ -47,7 +47,7 @@ namespace odin {
 class HikaruGpu;
 
 /* Draws what the graphics chips of the Hikaru hand over, through the card of
- * the host (BoardDrawing, board_drawing.hpp): it stands for the chips that
+ * the host (BoardDrawing, drawing.hpp): it stands for the chips that
  * plot the polygons (see hikaru_gpu.hpp), and keeps their rules.
  *
  * The command processor leaves the display list of a frame, the display chip

@@ -1024,11 +1024,11 @@ layers are in renderer.cpp, the passes of a list in renderer_scene.cpp, the
 translucent fragments in renderer_translucent.cpp, the variants of the
 programs in renderer_programs.cpp, the textures in renderer_textures.cpp, the
 2D layers in renderer_layers.cpp; what the graphics card of the host does for
-them is behind BoardDrawing (board_drawing.hpp; with OpenGL the board_*_gl.cpp
+them is behind BoardDrawing (drawing.hpp; with OpenGL the *_gl.cpp
 files; the shaders in src/odin/host/gfx/glsl). Vulkan ([display] api = vulkan,
 MARKDOWN/106 of the notes): vk_common.cpp (the card, its memory and
 commands), host_graphics_vk.cpp (the window and the menu) and the
-board_*_vk.cpp files (the pictures, the textures, the meshes and their
+*_vk.cpp files (the pictures, the textures, the meshes and their
 pipelines, kept in ~/.cache/odin/programs/vulkan-*.bin, the translucent
 fragments, the stamps of ODIN_DRAW_TIMES) draw the games, the bezel and the
 blurred backgrounds; picture_filter_vk.cpp the filter of the picture, from

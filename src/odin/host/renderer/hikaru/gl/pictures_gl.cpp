@@ -19,12 +19,12 @@
  * along with Valkyrie.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* The pictures of the board drawing with OpenGL (board_drawing.hpp) and
+/* The pictures of the board drawing with OpenGL (drawing.hpp) and
  * what goes from one to the next: the buffers the 3D is drawn in, the
  * pictures kept from one frame to the next, the picture of the frame and
  * the window. */
 
-#include "odin/host/renderer/hikaru/gl/board_drawing_gl.hpp"
+#include "odin/host/renderer/hikaru/gl/drawing_gl.hpp"
 
 #include <cstddef>
 #include <cstring>

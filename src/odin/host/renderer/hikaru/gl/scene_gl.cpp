@@ -19,10 +19,10 @@
  * along with Valkyrie.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* The meshes of a display list with OpenGL (board_drawing.hpp): the rules of
+/* The meshes of a display list with OpenGL (drawing.hpp): the rules of
  * the board (hikaru_draw.hpp) put into the uniforms of the mesh programs. */
 
-#include "odin/host/renderer/hikaru/gl/board_drawing_gl.hpp"
+#include "odin/host/renderer/hikaru/gl/drawing_gl.hpp"
 #include "odin/host/renderer/hikaru/depth_bias.hpp"
 #include "odin/host/gfx/gl_common.hpp"
 #include "odin/common/repeats.hpp"

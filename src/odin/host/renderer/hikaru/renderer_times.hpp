@@ -24,7 +24,7 @@
 #include <cstdint>
 #include <vector>
 
-#include "odin/host/renderer/hikaru/board_drawing.hpp"
+#include "odin/host/renderer/hikaru/drawing.hpp"
 
 namespace odin {
 

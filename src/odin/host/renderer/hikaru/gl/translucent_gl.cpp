@@ -19,12 +19,12 @@
  * along with Valkyrie.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* The translucent fragments of a view with OpenGL (board_drawing.hpp; the
+/* The translucent fragments of a view with OpenGL (drawing.hpp; the
  * rules they follow: renderer_translucent.cpp). A fragment goes to the list
  * of its pixel, in a storage buffer, then every pixel blends its list
  * (glsl/sort.frag). */
 
-#include "odin/host/renderer/hikaru/gl/board_drawing_gl.hpp"
+#include "odin/host/renderer/hikaru/gl/drawing_gl.hpp"
 #include "odin/host/gfx/gl_common.hpp"
 #include "odin/host/gfx/glsl_texts.hpp"
 

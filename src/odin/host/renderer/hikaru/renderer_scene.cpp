@@ -21,7 +21,7 @@
 
 /* A display list drawn: its viewports, its polygon types, its meshes, by
  * the rules of the board (hikaru_draw.hpp); the card draws them
- * (board_drawing.hpp). */
+ * (drawing.hpp). */
 
 #include "odin/host/renderer/hikaru/renderer.hpp"
 #include "odin/common/repeats.hpp"

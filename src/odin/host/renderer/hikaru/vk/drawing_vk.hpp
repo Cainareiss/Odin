@@ -19,11 +19,11 @@
 #ifndef ODIN_BOARD_DRAWING_VK_HPP
 #define ODIN_BOARD_DRAWING_VK_HPP
 
-/* The board drawing with Vulkan (board_drawing.hpp), for its own files
- * only: board_drawing_vk.cpp (made; the textures and their samplers),
- * board_pictures_vk.cpp (the pictures and what goes from one to the next),
- * board_scene_vk.cpp (the meshes of a list, their pipelines),
- * board_translucent_vk.cpp (their translucent fragments). The pictures
+/* The board drawing with Vulkan (drawing.hpp), for its own files
+ * only: drawing_vk.cpp (made; the textures and their samplers),
+ * pictures_vk.cpp (the pictures and what goes from one to the next),
+ * scene_vk.cpp (the meshes of a list, their pipelines),
+ * translucent_vk.cpp (their translucent fragments). The pictures
  * keep the lines in the order OpenGL gives them, the bottom one first:
  * drawn with the same coordinates, they hold the same bytes (MARKDOWN/106
  * § 2.2). */
@@ -35,7 +35,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "odin/host/renderer/hikaru/board_drawing.hpp"
+#include "odin/host/renderer/hikaru/drawing.hpp"
 #include "odin/host/video/picture_filter_vk.hpp"
 #include "odin/host/renderer/hikaru/renderer_programs.hpp"
 #include "odin/host/gfx/vk_common.hpp"
@@ -156,14 +156,14 @@ private:
 	void copy_picture(VkCommandBuffer cb, vk::Image &from, vk::Image &to);
 	void clear_window(unsigned window_w, unsigned window_h);
 
-	/* board_drawing_vk.cpp */
+	/* drawing_vk.cpp */
 	void make_sets(KeptSets &sets, VkDescriptorType type, VkShaderStageFlags stages);
 	KeptSet keep_set(KeptSets &sets);
 	void free_set(const KeptSet &set);
 	void destroy_sets(KeptSets &sets);
 	KeptSet image_set(const vk::Image &image);
 
-	/* board_scene_vk.cpp */
+	/* scene_vk.cpp */
 	void build_meshes();
 	void destroy_meshes();
 	void open_scene(bool clear);
@@ -177,7 +177,7 @@ private:
 	void set_view(const odin_mesh_t &mesh);
 	void bind_texture(const MeshDraw &draw);
 
-	/* board_translucent_vk.cpp */
+	/* translucent_vk.cpp */
 	void build_lists();
 	void destroy_lists();
 	void build_list_pictures();
@@ -260,7 +260,7 @@ private:
 		uint32_t order;		/* triangles sent so far, while collecting */
 	} m_pass{};
 
-	/* The translucent fragments, see board_translucent_vk.cpp: being
+	/* The translucent fragments, see translucent_vk.cpp: being
 	 * collected, and their set; the depth the other types left, the last
 	 * fragment of each pixel, the colour under them; the fragments, the
 	 * count of each view (each `m_count_stride` bytes), the counts the

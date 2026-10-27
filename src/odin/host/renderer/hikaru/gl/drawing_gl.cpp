@@ -17,9 +17,9 @@
  */
 
 /* What the graphics card of the host does for the renderer, with OpenGL
- * (board_drawing.hpp): made, its textures, the stamps of its clock. */
+ * (drawing.hpp): made, its textures, the stamps of its clock. */
 
-#include "odin/host/renderer/hikaru/gl/board_drawing_gl.hpp"
+#include "odin/host/renderer/hikaru/gl/drawing_gl.hpp"
 
 #include <vector>
 

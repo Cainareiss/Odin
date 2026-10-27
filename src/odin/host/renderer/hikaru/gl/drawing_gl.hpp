@@ -19,11 +19,11 @@
 #ifndef ODIN_BOARD_DRAWING_GL_HPP
 #define ODIN_BOARD_DRAWING_GL_HPP
 
-/* The board drawing with OpenGL (board_drawing.hpp), for its own files
- * only: board_drawing_gl.cpp (the textures), board_pictures_gl.cpp (the
- * pictures and what goes from one to the next), board_scene_gl.cpp (the
- * meshes of a list), board_translucent_gl.cpp (its translucent fragments),
- * board_programs_gl.cpp (the programs of the meshes). */
+/* The board drawing with OpenGL (drawing.hpp), for its own files
+ * only: drawing_gl.cpp (the textures), pictures_gl.cpp (the
+ * pictures and what goes from one to the next), scene_gl.cpp (the
+ * meshes of a list), translucent_gl.cpp (its translucent fragments),
+ * programs_gl.cpp (the programs of the meshes). */
 
 #include <memory>
 #include <optional>
@@ -32,8 +32,8 @@
 
 #include <GL/glew.h>
 
-#include "odin/host/renderer/hikaru/board_drawing.hpp"
-#include "odin/host/renderer/hikaru/gl/board_programs_gl.hpp"
+#include "odin/host/renderer/hikaru/drawing.hpp"
+#include "odin/host/renderer/hikaru/gl/programs_gl.hpp"
 #include "odin/machine/boards/hikaru/hikaru_draw.hpp"
 #include "odin/host/video/picture_filter_gl.hpp"
 
@@ -116,7 +116,7 @@ private:
 	void set_2d_state();
 	void show_picture(PictureRect rect, unsigned window_w, unsigned window_h);
 
-	/* board_scene_gl.cpp */
+	/* scene_gl.cpp */
 	void log(const char *fmt, ...) const __attribute__((format(printf, 2, 3)));
 	void upload_vertices(const odin_vertex_body_t *vertices, uint32_t num,
 	                     const uint32_t *indices, uint32_t num_indices);
@@ -128,7 +128,7 @@ private:
 	void draw_instance(const odin_mesh_t &mesh, unsigned i);
 	void set_blend(MeshBlend blend);
 
-	/* board_translucent_gl.cpp */
+	/* translucent_gl.cpp */
 	void build_list_pictures();
 	void destroy_list_pictures();
 	void build_lists();
@@ -198,7 +198,7 @@ private:
 		uint32_t order;		/* triangles sent so far, while collecting */
 	} m_pass{};
 
-	/* The translucent fragments, see board_translucent_gl.cpp */
+	/* The translucent fragments, see translucent_gl.cpp */
 	GLuint m_solid_depth;		/* the depth the other types left */
 	struct {
 		GLuint program;		/* blends them */

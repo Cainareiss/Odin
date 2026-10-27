@@ -67,7 +67,7 @@ inline constexpr unsigned BLUR_ROUNDS = 2;
  * the menu. host_graphics_gl.cpp does it with OpenGL, host_graphics_vk.cpp
  * with Vulkan. The pictures of the
  * board are drawn by the renderer (renderer.hpp) through the BoardDrawing
- * the card makes for it (board_drawing.hpp); it hands its picture over as
+ * the card makes for it (drawing.hpp); it hands its picture over as
  * a HostPicture.
  *
  * Everything runs on the thread that has taken the card, the drawing
