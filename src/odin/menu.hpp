@@ -90,10 +90,11 @@ struct LibraryState {
  * they show and what was asked there; the thread of the board keeps it
  * and does what was asked (session.cpp, library.cpp). */
 struct BarState {
-	/* At the right: the game and its frames a second, or a word that says
-	 * what went wrong */
+	/* At the right: the game and its frames a second. A note of Odin (what
+	 * it did, what went wrong) in the bottom-left corner, bar or not, and
+	 * how much of it shows (note_alpha: it fades out) */
 	std::string title, note;
-	float fps = 0.0f;
+	float fps = 0.0f, note_alpha = 1.0f;
 	/* Shown checked or chosen, and changed there: the whole display, the
 	 * frames a second in the title, the game paused, its sound kept in the
 	 * background, the board saying each access (at the next launch), what
@@ -420,6 +421,9 @@ public:
 	/* The bar alone over the game (menu_bar.cpp), opened and closed as the
 	 * menu is: built from the state; hidden, its menus closed */
 	void build_bar(BarState &state);
+	/* The note of the bar alone, the bar hidden: through none of the
+	 * backend of SDL, the pointer and the keys stay the game's */
+	void build_note(BarState &state);
 	void hide_bar();
 	/* The library, over the whole window under the bar (menu_library.cpp) */
 	void build_library(LibraryState &state, BarState &bar);
@@ -463,6 +467,7 @@ private:
 	 * closed */
 	void bar(BarState &state);
 	void new_card(BarState &state, const MenuKit &kit);
+	void note(const BarState &state, const MenuKit &kit);
 	void close_bar_menus();
 	/* The drawing thread: the pictures handed over to the library made
 	 * images of the card */
@@ -520,6 +525,8 @@ private:
 	 * typed there */
 	bool m_new_card = false;
 	std::array<char, 9> m_card_name{};
+	/* When the last note alone was built, in nanoseconds (its time step) */
+	Uint64 m_note_time = 0;
 
 	/* The drawing has started; the background (HostGraphics) there is,
 	 * and it is the window, which it covers as it was */

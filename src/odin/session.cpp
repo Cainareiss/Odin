@@ -278,6 +278,7 @@ Session::fill_bar()
 	m_bar.fps = m_display.fps();
 	m_bar.paused = m_paused;
 	m_bar.game = true;
+	m_bar.note_alpha = note_alpha(m_note_until);
 	if (SDL_GetTicks() >= m_note_until)
 		m_bar.note.clear();
 }
@@ -334,8 +335,6 @@ Session::say(const std::string &note)
 {
 	m_bar.note = note;
 	m_note_until = SDL_GetTicks() + NOTE_MS;
-	m_bar_until = std::max(m_bar_until, m_note_until);
-	follow_bar();
 }
 
 void
@@ -439,11 +438,12 @@ Session::frames()
 		follow_bar();
 		if (m_paused) {
 			/* Asleep until something comes, the next key; the bar drawn
-			 * over the picture while it is shown */
-			if (m_display.bar_shown()) {
+			 * over the picture while it is shown, a note until it is gone */
+			if (m_display.bar_shown() || !m_bar.note.empty()) {
 				fill_bar();
 				m_display.show_again(&m_bar);
-				do_bar();
+				if (m_display.bar_shown())
+					do_bar();
 				SDL_WaitEventTimeout(nullptr, BAR_PAUSED_MS);
 			} else {
 				SDL_WaitEvent(nullptr);
@@ -461,11 +461,12 @@ Session::frames()
 		if (m_audio)
 			m_audio->play(m_board.sound(false), m_board.sound(true));
 
-		const bool bar = m_display.bar_shown();
+		/* The bar, or a note alone, over the frame */
+		const bool bar = m_display.bar_shown(), over = bar || !m_bar.note.empty();
 
-		if (bar)
+		if (over)
 			fill_bar();
-		m_display.end_frame(m_board.frame(), std::chrono::steady_clock::now() > m_next + FRAME, bar ? &m_bar : nullptr);
+		m_display.end_frame(m_board.frame(), std::chrono::steady_clock::now() > m_next + FRAME, over ? &m_bar : nullptr);
 		if (bar)
 			do_bar();
 		save_state_at_frame();

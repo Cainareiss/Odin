@@ -23,6 +23,7 @@
 
 #include "odin/menu.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <string>
@@ -56,6 +57,10 @@ constexpr float MENU_CUT = 6.0f;
 constexpr float ACCENT = 2.0f;
 /* The bar lets the game show through, a little */
 constexpr float BAR_ALPHA = 0.96f;
+/* A note: from the bottom-left corner, the room around its words */
+constexpr float NOTE_MARGIN = 12.0f;
+constexpr float NOTE_WIDE = 10.0f;
+constexpr float NOTE_HIGH = 6.0f;
 
 constexpr const char *NAMES[] = { "FILE", "INPUT", "VIDEO", "AUDIO", "DEBUG", "ABOUT" };
 
@@ -95,6 +100,54 @@ Menu::build_bar(BarState &state)
 	begin_frame(state.theme);
 	bar(state);
 	ImGui::Render();
+}
+
+void
+Menu::build_note(BarState &state)
+{
+	ImGui::SetCurrentContext(m_imgui);
+	use_palette(state.theme);
+	follow_scale();
+
+	ImGuiIO &io = ImGui::GetIO();
+	int w = 0, h = 0, pixels_w = 0, pixels_h = 0;
+	const Uint64 now = SDL_GetTicksNS();
+
+	SDL_GetWindowSize(m_window, &w, &h);
+	SDL_GetWindowSizeInPixels(m_window, &pixels_w, &pixels_h);
+	io.DisplaySize = { static_cast<float>(w), static_cast<float>(h) };
+	if (w > 0 && h > 0)
+		io.DisplayFramebufferScale = { static_cast<float>(pixels_w) / static_cast<float>(w),
+		                               static_cast<float>(pixels_h) / static_cast<float>(h) };
+	io.DeltaTime = m_note_time && now > m_note_time ? std::max(static_cast<float>(now - m_note_time) * 1e-9f, 1e-4f) :
+	                                                  1.0f / 60.0f;
+	m_note_time = now;
+	add_fonts();
+	ImGui::NewFrame();
+	close_bar_menus();
+	note(state, MenuKit(*m_palette, m_scale));
+	ImGui::Render();
+}
+
+/* Over everything, in the bottom-left corner: its words in a frame as the
+ * menus of the bar have, fading out */
+void
+Menu::note(const BarState &state, const MenuKit &kit)
+{
+	if (state.note.empty() || state.note_alpha <= 0.0f)
+		return;
+
+	const MenuPalette &p = kit.palette();
+	const ImVec2 room = ImGui::GetIO().DisplaySize;
+	const float margin = kit.px(NOTE_MARGIN), wide = kit.px(NOTE_WIDE), high = kit.px(NOTE_HIGH);
+	const std::string shown = MenuKit::fitted(state.note, room.x - 2.0f * (margin + wide));
+	const ImVec2 b = { margin + MenuKit::measure(shown.c_str()) + 2.0f * wide, room.y - margin };
+	const ImVec2 a = { margin, b.y - ImGui::GetTextLineHeight() - 2.0f * high };
+	ImDrawList *const list = ImGui::GetForegroundDrawList();
+
+	kit.frame(list, a, b, kit.px(MENU_CUT), MenuKit::alpha(p.screen, state.note_alpha),
+	          MenuKit::alpha(p.outline, state.note_alpha));
+	list->AddText({ a.x + wide, a.y + high }, MenuKit::alpha(p.ink, state.note_alpha), shown.c_str());
 }
 
 void
@@ -283,12 +336,10 @@ Menu::bar(BarState &state)
 			ImGui::EndMenu();
 		}
 
-		/* The game and its speed, or what went wrong */
+		/* The game and its speed */
 		char right[256];
 
-		if (!state.note.empty())
-			std::snprintf(right, sizeof(right), "%s", state.note.c_str());
-		else if (state.paused)
+		if (state.paused)
 			std::snprintf(right, sizeof(right), "%s  ·  paused", state.title.c_str());
 		else if (state.show_speed && state.fps > 0.0f)
 			std::snprintf(right, sizeof(right), "%s  ·  %.0f fps", state.title.c_str(), static_cast<double>(state.fps));
@@ -299,12 +350,13 @@ Menu::bar(BarState &state)
 		const std::string shown = MenuKit::fitted(right, room);
 
 		list->AddText({ top.x + size.x - kit.px(NAME_WIDE) - MenuKit::measure(shown.c_str()),
-		                top.y + (size.y - line) / 2.0f }, state.note.empty() ? p.faint : p.danger, shown.c_str());
+		                top.y + (size.y - line) / 2.0f }, p.faint, shown.c_str());
 		state.open = open >= 0;
 		state.bottom = bottom;
 		ImGui::EndMainMenuBar();
 	}
 	new_card(state, kit);
+	note(state, kit);
 	ImGui::PopStyleVar(8);
 	ImGui::PopStyleColor(static_cast<int>(std::size(colours)));
 	style.DisplaySafeAreaPadding = safe;

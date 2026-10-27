@@ -79,7 +79,8 @@ private:
 	void close_menu();
 	/* The bar: the mouse shows it and works it (true: the event was the
 	 * bar's alone); shown or hidden as the mouse says; its state from what
-	 * is so now; what it changed and asked, done; a word at its right */
+	 * is so now; what it changed and asked, done; a note of Odin, in the
+	 * bottom-left corner a while (Menu::note) */
 	bool bar_event(const SDL_Event &event);
 	void follow_bar();
 	void fill_bar();

@@ -210,6 +210,7 @@ library(const Options &command, const GameList &games, Settings &settings, const
 		state.press = menus.press_name();
 		menus.fill_bar(bar);
 		bar.game = false;
+		bar.note_alpha = note_alpha(note_until);
 		if (SDL_GetTicks() >= note_until)
 			bar.note.clear();
 		display.draw_library(state, bar);

@@ -155,7 +155,8 @@ open the pages of the menu; VIDEO also takes the whole display and sets
 the bezel and the speed in the title, AUDIO the volume and the sound in
 the background; DEBUG pauses the game and has the board say each access
 (at the next game). What the bar changes is kept in odin.ini as the menu
-keeps it. In the library, Close game, Reset, the states and Pause are
+keeps it. What Odin does or cannot do (a state saved, the card taken in)
+is said a few seconds in the bottom-left corner, bar or not. In the library, Close game, Reset, the states and Pause are
 greyed out.
 
 0 is TEST and 9 SERVICE, the buttons of the cabinet: they open and work
@@ -426,7 +427,7 @@ card-<n>. Faster, FILE, New card (Virtual-On)... makes the card that
 terminal makes for a new pilot of the name typed (8 characters of its
 keyboard: A to Z, 0 to 9, space and @,./~_:;^!?<>+-*=%'"()), on the
 first VR of its list, and puts it in hand as <name>.card (a number after
-the name when that file is there already). The bar says when the reader
+the name when that file is there already). A note says when the reader
 takes the card in and when a card comes out at the slot. A card file is
 written whole or not at all, the card it held before kept beside it as
 <name>.card.bak, which Odin reads in its place should the card file be

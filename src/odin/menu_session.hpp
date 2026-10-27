@@ -19,6 +19,7 @@
 #ifndef ODIN_MENU_SESSION_HPP
 #define ODIN_MENU_SESSION_HPP
 
+#include <algorithm>
 #include <memory>
 #include <optional>
 #include <string>
@@ -48,9 +49,17 @@ struct Opened {
 	std::string game, folder;
 };
 
-/* A word at the right of the bar stays that long. The picker of an
- * archive, asked for by Open...: no folder of the menu. */
-inline constexpr Uint64 NOTE_MS = 5000;
+/* A note of Odin (BarState::note) stays that long, fading out in its last
+ * half second; how much of it shows until `until` */
+inline constexpr Uint64 NOTE_MS = 4000;
+inline constexpr Uint64 NOTE_FADE_MS = 500;
+inline float note_alpha(Uint64 until)
+{
+	const Uint64 now = SDL_GetTicks();
+
+	return now >= until ? 0.0f : std::min(1.0f, static_cast<float>(until - now) / static_cast<float>(NOTE_FADE_MS));
+}
+/* The picker of an archive, asked for by Open...: no folder of the menu */
 inline constexpr int ARCHIVE_ASKED = -1;
 
 /* An archive Open... gave: its game, as MAME names its archive (the BIOS is
@@ -124,7 +133,7 @@ public:
 	BarState::Ask do_bar(BarState &bar);
 	/* The player's card, on a cabinet with a card reader (Virtual-On):
 	 * into the slot, or back out of it once the reader ejected it; the
-	 * card of the list in hand (-1: none). What the bar says of it. */
+	 * card of the list in hand (-1: none). What the note says of it. */
 	std::string card_in_out();
 	std::string choose_card(int index);
 	/* A new card of a pilot of that name, as the terminal of the game

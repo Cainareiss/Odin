@@ -498,21 +498,31 @@ Display::bar_event(const SDL_Event &event)
 }
 
 /* The bar given the events of the mouse kept for it and built, when it is
- * shown: whether it is */
+ * shown, or its note alone: whether anything is */
 bool
 Display::build_bar(BarState *bar)
 {
-	if (!bar || !m_bar_shown)
+	if (!bar)
 		return false;
-	for (const SDL_Event &event : m_bar_events)
-		m_menu->event(event);
-	m_bar_events.clear();
-	m_menu->build_bar(*bar);
+	if (m_bar_shown) {
+		for (const SDL_Event &event : m_bar_events)
+			m_menu->event(event);
+		m_bar_events.clear();
+		m_menu->build_bar(*bar);
+		return true;
+	}
+	if (bar->note.empty())
+		return false;
+	if (!m_menu) {
+		m_menu = std::make_unique<Menu>(m_window, *m_graphics);
+		run([this] { m_menu->freeze({}); });
+	}
+	m_menu->build_note(*bar);
 	return true;
 }
 
 /* Over the picture of the game: the bezel, the game blurred at its sides,
- * the bar */
+ * the bar or a note */
 void
 Display::draw_over(unsigned w, unsigned h, bool bar)
 {
