@@ -21,15 +21,13 @@
  * odin_spirv_<name> starts one, odin_spirv_<name>_end follows it
  * (spirv.hpp). */
 
-#if defined(_WIN32)
-	.section .rdata, "dr"
-#else
-	.section .rodata
-#endif
+#include "../embedded.inc"
+
+	READ_ONLY
 
 #define SPIRV(name, file) \
-	.global odin_spirv_##name; .global odin_spirv_##name##_end; .balign 16; \
-	odin_spirv_##name: .incbin file; odin_spirv_##name##_end:
+	.global C_NAME(odin_spirv_##name) NEXT .global C_NAME(odin_spirv_##name##_end) NEXT .balign 16 NEXT \
+	C_NAME(odin_spirv_##name): .incbin file NEXT C_NAME(odin_spirv_##name##_end):
 
 /* The board drawing */
 SPIRV(whole_picture_vert, "glsl/whole_picture.vert.spv")
@@ -52,6 +50,4 @@ SPIRV(show_frag, "glsl/show.frag.spv")
 SPIRV(average_frag, "glsl/average.frag.spv")
 SPIRV(sides_frag, "glsl/sides.frag.spv")
 
-#if !defined(_WIN32)
-	.section .note.GNU-stack, "", @progbits
-#endif
+	STACK_NOTE

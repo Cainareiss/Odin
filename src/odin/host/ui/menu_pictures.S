@@ -20,15 +20,13 @@
  * (pictures/), in the binary as their PNG files are: odin_picture_<name>
  * starts one, odin_picture_<name>_end follows it (menu.cpp). */
 
-#if defined(_WIN32)
-	.section .rdata, "dr"
-#else
-	.section .rodata
-#endif
+#include "../embedded.inc"
+
+	READ_ONLY
 
 #define PICTURE(name, file) \
-	.global odin_picture_##name; .global odin_picture_##name##_end; .balign 16; \
-	odin_picture_##name: .incbin file; odin_picture_##name##_end:
+	.global C_NAME(odin_picture_##name) NEXT .global C_NAME(odin_picture_##name##_end) NEXT .balign 16 NEXT \
+	C_NAME(odin_picture_##name): .incbin file NEXT C_NAME(odin_picture_##name##_end):
 
 PICTURE(upscale_1, "pictures/upscale-1.png")
 PICTURE(upscale_2, "pictures/upscale-2.png")
@@ -49,6 +47,4 @@ PICTURE(mode_raw, "pictures/mode-raw.png")
 PICTURE(mode_snap, "pictures/mode-snap.png")
 PICTURE(mode_native, "pictures/mode-native.png")
 
-#if !defined(_WIN32)
-	.section .note.GNU-stack, "", @progbits
-#endif
+	STACK_NOTE

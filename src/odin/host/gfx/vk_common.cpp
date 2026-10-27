@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#define VK_ENABLE_BETA_EXTENSIONS
 #include "odin/host/gfx/vk_common.hpp"
 
 #include <algorithm>
@@ -357,8 +358,9 @@ Context::choose_gpu(std::string &why)
 			for (const char *e : extensions_below_13(api))
 				if (std::strcmp(e, VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME) != 0)
 					m_extensions.push_back(e);
-		if (has(extensions, "VK_KHR_portability_subset"))
-			m_extensions.push_back("VK_KHR_portability_subset");
+		m_portability_subset = has(extensions, VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME);
+		if (m_portability_subset)
+			m_extensions.push_back(VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME);
 		if (m_gl_clip_space)
 			m_extensions.push_back(VK_EXT_DEPTH_CLIP_CONTROL_EXTENSION_NAME);
 		if (m_host_query_reset && reset_ext)
@@ -401,7 +403,10 @@ Context::make_device(std::string &why)
 	wanted.all.features.samplerAnisotropy = had.all.features.samplerAnisotropy;
 	if (!had.all.features.samplerAnisotropy)
 		m_max_anisotropy = 1.0f;
-	wanted.all.features.geometryShader = m_primitive_ids = had.all.features.geometryShader;
+	wanted.all.features.geometryShader = m_geometry_shaders = had.all.features.geometryShader;
+	m_primitive_ids_tessellation = !had.all.features.geometryShader && had.all.features.tessellationShader;
+	wanted.all.features.tessellationShader = m_primitive_ids_tessellation;
+	m_primitive_ids = had.all.features.geometryShader || m_primitive_ids_tessellation;
 	wanted.v13.dynamicRendering = wanted.v13.synchronization2 = VK_TRUE;
 	wanted.rendering.dynamicRendering = wanted.sync2.synchronization2 = VK_TRUE;
 	wanted.dynamic.extendedDynamicState = VK_TRUE;
@@ -412,6 +417,14 @@ Context::make_device(std::string &why)
 	if (m_host_query_reset) {
 		wanted.with_reset();
 		wanted.reset.hostQueryReset = VK_TRUE;
+	}
+	VkPhysicalDevicePortabilitySubsetFeaturesKHR subset{};
+	if (m_portability_subset) {
+		subset.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PORTABILITY_SUBSET_FEATURES_KHR;
+		VkPhysicalDeviceFeatures2 query{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2, &subset, {} };
+		m_fn.vkGetPhysicalDeviceFeatures2(m_gpu, &query);
+		subset.pNext = wanted.all.pNext;
+		wanted.all.pNext = &subset;
 	}
 
 	const VkDeviceCreateInfo info{ VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO, &wanted.all, 0, 1, &queue, 0, nullptr,

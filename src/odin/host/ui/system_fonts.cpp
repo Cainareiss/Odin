@@ -48,6 +48,12 @@ const std::vector<std::vector<const char *>> WANTED = {
 	{ "segoeui.ttf" }, { "Nirmala.ttf" }, { "LeelawUI.ttf" }, { "YuGothR.ttc", "msgothic.ttc" },
 	{ "msyh.ttc" }, { "msjh.ttc" }, { "malgun.ttf" },
 };
+#elif defined(__APPLE__)
+const std::vector<std::vector<const char *>> WANTED = {
+	{ "Arial Unicode.ttf", "LucidaGrande.ttc" }, { "Hiragino Sans GB.ttc", "STHeiti Medium.ttc" },
+	{ "AppleSDGothicNeo.ttc", "AppleGothic.ttf" }, { "Ayuthaya.ttf", "ThonburiUI.ttc" },
+	{ "Kohinoor.ttc", "DevanagariMT.ttc" },
+};
 #else
 /* Anywhere in the folders of fonts of Linux, the first of each line found:
  * Latin, Greek, Cyrillic, Arabic, Hebrew (DejaVu Sans, on nearly all);
@@ -72,6 +78,13 @@ find_files()
 	const char *const windows = std::getenv("WINDIR");
 
 	folders.push_back(std::string(windows && windows[0] ? windows : "C:\\Windows") + "\\Fonts");
+#elif defined(__APPLE__)
+	const char *const home = std::getenv("HOME");
+
+	if (home && home[0])
+		folders.push_back(std::string(home) + "/Library/Fonts");
+	folders.push_back("/Library/Fonts");
+	folders.push_back("/System/Library/Fonts");
 #else
 	const char *const home = std::getenv("HOME");
 	const char *const data = std::getenv("XDG_DATA_HOME");

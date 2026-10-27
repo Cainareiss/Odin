@@ -21,6 +21,7 @@
 
 #include "odin/host/gfx/gl_common.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 
@@ -34,7 +35,7 @@ GLuint
 compile_shader(GLenum type, const char *text)
 {
 	const GLuint id = glCreateShader(type);
-	const char *const texts[2] = { "#version 430\n", text };
+	const char *const texts[2] = { fragment_lists() ? "#version 430\n" : "#version 410\n#define PEELING 1\n", text };
 	GLint status;
 
 	glShaderSource(id, 2, texts, nullptr);
@@ -126,6 +127,31 @@ fatal(const char *what)
 	std::abort();
 }
 
+bool
+fragment_lists()
+{
+	return GLEW_VERSION_4_3;
+}
+
+void
+storage(GLsizei levels, GLenum format, GLsizei w, GLsizei h)
+{
+	if (GLEW_VERSION_4_2 || GLEW_ARB_texture_storage) {
+		glTexStorage2D(GL_TEXTURE_2D, levels, format, w, h);
+		return;
+	}
+	const bool depth = format == GL_DEPTH_COMPONENT24 || format == GL_DEPTH_COMPONENT32F;
+	const GLenum layout = depth ? GL_DEPTH_COMPONENT : (format == GL_R32UI) ? GL_RED_INTEGER : GL_RGBA;
+	const GLenum type = depth ? GL_FLOAT : (format == GL_R32UI) ? GL_UNSIGNED_INT : GL_UNSIGNED_BYTE;
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, levels - 1);
+	for (GLint level = 0; level < levels; level++) {
+		glTexImage2D(GL_TEXTURE_2D, level, static_cast<GLint>(format), w, h, 0, layout, type, nullptr);
+		w = std::max(w / 2, 1);
+		h = std::max(h / 2, 1);
+	}
+}
+
 GLuint
 new_texture(GLenum format, unsigned w, unsigned h)
 {
@@ -133,7 +159,7 @@ new_texture(GLenum format, unsigned w, unsigned h)
 
 	glGenTextures(1, &id);
 	glBindTexture(GL_TEXTURE_2D, id);
-	glTexStorage2D(GL_TEXTURE_2D, 1, format, static_cast<GLsizei>(w), static_cast<GLsizei>(h));
+	storage(1, format, static_cast<GLsizei>(w), static_cast<GLsizei>(h));
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	return id;

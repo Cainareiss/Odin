@@ -20,17 +20,16 @@
  * ended by a zero: odin_glsl_<name> starts one (glsl_texts.hpp). A shader
  * that builds on fragment_lists.glsl has it put before its own file. */
 
-#if defined(_WIN32)
-	.section .rdata, "dr"
-#else
-	.section .rodata
-#endif
+#include "../embedded.inc"
+
+	READ_ONLY
 
 #define TEXT(name, file) \
-	.global odin_glsl_##name; .balign 16; odin_glsl_##name: .incbin file; .byte 0
+	.global C_NAME(odin_glsl_##name) NEXT .balign 16 NEXT C_NAME(odin_glsl_##name): .incbin file NEXT .byte 0
 
 #define TEXT_WITH_LISTS(name, file) \
-	.global odin_glsl_##name; .balign 16; odin_glsl_##name: .incbin "glsl/fragment_lists.glsl"; .incbin file; .byte 0
+	.global C_NAME(odin_glsl_##name) NEXT .balign 16 NEXT C_NAME(odin_glsl_##name): \
+	.incbin "glsl/fragment_lists.glsl" NEXT .incbin file NEXT .byte 0
 
 /* The board drawing */
 TEXT(mesh_vert, "glsl/mesh.vert")
@@ -42,6 +41,8 @@ TEXT(blend_frag, "glsl/blend.frag")
 TEXT(compose_vert, "glsl/compose.vert")
 TEXT(compose_frag, "glsl/compose.frag")
 TEXT(present_frag, "glsl/present.frag")
+TEXT(peel_blend_frag, "glsl/peel_blend.frag")
+TEXT(peel_show_frag, "glsl/peel_show.frag")
 
 /* The window */
 TEXT(image_vert, "glsl/image.vert")
@@ -52,6 +53,4 @@ TEXT(show_frag, "glsl/show.frag")
 TEXT(average_frag, "glsl/average.frag")
 TEXT(sides_frag, "glsl/sides.frag")
 
-#if !defined(_WIN32)
-	.section .note.GNU-stack, "", @progbits
-#endif
+	STACK_NOTE

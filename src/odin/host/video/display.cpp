@@ -254,10 +254,11 @@ Display::Display(const Keyboard &keys, const Options &options, SDL_Window *windo
 	/* The card goes to the drawing thread for good. */
 	m_graphics->leave_thread();
 	m_drawing = std::make_unique<Worker>();
-	m_drawing->run([this] {
+	m_drawing->post([this] {
 		m_graphics->take_thread();
 		m_graphics->set_waits(false);
 	});
+	wait_drawing();
 	if (options.window_w && options.window_h)
 		set_window_size(static_cast<int>(options.window_w), static_cast<int>(options.window_h), options.fullscreen);
 	else if (options.window >= 2 || options.fullscreen)
@@ -408,16 +409,28 @@ Display::finish()
 		m_held = false;
 		m_late_draw.release();
 	}
-	m_drawing->wait();
+	wait_drawing();
 	if (m_stats)
 		m_wait_write_ns += host_ns() - begin;
+}
+
+void
+Display::wait_drawing()
+{
+#if defined(__APPLE__)
+	while (!m_drawing->wait_for(std::chrono::milliseconds(1)))
+		SDL_PumpEvents();
+#else
+	m_drawing->wait();
+#endif
 }
 
 void
 Display::run(std::function<void()> job)
 {
 	finish();
-	m_drawing->run(std::move(job));
+	m_drawing->post(std::move(job));
+	wait_drawing();
 }
 
 void
@@ -544,13 +557,14 @@ Display::show_again(BarState *bar)
 	const bool over = build_bar(bar);
 
 	SDL_GetWindowSizeInPixels(m_window, &w, &h);
-	m_drawing->run([this, w, h, over] {
+	m_drawing->post([this, w, h, over] {
 		const auto ww = static_cast<unsigned>(w), wh = static_cast<unsigned>(h);
 
 		m_renderer->show_again(ww, wh, m_hole);
 		draw_over(ww, wh, over);
 		present(ww, wh, "again");
 	});
+	wait_drawing();
 }
 
 /* Built on this thread, drawn on the drawing thread meanwhile */

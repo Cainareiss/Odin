@@ -208,6 +208,9 @@ public:
 	/* Whether fragment shaders read gl_PrimitiveID (the geometry shaders
 	 * of the card) */
 	bool primitive_ids() const { return m_primitive_ids; }
+	bool primitive_ids_tessellation() const { return m_primitive_ids_tessellation; }
+	bool geometry_shaders() const { return m_geometry_shaders; }
+	bool portability_subset() const { return m_portability_subset; }
 	/* Whether the queue writes the time, its stamps reset by the
 	 * processor; the bits of a stamp and its unit, in ns */
 	bool stamps() const { return m_stamp_bits > 0 && m_host_query_reset; }
@@ -340,10 +343,13 @@ private:
 	bool m_gl_clip_space = false;
 	bool m_creation_feedback = false;
 	bool m_primitive_ids = false;
+	bool m_primitive_ids_tessellation = false;
+	bool m_geometry_shaders = false;
 	bool m_host_query_reset = false;
 	uint32_t m_stamp_bits = 0;
 	bool m_validation = false;
 	bool m_portability = false;
+	bool m_portability_subset = false;
 	bool m_core13 = false;
 	unsigned m_errors = 0;
 	/* The extensions the device was made with */

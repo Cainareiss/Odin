@@ -66,6 +66,29 @@ uniform uint u_snap;
 #define mul(m, v) ((m) * (v))
 #endif
 
+/* OpenGL 4.1 matches the stages by name */
+#ifdef PEELING
+#if NATIVE_2D != 0
+#define p_position g_position
+#define p_normal g_normal
+#define p_diffuse g_diffuse
+#define p_specular g_specular
+#define p_color1 g_color1
+#define p_ambient g_ambient
+#define p_texcoords g_texcoords
+#define p_alpha g_alpha
+#else
+#define p_position q_position
+#define p_normal q_normal
+#define p_diffuse q_diffuse
+#define p_specular q_specular
+#define p_color1 q_color1
+#define p_ambient q_ambient
+#define p_texcoords q_texcoords
+#define p_alpha q_alpha
+#endif
+#endif
+
 layout(location = 0) in vec3 i_position;
 layout(location = 1) in vec3 i_normal;
 layout(location = 2) in vec3 i_diffuse;

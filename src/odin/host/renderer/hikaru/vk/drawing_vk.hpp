@@ -50,7 +50,7 @@ public:
 	VkBoardDrawing &operator=(const VkBoardDrawing &) = delete;
 
 	void set_scale(unsigned scale) override;
-	bool draws_native() const override { return m_card.primitive_ids(); }
+	bool draws_native() const override { return m_card.geometry_shaders(); }
 
 	void begin_scene(const odin_display_list_t &list, const SceneDebug &debug) override;
 	void clear_depth() override;
@@ -166,7 +166,7 @@ private:
 	/* scene_vk.cpp */
 	void build_meshes();
 	void destroy_meshes();
-	void open_scene(bool clear);
+	void open_scene(bool clear, bool clear_depth = false);
 	void close_scene();
 	void log(const char *fmt, ...) const __attribute__((format(printf, 2, 3)));
 	VkPipeline pipeline(const MeshVariant &variant, MeshBlend blend);

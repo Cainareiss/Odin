@@ -37,6 +37,7 @@ namespace odin {
 
 GlBoardDrawing::GlBoardDrawing()
 {
+	m_peel.on = !gl::fragment_lists();
 	build_compose();
 	build_presenter();
 	build_pictures();
@@ -317,9 +318,20 @@ GlBoardDrawing::blend_scene_to_pipe(unsigned slot, unsigned buffer, uint32_t rat
 void
 GlBoardDrawing::keep_picture(unsigned slot, unsigned buffer)
 {
-	glCopyImageSubData(m_pipe[slot], GL_TEXTURE_2D, 0, 0, 0, 0,
-	                   m_buffers[buffer], GL_TEXTURE_2D, 0, 0, 0, 0,
-	                   static_cast<GLsizei>(width()), static_cast<GLsizei>(height()), 1);
+	if (GLEW_VERSION_4_3 || GLEW_ARB_copy_image) {
+		glCopyImageSubData(m_pipe[slot], GL_TEXTURE_2D, 0, 0, 0, 0,
+		                   m_buffers[buffer], GL_TEXTURE_2D, 0, 0, 0, 0,
+		                   static_cast<GLsizei>(width()), static_cast<GLsizei>(height()), 1);
+	} else {
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, m_pipe_fb[slot]);
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, m_buffers[buffer]);
+		m_unit0_texture = ~0u;
+		glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0,
+		                    static_cast<GLsizei>(width()), static_cast<GLsizei>(height()));
+		glBindTexture(GL_TEXTURE_2D, 0);
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+	}
 	gl::check("keeping a picture");
 }
 

@@ -36,7 +36,7 @@ layout(std430, set = LISTS_SET, binding = 0) buffer nodes_t {
 	node_t u_nodes[];
 };
 layout(set = LISTS_SET, binding = 1, r32ui) uniform uimage2D u_heads;
-#else
+#elif !defined(PEELING)
 layout(binding = 0, r32ui) uniform uimage2D u_heads;
 layout(std430, binding = 0) buffer nodes_t {
 	node_t u_nodes[];

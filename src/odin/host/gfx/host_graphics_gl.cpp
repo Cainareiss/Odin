@@ -333,7 +333,7 @@ GlGraphics::size_background(unsigned w, unsigned h)
 	glGenFramebuffers(2, m_blur_fb.data());
 	for (unsigned i = 0; i < 2; i++) {
 		glBindTexture(GL_TEXTURE_2D, m_blur_tex[i]);
-		glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, static_cast<GLsizei>(w), static_cast<GLsizei>(h));
+		gl::storage(1, GL_RGBA8, static_cast<GLsizei>(w), static_cast<GLsizei>(h));
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -419,7 +419,7 @@ GlGraphics::draw_background(unsigned window_w, unsigned window_h, unsigned w, un
 void
 GlGraphics::start_ui()
 {
-	ImGui_ImplOpenGL3_Init("#version 430 core");
+	ImGui_ImplOpenGL3_Init(gl::fragment_lists() ? "#version 430 core" : "#version 410 core");
 
 	glGenVertexArrays(1, &m_vao);
 	m_blur = gl::compile_program(odin_glsl_whole_window_vert, odin_glsl_blur_frag);
@@ -487,6 +487,10 @@ HostGraphics::make_gl(SDL_Window *window, unsigned window_w, unsigned window_h)
 	int num_ms_buffers, num_samples;
 	SDL_GLContext context = SDL_GL_CreateContext(window);
 
+	if (!context) {
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+		context = SDL_GL_CreateContext(window);
+	}
 	if (!context) {
 		std::fprintf(stderr, "ERROR: could not create GL context: '%s'\n", SDL_GetError());
 		return nullptr;
