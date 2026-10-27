@@ -4,6 +4,14 @@
  * JVS host side and device base, from MAME src/devices/machine/jvshost
  * and jvsdev, rewritten for Odin. Odin is GPL-3.0; this file keeps its
  * BSD-3-Clause licence and copyright holder.
+ *
+ *  ██████╗ ██████╗ ██╗███╗   ██╗
+ * ██╔═══██╗██╔══██╗██║████╗  ██║
+ * ██║   ██║██║  ██║██║██╔██╗ ██║
+ * ██║   ██║██║  ██║██║██║╚██╗██║
+ * ╚██████╔╝██████╔╝██║██║ ╚████║
+ *  ╚═════╝ ╚═════╝ ╚═╝╚═╝  ╚═══╝
+ *
  * Odin changes: Copyright (C) 2026 Réda Chérif-Touil
  */
 

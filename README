@@ -1,12 +1,16 @@
-Odin
-====
+ ██████╗ ██████╗ ██╗███╗   ██╗
+██╔═══██╗██╔══██╗██║████╗  ██║
+██║   ██║██║  ██║██║██╔██╗ ██║
+██║   ██║██║  ██║██║██║╚██╗██║
+╚██████╔╝██████╔╝██║██║ ╚████║
+ ╚═════╝ ╚═════╝ ╚═╝╚═╝  ╚═══╝
 
-Odin, Copyright (c) 2026 Réda Chérif-Touil
+Odin (ᚨ), Copyright (c) 2026 Réda Chérif-Touil
 Released under the GPL v3 License, see the LICENSE file.
 
 Odin is a low-level emulator of the SEGA Hikaru arcade board: it runs the
 programs of the real chips wherever they are known, and draws the games with
-OpenGL.
+OpenGL or Vulkan.
 
 
 GAMES

@@ -1,5 +1,11 @@
 /*
- * Odin
+ *  ██████╗ ██████╗ ██╗███╗   ██╗
+ * ██╔═══██╗██╔══██╗██║████╗  ██║
+ * ██║   ██║██║  ██║██║██╔██╗ ██║
+ * ██║   ██║██║  ██║██║██║╚██╗██║
+ * ╚██████╔╝██████╔╝██║██║ ╚████║
+ *  ╚═════╝ ╚═════╝ ╚═╝╚═╝  ╚═══╝
+ *
  * Copyright (C) 2026 Réda Chérif-Touil
  *
  * Valkyrie
@@ -187,7 +193,13 @@ main(int argc, char **argv)
 	if (const std::string log = odin::LogFile::path(); odin::LogFile::start(log))
 		options.log_file = log;
 
-	std::printf("Odin, Copyright(C) 2026 Réda Chérif-Touil\n");
+	std::printf(" ██████╗ ██████╗ ██╗███╗   ██╗\n"
+		    "██╔═══██╗██╔══██╗██║████╗  ██║\n"
+		    "██║   ██║██║  ██║██║██╔██╗ ██║\n"
+		    "██║   ██║██║  ██║██║██║╚██╗██║\n"
+		    "╚██████╔╝██████╔╝██║██║ ╚████║\n"
+		    " ╚═════╝ ╚═════╝ ╚═╝╚═╝  ╚═══╝\n\n");
+	std::printf("Odin (ᚨ), Copyright(C) 2026 Réda Chérif-Touil\n");
 	std::printf("A hard fork of Valkyrie, Copyright(C) 2011-2013 Stefano Teso\n");
 	std::printf("Released under the GPL3 License.\n");
 
