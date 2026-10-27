@@ -133,6 +133,8 @@ private:
 	void destroy_list_pictures();
 	void build_lists();
 	void destroy_lists();
+	void peel();
+	void draw_peel_layer();
 
 	unsigned m_scale = 1;
 	/* Where a list is drawn: a colour buffer and a depth buffer */
@@ -215,6 +217,19 @@ private:
 	} m_lists;
 	/* Each list of the pipe: its counts copied, or nullptr */
 	GLsync m_counted[3] = { nullptr, nullptr, nullptr };
+	struct PeelDraw {
+		const odin_mesh_t *mesh;
+		MeshDraw draw;
+	};
+	struct {
+		bool on;
+		std::vector<PeelDraw> draws;
+		bool drawing;
+		GLuint depth, layer, info, layer_fb;
+		GLuint color[2], last[2], color_fb[2];
+		GLuint blend, show;
+		GLuint any[8];
+	} m_peel{};
 
 	/* The stamps not in use, to be put again */
 	std::vector<GLuint> m_stamps;

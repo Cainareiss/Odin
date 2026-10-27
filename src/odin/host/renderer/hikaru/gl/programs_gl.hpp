@@ -87,7 +87,8 @@ public:
 	/* The texture units the programs read, set once */
 	enum : GLint {
 		UNIT_TEXTURE = 0,
-		UNIT_SOLID_DEPTH = 6
+		UNIT_SOLID_DEPTH = 6,
+		UNIT_PEEL_LAST = 7
 	};
 
 	~MeshPrograms();

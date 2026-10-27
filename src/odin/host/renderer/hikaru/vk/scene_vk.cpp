@@ -143,12 +143,26 @@ void
 VkBoardDrawing::build_meshes()
 {
 	const VkDevice device = m_card.device();
-	const vk::Spirv code[4] = { ODIN_SPIRV_OF(mesh_vert), ODIN_SPIRV_OF(mesh_frag), ODIN_SPIRV_OF(mesh_collect_frag),
-		                    ODIN_SPIRV_OF(mesh_geom) };
+	vk::Spirv code[4] = { ODIN_SPIRV_OF(mesh_vert), ODIN_SPIRV_OF(mesh_frag), ODIN_SPIRV_OF(mesh_collect_frag),
+		              ODIN_SPIRV_OF(mesh_geom) };
 	VkShaderModule *const modules[4] = { &m_mesh_vert, &m_mesh_frag, &m_mesh_collect, &m_mesh_geom };
+	const bool made[4] = { true, true, m_card.primitive_ids(), m_card.geometry_shaders() };
+	std::vector<uint32_t> collecting;
 
-	/* The two last need geometry shaders of the card */
-	for (unsigned i = 0; i < (m_card.primitive_ids() ? 4u : 2u); i++) {
+	/* gl_PrimitiveID declared through Tessellation, not Geometry (MoltenVK) */
+	if (m_card.primitive_ids_tessellation()) {
+		constexpr uint32_t CAPABILITY = 2u << 16 | 17u, GEOMETRY = 2, TESSELLATION = 3;
+
+		collecting.assign(code[2].code, code[2].code + code[2].bytes / sizeof(uint32_t));
+		for (size_t i = 5; i < collecting.size() && collecting[i] >> 16; i += collecting[i] >> 16)
+			if (collecting[i] == CAPABILITY && i + 1 < collecting.size() && collecting[i + 1] == GEOMETRY)
+				collecting[i + 1] = TESSELLATION;
+		code[2] = { collecting.data(), collecting.size() * sizeof(uint32_t) };
+	}
+
+	for (unsigned i = 0; i < 4; i++) {
+		if (!made[i])
+			continue;
 		const VkShaderModuleCreateInfo info{ VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO, nullptr, 0, code[i].bytes,
 		                                     code[i].code };
 		m_card.check(m_fn.vkCreateShaderModule(device, &info, nullptr, modules[i]), "a mesh shader");
@@ -445,7 +459,8 @@ VkBoardDrawing::prepare_program(uint64_t key)
 {
 	const std::optional<MeshVariant> variant = MeshVariant::from_key(key);
 
-	if (!variant || ((variant->collect || variant->native) && !m_card.primitive_ids()) || m_variants.contains(key))
+	if (!variant || (variant->collect && !m_card.primitive_ids()) || (variant->native && !m_card.geometry_shaders()) ||
+	    m_variants.contains(key))
 		return;
 	m_preparing = true;
 	pipeline(*variant, variant->has_cue ? MeshBlend::FADED : MeshBlend::REPLACE);
@@ -503,7 +518,7 @@ VkBoardDrawing::begin_scene(const odin_display_list_t &list, const SceneDebug &d
 /* The scene drawn into, emptied first or as it was left: every state of the
  * meshes set again (the commands may have been sent since, see count_now) */
 void
-VkBoardDrawing::open_scene(bool clear)
+VkBoardDrawing::open_scene(bool clear, bool clear_depth)
 {
 	const VkCommandBuffer cb = m_card.commands();
 	const VkAttachmentLoadOp load = clear ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
@@ -518,6 +533,8 @@ VkBoardDrawing::open_scene(bool clear)
 	colour.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 	colour.clearValue.color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
 	VkRenderingAttachmentInfo depth = colour;
+	if (clear_depth)
+		depth.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	depth.imageView = m_depth.view;
 	depth.imageLayout = m_depth.layout;
 	depth.clearValue.depthStencil = { 1.0f, 0 };
@@ -562,6 +579,12 @@ VkBoardDrawing::clear_depth()
 	const VkClearAttachment depth{ VK_IMAGE_ASPECT_DEPTH_BIT, 0, { .depthStencil = { 1.0f, 0 } } };
 	const VkClearRect all{ { { 0, 0 }, { width(), height() } }, 0, 1 };
 
+	/* MoltenVK clears the colour too with vkCmdClearAttachments */
+	if (m_card.portability_subset()) {
+		close_scene();
+		open_scene(false, true);
+		return;
+	}
 	if (!m_open)
 		open_scene(false);
 	m_fn.vkCmdClearAttachments(m_card.commands(), 1, &depth, 1, &all);

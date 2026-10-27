@@ -124,7 +124,7 @@ VkBoardDrawing::begin_translucent()
 	close_scene();
 	if (!m_card.primitive_ids()) {
 		if (!m_said_no_lists)
-			std::fprintf(stderr, "ERROR: vulkan: no translucent polygons on this card (no geometry shaders)\n");
+			std::fprintf(stderr, "ERROR: vulkan: no translucent polygons on this card (no geometry nor tessellation shaders)\n");
 		m_said_no_lists = true;
 		return;
 	}

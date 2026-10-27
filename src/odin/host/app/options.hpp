@@ -40,7 +40,11 @@ inline constexpr const char *VSYNCS[] = { "off", "on", "adaptive" };
 inline constexpr DisplaySides SIDES = DisplaySides::BEZEL;
 inline constexpr const char *SIDES_NAMES[] = { "off", "blur", "image" };
 /* The graphics API by default, and the names of odin.ini */
+#if defined(__APPLE__)
+inline constexpr DisplayApi API = DisplayApi::VULKAN;
+#else
 inline constexpr DisplayApi API = DisplayApi::OPENGL;
+#endif
 inline constexpr const char *APIS[] = { "opengl", "vulkan" };
 /* The names of the upscaling modes in odin.ini (DisplayUpscaleMode), raw
  * by default */

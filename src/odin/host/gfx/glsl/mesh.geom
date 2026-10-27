@@ -24,6 +24,18 @@
  * the hardware has its centre in the triangle, given its corners. The way
  * of GPU Gems 2, chapter 42 (conservative rasterization). */
 
+/* OpenGL 4.1 matches the stages by name */
+#ifdef PEELING
+#define p_position q_position
+#define p_normal q_normal
+#define p_diffuse q_diffuse
+#define p_specular q_specular
+#define p_color1 q_color1
+#define p_ambient q_ambient
+#define p_texcoords q_texcoords
+#define p_alpha q_alpha
+#endif
+
 layout(triangles) in;
 layout(triangle_strip, max_vertices = 4) out;
 

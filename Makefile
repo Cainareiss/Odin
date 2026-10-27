@@ -9,6 +9,20 @@ PKG_CFLAGS := `pkg-config --cflags gl glew jansson x11`
 PKG_LDFLAGS := `pkg-config --libs gl glew jansson x11`
 
 OPT_FLAGS := -O3 -fomit-frame-pointer -flto -march=native -fno-stack-protector
+
+# macOS
+UNAME := $(shell uname -s)
+ifeq ($(UNAME),Darwin)
+CXX := clang++
+CC := clang
+LD := clang++
+PKG_CFLAGS := `pkg-config --cflags glew jansson vulkan`
+PKG_LDFLAGS := `pkg-config --libs glew jansson` -framework OpenGL
+ifeq ($(shell uname -m),arm64)
+OPT_FLAGS := -O3 -fomit-frame-pointer -flto -mcpu=native -fno-stack-protector
+endif
+HOST_WARN_FLAGS := -Wno-sign-conversion
+endif
 #OPT_FLAGS := -O0 -g
 LDFLAGS := -lm $(PKG_LDFLAGS) $(SDL_LDFLAGS)
 
@@ -29,7 +43,7 @@ DEP_FLAGS := -MMD -MP
 # pictures (MARKDOWN/105 § 11).
 FP_FLAGS := -ffp-contract=off
 
-CXXFLAGS := -std=c++20 -pthread -I src -Wall -Wextra -Wpedantic -Wconversion -Wshadow $(PKG_CFLAGS) $(SDL_CFLAGS) $(OPT_FLAGS) $(FP_FLAGS) $(PGO_FLAGS) $(DEP_FLAGS)
+CXXFLAGS := -std=c++20 -pthread -I src -Wall -Wextra -Wpedantic -Wconversion -Wshadow $(HOST_WARN_FLAGS) $(PKG_CFLAGS) $(SDL_CFLAGS) $(OPT_FLAGS) $(FP_FLAGS) $(PGO_FLAGS) $(DEP_FLAGS)
 
 .PHONY: all install clean spirv check-layers
 
@@ -200,9 +214,7 @@ all: bin/odin spirv
 bin/odin: $(OBJ) $(IMGUI_OBJ) $(ARCHIVE_OBJ)
 	$(LD) $+ -o $@ $(CXXFLAGS) $(LDFLAGS)
 
-%.o: %.cpp
-	$(CXX) -c $< -o $@ $(CXXFLAGS)
-
+# Before %.o: make 3.81 takes the first matching rule
 src/imgui/%.o: src/imgui/%.cpp
 	$(CXX) -c $< -o $@ $(IMGUI_FLAGS)
 
@@ -211,6 +223,9 @@ src/miniz/%.o: src/miniz/%.c
 
 src/lzma/%.o: src/lzma/%.c
 	$(CC) -c $< -o $@ $(ARCHIVE_FLAGS)
+
+%.o: %.cpp
+	$(CXX) -c $< -o $@ $(CXXFLAGS)
 
 src/odin/host/app/rom_files.o: CXXFLAGS += -isystem src/miniz -isystem src/lzma
 src/odin/host/gfx/host_graphics_vk.o: CXXFLAGS += $(VULKAN_FLAGS)

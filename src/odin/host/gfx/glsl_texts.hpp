@@ -33,6 +33,7 @@ extern "C" {
 extern const char odin_glsl_mesh_vert[], odin_glsl_mesh_frag[], odin_glsl_mesh_geom[];
 extern const char odin_glsl_whole_picture_vert[];
 extern const char odin_glsl_sort_frag[], odin_glsl_blend_frag[], odin_glsl_present_frag[];
+extern const char odin_glsl_peel_blend_frag[], odin_glsl_peel_show_frag[];
 extern const char odin_glsl_compose_vert[], odin_glsl_compose_frag[];
 
 /* The window: an image over a viewport (the bezel); one triangle over the

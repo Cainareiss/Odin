@@ -353,6 +353,10 @@ GlBoardDrawing::draw_instance(const odin_mesh_t &mesh, unsigned i)
 void
 GlBoardDrawing::draw_mesh(const odin_mesh_t &mesh, const MeshDraw &draw)
 {
+	if (m_peel.on && draw.variant.collect && !m_peel.drawing) {
+		m_peel.draws.push_back({ &mesh, draw });
+		return;
+	}
 	set_blend(draw.blend);
 	use_program(draw.variant);
 	const MeshProgram::Locations &locs = m_program->locs;

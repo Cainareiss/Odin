@@ -29,18 +29,14 @@
  *     U+2100-214F --name-IDs='*' --name-languages='*' --name-legacy
  *     --notdef-outline --output-file=cozette.ttf */
 
-#if defined(_WIN32)
-	.section .rdata, "dr"
-#else
-	.section .rodata
-#endif
+#include "../embedded.inc"
+
+	READ_ONLY
 
 #define FONT(name, file) \
-	.global odin_font_##name; .global odin_font_##name##_end; .balign 16; \
-	odin_font_##name: .incbin file; odin_font_##name##_end:
+	.global C_NAME(odin_font_##name) NEXT .global C_NAME(odin_font_##name##_end) NEXT .balign 16 NEXT \
+	C_NAME(odin_font_##name): .incbin file NEXT C_NAME(odin_font_##name##_end):
 
 FONT(cozette, "fonts/cozette.ttf")
 
-#if !defined(_WIN32)
-	.section .note.GNU-stack, "", @progbits
-#endif
+	STACK_NOTE

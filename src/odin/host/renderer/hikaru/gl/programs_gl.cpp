@@ -211,6 +211,7 @@ MeshPrograms::compile(const MeshVariant &variant)
 	glUseProgram(program.id);
 	glUniform1i(find("u_texture"), UNIT_TEXTURE);
 	glUniform1i(find("u_solid_depth"), UNIT_SOLID_DEPTH);
+	glUniform1i(find("u_peel_last"), UNIT_PEEL_LAST);
 	gl::check("a mesh program");
 
 	return program;

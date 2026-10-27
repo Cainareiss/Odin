@@ -48,9 +48,14 @@ uint8_t *take(uintptr_t at, uint32_t size)
 	return static_cast<uint8_t *>(VirtualAlloc(reinterpret_cast<void *>(at), size, MEM_RESERVE | MEM_COMMIT,
 	                                           PAGE_EXECUTE_READWRITE));
 #else
+#if defined(MAP_FIXED_NOREPLACE)
+	const int fixed = MAP_FIXED_NOREPLACE;
+#else
+	const int fixed = 0;
+#endif
 	void *want = reinterpret_cast<void *>(at);
 	void *got = mmap(want, size, PROT_READ | PROT_WRITE | PROT_EXEC,
-	                 MAP_PRIVATE | MAP_ANONYMOUS | (at ? MAP_FIXED_NOREPLACE : 0), -1, 0);
+	                 MAP_PRIVATE | MAP_ANONYMOUS | (at ? fixed : 0), -1, 0);
 
 	if (got == MAP_FAILED) {
 		return nullptr;

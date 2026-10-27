@@ -69,8 +69,7 @@ GlBoardDrawing::make_texture(Texels texels, std::span<const TexelRect> levels)
 
 	/* The levels are allocated at once: given one by one, a 64x64 texture
 	 * takes the NVIDIA driver 595 some 1.7 ms instead of 0.03. */
-	glTexStorage2D(GL_TEXTURE_2D, num_levels, gl.internal, static_cast<GLsizei>(levels[0].w),
-	               static_cast<GLsizei>(levels[0].h));
+	gl::storage(num_levels, gl.internal, static_cast<GLsizei>(levels[0].w), static_cast<GLsizei>(levels[0].h));
 
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 	for (GLsizei level = 0; level < num_levels; level++) {

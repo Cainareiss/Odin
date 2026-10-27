@@ -43,6 +43,8 @@ void check(const char *stage);
 /* Says what went wrong on stderr and aborts. */
 [[noreturn]] void fatal(const char *what);
 
+bool fragment_lists();
+void storage(GLsizei levels, GLenum format, GLsizei w, GLsizei h);
 /* A texture of one level read pixel for pixel; a framebuffer that draws
  * to a texture. Each is left bound. */
 GLuint new_texture(GLenum format, unsigned w, unsigned h);

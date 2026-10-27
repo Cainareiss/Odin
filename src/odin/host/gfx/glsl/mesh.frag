@@ -106,9 +106,14 @@ layout(push_constant) uniform mesh_t {
 #define normalize(v) ((v) * inversesqrt (dot ((v), (v))))
 
 layout(location = 0) out vec4 fragColor;
+#elif defined(PEELING) && COLLECT != 0
+layout(location = 0) out vec4 fragColor;
+layout(location = 1) out vec4 fragInfo;
 #else
 out vec4 fragColor;
+#endif
 
+#ifndef VULKAN
 uniform light_t		u_lights[4];
 uniform vec3		u_ambient;
 uniform sampler2D	u_texture;
@@ -118,9 +123,13 @@ uniform float		u_alpha_ref;
 uniform float		u_weigh_by_alpha;
 uniform uint		u_pattern;
 
+#ifndef PEELING
 layout(std430, binding = 1) buffer count_t {
 	uint u_count;
 };
+#else
+uniform sampler2D	u_peel_last;
+#endif
 uniform sampler2D	u_solid_depth;
 uniform uint		u_order;
 uniform uint		u_blend_mode;
@@ -410,7 +419,16 @@ main (void)
 	if (u_weigh_by_alpha > 0.5)
 		fragColor.rgb *= fragColor.a;
 
-#if COLLECT != 0
+#if COLLECT != 0 && defined(PEELING)
+	float d = log2 (1.0 + u_sort_scale / (gl_FragCoord.w * u_depth_scale)) * (1.0 / 24.0);
+	float o = float (u_order + uint (gl_PrimitiveID));
+	vec2 last = texelFetch (u_peel_last, pixel, 0).xy;
+	if (!(last.x > d || (last.x == d && last.y < o)))
+		discard;
+	gl_FragDepth = d * 0.5;
+	fragColor = clamp (fragColor, 0.0, 1.0);
+	fragInfo = vec4 (float (u_blend_mode), o, d, 1.0);
+#elif COLLECT != 0
 	uint n = atomicAdd (u_count, 1u);
 	if (n < uint (u_nodes.length ())) {
 		u_nodes[n].color = clamp (fragColor, 0.0, 1.0);

@@ -216,6 +216,7 @@ private:
 	void prepare_programs(const std::string &title);
 	/* Waits for the frame being drawn. */
 	void finish();
+	void wait_drawing();
 	/* Has the drawing thread do a job, and waits for it. */
 	void run(std::function<void()> job);
 	/* On the drawing thread, the bar over the frame when `bar` */

@@ -21,13 +21,13 @@
 
 #include "odin/host/video/x11_window.hpp"
 
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__APPLE__)
 #include <X11/Xlib.h>
 #endif
 
 namespace odin {
 
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__APPLE__)
 
 /* As SDL sends it (SDL_x11window.c): _NET_WM_STATE, remove FULLSCREEN, to
  * the root window */
