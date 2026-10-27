@@ -447,18 +447,21 @@ Menu::bar(BarState &state)
 					ImGui::EndMenu();
 				}
 				/* The screens of the cabinets; another filter odin.ini
-				 * names is shown by its name */
+				 * names is shown by its name, taken before a click
+				 * changes it ("" for None has no name to show) */
 				if (ImGui::BeginMenu("CRT screen")) {
 					bool known = false;
 
+					for (const char *preset : PRESETS)
+						known = known || state.filter == preset;
+					const std::string other = known ? std::string() : state.filter;
+
 					framed();
-					for (size_t s = 0; s < std::size(PRESETS); s++) {
-						known = known || state.filter == PRESETS[s];
+					for (size_t s = 0; s < std::size(PRESETS); s++)
 						if (item(SCREENS[s], {}, state.filter == PRESETS[s]))
 							state.filter = PRESETS[s];
-					}
-					if (!known)
-						item(state.filter.c_str(), {}, true, false);
+					if (!other.empty())
+						item(other.c_str(), {}, true, false);
 					ImGui::EndMenu();
 				}
 				if (choose("Pace (next launch)", PACES, pace, !state.unthrottled_given))
@@ -490,20 +493,23 @@ Menu::bar(BarState &state)
 				ImGui::EndDisabled();
 				ImGui::Separator();
 				/* Where the sound plays: the system's device, or one
-				 * of those it has (one kept and gone stays listed) */
+				 * of those it has (one kept and gone stays listed,
+				 * taken before a click changes it) */
 				if (ImGui::BeginMenu("Device", !state.silent)) {
 					bool listed = state.device.empty();
+
+					for (const std::string &device : state.devices)
+						listed = listed || device == state.device;
+					const std::string gone = listed ? std::string() : state.device;
 
 					framed();
 					if (item("System default", {}, state.device.empty()))
 						state.device.clear();
-					for (const std::string &device : state.devices) {
-						listed = listed || device == state.device;
+					for (const std::string &device : state.devices)
 						if (item(device.c_str(), {}, device == state.device))
 							state.device = device;
-					}
-					if (!listed)
-						item(state.device.c_str(), {}, true, false);
+					if (!gone.empty())
+						item(gone.c_str(), {}, true, false);
 					ImGui::EndMenu();
 				}
 				/* The game that runs, when it has an optional sound
