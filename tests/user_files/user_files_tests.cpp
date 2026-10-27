@@ -173,6 +173,48 @@ test_artwork(const std::string &dir)
 	std::filesystem::remove_all(folder, error);
 }
 
+/* A portable Odin: portable.txt or odin.ini beside the program keeps the
+ * files of the user there (the program is put in the folder through
+ * APPIMAGE, as an AppImage there would be) */
+void
+test_portable(const std::string &dir)
+{
+	const std::string folder = std::filesystem::absolute(dir + "/portable-test").string();
+	std::error_code error;
+
+	std::filesystem::remove_all(folder, error);
+	std::filesystem::create_directories(folder, error);
+	setenv("HOME", "/home/someone", 1);
+	unsetenv("XDG_DATA_HOME");
+	setenv("APPIMAGE", (folder + "/odin.AppImage").c_str(), 1);
+
+	check(odin::portable_folder().empty(), "not portable without portable.txt or odin.ini");
+	check(SaveFolder::root() == "/home/someone/.local/share/odin/saves", "not portable: the saves of the user");
+
+	write_file(folder + "/portable.txt", {});
+	check(odin::portable_folder() == folder, "portable.txt: portable");
+	check(odin::odin_data_dir() == folder, "portable: the files of Odin beside the program");
+	check(SaveFolder::root() == folder + "/saves", "portable: its saves");
+	check(odin::user_path("ODIN_LOG", {}, "odin.log") == folder + "/odin.log", "portable: its log");
+	check(odin::artwork_folder() == folder + "/artwork", "portable: its artwork");
+	check(SaveFolder::root("/chosen") == "/chosen", "portable: the settings before it");
+	setenv("ODIN_SAVES", "/elsewhere", 1);
+	check(SaveFolder::root() == "/elsewhere", "portable: ODIN_SAVES before it");
+	unsetenv("ODIN_SAVES");
+
+	std::filesystem::remove(folder + "/portable.txt", error);
+	std::filesystem::create_directories(folder + "/odin.ini", error);
+	check(odin::portable_folder().empty(), "a folder named odin.ini does not make it portable");
+	std::filesystem::remove(folder + "/odin.ini", error);
+	write_file(folder + "/odin.ini", {});
+	check(odin::portable_folder() == folder, "odin.ini beside the program: portable");
+	check(odin::user_path("ODIN_CONFIG", {}, "odin.ini") == folder + "/odin.ini", "portable: that odin.ini");
+
+	unsetenv("APPIMAGE");
+	unsetenv("HOME");
+	std::filesystem::remove_all(folder, error);
+}
+
 int main(int argc, char **argv)
 {
 	const std::string dir = argc > 1 ? argv[1] : ".";
@@ -180,6 +222,7 @@ int main(int argc, char **argv)
 	test_where();
 	test_read_write(dir);
 	test_artwork(dir);
+	test_portable(dir);
 
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures ? 1 : 0;

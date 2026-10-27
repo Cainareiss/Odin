@@ -50,13 +50,14 @@ namespace {
 
 /* The lists of the mesh programs of a game (read_program_list): the one that
  * comes with Odin, in shaders/ where the list of the games is, and the one
- * kept for the user, in the cache of their home, with the folder of the
- * programs the driver made beside it. A path is left empty when there is
- * no such file or no place for it. */
+ * kept for the user, in the cache of their home (in cache/ beside a portable
+ * Odin), with the folder of the programs the driver made beside it. A path
+ * is left empty when there is no such file or no place for it. */
 void
 find_program_lists(const std::string &game, std::string &seed, std::string &kept, std::string &made)
 {
 	const std::string home = home_dir();
+	const std::string portable = portable_folder();
 	const char *const cache = std::getenv("XDG_CACHE_HOME");
 	std::error_code error;
 	std::string dir;
@@ -76,15 +77,17 @@ find_program_lists(const std::string &game, std::string &seed, std::string &kept
 			break;
 		}
 
-	if (cache && cache[0])
-		dir = cache;
+	if (!portable.empty())
+		dir = portable + "/cache";
+	else if (cache && cache[0])
+		dir = std::string(cache) + "/odin";
 	else if (!home.empty())
-		dir = home + "/.cache";
+		dir = home + "/.cache/odin";
 	else
 		return;
-	std::filesystem::create_directories(dir + "/odin/shaders", error);
-	kept = dir + "/odin/shaders/" + game + ".txt";
-	made = dir + "/odin/programs";
+	std::filesystem::create_directories(dir + "/shaders", error);
+	kept = dir + "/shaders/" + game + ".txt";
+	made = dir + "/programs";
 }
 
 /* The preset of a filter of the picture by its name: filters/<name>.glslp

@@ -33,9 +33,16 @@ namespace odin {
  * ~/Library/Application Support on macOS, XDG_DATA_HOME or ~/.local/share
  * elsewhere. Empty when it cannot be told. */
 std::string user_data_dir();
+/* The folder of the program when it holds portable.txt or odin.ini: this
+ * copy of Odin is then portable, its settings, saves, states, log and cache
+ * kept there, apart from those of any other copy. Empty otherwise. */
+std::string portable_folder();
+/* Where Odin keeps the files of the user: the portable folder, else odin in
+ * user_data_dir(); empty when it cannot be told */
+std::string odin_data_dir();
 /* A file or a folder of the user: the variable when it is set (none: no
- * such file), else the one chosen, else <name> in the folder of Odin in
- * user_data_dir(); empty when there is none */
+ * such file), else the one chosen, else <name> in odin_data_dir(); empty
+ * when there is none */
 std::string user_path(const char *variable, const std::string &chosen, const char *name);
 /* The folder the program is in, that of the AppImage it runs from (APPIMAGE)
  * else that of its executable; empty when it cannot be told. Its bios, roms
@@ -61,10 +68,11 @@ std::string artwork_file(const std::string &folder, const std::string &game, con
 class SaveFolder {
 public:
 	/* <folder>/<game> with ODIN_SAVES=<folder>; else <chosen>/<game>, the
-	 * folder the settings give; else <data>/odin/saves/<game>, <data>
-	 * being %APPDATA% on Windows, ~/Library/Application Support on macOS,
-	 * XDG_DATA_HOME or ~/.local/share elsewhere. None with
-	 * ODIN_SAVES=none, or when there is no such place. */
+	 * folder the settings give; else saves/<game> in odin_data_dir():
+	 * beside a portable Odin, or in <data>/odin, <data> being %APPDATA% on
+	 * Windows, ~/Library/Application Support on macOS, XDG_DATA_HOME or
+	 * ~/.local/share elsewhere. None with ODIN_SAVES=none, or when there
+	 * is no such place. */
 	static SaveFolder of_game(const std::string &game, const std::string &chosen = "");
 	/* The folder of the folders of the games; empty: none */
 	static std::string root(const std::string &chosen = "");

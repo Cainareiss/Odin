@@ -36,6 +36,7 @@
 #include "odin/repeats.hpp"
 #include "odin/session.hpp"
 #include "odin/settings.hpp"
+#include "odin/user_files.hpp"
 
 namespace odin {
 namespace {
@@ -199,6 +200,8 @@ main(int argc, char **argv)
 	}
 
 	odin::Settings settings;
+	if (const std::string portable = odin::portable_folder(); !portable.empty())
+		std::printf("portable: the files of this Odin in '%s'\n", portable.c_str());
 	const std::string settings_file = odin::Settings::user_file();
 	if (!settings_file.empty() && settings.load(settings_file)) {
 		std::printf("settings: '%s'\n", settings_file.c_str());

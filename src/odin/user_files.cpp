@@ -103,16 +103,41 @@ user_data_dir()
 }
 
 std::string
+portable_folder()
+{
+	const std::string folder = program_folder();
+	std::error_code error;
+
+	if (folder.empty())
+		return {};
+	for (const char *name : { "portable.txt", "odin.ini" })
+		if (std::filesystem::is_regular_file(std::filesystem::path(folder) / name, error))
+			return folder;
+	return {};
+}
+
+std::string
+odin_data_dir()
+{
+	const std::string portable = portable_folder();
+	const std::string data = user_data_dir();
+
+	if (!portable.empty())
+		return portable;
+	return data.empty() ? data : data + "/odin";
+}
+
+std::string
 user_path(const char *variable, const std::string &chosen, const char *name)
 {
 	const char *const given = std::getenv(variable);
-	const std::string data = user_data_dir();
+	const std::string dir = odin_data_dir();
 
 	if (given && given[0])
 		return std::strcmp(given, "none") ? given : "";
 	if (!chosen.empty())
 		return chosen;
-	return data.empty() ? data : data + "/odin/" + name;
+	return dir.empty() ? dir : dir + "/" + name;
 }
 
 std::string

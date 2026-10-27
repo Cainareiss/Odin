@@ -361,14 +361,14 @@ mode_of(int played)
 	       played == 2 ? AudioOut::Mode::QUAD : AudioOut::Mode::MIX;
 }
 
-/* The folder of the save states by default: <data>/odin/states, else the
- * folder Odin is started from (empty) */
+/* The folder of the save states by default: states in odin_data_dir(),
+ * else the folder Odin is started from (empty) */
 std::string
 default_states()
 {
-	const std::string data = user_data_dir();
+	const std::string data = odin_data_dir();
 
-	return data.empty() ? data : data + "/odin/states";
+	return data.empty() ? data : data + "/states";
 }
 
 /* The list of the games: in the folder Odin is started from, else with the

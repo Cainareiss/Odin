@@ -195,8 +195,9 @@ SLAVE (SYSTEM ASSIGNMENTS, COMMUNICATION MODE), and the seat of the
 cabinet (Virtual-On A, B...; Racer and NASCAR 1, 2...); a game that has
 never run on that computer starts once more to take its seat, and with
 board = none it goes back to NO LINK. Two Odins of one computer each have
-their own odin.ini, so their own saves: ODIN_CONFIG=<file> before odin,
-its [paths] saves another folder. Virtual-On in U.S.A. links 2 cabinets
+their own odin.ini, so their own saves: each a portable copy in its own
+folder (portable.txt beside it, see below), or ODIN_CONFIG=<file> before
+odin, its [paths] saves another folder. Virtual-On in U.S.A. links 2 cabinets
 at most. The program of the board needs a frame round the ring in less
 than about 15 ms: a network by cable, not by radio, and no further than
 the local network.
@@ -397,6 +398,13 @@ advance: the board of Air Trix steers once it is calibrated in the test
 menu of the game (CALIBRATION), with the controller you play with, and
 the other games have their own pages for it. The settings of Odin are in
 odin.ini in the same odin folder; ODIN_CONFIG=<file> reads another one.
+
+A portable Odin keeps its files in its own folder: put an empty file
+portable.txt beside the program (odin.exe, or the AppImage), or its
+odin.ini. Its odin.ini, saves, states, odin.log and the cache of its
+shaders are then there, apart from those of any other copy; it says
+"portable:" and the folder at the start. The variables above still come
+first.
 
 What Odin says (in the terminal it was started from; on Windows, opened by
 a double click, it has none) is written to odin.log in the same odin folder
