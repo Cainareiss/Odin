@@ -660,10 +660,37 @@ MenuSession::fill_bar(BarState &bar) const
 	bar.verbose_given = state.verbose_given;
 	bar.sides = state.sides;
 	bar.volume = state.volume;
-	bar.roms_given = state.roms_given;
-	bar.bios_given = state.bios_given;
 	bar.silent = state.silent != nullptr;
 	bar.theme = state.theme;
+	/* The settings of the pages the bar offers as lists */
+	bar.scale = state.scale;
+	bar.upscale_mode = state.upscale_mode;
+	bar.anisotropy = state.anisotropy;
+	bar.window = state.window;
+	bar.custom_window = state.custom_w != 0;
+	bar.vsync = state.vsync;
+	bar.filter = state.filter;
+	bar.unthrottled = state.unthrottled;
+	bar.scale_given = state.scale_given;
+	bar.anisotropy_given = state.anisotropy_given;
+	bar.window_given = state.window_given;
+	bar.unthrottled_given = state.unthrottled_given;
+	bar.vsync_locked = m_options.unthrottled;
+	bar.gpu = state.gpu;
+	if ((m_audio || m_listing) && (bar.open || bar.devices.empty()))
+		bar.devices = AudioOut::devices();
+	bar.device = state.device;
+	bar.sound_games.clear();
+	for (const MenuState::SoundGame &game : state.sound_games)
+		if (m_game && game.name == m_game->name)
+			bar.sound_games.push_back({ game.name, game.title, game.played, game.level, game.locked });
+	bar.lamps = state.network;
+	bar.link_board = state.link_board;
+	bar.link_cabinet = state.link_cabinet;
+	bar.link_port = state.link_port;
+	bar.link_given = state.link_given;
+	bar.link_next = state.link_next;
+	fill_bar_inputs(bar);
 	for (size_t a = 0; a < Hotkeys::ACTIONS; a++) {
 		const HotKey &key = m_hotkeys.of(static_cast<Hotkeys::Action>(a)).keys[0];
 
@@ -683,15 +710,94 @@ MenuSession::fill_bar(BarState &bar) const
 	}
 }
 
+/* The inputs of the game that runs, as the page Input shows them for the
+ * game it shows: the gamepads and joysticks plugged in (two of a make
+ * numbered as there), the tuning of each player's gamepad, the light guns
+ * seen (never polled here: the game polls them once a frame) and those the
+ * settings name, the players with a sight, the vibration */
+void
+MenuSession::fill_bar_inputs(BarState &bar) const
+{
+	bar.pads.clear();
+	bar.guns.clear();
+	bar.gun = {};
+	bar.sights = {};
+	bar.dead_zone = { -1, -1 };
+	bar.trigger_threshold = { -1, -1 };
+	bar.can_shake = m_game && m_game->shakes();
+	bar.undo = m_undo_until && SDL_GetTicks() < m_undo_until;
+	if (!m_game)
+		return;
+
+	const auto add = [&bar](const std::vector<Controls::Plugged> &plugged, bool joystick) {
+		for (size_t i = 0; i < plugged.size(); i++) {
+			const Controls::Plugged &one = plugged[i];
+			const auto before = std::count_if(plugged.begin(), plugged.begin() + static_cast<std::ptrdiff_t>(i),
+			                                  [&one](const Controls::Plugged &other) { return other.name == one.name; });
+
+			bar.pads.push_back({ one.name,
+			                     (before ? one.name + " (" + std::to_string(before + 1) + ")" : one.name) +
+			                             (joystick ? " · joystick" : ""),
+			                     one.guid, joystick, one.player });
+		}
+	};
+	const std::vector<Controls::Plugged> pads = m_controls.plugged();
+
+	add(pads, false);
+	add(m_controls.joysticks(), true);
+	for (const Controls::Plugged &pad : pads)
+		if (pad.player == 0 || pad.player == 1) {
+			const PadTuning tuning = PadTuning::of(m_settings, pad.guid, false);
+
+			bar.dead_zone[static_cast<size_t>(pad.player)] = tuning.dead_zone;
+			bar.trigger_threshold[static_cast<size_t>(pad.player)] = tuning.trigger_threshold;
+		}
+	if (const Pointers *const pointers = m_controls.pointers())
+		for (const Pointers::Device &device : pointers->devices())
+			bar.guns.push_back({ device.identity, device.name, device.present, device.absolute });
+	for (const auto &[key, value] : m_settings.section("players." + m_game->name)) {
+		if (key != "gun1" && key != "gun2")
+			continue;
+
+		const size_t space = value.find(' ');
+		const std::string identity = value.substr(0, space);
+
+		bar.gun[static_cast<size_t>(key[3] - '1')] = identity;
+		if (std::none_of(bar.guns.begin(), bar.guns.end(),
+		                 [&identity](const BarState::Gun &gun) { return gun.identity == identity; }))
+			bar.guns.push_back({ identity, space == std::string::npos ? identity : value.substr(space + 1), false, true });
+	}
+	for (const GameControl &control : m_controls.panel().controls())
+		if (control.role == Role::GUN_X)
+			bar.sights[control.player & 1] = true;
+	bar.shake = vibration_on(m_settings, m_game->name);
+}
+
 /* As the menu does them: kept in odin.ini the same way */
 BarState::Ask
 MenuSession::do_bar(BarState &bar)
 {
 	using Ask = BarState::Ask;
 	MenuState &state = m_menu_state;
+	/* The games of the bar among those of the menu, by name */
+	const auto sound_game = [&state](const BarState::SoundGame &game) -> MenuState::SoundGame * {
+		for (MenuState::SoundGame &one : state.sound_games)
+			if (one.name == game.name)
+				return &one;
+		return nullptr;
+	};
+	bool sound = bar.device != state.device;
 
-	if (bar.sides != state.sides || bar.volume != state.volume || bar.show_speed != state.show_speed ||
-	    bar.background != state.background || bar.verbose != state.verbose) {
+	for (const BarState::SoundGame &game : bar.sound_games)
+		if (const MenuState::SoundGame *const one = sound_game(game))
+			sound = sound || game.played != one->played || game.level != one->level;
+	if (sound || bar.sides != state.sides || bar.volume != state.volume || bar.show_speed != state.show_speed ||
+	    bar.background != state.background || bar.verbose != state.verbose || bar.scale != state.scale ||
+	    bar.upscale_mode != state.upscale_mode || bar.anisotropy != state.anisotropy || bar.window != state.window ||
+	    bar.custom_window != (state.custom_w != 0) || bar.vsync != state.vsync || bar.filter != state.filter ||
+	    bar.unthrottled != state.unthrottled || bar.theme != state.theme || bar.lamps != state.network ||
+	    bar.link_board != state.link_board || bar.link_cabinet != state.link_cabinet ||
+	    bar.link_port != state.link_port) {
 		const MenuState was = state;
 
 		state.sides = bar.sides;
@@ -699,21 +805,90 @@ MenuSession::do_bar(BarState &bar)
 		state.show_speed = bar.show_speed;
 		state.background = bar.background;
 		state.verbose = bar.verbose;
+		state.scale = bar.scale;
+		state.upscale_mode = bar.upscale_mode;
+		state.anisotropy = bar.anisotropy;
+		state.window = bar.window;
+		/* A size chosen in the bar ends the one given by hand */
+		if (!bar.custom_window)
+			state.custom_w = state.custom_h = 0;
+		state.vsync = bar.vsync;
+		state.filter = bar.filter;
+		state.unthrottled = bar.unthrottled;
+		state.theme = bar.theme;
+		state.device = bar.device;
+		for (const BarState::SoundGame &game : bar.sound_games)
+			if (MenuState::SoundGame *const one = sound_game(game)) {
+				one->played = game.played;
+				one->level = game.level;
+			}
+		state.network = bar.lamps;
+		state.link_board = bar.link_board;
+		state.link_cabinet = bar.link_cabinet;
+		state.link_port = bar.link_port;
 		apply(was);
+	}
+	/* The inputs of the game that runs */
+	if (m_game) {
+		if (bar.can_shake && bar.shake != vibration_on(m_settings, m_game->name))
+			keep_vibration(m_game->name, bar.shake, true);
+		for (const Controls::Plugged &pad : m_controls.plugged())
+			if (pad.player == 0 || pad.player == 1) {
+				const PadTuning was = PadTuning::of(m_settings, pad.guid, false);
+				PadTuning now = was;
+
+				now.dead_zone = bar.dead_zone[static_cast<size_t>(pad.player)];
+				now.trigger_threshold = bar.trigger_threshold[static_cast<size_t>(pad.player)];
+				if (now.dead_zone >= 0 && now.trigger_threshold >= 0)
+					keep_tuning(pad.guid, now, was);
+			}
 	}
 
 	const Ask ask = std::exchange(bar.ask, Ask::NONE);
+	const unsigned player = bar.asked_player & 1;
 
 	switch (ask) {
 	case Ask::OPEN:
 		m_dialog.ask_archive(m_display.window(), state.roms, ARCHIVE_ASKED);
 		return Ask::NONE;
-	case Ask::ROMS:
-	case Ask::BIOS:
-		ask_folder(ask == Ask::ROMS ? MenuState::Folder::ROMS : MenuState::Folder::BIOS);
-		return Ask::NONE;
 	case Ask::FULLSCREEN:
 		m_display.toggle_fullscreen();
+		return Ask::NONE;
+	case Ask::PAD:
+		if (m_game && bar.asked_pad >= 0 && static_cast<size_t>(bar.asked_pad) < bar.pads.size()) {
+			const BarState::Pad &pad = bar.pads[static_cast<size_t>(bar.asked_pad)];
+
+			want_pad(m_game->name, player, pad.guid, pad.name, pad.joystick, true);
+		}
+		return Ask::NONE;
+	case Ask::GUN:
+		if (m_game && bar.asked_gun < static_cast<int>(bar.guns.size())) {
+			const BarState::Gun none{}, &gun = bar.asked_gun < 0 ? none : bar.guns[static_cast<size_t>(bar.asked_gun)];
+
+			want_gun(m_game->name, player, gun.identity, gun.name, true);
+		}
+		return Ask::NONE;
+	case Ask::INPUTS_DEFAULTS:
+	case Ask::INPUTS_CLEAR:
+		/* As the page does them, on the game that runs, for that player
+		 * and that kind of device: the page shows them so from now on */
+		if (m_game) {
+			show_game(state.running);
+			state.player = player;
+			state.input_device[player] = static_cast<MenuState::Device>(std::clamp(bar.asked_kind, 0, 2));
+			if (ask == Ask::INPUTS_DEFAULTS)
+				change_inputs(true);
+			else
+				clear_inputs();
+		}
+		return Ask::NONE;
+	case Ask::INPUTS_UNDO:
+		if (m_undo_until && SDL_GetTicks() < m_undo_until)
+			undo();
+		return Ask::NONE;
+	case Ask::HOTKEYS_DEFAULTS:
+		m_hotkeys.reset();
+		keep_hotkeys();
 		return Ask::NONE;
 	default:
 		return ask;

@@ -102,7 +102,7 @@ struct BarState {
 	bool fullscreen = false, show_speed = true, paused = false, background = true, verbose = false;
 	unsigned sides = 2, volume = 100;
 	/* Said on the command line: shown, not changed; no sound to set */
-	bool roms_given = false, bios_given = false, verbose_given = false, silent = false;
+	bool verbose_given = false, silent = false;
 	/* A state of the game kept, to load; a game runs (not in the library:
 	 * nothing to close, save, load or pause); the palette (MenuState::theme),
 	 * of the library under the bar too */
@@ -120,14 +120,76 @@ struct BarState {
 	/* The characters of the name of a new card (empty: the game makes
 	 * none) */
 	std::string card_keys;
+
+	/* The settings of the pages the bar offers as lists, as MenuState has
+	 * them; changed there, done as the menu does them (do_bar). The
+	 * display: the 3D that many times finer, its flat pieces, the texture
+	 * filter, the window at start (or the size given by hand, kept), how
+	 * the frames wait for the display, the filter of the picture by its
+	 * name, frames without a limit (at the next launch); those the command
+	 * line gives, and the vertical sync off at an unlimited pace, are shown,
+	 * not changed. The graphics card. */
+	unsigned scale = 1, upscale_mode = 0, anisotropy = 1, window = 1, vsync = 0;
+	bool custom_window = false, unthrottled = false;
+	bool scale_given = false, anisotropy_given = false, window_given = false, unthrottled_given = false,
+	     vsync_locked = false;
+	std::string filter, gpu;
+	/* The sound: the devices (read while a menu of the bar is open) and the
+	 * one chosen (empty: the system's); the game that runs when it has an
+	 * optional sound board, how it plays it (Menu::PLAYED), its level in
+	 * dB */
+	struct SoundGame {
+		std::string name, title;
+		int played;
+		float level;
+		bool locked;
+	};
+	std::vector<std::string> devices;
+	std::string device;
+	std::vector<SoundGame> sound_games;
+	/* The game that runs: the gamepads and joysticks plugged in and the
+	 * player each is of (-1: none), its name shown (two of a make
+	 * numbered); the dead zone and the trigger threshold
+	 * of the gamepad of each player, in % (-1: no gamepad); the light guns
+	 * seen, that of each player (its identity; empty: none), the players
+	 * with a sight; its pads shake, and do; Undo of Clear mapping offered */
+	struct Pad {
+		std::string name, label, guid;
+		bool joystick;
+		int player;
+	};
+	struct Gun {
+		std::string identity, name;
+		bool present, aims;
+	};
+	std::vector<Pad> pads;
+	std::array<int, 2> dead_zone{ -1, -1 }, trigger_threshold{ -1, -1 };
+	std::vector<Gun> guns;
+	std::array<std::string, 2> gun;
+	std::array<bool, 2> sights{};
+	bool can_shake = false, shake = true, undo = false;
+	/* The outputs sent to the programs of lamps; the network board at the
+	 * next launch (NetLinkSettings::Board), this cabinet, its port, the
+	 * next cabinet (typed in Settings), set by ODIN_NETBD */
+	bool lamps = false, link_given = false;
+	int link_board = 0;
+	unsigned link_cabinet = 1, link_port = 0;
+	std::string link_next;
+
 	/* What was asked; the page of the settings asked (Menu::Page, -1: the
 	 * one shown last); the card chosen (CARD_CHOOSE, -1: none); the name
-	 * of the new card (CARD_NEW) */
-	enum class Ask { NONE, OPEN, CLOSE, RESET, SAVE_STATE, LOAD_STATE, CARD, CARD_CHOOSE, CARD_NEW, ROMS, BIOS, SETTINGS,
-	                 FULLSCREEN, PAUSE, QUIT };
+	 * of the new card (CARD_NEW); for the inputs of the game that runs
+	 * (PAD, GUN, INPUTS_*): the player, the gamepad or joystick chosen
+	 * (in pads), the light gun chosen (in guns, -1: none), the kind of
+	 * device whose inputs go back to their defaults or are cleared
+	 * (MenuState::Device) */
+	enum class Ask { NONE, OPEN, CLOSE, RESET, SAVE_STATE, LOAD_STATE, CARD, CARD_CHOOSE, CARD_NEW, SETTINGS, FULLSCREEN,
+	                 PAUSE, QUIT, PAD, GUN, INPUTS_DEFAULTS, INPUTS_CLEAR, INPUTS_UNDO, HOTKEYS_DEFAULTS };
 	Ask ask = Ask::NONE;
 	int page = -1, card_chosen = -1;
 	std::string card_name;
+	unsigned asked_player = 0;
+	int asked_pad = -1, asked_gun = -1, asked_kind = 0;
 	/* The mouse is on the bar or a menu of it is open: its buttons are the
 	 * bar's, not the game's; the bottom of the bar, in points */
 	bool wants_mouse = false, open = false;
@@ -395,7 +457,46 @@ class Menu {
 public:
 	/* The words of a choice of two, and of what is around the picture */
 	static constexpr const char *ON_OFF[] = { "on", "off" };
+	static constexpr const char *OFF_ON[] = { "Off", "On" };
 	static constexpr const char *SIDES_SHOWN[] = { "Off", "Blur", "Bezel" };
+	/* The choices of the page Display, as the bar offers them too: the 3D
+	 * that many times finer, how its flat pieces are, the texture filter
+	 * (ANISOTROPY: its values), the window at start (that many times the
+	 * screen; its sizes shorter where the row is narrow; Custom among them:
+	 * the size the user gives the window by hand), how frames wait for the
+	 * display, the screens of the cabinets (PRESETS: the filters they
+	 * name), the pace */
+	static constexpr const char *SCALES[] = { "1×", "2×", "3×", "4×", "5×", "6×" };
+	static constexpr const char *UPSCALE_MODES_SHOWN[] = { "Raw", "Snap 2D", "Native 2D" };
+	static constexpr const char *FILTERS[] = { "None", "2×", "4×", "8×", "16×" };
+	static constexpr unsigned ANISOTROPY[] = { 1, 2, 4, 8, 16 };
+	static constexpr const char *WINDOW_SIZES[] = { "640 × 480", "1280 × 960", "1920 × 1440", "2560 × 1920", "Custom" };
+	static constexpr const char *WINDOW_WIDTHS[] = { "640", "1280", "1920", "2560", "Custom" };
+	static constexpr int CUSTOM = 4;
+	static constexpr const char *SYNCS[] = { "off", "on", "adaptive" };
+	static constexpr const char *SCREENS[] = { "None", "Monitor 29\" (31 kHz)", "Projector 50\" (31 kHz)" };
+	static constexpr const char *PRESETS[] = { "", "lola-retro/sega-monitor-29", "lola-retro/sega-projector-50" };
+	static constexpr const char *PACES[] = { "60 fps (cabinet)", "Unlimited" };
+	/* How a game with an optional sound board plays it (page Audio) */
+	static constexpr const char *PLAYED[] = { "Main", "Both", "Four" };
+	/* The ports the page Link offers, from NetCable::PORT */
+	static constexpr unsigned LINK_PORTS = 8;
+	/* What Odin is, and the libraries it is made with: who wrote them,
+	 * their licence */
+	static constexpr const char *WHAT = "Sega Hikaru emulator, as close to the hardware as it goes";
+	static constexpr const char *LICENCES[][3] = {
+		{ "Odin", "Réda Chérif-Touil · Valkyrie, Stefano Teso", "GPL 3.0 or later" },
+		{ "Dear ImGui", "Omar Cornut", "MIT" },
+		{ "SDL 3", "Sam Lantinga", "zlib" },
+		{ "GLEW", "Milan Ikits, Marcelo Magallon", "BSD / MIT" },
+		{ "Jansson", "Petri Lehtinen", "MIT" },
+		{ "miniz", "Rich Geldreich, RAD Game Tools, Valve", "MIT" },
+		{ "LZMA SDK", "Igor Pavlov", "public domain" },
+		{ "Gamepad drawings", "AL2009man, Gamepad-Asset-Pack", "MIT" },
+		{ "Cozette", "the-moonwitch", "MIT" },
+		{ "Junicode (the rune)", "Peter S. Baker", "OFL 1.1" },
+		{ "Lola Retro (CRT filter)", "Zoki", "MIT" },
+	};
 
 	/* The pages, in the order of their tabs */
 	enum Page { INPUT, DISPLAY, AUDIO, HOTKEYS, OUTPUTS, LINK, PATHS, ABOUT, PAGES };

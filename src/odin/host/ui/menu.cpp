@@ -114,29 +114,6 @@ menu_size(float w, float h)
 	return { { std::min(w, std::max(w * SHARE, made.x)), std::min(h, std::max(h * SHARE, made.y)) }, made };
 }
 
-/* The window at start, that many times the screen; its sizes shorter
- * where the row is narrow */
-constexpr const char *WINDOW_SIZES[] = { "640 × 480", "1280 × 960", "1920 × 1440", "2560 × 1920", "Custom" };
-constexpr const char *WINDOW_WIDTHS[] = { "640", "1280", "1920", "2560", "Custom" };
-/* Custom among them: the size the user gives the window by hand */
-constexpr int CUSTOM = 4;
-constexpr unsigned ANISOTROPY[] = { 1, 2, 4, 8, 16 };
-
-/* The libraries Odin is made with: who wrote them, their licence */
-constexpr const char *LICENCES[][3] = {
-	{ "Odin", "Réda Chérif-Touil · Valkyrie, Stefano Teso", "GPL 3.0 or later" },
-	{ "Dear ImGui", "Omar Cornut", "MIT" },
-	{ "SDL 3", "Sam Lantinga", "zlib" },
-	{ "GLEW", "Milan Ikits, Marcelo Magallon", "BSD / MIT" },
-	{ "Jansson", "Petri Lehtinen", "MIT" },
-	{ "miniz", "Rich Geldreich, RAD Game Tools, Valve", "MIT" },
-	{ "LZMA SDK", "Igor Pavlov", "public domain" },
-	{ "Gamepad drawings", "AL2009man, Gamepad-Asset-Pack", "MIT" },
-	{ "Cozette", "the-moonwitch", "MIT" },
-	{ "Junicode (the rune)", "Peter S. Baker", "OFL 1.1" },
-	{ "Lola Retro (CRT filter)", "Zoki", "MIT" },
-};
-
 ImVec4
 colour(ImU32 c)
 {
@@ -585,7 +562,6 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 	kit.end_group();
 
 	kit.begin_group("3D QUALITY");
-	static constexpr const char *SCALES[] = { "1×", "2×", "3×", "4×", "5×", "6×" };
 	int scale = static_cast<int>(state.scale) - 1;
 
 	std::snprintf(about, sizeof(about), "drawn at %u × %u%s", 640 * state.scale, 480 * state.scale,
@@ -596,7 +572,6 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 	});
 
 	/* How the flat pieces (the HUD, its text) are drawn when finer */
-	static constexpr const char *UPSCALE_MODES_SHOWN[] = { "Raw", "Snap 2D", "Native 2D" };
 	static constexpr const char *UPSCALE_MODES_ABOUT[] = {
 		"the HUD drawn finer as the rest: thin lines may show between its pieces",
 		"the corners of the flat pieces (HUD, text) on the cabinet's pixels: no lines, slanted edges smooth",
@@ -611,7 +586,6 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 			state.upscale_mode = static_cast<unsigned>(upscale_mode);
 	});
 
-	static constexpr const char *FILTERS[] = { "None", "2×", "4×", "8×", "16×" };
 	int filter = index_of(ANISOTROPY, state.anisotropy);
 
 	watch(PREVIEW_FILTER, [&] {
@@ -650,7 +624,6 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 			state.window = static_cast<unsigned>(window) + 1;
 	});
 
-	static constexpr const char *SYNCS[] = { "off", "on", "adaptive" };
 	static constexpr const char *SYNCS_ABOUT[] = {
 		"frames do not wait for the display: one may tear",
 		"each frame waits for the display: no tearing, a late one slows the game",
@@ -684,8 +657,6 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 	 * the shaders of Lola Retro); another filter odin.ini names is shown
 	 * by its name */
 	kit.begin_group("FILTER");
-	static constexpr const char *SCREENS[] = { "None", "Monitor 29\" (31 kHz)", "Projector 50\" (31 kHz)" };
-	static constexpr const char *PRESETS[] = { "", "lola-retro/sega-monitor-29", "lola-retro/sega-projector-50" };
 	std::vector<std::string> screens(std::begin(SCREENS), std::end(SCREENS));
 	int screen = -1;
 
@@ -705,7 +676,6 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 	kit.end_group();
 
 	kit.begin_group("SPEED");
-	static constexpr const char *PACES[] = { "60 fps (cabinet)", "Unlimited" };
 	int pace = state.unthrottled ? 1 : 0;
 
 	watch(PREVIEW_SCREEN, [&] {
@@ -984,7 +954,7 @@ Menu::page_about(MenuKit &kit) const
 	const float width = ImGui::GetContentRegionAvail().x, mid = at.x + width / 2.0f;
 	const float rune = kit.px(34.0f), big = MenuKit::font(22.0f / 12.5f), letters = big * 0.2f;
 	const float small = MenuKit::font(MenuKit::SMALL);
-	const char *const what = "Sega Hikaru emulator, as close to the hardware as it goes";
+	const char *const what = WHAT;
 	const char *const version = odin_version();
 	float y = at.y + kit.px(10.0f);
 

@@ -210,7 +210,20 @@ private:
 	void keep_hotkeys();
 	void caught(const HostInput &input);
 	void change_inputs(bool to_defaults);
+	void clear_inputs();
 	void undo();
+	/* As the page Input and the bar do them for a game: the gamepad or the
+	 * joystick of a player, its light gun, its vibration ([players.<game>]);
+	 * the game that runs takes them at once when it is that game (`runs`);
+	 * the dead zone and the trigger threshold of a make and model of
+	 * gamepad ([gamepad.<guid>]) */
+	void want_pad(const std::string &game, unsigned player, const std::string &guid, const std::string &name,
+	              bool joystick, bool runs);
+	void want_gun(const std::string &game, unsigned player, const std::string &identity, const std::string &name,
+	              bool runs);
+	void keep_vibration(const std::string &game, bool on, bool runs);
+	void keep_tuning(const std::string &guid, const PadTuning &now, const PadTuning &was);
+	void fill_bar_inputs(BarState &bar) const;
 	void keep_binding(const Bindings::Line &line, const std::string &game = "");
 	/* The cards in the folder of the game, by name; the file of one */
 	void list_cards();

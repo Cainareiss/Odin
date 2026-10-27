@@ -286,21 +286,14 @@ MenuSession::draw_menu()
 	if (state.want_gun) {
 		const auto &[player, gun] = *state.want_gun;
 
-		keep("players." + game_shown(), player ? "gun2" : "gun1",
-		     gun.identity.empty() ? std::nullopt : std::optional<std::string>(gun.identity + " " + gun.name));
-		if (!m_other)
-			m_controls.want_gun(player, gun.identity);
+		want_gun(game_shown(), player, gun.identity, gun.name, !m_other);
 		state.want_gun.reset();
 		m_menu_pictures = MENU_PICTURES;
 	}
 	if (state.want) {
 		const auto &[guid, name] = *state.want;
-		const std::string section = "players." + game_shown(), key = state.player ? "p2" : "p1";
-		const std::optional<std::string> value = guid.empty() ? std::nullopt : std::optional(guid + " " + name);
 
-		if (!m_other)
-			m_controls.want(state.player, guid);
-		keep(section, key, value);
+		want_pad(game_shown(), state.player, guid, name, false, !m_other);
 		state.want.reset();
 		m_menu_pictures = MENU_PICTURES;
 	}
@@ -309,19 +302,14 @@ MenuSession::draw_menu()
 	if (state.want_joystick) {
 		const auto &[guid, name] = *state.want_joystick;
 
-		if (!m_other)
-			m_controls.want_joystick(state.player, guid);
-		keep("players." + game_shown(), state.player ? "joy2" : "joy1", guid + " " + name);
+		want_pad(game_shown(), state.player, guid, name, true, !m_other);
 		state.want_joystick.reset();
 		m_menu_pictures = MENU_PICTURES;
 	}
 	if (state.ask == MenuState::Ask::DEFAULTS) {
 		change_inputs(true);
 	} else if (state.ask == MenuState::Ask::CLEAR) {
-		m_cleared_game = game_shown();
-		m_cleared = m_settings.section("controls." + m_cleared_game);
-		change_inputs(false);
-		m_undo_until = SDL_GetTicks() + UNDO_MS;
+		clear_inputs();
 	} else if (state.ask == MenuState::Ask::UNDO) {
 		undo();
 	} else if (state.ask == MenuState::Ask::CLOSE_GAME) {
@@ -448,31 +436,11 @@ MenuSession::apply(const MenuState &was)
 		}
 	}
 	/* The vibration of the game shown: at once for the game that runs */
-	if (now.shake != was.shake && now.can_shake) {
-		const std::string section = "players." + game_shown();
-
-		if (!m_other && m_game)
-			m_controls.feel_game(*m_game, now.shake);
-		keep(section, "vibration", on_off(now.shake, true));
-	}
-	/* The dead zone and the trigger threshold of the gamepad shown: of its
-	 * make and model, a line of their own where they differ from
-	 * [gamepads] */
-	if (const std::string guid = pad_shown(now);
-	    !guid.empty() && (now.tuning.dead_zone != was.tuning.dead_zone ||
-	                      now.tuning.trigger_threshold != was.tuning.trigger_threshold)) {
-		const PadTuning all = PadTuning::of(m_settings, {}, false);
-		const std::string section = "gamepad." + guid;
-		const auto line = [](int percent, int standard) {
-			return percent == standard ? std::nullopt : std::optional(std::to_string(percent));
-		};
-
-		if (now.tuning.dead_zone != was.tuning.dead_zone)
-			keep(section, "dead_zone", line(now.tuning.dead_zone, all.dead_zone));
-		if (now.tuning.trigger_threshold != was.tuning.trigger_threshold)
-			keep(section, "trigger_threshold", line(now.tuning.trigger_threshold, all.trigger_threshold));
-		m_controls.retune();
-	}
+	if (now.shake != was.shake && now.can_shake)
+		keep_vibration(game_shown(), now.shake, !m_other && m_game);
+	/* The dead zone and the trigger threshold of the gamepad shown */
+	if (const std::string guid = pad_shown(now); !guid.empty())
+		keep_tuning(guid, now.tuning, was.tuning);
 	/* The network board: for the games that start from now */
 	if (now.link_board != was.link_board)
 		keep("network", "board", now.link_board == 0 ? std::nullopt :
@@ -494,6 +462,76 @@ MenuSession::apply(const MenuState &was)
 		m_menu_state.programs = 0;
 		keep("outputs", "network", on_off(now.network, false));
 	}
+}
+
+/* Clear mapping: the inputs of the device shown of the player shown, none;
+ * Undo offered a while */
+void
+MenuSession::clear_inputs()
+{
+	m_cleared_game = game_shown();
+	m_cleared = m_settings.section("controls." + m_cleared_game);
+	change_inputs(false);
+	m_undo_until = SDL_GetTicks() + UNDO_MS;
+}
+
+/* [players.<game>] p1 or p2 (none: the first free gamepad), joy1 or joy2 */
+void
+MenuSession::want_pad(const std::string &game, unsigned player, const std::string &guid, const std::string &name,
+                      bool joystick, bool runs)
+{
+	const std::string section = "players." + game;
+
+	if (joystick) {
+		if (runs)
+			m_controls.want_joystick(player, guid);
+		keep(section, player ? "joy2" : "joy1", guid + " " + name);
+		return;
+	}
+	if (runs)
+		m_controls.want(player, guid);
+	keep(section, player ? "p2" : "p1", guid.empty() ? std::nullopt : std::optional(guid + " " + name));
+}
+
+/* [players.<game>] gun1 or gun2 (none: no light gun) */
+void
+MenuSession::want_gun(const std::string &game, unsigned player, const std::string &identity, const std::string &name,
+                      bool runs)
+{
+	keep("players." + game, player ? "gun2" : "gun1",
+	     identity.empty() ? std::nullopt : std::optional<std::string>(identity + " " + name));
+	if (runs)
+		m_controls.want_gun(player, identity);
+}
+
+/* [players.<game>] vibration: a line only when off */
+void
+MenuSession::keep_vibration(const std::string &game, bool on, bool runs)
+{
+	if (runs)
+		m_controls.feel_game(*m_game, on);
+	keep("players." + game, "vibration", on ? std::nullopt : std::optional<std::string>("off"));
+}
+
+/* The dead zone and the trigger threshold of a make and model of gamepad:
+ * a line of their own where they differ from [gamepads] */
+void
+MenuSession::keep_tuning(const std::string &guid, const PadTuning &now, const PadTuning &was)
+{
+	if (now.dead_zone == was.dead_zone && now.trigger_threshold == was.trigger_threshold)
+		return;
+
+	const PadTuning all = PadTuning::of(m_settings, {}, false);
+	const std::string section = "gamepad." + guid;
+	const auto line = [](int percent, int standard) {
+		return percent == standard ? std::nullopt : std::optional(std::to_string(percent));
+	};
+
+	if (now.dead_zone != was.dead_zone)
+		keep(section, "dead_zone", line(now.dead_zone, all.dead_zone));
+	if (now.trigger_threshold != was.trigger_threshold)
+		keep(section, "trigger_threshold", line(now.trigger_threshold, all.trigger_threshold));
+	m_controls.retune();
 }
 
 } /* namespace odin */

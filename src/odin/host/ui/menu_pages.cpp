@@ -335,8 +335,6 @@ boards_of(const std::string &game)
 	return OTHER_BOARDS;
 }
 
-constexpr const char *PLAYED[] = { "Main", "Both", "Four" };
-
 /* The drawing of a card, in a space of 330 by 110 (mock-up v50) */
 constexpr float ROUTE_W = 330.0f;
 constexpr float ROUTE_H = 110.0f;
@@ -887,8 +885,6 @@ Menu::page_outputs(MenuKit &kit, MenuState &state) const
 void
 Menu::page_link(MenuKit &kit, MenuState &state) const
 {
-	static constexpr const char *OFF_ON[] = { "Off", "On" };
-	static constexpr unsigned PORTS = 8;
 	const char *const locked = state.link_given ? "set by ODIN_NETBD" : nullptr;
 	const bool looped = state.link_board == static_cast<int>(NetLinkSettings::Board::LOOP);
 	const bool on = state.link_board == static_cast<int>(NetLinkSettings::Board::RING);
@@ -941,9 +937,9 @@ Menu::page_link(MenuKit &kit, MenuState &state) const
 		std::vector<std::string> ports;
 		int port = -1;
 
-		for (unsigned p = 0; p < PORTS; p++)
+		for (unsigned p = 0; p < LINK_PORTS; p++)
 			ports.push_back(std::to_string(NetCable::PORT + p));
-		if (state.link_port < NetCable::PORT || state.link_port >= NetCable::PORT + PORTS)
+		if (state.link_port < NetCable::PORT || state.link_port >= NetCable::PORT + LINK_PORTS)
 			ports.push_back(std::to_string(state.link_port));
 		for (size_t p = 0; p < ports.size(); p++)
 			if (ports[p] == std::to_string(state.link_port))

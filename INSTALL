@@ -146,18 +146,29 @@ a tilted one (the lock-on of Planet Harriers).
 
 In a game, the mouse moved over the window shows the bar at its top a
 while, the game going on under it; in a game the mouse aims in (Brave Fire
-Fighters), only from the top edge of the window. FILE: Open... plays the
-zip or the 7z of a game, the game of its name in MAME, from its directory;
-Close game goes back to the library, Reset switches the cabinet off and
-on; the state of the game saved and loaded, the folders of the games and
-of the BIOS, the menu (Settings...), Quit. INPUT, VIDEO, AUDIO and ABOUT
-open the pages of the menu; VIDEO also takes the whole display and sets
-the bezel and the speed in the title, AUDIO the volume and the sound in
-the background; DEBUG pauses the game and has the board say each access
-(at the next game). What the bar changes is kept in odin.ini as the menu
-keeps it. What Odin does or cannot do (a state saved, the card taken in)
-is said a few seconds in the bottom-left corner, bar or not. In the library, Close game, Reset, the states and Pause are
-greyed out.
+Fighters), only from the top edge of the window. Its lists set what the
+pages of the menu set, without opening it. FILE: Open... plays the zip or
+the 7z of a game, the game of its name in MAME, from its directory; Close
+game goes back to the library, Reset switches the cabinet off and on; the
+state of the game saved and loaded, the menu (Settings...), Quit. INPUT,
+for the game that runs: the gamepad of each player, the dead zone and the
+trigger threshold of that gamepad, its inputs back to their defaults or
+cleared, kind of device by kind (Undo a few seconds), the light gun of
+each player and the vibration where the game has them; the hotkeys back to
+their defaults, the lamp programs. VIDEO: the whole display, the window at
+start, the upscaling and its mode, the texture filter, the vertical sync,
+the bezel, the CRT screen, the pace (at the next launch), the speed in the
+title, the palette of the menu. AUDIO: the volume, the sound in the
+background, the device, and how the game that runs plays its optional
+sound board. LINK: the network board, on or off, this cabinet and its port
+(at the next game). DEBUG pauses the game and has the board say each
+access (at the next game). ABOUT opens the page About. The keys of each
+control and hotkey, the folders, the address of the next cabinet and a
+window of a size given by hand are set in the menu. What the bar changes
+is kept in odin.ini as the menu keeps it. What Odin does or cannot do (a
+state saved, the card taken in) is said a few seconds in the bottom-left
+corner, bar or not. In the library, Close game, Reset, the states, Pause
+and the players of INPUT are greyed out.
 
 0 is TEST and 9 SERVICE, the buttons of the cabinet: they open and work
 the menu of the BOOTROM and the test menus of the games (both together
