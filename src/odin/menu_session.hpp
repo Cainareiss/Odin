@@ -27,6 +27,7 @@
 #include <SDL3/SDL.h>
 
 #include "odin/audio_out.hpp"
+#include "odin/card_reader.hpp"
 #include "odin/controls.hpp"
 #include "odin/display.hpp"
 #include "odin/folder_dialog.hpp"
@@ -126,6 +127,11 @@ public:
 	 * card of the list in hand (-1: none). What the bar says of it. */
 	std::string card_in_out();
 	std::string choose_card(int index);
+	/* What the reader did with a card since the last call, the game's
+	 * doing, to be said: the player's card taken in, a card out at the
+	 * slot; empty: nothing new. `quiet`: only seen (the player's own
+	 * gestures, a state loaded). */
+	std::string card_news(bool quiet = false);
 	/* For the tests: ODIN_MENU_TEST, the menu opens after that frame */
 	bool tested_at(unsigned frame) const { return m_menu_test && frame % m_menu_test == 0; }
 	/* Close game was pressed again in the menu, taken */
@@ -243,6 +249,7 @@ private:
 	 * changes the folders */
 	std::string m_states;
 	std::vector<std::string> m_cards;
+	std::optional<CardReader::Where> m_card_seen;
 	FolderDialog m_dialog;
 	bool m_menu_opened = false, m_closing = false, m_leaving = false;
 	/* A size of the window from the hands of the user, not kept yet */

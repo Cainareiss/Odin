@@ -20,7 +20,8 @@
 
 /* Checks of the CRP-1231BR-10 card reader (its replies as its program
  * gives them, MARKDOWN/96c: frames, ACK, ENQ, refusals, the read that waits,
- * blank tracks, the stocker, the player's card file) and of the MIE serial
+ * blank tracks, the stocker, the player's card file written whole or not
+ * at all, its copy) and of the MIE serial
  * adapter block driven from its ports
  * the way the Z80 code von4 uploads does it: routine 0x90E1 sends a
  * frame byte by byte, 0x913C reads one byte through the 0x80/0x81
@@ -31,7 +32,7 @@
  * Build: g++ -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
  *            -O2 -I src tests/mie/card_test.cpp src/odin/card_reader.cpp \
  *            src/odin/mie.cpp src/odin/z80.cpp src/odin/z80_ops.cpp \
- *            src/odin/jvs.cpp -o card_test
+ *            src/odin/jvs.cpp src/odin/user_files.cpp -o card_test
  * An optional argument names a scratch file for the checks of the card
  * file.
  * Exit status is 0 when every check passes. */
@@ -420,6 +421,51 @@ void test_reader(const char *scratch)
 	resp = exchange(l, frame(0x33, { '0', '1', '6' }), acked);
 	check(response_ok(resp, 0x33, st1(P::S1S2, true), 'V', '0', 3 * 0x45), "a wrong LRC on track 2: not read ('V')");
 	std::remove(file.c_str());
+
+	/* The file written whole or not at all: the card before kept as
+	 * <file>.bak, the same card not written again, a card not whole not
+	 * written; a file cut short gives way to its copy */
+	using Card = std::array<uint8_t, odin::CardReader::CARD_SIZE>;
+	using odin::CardReader;
+	const std::string bak = file + ".bak";
+	const auto card_of = [](uint8_t c) {
+		Card card{};
+
+		for (uint32_t t = 0; t < CardReader::TRACKS; t++) {
+			uint8_t *const track = card.data() + t * CardReader::TRACK_SIZE;
+
+			track[0] = 0xFF;
+			std::fill_n(track + 1, CardReader::TRACK_DATA, c);
+			track[CardReader::TRACK_DATA + 1] = 0xFF;
+			track[CardReader::TRACK_DATA + 2] =
+				CardReader::frame_xor(std::span<const uint8_t>(track + 1, CardReader::TRACK_DATA + 1));
+		}
+		return card;
+	};
+	const auto bytes_of = [](const Card &card) { return Bytes(card.begin(), card.end()); };
+	const Card one = card_of('1'), two = card_of('2');
+	Card spoilt = two;
+
+	spoilt[CardReader::TRACK_SIZE + CardReader::TRACK_DATA + 2] ^= 1;
+	std::remove(bak.c_str());
+	check(CardReader::whole_card(CardReader::blank_card()) && CardReader::whole_card(one) && !CardReader::whole_card(spoilt),
+	      "a new card and a written one whole, a wrong LRC not");
+	check(CardReader::write_card(file, one, nullptr) && read_file(file) == bytes_of(one) && read_file(bak).empty(),
+	      "a first card: written, no copy");
+	check(CardReader::write_card(file, two, nullptr) && read_file(file) == bytes_of(two) && read_file(bak) == bytes_of(one),
+	      "another card: the one before kept in .bak");
+	check(CardReader::write_card(file, two, nullptr) && read_file(bak) == bytes_of(one), "the same card again: the copy stays");
+	check(!CardReader::write_card(file, spoilt, nullptr) && read_file(file) == bytes_of(two), "a card not whole: not written");
+	check(write_file(file, Bytes(two.begin(), two.begin() + 100)), "(the file cut short)");
+	CardReader c(file);
+	check(c.where() == Where::IN_HAND, "a card cut short: in hand all the same");
+	exchange(c, frame(0xD0, { '1' }), acked);
+	c.insert();
+	resp = exchange(c, frame(0x33, { '0', '1', '6' }), acked);
+	check(response_ok(resp, 0x33, st1(P::S4S5, true), '0', '0', 3 * 0x45) && data_of(resp) == Bytes(3 * 0x45, '1'),
+	      "its copy read in its place");
+	std::remove(file.c_str());
+	std::remove(bak.c_str());
 }
 
 /* The chip with its bus granted to the host: the CPU stops, the

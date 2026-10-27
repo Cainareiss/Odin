@@ -22,6 +22,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <utility>
 
 #include "odin/env.hpp"
 #include "odin/user_files.hpp"
@@ -330,6 +331,31 @@ MenuSession::choose_card(int index)
 		return "The card is in the reader: take it back first";
 	keep("players." + m_game->name, "card", none ? std::nullopt : std::optional<std::string>(name));
 	return none ? "No card in hand" : "Card in hand: " + name;
+}
+
+std::string
+MenuSession::card_news(bool quiet)
+{
+	using Where = CardReader::Where;
+	CardReader *const reader = m_board ? m_board->card_reader() : nullptr;
+
+	if (!reader)
+		return {};
+
+	const Where now = reader->where();
+	const std::optional<Where> was = std::exchange(m_card_seen, now);
+
+	if (quiet || !was || *was == now)
+		return {};
+
+	const HotKey &key = m_hotkeys.of(Hotkeys::Action::CARD).keys[0];
+	const std::string with = key.key == SDLK_UNKNOWN ? "FILE, Take card back" : Hotkeys::text(key);
+
+	if (now == Where::INSIDE)
+		return "Card taken in: " + std::filesystem::path(reader->card_file()).stem().string();
+	if (now == Where::AT_SLOT)
+		return (*was == Where::INSIDE ? "Card out: take it back with " : "New card out: take it with ") + with;
+	return {};
 }
 
 MenuSession::Asked

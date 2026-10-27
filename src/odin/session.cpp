@@ -55,10 +55,13 @@ Session::load_or_save_state(bool load)
 	}
 	if (!load && !m_menus.states().empty())
 		std::filesystem::create_directories(m_menus.states(), error);
-	if (load ? m_board.load_state(path) : m_board.save_state(path))
+	if (load ? m_board.load_state(path) : m_board.save_state(path)) {
 		std::printf("%s state '%s'\n", load ? "loaded" : "saved", path.c_str());
-	else
+		/* The card where the state has it: no news */
+		m_menus.card_news(true);
+	} else {
 		std::fprintf(stderr, "ERROR: failed to %s state '%s'\n", load ? "load" : "save", path.c_str());
+	}
 }
 
 /* The hotkeys of the emulator (hotkeys.hpp): by default Escape or F10
@@ -171,6 +174,7 @@ Session::act(Hotkeys::Action action)
 		break;
 	case Action::CARD:
 		say(m_menus.card_in_out());
+		m_menus.card_news(true);
 		break;
 	case Action::QUIT:
 		return true;
@@ -298,6 +302,7 @@ Session::do_bar()
 		break;
 	case Ask::CARD_CHOOSE:
 		say(m_menus.choose_card(m_bar.card_chosen));
+		m_menus.card_news(true);
 		break;
 	case Ask::SETTINGS:
 		open_menu(m_bar.page);
@@ -438,6 +443,8 @@ Session::frames()
 		m_display.begin_frame();
 		m_controls.update();
 		m_board.run_frame();
+		if (const std::string news = m_menus.card_news(); !news.empty())
+			say(news);
 		m_controls.show(m_board.io_outputs(), m_board.sound(true), m_board.drive_torque());
 		if (OutputsNetwork *const outputs = m_menus.outputs())
 			outputs->show(m_board.io_outputs());

@@ -145,6 +145,16 @@ public:
 
 	/* XOR of a frame slice, as the program checks it */
 	static uint8_t frame_xor(std::span<const uint8_t> bytes);
+	/* A new card as the stocker has them (CMD_DISPENSE) */
+	static std::array<uint8_t, CARD_SIZE> blank_card();
+	/* Each track blank or whole: its marks and its LRC as the program
+	 * writes them */
+	static bool whole_card(std::span<const uint8_t, CARD_SIZE> card);
+	/* A card into its file whole or not at all: through a temporary file
+	 * (write_kept), the whole card the file held before kept beside it as
+	 * <file>.bak; nothing for a card not whole, nor for the same card
+	 * again. False, said to `log`, when it was not written. */
+	static bool write_card(const std::string &path, std::span<const uint8_t, CARD_SIZE> card, FILE *log);
 
 	/* Commands it does not answer as the program does, and bad frames,
 	 * are logged once each to `out` */
@@ -170,6 +180,10 @@ private:
 	void send(uint8_t byte);
 	void trace_frame(const char *dir, std::span<const uint8_t> bytes) const;
 	void log_once(uint8_t cmd, const char *what);
+	/* A card file read: missing or of another size, of the right size, or
+	 * whole as well (whole_card) */
+	enum class Read : uint8_t { NONE, NOT_WHOLE, WHOLE };
+	Read read_card_file(const std::string &path, std::array<uint8_t, CARD_SIZE> &card) const;
 	bool read_card(const std::string &path, std::array<uint8_t, CARD_SIZE> &card) const;
 	bool save_card(const std::string &path);
 

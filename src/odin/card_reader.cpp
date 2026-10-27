@@ -24,6 +24,8 @@
 #include <format>
 #include <utility>
 
+#include "odin/user_files.hpp"
+
 namespace odin {
 
 namespace {
@@ -359,10 +361,7 @@ void CardReader::run(std::span<const uint8_t> frame)
 			refuse(cmd);
 			break;
 		}
-		m_card.fill(0);
-		m_card[0] = 0xFF;
-		m_card[TRACK_DATA + 1] = 0xFF;
-		m_card[TRACK_DATA + 2] = 0xFF;
+		m_card = blank_card();
 		m_position = S3S4S5;
 		m_dispensed = true;
 		reply(cmd, '0', '0');
@@ -617,14 +616,87 @@ void CardReader::log_once(uint8_t cmd, const char *what)
 	std::fputs(std::format("card: command {:02x}: {}\n", cmd, what).c_str(), m_log);
 }
 
+std::array<uint8_t, CardReader::CARD_SIZE> CardReader::blank_card()
+{
+	std::array<uint8_t, CARD_SIZE> card{};
+
+	card[0] = 0xFF;
+	card[TRACK_DATA + 1] = 0xFF;
+	card[TRACK_DATA + 2] = frame_xor(std::span<const uint8_t>(card.data() + 1, TRACK_DATA + 1));
+	return card;
+}
+
+bool CardReader::whole_card(std::span<const uint8_t, CARD_SIZE> card)
+{
+	for (uint32_t t = 0; t < TRACKS; t++) {
+		const std::span<const uint8_t> raw = card.subspan(t * TRACK_SIZE, TRACK_SIZE);
+
+		if (std::all_of(raw.begin(), raw.end(), [](uint8_t b) { return b == 0; }))
+			continue;
+		if (raw[0] != 0xFF || raw[TRACK_DATA + 1] != 0xFF || raw[TRACK_DATA + 2] != frame_xor(raw.subspan(1, TRACK_DATA + 1)))
+			return false;
+	}
+	return true;
+}
+
+bool CardReader::write_card(const std::string &path, std::span<const uint8_t, CARD_SIZE> card, FILE *log)
+{
+	const auto said = [&](const std::string &what) {
+		if (log)
+			std::fputs(std::format("card: '{}' {}\n", path, what).c_str(), log);
+	};
+
+	if (!whole_card(card)) {
+		said("not written: a track is neither blank nor whole");
+		return false;
+	}
+
+	/* What the file holds now: the same card is not written again (an
+	 * eject after a write), another whole one is kept */
+	std::array<uint8_t, CARD_SIZE + 1> held;
+	size_t n = 0;
+
+	if (FILE *const f = std::fopen(path.c_str(), "rb")) {
+		n = std::fread(held.data(), 1, held.size(), f);
+		std::fclose(f);
+	}
+	if (n == CARD_SIZE && std::equal(card.begin(), card.end(), held.begin()))
+		return true;
+	if (n == CARD_SIZE && whole_card(std::span<const uint8_t, CARD_SIZE>(held.data(), CARD_SIZE)) &&
+	    !write_kept(path + ".bak", std::span<const uint8_t>(held.data(), CARD_SIZE)))
+		said("kept no copy of the card before");
+	if (!write_kept(path, card)) {
+		said("not written");
+		return false;
+	}
+	return true;
+}
+
 /* A card file: the three tracks as on the card, or their 69 bytes each,
- * recorded */
+ * recorded. One not whole (cut short, changed by hand) gives way to its
+ * copy <file>.bak (write_card) when that one is whole. */
 bool CardReader::read_card(const std::string &path, std::array<uint8_t, CARD_SIZE> &card) const
+{
+	if (read_card_file(path, card) == Read::WHOLE)
+		return true;
+
+	std::array<uint8_t, CARD_SIZE> kept;
+
+	if (read_card_file(path + ".bak", kept) == Read::WHOLE) {
+		if (m_log)
+			std::fputs(std::format("card: '{}' is not whole: its copy '{}.bak' taken\n", path, path).c_str(), m_log);
+		card = kept;
+		return true;
+	}
+	return read_card_file(path, card) != Read::NONE;
+}
+
+CardReader::Read CardReader::read_card_file(const std::string &path, std::array<uint8_t, CARD_SIZE> &card) const
 {
 	FILE *const f = std::fopen(path.c_str(), "rb");
 
 	if (!f)
-		return false;
+		return Read::NONE;
 
 	std::array<uint8_t, CARD_SIZE + 1> bytes;
 	const size_t n = std::fread(bytes.data(), 1, bytes.size(), f);
@@ -645,26 +717,15 @@ bool CardReader::read_card(const std::string &path, std::array<uint8_t, CARD_SIZ
 		if (m_log)
 			std::fputs(std::format("card: file '{}' holds {} bytes, {} or {} expected\n", path, n, CARD_SIZE,
 			                       DATA_SIZE).c_str(), m_log);
-		return false;
+		return Read::NONE;
 	}
-	return true;
+	return whole_card(card) ? Read::WHOLE : Read::NOT_WHOLE;
 }
 
-/* The card in the reader into a file */
+/* The card in the reader into a file (write_card) */
 bool CardReader::save_card(const std::string &path)
 {
-	FILE *const f = std::fopen(path.c_str(), "wb");
-
-	if (!f) {
-		if (m_log)
-			std::fputs(std::format("card: can't write '{}'\n", path).c_str(), m_log);
-		return false;
-	}
-
-	const size_t n = std::fwrite(m_card.data(), 1, m_card.size(), f);
-
-	std::fclose(f);
-	return n == m_card.size();
+	return write_card(path, m_card, m_log);
 }
 
 void CardReader::save(CardReaderState &out) const

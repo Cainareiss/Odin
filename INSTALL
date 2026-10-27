@@ -422,8 +422,12 @@ writes it and ejects it, and the game waits until the player takes it
 back, F6 or Take card back (Virtual-On). A new card comes from the
 cabinet set as a terminal (the test menu of the game, GAME ASSIGNMENTS,
 GAME START MODE = VENDOR, with FREE PLAY): taken back, it is kept as
-card-<n>. Virtual-On reads cards in the country Japan only (the SYSTEM
-MENU of the BIOS); elsewhere it never asks for one.
+card-<n>. The bar says when the reader takes the card in and when a card
+comes out at the slot. A card file is written whole or not at all, the
+card it held before kept beside it as <name>.card.bak, which Odin reads
+in its place should the card file be cut short. Virtual-On reads cards in
+the country Japan only (the SYSTEM MENU of the BIOS); elsewhere it never
+asks for one.
 
 A portable Odin keeps its files in its own folder: put an empty file
 portable.txt beside the program (odin.exe, or the AppImage), or its

@@ -30,7 +30,8 @@
  *            src/odin/mie.cpp \
  *            src/odin/mie_board.cpp src/odin/card_reader.cpp src/odin/z80.cpp \
  *            src/odin/z80_ops.cpp src/odin/io_837_13551.cpp src/odin/tmp90ph44.cpp \
- *            src/odin/tlcs90.cpp src/odin/io_837_13741.cpp src/odin/d71054.cpp -o mie_test
+ *            src/odin/tlcs90.cpp src/odin/io_837_13741.cpp src/odin/d71054.cpp \
+ *            src/odin/user_files.cpp -o mie_test
  * Exit status is 0 when every check passes. */
 
 #include "odin/eeprom_93c46.hpp"

@@ -39,7 +39,7 @@
  *            src/odin/z80.cpp src/odin/z80_ops.cpp src/odin/eeprom_93c46.cpp src/odin/card_reader.cpp \
  *            src/odin/jvs.cpp src/odin/io_837_13551_imitation.cpp src/odin/io_837_13741_imitation.cpp \
  *            src/odin/io_837_13551.cpp src/odin/tmp90ph44.cpp src/odin/tlcs90.cpp src/odin/io_837_13741.cpp \
- *            src/odin/d71054.cpp -o line_bench
+ *            src/odin/d71054.cpp src/odin/user_files.cpp -o line_bench
  * Run: line_bench <315-6215.bin>. Exit status 0 when every check passes. */
 
 #include "odin/mie_board.hpp"
