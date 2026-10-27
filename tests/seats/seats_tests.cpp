@@ -22,7 +22,7 @@
  *            `pkg-config --cflags sdl3` -I src tests/seats/seats_tests.cpp -o seats_tests
  * Exit status is 0 when every check passes. */
 
-#include "odin/seats.hpp"
+#include "odin/host/input/seats.hpp"
 
 #include <cstdio>
 

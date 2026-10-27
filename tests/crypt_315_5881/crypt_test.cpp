@@ -34,10 +34,10 @@
  *
  * Build: g++ -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
  *            -O2 -I src tests/crypt_315_5881/crypt_test.cpp \
- *            src/odin/crypt_315_5881.cpp -o crypt_test
+ *            src/odin/machine/chips/crypt_315_5881.cpp -o crypt_test
  * Exit status is 0 when every check passes. */
 
-#include "odin/crypt_315_5881.hpp"
+#include "odin/machine/chips/crypt_315_5881.hpp"
 
 #include <array>
 #include <cstdio>

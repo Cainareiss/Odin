@@ -20,11 +20,11 @@
  * driven by small programs in its PROM.
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
- *            -I src tests/tmp90ph44/tmp90ph44_tests.cpp src/odin/tmp90ph44.cpp src/odin/tlcs90.cpp \
+ *            -I src tests/tmp90ph44/tmp90ph44_tests.cpp src/odin/machine/chips/tmp90ph44.cpp src/odin/machine/cpu/tlcs90/tlcs90.cpp \
  *            -o tmp90ph44_tests
  * Exit status is 0 when every check passes. */
 
-#include "odin/tmp90ph44.hpp"
+#include "odin/machine/chips/tmp90ph44.hpp"
 
 #include <cstdio>
 #include <initializer_list>

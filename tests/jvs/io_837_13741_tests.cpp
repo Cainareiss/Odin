@@ -23,12 +23,12 @@
  * (tests/jvs/epr21868_bench.cpp runs that one).
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
- *            -I src tests/jvs/io_837_13741_tests.cpp src/odin/io_837_13741.cpp src/odin/d71054.cpp \
- *            src/odin/mie.cpp src/odin/z80.cpp src/odin/z80_ops.cpp src/odin/jvs.cpp -o io_837_13741_tests
+ *            -I src tests/jvs/io_837_13741_tests.cpp src/odin/machine/cabinet/io_837_13741.cpp src/odin/machine/chips/d71054.cpp \
+ *            src/odin/machine/chips/mie.cpp src/odin/machine/cpu/z80/z80.cpp src/odin/machine/cpu/z80/z80_ops.cpp src/odin/machine/cabinet/jvs.cpp -o io_837_13741_tests
  * Exit status is 0 when every check passes. */
 
-#include "odin/d71054.hpp"
-#include "odin/io_837_13741.hpp"
+#include "odin/machine/chips/d71054.hpp"
+#include "odin/machine/cabinet/io_837_13741.hpp"
 
 #include <algorithm>
 #include <cstdio>

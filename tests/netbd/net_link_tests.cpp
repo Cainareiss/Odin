@@ -23,11 +23,11 @@
  * must be free): both its ends plug in.
  *
  * Build: g++ -std=c++20 -O2 -pthread -Wall -Wextra -Wpedantic -Wconversion -Wshadow -I src \
- *            tests/netbd/net_link_tests.cpp src/odin/netbd_ring.cpp src/odin/netbd_837_13404.cpp \
- *            src/odin/sockets.cpp src/odin/m68000.cpp src/odin/m68000_ops.cpp -o net_link_tests
+ *            tests/netbd/net_link_tests.cpp src/odin/machine/cabinet/netbd_ring.cpp src/odin/machine/cabinet/netbd_837_13404.cpp \
+ *            src/odin/host/input/sockets.cpp src/odin/machine/cpu/m68000/m68000.cpp src/odin/machine/cpu/m68000/m68000_ops.cpp -o net_link_tests
  * Exit status is 0 when every check passes. */
 
-#include "odin/netbd_ring.hpp"
+#include "odin/machine/cabinet/netbd_ring.hpp"
 
 #include <chrono>
 #include <cstdio>

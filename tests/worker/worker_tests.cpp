@@ -20,10 +20,10 @@
  * time, and its owner waits for it only when it asks to.
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow -pthread \
- *            -I src tests/worker/worker_tests.cpp src/odin/worker.cpp -o worker_tests
+ *            -I src tests/worker/worker_tests.cpp src/odin/machine/core/worker.cpp -o worker_tests
  * Exit status is 0 when every check passes. */
 
-#include "odin/worker.hpp"
+#include "odin/machine/core/worker.hpp"
 
 #include <atomic>
 #include <chrono>

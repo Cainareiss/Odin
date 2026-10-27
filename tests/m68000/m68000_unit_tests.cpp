@@ -24,11 +24,11 @@
  * in the middle of a program.
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow -I src \
- *            tests/m68000/m68000_unit_tests.cpp src/odin/m68000.cpp src/odin/m68000_ops.cpp \
+ *            tests/m68000/m68000_unit_tests.cpp src/odin/machine/cpu/m68000/m68000.cpp src/odin/machine/cpu/m68000/m68000_ops.cpp \
  *            -o m68000_unit_tests
  */
 
-#include "odin/m68000.hpp"
+#include "odin/machine/cpu/m68000/m68000.hpp"
 
 #include <array>
 #include <cstdio>

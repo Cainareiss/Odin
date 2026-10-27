@@ -23,10 +23,10 @@
  *
  * Build: g++ -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
  *            -O2 -I src tests/wav_file/wav_file_tests.cpp \
- *            src/odin/wav_file.cpp -o wav_file_tests
+ *            src/odin/common/wav_file.cpp -o wav_file_tests
  */
 
-#include "odin/wav_file.hpp"
+#include "odin/common/wav_file.hpp"
 
 #include <cstdio>
 #include <cstdlib>

@@ -24,13 +24,13 @@
  * 837-13741 of NASCAR, against what its program epr-21868 answers.
  *
  * Build: g++ -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
- *            -O2 -I src tests/jvs/jvs_tests.cpp src/odin/jvs.cpp \
- *            src/odin/io_837_13551_imitation.cpp src/odin/io_837_13741_imitation.cpp -o jvs_tests
+ *            -O2 -I src tests/jvs/jvs_tests.cpp src/odin/machine/cabinet/jvs.cpp \
+ *            src/odin/machine/cabinet/io_837_13551_imitation.cpp src/odin/machine/cabinet/io_837_13741_imitation.cpp -o jvs_tests
  * Exit status is 0 when every check passes. */
 
-#include "odin/jvs.hpp"
-#include "odin/io_837_13551_imitation.hpp"
-#include "odin/io_837_13741_imitation.hpp"
+#include "odin/machine/cabinet/jvs.hpp"
+#include "odin/machine/cabinet/io_837_13551_imitation.hpp"
+#include "odin/machine/cabinet/io_837_13741_imitation.hpp"
 
 #include <cstdio>
 #include <cstring>

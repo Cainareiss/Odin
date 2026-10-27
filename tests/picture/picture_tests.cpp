@@ -24,7 +24,7 @@
  *            tests/picture/picture_tests.cpp -o picture_tests
  * Exit status is 0 when every check passes. */
 
-#include "odin/picture.hpp"
+#include "odin/host/video/picture.hpp"
 
 #include <cstdio>
 

@@ -21,13 +21,13 @@
  * from, from a whole file.
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
- *            -I src tests/program_cache/program_cache_tests.cpp src/odin/program_cache.cpp \
- *            src/odin/user_files.cpp -o program_cache_tests
+ *            -I src tests/program_cache/program_cache_tests.cpp src/odin/host/gfx/program_cache.cpp \
+ *            src/odin/host/app/user_files.cpp -o program_cache_tests
  * It writes its files in the folder given as its argument, or the current
  * one. Exit status is 0 when every check passes. */
 
-#include "odin/program_cache.hpp"
-#include "odin/user_files.hpp"
+#include "odin/host/gfx/program_cache.hpp"
+#include "odin/host/app/user_files.hpp"
 
 #include <cstdint>
 #include <cstdio>

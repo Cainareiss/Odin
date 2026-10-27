@@ -20,12 +20,12 @@
  * sizes, what is refused.
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
- *            -I src tests/state_file/state_file_tests.cpp src/odin/state_file.cpp \
+ *            -I src tests/state_file/state_file_tests.cpp src/odin/machine/core/state_file.cpp \
  *            -o state_file_tests
  * It writes its files in the folder given as its argument, or the current
  * one. Exit status is 0 when every check passes. */
 
-#include "odin/state_file.hpp"
+#include "odin/machine/core/state_file.hpp"
 
 #include <cstdint>
 #include <cstdio>

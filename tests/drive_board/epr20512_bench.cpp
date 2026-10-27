@@ -27,12 +27,12 @@
  *
  * Not run with the unit tests: it needs the EPROM.
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
- *            -I src tests/drive_board/epr20512_bench.cpp src/odin/drive_838_13366.cpp src/odin/z80.cpp \
- *            src/odin/z80_ops.cpp -o epr20512_bench
+ *            -I src tests/drive_board/epr20512_bench.cpp src/odin/machine/cabinet/drive_838_13366.cpp src/odin/machine/cpu/z80/z80.cpp \
+ *            src/odin/machine/cpu/z80/z80_ops.cpp -o epr20512_bench
  * Run: epr20512_bench <epr-20512.bin>. Exit status is 0 when every check
  * passes. */
 
-#include "odin/drive_838_13366.hpp"
+#include "odin/machine/cabinet/drive_838_13366.hpp"
 
 #include <algorithm>
 #include <cstdio>

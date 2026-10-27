@@ -20,12 +20,12 @@
  * refused, and that a file written takes the place of the old one whole.
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
- *            -I src tests/user_files/user_files_tests.cpp src/odin/user_files.cpp \
+ *            -I src tests/user_files/user_files_tests.cpp src/odin/host/app/user_files.cpp \
  *            -o user_files_tests
  * It writes its files in the folder given as its argument, or the current
  * one. Exit status is 0 when every check passes. */
 
-#include "odin/user_files.hpp"
+#include "odin/host/app/user_files.hpp"
 
 #include <cstdint>
 #include <cstdio>

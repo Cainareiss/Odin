@@ -28,11 +28,11 @@
  * RAM or write more than the board keeps must not be counted.
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
- *            -I src tests/drive_board/drive_wait_test.cpp src/odin/drive_838_13366.cpp src/odin/z80.cpp \
- *            src/odin/z80_ops.cpp -o drive_wait_test
+ *            -I src tests/drive_board/drive_wait_test.cpp src/odin/machine/cabinet/drive_838_13366.cpp src/odin/machine/cpu/z80/z80.cpp \
+ *            src/odin/machine/cpu/z80/z80_ops.cpp -o drive_wait_test
  * Run: drive_wait_test. Exit status is 0 when every check passes. */
 
-#include "odin/drive_838_13366.hpp"
+#include "odin/machine/cabinet/drive_838_13366.hpp"
 
 #include <algorithm>
 #include <cstdio>

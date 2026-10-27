@@ -20,17 +20,17 @@
  * interrupt causes, the layers and the blitter.
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
- *            -I src tests/eurasia/eurasia_tests.cpp src/odin/eurasia.cpp \
+ *            -I src tests/eurasia/eurasia_tests.cpp src/odin/machine/chips/eurasia/eurasia.cpp \
  *            -o eurasia_tests
  * Exit status is 0 when every check passes. */
 
-#include "odin/eurasia.hpp"
+#include "odin/machine/chips/eurasia/eurasia.hpp"
 
 #include <cstdio>
 #include <cstring>
 #include <vector>
 
-#include "odin/antarctic_list.hpp"
+#include "odin/machine/chips/antarctic/antarctic_list.hpp"
 
 namespace {
 

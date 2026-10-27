@@ -149,8 +149,8 @@ Not allowed:
   (`src/miniz/LICENSE`); the LZMA SDK is in the public domain
   (`src/lzma/lzma-sdk.txt`).
 - The gamepad drawings made from AL2009man's Gamepad-Asset-Pack keep its
-  MIT licence, written at the top of `src/odin/pad_drawings_al2009man.cpp`.
-- The font of the menu, Cozette (a part of it, `src/odin/fonts/cozette.ttf`),
-  keeps its MIT licence (`src/odin/fonts/LICENSE-cozette`).
+  MIT licence, written at the top of `src/odin/host/ui/pad_drawings_al2009man.cpp`.
+- The font of the menu, Cozette (a part of it, `src/odin/host/ui/fonts/cozette.ttf`),
+  keeps its MIT licence (`src/odin/host/ui/fonts/LICENSE-cozette`).
 - The CRT filters of Lola Retro (`filters/lola-retro`, its port for 86Box
   as it comes) keep their MIT licence (`filters/lola-retro/LICENSE`).

@@ -30,15 +30,15 @@
  * own A200 buffer.
  *
  * Build: g++ -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
- *            -O2 -I src tests/mie/card_test.cpp src/odin/card_reader.cpp \
- *            src/odin/mie.cpp src/odin/z80.cpp src/odin/z80_ops.cpp \
- *            src/odin/jvs.cpp src/odin/user_files.cpp -o card_test
+ *            -O2 -I src tests/mie/card_test.cpp src/odin/machine/chips/card_reader.cpp \
+ *            src/odin/machine/chips/mie.cpp src/odin/machine/cpu/z80/z80.cpp src/odin/machine/cpu/z80/z80_ops.cpp \
+ *            src/odin/machine/cabinet/jvs.cpp src/odin/host/app/user_files.cpp -o card_test
  * An optional argument names a scratch file for the checks of the card
  * file.
  * Exit status is 0 when every check passes. */
 
-#include "odin/card_reader.hpp"
-#include "odin/mie.hpp"
+#include "odin/machine/chips/card_reader.hpp"
+#include "odin/machine/chips/mie.hpp"
 
 #include <array>
 #include <cstdio>

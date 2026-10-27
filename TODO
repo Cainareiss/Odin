@@ -10,8 +10,8 @@ GENERAL
 
 One language: every file is C++20, built with the same warnings, and the
 frames of Valkyrie (machine, device, CPU, buffer, memory map) are gone: the
-board is a class (src/odin/hikaru.cpp), the window another
-(src/odin/display.cpp), and the save states keep each chip as it keeps
+board is a class (src/odin/machine/boards/hikaru/hikaru.cpp), the window another
+(src/odin/host/video/display.cpp), and the save states keep each chip as it keeps
 itself.
 
 Speed: the frames are held at 60 per second (-u lifts the limit). On a
@@ -28,7 +28,7 @@ another matter: on an Intel HD 520 the translucent fragments of a picture
 like the worst of BRAVEFF take 59 ms, against 0.8 ms on the RTX 3080. The main
 loop of the sound driver turns 312 times a frame and an interrupt comes every
 22 samples: the turns in between are counted without being run
-(src/odin/arm7.cpp). The drivers of VON4 and PHARRIER count their turns in
+(src/odin/machine/cpu/arm7/arm7.cpp). The drivers of VON4 and PHARRIER count their turns in
 the word at 0x40 of the wave memory: a turn that only adds a constant to one
 word, and looks at it nowhere else, is counted too, and the word is given
 the turns it is owed before anything reads it (Arm7::turn_counts; their
@@ -54,7 +54,7 @@ be the same. What is left of the sound boards is mostly what each of the
 1 470 samples of a frame costs by itself, turns counted or not.
 The ARM7 runs each instruction from what it decoded the last time, the
 word checked first (Arm7::run_decoded). By default its blocks run as host
-code (ODIN_ARM7_TRANSLATE=0: read; src/odin/arm7_host.cpp says how,
+code (ODIN_ARM7_TRANSLATE=0: read; src/odin/machine/cpu/arm7/arm7_host.cpp says how,
 arm7_translate.cpp what), each word still checked before it runs. Data
 processing with a value or a register shifted by a value, LDR and STR in
 the sound memory, B and BL are done in place, flags and cycles as the
@@ -64,8 +64,8 @@ same (tests/arm7, the six whole loops, the six attracts); the sound boards
 cost a quarter less on the PC, PHARRIER and VON4 2 to 4 ms less a frame on
 the i3-6100U.
 
-The frames are drawn on a thread of their own (src/odin/worker.hpp,
-src/odin/display.cpp) while the machine runs the next one: without the limit
+The frames are drawn on a thread of their own (src/odin/machine/core/worker.hpp,
+src/odin/host/video/display.cpp) while the machine runs the next one: without the limit
 the slowest second of a heavy scene goes from 72 to 90 frames per second in
 PHARRIER, 78 to 98 in VON4, 91 to 109 in BRAVEFF, 98 to 139 in AIRTRIX. The
 drawing reads the texture RAM and the display lists of the last two frames;
@@ -99,7 +99,7 @@ SGNASCAR, 4 to 8 ms late. In BRAVEFF (frame 3407) and SGNASCAR (8843,
 for: frames the machine itself takes 20 to 24 ms to run. Which chip of it
 was not measured.
 While the programs are made ready the window shows a loading screen
-(src/odin/loading_screen.cpp): black, the title of the game in the middle
+(src/odin/host/ui/loading_screen.cpp): black, the title of the game in the middle
 ("title" in odin-games.json, in a 5 by 7 font of our own), a bar below
 that fills as they are, NOW LOADING above it; the window has its size and
 its full screen first, and keeps answering. With the driver cache off,
@@ -121,9 +121,9 @@ of the SH-4 and raised its pins from chips not reset yet.
 HIKARU
 ------
 
-Move the slave GPU access to src/odin/hikaru_gpu.cpp.
+Move the slave GPU access to src/odin/machine/boards/hikaru/hikaru_gpu.cpp.
 
-MIE (src/odin/mie.cpp, its ROM and the program the BOOTROM uploads, run
+MIE (src/odin/machine/chips/mie.cpp, its ROM and the program the BOOTROM uploads, run
 by a Z80; every game needs its ROM). The slave reaches it through a window
 of its own, 1A800000-1A8000FF for its ports and 1B000100 for its bus, and
 meets the master on port E at start (see Resets). HEURISTIC: the Z80 sees
@@ -146,7 +146,7 @@ Ports 0x40/0x60/0x80/0x81, touched by the mask ROM init, are logged as
 unknown. The serial adapter block (ports 0x09-0x0E) is modelled from
 the Z80 code von4 uploads; its reply delays are HEURISTIC (mie.cpp
 SERIAL_SEND_CYCLES, SERIAL_REQUEST_CYCLES), measure them on a board.
-The card reader on that line (src/odin/card_reader.cpp,
+The card reader on that line (src/odin/machine/chips/card_reader.cpp,
 ODIN_CARD=none|reader) is the CRP-1231BR-10 of Virtual-On Force (von4
 reads its status as that model gives it, binary; its program and
 YACardEmu agree, MARKDOWN/96): it answers each command as its program
@@ -160,12 +160,12 @@ HEURISTIC: track 1 of a new card from its stocker (recorded at the
 factory: 69 zeros here) and the cleaning card of command A0 (given at
 once).
 
-Network board 837-13404 (src/odin/netbd_837_13404.cpp, ODIN_NETBD=none|
+Network board 837-13404 (src/odin/machine/cabinet/netbd_837_13404.cpp, ODIN_NETBD=none|
 loop|ring): a cabinet has none by default (page 0E answers nothing, the
 games find no board); loop puts one whose optical ring is closed on itself
 (VON4 with COMMUNICATION MODE MASTER in the BOOTROM settings: CONNECTION
 OK, THIS IS THE #1 SITE OF 1; MARKDOWN/98); ring links Odins by TCP
-(src/odin/netbd_ring.cpp: the previous cabinet comes in on a port, 13404
+(src/odin/machine/cabinet/netbd_ring.cpp: the previous cabinet comes in on a port, 13404
 by default, the next is address[:port]). [network] of odin.ini and the
 page Link of the menu set it for the games marked "link" in the list
 (VON4, SGNASCAR, SWRACER, PHARRIER); ODIN_NETBD, ODIN_NETBD_PORT and
@@ -177,7 +177,7 @@ the clock of the computer, as on a cabinet: the program needs a frame
 round the ring well within a turn of 16.4 ms (14.7 ms of it are the parts
 of four sites at 10 Mbit/s), so the boards cannot wait for each other at
 each frame; the games are then not the same from a run to the next, and
-the states are refused. Its 68000 (src/odin/m68000.cpp,
+the states are refused. Its 68000 (src/odin/machine/cpu/m68000/m68000.cpp,
 checked against the SingleStepTests 680x0 suite) runs the program the
 game uploads (m3_comm.asm 1.3: the same in VON4, SGNASCAR and SWRACER).
 HEURISTIC, deduced from that program and judged by it on a ring of 1 to
@@ -204,7 +204,7 @@ of a cabinet linked by the network comes in as late after the fastest
 recent one as 9 in 10 of them came (0.2 ms at most), as a fibre takes the
 same time for each. Not done: Windows (its timers).
 
-JVS (src/odin/jvs.cpp: the cable and the protocol of the standard). The
+JVS (src/odin/machine/cabinet/jvs.cpp: the cable and the protocol of the standard). The
 I/O boards are imitations made from their programs: io_837_13551_imitation.cpp
 from 315-6215 (a TMP90PH44, run in its place when the PROM is there,
 below), and
@@ -246,7 +246,7 @@ channels, whose report 315-6215 leaves out, or for more than 8, after
 whose report it sends the bytes of an earlier reply (0A70: the reply
 moves on by the count); nor SET_ADDRESS to a board that has an address,
 which the 837-13551 lets by (0309).
-The TMP90PH44 of the 837-13551 (src/odin/tlcs90.cpp, tmp90ph44.cpp,
+The TMP90PH44 of the 837-13551 (src/odin/machine/cpu/tlcs90/tlcs90.cpp, tmp90ph44.cpp,
 MARKDOWN/75 to 77) runs 315-6215 on the JVS line for the games whose
 folder has it (section io_rom of odin-games.json, optional); without it
 (von4: not in its folder) or with ODIN_IO=imitation the imitation answers.
@@ -281,7 +281,7 @@ giving the pin then; INTWD waits for the interrupts to be open, where on
 the TMP90C840 it does not: so, the board dies from its 9th frame on
 (interrupt() in tmp90ph44.cpp). In the bench: P3 bits 0-1 read 3 with no
 board after it; the bytes the board sends are not heard back.
-The 315-6146 of the 837-13741 (src/odin/io_837_13741.cpp, d71054.cpp,
+The 315-6146 of the 837-13741 (src/odin/machine/cabinet/io_837_13741.cpp, d71054.cpp,
 MARKDOWN/82) runs epr-21868 on the JVS line of NASCAR when its folder has
 it (section io_rom, optional); without it or with ODIN_IO=imitation the
 imitation answers: the game plays the same, and the outputs to its drive
@@ -326,7 +326,7 @@ spring FC, the register FD, the curve of FE to the torque of the motor),
 nor the strength of that motor against a host wheel (FE 41 / BF, 63 steps,
 is taken as the most the wheel gives); the clock of its Z80 (8 MHz as in
 Supermodel, the counters of its program at 500 Hz agree).
-Controls (src/odin/roles.cpp, bindings.cpp, control_panel.cpp,
+Controls (src/odin/host/input/roles.cpp, bindings.cpp, control_panel.cpp,
 controls.cpp): each control of a cabinet has an id and a role in
 odin-games.json; it is worked by the keys and pad inputs of its role
 (bindings.cpp), or by those the line of its id gives in [controls.<game>]
@@ -355,7 +355,7 @@ back as fast (the step of xemu's Chihiro wheel: a choice of the emulator);
 of the keys, the axes and the mouse bound, the last that moved 400 or more
 works it.
 
-AICA (src/odin/aica.cpp + arm7.cpp): control block, timers, interrupts,
+AICA (src/odin/machine/chips/aica/aica.cpp + arm7.cpp): control block, timers, interrupts,
 DMA, RTC and the ARM7 are in, and the voices (aica_voice.cpp: sampler,
 loops, envelope, filter, levels, LFO, the monitors the sound driver reads), the
 effect processor (aica_dsp.cpp) and the mix of a chip (ODIN_WAV writes that
@@ -456,7 +456,7 @@ of each reload, 20 MHz at least (HEURISTIC: no wait state). It costs a
 quarter of the speed: the driver sleeps most of the time, its wait could
 be billed without being run.
 
-ROM board 315-5881 (src/odin/crypt_315_5881.cpp, port of MAME, validated
+ROM board 315-5881 (src/odin/machine/chips/crypt_315_5881.cpp, port of MAME, validated
 on the real self-test of Planet Harriers and 19.7 M words against MAME's
 code): RAM at local bus 0x0A000000, registers at 0x0A010000, keys from
 MAME (airtrix, pharrier, swracer) in the list of the games ("rom_board",
@@ -490,7 +490,7 @@ of SGNASCAR). HEURISTIC: an empty socket reads 0 (rom_board.cpp
 read_rom); any value that stays the same gives the same word (FF as
 well), a floating bus would not.
 
-SGNASCAR ROM board security FPGA (src/odin/actel_m1.cpp, the stream
+SGNASCAR ROM board security FPGA (src/odin/machine/chips/actel_m1.cpp, the stream
 decoder of MAME's Naomi M1 board): registers at local bus 0x0A000000, key
 and ID from MAME, in the list of the games. Proven by the game: it reads
 208 bytes at each change of scene, compares them with its own copy and,
@@ -653,8 +653,8 @@ processor says once when a type never met comes in. The patents (US
 drawn and switch the lights off on what they cover: nothing here does it.
 The types 0 and 7 are not drawn.
 
-EEPROMs: the main board 93C46 (SH-4 port A, src/odin/eeprom_93c46.cpp)
-and the ROM board X76F100 (bus page 0x14, src/odin/x76f100.cpp) are
+EEPROMs: the main board 93C46 (SH-4 port A, src/odin/machine/chips/eeprom_93c46.cpp)
+and the ROM board X76F100 (bus page 0x14, src/odin/machine/chips/x76f100.cpp) are
 real and read by the BOOTROM (not known for the X76F100: whether SDA
 floats once the chip is deselected, it reads low as in MAME, and whether a
 read goes on past the end); the MIE 93C46 is in the LLE MIE. It holds
@@ -685,7 +685,7 @@ backup RAM, the clock) is read at start and written on exit in a folder
 of the game, a file for each, named as MAME names them (main_eeprom,
 mie_eeprom, rombd_eeprom, nvram; and clock): <data>/odin/saves/<game>,
 <data> being %APPDATA% on Windows, ~/Library/Application Support on macOS,
-$XDG_DATA_HOME or ~/.local/share elsewhere (src/odin/user_files.cpp).
+$XDG_DATA_HOME or ~/.local/share elsewhere (src/odin/host/app/user_files.cpp).
 ODIN_SAVES=<folder> takes <folder>/<game>, ODIN_SAVES=none reads and
 writes nothing: the tests use it. ODIN_MIE_EEPROM=<file> and
 ODIN_CLOCK_FILE=<file> keep these two elsewhere. Nothing is written
@@ -723,7 +723,7 @@ refill the source buffer right after starting a transfer (von4 model
 loader at 0x0C055FD4), so it must at least run ahead of the SH-4.
 
 Frame (hikaru.cpp): the board keeps its time in SH-4 cycles
-(src/odin/scheduler.cpp) and cuts the frame in the lines the game sets:
+(src/odin/machine/core/scheduler.cpp) and cuts the frame in the lines the game sets:
 818 dots a line, 528 lines, 480 of them shown (1A000080, 1A000084,
 1A00008C). HEURISTIC: the dot clock is the value of MAME, 25.94729 MHz,
 which gives 60.08 frames a second; no game sets or reads it and no manual
@@ -736,7 +736,7 @@ each in turn, and the line counter is written at the end of its line.
 Interrupts (hikaru.cpp, update_irqs): the lines of the chips are
 levels, held until the handler of the game has acknowledged the chip.
 IRL1 of the master is the bridge; IRL2 is what the interrupt controller on
-ports B, C and F of the MIE lets through (src/odin/mie_board.cpp; the
+ports B, C and F of the MIE lets through (src/odin/machine/boards/hikaru/mie_board.cpp; the
 lines have the names MAME's hikaru.cpp takes from the schematics), and
 port A of the master reads the same lines. The master sets the mask of the
 MIE to 0xE1: the sound boards do not interrupt the SH-4. The mask of the
@@ -810,7 +810,7 @@ and nothing above); it reads 0 here.
 Bits 1 and 4 are the reset lines of the graphics chips (GP_RES, every
 chip; PCI1_RES, the display chip): a chip goes back to its power-on state
 when its line falls and does nothing until it rises
-(src/odin/hikaru_gpu.cpp, set_reset_lines). VON4 pulses both when two
+(src/odin/machine/boards/hikaru/hikaru_gpu.cpp, set_reset_lines). VON4 pulses both when two
 lists in a row did not end (0x0C711C30), then has the slave run a program
 it leaves at 14FFF000, sets the chips again and starts over. It did so
 each time its SYSTEM MENU was left with EXIT while the end of a list was
@@ -875,7 +875,7 @@ message: the six attract loops touch none.
 SH-4
 ----
 
-The two SH-4 run on the Odin core (src/odin/sh4.cpp, sh4_ops.cpp,
+The two SH-4 run on the Odin core (src/odin/machine/cpu/sh4/sh4.cpp, sh4_ops.cpp,
 sh4_onchip.cpp). It gave the
 registers and the memory of the Valkyrie interpreter it replaced at every
 slice of the six games. ODIN_SH4_TRACE=<prefix> writes the PC and a hash of
@@ -905,8 +905,8 @@ the memory of the CPU (Sh4::map_quiet; the MIE for the master): they leave
 the blocks as they were compared and the block that makes them goes on.
 
 By default the kept blocks run as host code (ODIN_SH4_TRANSLATE=0: they
-are read; src/odin/sh4_translate.cpp says what a block does,
-src/odin/sh4_host.cpp writes it for x86-64 with the calling convention of
+are read; src/odin/machine/cpu/sh4/sh4_translate.cpp says what a block does,
+src/odin/machine/cpu/sh4/sh4_host.cpp writes it for x86-64 with the calling convention of
 Linux or of Windows; elsewhere the blocks are read). Each instruction is written once
 (Sh4OpsT) and handed over in two ways: the reader runs the next one by a
 tail call, the host code of a block calls its instructions in turn, all by
@@ -940,7 +940,7 @@ time once the scenes are compared again:
   them in the order the compiler gave the instruction, test_host_float);
 - FROZEN FOR NOW, to be replaced by the table of a real SH-4 when a source
   that can be trusted gives it: the sines and cosines of FSCA
-  (src/odin/sh4_fsca.cpp). They are the values the references were made
+  (src/odin/machine/cpu/sh4/sh4_fsca.cpp). They are the values the references were made
   with, the single-precision sin and cos of glibc, written so that no host
   library decides. Before that a Windows build and a Linux build did not
   draw the same display lists (the library of MinGW differs by a last bit
@@ -988,7 +988,7 @@ bytes below the queues, at DFFFFFE0, and sends no PREF; it is called for
 one block, which the cabinet does not copy either.
 
 The clock of the AICA starts on the local time of the host
-(src/odin/aica.cpp): two runs do not leave the same byte in the memory of
+(src/odin/machine/chips/aica/aica.cpp): two runs do not leave the same byte in the memory of
 AIRTRIX. The chip counts seconds, and the software of the Hikaru counts
 them from 1964-01-01 (the date routine of the BOOTROM, 0x0C008464, and its
 copies in the games), not from 1950 as the Dreamcast does: the CLOCK
@@ -1002,7 +1002,7 @@ the time of the host at every start.
 GPU / RENDERING
 ---------------
 
-Graphics chips (src/odin/hikaru_gpu.hpp, wired as on the board). The command
+Graphics chips (src/odin/machine/boards/hikaru/hikaru_gpu.hpp, wired as on the board). The command
 processor, 315-6083 (antarctic.hpp): its instructions are in
 antarctic_ops.cpp, the triangles and the display list of a frame in
 antarctic_mesh.cpp and antarctic_list.h, its registers and the texture
@@ -1018,14 +1018,14 @@ ODIN_SPEED=1 prints the frames a second of each 60 frames.
 ODIN_LOG_REPEATS=1 keeps the lines that repeat, which a game tells once and
 a kind of message eight times at most (repeats.hpp), as -v does.
 
-The renderer (src/odin/renderer.hpp, OpenGL 4.3) stands for the chips that
+The renderer (src/odin/host/renderer/hikaru/renderer.hpp, OpenGL 4.3) stands for the chips that
 plot the polygons. A frame, the two 3D buffers and the composition with the
 layers are in renderer.cpp, the passes of a list in renderer_scene.cpp, the
 translucent fragments in renderer_translucent.cpp, the variants of the
 programs in renderer_programs.cpp, the textures in renderer_textures.cpp, the
 2D layers in renderer_layers.cpp; what the graphics card of the host does for
 them is behind BoardDrawing (board_drawing.hpp; with OpenGL the board_*_gl.cpp
-files; the shaders in src/odin/glsl). Vulkan ([display] api = vulkan,
+files; the shaders in src/odin/host/gfx/glsl). Vulkan ([display] api = vulkan,
 MARKDOWN/106 of the notes): vk_common.cpp (the card, its memory and
 commands), host_graphics_vk.cpp (the window and the menu) and the
 board_*_vk.cpp files (the pictures, the textures, the meshes and their

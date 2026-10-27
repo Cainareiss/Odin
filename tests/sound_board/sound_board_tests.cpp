@@ -24,13 +24,13 @@
  * kind, and compares the memory, the ARM7 and the output.
  *
  * Build: g++ -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
- *            -O2 -I src tests/sound_board/sound_board_tests.cpp src/odin/sound_board.cpp \
- *            src/odin/aica.cpp src/odin/aica_voice.cpp src/odin/aica_dsp.cpp src/odin/arm7.cpp \
- *            src/odin/arm7_ops.cpp \
- *            src/odin/arm7_host.cpp src/odin/arm7_translate.cpp src/odin/host_code.cpp -o sound_board_tests
+ *            -O2 -I src tests/sound_board/sound_board_tests.cpp src/odin/machine/boards/hikaru/sound_board.cpp \
+ *            src/odin/machine/chips/aica/aica.cpp src/odin/machine/chips/aica/aica_voice.cpp src/odin/machine/chips/aica/aica_dsp.cpp src/odin/machine/cpu/arm7/arm7.cpp \
+ *            src/odin/machine/cpu/arm7/arm7_ops.cpp \
+ *            src/odin/machine/cpu/arm7/arm7_host.cpp src/odin/machine/cpu/arm7/arm7_translate.cpp src/odin/machine/core/host_code.cpp -o sound_board_tests
  */
 
-#include "odin/sound_board.hpp"
+#include "odin/machine/boards/hikaru/sound_board.hpp"
 
 #include <algorithm>
 #include <cstdio>

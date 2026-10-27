@@ -49,15 +49,15 @@
  *
  * Not run with the unit tests: it needs the PROM.
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
- *            -I src tests/jvs/s6215_bench.cpp src/odin/tmp90ph44.cpp src/odin/tlcs90.cpp \
- *            src/odin/jvs.cpp src/odin/io_837_13551_imitation.cpp -o s6215_bench
+ *            -I src tests/jvs/s6215_bench.cpp src/odin/machine/chips/tmp90ph44.cpp src/odin/machine/cpu/tlcs90/tlcs90.cpp \
+ *            src/odin/machine/cabinet/jvs.cpp src/odin/machine/cabinet/io_837_13551_imitation.cpp -o s6215_bench
  * Run: s6215_bench <315-6215.bin>. Exit status 0 when every reply, sense
  * line and output is the same. */
 
-#include "odin/io_837_13551.hpp"
-#include "odin/jvs.hpp"
-#include "odin/io_837_13551_imitation.hpp"
-#include "odin/tmp90ph44.hpp"
+#include "odin/machine/cabinet/io_837_13551.hpp"
+#include "odin/machine/cabinet/jvs.hpp"
+#include "odin/machine/cabinet/io_837_13551_imitation.hpp"
+#include "odin/machine/chips/tmp90ph44.hpp"
 
 #include <algorithm>
 #include <array>

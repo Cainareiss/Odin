@@ -23,13 +23,13 @@
  * last words before a crash are in it; the file by default and ODIN_LOG.
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow -pthread \
- *            -I src tests/log_file/log_file_tests.cpp src/odin/log_file.cpp src/odin/user_files.cpp \
+ *            -I src tests/log_file/log_file_tests.cpp src/odin/host/app/log_file.cpp src/odin/host/app/user_files.cpp \
  *            -o log_file_tests
  * It writes its files in the folder given as its argument, or the current
  * one; its own report goes to stderr... of a terminal it takes back. Exit
  * status is 0 when every check passes. */
 
-#include "odin/log_file.hpp"
+#include "odin/host/app/log_file.hpp"
 
 #include <cstdio>
 #include <cstdlib>

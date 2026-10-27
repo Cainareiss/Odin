@@ -25,13 +25,13 @@
  *
  * Not run with the unit tests: it needs the EPROMs.
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
- *            -I src tests/mie/von4_card_bench.cpp src/odin/von4_card.cpp src/odin/card_reader.cpp \
- *            src/odin/mie.cpp src/odin/z80.cpp src/odin/z80_ops.cpp src/odin/jvs.cpp src/odin/user_files.cpp \
+ *            -I src tests/mie/von4_card_bench.cpp src/odin/machine/chips/von4_card.cpp src/odin/machine/chips/card_reader.cpp \
+ *            src/odin/machine/chips/mie.cpp src/odin/machine/cpu/z80/z80.cpp src/odin/machine/cpu/z80/z80_ops.cpp src/odin/machine/cabinet/jvs.cpp src/odin/host/app/user_files.cpp \
  *            -o von4_card_bench
  * Run: von4_card_bench <epr23766e.ic29> <epr23767e.ic30>. Exit status is 0
  * when every check passes. */
 
-#include "odin/von4_card.hpp"
+#include "odin/machine/chips/von4_card.hpp"
 
 #include <cstdio>
 #include <vector>

@@ -21,14 +21,14 @@
  * texture transfer.
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
- *            -I src tests/antarctic/antarctic_tests.cpp src/odin/antarctic.cpp \
- *            src/odin/antarctic_ops.cpp src/odin/antarctic_mesh.cpp \
- *            src/odin/antarctic_io.cpp src/odin/antarctic_disasm.cpp \
- *            src/odin/antarctic_list.cpp -o antarctic_tests
+ *            -I src tests/antarctic/antarctic_tests.cpp src/odin/machine/chips/antarctic/antarctic.cpp \
+ *            src/odin/machine/chips/antarctic/antarctic_ops.cpp src/odin/machine/chips/antarctic/antarctic_mesh.cpp \
+ *            src/odin/machine/chips/antarctic/antarctic_io.cpp src/odin/machine/chips/antarctic/antarctic_disasm.cpp \
+ *            src/odin/machine/chips/antarctic/antarctic_list.cpp -o antarctic_tests
  * Exit status is 0 when every check passes. */
 
-#include "odin/antarctic.hpp"
-#include "odin/antarctic_disasm.hpp"
+#include "odin/machine/chips/antarctic/antarctic.hpp"
+#include "odin/machine/chips/antarctic/antarctic_disasm.hpp"
 
 #include <bit>
 #include <cstdio>

@@ -25,17 +25,17 @@
  * checked in tests/jvs.
  *
  * Build: g++ -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
- *            -O2 -I src tests/mie/mie_test.cpp src/odin/eeprom_93c46.cpp \
- *            src/odin/jvs.cpp src/odin/io_837_13551_imitation.cpp src/odin/io_837_13741_imitation.cpp \
- *            src/odin/mie.cpp \
- *            src/odin/mie_board.cpp src/odin/card_reader.cpp src/odin/z80.cpp \
- *            src/odin/z80_ops.cpp src/odin/io_837_13551.cpp src/odin/tmp90ph44.cpp \
- *            src/odin/tlcs90.cpp src/odin/io_837_13741.cpp src/odin/d71054.cpp \
- *            src/odin/user_files.cpp -o mie_test
+ *            -O2 -I src tests/mie/mie_test.cpp src/odin/machine/chips/eeprom_93c46.cpp \
+ *            src/odin/machine/cabinet/jvs.cpp src/odin/machine/cabinet/io_837_13551_imitation.cpp src/odin/machine/cabinet/io_837_13741_imitation.cpp \
+ *            src/odin/machine/chips/mie.cpp \
+ *            src/odin/machine/boards/hikaru/mie_board.cpp src/odin/machine/chips/card_reader.cpp src/odin/machine/cpu/z80/z80.cpp \
+ *            src/odin/machine/cpu/z80/z80_ops.cpp src/odin/machine/cabinet/io_837_13551.cpp src/odin/machine/chips/tmp90ph44.cpp \
+ *            src/odin/machine/cpu/tlcs90/tlcs90.cpp src/odin/machine/cabinet/io_837_13741.cpp src/odin/machine/chips/d71054.cpp \
+ *            src/odin/host/app/user_files.cpp -o mie_test
  * Exit status is 0 when every check passes. */
 
-#include "odin/eeprom_93c46.hpp"
-#include "odin/mie_board.hpp"
+#include "odin/machine/chips/eeprom_93c46.hpp"
+#include "odin/machine/boards/hikaru/mie_board.hpp"
 
 #include <algorithm>
 #include <cstdio>

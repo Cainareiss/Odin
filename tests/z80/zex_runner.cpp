@@ -24,11 +24,11 @@
  * '$'-terminated string at DE); a jump to 0000h ends the run.
  *
  * Build: g++ -std=c++20 -O2 -I src tests/z80/zex_runner.cpp \
- *            src/odin/z80.cpp src/odin/z80_ops.cpp -o zex_runner
+ *            src/odin/machine/cpu/z80/z80.cpp src/odin/machine/cpu/z80/z80_ops.cpp -o zex_runner
  * Use:   zex_runner prelim.com zexdoc.com zexall.com
  * Exit status is 0 when no exerciser reports an error. */
 
-#include "odin/z80.hpp"
+#include "odin/machine/cpu/z80/z80.hpp"
 
 #include <array>
 #include <chrono>

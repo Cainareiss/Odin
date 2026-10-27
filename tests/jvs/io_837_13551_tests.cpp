@@ -22,12 +22,12 @@
  * program in place of 315-6215 (tests/jvs/line_bench.cpp runs that one).
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
- *            -I src tests/jvs/io_837_13551_tests.cpp src/odin/io_837_13551.cpp src/odin/tmp90ph44.cpp \
- *            src/odin/tlcs90.cpp src/odin/mie.cpp src/odin/z80.cpp src/odin/z80_ops.cpp src/odin/jvs.cpp \
+ *            -I src tests/jvs/io_837_13551_tests.cpp src/odin/machine/cabinet/io_837_13551.cpp src/odin/machine/chips/tmp90ph44.cpp \
+ *            src/odin/machine/cpu/tlcs90/tlcs90.cpp src/odin/machine/chips/mie.cpp src/odin/machine/cpu/z80/z80.cpp src/odin/machine/cpu/z80/z80_ops.cpp src/odin/machine/cabinet/jvs.cpp \
  *            -o io_837_13551_tests
  * Exit status is 0 when every check passes. */
 
-#include "odin/io_837_13551.hpp"
+#include "odin/machine/cabinet/io_837_13551.hpp"
 
 #include <algorithm>
 #include <cstdio>

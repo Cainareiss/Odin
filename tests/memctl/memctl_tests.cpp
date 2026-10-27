@@ -21,11 +21,11 @@
  * asked.
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
- *            -I src tests/memctl/memctl_tests.cpp src/odin/memctl.cpp \
+ *            -I src tests/memctl/memctl_tests.cpp src/odin/machine/chips/memctl.cpp \
  *            -o memctl_tests
  * Exit status is 0 when every check passes. */
 
-#include "odin/memctl.hpp"
+#include "odin/machine/chips/memctl.hpp"
 
 #include <cstdio>
 #include <map>

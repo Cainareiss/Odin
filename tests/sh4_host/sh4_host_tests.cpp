@@ -25,9 +25,9 @@
  * against the manuals.
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
- *            -ffp-contract=off -I src tests/sh4_host/sh4_host_tests.cpp src/odin/sh4.cpp \
- *            src/odin/sh4_ops.cpp src/odin/sh4_onchip.cpp src/odin/sh4_host.cpp src/odin/sh4_translate.cpp \
- *            src/odin/sh4_fsca.cpp src/odin/sh4_clock.cpp src/odin/host_code.cpp -o sh4_host_tests
+ *            -ffp-contract=off -I src tests/sh4_host/sh4_host_tests.cpp src/odin/machine/cpu/sh4/sh4.cpp \
+ *            src/odin/machine/cpu/sh4/sh4_ops.cpp src/odin/machine/cpu/sh4/sh4_onchip.cpp src/odin/machine/cpu/sh4/sh4_host.cpp src/odin/machine/cpu/sh4/sh4_translate.cpp \
+ *            src/odin/machine/cpu/sh4/sh4_fsca.cpp src/odin/machine/cpu/sh4/sh4_clock.cpp src/odin/machine/core/host_code.cpp -o sh4_host_tests
  * Use:   sh4_host_tests [-v]
  * Exit status is 0 when every check passes. */
 

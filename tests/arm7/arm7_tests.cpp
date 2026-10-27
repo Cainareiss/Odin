@@ -23,12 +23,12 @@
  * taken from the ARM7TDMI data sheet and the ARMv4 reference manual.
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
- *            -I src tests/arm7/arm7_tests.cpp src/odin/arm7.cpp src/odin/arm7_ops.cpp \
- *            src/odin/arm7_host.cpp src/odin/arm7_translate.cpp src/odin/host_code.cpp -o arm7_tests
+ *            -I src tests/arm7/arm7_tests.cpp src/odin/machine/cpu/arm7/arm7.cpp src/odin/machine/cpu/arm7/arm7_ops.cpp \
+ *            src/odin/machine/cpu/arm7/arm7_host.cpp src/odin/machine/cpu/arm7/arm7_translate.cpp src/odin/machine/core/host_code.cpp -o arm7_tests
  * Use:   arm7_tests [-v]
  * Exit status is 0 when every check passes. */
 
-#include "odin/arm7.hpp"
+#include "odin/machine/cpu/arm7/arm7.hpp"
 
 #include <cstdio>
 #include <cstring>

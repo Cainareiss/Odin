@@ -26,12 +26,12 @@
  *
  * Build: g++ -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
  *            -O2 -I src tests/x76f100/x76f100_test.cpp \
- *            src/odin/x76f100.cpp -o x76f100_test
+ *            src/odin/machine/chips/x76f100.cpp -o x76f100_test
  * The sgnascar x76f100.ic85 dump is used when it is found, a built-in
  * image with the same layout otherwise. Exit status is 0 when every
  * check passes. */
 
-#include "odin/x76f100.hpp"
+#include "odin/machine/chips/x76f100.hpp"
 
 #include <array>
 #include <cstdio>

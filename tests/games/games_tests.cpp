@@ -23,8 +23,8 @@
  *
  * The objects of miniz and the LZMA SDK are those make builds.
  * Build: g++ -std=c++20 -O2 -flto=auto -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
- *            -I src -isystem src/miniz -isystem src/lzma tests/games/games_tests.cpp src/odin/games.cpp \
- *            src/odin/roles.cpp src/odin/rom_files.cpp src/miniz/miniz.o src/lzma/7zAlloc.o src/lzma/7zArcIn.o \
+ *            -I src -isystem src/miniz -isystem src/lzma tests/games/games_tests.cpp src/odin/host/app/games.cpp \
+ *            src/odin/host/input/roles.cpp src/odin/host/app/rom_files.cpp src/miniz/miniz.o src/lzma/7zAlloc.o src/lzma/7zArcIn.o \
  *            src/lzma/7zBuf.o src/lzma/7zBuf2.o src/lzma/7zCrc.o src/lzma/7zCrcOpt.o src/lzma/7zDec.o \
  *            src/lzma/7zFile.o src/lzma/7zStream.o src/lzma/Bcj2.o src/lzma/Bra.o src/lzma/Bra86.o \
  *            src/lzma/BraIA64.o src/lzma/CpuArch.o src/lzma/Delta.o src/lzma/Lzma2Dec.o src/lzma/LzmaDec.o \
@@ -32,8 +32,8 @@
  * It writes its files in the folder given as its argument, or the current
  * one. Exit status is 0 when every check passes. */
 
-#include "odin/games.hpp"
-#include "odin/rom_files.hpp"
+#include "odin/host/app/games.hpp"
+#include "odin/host/app/rom_files.hpp"
 
 #include <algorithm>
 #include <cstdint>

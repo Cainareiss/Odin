@@ -24,11 +24,11 @@
  * and the ARM reset bit as the AM2 driver upload uses it.
  *
  * Build: g++ -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
- *            -O2 -I src tests/aica/aica_test.cpp src/odin/aica.cpp \
- *            src/odin/aica_voice.cpp src/odin/aica_dsp.cpp -o aica_test
+ *            -O2 -I src tests/aica/aica_test.cpp src/odin/machine/chips/aica/aica.cpp \
+ *            src/odin/machine/chips/aica/aica_voice.cpp src/odin/machine/chips/aica/aica_dsp.cpp -o aica_test
  */
 
-#include "odin/aica.hpp"
+#include "odin/machine/chips/aica/aica.hpp"
 
 #include <cstdio>
 #include <cstdlib>

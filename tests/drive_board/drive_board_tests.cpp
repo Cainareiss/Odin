@@ -24,7 +24,7 @@
  *            -O2 -I src tests/drive_board/drive_board_tests.cpp -o drive_board_tests
  */
 
-#include "odin/drive_board.hpp"
+#include "odin/machine/cabinet/drive_board.hpp"
 
 #include <cstdio>
 #include <cstdlib>

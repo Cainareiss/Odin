@@ -24,12 +24,12 @@
  * sound driver reads of a voice, the levels, the LFO and the mix.
  *
  * Build: g++ -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
- *            -O2 -I src tests/aica/aica_voice_test.cpp src/odin/aica.cpp \
- *            src/odin/aica_voice.cpp src/odin/aica_dsp.cpp -o aica_voice_test
+ *            -O2 -I src tests/aica/aica_voice_test.cpp src/odin/machine/chips/aica/aica.cpp \
+ *            src/odin/machine/chips/aica/aica_voice.cpp src/odin/machine/chips/aica/aica_dsp.cpp -o aica_voice_test
  */
 
-#include "odin/aica.hpp"
-#include "odin/aica_voice.hpp"
+#include "odin/machine/chips/aica/aica.hpp"
+#include "odin/machine/chips/aica/aica_voice.hpp"
 
 #include <algorithm>
 #include <array>

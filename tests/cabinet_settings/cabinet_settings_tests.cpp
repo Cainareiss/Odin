@@ -24,11 +24,11 @@
  * the block of a game in the backup RAM.
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow -I src \
- *            tests/cabinet_settings/cabinet_settings_tests.cpp src/odin/cabinet_settings.cpp \
+ *            tests/cabinet_settings/cabinet_settings_tests.cpp src/odin/common/cabinet_settings.cpp \
  *            -o cabinet_settings_tests
  * Exit status is 0 when every check passes. */
 
-#include "odin/cabinet_settings.hpp"
+#include "odin/common/cabinet_settings.hpp"
 
 #include <cstdio>
 #include <cstring>

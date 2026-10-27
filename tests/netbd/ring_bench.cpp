@@ -30,14 +30,14 @@
  * same, the frames through NetCable on this computer (ports 13504...).
  *
  * Build: g++ -std=c++20 -O2 -pthread -Wall -Wextra -Wpedantic -Wconversion -Wshadow -I src \
- *            tests/netbd/ring_bench.cpp src/odin/netbd_837_13404.cpp src/odin/netbd_ring.cpp \
- *            src/odin/sockets.cpp src/odin/m68000.cpp src/odin/m68000_ops.cpp -o ring_bench
+ *            tests/netbd/ring_bench.cpp src/odin/machine/cabinet/netbd_837_13404.cpp src/odin/machine/cabinet/netbd_ring.cpp \
+ *            src/odin/host/input/sockets.cpp src/odin/machine/cpu/m68000/m68000.cpp src/odin/machine/cpu/m68000/m68000_ops.cpp -o ring_bench
  * Use:   ring_bench program.bin [nodes [seconds [start delay of node n, in frames]]]
  * Exit status is 0 when every node links and, after it, sees every other
  * part in 9 frames out of 10 at least. */
 
-#include "odin/netbd_837_13404.hpp"
-#include "odin/netbd_ring.hpp"
+#include "odin/machine/cabinet/netbd_837_13404.hpp"
+#include "odin/machine/cabinet/netbd_ring.hpp"
 
 #include <algorithm>
 #include <chrono>

@@ -25,12 +25,12 @@
  * counted apart.
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow -I src \
- *            tests/m68000/m68000_tests.cpp src/odin/m68000.cpp src/odin/m68000_ops.cpp \
+ *            tests/m68000/m68000_tests.cpp src/odin/machine/cpu/m68000/m68000.cpp src/odin/machine/cpu/m68000/m68000_ops.cpp \
  *            -ljansson -o m68000_tests
  * Use:   m68000_tests [-v N] file.json.gz...   (N: failures shown per file)
  * Exit status is 0 when every test passes. */
 
-#include "odin/m68000.hpp"
+#include "odin/machine/cpu/m68000/m68000.hpp"
 
 #include <jansson.h>
 

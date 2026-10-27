@@ -26,7 +26,7 @@
  *            -O2 -I src tests/audio_out/audio_out_tests.cpp -o audio_out_tests
  */
 
-#include "odin/audio_out.hpp"
+#include "odin/host/audio/audio_out.hpp"
 
 #include <cmath>
 #include <cstdio>

@@ -20,11 +20,11 @@
  * where the title and the bar go.
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
- *            -I src tests/loading_screen/loading_screen_tests.cpp src/odin/loading_screen.cpp \
+ *            -I src tests/loading_screen/loading_screen_tests.cpp src/odin/host/ui/loading_screen.cpp \
  *            -o loading_screen_tests
  * Exit status is 0 when every check passes. */
 
-#include "odin/loading_screen.hpp"
+#include "odin/host/ui/loading_screen.hpp"
 
 #include <algorithm>
 #include <cstddef>

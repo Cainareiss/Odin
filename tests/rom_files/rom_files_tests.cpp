@@ -27,7 +27,7 @@
  *
  * The objects of miniz and the LZMA SDK are those make builds.
  * Build: g++ -std=c++20 -O2 -flto=auto -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
- *            -I src -isystem src/miniz -isystem src/lzma tests/rom_files/rom_files_tests.cpp src/odin/rom_files.cpp \
+ *            -I src -isystem src/miniz -isystem src/lzma tests/rom_files/rom_files_tests.cpp src/odin/host/app/rom_files.cpp \
  *            src/miniz/miniz.o src/lzma/7zAlloc.o src/lzma/7zArcIn.o src/lzma/7zBuf.o \
  *            src/lzma/7zBuf2.o src/lzma/7zCrc.o src/lzma/7zCrcOpt.o src/lzma/7zDec.o src/lzma/7zFile.o \
  *            src/lzma/7zStream.o src/lzma/Bcj2.o src/lzma/Bra.o src/lzma/Bra86.o src/lzma/BraIA64.o \
@@ -36,7 +36,7 @@
  * It writes its files in the folder given as its argument, or the current
  * one. Exit status is 0 when every check passes. */
 
-#include "odin/rom_files.hpp"
+#include "odin/host/app/rom_files.hpp"
 
 #include <cstdint>
 #include <cstdio>

@@ -22,12 +22,12 @@
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
  *            -I src $(pkg-config --cflags sdl3) tests/control_panel/control_panel_tests.cpp \
- *            src/odin/control_panel.cpp src/odin/bindings.cpp src/odin/settings.cpp src/odin/roles.cpp \
- *            src/odin/user_files.cpp $(pkg-config --libs sdl3) -o control_panel_tests
+ *            src/odin/host/input/control_panel.cpp src/odin/host/input/bindings.cpp src/odin/host/app/settings.cpp src/odin/host/input/roles.cpp \
+ *            src/odin/host/app/user_files.cpp $(pkg-config --libs sdl3) -o control_panel_tests
  * Exit status is 0 when every check passes. */
 
-#include "odin/control_panel.hpp"
-#include "odin/picture.hpp"
+#include "odin/host/input/control_panel.hpp"
+#include "odin/host/video/picture.hpp"
 
 #include <cctype>
 #include <cmath>

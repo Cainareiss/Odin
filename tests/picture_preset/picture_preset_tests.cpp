@@ -21,11 +21,11 @@
  * presets of Lola Retro in filters/ (run from the repo).
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow -I src \
- *            tests/picture_preset/picture_preset_tests.cpp src/odin/picture_preset.cpp \
+ *            tests/picture_preset/picture_preset_tests.cpp src/odin/host/video/picture_preset.cpp \
  *            -o picture_preset_tests
  * Exit status is 0 when every check passes. */
 
-#include "odin/picture_preset.hpp"
+#include "odin/host/video/picture_preset.hpp"
 
 #include <cmath>
 #include <cstdio>

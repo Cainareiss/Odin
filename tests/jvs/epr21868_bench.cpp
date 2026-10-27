@@ -26,16 +26,16 @@
  *
  * Not run with the unit tests: it needs the EPROM.
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
- *            -I src tests/jvs/epr21868_bench.cpp src/odin/io_837_13741.cpp src/odin/d71054.cpp \
- *            src/odin/mie.cpp src/odin/z80.cpp src/odin/z80_ops.cpp src/odin/jvs.cpp \
- *            src/odin/io_837_13741_imitation.cpp -o epr21868_bench
+ *            -I src tests/jvs/epr21868_bench.cpp src/odin/machine/cabinet/io_837_13741.cpp src/odin/machine/chips/d71054.cpp \
+ *            src/odin/machine/chips/mie.cpp src/odin/machine/cpu/z80/z80.cpp src/odin/machine/cpu/z80/z80_ops.cpp src/odin/machine/cabinet/jvs.cpp \
+ *            src/odin/machine/cabinet/io_837_13741_imitation.cpp -o epr21868_bench
  * Run: epr21868_bench <epr-21868.ic7>. Exit status 0 when every reply is the
  * same. */
 
-#include "odin/io_837_13741.hpp"
-#include "odin/jvs.hpp"
-#include "odin/io_837_13741_imitation.hpp"
-#include "odin/mie.hpp"
+#include "odin/machine/cabinet/io_837_13741.hpp"
+#include "odin/machine/cabinet/jvs.hpp"
+#include "odin/machine/cabinet/io_837_13741_imitation.hpp"
+#include "odin/machine/chips/mie.hpp"
 
 #include <algorithm>
 #include <array>

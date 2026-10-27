@@ -27,13 +27,13 @@
  * FIQ entries are injected where the MAME trace shows PC = 0x1C.
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
- *            -I src tests/arm7/arm7_replay.cpp src/odin/arm7.cpp src/odin/arm7_ops.cpp \
- *            src/odin/arm7_host.cpp src/odin/arm7_translate.cpp src/odin/host_code.cpp -o arm7_replay
+ *            -I src tests/arm7/arm7_replay.cpp src/odin/machine/cpu/arm7/arm7.cpp src/odin/machine/cpu/arm7/arm7_ops.cpp \
+ *            src/odin/machine/cpu/arm7/arm7_host.cpp src/odin/machine/cpu/arm7/arm7_translate.cpp src/odin/machine/core/host_code.cpp -o arm7_replay
  * Use:   arm7_replay --ram dump.bin --regs regs.tsv --trace mame.tr [--cpu arm0]
  *                    [--mbox mbox.tsv] [--max N] [--trace-out odin.tr] [--quiet]
  * Exit status is 0 when the whole replay matches. */
 
-#include "odin/arm7.hpp"
+#include "odin/machine/cpu/arm7/arm7.hpp"
 
 #include <cstdio>
 #include <cstdlib>

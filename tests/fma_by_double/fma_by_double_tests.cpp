@@ -28,7 +28,7 @@
  *            -o fma_by_double_tests
  * Exit status is 0 when every check passes. */
 
-#include "odin/fma_by_double.hpp"
+#include "odin/common/fma_by_double.hpp"
 
 #include <bit>
 #include <cmath>

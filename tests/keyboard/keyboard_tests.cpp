@@ -21,10 +21,10 @@
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
  *            `pkg-config --cflags sdl3` -I src tests/keyboard/keyboard_tests.cpp \
- *            src/odin/keyboard.cpp -o keyboard_tests
+ *            src/odin/host/input/keyboard.cpp -o keyboard_tests
  * Exit status is 0 when every check passes. */
 
-#include "odin/keyboard.hpp"
+#include "odin/host/input/keyboard.hpp"
 
 #include <cstdio>
 

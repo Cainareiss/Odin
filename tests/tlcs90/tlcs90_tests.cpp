@@ -20,10 +20,10 @@
  * after the 1988 Toshiba data book (examples where it gives them).
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
- *            -I src tests/tlcs90/tlcs90_tests.cpp src/odin/tlcs90.cpp -o tlcs90_tests
+ *            -I src tests/tlcs90/tlcs90_tests.cpp src/odin/machine/cpu/tlcs90/tlcs90.cpp -o tlcs90_tests
  * Exit status is 0 when every check passes. */
 
-#include "odin/tlcs90.hpp"
+#include "odin/machine/cpu/tlcs90/tlcs90.hpp"
 
 #include <array>
 #include <cstdio>

@@ -20,17 +20,17 @@
  * [menu] of odin.ini, what is refused, and the actions the events start.
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
- *            -I src $(pkg-config --cflags sdl3) tests/menu_nav/menu_nav_tests.cpp src/odin/menu_nav.cpp \
- *            src/odin/bindings.cpp src/odin/settings.cpp src/odin/roles.cpp src/odin/user_files.cpp \
+ *            -I src $(pkg-config --cflags sdl3) tests/menu_nav/menu_nav_tests.cpp src/odin/host/ui/menu_nav.cpp \
+ *            src/odin/host/input/bindings.cpp src/odin/host/app/settings.cpp src/odin/host/input/roles.cpp src/odin/host/app/user_files.cpp \
  *            $(pkg-config --libs sdl3) -o menu_nav_tests
  * Exit status is 0 when every check passes. */
 
-#include "odin/menu_nav.hpp"
+#include "odin/host/ui/menu_nav.hpp"
 
 #include <cstdio>
 #include <vector>
 
-#include "odin/settings.hpp"
+#include "odin/host/app/settings.hpp"
 
 namespace {
 

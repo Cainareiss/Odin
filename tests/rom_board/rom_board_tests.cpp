@@ -20,12 +20,12 @@
  * empty sockets, the EEPROM page and the page of the guard chips.
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
- *            -I src tests/rom_board/rom_board_tests.cpp src/odin/rom_board.cpp \
- *            src/odin/x76f100.cpp src/odin/crypt_315_5881.cpp src/odin/actel_m1.cpp \
+ *            -I src tests/rom_board/rom_board_tests.cpp src/odin/machine/boards/hikaru/rom_board.cpp \
+ *            src/odin/machine/chips/x76f100.cpp src/odin/machine/chips/crypt_315_5881.cpp src/odin/machine/chips/actel_m1.cpp \
  *            -o rom_board_tests
  * Exit status is 0 when every check passes. */
 
-#include "odin/rom_board.hpp"
+#include "odin/machine/boards/hikaru/rom_board.hpp"
 
 #include <cstdio>
 #include <cstring>

@@ -22,11 +22,11 @@
  * order in which those of one date are taken.
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
- *            -I src tests/scheduler/scheduler_tests.cpp src/odin/scheduler.cpp \
+ *            -I src tests/scheduler/scheduler_tests.cpp src/odin/machine/core/scheduler.cpp \
  *            -o scheduler_tests
  * Exit status is 0 when every check passes. */
 
-#include "odin/scheduler.hpp"
+#include "odin/machine/core/scheduler.hpp"
 
 #include <cstdio>
 #include <vector>

@@ -51,11 +51,11 @@ MAME, nullDC, lxdream and Demul developers for their work and findings.
 The menu is drawn with Dear ImGui, Copyright (c) 2014-2026 Omar Cornut,
 released under the MIT License (src/imgui/LICENSE.txt). Its gamepads are
 drawn from AL2009man's Gamepad-Asset-Pack, Copyright (c) 2024 Al. Lopez,
-released under the MIT License (src/odin/pad_drawings_al2009man.cpp). Its
+released under the MIT License (src/odin/host/ui/pad_drawings_al2009man.cpp). Its
 letters are those of Cozette, by the-moonwitch, released under the MIT
-License (src/odin/fonts/LICENSE-cozette). The rune of Odin's logo is the one
+License (src/odin/host/ui/fonts/LICENSE-cozette). The rune of Odin's logo is the one
 of Junicode, Copyright (c) 2025 Peter S. Baker, released under the SIL Open
-Font License 1.1 (src/odin/fonts/LICENSE-junicode).
+Font License 1.1 (src/odin/host/ui/fonts/LICENSE-junicode).
 The archives of the games are read with miniz, Copyright (c) 2010-2014 Rich
 Geldreich and Tenacious Software LLC, 2013-2014 RAD Game Tools and Valve
 Software, released under the MIT License (src/miniz/LICENSE), and the 7z

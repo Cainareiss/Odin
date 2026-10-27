@@ -23,7 +23,7 @@
  *            tests/depth_bias/depth_bias_tests.cpp -o depth_bias_tests
  * Exit status is 0 when every check passes. */
 
-#include "odin/depth_bias.hpp"
+#include "odin/host/renderer/hikaru/depth_bias.hpp"
 
 #include <cmath>
 #include <cstdio>

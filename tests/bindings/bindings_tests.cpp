@@ -22,12 +22,12 @@
  * ids of its controls, and what is refused.
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
- *            -I src $(pkg-config --cflags sdl3) tests/bindings/bindings_tests.cpp src/odin/bindings.cpp \
- *            src/odin/settings.cpp src/odin/roles.cpp src/odin/user_files.cpp $(pkg-config --libs sdl3) -o bindings_tests
+ *            -I src $(pkg-config --cflags sdl3) tests/bindings/bindings_tests.cpp src/odin/host/input/bindings.cpp \
+ *            src/odin/host/app/settings.cpp src/odin/host/input/roles.cpp src/odin/host/app/user_files.cpp $(pkg-config --libs sdl3) -o bindings_tests
  * It writes its file in the folder given as its argument, or the temporary
  * one. Exit status is 0 when every check passes. */
 
-#include "odin/bindings.hpp"
+#include "odin/host/input/bindings.hpp"
 
 #include <cstdio>
 #include <cstdlib>

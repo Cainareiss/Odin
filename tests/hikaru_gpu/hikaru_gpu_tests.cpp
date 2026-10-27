@@ -21,14 +21,14 @@
  * lines.
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
- *            -I src tests/hikaru_gpu/hikaru_gpu_tests.cpp src/odin/hikaru_gpu.cpp \
- *            src/odin/eurasia.cpp src/odin/antarctic.cpp src/odin/antarctic_ops.cpp \
- *            src/odin/antarctic_mesh.cpp src/odin/antarctic_io.cpp \
- *            src/odin/antarctic_disasm.cpp src/odin/antarctic_list.cpp \
+ *            -I src tests/hikaru_gpu/hikaru_gpu_tests.cpp src/odin/machine/boards/hikaru/hikaru_gpu.cpp \
+ *            src/odin/machine/chips/eurasia/eurasia.cpp src/odin/machine/chips/antarctic/antarctic.cpp src/odin/machine/chips/antarctic/antarctic_ops.cpp \
+ *            src/odin/machine/chips/antarctic/antarctic_mesh.cpp src/odin/machine/chips/antarctic/antarctic_io.cpp \
+ *            src/odin/machine/chips/antarctic/antarctic_disasm.cpp src/odin/machine/chips/antarctic/antarctic_list.cpp \
  *            -o hikaru_gpu_tests
  * Exit status is 0 when every check passes. */
 
-#include "odin/hikaru_gpu.hpp"
+#include "odin/machine/boards/hikaru/hikaru_gpu.hpp"
 
 #include <cstdio>
 #include <cstring>

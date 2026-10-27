@@ -21,15 +21,15 @@
  * given to another action, the lines of [hotkeys] and what is refused.
  *
  * Build: g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
- *            -I src $(pkg-config --cflags sdl3) tests/hotkeys/hotkeys_tests.cpp src/odin/hotkeys.cpp \
- *            src/odin/settings.cpp src/odin/user_files.cpp $(pkg-config --libs sdl3) -o hotkeys_tests
+ *            -I src $(pkg-config --cflags sdl3) tests/hotkeys/hotkeys_tests.cpp src/odin/host/app/hotkeys.cpp \
+ *            src/odin/host/app/settings.cpp src/odin/host/app/user_files.cpp $(pkg-config --libs sdl3) -o hotkeys_tests
  * Exit status is 0 when every check passes. */
 
-#include "odin/hotkeys.hpp"
+#include "odin/host/app/hotkeys.hpp"
 
 #include <cstdio>
 
-#include "odin/settings.hpp"
+#include "odin/host/app/settings.hpp"
 
 namespace {
 

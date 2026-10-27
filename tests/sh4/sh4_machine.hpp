@@ -26,8 +26,8 @@
 #ifndef ODIN_TESTS_SH4_MACHINE_HPP
 #define ODIN_TESTS_SH4_MACHINE_HPP
 
-#include "odin/sh4.hpp"
-#include "odin/sh4_fsca.hpp"
+#include "odin/machine/cpu/sh4/sh4.hpp"
+#include "odin/machine/cpu/sh4/sh4_fsca.hpp"
 
 #include <algorithm>
 #include <bit>
