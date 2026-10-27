@@ -31,7 +31,7 @@ FP_FLAGS := -ffp-contract=off
 
 CXXFLAGS := -std=c++20 -pthread -I src -Wall -Wextra -Wpedantic -Wconversion -Wshadow $(PKG_CFLAGS) $(SDL_CFLAGS) $(OPT_FLAGS) $(FP_FLAGS) $(PGO_FLAGS) $(DEP_FLAGS)
 
-.PHONY: all install clean spirv
+.PHONY: all install clean spirv check-layers
 
 # The front end, the board, then its chips
 OBJ := \
@@ -265,6 +265,28 @@ VERSION := $(shell git rev-parse --short HEAD 2>/dev/null)
 GIT_DIR := $(shell git rev-parse --git-dir 2>/dev/null)
 src/odin/host/app/version.o: CXXFLAGS += -DODIN_VERSION='"$(VERSION)"'
 src/odin/host/app/version.o: $(wildcard $(GIT_DIR)/HEAD $(GIT_DIR)/index)
+
+# The layers, one way only: common <- machine <- host (CODING.md, section
+# 2). Fails on an include of the host by the machine, of the machine or the
+# host by common, of a graphics or interface library or of a header of the
+# system by either, but the known ones named here
+LAYER_INCLUDE := ^[[:space:]]*\#[[:space:]]*include[[:space:]]*
+LAYER_FILES := --include='*.cpp' --include='*.hpp' --include='*.h'
+check-layers:
+	@bad=$$( \
+		grep -rnE $(LAYER_FILES) '$(LAYER_INCLUDE)"odin/host/' src/odin/machine | grep -vE \
+			-e '^src/odin/machine/boards/hikaru/hikaru\.hpp:[0-9]+:#include "odin/host/app/games\.hpp"$$' \
+			-e '^src/odin/machine/boards/hikaru/hikaru\.hpp:[0-9]+:#include "odin/host/app/user_files\.hpp"$$' \
+			-e '^src/odin/machine/chips/card_reader\.cpp:[0-9]+:#include "odin/host/app/user_files\.hpp"$$' \
+			-e '^src/odin/machine/cabinet/netbd_ring\.cpp:[0-9]+:#include "odin/host/input/sockets\.hpp"$$'; \
+		grep -rnE $(LAYER_FILES) '$(LAYER_INCLUDE)"odin/(machine|host)/' src/odin/common; \
+		grep -rnE $(LAYER_FILES) '$(LAYER_INCLUDE)[<"](SDL|GL/|vulkan|jansson|imgui)' src/odin/machine src/odin/common; \
+		grep -rnE $(LAYER_FILES) '$(LAYER_INCLUDE)[<"](windows\.h|winsock|ws2tcpip|sys/|unistd|netdb|netinet|fcntl|dlfcn)' \
+			src/odin/machine src/odin/common | grep -vE \
+			-e '^src/odin/machine/core/host_code\.cpp:[0-9]+:#include <(windows|sys/mman)\.h>$$' \
+			-e '^src/odin/machine/cabinet/netbd_ring\.cpp:[0-9]+:#include <windows\.h>$$'); \
+	if [ -n "$$bad" ]; then echo "$$bad"; echo "check-layers: includes across the layers"; exit 1; fi; \
+	echo "check-layers: common <- machine <- host, only the known exceptions"
 
 install:
 	@( mkdir -pv $(HOME)/.local/bin )
