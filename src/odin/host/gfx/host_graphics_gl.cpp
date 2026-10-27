@@ -49,6 +49,7 @@ public:
 	~GlGraphics() override;
 
 	const std::string &name() const override { return m_name; }
+	bool vulkan() const override { return false; }
 	void take_thread() override { SDL_GL_MakeCurrent(m_window, m_context); }
 	void leave_thread() override { SDL_GL_MakeCurrent(m_window, nullptr); }
 

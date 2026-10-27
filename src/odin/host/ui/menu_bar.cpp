@@ -71,7 +71,7 @@ constexpr float NOTE_WIDE = 0.77f;
 constexpr float NOTE_HIGH = 0.46f;
 constexpr float NOTE_CUT = 0.46f;
 
-constexpr const char *NAMES[] = { "FILE", "INPUT", "VIDEO", "AUDIO", "LINK", "DEBUG", "ABOUT" };
+constexpr const char *NAMES[] = { "FILE", "INPUT", "DISPLAY", "AUDIO", "LINK", "DEBUG", "ABOUT" };
 /* The kinds of device whose inputs go back to their defaults or are
  * cleared, in the order of MenuState::Device */
 constexpr const char *DEVICE_KINDS[] = { "Keyboard and mouse", "Controller", "Joystick" };
@@ -263,7 +263,7 @@ Menu::bar(BarState &state)
 			framed();
 			switch (m) {
 			case 0:
-				if (item("Open..."))
+				if (item("Open game..."))
 					ask(Ask::OPEN);
 				if (item("Close game", {}, false, state.game))
 					ask(Ask::CLOSE);
@@ -284,10 +284,10 @@ Menu::bar(BarState &state)
 					const auto where = static_cast<Where>(state.card_where);
 					const bool at_slot = where == Where::AT_SLOT;
 
-					if (item(at_slot ? "Take card back (Virtual-On)" : "Insert card (Virtual-On)", key(Action::CARD),
+					if (item(at_slot ? "Remove card" : "Insert card", key(Action::CARD),
 					         false, at_slot || (where == Where::IN_HAND && state.card_slot_open)))
 						ask(Ask::CARD);
-					if (ImGui::BeginMenu("Card in hand (Virtual-On)", where != Where::INSIDE && !at_slot)) {
+					if (ImGui::BeginMenu("Card in hand", where != Where::INSIDE && !at_slot)) {
 						framed();
 						if (item("None", {}, state.card < 0)) {
 							state.card_chosen = -1;
@@ -301,7 +301,7 @@ Menu::bar(BarState &state)
 						ImGui::EndMenu();
 					}
 					if (!state.card_keys.empty() &&
-					    item("New card (Virtual-On)...", {}, false, where != Where::INSIDE && !at_slot))
+					    item("New card...", {}, false, where != Where::INSIDE && !at_slot))
 						m_new_card = true;
 					ImGui::Separator();
 				}
@@ -347,10 +347,10 @@ Menu::bar(BarState &state)
 					                                   [](const BarState::Pad &pad) { return pad.joystick; });
 
 					for (const bool to_defaults : { true, false }) {
-						if (!ImGui::BeginMenu(to_defaults ? "Inputs back to defaults" : "Clear mapping"))
+						if (!ImGui::BeginMenu(to_defaults ? "Restore defaults" : "Clear all"))
 							continue;
 						framed();
-						/* Clear mapping leaves the menu open: Undo shows
+						/* Clear all leaves the menu open: Undo shows
 						 * at once, for its few seconds */
 						ImGui::PushItemFlag(ImGuiItemFlags_AutoClosePopups, to_defaults);
 						for (int kind = 0; kind < (joysticks ? 3 : 2); kind++)
@@ -362,7 +362,7 @@ Menu::bar(BarState &state)
 						ImGui::PopItemFlag();
 						ImGui::EndMenu();
 					}
-					if (state.undo && item("Undo clear mapping"))
+					if (state.undo && item("Undo clear all"))
 						ask(Ask::INPUTS_UNDO);
 					ImGui::EndMenu();
 				}
@@ -398,11 +398,11 @@ Menu::bar(BarState &state)
 				ImGui::Separator();
 				if (ImGui::BeginMenu("Hotkeys")) {
 					framed();
-					if (item("Back to defaults"))
+					if (item("Restore defaults"))
 						ask(Ask::HOTKEYS_DEFAULTS);
 					ImGui::EndMenu();
 				}
-				if (item("Lamp programs", {}, state.lamps))
+				if (item("Send outputs", {}, state.lamps))
 					state.lamps = !state.lamps;
 				break;
 			case 2: {
@@ -418,7 +418,7 @@ Menu::bar(BarState &state)
 					ask(Ask::FULLSCREEN);
 				/* The sizes of the window; one given by hand is kept,
 				 * shown, and set in Settings */
-				if (ImGui::BeginMenu("Window size at start", !state.window_given && !state.fullscreen)) {
+				if (ImGui::BeginMenu("Window size", !state.window_given && !state.fullscreen)) {
 					framed();
 					for (int sized = 0; sized < CUSTOM; sized++)
 						if (item(WINDOW_SIZES[sized], {}, window == sized) && window != sized) {
@@ -430,11 +430,11 @@ Menu::bar(BarState &state)
 					ImGui::EndMenu();
 				}
 				ImGui::Separator();
-				if (choose("Upscaling", SCALES, scale, !state.scale_given))
+				if (choose("Internal resolution", SCALES, scale, !state.scale_given))
 					state.scale = static_cast<unsigned>(scale) + 1;
 				if (choose("Upscaling mode", UPSCALE_MODES_SHOWN, mode))
 					state.upscale_mode = static_cast<unsigned>(mode);
-				if (choose("Texture filter", FILTERS, filter, !state.anisotropy_given))
+				if (choose("Anisotropic filtering", FILTERS, filter, !state.anisotropy_given))
 					state.anisotropy = ANISOTROPY[filter];
 				if (choose("Vertical sync", SYNCS, sync, !state.vsync_locked))
 					state.vsync = static_cast<unsigned>(sync);
@@ -464,12 +464,12 @@ Menu::bar(BarState &state)
 						item(other.c_str(), {}, true, false);
 					ImGui::EndMenu();
 				}
-				if (choose("Pace (next launch)", PACES, pace, !state.unthrottled_given))
+				if (choose("Speed limit (next launch)", PACES, pace, !state.unthrottled_given))
 					state.unthrottled = pace == 1;
-				if (item("Show the speed", {}, state.show_speed))
+				if (item("Show FPS", {}, state.show_speed))
 					state.show_speed = !state.show_speed;
 				ImGui::Separator();
-				if (ImGui::BeginMenu("Menu palette")) {
+				if (ImGui::BeginMenu("Menu theme")) {
 					framed();
 					for (size_t t = 0; t < std::size(THEMES); t++)
 						if (item(THEMES[t].name, {}, theme == static_cast<int>(t)))
@@ -524,6 +524,9 @@ Menu::bar(BarState &state)
 						if (item(PLAYED[how], {}, game.played == how))
 							game.played = how;
 					ImGui::EndDisabled();
+					/* To or from Quad waits for the game to start again */
+					if (game.later)
+						ImGui::TextDisabled("Reset the game to apply");
 					ImGui::Separator();
 					ImGui::BeginDisabled(game.played != 1);
 					ImGui::TextUnformatted("Optional board level");
@@ -565,14 +568,14 @@ Menu::bar(BarState &state)
 					ImGui::EndMenu();
 				}
 				ImGui::Separator();
-				greyed("Next cabinet", state.link_next.empty() ? std::string("none, typed in Settings") : state.link_next);
-				ImGui::TextDisabled(state.link_given ? "Set by ODIN_NETBD" : "A game takes them when it starts");
+				greyed("Next cabinet", state.link_next.empty() ? std::string("none (set it in Settings)") : state.link_next);
+				ImGui::TextDisabled(state.link_given ? "Set by ODIN_NETBD" : "Applies when a game starts");
 				break;
 			}
 			case 5:
 				if (item("Pause", key(Action::PAUSE), state.paused, state.game))
 					ask(Ask::PAUSE);
-				if (item("Log each access (next game)", {}, state.verbose, !state.verbose_given))
+				if (item("Detailed log (next launch)", {}, state.verbose, !state.verbose_given))
 					state.verbose = !state.verbose;
 				break;
 			default:
@@ -649,9 +652,9 @@ Menu::new_card(BarState &state, const MenuKit &kit)
 			if (!(c >= '0' && c <= '9') && !(c >= 'A' && c <= 'Z'))
 				symbols += c;
 		kit.frame(ImGui::GetWindowDrawList(), a, b, kit.px(MENU_CUT), p.screen, p.outline);
-		ImGui::TextUnformatted("New card (Virtual-On)");
-		ImGui::TextDisabled("The pilot's name, as the terminal of the game takes it:");
-		ImGui::TextDisabled("8 characters, A-Z, 0-9, space and %s", symbols.c_str());
+		ImGui::TextUnformatted("New card");
+		ImGui::TextDisabled("The pilot's name, as the game's terminal accepts it:");
+		ImGui::TextDisabled("Up to 8 characters: A-Z, 0-9, space and %s", symbols.c_str());
 		if (ImGui::IsWindowAppearing())
 			ImGui::SetKeyboardFocusHere();
 		ImGui::SetNextItemWidth(kit.px(180.0f));
@@ -664,7 +667,7 @@ Menu::new_card(BarState &state, const MenuKit &kit)
 		const bool named = name.find_first_not_of(' ') != std::string_view::npos;
 
 		ImGui::BeginDisabled(!named);
-		if (ImGui::Button("Make card") || (entered && named)) {
+		if (ImGui::Button("Create card") || (entered && named)) {
 			state.card_name = name;
 			state.ask = BarState::Ask::CARD_NEW;
 			ImGui::CloseCurrentPopup();

@@ -44,6 +44,11 @@ constexpr float BUTTON_HIGH = 4.0f;
 /* The texts of a row have that room at the least beside its control, else
  * the control goes under them */
 constexpr float TEXT_LEAST = 120.0f;
+/* A tip goes on to the next line at that width, in heights of the font;
+ * the mark of a row that has one, that far after its name in points */
+constexpr float TIP_EMS = 26.0f;
+constexpr char ASK[] = "(?)";
+constexpr float ASK_GAP = 5.0f;
 /* What is left of a colour on a row that cannot change; of the action
  * colour in the fill of a button on */
 constexpr float OFF_ALPHA = 0.4f;
@@ -611,6 +616,7 @@ MenuKit::focus(ImVec2 a, ImVec2 b, float out) const
 {
 	if (!m_focus || m_focus->count++ != m_focus->at)
 		return false;
+	m_focus->tip = m_row_tip;
 	frame(ImGui::GetWindowDrawList(), { a.x - out, a.y - out }, { b.x + out, b.y + out }, px(CONTROL_CUT), 0,
 	      m_palette.accent);
 	/* The page scrolls to show it all */
@@ -710,6 +716,7 @@ MenuKit::begin_group(const char *title)
 	ImGui::Dummy({ 0.0f, size + px(5.0f) });
 	m_group_top = ImGui::GetCursorScreenPos();
 	m_first_row = true;
+	m_row_tip.clear();
 	/* The rows on top, the frame drawn under them once their height is known */
 	list->ChannelsSplit(2);
 	list->ChannelsSetCurrent(1);
@@ -725,6 +732,8 @@ MenuKit::end_group()
 	frame(list, m_group_top, { m_group_top.x + ImGui::GetContentRegionAvail().x, end.y }, px(GROUP_CUT), 0,
 	      m_palette.line);
 	list->ChannelsMerge();
+	/* What comes after the group is not its last row */
+	m_row_tip.clear();
 }
 
 ImVec2
@@ -732,6 +741,8 @@ MenuKit::begin_row(float &width)
 {
 	const ImVec2 at = ImGui::GetCursorScreenPos();
 
+	m_row_tip = std::move(m_next_tip);
+	m_next_tip.clear();
 	width = ImGui::GetContentRegionAvail().x;
 	if (!m_first_row)
 		ImGui::GetWindowDrawList()->AddLine({ at.x + 1.0f, at.y }, { at.x + width - 1.0f, at.y }, m_palette.line,
@@ -740,19 +751,33 @@ MenuKit::begin_row(float &width)
 	return at;
 }
 
+float
+MenuKit::ask_width() const
+{
+	return px(ASK_GAP) + ImGui::GetFont()->CalcTextSizeA(font(NOTE), FLT_MAX, 0.0f, ASK).x;
+}
+
 /* The name, what the row does and why it does not change, one under the
  * other in that width, the last two smaller and fainter; the name faint
- * too on a row that cannot change now (`off`): their height */
+ * too on a row that cannot change now (`off`): their height. A (?) after
+ * the name when the row has a tip, shown while the mouse is on the name. */
 float
 MenuKit::texts(ImVec2 at, float width, const char *name, const char *about, const char *locked, bool off,
                const char *warning) const
 {
 	ImDrawList *const list = ImGui::GetWindowDrawList();
 	ImFont *const face = ImGui::GetFont();
-	const float space = px(2.0f), note = font(NOTE);
-	float h = wrapped_h(name, ImGui::GetFontSize(), width);
+	const float space = px(2.0f), note = font(NOTE), size = ImGui::GetFontSize();
+	float h = wrapped_h(name, size, width);
 
-	list->AddText(face, ImGui::GetFontSize(), at, off ? m_palette.faint : m_palette.ink, name, nullptr, width);
+	list->AddText(face, size, at, off ? m_palette.faint : m_palette.ink, name, nullptr, width);
+	if (!m_row_tip.empty()) {
+		const float x = at.x + std::min(ImGui::CalcTextSize(name).x, width - ask_width()) + px(ASK_GAP);
+
+		list->AddText(face, note, { x, at.y + (size - note) / 2.0f }, m_palette.faint, ASK);
+		if (ImGui::IsWindowHovered() && ImGui::IsMouseHoveringRect(at, { at.x + width, at.y + h }))
+			tip(m_row_tip.c_str());
+	}
 	for (const char *text : { warning ? warning : about, locked }) {
 		if (!text || !*text)
 			continue;
@@ -768,7 +793,10 @@ MenuKit::place(ImVec2 at, float width, float control, float control_h, const cha
                const char *locked, bool off, const char *warning) const
 {
 	const float pad = px(ROW_PAD), beside = width - control - px(GAP) - 2.0f * pad;
-	const bool under = beside < px(TEXT_LEAST);
+	/* A name and its (?) that do not fit beside the control: the control
+	 * under them */
+	const bool under = beside < px(TEXT_LEAST) ||
+	                   (!m_row_tip.empty() && beside < ImGui::CalcTextSize(name).x + ask_width());
 	const float text_h = texts({ at.x + pad, at.y + pad }, under ? width - 2.0f * pad : beside, name, about, locked,
 	                           off, warning);
 
@@ -1179,7 +1207,10 @@ MenuKit::tip(const char *text) const
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, stroke());
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
 	if (ImGui::BeginTooltip()) {
+		/* A sentence goes on to the next line rather than off the window */
+		ImGui::PushTextWrapPos(ImGui::GetFontSize() * TIP_EMS);
 		ImGui::TextUnformatted(text);
+		ImGui::PopTextWrapPos();
 		ImGui::EndTooltip();
 	}
 	ImGui::PopStyleVar(3);

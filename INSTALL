@@ -147,28 +147,29 @@ a tilted one (the lock-on of Planet Harriers).
 In a game, the mouse moved over the window shows the bar at its top a
 while, the game going on under it; in a game the mouse aims in (Brave Fire
 Fighters), only from the top edge of the window. Its lists set what the
-pages of the menu set, without opening it. FILE: Open... plays the zip or
-the 7z of a game, the game of its name in MAME, from its directory; Close
-game goes back to the library, Reset switches the cabinet off and on; the
-state of the game saved and loaded, the menu (Settings...), Quit. INPUT,
-for the game that runs: the gamepad of each player, the dead zone and the
-trigger threshold of that gamepad, its inputs back to their defaults or
-cleared, kind of device by kind (Undo a few seconds), the light gun of
-each player and the vibration where the game has them; the hotkeys back to
-their defaults, the lamp programs. VIDEO: the whole display, the window at
-start, the upscaling and its mode, the texture filter, the vertical sync,
-the bezel, the CRT screen, the pace (at the next launch), the speed in the
-title, the palette of the menu. AUDIO: the volume, the sound in the
-background, the device, and how the game that runs plays its optional
-sound board. LINK: the network board, on or off, this cabinet and its port
-(at the next game). DEBUG pauses the game and has the board say each
-access (at the next game). ABOUT opens the page About. The keys of each
-control and hotkey, the folders, the address of the next cabinet and a
-window of a size given by hand are set in the menu. What the bar changes
-is kept in odin.ini as the menu keeps it. What Odin does or cannot do (a
-state saved, the card taken in) is said a few seconds in the bottom-left
-corner, bar or not. In the library, Close game, Reset, the states, Pause
-and the players of INPUT are greyed out.
+pages of the menu set, without opening it. FILE: Open game... plays the
+zip or the 7z of a game, the game of its name in MAME, from its directory;
+Close game goes back to the library, Reset switches the cabinet off and
+on; the state of the game saved and loaded, the menu (Settings...), Quit.
+INPUT, for the game that runs: the gamepad of each player, the dead zone
+and the trigger threshold of that gamepad, its inputs restored to their
+defaults or cleared, kind of device by kind (Undo a few seconds), the
+light gun of each player and the vibration where the game has them; the
+hotkeys restored to their defaults, sending the outputs. DISPLAY: the
+whole display, the window size, the internal resolution and the upscaling
+mode, the anisotropic filtering, the vertical sync, the bezel, the CRT
+screen, the speed limit (at the next launch), the FPS in the title, the
+menu theme. AUDIO: the volume, the sound in the background, the device,
+and how the game that runs plays its optional sound board. LINK: the
+network board, on or off, this cabinet and its port (at the next game).
+DEBUG pauses the game and turns the detailed log on (at the next launch).
+ABOUT opens the page About. The keys of each control and hotkey, the
+folders, the address of the next cabinet and a window of a size given by
+hand are set in the menu. What the bar changes is kept in odin.ini as the
+menu keeps it. What Odin does or cannot do (a state saved, the card taken
+in) is said a few seconds in the bottom-left corner, bar or not. In the
+library, Close game, Reset, the states, Pause and the players of INPUT are
+greyed out.
 
 0 is TEST and 9 SERVICE, the buttons of the cabinet: they open and work
 the menu of the BOOTROM and the test menus of the games (both together
@@ -371,7 +372,7 @@ a make and model its own in [gamepad.<GUID>], the GUID of its line in
  dead_zone = 8
 
 and the controls of the page Input as a list rather than on the drawing
-(the button Classic):
+(the button List):
 
  [menu]
  classic = on
@@ -384,16 +385,15 @@ page Display.)
 In the menu, LB and RB of a gamepad change the page, LT and RT the game
 (on the page Input they are tested as the controls they work: there the
 first two rows of the frame, the tabs and the games, change them), B goes
-back (a list dropped open closes first, then the advanced options, a
-key caught is let go, else the game goes on). The D-pad or the left stick moves a frame from
-row to row; left and right change a choice or a slider, A presses. On
+back (a list dropped open closes first, then the options, a key caught is
+let go, else the game goes on). The D-pad or the left stick moves a frame
+from row to row; left and right change a choice or a slider, A presses. On
 the page Input the frame goes from control to control: A changes it, X
-clears it and Y sets it back to its default, on the device shown; while
-Start mapping, A held a second skips a control (let go sooner, it is the
-button the control takes). [menu]
-gives them other inputs, as [controls.<game>] does: up, down, left,
-right, press, back, clear, default, page_before, page_after, game_before,
-game_after.
+clears it and Y sets it back to its default, on the device shown; during
+Map all, A held a second skips a control (let go sooner, it is the button
+the control takes). [menu] gives them other inputs, as [controls.<game>]
+does: up, down, left, right, press, back, clear, default, page_before,
+page_after, game_before, game_after.
 
 Odin writes every key it knows in odin.ini, at the start, those at their
 value by default as comments ("# volume = 100"): taking the # away and
@@ -426,24 +426,23 @@ odin.ini in the same odin folder; ODIN_CONFIG=<file> reads another one.
 
 The card of Virtual-On goes in and out as at the cabinet, by the player:
 nothing goes in by itself. The cards are kept with the saves of the game,
-in its folder cards (<name>.card); the menu FILE, Card in hand
-(Virtual-On), chooses the one in hand ([players.von4] card = <name>).
-When the game asks for a card (choosing the robot), F6 or Insert card
-(Virtual-On) puts it into the slot; at the end of the game the reader
-writes it and ejects it, and the game waits until the player takes it
-back, F6 or Take card back (Virtual-On). A new card comes from the
-cabinet set as a terminal (the test menu of the game, GAME ASSIGNMENTS,
-GAME START MODE = VENDOR, with FREE PLAY): taken back, it is kept as
-card-<n>. Faster, FILE, New card (Virtual-On)... makes the card that
-terminal makes for a new pilot of the name typed (8 characters of its
-keyboard: A to Z, 0 to 9, space and @,./~_:;^!?<>+-*=%'"()), on the
-first VR of its list, and puts it in hand as <name>.card (a number after
-the name when that file is there already). A note says when the reader
-takes the card in and when a card comes out at the slot. A card file is
-written whole or not at all, the card it held before kept beside it as
-<name>.card.bak, which Odin reads in its place should the card file be
-cut short. Virtual-On reads cards in the country Japan only (the SYSTEM
-MENU of the BIOS); elsewhere it never asks for one.
+in its folder cards (<name>.card); the menu FILE > Card in hand chooses
+the one in hand ([players.von4] card = <name>). When the game asks for a
+card (choosing the robot), F6 or FILE > Insert card puts it into the slot;
+at the end of the game the reader writes it and ejects it, and the game
+waits until the player takes it back, F6 or FILE > Remove card. A new card
+comes from the cabinet set as a terminal (the test menu of the game, GAME
+ASSIGNMENTS, GAME START MODE = VENDOR, with FREE PLAY): taken back, it is
+kept as card-<n>. Faster, FILE > New card... makes the card that terminal
+makes for a new pilot of the name typed (up to 8 characters of its
+keyboard: A to Z, 0 to 9, space and @,./~_:;^!?<>+-*=%'"()), on the first
+VR of its list, and puts it in hand as <name>.card (a number after the
+name when that file is there already). A note says when the reader takes
+the card in and when a card comes out at the slot. A card file is written
+whole or not at all, the card it held before kept beside it as
+<name>.card.bak, which Odin reads in its place should the card file be cut
+short. Virtual-On reads cards in the country Japan only (the SYSTEM MENU
+of the BIOS); elsewhere it never asks for one.
 
 A portable Odin keeps its files in its own folder: put an empty file
 portable.txt beside the program (odin.exe, or the AppImage), or its

@@ -86,6 +86,7 @@ public:
 	~VkGraphics() override;
 
 	const std::string &name() const override { return m_card->name(); }
+	bool vulkan() const override { return true; }
 	/* Vulkan has no context to make current: one thread at a time uses
 	 * the card, as display.hpp has it */
 	void take_thread() override {}

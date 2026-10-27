@@ -86,8 +86,9 @@ public:
 	static std::unique_ptr<HostGraphics> make_vk(SDL_Window *window, unsigned window_w, unsigned window_h);
 	virtual ~HostGraphics() = default;
 
-	/* The name of the card */
+	/* The name of the card, and whether Vulkan draws on it (else OpenGL) */
 	virtual const std::string &name() const = 0;
+	virtual bool vulkan() const = 0;
 	/* The calling thread takes the card, or lets it go for another */
 	virtual void take_thread() = 0;
 	virtual void leave_thread() = 0;

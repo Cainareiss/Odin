@@ -591,11 +591,20 @@ void test_shipped_outputs()
 
 	const auto shaker = [&shipped](const char *name, unsigned player) { return shipped.describe(name)->shaker(player); };
 
-	check(shaker("braveff", 0) == "output 1P NOZZLE VIBRATION" && shaker("braveff", 1) == "output 2P NOZZLE VIBRATION",
+	check(shaker("braveff", 0) == "from output 1P NOZZLE VIBRATION" &&
+	      shaker("braveff", 1) == "from output 2P NOZZLE VIBRATION",
 	      "what shakes the pad of each player of BRAVEFF: its nozzle");
-	check(shaker("swracer", 0) == "the shaker of the optional board" &&
-	      shaker("sgnascar", 0) == "the shocks of the cabinet wheel" && shaker("sgnascar", 1).empty() &&
+	check(shaker("swracer", 0) == "from the optional board's panel shaker" &&
+	      shaker("sgnascar", 0) == "from the jolts of the cabinet's wheel" && shaker("sgnascar", 1).empty() &&
 	      shaker("airtrix", 0).empty(), "the shaker of Racer, the shocks of NASCAR (player 1), nothing in Air Trix");
+
+	const auto experimental = [&shipped](const char *name, unsigned player) {
+		return shipped.describe(name)->shaker_experimental(player);
+	};
+
+	check(!experimental("braveff", 0) && !experimental("braveff", 1) && experimental("swracer", 0) &&
+	      experimental("sgnascar", 0) && !experimental("sgnascar", 1) && !experimental("airtrix", 0),
+	      "Odin makes up the shaking of Racer and NASCAR, not the nozzle of BRAVEFF");
 }
 
 void test_lists(const std::string &dir)

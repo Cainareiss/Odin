@@ -127,7 +127,7 @@ struct BarState {
 	 * filter, the window at start (or the size given by hand, kept), how
 	 * the frames wait for the display, the filter of the picture by its
 	 * name, frames without a limit (at the next launch); those the command
-	 * line gives, and the vertical sync off at an unlimited pace, are shown,
+	 * line gives, and the vertical sync off at unlimited speed, are shown,
 	 * not changed. The graphics card. */
 	unsigned scale = 1, upscale_mode = 0, anisotropy = 1, window = 1, vsync = 0;
 	bool custom_window = false, unthrottled = false;
@@ -143,6 +143,8 @@ struct BarState {
 		int played;
 		float level;
 		bool locked;
+		/* Its mode changed to or from Quad: the game must be reset */
+		bool later = false;
 	};
 	std::vector<std::string> devices;
 	std::string device;
@@ -221,10 +223,12 @@ struct MenuState {
 	/* Said on the command line: shown, not changed */
 	bool scale_given = false, anisotropy_given = false, window_given = false, fullscreen_given = false,
 	     unthrottled_given = false;
-	/* The graphics card, the size of the display in pixels, its frames a
-	 * second (0: not known) and whether they are fewer than the cabinet's;
-	 * why the frames do not wait for it (none: they do as vsync says) */
+	/* The graphics card and whether Vulkan draws on it (else OpenGL), the
+	 * size of the display in pixels, its frames a second (0: not known) and
+	 * whether they are fewer than the cabinet's; why the frames do not wait
+	 * for it (none: they do as vsync says) */
 	std::string gpu;
+	bool vulkan = false;
 	unsigned display_w = 0, display_h = 0;
 	float refresh = 0.0f;
 	bool refresh_short = false;
@@ -381,10 +385,12 @@ struct MenuState {
 	 * Brave; experimental: the shaker of Racer, the shocks of NASCAR), and
 	 * whether it does */
 	bool can_shake = false, shake = true;
-	/* What shakes on the cabinet ("output NOZZLE VIBRATION"); the dead
-	 * zone and the trigger threshold of the gamepad shown (its make and
-	 * model's); its advanced options open over the drawing */
+	/* What shakes on the cabinet ("from output NOZZLE VIBRATION") and
+	 * whether Odin makes it up (Game::shaker_experimental); the dead zone
+	 * and the trigger threshold of the gamepad shown (its make and
+	 * model's); its options open over the drawing */
 	std::string shake_from;
+	bool shake_experimental = false;
 	PadTuning tuning;
 	bool advanced = false;
 	/* The animations of the menu ([menu] animations): the row of the
@@ -455,35 +461,37 @@ struct MenuState {
  * let go of where the context is (release) before it is destroyed. */
 class Menu {
 public:
-	/* The words of a choice of two, and of what is around the picture */
-	static constexpr const char *ON_OFF[] = { "on", "off" };
+	/* The words of a choice of two, Off first everywhere, and of what is
+	 * around the picture */
 	static constexpr const char *OFF_ON[] = { "Off", "On" };
 	static constexpr const char *SIDES_SHOWN[] = { "Off", "Blur", "Bezel" };
 	/* The choices of the page Display, as the bar offers them too: the 3D
-	 * that many times finer, how its flat pieces are, the texture filter
-	 * (ANISOTROPY: its values), the window at start (that many times the
+	 * that many times finer, how its flat pieces are, the anisotropic
+	 * filtering (ANISOTROPY: its values), the window (that many times the
 	 * screen; its sizes shorter where the row is narrow; Custom among them:
 	 * the size the user gives the window by hand), how frames wait for the
 	 * display, the screens of the cabinets (PRESETS: the filters they
-	 * name), the pace */
+	 * name), the speed limit */
 	static constexpr const char *SCALES[] = { "1×", "2×", "3×", "4×", "5×", "6×" };
 	static constexpr const char *UPSCALE_MODES_SHOWN[] = { "Raw", "Snap 2D", "Native 2D" };
-	static constexpr const char *FILTERS[] = { "None", "2×", "4×", "8×", "16×" };
+	static constexpr const char *FILTERS[] = { "Off", "2×", "4×", "8×", "16×" };
 	static constexpr unsigned ANISOTROPY[] = { 1, 2, 4, 8, 16 };
 	static constexpr const char *WINDOW_SIZES[] = { "640 × 480", "1280 × 960", "1920 × 1440", "2560 × 1920", "Custom" };
 	static constexpr const char *WINDOW_WIDTHS[] = { "640", "1280", "1920", "2560", "Custom" };
 	static constexpr int CUSTOM = 4;
-	static constexpr const char *SYNCS[] = { "off", "on", "adaptive" };
-	static constexpr const char *SCREENS[] = { "None", "Monitor 29\" (31 kHz)", "Projector 50\" (31 kHz)" };
+	static constexpr const char *SYNCS[] = { "Off", "On", "Adaptive" };
+	static constexpr const char *SCREENS[] = { "None", "Monitor 29\"", "Projector 50\"" };
 	static constexpr const char *PRESETS[] = { "", "lola-retro/sega-monitor-29", "lola-retro/sega-projector-50" };
 	static constexpr const char *PACES[] = { "60 fps (cabinet)", "Unlimited" };
 	/* How a game with an optional sound board plays it (page Audio) */
-	static constexpr const char *PLAYED[] = { "Main", "Both", "Four" };
+	static constexpr const char *PLAYED[] = { "Main", "Both", "Quad" };
+	/* The first key of an action of Odin as the user set it: "" for none */
+	static std::string first_key(const MenuState &state, Hotkeys::Action action);
 	/* The ports the page Link offers, from NetCable::PORT */
 	static constexpr unsigned LINK_PORTS = 8;
 	/* What Odin is, and the libraries it is made with: who wrote them,
 	 * their licence */
-	static constexpr const char *WHAT = "Sega Hikaru emulator, as close to the hardware as it goes";
+	static constexpr const char *WHAT = "Sega Hikaru emulator, as close to the hardware as it gets";
 	static constexpr const char *LICENCES[][3] = {
 		{ "Odin", "Réda Chérif-Touil · Valkyrie, Stefano Teso", "GPL 3.0 or later" },
 		{ "Dear ImGui", "Omar Cornut", "MIT" },

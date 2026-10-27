@@ -109,7 +109,7 @@ struct PadDrawing {
 inline constexpr int PAD_STEAM_CONTROLLER = SDL_GAMEPAD_TYPE_COUNT;
 int pad_kind(SDL_GamepadType type, uint16_t vendor, uint16_t product);
 
-/* The drawing of a kind of gamepad, and its name ("Xbox 360", "generic") */
+/* The drawing of a kind of gamepad, and its name ("Xbox 360", "Generic") */
 const PadDrawing &pad_drawing(int kind);
 const char *pad_drawing_name(int kind);
 

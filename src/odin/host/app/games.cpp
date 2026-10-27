@@ -428,12 +428,21 @@ Game::shaker(unsigned player) const
 
 	for (const GameOutput &output : outputs)
 		if (output.role == GameOutput::Role::RUMBLE && output.player == player)
-			out += (out.empty() ? "output " : ", ") + output.name;
+			out += (out.empty() ? "from output " : ", ") + output.name;
 	if (out.empty() && player == 0 && option_vibration)
-		out = "the shaker of the optional board";
+		out = "from the optional board's panel shaker";
 	if (out.empty() && player == 0 && drive_first_output)
-		out = "the shocks of the cabinet wheel";
+		out = "from the jolts of the cabinet's wheel";
 	return out;
+}
+
+bool
+Game::shaker_experimental(unsigned player) const
+{
+	for (const GameOutput &output : outputs)
+		if (output.role == GameOutput::Role::RUMBLE && output.player == player)
+			return false;
+	return player == 0 && (option_vibration || drive_first_output);
 }
 
 std::span<const uint8_t>

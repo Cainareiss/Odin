@@ -150,9 +150,10 @@ public:
 	/* The frames a second of the display the window is on (0: not
 	 * known) */
 	float refresh() const;
-	/* The graphics card, and the size in pixels of the display the
-	 * window is on */
+	/* The graphics card, whether Vulkan draws on it (else OpenGL), and
+	 * the size in pixels of the display the window is on */
 	const std::string &gpu() const { return m_gpu; }
+	bool vulkan() const { return m_graphics->vulkan(); }
 	void display_size(unsigned &w, unsigned &h) const;
 	/* The window, for the dialogs of the system; the list of the 3D
 	 * programs of the game kept for the user (empty: none) */

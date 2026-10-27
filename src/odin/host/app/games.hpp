@@ -238,10 +238,12 @@ struct Game {
 		                   [](const GameOutput &output) { return output.role == GameOutput::Role::RUMBLE; });
 	}
 	/* What shakes the pad of a player (0 or 1), as the menu says it: its
-	 * rumble outputs ("output 1P NOZZLE VIBRATION"), the vibration device
-	 * of the optional board or the shocks of the drive board (player 1);
-	 * empty: nothing */
+	 * rumble outputs ("from output 1P NOZZLE VIBRATION"), the vibration
+	 * device of the optional board or the shocks of the drive board (player
+	 * 1); empty: nothing. Whether it is one of the last two, which Odin
+	 * makes from what the game does (experimental), not an output. */
 	std::string shaker(unsigned player) const;
+	bool shaker_experimental(unsigned player) const;
 };
 
 /* The list of the games, a JSON file (odin-games.json). A game has sections

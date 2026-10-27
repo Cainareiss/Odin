@@ -25,6 +25,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "imgui/imgui.h"
@@ -120,7 +121,7 @@ inline constexpr MenuTheme THEMES[] = {
 	{ "runasteinn", "Rúnasteinn", "", "granite and the red ochre of runestones", &RUNASTEINN },
 	{ "edda", "Edda", "paper", "vellum and the red ink of manuscripts", &EDDA },
 	{ "raf", "Raf", "retro", "the amber glow of old terminals", &RAF },
-	{ "heimdall", "Heimdall", "high contrast", "black, white and yellow: most legible", &HEIMDALL },
+	{ "heimdall", "Heimdall", "high contrast", "black, white and yellow: the most legible", &HEIMDALL },
 };
 
 /* The theme of that word of odin.ini; -1 for none */
@@ -138,13 +139,15 @@ theme_named(std::string_view key)
  * it), how many the page drew at the last picture and draws now, whether
  * it moved there now (the page scrolls to it); what the gamepad asks of
  * that item now: a choice or a slider moved, pressed; the part of the
- * item chosen (a slot of a shortcut) */
+ * item chosen (a slot of a shortcut); the tip of the row it is on, which
+ * the foot of the menu shows (a gamepad has no mouse to point at a (?)) */
 struct MenuFocus {
 	int at = -1, last = 0, count = 0;
 	bool moved = false;
 	int side = 0;
 	bool press = false;
 	int part = 0;
+	std::string tip;
 };
 
 /* The dressed widgets of the menu, on Dear ImGui: corners cut at 45
@@ -264,6 +267,10 @@ public:
 	/* A group of settings: its title, then its rows in a frame */
 	void begin_group(const char *title);
 	void end_group();
+	/* What the next row says in a tip, on a (?) after its name: the mouse
+	 * on its name shows it, and the foot of the menu while the frame of the
+	 * gamepad is on the row */
+	void next_tip(std::string text) { m_next_tip = std::move(text); }
 
 	/* A row: its name, what it does under it, and at its right a choice
 	 * among labels (true when it changed; -1 is none of them) or a text.
@@ -363,6 +370,8 @@ private:
 	ImVec2 begin_row(float &width);
 	float texts(ImVec2 at, float width, const char *name, const char *about, const char *locked, bool off = false,
 	            const char *warning = nullptr) const;
+	/* The room the (?) of a row with a tip takes after its name */
+	float ask_width() const;
 	/* The texts of a row drawn, and the place of its control, `control`
 	 * wide and `control_h` high: beside them, or under them where they
 	 * would have too little room. The height of the row and the top of
@@ -389,6 +398,8 @@ private:
 	MenuFocus *m_focus;
 	ImVec2 m_group_top = {};
 	bool m_first_row = true;
+	/* The tip next_tip gave, and the one of the row being drawn */
+	std::string m_next_tip, m_row_tip;
 	/* The last button a value row drew */
 	ImVec2 m_button_a = {}, m_button_b = {};
 };

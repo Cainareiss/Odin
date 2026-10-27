@@ -161,6 +161,14 @@ set_hint(const char *name, const std::optional<std::string> &value)
 
 } /* namespace */
 
+std::string
+Menu::first_key(const MenuState &state, Hotkeys::Action action)
+{
+	const HotKey &key = state.hotkeys[static_cast<size_t>(action)].keys[0];
+
+	return key.key == SDLK_UNKNOWN ? std::string() : Hotkeys::text(key);
+}
+
 Menu::Menu(SDL_Window *window, HostGraphics &graphics)
 	: m_window(window), m_graphics(graphics), m_imgui(nullptr), m_scale(0.0f), m_page(INPUT), m_cursor_shown(true)
 {
@@ -432,8 +440,11 @@ Menu::build(MenuState &state)
 	 * RB); on the page Input without the pills of LB and RB, which are
 	 * tested there as controls. A tab clicked: no frame on the page shown */
 	const bool pills = m_page != INPUT, by_pad = m_focus.at == 0 && m_focus.side;
+	/* The tip of the row the gamepad framed in the last picture */
+	const std::string framed_tip = m_focus.tip;
 
 	m_focus.count = 0;
+	m_focus.tip.clear();
 	if (kit.tabs(TABS, TAB_ICONS, room.x < WIDE * room.y, m_page,
 	             pills ? std::span<const std::string>(state.pills.data(), 2) : std::span<const std::string>(), true)) {
 		m_focus = {};
@@ -446,19 +457,30 @@ Menu::build(MenuState &state)
 	ImGui::Dummy({ 0.0f, kit.px(LINE_ROOM) });
 
 	/* What the page says at the bottom, beside the keys, on as many lines
-	 * as it takes, under a line: the page above it. Input says it with
-	 * the names and inputs of its controls. While an input is caught,
-	 * Input says what to do there, keys and all. Over a game, Close game
-	 * before the keys: the last place of the frame of the gamepad, up from
-	 * the first; pressed once, it asks to be pressed again. */
+	 * as it takes, under a line: the page above it; the tip of the row the
+	 * gamepad frames in its place. Input says it with the names and inputs
+	 * of its controls. While an input is caught, Input says what to do
+	 * there, keys and all. The keys are those the user set for the menu and
+	 * to quit. Over a game, Close game before the keys: the last place of
+	 * the frame of the gamepad, up from the first; pressed once, it asks to
+	 * be pressed again. */
 	static constexpr char CLOSE[] = "Close game", AGAIN[] = "Press again";
-	const char *const keys = state.library ? "Esc: back to the library    Ctrl+Q: quit" :
-	                                         "Esc: back to the game    Ctrl+Q: quit";
+	const std::string back = first_key(state, Hotkeys::Action::MENU), quit = first_key(state, Hotkeys::Action::QUIT);
+	std::string keys_said;
+
+	if (!back.empty())
+		keys_said = back + (state.library ? ": back to the library" : ": back to the game");
+	if (!quit.empty())
+		keys_said += (keys_said.empty() ? "" : "    ") + quit + ": quit";
+
+	const char *const keys = keys_said.c_str();
 	const bool keys_shown = m_page != INPUT || !state.catching, closable = keys_shown && !state.library;
 	const ImVec2 close = closable ? kit.button_size(m_closing ? AGAIN : CLOSE) : ImVec2{};
 	const float close_w = closable ? std::max(kit.button_size(CLOSE).x, kit.button_size(AGAIN).x) + pad : 0.0f;
 	const float keys_w = ImGui::CalcTextSize(keys).x, help_w = std::max(0.0f, w - 3.0f * pad - keys_w - close_w);
-	const std::string help = m_page == INPUT ? std::string() : this->help(m_page, state);
+	const std::string help = m_page == INPUT ? std::string() :
+	                         framed_tip.empty() ? this->help(m_page, state) :
+	                         state.kept ? framed_tip : framed_tip + " Not saved (ODIN_CONFIG=none).";
 	const float help_h = m_page == INPUT ? 0.0f : ImGui::CalcTextSize(help.c_str(), nullptr, false, help_w).y;
 	const float foot = m_page == INPUT ? input_foot(kit, state, {}, help_w, 0.0f, false) :
 	                                     std::max({ line, help_h, close.y });
@@ -555,43 +577,48 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 
 	const bool narrow = ImGui::GetContentRegionAvail().x < kit.px(560.0f);
 
-	kit.begin_group("ENGINE");
+	kit.begin_group("RENDERER");
+	kit.next_tip("Chosen by the system, not by Odin.");
 	watch(PREVIEW_CARD, [&] {
-		kit.text("Graphics card", "chosen by the system", state.gpu.c_str());
+		kit.text("Graphics card", nullptr, state.gpu.c_str());
 	});
 	kit.end_group();
 
 	kit.begin_group("3D QUALITY");
 	int scale = static_cast<int>(state.scale) - 1;
 
-	std::snprintf(about, sizeof(about), "drawn at %u × %u%s", 640 * state.scale, 480 * state.scale,
-	              state.scale == 1 ? " · as the cabinet" : "");
+	std::snprintf(about, sizeof(about), "The 3D is drawn at %u × %u%s.", 640 * state.scale, 480 * state.scale,
+	              state.scale == 1 ? ", as on the cabinet" : "");
+	kit.next_tip(about);
 	watch(PREVIEW_UPSCALE, [&] {
-		if (kit.choice("Upscaling", about, SCALES, scale, state.scale_given ? "set by the command line: -x" : nullptr))
+		if (kit.choice("Internal resolution", nullptr, SCALES, scale,
+		               state.scale_given ? "set on the command line: -x" : nullptr))
 			state.scale = static_cast<unsigned>(scale) + 1;
 	});
 
 	/* How the flat pieces (the HUD, its text) are drawn when finer */
-	static constexpr const char *UPSCALE_MODES_ABOUT[] = {
-		"the HUD drawn finer as the rest: thin lines may show between its pieces",
-		"the corners of the flat pieces (HUD, text) on the cabinet's pixels: no lines, slanted edges smooth",
-		"the flat pieces cover the cabinet's pixels, their textures finer: no lines, edges as the cabinet",
+	static constexpr const char *UPSCALE_MODES_TIP[] = {
+		"The HUD and text are upscaled like the 3D: thin seams may show between their pieces.",
+		"The corners of flat pieces (HUD, text) snap to the cabinet's pixels: no seams, and slanted edges stay "
+		"smooth.",
+		"Flat pieces cover the same pixels as on the cabinet, with finer textures: no seams, and edges look as on "
+		"the cabinet.",
 	};
 	int upscale_mode = static_cast<int>(std::min(state.upscale_mode, 2u));
 
-	std::snprintf(about, sizeof(about), "%s%s", UPSCALE_MODES_ABOUT[upscale_mode],
-	              state.scale == 1 ? " · at 2× and more" : "");
+	kit.next_tip(UPSCALE_MODES_TIP[upscale_mode]);
 	watch(PREVIEW_MODE, [&] {
-		if (kit.choice("Upscaling mode", about, UPSCALE_MODES_SHOWN, upscale_mode))
+		if (kit.choice("Upscaling mode", state.scale == 1 ? "no effect at 1×" : nullptr, UPSCALE_MODES_SHOWN,
+		               upscale_mode))
 			state.upscale_mode = static_cast<unsigned>(upscale_mode);
 	});
 
 	int filter = index_of(ANISOTROPY, state.anisotropy);
 
+	kit.next_tip("Sharpens distant textures, such as roads and floors (NASCAR, Virtual-On). The cabinet has none.");
 	watch(PREVIEW_FILTER, [&] {
-		if (kit.choice("Texture filter", "anisotropic, the cabinet has none; seen on far roads and floors (NASCAR, "
-		               "Virtual-On)", FILTERS, filter,
-		               state.anisotropy_given ? "set by the command line: -a" : nullptr))
+		if (kit.choice("Anisotropic filtering", nullptr, FILTERS, filter,
+		               state.anisotropy_given ? "set on the command line: -a" : nullptr))
 			state.anisotropy = ANISOTROPY[filter];
 	});
 	kit.end_group();
@@ -599,23 +626,35 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 	kit.begin_group("SCREEN");
 	static constexpr const char *MODES[] = { "Window", "Full screen" };
 	int mode = state.fullscreen ? 1 : 0;
+	/* The keys of full screen, as the user set them */
+	const Hotkeys::Binding &full = state.hotkeys[static_cast<size_t>(Hotkeys::Action::FULLSCREEN)];
+	std::string shortcut;
 
-	std::snprintf(about, sizeof(about), "full screen at %u × %u, the display's size · F11 or Alt+Enter",
-	              state.display_w, state.display_h);
+	for (const HotKey &key : full.keys)
+		if (key.key != SDLK_UNKNOWN)
+			shortcut += (shortcut.empty() ? " Shortcut: " : " or ") + Hotkeys::text(key);
+	std::snprintf(about, sizeof(about), "Full screen uses your display's size, %u × %u.%s%s", state.display_w,
+	              state.display_h, shortcut.c_str(), shortcut.empty() ? "" : ".");
+	kit.next_tip(about);
 	watch(PREVIEW_SCREEN, [&] {
-		if (kit.choice("Display", about, MODES, mode, state.fullscreen_given ? "set by the command line: -f" : nullptr))
+		if (kit.choice("Display mode", nullptr, MODES, mode,
+		               state.fullscreen_given ? "set on the command line: -f" : nullptr))
 			state.fullscreen = mode == 1;
 	});
 
 	int window = state.custom_w ? CUSTOM : state.window <= CUSTOM ? static_cast<int>(state.window) - 1 : -1;
-	char sizes[96] = "640 × 480 by default · Custom: the size you give it by hand";
+	char sizes[96] = "640 × 480 by default. Custom keeps the size you give the window by resizing it.";
 
 	if (state.custom_w)
-		std::snprintf(sizes, sizeof(sizes), "Custom: %u × %u, the size you gave it by hand", state.custom_w,
-		              state.custom_h);
+		std::snprintf(sizes, sizeof(sizes), "Custom: %u × %u, the size you gave the window by resizing it.",
+		              state.custom_w, state.custom_h);
+	kit.next_tip(sizes);
 	watch(PREVIEW_SCREEN, [&] {
-		if (!kit.choice("Window size at start", sizes, narrow ? WINDOW_WIDTHS : WINDOW_SIZES, window,
-		                state.window_given ? "set by the command line: -w" : nullptr, state.fullscreen))
+		if (!kit.choice("Window size", nullptr, narrow ? WINDOW_WIDTHS : WINDOW_SIZES, window,
+		                state.window_given ? "set on the command line: -w" :
+		                state.fullscreen   ? "not in full screen" :
+		                                     nullptr,
+		                state.fullscreen))
 			return;
 		/* Custom: the window as it is now */
 		state.custom_w = window == CUSTOM ? state.window_w : 0;
@@ -624,31 +663,35 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 			state.window = static_cast<unsigned>(window) + 1;
 	});
 
-	static constexpr const char *SYNCS_ABOUT[] = {
-		"frames do not wait for the display: one may tear",
-		"each frame waits for the display: no tearing, a late one slows the game",
-		"frames on time wait; a late one shows at once and may tear",
+	/* Under the name, why a choice does not take; in the tip, what each
+	 * does and the rate of the display */
+	static constexpr const char *SYNCS_TIP[] = {
+		"Frames do not wait for the display: the picture may tear.",
+		"Each frame waits for the display: no tearing, but a late frame slows the game.",
+		"Frames on time wait for the display; a late frame shows at once and may tear.",
 	};
 	int sync = static_cast<int>(state.vsync);
-	const char *const said = state.vsync_off ? state.vsync_off :
-	                         state.refresh_short && state.vsync == 1 ?
-	                         "off: this display shows fewer than the cabinet's 60 frames a second" :
-	                         SYNCS_ABOUT[state.vsync];
+	const char *const why = state.vsync_off ? state.vsync_off :
+	                        state.refresh_short && state.vsync == 1 ? "off: this display runs below the cabinet's 60 Hz" :
+	                                                                  nullptr;
 
 	if (state.refresh > 0.0f)
-		std::snprintf(about, sizeof(about), "%s · %.2f Hz", said, static_cast<double>(state.refresh));
+		std::snprintf(about, sizeof(about), "%s This display runs at %.2f Hz.", SYNCS_TIP[state.vsync],
+		              static_cast<double>(state.refresh));
 	else
-		std::snprintf(about, sizeof(about), "%s", said);
+		std::snprintf(about, sizeof(about), "%s", SYNCS_TIP[state.vsync]);
+	kit.next_tip(about);
 	watch(PREVIEW_VSYNC, [&] {
-		if (kit.choice("Vertical sync", about, SYNCS, sync, nullptr, state.vsync_off != nullptr))
+		if (kit.choice("Vertical sync", why, SYNCS, sync, nullptr, state.vsync_off != nullptr))
 			state.vsync = static_cast<unsigned>(sync);
 	});
 
 	int sides = static_cast<int>(state.sides);
 
+	kit.next_tip("What fills the sides of a wide window: black, the game blurred, or its bezel from the Artwork "
+	             "folder (Paths page).");
 	watch(PREVIEW_SCREEN, [&] {
-		if (kit.choice("Bezel", "beside the game in a wide window: black, the game blurred, or its picture from "
-		               "Artwork (page Paths)", SIDES_SHOWN, sides))
+		if (kit.choice("Bezel", nullptr, SIDES_SHOWN, sides))
 			state.sides = static_cast<unsigned>(sides);
 	});
 	kit.end_group();
@@ -667,10 +710,11 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 		screens.push_back(state.filter);
 		screen = static_cast<int>(screens.size()) - 1;
 	}
+	kit.next_tip("Imitates the cabinets' screens, from Sega's manuals (Lola Retro filters): a monitor for Planet "
+	             "Harriers and NASCAR, a projector for the other games. Demanding on the graphics card.");
 	watch(PREVIEW_SCREEN, [&] {
-		if (kit.dropdown("CRT screen", "the screen of the cabinets, after Sega's manuals (Lola Retro): Planet "
-		                 "Harriers and NASCAR a monitor, the others a projector; asks much of the graphics card",
-		                 screens, screen) && screen >= 0 && static_cast<size_t>(screen) < std::size(PRESETS))
+		if (kit.dropdown("CRT screen", nullptr, screens, screen) && screen >= 0 &&
+		    static_cast<size_t>(screen) < std::size(PRESETS))
 			state.filter = PRESETS[screen];
 	});
 	kit.end_group();
@@ -678,17 +722,19 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 	kit.begin_group("SPEED");
 	int pace = state.unthrottled ? 1 : 0;
 
+	kit.next_tip("Unlimited runs as fast as the computer can.");
 	watch(PREVIEW_SCREEN, [&] {
-		if (kit.choice("Pace", "unlimited: as fast as the computer, no sound · at the next launch", PACES, pace,
-		               state.unthrottled_given ? "set by the command line: -u" : nullptr))
+		if (kit.choice("Speed limit", "unlimited: no sound · at the next launch", PACES, pace,
+		               state.unthrottled_given ? "set on the command line: -u" : nullptr))
 			state.unthrottled = pace == 1;
 	});
 
-	int speed = state.show_speed ? 0 : 1;
+	int speed = state.show_speed ? 1 : 0;
 
+	kit.next_tip("Shows frames per second in the window title and the bar.");
 	watch(PREVIEW_SCREEN, [&] {
-		if (kit.choice("Show the speed", "frames per second in the title", ON_OFF, speed))
-			state.show_speed = speed == 0;
+		if (kit.choice("Show FPS", nullptr, OFF_ON, speed))
+			state.show_speed = speed == 1;
 	});
 	kit.end_group();
 
@@ -704,7 +750,8 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 		themes.push_back({ one.name, one.about, one.kind, MenuKit::Icon::NONE, false,
 		                   { p.screen, p.part, p.ink, p.accent } });
 	}
-	if (kit.dropdown("Palette", "the colours of the menu, the bar and the library", themes, theme))
+	kit.next_tip("The colours of the menu, the bar and the library.");
+	if (kit.dropdown("Menu theme", nullptr, themes, theme))
 		state.theme = static_cast<unsigned>(theme);
 	kit.end_group();
 	ImGui::Dummy({ 0.0f, kit.px(4.0f) });
@@ -812,7 +859,7 @@ Menu::preview(const MenuKit &kit, const MenuState &state, int which, ImVec2 a, I
 		caps_centred(mid, y, "GRAPHICS CARD");
 		y += caps + kit.px(12.0f);
 		y += centred(y, name, palette.ink, big) + kit.px(10.0f);
-		centred(y, "OpenGL 4.3: what Odin asks of it", palette.dim, note);
+		centred(y, state.vulkan ? "Odin needs Vulkan 1.1" : "Odin needs OpenGL 4.3", palette.dim, note);
 		break;
 	}
 	case PREVIEW_UPSCALE: {
@@ -820,7 +867,7 @@ Menu::preview(const MenuKit &kit, const MenuState &state, int which, ImVec2 a, I
 		char chosen[8];
 
 		std::snprintf(chosen, sizeof(chosen), "%u×", scale);
-		pair("UPSCALING", UPSCALE, scale > 1 ? static_cast<int>(UPSCALE + scale - 1) : -1, "1× · THE CABINET", chosen,
+		pair("INTERNAL RESOLUTION", UPSCALE, scale > 1 ? static_cast<int>(UPSCALE + scale - 1) : -1, "1× · THE CABINET", chosen,
 		     "Captured in Odin: Brave Fire Fighters, the same picture at each scale.");
 		break;
 	}
@@ -830,16 +877,16 @@ Menu::preview(const MenuKit &kit, const MenuState &state, int which, ImVec2 a, I
 
 		pair("UPSCALING MODE", MODE, state.scale > 1 ? static_cast<int>(MODE + 1 + mode) : -1, "1× · THE CABINET",
 		     NAMES[mode],
-		     "Captured in Odin: Virtual-On, its timer at 4×. Snap 2D and Native 2D may split a piece made of a flat "
-		     "part and a tilted one (the lock-on of Planet Harriers).");
+		     "Captured in Odin: the Virtual-On timer at 4×. Snap 2D and Native 2D may split a piece made of a flat "
+		     "part and a tilted one (the lock-on reticle in Planet Harriers).");
 		break;
 	}
 	case PREVIEW_FILTER: {
 		const int filter = index_of(ANISOTROPY, state.anisotropy);
-		static constexpr const char *NAMES[] = { "NONE", "2×", "4×", "8×", "16×" };
+		static constexpr const char *NAMES[] = { "OFF", "2×", "4×", "8×", "16×" };
 
-		pair("TEXTURE FILTER", FILTER, filter > 0 ? FILTER + filter : -1, "NONE · THE CABINET", NAMES[filter],
-		     "Captured in Odin: Planet Harriers, the far road, at 1×.");
+		pair("ANISOTROPIC FILTERING", FILTER, filter > 0 ? FILTER + filter : -1, "OFF · THE CABINET", NAMES[filter],
+		     "Captured in Odin: the distant road in Planet Harriers, at 1×.");
 		break;
 	}
 	case PREVIEW_VSYNC: {
@@ -847,8 +894,8 @@ Menu::preview(const MenuKit &kit, const MenuState &state, int which, ImVec2 a, I
 
 		pair("VERTICAL SYNC", WHOLE, state.vsync == 0 ? TORN : WHOLE, "WHOLE · THE CABINET",
 		     NAMES[std::min(state.vsync, 2u)],
-		     "Captured in Odin: Brave Fire Fighters, two frames in a row; torn, the top of one meets the bottom of "
-		     "the next.");
+		     "Captured in Odin: two frames in a row of Brave Fire Fighters; when torn, the top of one meets the "
+		     "bottom of the next.");
 		break;
 	}
 	case PREVIEW_SCREEN: {
@@ -861,12 +908,12 @@ Menu::preview(const MenuKit &kit, const MenuState &state, int which, ImVec2 a, I
 		char caption[160];
 
 		if (state.fullscreen)
-			std::snprintf(caption, sizeof(caption), "Full screen, the %u × %u of your display.",
+			std::snprintf(caption, sizeof(caption), "Full screen, at your display's %u × %u.",
 			              static_cast<unsigned>(sw), static_cast<unsigned>(sh));
 		else
-			std::snprintf(caption, sizeof(caption), "Window %u × %u at start, on your %u × %u display%s",
+			std::snprintf(caption, sizeof(caption), "Window of %u × %u, on your %u × %u display%s",
 			              static_cast<unsigned>(ww), static_cast<unsigned>(wh), static_cast<unsigned>(sw),
-			              static_cast<unsigned>(sh), ww > sw || wh > sh ? ": bigger than it." : ".");
+			              static_cast<unsigned>(sh), ww > sw || wh > sh ? ": larger than the display." : ".");
 
 		const float caption_h = MenuKit::wrapped_h(caption, note, width);
 		const float k = std::min(width / sw, (hi.y - lo.y - caps - caption_h - kit.px(26.0f)) / sh);
@@ -918,26 +965,25 @@ Menu::picture(ImDrawList *list, int which, ImVec2 a, ImVec2 b, float shown) cons
 std::string
 Menu::help(int page, const MenuState &state)
 {
-	const char *const kept = state.kept ? "." : ", until Odin closes (ODIN_CONFIG=none).";
+	const char *const kept = state.kept ? "." : ", but are not saved (ODIN_CONFIG=none).";
 
 	switch (page) {
 	case DISPLAY:
-		return std::string("These settings hold for every game") + kept;
+		return std::string("These settings apply to every game") + kept;
 	case AUDIO:
-		return std::string("Sound only; vibration is in Input") + kept;
+		return std::string("Sound only: vibration is on the Input page") + kept;
 	case HOTKEYS:
 		return state.hotkey_catching || state.kept ? hotkeys_help(state) :
-		       hotkeys_help(state) + " Until Odin closes (ODIN_CONFIG=none).";
+		       hotkeys_help(state) + " Not saved (ODIN_CONFIG=none).";
 	case OUTPUTS:
-		return state.kept ? "" : "Until Odin closes (ODIN_CONFIG=none).";
+		return state.kept ? "" : "Not saved (ODIN_CONFIG=none).";
 	case LINK:
-		return state.kept ? "A game takes these settings when it starts." :
-		                    "A game takes these settings when it starts, until Odin closes (ODIN_CONFIG=none).";
+		return std::string("These settings apply when a game starts") + kept;
 	case PATHS:
 		if (state.no_picker)
-			return "No folder picker here: set the folders in [paths] of odin.ini.";
-		return state.choosing ? "Pick the folder in the window of the system." :
-		                        std::string("These paths hold for every game") + kept;
+			return "No folder picker on this system: set the folders in the [paths] section of odin.ini.";
+		return state.choosing ? "Pick the folder in the window that opened." :
+		                        std::string("These paths apply to every game") + kept;
 	default:
 		return "";
 	}

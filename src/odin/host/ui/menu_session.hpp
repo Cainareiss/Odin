@@ -23,6 +23,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <SDL3/SDL.h>
@@ -131,6 +132,9 @@ public:
 	 * asked, what the menu does: the rest is the caller's */
 	void fill_bar(BarState &bar) const;
 	BarState::Ask do_bar(BarState &bar);
+	/* What the last change of the bar asks the user to do, said once
+	 * ("": nothing) */
+	std::string bar_note() { return std::exchange(m_bar_note, std::string()); }
 	/* The player's card, on a cabinet with a card reader (Virtual-On):
 	 * into the slot, or back out of it once the reader ejected it; the
 	 * card of the list in hand (-1: none). What the note says of it. */
@@ -252,6 +256,7 @@ private:
 	std::vector<GameOutput> m_other_outputs;
 	bool m_other_shakes = false;
 	std::array<std::string, 2> m_other_shakers;
+	std::array<bool, 2> m_other_experimental{};
 	Game::Link m_other_link;
 	std::string m_other_title;
 	std::optional<ControlPanel> m_other;
@@ -279,6 +284,7 @@ private:
 	/* The characters of a new card's name (Von4Card::keys); empty: the
 	 * game makes none */
 	std::string m_card_keys;
+	std::string m_bar_note;
 	FolderDialog m_dialog;
 	bool m_menu_opened = false, m_closing = false, m_leaving = false;
 	/* A size of the window from the hands of the user, not kept yet */

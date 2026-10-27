@@ -289,7 +289,11 @@ Session::do_bar()
 	using Ask = BarState::Ask;
 	std::error_code error;
 
-	switch (m_menus.do_bar(m_bar)) {
+	const Ask asked = m_menus.do_bar(m_bar);
+
+	if (const std::string note = m_menus.bar_note(); !note.empty())
+		say(note);
+	switch (asked) {
 	case Ask::CLOSE:
 		m_end = Ended::CLOSED;
 		break;

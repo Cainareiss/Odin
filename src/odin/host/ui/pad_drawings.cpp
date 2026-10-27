@@ -761,7 +761,7 @@ pad_drawing_name(int kind)
 		return "Switch Pro";
 	if (&drawing == &PAD_STEAM)
 		return "Steam Controller";
-	return "generic";
+	return "Generic";
 }
 
 } /* namespace odin */

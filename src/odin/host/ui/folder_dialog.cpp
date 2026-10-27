@@ -42,7 +42,7 @@ struct Asked {
 };
 
 /* Read by the picker until it answers */
-constexpr SDL_DialogFileFilter ARCHIVES[] = { { "Games as MAME keeps them (zip, 7z)", "zip;7z" } };
+constexpr SDL_DialogFileFilter ARCHIVES[] = { { "MAME game archives (zip, 7z)", "zip;7z" } };
 
 /* Where the picker opens: the folder when it is there */
 const char *

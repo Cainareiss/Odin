@@ -69,6 +69,7 @@ MenuSession::show_game(size_t game)
 	m_other_outputs = other->outputs;
 	m_other_shakes = other->shakes();
 	m_other_shakers = { other->shaker(0), other->shaker(1) };
+	m_other_experimental = { other->shaker_experimental(0), other->shaker_experimental(1) };
 	m_other_link = other->link;
 	m_other_title = other->title;
 	m_other.emplace(m_other_controls, m_settings, other->name);
@@ -93,7 +94,7 @@ MenuSession::draw_menu()
 	follow_hand_size();
 	m_display.display_size(state.display_w, state.display_h);
 	state.refresh = m_display.refresh();
-	state.vsync_off = m_options.unthrottled ? "off at an unlimited pace" : nullptr;
+	state.vsync_off = m_options.unthrottled ? "off at unlimited speed" : nullptr;
 	state.refresh_short = state.refresh > 0.0f && state.refresh < Display::LEAST_REFRESH;
 	state.panel = &panel_shown();
 	state.touched.clear();
@@ -155,6 +156,8 @@ MenuSession::draw_menu()
 	state.can_shake = m_other ? m_other_shakes : m_game && m_game->shakes();
 	state.shake_from = m_other ? m_other_shakers[state.player & 1] :
 	                   m_game ? m_game->shaker(state.player & 1) : std::string();
+	state.shake_experimental = m_other ? m_other_experimental[state.player & 1] :
+	                           m_game && m_game->shaker_experimental(state.player & 1);
 	state.shake = vibration_on(m_settings, game_shown());
 	/* How the game shown links cabinets */
 	const Game::Link shown_link = m_other ? m_other_link : m_game ? m_game->link : Game::Link{};

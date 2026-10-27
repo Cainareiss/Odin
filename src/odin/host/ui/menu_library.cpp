@@ -253,17 +253,17 @@ Menu::build_library(LibraryState &state, BarState &bar_state)
 		list->PushClipRect({ x, y }, { x + width, foot - kit.px(6.0f) }, true);
 		if (state.failed == game.name)
 			y += wrapped(list, { x, y }, width, size, palette.danger,
-			             "It did not start: odin.log tells why.") + line;
+			             "It failed to start: see odin.log for why.") + line;
 		if (state.roms.empty()) {
 			y += wrapped(list, { x, y }, width, size, palette.ink,
 			             "Choose your games folder: one folder, zip or 7z per game, named as in MAME.") + line;
 		} else if (!game.missing.empty()) {
-			y += wrapped(list, { x, y }, width, size, palette.ink, "Files missing:") + kit.px(4.0f);
+			y += wrapped(list, { x, y }, width, size, palette.ink, "Missing files:") + kit.px(4.0f);
 			for (const std::string &file : game.missing)
 				y += wrapped(list, { x, y }, width, size, palette.dim, file);
 			y += line;
 			y += wrapped(list, { x, y }, width, size, palette.faint,
-			             "Looked for in " + shown_path(state.roms, "") +
+			             "Searched in " + shown_path(state.roms, "") +
 			             (state.bios.empty() ? std::string() : " and " + shown_path(state.bios, ""))) + line;
 		}
 		if (!game.missing.empty()) {

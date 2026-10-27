@@ -32,11 +32,12 @@
 
 #if defined(__AVX512F__)
 #define ODIN_CPU_LEVEL "x86-64-v4"
-#define ODIN_CPU_NEEDS "This build of Odin needs a processor with AVX-512 (x86-64-v4)."
+#define ODIN_CPU_NEEDS "This build of Odin needs a processor with AVX-512 (x86-64-v4). On this computer, use the " \
+	"main build of Odin, or the \"old\" one."
 #elif defined(__AVX2__)
 #define ODIN_CPU_LEVEL "x86-64-v3"
-#define ODIN_CPU_NEEDS "This build of Odin needs a processor with AVX2 and FMA (x86-64-v3): an Intel Core of the " \
-	"4th generation (2013) or later, or an AMD Ryzen. On this computer, use the \"old\" build of Odin."
+#define ODIN_CPU_NEEDS "This build of Odin needs a processor with AVX2 and FMA (x86-64-v3): a 4th-generation Intel Core " \
+	"(2013) or later, or an AMD Ryzen. On this computer, use the \"old\" build of Odin."
 #else
 #define ODIN_CPU_LEVEL "x86-64-v2"
 #define ODIN_CPU_NEEDS "This build of Odin needs a processor with SSE4.2 and POPCNT (x86-64-v2), from 2009 or later."

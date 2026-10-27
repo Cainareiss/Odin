@@ -209,7 +209,7 @@ link_set(const MenuState &state, bool on)
 	if (!on)
 		return "The link is off: Odin sets NO LINK.";
 	if (state.link_cabinet > state.link_shown_cabinets)
-		return "This game links " + std::to_string(state.link_shown_cabinets) + " cabinets: choose 1 to " +
+		return "This game links up to " + std::to_string(state.link_shown_cabinets) + " cabinets: choose 1 to " +
 		       std::to_string(state.link_shown_cabinets) + ".";
 
 	std::string set = state.link_cabinet == 1 ? "This Odin: master" : "This Odin: slave";
@@ -237,7 +237,7 @@ link_tiles(const MenuKit &kit, const MenuState &state, const Box &box, bool on)
 
 	if (count == 0) {
 		const std::string none = (state.link_shown_title.empty() ? std::string("This game") : state.link_shown_title) +
-		                         " links no cabinets: it has no network board.";
+		                         " cannot be linked: it has no network board.";
 
 		in_box(kit, box, centred({}, width, size, none.c_str(), 0), [&](float top) {
 			centred({ box.a.x + inside, top }, width, size, none.c_str(), palette.dim);
@@ -253,7 +253,7 @@ link_tiles(const MenuKit &kit, const MenuState &state, const Box &box, bool on)
 	const float line = ImGui::GetTextLineHeight();
 	const float tile_h = 2.0f * pad + line + 2.0f * tiny * 1.3f;
 	const std::string set = link_set(state, on);
-	const char ring[] = "Each cabinet sends its frames to the next, the last to cabinet 1.";
+	const char ring[] = "Each cabinet sends its data to the next, and the last one to cabinet 1.";
 	const float tiles_h = static_cast<float>(rows) * tile_h + static_cast<float>(rows - 1) * gap;
 	const float set_h = centred({}, width, size, set.c_str(), 0), ring_h = centred({}, width, tiny, ring, 0);
 
@@ -319,10 +319,10 @@ struct Boards {
 };
 
 constexpr Boards BOARDS[] = {
-	{ "sgnascar", "front (FRONT)", "seat backs (REAR)", "; as the REAR knob of the cabinet" },
+	{ "sgnascar", "front (FRONT)", "seat backs (REAR)", ", like the cabinet's REAR knob" },
 	{ "pharrier", "monitor speakers + woofer", "seat backs (REAR)", "" },
 	{ "swracer", "seat + woofer", "panel shaker (VIBRATION)",
-	  "; the cabinet feeds it to the shaker only" },
+	  ". The cabinet sends it to the shaker only" },
 };
 constexpr Boards OTHER_BOARDS = { "", "main speakers", "optional speakers", "" };
 
@@ -492,8 +492,8 @@ route_cards(const MenuKit &kit, const MenuState &state, const Box &box)
 	}
 	for (size_t i = 0; i < titles.size(); i++)
 		others += (i == 0 ? "" : i + 1 == titles.size() ? " and " : ", ") + titles[i];
-	others += titles.size() == 1 ? " plays its main board alone, in stereo." :
-	                               " play their main board alone, in stereo.";
+	others += titles.size() == 1 ? " plays only its main board, in stereo." :
+	                               " play only their main board, in stereo.";
 
 	float all_h = titles.empty() ? -gap : centred({}, width, size, others.c_str(), 0);
 
@@ -532,7 +532,7 @@ Menu::page_audio(MenuKit &kit, MenuState &state) const
 		device = static_cast<int>(devices.size());
 		devices.push_back(state.device);
 	}
-	if (kit.value_list("Device", "where Odin's sound plays", devices[static_cast<size_t>(device)].c_str(),
+	if (kit.value_list("Device", nullptr, devices[static_cast<size_t>(device)].c_str(),
 	                   "Change...", devices, device, state.silent))
 		state.device = device == 0 ? "" : devices[static_cast<size_t>(device)];
 
@@ -540,35 +540,38 @@ Menu::page_audio(MenuKit &kit, MenuState &state) const
 	char shown[16];
 
 	std::snprintf(shown, sizeof(shown), "%u %%", state.volume);
-	if (kit.slider("Volume", "Odin's sound only; 0 is silent", volume, 0.0f, 100.0f, 1.0f, shown, state.silent))
+	kit.next_tip("Odin's own volume, not the system's. 0 is silent.");
+	if (kit.slider("Volume", nullptr, volume, 0.0f, 100.0f, 1.0f, shown, state.silent))
 		state.volume = static_cast<unsigned>(std::lround(volume));
 
 	static constexpr const char *KEEP_MUTE[] = { "Keep", "Mute" };
 	int background = state.background ? 0 : 1;
 
-	if (kit.choice("Sound in the background", "when Odin is not the active window", KEEP_MUTE, background,
-	               state.silent))
+	kit.next_tip("Whether Odin keeps its sound when another window is active.");
+	if (kit.choice("Sound in the background", nullptr, KEEP_MUTE, background, state.silent))
 		state.background = background == 0;
 	kit.end_group();
 
-	kit.paragraph("SOUND BOARDS", "Main: the main board alone. Both: the two boards mixed on two speakers. Four: "
-	              "each board on its own pair, four channels. By default as the cabinet: Racer's optional board only "
-	              "shakes its panel (set in Input).");
+	kit.paragraph("SOUND BOARDS", "By default, as on the cabinet. Racer's optional board only drives its panel "
+	              "shaker (see the Input page).");
 	for (MenuState::SoundGame &game : state.sound_games) {
 		const std::string title = MenuKit::capitals(game.title);
 		char about[160];
 
 		ImGui::PushID(game.name.c_str());
 		kit.begin_group(title.c_str());
-		kit.choice("Played", "", PLAYED, game.played, game.locked ? "set by the command line: -o" : nullptr, false,
-		           game.later ? "CLOSE THE GAME AND START IT AGAIN TO TAKE EFFECT" : nullptr);
+		kit.next_tip("Main: the main board only. Both: the two boards mixed in stereo. Quad: each board on its own "
+		             "pair of speakers, four channels.");
+		kit.choice("Mode", nullptr, PLAYED, game.played, game.locked ? "set on the command line: -o" : nullptr, false,
+		           game.later ? "Reset the game to apply" : nullptr);
 
 		const Boards &boards = boards_of(game.name);
 		const std::string level = decibels(game.level);
 
-		std::snprintf(about, sizeof(about), "%s; with Both, -60 to +12 dB%s", boards.option, boards.knob);
-		kit.slider("Optional board level", about, game.level, -60.0f, 12.0f, 1.0f, level.c_str(), nullptr,
-		           game.played != 1);
+		std::snprintf(about, sizeof(about), "Plays on the %s, from -60 to +12 dB%s.", boards.option, boards.knob);
+		kit.next_tip(about);
+		kit.slider("Optional board level", game.played != 1 ? "only with Both" : nullptr, game.level, -60.0f, 12.0f,
+		           1.0f, level.c_str(), nullptr, game.played != 1);
 		kit.end_group();
 		ImGui::PopID();
 	}
@@ -579,8 +582,8 @@ Menu::page_audio(MenuKit &kit, MenuState &state) const
 /* The actions of Odin as the page Hotkeys says them, in the order of
  * Hotkeys::Action */
 constexpr const char *HOTKEY_NAMES[Hotkeys::ACTIONS] = {
-	"Menu (pauses the game)", "Pause", "Save state", "Load state", "Reset", "Full screen", "Card in / out (Virtual-On)",
-	"Quit",
+	"Settings (pauses the game)", "Pause", "Save state", "Load state", "Reset", "Full screen",
+	"Insert / remove card (Virtual-On)", "Quit",
 };
 
 /* The modifiers as their caps say them */
@@ -706,8 +709,8 @@ hotkeys_keyboard(const MenuKit &kit, const MenuState &state, const Box &box, con
 	for (const auto &[key, name] : others)
 		others_w += kit.key_size(name.c_str()).x + gap;
 
-	const char caption[] = "Light outline: Odin's keys. Touch them: they light.";
-	const char guide[] = "held: the hotkey, as on Batocera";
+	const char caption[] = "Bright outline: Odin's keys. Press one to see it light up.";
+	const char guide[] = "held: the hotkey button, as on Batocera";
 	const float text_w = std::min(width, kit.px(260.0f));
 	const float caption_h = centred({}, width, size, caption, 0);
 	const float guide_w = kit.pill_size(guide_name.c_str()).x, guide_text_w = text_w - guide_w - kit.px(8.0f);
@@ -837,7 +840,7 @@ Menu::hotkeys_help(const MenuState &state)
 		                         moved.pad == Hotkeys::GUIDE_ALONE ? guide :
 		                                                             guide + " + " + button_name(moved.pad, type);
 
-		return what + " went from " + named(moved.from) + " to " + named(moved.to) + ".";
+		return what + " moved from " + named(moved.from) + " to " + named(moved.to) + ".";
 	}
 	if (!state.hotkey_catching)
 		return "Click a key or a combination to change it.";
@@ -865,13 +868,16 @@ Menu::page_outputs(MenuKit &kit, MenuState &state) const
 	output_tiles(kit, state, box);
 	begin_settings(kit, box, top, room);
 
-	kit.begin_group("LAMP PROGRAMS");
-	int send = state.network ? 0 : 1;
+	kit.begin_group("OUTPUT PROGRAMS");
+	int send = state.network ? 1 : 0;
 
-	if (kit.choice("Send to lamp programs", "LEDBlinky, MAMEHooker, DOFLinx · this machine, port 8000", ON_OFF, send))
-		state.network = send == 0;
+	kit.next_tip("Sends the cabinet's outputs to LEDBlinky, MAMEHooker or DOFLinx, as MAME's network output does: "
+	             "this computer, port 8000.");
+	if (kit.choice("Send outputs", nullptr, OFF_ON, send))
+		state.network = send == 1;
 	if (state.network)
-		kit.text("Programs connected", state.network_failed ? "another program has port 8000: nothing is sent" : "",
+		kit.text("Connected programs", state.network_failed ? "port 8000 is used by another program: nothing is sent" :
+		                                                      nullptr,
 		         state.network_failed ? "-" : std::to_string(state.programs).c_str());
 	kit.end_group();
 
@@ -902,8 +908,9 @@ Menu::page_link(MenuKit &kit, MenuState &state) const
 	kit.begin_group("LINK");
 	int chosen = on ? 1 : looped ? -1 : 0;
 
-	if (kit.choice("Link cabinets", looped ? "now alone, its cable looped back (odin.ini, board = loop)" :
-	               "each Odin on its own computer", OFF_ON, chosen, locked) && chosen >= 0)
+	kit.next_tip("Each cabinet is an Odin on its own computer.");
+	if (kit.choice("Link cabinets", looped ? "alone: its cable is looped back (odin.ini: board = loop)" : nullptr,
+	               OFF_ON, chosen, locked) && chosen >= 0)
 		state.link_board = static_cast<int>(chosen ? NetLinkSettings::Board::RING : NetLinkSettings::Board::NONE);
 	if (on) {
 		std::vector<std::string> numbers;
@@ -913,13 +920,16 @@ Menu::page_link(MenuKit &kit, MenuState &state) const
 			numbers.push_back(n == 1 ? "1 · master" : std::to_string(n));
 		if (locked)
 			kit.text("This cabinet", locked, cabinet >= 0 ? numbers[static_cast<size_t>(cabinet)].c_str() : "as it is");
-		else if (kit.dropdown("This cabinet", "1 leads the others", numbers, cabinet) && cabinet >= 0)
-			state.link_cabinet = static_cast<unsigned>(cabinet) + 1;
+		else {
+			kit.next_tip("Cabinet 1 is the master: it leads the others.");
+			if (kit.dropdown("This cabinet", nullptr, numbers, cabinet) && cabinet >= 0)
+				state.link_cabinet = static_cast<unsigned>(cabinet) + 1;
+		}
 
 		const bool last = state.link_cabinet == NetLinkSettings::MOST_CABINETS ||
 		                  state.link_cabinet == state.link_shown_cabinets;
-		const std::string about = state.link_next_bad ? "not an address, or :port after it: not kept" :
-		                          last ? "the address of cabinet 1: this one is the last" :
+		const std::string about = state.link_next_bad ? "not a valid address or address:port: not saved" :
+		                          last ? "the address of cabinet 1, as this one is the last" :
 		                          "the address of cabinet " + std::to_string(state.link_cabinet + 1);
 
 		if (kit.edit("Next cabinet", about.c_str(), state.link_next_typed, "192.168.1.20", 63, locked)) {
@@ -946,8 +956,11 @@ Menu::page_link(MenuKit &kit, MenuState &state) const
 				port = static_cast<int>(p);
 		if (locked)
 			kit.text("Port", locked, std::to_string(state.link_port).c_str());
-		else if (kit.dropdown("Port", "change it for two Odins on one computer", ports, port) && port >= 0)
-			state.link_port = static_cast<unsigned>(std::stoul(ports[static_cast<size_t>(port)]));
+		else {
+			kit.next_tip("Change it only to run two Odins on one computer.");
+			if (kit.dropdown("Port", nullptr, ports, port) && port >= 0)
+				state.link_port = static_cast<unsigned>(std::stoul(ports[static_cast<size_t>(port)]));
+		}
 	}
 	kit.end_group();
 
@@ -955,21 +968,22 @@ Menu::page_link(MenuKit &kit, MenuState &state) const
 	if (state.link_running && state.shown == state.running && (state.link_board_now || state.link_failed)) {
 		kit.begin_group("CABLES");
 		if (state.link_failed) {
-			kit.text("Port", "this cabinet is not linked", "taken by another program");
+			kit.text("Port", "this cabinet is not linked", "in use by another program");
 		} else if (!state.link_linked) {
-			kit.text("Cable", "", "looped back on this cabinet");
+			kit.text("Cable", nullptr, "looped back on this cabinet");
 		} else {
-			kit.text("Cabinet before", "", state.link_previous ? "connected" : "waiting");
-			kit.text("Cabinet after", "", state.link_next_plugged ? "connected" : "waiting");
+			kit.text("Previous cabinet", nullptr, state.link_previous ? "connected" : "waiting");
+			kit.text("Next cabinet", nullptr, state.link_next_plugged ? "connected" : "waiting");
 		}
 		kit.end_group();
 	}
 	kit.paragraph("HOW TO LINK",
-	              "1. One computer for each cabinet, all on one network by cable: WiFi is too slow.\n"
-	              "2. On each: the link On, its own number 1, 2, 3...\n"
-	              "3. Next cabinet: the address of the next number; the last one, of cabinet 1.\n"
-	              "4. The same game on all. Odin sets the master, the slaves and the seats; a game that has "
-	              "never run starts once more to take its seat.");
+	              "1. One computer per cabinet, all on the same wired network: Wi-Fi is too slow.\n"
+	              "2. On each one, set Link cabinets to On and give it its own number: 1, 2, 3...\n"
+	              "3. In Next cabinet, type the address of the next number; on the last one, the address of "
+	              "cabinet 1.\n"
+	              "4. Start the same game on all of them. Odin sets the master, the slaves and the seats; a game run "
+	              "for the first time restarts once by itself to take its seat.");
 	end_settings(kit, top, room);
 }
 
@@ -980,47 +994,59 @@ Menu::page_paths(MenuKit &kit, MenuState &state) const
 	const char *const change = state.choosing ? nullptr : "Change...";
 
 	kit.begin_group("GAMES");
-	if (kit.value("Games (ROMs)", "a folder for each game · at the next launch",
-	              shown_path(state.roms, "not set").c_str(), change, nullptr,
-	              state.roms_given ? "set by the command line: -R" : nullptr))
+	kit.next_tip("One zip, 7z or folder per game, named as in MAME.");
+	if (kit.value("Games (ROMs)", "at the next launch", shown_path(state.roms, "not set").c_str(), change, nullptr,
+	              state.roms_given ? "set on the command line: -R" : nullptr))
 		state.choose = MenuState::Folder::ROMS;
-	if (kit.value("BIOS", "hikaru, mie, jvs13551 as MAME keeps them · at the next launch",
-	              shown_path(state.bios, "the folder of the games").c_str(), change, nullptr,
-	              state.bios_given ? "set by the command line: -B" : nullptr))
+	kit.next_tip("hikaru, mie and jvs13551, named as in MAME.");
+	if (kit.value("BIOS", "at the next launch", shown_path(state.bios, "the games folder").c_str(), change, nullptr,
+	              state.bios_given ? "set on the command line: -B" : nullptr))
 		state.choose = MenuState::Folder::BIOS;
-	if (kit.value("Artwork", "named as in MAME: swracer_logo.png (library), swracer_bezel.png (around the game); "
-	              "Odin saves swracer_title.png",
-	              shown_path(state.artwork, "none").c_str(), change, nullptr,
+	kit.next_tip("Files named after the game's MAME name: swracer_logo.png for the library, swracer_bezel.png for "
+	             "the bezel. Odin saves swracer_title.png here.");
+	if (kit.value("Artwork", nullptr, shown_path(state.artwork, "none").c_str(), change, nullptr,
 	              state.artwork_given ? "set by ODIN_ARTWORK" : nullptr))
 		state.choose = MenuState::Folder::ARTWORK;
 	kit.end_group();
 
 	kit.begin_group("SAVES");
-	if (kit.value("Game saves", "EEPROM, cards, operator settings; one folder per game · at the next launch",
-	              shown_path(state.saves, "none").c_str(), change, nullptr,
+	kit.next_tip("EEPROM, cards and operator settings, one folder per game.");
+	if (kit.value("Game saves", "at the next launch", shown_path(state.saves, "none").c_str(), change, nullptr,
 	              state.saves_given ? "set by ODIN_SAVES" : nullptr))
 		state.choose = MenuState::Folder::SAVES;
-	if (kit.value("Save states", "F4 saves the game where it is, F1 takes it back",
-	              shown_path(state.states, "where Odin was started").c_str(), change))
+
+	/* The keys of the states, as the user set them */
+	const std::string save = first_key(state, Hotkeys::Action::SAVE_STATE),
+	                  load = first_key(state, Hotkeys::Action::LOAD_STATE);
+	std::string states;
+
+	if (!save.empty())
+		states = save + " saves a state";
+	if (!load.empty())
+		states += (states.empty() ? "" : ", ") + load + (save.empty() ? " loads a state" : " loads it");
+	kit.next_tip(states.empty() ? std::string() : states + ".");
+	if (kit.value("Save states", nullptr, shown_path(state.states, "the folder Odin was started from").c_str(),
+	              change))
 		state.choose = MenuState::Folder::STATES;
 	kit.end_group();
 
 	kit.begin_group("ODIN FILES");
-	kit.value("Configuration", "odin.ini, written by this menu",
-	          shown_path(state.settings_file, "none: ODIN_CONFIG=none").c_str(), nullptr, "READ ONLY");
-	kit.value("Shader lists", "each game's 3D programs, prepared when it starts",
-	          shown_path(state.shader_lists, "none").c_str(), nullptr, "READ ONLY");
+	kit.next_tip("odin.ini, where this menu saves your settings.");
+	kit.value("Configuration", nullptr, shown_path(state.settings_file, "none: ODIN_CONFIG=none").c_str(), nullptr);
+	kit.next_tip("The shaders each game uses, listed so Odin can prepare them when the game starts.");
+	kit.value("Shader lists", nullptr, shown_path(state.shader_lists, "none").c_str(), nullptr, "READ ONLY");
 	kit.end_group();
 
 	kit.begin_group("LOG");
-	kit.value("Log file", "Odin's messages from its last launch; the one before: odin-previous.log",
-	          shown_path(state.log_file, "none: ODIN_LOG=none").c_str(), nullptr, "READ ONLY");
+	kit.next_tip("Odin's messages since it started. The previous run's are in odin-previous.log.");
+	kit.value("Log file", nullptr, shown_path(state.log_file, "none: ODIN_LOG=none").c_str(), nullptr, "READ ONLY");
 
-	int verbose = state.verbose ? 0 : 1;
+	int verbose = state.verbose ? 1 : 0;
 
-	if (kit.choice("Detailed log", "every access of the board, in the terminal and the log; far slower · at the "
-	               "next launch", ON_OFF, verbose, state.verbose_given ? "set by the command line: -v" : nullptr))
-		state.verbose = verbose == 0;
+	kit.next_tip("Logs every access of the board, to the terminal and the log file.");
+	if (kit.choice("Detailed log", "much slower · at the next launch", OFF_ON, verbose,
+	               state.verbose_given ? "set on the command line: -v" : nullptr))
+		state.verbose = verbose == 1;
 	kit.end_group();
 }
 

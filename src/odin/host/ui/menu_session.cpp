@@ -39,7 +39,7 @@ open_archive(const FolderDialog::Answer &answer, const GameList &games, std::str
 {
 	if (!answer.error.empty()) {
 		std::fprintf(stderr, "ERROR: no file picker: %s\n", answer.error.c_str());
-		note = "This system gives Odin no file picker";
+		note = "No file picker on this system";
 		return std::nullopt;
 	}
 	if (answer.folder.empty())
@@ -55,7 +55,7 @@ open_archive(const FolderDialog::Answer &answer, const GameList &games, std::str
 			return Opened{ game, file.parent_path().string() };
 	std::fprintf(stderr, "ERROR: '%s' is no game of the list: an archive takes the name MAME gives its game\n",
 	             answer.folder.c_str());
-	note = file.filename().string() + ": not a game of Odin";
+	note = file.filename().string() + ": not a game Odin knows";
 	return std::nullopt;
 }
 
@@ -148,6 +148,7 @@ MenuSession::MenuSession(const Options &options, Display &display, Keyboard &key
 	state.fullscreen_given = options.given.fullscreen;
 	state.unthrottled_given = options.given.unthrottled;
 	state.gpu = display.gpu();
+	state.vulkan = display.vulkan();
 	state.kept = !settings_file.empty();
 	state.roms = options.rom_path;
 	state.roms_given = options.given.roms;
@@ -185,8 +186,8 @@ MenuSession::MenuSession(const Options &options, Display &display, Keyboard &key
 	/* The library lists the devices of the system: its sound is
 	 * started for that */
 	m_listing = !game && options.sound && !options.unthrottled && SDL_InitSubSystem(SDL_INIT_AUDIO);
-	state.silent = options.unthrottled ? "no sound at an unlimited pace (Display)" :
-	               !options.sound ? "set by the command line: -o off" :
+	state.silent = options.unthrottled ? "no sound at unlimited speed (Display page)" :
+	               !options.sound ? "set on the command line: -o off" :
 	               !audio && !m_listing ? "no sound device" : nullptr;
 	state.library = !game;
 	for (const auto &[name, title] : games.titles("hikaru")) {
@@ -301,17 +302,17 @@ MenuSession::card_in_out()
 		}
 		reader->take(fresh);
 		if (reader->where() != CardReader::Where::IN_HAND)
-			return "Card taken back, not kept: no folder for the saves";
+			return "Card removed but not saved: no save folder";
 
 		const std::string taken = std::filesystem::path(reader->card_file()).stem().string();
 
 		list_cards();
 		keep("players." + m_game->name, "card", taken);
-		return "Card taken back: " + taken;
+		return "Card removed: " + taken;
 	}
 	case CardReader::Where::IN_HAND:
 		if (!reader->shutter_open())
-			return "The slot of the card reader is closed";
+			return "The card slot is closed";
 		if (!reader->insert())
 			return "The card " + name + " cannot be read";
 		return "Card inserted: " + name;
@@ -319,7 +320,7 @@ MenuSession::card_in_out()
 		return "The card is inside the reader";
 	case CardReader::Where::NO_CARD:
 	default:
-		return "No card in hand: FILE, Card in hand";
+		return "No card in hand: choose one in FILE > Card in hand";
 	}
 }
 
@@ -333,7 +334,7 @@ MenuSession::choose_card(int index)
 	if (!reader)
 		return "No card reader on this cabinet";
 	if (!reader->choose(none ? std::string() : card_file(name)))
-		return "The card is in the reader: take it back first";
+		return "The card is in the reader: remove it first";
 	keep("players." + m_game->name, "card", none ? std::nullopt : std::optional<std::string>(name));
 	return none ? "No card in hand" : "Card in hand: " + name;
 }
@@ -368,18 +369,18 @@ MenuSession::new_card(const std::string &name)
 	const Von4Card maker(m_board ? m_board->program() : std::span<const uint8_t>());
 
 	if (!reader || !maker.valid())
-		return "This game makes no new cards";
+		return "This game cannot make new cards";
 
 	const std::optional<std::array<uint8_t, CardReader::CARD_SIZE>> card = maker.make(name);
 
 	if (!card)
-		return "Not a name the terminal of the game takes: " + name;
+		return "The game's terminal does not accept this name: " + name;
 
 	const std::string folder = m_board->cards_folder();
 	std::error_code error;
 
 	if (folder.empty())
-		return "No new card: no folder for the saves";
+		return "Cannot make a new card: no save folder";
 	std::filesystem::create_directories(folder, error);
 
 	/* Under the pilot's name, the number after it of the first file that
@@ -390,13 +391,13 @@ MenuSession::new_card(const std::string &name)
 	for (unsigned n = 2; std::filesystem::exists(path, error); n++)
 		path = card_file(stem + "-" + std::to_string(n));
 	if (!CardReader::write_card(path, *card, stderr))
-		return "No new card: " + path + " not written";
+		return "Cannot make a new card: " + path + " could not be written";
 	list_cards();
 
 	const std::string made = std::filesystem::path(path).stem().string();
 
 	if (!reader->choose(path))
-		return "New card " + made + " kept: take back the card in the reader to hold it";
+		return "New card " + made + " saved: remove the card in the reader to take it";
 	keep("players." + m_game->name, "card", made);
 	return "New card in hand: " + made;
 }
@@ -417,12 +418,12 @@ MenuSession::card_news(bool quiet)
 		return {};
 
 	const HotKey &key = m_hotkeys.of(Hotkeys::Action::CARD).keys[0];
-	const std::string with = key.key == SDLK_UNKNOWN ? "FILE, Take card back" : Hotkeys::text(key);
+	const std::string with = key.key == SDLK_UNKNOWN ? "FILE > Remove card" : Hotkeys::text(key);
 
 	if (now == Where::INSIDE)
-		return "Card taken in: " + std::filesystem::path(reader->card_file()).stem().string();
+		return "Card pulled in: " + std::filesystem::path(reader->card_file()).stem().string();
 	if (now == Where::AT_SLOT)
-		return (*was == Where::INSIDE ? "Card out: take it back with " : "New card out: take it with ") + with;
+		return (*was == Where::INSIDE ? "Card ejected: remove it with " : "New card dispensed: take it with ") + with;
 	return {};
 }
 
@@ -683,7 +684,7 @@ MenuSession::fill_bar(BarState &bar) const
 	bar.sound_games.clear();
 	for (const MenuState::SoundGame &game : state.sound_games)
 		if (m_game && game.name == m_game->name)
-			bar.sound_games.push_back({ game.name, game.title, game.played, game.level, game.locked });
+			bar.sound_games.push_back({ game.name, game.title, game.played, game.level, game.locked, game.later });
 	bar.lamps = state.network;
 	bar.link_board = state.link_board;
 	bar.link_cabinet = state.link_cabinet;
@@ -827,6 +828,11 @@ MenuSession::do_bar(BarState &bar)
 		state.link_cabinet = bar.link_cabinet;
 		state.link_port = bar.link_port;
 		apply(was);
+		/* A mode that waits for the game to start again says so once the
+		 * menu of the bar is closed */
+		for (size_t g = 0; g < state.sound_games.size() && g < was.sound_games.size(); g++)
+			if (state.sound_games[g].later && state.sound_games[g].played != was.sound_games[g].played)
+				m_bar_note = "Reset the game to apply the sound mode";
 	}
 	/* The inputs of the game that runs */
 	if (m_game) {
