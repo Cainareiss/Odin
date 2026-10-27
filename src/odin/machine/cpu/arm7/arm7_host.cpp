@@ -431,7 +431,7 @@ HostCode::Jump Arm7Host::skip_ahead()
 	return Jump{m_used - 4};
 }
 
-#else /* a host this file does not write code for */
+#elif !defined(ODIN_HOST_AARCH64) /* a host no file writes code for */
 
 Arm7Host::Arm7Host(const Places &places, Link link)
 	: HostCode(0), m_places(places), m_link(link), m_follow(0), m_block(0), m_enter(nullptr)

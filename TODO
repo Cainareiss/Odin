@@ -906,8 +906,8 @@ the blocks as they were compared and the block that makes them goes on.
 
 By default the kept blocks run as host code (ODIN_SH4_TRANSLATE=0: they
 are read; src/odin/machine/cpu/sh4/sh4_translate.cpp says what a block does,
-src/odin/machine/cpu/sh4/sh4_host.cpp writes it for x86-64 with the calling convention of
-Linux or of Windows; elsewhere the blocks are read). Each instruction is written once
+src/odin/machine/cpu/sh4/sh4_host.cpp writes it for x86-64, sh4_host_arm64.cpp for AArch64,
+with the calling convention of the system; elsewhere the blocks are read). Each instruction is written once
 (Sh4OpsT) and handed over in two ways: the reader runs the next one by a
 tail call, the host code of a block calls its instructions in turn, all by
 direct calls. The two give the same registers, memories, cycles and

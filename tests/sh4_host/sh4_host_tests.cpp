@@ -771,6 +771,53 @@ void test_host_float()
 	}
 }
 
+/* FIPR and FTRV, in place where the host has vectors: every vector of
+ * FR and of the matrix in XF made of the values of test_host_float(),
+ * not numbers among them */
+void test_host_vectors()
+{
+	g_test = "host code, vectors";
+	static const uint32_t floats[] = {0x00000000, 0x80000000, 0x3F800000, 0xBF800000, 0x7F800000, 0xFF800000,
+	                                  0x7FC00000, 0x7F800001, 0x00000001, 0x807FFFFF, 0x4F000000, 0xCF000000,
+	                                  0x4EFFFFFF, 0x3EAAAAAB, 0x7F7FFFFF, 0x4B800001, 0x3FC00000, 0xBFD9999A,
+	                                  0x7FC00001, 0xFFC00000};
+	constexpr uint32_t COUNT = sizeof(floats) / sizeof(floats[0]);
+	{
+		Pair probe;
+		if (!probe.host.cpu.translates()) {
+			std::printf("host code: none on this machine, not tested\n");
+			return;
+		}
+	}
+	for (const bool trv : {false, true}) {
+		unsigned runs = 0, differ = 0;
+		Pair p;
+		const Sh4State start = p.read.state();
+
+		for (uint32_t n = 0; n < 4; n++) {
+			for (uint32_t m = 0; m < (trv ? 1u : 4u); m++) {
+				const uint16_t code = static_cast<uint16_t>(trv ? 0xF1FD | (n << 10) : 0xF0ED | (n << 10) | (m << 8));
+
+				p.each([&](Machine &mc) { mc.code(CODE, {code, code, 0xAFFE, NOP}); });
+				for (uint32_t a = 0; a < 4 * COUNT; a++) {
+					Sh4State st = start;
+
+					for (uint32_t i = 0; i < 16; i++) {
+						st.fr[i] = floats[(a + 3 * i + 5) % COUNT];
+						st.xf[i] = floats[(5 * a + 7 * i + 1) % COUNT];
+					}
+					st.fpscr = 0x00040001;
+					p.each([&st](Machine &mc) { mc.cpu.load(st); });
+					p.slice(200);
+					runs++;
+				}
+			}
+		}
+		differ += p.differ;
+		check(runs > 0 && differ == 0, std::string(trv ? "ftrv" : "fipr") + ": the same read and in place");
+	}
+}
+
 /* The branches host code makes itself: each of them in a loop whose turns
  * take it or not as a register turned bit by bit says, its delay slot an
  * instruction in place, an access to the memory or a call; then what the
@@ -841,6 +888,7 @@ int main(int argc, char **argv)
 	test_host_branches();
 	test_host_fpu_moves();
 	test_host_float();
+	test_host_vectors();
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures == 0 ? 0 : 1;
 }

@@ -51,7 +51,7 @@ class Arm7;
  * Only this class knows the host: arm7_translate.cpp says what a block
  * does. On a host it does not write for, or that refuses the memory,
  * usable() is false and the ARM7 keeps to its reader. Written for x86-64
- * (HostCode). */
+ * and AArch64 (HostCode). */
 class Arm7Host : public HostCode {
 public:
 	using Run = void (*)(Arm7 &, uint32_t);
@@ -150,13 +150,18 @@ public:
 	 * returns the cycles spent when it is back. */
 	uint32_t run(Arm7 &cpu, uint32_t place, uint32_t done, uint32_t cycles) const
 	{
+		ready();
 		return m_enter(&cpu, m_code + place, done, cycles);
 	}
 
 private:
 	/* Bytes of the longest block: Arm7::BLOCK_MAX instructions of at
 	 * most 384 bytes each, and its end and ways out. */
+#if defined(ODIN_HOST_AARCH64)
+	static constexpr uint32_t LONGEST = 98304;
+#else
 	static constexpr uint32_t LONGEST = 32768;
+#endif
 
 	struct Out {
 		Jump jump;
