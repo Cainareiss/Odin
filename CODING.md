@@ -14,12 +14,19 @@ written so that everyone knows what to do.
   (`src/lzma`) are not ours: they are kept as they come and built with
   their own flags.
 
-## 2. One class per chip
+## 2. One class per chip, in three layers
 
-- One source pair per real chip or board: `src/odin/<chip>.hpp` and
-  `src/odin/<chip>.cpp`. Examples: `mie.cpp` (315-6146), `z80.cpp`,
-  `memctl.cpp` (315-6154), `io_837_13551_imitation.cpp`, `aica.cpp`. The JVS
-  cable and protocol shared by the I/O boards: `jvs.cpp`.
+- One source pair per real chip or board, in the folder of its kind:
+  `src/odin/machine/chips/<chip>.hpp` and `.cpp` for a chip, in a folder
+  of its own when it takes several files (`machine/chips/aica/`);
+  `machine/cpu/<cpu>/` for a processor; `machine/boards/<board>/` for a
+  board; `machine/cabinet/` for the boards and cables of the cabinet
+  around it; `machine/core/` for what runs them all (the scheduler, the
+  save states). Examples: `machine/chips/mie.cpp` (315-6146),
+  `machine/cpu/z80/z80.cpp`, `machine/chips/memctl.cpp` (315-6154),
+  `machine/cabinet/io_837_13551_imitation.cpp`,
+  `machine/chips/aica/aica.cpp`. The JVS cable and protocol shared by the
+  I/O boards: `machine/cabinet/jvs.cpp`.
 - Every device implements the same small interface: `reset()`,
   `read(addr, size)`, `write(addr, size, value)`, `run(cycles)` or
   `tick()`, interrupt lines in and out, `save(state&)` / `load(state&)`,
@@ -28,6 +35,28 @@ written so that everyone knows what to do.
   implementations. No deeper hierarchies, no mix-ins.
 - A device knows its own silicon only. It never knows which game is
   running.
+- The sources are in three layers, and an include goes one way only:
+  `common` ← `machine` ← `host`.
+  - `src/odin/common/`: small helpers with no API of the host, used on
+    both sides.
+  - `src/odin/machine/`: the emulated hardware. It includes `common/` and
+    `machine/` only: no SDL, OpenGL, Vulkan, jansson or ImGui, and no
+    header of the system.
+  - `src/odin/host/`: the PC (the window, the renderer, the inputs, the
+    sound, the menus). It may include everything.
+- `machine/boards/hikaru/hikaru_draw.hpp` is the contract between the board
+  and the renderer, with no graphics API: the board makes it, the renderer
+  (`host/renderer/hikaru/`) reads it.
+- `make check-layers` fails on an include that crosses the layers, but
+  these known ones. Each is to be removed later, in a commit of its own:
+
+  | Machine file | Includes | Why | Later |
+  |---|---|---|---|
+  | `machine/boards/hikaru/hikaru.hpp` | `host/app/games.hpp` | the board gets the whole `Game` | give it only the configuration of the board it needs |
+  | `machine/boards/hikaru/hikaru.hpp` | `host/app/user_files.hpp` | the paths of the saves | pass the paths in, or a small storage interface |
+  | `machine/chips/card_reader.cpp` | `host/app/user_files.hpp` | the safe writing of the cards | the same as `hikaru.hpp` |
+  | `machine/cabinet/netbd_ring.cpp` | `host/input/sockets.hpp`, `<windows.h>` | the TCP link between cabinets | a `Link` interface, implemented in `host/` |
+  | `machine/core/host_code.cpp` | `<windows.h>`, `<sys/mman.h>` | executable memory for the translated SH-4 and ARM7 code | it stays |
 
 ## 3. The C++20 subset
 
@@ -122,7 +151,10 @@ Not allowed:
 
 - One change per commit. Subject line in the imperative, plain English,
   at most 60 characters, prefixed by the area: `mie: run the Z80 at
-  16 MHz`, `gpu-cp: decode opcode 0x0D1 mode 3`.
+  16 MHz`, `gpu-cp: decode opcode 0x0D1 mode 3`. The area can follow the
+  folders: `sh4:`, `aica:`, `antarctic:`, `renderer:`, `menu:`. The
+  prefixes already in the history (`gpu-cp:`, `mie:`) stay as they are;
+  the history is never rewritten.
 - The body, when needed, says what was measured and where the facts come
   from. No attribution trailers.
 - Only code and project files go in the repository: sources, headers,
