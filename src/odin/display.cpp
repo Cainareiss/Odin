@@ -235,7 +235,8 @@ Display::Display(const Keyboard &keys, const Options &options, SDL_Window *windo
 	: m_board(nullptr), m_keys(keys), m_window(window), m_graphics(std::move(graphics)), m_menu_shown(false),
 	  m_show_speed(options.show_speed), m_vsync(options.vsync),
 	  m_wait_on_time(false), m_wait_late(false), m_waits(false),
-	  m_frame(0), m_scale(options.scale), m_anisotropy(options.anisotropy), m_filter(find_filter(options.filter)), m_logged(false),
+	  m_frame(0), m_scale(options.scale), m_anisotropy(options.anisotropy), m_upscale_mode(options.upscale_mode),
+	  m_filter(find_filter(options.filter)), m_logged(false),
 	  m_picture{ 0, Renderer::WIDTH, Renderer::HEIGHT },
 	  m_late(env_flag("ODIN_LATE_DRAW")), m_held(false), m_late_draw(0),
 	  m_shot_prefix(std::getenv("ODIN_SCREENSHOT")), m_window_shot(std::getenv("ODIN_WINDOW_SHOT")), m_shot_every(60),
@@ -662,6 +663,7 @@ Display::draw(bool late, unsigned window_w, unsigned window_h, bool bar)
 	const uint64_t begin = m_stats ? host_ns() : 0;
 
 	m_renderer->set_scale(m_scale);
+	m_renderer->set_upscale_mode(m_upscale_mode);
 	m_renderer->set_anisotropy(m_anisotropy);
 	m_renderer->set_filter(m_filter);
 	m_renderer->draw_frame();
@@ -824,6 +826,13 @@ Display::set_anisotropy(unsigned level)
 {
 	finish();
 	m_anisotropy = level;
+}
+
+void
+Display::set_upscale_mode(DisplayUpscaleMode mode)
+{
+	finish();
+	m_upscale_mode = mode;
 }
 
 void

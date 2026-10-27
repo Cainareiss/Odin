@@ -53,15 +53,18 @@ compile_shader(GLenum type, const char *text)
 } /* namespace */
 
 GLuint
-compile_program(const char *vertex, const char *fragment, bool retrievable)
+compile_program(const char *vertex, const char *fragment, bool retrievable, const char *geometry)
 {
 	const GLuint vs = compile_shader(GL_VERTEX_SHADER, vertex);
 	const GLuint fs = compile_shader(GL_FRAGMENT_SHADER, fragment);
+	const GLuint gs = geometry ? compile_shader(GL_GEOMETRY_SHADER, geometry) : 0;
 	const GLuint id = glCreateProgram();
 	GLint status;
 
 	glAttachShader(id, vs);
 	glAttachShader(id, fs);
+	if (gs)
+		glAttachShader(id, gs);
 	if (retrievable)
 		glProgramParameteri(id, GL_PROGRAM_BINARY_RETRIEVABLE_HINT, GL_TRUE);
 	glLinkProgram(id);
@@ -78,6 +81,8 @@ compile_program(const char *vertex, const char *fragment, bool retrievable)
 	/* The program keeps its shaders until it goes. */
 	glDeleteShader(vs);
 	glDeleteShader(fs);
+	if (gs)
+		glDeleteShader(gs);
 	check("a program");
 	return id;
 }

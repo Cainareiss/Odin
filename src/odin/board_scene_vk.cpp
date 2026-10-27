@@ -86,9 +86,9 @@ struct Constants {
 	int32_t gl_clip_space;
 	int32_t has_texture, has_lighting, shading_mode, alpha_mode, tex_mode;
 	int32_t has_light[4], light_type[4], light_att_type[4];
-	int32_t has_fog, has_cue, has_pattern;
+	int32_t has_fog, has_cue, has_pattern, native_2d;
 };
-constexpr uint32_t NUM_CONSTANTS = 21;
+constexpr uint32_t NUM_CONSTANTS = 22;
 static_assert(sizeof(Constants) == NUM_CONSTANTS * sizeof(int32_t));
 
 /* The blend factors of each MeshBlend, as board_scene_gl.cpp has them:
@@ -143,10 +143,12 @@ void
 VkBoardDrawing::build_meshes()
 {
 	const VkDevice device = m_card.device();
-	const vk::Spirv code[3] = { ODIN_SPIRV_OF(mesh_vert), ODIN_SPIRV_OF(mesh_frag), ODIN_SPIRV_OF(mesh_collect_frag) };
-	VkShaderModule *const modules[3] = { &m_mesh_vert, &m_mesh_frag, &m_mesh_collect };
+	const vk::Spirv code[4] = { ODIN_SPIRV_OF(mesh_vert), ODIN_SPIRV_OF(mesh_frag), ODIN_SPIRV_OF(mesh_collect_frag),
+		                    ODIN_SPIRV_OF(mesh_geom) };
+	VkShaderModule *const modules[4] = { &m_mesh_vert, &m_mesh_frag, &m_mesh_collect, &m_mesh_geom };
 
-	for (unsigned i = 0; i < (m_card.primitive_ids() ? 3u : 2u); i++) {
+	/* The two last need geometry shaders of the card */
+	for (unsigned i = 0; i < (m_card.primitive_ids() ? 4u : 2u); i++) {
 		const VkShaderModuleCreateInfo info{ VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO, nullptr, 0, code[i].bytes,
 		                                     code[i].code };
 		m_card.check(m_fn.vkCreateShaderModule(device, &info, nullptr, modules[i]), "a mesh shader");
@@ -221,6 +223,7 @@ VkBoardDrawing::destroy_meshes()
 	m_fn.vkDestroyShaderModule(device, m_mesh_vert, nullptr);
 	m_fn.vkDestroyShaderModule(device, m_mesh_frag, nullptr);
 	m_fn.vkDestroyShaderModule(device, m_mesh_collect, nullptr);
+	m_fn.vkDestroyShaderModule(device, m_mesh_geom, nullptr);
 }
 
 /* The cache of this card and of these mesh shaders in the folder, taken
@@ -235,7 +238,7 @@ VkBoardDrawing::keep_programs_in(const std::string &folder)
 
 	if (folder.empty())
 		return;
-	for (const vk::Spirv &code : { ODIN_SPIRV_OF(mesh_vert), ODIN_SPIRV_OF(mesh_frag) }) {
+	for (const vk::Spirv &code : { ODIN_SPIRV_OF(mesh_vert), ODIN_SPIRV_OF(mesh_frag), ODIN_SPIRV_OF(mesh_geom) }) {
 		const uint8_t *const bytes = reinterpret_cast<const uint8_t *>(code.code);
 
 		for (size_t i = 0; i < code.bytes; i++)
@@ -329,17 +332,22 @@ VkBoardDrawing::pipeline(const MeshVariant &variant, MeshBlend blend)
 	c.has_fog = variant.has_fog;
 	c.has_cue = variant.has_cue;
 	c.has_pattern = variant.has_pattern;
+	c.native_2d = variant.native;
 	VkSpecializationMapEntry entries[NUM_CONSTANTS];
 	for (uint32_t i = 0; i < NUM_CONSTANTS; i++)
 		entries[i] = { i, i * static_cast<uint32_t>(sizeof(int32_t)), sizeof(int32_t) };
 	const VkSpecializationInfo constants{ NUM_CONSTANTS, entries, sizeof(c), &c };
 
-	const VkPipelineShaderStageCreateInfo stages[2] = {
+	/* Native 2D: the geometry shader between them */
+	const VkPipelineShaderStageCreateInfo stages[3] = {
 		{ VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_VERTEX_BIT, m_mesh_vert,
 		  "main", &constants },
 		{ VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_FRAGMENT_BIT,
 		  variant.collect ? m_mesh_collect : m_mesh_frag, "main", &constants },
+		{ VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_GEOMETRY_BIT, m_mesh_geom,
+		  "main", nullptr },
 	};
+	const uint32_t num_stages = variant.native ? 3 : 2;
 
 	/* The locations of the mesh vertex shader, as board_scene_gl.cpp
 	 * gives them: three bytes of a colour read as four, the shader
@@ -395,16 +403,16 @@ VkBoardDrawing::pipeline(const MeshVariant &variant, MeshBlend blend)
 	const VkPipelineDynamicStateCreateInfo dynamic{ VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO, nullptr, 0, 7,
 	                                                states };
 	const VkFormat colour = PICTURE_FORMAT;
-	VkPipelineCreationFeedback made{}, stage_made[2] = {};
+	VkPipelineCreationFeedback made{}, stage_made[3] = {};
 	const VkPipelineCreationFeedbackCreateInfo feedback{ VK_STRUCTURE_TYPE_PIPELINE_CREATION_FEEDBACK_CREATE_INFO,
-		                                             nullptr, &made, 2, stage_made };
+		                                             nullptr, &made, num_stages, stage_made };
 	const VkPipelineRenderingCreateInfo rendering{ VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
 		                                       m_card.creation_feedback() ? &feedback : nullptr, 0, 1, &colour,
 		                                       m_card.depth_format(), VK_FORMAT_UNDEFINED };
 	VkGraphicsPipelineCreateInfo info{};
 	info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 	info.pNext = &rendering;
-	info.stageCount = 2;
+	info.stageCount = num_stages;
 	info.pStages = stages;
 	info.pVertexInputState = &input;
 	info.pInputAssemblyState = &assembly;
@@ -437,7 +445,7 @@ VkBoardDrawing::prepare_program(uint64_t key)
 {
 	const std::optional<MeshVariant> variant = MeshVariant::from_key(key);
 
-	if (!variant || (variant->collect && !m_card.primitive_ids()) || m_variants.contains(key))
+	if (!variant || ((variant->collect || variant->native) && !m_card.primitive_ids()) || m_variants.contains(key))
 		return;
 	m_preparing = true;
 	pipeline(*variant, variant->has_cue ? MeshBlend::FADED : MeshBlend::REPLACE);
@@ -727,6 +735,8 @@ VkBoardDrawing::draw_mesh(const odin_mesh_t &mesh, const MeshDraw &draw)
 	m_push.pattern = pattern_bits(mesh.pattern);
 	m_push.blend_mode = draw.blend_mode;
 	m_push.sort_scale = depth_bias::sort_scale(bias);
+	m_push.snap = draw.snap ? 1 : 0;
+	m_push.scale = static_cast<float>(m_scale);
 
 	/* Something is drawn anyway with no modelview, as with OpenGL */
 	const bool none = mesh.mv_index == NONE;

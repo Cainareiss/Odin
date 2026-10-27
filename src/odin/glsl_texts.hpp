@@ -25,12 +25,12 @@
 
 extern "C" {
 
-/* The board drawing: a mesh of the display list; one triangle over the
- * whole picture and, for it, the translucent fragments of every pixel put
- * in order and blended, the two 3D buffers blended into one, the picture of
- * the frame at the size of the window; the picture shown and the 2D layers,
- * composed */
-extern const char odin_glsl_mesh_vert[], odin_glsl_mesh_frag[];
+/* The board drawing: a mesh of the display list (and the geometry shader
+ * of Native 2D); one triangle over the whole picture and, for it, the
+ * translucent fragments of every pixel put in order and blended, the two 3D
+ * buffers blended into one, the picture of the frame at the size of the
+ * window; the picture shown and the 2D layers, composed */
+extern const char odin_glsl_mesh_vert[], odin_glsl_mesh_frag[], odin_glsl_mesh_geom[];
 extern const char odin_glsl_whole_picture_vert[];
 extern const char odin_glsl_sort_frag[], odin_glsl_blend_frag[], odin_glsl_present_frag[];
 extern const char odin_glsl_compose_vert[], odin_glsl_compose_frag[];

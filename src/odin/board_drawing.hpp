@@ -73,6 +73,7 @@ struct MeshDraw {
 	unsigned blend_mode;	/* A81, among the translucent fragments */
 	HostTexture texture;	/* with variant.has_texture */
 	HostSampler sampler;
+	bool snap;		/* Snap 2D: its corners on the pixels of the hardware's screen */
 };
 
 /* What the drawing of a list is told besides the list: where the lines of
@@ -111,6 +112,8 @@ public:
 	/* The pictures `scale` times finer, 1 at first; the kept ones carried
 	 * over, each pixel the nearest */
 	virtual void set_scale(unsigned scale) = 0;
+	/* Whether it draws Native 2D (MeshVariant::native: geometry shaders) */
+	virtual bool draws_native() const = 0;
 
 	/* A display list drawn into the scene: its vertices sent and the
 	 * scene emptied; each of its views from an empty depth; a pass for

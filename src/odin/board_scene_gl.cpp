@@ -363,8 +363,8 @@ GlBoardDrawing::draw_mesh(const odin_mesh_t &mesh, const MeshDraw &draw)
 		held.drawing = m_drawing;
 		held.vp_index = held.ls_index = held.ls_vp_index = NONE;
 		held.mv_index = held.mv2_index = NONE;
-		held.alpha_ref = held.depth_scale = held.sort_scale = NAN;
-		held.weigh_by_alpha = -1;
+		held.alpha_ref = held.depth_scale = held.sort_scale = held.scale = NAN;
+		held.weigh_by_alpha = held.snap = -1;
 		held.pattern = NONE;
 	}
 	if (m_variant.has_pattern && held.pattern != mesh.pattern) {
@@ -378,6 +378,14 @@ GlBoardDrawing::draw_mesh(const odin_mesh_t &mesh, const MeshDraw &draw)
 	if (held.weigh_by_alpha != static_cast<int>(draw.weigh_by_alpha)) {
 		held.weigh_by_alpha = draw.weigh_by_alpha;
 		glUniform1f(locs.weigh_by_alpha, draw.weigh_by_alpha ? 1.0f : 0.0f);
+	}
+	if (held.snap != static_cast<int>(draw.snap)) {
+		held.snap = draw.snap;
+		glUniform1ui(locs.snap, draw.snap ? 1u : 0u);
+	}
+	if (m_variant.native && held.scale != static_cast<float>(m_scale)) {
+		held.scale = static_cast<float>(m_scale);
+		glUniform1f(locs.scale, held.scale);
 	}
 	if (m_variant.collect)
 		glUniform1ui(locs.blend_mode, draw.blend_mode);

@@ -47,6 +47,7 @@ struct MeshProgram {
 		GLint modelview;
 		GLint modelview2;
 		GLint depth_scale, sort_scale;
+		GLint snap, scale;
 		Light lights[4];
 		GLint ambient;
 		GLint fog, fog_color;
@@ -62,8 +63,8 @@ struct MeshProgram {
 		uint32_t drawing = ~0u;
 		uint32_t vp_index, ls_index, ls_vp_index;
 		uint32_t mv_index, mv2_index;
-		float alpha_ref, depth_scale, sort_scale;
-		int weigh_by_alpha;
+		float alpha_ref, depth_scale, sort_scale, scale;
+		int weigh_by_alpha, snap;
 		uint32_t pattern;
 	};
 
@@ -113,7 +114,7 @@ public:
 
 private:
 	MeshProgram compile(const MeshVariant &variant);
-	GLuint link(uint64_t key, const std::string &vertex, const std::string &fragment);
+	GLuint link(uint64_t key, const std::string &vertex, const std::string &fragment, const std::string &geometry);
 
 	std::unordered_map<uint64_t, MeshProgram> m_programs;
 	ProgramList m_list;

@@ -363,6 +363,11 @@ MenuSession::apply(const MenuState &was)
 		m_display.set_anisotropy(now.anisotropy);
 		keep("anisotropy", number(now.anisotropy, 1));
 	}
+	if (now.upscale_mode != was.upscale_mode && now.upscale_mode < std::size(UPSCALE_MODES)) {
+		m_display.set_upscale_mode(static_cast<DisplayUpscaleMode>(now.upscale_mode));
+		keep("upscale_mode", now.upscale_mode == 0 ? std::nullopt :
+		                     std::optional<std::string>(UPSCALE_MODES[now.upscale_mode]));
+	}
 	if (now.fullscreen != was.fullscreen) {
 		m_display.set_fullscreen(now.fullscreen);
 		keep("fullscreen", on_off(now.fullscreen, false));

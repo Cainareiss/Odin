@@ -81,7 +81,8 @@ window_size(const std::string &value, unsigned &w, unsigned &h)
 }
 
 /* [display] of odin.ini, where the command line says nothing: the 3D 1 to
- * 6 times finer, the texture filter (1 to 16), the window 1 to 6 times the
+ * 6 times finer and how its flat meshes are drawn then (upscale_mode), the
+ * texture filter (1 to 16), the window 1 to 6 times the
  * screen or of a size the user gave it, the whole display, no limit to the
  * frames, the speed in the title. The last line says. */
 void
@@ -125,6 +126,10 @@ read_display(const Settings &settings, Options &options)
 		} else if (key == "api" && std::find(std::begin(APIS), std::end(APIS), value) != std::end(APIS)) {
 			options.display.api = static_cast<DisplayApi>(std::find(std::begin(APIS), std::end(APIS), value) -
 			                                              std::begin(APIS));
+		} else if (key == "upscale_mode" && std::find(std::begin(UPSCALE_MODES), std::end(UPSCALE_MODES), value) !=
+		                                            std::end(UPSCALE_MODES)) {
+			options.display.upscale_mode = static_cast<DisplayUpscaleMode>(
+				std::find(std::begin(UPSCALE_MODES), std::end(UPSCALE_MODES), value) - std::begin(UPSCALE_MODES));
 		} else if (key == "bezel" && std::find(std::begin(SIDES_NAMES), std::end(SIDES_NAMES), value) !=
 		                                     std::end(SIDES_NAMES)) {
 			options.sides = static_cast<DisplaySides>(
@@ -406,7 +411,8 @@ std::vector<Settings::Known>
 known_settings(const GameList &games)
 {
 	std::vector<Settings::Known> out = {
-		{ "display", "scale", "1" }, { "display", "anisotropy", "1" }, { "display", "window", "1" },
+		{ "display", "scale", "1" }, { "display", "upscale_mode", UPSCALE_MODES[0] }, { "display", "anisotropy", "1" },
+		{ "display", "window", "1" },
 		{ "display", "fullscreen", "off" }, { "display", "vsync", VSYNCS[static_cast<unsigned>(VSYNC)] },
 		{ "display", "bezel", SIDES_NAMES[static_cast<unsigned>(SIDES)] },
 		{ "display", "unthrottled", "off" }, { "display", "show_speed", "on" }, { "display", "filter", "none" },

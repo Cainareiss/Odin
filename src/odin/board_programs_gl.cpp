@@ -80,14 +80,20 @@ MeshPrograms::keep_in(const std::string &folder)
 	}
 }
 
-/* The program of these sources: the one kept for the key, when this driver
- * made it from them and takes it back, else compiled and kept. */
+/* The program of these sources (with a geometry shader, unless its text is
+ * empty): the one kept for the key, when this driver made it from them and
+ * takes it back, else compiled and kept. */
 GLuint
-MeshPrograms::link(uint64_t key, const std::string &vertex, const std::string &fragment)
+MeshPrograms::link(uint64_t key, const std::string &vertex, const std::string &fragment, const std::string &geometry)
 {
+	const char *const between = geometry.empty() ? nullptr : geometry.c_str();
+	/* The kept file is checked against the vertex shader and the geometry
+	 * one after it */
+	const std::string first = vertex + geometry;
+
 	if (m_kept.empty()) {
 		m_compiled++;
-		return gl::compile_program(vertex.c_str(), fragment.c_str());
+		return gl::compile_program(vertex.c_str(), fragment.c_str(), false, between);
 	}
 
 	char name[32];
@@ -96,7 +102,7 @@ MeshPrograms::link(uint64_t key, const std::string &vertex, const std::string &f
 	const std::string path = m_kept + name;
 
 	if (const std::optional<std::vector<uint8_t>> file = read_file(path)) {
-		if (const std::optional<KeptProgram> kept = program_from_file(*file, m_driver, vertex, fragment)) {
+		if (const std::optional<KeptProgram> kept = program_from_file(*file, m_driver, first, fragment)) {
 			const GLuint id = glCreateProgram();
 			GLint status = GL_FALSE;
 
@@ -113,7 +119,7 @@ MeshPrograms::link(uint64_t key, const std::string &vertex, const std::string &f
 		}
 	}
 
-	const GLuint id = gl::compile_program(vertex.c_str(), fragment.c_str(), true);
+	const GLuint id = gl::compile_program(vertex.c_str(), fragment.c_str(), true, between);
 	GLint size = 0;
 
 	m_compiled++;
@@ -127,7 +133,7 @@ MeshPrograms::link(uint64_t key, const std::string &vertex, const std::string &f
 		if (got > 0) {
 			kept.format = format;
 			kept.binary.resize(static_cast<size_t>(got));
-			write_kept(path, program_file(m_driver, vertex, fragment, kept));
+			write_kept(path, program_file(m_driver, first, fragment, kept));
 		}
 	}
 	return id;
@@ -162,9 +168,11 @@ MeshPrograms::compile(const MeshVariant &variant)
 	define("HAS_CUE", variant.has_cue);
 	define("COLLECT", variant.collect);
 	define("HAS_PATTERN", variant.has_pattern);
+	define("NATIVE_2D", variant.native);
 
 	MeshProgram program;
-	program.id = link(variant.key(), defines + odin_glsl_mesh_vert, defines + odin_glsl_mesh_frag);
+	program.id = link(variant.key(), defines + odin_glsl_mesh_vert, defines + odin_glsl_mesh_frag,
+	                  variant.native ? odin_glsl_mesh_geom : "");
 
 	const auto find = [&](const char *name) {
 		return glGetUniformLocation(program.id, name);
@@ -176,6 +184,8 @@ MeshPrograms::compile(const MeshVariant &variant)
 	locs.modelview2 = find("u_modelview2");
 	locs.depth_scale = find("u_depth_scale");
 	locs.sort_scale = find("u_sort_scale");
+	locs.snap = find("u_snap");
+	locs.scale = find("u_scale");
 	for (unsigned i = 0; i < 4; i++) {
 		const std::string light = "u_lights[" + std::to_string(i) + "].";
 

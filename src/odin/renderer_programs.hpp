@@ -66,6 +66,7 @@ struct MeshVariant {
 	bool has_cue = false;		/* faded by the depth queue */
 	bool collect = false;		/* translucent fragments go to the lists */
 	bool has_pattern = false;	/* 501 */
+	bool native = false;		/* Native 2D: with glsl/mesh.geom */
 
 	/* The whole of it as one number, and the variant of a number, if
 	 * it is the number of one. */

@@ -62,6 +62,7 @@ layout(constant_id = 17) const int LIGHT3_ATT_TYPE = 0;
 layout(constant_id = 18) const int HAS_FOG = 0;
 layout(constant_id = 19) const int HAS_CUE = 0;
 layout(constant_id = 20) const int HAS_PATTERN = 0;
+layout(constant_id = 21) const int NATIVE_2D = 0;
 
 struct view_t {
 	mat4 projection;
@@ -93,6 +94,8 @@ layout(push_constant) uniform mesh_t {
 	uint u_pattern;
 	uint u_order, u_blend_mode;
 	float u_sort_scale;
+	uint u_snap;
+	float u_scale;
 };
 #define u_lights u_lightsets[u_lightset].lights
 #define u_ambient u_views[u_view].ambient
@@ -102,14 +105,6 @@ layout(push_constant) uniform mesh_t {
 /* As Mesa's OpenGL normalizes: its SPIR-V path divides by the length */
 #define normalize(v) ((v) * inversesqrt (dot ((v), (v))))
 
-layout(location = 0) in vec4 p_position;
-layout(location = 1) in vec3 p_normal;
-layout(location = 2) in vec3 p_diffuse;
-layout(location = 3) in vec4 p_specular;
-layout(location = 4) in vec3 p_color1;
-layout(location = 5) in vec3 p_ambient;
-layout(location = 6) in vec2 p_texcoords;
-layout(location = 7) in float p_alpha;
 layout(location = 0) out vec4 fragColor;
 #else
 out vec4 fragColor;
@@ -131,16 +126,56 @@ uniform uint		u_order;
 uniform uint		u_blend_mode;
 uniform float		u_depth_scale;
 uniform float		u_sort_scale;
-
-in vec4 p_position;
-in vec3 p_normal;
-in vec3 p_diffuse;
-in vec4 p_specular;
-in vec3 p_color1;
-in vec3 p_ambient;
-in vec2 p_texcoords;
-in float p_alpha;
+uniform float		u_scale;
 #endif
+
+/* What the vertices give, as it runs over the triangle; main takes it into
+ * the p_ values, which Native 2D moves for some pixels */
+layout(location = 0) in vec4 q_position;
+layout(location = 1) in vec3 q_normal;
+layout(location = 2) in vec3 q_diffuse;
+layout(location = 3) in vec4 q_specular;
+layout(location = 4) in vec3 q_color1;
+layout(location = 5) in vec3 q_ambient;
+layout(location = 6) in vec2 q_texcoords;
+layout(location = 7) in float q_alpha;
+layout(location = 8) flat in vec2 p_corner0;
+layout(location = 9) flat in vec2 p_corner1;
+layout(location = 10) flat in vec2 p_corner2;
+vec4 p_position;
+vec3 p_normal;
+vec3 p_diffuse;
+vec4 p_specular;
+vec3 p_color1;
+vec3 p_ambient;
+vec2 p_texcoords;
+float p_alpha;
+
+/* Native 2D (mesh.geom): the point c, in pixels of the hardware, on the
+ * side of the edge a to b that holds the triangle of that area, or on the
+ * edge where the card takes it in at that size, a left or a low one */
+bool
+holds (vec2 a, vec2 b, vec2 c, float area)
+{
+	vec2 d = area > 0.0 ? b - a : a - b;
+	float e = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+
+	if (area < 0.0)
+		e = -e;
+	if (e != 0.0)
+		return e > 0.0;
+	return d.y < 0.0 || (d.y == 0.0 && d.x > 0.0);
+}
+
+bool
+in_triangle (vec2 c)
+{
+	float area = (p_corner1.x - p_corner0.x) * (p_corner2.y - p_corner0.y) -
+	             (p_corner1.y - p_corner0.y) * (p_corner2.x - p_corner0.x);
+
+	return area != 0.0 && holds (p_corner0, p_corner1, c, area) && holds (p_corner1, p_corner2, c, area) &&
+	       holds (p_corner2, p_corner0, c, area);
+}
 
 void
 apply_light (inout vec3 diffuse,
@@ -218,6 +253,45 @@ main (void)
 	vec3 base;
 	float alpha;
 	ivec2 pixel = ivec2 (gl_FragCoord.xy);
+
+	p_position = q_position;
+	p_normal = q_normal;
+	p_diffuse = q_diffuse;
+	p_specular = q_specular;
+	p_color1 = q_color1;
+	p_ambient = q_ambient;
+	p_texcoords = q_texcoords;
+	p_alpha = q_alpha;
+	/* Native 2D: a fine pixel drawn when the centre of its pixel of the
+	 * hardware is in the triangle; one off the triangle takes the values
+	 * of that centre, which is on it (they run straight: the rates of the
+	 * neighbours tell them) */
+	if (NATIVE_2D != 0) {
+		vec4 dx0 = dFdx (q_position), dy0 = dFdy (q_position);
+		vec3 dx1 = dFdx (q_normal), dy1 = dFdy (q_normal);
+		vec3 dx2 = dFdx (q_diffuse), dy2 = dFdy (q_diffuse);
+		vec4 dx3 = dFdx (q_specular), dy3 = dFdy (q_specular);
+		vec3 dx4 = dFdx (q_color1), dy4 = dFdy (q_color1);
+		vec3 dx5 = dFdx (q_ambient), dy5 = dFdy (q_ambient);
+		vec2 dx6 = dFdx (q_texcoords), dy6 = dFdy (q_texcoords);
+		float dx7 = dFdx (q_alpha), dy7 = dFdy (q_alpha);
+		vec2 at = gl_FragCoord.xy / u_scale, centre = floor (at) + 0.5;
+
+		if (!in_triangle (centre))
+			discard;
+		if (!in_triangle (at)) {
+			vec2 d = (centre - at) * u_scale;
+
+			p_position += dx0 * d.x + dy0 * d.y;
+			p_normal += dx1 * d.x + dy1 * d.y;
+			p_diffuse += dx2 * d.x + dy2 * d.y;
+			p_specular += dx3 * d.x + dy3 * d.y;
+			p_color1 += dx4 * d.x + dy4 * d.y;
+			p_ambient += dx5 * d.x + dy5 * d.y;
+			p_texcoords += dx6 * d.x + dy6 * d.y;
+			p_alpha += dx7 * d.x + dy7 * d.y;
+		}
+	}
 
 	/* The depth buffer holds the logarithm of the eye depth: with the
 	 * near planes the games send, the projected depth cannot tell apart

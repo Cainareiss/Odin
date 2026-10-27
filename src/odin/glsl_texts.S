@@ -34,6 +34,7 @@
 
 /* The board drawing */
 TEXT(mesh_vert, "glsl/mesh.vert")
+TEXT(mesh_geom, "glsl/mesh.geom")
 TEXT_WITH_LISTS(mesh_frag, "glsl/mesh.frag")
 TEXT(whole_picture_vert, "glsl/whole_picture.vert")
 TEXT_WITH_LISTS(sort_frag, "glsl/sort.frag")

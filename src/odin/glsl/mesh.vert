@@ -44,6 +44,8 @@ layout(push_constant) uniform mesh_t {
 	uint u_pattern;
 	uint u_order, u_blend_mode;
 	float u_sort_scale;
+	uint u_snap;
+	float u_scale;
 };
 /* 0: the card clips z from 0 to w, not from -w to w as OpenGL */
 layout(constant_id = 0) const int GL_CLIP_SPACE = 1;
@@ -60,6 +62,7 @@ uniform mat4 u_projection;
 uniform mat4 u_modelview;
 uniform mat4 u_modelview2;
 uniform float u_depth_scale;
+uniform uint u_snap;
 #define mul(m, v) ((m) * (v))
 #endif
 
@@ -73,7 +76,6 @@ layout(location = 6) in vec2 i_texcoords;
 layout(location = 7) in float i_alpha;
 layout(location = 8) in float i_second_mv;
 
-#ifdef VULKAN
 layout(location = 0) out vec4 p_position;
 layout(location = 1) out vec3 p_normal;
 layout(location = 2) out vec3 p_diffuse;
@@ -82,16 +84,10 @@ layout(location = 4) out vec3 p_color1;
 layout(location = 5) out vec3 p_ambient;
 layout(location = 6) out vec2 p_texcoords;
 layout(location = 7) out float p_alpha;
-#else
-out vec4 p_position;
-out vec3 p_normal;
-out vec3 p_diffuse;
-out vec4 p_specular;
-out vec3 p_color1;
-out vec3 p_ambient;
-out vec2 p_texcoords;
-out float p_alpha;
-#endif
+/* The corners of the triangle, for mesh.frag: given by mesh.geom alone */
+layout(location = 8) flat out vec2 p_corner0;
+layout(location = 9) flat out vec2 p_corner1;
+layout(location = 10) flat out vec2 p_corner2;
 
 void main (void) {
 	/* 1: the second modelview, 64: without the 3x3, 128: without
@@ -126,6 +122,15 @@ void main (void) {
 	if (GL_CLIP_SPACE == 0)
 		gl_Position.z = (gl_Position.z + gl_Position.w) * 0.5;
 #endif
+	/* Snap 2D: its corners on the pixel corners of the screen of the
+	 * hardware (Renderer::draw_mesh), each edge between the pixels it
+	 * covers at that size: a corner to 1/256 of a pixel, as the card
+	 * rasterizes, and a centre on a left or low edge taken in. */
+	if (u_snap != 0u) {
+		const vec2 screen = vec2 (640.0, 480.0);
+		vec2 at = floor ((gl_Position.xy / gl_Position.w * 0.5 + 0.5) * screen * 256.0 + 0.5) / 256.0;
+		gl_Position.xy = (ceil (at - 0.5) / screen * 2.0 - 1.0) * gl_Position.w;
+	}
 
 	p_diffuse = i_diffuse;
 	p_ambient = i_ambient;
@@ -133,4 +138,5 @@ void main (void) {
 	p_color1 = i_color1;
 	p_texcoords = i_texcoords;
 	p_alpha = i_alpha;
+	p_corner0 = p_corner1 = p_corner2 = vec2 (0.0);
 }

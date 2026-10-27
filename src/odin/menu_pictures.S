@@ -44,6 +44,10 @@ PICTURE(filter_16, "pictures/filter-16.png")
 PICTURE(screen, "pictures/screen.png")
 PICTURE(whole, "pictures/whole.png")
 PICTURE(torn, "pictures/torn.png")
+PICTURE(mode_cabinet, "pictures/mode-cabinet.png")
+PICTURE(mode_raw, "pictures/mode-raw.png")
+PICTURE(mode_snap, "pictures/mode-snap.png")
+PICTURE(mode_native, "pictures/mode-native.png")
 
 #if !defined(_WIN32)
 	.section .note.GNU-stack, "", @progbits

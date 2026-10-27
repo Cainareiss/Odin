@@ -94,7 +94,8 @@ Options:
 
 Keys: Escape or F10 opens the menu, which pauses the game (its Display
 page sets the window and the picture, kept in [display] of odin.ini:
-scale = 1 to 6, anisotropy = 1 to 16, window = 1 to 6 or a size, 1600x900
+scale = 1 to 6, upscale_mode = raw, snap or native (see below),
+anisotropy = 1 to 16, window = 1 to 6 or a size, 1600x900
 (Custom: the window resized by hand keeps its size for the next start),
 vsync = off, on or adaptive (the frames on time wait for the display, a
 late one does not), fullscreen, unthrottled and show_speed = on or off,
@@ -131,6 +132,17 @@ lola-retro/pc-monitor-vga and its -good, -premium, -premium-plus,
 tube shows it and asks much of the graphics card (a weak one cannot keep
 60 frames a second). Its files are in filters/, where odin-games.json is
 (with Vulkan, the SPIR-V the build leaves beside its shaders too).
+
+At a scale above 1, the pieces of the picture flat to the screen (the HUD,
+its text) can be drawn as the 640 x 480 screen of the board has them: page
+Display, Upscaling mode, or upscale_mode in [display]. raw, by default,
+draws them finer as the rest: thin lines may show between pieces the
+games leave a fraction of a pixel apart (around the timer of Virtual-On);
+snap puts their corners on the pixels of that screen, their slanted edges
+smooth; native has them cover the pixels they cover there, their textures
+finer, their edges as on the cabinet (with Vulkan, on a card with geometry
+shaders; snap on another). Both may split a piece made of a flat part and
+a tilted one (the lock-on of Planet Harriers).
 
 In a game, the mouse moved over the window shows the bar at its top a
 while, the game going on under it; in a game the mouse aims in (Brave Fire

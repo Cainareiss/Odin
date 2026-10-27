@@ -137,6 +137,9 @@ struct MenuState {
 	 * at all, 1 all, 2 those on time), frames without a limit (at the
 	 * next launch), the frames a second in the title */
 	unsigned scale = 1, anisotropy = 1, window = 1, vsync = 0;
+	/* How the flat meshes are drawn when finer (DisplayUpscaleMode: 0
+	 * raw, 1 snap, 2 native) */
+	unsigned upscale_mode = 0;
 	/* The window at start of the size the user gave it by hand instead,
 	 * in points (Custom; 0: none); the size it has now */
 	unsigned custom_w = 0, custom_h = 0, window_w = 0, window_h = 0;
@@ -438,11 +441,12 @@ public:
 private:
 	/* The pictures of the page Display (menu_pictures.S): real captures
 	 * of Odin, the same place at each scale and at each filter, a frame
-	 * whole and torn */
-	enum Picture { UPSCALE = 0, FILTER = UPSCALE + 6, SCREEN = FILTER + 5, WHOLE, TORN, PICTURES };
+	 * whole and torn, the timer of VON4 at 1× and in each upscaling mode
+	 * at 4× */
+	enum Picture { UPSCALE = 0, FILTER = UPSCALE + 6, SCREEN = FILTER + 5, WHOLE, TORN, MODE, PICTURES = MODE + 4 };
 	/* What the left of the page Display shows: what the row pointed at
 	 * or in the frame does */
-	enum Preview { PREVIEW_CARD, PREVIEW_UPSCALE, PREVIEW_FILTER, PREVIEW_SCREEN, PREVIEW_VSYNC };
+	enum Preview { PREVIEW_CARD, PREVIEW_UPSCALE, PREVIEW_MODE, PREVIEW_FILTER, PREVIEW_SCREEN, PREVIEW_VSYNC };
 
 	void follow_scale();
 	void add_fonts();

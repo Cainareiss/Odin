@@ -31,10 +31,11 @@
 namespace odin::gl {
 
 /* Compiles and links a program of two texts of glsl/ (glsl_texts.hpp),
- * each after its #version line. Aborts with what the driver says if it
- * cannot. `retrievable`: the driver is told glGetProgramBinary will be
- * asked for it. */
-GLuint compile_program(const char *vertex, const char *fragment, bool retrievable = false);
+ * each after its #version line, and a geometry shader between them if
+ * given. Aborts with what the driver says if it cannot. `retrievable`: the
+ * driver is told glGetProgramBinary will be asked for it. */
+GLuint compile_program(const char *vertex, const char *fragment, bool retrievable = false,
+                       const char *geometry = nullptr);
 /* The location of a uniform the program must have. */
 GLint uniform(GLuint program, const char *name);
 /* Aborts if OpenGL has an error to tell; `stage` names where. */

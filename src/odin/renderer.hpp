@@ -33,6 +33,7 @@
 
 #include "odin/antarctic_list.hpp"
 #include "odin/board_drawing.hpp"
+#include "odin/display_options.hpp"
 #include "odin/eurasia_layers.hpp"
 #include "odin/hikaru_draw.hpp"
 #include "odin/host_graphics.hpp"
@@ -126,6 +127,9 @@ public:
 	void set_scale(unsigned scale);
 	/* Anisotropic filtering of the textures, 1 for none as on the board */
 	void set_anisotropy(unsigned level) { m_textures.set_anisotropy(level); }
+	/* How the meshes flat to the screen are drawn at a scale above 1:
+	 * finer as the rest, or as the hardware's screen has them (draw_mesh) */
+	void set_upscale_mode(DisplayUpscaleMode mode) { m_upscale_mode = mode; }
 	/* The picture through the filter of that preset (picture_filter_gl.hpp)
 	 * into the window; none with an empty path, or when it does not
 	 * build (said once on stderr). Built when the path changes. */
@@ -315,6 +319,7 @@ private:
 	/* How many times finer than the screen of the hardware the buffers
 	 * are */
 	unsigned m_scale;
+	DisplayUpscaleMode m_upscale_mode;
 	/* The pictures of the last three lists, in the pipe of m_card: see
 	 * show */
 	uint32_t m_num_lists;		/* lists drawn so far */

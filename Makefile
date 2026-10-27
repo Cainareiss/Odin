@@ -230,7 +230,7 @@ src/odin/glsl_texts.o: src/odin/glsl_texts.S $(wildcard src/odin/glsl/*)
 # defines VULKAN), then put in the binary the same way
 GLSLANG := glslangValidator
 SPIRV := $(patsubst %,src/odin/glsl/%.spv,whole_picture.vert blend.frag compose.vert compose.frag present.frag \
-	mesh.vert mesh.frag mesh_collect.frag sort.frag image.vert image.frag whole_window.vert blur.frag show.frag \
+	mesh.vert mesh.geom mesh.frag mesh_collect.frag sort.frag image.vert image.frag whole_window.vert blur.frag show.frag \
 	average.frag sides.frag)
 src/odin/glsl/%.spv: src/odin/glsl/%
 	{ echo '#version 450'; cat $<; } | $(GLSLANG) -V --stdin -S $(subst .,,$(suffix $<)) -o $@

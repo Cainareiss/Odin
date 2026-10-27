@@ -128,6 +128,7 @@ public:
 	/* What the menu sets, the board waiting meanwhile. The window takes
 	 * `times` the screen unless it is on the whole display. */
 	void set_scale(unsigned scale);
+	void set_upscale_mode(DisplayUpscaleMode mode);
 	/* The filter of the picture by its name; empty: none */
 	void set_filter(const std::string &name);
 	void set_anisotropy(unsigned level);
@@ -269,6 +270,7 @@ private:
 	 * Around it: the bezel, or the sides blurred. */
 	unsigned m_frame;
 	unsigned m_scale, m_anisotropy;
+	DisplayUpscaleMode m_upscale_mode;
 	std::string m_filter;	/* the path of its preset */
 	bool m_logged;
 	HostPicture m_picture;

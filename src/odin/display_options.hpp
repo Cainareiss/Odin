@@ -37,6 +37,10 @@ enum class DisplayVsync : uint8_t { OFF, ON, ADAPTIVE };
 enum class DisplaySides : uint8_t { OFF, BLUR, BEZEL };
 /* What draws: OpenGL, or Vulkan (taken when Odin starts) */
 enum class DisplayApi : uint8_t { OPENGL, VULKAN };
+/* How the meshes flat to the screen (the HUD, its text) are drawn at a
+ * scale above 1: finer as the rest; their corners on the pixels of the
+ * hardware's screen; or over the pixels they cover there (Renderer) */
+enum class DisplayUpscaleMode : uint8_t { RAW, SNAP, NATIVE };
 
 struct DisplayOptions {
 	unsigned scale;		/* the 3D that many times finer than the screen, 1 to 6 */
@@ -52,6 +56,7 @@ struct DisplayOptions {
 	 * filters/<name>.glslp: picture_filter_gl.hpp); empty: none */
 	std::string filter;
 	DisplayApi api;
+	DisplayUpscaleMode upscale_mode;
 };
 
 } /* namespace odin */

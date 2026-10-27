@@ -39,7 +39,7 @@
 #define PICTURE(name) extern "C" const unsigned char odin_picture_##name[], odin_picture_##name##_end[];
 PICTURE(upscale_1) PICTURE(upscale_2) PICTURE(upscale_3) PICTURE(upscale_4) PICTURE(upscale_5) PICTURE(upscale_6)
 PICTURE(filter_1) PICTURE(filter_2) PICTURE(filter_4) PICTURE(filter_8) PICTURE(filter_16) PICTURE(screen)
-PICTURE(whole) PICTURE(torn)
+PICTURE(whole) PICTURE(torn) PICTURE(mode_cabinet) PICTURE(mode_raw) PICTURE(mode_snap) PICTURE(mode_native)
 #undef PICTURE
 /* The font of the menu (menu_fonts.S) */
 extern "C" const unsigned char odin_font_cozette[], odin_font_cozette_end[];
@@ -57,6 +57,8 @@ const std::pair<const unsigned char *, const unsigned char *> PICTURE_FILES[] = 
 	{ odin_picture_filter_4, odin_picture_filter_4_end }, { odin_picture_filter_8, odin_picture_filter_8_end },
 	{ odin_picture_filter_16, odin_picture_filter_16_end }, { odin_picture_screen, odin_picture_screen_end },
 	{ odin_picture_whole, odin_picture_whole_end }, { odin_picture_torn, odin_picture_torn_end },
+	{ odin_picture_mode_cabinet, odin_picture_mode_cabinet_end }, { odin_picture_mode_raw, odin_picture_mode_raw_end },
+	{ odin_picture_mode_snap, odin_picture_mode_snap_end }, { odin_picture_mode_native, odin_picture_mode_native_end },
 };
 
 /* The hints of the mouse Dear ImGui sets for itself (imgui_impl_sdl3.cpp):
@@ -593,6 +595,22 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 			state.scale = static_cast<unsigned>(scale) + 1;
 	});
 
+	/* How the flat pieces (the HUD, its text) are drawn when finer */
+	static constexpr const char *UPSCALE_MODES_SHOWN[] = { "Raw", "Snap 2D", "Native 2D" };
+	static constexpr const char *UPSCALE_MODES_ABOUT[] = {
+		"the HUD drawn finer as the rest: thin lines may show between its pieces",
+		"the corners of the flat pieces (HUD, text) on the cabinet's pixels: no lines, slanted edges smooth",
+		"the flat pieces cover the cabinet's pixels, their textures finer: no lines, edges as the cabinet",
+	};
+	int upscale_mode = static_cast<int>(std::min(state.upscale_mode, 2u));
+
+	std::snprintf(about, sizeof(about), "%s%s", UPSCALE_MODES_ABOUT[upscale_mode],
+	              state.scale == 1 ? " · at 2× and more" : "");
+	watch(PREVIEW_MODE, [&] {
+		if (kit.choice("Upscaling mode", about, UPSCALE_MODES_SHOWN, upscale_mode))
+			state.upscale_mode = static_cast<unsigned>(upscale_mode);
+	});
+
 	static constexpr const char *FILTERS[] = { "None", "2×", "4×", "8×", "16×" };
 	int filter = index_of(ANISOTROPY, state.anisotropy);
 
@@ -834,6 +852,16 @@ Menu::preview(const MenuKit &kit, const MenuState &state, int which, ImVec2 a, I
 		std::snprintf(chosen, sizeof(chosen), "%u×", scale);
 		pair("UPSCALING", UPSCALE, scale > 1 ? static_cast<int>(UPSCALE + scale - 1) : -1, "1× · THE CABINET", chosen,
 		     "Captured in Odin: Brave Fire Fighters, the same picture at each scale.");
+		break;
+	}
+	case PREVIEW_MODE: {
+		static constexpr const char *NAMES[] = { "RAW", "SNAP 2D", "NATIVE 2D" };
+		const unsigned mode = std::min(state.upscale_mode, 2u);
+
+		pair("UPSCALING MODE", MODE, state.scale > 1 ? static_cast<int>(MODE + 1 + mode) : -1, "1× · THE CABINET",
+		     NAMES[mode],
+		     "Captured in Odin: Virtual-On, its timer at 4×. Snap 2D and Native 2D may split a piece made of a flat "
+		     "part and a tilted one (the lock-on of Planet Harriers).");
 		break;
 	}
 	case PREVIEW_FILTER: {

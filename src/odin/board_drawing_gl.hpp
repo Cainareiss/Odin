@@ -47,6 +47,7 @@ public:
 	GlBoardDrawing &operator=(const GlBoardDrawing &) = delete;
 
 	void set_scale(unsigned scale) override;
+	bool draws_native() const override { return true; }
 
 	void begin_scene(const odin_display_list_t &list, const SceneDebug &debug) override;
 	void clear_depth() override;

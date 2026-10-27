@@ -26,6 +26,8 @@
 #include "odin/renderer.hpp"
 #include "odin/repeats.hpp"
 
+#include <cmath>
+
 namespace odin {
 
 namespace {
@@ -61,6 +63,73 @@ type_of(const odin_light_t &light)
 	if (has_position)
 		return LightType::POSITIONAL;
 	return LightType::DIRECTIONAL;
+}
+
+/* Twice the area of a triangle on the screen, signed by its winding */
+float
+twice_area(const float (&at)[3][2])
+{
+	return (at[1][0] - at[0][0]) * (at[2][1] - at[0][1]) - (at[1][1] - at[0][1]) * (at[2][0] - at[0][0]);
+}
+
+/* A mesh flat to the screen: each of its instances at one depth, through
+ * its first modelview. The HUD of VON4 is such meshes, with gaps of a
+ * fraction of a pixel between them that no pixel centre of the hardware's
+ * screen meets (0.23 between the digits of its timer and its panel).
+ * `unturned`: none of its triangles turned over with its corners on that
+ * screen's pixels, where Snap 2D puts them (a fold would open a hole). */
+bool
+flat_on_screen(const odin_display_list_t &list, const odin_mesh_t &mesh, bool unturned)
+{
+	if (mesh.mv_index == NONE || mesh.vp_index >= list.num_vps || mesh.mv_index + mesh.num_instances > list.num_mvs)
+		return false;
+
+	float projection[4][4];
+
+	view_projection(list.vp_list[mesh.vp_index], projection);
+	for (uint32_t i = 0; i < mesh.num_instances; i++) {
+		const float (&m)[4][4] = list.mv_list[mesh.mv_index + i].mtx;
+		float depth = 0.0f;
+
+		for (uint32_t t = 0; t < mesh.num_tris; t++) {
+			float at[3][2], grid[3][2];
+
+			for (uint32_t k = 0; k < 3; k++) {
+				const odin_vertex_body_t &v = list.verts.all[list.indices.all[mesh.first_index + t * 3 + k]];
+				float eye[4] = { 0.0f, 0.0f, 0.0f, 1.0f }, clip[4];
+
+				if (v.second_mv != 0)
+					return false;
+				for (unsigned r = 0; r < 3; r++)
+					eye[r] = m[0][r] * v.position[0] + m[1][r] * v.position[1] + m[2][r] * v.position[2] + m[3][r];
+				if (t == 0 && k == 0)
+					depth = eye[2];
+				else if (std::fabs(eye[2] - depth) > 1e-5f * std::fabs(depth))
+					return false;
+				if (!unturned)
+					continue;
+				for (unsigned r = 0; r < 4; r++)
+					clip[r] = projection[0][r] * eye[0] + projection[1][r] * eye[1] +
+					          projection[2][r] * eye[2] + projection[3][r] * eye[3];
+				if (!(clip[3] > 0.0f))
+					return false;
+
+				/* On the screen, and on the grid as mesh.vert puts it */
+				at[k][0] = (clip[0] / clip[3] * 0.5f + 0.5f) * static_cast<float>(SCREEN_WIDTH);
+				at[k][1] = (clip[1] / clip[3] * 0.5f + 0.5f) * static_cast<float>(SCREEN_HEIGHT);
+				for (unsigned c = 0; c < 2; c++)
+					grid[k][c] = std::ceil(std::floor(at[k][c] * 256.0f + 0.5f) / 256.0f - 0.5f);
+			}
+			if (!unturned)
+				continue;
+
+			const float before = twice_area(at), after = twice_area(grid);
+
+			if ((before > 0.0f && after < 0.0f) || (before < 0.0f && after > 0.0f))
+				return false;
+		}
+	}
+	return true;
 }
 
 } /* namespace */
@@ -196,7 +265,13 @@ Renderer::choose_texture(const odin_mesh_t &mesh)
 }
 
 /* The mesh with its program, its blend (set_material_blend or
- * set_opaque_blend) and its texture */
+ * set_opaque_blend) and its texture. In a finer picture, a mesh flat to the
+ * screen is drawn as the hardware's screen has it, if the user asks
+ * (DisplayUpscaleMode): Snap 2D puts its corners on the pixels of that
+ * screen, Native 2D has it cover the pixels it covers there
+ * (glsl/mesh.geom); the gaps of a fraction of a pixel between such meshes
+ * stay shut. A piece made of a flat mesh and one a little tilted comes
+ * apart: the lock-on of PHARRIER. */
 void
 Renderer::draw_mesh(const odin_mesh_t &mesh)
 {
@@ -206,6 +281,15 @@ Renderer::draw_mesh(const odin_mesh_t &mesh)
 	m_draw.variant = variant_of(mesh);
 	if (m_draw.variant.has_texture)
 		choose_texture(mesh);
+	m_draw.snap = false;
+	if (m_scale > 1 && m_upscale_mode != DisplayUpscaleMode::RAW) {
+		const bool native = m_upscale_mode == DisplayUpscaleMode::NATIVE && m_card->draws_native();
+
+		if (flat_on_screen(*m_list, mesh, !native)) {
+			m_draw.variant.native = native;
+			m_draw.snap = !native;
+		}
+	}
 	m_card->draw_mesh(mesh, m_draw);
 	m_times.mesh(mesh.num_tris * mesh.num_instances);
 }

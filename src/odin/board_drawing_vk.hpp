@@ -50,6 +50,7 @@ public:
 	VkBoardDrawing &operator=(const VkBoardDrawing &) = delete;
 
 	void set_scale(unsigned scale) override;
+	bool draws_native() const override { return m_card.primitive_ids(); }
 
 	void begin_scene(const odin_display_list_t &list, const SceneDebug &debug) override;
 	void clear_depth() override;
@@ -135,6 +136,8 @@ private:
 		uint32_t pattern;
 		uint32_t order, blend_mode;
 		float sort_scale;
+		uint32_t snap;
+		float scale;
 	};
 
 	/* The number of the picture of the frame, as the window reads it;
@@ -223,6 +226,7 @@ private:
 	 * file), the list of the programs of the game */
 	vk::Image m_depth;
 	VkShaderModule m_mesh_vert = VK_NULL_HANDLE, m_mesh_frag = VK_NULL_HANDLE, m_mesh_collect = VK_NULL_HANDLE;
+	VkShaderModule m_mesh_geom = VK_NULL_HANDLE;	/* Native 2D */
 	VkDescriptorSetLayout m_list_layout = VK_NULL_HANDLE, m_collect_layout = VK_NULL_HANDLE;
 	VkPipelineLayout m_mesh_layout = VK_NULL_HANDLE;
 	std::unordered_map<uint64_t, VkPipeline> m_pipelines;
