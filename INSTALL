@@ -431,8 +431,9 @@ another folder before it, ODIN_SAVES=none keeps nothing. The files have the name
 MAME gives them: mie_eeprom (the SYSTEM MENU of the BIOS: country, coins,
 cabinet type, sound of the attract), nvram (the game), main_eeprom and
 rombd_eeprom (the serial number of the main board, the security of the ROM
-board). A game without mie_eeprom starts as a new U.S.A. cabinet left the
-factory: the settings of its manual. Odin calibrates no control in
+board). A game without mie_eeprom starts as a new cabinet left the
+factory: U.S.A. with the settings of its manual, Virtual-On Japan (it was
+sold there only). Odin calibrates no control in
 advance: the board of Air Trix steers once it is calibrated in the test
 menu of the game (CALIBRATION), with the controller you play with, and
 the other games have their own pages for it. The settings of Odin are in
@@ -455,8 +456,8 @@ name when that file is there already). A note says when the reader takes
 the card in and when a card comes out at the slot. A card file is written
 whole or not at all, the card it held before kept beside it as
 <name>.card.bak, which Odin reads in its place should the card file be cut
-short. Virtual-On reads cards in the country Japan only (the SYSTEM MENU
-of the BIOS); elsewhere it never asks for one.
+short. Virtual-On reads cards in the country Japan only, the one it
+starts in; elsewhere it never asks for one.
 
 A portable Odin keeps its files in its own folder: put an empty file
 portable.txt beside the program (odin.exe, or the AppImage), or its

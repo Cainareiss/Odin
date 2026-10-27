@@ -527,7 +527,8 @@ uint16_t bootrom_crc(const uint8_t *bytes, size_t size)
 }
 
 /* The chips of new cabinets in the list of the repo (the tests run from the
- * repo): written by the BOOTROM, each copy right for it, the country U.S.A. */
+ * repo): written by the BOOTROM, each copy right for it, the country U.S.A.,
+ * VON4 Japan (sold there only) */
 void test_shipped_chips()
 {
 	json_error_t error;
@@ -548,16 +549,18 @@ void test_shipped_chips()
 		/* AIRTRIX keeps the calibration of its board there (0x26 - 0x2B): the player's to make, not Odin's */
 		const bool blank = std::string(game) != "airtrix" ||
 		                   (b.size() == 128 && std::all_of(b.begin() + 0x26, b.begin() + 0x2C, [](uint8_t v) { return !v; }));
+		const uint8_t country = std::string(game) == "von4" ? 0 : 1;
 
 		if (b.size() == 128 && std::equal(b.begin(), b.begin() + 64, b.begin() + 64) &&
-		    bootrom_crc(b.data(), 62) == (b[62] | b[63] << 8) && b[5] == 1 && blank)
+		    bootrom_crc(b.data(), 62) == (b[62] | b[63] << 8) && b[5] == country && blank)
 			right++;
 		else
 			std::printf("not right: %s\n", json_string_value(json_object_get(json_array_get(roms, i), "name")));
 	}
 	json_decref(root);
 	check(chips == 6 && right == 6,
-	      "the six games have the chip of a new U.S.A. cabinet, its CRC right, the board of AIRTRIX not calibrated");
+	      "the six games have the chip of a new cabinet, U.S.A. (VON4 Japan), its CRC right, the board of AIRTRIX "
+	      "not calibrated");
 }
 
 /* The outputs of the list of the repo: the nozzles of BRAVEFF shake, read

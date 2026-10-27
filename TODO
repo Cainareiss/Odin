@@ -665,12 +665,26 @@ three BOOTROMs: Japan, 2 players, no sound in the attract), then, for a
 chip of another game, the coin settings the game gives for the country
 (0x206 of its header, 17 bytes a country). The COUNTRY SETTING page of
 the BOOTROM menu is the second routine of its EXIT line, which reboots
-first: no page reaches the country, which SEGA wrote at the factory. A
-game without saved settings has the chip of a new U.S.A. cabinet
-("mie_eeprom" in odin-games.json): the BOOTROM wrote each one through its
-menu, from its own block with byte 5 set to 1 by hand (U.S.A., chosen),
-and the cabinet type and the sound of the attract of the manuals (US
-manuals; AIRTRIX: the manual of SEGA Europe, 1 player). AIRTRIX keeps the
+first: no page of that menu reaches the country, which SEGA wrote at the
+factory. A game can: the password SET COUNTRY of the PASSWORD page of VON4
+(0C0B2450 -> 0C1B85EC) jumps to that routine (0C0050F0) when the BOOTROM
+is 0.75 or later, then sets the game again for the new country. Its
+password is _LANDING_FORCE (the entries at 0C215EE9 undone with the
+cipher of the cards, keys 2, 1, 0, the bytes reversed between them, as
+0C0B2310 makes them); seen in Odin: the lever right to the first place,
+SERVICE for each letter, the lever right for the next place, SERVICE on
+EXIT makes it CHECK, TEST. The others: 20001210_MEGUMEGU, 20010523_AYUAYU,
+20010702_YUUYUU (versions 7.5, 7.6, 7.7), _FUTAGO and _TANMATSU (GAME
+START MODE NORMAL), ___*UNITE_VER (UNITED), ___*STOP_VER and
+___*NONSTOP_VER (version stopped or not); not tried. A game without saved
+settings has the chip of a new cabinet ("mie_eeprom" in odin-games.json):
+the BOOTROM wrote each
+one through its menu, from its own block (Japan) with byte 5 set to 1 by
+hand (U.S.A., chosen), and the cabinet type and the sound of the attract
+of the manuals (US manuals; AIRTRIX: the manual of SEGA Europe, 1 player).
+VON4, sold in Japan only, keeps Japan: the one chip of the list made
+without a byte set by hand, and the reader of its cards works in Japan
+only (0C17B960). AIRTRIX keeps the
 calibration of its board in the part of the chip that is the game's
 ("AIRTRIX0" at 0x1E, the bounds at 0x26 - 0x2B); blank, its board does not
 steer (the library, @0C011B84, divides by the span of the bounds). Its
