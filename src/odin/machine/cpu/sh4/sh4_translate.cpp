@@ -440,6 +440,9 @@ bool Sh4::translate_float(Inline form, const Sh4Op &op, uint32_t i, std::vector<
 	Sh4Host::Slow slow{};
 
 	switch (form) {
+	case Inline::FIpr:
+	case Inline::FTrv:
+		return translate_vector(form, op, i, ways);
 	case Inline::FSts:
 		host.load(A, FPUL);
 		host.store(n, A);
@@ -512,6 +515,27 @@ bool Sh4::translate_float(Inline form, const Sh4Op &op, uint32_t i, std::vector<
 		host.float_fused();
 		host.float_store(n, 0);
 		break;
+	}
+	ways.push_back(LongWay{slow, i, host.here()});
+	return true;
+}
+
+/* FIPR and FTRV where the host has vectors: the long way, a call of the
+ * instruction, when SR.FD has the FPU disabled. False on another host. */
+bool Sh4::translate_vector(Inline form, const Sh4Op &op, uint32_t i, std::vector<LongWay> &ways)
+{
+	constexpr uint32_t FR = offsetof(Regs, fr) / 4, XF = offsetof(Regs, xf) / 4, SR = offsetof(Regs, sr) / 4;
+	Sh4Host &host = *m_host;
+	Sh4Host::Slow slow{};
+
+	if (!host.vectors()) {
+		return false;
+	}
+	slow.jumps[slow.count++] = host.jump_if_bits(SR, SR_FD, true);
+	if (form == Inline::FIpr) {
+		host.float_ipr(FR + op.n, FR + op.m);
+	} else {
+		host.float_trv(FR + op.n, XF);
 	}
 	ways.push_back(LongWay{slow, i, host.here()});
 	return true;

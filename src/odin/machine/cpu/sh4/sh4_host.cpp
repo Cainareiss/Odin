@@ -259,6 +259,10 @@ void Sh4Host::float_fused()
 	bytes({0xC4, 0xE2, 0x71, 0x99, 0xC2});		/* vfmadd132ss xmm0, xmm1, xmm2 */
 }
 
+bool Sh4Host::vectors() const { return false; }
+void Sh4Host::float_ipr(uint32_t, uint32_t) {}
+void Sh4Host::float_trv(uint32_t, uint32_t) {}
+
 void Sh4Host::load_pair(uint32_t rank)
 {
 	bytes({0x48, 0x8B});				/* mov rax, [the words] */
@@ -378,7 +382,7 @@ void Sh4Host::read_at(const uint8_t *at, uint32_t size)
 	}
 }
 
-#else /* a host this file does not write code for */
+#elif !defined(ODIN_HOST_AARCH64) /* a host no file writes code for */
 
 Sh4Host::Sh4Host(uint32_t *words, const Memory &memory, const Places &places)
 	: HostCode(0), m_words(words), m_memory(memory), m_places(places), m_fused(false), m_enter(nullptr)
@@ -400,6 +404,9 @@ void Sh4Host::float_compare(uint32_t, uint32_t) {}
 void Sh4Host::float_from(uint32_t, uint32_t) {}
 void Sh4Host::float_to(uint32_t) {}
 void Sh4Host::float_fused() {}
+bool Sh4Host::vectors() const { return false; }
+void Sh4Host::float_ipr(uint32_t, uint32_t) {}
+void Sh4Host::float_trv(uint32_t, uint32_t) {}
 void Sh4Host::store_pair(uint32_t) {}
 void Sh4Host::add_remaining(int32_t) {}
 void Sh4Host::loop_if_told() {}

@@ -25,9 +25,7 @@ of Xcode (Clang and make) and Homebrew:
 Vulkan draws there by default, through MoltenVK. OpenGL stops at 4.1 on
 macOS: with api = opengl Odin draws with it all the same, its translucent
 fragments peeled one layer at a time instead of put in lists (the same
-pictures, slower where they pile up). The processors of the board are
-interpreted on Apple silicon: the translation to the code of the host is
-written for x86-64.
+pictures, slower where they pile up).
 
 
 RUNNING

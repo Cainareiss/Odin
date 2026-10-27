@@ -26,26 +26,29 @@
 
 #include <cstring>
 
-#if defined(ODIN_HOST_X86_64)
+#if defined(ODIN_HOST_X86_64) || defined(ODIN_HOST_AARCH64)
 #if defined(_WIN32)
 #include <windows.h>
 #else
 #include <sys/mman.h>
 #endif
+#if defined(__APPLE__) && defined(ODIN_HOST_AARCH64)
+#include <libkern/OSCacheControl.h>
+#include <pthread.h>
+#endif
 #endif
 
 namespace odin {
 
-#if defined(ODIN_HOST_X86_64)
+#if defined(ODIN_HOST_X86_64) || defined(ODIN_HOST_AARCH64)
 
 namespace {
 
-/* The bytes a call needs above it on the stack, with what keeps the stack
- * aligned on 16 */
-#if defined(_WIN32)
-constexpr uint8_t FRAME = 40;
+/* How far a direct call reaches */
+#if defined(ODIN_HOST_X86_64)
+constexpr uintptr_t REACH = 2048u << 20;
 #else
-constexpr uint8_t FRAME = 8;
+constexpr uintptr_t REACH = 128u << 20;
 #endif
 
 uint8_t *take(uintptr_t at, uint32_t size)
@@ -59,9 +62,14 @@ uint8_t *take(uintptr_t at, uint32_t size)
 #else
 	const int fixed = 0;
 #endif
+#if defined(__APPLE__) && defined(ODIN_HOST_AARCH64)
+	const int jit = MAP_JIT;
+#else
+	const int jit = 0;
+#endif
 	void *want = reinterpret_cast<void *>(at);
 	void *got = mmap(want, size, PROT_READ | PROT_WRITE | PROT_EXEC,
-	                 MAP_PRIVATE | MAP_ANONYMOUS | (at ? fixed : 0), -1, 0);
+	                 MAP_PRIVATE | MAP_ANONYMOUS | jit | (at ? fixed : 0), -1, 0);
 
 	if (got == MAP_FAILED) {
 		return nullptr;
@@ -84,11 +92,11 @@ void give_back(uint8_t *code, uint32_t size)
 #endif
 }
 
-/* Memory the host may run, within 2 GB of the code of the program when
- * there is some free, for a call to reach a function directly. */
+/* Memory the host may run, within reach of a direct call from the code of
+ * the program when there is some free. */
 uint8_t *take_near(uint32_t size)
 {
-	const uintptr_t step = 64u << 20;
+	const uintptr_t step = REACH / 32;
 	const uintptr_t here = reinterpret_cast<uintptr_t>(&take) & ~(step - 1);
 
 	for (uintptr_t n = 1; n < 24; n++) {
@@ -107,7 +115,11 @@ uint8_t *take_near(uint32_t size)
 } /* namespace */
 
 HostCode::HostCode(uint32_t size)
-	: m_code(take_near(size)), m_size(size), m_used(0), m_leave(0), m_far_calls(0)
+	:
+#if defined(ODIN_HOST_AARCH64)
+	  m_written(0),
+#endif
+	  m_code(take_near(size)), m_size(size), m_used(0), m_leave(0), m_far_calls(0)
 {
 }
 
@@ -117,6 +129,61 @@ HostCode::~HostCode()
 		give_back(m_code, m_size);
 	}
 }
+
+#if defined(__APPLE__) && defined(ODIN_HOST_AARCH64)
+namespace {
+thread_local bool g_writing = false;
+}
+#endif
+
+void HostCode::writable()
+{
+#if defined(__APPLE__) && defined(ODIN_HOST_AARCH64)
+	if (!g_writing) {
+		pthread_jit_write_protect_np(0);
+		g_writing = true;
+	}
+#endif
+}
+
+void HostCode::ready() const
+{
+#if defined(ODIN_HOST_AARCH64)
+#if defined(__APPLE__)
+	if (g_writing) {
+		pthread_jit_write_protect_np(1);
+		g_writing = false;
+	}
+#endif
+	if (m_written < m_used) {
+#if defined(__APPLE__)
+		sys_icache_invalidate(m_code + m_written, m_used - m_written);
+#elif defined(_WIN32)
+		FlushInstructionCache(GetCurrentProcess(), m_code + m_written, m_used - m_written);
+#else
+		__builtin___clear_cache(reinterpret_cast<char *>(m_code + m_written),
+		                        reinterpret_cast<char *>(m_code + m_used));
+#endif
+		m_written = m_used;
+	}
+#endif
+}
+
+#endif
+
+#if defined(ODIN_HOST_X86_64)
+
+namespace {
+
+/* The bytes a call needs above it on the stack, with what keeps the stack
+ * aligned on 16 */
+#if defined(_WIN32)
+constexpr uint8_t FRAME = 40;
+#else
+constexpr uint8_t FRAME = 8;
+#endif
+
+} /* namespace */
 
 void HostCode::bytes(std::initializer_list<uint8_t> values)
 {
@@ -281,28 +348,16 @@ void HostCode::way_out()
 	bytes({0x5D, 0x41, 0x5C, 0x5B, 0xC3});		/* pop rbp / pop r12 / pop rbx / ret */
 }
 
-#else /* a host this file does not write code for */
+#endif
+
+#if !defined(ODIN_HOST_X86_64) && !defined(ODIN_HOST_AARCH64) /* a host this file does not write code for */
 
 HostCode::HostCode(uint32_t size) : m_code(nullptr), m_size(size), m_used(0), m_leave(0), m_far_calls(0) {}
 HostCode::~HostCode() = default;
-void HostCode::bytes(std::initializer_list<uint8_t>) {}
-void HostCode::word(uint32_t) {}
-void HostCode::quad(uint64_t) {}
-void HostCode::jump_to(uint32_t) {}
-HostCode::Jump HostCode::jump_if(uint8_t) { return Jump{0}; }
 void HostCode::bind(Jump) {}
 void HostCode::jump_back(uint32_t) {}
-void HostCode::call_to(uintptr_t) {}
-void HostCode::move32(uint8_t, uint8_t) {}
-void HostCode::op_rr(uint8_t, uint8_t, uint8_t) {}
-void HostCode::op_ri(uint8_t, uint8_t, uint32_t) {}
-void HostCode::shift_ri(uint8_t, uint8_t, uint8_t) {}
-void HostCode::not_r(uint8_t) {}
-void HostCode::mov_ri(uint8_t, uint32_t) {}
-void HostCode::flag_r(uint8_t, uint8_t) {}
-void HostCode::way_in() {}
-void HostCode::way_in_end() {}
-void HostCode::way_out() {}
+void HostCode::writable() {}
+void HostCode::ready() const {}
 
 #endif
 

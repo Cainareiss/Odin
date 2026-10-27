@@ -45,7 +45,7 @@ struct Sh4Op;
  * Only this class knows the host: sh4_translate.cpp says what a block
  * does, with the functions below. On a host it does not write for, or that
  * refuses the memory, usable() is false and the SH-4 keeps to its reader.
- * Written for x86-64 (HostCode). */
+ * Written for x86-64 and AArch64 (HostCode). */
 class Sh4Host : public HostCode {
 public:
 	using Call = uintptr_t (*)(Sh4 &, const Sh4Op *);
@@ -132,6 +132,12 @@ public:
 	 * that can, see fused(). */
 	bool fused() const { return m_fused; }
 	void float_fused();
+	/* FIPR and FTRV as the reader computes them, only on a host that has
+	 * vectors: the word n + 3 = the inner product of the words from n and
+	 * from m; the words from n = the matrix in the words from x by them */
+	bool vectors() const;
+	void float_ipr(uint32_t n, uint32_t m);
+	void float_trv(uint32_t n, uint32_t x);
 	/* Two words that follow each other, the first one the low half of A */
 	void load_pair(uint32_t rank);
 	void store_pair(uint32_t rank);
@@ -163,13 +169,21 @@ public:
 	void bind(const Slow &slow);
 
 	/* Runs the blocks from that place until one asks for the run loop. */
-	void run(Sh4 &cpu, uint32_t place) const { m_enter(&cpu, m_code + place); }
+	void run(Sh4 &cpu, uint32_t place) const
+	{
+		ready();
+		m_enter(&cpu, m_code + place);
+	}
 
 private:
 	/* Bytes of the longest block: BLOCK_MAX instructions and as many
 	 * delay slots, each a call and a test or an access to the memory
 	 * with its long way, and as many ends as branches. */
+#if defined(ODIN_HOST_AARCH64)
+	static constexpr uint32_t LONGEST = 65536;
+#else
 	static constexpr uint32_t LONGEST = 16384;
+#endif
 
 	void operand(uint8_t reg, uint32_t rank);
 	void page(uint8_t table, uint32_t size, Slow &slow);
@@ -178,6 +192,7 @@ private:
 	Memory m_memory;
 	Places m_places;
 	bool m_fused;
+	bool m_float_compared = false;	/* the flags are those of floats */
 	void (*m_enter)(Sh4 *, const uint8_t *);
 };
 

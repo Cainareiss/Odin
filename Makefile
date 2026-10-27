@@ -123,7 +123,9 @@ OBJ := \
 	src/odin/machine/cpu/sh4/sh4.o \
 	src/odin/machine/cpu/sh4/sh4_fsca.o \
 	src/odin/machine/core/host_code.o \
+	src/odin/machine/core/host_code_arm64.o \
 	src/odin/machine/cpu/sh4/sh4_host.o \
+	src/odin/machine/cpu/sh4/sh4_host_arm64.o \
 	src/odin/machine/cpu/sh4/sh4_translate.o \
 	src/odin/machine/cpu/sh4/sh4_ops.o \
 	src/odin/machine/cpu/sh4/sh4_onchip.o \
@@ -156,6 +158,7 @@ OBJ := \
 	src/odin/machine/cpu/arm7/arm7.o \
 	src/odin/machine/cpu/arm7/arm7_ops.o \
 	src/odin/machine/cpu/arm7/arm7_host.o \
+	src/odin/machine/cpu/arm7/arm7_host_arm64.o \
 	src/odin/machine/cpu/arm7/arm7_translate.o \
 	src/odin/machine/boards/hikaru/hikaru_gpu.o \
 	src/odin/machine/chips/antarctic/antarctic.o \
