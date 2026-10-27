@@ -59,14 +59,62 @@ bool even_parity(uint8_t byte)
 } /* namespace */
 
 CardReader::CardReader(std::string card_file)
-	: m_card_file(std::move(card_file)), m_card{}, m_position(NONE), m_in_hand(false), m_dispensed(false),
-	  m_ejected(false), m_shutter_open(false), m_stocker_full(true), m_retries(4), m_phase(IDLE), m_rx{},
-	  m_rx_count(0), m_command{}, m_command_size(0), m_second{}, m_second_size(0), m_reply{}, m_reply_size(0),
-	  m_reply_sent(false), m_tx{}, m_tx_head(0), m_tx_count(0), m_log(nullptr), m_trace(nullptr),
-	  m_frame_logged(false)
+	: m_in_hand(false), m_card{}, m_position(NONE), m_dispensed(false), m_ejected(false), m_shutter_open(false),
+	  m_stocker_full(true), m_retries(4), m_phase(IDLE), m_rx{}, m_rx_count(0), m_command{}, m_command_size(0),
+	  m_second{}, m_second_size(0), m_reply{}, m_reply_size(0), m_reply_sent(false), m_tx{}, m_tx_head(0),
+	  m_tx_count(0), m_log(nullptr), m_trace(nullptr), m_frame_logged(false)
 {
 	m_cmd_logged.fill(false);
 	reset();
+	choose(card_file);
+}
+
+bool CardReader::choose(const std::string &card_file)
+{
+	std::array<uint8_t, CARD_SIZE> card;
+
+	if (m_position != NONE && !m_dispensed)
+		return false;
+	m_card_file = card_file;
+	m_in_hand = !card_file.empty() && read_card(card_file, card);
+	return true;
+}
+
+/* The card at the entrance; a read that waits takes it in at its next
+ * ENQ (FUN_0000aa32 state 3 ends when S1 is covered) */
+bool CardReader::insert()
+{
+	if (!m_in_hand || m_position != NONE || !m_shutter_open || !read_card(m_card_file, m_card))
+		return false;
+	m_in_hand = false;
+	m_dispensed = false;
+	m_position = S1;
+	return true;
+}
+
+bool CardReader::take(const std::string &new_file)
+{
+	if (m_position != S1)
+		return false;
+
+	const std::string path = m_dispensed || m_card_file.empty() ? new_file : m_card_file;
+
+	if (!path.empty() && save_card(path)) {
+		m_card_file = path;
+		m_in_hand = true;
+	}
+	m_position = NONE;
+	m_dispensed = false;
+	return true;
+}
+
+CardReader::Where CardReader::where() const
+{
+	if (m_position == S1)
+		return Where::AT_SLOT;
+	if (m_position != NONE && !m_dispensed)
+		return Where::INSIDE;
+	return m_in_hand ? Where::IN_HAND : Where::NO_CARD;
 }
 
 /* FUN_000020ee: four tries, the shutter as its sensors are (closed at
@@ -117,7 +165,7 @@ void CardReader::receive(uint8_t byte)
 				run(std::span<const uint8_t>(m_command.data(), m_command_size));
 			else if (byte == ENQ && m_phase == WAITING && m_second_size)
 				answer = second_frame(std::span<const uint8_t>(m_second.data(), m_second_size));
-			else if (m_phase == WAITING && m_in_hand)
+			else if (m_phase == WAITING && m_position != NONE)
 				read(std::span<const uint8_t>(m_command.data() + FRAME_PARAMS, 3));
 			else if (m_phase == WAITING)
 				reply(CMD_READ, '0', '4');
@@ -370,15 +418,10 @@ void CardReader::read(std::span<const uint8_t> params)
 			refuse(CMD_READ);
 			return;
 		}
-		if (!m_in_hand || !hold_card()) {
-			/* Until a card comes: st3 '4' on each ENQ */
-			m_phase = WAITING;
-			reply(CMD_READ, '0', '4');
-			return;
-		}
-		m_in_hand = false;
-		m_dispensed = false;
-		m_position = S1;
+		/* Until the player inserts a card: st3 '4' on each ENQ */
+		m_phase = WAITING;
+		reply(CMD_READ, '0', '4');
+		return;
 	}
 	m_phase = IDLE;
 
@@ -488,21 +531,19 @@ void CardReader::write(std::span<const uint8_t> params)
 		raw[TRACK_DATA + 2] = frame_xor(std::span<const uint8_t>(raw + 1, TRACK_DATA + 1));
 	}
 	m_position = S4S5;
-	save_card();
+	if (!m_dispensed && !m_card_file.empty())
+		save_card(m_card_file);
 	reply(CMD_WRITE, '0', '0');
 }
 
-/* The card pushed out to the slot (FUN_0000abe4) and taken back by the
- * player: kept in the file, a new card beside it when the player already
- * has one */
+/* The card pushed out to the slot (FUN_0000abe4), where it stays until
+ * the player takes it (take). The player's card kept in its file. */
 void CardReader::eject()
 {
 	m_position = S1;
 	m_ejected = true;
-	save_card();
-	m_position = NONE;
-	m_in_hand = !m_card_file.empty();
-	m_dispensed = false;
+	if (!m_dispensed && !m_card_file.empty())
+		save_card(m_card_file);
 }
 
 /* The reply, kept until an ENQ asks for it; a reply that sees no card
@@ -576,29 +617,24 @@ void CardReader::log_once(uint8_t cmd, const char *what)
 	std::fputs(std::format("card: command {:02x}: {}\n", cmd, what).c_str(), m_log);
 }
 
-/* The card of the file into the reader's buffer: the three tracks as on the
- * card, or their 69 bytes each, recorded */
-bool CardReader::hold_card()
+/* A card file: the three tracks as on the card, or their 69 bytes each,
+ * recorded */
+bool CardReader::read_card(const std::string &path, std::array<uint8_t, CARD_SIZE> &card) const
 {
-	if (m_card_file.empty())
-		return false;
+	FILE *const f = std::fopen(path.c_str(), "rb");
 
-	FILE *const f = std::fopen(m_card_file.c_str(), "rb");
-
-	if (!f) {
-		m_in_hand = false;
+	if (!f)
 		return false;
-	}
 
 	std::array<uint8_t, CARD_SIZE + 1> bytes;
 	const size_t n = std::fread(bytes.data(), 1, bytes.size(), f);
 
 	std::fclose(f);
 	if (n == CARD_SIZE) {
-		std::copy_n(bytes.begin(), CARD_SIZE, m_card.begin());
+		std::copy_n(bytes.begin(), CARD_SIZE, card.begin());
 	} else if (n == DATA_SIZE) {
 		for (uint32_t t = 0; t < TRACKS; t++) {
-			uint8_t *const raw = m_card.data() + t * TRACK_SIZE;
+			uint8_t *const raw = card.data() + t * TRACK_SIZE;
 
 			raw[0] = 0xFF;
 			std::copy_n(bytes.begin() + t * TRACK_DATA, TRACK_DATA, raw + 1);
@@ -607,33 +643,16 @@ bool CardReader::hold_card()
 		}
 	} else {
 		if (m_log)
-			std::fputs(std::format("card: file '{}' holds {} bytes, {} or {} expected\n", m_card_file, n,
-			                       CARD_SIZE, DATA_SIZE).c_str(), m_log);
-		m_in_hand = false;
+			std::fputs(std::format("card: file '{}' holds {} bytes, {} or {} expected\n", path, n, CARD_SIZE,
+			                       DATA_SIZE).c_str(), m_log);
 		return false;
 	}
-	m_in_hand = true;
 	return true;
 }
 
-/* The card into its file; a card from the stocker beside the player's
- * own (`<file>.new`), never over it */
-bool CardReader::save_card()
+/* The card in the reader into a file */
+bool CardReader::save_card(const std::string &path)
 {
-	if (m_card_file.empty())
-		return false;
-
-	std::string path = m_card_file;
-
-	if (m_dispensed) {
-		if (FILE *const own = std::fopen(m_card_file.c_str(), "rb")) {
-			std::fclose(own);
-			path += ".new";
-		} else {
-			m_dispensed = false;	/* the player had none: it is theirs */
-		}
-	}
-
 	FILE *const f = std::fopen(path.c_str(), "wb");
 
 	if (!f) {
@@ -645,8 +664,6 @@ bool CardReader::save_card()
 	const size_t n = std::fwrite(m_card.data(), 1, m_card.size(), f);
 
 	std::fclose(f);
-	if (m_log && path != m_card_file)
-		std::fputs(std::format("card: the new card kept in '{}'\n", path).c_str(), m_log);
 	return n == m_card.size();
 }
 

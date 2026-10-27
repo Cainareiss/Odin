@@ -105,13 +105,14 @@ nor vsync = on on a display slower than 60 frames a second),
 Ctrl+Q quits, P pauses, F4 saves <game>.odinstate and F1 loads it, in
 ~/.local/share/odin/states (states in [paths] of odin.ini, page Paths),
 Ctrl+R resets (the cabinet switched off and on), F11 or Alt+Enter takes
-the whole display. The page Hotkeys of the menu changes these keys and the
-buttons below, kept in [hotkeys] of odin.ini:
+the whole display, F6 puts the card of Virtual-On in or takes it out (see
+below). The page Hotkeys of the menu changes these keys and the buttons
+below, kept in [hotkeys] of odin.ini:
 
  [hotkeys]
- pause = Pause, pad:guide+y
+ pause = Pause, pad:guide+x
 
-(menu, pause, save_state, load_state, reset, fullscreen and quit: two keys
+(menu, pause, save_state, load_state, reset, fullscreen, card and quit: two keys
 at most, Ctrl+Q written so, and a button held with Guide,
 pad:guide+<button>, or pad:guide for Guide alone; none for nothing.)
 
@@ -398,6 +399,19 @@ advance: the board of Air Trix steers once it is calibrated in the test
 menu of the game (CALIBRATION), with the controller you play with, and
 the other games have their own pages for it. The settings of Odin are in
 odin.ini in the same odin folder; ODIN_CONFIG=<file> reads another one.
+
+The card of Virtual-On goes in and out as at the cabinet, by the player:
+nothing goes in by itself. The cards are kept with the saves of the game,
+in its folder cards (<name>.card); the menu FILE, Card in hand
+(Virtual-On), chooses the one in hand ([players.von4] card = <name>).
+When the game asks for a card (choosing the robot), F6 or Insert card
+(Virtual-On) puts it into the slot; at the end of the game the reader
+writes it and ejects it, and the game waits until the player takes it
+back, F6 or Take card back (Virtual-On). A new card comes from the
+cabinet set as a terminal (the test menu of the game, GAME ASSIGNMENTS,
+GAME START MODE = VENDOR, with FREE PLAY): taken back, it is kept as
+card-<n>. Virtual-On reads cards in the country Japan only (the SYSTEM
+MENU of the BIOS); elsewhere it never asks for one.
 
 A portable Odin keeps its files in its own folder: put an empty file
 portable.txt beside the program (odin.exe, or the AppImage), or its

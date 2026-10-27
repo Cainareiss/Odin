@@ -156,9 +156,11 @@ public:
 
 	/* Puts a CRP-1231BR-10 card reader on the serial block of the MIE.
 	 * card_file (may be nullptr) holds the three tracks of the player's
-	 * card, given to the reader when it waits for one; trace (may be
-	 * nullptr) gets a line per frame. True when the player has a card. */
+	 * card, in their hand; trace (may be nullptr) gets a line per frame.
+	 * True when the player has a card. */
 	bool attach_card(const char *card_file, FILE *trace);
+	/* The card reader; none on a cabinet without one */
+	CardReader *card_reader() { return m_card.get(); }
 
 	void save(State &out);
 	/* False when the state has a card reader and the board has none, or

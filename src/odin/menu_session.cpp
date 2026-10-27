@@ -235,6 +235,100 @@ MenuSession::MenuSession(const Options &options, Display &display, Keyboard &key
 	/* The BIOS alone, or no game: the page Input shows the first one */
 	if (state.running == state.games.size())
 		show_game(0);
+	/* The card in hand: the one of the settings (ODIN_CARD_FILE first) */
+	if (game && board && board->card_reader()) {
+		list_cards();
+		for (const auto &[key, value] : settings.section("players." + game->name))
+			if (key == "card" && !std::getenv("ODIN_CARD_FILE") &&
+			    std::find(m_cards.begin(), m_cards.end(), value) != m_cards.end())
+				board->card_reader()->choose(card_file(value));
+	}
+}
+
+void
+MenuSession::list_cards()
+{
+	const std::string folder = m_board ? m_board->cards_folder() : std::string();
+	std::error_code error;
+
+	m_cards.clear();
+	if (folder.empty())
+		return;
+	for (auto it = std::filesystem::directory_iterator(folder, error); !error && it != std::filesystem::directory_iterator();
+	     it.increment(error))
+		if (it->path().extension() == ".card" && it->is_regular_file(error))
+			m_cards.push_back(it->path().stem().string());
+	std::sort(m_cards.begin(), m_cards.end());
+}
+
+std::string
+MenuSession::card_file(const std::string &name) const
+{
+	const std::string folder = m_board ? m_board->cards_folder() : std::string();
+
+	return folder.empty() ? folder : folder + "/" + name + ".card";
+}
+
+/* In hand, the card goes into the slot; at the slot, it comes back to the
+ * hand, a new card from the stocker kept as card-<n> */
+std::string
+MenuSession::card_in_out()
+{
+	CardReader *const reader = m_board ? m_board->card_reader() : nullptr;
+
+	if (!reader)
+		return "No card reader on this cabinet";
+
+	const std::string name = std::filesystem::path(reader->card_file()).stem().string();
+
+	switch (reader->where()) {
+	case CardReader::Where::AT_SLOT: {
+		const std::string folder = m_board->cards_folder();
+		std::string fresh;
+		std::error_code error;
+
+		if (!folder.empty()) {
+			std::filesystem::create_directories(folder, error);
+			for (unsigned n = 1; fresh.empty() || std::filesystem::exists(fresh, error); n++)
+				fresh = card_file("card-" + std::to_string(n));
+		}
+		reader->take(fresh);
+		if (reader->where() != CardReader::Where::IN_HAND)
+			return "Card taken back, not kept: no folder for the saves";
+
+		const std::string taken = std::filesystem::path(reader->card_file()).stem().string();
+
+		list_cards();
+		keep("players." + m_game->name, "card", taken);
+		return "Card taken back: " + taken;
+	}
+	case CardReader::Where::IN_HAND:
+		if (!reader->shutter_open())
+			return "The slot of the card reader is closed";
+		if (!reader->insert())
+			return "The card " + name + " cannot be read";
+		return "Card inserted: " + name;
+	case CardReader::Where::INSIDE:
+		return "The card is inside the reader";
+	case CardReader::Where::NO_CARD:
+	default:
+		return "No card in hand: FILE, Card in hand";
+	}
+}
+
+std::string
+MenuSession::choose_card(int index)
+{
+	CardReader *const reader = m_board ? m_board->card_reader() : nullptr;
+	const bool none = index < 0 || index >= static_cast<int>(m_cards.size());
+	const std::string name = none ? std::string() : m_cards[static_cast<size_t>(index)];
+
+	if (!reader)
+		return "No card reader on this cabinet";
+	if (!reader->choose(none ? std::string() : card_file(name)))
+		return "The card is in the reader: take it back first";
+	keep("players." + m_game->name, "card", none ? std::nullopt : std::optional<std::string>(name));
+	return none ? "No card in hand" : "Card in hand: " + name;
 }
 
 MenuSession::Asked
@@ -479,6 +573,17 @@ MenuSession::fill_bar(BarState &bar) const
 		const HotKey &key = m_hotkeys.of(static_cast<Hotkeys::Action>(a)).keys[0];
 
 		bar.keys[a] = key.key == SDLK_UNKNOWN ? std::string() : Hotkeys::text(key);
+	}
+	if (const CardReader *const reader = m_board ? m_board->card_reader() : nullptr) {
+		const std::string name = std::filesystem::path(reader->card_file()).stem().string();
+		const auto chosen = std::find(m_cards.begin(), m_cards.end(), name);
+
+		bar.card_reader = true;
+		bar.card_where = static_cast<int>(reader->where());
+		bar.card_slot_open = reader->shutter_open();
+		bar.cards = m_cards;
+		bar.card = reader->card_file().empty() || chosen == m_cards.end() ? -1 :
+		           static_cast<int>(chosen - m_cards.begin());
 	}
 }
 

@@ -110,11 +110,18 @@ struct BarState {
 	/* The first key of each action of Odin (Hotkeys::Action), as odin.ini
 	 * says it */
 	std::array<std::string, Hotkeys::ACTIONS> keys;
+	/* The card reader of the game (Virtual-On): it has one, where the
+	 * player's card is (CardReader::Where), its slot open; the player's
+	 * cards and the one in hand (-1: none) */
+	bool card_reader = false, card_slot_open = false;
+	int card_where = 0, card = -1;
+	std::vector<std::string> cards;
 	/* What was asked; the page of the settings asked (Menu::Page, -1: the
-	 * one shown last) */
-	enum class Ask { NONE, OPEN, CLOSE, RESET, SAVE_STATE, LOAD_STATE, ROMS, BIOS, SETTINGS, FULLSCREEN, PAUSE, QUIT };
+	 * one shown last); the card chosen (CARD_CHOOSE, -1: none) */
+	enum class Ask { NONE, OPEN, CLOSE, RESET, SAVE_STATE, LOAD_STATE, CARD, CARD_CHOOSE, ROMS, BIOS, SETTINGS, FULLSCREEN,
+	                 PAUSE, QUIT };
 	Ask ask = Ask::NONE;
-	int page = -1;
+	int page = -1, card_chosen = -1;
 	/* The mouse is on the bar or a menu of it is open: its buttons are the
 	 * bar's, not the game's; the bottom of the bar, in points */
 	bool wants_mouse = false, open = false;

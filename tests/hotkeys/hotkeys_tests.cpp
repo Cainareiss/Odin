@@ -75,6 +75,8 @@ void test_standard()
 	check(is(keys.pad_action(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER), Action::SAVE_STATE), "Guide+RB: save");
 	check(is(keys.pad_action(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER), Action::LOAD_STATE), "Guide+LB: load");
 	check(is(keys.pad_action(SDL_GAMEPAD_BUTTON_START), Action::QUIT), "Guide+Start: quit");
+	check(is(keys.key_action(SDLK_F6, SDL_KMOD_NONE), Action::CARD), "F6: the card in or out");
+	check(is(keys.pad_action(SDL_GAMEPAD_BUTTON_NORTH), Action::CARD), "Guide+Y: the card");
 	check(!keys.pad_action(SDL_GAMEPAD_BUTTON_LEFT_STICK), "Guide+L3 (SERVICE, a control): no action");
 	check(!keys.pad_action(Hotkeys::NO_PAD), "no button: no action");
 	check(keys.takes(SDLK_P) && keys.takes(SDLK_F10) && keys.takes(SDLK_ESCAPE), "P, F10, Escape are Odin's");
@@ -95,6 +97,7 @@ void test_text()
 	check(Hotkeys::line(Hotkeys::standard(Action::MENU)) == "Escape, F10, pad:guide", "the line of the menu");
 	check(Hotkeys::line(Hotkeys::standard(Action::QUIT)) == "Ctrl+Q, pad:guide+start", "the line of quit");
 	check(Hotkeys::line(Hotkeys::standard(Action::RESET)) == "Ctrl+R", "the line of reset");
+	check(Hotkeys::line(Hotkeys::standard(Action::CARD)) == "F6, pad:guide+y", "the line of the card");
 	check(Hotkeys::line(Hotkeys::standard(Action::FULLSCREEN)) == "F11, Alt+Return", "no button: none said");
 	for (size_t a = 0; a < Hotkeys::ACTIONS; a++) {
 		const Hotkeys::Binding &standard = Hotkeys::standard(static_cast<Action>(a));

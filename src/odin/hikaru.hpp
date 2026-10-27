@@ -93,6 +93,11 @@ public:
 	const std::vector<int16_t> &sound(bool optional) const { return m_sound[optional ? SLAVE : MASTER]->samples(); }
 	/* The outputs of the I/O board of the cabinet (MieBoard::io_outputs) */
 	std::span<const uint8_t> io_outputs() const { return m_mie->io_outputs(); }
+	/* The card reader of the cabinet (MieBoard::card_reader); none: null.
+	 * The folder of the player's cards: cards in the folder of the saves
+	 * of the game; empty when nothing is kept. */
+	CardReader *card_reader() { return m_mie->card_reader(); }
+	std::string cards_folder() const { return m_saves.none() ? std::string() : m_saves.path("cards"); }
 	/* The network board and its cable: whether it has one, linked to
 	 * other Odins, the port it could not open, each end plugged in */
 	struct LinkStatus {

@@ -281,8 +281,17 @@ void test_reader(const char *scratch)
 	      "open the shutter");
 	check(response_ok(exchange(r, frame(0xD0, { '1' }), acked), 0xD0, st1(P::S4S5, true), '0', '2', 0),
 	      "open an open shutter: refused");
-	check(response_ok(exchange(r, frame(0x80, {}), acked), 0x80, st1(P::NONE, true), '0', '0', 0) && r.position() == P::NONE &&
-	      !r.card_in_hand(), "eject: the card taken (no file: not kept)");
+	check(response_ok(exchange(r, frame(0x80, {}), acked), 0x80, st1(P::S1, true), '0', '0', 0) && r.position() == P::S1 &&
+	      r.where() == odin::CardReader::Where::AT_SLOT, "eject: the card at the slot until the player takes it");
+	check(response_ok(exchange(r, frame(0x20, {}), acked), 0x20, st1(P::S1, true), '0', '0', 0),
+	      "the game sees it there (S1) until then");
+	check(response_ok(exchange(r, frame(0x33, { '0', '1', '6' }), acked), 0x33, st1(P::S1, true), '0', '2', 0),
+	      "a read of the card ejected, still at the slot: refused ('F')");
+	check(r.take("") && r.position() == P::NONE && r.where() == odin::CardReader::Where::NO_CARD,
+	      "taken from the slot (no file: not kept)");
+	check(!r.take(""), "nothing at the slot to take");
+	check(response_ok(exchange(r, frame(0x20, {}), acked), 0x20, st1(P::NONE, true), '0', '0', 0),
+	      "the game sees the slot empty: the eject is over");
 
 	/* A read that waits for a card: '4' on each ENQ; 20 gets it again,
 	 * 40 cancels it */
@@ -324,57 +333,78 @@ void test_reader(const char *scratch)
 		return;
 	}
 
-	/* The player's card: given when a read waits, taken back on eject,
-	 * kept in its file */
+	/* The player's card: in hand, inserted by the player (the reader
+	 * waits as long as it takes), at the slot after an eject until the
+	 * player takes it back, kept in its file */
+	using Where = odin::CardReader::Where;
 	const std::string file = std::string(scratch) + ".card";
+	const std::string fresh_file = std::string(scratch) + "-new.card";
 	const Bytes old = tracks('a');
 	check(write_file(file, old), "(a card of 207 bytes, data only)");
 	odin::CardReader p(file);
-	check(p.hold_card() && p.card_in_hand(), "the player holds the card of the file");
+	check(p.where() == Where::IN_HAND && p.card_in_hand(), "the player holds the card of the file");
+	check(!p.insert() && p.where() == Where::IN_HAND, "the shutter closed: the card does not go in");
 	exchange(p, frame(0xD0, { '1' }), acked);
 	resp = exchange(p, frame(0x33, { '0', '1', '6' }), acked);
-	check(response_ok(resp, 0x33, st1(P::S4S5, true), '0', '0', 3 * 0x45) && data_of(resp) == old && !p.card_in_hand(),
-	      "a read takes the card from the player: its 207 bytes read as recorded");
+	check(response_ok(resp, 0x33, st1(P::NONE, true), '0', '4', 0) && p.card_in_hand(),
+	      "a read waits ('4'): nothing goes in by itself");
+	check(response_ok(enq(p), 0x33, st1(P::NONE, true), '0', '4', 0), "still waiting");
+	check(p.insert() && p.where() == Where::AT_SLOT && !p.card_in_hand(), "the player inserts it: at the entrance");
+	resp = enq(p);
+	check(response_ok(resp, 0x33, st1(P::S4S5, true), '0', '0', 3 * 0x45) && data_of(resp) == old &&
+	      p.where() == Where::INSIDE, "the read waiting takes it in: its 207 bytes read as recorded");
+	check(!p.choose(""), "the card in the reader: no other in hand");
 	resp = exchange(p, frame(0x53, with({ '0', '1', '6' }, three)), acked);
 	check(response_ok(resp, 0x53, st1(P::S4S5, true), '0', '0', 0) && read_file(file).size() == 216,
 	      "write: the file kept as on the card, 216 bytes");
 	resp = exchange(p, frame(0x80, {}), acked);
-	check(response_ok(resp, 0x80, st1(P::NONE, true), '0', '0', 0) && p.card_in_hand(), "eject: back in the player's hand");
+	check(response_ok(resp, 0x80, st1(P::S1, true), '0', '0', 0) && p.where() == Where::AT_SLOT, "eject: at the slot");
+	check(p.take(fresh_file) && p.where() == Where::IN_HAND && p.card_file() == file &&
+	      read_file(fresh_file).empty(), "taken back: in hand, in its own file");
+	check(response_ok(exchange(p, frame(0x20, {}), acked), 0x20, st1(P::NONE, true), '0', '0', 0),
+	      "the game sees no card any more");
+	check(p.insert(), "inserted again, the shutter open, no read waiting");
 	resp = exchange(p, frame(0x33, { '0', '1', '6' }), acked);
 	check(response_ok(resp, 0x33, st1(P::S4S5, true), '0', '0', 3 * 0x45) && data_of(resp) == three,
-	      "read again: what was written");
+	      "a card at the entrance: the read takes it in at once, what was written");
 	exchange(p, frame(0x80, {}), acked);
+	p.take(fresh_file);
 
-	/* A new card when the player has one: kept beside it */
+	/* A new card when the player has one: its own file, then the
+	 * player's; the own card untouched */
 	exchange(p, frame(0xB0, { '1' }), acked);
+	check(p.where() == Where::IN_HAND, "a new card in the reader: the player's own still in hand");
 	exchange(p, frame(0x53, with({ '0', '1', '6' }, tracks('0'))), acked);
 	exchange(p, frame(0x80, {}), acked);
-	const Bytes own = read_file(file), fresh = read_file(file + ".new");
-	check(own.size() == 216 && own[1] == 'A' && fresh.size() == 216 && fresh[1] == '0' && p.card_in_hand(),
-	      "a new card beside the player's own (.new), the own card untouched");
-	std::remove((file + ".new").c_str());
+	check(p.take(fresh_file) && p.card_file() == fresh_file, "the new card taken back: kept in its own file");
+	const Bytes own = read_file(file), fresh = read_file(fresh_file);
+	check(own.size() == 216 && own[1] == 'A' && fresh.size() == 216 && fresh[1] == '0', "the own card untouched");
+	check(p.choose(file) && p.card_file() == file && p.where() == Where::IN_HAND, "the other card chosen in hand");
+	std::remove(fresh_file.c_str());
 
 	/* No card yet: the new card becomes the player's */
 	std::remove(file.c_str());
 	odin::CardReader q(file);
-	check(!q.hold_card(), "(no card file)");
+	check(q.where() == Where::NO_CARD && !q.insert(), "(no card file: no card in hand)");
 	exchange(q, frame(0xB0, { '1' }), acked);
 	exchange(q, frame(0x53, with({ '0', '1', '6' }, tracks('k'))), acked);
 	exchange(q, frame(0xD0, { '1' }), acked);
 	exchange(q, frame(0x80, {}), acked);
-	check(read_file(file).size() == 216 && read_file(file)[1] == 'k' && read_file(file + ".new").empty() &&
-	      q.card_in_hand(), "a new card for a player without one: theirs, in the file");
+	check(q.take(file) && read_file(file).size() == 216 && read_file(file)[1] == 'k' && q.card_in_hand(),
+	      "a new card for a player without one: theirs, in the file");
 	std::remove(file.c_str());
 
 	/* A new card ejected before anything is written on it: kept as it
 	 * is, by an init '1' (the shutter open) */
-	odin::CardReader n(file);
+	odin::CardReader n("");
 	exchange(n, frame(0xD0, { '1' }), acked);
 	exchange(n, frame(0xB0, { '1' }), acked);
 	resp = exchange(n, frame(0x10, { '1' }), acked);
+	check(response_ok(resp, 0x10, st1(P::S1, true), '0', '0', 0) && n.where() == Where::AT_SLOT,
+	      "init '1' ejects: at the slot");
+	check(n.take(file) && n.card_in_hand(), "taken back");
 	const Bytes kept = read_file(file);
-	check(response_ok(resp, 0x10, st1(P::NONE, true), '0', '0', 0) && n.position() == P::NONE && n.card_in_hand() &&
-	      kept.size() == 216 && kept[0] == 0xFF && kept[0x48] == 0, "init '1' ejects; the new card kept as it is");
+	check(kept.size() == 216 && kept[0] == 0xFF && kept[0x48] == 0, "the new card kept as it is");
 
 	/* A track whose LRC is wrong does not read */
 	Bytes broken = kept;
@@ -385,8 +415,8 @@ void test_reader(const char *scratch)
 	broken[0x48 + 0x47] = 0x01;
 	check(write_file(file, broken), "(a card whose track 2 has a wrong LRC)");
 	odin::CardReader l(file);
-	l.hold_card();
 	exchange(l, frame(0xD0, { '1' }), acked);
+	l.insert();
 	resp = exchange(l, frame(0x33, { '0', '1', '6' }), acked);
 	check(response_ok(resp, 0x33, st1(P::S1S2, true), 'V', '0', 3 * 0x45), "a wrong LRC on track 2: not read ('V')");
 	std::remove(file.c_str());

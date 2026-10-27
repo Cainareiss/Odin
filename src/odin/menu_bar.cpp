@@ -35,6 +35,7 @@
 #pragma GCC diagnostic ignored "-Wconversion"
 #include "imgui/imgui_internal.h"
 #pragma GCC diagnostic pop
+#include "odin/card_reader.hpp"
 #include "odin/menu_kit.hpp"
 #include "odin/version.hpp"
 
@@ -180,6 +181,31 @@ Menu::bar(BarState &state)
 				         state.game && state.saved))
 					ask(Ask::LOAD_STATE);
 				ImGui::Separator();
+				/* The player's card: in or out as at the cabinet; the
+				 * one in hand while it is not in the reader */
+				if (state.game && state.card_reader) {
+					using Where = CardReader::Where;
+					const auto where = static_cast<Where>(state.card_where);
+					const bool at_slot = where == Where::AT_SLOT;
+
+					if (item(at_slot ? "Take card back (Virtual-On)" : "Insert card (Virtual-On)", key(Action::CARD),
+					         false, at_slot || (where == Where::IN_HAND && state.card_slot_open)))
+						ask(Ask::CARD);
+					if (ImGui::BeginMenu("Card in hand (Virtual-On)", where != Where::INSIDE && !at_slot)) {
+						framed();
+						if (item("None", {}, state.card < 0)) {
+							state.card_chosen = -1;
+							ask(Ask::CARD_CHOOSE);
+						}
+						for (size_t c = 0; c < state.cards.size(); c++)
+							if (item(state.cards[c].c_str(), {}, state.card == static_cast<int>(c))) {
+								state.card_chosen = static_cast<int>(c);
+								ask(Ask::CARD_CHOOSE);
+							}
+						ImGui::EndMenu();
+					}
+					ImGui::Separator();
+				}
 				if (item("ROM folder...", {}, false, !state.roms_given))
 					ask(Ask::ROMS);
 				if (item("BIOS folder...", {}, false, !state.bios_given))

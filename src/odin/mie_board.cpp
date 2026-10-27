@@ -312,7 +312,7 @@ MieBoard::attach_card(const char *card_file, FILE *trace)
 	m_card->set_log(m_log);
 	m_card->set_trace(trace);
 	m_mie.set_serial_device(m_card.get());
-	return m_card->hold_card();
+	return m_card->where() == CardReader::Where::IN_HAND;
 }
 
 void

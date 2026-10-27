@@ -457,6 +457,8 @@ known_settings(const GameList &games)
 				out.push_back({ "players." + name, control.player ? "gun2" : "gun1", "" });
 		if (game->shakes())
 			out.push_back({ "players." + name, "vibration", "on" });
+		if (!game->card_reader.empty())
+			out.push_back({ "players." + name, "card", "" });
 	}
 	return out;
 }

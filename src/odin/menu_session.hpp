@@ -121,6 +121,11 @@ public:
 	 * asked, what the menu does: the rest is the caller's */
 	void fill_bar(BarState &bar) const;
 	BarState::Ask do_bar(BarState &bar);
+	/* The player's card, on a cabinet with a card reader (Virtual-On):
+	 * into the slot, or back out of it once the reader ejected it; the
+	 * card of the list in hand (-1: none). What the bar says of it. */
+	std::string card_in_out();
+	std::string choose_card(int index);
 	/* For the tests: ODIN_MENU_TEST, the menu opens after that frame */
 	bool tested_at(unsigned frame) const { return m_menu_test && frame % m_menu_test == 0; }
 	/* Close game was pressed again in the menu, taken */
@@ -188,6 +193,9 @@ private:
 	void change_inputs(bool to_defaults);
 	void undo();
 	void keep_binding(const Bindings::Line &line, const std::string &game = "");
+	/* The cards in the folder of the game, by name; the file of one */
+	void list_cards();
+	std::string card_file(const std::string &name) const;
 
 	const Options &m_options;
 	Display &m_display;
@@ -234,6 +242,7 @@ private:
 	/* The folder of the save states, and the picker of the system that
 	 * changes the folders */
 	std::string m_states;
+	std::vector<std::string> m_cards;
 	FolderDialog m_dialog;
 	bool m_menu_opened = false, m_closing = false, m_leaving = false;
 	/* A size of the window from the hands of the user, not kept yet */

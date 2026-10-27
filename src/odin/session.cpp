@@ -169,6 +169,9 @@ Session::act(Hotkeys::Action action)
 	case Action::FULLSCREEN:
 		m_display.toggle_fullscreen();
 		break;
+	case Action::CARD:
+		say(m_menus.card_in_out());
+		break;
 	case Action::QUIT:
 		return true;
 	}
@@ -289,6 +292,12 @@ Session::do_bar()
 	case Ask::LOAD_STATE:
 		load_or_save_state(true);
 		m_touched = true;
+		break;
+	case Ask::CARD:
+		act(Hotkeys::Action::CARD);
+		break;
+	case Ask::CARD_CHOOSE:
+		say(m_menus.choose_card(m_bar.card_chosen));
 		break;
 	case Ask::SETTINGS:
 		open_menu(m_bar.page);

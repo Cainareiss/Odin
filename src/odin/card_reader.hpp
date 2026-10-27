@@ -53,9 +53,9 @@ namespace odin {
  * A reply already sent goes again on the next ENQ or NAK, st2 and st3 back
  * to '0' (st3 '3' kept), st1 as the sensors are then.
  *
- * Its player: the card of the file is in the player's hand, given to the
- * reader when a read waits for a card, taken back as soon as it is
- * ejected (as YACardEmu does). */
+ * Its player inserts the card and takes it back (choose, insert, take): a
+ * read waits for it as long as it takes, and the game goes on after an
+ * eject only once the reader sees no card (MARKDOWN/96a, 0C180E20). */
 struct CardReaderState;
 
 class CardReader : public MieSerialDevice {
@@ -104,9 +104,24 @@ public:
 		NONE, S1, S1S2, S1S2S3, S2S3, S2S3S4, S3S4, S3S4S5, S4S5, S5
 	};
 
-	/* `card_file` holds the player's card; empty: no file, a card the
-	 * reader gives is not kept */
+	/* Where the player's card is (the menu says it) */
+	enum class Where : uint8_t { NO_CARD, IN_HAND, AT_SLOT, INSIDE };
+
+	/* `card_file` holds the player's card, in their hand; empty: none */
 	explicit CardReader(std::string card_file = std::string());
+
+	/* The player, as at the cabinet: nothing goes in or out by itself.
+	 * choose: the card of that file in hand (empty: none), while their
+	 * card is not in the reader. insert: the card in hand pushed into the
+	 * slot, the shutter open: it waits at the entrance (S1) until a read
+	 * takes it in. take: the card at the slot (after an eject) pulled out,
+	 * kept in its file; a new card from the stocker in `new_file`, which
+	 * is then the player's. False, nothing done, when it cannot be. */
+	bool choose(const std::string &card_file);
+	bool insert();
+	bool take(const std::string &new_file);
+	Where where() const;
+	const std::string &card_file() const { return m_card_file; }
 
 	/* Power-up: the shutter closed, the stocker full, the boot reply ready.
 	 * A card inside stays there. */
@@ -120,9 +135,6 @@ public:
 	void save(CardReaderState &out) const;
 	void load(const CardReaderState &in);
 
-	/* The card of the file in the player's hand; false when the file
-	 * cannot be read */
-	bool hold_card();
 	/* For the tests: where the card is, the shutter, a full stocker; the
 	 * three tracks as on the card */
 	bool card_in_hand() const { return m_in_hand; }
@@ -158,13 +170,16 @@ private:
 	void send(uint8_t byte);
 	void trace_frame(const char *dir, std::span<const uint8_t> bytes) const;
 	void log_once(uint8_t cmd, const char *what);
-	bool save_card();
+	bool read_card(const std::string &path, std::array<uint8_t, CARD_SIZE> &card) const;
+	bool save_card(const std::string &path);
 
+	/* The player's card: its file, in their hand or not */
 	std::string m_card_file;
+	bool m_in_hand;
+	/* The card in the reader */
 	std::array<uint8_t, CARD_SIZE> m_card;
 	Position m_position;
-	bool m_in_hand;
-	bool m_dispensed;	/* the card in it came from the stocker */
+	bool m_dispensed;	/* it came from the stocker */
 	bool m_ejected;		/* the program's 'F': refused until a reply sees no card */
 	bool m_shutter_open;
 	bool m_stocker_full;
