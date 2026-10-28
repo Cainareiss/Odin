@@ -310,6 +310,8 @@ Display::attach(Hikaru &board, const std::string &title)
 	m_speed_since = m_speed_last = m_speed_longest = 0;
 	m_title_since = 0;
 	m_fps = 0.0f;
+	m_title = std::string("Odin - ") + title + " [" + m_graphics->api() + "]";
+	SDL_SetWindowTitle(m_window, m_title.c_str());
 	prepare_programs(title);
 	set_vsync(m_vsync);
 	board.set_screen(this);
@@ -325,6 +327,7 @@ Display::detach()
 	m_board = nullptr;
 	m_picture.id = 0;
 	m_program_list.clear();
+	m_title = "Odin";
 	SDL_SetWindowTitle(m_window, "Odin");
 	show_black();
 }
@@ -828,9 +831,9 @@ Display::show_speed()
 
 		m_fps = static_cast<float>(fps);
 		if (!m_message.empty())
-			std::snprintf(title, sizeof(title), "Odin (%4.1f FPS) [%s]", fps, m_message.c_str());
+			std::snprintf(title, sizeof(title), "%s (%4.1f FPS) [%s]", m_title.c_str(), fps, m_message.c_str());
 		else
-			std::snprintf(title, sizeof(title), "Odin (%4.1f FPS)", fps);
+			std::snprintf(title, sizeof(title), "%s (%4.1f FPS)", m_title.c_str(), fps);
 		SDL_SetWindowTitle(m_window, title);
 	}
 	m_title_since = now;
@@ -871,7 +874,7 @@ Display::set_show_speed(bool on)
 	m_show_speed = on;
 	m_title_since = 0;
 	if (!on)
-		SDL_SetWindowTitle(m_window, "Odin");
+		SDL_SetWindowTitle(m_window, m_title.c_str());
 }
 
 void

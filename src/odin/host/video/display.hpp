@@ -256,6 +256,7 @@ private:
 	/* Whether Odin asked last for the whole display */
 	bool m_fullscreen_asked = false;
 	std::string m_program_list;
+	std::string m_title = "Odin";	/* without the speed */
 	/* What it draws with, and the renderer of the board */
 	std::unique_ptr<HostGraphics> m_graphics;
 	std::unique_ptr<Renderer> m_renderer;
