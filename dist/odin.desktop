@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Odin
+GenericName=Sega Hikaru emulator
+Comment=Play the games of the Sega Hikaru arcade board
+Exec=odin
+Icon=odin
+Terminal=false
+Categories=Game;Emulator;

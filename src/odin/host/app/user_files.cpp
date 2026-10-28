@@ -35,6 +35,8 @@
 
 #if defined(_WIN32)
 #include <windows.h>
+#elif defined(__APPLE__)
+#include <mach-o/dyld.h>
 #endif
 
 namespace odin {
@@ -54,7 +56,16 @@ executable_folder()
 		return {};
 	return std::filesystem::path(path).parent_path().string();
 #elif defined(__APPLE__)
-	return {};
+	uint32_t size = 0;
+
+	_NSGetExecutablePath(nullptr, &size);
+	std::string path(size, '\0');
+	if (size == 0 || _NSGetExecutablePath(path.data(), &size) != 0)
+		return {};
+	path.resize(std::strlen(path.c_str()));
+	const std::filesystem::path exe = std::filesystem::canonical(path, error);
+
+	return error ? std::string() : exe.parent_path().string();
 #else
 	const std::filesystem::path exe = std::filesystem::read_symlink("/proc/self/exe", error);
 
