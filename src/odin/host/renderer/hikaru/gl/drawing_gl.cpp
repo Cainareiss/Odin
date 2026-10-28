@@ -40,6 +40,36 @@ namespace {
 struct GlTexels {
 	GLenum internal, layout, type;
 };
+#ifdef ODIN_GLES
+/* OpenGL ES has no 1555 or 4444 swizzles: reorder the bits */
+constexpr GlTexels GL_TEXELS[] = {
+	{ GL_RGB5_A1, GL_RGBA, GL_UNSIGNED_SHORT_5_5_5_1 },
+	{ GL_RGBA4, GL_RGBA, GL_UNSIGNED_SHORT_4_4_4_4 },
+	{ GL_RG8, GL_RG, GL_UNSIGNED_BYTE },
+};
+constexpr GLint SWIZZLES[][4] = {
+	{ GL_BLUE, GL_GREEN, GL_RED, GL_ALPHA },
+	{ GL_ALPHA, GL_BLUE, GL_GREEN, GL_RED },
+	{ GL_RED, GL_RED, GL_RED, GL_GREEN },
+};
+
+/* A level of ABGR1555 as GL_UNSIGNED_SHORT_5_5_5_1 takes it, whole */
+std::vector<uint16_t>
+turned_1555(const TexelRect &l)
+{
+	std::vector<uint16_t> out(size_t{l.w} * l.h);
+	const uint8_t *const in = static_cast<const uint8_t *>(l.texels);
+
+	for (uint32_t y = 0; y < l.h; y++)
+		for (uint32_t x = 0; x < l.w; x++) {
+			const size_t at = (size_t{l.y + y} * l.row + l.x + x) * 2;
+			const uint16_t v = static_cast<uint16_t>(in[at] | in[at + 1] << 8);
+
+			out[size_t{y} * l.w + x] = static_cast<uint16_t>(v << 1 | v >> 15);
+		}
+	return out;
+}
+#else
 constexpr GlTexels GL_TEXELS[] = {
 	{ GL_RGB5_A1, GL_RGBA, GL_UNSIGNED_SHORT_1_5_5_5_REV },
 	{ GL_RGBA4, GL_RGBA, GL_UNSIGNED_SHORT_4_4_4_4_REV },
@@ -47,6 +77,7 @@ constexpr GlTexels GL_TEXELS[] = {
 };
 /* LA8: the light in the three colours */
 constexpr GLint LA8_SWIZZLE[4] = { GL_RED, GL_RED, GL_RED, GL_GREEN };
+#endif
 
 } /* namespace */
 
@@ -70,8 +101,13 @@ GlBoardDrawing::make_texture(Texels texels, std::span<const TexelRect> levels)
 	glBindTexture(GL_TEXTURE_2D, id);
 	m_unit0_texture = ~0u;
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, num_levels - 1);
+#ifdef ODIN_GLES
+	for (unsigned i = 0; i < 4; i++)
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_R + i, SWIZZLES[static_cast<size_t>(texels)][i]);
+#else
 	if (texels == Texels::LA8)
 		glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, LA8_SWIZZLE);
+#endif
 
 	/* The levels are allocated at once: given one by one, a 64x64 texture
 	 * takes the NVIDIA driver 595 some 1.7 ms instead of 0.03. */
@@ -81,6 +117,15 @@ GlBoardDrawing::make_texture(Texels texels, std::span<const TexelRect> levels)
 	for (GLsizei level = 0; level < num_levels; level++) {
 		const TexelRect &l = levels[static_cast<size_t>(level)];
 
+#ifdef ODIN_GLES
+		if (texels == Texels::ABGR1555) {
+			const std::vector<uint16_t> turned = turned_1555(l);
+
+			glTexSubImage2D(GL_TEXTURE_2D, level, 0, 0, static_cast<GLsizei>(l.w), static_cast<GLsizei>(l.h),
+			                gl.layout, gl.type, turned.data());
+			continue;
+		}
+#endif
 		glPixelStorei(GL_UNPACK_ROW_LENGTH, static_cast<GLint>(l.row));
 		glPixelStorei(GL_UNPACK_SKIP_ROWS, static_cast<GLint>(l.y));
 		glPixelStorei(GL_UNPACK_SKIP_PIXELS, static_cast<GLint>(l.x));
@@ -132,12 +177,47 @@ GlBoardDrawing::make_sampler(const TextureSampling &sampling, unsigned anisotrop
 		glSamplerParameteri(id, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
 		break;
 	}
+#ifdef ODIN_GLES
+	m_sampler_bias[id] = sampling.lod_bias;
+#else
 	glSamplerParameterf(id, GL_TEXTURE_LOD_BIAS, sampling.lod_bias);
-	if (anisotropy > 1 && GLEW_EXT_texture_filter_anisotropic)
+#endif
+	if (anisotropy > 1 && gl::anisotropic_filter())
 		glSamplerParameterf(id, GL_TEXTURE_MAX_ANISOTROPY_EXT, static_cast<float>(anisotropy));
 	return { id };
 }
 
+#ifdef ODIN_GLES
+/* OpenGL ES has timestamps only with GL_EXT_disjoint_timer_query */
+bool
+GlBoardDrawing::has_stamps() const
+{
+	return false;
+}
+
+uint32_t
+GlBoardDrawing::put_stamp()
+{
+	return 0;
+}
+
+bool
+GlBoardDrawing::reached(uint32_t)
+{
+	return true;
+}
+
+uint64_t
+GlBoardDrawing::stamp_time(uint32_t)
+{
+	return 0;
+}
+
+void
+GlBoardDrawing::forget_stamp(uint32_t, bool)
+{
+}
+#else
 bool
 GlBoardDrawing::has_stamps() const
 {
@@ -189,5 +269,6 @@ GlBoardDrawing::forget_stamp(uint32_t stamp, bool again)
 	else
 		glDeleteQueries(1, &stamp);
 }
+#endif
 
 } /* namespace odin */

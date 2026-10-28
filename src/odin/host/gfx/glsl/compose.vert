@@ -36,6 +36,8 @@ const vec2 TEXCOORDS[4] = vec2[] (vec2 (1.0, 1.0), vec2 (0.0, 1.0), vec2 (1.0, 0
 #define i_position CORNERS[gl_VertexIndex]
 #define i_texcoords TEXCOORDS[gl_VertexIndex]
 const mat4 u_projection =
+#elif defined(GL_ES)
+const mat4 u_projection =
 #else
 uniform mat4 u_projection =
 #endif

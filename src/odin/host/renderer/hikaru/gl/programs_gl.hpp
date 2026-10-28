@@ -35,7 +35,7 @@
 #include <string>
 #include <unordered_map>
 
-#include <GL/glew.h>
+#include "odin/host/gfx/gl_common.hpp"
 
 #include "odin/host/renderer/hikaru/renderer_programs.hpp"
 
@@ -62,6 +62,7 @@ struct MeshProgram {
 		GLint order;
 		GLint blend_mode;
 		GLint pattern;
+		GLint lod_bias;
 	};
 	/* What it was given last, so as not to give it again: indices in
 	 * the display list being drawn, see Renderer::forget_held. */

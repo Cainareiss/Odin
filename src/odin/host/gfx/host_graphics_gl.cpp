@@ -32,8 +32,8 @@
 #include <array>
 #include <cmath>
 #include <cstdio>
+#include <vector>
 
-#include <GL/glew.h>
 #include <SDL3/SDL.h>
 
 #include "imgui/imgui.h"
@@ -146,7 +146,16 @@ GlGraphics::read(HostPicture picture, unsigned w, unsigned h, uint8_t *pixels)
 	glBindFramebuffer(GL_READ_FRAMEBUFFER, picture.id);
 	glReadBuffer(picture.id ? GL_COLOR_ATTACHMENT0 : GL_BACK);
 	glPixelStorei(GL_PACK_ALIGNMENT, 1);
+#ifdef ODIN_GLES
+	/* OpenGL ES only guarantees RGBA reads */
+	std::vector<uint8_t> rgba(size_t{w} * h * 4);
+
+	glReadPixels(0, 0, static_cast<GLsizei>(w), static_cast<GLsizei>(h), GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
+	for (size_t i = 0; i < size_t{w} * h; i++)
+		std::copy_n(&rgba[i * 4], 3, &pixels[i * 3]);
+#else
 	glReadPixels(0, 0, static_cast<GLsizei>(w), static_cast<GLsizei>(h), GL_RGB, GL_UNSIGNED_BYTE, pixels);
+#endif
 	glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
 }
 
@@ -425,7 +434,11 @@ GlGraphics::draw_background(unsigned window_w, unsigned window_h, unsigned w, un
 void
 GlGraphics::start_ui()
 {
+#ifdef ODIN_GLES
+	ImGui_ImplOpenGL3_Init("#version 300 es");
+#else
 	ImGui_ImplOpenGL3_Init(gl::fragment_lists() ? "#version 430 core" : "#version 410 core");
+#endif
 
 	glGenVertexArrays(1, &m_vao);
 	m_blur = gl::compile_program(odin_glsl_whole_window_vert, odin_glsl_blur_frag);
@@ -474,10 +487,16 @@ HostGraphics::prepare_gl()
 	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 0);
 	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 0);
 	SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
+#ifdef ODIN_GLES
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+#else
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+#endif
 }
 
 uint64_t
@@ -486,7 +505,7 @@ HostGraphics::window_flags_gl()
 	return SDL_WINDOW_OPENGL;
 }
 
-/* An OpenGL 4.3 context */
+/* Try 4.3 then 4.1, or ES 3.2 then 3.1 */
 std::unique_ptr<HostGraphics>
 HostGraphics::make_gl(SDL_Window *window, unsigned window_w, unsigned window_h)
 {
@@ -505,6 +524,7 @@ HostGraphics::make_gl(SDL_Window *window, unsigned window_w, unsigned window_h)
 	/* The frames are paced by the board alone until set_vsync. */
 	SDL_GL_SetSwapInterval(0);
 
+#ifndef ODIN_GLES
 	/* Under Wayland the context is EGL's: GLEW has the functions of OpenGL
 	 * then, only GLX is missing. */
 	glewExperimental = GL_TRUE;
@@ -514,6 +534,7 @@ HostGraphics::make_gl(SDL_Window *window, unsigned window_w, unsigned window_h)
 	}
 
 	glDisable(GL_MULTISAMPLE);
+#endif
 
 	SDL_GL_GetAttribute(SDL_GL_MULTISAMPLEBUFFERS, &num_ms_buffers);
 	SDL_GL_GetAttribute(SDL_GL_MULTISAMPLESAMPLES, &num_samples);

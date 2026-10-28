@@ -34,7 +34,7 @@ out vec2 place;
 #endif
 
 void main (void) {
-	const vec2 corner = vec2 (VERTEX_ID & 1, VERTEX_ID >> 1) * 2.0;
+	vec2 corner = vec2 (VERTEX_ID & 1, VERTEX_ID >> 1) * 2.0;
 
 #ifdef VULKAN
 	/* The window of Vulkan has its top line first: the same corner is the
