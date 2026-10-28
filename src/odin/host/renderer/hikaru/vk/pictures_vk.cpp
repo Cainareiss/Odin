@@ -61,7 +61,7 @@ constexpr VkComponentMapping ABGR1555_SWIZZLE = { VK_COMPONENT_SWIZZLE_B, VK_COM
 
 } /* namespace */
 
-VkBoardDrawing::VkBoardDrawing(vk::Context &card) : m_card(card), m_fn(card.fn())
+VkDrawing::VkDrawing(vk::Context &card) : m_card(card), m_fn(card.fn())
 {
 	VkSamplerCreateInfo nearest{};
 
@@ -90,7 +90,7 @@ VkBoardDrawing::VkBoardDrawing(vk::Context &card) : m_card(card), m_fn(card.fn()
 	m_card.name_picture(FRAME_PICTURE, &m_frame);
 }
 
-VkBoardDrawing::~VkBoardDrawing()
+VkDrawing::~VkDrawing()
 {
 	m_card.send_and_wait();
 	m_card.forget_picture(FRAME_PICTURE);
@@ -108,7 +108,7 @@ VkBoardDrawing::~VkBoardDrawing()
 }
 
 vk::Image
-VkBoardDrawing::make_picture(unsigned w, unsigned h)
+VkDrawing::make_picture(unsigned w, unsigned h)
 {
 	return m_card.make_image(PICTURE_FORMAT, w, h, 1,
 	                         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
@@ -116,7 +116,7 @@ VkBoardDrawing::make_picture(unsigned w, unsigned h)
 }
 
 void
-VkBoardDrawing::clear(VkCommandBuffer cb, vk::Image &image, float alpha)
+VkDrawing::clear(VkCommandBuffer cb, vk::Image &image, float alpha)
 {
 	const VkClearColorValue colour{ { 0.0f, 0.0f, 0.0f, alpha } };
 	const VkImageSubresourceRange all{ VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
@@ -128,7 +128,7 @@ VkBoardDrawing::clear(VkCommandBuffer cb, vk::Image &image, float alpha)
 /* The two 3D buffers and the pictures of the last three lists, empty: an
  * empty 3D buffer lets everything through, its alpha is 1. */
 void
-VkBoardDrawing::build_pictures()
+VkDrawing::build_pictures()
 {
 	const VkCommandBuffer cb = m_card.commands();
 
@@ -144,7 +144,7 @@ VkBoardDrawing::build_pictures()
 }
 
 void
-VkBoardDrawing::destroy_pictures(bool kept_too)
+VkDrawing::destroy_pictures(bool kept_too)
 {
 	std::vector<vk::Image> gone = { m_scene, m_depth, m_frame, m_solid_depth, m_heads, m_below,
 	                                m_eye[0], m_eye[1], m_flag_depth };
@@ -158,7 +158,7 @@ VkBoardDrawing::destroy_pictures(bool kept_too)
 }
 
 void
-VkBoardDrawing::copy_picture(VkCommandBuffer cb, vk::Image &from, vk::Image &to)
+VkDrawing::copy_picture(VkCommandBuffer cb, vk::Image &from, vk::Image &to)
 {
 	const VkImageBlit blit{ { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 },
 	                        { { 0, 0, 0 }, { static_cast<int32_t>(from.w), static_cast<int32_t>(from.h), 1 } },
@@ -171,7 +171,7 @@ VkBoardDrawing::copy_picture(VkCommandBuffer cb, vk::Image &from, vk::Image &to)
 }
 
 void
-VkBoardDrawing::set_scale(unsigned scale)
+VkDrawing::set_scale(unsigned scale)
 {
 	vk::Image old[KEPT];
 
@@ -192,7 +192,7 @@ VkBoardDrawing::set_scale(unsigned scale)
 }
 
 void
-VkBoardDrawing::scene_to_pipe(unsigned slot)
+VkDrawing::scene_to_pipe(unsigned slot)
 {
 	const VkCommandBuffer cb = m_card.commands();
 	vk::Image &to = kept(2 + slot);
@@ -208,7 +208,7 @@ VkBoardDrawing::scene_to_pipe(unsigned slot)
  * then holds every earlier frame, fading by the rate at each frame (the
  * motion blur of the cabinets, pictures_gl.cpp). */
 void
-VkBoardDrawing::blend_scene_to_pipe(unsigned slot, unsigned buffer, uint32_t rate)
+VkDrawing::blend_scene_to_pipe(unsigned slot, unsigned buffer, uint32_t rate)
 {
 	const VkCommandBuffer cb = m_card.commands();
 	const int32_t push = static_cast<int32_t>(rate);
@@ -223,7 +223,7 @@ VkBoardDrawing::blend_scene_to_pipe(unsigned slot, unsigned buffer, uint32_t rat
 }
 
 void
-VkBoardDrawing::keep_picture(unsigned slot, unsigned buffer)
+VkDrawing::keep_picture(unsigned slot, unsigned buffer)
 {
 	const VkCommandBuffer cb = m_card.commands();
 	vk::Image &from = kept(2 + slot), &to = kept(buffer);
@@ -239,7 +239,7 @@ VkBoardDrawing::keep_picture(unsigned slot, unsigned buffer)
  * holds changes. Its lines are given the top one first, as OpenGL is: the
  * composition reads it upside down (compose.frag). */
 void
-VkBoardDrawing::set_layer(unsigned i, LayerTexels texels, const void *pixels)
+VkDrawing::set_layer(unsigned i, LayerTexels texels, const void *pixels)
 {
 	const bool wide = texels == LayerTexels::A2BGR10;
 	const VkDeviceSize bytes = VkDeviceSize{SCREEN_WIDTH} * SCREEN_HEIGHT * (wide ? 4 : 2);
@@ -268,7 +268,7 @@ VkBoardDrawing::set_layer(unsigned i, LayerTexels texels, const void *pixels)
 
 /* As pictures_gl.cpp: the two blender inputs, then the 2D layers */
 void
-VkBoardDrawing::compose(const Compose &c, unsigned shown, const bool layers[2])
+VkDrawing::compose(const Compose &c, unsigned shown, const bool layers[2])
 {
 	const VkCommandBuffer cb = m_card.commands();
 	vk::Image *const layer[2] = { layers[0] && m_layers[0].image ? &m_layers[0] : &m_none,
@@ -294,7 +294,7 @@ VkBoardDrawing::compose(const Compose &c, unsigned shown, const bool layers[2])
 }
 
 void
-VkBoardDrawing::clear_window(unsigned window_w, unsigned window_h)
+VkDrawing::clear_window(unsigned window_w, unsigned window_h)
 {
 	const VkCommandBuffer cb = m_card.commands();
 
@@ -306,7 +306,7 @@ VkBoardDrawing::clear_window(unsigned window_w, unsigned window_h)
  * first), else through the presentation, which counts y from the bottom as
  * OpenGL does */
 void
-VkBoardDrawing::present(PictureRect rect, unsigned window_w, unsigned window_h)
+VkDrawing::present(PictureRect rect, unsigned window_w, unsigned window_h)
 {
 	const unsigned w = rect.w, h = rect.h;
 
@@ -362,7 +362,7 @@ VkBoardDrawing::present(PictureRect rect, unsigned window_w, unsigned window_h)
 
 /* The filter before goes once the card is done with the frames it drew */
 void
-VkBoardDrawing::set_filter(const std::string &preset)
+VkDrawing::set_filter(const std::string &preset)
 {
 	if (preset == m_filter_preset)
 		return;
@@ -379,7 +379,7 @@ VkBoardDrawing::set_filter(const std::string &preset)
 /* The window black, then each rectangle at its shade (the window image has
  * the top line first, as the rectangles count them) */
 void
-VkBoardDrawing::draw_loading(std::span<const LoadingRect> rects, unsigned window_w, unsigned window_h)
+VkDrawing::draw_loading(std::span<const LoadingRect> rects, unsigned window_w, unsigned window_h)
 {
 	clear_window(window_w, window_h);
 	if (rects.empty())
@@ -405,7 +405,7 @@ VkBoardDrawing::draw_loading(std::span<const LoadingRect> rects, unsigned window
 /* As pictures_gl.cpp: the first pixel of each scale x scale, the
  * bottom line first */
 void
-VkBoardDrawing::read_kept(std::span<uint8_t> pictures)
+VkDrawing::read_kept(std::span<uint8_t> pictures)
 {
 	const size_t size = size_t{SCREEN_WIDTH} * SCREEN_HEIGHT * 4;
 	const VkCommandBuffer cb = m_card.commands();
@@ -433,7 +433,7 @@ VkBoardDrawing::read_kept(std::span<uint8_t> pictures)
 }
 
 void
-VkBoardDrawing::write_kept(std::span<const uint8_t> pictures)
+VkDrawing::write_kept(std::span<const uint8_t> pictures)
 {
 	const size_t size = size_t{SCREEN_WIDTH} * SCREEN_HEIGHT * 4;
 	const VkCommandBuffer cb = m_card.commands();

@@ -78,7 +78,7 @@ bind_unit(GLenum unit, GLuint texture)
 /* The pictures of the lists, at the size of the buffers: the last fragment
  * of each pixel, the colour under them, and the depth the other types left */
 void
-GlBoardDrawing::build_list_pictures()
+GlDrawing::build_list_pictures()
 {
 	const unsigned w = width(), h = height();
 
@@ -113,7 +113,7 @@ GlBoardDrawing::build_list_pictures()
 }
 
 void
-GlBoardDrawing::destroy_list_pictures()
+GlDrawing::destroy_list_pictures()
 {
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glDeleteTextures(1, &m_solid_depth);
@@ -135,7 +135,7 @@ GlBoardDrawing::destroy_list_pictures()
 }
 
 void
-GlBoardDrawing::build_lists()
+GlDrawing::build_lists()
 {
 	GLint64 limit = 0;
 
@@ -197,7 +197,7 @@ GlBoardDrawing::build_lists()
 }
 
 void
-GlBoardDrawing::destroy_lists()
+GlDrawing::destroy_lists()
 {
 	if (m_peel.on) {
 		glDeleteQueries(PEEL_BATCH, m_peel.any);
@@ -214,7 +214,7 @@ GlBoardDrawing::destroy_lists()
 }
 
 void
-GlBoardDrawing::size_fragments(uint32_t max)
+GlDrawing::size_fragments(uint32_t max)
 {
 	if (m_peel.on)
 		return;
@@ -226,7 +226,7 @@ GlBoardDrawing::size_fragments(uint32_t max)
 }
 
 void
-GlBoardDrawing::begin_translucent()
+GlDrawing::begin_translucent()
 {
 	if (!gl::primitive_ids()) {
 		if (!m_said_no_translucent)
@@ -253,7 +253,7 @@ GlBoardDrawing::begin_translucent()
 /* The depth the meshes of the scene left (the unflagged ones in a view with
  * both families, see begin_families), for the meshes to test themselves */
 void
-GlBoardDrawing::copy_solid_depth()
+GlDrawing::copy_solid_depth()
 {
 	/* OpenGL ES can only blit depth */
 	glBindFramebuffer(GL_READ_FRAMEBUFFER, m_scene_fb);
@@ -279,7 +279,7 @@ GlBoardDrawing::copy_solid_depth()
  * buffer that has grown bound again, and does not always reset an atomic
  * counter buffer: the count is in a storage buffer. */
 void
-GlBoardDrawing::begin_collect(unsigned view)
+GlDrawing::begin_collect(unsigned view)
 {
 	static const GLuint zero[4] = { 0, 0, 0, 0 };
 
@@ -304,7 +304,7 @@ GlBoardDrawing::begin_collect(unsigned view)
 }
 
 void
-GlBoardDrawing::end_collect()
+GlDrawing::end_collect()
 {
 	if (m_peel.on)
 		return;
@@ -315,7 +315,7 @@ GlBoardDrawing::end_collect()
 /* Nobody waits for the card here: the count goes where it waits for
  * counted_fragments. */
 void
-GlBoardDrawing::keep_count(unsigned view, unsigned slot)
+GlDrawing::keep_count(unsigned view, unsigned slot)
 {
 	if (m_peel.on)
 		return;
@@ -333,7 +333,7 @@ GlBoardDrawing::keep_count(unsigned view, unsigned slot)
 }
 
 uint32_t
-GlBoardDrawing::count_now(unsigned view)
+GlDrawing::count_now(unsigned view)
 {
 	GLuint used;
 
@@ -346,7 +346,7 @@ GlBoardDrawing::count_now(unsigned view)
 
 /* Blends them over the colour below */
 void
-GlBoardDrawing::end_translucent(bool blend)
+GlDrawing::end_translucent(bool blend)
 {
 	if (m_peel.on) {
 		if (blend && !m_peel.draws.empty())
@@ -383,7 +383,7 @@ GlBoardDrawing::end_translucent(bool blend)
 }
 
 uint32_t
-GlBoardDrawing::counted_fragments(unsigned slot, uint32_t views)
+GlDrawing::counted_fragments(unsigned slot, uint32_t views)
 {
 	GLuint used = 0;
 
@@ -419,7 +419,7 @@ GlBoardDrawing::counted_fragments(unsigned slot, uint32_t views)
 }
 
 void
-GlBoardDrawing::forget_counts(unsigned slot)
+GlDrawing::forget_counts(unsigned slot)
 {
 	if (m_counted[slot])
 		glDeleteSync(m_counted[slot]);
@@ -457,7 +457,7 @@ end_peel_condition(bool began)
 } /* namespace */
 
 void
-GlBoardDrawing::draw_peel_layer()
+GlDrawing::draw_peel_layer()
 {
 	m_peel.drawing = true;
 	m_pass.order = 0;
@@ -471,7 +471,7 @@ GlBoardDrawing::draw_peel_layer()
 
 /* GL_GREATER keeps the farthest fragment, the first sent among equals */
 void
-GlBoardDrawing::peel()
+GlDrawing::peel()
 {
 	static const GLfloat before_first[4] = { 2.0f, 0.0f, 0.0f, 0.0f }, none[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 	static const GLfloat farthest = 0.0f;

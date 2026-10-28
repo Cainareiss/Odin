@@ -48,12 +48,12 @@
 
 namespace odin {
 
-class VkBoardDrawing : public BoardDrawing {
+class VkDrawing : public Drawing {
 public:
-	explicit VkBoardDrawing(vk::Context &card);
-	~VkBoardDrawing() override;
-	VkBoardDrawing(const VkBoardDrawing &) = delete;
-	VkBoardDrawing &operator=(const VkBoardDrawing &) = delete;
+	explicit VkDrawing(vk::Context &card);
+	~VkDrawing() override;
+	VkDrawing(const VkDrawing &) = delete;
+	VkDrawing &operator=(const VkDrawing &) = delete;
 
 	void set_scale(unsigned scale) override;
 	bool draws_native() const override { return m_card.geometry_shaders(); }

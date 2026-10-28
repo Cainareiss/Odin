@@ -83,7 +83,7 @@ public:
 	void stop_ui() override;
 	uint64_t ui_image(HostImage image) const override { return image.id; }
 
-	std::unique_ptr<BoardDrawing> make_board_drawing() override { return BoardDrawing::make_gl(); }
+	std::unique_ptr<Drawing> make_drawing() override { return Drawing::make_gl(); }
 
 private:
 	/* The program of an image over a viewport, made when first drawn */

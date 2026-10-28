@@ -1037,7 +1037,7 @@ layers are in renderer.cpp, the passes of a list in renderer_scene.cpp, the
 translucent fragments in renderer_translucent.cpp, the variants of the
 programs in renderer_programs.cpp, the textures in renderer_textures.cpp, the
 2D layers in renderer_layers.cpp; what the graphics card of the host does for
-them is behind BoardDrawing (drawing.hpp; with OpenGL the *_gl.cpp
+them is behind Drawing (drawing.hpp; with OpenGL the *_gl.cpp
 files; the shaders in src/odin/host/gfx/glsl). Vulkan ([display] api = vulkan,
 MARKDOWN/106 of the notes): vk_common.cpp (the card, its memory and
 commands), host_graphics_vk.cpp (the window and the menu) and the

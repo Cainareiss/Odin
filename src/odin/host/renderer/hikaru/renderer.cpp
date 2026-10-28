@@ -39,7 +39,7 @@ namespace odin {
 
 Renderer::Renderer(HostGraphics &graphics, const Memory &memory, const Options &options)
 	: m_gpu(nullptr), m_fb(memory.fb), m_options(options), m_building(nullptr), m_list(nullptr),
-	  m_frame{}, m_card(graphics.make_board_drawing()), m_textures(*m_card, memory.texram),
+	  m_frame{}, m_card(graphics.make_drawing()), m_textures(*m_card, memory.texram),
 	  m_times(*m_card, options.times),
 	  m_bound_tex_index(~0u), m_draw{}, m_collect(false), m_families_view(false), m_families(false),
 	  m_again(false), m_fragments_max(0),
@@ -63,7 +63,7 @@ Renderer::~Renderer()
 }
 
 /* Makes ready the mesh programs the lists of the game name, those of Odin
- * then those of the player (BoardDrawing::prepare_program); on the thread
+ * then those of the player (Drawing::prepare_program); on the thread
  * that draws the frames. */
 void
 Renderer::prepare_programs(const std::function<void(unsigned, unsigned)> &progress)

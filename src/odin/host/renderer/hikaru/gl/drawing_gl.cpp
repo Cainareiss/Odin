@@ -81,16 +81,16 @@ constexpr GLint LA8_SWIZZLE[4] = { GL_RED, GL_RED, GL_RED, GL_GREEN };
 
 } /* namespace */
 
-std::unique_ptr<BoardDrawing>
-BoardDrawing::make_gl()
+std::unique_ptr<Drawing>
+Drawing::make_gl()
 {
-	return std::make_unique<GlBoardDrawing>();
+	return std::make_unique<GlDrawing>();
 }
 
 /* The texture is left bound on the unit 0: bind_texture binds the one of
  * the next mesh again. */
 HostTexture
-GlBoardDrawing::make_texture(Texels texels, std::span<const TexelRect> levels)
+GlDrawing::make_texture(Texels texels, std::span<const TexelRect> levels)
 {
 	const GlTexels &gl = GL_TEXELS[static_cast<size_t>(texels)];
 	const GLsizei num_levels = static_cast<GLsizei>(levels.size());
@@ -141,7 +141,7 @@ GlBoardDrawing::make_texture(Texels texels, std::span<const TexelRect> levels)
 }
 
 void
-GlBoardDrawing::forget_textures(std::span<const HostTexture> textures)
+GlDrawing::forget_textures(std::span<const HostTexture> textures)
 {
 	std::vector<GLuint> ids;
 
@@ -152,7 +152,7 @@ GlBoardDrawing::forget_textures(std::span<const HostTexture> textures)
 }
 
 HostSampler
-GlBoardDrawing::make_sampler(const TextureSampling &sampling, unsigned anisotropy)
+GlDrawing::make_sampler(const TextureSampling &sampling, unsigned anisotropy)
 {
 	const auto wrap = [](TextureSampling::Wrap w) -> GLint {
 		return w == TextureSampling::Wrap::MIRROR ? GL_MIRRORED_REPEAT :
@@ -190,36 +190,36 @@ GlBoardDrawing::make_sampler(const TextureSampling &sampling, unsigned anisotrop
 #ifdef ODIN_GLES
 /* OpenGL ES has timestamps only with GL_EXT_disjoint_timer_query */
 bool
-GlBoardDrawing::has_stamps() const
+GlDrawing::has_stamps() const
 {
 	return false;
 }
 
 uint32_t
-GlBoardDrawing::put_stamp()
+GlDrawing::put_stamp()
 {
 	return 0;
 }
 
 bool
-GlBoardDrawing::reached(uint32_t)
+GlDrawing::reached(uint32_t)
 {
 	return true;
 }
 
 uint64_t
-GlBoardDrawing::stamp_time(uint32_t)
+GlDrawing::stamp_time(uint32_t)
 {
 	return 0;
 }
 
 void
-GlBoardDrawing::forget_stamp(uint32_t, bool)
+GlDrawing::forget_stamp(uint32_t, bool)
 {
 }
 #else
 bool
-GlBoardDrawing::has_stamps() const
+GlDrawing::has_stamps() const
 {
 	GLint bits = 0;
 
@@ -228,7 +228,7 @@ GlBoardDrawing::has_stamps() const
 }
 
 uint32_t
-GlBoardDrawing::put_stamp()
+GlDrawing::put_stamp()
 {
 	GLuint id;
 
@@ -243,7 +243,7 @@ GlBoardDrawing::put_stamp()
 }
 
 bool
-GlBoardDrawing::reached(uint32_t stamp)
+GlDrawing::reached(uint32_t stamp)
 {
 	GLuint ready = 0;
 
@@ -252,7 +252,7 @@ GlBoardDrawing::reached(uint32_t stamp)
 }
 
 uint64_t
-GlBoardDrawing::stamp_time(uint32_t stamp)
+GlDrawing::stamp_time(uint32_t stamp)
 {
 	GLuint64 at = 0;
 
@@ -262,7 +262,7 @@ GlBoardDrawing::stamp_time(uint32_t stamp)
 
 /* A stamp the card still owes is not put again. */
 void
-GlBoardDrawing::forget_stamp(uint32_t stamp, bool again)
+GlDrawing::forget_stamp(uint32_t stamp, bool again)
 {
 	if (again)
 		m_stamps.push_back(stamp);

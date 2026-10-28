@@ -60,7 +60,7 @@ constexpr vk::Use HEADS_USED = { VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_2_FR
 /* The pass that blends the fragments, the counts of the views and where
  * the processor reads them */
 void
-VkBoardDrawing::build_lists()
+VkDrawing::build_lists()
 {
 	const std::vector<VkDescriptorSetLayoutBinding> sort = {
 		{ 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
@@ -80,7 +80,7 @@ VkBoardDrawing::build_lists()
 
 /* The card is done with them: the frames were waited for. */
 void
-VkBoardDrawing::destroy_lists()
+VkDrawing::destroy_lists()
 {
 	for (vk::Buffer *buffer : { &m_nodes, &m_counts, &m_readback })
 		if (buffer->buffer)
@@ -91,7 +91,7 @@ VkBoardDrawing::destroy_lists()
 /* The pictures of the lists, at the size of the scene: the depth the other
  * types left, the last fragment of each pixel, the colour under them */
 void
-VkBoardDrawing::build_list_pictures()
+VkDrawing::build_list_pictures()
 {
 	m_solid_depth = m_card.make_image(m_card.depth_format(), width(), height(), 1,
 	                                  VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
@@ -108,7 +108,7 @@ VkBoardDrawing::build_list_pictures()
 
 /* What the buffer held is lost; the old one goes once the card is done. */
 void
-VkBoardDrawing::size_fragments(uint32_t max)
+VkDrawing::size_fragments(uint32_t max)
 {
 	if (m_nodes.buffer) {
 		vk::Buffer old = m_nodes;
@@ -119,14 +119,14 @@ VkBoardDrawing::size_fragments(uint32_t max)
 }
 
 uint32_t
-VkBoardDrawing::fragment_limit() const
+VkDrawing::fragment_limit() const
 {
 	return static_cast<uint32_t>(m_card.limits().maxStorageBufferRange / NODE_SIZE);
 }
 
 /* The depth the other types left */
 void
-VkBoardDrawing::begin_translucent()
+VkDrawing::begin_translucent()
 {
 	const VkCommandBuffer cb = m_card.commands();
 	const VkImageCopy copy{ { VK_IMAGE_ASPECT_DEPTH_BIT, 0, 0, 1 }, { 0, 0, 0 }, { VK_IMAGE_ASPECT_DEPTH_BIT, 0, 0, 1 },
@@ -152,7 +152,7 @@ VkBoardDrawing::begin_translucent()
  * last blending read is read before (glMemoryBarrier of all in OpenGL). Each
  * viewport has its count, as with OpenGL. */
 void
-VkBoardDrawing::begin_collect(unsigned view)
+VkDrawing::begin_collect(unsigned view)
 {
 	if (!m_card.primitive_ids())
 		return;
@@ -201,7 +201,7 @@ VkBoardDrawing::begin_collect(unsigned view)
 
 /* What the meshes wrote is seen by the copies and the blending after */
 void
-VkBoardDrawing::end_collect()
+VkDrawing::end_collect()
 {
 	if (!m_collecting)
 		return;
@@ -216,7 +216,7 @@ VkBoardDrawing::end_collect()
 /* Nobody waits for the card here: the count goes where the processor reads
  * it once the commands it is sent with are done (counted_fragments). */
 void
-VkBoardDrawing::keep_count(unsigned view, unsigned slot)
+VkDrawing::keep_count(unsigned view, unsigned slot)
 {
 	if (!m_card.primitive_ids())
 		return;
@@ -232,7 +232,7 @@ VkBoardDrawing::keep_count(unsigned view, unsigned slot)
 /* The commands sent and waited for: the next ones begin another command
  * buffer, which the scene sets up again when it opens. */
 uint32_t
-VkBoardDrawing::count_now(unsigned view)
+VkDrawing::count_now(unsigned view)
 {
 	if (!m_card.primitive_ids())
 		return 0;
@@ -250,7 +250,7 @@ VkBoardDrawing::count_now(unsigned view)
 
 /* Blends them over the colour below, the whole picture */
 void
-VkBoardDrawing::end_translucent(bool blend)
+VkDrawing::end_translucent(bool blend)
 {
 	if (!m_card.primitive_ids() || !blend)
 		return;
@@ -288,7 +288,7 @@ VkBoardDrawing::end_translucent(bool blend)
 /* The most fragments a view of the list of that picture left, the commands
  * that copied its counts done */
 uint32_t
-VkBoardDrawing::counted_fragments(unsigned slot, uint32_t views)
+VkDrawing::counted_fragments(unsigned slot, uint32_t views)
 {
 	uint32_t used = 0;
 

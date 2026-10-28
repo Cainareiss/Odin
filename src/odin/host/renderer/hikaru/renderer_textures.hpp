@@ -50,7 +50,7 @@ class TextureCache {
 public:
 	/* card: what makes the textures; texram: the two banks of the
 	 * texture RAM, 4 MB each */
-	TextureCache(BoardDrawing &card, const std::span<const uint8_t> texram[2]);
+	TextureCache(Drawing &card, const std::span<const uint8_t> texram[2]);
 	~TextureCache();
 
 	/* The texture of a texhead, decoded if it is not held; none if it
@@ -118,7 +118,7 @@ private:
 	                                uint32_t x0, uint32_t y0) const;
 	void clear_bank(unsigned bank);
 
-	BoardDrawing &m_card;
+	Drawing &m_card;
 	std::span<const uint8_t> m_texram[2];
 	std::vector<Slot> m_slots[2];
 	/* The slots of each bank that hold a texture, in order: a bank has

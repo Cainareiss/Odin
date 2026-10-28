@@ -56,14 +56,14 @@ constexpr unsigned TEXEL_BYTES = 2;
 
 } /* namespace */
 
-std::unique_ptr<BoardDrawing>
-BoardDrawing::make_vk(vk::Context &card)
+std::unique_ptr<Drawing>
+Drawing::make_vk(vk::Context &card)
 {
-	return std::make_unique<VkBoardDrawing>(card);
+	return std::make_unique<VkDrawing>(card);
 }
 
 void
-VkBoardDrawing::make_sets(KeptSets &sets, VkDescriptorType type, VkShaderStageFlags stages)
+VkDrawing::make_sets(KeptSets &sets, VkDescriptorType type, VkShaderStageFlags stages)
 {
 	const VkDescriptorSetLayoutBinding binding{ 0, type, 1, stages, nullptr };
 	const VkDescriptorSetLayoutCreateInfo info{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO, nullptr, 0, 1,
@@ -73,8 +73,8 @@ VkBoardDrawing::make_sets(KeptSets &sets, VkDescriptorType type, VkShaderStageFl
 	m_card.check(m_fn.vkCreateDescriptorSetLayout(m_card.device(), &info, nullptr, &sets.layout), "a set layout");
 }
 
-VkBoardDrawing::KeptSet
-VkBoardDrawing::keep_set(KeptSets &sets)
+VkDrawing::KeptSet
+VkDrawing::keep_set(KeptSets &sets)
 {
 	constexpr uint32_t SETS = 1024;
 	KeptSet kept;
@@ -116,7 +116,7 @@ VkBoardDrawing::keep_set(KeptSets &sets)
 
 /* Once the frames that may use it are done */
 void
-VkBoardDrawing::free_set(const KeptSet &set)
+VkDrawing::free_set(const KeptSet &set)
 {
 	m_card.later([card = &m_card, set]() {
 		card->fn().vkFreeDescriptorSets(card->device(), set.pool, 1, &set.set);
@@ -124,7 +124,7 @@ VkBoardDrawing::free_set(const KeptSet &set)
 }
 
 void
-VkBoardDrawing::destroy_sets(KeptSets &sets)
+VkDrawing::destroy_sets(KeptSets &sets)
 {
 	for (const VkDescriptorPool pool : sets.pools)
 		m_fn.vkDestroyDescriptorPool(m_card.device(), pool, nullptr);
@@ -134,8 +134,8 @@ VkBoardDrawing::destroy_sets(KeptSets &sets)
 }
 
 /* A sampled image as the mesh shaders read it */
-VkBoardDrawing::KeptSet
-VkBoardDrawing::image_set(const vk::Image &image)
+VkDrawing::KeptSet
+VkDrawing::image_set(const vk::Image &image)
 {
 	const KeptSet set = keep_set(m_texture_sets);
 	const VkDescriptorImageInfo info{ VK_NULL_HANDLE, image.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
@@ -150,7 +150,7 @@ VkBoardDrawing::image_set(const vk::Image &image)
  * uploads copy from before the commands of the frame: the texture may be
  * made while the meshes of a list are drawn. */
 HostTexture
-VkBoardDrawing::make_texture(Texels texels, std::span<const TexelRect> levels)
+VkDrawing::make_texture(Texels texels, std::span<const TexelRect> levels)
 {
 	const VkTexels &format = VK_TEXELS[static_cast<size_t>(texels)];
 	const unsigned num_levels = static_cast<unsigned>(levels.size());
@@ -208,7 +208,7 @@ VkBoardDrawing::make_texture(Texels texels, std::span<const TexelRect> levels)
 }
 
 void
-VkBoardDrawing::forget_textures(std::span<const HostTexture> textures)
+VkDrawing::forget_textures(std::span<const HostTexture> textures)
 {
 	for (const HostTexture t : textures) {
 		const auto found = m_textures.find(t.id);
@@ -226,7 +226,7 @@ VkBoardDrawing::forget_textures(std::span<const HostTexture> textures)
  * the specification of Vulkan has it (maxLod 0.25); the bias as far as the
  * card takes it, as OpenGL clamps it */
 HostSampler
-VkBoardDrawing::make_sampler(const TextureSampling &sampling, unsigned anisotropy)
+VkDrawing::make_sampler(const TextureSampling &sampling, unsigned anisotropy)
 {
 	const auto wrap = [](TextureSampling::Wrap w) {
 		return w == TextureSampling::Wrap::MIRROR ? VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT :
@@ -277,7 +277,7 @@ VkBoardDrawing::make_sampler(const TextureSampling &sampling, unsigned anisotrop
 }
 
 void
-VkBoardDrawing::forget_sampler(HostSampler s)
+VkDrawing::forget_sampler(HostSampler s)
 {
 	const auto found = m_samplers.find(s.id);
 
@@ -292,7 +292,7 @@ VkBoardDrawing::forget_sampler(HostSampler s)
 /* Debug: the stamps of ODIN_DRAW_TIMES, as glQueryCounter. None when all
  * are out: the frame is left out. */
 uint32_t
-VkBoardDrawing::put_stamp()
+VkDrawing::put_stamp()
 {
 	constexpr uint32_t STAMPS = 4096;
 
@@ -314,7 +314,7 @@ VkBoardDrawing::put_stamp()
 }
 
 bool
-VkBoardDrawing::reached(uint32_t stamp)
+VkDrawing::reached(uint32_t stamp)
 {
 	uint64_t at;
 
@@ -324,7 +324,7 @@ VkBoardDrawing::reached(uint32_t stamp)
 
 /* Once reached, in ns */
 uint64_t
-VkBoardDrawing::stamp_time(uint32_t stamp)
+VkDrawing::stamp_time(uint32_t stamp)
 {
 	const uint32_t bits = m_card.stamp_bits();
 	uint64_t at = 0;
@@ -340,7 +340,7 @@ VkBoardDrawing::stamp_time(uint32_t stamp)
 /* A stamp the card still owes is put again once the frame being written is
  * done: the card wrote it then. */
 void
-VkBoardDrawing::forget_stamp(uint32_t stamp, bool again)
+VkDrawing::forget_stamp(uint32_t stamp, bool again)
 {
 	if (!stamp)
 		return;

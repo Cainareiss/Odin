@@ -118,7 +118,7 @@ public:
 	void stop_ui() override;
 	uint64_t ui_image(HostImage image) const override;
 
-	std::unique_ptr<BoardDrawing> make_board_drawing() override { return BoardDrawing::make_vk(*m_card); }
+	std::unique_ptr<Drawing> make_drawing() override { return Drawing::make_vk(*m_card); }
 
 private:
 	void make_swapchain();

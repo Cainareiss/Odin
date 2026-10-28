@@ -53,7 +53,7 @@ is_nonnegative(float x)
 } /* namespace */
 
 void
-GlBoardDrawing::log(const char *fmt, ...) const
+GlDrawing::log(const char *fmt, ...) const
 {
 	va_list args;
 
@@ -67,7 +67,7 @@ GlBoardDrawing::log(const char *fmt, ...) const
 /* Nothing a program holds, nothing bound is of the list about to be drawn:
  * the pictures are drawn with other programs and textures in between. */
 void
-GlBoardDrawing::begin_scene(const odin_display_list_t &list, const SceneDebug &debug)
+GlDrawing::begin_scene(const odin_display_list_t &list, const SceneDebug &debug)
 {
 	m_list = &list;
 	m_debug = debug;
@@ -99,7 +99,7 @@ GlBoardDrawing::begin_scene(const odin_display_list_t &list, const SceneDebug &d
 }
 
 void
-GlBoardDrawing::clear_depth()
+GlDrawing::clear_depth()
 {
 	glBindFramebuffer(GL_FRAMEBUFFER, m_scene_fb);
 	glDepthMask(GL_TRUE);
@@ -112,7 +112,7 @@ GlBoardDrawing::clear_depth()
 
 /* The meshes test the other family themselves (glsl/mesh.frag, FAMILIES). */
 void
-GlBoardDrawing::begin_families()
+GlDrawing::begin_families()
 {
 	static const GLfloat none[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 	static const GLfloat farthest = 1.0f;
@@ -131,7 +131,7 @@ GlBoardDrawing::begin_families()
 }
 
 void
-GlBoardDrawing::begin_pass(const PassRules &rules)
+GlDrawing::begin_pass(const PassRules &rules)
 {
 	/* The eye depths of the families are not blended (begin_families);
 	 * where a buffer cannot be left out, the alpha of 1 of those
@@ -148,13 +148,13 @@ GlBoardDrawing::begin_pass(const PassRules &rules)
 }
 
 void
-GlBoardDrawing::end_pass()
+GlDrawing::end_pass()
 {
 	gl::check("a polygon type");
 }
 
 void
-GlBoardDrawing::end_scene()
+GlDrawing::end_scene()
 {
 	/* What the meshes left bound is the 2D drawing's then. */
 	glBindFramebuffer(GL_FRAMEBUFFER, m_scene_fb);
@@ -171,7 +171,7 @@ GlBoardDrawing::end_scene()
 /* Each program draws a triangle without area once: the driver finishes its
  * work on it then. */
 void
-GlBoardDrawing::begin_preparing()
+GlDrawing::begin_preparing()
 {
 	static const odin_vertex_body_t none[3] = {};
 
@@ -179,7 +179,7 @@ GlBoardDrawing::begin_preparing()
 }
 
 void
-GlBoardDrawing::prepare_program(uint64_t key)
+GlDrawing::prepare_program(uint64_t key)
 {
 	/* Not those the card cannot run (draw_mesh, draws_native) */
 	if (const std::optional<MeshVariant> v = MeshVariant::from_key(key);
@@ -193,7 +193,7 @@ GlBoardDrawing::prepare_program(uint64_t key)
 }
 
 void
-GlBoardDrawing::end_preparing()
+GlDrawing::end_preparing()
 {
 	glUseProgram(0);
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -203,7 +203,7 @@ GlBoardDrawing::end_preparing()
 
 /* The program of the mesh, put in use if it is another one. */
 void
-GlBoardDrawing::use_program(const MeshVariant &variant)
+GlDrawing::use_program(const MeshVariant &variant)
 {
 	const uint64_t key = variant.key();
 
@@ -217,7 +217,7 @@ GlBoardDrawing::use_program(const MeshVariant &variant)
 }
 
 void
-GlBoardDrawing::upload_viewport(const odin_mesh_t &mesh)
+GlDrawing::upload_viewport(const odin_mesh_t &mesh)
 {
 	const odin_viewport_t &vp = m_list->vp_list[mesh.vp_index];
 	const MeshProgram::Locations &locs = m_program->locs;
@@ -276,7 +276,7 @@ GlBoardDrawing::upload_viewport(const odin_mesh_t &mesh)
  * the vertices that follow it. The normals go through them too, see the
  * vertex shader. */
 void
-GlBoardDrawing::upload_modelview(const odin_mesh_t &mesh, unsigned i)
+GlDrawing::upload_modelview(const odin_mesh_t &mesh, unsigned i)
 {
 	static const odin_modelview_t identity = { {
 		{ 1.0f, 0.0f, 0.0f, 0.0f },
@@ -310,7 +310,7 @@ GlBoardDrawing::upload_modelview(const odin_mesh_t &mesh, unsigned i)
 /* The texture of the mesh on the unit 0. The texture of a texhead and its
  * sampling stay bound; a texture made is left bound (make_texture). */
 void
-GlBoardDrawing::bind_texture(const MeshDraw &draw)
+GlDrawing::bind_texture(const MeshDraw &draw)
 {
 	if (!m_variant.has_texture)
 		return;
@@ -332,7 +332,7 @@ GlBoardDrawing::bind_texture(const MeshDraw &draw)
 }
 
 void
-GlBoardDrawing::upload_lightset(const odin_mesh_t &mesh)
+GlDrawing::upload_lightset(const odin_mesh_t &mesh)
 {
 	const odin_lightset_t &ls = m_list->ls_list[mesh.ls_index];
 	const MeshProgram::Locations &locs = m_program->locs;
@@ -382,7 +382,7 @@ GlBoardDrawing::upload_lightset(const odin_mesh_t &mesh)
 }
 
 void
-GlBoardDrawing::draw_instance(const odin_mesh_t &mesh, unsigned i)
+GlDrawing::draw_instance(const odin_mesh_t &mesh, unsigned i)
 {
 	upload_modelview(mesh, i);
 	if (m_variant.collect) {
@@ -394,7 +394,7 @@ GlBoardDrawing::draw_instance(const odin_mesh_t &mesh, unsigned i)
 }
 
 void
-GlBoardDrawing::draw_mesh(const odin_mesh_t &mesh, const MeshDraw &draw)
+GlDrawing::draw_mesh(const odin_mesh_t &mesh, const MeshDraw &draw)
 {
 	/* A translucent mesh needs gl_PrimitiveID, see begin_translucent */
 	if (draw.variant.collect && !gl::primitive_ids())
@@ -485,8 +485,8 @@ GlBoardDrawing::draw_mesh(const odin_mesh_t &mesh, const MeshDraw &draw)
 /* Uploads the vertices of a list and the indices of its triangles, once,
  * before its meshes are drawn. */
 void
-GlBoardDrawing::upload_vertices(const odin_vertex_body_t *vertices, uint32_t num,
-                          const uint32_t *indices, uint32_t num_indices)
+GlDrawing::upload_vertices(const odin_vertex_body_t *vertices, uint32_t num,
+                           const uint32_t *indices, uint32_t num_indices)
 {
 	const auto attribute = [](GLuint index, GLint size, GLenum type, GLboolean normalized,
 	                          size_t offset) {
@@ -529,7 +529,7 @@ GlBoardDrawing::upload_vertices(const odin_vertex_body_t *vertices, uint32_t num
 
 /* The blend factors of OpenGL, sent when they change */
 void
-GlBoardDrawing::set_blend(MeshBlend blend)
+GlDrawing::set_blend(MeshBlend blend)
 {
 	static const GLenum factors[6][4] = {
 		/* REPLACE */     { GL_ONE,       GL_ZERO,                GL_ZERO, GL_ZERO },

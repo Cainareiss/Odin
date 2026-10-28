@@ -46,12 +46,12 @@
 
 namespace odin {
 
-class GlBoardDrawing : public BoardDrawing {
+class GlDrawing : public Drawing {
 public:
-	GlBoardDrawing();
-	~GlBoardDrawing() override;
-	GlBoardDrawing(const GlBoardDrawing &) = delete;
-	GlBoardDrawing &operator=(const GlBoardDrawing &) = delete;
+	GlDrawing();
+	~GlDrawing() override;
+	GlDrawing(const GlDrawing &) = delete;
+	GlDrawing &operator=(const GlDrawing &) = delete;
 
 	void set_scale(unsigned scale) override;
 	bool draws_native() const override { return gl::geometry_shaders(); }

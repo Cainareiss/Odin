@@ -63,7 +63,7 @@ i4_to_rgba4444(uint32_t texel)
 
 } /* namespace */
 
-TextureCache::TextureCache(BoardDrawing &card, const std::span<const uint8_t> texram[2])
+TextureCache::TextureCache(Drawing &card, const std::span<const uint8_t> texram[2])
 	: m_card(card), m_texram{texram[0], texram[1]}, m_no_mipmaps(false), m_anisotropy(1),
 	  m_log(nullptr)
 {

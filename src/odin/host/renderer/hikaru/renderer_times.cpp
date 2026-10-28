@@ -60,7 +60,7 @@ ms(uint64_t ns, uint64_t frames)
 
 } /* namespace */
 
-DrawTimes::DrawTimes(BoardDrawing &card, bool on)
+DrawTimes::DrawTimes(Drawing &card, bool on)
 	: m_card(card), m_on(on), m_stamps(on && card.has_stamps()), m_part(NUM_PARTS), m_within(false),
 	  m_frame(0), m_sums{}, m_drawn(0), m_read(0), m_lists(0), m_fragments(0), m_fragments_worst(0)
 {

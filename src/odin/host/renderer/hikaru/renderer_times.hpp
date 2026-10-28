@@ -41,7 +41,7 @@ namespace odin {
  *
  * The renderer names the part it enters; the time goes to that part until
  * it names another one. The time of the card is read from the stamps the
- * card puts in its stream of commands (BoardDrawing::put_stamp), a few
+ * card puts in its stream of commands (Drawing::put_stamp), a few
  * frames later, when it has them: nobody waits for it. A card that lies
  * idle between two stamps, for its commands to come, counts that time as
  * well.
@@ -69,7 +69,7 @@ public:
 	};
 
 	/* card: the one the renderer draws with, which outlives it */
-	DrawTimes(BoardDrawing &card, bool on);
+	DrawTimes(Drawing &card, bool on);
 	~DrawTimes();
 	DrawTimes(const DrawTimes &) = delete;
 	DrawTimes &operator=(const DrawTimes &) = delete;
@@ -118,7 +118,7 @@ private:
 	Part enter(Part part);
 	void read(std::vector<Mark> &frame);
 
-	BoardDrawing &m_card;
+	Drawing &m_card;
 	bool m_on;
 	bool m_stamps;		/* the card has stamps */
 	Part m_part;

@@ -41,7 +41,7 @@
 
 namespace odin {
 
-GlBoardDrawing::GlBoardDrawing()
+GlDrawing::GlDrawing()
 {
 	m_peel.on = !gl::fragment_lists();
 	build_compose();
@@ -60,7 +60,7 @@ GlBoardDrawing::GlBoardDrawing()
 	gl::check("building the board drawing");
 }
 
-GlBoardDrawing::~GlBoardDrawing()
+GlDrawing::~GlDrawing()
 {
 	glBindVertexArray(0);
 	if (m_mesh_vao) {
@@ -88,7 +88,7 @@ GlBoardDrawing::~GlBoardDrawing()
 }
 
 void
-GlBoardDrawing::build_pictures()
+GlDrawing::build_pictures()
 {
 	const unsigned w = width(), h = height();
 
@@ -165,7 +165,7 @@ GlBoardDrawing::build_pictures()
 }
 
 void
-GlBoardDrawing::destroy_pictures(bool kept_too)
+GlDrawing::destroy_pictures(bool kept_too)
 {
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glDeleteFramebuffers(1, &m_scene_fb);
@@ -186,8 +186,8 @@ GlBoardDrawing::destroy_pictures(bool kept_too)
 /* Copies a picture into another of any size: each pixel takes the nearest
  * one. */
 void
-GlBoardDrawing::copy_picture(GLuint from, unsigned from_w, unsigned from_h,
-                             GLuint to, unsigned to_w, unsigned to_h)
+GlDrawing::copy_picture(GLuint from, unsigned from_w, unsigned from_h,
+                        GLuint to, unsigned to_w, unsigned to_h)
 {
 	glBindFramebuffer(GL_READ_FRAMEBUFFER, m_copy_fb[0]);
 	glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, from, 0);
@@ -207,7 +207,7 @@ GlBoardDrawing::copy_picture(GLuint from, unsigned from_w, unsigned from_h,
 }
 
 void
-GlBoardDrawing::set_scale(unsigned scale)
+GlDrawing::set_scale(unsigned scale)
 {
 	const unsigned old_w = width(), old_h = height();
 	GLuint old[KEPT];
@@ -227,7 +227,7 @@ GlBoardDrawing::set_scale(unsigned scale)
 }
 
 void
-GlBoardDrawing::build_blender()
+GlDrawing::build_blender()
 {
 	m_blender = gl::compile_program(odin_glsl_whole_picture_vert, odin_glsl_blend_frag);
 	m_blender_rate = gl::uniform(m_blender, "u_rate");
@@ -241,7 +241,7 @@ GlBoardDrawing::build_blender()
  * draw one triangle over the whole picture take no vertex: they are drawn
  * with this array bound as well. */
 void
-GlBoardDrawing::build_quad()
+GlDrawing::build_quad()
 {
 	struct Corner {
 		float position[3];
@@ -270,7 +270,7 @@ GlBoardDrawing::build_quad()
 }
 
 void
-GlBoardDrawing::build_compose()
+GlDrawing::build_compose()
 {
 	m_compose = gl::compile_program(odin_glsl_compose_vert, odin_glsl_compose_frag);
 
@@ -294,7 +294,7 @@ GlBoardDrawing::build_compose()
 }
 
 void
-GlBoardDrawing::build_presenter()
+GlDrawing::build_presenter()
 {
 	m_presenter = gl::compile_program(odin_glsl_whole_picture_vert, odin_glsl_present_frag);
 	m_presenter_rect = gl::uniform(m_presenter, "u_rect");
@@ -306,7 +306,7 @@ GlBoardDrawing::build_presenter()
 /* What goes from one picture to another: no depth, no blending, no
  * scissor, nothing culled, all of the picture. */
 void
-GlBoardDrawing::set_2d_state()
+GlDrawing::set_2d_state()
 {
 	glDisable(GL_DEPTH_TEST);
 	glDisable(GL_BLEND);
@@ -316,7 +316,7 @@ GlBoardDrawing::set_2d_state()
 }
 
 void
-GlBoardDrawing::scene_to_pipe(unsigned slot)
+GlDrawing::scene_to_pipe(unsigned slot)
 {
 	set_2d_state();
 	glBindFramebuffer(GL_READ_FRAMEBUFFER, m_scene_fb);
@@ -333,7 +333,7 @@ GlBoardDrawing::scene_to_pipe(unsigned slot)
  * the motion blur of the cabinets (the stars of the PHARRIER logo scene
  * trail behind them at 181 = 01C6). */
 void
-GlBoardDrawing::blend_scene_to_pipe(unsigned slot, unsigned buffer, uint32_t rate)
+GlDrawing::blend_scene_to_pipe(unsigned slot, unsigned buffer, uint32_t rate)
 {
 	set_2d_state();
 	glBindFramebuffer(GL_FRAMEBUFFER, m_pipe_fb[slot]);
@@ -355,7 +355,7 @@ GlBoardDrawing::blend_scene_to_pipe(unsigned slot, unsigned buffer, uint32_t rat
 }
 
 void
-GlBoardDrawing::keep_picture(unsigned slot, unsigned buffer)
+GlDrawing::keep_picture(unsigned slot, unsigned buffer)
 {
 	if (gl::copy_image()) {
 		glCopyImageSubData(m_pipe[slot], GL_TEXTURE_2D, 0, 0, 0, 0,
@@ -377,7 +377,7 @@ GlBoardDrawing::keep_picture(unsigned slot, unsigned buffer)
 /* The texture of a layer is made the first time, and made again when what
  * it holds changes. */
 void
-GlBoardDrawing::set_layer(unsigned i, LayerTexels texels, const void *pixels)
+GlDrawing::set_layer(unsigned i, LayerTexels texels, const void *pixels)
 {
 	const bool same = m_layer_texels[i] == texels;
 
@@ -439,7 +439,7 @@ GlBoardDrawing::set_layer(unsigned i, LayerTexels texels, const void *pixels)
 
 /* The two blender inputs are on the units 0 and 1, the 2D layers on 2 and 3. */
 void
-GlBoardDrawing::compose(const Compose &c, unsigned shown, const bool layers[2])
+GlDrawing::compose(const Compose &c, unsigned shown, const bool layers[2])
 {
 	const GLuint layer[2] = { layers[0] ? m_layer_tex[0] : 0, layers[1] ? m_layer_tex[1] : 0 };
 	const auto texture = [&](Compose::Source source) {
@@ -487,14 +487,14 @@ GlBoardDrawing::compose(const Compose &c, unsigned shown, const bool layers[2])
 }
 
 void
-GlBoardDrawing::present(PictureRect rect, unsigned window_w, unsigned window_h)
+GlDrawing::present(PictureRect rect, unsigned window_w, unsigned window_h)
 {
 	show_picture(rect, window_w, window_h);
 	gl::check("a frame");
 }
 
 void
-GlBoardDrawing::show_picture(PictureRect rect, unsigned window_w, unsigned window_h)
+GlDrawing::show_picture(PictureRect rect, unsigned window_w, unsigned window_h)
 {
 	const unsigned w = rect.w, h = rect.h;
 
@@ -557,7 +557,7 @@ GlBoardDrawing::show_picture(PictureRect rect, unsigned window_w, unsigned windo
 }
 
 void
-GlBoardDrawing::set_filter(const std::string &preset)
+GlDrawing::set_filter(const std::string &preset)
 {
 	if (preset == m_filter_preset)
 		return;
@@ -567,7 +567,7 @@ GlBoardDrawing::set_filter(const std::string &preset)
 }
 
 void
-GlBoardDrawing::draw_loading(std::span<const LoadingRect> rects, unsigned, unsigned window_h)
+GlDrawing::draw_loading(std::span<const LoadingRect> rects, unsigned, unsigned window_h)
 {
 	/* What the drawing of the frames finds is left as it was. */
 	const GLboolean scissoring = glIsEnabled(GL_SCISSOR_TEST);
@@ -595,7 +595,7 @@ GlBoardDrawing::draw_loading(std::span<const LoadingRect> rects, unsigned, unsig
 }
 
 void
-GlBoardDrawing::read_kept(std::span<uint8_t> pictures)
+GlDrawing::read_kept(std::span<uint8_t> pictures)
 {
 	const size_t size = size_t{SCREEN_WIDTH} * SCREEN_HEIGHT * 4;
 	std::vector<uint8_t> whole(size_t{width()} * height() * 4);
@@ -632,7 +632,7 @@ GlBoardDrawing::read_kept(std::span<uint8_t> pictures)
 }
 
 void
-GlBoardDrawing::write_kept(std::span<const uint8_t> pictures)
+GlDrawing::write_kept(std::span<const uint8_t> pictures)
 {
 	const size_t size = size_t{SCREEN_WIDTH} * SCREEN_HEIGHT * 4;
 

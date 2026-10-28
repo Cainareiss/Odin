@@ -105,15 +105,15 @@ struct SceneDebug {
  *  - the picture of the frame: the 3D and the 2D layers composed.
  *
  * On the drawing thread (display.hpp), as the renderer. */
-class BoardDrawing {
+class Drawing {
 public:
 	static constexpr unsigned KEPT = 5;
 
 	/* With OpenGL, on the thread its context is current on; with Vulkan,
 	 * on that card (vk_common.hpp) */
-	static std::unique_ptr<BoardDrawing> make_gl();
-	static std::unique_ptr<BoardDrawing> make_vk(vk::Context &card);
-	virtual ~BoardDrawing() = default;
+	static std::unique_ptr<Drawing> make_gl();
+	static std::unique_ptr<Drawing> make_vk(vk::Context &card);
+	virtual ~Drawing() = default;
 
 	/* The pictures `scale` times finer, 1 at first; the kept ones carried
 	 * over, each pixel the nearest */

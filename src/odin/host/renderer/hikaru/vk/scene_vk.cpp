@@ -130,7 +130,7 @@ cache_fits(const std::vector<uint8_t> &bytes, const VkPhysicalDeviceProperties &
 } /* namespace */
 
 void
-VkBoardDrawing::log(const char *fmt, ...) const
+VkDrawing::log(const char *fmt, ...) const
 {
 	va_list args;
 
@@ -146,7 +146,7 @@ VkBoardDrawing::log(const char *fmt, ...) const
  * the sampler of the meshes without one (made after m_none and m_nearest),
  * an empty cache */
 void
-VkBoardDrawing::build_meshes()
+VkDrawing::build_meshes()
 {
 	const VkDevice device = m_card.device();
 	vk::Spirv code[5] = { ODIN_SPIRV_OF(mesh_vert), ODIN_SPIRV_OF(mesh_frag), ODIN_SPIRV_OF(mesh_collect_frag),
@@ -225,7 +225,7 @@ VkBoardDrawing::build_meshes()
 
 /* The card is done with them: the frames were waited for. */
 void
-VkBoardDrawing::destroy_meshes()
+VkDrawing::destroy_meshes()
 {
 	const VkDevice device = m_card.device();
 
@@ -256,7 +256,7 @@ VkBoardDrawing::destroy_meshes()
  * when its driver made it; what the cache held so far kept with it. Its name
  * has the card and the fingerprint of the shaders (FNV-1a). */
 void
-VkBoardDrawing::keep_programs_in(const std::string &folder)
+VkDrawing::keep_programs_in(const std::string &folder)
 {
 	const VkPhysicalDeviceProperties &card = m_card.properties();
 	uint64_t shaders = 0xcbf29ce484222325;
@@ -280,7 +280,7 @@ VkBoardDrawing::keep_programs_in(const std::string &folder)
 }
 
 void
-VkBoardDrawing::read_cache(const std::string &path)
+VkDrawing::read_cache(const std::string &path)
 {
 	const std::optional<std::vector<uint8_t>> file = read_file(path);
 
@@ -302,7 +302,7 @@ VkBoardDrawing::read_cache(const std::string &path)
  * made with other mesh shaders go: no pipeline of theirs would be taken
  * again. */
 void
-VkBoardDrawing::write_cache()
+VkDrawing::write_cache()
 {
 	size_t size = 0;
 
@@ -333,7 +333,7 @@ VkBoardDrawing::write_cache()
  * translucent fragments go to their lists, not to the colour: their blend
  * is that of sort.frag, the pipeline is one whatever the blend. */
 VkPipeline
-VkBoardDrawing::pipeline(const MeshVariant &variant, MeshBlend blend)
+VkDrawing::pipeline(const MeshVariant &variant, MeshBlend blend)
 {
 	if (variant.collect)
 		blend = MeshBlend::REPLACE;
@@ -478,7 +478,7 @@ VkBoardDrawing::pipeline(const MeshVariant &variant, MeshBlend blend)
 /* With the blend the variant is most often drawn with: faded by the depth
  * queue, else replacing (the others, the background's, when first met). */
 void
-VkBoardDrawing::prepare_program(uint64_t key)
+VkDrawing::prepare_program(uint64_t key)
 {
 	const std::optional<MeshVariant> variant = MeshVariant::from_key(key);
 
@@ -496,7 +496,7 @@ VkBoardDrawing::prepare_program(uint64_t key)
  * empty 3D buffer lets everything through, the clear color comes in on the
  * screen (compose). */
 void
-VkBoardDrawing::begin_scene(const odin_display_list_t &list, const SceneDebug &debug)
+VkDrawing::begin_scene(const odin_display_list_t &list, const SceneDebug &debug)
 {
 	const VkDeviceSize align = std::max<VkDeviceSize>(m_card.limits().minStorageBufferOffsetAlignment, 16);
 	const auto bytes = [](size_t n, size_t each) { return static_cast<VkDeviceSize>(std::max<size_t>(n, 1) * each); };
@@ -541,7 +541,7 @@ VkBoardDrawing::begin_scene(const odin_display_list_t &list, const SceneDebug &d
 /* The scene drawn into, emptied first or as it was left: every state of the
  * meshes set again (the commands may have been sent since, see count_now) */
 void
-VkBoardDrawing::open_scene(bool clear, bool clear_depth)
+VkDrawing::open_scene(bool clear, bool clear_depth)
 {
 	const VkCommandBuffer cb = m_card.commands();
 	const VkAttachmentLoadOp load = clear ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
@@ -573,7 +573,7 @@ VkBoardDrawing::open_scene(bool clear, bool clear_depth)
 /* The scene drawn into with the depth and the eye depths of a family of
  * the 101 (begin_families) */
 void
-VkBoardDrawing::open_family(unsigned family)
+VkDrawing::open_family(unsigned family)
 {
 	const VkCommandBuffer cb = m_card.commands();
 	vk::Image &depth = family ? m_flag_depth : m_depth;
@@ -608,7 +608,7 @@ VkBoardDrawing::open_family(unsigned family)
 /* What the meshes need set in a rendering just begun; the set of the
  * translucent fragments, or of a family, third if any */
 void
-VkBoardDrawing::set_scene_state(VkCommandBuffer cb, VkDescriptorSet set3)
+VkDrawing::set_scene_state(VkCommandBuffer cb, VkDescriptorSet set3)
 {
 	const VkRect2D all{ { 0, 0 }, { width(), height() } };
 	const VkViewport viewport{ 0.0f, 0.0f, static_cast<float>(width()), static_cast<float>(height()), 0.0f, 1.0f };
@@ -634,7 +634,7 @@ VkBoardDrawing::set_scene_state(VkCommandBuffer cb, VkDescriptorSet set3)
 }
 
 void
-VkBoardDrawing::close_scene()
+VkDrawing::close_scene()
 {
 	if (!m_open)
 		return;
@@ -643,7 +643,7 @@ VkBoardDrawing::close_scene()
 }
 
 void
-VkBoardDrawing::clear_depth()
+VkDrawing::clear_depth()
 {
 	const VkClearAttachment depth{ VK_IMAGE_ASPECT_DEPTH_BIT, 0, { .depthStencil = { 1.0f, 0 } } };
 	const VkClearRect all{ { { 0, 0 }, { width(), height() } }, 0, 1 };
@@ -665,7 +665,7 @@ VkBoardDrawing::clear_depth()
 /* The eye depths of both families and the depth of the flagged one
  * emptied; each family reads the other's (glsl/mesh.frag, FAMILIES) */
 void
-VkBoardDrawing::begin_families()
+VkDrawing::begin_families()
 {
 	const VkCommandBuffer cb = m_card.commands();
 
@@ -704,7 +704,7 @@ VkBoardDrawing::begin_families()
 }
 
 void
-VkBoardDrawing::begin_pass(const PassRules &rules)
+VkDrawing::begin_pass(const PassRules &rules)
 {
 	m_pass.alpha_ref = rules.alpha_ref;
 	m_pass.depth_bias = rules.depth_bias;
@@ -714,7 +714,7 @@ VkBoardDrawing::begin_pass(const PassRules &rules)
 }
 
 void
-VkBoardDrawing::end_scene()
+VkDrawing::end_scene()
 {
 	close_scene();
 	m_in_scene = false;
@@ -724,7 +724,7 @@ VkBoardDrawing::end_scene()
  * queue, its fog and its ambient light. The checks of scene_gl.cpp,
  * once a list. */
 void
-VkBoardDrawing::write_view(unsigned index)
+VkDrawing::write_view(unsigned index)
 {
 	const odin_viewport_t &vp = m_list->vp_list[index];
 	ViewData view{};
@@ -747,7 +747,7 @@ VkBoardDrawing::write_view(unsigned index)
 
 /* The lights of a lightset that are on, as scene_gl.cpp gives them */
 void
-VkBoardDrawing::write_lightset(unsigned index)
+VkDrawing::write_lightset(unsigned index)
 {
 	const odin_lightset_t &ls = m_list->ls_list[index];
 	LightsetData data{};
@@ -783,7 +783,7 @@ VkBoardDrawing::write_lightset(unsigned index)
  * one. Vulkan counts the turn of a triangle the other way (MARKDOWN/106
  * § 2.2). */
 void
-VkBoardDrawing::set_view(const odin_mesh_t &mesh)
+VkDrawing::set_view(const odin_mesh_t &mesh)
 {
 	const odin_viewport_t &vp = m_list->vp_list[mesh.vp_index];
 	const VkCommandBuffer cb = m_card.commands();
@@ -813,7 +813,7 @@ VkBoardDrawing::set_view(const odin_mesh_t &mesh)
 /* The texture of a texhead and its sampling, bound when they change; no
  * texture reads as OpenGL's texture 0 */
 void
-VkBoardDrawing::bind_texture(const MeshDraw &draw)
+VkDrawing::bind_texture(const MeshDraw &draw)
 {
 	const VkCommandBuffer cb = m_card.commands();
 
@@ -834,7 +834,7 @@ VkBoardDrawing::bind_texture(const MeshDraw &draw)
 }
 
 void
-VkBoardDrawing::draw_mesh(const odin_mesh_t &mesh, const MeshDraw &draw)
+VkDrawing::draw_mesh(const odin_mesh_t &mesh, const MeshDraw &draw)
 {
 	const MeshVariant &variant = draw.variant;
 

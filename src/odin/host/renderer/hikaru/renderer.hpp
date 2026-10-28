@@ -53,7 +53,7 @@ namespace odin {
 class HikaruGpu;
 
 /* Draws what the graphics chips of the Hikaru hand over, through the card of
- * the host (BoardDrawing, drawing.hpp): it stands for the chips that
+ * the host (Drawing, drawing.hpp): it stands for the chips that
  * plot the polygons (see hikaru_gpu.hpp), and keeps their rules.
  *
  * The command processor leaves the display list of a frame, the display chip
@@ -194,7 +194,7 @@ public:
 	 * the hardware whatever the scale: one pixel of each scale x scale is
 	 * saved, and comes back as all of them. The textures are decoded
 	 * again from the texture RAM. */
-	static constexpr unsigned PICTURES = BoardDrawing::KEPT;
+	static constexpr unsigned PICTURES = Drawing::KEPT;
 	static constexpr size_t PICTURE_SIZE = size_t{WIDTH} * HEIGHT * 4;
 	struct Counters {
 		uint32_t num_lists;
@@ -306,7 +306,7 @@ private:
 	ListTextures m_list_textures[3];
 
 	/* What the card of the host does for it */
-	std::unique_ptr<BoardDrawing> m_card;
+	std::unique_ptr<Drawing> m_card;
 	TextureCache m_textures;
 	DrawTimes m_times;
 

@@ -37,7 +37,7 @@ struct SDL_Window;
 
 namespace odin {
 
-class BoardDrawing;
+class Drawing;
 
 /* A picture the renderer drew, as the graphics card holds it (0: none),
  * and its size */
@@ -72,7 +72,7 @@ inline constexpr unsigned BLUR_ROUNDS = 2;
  * over it, blur the sides of the game, the background and the images of
  * the menu. host_graphics_gl.cpp does it with OpenGL, host_graphics_vk.cpp
  * with Vulkan. The pictures of the
- * board are drawn by the renderer (renderer.hpp) through the BoardDrawing
+ * board are drawn by the renderer (renderer.hpp) through the Drawing
  * the card makes for it (drawing.hpp); it hands its picture over as
  * a HostPicture.
  *
@@ -136,7 +136,7 @@ public:
 	virtual uint64_t ui_image(HostImage image) const = 0;
 
 	/* What the card does for the renderer of a game */
-	virtual std::unique_ptr<BoardDrawing> make_board_drawing() = 0;
+	virtual std::unique_ptr<Drawing> make_drawing() = 0;
 };
 
 } /* namespace odin */
