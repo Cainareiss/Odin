@@ -21,7 +21,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 # awk -v part=VERTEX|FRAGMENT -f filter_spirv.awk <folder>/*.glsl <pass> : the
-# source of a pass of a filter of the picture for Vulkan (Makefile), as
+# source of a pass of a filter of the picture for Vulkan (CMakeLists.txt), as
 # picture_preset.cpp's part() makes it for OpenGL: its version first, then
 # its part defined. Each parameter the shaders of its folder declare
 # (#pragma parameter) a specialization constant at its first value, where

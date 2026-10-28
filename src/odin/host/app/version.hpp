@@ -27,7 +27,7 @@
 
 namespace odin {
 
-/* The commit of git Odin is built from, as the Makefile gives it (the page
+/* The commit of git Odin is built from, as CMakeLists.txt gives it (the page
  * About of the menu says it); empty for a build from elsewhere */
 const char *odin_version();
 

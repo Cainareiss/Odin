@@ -27,7 +27,7 @@
  * cabinet, and what is refused. The chips of the list of the repo are checked
  * too: run it from the repo.
  *
- * The objects of miniz and the LZMA SDK are those make builds.
+ * The objects of miniz and the LZMA SDK are those of the build of Odin.
  * Build: g++ -std=c++20 -O2 -flto=auto -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
  *            -I src -isystem src/miniz -isystem src/lzma tests/games/games_tests.cpp src/odin/host/app/games.cpp \
  *            src/odin/host/input/roles.cpp src/odin/host/app/rom_files.cpp src/miniz/miniz.o src/lzma/7zAlloc.o src/lzma/7zArcIn.o \
