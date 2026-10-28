@@ -1360,7 +1360,10 @@ cabinet as they are. No library emits them, the X360 port skips them, and
 no list of the attract loops shows what they change. A whole game of RACER
 (course and pod selection, race, walls hit, time out) sends none.
 
-Implement proper model caching using VBOs.
+The vertices of a list go to the card once, in one buffer with the
+indices of its triangles (GlDrawing::upload_vertices; the Vulkan drawing
+stages them the same way), and each mesh draws its share of them;
+nothing is kept from a list to the next.
 
 
 AIRTRIX
