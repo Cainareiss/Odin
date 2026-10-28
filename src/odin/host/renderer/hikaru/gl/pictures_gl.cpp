@@ -108,6 +108,31 @@ GlBoardDrawing::build_pictures()
 	                          GL_RENDERBUFFER, m_scene_depth);
 	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
 		gl::fatal("the framebuffer of the lists is not complete");
+
+	/* Where the two families of the 101 are drawn (begin_families) */
+	{
+		static const GLenum targets[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
+
+		glGenRenderbuffers(1, &m_flag_depth);
+		glBindRenderbuffer(GL_RENDERBUFFER, m_flag_depth);
+#ifdef ODIN_GLES
+		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, static_cast<GLsizei>(w), static_cast<GLsizei>(h));
+#else
+		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, static_cast<GLsizei>(w), static_cast<GLsizei>(h));
+#endif
+		glGenFramebuffers(2, m_family_fb);
+		for (unsigned f = 0; f < 2; f++) {
+			m_eye[f] = gl::new_texture(GL_RG32F, w, h);
+			glBindFramebuffer(GL_FRAMEBUFFER, m_family_fb[f]);
+			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_scene_color, 0);
+			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, m_eye[f], 0);
+			glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER,
+			                          f == 0 ? m_scene_depth : m_flag_depth);
+			glDrawBuffers(2, targets);
+			if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+				gl::fatal("a framebuffer of the families is not complete");
+		}
+	}
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 	/* The two 3D buffers and the pictures of the last three lists,
@@ -146,6 +171,9 @@ GlBoardDrawing::destroy_pictures(bool kept_too)
 	glDeleteFramebuffers(1, &m_scene_fb);
 	glDeleteTextures(1, &m_scene_color);
 	glDeleteRenderbuffers(1, &m_scene_depth);
+	glDeleteFramebuffers(2, m_family_fb);
+	glDeleteTextures(2, m_eye);
+	glDeleteRenderbuffers(1, &m_flag_depth);
 	glDeleteFramebuffers(3, m_pipe_fb);
 	glDeleteFramebuffers(1, &m_frame_fb);
 	glDeleteTextures(1, &m_frame_color);

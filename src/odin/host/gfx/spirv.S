@@ -44,6 +44,7 @@ SPIRV(present_frag, "glsl/present.frag.spv")
 SPIRV(mesh_vert, "glsl/mesh.vert.spv")
 SPIRV(mesh_frag, "glsl/mesh.frag.spv")
 SPIRV(mesh_collect_frag, "glsl/mesh_collect.frag.spv")
+SPIRV(mesh_families_frag, "glsl/mesh_families.frag.spv")
 SPIRV(mesh_geom, "glsl/mesh.geom.spv")
 SPIRV(sort_frag, "glsl/sort.frag.spv")
 

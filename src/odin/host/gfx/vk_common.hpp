@@ -216,6 +216,8 @@ public:
 	bool primitive_ids() const { return m_primitive_ids; }
 	bool primitive_ids_tessellation() const { return m_primitive_ids_tessellation; }
 	bool geometry_shaders() const { return m_geometry_shaders; }
+	/* Each colour attachment its own blend */
+	bool independent_blend() const { return m_independent_blend; }
 	bool portability_subset() const { return m_portability_subset; }
 	/* Whether the queue writes the time, its stamps reset by the
 	 * processor; the bits of a stamp and its unit, in ns */
@@ -351,6 +353,7 @@ private:
 	bool m_primitive_ids = false;
 	bool m_primitive_ids_tessellation = false;
 	bool m_geometry_shaders = false;
+	bool m_independent_blend = false;
 	bool m_host_query_reset = false;
 	uint32_t m_stamp_bits = 0;
 	bool m_validation = false;

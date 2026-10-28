@@ -410,6 +410,7 @@ Context::make_device(std::string &why)
 	if (!had.all.features.samplerAnisotropy)
 		m_max_anisotropy = 1.0f;
 	wanted.all.features.geometryShader = m_geometry_shaders = had.all.features.geometryShader;
+	wanted.all.features.independentBlend = m_independent_blend = had.all.features.independentBlend;
 	m_primitive_ids_tessellation = !had.all.features.geometryShader && had.all.features.tessellationShader;
 	wanted.all.features.tessellationShader = m_primitive_ids_tessellation;
 	m_primitive_ids = had.all.features.geometryShader || m_primitive_ids_tessellation;

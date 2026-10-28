@@ -175,6 +175,7 @@ MeshPrograms::compile(const MeshVariant &variant)
 	define("COLLECT", variant.collect);
 	define("HAS_PATTERN", variant.has_pattern);
 	define("NATIVE_2D", variant.native);
+	define("FAMILIES", variant.families);
 
 	MeshProgram program;
 	program.id = link(variant.key(), defines + odin_glsl_mesh_vert, defines + odin_glsl_mesh_frag,
@@ -213,12 +214,15 @@ MeshPrograms::compile(const MeshVariant &variant)
 	locs.blend_mode = find("u_blend_mode");
 	locs.pattern = find("u_pattern");
 	locs.lod_bias = find("u_lod_bias");
+	locs.family = find("u_family");
 
 	/* The texture units never change. */
 	glUseProgram(program.id);
 	glUniform1i(find("u_texture"), UNIT_TEXTURE);
 	glUniform1i(find("u_solid_depth"), UNIT_SOLID_DEPTH);
 	glUniform1i(find("u_peel_last"), UNIT_PEEL_LAST);
+	glUniform1i(find("u_eye"), UNIT_EYE);
+	glUniform1i(find("u_flagged_eye"), UNIT_FLAGGED_EYE);
 	gl::check("a mesh program");
 
 	return program;

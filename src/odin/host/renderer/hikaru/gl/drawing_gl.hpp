@@ -62,6 +62,7 @@ public:
 	void draw_mesh(const odin_mesh_t &mesh, const MeshDraw &draw) override;
 	void end_pass() override;
 	void end_scene() override;
+	void begin_families() override;
 
 	void begin_translucent() override;
 	void begin_collect(unsigned view) override;
@@ -142,6 +143,7 @@ private:
 	void set_blend(MeshBlend blend);
 
 	/* translucent_gl.cpp */
+	void copy_solid_depth();
 	void build_list_pictures();
 	void destroy_list_pictures();
 	void build_lists();
@@ -152,6 +154,16 @@ private:
 	unsigned m_scale = 1;
 	/* Where a list is drawn: a colour buffer and a depth buffer */
 	GLuint m_scene_fb, m_scene_color, m_scene_depth;
+	/* A view with both families of the 101 (begin_families): for each,
+	 * the eye depth of the mesh that keeps each pixel (0: none) and the
+	 * scale its 101 gives, and
+	 * where it is drawn: the colour of the scene, that eye depth, a
+	 * depth (the unflagged family that of the scene, the flagged one its
+	 * own); the family drawn into now, NO_FAMILY: the scene */
+	static constexpr unsigned NO_FAMILY = 2;
+	GLuint m_eye[2], m_flag_depth, m_family_fb[2];
+	bool m_families_view = false;
+	unsigned m_family = NO_FAMILY;
 	/* The two 3D buffers of the hardware: the picture last blended into
 	 * each */
 	GLuint m_buffers[2];

@@ -101,16 +101,44 @@ GlBoardDrawing::begin_scene(const odin_display_list_t &list, const SceneDebug &d
 void
 GlBoardDrawing::clear_depth()
 {
+	glBindFramebuffer(GL_FRAMEBUFFER, m_scene_fb);
 	glDepthMask(GL_TRUE);
 	glDisable(GL_SCISSOR_TEST);
 	glClear(GL_DEPTH_BUFFER_BIT);
 	glEnable(GL_SCISSOR_TEST);
+	m_families_view = false;
+	m_family = NO_FAMILY;
+}
+
+/* The meshes test the other family themselves (glsl/mesh.frag, FAMILIES). */
+void
+GlBoardDrawing::begin_families()
+{
+	static const GLfloat none[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+	static const GLfloat farthest = 1.0f;
+
+	glDepthMask(GL_TRUE);
+	glDisable(GL_SCISSOR_TEST);
+	glBindFramebuffer(GL_FRAMEBUFFER, m_family_fb[1]);
+	glClearBufferfv(GL_COLOR, 1, none);
+	glClearBufferfv(GL_DEPTH, 0, &farthest);
+	glBindFramebuffer(GL_FRAMEBUFFER, m_family_fb[0]);
+	glClearBufferfv(GL_COLOR, 1, none);
+	glBindFramebuffer(GL_FRAMEBUFFER, m_scene_fb);
+	glEnable(GL_SCISSOR_TEST);
+	m_families_view = true;
+	m_family = NO_FAMILY;
 }
 
 void
 GlBoardDrawing::begin_pass(const PassRules &rules)
 {
+	/* The eye depths of the families are not blended (begin_families);
+	 * where a buffer cannot be left out, the alpha of 1 of those
+	 * fragments keeps them with the blends of the depth-writing types. */
 	glEnable(GL_BLEND);
+	if (gl::blend_per_buffer())
+		glDisablei(GL_BLEND, 1);
 	m_blend[0] = ~0u;
 	set_blend(MeshBlend::REPLACE);
 	glDepthMask(rules.depth_write ? GL_TRUE : GL_FALSE);
@@ -129,6 +157,7 @@ void
 GlBoardDrawing::end_scene()
 {
 	/* What the meshes left bound is the 2D drawing's then. */
+	glBindFramebuffer(GL_FRAMEBUFFER, m_scene_fb);
 	glBindVertexArray(0);
 	glBindSampler(0, 0);
 	m_unit0_sampler = 0;
@@ -374,6 +403,19 @@ GlBoardDrawing::draw_mesh(const odin_mesh_t &mesh, const MeshDraw &draw)
 		m_peel.draws.push_back({ &mesh, draw });
 		return;
 	}
+	/* Into the depth of its family, the other family's eye depth read; a
+	 * mesh of no family into the scene (its colour alone) */
+	if (const unsigned family = !draw.variant.families ? NO_FAMILY :
+	                            depth_bias::flagged(static_cast<int>(mesh.depth_bias)) ? 1 : 0;
+	    family != m_family && !draw.variant.collect) {
+		m_family = family;
+		glBindFramebuffer(GL_FRAMEBUFFER, family == NO_FAMILY ? m_scene_fb : m_family_fb[family]);
+		if (family != NO_FAMILY) {
+			glActiveTexture(GL_TEXTURE0 + MeshPrograms::UNIT_EYE);
+			glBindTexture(GL_TEXTURE_2D, m_eye[1 - family]);
+			glActiveTexture(GL_TEXTURE0);
+		}
+	}
 	set_blend(draw.blend);
 	use_program(draw.variant);
 	const MeshProgram::Locations &locs = m_program->locs;
@@ -408,8 +450,6 @@ GlBoardDrawing::draw_mesh(const odin_mesh_t &mesh, const MeshDraw &draw)
 		held.scale = static_cast<float>(m_scale);
 		glUniform1f(locs.scale, held.scale);
 	}
-	if (m_variant.collect)
-		glUniform1ui(locs.blend_mode, draw.blend_mode);
 
 	upload_viewport(mesh);
 	bind_texture(draw);
@@ -430,6 +470,12 @@ GlBoardDrawing::draw_mesh(const odin_mesh_t &mesh, const MeshDraw &draw)
 	if (m_variant.collect && held.sort_scale != sort_scale) {
 		held.sort_scale = sort_scale;
 		glUniform1f(locs.sort_scale, sort_scale);
+	}
+	/* A translucent mesh meets what kept each pixel by the families of
+	 * both, if the view has flagged meshes (0: it has none) */
+	if (m_variant.collect) {
+		glUniform1ui(locs.blend_mode, draw.blend_mode);
+		glUniform1f(locs.family, !m_families_view ? 0.0f : depth_bias::flagged(bias) ? -1.0f : 1.0f);
 	}
 
 	for (unsigned i = 0; i < mesh.num_instances; i++)

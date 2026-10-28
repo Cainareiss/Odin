@@ -75,6 +75,7 @@ MeshVariant::key() const
 	put(collect, 1);
 	put(has_pattern, 1);
 	put(native, 1);
+	put(families, 1);
 	return k;
 }
 
@@ -110,6 +111,7 @@ MeshVariant::from_key(uint64_t key)
 	variant.collect = take(1);
 	variant.has_pattern = take(1);
 	variant.native = take(1);
+	variant.families = take(1);
 
 	if (!known || variant.key() != key)
 		return std::nullopt;

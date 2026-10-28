@@ -318,6 +318,12 @@ add_custom_command(OUTPUT ${out}
 		${GLSLANG} ${out} ${GLSL}/fragment_lists.glsl ${GLSL}/mesh.frag
 	DEPENDS ${GLSL}/fragment_lists.glsl ${GLSL}/mesh.frag VERBATIM)
 list(APPEND SPIRV ${out})
+set(out ${SPIRV_DIR}/glsl/mesh_families.frag.spv)
+add_custom_command(OUTPUT ${out}
+	COMMAND sh -c "{ echo '#version 450'; echo '#define FAMILIES 1'; cat \"$2\"; } | \"$0\" -V --stdin -S frag -o \"$1\""
+		${GLSLANG} ${out} ${GLSL}/mesh.frag
+	DEPENDS ${GLSL}/mesh.frag VERBATIM)
+list(APPEND SPIRV ${out})
 
 # Files embedded with .incbin
 set(UI ${CMAKE_SOURCE_DIR}/src/odin/host/ui)

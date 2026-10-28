@@ -73,6 +73,7 @@ struct MeshVariant {
 	bool collect = false;		/* translucent fragments go to the lists */
 	bool has_pattern = false;	/* 501 */
 	bool native = false;		/* Native 2D: with glsl/mesh.geom */
+	bool families = false;		/* its depth by its family of the 101 (depth_bias.hpp) */
 
 	/* The whole of it as one number, and the variant of a number, if
 	 * it is the number of one. */

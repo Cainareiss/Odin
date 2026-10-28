@@ -132,6 +132,13 @@ public:
 	virtual void end_pass() = 0;
 	virtual void end_scene() = 0;
 
+	/* A view with meshes of both families of the 101 (depth_bias.hpp),
+	 * until clear_depth: each mesh that writes the depth (variant
+	 * families) is drawn into the depth of its family, where the 101
+	 * moves it, and meets the other family at the eye depths both leave;
+	 * the translucent fragments meet what kept each pixel the same way. */
+	virtual void begin_families() = 0;
+
 	/* The translucent polygons of a view (renderer_translucent.cpp),
 	 * within its pass: begin_translucent; then their meshes drawn between
 	 * begin_collect and end_collect put their fragments in lists, and the

@@ -90,6 +90,26 @@ void test_cabinets()
 	check(bias::sort_scale(held(0x1FF)) * 1.0027f < bias::sort_scale(0), "the glow before the glass");
 	check(bias::test_scale(held(0x1FF)) * 1.011f < bias::test_scale(0), "the glow before the roof");
 
+	/* The two families (flagged): the pit of SGNASCAR, its lane (0x500)
+	 * on its ground (0x400), the shadows of its crew 0.35 % and its air
+	 * hose 0.5 % before the lane; its track, the painted lines 1.5 %
+	 * behind it; the wall and the stands. */
+	check(bias::flagged(held(0x500)) && bias::flagged(held(0x400)) && bias::flagged(held(0x700)),
+	      "bit 26, the family of SGNASCAR's track");
+	check(!bias::flagged(0) && !bias::flagged(held(0x3FF)) && !bias::flagged(held(0x1FF)),
+	      "no bit 26, the other family");
+	check(bias::before(1.0f, held(0x500), 1.0f, held(0x400)), "the lane over its ground");
+	check(!bias::before(1.0f, held(0x400), 1.0f, held(0x500)), "the ground under its lane");
+	check(bias::before(0.9965f, 0, 1.0f, held(0x500)), "a crew shadow over the lane");
+	check(bias::before(0.995f, 0, 1.0f, held(0x500)), "the air hose over the lane");
+	check(!bias::before(1.0f, held(0x500), 0.995f, 0), "the lane under the air hose");
+	check(bias::before(1.015f, held(0x500), 1.0f, held(0x400)), "a painted line over its track");
+	check(bias::before(1.06f, held(0x700), 1.0f, held(0x400)), "a car shadow over its track");
+	check(bias::before(0.9944f, held(0x401), 1.0f, 0), "the wall before the stands");
+	check(!bias::before(1.0f, 0, 0.9944f, held(0x401)), "the stands behind the wall");
+	check(bias::before(1.0f, held(0x01F), 1.001f, 0) && !bias::before(1.003f, held(0x01F), 1.0f, 0) &&
+	      bias::before(1.002f, held(0x01F), 1.0f, 0), "without bit 26, as before: 31 units");
+
 	bool positive = true;
 	for (int b = -1024; b < 1024; b++)
 		positive = positive && bias::test_scale(b) > 0.9f && bias::sort_scale(b) > 0.98f;

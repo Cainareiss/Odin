@@ -52,6 +52,7 @@ layout(push_constant) uniform mesh_t {
 	float u_sort_scale;
 	uint u_snap;
 	float u_scale;
+	float u_family;
 };
 /* 0: the card clips z from 0 to w, not from -w to w as OpenGL */
 layout(constant_id = 0) const int GL_CLIP_SPACE = 1;

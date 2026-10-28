@@ -254,6 +254,13 @@ border_clamp()
 	return has;
 }
 
+/* glDisablei */
+bool
+blend_per_buffer()
+{
+	return es_version() >= 32;
+}
+
 const char *
 es_version_head()
 {
@@ -290,6 +297,12 @@ bool
 buffer_storage()
 {
 	return GLEW_ARB_buffer_storage;
+}
+
+bool
+blend_per_buffer()
+{
+	return true;
 }
 
 bool

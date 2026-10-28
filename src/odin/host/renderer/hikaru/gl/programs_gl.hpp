@@ -63,6 +63,7 @@ struct MeshProgram {
 		GLint blend_mode;
 		GLint pattern;
 		GLint lod_bias;
+		GLint family;
 	};
 	/* What it was given last, so as not to give it again: indices in
 	 * the display list being drawn, see Renderer::forget_held. */
@@ -95,7 +96,9 @@ public:
 	enum : GLint {
 		UNIT_TEXTURE = 0,
 		UNIT_SOLID_DEPTH = 6,
-		UNIT_PEEL_LAST = 7
+		UNIT_PEEL_LAST = 7,
+		UNIT_EYE = 8,		/* the other family's; the translucent ones: the unflagged */
+		UNIT_FLAGGED_EYE = 9
 	};
 
 	~MeshPrograms();

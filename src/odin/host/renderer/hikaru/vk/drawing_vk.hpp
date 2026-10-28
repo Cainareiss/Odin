@@ -64,6 +64,7 @@ public:
 	void draw_mesh(const odin_mesh_t &mesh, const MeshDraw &draw) override;
 	void end_pass() override {}
 	void end_scene() override;
+	void begin_families() override;
 
 	void begin_translucent() override;
 	void begin_collect(unsigned view) override;
@@ -144,6 +145,7 @@ private:
 		float sort_scale;
 		uint32_t snap;
 		float scale;
+		float family;
 	};
 
 	/* The number of the picture of the frame, as the window reads it;
@@ -173,6 +175,8 @@ private:
 	void build_meshes();
 	void destroy_meshes();
 	void open_scene(bool clear, bool clear_depth = false);
+	void open_family(unsigned family);
+	void set_scene_state(VkCommandBuffer cb, VkDescriptorSet set3);
 	void close_scene();
 	void log(const char *fmt, ...) const __attribute__((format(printf, 2, 3)));
 	VkPipeline pipeline(const MeshVariant &variant, MeshBlend blend);
@@ -232,6 +236,7 @@ private:
 	 * file), the list of the programs of the game */
 	vk::Image m_depth;
 	VkShaderModule m_mesh_vert = VK_NULL_HANDLE, m_mesh_frag = VK_NULL_HANDLE, m_mesh_collect = VK_NULL_HANDLE;
+	VkShaderModule m_mesh_families = VK_NULL_HANDLE;
 	VkShaderModule m_mesh_geom = VK_NULL_HANDLE;	/* Native 2D */
 	VkDescriptorSetLayout m_list_layout = VK_NULL_HANDLE, m_collect_layout = VK_NULL_HANDLE;
 	VkPipelineLayout m_mesh_layout = VK_NULL_HANDLE;
@@ -274,6 +279,17 @@ private:
 	 * counts go with (0: none); the pass that blends them */
 	bool m_collecting = false;
 	VkDescriptorSet m_collect_set = VK_NULL_HANDLE;
+	/* A view with both families of the 101 (begin_families, as
+	 * scene_gl.cpp): the eye depth and the scale of the mesh that keeps each
+	 * pixel in each family, the depth of the flagged one, the set each
+	 * family reads the other's eye depths through, the family drawn into
+	 * now (NO_FAMILY: the scene) */
+	static constexpr unsigned NO_FAMILY = 2;
+	static constexpr VkFormat EYE_FORMAT = VK_FORMAT_R32G32_SFLOAT;
+	vk::Image m_eye[2], m_flag_depth;
+	VkDescriptorSet m_family_set[2] = { VK_NULL_HANDLE, VK_NULL_HANDLE };
+	bool m_families_view = false;
+	unsigned m_family = NO_FAMILY;
 	vk::Image m_solid_depth, m_heads, m_below;
 	vk::Buffer m_nodes, m_counts, m_readback;
 	VkDeviceSize m_count_stride = 4;

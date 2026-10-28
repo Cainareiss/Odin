@@ -99,6 +99,11 @@ VkBoardDrawing::build_list_pictures()
 	                            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
 	m_below = m_card.make_image(PICTURE_FORMAT, width(), height(), 1,
 	                            VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
+	for (vk::Image &eye : m_eye)
+		eye = m_card.make_image(EYE_FORMAT, width(), height(), 1,
+		                        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+	m_flag_depth = m_card.make_image(m_card.depth_format(), width(), height(), 1,
+	                                 VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
 }
 
 /* What the buffer held is lost; the old one goes once the card is done. */
@@ -138,6 +143,9 @@ VkBoardDrawing::begin_translucent()
 	m_card.barrier(cb, m_solid_depth, vk::COPIED_TO);
 	m_fn.vkCmdCopyImage(cb, m_depth.image, m_depth.layout, m_solid_depth.image, m_solid_depth.layout, 1, &copy);
 	m_card.barrier(cb, m_solid_depth, vk::SAMPLED);
+	/* What each family left, in a view with both (begin_families) */
+	for (vk::Image &eye : m_eye)
+		m_card.barrier(cb, eye, vk::SAMPLED);
 }
 
 /* The lists of the pixels and the count of the view emptied; what the
@@ -168,7 +176,9 @@ VkBoardDrawing::begin_collect(unsigned view)
 	const VkDescriptorImageInfo heads{ VK_NULL_HANDLE, m_heads.view, m_heads.layout };
 	const VkDescriptorBufferInfo count{ m_counts.buffer, view * m_count_stride, sizeof(uint32_t) };
 	const VkDescriptorImageInfo depth{ m_nearest, m_solid_depth.view, m_solid_depth.layout };
-	const VkWriteDescriptorSet writes[4] = {
+	const VkDescriptorImageInfo eyes[2] = { { m_nearest, m_eye[0].view, m_eye[0].layout },
+		                                { m_nearest, m_eye[1].view, m_eye[1].layout } };
+	const VkWriteDescriptorSet writes[6] = {
 		{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, m_collect_set, 0, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 		  nullptr, &nodes, nullptr },
 		{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, m_collect_set, 1, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
@@ -177,8 +187,12 @@ VkBoardDrawing::begin_collect(unsigned view)
 		  nullptr, &count, nullptr },
 		{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, m_collect_set, 3, 0, 1,
 		  VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &depth, nullptr, nullptr },
+		{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, m_collect_set, 4, 0, 1,
+		  VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &eyes[0], nullptr, nullptr },
+		{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, m_collect_set, 5, 0, 1,
+		  VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &eyes[1], nullptr, nullptr },
 	};
-	m_fn.vkUpdateDescriptorSets(m_card.device(), 4, writes, 0, nullptr);
+	m_fn.vkUpdateDescriptorSets(m_card.device(), 6, writes, 0, nullptr);
 
 	m_collecting = true;
 	m_pass.order = 0;

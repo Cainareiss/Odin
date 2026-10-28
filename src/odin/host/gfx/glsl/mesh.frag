@@ -44,6 +44,9 @@ struct light_t {
 	float table[16];
 };
 
+#ifndef FAMILIES
+#define FAMILIES 0
+#endif
 #ifdef VULKAN
 #ifndef COLLECT
 #define COLLECT 0
@@ -92,7 +95,15 @@ layout(set = 2, binding = 0) uniform sampler u_sampling;
 layout(std430, set = 3, binding = 2) buffer count_t {
 	uint u_count;
 };
+#endif
+#if COLLECT != 0
 layout(set = 3, binding = 3) uniform sampler2D u_solid_depth;
+#endif
+#if COLLECT != 0 || FAMILIES != 0
+layout(set = 3, binding = 4) uniform sampler2D u_eye;
+#endif
+#if COLLECT != 0
+layout(set = 3, binding = 5) uniform sampler2D u_flagged_eye;
 #endif
 layout(push_constant) uniform mesh_t {
 	uint u_view, u_mv, u_mv2, u_lightset;
@@ -102,6 +113,7 @@ layout(push_constant) uniform mesh_t {
 	float u_sort_scale;
 	uint u_snap;
 	float u_scale;
+	float u_family;
 };
 #define u_lights u_lightsets[u_lightset].lights
 #define u_ambient u_views[u_view].ambient
@@ -112,9 +124,15 @@ layout(push_constant) uniform mesh_t {
 #define normalize(v) ((v) * inversesqrt (dot ((v), (v))))
 
 layout(location = 0) out vec4 fragColor;
+#if FAMILIES != 0
+layout(location = 1) out vec4 fragEye;
+#endif
 #elif defined(PEELING) && COLLECT != 0
 layout(location = 0) out vec4 fragColor;
 layout(location = 1) out vec4 fragInfo;
+#elif FAMILIES != 0
+layout(location = 0) out vec4 fragColor;
+layout(location = 1) out vec4 fragEye;
 #else
 out vec4 fragColor;
 #endif
@@ -141,6 +159,9 @@ layout(std430, binding = 1) buffer count_t {
 uniform sampler2D	u_peel_last;
 #endif
 uniform sampler2D	u_solid_depth;
+uniform sampler2D	u_eye;
+uniform sampler2D	u_flagged_eye;
+uniform float		u_family;
 uniform uint		u_order;
 uniform uint		u_blend_mode;
 uniform float		u_depth_scale;
@@ -327,6 +348,19 @@ main (void)
 	float frag_depth = log2 (1.0 + 1.0 / gl_FragCoord.w) * (1.0 / 24.0);
 	gl_FragDepth = frag_depth;
 
+#if FAMILIES != 0
+	/* In a view with both families of the 101 (depth_bias.hpp), a mesh is
+	 * drawn into the depth of its own, where the 101 moves it, and meets
+	 * the other family at the eye depth that family left, its own unmoved;
+	 * it leaves its own (0: none) and its scale. Equal ones keep the
+	 * pixel, as the depth test does. */
+	float eye_depth = 1.0 / (gl_FragCoord.w * u_depth_scale);
+	float other = texelFetch (u_eye, pixel, 0).r;
+	if (other != 0.0 && eye_depth > other * 1.000001)
+		discard;
+	fragEye = vec4 (eye_depth, u_depth_scale, 0.0, 1.0);
+#endif
+
 	if (HAS_TEXTURE != 0) {
 #ifdef GL_ES
 		vec4 texel = texture (u_texture, p_texcoords, u_lod_bias);
@@ -403,9 +437,25 @@ main (void)
 
 #if COLLECT != 0
 	/* A translucent fragment is kept unless it is behind the other
-	 * types, whose depth buffer has steps of 6e-8. */
-	if (frag_depth >= 1.0 ||
-	    frag_depth > texelFetch (u_solid_depth, pixel, 0).r + 3.0e-8)
+	 * types, whose depth buffer has steps of 6e-8. In a view with both
+	 * families of the 101 (depth_bias.hpp), the pixel is kept by the
+	 * family whose eye depth there is the nearer: against a mesh of its
+	 * own family, the depths moved (the unflagged ones as the buffer has
+	 * them); against the other, the eye depths. */
+	float solid = texelFetch (u_solid_depth, pixel, 0).r;
+	bool behind = frag_depth > solid + 3.0e-8;
+
+	if (u_family != 0.0) {
+		vec2 unflagged = texelFetch (u_eye, pixel, 0).xy, flagged = texelFetch (u_flagged_eye, pixel, 0).xy;
+		bool by_flagged = flagged.x != 0.0 && (unflagged.x == 0.0 || flagged.x <= unflagged.x);
+		float eye_depth = 1.0 / (gl_FragCoord.w * u_depth_scale);
+
+		if (by_flagged && u_family < 0.0)
+			behind = eye_depth * u_depth_scale > flagged.x * flagged.y * 1.000001;
+		else if (by_flagged || (unflagged.x != 0.0 && u_family < 0.0))
+			behind = eye_depth > (by_flagged ? flagged.x : unflagged.x) * 1.000001;
+	}
+	if (frag_depth >= 1.0 || behind)
 		discard;
 #endif
 

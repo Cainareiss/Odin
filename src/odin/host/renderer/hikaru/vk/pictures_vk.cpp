@@ -146,7 +146,8 @@ VkBoardDrawing::build_pictures()
 void
 VkBoardDrawing::destroy_pictures(bool kept_too)
 {
-	std::vector<vk::Image> gone = { m_scene, m_depth, m_frame, m_solid_depth, m_heads, m_below };
+	std::vector<vk::Image> gone = { m_scene, m_depth, m_frame, m_solid_depth, m_heads, m_below,
+	                                m_eye[0], m_eye[1], m_flag_depth };
 
 	if (kept_too)
 		gone.insert(gone.end(), std::begin(m_kept), std::end(m_kept));

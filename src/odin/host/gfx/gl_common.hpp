@@ -65,6 +65,7 @@ bool copy_image();
 bool buffer_storage();
 bool anisotropic_filter();
 bool border_clamp();
+bool blend_per_buffer();
 #ifdef ODIN_GLES
 /* #version and precision lines for GLSL ES */
 const char *es_version_head();

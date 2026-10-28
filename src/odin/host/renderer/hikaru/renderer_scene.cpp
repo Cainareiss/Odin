@@ -30,6 +30,7 @@
  * (drawing.hpp). */
 
 #include "odin/host/renderer/hikaru/renderer.hpp"
+#include "odin/host/renderer/hikaru/depth_bias.hpp"
 #include "odin/common/repeats.hpp"
 
 #include <cmath>
@@ -181,6 +182,7 @@ Renderer::variant_of(const odin_mesh_t &mesh) const
 	MeshVariant variant;
 
 	variant.collect = m_collect;
+	variant.families = m_families;
 	/* 0 and 16 are every pixel */
 	variant.has_pattern = (mesh.pattern & 15) != 0;
 
@@ -319,6 +321,23 @@ Renderer::set_opaque_blend(const odin_mesh_t &mesh)
 	m_draw.blend = is_faded_by_depth(mesh) ? MeshBlend::FADED : MeshBlend::REPLACE;
 }
 
+/* The depth-writing types or the translucent one of a view have meshes
+ * whose 101 has bit 26 (depth_bias.hpp) */
+bool
+Renderer::has_flagged(unsigned vpi) const
+{
+	static const unsigned types[] = {
+		ODIN_POLYTYPE_TRANSPARENT, ODIN_POLYTYPE_OPAQUE, ODIN_POLYTYPE_SHADOW_A,
+		ODIN_POLYTYPE_SHADOW_B, ODIN_POLYTYPE_TRANSLUCENT,
+	};
+
+	for (const unsigned polytype : types)
+		for (unsigned j = 0; j < m_list->num_meshes[vpi][polytype]; j++)
+			if (depth_bias::flagged(static_cast<int>(m_list->mesh_list[vpi][polytype][j].depth_bias)))
+				return true;
+	return false;
+}
+
 void
 Renderer::draw_polytype(unsigned vpi, unsigned polytype)
 {
@@ -340,6 +359,7 @@ Renderer::draw_polytype(unsigned vpi, unsigned polytype)
 	const PassRules rules = pass_rules(polytype);
 
 	m_card->begin_pass(rules);
+	m_families = m_families_view && rules.depth_write;
 	m_draw.blend = MeshBlend::REPLACE;
 	m_draw.weigh_by_alpha = false;
 	switch (polytype) {
@@ -395,13 +415,18 @@ Renderer::draw_scene()
 	m_card->begin_scene(*m_list, { logging() ? stdout : nullptr, m_debug[DEBUG_NO_AMBIENT] != 0,
 	                               m_debug[DEBUG_NO_DIFFUSE] != 0 });
 
-	/* Each viewport starts from an empty depth buffer. */
+	/* Each viewport starts from an empty depth buffer, each family of the
+	 * 101 its own in a view that has both (depth_bias.hpp). */
 	for (unsigned vpi = 0; vpi < 8; vpi++) {
 		m_times.part(DrawTimes::PART_VERTICES);
 		m_card->clear_depth();
+		m_families_view = has_flagged(vpi);
+		if (m_families_view)
+			m_card->begin_families();
 		for (const unsigned polytype : order)
 			draw_polytype(vpi, polytype);
 	}
+	m_families_view = m_families = false;
 	m_card->end_scene();
 }
 

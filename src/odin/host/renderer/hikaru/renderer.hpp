@@ -264,6 +264,7 @@ private:
 
 	/* renderer_scene.cpp */
 	void draw_scene();
+	bool has_flagged(unsigned vpi) const;
 	void draw_polytype(unsigned vpi, unsigned polytype);
 	void draw_mesh(const odin_mesh_t &mesh);
 	MeshVariant variant_of(const odin_mesh_t &mesh) const;
@@ -313,8 +314,11 @@ private:
 	 * how the next mesh is drawn */
 	uint32_t m_bound_tex_index;
 	MeshDraw m_draw;
-	/* The translucent fragments are collected (draw_translucent) */
+	/* The translucent fragments are collected (draw_translucent); the
+	 * view has meshes of both families of the 101 (depth_bias.hpp), and
+	 * the pass writes the depth */
 	bool m_collect;
+	bool m_families_view, m_families;
 	/* The list is drawn again, see check_last_list */
 	bool m_again;
 	/* Room for that many translucent fragments; a list did not fit, and

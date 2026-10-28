@@ -149,10 +149,11 @@ void
 VkBoardDrawing::build_meshes()
 {
 	const VkDevice device = m_card.device();
-	vk::Spirv code[4] = { ODIN_SPIRV_OF(mesh_vert), ODIN_SPIRV_OF(mesh_frag), ODIN_SPIRV_OF(mesh_collect_frag),
-		              ODIN_SPIRV_OF(mesh_geom) };
-	VkShaderModule *const modules[4] = { &m_mesh_vert, &m_mesh_frag, &m_mesh_collect, &m_mesh_geom };
-	const bool made[4] = { true, true, m_card.primitive_ids(), m_card.geometry_shaders() };
+	vk::Spirv code[5] = { ODIN_SPIRV_OF(mesh_vert), ODIN_SPIRV_OF(mesh_frag), ODIN_SPIRV_OF(mesh_collect_frag),
+		              ODIN_SPIRV_OF(mesh_geom), ODIN_SPIRV_OF(mesh_families_frag) };
+	VkShaderModule *const modules[5] = { &m_mesh_vert, &m_mesh_frag, &m_mesh_collect, &m_mesh_geom,
+		                             &m_mesh_families };
+	const bool made[5] = { true, true, m_card.primitive_ids(), m_card.geometry_shaders(), true };
 	std::vector<uint32_t> collecting;
 
 	/* gl_PrimitiveID declared through Tessellation, not Geometry (MoltenVK) */
@@ -166,7 +167,7 @@ VkBoardDrawing::build_meshes()
 		code[2] = { collecting.data(), collecting.size() * sizeof(uint32_t) };
 	}
 
-	for (unsigned i = 0; i < 4; i++) {
+	for (unsigned i = 0; i < 5; i++) {
 		if (!made[i])
 			continue;
 		const VkShaderModuleCreateInfo info{ VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO, nullptr, 0, code[i].bytes,
@@ -188,14 +189,18 @@ VkBoardDrawing::build_meshes()
 	make_sets(m_sampler_sets, VK_DESCRIPTOR_TYPE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
 
 	/* The fragments, the last of each pixel, the count of the view, the
-	 * depth the other types left (glsl/fragment_lists.glsl, mesh.frag) */
-	const VkDescriptorSetLayoutBinding lists[4] = {
+	 * depth the other types left, what each family of the 101 left
+	 * (glsl/fragment_lists.glsl, mesh.frag); a family meets the other one
+	 * through the first of those */
+	const VkDescriptorSetLayoutBinding lists[6] = {
 		{ 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
 		{ 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
 		{ 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
 		{ 3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
+		{ 4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
+		{ 5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
 	};
-	const VkDescriptorSetLayoutCreateInfo collect{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO, nullptr, 0, 4,
+	const VkDescriptorSetLayoutCreateInfo collect{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO, nullptr, 0, 6,
 	                                               lists };
 	m_card.check(m_fn.vkCreateDescriptorSetLayout(device, &collect, nullptr, &m_collect_layout),
 	             "the set of the translucent fragments");
@@ -243,6 +248,7 @@ VkBoardDrawing::destroy_meshes()
 	m_fn.vkDestroyShaderModule(device, m_mesh_vert, nullptr);
 	m_fn.vkDestroyShaderModule(device, m_mesh_frag, nullptr);
 	m_fn.vkDestroyShaderModule(device, m_mesh_collect, nullptr);
+	m_fn.vkDestroyShaderModule(device, m_mesh_families, nullptr);
 	m_fn.vkDestroyShaderModule(device, m_mesh_geom, nullptr);
 }
 
@@ -258,7 +264,8 @@ VkBoardDrawing::keep_programs_in(const std::string &folder)
 
 	if (folder.empty())
 		return;
-	for (const vk::Spirv &code : { ODIN_SPIRV_OF(mesh_vert), ODIN_SPIRV_OF(mesh_frag), ODIN_SPIRV_OF(mesh_geom) }) {
+	for (const vk::Spirv &code : { ODIN_SPIRV_OF(mesh_vert), ODIN_SPIRV_OF(mesh_frag), ODIN_SPIRV_OF(mesh_geom),
+	                                ODIN_SPIRV_OF(mesh_families_frag) }) {
 		const uint8_t *const bytes = reinterpret_cast<const uint8_t *>(code.code);
 
 		for (size_t i = 0; i < code.bytes; i++)
@@ -363,7 +370,7 @@ VkBoardDrawing::pipeline(const MeshVariant &variant, MeshBlend blend)
 		{ VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_VERTEX_BIT, m_mesh_vert,
 		  "main", &constants },
 		{ VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_FRAGMENT_BIT,
-		  variant.collect ? m_mesh_collect : m_mesh_frag, "main", &constants },
+		  variant.collect ? m_mesh_collect : variant.families ? m_mesh_families : m_mesh_frag, "main", &constants },
 		{ VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_GEOMETRY_BIT, m_mesh_geom,
 		  "main", nullptr },
 	};
@@ -410,25 +417,35 @@ VkBoardDrawing::pipeline(const MeshVariant &variant, MeshBlend blend)
 	const VkBlendFactor *const f = BLENDS[static_cast<unsigned>(blend)];
 	const VkColorComponentFlags rgba = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT |
 	                                   VK_COLOR_COMPONENT_A_BIT;
-	const VkPipelineColorBlendAttachmentState mix{ VK_TRUE, f[0], f[1], VK_BLEND_OP_ADD, f[2], f[3], VK_BLEND_OP_ADD,
-		                                       variant.collect ? 0u : rgba };
+	/* The families of the 101 leave their eye depths too, not blended;
+	 * on a card where the blend is the same for all, the alpha of 1 of
+	 * those fragments keeps them with the blends of the depth-writing
+	 * types (scene_gl.cpp) */
+	VkPipelineColorBlendAttachmentState mix[2] = {
+		{ VK_TRUE, f[0], f[1], VK_BLEND_OP_ADD, f[2], f[3], VK_BLEND_OP_ADD, variant.collect ? 0u : rgba },
+		{ VK_FALSE, VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ZERO, VK_BLEND_OP_ADD, VK_BLEND_FACTOR_ONE,
+		  VK_BLEND_FACTOR_ZERO, VK_BLEND_OP_ADD, VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT },
+	};
+	if (!m_card.independent_blend())
+		mix[1] = mix[0];
 	VkPipelineColorBlendStateCreateInfo blending{};
 	blending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-	blending.attachmentCount = 1;
-	blending.pAttachments = &mix;
+	blending.attachmentCount = variant.families ? 2 : 1;
+	blending.pAttachments = mix;
 	const VkDynamicState states[7] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR,
 		                           VK_DYNAMIC_STATE_CULL_MODE, VK_DYNAMIC_STATE_FRONT_FACE,
 		                           VK_DYNAMIC_STATE_DEPTH_TEST_ENABLE, VK_DYNAMIC_STATE_DEPTH_WRITE_ENABLE,
 		                           VK_DYNAMIC_STATE_DEPTH_COMPARE_OP };
 	const VkPipelineDynamicStateCreateInfo dynamic{ VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO, nullptr, 0, 7,
 	                                                states };
-	const VkFormat colour = PICTURE_FORMAT;
+	const VkFormat colours[2] = { PICTURE_FORMAT, EYE_FORMAT };
 	VkPipelineCreationFeedback made{}, stage_made[3] = {};
 	const VkPipelineCreationFeedbackCreateInfo feedback{ VK_STRUCTURE_TYPE_PIPELINE_CREATION_FEEDBACK_CREATE_INFO,
 		                                             nullptr, &made, num_stages, stage_made };
 	const VkPipelineRenderingCreateInfo rendering{ VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
-		                                       m_card.creation_feedback() ? &feedback : nullptr, 0, 1, &colour,
-		                                       m_card.depth_format(), VK_FORMAT_UNDEFINED };
+		                                       m_card.creation_feedback() ? &feedback : nullptr, 0,
+		                                       variant.families ? 2u : 1u, colours, m_card.depth_format(),
+		                                       VK_FORMAT_UNDEFINED };
 	VkGraphicsPipelineCreateInfo info{};
 	info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 	info.pNext = &rendering;
@@ -547,9 +564,55 @@ VkBoardDrawing::open_scene(bool clear, bool clear_depth)
 	const VkRect2D all{ { 0, 0 }, { width(), height() } };
 	const VkRenderingInfo rendering{ VK_STRUCTURE_TYPE_RENDERING_INFO, nullptr, 0, all, 1, 0, 1, &colour, &depth,
 	                                 nullptr };
-	const VkViewport viewport{ 0.0f, 0.0f, static_cast<float>(width()), static_cast<float>(height()), 0.0f, 1.0f };
 
 	m_fn.vkCmdBeginRendering(cb, &rendering);
+	set_scene_state(cb, m_collecting ? m_collect_set : VK_NULL_HANDLE);
+	m_family = NO_FAMILY;
+}
+
+/* The scene drawn into with the depth and the eye depths of a family of
+ * the 101 (begin_families) */
+void
+VkBoardDrawing::open_family(unsigned family)
+{
+	const VkCommandBuffer cb = m_card.commands();
+	vk::Image &depth = family ? m_flag_depth : m_depth;
+
+	close_scene();
+	m_card.barrier(cb, m_scene, vk::DRAWN_IN);
+	m_card.barrier(cb, m_eye[family], vk::DRAWN_IN);
+	m_card.barrier(cb, m_eye[1 - family], vk::SAMPLED);
+	m_card.barrier(cb, depth, vk::DEPTH_IN);
+	VkRenderingAttachmentInfo colours[2]{};
+	for (unsigned i = 0; i < 2; i++) {
+		const vk::Image &image = i ? m_eye[family] : m_scene;
+
+		colours[i].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+		colours[i].imageView = image.view;
+		colours[i].imageLayout = image.layout;
+		colours[i].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+		colours[i].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	}
+	VkRenderingAttachmentInfo depths = colours[0];
+	depths.imageView = depth.view;
+	depths.imageLayout = depth.layout;
+	const VkRect2D all{ { 0, 0 }, { width(), height() } };
+	const VkRenderingInfo rendering{ VK_STRUCTURE_TYPE_RENDERING_INFO, nullptr, 0, all, 1, 0, 2, colours, &depths,
+	                                 nullptr };
+
+	m_fn.vkCmdBeginRendering(cb, &rendering);
+	set_scene_state(cb, m_family_set[family]);
+	m_family = family;
+}
+
+/* What the meshes need set in a rendering just begun; the set of the
+ * translucent fragments, or of a family, third if any */
+void
+VkBoardDrawing::set_scene_state(VkCommandBuffer cb, VkDescriptorSet set3)
+{
+	const VkRect2D all{ { 0, 0 }, { width(), height() } };
+	const VkViewport viewport{ 0.0f, 0.0f, static_cast<float>(width()), static_cast<float>(height()), 0.0f, 1.0f };
+
 	m_fn.vkCmdSetViewport(cb, 0, 1, &viewport);
 	m_fn.vkCmdSetScissor(cb, 0, 1, &all);
 	m_fn.vkCmdSetCullMode(cb, VK_CULL_MODE_BACK_BIT);
@@ -560,9 +623,9 @@ VkBoardDrawing::open_scene(bool clear, bool clear_depth)
 	m_fn.vkCmdSetDepthCompareOp(cb, VK_COMPARE_OP_LESS_OR_EQUAL);
 	m_fn.vkCmdBindVertexBuffers(cb, 0, 1, &m_vertices.buffer, &m_vertices.offset);
 	m_fn.vkCmdBindIndexBuffer(cb, m_indices.buffer, m_indices.offset, VK_INDEX_TYPE_UINT32);
-	const VkDescriptorSet sets[4] = { m_list_set, m_none_set.set, m_nearest_set.set, m_collect_set };
-	m_fn.vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, m_mesh_layout, 0, m_collecting ? 4 : 3, sets,
-	                             0, nullptr);
+	const VkDescriptorSet sets[4] = { m_list_set, m_none_set.set, m_nearest_set.set, set3 };
+	m_fn.vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, m_mesh_layout, 0, set3 ? 4 : 3, sets, 0,
+	                             nullptr);
 	m_bound_pipeline = VK_NULL_HANDLE;
 	m_bound_texture = 0;
 	m_bound_sampler = NONE;
@@ -585,15 +648,59 @@ VkBoardDrawing::clear_depth()
 	const VkClearAttachment depth{ VK_IMAGE_ASPECT_DEPTH_BIT, 0, { .depthStencil = { 1.0f, 0 } } };
 	const VkClearRect all{ { { 0, 0 }, { width(), height() } }, 0, 1 };
 
+	m_families_view = false;
 	/* MoltenVK clears the colour too with vkCmdClearAttachments */
 	if (m_card.portability_subset()) {
 		close_scene();
 		open_scene(false, true);
 		return;
 	}
-	if (!m_open)
+	if (!m_open || m_family != NO_FAMILY) {
+		close_scene();
 		open_scene(false);
+	}
 	m_fn.vkCmdClearAttachments(m_card.commands(), 1, &depth, 1, &all);
+}
+
+/* The eye depths of both families and the depth of the flagged one
+ * emptied; each family reads the other's (glsl/mesh.frag, FAMILIES) */
+void
+VkBoardDrawing::begin_families()
+{
+	const VkCommandBuffer cb = m_card.commands();
+
+	close_scene();
+	for (vk::Image &eye : m_eye)
+		m_card.barrier(cb, eye, vk::DRAWN_IN);
+	m_card.barrier(cb, m_flag_depth, vk::DEPTH_IN);
+	VkRenderingAttachmentInfo colours[2]{};
+	for (unsigned i = 0; i < 2; i++) {
+		colours[i].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+		colours[i].imageView = m_eye[i].view;
+		colours[i].imageLayout = m_eye[i].layout;
+		colours[i].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+		colours[i].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	}
+	VkRenderingAttachmentInfo depth = colours[0];
+	depth.imageView = m_flag_depth.view;
+	depth.imageLayout = m_flag_depth.layout;
+	depth.clearValue.depthStencil = { 1.0f, 0 };
+	const VkRect2D all{ { 0, 0 }, { width(), height() } };
+	const VkRenderingInfo rendering{ VK_STRUCTURE_TYPE_RENDERING_INFO, nullptr, 0, all, 1, 0, 2, colours, &depth,
+	                                 nullptr };
+	m_fn.vkCmdBeginRendering(cb, &rendering);
+	m_fn.vkCmdEndRendering(cb);
+
+	for (unsigned f = 0; f < 2; f++) {
+		const VkDescriptorImageInfo other{ m_nearest, m_eye[1 - f].view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+
+		m_family_set[f] = m_card.frame_set(m_collect_layout);
+		const VkWriteDescriptorSet write{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, m_family_set[f], 4, 0, 1,
+			                          VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &other, nullptr, nullptr };
+		m_fn.vkUpdateDescriptorSets(m_card.device(), 1, &write, 0, nullptr);
+	}
+	m_families_view = true;
+	m_family = NO_FAMILY;
 }
 
 void
@@ -734,8 +841,20 @@ VkBoardDrawing::draw_mesh(const odin_mesh_t &mesh, const MeshDraw &draw)
 	/* Without gl_PrimitiveID, no translucent fragments (begin_collect) */
 	if (variant.collect && !m_collecting)
 		return;
-	if (!variant.collect && !m_open)
-		open_scene(false);
+	/* Into the depth of its family, or the scene (begin_families) */
+	if (!variant.collect) {
+		const unsigned family = !variant.families ? NO_FAMILY :
+		                        depth_bias::flagged(static_cast<int>(mesh.depth_bias)) ? 1 : 0;
+
+		if (!m_open || family != m_family) {
+			if (family == NO_FAMILY) {
+				close_scene();
+				open_scene(false);
+			} else {
+				open_family(family);
+			}
+		}
+	}
 	if (mesh.vp_index >= m_list->num_vps || (variant.has_lighting && mesh.ls_index >= m_list->num_lss)) {
 		repeats::error("a mesh outside its list: vp %u, ls %u", mesh.vp_index, mesh.ls_index);
 		return;
@@ -766,6 +885,9 @@ VkBoardDrawing::draw_mesh(const odin_mesh_t &mesh, const MeshDraw &draw)
 	m_push.sort_scale = depth_bias::sort_scale(bias);
 	m_push.snap = draw.snap ? 1 : 0;
 	m_push.scale = static_cast<float>(m_scale);
+	/* A translucent mesh meets what kept each pixel by the families of
+	 * both, in a view with both (0: one without) */
+	m_push.family = !m_families_view ? 0.0f : depth_bias::flagged(bias) ? -1.0f : 1.0f;
 
 	/* Something is drawn anyway with no modelview, as with OpenGL */
 	const bool none = mesh.mv_index == NONE;

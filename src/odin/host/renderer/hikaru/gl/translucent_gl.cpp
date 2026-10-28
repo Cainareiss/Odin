@@ -234,6 +234,27 @@ GlBoardDrawing::begin_translucent()
 		m_said_no_translucent = true;
 	}
 
+	copy_solid_depth();
+	m_family = NO_FAMILY;
+	/* What each family left, in a view with both (begin_families) */
+	const GLuint families[2][2] = { { MeshPrograms::UNIT_EYE, m_eye[0] },
+		                        { MeshPrograms::UNIT_FLAGGED_EYE, m_eye[1] } };
+	for (const auto &[unit, texture] : families) {
+		glActiveTexture(GL_TEXTURE0 + unit);
+		glBindTexture(GL_TEXTURE_2D, texture);
+	}
+	glActiveTexture(GL_TEXTURE0);
+
+	if (!m_peel.on)
+		glBindImageTexture(0, m_lists.heads, 0, GL_FALSE, 0, GL_READ_WRITE, GL_R32UI);
+	glDisable(GL_DEPTH_TEST);
+}
+
+/* The depth the meshes of the scene left (the unflagged ones in a view with
+ * both families, see begin_families), for the meshes to test themselves */
+void
+GlBoardDrawing::copy_solid_depth()
+{
 	/* OpenGL ES can only blit depth */
 	glBindFramebuffer(GL_READ_FRAMEBUFFER, m_scene_fb);
 #ifdef ODIN_GLES
@@ -251,10 +272,6 @@ GlBoardDrawing::begin_translucent()
 	                    static_cast<GLsizei>(width()), static_cast<GLsizei>(height()));
 	glActiveTexture(GL_TEXTURE0);
 #endif
-
-	if (!m_peel.on)
-		glBindImageTexture(0, m_lists.heads, 0, GL_FALSE, 0, GL_READ_WRITE, GL_R32UI);
-	glDisable(GL_DEPTH_TEST);
 }
 
 /* Each viewport has its count: writing a part of a buffer the card is

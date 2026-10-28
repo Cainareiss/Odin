@@ -1134,15 +1134,26 @@ smaller levels alone are rewritten would keep the old ones (no case known).
 
 The 101 moves a mesh of any type but the background by a fraction of its
 own depth, read two ways (depth_bias.hpp, HEURISTIC): against the other
-types bits 25:16 unsigned, nearer, 5.6 / 65536 a unit, bit 26 left out;
-among the translucent fragments bits 26:16 signed, 1 / 65536 a unit. Both
-read from the cabinets of three games: the car shadows of SGNASCAR (0x700)
-over its banked track (0x400) they lie as much as 6 % behind, its walls
-(0x401) before the stands, the halos of the PHARRIER planets (0x500)
-behind the planets, the shadows and lamp glows of AIRTRIX (2 to 0x3D6).
-Not known: what the hardware does with bit 26 against the other types, the
-true units, and why two readings (the patents describe no depth offset;
-the X360 port decodes the 101 and never uses it).
+types bits 25:16 unsigned, nearer, 5.6 / 65536 a unit; among the
+translucent fragments bits 26:16 signed, 1 / 65536 a unit. Bit 26 puts the
+meshes in two families, and against the other types the 101 moves a mesh
+against those of its own family only: across the families the depths meet
+as they are. Read from the cabinets of three games: the car shadows of
+SGNASCAR (0x700) over its banked track (0x400) they lie as much as 6 %
+behind, its painted lines (0x500) 1.5 % behind it, its walls (0x401) before
+the stands (0), and in its pit the shadows of the crew (0) and the air hose
+(0), 0.35 % and 0.5 % before the lane (0x500) that covers the ground it
+lies on (0x400); the halos of the PHARRIER planets (0x500) behind the
+planets, the shadows and lamp glows of AIRTRIX (10 to 982). In a view with
+both families each draws into a depth of its own and leaves, for each
+pixel, the eye depth and the scale of what keeps it, which the other family
+and the translucent fragments meet (glsl/mesh.frag, FAMILIES); in list
+order, as a fog-faded mesh blends into what was drawn before it. Tried on
+NVIDIA (OpenGL, ES, Vulkan) and AMD under Mesa (OpenGL 4.6 and 4.1,
+Vulkan); with the families the views of SGNASCAR and PHARRIER only change,
+at the same frames on both, and their speed stays. Not known: why bit 26
+and two readings, the true units (the patents describe no depth offset; the
+X360 port decodes the 101 and never uses it).
 
 The 161 with bit 18 loads a second modelview and a vertex with bit 12 of
 its header follows it (the AIRTRIX trails and skater joints). Bits 13 and
