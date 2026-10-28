@@ -136,6 +136,7 @@ play(const Options &given, const std::string &name, const GameList &games, Setti
 	if (audio && options.sound == AudioOut::Mode::MIX && option_level != 0)
 		std::printf("sound: the optional board at %+g dB in the mix\n", option_level);
 	controls.feel_game(*game, vibration);
+	controls.set_wheel_force(wheel_force_of(settings, game->name));
 	if (vibration && (game->option_vibration || game->drive_first_output))
 		std::printf("controls: the pad of player 1 shakes as the%s%s of the cabinet (experimental)\n",
 		            game->option_vibration ? " vibration device" : "",

@@ -232,6 +232,7 @@ private:
 	void want_gun(const std::string &game, unsigned player, const std::string &identity, const std::string &name,
 	              bool runs);
 	void keep_vibration(const std::string &game, bool on, bool runs);
+	void keep_wheel_force(const std::string &game, int percent, bool runs);
 	void keep_tuning(const std::string &guid, const PadTuning &now, const PadTuning &was);
 	void fill_bar_inputs(BarState &bar) const;
 	void keep_binding(const Bindings::Line &line, const std::string &game = "");
@@ -261,6 +262,7 @@ private:
 	std::vector<GameControl> m_other_controls;
 	std::vector<GameOutput> m_other_outputs;
 	bool m_other_shakes = false;
+	bool m_other_forces = false;
 	std::array<std::string, 2> m_other_shakers;
 	std::array<bool, 2> m_other_experimental{};
 	Game::Link m_other_link;

@@ -377,7 +377,9 @@ the system that let joysticks be written to), elsewhere through SDL. While
 the game runs, the wheel's own centring spring is off and its gain at its
 highest, as SDL leaves them; the force lets go when the menu opens, and
 stops with the vibration of the page Input ("vibration = off" in
-[players.sgnascar]).
+[players.sgnascar]). The most force the game asks is the most of the
+wheel; Wheel force, in the options of the page Input ("wheel_force = 0"
+to 100 in [players.sgnascar]), takes that share of it.
 
 Gamepads: one for each player, in the order they are plugged in, or the
 one chosen for the game in the menu (Input). SELECT (SHARE) puts in a

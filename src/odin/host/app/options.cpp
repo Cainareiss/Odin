@@ -350,6 +350,28 @@ vibration_on(const Settings &settings, const std::string &game)
 	return on;
 }
 
+std::optional<int>
+wheel_force_named(const std::string &value)
+{
+	char *end = nullptr;
+	const long percent = std::strtol(value.c_str(), &end, 10);
+
+	if (value.empty() || *end || percent < 0 || percent > WHEEL_FORCE)
+		return std::nullopt;
+	return static_cast<int>(percent);
+}
+
+int
+wheel_force_of(const Settings &settings, const std::string &game)
+{
+	int percent = WHEEL_FORCE;
+
+	for (const auto &[key, value] : settings.section("players." + game))
+		if (key == "wheel_force" && wheel_force_named(value))
+			percent = *wheel_force_named(value);
+	return percent;
+}
+
 int
 played_of(AudioOut::Mode mode)
 {
@@ -469,6 +491,8 @@ known_settings(const GameList &games)
 				out.push_back({ "players." + name, control.player ? "gun2" : "gun1", "" });
 		if (game->shakes())
 			out.push_back({ "players." + name, "vibration", "on" });
+		if (game->drive_first_output)
+			out.push_back({ "players." + name, "wheel_force", std::to_string(WHEEL_FORCE) });
 		if (!game->card_reader.empty())
 			out.push_back({ "players." + name, "card", "" });
 	}

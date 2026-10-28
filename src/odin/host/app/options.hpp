@@ -121,6 +121,12 @@ std::optional<double> level_named(const std::string &value);
 /* [players.<game>] vibration: the pads shake unless it says off (the last
  * line says) */
 bool vibration_on(const Settings &settings, const std::string &game);
+/* [players.<game>] wheel_force: how hard the wheel turns as the drive board
+ * tells it, in % of its force (0 to WHEEL_FORCE, the most: the force the
+ * board asks at its most is the most of the wheel); the last line says */
+inline constexpr int WHEEL_FORCE = 100;
+std::optional<int> wheel_force_named(const std::string &value);
+int wheel_force_of(const Settings &settings, const std::string &game);
 
 /* The way of playing of the page Audio: 0 the main board, 1 both, 2 four
  * channels, -1 the optional board alone */

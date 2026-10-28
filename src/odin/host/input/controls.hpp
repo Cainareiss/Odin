@@ -166,6 +166,9 @@ public:
 		m_drive_output = first_output;
 		m_force.reset();
 	}
+	/* How hard the wheel turns, in % of what the drive board asks
+	 * ([players.<game>] wheel_force, options.hpp) */
+	void set_wheel_force(int percent) { m_wheel_force = percent; }
 	/* All three as the cabinet of that game shakes, or none (`on` false) */
 	void feel_game(const Game &game, bool on)
 	{
@@ -247,6 +250,7 @@ private:
 	unsigned m_drive_output = 0;
 	Uint16 m_drive_level = 0;	/* how hard the felt shocks shake */
 	int m_force_was = 0;		/* the force of the last frame */
+	int m_wheel_force = 100;	/* the wheel turns at that % of it */
 	int m_wheel_channel = -1;	/* the steering wheel of player 1, if any */
 	uint16_t m_wheel_was = 0;
 	std::array<double, 6> m_wheel_moves{};	/* its moves over the last frames */

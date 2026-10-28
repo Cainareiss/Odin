@@ -397,6 +397,10 @@ struct MenuState {
 	 * model's); its options open over the drawing */
 	std::string shake_from;
 	bool shake_experimental = false;
+	/* The game shown turns the wheel through the drive board of its
+	 * cabinet (NASCAR), and how hard, in % ([players.<game>] wheel_force) */
+	bool can_force = false;
+	int wheel_force = 100;
 	PadTuning tuning;
 	bool advanced = false;
 	/* The animations of the menu ([menu] animations): the row of the

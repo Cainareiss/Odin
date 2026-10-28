@@ -25,6 +25,7 @@
 #include "odin/host/input/controls.hpp"
 
 #include "odin/host/audio/audio_out.hpp"
+#include "odin/host/app/options.hpp"
 #include "odin/machine/cabinet/drive_board.hpp"
 #include "odin/host/ui/pad_drawing.hpp"
 #include "odin/host/video/picture.hpp"
@@ -55,7 +56,8 @@ Controls::Controls(Keyboard &keys, const std::vector<GameControl> &controls, con
 			m_guns[key[3] - '1'] = value.substr(0, value.find(' '));
 		} else if (key == "joy1" || key == "joy2") {
 			m_joys_wanted[key[3] - '1'] = value.substr(0, value.find(' '));
-		} else if (key != "vibration" || (value != "on" && value != "off")) {	/* vibration: main.cpp, menu_session.cpp */
+		} else if (key == "vibration" ? value != "on" && value != "off" :	/* both: main.cpp, menu_session.cpp */
+		           key != "wheel_force" || !wheel_force_named(value)) {
 			std::fprintf(stderr, "ERROR: settings: [players.%s]: not right: %s = %s\n", game.c_str(), key.c_str(),
 			             value.c_str());
 		}
@@ -467,7 +469,7 @@ Controls::turn_wheel(int torque)
 	}
 	if (!m_force)
 		m_force = std::make_unique<WheelForce>(joy->handle);
-	m_force->push(static_cast<double>(torque) / DriveBoard::MOST);
+	m_force->push(static_cast<double>(torque) / DriveBoard::MOST * m_wheel_force / WHEEL_FORCE);
 }
 
 void

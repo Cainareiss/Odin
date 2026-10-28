@@ -74,6 +74,7 @@ MenuSession::show_game(size_t game)
 	m_other_controls = other->controls;
 	m_other_outputs = other->outputs;
 	m_other_shakes = other->shakes();
+	m_other_forces = other->drive_first_output != 0;
 	m_other_shakers = { other->shaker(0), other->shaker(1) };
 	m_other_experimental = { other->shaker_experimental(0), other->shaker_experimental(1) };
 	m_other_link = other->link;
@@ -165,6 +166,9 @@ MenuSession::draw_menu()
 	state.shake_experimental = m_other ? m_other_experimental[state.player & 1] :
 	                           m_game && m_game->shaker_experimental(state.player & 1);
 	state.shake = vibration_on(m_settings, game_shown());
+	/* The wheel the drive board turns, and how hard */
+	state.can_force = m_other ? m_other_forces : m_game && m_game->drive_first_output;
+	state.wheel_force = wheel_force_of(m_settings, game_shown());
 	/* How the game shown links cabinets */
 	const Game::Link shown_link = m_other ? m_other_link : m_game ? m_game->link : Game::Link{};
 
@@ -447,6 +451,9 @@ MenuSession::apply(const MenuState &was)
 	/* The vibration of the game shown: at once for the game that runs */
 	if (now.shake != was.shake && now.can_shake)
 		keep_vibration(game_shown(), now.shake, !m_other && m_game);
+	/* The force of its wheel, at once too */
+	if (now.wheel_force != was.wheel_force && now.can_force)
+		keep_wheel_force(game_shown(), now.wheel_force, !m_other && m_game);
 	/* The dead zone and the trigger threshold of the gamepad shown */
 	if (const std::string guid = pad_shown(now); !guid.empty())
 		keep_tuning(guid, now.tuning, was.tuning);
@@ -520,6 +527,16 @@ MenuSession::keep_vibration(const std::string &game, bool on, bool runs)
 	if (runs)
 		m_controls.feel_game(*m_game, on);
 	keep("players." + game, "vibration", on ? std::nullopt : std::optional<std::string>("off"));
+}
+
+/* [players.<game>] wheel_force: a line only when below the most */
+void
+MenuSession::keep_wheel_force(const std::string &game, int percent, bool runs)
+{
+	if (runs)
+		m_controls.set_wheel_force(percent);
+	keep("players." + game, "wheel_force",
+	     percent == WHEEL_FORCE ? std::nullopt : std::optional<std::string>(std::to_string(percent)));
 }
 
 /* The dead zone and the trigger threshold of a make and model of gamepad:
