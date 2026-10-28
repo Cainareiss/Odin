@@ -32,6 +32,7 @@
 #include "odin/host/video/picture.hpp"
 
 struct ImDrawData;
+struct ImDrawList;
 struct SDL_Surface;
 struct SDL_Window;
 
@@ -134,6 +135,9 @@ public:
 	virtual void draw_ui(ImDrawData *data, unsigned window_w, unsigned window_h, const char *what) = 0;
 	virtual void stop_ui() = 0;
 	virtual uint64_t ui_image(HostImage image) const = 0;
+	/* The images in blocks (make_image) drawn in blocks in the list from
+	 * here on, till `on` false: Dear ImGui would smooth them */
+	virtual void ui_blocks(ImDrawList *list, bool on) const = 0;
 
 	/* What the card does for the renderer of a game */
 	virtual std::unique_ptr<Drawing> make_drawing() = 0;

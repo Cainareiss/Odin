@@ -82,6 +82,7 @@ public:
 	void draw_ui(ImDrawData *data, unsigned window_w, unsigned window_h, const char *what) override;
 	void stop_ui() override;
 	uint64_t ui_image(HostImage image) const override { return image.id; }
+	void ui_blocks(ImDrawList *list, bool on) const override;
 
 	std::unique_ptr<Drawing> make_drawing() override { return Drawing::make_gl(); }
 
@@ -179,6 +180,16 @@ GlGraphics::make_image(const SDL_Surface &rgba, bool smooth)
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
 	glBindTexture(GL_TEXTURE_2D, 0);
 	return { texture, static_cast<float>(rgba.w), static_cast<float>(rgba.h) };
+}
+
+/* Dear ImGui binds a smooth sampler of its own over the filters of the
+ * texture */
+void
+GlGraphics::ui_blocks(ImDrawList *list, bool on) const
+{
+	const ImGuiPlatformIO &io = ImGui::GetPlatformIO();
+
+	list->AddCallback(on ? io.DrawCallback_SetSamplerFromTex : io.DrawCallback_ResetRenderState, nullptr);
 }
 
 void

@@ -971,9 +971,12 @@ Menu::picture(ImDrawList *list, int which, ImVec2 a, ImVec2 b, float shown) cons
 {
 	const HostImage image = m_pictures[static_cast<size_t>(which)];
 
-	if (image.id)
-		list->AddImage(ImTextureRef(static_cast<ImTextureID>(m_graphics.ui_image(image))), a, b, { 0.0f, 0.0f },
-		               { 1.0f, 1.0f }, MenuKit::alpha(IM_COL32_WHITE, shown));
+	if (!image.id)
+		return;
+	m_graphics.ui_blocks(list, true);
+	list->AddImage(ImTextureRef(static_cast<ImTextureID>(m_graphics.ui_image(image))), a, b, { 0.0f, 0.0f },
+	               { 1.0f, 1.0f }, MenuKit::alpha(IM_COL32_WHITE, shown));
+	m_graphics.ui_blocks(list, false);
 }
 
 std::string

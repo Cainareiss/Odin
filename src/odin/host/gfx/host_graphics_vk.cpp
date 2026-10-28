@@ -117,6 +117,7 @@ public:
 	void draw_ui(ImDrawData *data, unsigned window_w, unsigned window_h, const char *what) override;
 	void stop_ui() override;
 	uint64_t ui_image(HostImage image) const override;
+	void ui_blocks(ImDrawList *list, bool on) const override;
 
 	std::unique_ptr<Drawing> make_drawing() override { return Drawing::make_vk(*m_card); }
 
@@ -152,6 +153,13 @@ private:
 	uint32_t m_next_image = 1;
 	mutable std::unordered_map<uint32_t, VkDescriptorSet> m_ui_sets;
 	bool m_ui = false;
+	/* The sampler of the images in blocks for Dear ImGui (ui_blocks), in
+	 * a set of its own as the backend binds its own samplers */
+	VkSampler m_ui_sampler = VK_NULL_HANDLE;
+	VkDescriptorSetLayout m_ui_sampler_layout = VK_NULL_HANDLE;
+	VkDescriptorPool m_ui_sampler_pool = VK_NULL_HANDLE;
+	VkDescriptorSet m_ui_sampler_set = VK_NULL_HANDLE;
+	static void bind_ui_blocks(const ImDrawList *list, const ImDrawCmd *cmd);
 
 	/* The bezel, the sides lit by the picture, the background of the
 	 * menu: their passes (made when first needed), the samplers (linear
@@ -716,6 +724,36 @@ VkGraphics::start_ui()
 	info.CheckVkResultFn = imgui_check;
 	ImGui_ImplVulkan_Init(&info);
 	m_ui = true;
+
+	/* As GL_NEAREST and GL_LINEAR_MIPMAP_LINEAR, repeated as OpenGL does
+	 * by default */
+	VkSamplerCreateInfo sampler{};
+	sampler.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+	sampler.magFilter = VK_FILTER_NEAREST;
+	sampler.minFilter = VK_FILTER_LINEAR;
+	sampler.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+	sampler.addressModeU = sampler.addressModeV = sampler.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+	sampler.maxLod = VK_LOD_CLAMP_NONE;
+	m_card->check(m_fn.vkCreateSampler(m_card->device(), &sampler, nullptr, &m_ui_sampler), "a sampler");
+
+	const VkDescriptorSetLayoutBinding binding{ 0, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr };
+	const VkDescriptorSetLayoutCreateInfo layout{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO, nullptr, 0, 1,
+	                                              &binding };
+	m_card->check(m_fn.vkCreateDescriptorSetLayout(m_card->device(), &layout, nullptr, &m_ui_sampler_layout),
+	              "a descriptor set layout");
+
+	const VkDescriptorPoolSize size{ VK_DESCRIPTOR_TYPE_SAMPLER, 1 };
+	const VkDescriptorPoolCreateInfo pool{ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO, nullptr, 0, 1, 1, &size };
+	m_card->check(m_fn.vkCreateDescriptorPool(m_card->device(), &pool, nullptr, &m_ui_sampler_pool), "a descriptor pool");
+
+	const VkDescriptorSetAllocateInfo set{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO, nullptr, m_ui_sampler_pool, 1,
+	                                       &m_ui_sampler_layout };
+	m_card->check(m_fn.vkAllocateDescriptorSets(m_card->device(), &set, &m_ui_sampler_set), "a descriptor set");
+
+	const VkDescriptorImageInfo image{ m_ui_sampler, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_UNDEFINED };
+	const VkWriteDescriptorSet write{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, m_ui_sampler_set, 0, 0, 1,
+	                                  VK_DESCRIPTOR_TYPE_SAMPLER, &image, nullptr, nullptr };
+	m_fn.vkUpdateDescriptorSets(m_card->device(), 1, &write, 0, nullptr);
 }
 
 void
@@ -748,6 +786,13 @@ VkGraphics::stop_ui()
 	m_ui_sets.clear();
 	ImGui_ImplVulkan_Shutdown();
 	m_ui = false;
+	m_fn.vkDestroyDescriptorPool(m_card->device(), m_ui_sampler_pool, nullptr);
+	m_fn.vkDestroyDescriptorSetLayout(m_card->device(), m_ui_sampler_layout, nullptr);
+	m_fn.vkDestroySampler(m_card->device(), m_ui_sampler, nullptr);
+	m_ui_sampler_pool = VK_NULL_HANDLE;
+	m_ui_sampler_layout = VK_NULL_HANDLE;
+	m_ui_sampler = VK_NULL_HANDLE;
+	m_ui_sampler_set = VK_NULL_HANDLE;
 }
 
 uint64_t
@@ -762,6 +807,26 @@ VkGraphics::ui_image(HostImage image) const
 		ImGui_ImplVulkan_AddTexture(found->second.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	m_ui_sets[image.id] = descriptors;
 	return reinterpret_cast<uint64_t>(descriptors);
+}
+
+void
+VkGraphics::ui_blocks(ImDrawList *list, bool on) const
+{
+	if (!on)
+		list->AddCallback(ImGui::GetPlatformIO().DrawCallback_ResetRenderState, nullptr);
+	else if (m_ui_sampler_set)
+		list->AddCallback(bind_ui_blocks, const_cast<VkGraphics *>(this));
+}
+
+/* Called by Dear ImGui as it draws (ui_blocks): its samplers are the set 1 */
+void
+VkGraphics::bind_ui_blocks(const ImDrawList *, const ImDrawCmd *cmd)
+{
+	const VkGraphics &self = *static_cast<const VkGraphics *>(cmd->UserCallbackData);
+	const ImGui_ImplVulkan_RenderState &state = *ImGui_ImplVulkan_GetRenderState();
+
+	self.m_fn.vkCmdBindDescriptorSets(state.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, state.PipelineLayout, 1, 1,
+	                                  &self.m_ui_sampler_set, 0, nullptr);
 }
 
 } /* namespace */
