@@ -23,6 +23,9 @@ Options (-D<option>=<value>):
  ODIN_VERSION=<commit>	version string when building without git
  GLSLANG=<path>		glslangValidator to use
  ODIN_TESTS=ON		build the tests
+ ODIN_GLES=ON		OpenGL ES 3.1+ instead of OpenGL (Linux)
+
+OpenGL ES 3.1 needs GL_EXT_geometry_shader for translucent polygons.
 
 Leave CMAKE_BUILD_TYPE empty: Release adds -DNDEBUG, which drops asserts.
 

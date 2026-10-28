@@ -34,9 +34,10 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
-#include <GL/glew.h>
+#include "odin/host/gfx/gl_common.hpp"
 
 #include "odin/host/renderer/hikaru/drawing.hpp"
 #include "odin/host/renderer/hikaru/gl/programs_gl.hpp"
@@ -53,7 +54,7 @@ public:
 	GlBoardDrawing &operator=(const GlBoardDrawing &) = delete;
 
 	void set_scale(unsigned scale) override;
-	bool draws_native() const override { return true; }
+	bool draws_native() const override { return gl::geometry_shaders(); }
 
 	void begin_scene(const odin_display_list_t &list, const SceneDebug &debug) override;
 	void clear_depth() override;
@@ -106,7 +107,13 @@ public:
 	HostTexture make_texture(Texels texels, std::span<const TexelRect> levels) override;
 	void forget_textures(std::span<const HostTexture> textures) override;
 	HostSampler make_sampler(const TextureSampling &sampling, unsigned anisotropy) override;
-	void forget_sampler(HostSampler sampler) override { glDeleteSamplers(1, &sampler.id); }
+	void forget_sampler(HostSampler sampler) override
+	{
+#ifdef ODIN_GLES
+		m_sampler_bias.erase(sampler.id);
+#endif
+		glDeleteSamplers(1, &sampler.id);
+	}
 
 private:
 	unsigned width() const { return SCREEN_WIDTH * m_scale; }
@@ -198,6 +205,10 @@ private:
 	uint32_t m_drawing = 0;			/* counts the lists drawn, see begin_scene */
 	uint32_t m_scissor_vp_index = ~0u;
 	GLuint m_unit0_texture = ~0u, m_unit0_sampler = ~0u;
+#ifdef ODIN_GLES
+	/* The LOD bias of each sampler, which the mesh shader applies */
+	std::unordered_map<GLuint, float> m_sampler_bias;
+#endif
 	GLenum m_blend[4] = { ~0u, ~0u, ~0u, ~0u };
 	/* How the meshes of the polygon type being drawn are drawn */
 	struct {
@@ -208,6 +219,10 @@ private:
 
 	/* The translucent fragments, see translucent_gl.cpp */
 	GLuint m_solid_depth;		/* the depth the other types left */
+#ifdef ODIN_GLES
+	GLuint m_solid_depth_fb;	/* to blit it there */
+#endif
+	bool m_said_no_translucent = false;
 	struct {
 		GLuint program;		/* blends them */
 		GLuint heads, heads_fb;	/* the last one of each pixel */

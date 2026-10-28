@@ -83,6 +83,11 @@ GlBoardDrawing::build_list_pictures()
 	const unsigned w = width(), h = height();
 
 	m_solid_depth = gl::new_texture(GL_DEPTH_COMPONENT24, w, h);
+#ifdef ODIN_GLES
+	glGenFramebuffers(1, &m_solid_depth_fb);
+	glBindFramebuffer(GL_FRAMEBUFFER, m_solid_depth_fb);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, m_solid_depth, 0);
+#endif
 	m_lists.below = gl::new_texture(GL_RGBA8, w, h);
 	if (m_peel.on) {
 		m_peel.depth = gl::new_texture(GL_DEPTH_COMPONENT32F, w, h);
@@ -112,6 +117,9 @@ GlBoardDrawing::destroy_list_pictures()
 {
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glDeleteTextures(1, &m_solid_depth);
+#ifdef ODIN_GLES
+	glDeleteFramebuffers(1, &m_solid_depth_fb);
+#endif
 	glDeleteTextures(1, &m_lists.below);
 	if (m_peel.on) {
 		const GLuint fbs[] = { m_peel.layer_fb, m_peel.color_fb[0], m_peel.color_fb[1] };
@@ -168,12 +176,15 @@ GlBoardDrawing::build_lists()
 	glGenBuffers(1, &m_lists.readback);
 	glBindBuffer(GL_COPY_WRITE_BUFFER, m_lists.readback);
 	m_lists.counts = nullptr;
-	if (GLEW_ARB_buffer_storage) {
+#ifndef ODIN_GLES
+	if (gl::buffer_storage()) {
 		const GLbitfield flags = GL_MAP_READ_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT;
 
 		glBufferStorage(GL_COPY_WRITE_BUFFER, readback, nullptr, flags);
 		m_lists.counts = static_cast<const GLuint *>(glMapBufferRange(GL_COPY_WRITE_BUFFER, 0, readback, flags));
-	} else {
+	} else
+#endif
+	{
 		glBufferData(GL_COPY_WRITE_BUFFER, readback, nullptr, GL_STREAM_READ);
 	}
 	glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
@@ -217,13 +228,29 @@ GlBoardDrawing::size_fragments(uint32_t max)
 void
 GlBoardDrawing::begin_translucent()
 {
-	/* The depth the other types left */
+	if (!gl::primitive_ids()) {
+		if (!m_said_no_translucent)
+			std::fprintf(stderr, "ERROR: opengl es: no translucent polygons on this card (no geometry shaders)\n");
+		m_said_no_translucent = true;
+	}
+
+	/* OpenGL ES can only blit depth */
 	glBindFramebuffer(GL_READ_FRAMEBUFFER, m_scene_fb);
+#ifdef ODIN_GLES
+	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_solid_depth_fb);
+	glBlitFramebuffer(0, 0, static_cast<GLint>(width()), static_cast<GLint>(height()), 0, 0,
+	                  static_cast<GLint>(width()), static_cast<GLint>(height()), GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_scene_fb);
+	glActiveTexture(GL_TEXTURE0 + MeshPrograms::UNIT_SOLID_DEPTH);
+	glBindTexture(GL_TEXTURE_2D, m_solid_depth);
+	glActiveTexture(GL_TEXTURE0);
+#else
 	glActiveTexture(GL_TEXTURE0 + MeshPrograms::UNIT_SOLID_DEPTH);
 	glBindTexture(GL_TEXTURE_2D, m_solid_depth);
 	glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0,
 	                    static_cast<GLsizei>(width()), static_cast<GLsizei>(height()));
 	glActiveTexture(GL_TEXTURE0);
+#endif
 
 	if (!m_peel.on)
 		glBindImageTexture(0, m_lists.heads, 0, GL_FALSE, 0, GL_READ_WRITE, GL_R32UI);
@@ -296,7 +323,7 @@ GlBoardDrawing::count_now(unsigned view)
 	if (m_peel.on)
 		return m_peel.draws.empty() ? 0 : 1;
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_lists.count[view]);
-	glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &used);
+	gl::read_buffer(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &used);
 	return used;
 }
 
@@ -365,8 +392,8 @@ GlBoardDrawing::counted_fragments(unsigned slot, uint32_t views)
 			count = m_lists.counts[at];
 		} else {
 			glBindBuffer(GL_COPY_READ_BUFFER, m_lists.readback);
-			glGetBufferSubData(GL_COPY_READ_BUFFER, static_cast<GLintptr>(at * sizeof(GLuint)),
-			                   sizeof(GLuint), &count);
+			gl::read_buffer(GL_COPY_READ_BUFFER, static_cast<GLintptr>(at * sizeof(GLuint)), sizeof(GLuint),
+			                &count);
 			glBindBuffer(GL_COPY_READ_BUFFER, 0);
 		}
 		used = std::max(used, count);
@@ -381,6 +408,36 @@ GlBoardDrawing::forget_counts(unsigned slot)
 		glDeleteSync(m_counted[slot]);
 	m_counted[slot] = nullptr;
 }
+
+namespace {
+
+/* OpenGL ES has no conditional rendering: read the query instead */
+bool
+peel_condition(GLuint query)
+{
+#ifdef ODIN_GLES
+	GLuint any = 0;
+
+	glGetQueryObjectuiv(query, GL_QUERY_RESULT, &any);
+	return any != 0;
+#else
+	glBeginConditionalRender(query, GL_QUERY_WAIT);
+	return true;
+#endif
+}
+
+void
+end_peel_condition(bool began)
+{
+#ifndef ODIN_GLES
+	if (began)
+		glEndConditionalRender();
+#else
+	(void)began;
+#endif
+}
+
+} /* namespace */
 
 void
 GlBoardDrawing::draw_peel_layer()
@@ -424,22 +481,25 @@ GlBoardDrawing::peel()
 		const unsigned start = now;
 
 		for (unsigned j = 0; j < PEEL_BATCH; j++) {
-			if (j > 0)
-				glBeginConditionalRender(m_peel.any[j - 1], GL_QUERY_WAIT);
+			const bool layer = j == 0 || peel_condition(m_peel.any[j - 1]);
+
 			bind_unit(MeshPrograms::UNIT_PEEL_LAST, m_peel.last[now]);
 			glBindFramebuffer(GL_FRAMEBUFFER, m_peel.layer_fb);
 			glDisable(GL_SCISSOR_TEST);
-			glClearBufferfv(GL_DEPTH, 0, &farthest);
-			glClearBufferfv(GL_COLOR, 1, none);
+			if (layer) {
+				glClearBufferfv(GL_DEPTH, 0, &farthest);
+				glClearBufferfv(GL_COLOR, 1, none);
+			}
 			glEnable(GL_DEPTH_TEST);
 			glDepthFunc(GL_GREATER);
 			glBeginQuery(GL_ANY_SAMPLES_PASSED, m_peel.any[j]);
-			draw_peel_layer();
+			if (layer)
+				draw_peel_layer();
 			glEndQuery(GL_ANY_SAMPLES_PASSED);
-			if (j > 0)
-				glEndConditionalRender();
+			end_peel_condition(j > 0);
 
-			glBeginConditionalRender(m_peel.any[j], GL_QUERY_WAIT);
+			const bool blend = peel_condition(m_peel.any[j]);
+
 			bind_unit(UNIT_PEEL_COLOR, m_peel.color[now]);
 			glBindFramebuffer(GL_FRAMEBUFFER, m_peel.color_fb[now ^ 1]);
 			glDisable(GL_DEPTH_TEST);
@@ -447,10 +507,11 @@ GlBoardDrawing::peel()
 			glDisable(GL_CULL_FACE);
 			glUseProgram(m_peel.blend);
 			glBindVertexArray(m_quad_vao);
-			glDrawArrays(GL_TRIANGLES, 0, 3);
+			if (blend)
+				glDrawArrays(GL_TRIANGLES, 0, 3);
 			glEnable(GL_CULL_FACE);
 			bind_unit(UNIT_PEEL_COLOR, 0);
-			glEndConditionalRender();
+			end_peel_condition(true);
 			now ^= 1;
 		}
 

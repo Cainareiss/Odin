@@ -128,6 +128,10 @@ uniform vec3		u_fog_color;
 uniform float		u_alpha_ref;
 uniform float		u_weigh_by_alpha;
 uniform uint		u_pattern;
+#ifdef GL_ES
+/* OpenGL ES samplers have no bias of their own */
+uniform float		u_lod_bias;
+#endif
 
 #ifndef PEELING
 layout(std430, binding = 1) buffer count_t {
@@ -324,7 +328,11 @@ main (void)
 	gl_FragDepth = frag_depth;
 
 	if (HAS_TEXTURE != 0) {
+#ifdef GL_ES
+		vec4 texel = texture (u_texture, p_texcoords, u_lod_bias);
+#else
 		vec4 texel = texture (u_texture, p_texcoords);
+#endif
 
 		if (ALPHA_MODE != 0) {
 			/* 881 bit a: the vertex alpha blends the texel over the 091 colour

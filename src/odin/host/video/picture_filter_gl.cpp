@@ -47,8 +47,15 @@ power_of_two(float size)
 }
 
 GLuint
-build_shader(GLenum type, const std::string &text, const std::string &name)
+build_shader(GLenum type, const std::string &desktop, const std::string &name)
 {
+#ifdef ODIN_GLES
+	/* Replace the desktop #version line */
+	const size_t line = desktop.rfind("#version", 0) == 0 ? desktop.find('\n') : std::string::npos;
+	const std::string text = gl::es_version_head() + (line == std::string::npos ? desktop : desktop.substr(line + 1));
+#else
+	const std::string &text = desktop;
+#endif
 	const GLuint shader = glCreateShader(type);
 	const char *const source = text.c_str();
 	GLint status;
@@ -178,7 +185,8 @@ PictureFilter::build(const preset::Plan &plan)
 		pass.out.is_float = from.is_float;
 		pass.out.wrap = from.wrap == preset::Plan::Wrap::REPEAT ? GL_REPEAT :
 		                from.wrap == preset::Plan::Wrap::MIRRORED ? GL_MIRRORED_REPEAT :
-		                from.wrap == preset::Plan::Wrap::EDGE ? GL_CLAMP_TO_EDGE : GL_CLAMP_TO_BORDER;
+		                from.wrap == preset::Plan::Wrap::EDGE || !gl::border_clamp() ? GL_CLAMP_TO_EDGE :
+		                GL_CLAMP_TO_BORDER;
 		pass.scale_type = from.scale_type;
 		pass.scale = from.scale;
 	}
@@ -322,7 +330,8 @@ PictureFilter::sampler(bool linear, GLint wrap)
 		glSamplerParameteri(held, GL_TEXTURE_MAG_FILTER, linear ? GL_LINEAR : GL_NEAREST);
 		glSamplerParameteri(held, GL_TEXTURE_WRAP_S, wrap);
 		glSamplerParameteri(held, GL_TEXTURE_WRAP_T, wrap);
-		glSamplerParameterfv(held, GL_TEXTURE_BORDER_COLOR, BLACK);
+		if (gl::border_clamp())
+			glSamplerParameterfv(held, GL_TEXTURE_BORDER_COLOR, BLACK);
 	}
 	return held;
 }

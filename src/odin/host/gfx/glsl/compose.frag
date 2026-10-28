@@ -48,25 +48,25 @@ uniform sampler2D u_front;
 uniform sampler2D u_back;
 uniform sampler2D u_layer1;
 uniform sampler2D u_layer2;
-uniform float u_factor = 0.0;
-uniform float u_mult_f = 1.0;
-uniform float u_mult_b = 1.0;
-uniform float u_mult_1 = 1.0;
-uniform float u_mult_2 = 1.0;
-uniform float u_keyed_1 = 1.0;
-uniform float u_keyed_2 = 1.0;
-uniform float u_keyed_3d = 0.0;
-uniform float u_above_1 = 1.0;
-uniform float u_above_2 = 1.0;
-uniform int u_invert_f = 0;
-uniform int u_invert_b = 0;
-uniform vec4 u_clear = vec4 (0.0);
+uniform float u_factor;
+uniform float u_mult_f;
+uniform float u_mult_b;
+uniform float u_mult_1;
+uniform float u_mult_2;
+uniform float u_keyed_1;
+uniform float u_keyed_2;
+uniform float u_keyed_3d;
+uniform float u_above_1;
+uniform float u_above_2;
+uniform int u_invert_f;
+uniform int u_invert_b;
+uniform vec4 u_clear;
 
 in vec2 p_texcoords;
 #endif
 
 void main (void) {
-	vec2 p_texcoords_inv = vec2 (p_texcoords.s, 1 - p_texcoords.t);
+	vec2 p_texcoords_inv = vec2 (p_texcoords.s, 1.0 - p_texcoords.t);
 	vec4 texel_f, texel_b;
 
 	if (u_invert_f == 0)

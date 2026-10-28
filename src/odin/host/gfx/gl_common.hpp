@@ -32,7 +32,13 @@
  * from its two texts, a check after a stage, textures and framebuffers to
  * draw in, and the projection it computes for the shaders. */
 
+/* OpenGL 4.3 through GLEW, or OpenGL ES 3.1+ (ODIN_GLES) */
+#ifdef ODIN_GLES
+#include <GLES3/gl32.h>
+#include <GLES2/gl2ext.h>
+#else
 #include <GL/glew.h>
+#endif
 
 namespace odin::gl {
 
@@ -49,8 +55,23 @@ void check(const char *stage);
 /* Says what went wrong on stderr and aborts. */
 [[noreturn]] void fatal(const char *what);
 
+/* Context features; on OpenGL ES, gl_PrimitiveID needs geometry shaders */
+bool es();
+bool has_extension(const char *name);
 bool fragment_lists();
+bool primitive_ids();
+bool geometry_shaders();
+bool copy_image();
+bool buffer_storage();
+bool anisotropic_filter();
+bool border_clamp();
+#ifdef ODIN_GLES
+/* #version and precision lines for GLSL ES */
+const char *es_version_head();
+#endif
 void storage(GLsizei levels, GLenum format, GLsizei w, GLsizei h);
+/* Reads back the buffer bound to `target` */
+void read_buffer(GLenum target, GLintptr offset, GLsizeiptr size, void *out);
 /* A texture of one level read pixel for pixel; a framebuffer that draws
  * to a texture. Each is left bound. */
 GLuint new_texture(GLenum format, unsigned w, unsigned h);
