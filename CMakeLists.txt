@@ -151,6 +151,9 @@ if(NOT ODIN_BUNDLED_LIBS STREQUAL "ON")
 	endif()
 endif()
 add_library(odin_vulkan_headers INTERFACE)
+# VK_KHR_portability_subset (MoltenVK) is a beta extension; each file sees
+# the same headers
+target_compile_definitions(odin_vulkan_headers INTERFACE VK_ENABLE_BETA_EXTENSIONS)
 if(ODIN_SYSTEM_VULKAN_HEADERS)
 	target_compile_options(odin_vulkan_headers INTERFACE ${vulkan_cflags})
 	message(STATUS "vulkan headers: from the system")

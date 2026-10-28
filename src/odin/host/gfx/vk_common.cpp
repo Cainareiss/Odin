@@ -22,7 +22,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#define VK_ENABLE_BETA_EXTENSIONS
 #include "odin/host/gfx/vk_common.hpp"
 
 #include <algorithm>
