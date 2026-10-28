@@ -149,6 +149,9 @@ public:
 	 * is then the size Odin gives it back after the whole display. */
 	bool hand_size(unsigned &w, unsigned &h);
 	void set_show_speed(bool on);
+	/* The game paused (Session): the title says so, as while the menu is
+	 * open, instead of its last speed */
+	void set_paused(bool paused);
 	/* Each frame waits only where the display keeps up (LEAST_REFRESH);
 	 * again when the window goes to another display */
 	void set_vsync(Vsync vsync);
@@ -257,6 +260,8 @@ private:
 	bool m_fullscreen_asked = false;
 	std::string m_program_list;
 	std::string m_title = "Odin";	/* without the speed */
+	bool m_paused = false;
+	void retitle();
 	/* What it draws with, and the renderer of the board */
 	std::unique_ptr<HostGraphics> m_graphics;
 	std::unique_ptr<Renderer> m_renderer;

@@ -171,6 +171,7 @@ Session::act(Hotkeys::Action action)
 		m_paused = !m_paused;
 		if (m_paused)
 			m_controls.quiet();
+		m_display.set_paused(m_paused);
 		break;
 	case Action::SAVE_STATE:
 		load_or_save_state(false);

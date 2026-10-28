@@ -462,6 +462,7 @@ Display::open_menu(int page)
 		run([this, w, h] { m_menu->freeze_window(static_cast<unsigned>(w), static_cast<unsigned>(h)); });
 	}
 	m_menu_shown = true;
+	retitle();
 }
 
 void
@@ -469,6 +470,25 @@ Display::close_menu()
 {
 	m_menu->close();
 	m_menu_shown = false;
+	retitle();
+}
+
+void
+Display::set_paused(bool paused)
+{
+	m_paused = paused;
+	retitle();
+}
+
+/* The title of a game: "(paused)" while it waits, its speed again a second
+ * after (show_speed) */
+void
+Display::retitle()
+{
+	if (!m_board)
+		return;
+	m_title_since = 0;
+	SDL_SetWindowTitle(m_window, m_menu_shown || m_paused ? (m_title + " (paused)").c_str() : m_title.c_str());
 }
 
 void
