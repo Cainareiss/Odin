@@ -18,7 +18,7 @@ set(ODIN_OPT_FLAGS "-O3 -fomit-frame-pointer -fno-stack-protector" CACHE STRING
 set(ODIN_PGO "" CACHE STRING "Profile-guided build: generate or use")
 set_property(CACHE ODIN_PGO PROPERTY STRINGS "" generate use)
 set(ODIN_VERSION "" CACHE STRING "Version string (default: git commit)")
-find_program(GLSLANG glslangValidator HINTS $ENV{VULKAN_SDK}/bin)
+find_program(GLSLANG glslangValidator HINTS $ENV{VULKAN_SDK}/bin $ENV{VULKAN_SDK}/macOS/bin)
 if(NOT GLSLANG)
 	message(FATAL_ERROR "glslangValidator not found: set -DGLSLANG=<path>")
 endif()
@@ -393,6 +393,10 @@ target_link_options(odin PRIVATE -pthread ${OPT_FLAGS})
 if(UNIX)
 	target_link_libraries(odin PRIVATE m)
 endif()
+if(WIN32)
+	target_link_libraries(odin PRIVATE ws2_32 hid)
+	target_link_options(odin PRIVATE -static)
+endif()
 target_link_libraries(odin PRIVATE odin_deps odin_sdl)
 
 # Data in build/share/odin, laid out as installed
@@ -426,6 +430,10 @@ add_custom_target(spirv ALL DEPENDS ${FILTER_SPIRV})
 
 install(TARGETS odin RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(DIRECTORY ${DATA} DESTINATION ${CMAKE_INSTALL_DATADIR})
+if(UNIX AND NOT APPLE)
+	install(FILES dist/odin.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+	install(FILES dist/odin.svg DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps)
+endif()
 
 add_custom_target(check-layers
 	COMMAND sh ${CMAKE_SOURCE_DIR}/tools/check-layers.sh

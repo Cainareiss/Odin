@@ -69,6 +69,17 @@ macOS: with api = opengl Odin draws with it all the same, its translucent
 fragments peeled one layer at a time instead of put in lists (the same
 pictures, slower where they pile up).
 
+To make Odin.app:
+
+ $ cmake --install build --prefix install
+ $ dist/macos/make-app.sh install Odin.app
+
+On Windows, build with MSYS2 UCRT64 (MSVC lacks .incbin):
+
+ $ pacman -S mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake \
+       mingw-w64-ucrt-x86_64-ninja mingw-w64-ucrt-x86_64-glslang gawk git
+ $ cmake -B build -G Ninja -DODIN_BUNDLED_LIBS=ON && cmake --build build
+
 
 RUNNING
 =======
