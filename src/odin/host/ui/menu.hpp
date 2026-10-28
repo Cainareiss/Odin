@@ -165,6 +165,7 @@ struct BarState {
 		std::string name, label, guid;
 		bool joystick;
 		int player;
+		SDL_JoystickID id;
 	};
 	struct Gun {
 		std::string identity, name;
@@ -350,19 +351,20 @@ struct MenuState {
 	std::array<std::string, 2> pads;
 	std::array<int, 2> pad_types{};
 	/* The gamepads plugged in (name, GUID, kind, the player it is the pad
-	 * of in the game shown, -1: none, by a wire or not), the one asked for
-	 * the player shown */
+	 * of in the game shown, -1: none, by a wire or not, its id), the one
+	 * asked for the player shown */
 	struct Plugged {
 		std::string name, guid;
 		int kind, player;
 		SDL_JoystickConnectionState connection;
+		SDL_JoystickID id;
 	};
 	std::vector<Plugged> plugged;
-	std::optional<std::pair<std::string, std::string>> want;
+	std::optional<Plugged> want;
 	/* The joysticks that are no gamepads (a wheel), the same (kind: their
 	 * SDL_JoystickType), and the one asked for the player shown */
 	std::vector<Plugged> joysticks;
-	std::optional<std::pair<std::string, std::string>> want_joystick;
+	std::optional<Plugged> want_joystick;
 	/* The light guns and mice read one by one (pointers.hpp) that were
 	 * seen: identity, name, plugged in, aiming (else moving); that of each
 	 * player in the game shown (its identity; empty: none) and whether the

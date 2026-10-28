@@ -228,7 +228,7 @@ private:
 	 * the dead zone and the trigger threshold of a make and model of
 	 * gamepad ([gamepad.<guid>]) */
 	void want_pad(const std::string &game, unsigned player, const std::string &guid, const std::string &name,
-	              bool joystick, bool runs);
+	              bool joystick, bool runs, SDL_JoystickID picked = 0);
 	void want_gun(const std::string &game, unsigned player, const std::string &identity, const std::string &name,
 	              bool runs);
 	void keep_vibration(const std::string &game, bool on, bool runs);

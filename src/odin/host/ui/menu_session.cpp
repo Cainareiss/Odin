@@ -745,7 +745,7 @@ MenuSession::fill_bar_inputs(BarState &bar) const
 			bar.pads.push_back({ one.name,
 			                     (before ? one.name + " (" + std::to_string(before + 1) + ")" : one.name) +
 			                             (joystick ? " · joystick" : ""),
-			                     one.guid, joystick, one.player });
+			                     one.guid, joystick, one.player, one.id });
 		}
 	};
 	const std::vector<Controls::Plugged> pads = m_controls.plugged();
@@ -870,7 +870,7 @@ MenuSession::do_bar(BarState &bar)
 		if (m_game && bar.asked_pad >= 0 && static_cast<size_t>(bar.asked_pad) < bar.pads.size()) {
 			const BarState::Pad &pad = bar.pads[static_cast<size_t>(bar.asked_pad)];
 
-			want_pad(m_game->name, player, pad.guid, pad.name, pad.joystick, true);
+			want_pad(m_game->name, player, pad.guid, pad.name, pad.joystick, true, pad.id);
 		}
 		return Ask::NONE;
 	case Ask::GUN:

@@ -952,10 +952,9 @@ devices_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width, bool t
 			                             chosen <= pads ? MenuState::Device::PAD : MenuState::Device::JOYSTICK;
 			state.catching.reset();
 			if (chosen >= 1 && chosen <= pads)
-				state.want = std::pair(state.plugged[chosen - 1].guid, state.plugged[chosen - 1].name);
+				state.want = state.plugged[chosen - 1];
 			else if (chosen > pads && chosen - pads - 1 < state.joysticks.size())
-				state.want_joystick = std::pair(state.joysticks[chosen - pads - 1].guid,
-				                                state.joysticks[chosen - pads - 1].name);
+				state.want_joystick = state.joysticks[chosen - pads - 1];
 		}
 		ImGui::PopID();
 	}

@@ -147,8 +147,8 @@ Controls::reseat()
 	for (const Joy &joy : m_joys)
 		joys.push_back({ joy.id, joy.guid });
 
-	const std::array<SDL_JoystickID, 2> seats = seat_pads(pads, m_wanted, m_seats);
-	const std::array<SDL_JoystickID, 2> joy_seats = seat_pads(joys, m_joys_wanted, m_joy_seats);
+	const std::array<SDL_JoystickID, 2> seats = seat_pads(pads, m_wanted, m_picked, m_seats);
+	const std::array<SDL_JoystickID, 2> joy_seats = seat_pads(joys, m_joys_wanted, m_joys_picked, m_joy_seats);
 
 	for (unsigned player = 0; player < 2; player++) {
 		if (joy_seats[player] == m_joy_seats[player])
@@ -192,9 +192,12 @@ Controls::plugged() const
 }
 
 void
-Controls::want(unsigned player, const std::string &guid)
+Controls::want(unsigned player, const std::string &guid, SDL_JoystickID picked)
 {
 	m_wanted[player & 1] = guid;
+	m_picked[player & 1] = picked;
+	if (picked && m_picked[~player & 1] == picked)
+		m_picked[~player & 1] = 0;
 	reseat();
 }
 
@@ -214,9 +217,12 @@ Controls::joysticks() const
 }
 
 void
-Controls::want_joystick(unsigned player, const std::string &guid)
+Controls::want_joystick(unsigned player, const std::string &guid, SDL_JoystickID picked)
 {
 	m_joys_wanted[player & 1] = guid;
+	m_joys_picked[player & 1] = picked;
+	if (picked && m_joys_picked[~player & 1] == picked)
+		m_joys_picked[~player & 1] = 0;
 	reseat();
 }
 

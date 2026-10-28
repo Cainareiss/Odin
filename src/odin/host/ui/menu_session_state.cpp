@@ -231,13 +231,13 @@ MenuSession::draw_menu()
 						wanted[player] = value.substr(0, value.find(' '));
 			for (const Controls::Plugged &one : plugged)
 				open.push_back({ one.id, one.guid });
-			seats = seat_pads(open, wanted, {});
+			seats = seat_pads(open, wanted, {}, {});
 		}
 		out.clear();
 		for (const Controls::Plugged &one : plugged)
 			out.push_back({ one.name, one.guid, one.kind,
 			                !m_other ? one.player : one.id == seats[0] ? 0 : one.id == seats[1] ? 1 : -1,
-			                one.connection });
+			                one.connection, one.id });
 	};
 
 	list(state.plugged, m_controls.plugged(), "p");
@@ -321,18 +321,15 @@ MenuSession::draw_menu()
 		m_menu_pictures = MENU_PICTURES;
 	}
 	if (state.want) {
-		const auto &[guid, name] = *state.want;
-
-		want_pad(game_shown(), state.player, guid, name, false, !m_other);
+		want_pad(game_shown(), state.player, state.want->guid, state.want->name, false, !m_other, state.want->id);
 		state.want.reset();
 		m_menu_pictures = MENU_PICTURES;
 	}
 	/* The joystick a player wants for the game: [players.<game>] joy1 or
 	 * joy2 */
 	if (state.want_joystick) {
-		const auto &[guid, name] = *state.want_joystick;
-
-		want_pad(game_shown(), state.player, guid, name, true, !m_other);
+		want_pad(game_shown(), state.player, state.want_joystick->guid, state.want_joystick->name, true, !m_other,
+		         state.want_joystick->id);
 		state.want_joystick.reset();
 		m_menu_pictures = MENU_PICTURES;
 	}
@@ -511,21 +508,22 @@ MenuSession::clear_inputs()
 	m_undo_until = SDL_GetTicks() + UNDO_MS;
 }
 
-/* [players.<game>] p1 or p2 (none: the first free gamepad), joy1 or joy2 */
+/* [players.<game>] p1 or p2 (none: the first free gamepad), joy1 or joy2;
+ * the very one picked (two of a make) for this run only */
 void
 MenuSession::want_pad(const std::string &game, unsigned player, const std::string &guid, const std::string &name,
-                      bool joystick, bool runs)
+                      bool joystick, bool runs, SDL_JoystickID picked)
 {
 	const std::string section = "players." + game;
 
 	if (joystick) {
 		if (runs)
-			m_controls.want_joystick(player, guid);
+			m_controls.want_joystick(player, guid, picked);
 		keep(section, player ? "joy2" : "joy1", guid + " " + name);
 		return;
 	}
 	if (runs)
-		m_controls.want(player, guid);
+		m_controls.want(player, guid, picked);
 	keep(section, player ? "p2" : "p1", guid.empty() ? std::nullopt : std::optional(guid + " " + name));
 }
 

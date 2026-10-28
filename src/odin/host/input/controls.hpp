@@ -118,14 +118,15 @@ public:
 		SDL_JoystickConnectionState connection;
 	};
 	std::vector<Plugged> plugged() const;
-	/* The gamepad a player wants: its GUID, empty for the first free one;
-	 * it takes its seat at once */
-	void want(unsigned player, const std::string &guid);
+	/* The gamepad a player wants: its GUID, empty for the first free one,
+	 * and the one picked of that make (0: the first free one); it takes
+	 * its seat at once */
+	void want(unsigned player, const std::string &guid, SDL_JoystickID picked = 0);
 	/* The joysticks plugged in that are no gamepads, in the order they
 	 * came, as the gamepads (kind: their SDL_JoystickType), and the one a
 	 * player wants */
 	std::vector<Plugged> joysticks() const;
-	void want_joystick(unsigned player, const std::string &guid);
+	void want_joystick(unsigned player, const std::string &guid, SDL_JoystickID picked = 0);
 	/* The id of the joystick of a player (0: none) */
 	SDL_JoystickID joystick_id(unsigned player) const { return joystick(player) ? m_joy_seats[player & 1] : 0; }
 
@@ -268,9 +269,11 @@ private:
 	std::vector<Pad> m_pads;	/* plugged in, in the order they came */
 	std::array<SDL_JoystickID, 2> m_seats{};	/* that of each player, 0: none */
 	std::array<std::string, 2> m_wanted;
+	std::array<SDL_JoystickID, 2> m_picked{};	/* the very one, 0: any of that make */
 	std::vector<Joy> m_joys;	/* plugged in, in the order they came */
 	std::array<SDL_JoystickID, 2> m_joy_seats{};
 	std::array<std::string, 2> m_joys_wanted;
+	std::array<SDL_JoystickID, 2> m_joys_picked{};
 	/* The force of the wheel of player 1, made at its first torque (none:
 	 * not tried yet, or the joystick changed) */
 	std::unique_ptr<WheelForce> m_force;
