@@ -81,6 +81,7 @@ MenuSession::show_game(size_t game)
 	m_other_link = other->link;
 	m_other_title = other->title;
 	m_other.emplace(m_other_controls, m_settings, other->name);
+	m_other->set_wheel_rotation(wheel_rotation_of(m_settings, other->name));
 }
 
 /* The menu drawn once from what is so now (F11 may have changed the
@@ -172,6 +173,7 @@ MenuSession::draw_menu()
 	state.steers = std::any_of(panel_shown().controls().begin(), panel_shown().controls().end(),
 	                           [](const GameControl &control) { return control.role == Role::STEER; });
 	state.wheel_force = wheel_force_of(m_settings, game_shown());
+	state.wheel_rotation = wheel_rotation_of(m_settings, game_shown());
 	/* Its cabinets, and the one chosen; the game that runs plays the one it
 	 * started with */
 	static const std::vector<Game::Cabinet> NONE;
@@ -471,6 +473,9 @@ MenuSession::apply(const MenuState &was)
 	/* The force of its wheel, at once too */
 	if (now.wheel_force != was.wheel_force && now.can_force)
 		keep_wheel_force(game_shown(), now.wheel_force, !m_other && m_game);
+	/* How far a wheel turns for its steering, at once too */
+	if (now.wheel_rotation != was.wheel_rotation && now.steers)
+		keep_wheel_rotation(game_shown(), now.wheel_rotation, !m_other && m_game);
 	/* Its cabinet: the game that runs takes it when it is reset */
 	if (now.cabinet != was.cabinet && now.cabinet >= 0 && static_cast<size_t>(now.cabinet) < now.cabinet_ids.size())
 		keep_cabinet(game_shown(), now.cabinet_ids[static_cast<size_t>(now.cabinet)]);
@@ -557,7 +562,7 @@ MenuSession::keep_cabinet(const std::string &game, const std::string &id)
 	keep("players." + game, "cabinet", id == "standard" ? std::nullopt : std::optional<std::string>(id));
 }
 
-/* [players.<game>] wheel_force: a line only when below the most */
+/* [players.<game>] wheel_force: a line only when another than 100 % */
 void
 MenuSession::keep_wheel_force(const std::string &game, int percent, bool runs)
 {
@@ -565,6 +570,18 @@ MenuSession::keep_wheel_force(const std::string &game, int percent, bool runs)
 		m_controls.set_wheel_force(percent);
 	keep("players." + game, "wheel_force",
 	     percent == WHEEL_FORCE ? std::nullopt : std::optional<std::string>(std::to_string(percent)));
+}
+
+/* [players.<game>] wheel_rotation: a line only when another than 270 */
+void
+MenuSession::keep_wheel_rotation(const std::string &game, int degrees, bool runs)
+{
+	if (runs)
+		m_controls.set_wheel_rotation(degrees);
+	else if (m_other)
+		m_other->set_wheel_rotation(degrees);
+	keep("players." + game, "wheel_rotation",
+	     degrees == WHEEL_ROTATION ? std::nullopt : std::optional<std::string>(std::to_string(degrees)));
 }
 
 /* The dead zone and the trigger threshold of a make and model of gamepad:

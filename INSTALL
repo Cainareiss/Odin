@@ -350,8 +350,9 @@ A wheel, its pedals or another joystick that is no gamepad (a flight
 stick): one for each player, in the order they are plugged in, or the one
 of "joy1 = <GUID> <name>" (joy2: player 2) in [players.<game>]. Odin's log
 names each one ("joystick: '<name>' plugged, 4 axes, 25 buttons, 1
-hats"). It is read all of its way, without a dead zone, by the numbers
-SDL gives its inputs, those EmulationStation gives them on Batocera:
+hats"). It is read all of its way (the steering as far as Wheel rotation
+below says), without a dead zone, by the numbers SDL gives its inputs,
+those EmulationStation gives them on Batocera:
 joy:axis0 an axis (the first one steers by default: that of a wheel),
 joy:axis2:invert an axis turned over (a pedal at rest at the top of its
 axis), joy:-axis1 and joy:+axis1 its halves, joy:button4 a button,
@@ -370,6 +371,14 @@ The wheel stays with the driver of the system: SDL's own driver of the
 Logitech wheels, which would turn their centring spring off, is off
 unless SDL_JOYSTICK_HIDAPI_LG4FF=1 is in the environment.
 
+The axis of a joystick that steers is taken as a wheel that turns 900
+degrees from one end to the other, as most do (a G29, a G920, a T300).
+Wheel rotation, in the options of the page Input ("wheel_rotation = 270"
+in [players.<game>], or 360, 540, 900, 1080; 0 for the whole way of the
+wheel), is how far it turns to take the steering of the game from one
+end to the other: 270 by default, as xemu's Chihiro wheels; never
+further than the wheel goes.
+
 In NASCAR the wheel of player 1, when it has force feedback, turns as the
 game tells the drive board of the cabinet (see the programs above): on
 Linux through its event node (the user in the group input, or the rules of
@@ -379,7 +388,8 @@ highest, as SDL leaves them; the force lets go when the menu opens, and
 stops with the vibration of the page Input ("vibration = off" in
 [players.sgnascar]). The most force the game asks is the most of the
 wheel; Wheel force, in the options of the page Input ("wheel_force = 0"
-to 100 in [players.sgnascar]), takes that share of it.
+to 200 in [players.sgnascar], 100 by default), takes that share of it:
+above 100, the wheel reaches its most before the game asks it.
 
 NASCAR was also sold as a Deluxe cabinet, which its program tells apart
 by a switch its wiring ties to the ground ("GND (FOR DX)", read as 1P

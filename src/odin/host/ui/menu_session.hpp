@@ -233,6 +233,7 @@ private:
 	              bool runs);
 	void keep_vibration(const std::string &game, bool on, bool runs);
 	void keep_wheel_force(const std::string &game, int percent, bool runs);
+	void keep_wheel_rotation(const std::string &game, int degrees, bool runs);
 	void keep_cabinet(const std::string &game, const std::string &id);
 	void keep_tuning(const std::string &guid, const PadTuning &now, const PadTuning &was);
 	void fill_bar_inputs(BarState &bar) const;

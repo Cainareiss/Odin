@@ -175,6 +175,13 @@ public:
 	/* How hard the wheel turns, in % of what the drive board asks
 	 * ([players.<game>] wheel_force, options.hpp) */
 	void set_wheel_force(int percent) { m_wheel_force = percent; }
+	/* How far a wheel of the host turns for the steering of the game
+	 * ([players.<game>] wheel_rotation, options.hpp) */
+	void set_wheel_rotation(int degrees)
+	{
+		m_wheel_rotation = degrees;
+		m_panel.set_wheel_rotation(degrees);
+	}
 	/* The switches the wiring of the cabinet ties to the ground
 	 * (Game::grounded): closed for the game whatever the player does */
 	void ground(std::vector<JvsSwitch> switches) { m_grounded = std::move(switches); }
@@ -260,6 +267,7 @@ private:
 	Uint16 m_drive_level = 0;	/* how hard the felt shocks shake */
 	int m_force_was = 0;		/* the force of the last frame */
 	int m_wheel_force = 100;	/* the wheel turns at that % of it */
+	int m_wheel_rotation = 0;	/* the degrees of a wheel for the steering, 0: its whole way */
 	bool m_wheel_reversed = false;	/* its low values on the right */
 	bool m_steers = false;	/* the game has a steering wheel: a wheel can be seated */
 	std::vector<JvsSwitch> m_grounded;

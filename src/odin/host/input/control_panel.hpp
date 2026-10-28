@@ -136,6 +136,10 @@ public:
 	/* An input takes an analog control from another when it moves this
 	 * much: above the noise of a stick, a choice of the emulator. */
 	static constexpr int MOVED = 0x400;
+	/* The degrees a wheel of the host turns from one end to the other, as
+	 * most do (a G29, a G920, a T300): how far it turns for the steering
+	 * of the game is taken on that */
+	static constexpr int WHEEL_RANGE = 900;
 
 	ControlPanel(const std::vector<GameControl> &controls, const Settings &settings, const std::string &game);
 
@@ -159,6 +163,13 @@ public:
 	/* A control as the host holds it now, the lever where the last update
 	 * left it; nothing changes */
 	ControlNow now(const HostState &host, size_t control) const;
+	/* An axis of a joystick that steers the game goes that many degrees
+	 * of a wheel from one end to the other (0: the whole way of the
+	 * wheel), never further than the wheel does */
+	void set_wheel_rotation(int degrees)
+	{
+		m_steer_scale = degrees > 0 ? std::max(1.0, static_cast<double>(WHEEL_RANGE) / degrees) : 1.0;
+	}
 
 	/* The channel for that value of an axis, the low values on the way the
 	 * game wants them: a stick from -32768 (left or up), a trigger from 0
@@ -179,8 +190,9 @@ public:
 private:
 	bool held(const HostState &host, const HostInput &input, unsigned player) const;
 	/* The channel an axis of the joystick of the player gives that control
-	 * (nothing: no such axis, or no value yet) */
-	static std::optional<uint16_t> joy_channel(const JoyState *joy, const JoyInput &input, GameControl::Low low);
+	 * (nothing: no such axis, or no value yet); a steering one, as far as
+	 * the rotation of the wheel takes it */
+	std::optional<uint16_t> joy_channel(const JoyState *joy, const JoyInput &input, const GameControl &control) const;
 	bool pressed(const HostState &host, const std::vector<HostInput> &inputs, unsigned player) const;
 	uint16_t analog(const HostState &host, size_t control);
 
@@ -201,6 +213,7 @@ private:
 	 * update, it has moved at this one, where it was when it last moved */
 	std::array<bool, 2> m_mouse_aims, m_mouse_moved, m_mouse_seen;
 	std::array<double, 2> m_mouse_x, m_mouse_y;
+	double m_steer_scale = 1.0;	/* a steering axis of a joystick goes that much further */
 };
 
 } /* namespace odin */

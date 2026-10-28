@@ -1766,21 +1766,26 @@ buttons_bar(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows
 }
 
 /* The advanced options of the gamepad or joystick shown, over its box
- * (mock-up v50): the vibration of the game and the force of its wheel; the
- * dead zone and the trigger threshold of the make and model of a gamepad;
- * Close (B, Escape) */
+ * (mock-up v50): the vibration of the game, the force of its wheel and, for
+ * a joystick, how far it turns for the steering; the dead zone and the
+ * trigger threshold of the make and model of a gamepad; Close (B, Escape) */
 void
 advanced_box(const MenuKit &kit, MenuState &state, ImVec2 a, ImVec2 b)
 {
 	using Icon = MenuKit::Icon;
 	static constexpr char NO_SHAKE[] = "this game has no vibration";
+	static constexpr const char *TURNS[] = { "Full", "270°", "360°", "540°", "900°", "1080°" };
+	static_assert(std::size(TURNS) == std::size(WHEEL_ROTATIONS));
 	const bool pad = state.on_pad();
-	const char *const foot = pad ? state.can_force ? "Vibration and wheel force apply to this game only; the dead zone "
-	                                                 "and trigger threshold follow this controller to every game." :
-	                                                 "Vibration applies to this game only; the dead zone and trigger "
-	                                                 "threshold follow this controller to every game." :
-	                         state.can_force ? "Vibration and wheel force apply to this game only." :
-	                                           "Vibration applies to this game only.";
+	const bool turns = state.steers && !pad;
+	const char *const applies = state.can_force && turns ? "Vibration, wheel force and wheel rotation apply" :
+	                            state.can_force          ? "Vibration and wheel force apply" :
+	                            turns                    ? "Vibration and wheel rotation apply" :
+	                                                       "Vibration applies";
+	const std::string foot = std::string(applies) +
+	                         (pad ? " to this game only; the dead zone and trigger threshold follow this controller "
+	                                "to every game." :
+	                                " to this game only.");
 	ImDrawList *const list = ImGui::GetWindowDrawList();
 	const MenuPalette &palette = kit.palette();
 	const float line = ImGui::GetTextLineHeight(), note = MenuKit::font(MenuKit::NOTE), apart = kit.px(16.0f);
@@ -1849,15 +1854,31 @@ advanced_box(const MenuKit &kit, MenuState &state, ImVec2 a, ImVec2 b)
 	};
 
 	if (state.can_force)
-		percent("Wheel force", state.wheel_force, WHEEL_FORCE);
+		percent("Wheel force", state.wheel_force, MOST_WHEEL_FORCE);
+	/* The degrees of the wheel from one end of the steering to the other;
+	 * the gamepad: left or right, or A, takes the next one */
+	if (turns) {
+		const ImVec2 cells = kit.segments_size(TURNS);
+		const float h = std::max(line, cells.y);
+		const auto at = std::find(std::begin(WHEEL_ROTATIONS), std::end(WHEEL_ROTATIONS), state.wheel_rotation);
+		const int n = static_cast<int>(std::size(TURNS));
+		int turn = at == std::end(WHEEL_ROTATIONS) ? 1 : static_cast<int>(at - std::begin(WHEEL_ROTATIONS));
+
+		list->AddText({ lo.x, y + (h - line) / 2.0f }, palette.ink, "Wheel rotation");
+		if (kit.focus({ lo.x, y }, { hi.x, y + h }, kit.px(4.0f)) && (kit.side() || kit.pressed()))
+			turn = (turn + (kit.side() < 0 ? n - 1 : 1)) % n;
+		kit.segments({ hi.x - cells.x, y + (h - cells.y) / 2.0f }, TURNS, turn);
+		state.wheel_rotation = WHEEL_ROTATIONS[turn];
+		y += h + apart;
+	}
 	if (pad) {
 		percent("Stick dead zone", state.tuning.dead_zone, PadTuning::MOST_DEAD_ZONE);
 		percent("Trigger threshold", state.tuning.trigger_threshold, PadTuning::MOST_TRIGGER_THRESHOLD);
 	}
 
-	const float foot_h = MenuKit::wrapped_h(foot, note, hi.x - lo.x);
+	const float foot_h = MenuKit::wrapped_h(foot.c_str(), note, hi.x - lo.x);
 
-	list->AddText(ImGui::GetFont(), note, { lo.x, hi.y - foot_h }, palette.faint, foot, nullptr, hi.x - lo.x);
+	list->AddText(ImGui::GetFont(), note, { lo.x, hi.y - foot_h }, palette.faint, foot.c_str(), nullptr, hi.x - lo.x);
 	if (kit.button("Close", { hi.x - close.x, lo.y }, false, Icon::CLEAR))
 		state.advanced = false;
 }

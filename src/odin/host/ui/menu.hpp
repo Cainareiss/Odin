@@ -402,10 +402,13 @@ struct MenuState {
 	bool shake_experimental = false;
 	/* The game shown turns the wheel through the drive board of its
 	 * cabinet (NASCAR), and how hard, in % ([players.<game>] wheel_force);
-	 * it steers with a wheel (a wheel is for such a game alone) */
+	 * it steers with a wheel (a wheel is for such a game alone), and how
+	 * far a wheel turns for it, in degrees ([players.<game>]
+	 * wheel_rotation) */
 	bool can_force = false;
 	bool steers = false;
 	int wheel_force = 100;
+	int wheel_rotation = 270;
 	/* The cabinets the game shown was sold in, Standard first
 	 * (Game::cabinets): their ids and names, the one chosen
 	 * ([players.<game>] cabinet), and whether the game that runs plays

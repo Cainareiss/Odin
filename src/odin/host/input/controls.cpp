@@ -60,9 +60,10 @@ Controls::Controls(Keyboard &keys, const std::vector<GameControl> &controls, con
 			m_guns[key[3] - '1'] = value.substr(0, value.find(' '));
 		} else if (key == "joy1" || key == "joy2") {
 			m_joys_wanted[key[3] - '1'] = value.substr(0, value.find(' '));
-		} else if (key != "cabinet" && key != "card" &&	/* these four: main.cpp, menu_session.cpp */
-		           (key == "vibration" ? value != "on" && value != "off" :
-		                                 key != "wheel_force" || !wheel_force_named(value))) {
+		} else if (key != "cabinet" && key != "card" &&	/* these five: main.cpp, menu_session.cpp */
+		           (key == "vibration"   ? value != "on" && value != "off" :
+		            key == "wheel_force" ? !wheel_force_named(value) :
+		                                   key != "wheel_rotation" || !wheel_rotation_named(value))) {
 			std::fprintf(stderr, "ERROR: settings: [players.%s]: not right: %s = %s\n", game.c_str(), key.c_str(),
 			             value.c_str());
 		}
@@ -573,6 +574,7 @@ void
 Controls::rebind(const Settings &settings)
 {
 	m_panel = ControlPanel(m_game_controls, settings, m_game);
+	m_panel.set_wheel_rotation(m_wheel_rotation);
 }
 
 void

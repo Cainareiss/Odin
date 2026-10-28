@@ -185,11 +185,17 @@ ControlPanel::channel(const JoyInput &input, GameControl::Low low, int16_t value
 }
 
 std::optional<uint16_t>
-ControlPanel::joy_channel(const JoyState *joy, const JoyInput &input, GameControl::Low low)
+ControlPanel::joy_channel(const JoyState *joy, const JoyInput &input, const GameControl &control) const
 {
 	if (!joy || input.type != JoyInput::Type::AXIS || input.index >= joy->axes.size() || !joy->known[input.index])
 		return std::nullopt;
-	return channel(input, low, joy->axes[input.index]);
+
+	const int16_t value = joy->axes[input.index];
+
+	if (control.role != Role::STEER)
+		return channel(input, control.low, value);
+	return channel(input, control.low,
+	               static_cast<int16_t>(std::clamp(std::lround(value * m_steer_scale), -32768L, 32767L)));
 }
 
 uint16_t
@@ -300,7 +306,7 @@ ControlPanel::touched(const HostState &host, size_t control) const
 		    std::abs(static_cast<int>(pad->axes[input.pad.index])) >= PRESSED)
 			return true;
 		/* An axis of a joystick from half its way, as a stick or a trigger */
-		const auto at = input.kind == HostInput::Kind::JOY ? joy_channel(host.joys[c.player & 1], input.joy, c.low) :
+		const auto at = input.kind == HostInput::Kind::JOY ? joy_channel(host.joys[c.player & 1], input.joy, c) :
 		                                                     std::nullopt;
 
 		if (at && std::abs(*at - rest(c.low)) >= (GameControl::half(c.low, false) ? 0x4000 : 0x8000))
@@ -331,7 +337,7 @@ ControlPanel::now(const HostState &host, size_t control) const
 		if (input.kind == HostInput::Kind::PAD && input.pad.type == PadInput::Type::AXIS && pad) {
 			v = std::clamp(static_cast<float>(pad->axes[input.pad.index]) / 32767.0f, -1.0f, 1.0f);
 			v = input.pad.inverted ? -v : v;
-		} else if (const auto at = input.kind == HostInput::Kind::JOY ? joy_channel(joy, input.joy, c.low) :
+		} else if (const auto at = input.kind == HostInput::Kind::JOY ? joy_channel(joy, input.joy, c) :
 		                                                               std::nullopt) {
 			/* From its channel: a pedal from 0, the others from -1, the
 			 * way the game takes them turned back */
@@ -383,7 +389,7 @@ ControlPanel::analog(const HostState &host, size_t c)
 			now[s] = channel(input.pad, control.low, pad->axes[input.pad.index]);
 			there[s] = true;
 		} else if (const auto at = input.kind == HostInput::Kind::JOY ?
-		                           joy_channel(host.joys[control.player & 1], input.joy, control.low) :
+		                           joy_channel(host.joys[control.player & 1], input.joy, control) :
 		                           std::nullopt) {
 			now[s] = *at;
 			there[s] = true;

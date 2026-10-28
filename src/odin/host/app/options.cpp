@@ -356,7 +356,7 @@ wheel_force_named(const std::string &value)
 	char *end = nullptr;
 	const long percent = std::strtol(value.c_str(), &end, 10);
 
-	if (value.empty() || *end || percent < 0 || percent > WHEEL_FORCE)
+	if (value.empty() || *end || percent < 0 || percent > MOST_WHEEL_FORCE)
 		return std::nullopt;
 	return static_cast<int>(percent);
 }
@@ -370,6 +370,29 @@ wheel_force_of(const Settings &settings, const std::string &game)
 		if (key == "wheel_force" && wheel_force_named(value))
 			percent = *wheel_force_named(value);
 	return percent;
+}
+
+std::optional<int>
+wheel_rotation_named(const std::string &value)
+{
+	char *end = nullptr;
+	const long degrees = std::strtol(value.c_str(), &end, 10);
+
+	if (value.empty() || *end || std::find(std::begin(WHEEL_ROTATIONS), std::end(WHEEL_ROTATIONS), degrees) ==
+	                                     std::end(WHEEL_ROTATIONS))
+		return std::nullopt;
+	return static_cast<int>(degrees);
+}
+
+int
+wheel_rotation_of(const Settings &settings, const std::string &game)
+{
+	int degrees = WHEEL_ROTATION;
+
+	for (const auto &[key, value] : settings.section("players." + game))
+		if (key == "wheel_rotation" && wheel_rotation_named(value))
+			degrees = *wheel_rotation_named(value);
+	return degrees;
 }
 
 std::string
@@ -504,6 +527,9 @@ known_settings(const GameList &games)
 			out.push_back({ "players." + name, "vibration", "on" });
 		if (game->drive_first_output)
 			out.push_back({ "players." + name, "wheel_force", std::to_string(WHEEL_FORCE) });
+		if (std::any_of(game->controls.begin(), game->controls.end(),
+		                [](const GameControl &control) { return control.role == Role::STEER; }))
+			out.push_back({ "players." + name, "wheel_rotation", std::to_string(WHEEL_ROTATION) });
 		if (!game->cabinets.empty())
 			out.push_back({ "players." + name, "cabinet", "standard" });
 		if (!game->card_reader.empty())

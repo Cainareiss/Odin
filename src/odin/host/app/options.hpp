@@ -122,11 +122,21 @@ std::optional<double> level_named(const std::string &value);
  * line says) */
 bool vibration_on(const Settings &settings, const std::string &game);
 /* [players.<game>] wheel_force: how hard the wheel turns as the drive board
- * tells it, in % of its force (0 to WHEEL_FORCE, the most: the force the
- * board asks at its most is the most of the wheel); the last line says */
-inline constexpr int WHEEL_FORCE = 100;
+ * tells it, in % of its force (0 to MOST_WHEEL_FORCE; at WHEEL_FORCE, when
+ * it does not say, the force the board asks at its most is the most of the
+ * wheel; above, the wheel reaches its most sooner); the last line says */
+inline constexpr int WHEEL_FORCE = 100, MOST_WHEEL_FORCE = 200;
 std::optional<int> wheel_force_named(const std::string &value);
 int wheel_force_of(const Settings &settings, const std::string &game);
+/* [players.<game>] wheel_rotation: the degrees a wheel of the host turns to
+ * take the steering of the game from one end to the other, one of
+ * WHEEL_ROTATIONS (0: the whole way of the wheel); WHEEL_ROTATION when it
+ * does not say, a choice of the emulator as xemu's Chihiro wheels; the last
+ * line says */
+inline constexpr int WHEEL_ROTATIONS[] = { 0, 270, 360, 540, 900, 1080 };
+inline constexpr int WHEEL_ROTATION = 270;
+std::optional<int> wheel_rotation_named(const std::string &value);
+int wheel_rotation_of(const Settings &settings, const std::string &game);
 /* [players.<game>] cabinet: the id of the cabinet of the game played
  * (Game::cabinets; "standard": that of the list, when it does not say) */
 std::string cabinet_of(const Settings &settings, const std::string &game);

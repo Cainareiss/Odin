@@ -843,6 +843,58 @@ void test_joystick()
 	check(inputs.jvs_analog[0] == 0x8000 - 8000, "its first value, then a move: the wheel");
 }
 
+/* The wheel taken as one of 900 degrees: at 270, 135 degrees of it to the
+ * left take the steering all the way, the gas as it is; at 0, or wider
+ * than the wheel, the whole way of the wheel */
+void test_wheel_rotation()
+{
+	Settings settings;
+
+	settings.parse("[controls.sgnascar]\n"
+	               "gas = joy:axis2:invert\n", "test");
+
+	ControlPanel panel(cabinet(), settings, "sgnascar");
+	size_t steering = 0;
+
+	while (panel.controls()[steering].id != "wheel")
+		steering++;
+
+	const std::vector<SDL_Keycode> none;
+	JoyState wheel;
+	HostState host;
+	CabinetInputs inputs = {};
+	const auto update = [&] {
+		panel.update(host);
+		panel.fill(inputs);
+	};
+
+	wheel.axes = { 0, 32767, 32767, 32767 };
+	wheel.known = { true, true, true, true };
+	wheel.buttons.assign(25, false);
+	wheel.hats = { 0 };
+	host.keys = &none;
+	host.joys[0] = &wheel;
+	panel.set_wheel_rotation(270);
+	update();
+	wheel.axes[0] = 3000;
+	wheel.axes[2] = -1;
+	update();
+	check(inputs.jvs_analog[0] == 0x8000 + 10000, "270: the wheel goes 900 / 270 times as far");
+	check(inputs.jvs_analog[1] == 0x8000, "the gas as it is");
+	wheel.axes[0] = -9831;
+	update();
+	check(inputs.jvs_analog[0] == 0x0000 && panel.now(host, steering).value == -1.0f,
+	      "135 degrees to the left: all the way, and drawn there");
+	panel.set_wheel_rotation(0);
+	wheel.axes[0] = -3000;
+	update();
+	check(inputs.jvs_analog[0] == 0x8000 - 3000, "0: the whole way of the wheel");
+	panel.set_wheel_rotation(1080);
+	wheel.axes[0] = 6000;
+	update();
+	check(inputs.jvs_analog[0] == 0x8000 + 6000, "1080, wider than the wheel: its whole way too");
+}
+
 int main()
 {
 	test_standard_panel();
@@ -861,6 +913,7 @@ int main()
 	test_touched();
 	test_now();
 	test_joystick();
+	test_wheel_rotation();
 
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures ? 1 : 0;

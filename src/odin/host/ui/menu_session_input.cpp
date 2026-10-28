@@ -444,8 +444,10 @@ MenuSession::keep_binding(const Bindings::Line &line, const std::string &game)
 
 	keep(section, line.key, line.value);
 	m_controls.rebind(m_settings);
-	if (m_other)
+	if (m_other) {
 		m_other.emplace(m_other_controls, m_settings, game_shown());
+		m_other->set_wheel_rotation(wheel_rotation_of(m_settings, game_shown()));
+	}
 }
 
 } /* namespace odin */
