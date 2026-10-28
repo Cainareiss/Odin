@@ -121,7 +121,7 @@ jobs:
       - name: Configure
         run: |
           cmake -S . -B build -G "Unix Makefiles" \
-            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=13.3 \
             -DODIN_NATIVE=OFF -DODIN_BUNDLED_LIBS=ON
 
       - name: Build
@@ -129,8 +129,8 @@ jobs:
 
       - name: Build Odin.app
         run: |
-          cmake --install build --strip --prefix install
-          dist/macos/make-app.sh install Odin.app "${VERSION#v}"
+          cmake --install build --strip --prefix stage
+          dist/macos/make-app.sh stage Odin.app "${VERSION#v}"
 
       - name: Test
         run: |
@@ -191,10 +191,10 @@ jobs:
       - name: Build zip
         run: |
           dir="odin-${VERSION}-windows-x86_64"
-          cmake --install build --strip --prefix install
+          cmake --install build --strip --prefix stage
           mkdir -p "$dir" out
-          cp install/bin/odin.exe README LICENSE "$dir/"
-          cp -R install/share/odin/. "$dir/"
+          cp stage/bin/odin.exe README LICENSE "$dir/"
+          cp -R stage/share/odin/. "$dir/"
           "$dir/odin.exe" -h > /dev/null
           objdump -p "$dir/odin.exe" | grep "DLL Name"
           powershell -Command "Compress-Archive -Path '$dir' -DestinationPath 'out/$dir.zip'"

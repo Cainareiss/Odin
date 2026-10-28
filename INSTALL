@@ -71,8 +71,8 @@ pictures, slower where they pile up).
 
 To make Odin.app:
 
- $ cmake --install build --prefix install
- $ dist/macos/make-app.sh install Odin.app
+ $ cmake --install build --prefix stage
+ $ dist/macos/make-app.sh stage Odin.app
 
 On Windows, build with MSYS2 UCRT64 (MSVC lacks .incbin):
 
