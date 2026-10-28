@@ -93,6 +93,7 @@ public:
 
 	const std::string &name() const override { return m_card->name(); }
 	bool vulkan() const override { return true; }
+	const char *api() const override { return "Vulkan"; }
 	/* Vulkan has no context to make current: one thread at a time uses
 	 * the card, as display.hpp has it */
 	void take_thread() override {}
