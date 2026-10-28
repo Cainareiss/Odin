@@ -39,7 +39,9 @@
 #include "odin/host/app/library.hpp"
 #include "odin/host/app/log_file.hpp"
 #include "odin/host/app/options.hpp"
+#include "odin/common/env.hpp"
 #include "odin/common/repeats.hpp"
+#include "odin/common/stop_message.hpp"
 #include "odin/host/app/session.hpp"
 #include "odin/host/app/settings.hpp"
 #include "odin/host/app/user_files.hpp"
@@ -203,6 +205,12 @@ main(int argc, char **argv)
 	odin::LogFile::leave_own_console();
 	if (const std::string log = odin::LogFile::path(); odin::LogFile::start(log))
 		options.log_file = log;
+	/* A board that cannot go on says why in a box too (ODIN_STOP_BOX=0:
+	 * not, as in the tests, which nobody watches) */
+	if (odin::env_flag("ODIN_STOP_BOX", true))
+		odin::stop_message = [](const char *text) {
+			SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Odin stopped", text, nullptr);
+		};
 
 	std::printf(" ██████╗ ██████╗ ██╗███╗   ██╗\n"
 		    "██╔═══██╗██╔══██╗██║████╗  ██║\n"

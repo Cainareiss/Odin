@@ -750,7 +750,13 @@ which gives 60.08 frames a second; no game sets or reads it and no manual
 gives it. Measure it on a board: PHARRIER keeps the length of its frames,
 in microseconds, at 0x0C27D088. HEURISTIC: the frame is the same before
 the game sets it, some thirty frames after power-on. Any other screen (the
-24 kHz one) stops the emulator. As Valkyrie had them: the chips run a line
+24 kHz one, DISPLAY MODE 24KHz in SYSTEM ASSIGNMENTS) is not supported yet
+and stops the emulator, which says why in a box (ODIN_STOP_BOX=0: on
+stderr only): its video clock is not known. To do one day. Nothing of that
+choice is kept: the BOOTROM writes it to the chip of the MIE only at EXIT,
+then asks for the clock, and the stop comes before the saves, which Odin
+writes at power off only (a reset or a quit before EXIT keeps the chip as
+it was). A stop must never write them. As Valkyrie had them: the chips run a line
 each in turn, and the line counter is written at the end of its line.
 
 Interrupts (hikaru.cpp, update_irqs): the lines of the chips are
