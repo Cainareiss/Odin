@@ -23,7 +23,7 @@
  */
 
 /* The shaders of Vulkan, compiled from glsl/ to SPIR-V when Odin is built
- * (Makefile: glslangValidator), in the binary as they come out:
+ * (CMakeLists.txt: glslangValidator), in the binary as they come out:
  * odin_spirv_<name> starts one, odin_spirv_<name>_end follows it
  * (spirv.hpp). */
 

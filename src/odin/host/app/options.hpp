@@ -134,7 +134,7 @@ AudioOut::Mode mode_of(int played);
 std::string default_states();
 
 /* The list of the games: in the folder Odin is started from, else in the
- * home of the user, else where `make install` puts it. */
+ * home of the user, else where an install to ~/.local puts it. */
 bool load_game_list(GameList &games);
 
 /* Every key of odin.ini, at its value by default, in the order the file

@@ -384,7 +384,7 @@ default_states()
 
 /* The list of the games: in the folder Odin is started from, else with the
  * program (program_data_folders), else in the home of the user, else where
- * `make install` puts it. */
+ * an install to ~/.local puts it. */
 bool
 load_game_list(GameList &games)
 {

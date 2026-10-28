@@ -1,26 +1,55 @@
 BUILDING
 ========
 
-Odin is built on GNU/Linux with GCC (C++20), GNU make and pkg-config.
-It needs the development files of SDL 3, GLEW and Jansson, the headers of
-Vulkan, glslangValidator (the shaders of Vulkan in SPIR-V), and a graphics
-driver that offers OpenGL 4.3.
+Odin is built on GNU/Linux with GCC (C++20), CMake 3.20+ and pkg-config.
+It needs SDL 3, GLEW, Jansson, the Vulkan headers, glslangValidator and an
+OpenGL 4.3 driver.
 
- $ cd path/to/odin
- $ make
+ $ cmake -B build
+ $ cmake --build build -j
 
-This makes bin/odin, and beside each shader of the filters of the picture
-(filters/) its SPIR-V for Vulkan. An object is built again when a header it
-includes changes. "make install" copies the binary to ~/.local/bin, and to
-~/.local/share/odin the list of the games, odin-games.json, with the lists of
-the mesh programs of each game (shaders/) and the filters.
+The binary is build/bin/odin, with its data in build/share/odin. To install
+(default prefix /usr/local):
 
-On macOS (Apple silicon or Intel), with the Command Line Tools
-of Xcode (Clang and make) and Homebrew:
+ $ cmake -B build -DCMAKE_INSTALL_PREFIX=$HOME/.local
+ $ cmake --build build -j && cmake --install build
 
- $ brew install pkgconf sdl3 glew jansson vulkan-headers vulkan-loader \
+Options (-D<option>=<value>):
+
+ ODIN_NATIVE=OFF	no -march=native, for packages and cross builds
+ ODIN_LTO=OFF		no -flto
+ ODIN_OPT_FLAGS=<flags>	default "-O3 -fomit-frame-pointer -fno-stack-protector"
+ ODIN_PGO=generate|use	profile-guided build
+ ODIN_VERSION=<commit>	version string when building without git
+ GLSLANG=<path>		glslangValidator to use
+ ODIN_TESTS=ON		build the tests
+
+Leave CMAKE_BUILD_TYPE empty: Release adds -DNDEBUG, which drops asserts.
+
+Profile-guided build (4-15 % faster):
+
+ $ cmake -B build -DODIN_PGO=generate && cmake --build build -j
+ $ build/bin/odin ...
+ $ cmake -B build -DODIN_PGO=use && cmake --build build -j
+
+Cross build:
+
+ $ cmake -B build -DCMAKE_TOOLCHAIN_FILE=<toolchain.cmake> -DODIN_NATIVE=OFF \
+       -DGLSLANG=<host>/bin/glslangValidator -DODIN_VERSION=<commit>
+ $ cmake --build build -j
+ $ DESTDIR=<target> cmake --install build --prefix /usr
+
+Tests and the layer check:
+
+ $ cmake -B build -DODIN_TESTS=ON && cmake --build build -j
+ $ ctest --test-dir build
+ $ cmake --build build --target check-layers
+
+On macOS, with the Xcode Command Line Tools and Homebrew:
+
+ $ brew install cmake pkgconf sdl3 glew jansson vulkan-headers vulkan-loader \
        molten-vk glslang
- $ make
+ $ cmake -B build && cmake --build build -j
 
 Vulkan draws there by default, through MoltenVK. OpenGL stops at 4.1 on
 macOS: with api = opengl Odin draws with it all the same, its translucent
@@ -31,7 +60,7 @@ pictures, slower where they pile up).
 RUNNING
 =======
 
- $ bin/odin -R <ROM directory> -r <game>
+ $ build/bin/odin -R <ROM directory> -r <game>
 
 (-R may be left out once the menu, page Paths, keeps the folder: roms in
 [paths] of odin.ini.) Without -r, as a double click starts it, Odin opens

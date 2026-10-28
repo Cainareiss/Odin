@@ -47,8 +47,9 @@ written so that everyone knows what to do.
 - `machine/boards/hikaru/hikaru_draw.hpp` is the contract between the board
   and the renderer, with no graphics API: the board makes it, the renderer
   (`host/renderer/hikaru/`) reads it.
-- `make check-layers` fails on an include that crosses the layers, but
-  these known ones. Each is to be removed later, in a commit of its own:
+- `cmake --build build --target check-layers` fails on an include that
+  crosses the layers, but these known ones. Each is to be removed later,
+  in a commit of its own:
 
   | Machine file | Includes | Why | Later |
   |---|---|---|---|

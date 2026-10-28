@@ -38,7 +38,7 @@ namespace odin {
  * more than 24 + 2 bits, so the float is the sum rounded once (Boldo and
  * Melquiond, "Emulation of FMA and correctly rounded sums: proved
  * algorithms using rounding to odd", IEEE Transactions on Computers, 2008).
- * Built without a product fused with a sum (FP_FLAGS of the Makefile). */
+ * Built without a product fused with a sum (-ffp-contract=off, CMakeLists.txt). */
 inline float
 fma_by_double(float x, float y, float z)
 {
