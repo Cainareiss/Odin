@@ -509,6 +509,19 @@ touched(int key, const PadState &now)
 	return now.buttons[static_cast<size_t>(key)];
 }
 
+/* Whether the game takes that input of a label now, as ControlPanel reads
+ * it: a button pressed with Guide held is a shortcut of Odin, unless the
+ * input is that pair */
+bool
+taken(const PadInput &input, int key, const PadState &now)
+{
+	const bool on = touched(key, now);
+
+	if (!on || key >= 100)
+		return on;
+	return input.with >= 0 ? now.buttons[static_cast<size_t>(input.with)] : !now.shortcut[static_cast<size_t>(key)];
+}
+
 /* A name beside the drawing: the controls on one input of it, their text,
  * the first of them caught by a click; the box of its part, the side it is
  * on, its height and its leader line */
@@ -1243,7 +1256,7 @@ sort_rows(const MenuState &state, std::span<const InputRow> rows, const PadDrawi
 			Label l{ { name }, r, key, static_cast<size_t>(part) };
 
 			l.chosen = is_chosen(state, rows[r].slot);
-			l.hot = touched(key, now);
+			l.hot = taken(input.pad, key, now);
 			out.labels.push_back(std::move(l));
 		}
 	}
