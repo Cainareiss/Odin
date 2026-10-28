@@ -446,9 +446,16 @@ jump by up to 52, 850 times the move at most, a wall by up to 51 with the
 wheel still, measured 17/10/2026). Not known: why BASS
 SHAKER (FRONT+REAR) changes no output here, and the REAR ON output of the
 wiring. The deluxe harness ties "GND (FOR DX)" (CN8 pin 23 of the
-837-13844), which the game reads as 1P PUSH1 and shows those two lines of
-its OUTPUT TEST for, and turns its force over for; the list does not tie
-it (standard cabinet).
+837-13844), which the game reads as 1P PUSH1, in twelve places of its
+program: those two lines of its OUTPUT TEST, DX as the CABINET TYPE of
+BOOKKEEPING, its force and the FORCE TEST turned over, the wheel it reads
+turned over (0C037526, 0C03FB20, 0C04163A, 0C0449A2, 0C045250) with its
+offset setting (0C01A396), VIEW CHANGE read on 1P UP, not 1P DOWN
+(0C02B084, 0C04D474, 0C04D49C); its centring spring is not turned over,
+so the potentiometer and the motor of a deluxe are turned together. The
+list has it as the cabinet "deluxe" ([players.sgnascar] cabinet), the
+wheel read the other way, and Odin turns the force back for it
+(Controls::turn_wheel).
 The ARM7 runs on the 22.5792 MHz bus clock, eight times MAME's
 figure: the SGNASCAR cabinet shows its sound driver ready within a frame
 of each reload, 20 MHz at least (HEURISTIC: no wait state). The driver

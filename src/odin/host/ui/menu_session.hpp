@@ -233,6 +233,7 @@ private:
 	              bool runs);
 	void keep_vibration(const std::string &game, bool on, bool runs);
 	void keep_wheel_force(const std::string &game, int percent, bool runs);
+	void keep_cabinet(const std::string &game, const std::string &id);
 	void keep_tuning(const std::string &guid, const PadTuning &now, const PadTuning &was);
 	void fill_bar_inputs(BarState &bar) const;
 	void keep_binding(const Bindings::Line &line, const std::string &game = "");
@@ -263,6 +264,7 @@ private:
 	std::vector<GameOutput> m_other_outputs;
 	bool m_other_shakes = false;
 	bool m_other_forces = false;
+	std::vector<Game::Cabinet> m_other_cabinets;
 	std::array<std::string, 2> m_other_shakers;
 	std::array<bool, 2> m_other_experimental{};
 	Game::Link m_other_link;

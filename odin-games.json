@@ -476,6 +476,10 @@
 			"outputs" : [
 				{ "name" : "BASS SHAKER MUTE", "id" : "bass_shaker_mute", "output" : 14, "role" : "mute" }
 			],
+			"cabinets" : [
+				{ "id" : "deluxe", "name" : "Deluxe", "grounded" : [ "1P PUSH1" ],
+				  "controls" : { "steering_wheel" : { "low" : "right" }, "view_change" : { "switch" : "1P UP" } } }
+			],
 			"sections" : [
 				{
 					"name" : "mie",

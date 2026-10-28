@@ -1122,9 +1122,12 @@ next_mapping(MenuState &state, std::span<const InputRow> rows)
 }
 
 /* The cabinet of the game shown: in its own box, its name and the game's
- * at the top (`framed`), or in the box of the device */
+ * at the top (`framed`), or in the box of the device; at the top, the
+ * cabinets the game was sold in in place of its name, when there are
+ * more than one (NASCAR: Standard, Deluxe), the game that runs taking the
+ * one chosen when it is reset */
 void
-cabinet_box(const MenuKit &kit, const MenuState &state, ImVec2 a, ImVec2 b, bool framed)
+cabinet_box(const MenuKit &kit, MenuState &state, ImVec2 a, ImVec2 b, bool framed)
 {
 	if (!state.panel || state.shown >= state.games.size())
 		return;
@@ -1163,9 +1166,34 @@ cabinet_box(const MenuKit &kit, const MenuState &state, ImVec2 a, ImVec2 b, bool
 		kit.frame(list, a, b, kit.px(MenuKit::BOX_CUT), 0, palette.line);
 		MenuKit::write(list, { a.x + pad, a.y + kit.px(6.0f) + small - tiny }, palette.cabinet, "THE CABINET", tiny,
 		               tiny * 0.14f);
-		MenuKit::write(list, { b.x - pad - MenuKit::measure(title.c_str(), small), a.y + kit.px(6.0f) }, palette.dim,
-		               title.c_str(), small);
 		top = a.y + kit.px(6.0f) + small;
+		if (state.cabinet_names.size() > 1) {
+			std::vector<const char *> names;
+
+			for (const std::string &name : state.cabinet_names)
+				names.push_back(name.c_str());
+
+			const ImVec2 cells = kit.segments_size(names);
+			const ImVec2 at = { b.x - pad - cells.x, a.y + kit.px(6.0f) };
+
+			/* The gamepad: left or right, or A, takes the next one */
+			if (kit.focus(at, { at.x + cells.x, at.y + cells.y }, kit.px(4.0f)) && (kit.side() || kit.pressed()))
+				state.cabinet = (state.cabinet + (kit.side() < 0 ? static_cast<int>(names.size()) - 1 : 1)) %
+				                static_cast<int>(names.size());
+			kit.segments(at, names, state.cabinet);
+			top = at.y + cells.y;
+			if (state.cabinet_later) {
+				static constexpr char LATER[] = "Reset the game to apply";
+				const float note = MenuKit::font(MenuKit::NOTE);
+
+				MenuKit::write(list, { b.x - pad - MenuKit::measure(LATER, note), top + kit.px(3.0f) }, palette.dim,
+				               LATER, note);
+				top += kit.px(3.0f) + note;
+			}
+		} else {
+			MenuKit::write(list, { b.x - pad - MenuKit::measure(title.c_str(), small), a.y + kit.px(6.0f) },
+			               palette.dim, title.c_str(), small);
+		}
 	}
 	draw_cabinet(kit, state.games[state.shown].first, now, { a.x + kit.px(4.0f), top },
 	             { b.x - kit.px(4.0f), b.y - kit.px(6.0f) });

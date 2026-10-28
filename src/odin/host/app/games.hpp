@@ -177,6 +177,23 @@ struct Game {
 	/* The outputs of its cabinet the host uses: "outputs" in the list,
 	 * none when the list does not say. */
 	std::vector<GameOutput> outputs;
+	/* The switches the wiring of its cabinet ties to the ground, closed
+	 * for good: "grounded" in the list, none when it does not say. */
+	std::vector<JvsSwitch> grounded;
+	/* The other cabinets the game was sold in, which its program tells
+	 * apart (NASCAR: Deluxe): "cabinets" in the list, [{"id": ..., "name":
+	 * ..., "grounded": [...], "controls": {<id>: {fields in place of those
+	 * of that control}}}]. The cabinet of the list is "standard". */
+	struct Cabinet {
+		std::string id, name;
+		std::vector<GameControl> controls;
+		std::vector<JvsSwitch> grounded;
+	};
+	std::vector<Cabinet> cabinets;
+	/* The one played: its controls and wiring become those of that cabinet;
+	 * false when the game has no such cabinet */
+	std::string cabinet = "standard";
+	bool use_cabinet(const std::string &id);
 	/* The 93C46 of the MIE of a new cabinet, the settings of the SYSTEM
 	 * MENU as SEGA left them: "mie_eeprom" in the list, 128 bytes in
 	 * hexadecimal; empty when the list does not say (a blank chip). */

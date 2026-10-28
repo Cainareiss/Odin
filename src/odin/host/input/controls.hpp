@@ -129,7 +129,12 @@ public:
 	/* The id of the joystick of a player (0: none) */
 	SDL_JoystickID joystick_id(unsigned player) const { return joystick(player) ? m_joy_seats[player & 1] : 0; }
 
-	void read_inputs(CabinetInputs &inputs) override { m_panel.fill(inputs); }
+	void read_inputs(CabinetInputs &inputs) override
+	{
+		m_panel.fill(inputs);
+		for (const JvsSwitch &sw : m_grounded)
+			inputs.jvs_player[sw.player & 1] |= sw.mask;
+	}
 	/* The outputs of the board after a frame: the pad of a player shakes
 	 * while a rumble output of that player is on, when it feels them; the
 	 * pad of player 1 also
@@ -169,6 +174,9 @@ public:
 	/* How hard the wheel turns, in % of what the drive board asks
 	 * ([players.<game>] wheel_force, options.hpp) */
 	void set_wheel_force(int percent) { m_wheel_force = percent; }
+	/* The switches the wiring of the cabinet ties to the ground
+	 * (Game::grounded): closed for the game whatever the player does */
+	void ground(std::vector<JvsSwitch> switches) { m_grounded = std::move(switches); }
 	/* All three as the cabinet of that game shakes, or none (`on` false) */
 	void feel_game(const Game &game, bool on)
 	{
@@ -251,6 +259,8 @@ private:
 	Uint16 m_drive_level = 0;	/* how hard the felt shocks shake */
 	int m_force_was = 0;		/* the force of the last frame */
 	int m_wheel_force = 100;	/* the wheel turns at that % of it */
+	bool m_wheel_reversed = false;	/* its low values on the right */
+	std::vector<JvsSwitch> m_grounded;
 	int m_wheel_channel = -1;	/* the steering wheel of player 1, if any */
 	uint16_t m_wheel_was = 0;
 	std::array<double, 6> m_wheel_moves{};	/* its moves over the last frames */

@@ -134,6 +134,9 @@ const char LIST[] = R"({
         { "name": "2P SHAKE", "id": "2p_shake", "output": 13, "role": "rumble", "player": 2 },
         { "name": "LOCK", "id": "lock", "output": 32, "role": "lock" },
         { "name": "MUTE", "id": "mute", "output": 14, "role": "mute" } ],
+      "grounded": [ "2P PUSH1" ],
+      "cabinets": [ { "id": "deluxe", "name": "Deluxe", "grounded": [ "1P PUSH1" ],
+        "controls": { "wheel": { "low": "right" }, "view": { "switch": "1P UP" } } } ],
       "sections": [
         { "name": "bootrom", "type": "alternative", "data": [ { "name": "boot.bin", "size": 4 } ] } ] }
   ]
@@ -289,6 +292,31 @@ void test_games(const std::string &dir)
 		check(toy->controls.empty() && toy->mie_eeprom.empty() && !toy->option_speakers && toy->option_level == 0 &&
 		      !toy->option_vibration && !toy->drive_first_output && !toy->rom_board && !toy->title_frame,
 		      "without \"controls\", no control, without \"mie_eeprom\", no chip, without \"option_speakers\", none");
+	check(wheel && wheel->grounded.size() == 1 && wheel->grounded[0].player == 1 && wheel->grounded[0].mask == 0x0200 &&
+	      toy && toy->grounded.empty() && toy->cabinets.empty(),
+	      "the switches its wiring grounds, the list tells; none, and no other cabinet, when it does not say");
+	if (wheel && wheel->cabinets.size() == 1 && wheel->controls.size() == 7) {
+		using odin::GameControl;
+		const odin::Game::Cabinet &dx = wheel->cabinets[0];
+
+		check(dx.id == "deluxe" && dx.name == "Deluxe" && dx.grounded.size() == 1 && dx.grounded[0].player == 0 &&
+		      dx.grounded[0].mask == 0x0200, "another cabinet: its id, its name, the switches its wiring grounds");
+		check(dx.controls.size() == 7 && dx.controls[0].low == GameControl::Low::RIGHT &&
+		      dx.controls[3].button.mask == 0x2000 && dx.controls[3].keys == wheel->controls[3].keys &&
+		      dx.controls[1].analog == 7 && dx.controls[6].positions.size() == 2,
+		      "its controls: those of the list, with the fields it changes, the others kept");
+
+		odin::Game played = *wheel, standard = *wheel;
+
+		check(played.use_cabinet("deluxe") && played.cabinet == "deluxe" &&
+		      played.controls[0].low == GameControl::Low::RIGHT && played.grounded.size() == 1 &&
+		      played.grounded[0].mask == 0x0200, "the game played in that cabinet takes its controls and wiring");
+		check(standard.use_cabinet("standard") && standard.cabinet == "standard" &&
+		      standard.controls[0].low == GameControl::Low::LEFT && !standard.use_cabinet("twin"),
+		      "standard: the cabinet of the list; no cabinet the list does not tell");
+	} else {
+		check(false, "the other cabinets the list tells");
+	}
 	check(wheel && wheel->mie_eeprom.size() == 128 && wheel->mie_eeprom[0] == 0x42 && wheel->mie_eeprom[4] == 0x01 &&
 	      wheel->mie_eeprom[5] == 0xAB && wheel->mie_eeprom[7] == 0xEF && wheel->mie_eeprom[127] == 0xFF,
 	      "the chip of a new cabinet, byte by byte, small or capital figures");
@@ -473,6 +501,22 @@ void test_bad_controls(const std::string &dir)
 	      "and one whose \"title_frame\" is not a frame");
 	check(refuses(R"("option_vibration": "yes")") && refuses(R"("option_vibration": 1)"),
 	      "and one whose \"option_vibration\" is not true or false");
+	{
+		const std::string a = R"("controls": [ { "name": "A", "id": "a", "switch": "1P START", "role": "start" } ], )";
+
+		check(!refuses(a + R"("grounded": [ "1P PUSH1" ], "cabinets": [ { "id": "dx", "name": "DX",
+		                         "controls": { "a": { "switch": "1P UP" } } } ])"),
+		      "a cabinet with its controls changed and switches grounded is one");
+		check(refuses(a + R"("cabinets": [ { "id": "dx", "name": "DX", "controls": { "b": { "low": "right" } } } ])") &&
+		      refuses(a + R"("cabinets": [ { "id": "standard", "name": "S" } ])") &&
+		      refuses(a + R"("cabinets": [ { "id": "dx", "name": "DX" }, { "id": "dx", "name": "DX 2" } ])") &&
+		      refuses(a + R"("cabinets": [ { "id": "dx" } ])") &&
+		      refuses(a + R"("cabinets": [ { "id": "dx", "name": "DX", "grounded": [ "3P START" ] } ])") &&
+		      refuses(a + R"("cabinets": [ { "id": "dx", "name": "DX", "controls": { "a": 1 } } ])") &&
+		      refuses(a + R"("cabinets": [ { "id": "dx", "name": "DX", "controls": { "a": { "id": "b" } } } ])") &&
+		      refuses(a + R"("cabinets": { "id": "dx", "name": "DX" })") && refuses(a + R"("grounded": "1P PUSH1")"),
+		      "and one whose cabinets or grounded switches are not right");
+	}
 	check(refuses(R"("link": true)") && refuses(R"("link": 4)") && refuses(R"("link": {})") &&
 	      refuses(R"("link": { "cabinets": 1 })") && refuses(R"("link": { "cabinets": 9 })") &&
 	      refuses(R"("link": { "cabinets": "4" })") &&

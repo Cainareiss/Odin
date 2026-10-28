@@ -381,6 +381,16 @@ stops with the vibration of the page Input ("vibration = off" in
 wheel; Wheel force, in the options of the page Input ("wheel_force = 0"
 to 100 in [players.sgnascar]), takes that share of it.
 
+NASCAR was also sold as a Deluxe cabinet, which its program tells apart
+by a switch its wiring ties to the ground ("GND (FOR DX)", read as 1P
+PUSH1): Standard or Deluxe at the top of the cabinet on the page Input
+("cabinet = deluxe" in [players.sgnascar]), taken when the game is reset.
+On a Deluxe the game shows the bass shakers in its OUTPUT TEST and DX as
+its CABINET TYPE, reads VIEW CHANGE on 1P UP, and reads the wheel and
+turns it the other way, as the potentiometer and the motor of that
+cabinet are mounted: Odin turns both back, and the wheel of the player
+works the same in both.
+
 Gamepads: one for each player, in the order they are plugged in, or the
 one chosen for the game in the menu (Input). SELECT (SHARE) puts in a
 coin for the player of the pad. Guide alone opens the menu; at its foot,

@@ -372,6 +372,17 @@ wheel_force_of(const Settings &settings, const std::string &game)
 	return percent;
 }
 
+std::string
+cabinet_of(const Settings &settings, const std::string &game)
+{
+	std::string id = "standard";
+
+	for (const auto &[key, value] : settings.section("players." + game))
+		if (key == "cabinet")
+			id = value;
+	return id;
+}
+
 int
 played_of(AudioOut::Mode mode)
 {
@@ -493,6 +504,8 @@ known_settings(const GameList &games)
 			out.push_back({ "players." + name, "vibration", "on" });
 		if (game->drive_first_output)
 			out.push_back({ "players." + name, "wheel_force", std::to_string(WHEEL_FORCE) });
+		if (!game->cabinets.empty())
+			out.push_back({ "players." + name, "cabinet", "standard" });
 		if (!game->card_reader.empty())
 			out.push_back({ "players." + name, "card", "" });
 	}

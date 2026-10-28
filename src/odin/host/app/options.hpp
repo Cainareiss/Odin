@@ -127,6 +127,9 @@ bool vibration_on(const Settings &settings, const std::string &game);
 inline constexpr int WHEEL_FORCE = 100;
 std::optional<int> wheel_force_named(const std::string &value);
 int wheel_force_of(const Settings &settings, const std::string &game);
+/* [players.<game>] cabinet: the id of the cabinet of the game played
+ * (Game::cabinets; "standard": that of the list, when it does not say) */
+std::string cabinet_of(const Settings &settings, const std::string &game);
 
 /* The way of playing of the page Audio: 0 the main board, 1 both, 2 four
  * channels, -1 the optional board alone */

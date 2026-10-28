@@ -75,6 +75,7 @@ MenuSession::show_game(size_t game)
 	m_other_outputs = other->outputs;
 	m_other_shakes = other->shakes();
 	m_other_forces = other->drive_first_output != 0;
+	m_other_cabinets = other->cabinets;
 	m_other_shakers = { other->shaker(0), other->shaker(1) };
 	m_other_experimental = { other->shaker_experimental(0), other->shaker_experimental(1) };
 	m_other_link = other->link;
@@ -169,6 +170,22 @@ MenuSession::draw_menu()
 	/* The wheel the drive board turns, and how hard */
 	state.can_force = m_other ? m_other_forces : m_game && m_game->drive_first_output;
 	state.wheel_force = wheel_force_of(m_settings, game_shown());
+	/* Its cabinets, and the one chosen; the game that runs plays the one it
+	 * started with */
+	static const std::vector<Game::Cabinet> NONE;
+	const std::vector<Game::Cabinet> &cabinets = m_other ? m_other_cabinets : m_game ? m_game->cabinets : NONE;
+	const std::string chosen = cabinet_of(m_settings, game_shown());
+
+	state.cabinet_ids = { "standard" };
+	state.cabinet_names = { "Standard" };
+	state.cabinet = 0;
+	for (const Game::Cabinet &cabinet : cabinets) {
+		if (cabinet.id == chosen)
+			state.cabinet = static_cast<int>(state.cabinet_ids.size());
+		state.cabinet_ids.push_back(cabinet.id);
+		state.cabinet_names.push_back(cabinet.name);
+	}
+	state.cabinet_later = !m_other && m_game && m_game->cabinet != state.cabinet_ids[static_cast<size_t>(state.cabinet)];
 	/* How the game shown links cabinets */
 	const Game::Link shown_link = m_other ? m_other_link : m_game ? m_game->link : Game::Link{};
 
@@ -454,6 +471,9 @@ MenuSession::apply(const MenuState &was)
 	/* The force of its wheel, at once too */
 	if (now.wheel_force != was.wheel_force && now.can_force)
 		keep_wheel_force(game_shown(), now.wheel_force, !m_other && m_game);
+	/* Its cabinet: the game that runs takes it when it is reset */
+	if (now.cabinet != was.cabinet && now.cabinet >= 0 && static_cast<size_t>(now.cabinet) < now.cabinet_ids.size())
+		keep_cabinet(game_shown(), now.cabinet_ids[static_cast<size_t>(now.cabinet)]);
 	/* The dead zone and the trigger threshold of the gamepad shown */
 	if (const std::string guid = pad_shown(now); !guid.empty())
 		keep_tuning(guid, now.tuning, was.tuning);
@@ -527,6 +547,13 @@ MenuSession::keep_vibration(const std::string &game, bool on, bool runs)
 	if (runs)
 		m_controls.feel_game(*m_game, on);
 	keep("players." + game, "vibration", on ? std::nullopt : std::optional<std::string>("off"));
+}
+
+/* [players.<game>] cabinet: a line only for another than Standard */
+void
+MenuSession::keep_cabinet(const std::string &game, const std::string &id)
+{
+	keep("players." + game, "cabinet", id == "standard" ? std::nullopt : std::optional<std::string>(id));
 }
 
 /* [players.<game>] wheel_force: a line only when below the most */

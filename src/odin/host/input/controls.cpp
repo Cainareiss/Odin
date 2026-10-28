@@ -43,8 +43,10 @@ Controls::Controls(Keyboard &keys, const std::vector<GameControl> &controls, con
 	  m_mouse_placed(false), m_mouse_from_x(0), m_mouse_from_y(0), m_mouse_fresh{}, m_mouse_release{}
 {
 	for (const GameControl &control : controls)
-		if (control.type == GameControl::Type::ANALOG && control.role == Role::STEER && control.player == 0)
+		if (control.type == GameControl::Type::ANALOG && control.role == Role::STEER && control.player == 0) {
 			m_wheel_channel = control.analog;
+			m_wheel_reversed = control.low == GameControl::Low::RIGHT;
+		}
 	const char *const chosen = std::getenv("ODIN_CONTROLLERS");
 
 	if (chosen && !std::strcmp(chosen, "none"))
@@ -56,8 +58,9 @@ Controls::Controls(Keyboard &keys, const std::vector<GameControl> &controls, con
 			m_guns[key[3] - '1'] = value.substr(0, value.find(' '));
 		} else if (key == "joy1" || key == "joy2") {
 			m_joys_wanted[key[3] - '1'] = value.substr(0, value.find(' '));
-		} else if (key == "vibration" ? value != "on" && value != "off" :	/* both: main.cpp, menu_session.cpp */
-		           key != "wheel_force" || !wheel_force_named(value)) {
+		} else if (key != "cabinet" && key != "card" &&	/* these four: main.cpp, menu_session.cpp */
+		           (key == "vibration" ? value != "on" && value != "off" :
+		                                 key != "wheel_force" || !wheel_force_named(value))) {
 			std::fprintf(stderr, "ERROR: settings: [players.%s]: not right: %s = %s\n", game.c_str(), key.c_str(),
 			             value.c_str());
 		}
@@ -469,7 +472,13 @@ Controls::turn_wheel(int torque)
 	}
 	if (!m_force)
 		m_force = std::make_unique<WheelForce>(joy->handle);
-	m_force->push(static_cast<double>(torque) / DriveBoard::MOST * m_wheel_force / WHEEL_FORCE);
+	/* A wheel read the other way (its low values on the right) turns the
+	 * other way: the program of NASCAR reverses both the wheel it reads and
+	 * the force it asks on a Deluxe, and keeps its centring spring, so the
+	 * potentiometer and the motor of that cabinet are reversed together */
+	const double way = m_wheel_reversed ? -1.0 : 1.0;
+
+	m_force->push(way * torque / DriveBoard::MOST * m_wheel_force / WHEEL_FORCE);
 }
 
 void

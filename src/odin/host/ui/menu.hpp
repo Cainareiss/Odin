@@ -401,6 +401,13 @@ struct MenuState {
 	 * cabinet (NASCAR), and how hard, in % ([players.<game>] wheel_force) */
 	bool can_force = false;
 	int wheel_force = 100;
+	/* The cabinets the game shown was sold in, Standard first
+	 * (Game::cabinets): their ids and names, the one chosen
+	 * ([players.<game>] cabinet), and whether the game that runs plays
+	 * another until it is reset */
+	std::vector<std::string> cabinet_ids, cabinet_names;
+	int cabinet = 0;
+	bool cabinet_later = false;
 	PadTuning tuning;
 	bool advanced = false;
 	/* The animations of the menu ([menu] animations): the row of the

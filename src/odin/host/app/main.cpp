@@ -63,13 +63,22 @@ play(const Options &given, const std::string &name, const GameList &games, Setti
 		return Ended::FAILED;
 	}
 
-	/* The archives are let go of once the files are read */
+	/* The archives are let go of once the files are read; the cabinet of
+	 * [players.<game>] */
 	const std::optional<Game> game = [&] {
 		RomFiles files(options.rom_path, options.bios_path);
 		std::optional<Game> loaded = games.load_game(files, name);
 
-		if (loaded)
+		if (loaded) {
+			const std::string cabinet = cabinet_of(settings, name);
+
+			if (!loaded->use_cabinet(cabinet))
+				std::fprintf(stderr, "ERROR: settings: [players.%s]: not right: cabinet = %s\n", name.c_str(),
+				             cabinet.c_str());
+			else if (cabinet != "standard")
+				std::printf("cabinet: %s\n", cabinet.c_str());
 			return loaded;
+		}
 		for (const RomFiles::File &file : games.missing(files, name)) {
 			char crc[16] = "";
 
@@ -137,6 +146,7 @@ play(const Options &given, const std::string &name, const GameList &games, Setti
 		std::printf("sound: the optional board at %+g dB in the mix\n", option_level);
 	controls.feel_game(*game, vibration);
 	controls.set_wheel_force(wheel_force_of(settings, game->name));
+	controls.ground(game->grounded);
 	if (vibration && (game->option_vibration || game->drive_first_output))
 		std::printf("controls: the pad of player 1 shakes as the%s%s of the cabinet (experimental)\n",
 		            game->option_vibration ? " vibration device" : "",
