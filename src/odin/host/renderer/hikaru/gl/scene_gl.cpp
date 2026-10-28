@@ -152,6 +152,10 @@ GlBoardDrawing::begin_preparing()
 void
 GlBoardDrawing::prepare_program(uint64_t key)
 {
+	/* Not those the card cannot run (draw_mesh, draws_native) */
+	if (const std::optional<MeshVariant> v = MeshVariant::from_key(key);
+	    v && ((v->collect && !gl::primitive_ids()) || (v->native && !gl::geometry_shaders())))
+		return;
 	/* Back from the loading screen, drawn in the window */
 	glBindVertexArray(m_mesh_vao);
 	glBindFramebuffer(GL_FRAMEBUFFER, m_scene_fb);
@@ -292,6 +296,10 @@ GlBoardDrawing::bind_texture(const MeshDraw &draw)
 		m_unit0_sampler = draw.sampler.id;
 		glBindSampler(0, draw.sampler.id);
 	}
+#ifdef ODIN_GLES
+	if (const auto bias = m_sampler_bias.find(draw.sampler.id); bias != m_sampler_bias.end())
+		glUniform1f(m_program->locs.lod_bias, bias->second);
+#endif
 }
 
 void
@@ -359,6 +367,9 @@ GlBoardDrawing::draw_instance(const odin_mesh_t &mesh, unsigned i)
 void
 GlBoardDrawing::draw_mesh(const odin_mesh_t &mesh, const MeshDraw &draw)
 {
+	/* A translucent mesh needs gl_PrimitiveID, see begin_translucent */
+	if (draw.variant.collect && !gl::primitive_ids())
+		return;
 	if (m_peel.on && draw.variant.collect && !m_peel.drawing) {
 		m_peel.draws.push_back({ &mesh, draw });
 		return;

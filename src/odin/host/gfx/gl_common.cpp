@@ -30,25 +30,67 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
+#include <string>
 
 namespace odin::gl {
 
 namespace {
 
-/* The shaders of Odin are GLSL 4.30 (glsl/): their texts come after this
- * #version line. */
+#ifdef ODIN_GLES
+/* 31 or 32 */
+int
+es_version()
+{
+	static const int version = [] {
+		GLint major = 0, minor = 0;
+
+		glGetIntegerv(GL_MAJOR_VERSION, &major);
+		glGetIntegerv(GL_MINOR_VERSION, &minor);
+		return major * 10 + minor;
+	}();
+	return version;
+}
+
+/* GLSL ES 3.10 needs extensions for what Odin uses of 3.20 */
+std::string
+es_head()
+{
+	std::string head = es_version() >= 32 ? "#version 320 es\n" : "#version 310 es\n";
+
+	if (es_version() < 32) {
+		for (const char *ext : { "GL_EXT_geometry_shader", "GL_OES_shader_image_atomic", "GL_EXT_gpu_shader5" })
+			if (has_extension(ext))
+				head += std::string("#extension ") + ext + " : enable\n";
+		if (!has_extension("GL_EXT_gpu_shader5"))
+			head += "#define precise\n";
+	}
+	head += "precision highp float;\nprecision highp int;\nprecision highp sampler2D;\n"
+	        "precision highp usampler2D;\nprecision highp image2D;\nprecision highp uimage2D;\n";
+	if (!fragment_lists())
+		head += "#define PEELING 1\n";
+	return head;
+}
+#endif
+
+/* Prepended to the GLSL 4.30 shaders */
 GLuint
 compile_shader(GLenum type, const char *text)
 {
 	const GLuint id = glCreateShader(type);
+#ifdef ODIN_GLES
+	static const std::string head = es_head();
+	const char *const texts[2] = { head.c_str(), text };
+#else
 	const char *const texts[2] = { fragment_lists() ? "#version 430\n" : "#version 410\n#define PEELING 1\n", text };
+#endif
 	GLint status;
 
 	glShaderSource(id, 2, texts, nullptr);
 	glCompileShader(id);
 	glGetShaderiv(id, GL_COMPILE_STATUS, &status);
 	if (!status) {
-		char info[256];
+		char info[1024];
 
 		glGetShaderInfoLog(id, sizeof(info), nullptr, info);
 		std::fprintf(stderr, "renderer: could not compile a shader: '%s'\n%s\n", info, text);
@@ -134,15 +176,145 @@ fatal(const char *what)
 }
 
 bool
+es()
+{
+#ifdef ODIN_GLES
+	return true;
+#else
+	return false;
+#endif
+}
+
+bool
+has_extension(const char *name)
+{
+	GLint count = 0;
+
+	glGetIntegerv(GL_NUM_EXTENSIONS, &count);
+	for (GLint i = 0; i < count; i++) {
+		const char *const ext = reinterpret_cast<const char *>(glGetStringi(GL_EXTENSIONS, static_cast<GLuint>(i)));
+
+		if (ext && std::strcmp(ext, name) == 0)
+			return true;
+	}
+	return false;
+}
+
+#ifdef ODIN_GLES
+bool
+fragment_lists()
+{
+	static const bool lists = [] {
+		GLint buffers = 0;
+
+		glGetIntegerv(GL_MAX_FRAGMENT_SHADER_STORAGE_BLOCKS, &buffers);
+		return buffers > 0 && primitive_ids() && (es_version() >= 32 || has_extension("GL_OES_shader_image_atomic"));
+	}();
+	return lists;
+}
+
+bool
+geometry_shaders()
+{
+	static const bool has = es_version() >= 32 || has_extension("GL_EXT_geometry_shader");
+	return has;
+}
+
+bool
+primitive_ids()
+{
+	return geometry_shaders();
+}
+
+bool
+copy_image()
+{
+	return es_version() >= 32;
+}
+
+/* No persistent maps: they need GL_EXT_buffer_storage */
+bool
+buffer_storage()
+{
+	return false;
+}
+
+bool
+anisotropic_filter()
+{
+	static const bool has = has_extension("GL_EXT_texture_filter_anisotropic");
+	return has;
+}
+
+bool
+border_clamp()
+{
+	static const bool has = es_version() >= 32 || has_extension("GL_EXT_texture_border_clamp") ||
+	                        has_extension("GL_OES_texture_border_clamp");
+	return has;
+}
+
+const char *
+es_version_head()
+{
+	static const std::string head = std::string(es_version() >= 32 ? "#version 320 es\n" : "#version 310 es\n") +
+	                                "precision highp float;\nprecision highp int;\nprecision highp sampler2D;\n";
+	return head.c_str();
+}
+#else
+bool
 fragment_lists()
 {
 	return GLEW_VERSION_4_3;
 }
 
+bool
+geometry_shaders()
+{
+	return true;
+}
+
+bool
+primitive_ids()
+{
+	return true;
+}
+
+bool
+copy_image()
+{
+	return GLEW_VERSION_4_3 || GLEW_ARB_copy_image;
+}
+
+bool
+buffer_storage()
+{
+	return GLEW_ARB_buffer_storage;
+}
+
+bool
+anisotropic_filter()
+{
+	return GLEW_EXT_texture_filter_anisotropic;
+}
+
+bool
+border_clamp()
+{
+	return true;
+}
+#endif
+
 void
 storage(GLsizei levels, GLenum format, GLsizei w, GLsizei h)
 {
-	if (GLEW_VERSION_4_2 || GLEW_ARB_texture_storage) {
+#ifdef ODIN_GLES
+	const bool immutable = true;
+#else
+	const bool immutable = GLEW_VERSION_4_2 || GLEW_ARB_texture_storage;
+#endif
+
+	if (immutable) {
 		glTexStorage2D(GL_TEXTURE_2D, levels, format, w, h);
 		return;
 	}
@@ -156,6 +328,21 @@ storage(GLsizei levels, GLenum format, GLsizei w, GLsizei h)
 		w = std::max(w / 2, 1);
 		h = std::max(h / 2, 1);
 	}
+}
+
+void
+read_buffer(GLenum target, GLintptr offset, GLsizeiptr size, void *out)
+{
+#ifdef ODIN_GLES
+	const void *const at = glMapBufferRange(target, offset, size, GL_MAP_READ_BIT);
+
+	if (!at)
+		fatal("a buffer could not be mapped to be read");
+	std::memcpy(out, at, static_cast<size_t>(size));
+	glUnmapBuffer(target);
+#else
+	glGetBufferSubData(target, offset, size, out);
+#endif
 }
 
 GLuint

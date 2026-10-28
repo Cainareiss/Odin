@@ -32,7 +32,7 @@
 #include <utility>
 #include <vector>
 
-#include <GL/glew.h>
+#include "odin/host/gfx/gl_common.hpp"
 
 #include "odin/host/video/picture_preset.hpp"
 

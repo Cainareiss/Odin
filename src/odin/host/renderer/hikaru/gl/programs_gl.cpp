@@ -212,6 +212,7 @@ MeshPrograms::compile(const MeshVariant &variant)
 	locs.order = find("u_order");
 	locs.blend_mode = find("u_blend_mode");
 	locs.pattern = find("u_pattern");
+	locs.lod_bias = find("u_lod_bias");
 
 	/* The texture units never change. */
 	glUseProgram(program.id);

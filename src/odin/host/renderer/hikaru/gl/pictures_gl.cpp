@@ -97,8 +97,13 @@ GlBoardDrawing::build_pictures()
 	m_scene_fb = gl::new_framebuffer(m_scene_color);
 	glGenRenderbuffers(1, &m_scene_depth);
 	glBindRenderbuffer(GL_RENDERBUFFER, m_scene_depth);
+#ifdef ODIN_GLES
+	/* Sized format, matching m_solid_depth for the blit */
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, static_cast<GLsizei>(w), static_cast<GLsizei>(h));
+#else
 	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT,
 	                      static_cast<GLsizei>(w), static_cast<GLsizei>(h));
+#endif
 	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
 	                          GL_RENDERBUFFER, m_scene_depth);
 	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
@@ -324,7 +329,7 @@ GlBoardDrawing::blend_scene_to_pipe(unsigned slot, unsigned buffer, uint32_t rat
 void
 GlBoardDrawing::keep_picture(unsigned slot, unsigned buffer)
 {
-	if (GLEW_VERSION_4_3 || GLEW_ARB_copy_image) {
+	if (gl::copy_image()) {
 		glCopyImageSubData(m_pipe[slot], GL_TEXTURE_2D, 0, 0, 0, 0,
 		                   m_buffers[buffer], GL_TEXTURE_2D, 0, 0, 0, 0,
 		                   static_cast<GLsizei>(width()), static_cast<GLsizei>(height()), 1);
@@ -363,6 +368,29 @@ GlBoardDrawing::set_layer(unsigned i, LayerTexels texels, const void *pixels)
 	glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
 	m_layer_texels[i] = texels;
 
+#ifdef ODIN_GLES
+	/* Reorder 1555 bits as in drawing_gl.cpp */
+	const GLint swizzle_rb = texels == LayerTexels::ABGR1555 ? GL_BLUE : GL_RED;
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_R, swizzle_rb);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_B, swizzle_rb == GL_BLUE ? GL_RED : GL_BLUE);
+	if (texels == LayerTexels::ABGR1555) {
+		const uint8_t *const in = static_cast<const uint8_t *>(pixels);
+		std::vector<uint16_t> turned(size_t{SCREEN_WIDTH} * SCREEN_HEIGHT);
+
+		for (size_t p = 0; p < turned.size(); p++) {
+			const uint16_t v = static_cast<uint16_t>(in[2 * p] | in[2 * p + 1] << 8);
+
+			turned[p] = static_cast<uint16_t>(v << 1 | v >> 15);
+		}
+		if (same)
+			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT,
+			                GL_RGBA, GL_UNSIGNED_SHORT_5_5_5_1, turned.data());
+		else
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB5_A1, SCREEN_WIDTH, SCREEN_HEIGHT, 0,
+			             GL_RGBA, GL_UNSIGNED_SHORT_5_5_5_1, turned.data());
+	} else if (same) {
+#else
 	if (texels == LayerTexels::ABGR1555) {
 		if (same)
 			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT,
@@ -371,6 +399,7 @@ GlBoardDrawing::set_layer(unsigned i, LayerTexels texels, const void *pixels)
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB5_A1, SCREEN_WIDTH, SCREEN_HEIGHT, 0,
 			             GL_RGBA, GL_UNSIGNED_SHORT_1_5_5_5_REV, pixels);
 	} else if (same) {
+#endif
 		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT,
 		                GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, pixels);
 	} else {
@@ -547,8 +576,22 @@ GlBoardDrawing::read_kept(std::span<uint8_t> pictures)
 	for (unsigned i = 0; i < KEPT; i++) {
 		uint8_t *out = &pictures[i * size];
 
+#ifdef ODIN_GLES
+		/* OpenGL ES reads a texture through a framebuffer only */
+		GLuint fb;
+
+		glGenFramebuffers(1, &fb);
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, fb);
+		glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, kept(i), 0);
+		glReadBuffer(GL_COLOR_ATTACHMENT0);
+		glReadPixels(0, 0, static_cast<GLsizei>(width()), static_cast<GLsizei>(height()), GL_RGBA, GL_UNSIGNED_BYTE,
+		             whole.data());
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+		glDeleteFramebuffers(1, &fb);
+#else
 		glBindTexture(GL_TEXTURE_2D, kept(i));
 		glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, whole.data());
+#endif
 		for (unsigned y = 0; y < SCREEN_HEIGHT; y++) {
 			const uint8_t *row = &whole[size_t{y} * m_scale * width() * 4];
 

@@ -82,8 +82,9 @@ Not allowed:
   devices.
 - Type punning through pointer casts. Use `std::bit_cast` or `memcpy`.
 - Boost or any other third-party library. Dependencies stay SDL3,
-  OpenGL 4.3 core with GLEW, Vulkan (its headers only: the functions are
-  loaded through SDL), and jansson; glslang at build time only, for the
+  OpenGL 4.3 core with GLEW (or OpenGL ES 3.1+ with ODIN_GLES),
+  Vulkan (its headers only: the functions are loaded through SDL), and
+  jansson; glslang at build time only, for the
   shaders of Vulkan. The exceptions are copied from a release, unchanged:
   Dear ImGui, which draws the menu (its core and its SDL3, OpenGL 3 and
   Vulkan backends, `src/imgui`); miniz and the 7z reader of the LZMA SDK,
