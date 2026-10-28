@@ -169,6 +169,8 @@ MenuSession::draw_menu()
 	state.shake = vibration_on(m_settings, game_shown());
 	/* The wheel the drive board turns, and how hard */
 	state.can_force = m_other ? m_other_forces : m_game && m_game->drive_first_output;
+	state.steers = std::any_of(panel_shown().controls().begin(), panel_shown().controls().end(),
+	                           [](const GameControl &control) { return control.role == Role::STEER; });
 	state.wheel_force = wheel_force_of(m_settings, game_shown());
 	/* Its cabinets, and the one chosen; the game that runs plays the one it
 	 * started with */
@@ -217,8 +219,8 @@ MenuSession::draw_menu()
 	}
 	/* The gamepads and the joysticks plugged in and their players; those of
 	 * a game that does not run as its settings would seat them */
-	const auto list = [this](std::vector<MenuState::Plugged> &out, const std::vector<Controls::Plugged> &plugged,
-	                         const char *keys) {
+	const auto list = [this, &state](std::vector<MenuState::Plugged> &out, const std::vector<Controls::Plugged> &plugged,
+	                                 const char *keys) {
 		std::array<SDL_JoystickID, 2> seats{};
 
 		if (m_other) {
@@ -230,7 +232,8 @@ MenuSession::draw_menu()
 					if (key == keys + std::to_string(player + 1))
 						wanted[player] = value.substr(0, value.find(' '));
 			for (const Controls::Plugged &one : plugged)
-				open.push_back({ one.id, one.guid });
+				if (state.steers || keys[0] == 'p' || one.kind != SDL_JOYSTICK_TYPE_WHEEL)
+					open.push_back({ one.id, one.guid });
 			seats = seat_pads(open, wanted, {}, {});
 		}
 		out.clear();

@@ -736,7 +736,10 @@ MenuSession::fill_bar_inputs(BarState &bar) const
 	if (!m_game)
 		return;
 
-	const auto add = [&bar](const std::vector<Controls::Plugged> &plugged, bool joystick) {
+	const std::vector<GameControl> &controls = m_controls.panel().controls();
+	const bool steers = std::any_of(controls.begin(), controls.end(),
+	                                [](const GameControl &control) { return control.role == Role::STEER; });
+	const auto add = [&bar, steers](const std::vector<Controls::Plugged> &plugged, bool joystick) {
 		for (size_t i = 0; i < plugged.size(); i++) {
 			const Controls::Plugged &one = plugged[i];
 			const auto before = std::count_if(plugged.begin(), plugged.begin() + static_cast<std::ptrdiff_t>(i),
@@ -745,7 +748,8 @@ MenuSession::fill_bar_inputs(BarState &bar) const
 			bar.pads.push_back({ one.name,
 			                     (before ? one.name + " (" + std::to_string(before + 1) + ")" : one.name) +
 			                             (joystick ? " · joystick" : ""),
-			                     one.guid, joystick, one.player, one.id });
+			                     one.guid, joystick, one.player, one.id,
+			                     joystick && one.kind == SDL_JOYSTICK_TYPE_WHEEL && !steers });
 		}
 	};
 	const std::vector<Controls::Plugged> pads = m_controls.plugged();

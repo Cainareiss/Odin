@@ -1030,8 +1030,11 @@ MenuKit::list_popup(ImVec2 at, float width, std::span<const Item> items, int &ch
 			const float h = line + 2.0f * high + (item.about.empty() ? 0.0f : under + note);
 			const ImVec2 a = ImGui::GetCursorScreenPos();
 
+			const ImU32 ink = item.off ? p.faint : p.ink;
+
 			ImGui::PushID(static_cast<int>(i));
-			if (ImGui::Selectable("##item", on, ImGuiSelectableFlags_None, { 0.0f, h }))
+			if (ImGui::Selectable("##item", on, item.off ? ImGuiSelectableFlags_Disabled : ImGuiSelectableFlags_None,
+			                      { 0.0f, h }))
 				chosen = static_cast<int>(i);
 			ImGui::PopID();
 
@@ -1040,9 +1043,9 @@ MenuKit::list_popup(ImVec2 at, float width, std::span<const Item> items, int &ch
 
 			if (on)
 				frame(list, ImGui::GetItemRectMin(), b, px(CONTROL_CUT), 0, p.stroke);
-			icon(list, item.icon, { a.x + px(CELL_WIDE), a.y + high }, line, p.ink);
+			icon(list, item.icon, { a.x + px(CELL_WIDE), a.y + high }, line, ink);
 			colours(list, { x - colours_width(item) - px(6.0f), a.y + high }, item);
-			write(list, { x, a.y + high }, p.ink, item.name.c_str());
+			write(list, { x, a.y + high }, ink, item.name.c_str());
 			if (item.strong && !item.tag.empty()) {
 				const ImVec2 ta = { b.x - px(CELL_WIDE) - tag_w(item), a.y + high + (line - tiny) / 2.0f - px(2.0f) };
 				const ImVec2 tb = { b.x - px(CELL_WIDE), ta.y + tiny + px(4.0f) };
@@ -1054,7 +1057,7 @@ MenuKit::list_popup(ImVec2 at, float width, std::span<const Item> items, int &ch
 				      item.tag.c_str(), note);
 			}
 			if (!item.about.empty())
-				write(list, { x, a.y + high + line + under }, p.dim, item.about.c_str(), note);
+				write(list, { x, a.y + high + line + under }, item.off ? p.faint : p.dim, item.about.c_str(), note);
 		}
 		if (foot) {
 			const float w = ImGui::GetContentRegionAvail().x - 2.0f * px(CELL_WIDE);

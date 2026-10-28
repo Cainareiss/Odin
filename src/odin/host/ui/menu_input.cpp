@@ -908,6 +908,7 @@ devices_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width, bool t
 				const auto before = std::count_if(plugged.begin(), plugged.begin() + static_cast<std::ptrdiff_t>(i),
 				                                  [&one](const MenuState::Plugged &other) { return other.name == one.name; });
 				const auto type = static_cast<SDL_JoystickType>(one.kind);
+				const bool off = !pads && type == SDL_JOYSTICK_TYPE_WHEEL && !state.steers;
 
 				if (state.input_device[player] == shown && one.player == static_cast<int>(player))
 					device = static_cast<int>(devices.size());
@@ -915,10 +916,11 @@ devices_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width, bool t
 				                    pads ? std::string("Controller · ") + pad_drawing_name(one.kind) :
 				                    type == SDL_JOYSTICK_TYPE_WHEEL        ? "Wheel" :
 				                    type == SDL_JOYSTICK_TYPE_FLIGHT_STICK ? "Flight stick" : "Joystick",
+				                    off                                                ? "not for this game" :
 				                    one.connection == SDL_JOYSTICK_CONNECTION_WIRED    ? "WIRED" :
 				                    one.connection == SDL_JOYSTICK_CONNECTION_WIRELESS ? "WIRELESS" : "",
 				                    pads || type != SDL_JOYSTICK_TYPE_WHEEL ? MenuKit::Icon::PAD : MenuKit::Icon::WHEEL,
-				                    true });
+				                    !off, {}, off });
 			}
 		};
 

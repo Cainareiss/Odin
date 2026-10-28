@@ -166,6 +166,7 @@ struct BarState {
 		bool joystick;
 		int player;
 		SDL_JoystickID id;
+		bool off;	/* a wheel, for a game that has none */
 	};
 	struct Gun {
 		std::string identity, name;
@@ -400,8 +401,10 @@ struct MenuState {
 	std::string shake_from;
 	bool shake_experimental = false;
 	/* The game shown turns the wheel through the drive board of its
-	 * cabinet (NASCAR), and how hard, in % ([players.<game>] wheel_force) */
+	 * cabinet (NASCAR), and how hard, in % ([players.<game>] wheel_force);
+	 * it steers with a wheel (a wheel is for such a game alone) */
 	bool can_force = false;
+	bool steers = false;
 	int wheel_force = 100;
 	/* The cabinets the game shown was sold in, Standard first
 	 * (Game::cabinets): their ids and names, the one chosen

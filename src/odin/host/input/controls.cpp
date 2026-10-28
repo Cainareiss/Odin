@@ -42,11 +42,13 @@ Controls::Controls(Keyboard &keys, const std::vector<GameControl> &controls, con
 	: m_keys(keys), m_settings(settings), m_game_controls(controls), m_game(game), m_panel(controls, settings, game), m_outputs(outputs), m_on(false), m_cursor_hidden(false), m_mouse_seen(false),
 	  m_mouse_placed(false), m_mouse_from_x(0), m_mouse_from_y(0), m_mouse_fresh{}, m_mouse_release{}
 {
-	for (const GameControl &control : controls)
+	for (const GameControl &control : controls) {
+		m_steers = m_steers || control.role == Role::STEER;
 		if (control.type == GameControl::Type::ANALOG && control.role == Role::STEER && control.player == 0) {
 			m_wheel_channel = control.analog;
 			m_wheel_reversed = control.low == GameControl::Low::RIGHT;
 		}
+	}
 	const char *const chosen = std::getenv("ODIN_CONTROLLERS");
 
 	if (chosen && !std::strcmp(chosen, "none"))
@@ -144,8 +146,10 @@ Controls::reseat()
 
 	for (const Pad &pad : m_pads)
 		pads.push_back({ pad.id, pad.guid });
+	/* A wheel is for a game that steers with one */
 	for (const Joy &joy : m_joys)
-		joys.push_back({ joy.id, joy.guid });
+		if (m_steers || SDL_GetJoystickType(joy.handle) != SDL_JOYSTICK_TYPE_WHEEL)
+			joys.push_back({ joy.id, joy.guid });
 
 	const std::array<SDL_JoystickID, 2> seats = seat_pads(pads, m_wanted, m_picked, m_seats);
 	const std::array<SDL_JoystickID, 2> joy_seats = seat_pads(joys, m_joys_wanted, m_joys_picked, m_joy_seats);

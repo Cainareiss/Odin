@@ -261,6 +261,7 @@ private:
 	int m_force_was = 0;		/* the force of the last frame */
 	int m_wheel_force = 100;	/* the wheel turns at that % of it */
 	bool m_wheel_reversed = false;	/* its low values on the right */
+	bool m_steers = false;	/* the game has a steering wheel: a wheel can be seated */
 	std::vector<JvsSwitch> m_grounded;
 	int m_wheel_channel = -1;	/* the steering wheel of player 1, if any */
 	uint16_t m_wheel_was = 0;

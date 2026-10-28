@@ -336,7 +336,7 @@ Menu::bar(BarState &state)
 						const BarState::Pad &pad = state.pads[i];
 						const bool mine = pad.player == static_cast<int>(player);
 
-						if (item(pad.label.c_str(), {}, mine) && !mine) {
+						if (item(pad.label.c_str(), pad.off ? "not for this game" : "", mine, !pad.off) && !mine) {
 							state.asked_player = player;
 							state.asked_pad = static_cast<int>(i);
 							ask(Ask::PAD);

@@ -338,6 +338,7 @@ public:
 		Icon icon = Icon::NONE;
 		bool strong = false;
 		std::array<ImU32, 4> colours{};
+		bool off = false;	/* shown faint, not to be picked */
 	};
 	/* A row with a list that drops down from its right: true when the
 	 * choice changed */
