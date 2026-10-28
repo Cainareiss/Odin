@@ -88,7 +88,8 @@ Not allowed:
   shaders of Vulkan. The exceptions are copied from a release, unchanged:
   Dear ImGui, which draws the menu (its core and its SDL3, OpenGL 3 and
   Vulkan backends, `src/imgui`); miniz and the 7z reader of the LZMA SDK,
-  which read the archives of the games (`src/miniz`, `src/lzma`).
+  which read the archives of the games (`src/miniz`, `src/lzma`). SDL3,
+  GLEW, jansson and the Vulkan headers are submodules in `3rdparty/`.
 
 ## 4. Hardware rules (what LLE means here)
 
