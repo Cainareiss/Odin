@@ -432,17 +432,6 @@ device_named(const std::string &value)
 	return std::nullopt;
 }
 
-std::optional<InputDevice>
-device_chosen(const Settings &settings, const std::string &game, unsigned player)
-{
-	std::optional<InputDevice> chosen;
-
-	for (const auto &[key, value] : settings.section("players." + game))
-		if (key == (player ? "device2" : "device1") && device_named(value))
-			chosen = device_named(value);
-	return chosen;
-}
-
 std::string
 cabinet_of(const Settings &settings, const std::string &game)
 {

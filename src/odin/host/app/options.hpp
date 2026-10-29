@@ -149,9 +149,8 @@ inline constexpr int WHEEL_ROTATION = 270;
 std::optional<int> wheel_rotation_named(const std::string &value);
 int wheel_rotation_of(const Settings &settings, const std::string &game);
 /* [players.<game>] device1, device2: the kind of device a player chose
- * (DEVICE_NAMES, seats.hpp; nothing: Odin picks); the last line says */
+ * (DEVICE_NAMES, seats.hpp; nothing: Odin picks) */
 std::optional<InputDevice> device_named(const std::string &value);
-std::optional<InputDevice> device_chosen(const Settings &settings, const std::string &game, unsigned player);
 /* [players.<game>] cabinet: the id of the cabinet of the game played
  * (Game::cabinets; "standard": that of the list, when it does not say) */
 std::string cabinet_of(const Settings &settings, const std::string &game);

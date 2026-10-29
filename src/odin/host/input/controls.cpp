@@ -37,6 +37,28 @@
 
 namespace odin {
 
+namespace {
+
+/* The other lines of [players.<game>]: the keys others read (main.cpp,
+ * menu_session.cpp) and whether their value is right */
+bool
+player_value_right(const std::string &key, const std::string &value)
+{
+	if (key == "cabinet" || key == "card")
+		return true;
+	if (key == "vibration")
+		return value == "on" || value == "off";
+	if (key == "wheel_force")
+		return wheel_force_named(value).has_value();
+	if (key == "vibration_force")
+		return vibration_force_named(value).has_value();
+	if (key == "wheel_rotation")
+		return wheel_rotation_named(value).has_value();
+	return false;
+}
+
+} /* namespace */
+
 Controls::Controls(Keyboard &keys, const std::vector<GameControl> &controls, const std::vector<GameOutput> &outputs,
                    const Settings &settings, const std::string &game)
 	: m_keys(keys), m_settings(settings), m_game_controls(controls), m_game(game), m_panel(controls, settings, game), m_outputs(outputs), m_on(false), m_cursor_hidden(false), m_mouse_seen(false),
@@ -64,11 +86,7 @@ Controls::Controls(Keyboard &keys, const std::vector<GameControl> &controls, con
 			m_chosen[key[6] - '1'] = device_named(value);
 		} else if (key == "light_gun_mode" && (value == "on" || value == "off")) {
 			m_light_gun_mode = value == "on";
-		} else if (key != "cabinet" && key != "card" &&	/* these six: main.cpp, menu_session.cpp */
-		           (key == "vibration"       ? value != "on" && value != "off" :
-		            key == "wheel_force"     ? !wheel_force_named(value) :
-		            key == "vibration_force" ? !vibration_force_named(value) :
-		                                       key != "wheel_rotation" || !wheel_rotation_named(value))) {
+		} else if (!player_value_right(key, value)) {
 			refuse_setting("players." + game, key, value);
 		}
 	}
