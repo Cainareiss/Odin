@@ -116,7 +116,7 @@ struct MieUartState {
 	uint8_t tx_byte;
 	std::array<uint8_t, 512> rx_fifo;
 	uint32_t rx_head, rx_count;
-	std::array<uint8_t, 512> wire;
+	std::array<uint8_t, JvsHost::BUFFER_SIZE> wire;
 	uint32_t wire_pos, wire_count, wire_ticks;
 	uint8_t thre_irq;	/* the transmitter asks for its interrupt */
 };
