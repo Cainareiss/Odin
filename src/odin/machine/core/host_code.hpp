@@ -115,9 +115,11 @@ protected:
 
 	/* The way in from C++: the registers a call leaves alone (rbx, rbp,
 	 * r12 to r15) are kept, the stack is made ready for calls and the
-	 * first argument goes to rbx. The writer then sets its own registers
-	 * and calls way_in_end(), which jumps to the second argument and
-	 * notes the place of the way back; way_out() writes the way back. */
+	 * first argument goes to rbx. Under Windows a call also leaves rdi,
+	 * rsi and xmm6 to xmm15 alone: the code written here does not use
+	 * them. The writer then sets its own registers and calls
+	 * way_in_end(), which jumps to the second argument and notes the
+	 * place of the way back; way_out() writes the way back. */
 	void way_in();
 	void way_in_end();
 	void way_out();

@@ -807,7 +807,6 @@ void Sh4::decode_once(uint32_t pc)
 	run_block(b);
 }
 
-/* Runs the block from its instruction `from` on. */
 void Sh4::run_block(const Block &b, uint32_t from)
 {
 	const Sh4Op *ops = b.ops + from;
@@ -896,7 +895,6 @@ bool Sh4::fits(Block &b, uint32_t from)
 	return b.checked == m_epoch || same_code(b);
 }
 
-/* Runs the block at `pc`. */
 void Sh4::run_at(uint32_t pc)
 {
 	Block &b = near_of(pc);

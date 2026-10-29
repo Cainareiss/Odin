@@ -448,7 +448,6 @@ Antarctic::transfer_texture(const uint32_t entry[4])
 	    (entry[3] & 0xFFFFFFFE)) {
 		error("GPU IDMA: unhandled bits in texture entry: %08X %08X %08X %08X",
 		      entry[0], entry[1], entry[2], entry[3]);
-		/* continue anyway */
 	}
 
 	if (format != ODIN_FORMAT_ABGR1555 &&
@@ -456,7 +455,6 @@ Antarctic::transfer_texture(const uint32_t entry[4])
 	    format != ODIN_FORMAT_I4 &&
 	    format != ODIN_FORMAT_LA8) {
 		error("GPU IDMA: unknown texhead format: %s", odin_texhead_str(&texhead));
-		/* continue anyway */
 	}
 
 	if (slotx < 0x80 || sloty < 0xC0) {
@@ -481,7 +479,6 @@ Antarctic::transfer_texture(const uint32_t entry[4])
 	const uint32_t size_copied = copy_texture(bus_addr, size, texhead);
 	if (size_copied != size) {
 		error("GPU IDMA: requested vs. copied sizes mismatch: %u vs %u", size, size_copied);
-		/* continue anyway */
 	}
 }
 
