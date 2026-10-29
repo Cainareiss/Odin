@@ -122,6 +122,10 @@ std::optional<double> level_named(const std::string &value);
 /* [players.<game>] vibration: the pads shake unless it says off (the last
  * line says) */
 bool vibration_on(const Settings &settings, const std::string &game);
+/* [players.<game>] light_gun_mode: in a game where player 1 has a sight,
+ * the mouse aims and shoots there, no pointer, no bar (on, when it does
+ * not say), or is a pointer again (off); the last line says */
+bool light_gun_mode_on(const Settings &settings, const std::string &game);
 /* [players.<game>] wheel_force: how hard the wheel turns as the drive board
  * tells it, in % of its force (0 to MOST_WHEEL_FORCE; at WHEEL_FORCE, when
  * it does not say, the force the board asks at its most is the most of the

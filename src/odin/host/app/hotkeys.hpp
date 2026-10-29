@@ -63,9 +63,10 @@ struct HotKey {
 class Hotkeys {
 public:
 	/* CARD: the player's card into the slot of the card reader, or back
-	 * out of it (Virtual-On) */
-	enum class Action : uint8_t { MENU, PAUSE, SAVE_STATE, LOAD_STATE, RESET, FULLSCREEN, CARD, QUIT };
-	static constexpr size_t ACTIONS = 8;
+	 * out of it (Virtual-On); LIGHT_GUN: the mouse aims in the game, or is
+	 * a pointer again (Brave Fire Fighters) */
+	enum class Action : uint8_t { MENU, PAUSE, SAVE_STATE, LOAD_STATE, RESET, FULLSCREEN, CARD, LIGHT_GUN, QUIT };
+	static constexpr size_t ACTIONS = 9;
 	static constexpr size_t KEYS = 2;
 	/* The gamepad of an action: none, Guide tapped alone, or a button with
 	 * Guide held (an SDL_GamepadButton) */

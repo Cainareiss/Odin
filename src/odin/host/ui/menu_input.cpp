@@ -1716,7 +1716,8 @@ buttons_bar(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows
 	using Tone = MenuKit::Tone;
 	const float across = kit.px(12.0f), down = kit.px(5.0f), h = kit.button_size("Defaults", Icon::DEFAULTS).y;
 	const char *const clear = state.undo ? "Undo" : "Clear all";
-	const bool advanced = state.on_pad() || state.on_joystick();
+	/* The keyboard and the mouse have options in a game the mouse aims in */
+	const bool advanced = state.on_pad() || state.on_joystick() || state.sights[0];
 	std::vector<float> widths;
 
 	if (advanced)
@@ -1766,11 +1767,12 @@ buttons_bar(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows
 	return height;
 }
 
-/* The advanced options of the gamepad or joystick shown, over its box
- * (mock-up v50): the vibration of the game; for a gamepad how hard it
- * shakes, for a joystick the force of the wheel and how far it turns for
- * the steering; the dead zone and the trigger threshold of the make and
- * model of a gamepad; Close (B, Escape) */
+/* The advanced options of the device shown, over its box (mock-up v50):
+ * the vibration of the game; for a gamepad how hard it shakes, for a
+ * joystick the force of the wheel and how far it turns for the steering;
+ * in a game where player 1 has a sight, the light gun mode (the only
+ * option of the keyboard and the mouse); the dead zone and the trigger
+ * threshold of the make and model of a gamepad; Close (B, Escape) */
 void
 advanced_box(const MenuKit &kit, MenuState &state, ImVec2 a, ImVec2 b)
 {
@@ -1778,17 +1780,28 @@ advanced_box(const MenuKit &kit, MenuState &state, ImVec2 a, ImVec2 b)
 	static constexpr char NO_SHAKE[] = "this game has no vibration";
 	static constexpr const char *TURNS[] = { "Full", "270°", "360°", "540°", "900°", "1080°" };
 	static_assert(std::size(TURNS) == std::size(WHEEL_ROTATIONS));
-	const bool pad = state.on_pad();
-	const bool turns = state.steers && !pad;
-	const char *const applies = pad                      ? "Vibration and its force apply" :
-	                            state.can_force && turns ? "Vibration, wheel force and wheel rotation apply" :
-	                            state.can_force          ? "Vibration and wheel force apply" :
-	                            turns                    ? "Vibration and wheel rotation apply" :
-	                                                       "Vibration applies";
-	const std::string foot = std::string(applies) +
-	                         (pad ? " to this game only; the dead zone and trigger threshold follow this controller "
-	                                "to every game." :
-	                                " to this game only.");
+	const bool pad = state.on_pad(), keys = !pad && !state.on_joystick();
+	const bool turns = state.steers && !pad && !keys, gun = state.sights[0];
+	/* What applies to this game only, as the rows below show it */
+	std::vector<const char *> game_rows;
+
+	if (!keys)
+		game_rows.push_back("Vibration");
+	if (pad && state.can_shake)
+		game_rows.push_back("its force");
+	if (state.can_force && turns)
+		game_rows.push_back("wheel force");
+	if (turns)
+		game_rows.push_back("wheel rotation");
+	if (gun)
+		game_rows.push_back(keys ? "Light gun mode" : "light gun mode");
+
+	std::string foot;
+
+	for (size_t i = 0; i < game_rows.size(); i++)
+		foot += (i == 0 ? "" : i + 1 == game_rows.size() ? " and " : ", ") + std::string(game_rows[i]);
+	foot += game_rows.size() > 1 ? " apply to this game only" : " applies to this game only";
+	foot += pad ? "; the dead zone and trigger threshold follow this controller to every game." : ".";
 	ImDrawList *const list = ImGui::GetWindowDrawList();
 	const MenuPalette &palette = kit.palette();
 	const float line = ImGui::GetTextLineHeight(), note = MenuKit::font(MenuKit::NOTE), apart = kit.px(16.0f);
@@ -1796,11 +1809,11 @@ advanced_box(const MenuKit &kit, MenuState &state, ImVec2 a, ImVec2 b)
 	const ImVec2 hi = { b.x - kit.px(14.0f), b.y - kit.px(MenuKit::BOX_INSIDE) };
 	const ImVec2 close = kit.button_size("Close", Icon::CLEAR);
 	/* A joystick is named as the list of devices names it */
-	std::string device = pad ? "Controller · " + std::string(pad_drawing_name(state.pad_types[state.player & 1])) :
-	                           "Joystick";
+	std::string device = pad  ? "Controller · " + std::string(pad_drawing_name(state.pad_types[state.player & 1])) :
+	                     keys ? "Keyboard and mouse" : "Joystick";
 
 	for (const MenuState::Plugged &one : state.joysticks)
-		if (!pad && one.player == static_cast<int>(state.player & 1))
+		if (!pad && !keys && one.player == static_cast<int>(state.player & 1))
 			device = static_cast<SDL_JoystickType>(one.kind) == SDL_JOYSTICK_TYPE_WHEEL        ? "Wheel" :
 			         static_cast<SDL_JoystickType>(one.kind) == SDL_JOYSTICK_TYPE_FLIGHT_STICK ? "Flight stick" :
 			                                                                                     "Joystick";
@@ -1814,8 +1827,9 @@ advanced_box(const MenuKit &kit, MenuState &state, ImVec2 a, ImVec2 b)
 	               MenuKit::fitted(title, hi.x - lo.x - close.x - kit.px(12.0f)).c_str());
 	list->AddLine({ lo.x, rule }, { hi.x, rule }, palette.line, kit.stroke());
 
-	/* The vibration, with what shakes on the cabinet under it */
-	{
+	/* The vibration, with what shakes on the cabinet under it (none for
+	 * the keyboard and the mouse) */
+	if (!keys) {
 		const ImVec2 cells = kit.segments_size(Menu::OFF_ON);
 		const float h = std::max(line + (state.shake_from.empty() ? 0.0f : kit.px(2.0f) + note), cells.y);
 
@@ -1876,6 +1890,24 @@ advanced_box(const MenuKit &kit, MenuState &state, ImVec2 a, ImVec2 b)
 		state.wheel_rotation = WHEEL_ROTATIONS[turn];
 		y += h + apart;
 	}
+	/* The mouse aims and shoots for player 1, no pointer and no bar, or is
+	 * a pointer (the gamepad: left, right or A switches it) */
+	if (gun) {
+		static constexpr char UNDER[] = "the mouse aims and shoots; off, a pointer with the bar";
+		const ImVec2 cells = kit.segments_size(Menu::OFF_ON);
+		const float h = std::max(line + kit.px(2.0f) + note, cells.y);
+
+		list->AddText({ lo.x, y }, palette.ink, "Light gun mode");
+		MenuKit::write(list, { lo.x, y + line + kit.px(2.0f) }, palette.dim, UNDER, note);
+		if (kit.focus({ lo.x, y }, { hi.x, y + h }, kit.px(4.0f)) && (kit.side() || kit.pressed()))
+			state.light_gun = kit.side() ? kit.side() > 0 : !state.light_gun;
+
+		int on = state.light_gun ? 1 : 0;
+
+		if (kit.segments({ hi.x - cells.x, y + (h - cells.y) / 2.0f }, Menu::OFF_ON, on))
+			state.light_gun = on == 1;
+		y += h + apart;
+	}
 	if (pad) {
 		percent("Stick dead zone", state.tuning.dead_zone, PadTuning::MOST_DEAD_ZONE);
 		percent("Trigger threshold", state.tuning.trigger_threshold, PadTuning::MOST_TRIGGER_THRESHOLD);
@@ -1922,7 +1954,7 @@ Menu::page_input(MenuKit &kit, MenuState &state) const
 	const bool wide = window.x >= WIDE * window.y;
 	const bool cabinet = !wide && state.cabinet_shown;
 
-	state.advanced = state.advanced && (state.on_pad() || state.on_joystick());
+	state.advanced = state.advanced && (state.on_pad() || state.on_joystick() || state.sights[0]);
 
 	const bool options = state.advanced && !cabinet;
 

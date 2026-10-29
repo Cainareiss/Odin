@@ -350,6 +350,17 @@ vibration_on(const Settings &settings, const std::string &game)
 	return on;
 }
 
+bool
+light_gun_mode_on(const Settings &settings, const std::string &game)
+{
+	bool on = true;
+
+	for (const auto &[key, value] : settings.section("players." + game))
+		if (key == "light_gun_mode" && (value == "on" || value == "off"))
+			on = value == "on";
+	return on;
+}
+
 std::optional<int>
 wheel_force_named(const std::string &value)
 {
@@ -565,8 +576,11 @@ known_settings(const GameList &games)
 		out.push_back({ "players." + name, "device1", "" });
 		out.push_back({ "players." + name, "device2", "" });
 		for (const GameControl &control : game->controls)
-			if (control.role == Role::GUN_X)
+			if (control.role == Role::GUN_X) {
 				out.push_back({ "players." + name, control.player ? "gun2" : "gun1", "" });
+				if (!control.player)
+					out.push_back({ "players." + name, "light_gun_mode", "on" });
+			}
 		if (game->shakes())
 			out.push_back({ "players." + name, "vibration", "on" });
 		if (game->shakes())

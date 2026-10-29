@@ -283,6 +283,19 @@ MenuSession::card_file(const std::string &name) const
 	return folder.empty() ? folder : folder + "/" + name + ".card";
 }
 
+std::string
+MenuSession::light_gun_in_out()
+{
+	if (!m_game || !m_controls.has_sight())
+		return {};
+
+	const bool on = !light_gun_mode_on(m_settings, m_game->name);
+
+	keep_light_gun(m_game->name, on, true);
+	m_controls.follow_cursor();
+	return on ? "Light gun mode: the mouse aims" : "Light gun mode off: the mouse is a pointer";
+}
+
 /* In hand, the card goes into the slot; at the slot, it comes back to the
  * hand, a new card from the stocker kept as card-<n> */
 std::string
@@ -582,6 +595,7 @@ void
 MenuSession::close()
 {
 	m_display.close_menu();
+	m_controls.follow_cursor();
 	m_nav.reset();
 	m_held.reset();
 	m_menu_state.advanced = false;
@@ -774,6 +788,7 @@ MenuSession::fill_bar_inputs(BarState &bar) const
 		if (control.role == Role::GUN_X)
 			bar.sights[control.player & 1] = true;
 	bar.shake = vibration_on(m_settings, m_game->name);
+	bar.light_gun = light_gun_mode_on(m_settings, m_game->name);
 }
 
 /* As the menu does them: kept in odin.ini the same way */
@@ -840,6 +855,10 @@ MenuSession::do_bar(BarState &bar)
 	if (m_game) {
 		if (bar.can_shake && bar.shake != vibration_on(m_settings, m_game->name))
 			keep_vibration(m_game->name, bar.shake, true);
+		if (bar.sights[0] && bar.light_gun != light_gun_mode_on(m_settings, m_game->name)) {
+			keep_light_gun(m_game->name, bar.light_gun, true);
+			m_controls.follow_cursor();
+		}
 		for (const Controls::Plugged &pad : m_controls.plugged())
 			if (pad.player == 0 || pad.player == 1) {
 				const PadTuning was = PadTuning::of(m_settings, pad.guid, false);

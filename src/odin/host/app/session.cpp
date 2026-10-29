@@ -189,6 +189,12 @@ Session::act(Hotkeys::Action action)
 		say(m_menus.card_in_out());
 		m_menus.card_news(true);
 		break;
+	case Action::LIGHT_GUN:
+		if (const std::string note = m_menus.light_gun_in_out(); !note.empty())
+			say(note);
+		if (m_controls.aims())
+			m_bar_until = 0;
+		break;
 	case Action::QUIT:
 		return true;
 	}

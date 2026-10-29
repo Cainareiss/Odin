@@ -408,6 +408,8 @@ Menu::bar(BarState &state)
 				}
 				if (state.can_shake && item("Vibration", {}, state.shake, state.game))
 					state.shake = !state.shake;
+				if (state.sights[0] && item("Light gun mode", key(Action::LIGHT_GUN), state.light_gun, state.game))
+					state.light_gun = !state.light_gun;
 				ImGui::Separator();
 				if (ImGui::BeginMenu("Hotkeys")) {
 					framed();

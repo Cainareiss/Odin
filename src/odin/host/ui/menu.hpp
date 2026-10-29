@@ -181,7 +181,7 @@ struct BarState {
 	std::vector<Gun> guns;
 	std::array<std::string, 2> gun;
 	std::array<bool, 2> sights{};
-	bool can_shake = false, shake = true, undo = false;
+	bool can_shake = false, shake = true, undo = false, light_gun = true;
 	/* The outputs sent to the programs of lamps; the network board at the
 	 * next launch (NetLinkSettings::Board), this cabinet, its port, the
 	 * next cabinet (typed in Settings), set by ODIN_NETBD */
@@ -403,6 +403,9 @@ struct MenuState {
 	 * vibration_force) */
 	bool can_shake = false, shake = true;
 	int vibration_force = 100;
+	/* Player 1 has a sight (sights): the mouse aims there, or is a pointer
+	 * ([players.<game>] light_gun_mode) */
+	bool light_gun = true;
 	/* What shakes on the cabinet ("from output NOZZLE VIBRATION") and
 	 * whether Odin makes it up (Game::shaker_experimental); the dead zone
 	 * and the trigger threshold of the gamepad shown (its make and

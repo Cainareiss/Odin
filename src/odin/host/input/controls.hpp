@@ -73,8 +73,15 @@ public:
 	/* An event of a gamepad, of a joystick or of the mouse; false for any
 	 * other. */
 	bool event(const SDL_Event &event);
-	/* The mouse aims in the game (a sight of player 1): no pointer */
-	bool aims() const { return m_cursor_hidden; }
+	/* The mouse aims in the game (a sight of player 1, in light gun mode):
+	 * no pointer */
+	bool aims() const { return m_sight && m_light_gun_mode; }
+	/* The light gun mode ([players.<game>] light_gun_mode): off, the mouse
+	 * is a pointer again and does nothing in the game; the pointer follows
+	 * at the next follow_cursor (the menu shows it while it is open) */
+	void set_light_gun_mode(bool on) { m_light_gun_mode = on; }
+	bool has_sight() const { return m_sight; }
+	void follow_cursor();
 	/* The mouse is read where the picture is: in the hole of the bezel
 	 * when there is one (picture.hpp) */
 	void set_picture_hole(const PictureHole &hole) { m_hole = hole; }
@@ -270,6 +277,8 @@ private:
 	std::vector<GameOutput> m_outputs;
 	bool m_on;
 	bool m_cursor_hidden;	/* the mouse aims in the game: no cursor */
+	bool m_sight = false;	/* player 1 has a sight */
+	bool m_light_gun_mode = true;
 	bool m_guide_tapped = false;
 	int m_guide_combo = -1;
 	bool m_rumble = true;

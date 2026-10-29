@@ -173,8 +173,9 @@ nor vsync = on on a display slower than 60 frames a second),
 Ctrl+Q quits, P pauses, F4 saves <game>.odinstate and F1 loads it, in
 ~/.local/share/odin/states (states in [paths] of odin.ini, page Paths),
 Ctrl+R resets (the cabinet switched off and on), F11 or Alt+Enter takes
-the whole display, F6 puts the card of Virtual-On in or takes it out (see
-below). The page Hotkeys of the menu changes these keys and the buttons
+the whole display, F6 puts the card of Virtual-On in or takes it out, F7
+turns the light gun mode of Brave off or on (see below). The page Hotkeys
+of the menu changes these keys and the buttons
 below, kept in [hotkeys] of odin.ini:
 
  [hotkeys]
@@ -212,8 +213,8 @@ shaders; snap on another). Both may split a piece made of a flat part and
 a tilted one (the lock-on of Planet Harriers).
 
 In a game, the mouse moved over the window shows the bar at its top a
-while, the game going on under it; never in a game the mouse aims in
-(Brave Fire Fighters): the menu sets the same. Its lists set what the
+while, the game going on under it; never while the mouse aims in the game
+(the light gun mode of Brave Fire Fighters, F7). Its lists set what the
 pages of the menu set, without opening it. FILE: Open game... plays the
 zip or the 7z of a game, the game of its name in MAME, from its directory;
 Close game goes back to the library, Reset switches the cabinet off and
@@ -332,7 +333,10 @@ picture, water on the left button, fog on the right one, Start on the
 middle one; off the picture, the nozzle points away from the screen. Of
 the keys, a stick and the mouse, the last that moved works a control. The
 sight meets the pointer once NOZZLE SENSOR SETTING (in the test menu of
-the game) has been done with the mouse.
+the game) has been done with the mouse. That is the light gun mode, with
+no pointer and no bar; off (F7, Light gun mode in the bar or in the
+options of the page Input, "light_gun_mode = off" in [players.braveff]),
+the mouse is a pointer again, does nothing in the game and shows the bar.
 
 A light gun (or a second mouse) for each player, read on its own (evdev
 on Linux: the user in the group input; Raw Input on Windows), chosen on

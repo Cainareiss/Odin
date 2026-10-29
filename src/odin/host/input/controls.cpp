@@ -62,6 +62,8 @@ Controls::Controls(Keyboard &keys, const std::vector<GameControl> &controls, con
 			m_joys_wanted[key[3] - '1'] = value.substr(0, value.find(' '));
 		} else if ((key == "device1" || key == "device2") && device_named(value)) {
 			m_chosen[key[6] - '1'] = device_named(value);
+		} else if (key == "light_gun_mode" && (value == "on" || value == "off")) {
+			m_light_gun_mode = value == "on";
 		} else if (key != "cabinet" && key != "card" &&	/* these six: main.cpp, menu_session.cpp */
 		           (key == "vibration"       ? value != "on" && value != "off" :
 		            key == "wheel_force"     ? !wheel_force_named(value) :
@@ -81,9 +83,21 @@ Controls::Controls(Keyboard &keys, const std::vector<GameControl> &controls, con
 	m_on = true;
 	for (const GameControl &control : controls)
 		if (control.role == Role::GUN_X && control.player == 0)
-			m_cursor_hidden = true;
+			m_sight = true;
+	follow_cursor();
+}
+
+/* No pointer while the mouse aims */
+void
+Controls::follow_cursor()
+{
+	if (!m_on || aims() == m_cursor_hidden)
+		return;
+	m_cursor_hidden = aims();
 	if (m_cursor_hidden)
 		SDL_HideCursor();
+	else
+		SDL_ShowCursor();
 }
 
 /* The next game, or the window without one, finds the cursor as it was */
@@ -570,7 +584,9 @@ Controls::host() const
 		host.pads[player] = seat(player) ? &seat(player)->state : nullptr;
 		host.joys[player] = joystick(player) ? &joystick(player)->state : nullptr;
 	}
-	host.mice[0] = m_gun_seen[0] ? &m_gun_aims[0] : m_mouse_seen ? &m_mouse : nullptr;
+	/* Out of light gun mode the mouse does nothing in a game with a sight */
+	host.mice[0] = m_gun_seen[0]                                   ? &m_gun_aims[0] :
+	               m_mouse_seen && (!m_sight || m_light_gun_mode) ? &m_mouse : nullptr;
 	host.mice[1] = m_gun_seen[1] ? &m_gun_aims[1] : nullptr;
 	return host;
 }

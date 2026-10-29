@@ -169,6 +169,7 @@ MenuSession::draw_menu()
 	                           m_game && m_game->shaker_experimental(state.player & 1);
 	state.shake = vibration_on(m_settings, game_shown());
 	state.vibration_force = vibration_force_of(m_settings, game_shown());
+	state.light_gun = light_gun_mode_on(m_settings, game_shown());
 	/* The wheel the drive board turns, and how hard */
 	state.can_force = m_other ? m_other_forces : m_game && m_game->drive_first_output;
 	state.steers = std::any_of(panel_shown().controls().begin(), panel_shown().controls().end(),
@@ -477,6 +478,9 @@ MenuSession::apply(const MenuState &was)
 		keep_vibration(game_shown(), now.shake, !m_other && m_game);
 	if (now.vibration_force != was.vibration_force && now.can_shake)
 		keep_vibration_force(game_shown(), now.vibration_force, !m_other && m_game);
+	/* Its light gun mode: the pointer follows when the menu closes */
+	if (now.light_gun != was.light_gun && now.sights[0])
+		keep_light_gun(game_shown(), now.light_gun, !m_other && m_game);
 	/* The force of its wheel, at once too */
 	if (now.wheel_force != was.wheel_force && now.can_force)
 		keep_wheel_force(game_shown(), now.wheel_force, !m_other && m_game);
@@ -577,6 +581,15 @@ void
 MenuSession::keep_cabinet(const std::string &game, const std::string &id)
 {
 	keep("players." + game, "cabinet", id == "standard" ? std::nullopt : std::optional<std::string>(id));
+}
+
+/* [players.<game>] light_gun_mode: a line only when off */
+void
+MenuSession::keep_light_gun(const std::string &game, bool on, bool runs)
+{
+	if (runs)
+		m_controls.set_light_gun_mode(on);
+	keep("players." + game, "light_gun_mode", on ? std::nullopt : std::optional<std::string>("off"));
 }
 
 /* [players.<game>] vibration_force: a line only when another than 100 % */
