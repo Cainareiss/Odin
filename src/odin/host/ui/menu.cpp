@@ -178,9 +178,7 @@ set_hint(const char *name, const std::optional<std::string> &value)
 std::string
 Menu::first_key(const MenuState &state, Hotkeys::Action action)
 {
-	const HotKey &key = state.hotkeys[static_cast<size_t>(action)].keys[0];
-
-	return key.key == SDLK_UNKNOWN ? std::string() : Hotkeys::text(key);
+	return Hotkeys::first_text(state.hotkeys[static_cast<size_t>(action)]);
 }
 
 Menu::Menu(SDL_Window *window, HostGraphics &graphics)

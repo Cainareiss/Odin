@@ -210,6 +210,12 @@ Hotkeys::is_modifier(SDL_Keycode key)
 }
 
 std::string
+Hotkeys::first_text(const Binding &binding)
+{
+	return binding.keys[0].key == SDLK_UNKNOWN ? std::string() : text(binding.keys[0]);
+}
+
+std::string
 Hotkeys::text(const HotKey &key)
 {
 	std::string out;

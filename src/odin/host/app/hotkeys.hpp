@@ -111,6 +111,8 @@ public:
 	static bool is_modifier(SDL_Keycode key);
 	/* A key as odin.ini says it ("Ctrl+Q", "F10"), and back */
 	static std::string text(const HotKey &key);
+	/* The first key of a binding as text; empty when it has none */
+	static std::string first_text(const Binding &binding);
 	static std::optional<HotKey> key_of(std::string_view text);
 	/* A line of [hotkeys], and back ("Escape, F10, pad:guide") */
 	static std::string line(const Binding &binding);

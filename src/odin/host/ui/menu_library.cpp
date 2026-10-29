@@ -139,7 +139,9 @@ Menu::build_library(LibraryState &state, BarState &bar_state)
 
 	/* The head: what to do, the keys at its right (and the button of the
 	 * gamepad), the line of the accent under them */
-	const std::string keys = "Enter" + (state.press.empty() ? "" : " or " + state.press) + ": play    Ctrl+Q: quit";
+	const std::string &quit = bar_state.keys[static_cast<size_t>(Hotkeys::Action::QUIT)];
+	const std::string keys = "Enter" + (state.press.empty() ? "" : " or " + state.press) + ": play" +
+	                         (quit.empty() ? "" : "    " + quit + ": quit");
 
 	MenuKit::write(list, { margin, below + margin }, palette.cabinet, "SELECT A GAME", size, size * TITLE_SPACING);
 	list->AddText({ room.x - margin - ImGui::CalcTextSize(keys.c_str()).x, below + margin }, palette.faint, keys.c_str());

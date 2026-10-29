@@ -435,8 +435,8 @@ MenuSession::card_news(bool quiet)
 	if (quiet || !was || *was == now)
 		return {};
 
-	const HotKey &key = m_hotkeys.of(Hotkeys::Action::CARD).keys[0];
-	const std::string with = key.key == SDLK_UNKNOWN ? "FILE > Remove card" : Hotkeys::text(key);
+	const std::string key = Hotkeys::first_text(m_hotkeys.of(Hotkeys::Action::CARD));
+	const std::string with = key.empty() ? "FILE > Remove card" : key;
 
 	if (now == Where::INSIDE)
 		return "Card pulled in: " + std::filesystem::path(reader->card_file()).stem().string();
@@ -681,11 +681,8 @@ MenuSession::fill_bar(BarState &bar) const
 	bar.link_given = state.link_given;
 	bar.link_next = state.link_next;
 	fill_bar_inputs(bar);
-	for (size_t a = 0; a < Hotkeys::ACTIONS; a++) {
-		const HotKey &key = m_hotkeys.of(static_cast<Hotkeys::Action>(a)).keys[0];
-
-		bar.keys[a] = key.key == SDLK_UNKNOWN ? std::string() : Hotkeys::text(key);
-	}
+	for (size_t a = 0; a < Hotkeys::ACTIONS; a++)
+		bar.keys[a] = Hotkeys::first_text(m_hotkeys.of(static_cast<Hotkeys::Action>(a)));
 	if (const CardReader *const reader = m_board ? m_board->card_reader() : nullptr) {
 		const std::string name = std::filesystem::path(reader->card_file()).stem().string();
 		const auto chosen = std::find(m_cards.begin(), m_cards.end(), name);
