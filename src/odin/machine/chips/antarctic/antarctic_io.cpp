@@ -502,7 +502,7 @@ Antarctic::copy_texture(uint32_t bus_addr, uint32_t size, const odin_texhead_t &
 	odin_tex_coords(&texhead, &dstx, &dsty);
 
 	while (size_copied < size && level <= max_level) {
-		if (dstx + level_w > 2048 || dsty + level_h > 1024) {
+		if (dstx + level_w > TEXRAM_WIDTH || dsty + level_h > TEXRAM_HEIGHT) {
 			error("GPU IDMA: out-of-bounds transfer: %s", odin_texhead_str(&texhead));
 			break;
 		}
@@ -521,8 +521,8 @@ Antarctic::copy_texture(uint32_t bus_addr, uint32_t size, const odin_texhead_t &
 
 		/* The next level: halfway to the right and bottom edges of the
 		 * texture RAM, in the other bank */
-		dstx += (2048 - dstx) / 2;
-		dsty += (1024 - dsty) / 2;
+		dstx += (TEXRAM_WIDTH - dstx) / 2;
+		dsty += (TEXRAM_HEIGHT - dsty) / 2;
 		bank ^= 1;
 
 		level_w = std::max(level_w >> 1, 1u);
@@ -544,7 +544,7 @@ Antarctic::copy_level(std::span<const uint8_t> src, std::span<uint8_t> texram, u
 
 	for (uint32_t y = 0; y < h; y++) {
 		for (uint32_t x = 0; x < w; x++, offs += 2) {
-			const uint32_t dst = ((y0 + y) * 4096 + (x0 + x) * 2) ^ 2;
+			const uint32_t dst = ((y0 + y) * TEXRAM_PITCH + (x0 + x) * 2) ^ 2;
 
 			std::memcpy(&texram[dst], &src[offs], 2);
 		}

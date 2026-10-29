@@ -78,6 +78,8 @@ public:
 	};
 
 	/* `eprom`: the 64 KB of epr-21868 */
+	static constexpr uint32_t EPROM_SIZE = 0x10000;	/* epr-21868 */
+
 	Io837_13741(std::span<const uint8_t> eprom, JvsInputs &inputs);
 
 	/* IoLineBoard */

@@ -33,6 +33,7 @@
 #define ODIN_ANTARCTIC_LIST_HPP
 
 #include <cstdint>
+#include <cstdio>
 
 /* Used for both texheads and layers */
 enum {
@@ -317,6 +318,6 @@ const char *odin_lightset_str(const odin_lightset_t *ls);
 uint64_t odin_display_list_fingerprint(const odin_display_list_t *list,
                                        const odin_fb_config_t *fb,
                                        uint32_t *meshes, uint32_t *tris,
-                                       void *dump);
+                                       FILE *dump);
 
 #endif /* ODIN_ANTARCTIC_LIST_HPP */

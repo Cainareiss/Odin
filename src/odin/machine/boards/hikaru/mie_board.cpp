@@ -36,6 +36,11 @@ namespace odin {
 
 namespace {
 
+/* The ports of the MIE wired on the board: its interrupt requests, port D
+ * (the resets of the main board), the pins of the 93C46, the switches of
+ * the board (Test, Service, the fans) */
+enum : uint8_t { PORT_IRQ = 1, PORT_RESETS = 3, PORT_EEPROM = 5, PORT_SWITCHES = 6 };
+
 /* The window of the board on the bus of the main processor */
 constexpr uint32_t PAGE_MEM = 0x20000;
 constexpr uint32_t PAGE_END = 0x40000;
@@ -76,7 +81,7 @@ MieBoard::MieBoard(std::span<const uint8_t> rom, std::span<uint8_t> ram, uint32_
 	if (io_board == "837-13551" && io_rom.size() == Tmp90ph44::ROM_SIZE && !imitation) {
 		m_line_13551 = std::make_unique<Io837_13551>(io_rom, *this);
 		m_line = m_line_13551.get();
-	} else if (io_board == "837-13741" && io_rom.size() == 0x10000 && !imitation) {
+	} else if (io_board == "837-13741" && io_rom.size() == Io837_13741::EPROM_SIZE && !imitation) {
 		m_line_13741 = std::make_unique<Io837_13741>(io_rom, *this);
 		m_line = m_line_13741.get();
 	}
@@ -92,7 +97,7 @@ uint8_t
 MieBoard::gpio_read(uint8_t port)
 {
 	switch (port) {
-	case 6: {
+	case PORT_SWITCHES: {
 		/* Fan sensors (4-6) are not populated, read high. Bit 7 is
 		 * the GPU JTAG chain output, idle high. The game treats bit 3
 		 * as Test and bit 2 as Service (BOOTROM credit and test-menu
@@ -107,7 +112,7 @@ MieBoard::gpio_read(uint8_t port)
 			v |= 0x08;
 		return v;
 	}
-	case 1:
+	case PORT_IRQ:
 		return irq_pending();
 	default:
 		/* Unpopulated switches and unused inputs read high. */
@@ -118,10 +123,10 @@ MieBoard::gpio_read(uint8_t port)
 void
 MieBoard::gpio_write(uint8_t port, uint8_t value)
 {
-	if (port == 5)
+	if (port == PORT_EEPROM)
 		m_eeprom.set_pins((value & 0x08) != 0, (value & 0x01) != 0,
 		                  (value & 0x02) != 0, (value & 0x04) != 0);
-	if (port == 3 && m_port_d)
+	if (port == PORT_RESETS && m_port_d)
 		m_port_d(value);
 }
 

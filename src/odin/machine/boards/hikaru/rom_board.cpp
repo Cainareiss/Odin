@@ -454,9 +454,8 @@ RomBoard::plain(uint32_t bus_addr) const
 }
 
 bool
-RomBoard::write(uint32_t bus_addr, unsigned size, uint64_t value)
+RomBoard::write(uint32_t bus_addr, unsigned, uint64_t value)
 {
-	(void) size;
 	if ((bus_addr >> 24) != m_config.eeprom_bank)
 		return false;
 	/* Bit 0 SDA, 1 SCL, 2 /CS, 3 /RST (MAME hikaru.cpp:909) */

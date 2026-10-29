@@ -624,7 +624,7 @@ Antarctic::op_viewport_recall(const uint32_t *inst)
 	case 2:
 		m_s.vp.stack[m_s.vp.depth] = *vp;
 		m_s.vp.depth++;
-		if (m_s.vp.depth >= 32)
+		if (m_s.vp.depth >= AntarcticState::VIEWPORT_STACK)
 			fatal("viewport stack full", inst[0]);
 
 		*vp = m_s.vp.table[viewport_index(inst)];
@@ -1715,7 +1715,7 @@ Antarctic::op_polygon_type(const uint32_t *inst)
 {
 	const uint32_t type = (inst[0] >> 9) & 7;
 
-	if (((0x8Du >> type) & 1) && !((m_types_told >> type) & 1)) {
+	if (((TYPES_NEVER_MET >> type) & 1) && !((m_types_told >> type) & 1)) {
 		m_types_told |= 1u << type;
 		error("CP @%08X : polygon type %u, never met", m_s.pc, type);
 	}

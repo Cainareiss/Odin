@@ -78,6 +78,14 @@ clip_xy(uint32_t c)
 	return static_cast<float>(static_cast<int16_t>(c));
 }
 
+/* The condition of a call and of a return, bits 12-15 */
+const char *const CALL_COND[16] = {
+	"",		"?1?",		"?2?",		"?3?",
+	"!COND",	"?5?",		"?6?",		"?7?",
+	"COND",		"?9?",		"?A?",		"?B?",
+	"?C?",		"?D?",		"?E?",		"?F?",
+};
+
 void
 text_nop(Out &o, const uint32_t *inst)
 {
@@ -106,31 +114,19 @@ text_jump(Out &o, const uint32_t *inst)
 void
 text_call(Out &o, const uint32_t *inst)
 {
-	static const char *cond[16] = {
-		"",		"?1?",		"?2?",		"?3?",
-		"!COND",	"?5?",		"?6?",		"?7?",
-		"COND",		"?9?",		"?A?",		"?B?",
-		"?C?",		"?D?",		"?E?",		"?F?",
-	};
 	uint32_t addr = jump_address(o.pc, inst);
 
 	o.unhandled |= !!(inst[0] & 0xFFFF3600);
 
-	o.print("call %s @%08X", cond[(inst[0] >> 12) & 0xF], addr);
+	o.print("call %s @%08X", CALL_COND[(inst[0] >> 12) & 0xF], addr);
 }
 
 void
 text_return(Out &o, const uint32_t *inst)
 {
-	static const char *cond[16] = {
-		"",		"?1?",		"?2?",		"?3?",
-		"!COND",	"?5?",		"?6?",		"?7?",
-		"COND",		"?9?",		"?A?",		"?B?",
-		"?C?",		"?D?",		"?E?",		"?F?",
-	};
 	o.unhandled |= !!(inst[0] & 0xFFFF3E00);
 
-	o.print("ret %s", cond[(inst[0] >> 12) & 0xF]);
+	o.print("ret %s", CALL_COND[(inst[0] >> 12) & 0xF]);
 }
 
 void

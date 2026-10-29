@@ -105,9 +105,8 @@ hash_lightset(const odin_lightset_t &ls, const uint16_t table[4][16])
 uint64_t
 odin_display_list_fingerprint(const odin_display_list_t *list,
                               const odin_fb_config_t *fb,
-                              uint32_t *meshes, uint32_t *tris, void *dump)
+                              uint32_t *meshes, uint32_t *tris, FILE *out)
 {
-	FILE *out = static_cast<FILE *>(dump);
 	Hash all;
 
 	*meshes = 0;

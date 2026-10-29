@@ -296,7 +296,7 @@ Hikaru::load_items(StateFile &state)
 	quiet_windows();
 	m_sh[MASTER]->set_time(m_sched.now());
 	m_sh[SLAVE]->set_time(m_sched.now());
-	m_mie_port_d = m_mie ? m_mie->port_d() : 0xFF;
+	m_mie_port_d = m_mie->port_d();
 	set_gpu_reset_lines();
 	update_irqs();
 	return true;

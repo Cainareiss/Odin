@@ -49,6 +49,7 @@ struct AntarcticState {
 	static constexpr uint32_t TEXHEADS = 65536;
 	static constexpr uint32_t LIGHTS = 1024;
 	static constexpr uint32_t LIGHTSETS = 256;
+	static constexpr int32_t VIEWPORT_STACK = 32;	/* viewports pushed */
 
 	uint32_t pc;
 	uint32_t sp[2];
@@ -80,7 +81,7 @@ struct AntarcticState {
 		odin_viewport_t table[VIEWPORTS];
 		odin_viewport_t scratch;
 		odin_viewport_t current;
-		odin_viewport_t stack[32];
+		odin_viewport_t stack[VIEWPORT_STACK];
 		int32_t depth;
 	} vp;
 
@@ -158,6 +159,8 @@ struct AntarcticState {
  * antarctic_io.cpp. */
 class Antarctic {
 public:
+	/* A bank of the texture RAM: texels of 16 bits, and the bytes of a line */
+	static constexpr uint32_t TEXRAM_WIDTH = 2048, TEXRAM_HEIGHT = 1024, TEXRAM_PITCH = 2 * TEXRAM_WIDTH;
 	/* The interrupt causes of 15000088 */
 	enum : uint32_t {
 		IRQ_TRANSFER_END = 0x01,	/* texture transfer done */
@@ -449,6 +452,7 @@ private:
 	void *m_before_texture_write_ctx;
 
 	FILE *m_disasm, *m_log, *m_transfer_log;
+	static constexpr uint32_t TYPES_NEVER_MET = 0x8D;	/* polygon types 0, 2, 3 and 7 */
 	uint32_t m_types_told;	/* polygon types never met, told once each */
 };
 
