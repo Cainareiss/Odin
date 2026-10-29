@@ -138,11 +138,7 @@ Aica::reg_value(uint32_t offset, uint32_t size, bool effects)
 		value = rd16(word);
 
 	value >>= shift;
-	if (size == 1)
-		return value & 0xFF;
-	if (size == 2)
-		return value & 0xFFFF;
-	return value & 0xFFFF;
+	return size == 1 ? value & 0xFF : value & 0xFFFF;
 }
 
 void
@@ -201,7 +197,7 @@ Aica::read_common(uint32_t word, bool effects)
 	case REG_ARM_RESET:
 		return static_cast<uint16_t>(rd16(word) | (m_arm_reset ? 1 : 0));
 	default:
-		if (word < 0x28C0 || word == REG_ARM_RESET)
+		if (word < 0x28C0)
 			return rd16(word);
 		if (effects)
 			log_unknown('R', word, 2, 0);

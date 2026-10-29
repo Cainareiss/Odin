@@ -48,9 +48,6 @@ inline constexpr uint32_t ADD_VALUE = 0x11000000, SUB_VALUE = 0x51000000, SUBS_V
 /* With a mask (N << 22, immr << 16, imms << 10), see logical_mask() */
 inline constexpr uint32_t AND_VALUE = 0x12000000, ORR_VALUE = 0x32000000, EOR_VALUE = 0x52000000,
 	ANDS_VALUE = 0x72000000;
-/* A shift of Rm in a register step: << 22 the kind (0 LSL, 1 LSR, 2 ASR),
- * << 10 the count */
-inline constexpr uint32_t LSR_BY = 1u << 22;
 /* Moves of 16 bits (hw << 21, the value << 5) */
 inline constexpr uint32_t MOVZ = 0x52800000, MOVN = 0x12800000, MOVK = 0x72800000;
 /* Bit fields (immr << 16, imms << 10), rotations, shifts by a register,

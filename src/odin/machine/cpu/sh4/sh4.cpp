@@ -488,7 +488,7 @@ bool Sh4::read_slow(const Sh4Op *op, uint32_t addr, uint32_t size, uint64_t &val
 		m_bus.unanswered(false, addr, size, 0);
 	}
 	if (m_clock_note.on) [[unlikely]] {
-		clock_noted_slow(addr, size, value);
+		clock_noted_slow(addr, size);
 	}
 	return !m_event && !past_slice(bus);
 }

@@ -125,11 +125,8 @@ static inline unsigned odin_mat_shading_mode (const odin_material_t *m) { return
 static inline unsigned odin_mat_depth_blend (const odin_material_t *m) { return (m->w881 >> 18) & 1; }
 static inline unsigned odin_mat_has_texture (const odin_material_t *m) { return (m->w881 >> 19) & 1; }
 static inline unsigned odin_mat_has_alpha (const odin_material_t *m) { return (m->w881 >> 20) & 1; }
-static inline unsigned odin_mat_has_highlight (const odin_material_t *m) { return (m->w881 >> 21) & 1; }
 /* A81 */
 static inline unsigned odin_mat_blending_mode (const odin_material_t *m) { return (m->wA81 >> 16) & 3; }
-/* C81 */
-static inline unsigned odin_mat_alpha_index (const odin_material_t *m) { return (m->wC81 >> 16) & 0x3F; }
 
 enum {
 	ODIN_TEX_HAS_0C1 = 1 << 0,
@@ -259,7 +256,6 @@ typedef struct {
 
 	odin_modelview_t	*mv_list;
 	uint32_t		 num_mvs;
-	uint32_t		 num_instances;
 	uint32_t		 mv2_index;	/* last second modelview listed this frame */
 
 	odin_material_t		*mat_list;

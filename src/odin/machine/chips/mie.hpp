@@ -239,9 +239,7 @@ public:
 private:
 	enum : uint16_t {
 		ROM_END = 0x0800,
-		OPEN_END = 0x7000,
 		MAPLE_BASE = 0x7000,
-		MAPLE_END = 0x7800,
 		RAM_LOW_BASE = 0x7800,
 		RAM_BASE = 0x8000
 	};
@@ -340,7 +338,7 @@ private:
 	bool m_trace_armed;
 	bool m_busak_traced;
 	std::array<bool, 512> m_port_logged;
-	std::array<bool, 4> m_mem_logged;
+	std::array<bool, 2> m_mem_logged;
 };
 
 } /* namespace odin */

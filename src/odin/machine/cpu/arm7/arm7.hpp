@@ -402,7 +402,6 @@ private:
 	Arm7State m_turn_start;
 	std::array<uint32_t, TURN_MAX + 1> m_turn_cycles; /* summed */
 	std::array<uint16_t, TURN_MAX + 1> m_turn_passed; /* summed */
-	std::array<uint8_t, 256> m_turn_pages;            /* memory read */
 	std::array<uint8_t, 256> m_turn_changed;          /* memory changed */
 	std::array<uint8_t, 256> m_turn_watched;          /* memory read or written */
 	std::array<TurnRead, TURN_READS> m_turn_reads;

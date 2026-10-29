@@ -258,7 +258,7 @@ void Arm7::set_turn_replay(bool on)
 
 void Arm7::turn_begin()
 {
-	if (m_trace || m_ram.size > ((m_turn_pages.size() * 8) << TURN_PAGE)) {
+	if (m_trace || m_ram.size > ((m_turn_watched.size() * 8) << TURN_PAGE)) {
 		return;
 	}
 	save(m_turn_start);
@@ -266,7 +266,6 @@ void Arm7::turn_begin()
 	m_turn_rounds = 0;
 	m_turn_cycles[0] = 0;
 	m_turn_passed[0] = 0;
-	m_turn_pages.fill(0);
 	m_turn_changed.fill(0);
 	m_turn_watched.fill(0);
 	m_turn_num_reads = 0;
@@ -754,7 +753,6 @@ void Arm7::turn_note_fetch(uint32_t addr, uint32_t op)
 {
 	if (addr < m_ram.size) {
 		uint32_t page = (addr & m_ram.mask) >> TURN_PAGE;
-		m_turn_pages[page >> 3] |= u8(1u << (page & 7));
 		m_turn_watched[page >> 3] |= u8(1u << (page & 7));
 		turn_trail(addr & m_ram.mask, op, 4, false);
 	} else if (m_turn_num_reads < TURN_READS) {
@@ -773,7 +771,6 @@ void Arm7::turn_note_read(uint32_t addr, uint32_t size, uint32_t value)
 	o.load_hi = std::max(o.load_hi, at + size);
 	if (addr < m_ram.size) {
 		uint32_t page = (addr & m_ram.mask) >> TURN_PAGE;
-		m_turn_pages[page >> 3] |= u8(1u << (page & 7));
 		m_turn_watched[page >> 3] |= u8(1u << (page & 7));
 		turn_trail(addr & m_ram.mask, value, size, false);
 	} else if (m_turn_num_reads < TURN_READS) {

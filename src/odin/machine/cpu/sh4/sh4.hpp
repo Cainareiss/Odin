@@ -55,7 +55,7 @@ enum : uint32_t {
 };
 }
 
-enum class Sh4Run : uint32_t { Running, Stopped, Sleeping, Standby };
+enum class Sh4Run : uint32_t { Running, Stopped, Sleeping };
 
 struct Sh4IrqSource {
 	uint32_t raised;
@@ -516,7 +516,7 @@ private:
 	bool clock_skip(const ClockTurn &turn);
 	void clock_noted_read(uint32_t addr, uint32_t size, const void *at);
 	void clock_noted_write(uint32_t addr, uint32_t size, const void *old, const void *value);
-	void clock_noted_slow(uint32_t addr, uint32_t size, uint64_t value);
+	void clock_noted_slow(uint32_t addr, uint32_t size);
 	static uint32_t &use_of(Regs &r, uint32_t i);
 	/* The end of an instruction run alone for clock_note(): on at `imm`,
 	 * no other block after it */

@@ -103,7 +103,6 @@ Antarctic::List::clear()
 {
 	view.num_vps = 0;
 	view.num_mvs = 0;
-	view.num_instances = 0;
 	view.mv2_index = ~0u;
 	mv_index = ~0u;
 	view.num_mats = 0;
@@ -179,7 +178,6 @@ Antarctic::list_state(odin_mesh_t &mesh)
 	}
 	mesh.mv_index = m_list->mv_index;
 	mesh.num_instances = 1;
-	l.num_instances = 1;
 
 	/* The second modelview (161 with bit 18) is listed when it changes. */
 	if (l.mv2_index >= l.num_mvs ||

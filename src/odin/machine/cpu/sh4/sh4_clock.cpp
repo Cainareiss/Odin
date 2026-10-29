@@ -175,12 +175,11 @@ void Sh4::clock_noted_write(uint32_t addr, uint32_t size, const void *old, const
 }
 
 /* A read outside the plain memory: one of a TCNT only */
-void Sh4::clock_noted_slow(uint32_t addr, uint32_t size, uint64_t value)
+void Sh4::clock_noted_slow(uint32_t addr, uint32_t size)
 {
 	const uint32_t top = addr >> 24, reg = addr & 0xFFFFFF;
 	uint32_t channel = 3;
 
-	(void)value;
 	for (uint32_t ch = 0; ch < 3; ch++) {
 		if (reg == TMU_TCNT0 + 12 * ch) {
 			channel = ch;
