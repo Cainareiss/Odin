@@ -141,7 +141,7 @@ read_display(const Settings &settings, Options &options)
 			options.sides = static_cast<DisplaySides>(
 				std::find(std::begin(SIDES_NAMES), std::end(SIDES_NAMES), value) - std::begin(SIDES_NAMES));
 		} else {
-			std::fprintf(stderr, "ERROR: settings: [display]: not right: %s = %s\n", key.c_str(), value.c_str());
+			refuse_setting("display", key, value);
 		}
 	}
 }
@@ -169,7 +169,7 @@ read_paths(const Settings &settings, Options &options)
 		} else if (key == "states" && !value.empty()) {
 			options.states = value;
 		} else {
-			std::fprintf(stderr, "ERROR: settings: [paths]: not right: %s = %s\n", key.c_str(), value.c_str());
+			refuse_setting("paths", key, value);
 		}
 	}
 	for (const auto &[key, value] : settings.section("log")) {
@@ -177,7 +177,7 @@ read_paths(const Settings &settings, Options &options)
 			if (!options.given.verbose)
 				options.verbose = value == "on";
 		} else {
-			std::fprintf(stderr, "ERROR: settings: [log]: not right: %s = %s\n", key.c_str(), value.c_str());
+			refuse_setting("log", key, value);
 		}
 	}
 
@@ -211,7 +211,7 @@ read_sound(const Settings &settings, Options &options)
 		else if (key == "background" && (value == "on" || value == "off"))
 			options.background = value == "on";
 		else
-			std::fprintf(stderr, "ERROR: settings: [sound]: not right: %s = %s\n", key.c_str(), value.c_str());
+			refuse_setting("sound", key, value);
 	}
 }
 

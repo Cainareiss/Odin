@@ -122,8 +122,7 @@ PadTuning::of(const Settings &settings, const std::string &guid, bool tell)
 			    percent <= (dead ? MOST_DEAD_ZONE : MOST_TRIGGER_THRESHOLD))
 				*field = percent;
 			else if (tell)
-				std::fprintf(stderr, "ERROR: settings: [%s]: not right: %s = %s\n", section.c_str(), key.c_str(),
-				             value.c_str());
+				refuse_setting(section, key, value);
 		}
 	}
 	return out;

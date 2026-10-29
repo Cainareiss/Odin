@@ -76,7 +76,7 @@ Hotkeys::Hotkeys(const Settings &settings) : Hotkeys()
 		const std::optional<Binding> binding = action < ACTIONS ? parse(value) : std::nullopt;
 
 		if (!binding) {
-			std::fprintf(stderr, "ERROR: settings: [hotkeys]: not right: %s = %s\n", key.c_str(), value.c_str());
+			refuse_setting("hotkeys", key, value);
 			continue;
 		}
 		m_bindings[action] = {};

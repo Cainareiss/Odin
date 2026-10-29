@@ -125,7 +125,7 @@ MenuNav::MenuNav(const Settings &settings) : MenuNav()
 				m_inputs[a] = *inputs;
 				m_held[a].assign(m_inputs[a].size(), false);
 			} else {
-				std::fprintf(stderr, "ERROR: settings: [menu]: not right: %s = %s\n", key.c_str(), value.c_str());
+				refuse_setting("menu", key, value);
 			}
 		}
 	}

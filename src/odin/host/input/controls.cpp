@@ -69,8 +69,7 @@ Controls::Controls(Keyboard &keys, const std::vector<GameControl> &controls, con
 		            key == "wheel_force"     ? !wheel_force_named(value) :
 		            key == "vibration_force" ? !vibration_force_named(value) :
 		                                       key != "wheel_rotation" || !wheel_rotation_named(value))) {
-			std::fprintf(stderr, "ERROR: settings: [players.%s]: not right: %s = %s\n", game.c_str(), key.c_str(),
-			             value.c_str());
+			refuse_setting("players." + game, key, value);
 		}
 	}
 	/* The pads and joysticks already there come as added events; the

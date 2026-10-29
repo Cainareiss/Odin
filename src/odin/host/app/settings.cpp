@@ -38,6 +38,12 @@
 
 namespace odin {
 
+void
+refuse_setting(const std::string &section, const std::string &key, const std::string &value)
+{
+	std::fprintf(stderr, "ERROR: settings: [%s]: not right: %s = %s\n", section.c_str(), key.c_str(), value.c_str());
+}
+
 namespace {
 
 /* The word on top of odin.ini */

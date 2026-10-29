@@ -45,6 +45,10 @@ trimmed(std::string_view text)
 	return text;
 }
 
+/* A line of odin.ini whose value is not right, said on stderr; Odin takes
+ * the value by default instead */
+void refuse_setting(const std::string &section, const std::string &key, const std::string &value);
+
 /* The settings of the user, odin.ini: "[section]" lines, then
  * "key = value" lines; a line that starts with # or ; is a comment. A key
  * keeps the order of the file. Each key Odin knows is in the file: as a

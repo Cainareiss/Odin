@@ -74,7 +74,7 @@ network_on(const Settings &settings)
 		if (key == "network" && (value == "on" || value == "off"))
 			network = value == "on";
 		else
-			std::fprintf(stderr, "ERROR: settings: [outputs]: not right: %s = %s\n", key.c_str(), value.c_str());
+			refuse_setting("outputs", key, value);
 	}
 	return network;
 }
@@ -104,7 +104,7 @@ link_settings(const Settings &settings)
 				continue;
 			}
 		}
-		std::fprintf(stderr, "ERROR: settings: [network]: not right: %s = %s\n", key.c_str(), value.c_str());
+		refuse_setting("network", key, value);
 	}
 	return link;
 }
@@ -234,7 +234,7 @@ MenuSession::MenuSession(const Options &options, Display &display, Keyboard &key
 		else if (key == "theme" && theme_named(value) >= 0)
 			state.theme = static_cast<unsigned>(theme_named(value));
 		else if (!MenuNav::knows(key))
-			std::fprintf(stderr, "ERROR: settings: [menu]: not right: %s = %s\n", key.c_str(), value.c_str());
+			refuse_setting("menu", key, value);
 	}
 	state.shown = state.running = state.games.size();
 	for (size_t g = 0; g < state.games.size(); g++)

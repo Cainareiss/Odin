@@ -132,8 +132,7 @@ play(const Options &given, const std::string &name, const GameList &games, Setti
 		else if (key == "mode" && mode_named(value))
 			continue;
 		else
-			std::fprintf(stderr, "ERROR: settings: [sound.%s]: not right: %s = %s\n", game->name.c_str(),
-			             key.c_str(), value.c_str());
+			odin::refuse_setting("sound." + game->name, key, value);
 	}
 
 	/* Unthrottled frames do not keep time: no sound with -u */
