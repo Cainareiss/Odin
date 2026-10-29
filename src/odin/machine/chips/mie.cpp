@@ -138,6 +138,16 @@ enum : uint8_t {
 constexpr uint32_t SERIAL_SEND_CYCLES = 640;
 constexpr uint32_t SERIAL_REQUEST_CYCLES = 160;
 
+/* A received byte into the FIFO, lost when it is full */
+void
+rx_push(MieUartState &u, uint8_t byte)
+{
+	if (u.rx_count < u.rx_fifo.size()) {
+		u.rx_fifo[(u.rx_head + u.rx_count) % static_cast<uint32_t>(u.rx_fifo.size())] = byte;
+		u.rx_count++;
+	}
+}
+
 } /* namespace */
 
 Mie::Mie(MieHost &host, std::span<const uint8_t> rom, std::span<uint8_t> ram)
@@ -275,11 +285,8 @@ void Mie::write8(uint16_t addr, uint8_t value)
 	m_proof.on = false;
 	if (addr >= RAM_BASE) {
 		m_ram[addr - RAM_BASE] = value;
-	} else if (m_external) {
-		if (!m_mem_logged[1]) {
-			m_mem_logged[1] = true;
-			log_unknown('w', "rom", addr, value);
-		}
+	} else if (m_external || addr < ROM_END) {
+		log_once(m_mem_logged[1], 'w', "rom", addr, value);
 	} else if (addr >= RAM_LOW_BASE) {
 		m_ram_low[addr - RAM_LOW_BASE] = value;
 	} else if (addr >= MAPLE_BASE) {
@@ -288,16 +295,8 @@ void Mie::write8(uint16_t addr, uint8_t value)
 		if (off < 0x24) {
 			m_maple[off] = value;
 		}
-	} else if (addr >= ROM_END) {
-		if (!m_mem_logged[0]) {
-			m_mem_logged[0] = true;
-			log_unknown('w', "mem", addr, value);
-		}
 	} else {
-		if (!m_mem_logged[1]) {
-			m_mem_logged[1] = true;
-			log_unknown('w', "rom", addr, value);
-		}
+		log_once(m_mem_logged[0], 'w', "mem", addr, value);
 	}
 }
 
@@ -350,10 +349,7 @@ uint8_t Mie::in8(uint16_t port)
 	if (uint8_t value; m_host.board_in8(p, value)) {
 		return value;
 	}
-	if (!m_port_logged[p]) {
-		m_port_logged[p] = true;
-		log_unknown('i', "port", p, 0xFF);
-	}
+	log_once(m_port_logged[p], 'i', "port", p, 0xFF);
 	return 0xFF;
 }
 
@@ -412,10 +408,7 @@ void Mie::out8(uint16_t port, uint8_t value)
 	if (m_host.board_out8(p, value)) {
 		return;
 	}
-	if (!m_port_logged[256 + p]) {
-		m_port_logged[256 + p] = true;
-		log_unknown('o', "port", p, value);
-	}
+	log_once(m_port_logged[256 + p], 'o', "port", p, value);
 }
 
 /* GPIO: direction bit set = input (MAME mie.cpp gpio_r); an output reads
@@ -492,19 +485,23 @@ bool Mie::uart_irq() const
 	return ((m_uart.ier & IER_RX) && m_uart.rx_count) || ((m_uart.ier & IER_THRE) && m_uart.thre_irq);
 }
 
+/* The levels 0 to 6 that ask and are enabled */
+uint8_t Mie::levels() const
+{
+	return static_cast<uint8_t>(m_irq_enable & (m_irq_pending | (uart_irq() ? IRQ_UART1 : 0)) & 0x7F);
+}
+
 bool Mie::irq_line() const
 {
-	const uint8_t levels = static_cast<uint8_t>(m_irq_pending | (uart_irq() ? IRQ_UART1 : 0));
-
-	return (m_irq_enable & levels & 0x7F) || ((m_irq_enable & IRQ_EXTERNAL) && m_external_irq);
+	return levels() || ((m_irq_enable & IRQ_EXTERNAL) && m_external_irq);
 }
 
 uint8_t Mie::int_ack()
 {
-	const uint8_t levels = static_cast<uint8_t>(m_irq_enable & (m_irq_pending | (uart_irq() ? IRQ_UART1 : 0)) & 0x7F);
+	const uint8_t asking = levels();
 
 	for (unsigned level = 0; level < 7; level++) {
-		if (levels & (1u << level)) {
+		if (asking & (1u << level)) {
 			/* UART 1 asks as long as its cause holds */
 			m_irq_pending = static_cast<uint8_t>(m_irq_pending & ~(1u << level));
 			return static_cast<uint8_t>(0xF2 + 2 * level);
@@ -716,11 +713,7 @@ void Mie::uart_tick(uint32_t cycles)
 		u.wire_ticks -= step;
 		left -= step;
 		if (u.wire_ticks == 0) {
-			if (u.rx_count < u.rx_fifo.size()) {
-				const uint32_t tail = (u.rx_head + u.rx_count) % static_cast<uint32_t>(u.rx_fifo.size());
-				u.rx_fifo[tail] = u.wire[u.wire_pos];
-				u.rx_count++;
-			}
+			rx_push(u, u.wire[u.wire_pos]);
 			u.wire_pos++;
 			u.wire_ticks = byte_ticks;
 		}
@@ -758,10 +751,7 @@ uint8_t Mie::serial_read(uint8_t port)
 	default:
 		break;
 	}
-	if (!m_port_logged[port]) {
-		m_port_logged[port] = true;
-		log_unknown('i', "port", port, 0xFF);
-	}
+	log_once(m_port_logged[port], 'i', "port", port, 0xFF);
 	return 0xFF;
 }
 
@@ -787,10 +777,7 @@ void Mie::serial_write(uint8_t port, uint8_t value)
 	case SERIAL_CTRL_REQUEST:
 	case SERIAL_CTRL_REQUEST + 1:
 		if (s.data != SERIAL_REQ_STATUS && s.data != SERIAL_REQ_TAKE) {
-			if (!m_port_logged[256 + port]) {
-				m_port_logged[256 + port] = true;
-				log_unknown('o', "serial request", port, s.data);
-			}
+			log_once(m_port_logged[256 + port], 'o', "serial request", port, s.data);
 			return;
 		}
 		s.op = SERIAL_OP_REQUEST;
@@ -801,10 +788,7 @@ void Mie::serial_write(uint8_t port, uint8_t value)
 		s.busy_cycles = SERIAL_REQUEST_CYCLES;
 		break;
 	default:
-		if (!m_port_logged[256 + port]) {
-			m_port_logged[256 + port] = true;
-			log_unknown('o', "serial control", port, value);
-		}
+		log_once(m_port_logged[256 + port], 'o', "serial control", port, value);
 		return;
 	}
 	s.status |= SERIAL_STATUS_BUSY;
@@ -868,12 +852,7 @@ void Mie::tick(uint32_t cycles)
 
 void Mie::line_received(uint8_t byte)
 {
-	MieUartState &u = m_uart;
-
-	if (u.rx_count < u.rx_fifo.size()) {
-		u.rx_fifo[(u.rx_head + u.rx_count) % static_cast<uint32_t>(u.rx_fifo.size())] = byte;
-		u.rx_count++;
-	}
+	rx_push(m_uart, byte);
 }
 
 /* Loops that only wait */
@@ -1277,6 +1256,15 @@ uint32_t Mie::run(uint32_t cycles)
 		}
 	}
 	return done;
+}
+
+/* Each kind of unknown access is told once */
+void Mie::log_once(bool &said, char rw, const char *space, uint32_t addr, uint32_t value)
+{
+	if (!said) {
+		said = true;
+		log_unknown(rw, space, addr, value);
+	}
 }
 
 void Mie::log_unknown(char rw, const char *space, uint32_t addr, uint32_t value)

@@ -245,6 +245,7 @@ private:
 	};
 
 	bool uart_irq() const;
+	uint8_t levels() const;
 	bool irq_line() const;
 	uint8_t gpio_read(uint8_t port);
 	void gpio_write(uint8_t port, uint8_t value);
@@ -269,6 +270,7 @@ private:
 	uint32_t uart_end(uint32_t done, uint32_t cycles) const;
 	uint8_t uart_lsr() const;
 	int counts_down(unsigned reg, uint16_t &dec_pc);
+	void log_once(bool &said, char rw, const char *space, uint32_t addr, uint32_t value);
 	void log_unknown(char rw, const char *space, uint32_t addr, uint32_t value);
 	void trace_host(char rw, uint32_t addr, uint8_t value) const;
 
