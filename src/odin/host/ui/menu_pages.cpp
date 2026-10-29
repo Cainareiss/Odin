@@ -316,6 +316,8 @@ shown_path(const std::string &path, const char *none)
 #endif
 }
 
+namespace {
+
 /* The two sound boards of a cabinet, as its wiring takes them (the manuals
  * and wiring diagrams of SEGA): its game, where each board plays,
  * what sets the level of the optional one on the cabinet. The optional
@@ -515,6 +517,8 @@ route_cards(const MenuKit &kit, const MenuState &state, const Box &box)
 	});
 }
 
+} /* namespace */
+
 /* Audio: where the sound goes, how loud; how the cabinets with two sound
  * boards play them */
 void
@@ -597,6 +601,8 @@ constexpr const char *HOTKEY_NAMES[Hotkeys::ACTIONS] = {
 constexpr std::pair<SDL_Keymod, const char *> MODIFIER_CAPS[] = {
 	{ SDL_KMOD_CTRL, "Ctrl" }, { SDL_KMOD_ALT, "Alt" }, { SDL_KMOD_SHIFT, "Shift" }, { SDL_KMOD_GUI, "Gui" },
 };
+
+namespace {
 
 /* The row of the function keys of a keyboard, a gap (0) between groups */
 constexpr SDL_Keycode FUNCTION_ROW[] = {
@@ -761,6 +767,8 @@ hotkeys_keyboard(const MenuKit &kit, const MenuState &state, const Box &box, con
 		              nullptr, guide_text_w);
 	});
 }
+
+} /* namespace */
 
 /* Hotkeys: what Odin does itself on a key or with Guide held, each changed
  * by a click and the next key or button */

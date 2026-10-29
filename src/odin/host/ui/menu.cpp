@@ -54,6 +54,9 @@ namespace odin {
 
 namespace {
 
+/* What a page says when its settings are not written to odin.ini */
+constexpr const char *NOT_SAVED = "Not saved (ODIN_CONFIG=none).";
+
 /* Their files, in the order of Menu::Picture */
 const std::pair<const unsigned char *, const unsigned char *> PICTURE_FILES[] = {
 	{ odin_picture_upscale_1, odin_picture_upscale_1_end }, { odin_picture_upscale_2, odin_picture_upscale_2_end },
@@ -492,7 +495,7 @@ Menu::build(MenuState &state)
 	const float keys_w = ImGui::CalcTextSize(keys).x, help_w = std::max(0.0f, w - 3.0f * pad - keys_w - close_w);
 	const std::string help = m_page == INPUT ? std::string() :
 	                         framed_tip.empty() ? this->help(m_page, state) :
-	                         state.kept ? framed_tip : framed_tip + " Not saved (ODIN_CONFIG=none).";
+	                         state.kept ? framed_tip : framed_tip + " " + NOT_SAVED;
 	const float help_h = m_page == INPUT ? 0.0f : ImGui::CalcTextSize(help.c_str(), nullptr, false, help_w).y;
 	const float foot = m_page == INPUT ? input_foot(kit, state, {}, help_w, 0.0f, false) :
 	                                     std::max({ line, help_h, close.y });
@@ -989,9 +992,9 @@ Menu::help(int page, const MenuState &state)
 		return std::string("Sound only: vibration is on the Input page") + kept;
 	case HOTKEYS:
 		return state.hotkey_catching || state.kept ? hotkeys_help(state) :
-		       hotkeys_help(state) + " Not saved (ODIN_CONFIG=none).";
+		       hotkeys_help(state) + " " + NOT_SAVED;
 	case OUTPUTS:
-		return state.kept ? "" : "Not saved (ODIN_CONFIG=none).";
+		return state.kept ? "" : NOT_SAVED;
 	case LINK:
 		return std::string("These settings apply when a game starts") + kept;
 	case PATHS:

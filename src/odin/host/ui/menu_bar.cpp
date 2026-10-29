@@ -52,6 +52,9 @@ namespace odin {
 
 namespace {
 
+/* The width of a slider of a menu of the bar, in points */
+constexpr float SLIDER_W = 150.0f;
+
 /* In points: the room around a name of the bar, between two, around the
  * items of a menu; the cut of the corners of a menu; the line of the
  * accent under the menu open */
@@ -213,7 +216,7 @@ struct Menu::BarItems {
 	void slider(const char *name, const char *id, int &value, int most) const
 	{
 		ImGui::TextUnformatted(name);
-		ImGui::SetNextItemWidth(kit.px(150.0f));
+		ImGui::SetNextItemWidth(kit.px(SLIDER_W));
 		ImGui::SliderInt(id, &value, 0, most, "%d %%", ImGuiSliderFlags_AlwaysClamp);
 	}
 	/* A line to read only: what, and what it is */
@@ -568,7 +571,7 @@ Menu::bar_audio(BarItems &b)
 
 	ImGui::BeginDisabled(state.silent);
 	ImGui::TextUnformatted("Volume");
-	ImGui::SetNextItemWidth(kit.px(150.0f));
+	ImGui::SetNextItemWidth(kit.px(SLIDER_W));
 	if (ImGui::SliderInt("##volume", &volume, 0, 100, "%d %%", ImGuiSliderFlags_AlwaysClamp))
 		state.volume = static_cast<unsigned>(volume);
 	if (item("Sound in the background", {}, state.background))
@@ -613,7 +616,7 @@ Menu::bar_audio(BarItems &b)
 		ImGui::Separator();
 		ImGui::BeginDisabled(game.played != 1);
 		ImGui::TextUnformatted("Optional board level");
-		ImGui::SetNextItemWidth(kit.px(150.0f));
+		ImGui::SetNextItemWidth(kit.px(SLIDER_W));
 		if (ImGui::SliderFloat("##level", &game.level, -60.0f, 12.0f, "%+.0f dB", ImGuiSliderFlags_AlwaysClamp))
 			game.level = std::round(game.level);
 		ImGui::EndDisabled();
