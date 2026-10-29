@@ -90,6 +90,13 @@ struct LibraryState {
 	std::string press;
 };
 
+/* A light gun or a mouse read one by one (pointers.hpp), seen or named by
+ * the settings: its identity, its name, plugged in, aiming (else moving) */
+struct LightGun {
+	std::string identity, name;
+	bool present = false, aims = false;
+};
+
 /* The settings the pages and the bar both change: MenuState has them, the
  * bar a copy (MenuSession::fill_bar), given back once changed there
  * (do_bar) */
@@ -193,15 +200,11 @@ struct BarState : BarSettings {
 		SDL_JoystickID id;
 		bool off;	/* a wheel, for a game that has none */
 	};
-	struct Gun {
-		std::string identity, name;
-		bool present, aims;
-	};
 	unsigned players = 1;
 	std::array<InputDevice, 2> plays_with{};
 	std::vector<Pad> pads;
 	std::array<int, 2> dead_zone{ -1, -1 }, trigger_threshold{ -1, -1 };
-	std::vector<Gun> guns;
+	std::vector<LightGun> guns;
 	std::array<std::string, 2> gun;
 	std::array<bool, 2> sights{};
 	bool can_shake = false, shake = true, undo = false, light_gun = true;
@@ -364,19 +367,13 @@ struct MenuState : BarSettings {
 	 * SDL_JoystickType), and the one asked for the player shown */
 	std::vector<Plugged> joysticks;
 	std::optional<Plugged> want_joystick;
-	/* The light guns and mice read one by one (pointers.hpp) that were
-	 * seen: identity, name, plugged in, aiming (else moving); that of each
-	 * player in the game shown (its identity; empty: none) and whether the
-	 * player has a sight there; the one asked for a player (no identity:
-	 * none) */
-	struct Gun {
-		std::string identity, name;
-		bool present = false, aims = false;
-	};
-	std::vector<Gun> guns;
+	/* The light guns and mice seen; that of each player in the game shown
+	 * (its identity; empty: none) and whether the player has a sight there;
+	 * the one asked for a player (no identity: none) */
+	std::vector<LightGun> guns;
 	std::array<std::string, 2> gun;
 	std::array<bool, 2> sights{};
-	std::optional<std::pair<unsigned, Gun>> want_gun;
+	std::optional<std::pair<unsigned, LightGun>> want_gun;
 	/* The player shown, and the inputs of each player shown: of the
 	 * keyboard (and the mouse), of the gamepad or of the joystick (the
 	 * device each one plays with when the menu opens), the device a player

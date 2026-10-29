@@ -392,7 +392,7 @@ Menu::bar(BarState &state)
 						ask(Ask::GUN);
 					}
 					for (size_t g = 0; g < state.guns.size(); g++) {
-						const BarState::Gun &gun = state.guns[g];
+						const LightGun &gun = state.guns[g];
 						const std::string label = gun.name + (gun.aims ? "" : " · mouse") +
 						                          (gun.present ? "" : " · unplugged");
 						const bool mine = gun.identity == state.gun[player];

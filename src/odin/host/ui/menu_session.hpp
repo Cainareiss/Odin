@@ -244,6 +244,8 @@ private:
 	void keep_cabinet(const std::string &game, const std::string &id);
 	void keep_tuning(const std::string &guid, const PadTuning &now, const PadTuning &was);
 	void fill_bar_inputs(BarState &bar) const;
+	void light_guns(const std::string &game, const std::vector<GameControl> &controls, std::vector<LightGun> &guns,
+	                std::array<std::string, 2> &gun, std::array<bool, 2> &sights) const;
 	void keep_binding(const Bindings::Line &line, const std::string &game = "");
 	/* The cards in the folder of the game, by name; the file of one */
 	void list_cards();

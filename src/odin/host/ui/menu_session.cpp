@@ -698,6 +698,35 @@ MenuSession::fill_bar(BarState &bar) const
 	}
 }
 
+/* The light guns seen (one chosen and never plugged in since Odin started,
+ * as the settings name it), that of each player in a game, the players
+ * with a sight there */
+void
+MenuSession::light_guns(const std::string &game, const std::vector<GameControl> &controls,
+                        std::vector<LightGun> &guns, std::array<std::string, 2> &gun, std::array<bool, 2> &sights) const
+{
+	guns.clear();
+	if (const Pointers *const pointers = m_controls.pointers())
+		for (const Pointers::Device &device : pointers->devices())
+			guns.push_back({ device.identity, device.name, device.present, device.absolute });
+	gun = {};
+	for (const auto &[key, value] : m_settings.section("players." + game)) {
+		if (key != "gun1" && key != "gun2")
+			continue;
+
+		const size_t space = value.find(' ');
+		const std::string identity = value.substr(0, space);
+
+		gun[static_cast<size_t>(key[3] - '1')] = identity;
+		if (std::none_of(guns.begin(), guns.end(), [&identity](const LightGun &one) { return one.identity == identity; }))
+			guns.push_back({ identity, space == std::string::npos ? identity : value.substr(space + 1), false, true });
+	}
+	sights = {};
+	for (const GameControl &control : controls)
+		if (control.role == Role::GUN_X)
+			sights[control.player & 1] = true;
+}
+
 /* The inputs of the game that runs, as the page Input shows them for the
  * game it shows: the gamepads and joysticks plugged in (two of a make
  * numbered as there), the tuning of each player's gamepad, the light guns
@@ -748,24 +777,7 @@ MenuSession::fill_bar_inputs(BarState &bar) const
 			bar.dead_zone[static_cast<size_t>(pad.player)] = tuning.dead_zone;
 			bar.trigger_threshold[static_cast<size_t>(pad.player)] = tuning.trigger_threshold;
 		}
-	if (const Pointers *const pointers = m_controls.pointers())
-		for (const Pointers::Device &device : pointers->devices())
-			bar.guns.push_back({ device.identity, device.name, device.present, device.absolute });
-	for (const auto &[key, value] : m_settings.section("players." + m_game->name)) {
-		if (key != "gun1" && key != "gun2")
-			continue;
-
-		const size_t space = value.find(' ');
-		const std::string identity = value.substr(0, space);
-
-		bar.gun[static_cast<size_t>(key[3] - '1')] = identity;
-		if (std::none_of(bar.guns.begin(), bar.guns.end(),
-		                 [&identity](const BarState::Gun &gun) { return gun.identity == identity; }))
-			bar.guns.push_back({ identity, space == std::string::npos ? identity : value.substr(space + 1), false, true });
-	}
-	for (const GameControl &control : m_controls.panel().controls())
-		if (control.role == Role::GUN_X)
-			bar.sights[control.player & 1] = true;
+	light_guns(m_game->name, controls, bar.guns, bar.gun, bar.sights);
 	bar.shake = vibration_on(m_settings, m_game->name);
 	bar.light_gun = light_gun_mode_on(m_settings, m_game->name);
 }
@@ -851,7 +863,7 @@ MenuSession::do_bar(BarState &bar)
 		return Ask::NONE;
 	case Ask::GUN:
 		if (m_game && bar.asked_gun < static_cast<int>(bar.guns.size())) {
-			const BarState::Gun none{}, &gun = bar.asked_gun < 0 ? none : bar.guns[static_cast<size_t>(bar.asked_gun)];
+			const LightGun none{}, &gun = bar.asked_gun < 0 ? none : bar.guns[static_cast<size_t>(bar.asked_gun)];
 
 			want_gun(m_game->name, player, gun.identity, gun.name, true);
 		}

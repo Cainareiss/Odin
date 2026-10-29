@@ -268,32 +268,10 @@ MenuSession::draw_menu()
 	/* What moves says so as it is drawn */
 	state.moving = false;
 
-	/* The light guns seen (one chosen and never plugged in since Odin
-	 * started, as the settings name it), that of each player in the game
-	 * shown, the players with a sight there */
-	state.guns.clear();
-	if (Pointers *const pointers = m_controls.pointers()) {
+	/* The light guns, of the game shown */
+	if (Pointers *const pointers = m_controls.pointers())
 		pointers->poll();
-		for (const Pointers::Device &device : pointers->devices())
-			state.guns.push_back({ device.identity, device.name, device.present, device.absolute });
-	}
-	state.gun = {};
-	for (const auto &[key, value] : m_settings.section("players." + game_shown())) {
-		if (key != "gun1" && key != "gun2")
-			continue;
-
-		const size_t space = value.find(' ');
-		const std::string identity = value.substr(0, space);
-
-		state.gun[key[3] - '1'] = identity;
-		if (std::none_of(state.guns.begin(), state.guns.end(),
-		                 [&identity](const MenuState::Gun &gun) { return gun.identity == identity; }))
-			state.guns.push_back({ identity, space == std::string::npos ? identity : value.substr(space + 1), false, true });
-	}
-	state.sights = {};
-	for (const GameControl &control : panel_shown().controls())
-		if (control.role == Role::GUN_X)
-			state.sights[control.player & 1] = true;
+	light_guns(game_shown(), panel_shown().controls(), state.guns, state.gun, state.sights);
 	const MenuState was = state;
 
 	m_display.draw_menu(state);

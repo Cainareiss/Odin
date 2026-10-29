@@ -1001,7 +1001,7 @@ guns_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width, bool two)
 		};
 		int chosen = 0;
 
-		for (const MenuState::Gun &gun : state.guns) {
+		for (const LightGun &gun : state.guns) {
 			if (gun.identity == state.gun[player])
 				chosen = static_cast<int>(items.size());
 			items.push_back({ gun.name, gun.aims ? "light gun" : "mouse", gun.present ? "" : "UNPLUGGED",
@@ -1010,7 +1010,7 @@ guns_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width, bool two)
 		ImGui::PushID(static_cast<int>(player));
 		if (kit.picker("gun", { at.x + static_cast<float>(player) * (each + spacing) + past, at.y }, each - past, items,
 		               chosen, MenuKit::Icon::NONE, FOOT))
-			state.want_gun = std::pair(player, chosen ? state.guns[static_cast<size_t>(chosen) - 1] : MenuState::Gun());
+			state.want_gun = std::pair(player, chosen ? state.guns[static_cast<size_t>(chosen) - 1] : LightGun());
 		ImGui::PopID();
 	}
 	return at.y + h;
