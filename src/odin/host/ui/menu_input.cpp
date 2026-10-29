@@ -951,8 +951,11 @@ devices_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width, bool t
 			const bool focused = kit.focus({ x - kit.px(4.0f), at.y }, { x + size.x + kit.px(4.0f), at.y + h });
 
 			ImGui::SetCursorScreenPos({ x, at.y });
-			if (ImGui::InvisibleButton("player", { size.x + kit.px(8.0f), h }) || (focused && kit.pressed()))
-				state.player = player, state.catching.reset(), state.catch_next.clear();
+			if (ImGui::InvisibleButton("player", { size.x + kit.px(8.0f), h }) || (focused && kit.pressed())) {
+				state.player = player;
+				state.catching.reset();
+				state.catch_next.clear();
+			}
 			list->AddText({ x, at.y + (h - size.y) / 2.0f }, shown ? palette.ink : palette.dim, name);
 			x += size.x + kit.px(8.0f);
 			w -= size.x + kit.px(8.0f);
@@ -1748,9 +1751,7 @@ buttons_bar(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows
 
 	if (advanced && kit.button("Options", places[i++], false, Icon::SETTINGS)) {
 		state.advanced = true;
-		state.catching.reset();
-		state.catch_next.clear();
-		state.mapping.reset();
+		state.stop_catching();
 	}
 	if (kit.button("Defaults", places[i++], false, Icon::DEFAULTS))
 		state.ask = MenuState::Ask::DEFAULTS;
@@ -2109,7 +2110,7 @@ Menu::input_foot(const MenuKit &kit, MenuState &state, ImVec2 at, float width, f
 			                    MenuKit::alpha(palette.action, 0.35f));
 		x += skip.x + space;
 		if (kit.button("Stop", { x, button_y }, false))
-			state.mapping.reset(), state.catching.reset(), state.catch_next.clear();
+			state.stop_catching();
 		return height;
 	}
 

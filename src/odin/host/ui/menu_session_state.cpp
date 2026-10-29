@@ -261,11 +261,8 @@ MenuSession::draw_menu()
 		                [player](const MenuState::Plugged &one) { return one.player == static_cast<int>(player); }))
 			continue;
 		state.input_device[player] = MenuState::Device::KEYBOARD;
-		if (state.player == player) {
-			state.catching.reset();
-			state.catch_next.clear();
-			state.mapping.reset();
-		}
+		if (state.player == player)
+			state.stop_catching();
 	}
 	state.tuning = PadTuning::of(m_settings, pad_shown(state), false);
 	/* What moves says so as it is drawn */

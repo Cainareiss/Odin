@@ -463,6 +463,13 @@ struct MenuState {
 	 * one caught now in the list of the page, since when (SDL ticks) */
 	std::optional<size_t> mapping;
 	uint64_t mapping_since = 0;
+	/* Nothing caught any more: no part, none next, no Start mapping */
+	void stop_catching()
+	{
+		catching.reset();
+		catch_next.clear();
+		mapping.reset();
+	}
 	/* How far the button that presses is held toward Skip, 0 to 1 */
 	float skip_hold = 0.0f;
 	/* Close game, at the foot of the menu over a game, pressed twice; back

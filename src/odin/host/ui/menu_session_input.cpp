@@ -49,9 +49,7 @@ MenuSession::catch_input(const SDL_Event &event)
 		if (!event.key.down || event.key.repeat)
 			return true;
 		if (event.key.key == SDLK_ESCAPE) {
-			state.catching.reset();
-			state.catch_next.clear();
-			state.mapping.reset();
+			state.stop_catching();
 			return true;
 		}
 		/* A gamepad or a joystick is caught: the keys of quitting and of the
@@ -91,11 +89,8 @@ MenuSession::catch_input(const SDL_Event &event)
 		m_controls.guide_combo();
 		/* A key is caught: B of a gamepad lets it go */
 		if (!state.on_pad()) {
-			if (back) {
-				state.catching.reset();
-				state.catch_next.clear();
-				state.mapping.reset();
-			}
+			if (back)
+				state.stop_catching();
 			return true;
 		}
 
