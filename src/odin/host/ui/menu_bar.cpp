@@ -256,6 +256,10 @@ Menu::bar(BarState &state)
 			const float at = ImGui::GetCursorScreenPos().x + std::trunc(style.ItemSpacing.x * 0.5f);
 			const float w = ImGui::CalcTextSize(NAMES[m]).x;
 
+			if (m == state.open_test) {
+				state.open_test = -1;
+				ImGui::OpenPopup(NAMES[m]);
+			}
 			ImGui::PushStyleColor(ImGuiCol_Text, p.dim);
 			const bool shown = ImGui::BeginMenu(NAMES[m]);
 			ImGui::PopStyleColor();

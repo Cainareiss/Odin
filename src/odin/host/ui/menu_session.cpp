@@ -130,7 +130,9 @@ MenuSession::MenuSession(const Options &options, Display &display, Keyboard &key
 	: m_options(options), m_display(display), m_keys(keys), m_controls(controls), m_settings(settings),
 	  m_settings_file(settings_file), m_games(games), m_game(game), m_board(board), m_audio(audio),
 	  m_outputs(std::move(outputs)), m_hotkeys(settings), m_nav(settings),
-	  m_menu_test(game ? static_cast<unsigned>(std::max(env_int("ODIN_MENU_TEST", 0), 0)) : 0)
+	  m_menu_test(game ? static_cast<unsigned>(std::max(env_int("ODIN_MENU_TEST", 0), 0)) : 0),
+	  m_menu_test_page(m_menu_test ? env_int("ODIN_MENU_PAGE", -1) : -1),
+	  m_bar_test(m_menu_test ? env_int("ODIN_BAR_MENU", -1) : -1)
 {
 	MenuState &state = m_menu_state;
 
@@ -584,7 +586,7 @@ MenuSession::open(int page)
 	 * shakes */
 	for (unsigned player = 0; player < 2; player++)
 		m_menu_state.input_device[player] = m_controls.device(player);
-	m_display.open_menu(page);
+	m_display.open_menu(page < 0 ? m_menu_test_page : page);
 	m_menu_pictures = MENU_PICTURES;
 }
 

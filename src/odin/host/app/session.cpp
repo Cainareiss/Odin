@@ -484,8 +484,14 @@ Session::frames()
 			do_bar();
 		save_state_at_frame();
 		capture_title();
-		if (m_menus.tested_at(m_board.frame()))
-			press_escape();
+		if (m_menus.tested_at(m_board.frame())) {
+			if (m_menus.bar_tested() < 0) {
+				press_escape();
+			} else {
+				m_bar_until = SDL_GetTicks() + BAR_MS;
+				m_bar.open_test = m_menus.bar_tested();
+			}
+		}
 		if (!m_options.unthrottled)
 			limit_frame_rate();
 	}

@@ -230,6 +230,8 @@ struct BarState : BarSettings {
 	/* The mouse is on the bar or a menu of it is open: its buttons are the
 	 * bar's, not the game's; the bottom of the bar, in points */
 	bool wants_mouse = false, open = false;
+	/* For the tests: the menu of the bar to open once (-1: none) */
+	int open_test = -1;
 	float bottom = 0.0f;
 };
 

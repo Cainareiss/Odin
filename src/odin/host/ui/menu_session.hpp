@@ -159,8 +159,11 @@ public:
 	 * slot; empty: nothing new. `quiet`: only seen (the player's own
 	 * gestures, a state loaded). */
 	std::string card_news(bool quiet = false);
-	/* For the tests: ODIN_MENU_TEST, the menu opens after that frame */
+	/* For the tests: ODIN_MENU_TEST, the menu opens after that frame, on
+	 * the page ODIN_MENU_PAGE (Menu::Page; else the last shown); with
+	 * ODIN_BAR_MENU, the bar instead, that menu of it open (Menu::bar) */
 	bool tested_at(unsigned frame) const { return m_menu_test && frame % m_menu_test == 0; }
+	int bar_tested() const { return m_bar_test; }
 	/* Close game was pressed again in the menu, taken */
 	bool closing() { return std::exchange(m_closing, false); }
 	/* A click beside the frame asked to go back to the game or the
@@ -312,6 +315,7 @@ private:
 	unsigned m_menu_pictures = 0;	/* still to draw */
 	Uint64 m_menu_drawn = 0;	/* when the last one was */
 	const unsigned m_menu_test;
+	const int m_menu_test_page, m_bar_test;
 };
 
 } /* namespace odin */
