@@ -191,19 +191,6 @@ read_spirv(const std::string &path)
 	return words;
 }
 
-/* The power of two a size takes, as 86Box rounds the whole number of
- * pixels up (picture_filter_gl.cpp) */
-float
-power_of_two(float size)
-{
-	const unsigned whole = static_cast<unsigned>(size);
-	unsigned power = 1;
-
-	while (power < whole)
-		power <<= 1;
-	return static_cast<float>(power);
-}
-
 constexpr VkFormat PICTURE_FORMAT = VK_FORMAT_R8G8B8A8_UNORM;
 
 /* A texture read by a pass, by either of its stages */
@@ -451,7 +438,7 @@ VkPictureFilter::frame(unsigned w, unsigned h)
 	if (m_frame_size[0] != w || m_frame_size[1] != h) {
 		m_frame_size = { w, h };
 		m_frame.size = { static_cast<float>(w), static_cast<float>(h) };
-		m_frame.texture_size = { power_of_two(m_frame.size[0]), power_of_two(m_frame.size[1]) };
+		m_frame.texture_size = { preset::power_of_two(m_frame.size[0]), preset::power_of_two(m_frame.size[1]) };
 		make_picture(m_frame, static_cast<unsigned>(m_frame.texture_size[0]),
 		             static_cast<unsigned>(m_frame.texture_size[1]));
 		m_window = {};
@@ -475,8 +462,8 @@ VkPictureFilter::size(unsigned w, unsigned h)
 			                      pass.scale_type[axis] == Scale::ABSOLUTE ? pass.scale[axis] :
 			                      in->size[axis] * pass.scale[axis];
 		if (!pass.window) {
-			const std::array<float, 2> texture_size = { power_of_two(pass.out.size[0]),
-			                                            power_of_two(pass.out.size[1]) };
+			const std::array<float, 2> texture_size = { preset::power_of_two(pass.out.size[0]),
+			                                            preset::power_of_two(pass.out.size[1]) };
 
 			if (texture_size != pass.out.texture_size || !pass.out.image.image) {
 				pass.out.texture_size = texture_size;

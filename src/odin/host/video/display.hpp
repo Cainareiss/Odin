@@ -265,6 +265,8 @@ private:
 	std::string m_title = "Odin";	/* without the speed */
 	bool m_paused = false;
 	void retitle();
+	/* The menu, made the first time the bar, a note or the library needs it */
+	void make_menu();
 	/* What it draws with, and the renderer of the board */
 	std::unique_ptr<HostGraphics> m_graphics;
 	std::unique_ptr<Renderer> m_renderer;

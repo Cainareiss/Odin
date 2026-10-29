@@ -252,9 +252,8 @@ main(int argc, char **argv)
 	/* The light guns and the mice, each read on its own (held only for the
 	 * game that names them); none with ODIN_CONTROLLERS=none, as the
 	 * gamepads and the mouse */
-	const char *const controllers = std::getenv("ODIN_CONTROLLERS");
 	const std::unique_ptr<odin::Pointers> pointers =
-		controllers && !std::strcmp(controllers, "none") ? nullptr : std::make_unique<odin::Pointers>(display->window());
+		odin::Controls::all_off() ? nullptr : std::make_unique<odin::Pointers>(display->window());
 
 	/* For the tests: ODIN_GAMES_TEST=<game>,..., these games after the
 	 * first, each from its power-on to its frame -n, in the same window */

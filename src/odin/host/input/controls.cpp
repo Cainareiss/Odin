@@ -59,6 +59,14 @@ player_value_right(const std::string &key, const std::string &value)
 
 } /* namespace */
 
+bool
+Controls::all_off()
+{
+	const char *const chosen = std::getenv("ODIN_CONTROLLERS");
+
+	return chosen && !std::strcmp(chosen, "none");
+}
+
 Controls::Controls(Keyboard &keys, const std::vector<GameControl> &controls, const std::vector<GameOutput> &outputs,
                    const Settings &settings, const std::string &game)
 	: m_keys(keys), m_settings(settings), m_game_controls(controls), m_game(game), m_panel(controls, settings, game), m_outputs(outputs), m_on(false), m_cursor_hidden(false), m_mouse_seen(false),
@@ -71,9 +79,7 @@ Controls::Controls(Keyboard &keys, const std::vector<GameControl> &controls, con
 			m_wheel_reversed = control.low == GameControl::Low::RIGHT;
 		}
 	}
-	const char *const chosen = std::getenv("ODIN_CONTROLLERS");
-
-	if (chosen && !std::strcmp(chosen, "none"))
+	if (all_off())
 		return;
 	for (const auto &[key, value] : settings.section("players." + game)) {
 		if (key == "p1" || key == "p2") {

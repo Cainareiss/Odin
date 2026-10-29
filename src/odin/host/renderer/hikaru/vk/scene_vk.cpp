@@ -31,6 +31,7 @@
 #include "odin/host/renderer/hikaru/vk/drawing_vk.hpp"
 #include "odin/host/renderer/hikaru/depth_bias.hpp"
 #include "odin/host/gfx/program_cache.hpp"
+#include "odin/common/bytes.hpp"
 #include "odin/common/repeats.hpp"
 #include "odin/host/gfx/spirv.hpp"
 #include "odin/host/app/user_files.hpp"
@@ -259,18 +260,14 @@ void
 VkDrawing::keep_programs_in(const std::string &folder)
 {
 	const VkPhysicalDeviceProperties &card = m_card.properties();
-	uint64_t shaders = 0xcbf29ce484222325;
+	uint64_t shaders = FNV_START;
 	char name[64];
 
 	if (folder.empty())
 		return;
 	for (const vk::Spirv &code : { ODIN_SPIRV_OF(mesh_vert), ODIN_SPIRV_OF(mesh_frag), ODIN_SPIRV_OF(mesh_geom),
-	                                ODIN_SPIRV_OF(mesh_families_frag) }) {
-		const uint8_t *const bytes = reinterpret_cast<const uint8_t *>(code.code);
-
-		for (size_t i = 0; i < code.bytes; i++)
-			shaders = (shaders ^ bytes[i]) * 0x100000001b3;
-	}
+	                                ODIN_SPIRV_OF(mesh_families_frag) })
+		shaders = fnv1a(shaders, code.code, code.bytes);
 	std::snprintf(name, sizeof(name), "vulkan-%08" PRIx32 "-%08" PRIx32 "-", card.vendorID, card.deviceID);
 	m_cache_card = name;
 	std::snprintf(name, sizeof(name), "%016" PRIx64 ".bin", shaders);

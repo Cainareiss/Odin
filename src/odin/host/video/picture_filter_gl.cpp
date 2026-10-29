@@ -33,19 +33,6 @@ namespace odin {
 
 namespace {
 
-/* The power of two a size takes, as 86Box rounds the whole number of
- * pixels up */
-float
-power_of_two(float size)
-{
-	const unsigned whole = static_cast<unsigned>(size);
-	unsigned power = 1;
-
-	while (power < whole)
-		power <<= 1;
-	return static_cast<float>(power);
-}
-
 GLuint
 build_shader(GLenum type, const std::string &desktop, const std::string &name)
 {
@@ -270,7 +257,7 @@ PictureFilter::frame(unsigned w, unsigned h)
 	if (m_frame_size[0] != w || m_frame_size[1] != h) {
 		m_frame_size = { w, h };
 		m_frame.size = { static_cast<float>(w), static_cast<float>(h) };
-		m_frame.texture_size = { power_of_two(m_frame.size[0]), power_of_two(m_frame.size[1]) };
+		m_frame.texture_size = { preset::power_of_two(m_frame.size[0]), preset::power_of_two(m_frame.size[1]) };
 		make_texture(m_frame.texture, m_frame.fb, static_cast<unsigned>(m_frame.texture_size[0]),
 		             static_cast<unsigned>(m_frame.texture_size[1]), false);
 		m_window = {};
@@ -294,8 +281,8 @@ PictureFilter::size(unsigned w, unsigned h)
 			                      pass.scale_type[axis] == Scale::ABSOLUTE ? pass.scale[axis] :
 			                      in->size[axis] * pass.scale[axis];
 		if (!pass.window) {
-			const std::array<float, 2> texture_size = { power_of_two(pass.out.size[0]),
-			                                            power_of_two(pass.out.size[1]) };
+			const std::array<float, 2> texture_size = { preset::power_of_two(pass.out.size[0]),
+			                                            preset::power_of_two(pass.out.size[1]) };
 
 			if (texture_size != pass.out.texture_size || !pass.out.texture) {
 				pass.out.texture_size = texture_size;

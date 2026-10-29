@@ -84,6 +84,19 @@ struct Plan {
  * into the window) */
 std::optional<Plan> read_plan(const std::string &preset);
 
+/* The power of two a size takes, as 86Box rounds the whole number of
+ * pixels up */
+inline float
+power_of_two(float size)
+{
+	const unsigned whole = static_cast<unsigned>(size);
+	unsigned power = 1;
+
+	while (power < whole)
+		power <<= 1;
+	return static_cast<float>(power);
+}
+
 } /* namespace odin::preset */
 
 #endif /* ODIN_PICTURE_PRESET_HPP */

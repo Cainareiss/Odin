@@ -515,10 +515,8 @@ Display::show_bar(bool on)
 {
 	if (on == m_bar_shown)
 		return;
-	if (on && !m_menu) {
-		m_menu = std::make_unique<Menu>(m_window, *m_graphics);
-		run([this] { m_menu->freeze({}); });
-	}
+	if (on)
+		make_menu();
 	m_bar_shown = on;
 	m_bar_events.clear();
 	if (on) {
@@ -553,10 +551,7 @@ Display::build_bar(BarState *bar)
 	}
 	if (bar->note.empty())
 		return false;
-	if (!m_menu) {
-		m_menu = std::make_unique<Menu>(m_window, *m_graphics);
-		run([this] { m_menu->freeze({}); });
-	}
+	make_menu();
 	m_menu->build_note(*bar);
 	return true;
 }
@@ -594,15 +589,21 @@ Display::show_again(BarState *bar)
 	wait_drawing();
 }
 
+void
+Display::make_menu()
+{
+	if (m_menu)
+		return;
+	m_menu = std::make_unique<Menu>(m_window, *m_graphics);
+	run([this] { m_menu->freeze({}); });
+}
+
 /* The library draws with the menu: made here if it is not yet */
 void
 Display::open_library()
 {
 	/* Its renderer first: Dear ImGui builds on it */
-	if (!m_menu) {
-		m_menu = std::make_unique<Menu>(m_window, *m_graphics);
-		run([this] { m_menu->freeze({}); });
-	}
+	make_menu();
 	m_menu->forget_input();
 }
 

@@ -64,6 +64,8 @@ namespace odin {
  * the window. */
 class Controls : public HikaruPanel {
 public:
+	/* ODIN_CONTROLLERS=none: no gamepad, joystick, mouse nor light gun is read (the tests) */
+	static bool all_off();
 	Controls(Keyboard &keys, const std::vector<GameControl> &controls, const std::vector<GameOutput> &outputs,
 	         const Settings &settings, const std::string &game);
 	~Controls();
