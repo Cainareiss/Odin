@@ -115,8 +115,19 @@ private:
 		bool wide = false;	/* 16 bits */
 		Operand x, y;		/* destination, source */
 		uint32_t states = 0, states_not_taken = 0;
+
+		/* The operation and its states, the same when not taken unless said */
+		void set(Op o, uint32_t taken, uint32_t not_taken = 0)
+		{
+			op = o;
+			states = taken;
+			states_not_taken = not_taken ? not_taken : taken;
+		}
 	};
 
+	/* The operation of the low three bits of an opcode: ADD to CP, RLC to SRL */
+	static Op alu_op(uint8_t n);
+	static Op shift_op(uint8_t n);
 	static Operand reg8(uint8_t n) { return { Operand::Kind::R8, n, 0 }; }
 	static Operand reg16(uint8_t n) { return { Operand::Kind::R16, n, 0 }; }
 	static Operand imm(uint16_t v) { return { Operand::Kind::IMM, 0, v }; }
@@ -130,9 +141,9 @@ private:
 
 	uint8_t fetch() { return m_bus.read8(m_pc++); }
 	uint16_t fetch16();
-	uint8_t rd(uint16_t addr) { return m_bus.read8(addr); }
+	uint8_t rd(uint16_t addr) const { return m_bus.read8(addr); }
 	void wr(uint16_t addr, uint8_t v) { m_bus.write8(addr, v); }
-	uint16_t rd16(uint16_t addr);
+	uint16_t rd16(uint16_t addr) const;
 	void wr16(uint16_t addr, uint16_t v);
 	void push(uint16_t v);
 	uint16_t pop();
@@ -157,6 +168,7 @@ private:
 	void alu8(Op op, const Operand &x, uint8_t v);
 	void alu16(Op op, const Operand &x, uint16_t v, bool flags_of_add);
 	uint8_t shift(Op op, uint8_t v, bool on_a);
+	void flags_inc_dec8(uint8_t v, bool up);
 	void daa();
 
 	Tlcs90Bus &m_bus;

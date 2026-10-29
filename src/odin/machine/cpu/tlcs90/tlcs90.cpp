@@ -77,7 +77,7 @@ Tlcs90::fetch16()
 }
 
 uint16_t
-Tlcs90::rd16(uint16_t addr)
+Tlcs90::rd16(uint16_t addr) const
 {
 	return static_cast<uint16_t>(rd(addr) | rd(static_cast<uint16_t>(addr + 1)) << 8);
 }
@@ -143,7 +143,7 @@ Tlcs90::get8(const Operand &o) const
 	switch (o.kind) {
 	case Operand::Kind::R8: return m_r[o.reg];
 	case Operand::Kind::IMM: return static_cast<uint8_t>(o.value);
-	case Operand::Kind::MEM: return m_bus.read8(o.value);
+	case Operand::Kind::MEM: return rd(o.value);
 	default: return 0;
 	}
 }
@@ -154,7 +154,7 @@ Tlcs90::put8(const Operand &o, uint8_t v)
 	if (o.kind == Operand::Kind::R8)
 		m_r[o.reg] = v;
 	else if (o.kind == Operand::Kind::MEM)
-		m_bus.write8(o.value, v);
+		wr(o.value, v);
 }
 
 uint16_t
@@ -163,8 +163,7 @@ Tlcs90::get16(const Operand &o) const
 	switch (o.kind) {
 	case Operand::Kind::R16: return r16(o.reg);
 	case Operand::Kind::IMM: return o.value;
-	case Operand::Kind::MEM:
-		return static_cast<uint16_t>(m_bus.read8(o.value) | m_bus.read8(static_cast<uint16_t>(o.value + 1)) << 8);
+	case Operand::Kind::MEM: return rd16(o.value);
 	default: return 0;
 	}
 }
@@ -241,115 +240,120 @@ Tlcs90::address_of(const Operand &o) const
 	return static_cast<uint16_t>(r16(o.base) + o.disp);
 }
 
+Tlcs90::Op
+Tlcs90::alu_op(uint8_t n)
+{
+	return static_cast<Op>(static_cast<uint8_t>(Op::ADD) + (n & 7));
+}
+
+Tlcs90::Op
+Tlcs90::shift_op(uint8_t n)
+{
+	return static_cast<Op>(static_cast<uint8_t>(Op::RLC) + (n & 7));
+}
+
 void
 Tlcs90::decode(Instruction &ins)
 {
 	const uint8_t b0 = fetch();
-	const auto set = [&ins](Op op, uint32_t states, uint32_t not_taken = 0) {
-		ins.op = op;
-		ins.states = states;
-		ins.states_not_taken = not_taken ? not_taken : states;
-	};
 	const auto short_mem = [this] { return mem(static_cast<uint16_t>(0xFF00 | fetch())); };
-	const auto alu = [](uint8_t n) { return static_cast<Op>(static_cast<uint8_t>(Op::ADD) + (n & 7)); };
-	const auto shifter = [](uint8_t n) { return static_cast<Op>(static_cast<uint8_t>(Op::RLC) + (n & 7)); };
 
 	ins.wide = false;
 	ins.x = ins.y = Operand();
 	switch (b0) {
-	case 0x00: set(Op::NOP, 2); return;
-	case 0x01: set(Op::HALT, 4); return;
-	case 0x02: set(Op::DI, 2); return;
-	case 0x03: set(Op::EI, 2); return;
-	case 0x07: set(Op::INCX, 10, 6); ins.x = short_mem(); return;
-	case 0x08: set(Op::EX, 2); ins.wide = true; ins.x = reg16(DE); ins.y = reg16(HL); return;
-	case 0x09: set(Op::EX, 2); ins.wide = true; ins.x = reg16(AF); ins.y = reg16(AF2); return;
-	case 0x0A: set(Op::EXX, 2); return;
-	case 0x0B: set(Op::DAA, 4); return;
-	case 0x0C: set(Op::RCF, 2); return;
-	case 0x0D: set(Op::SCF, 2); return;
-	case 0x0E: set(Op::CCF, 2); return;
-	case 0x0F: set(Op::DECX, 10, 6); ins.x = short_mem(); return;
-	case 0x10: set(Op::CPL, 2); return;
-	case 0x11: set(Op::NEG, 2); return;
+	case 0x00: ins.set(Op::NOP, 2); return;
+	case 0x01: ins.set(Op::HALT, 4); return;
+	case 0x02: ins.set(Op::DI, 2); return;
+	case 0x03: ins.set(Op::EI, 2); return;
+	case 0x07: ins.set(Op::INCX, 10, 6); ins.x = short_mem(); return;
+	case 0x08: ins.set(Op::EX, 2); ins.wide = true; ins.x = reg16(DE); ins.y = reg16(HL); return;
+	case 0x09: ins.set(Op::EX, 2); ins.wide = true; ins.x = reg16(AF); ins.y = reg16(AF2); return;
+	case 0x0A: ins.set(Op::EXX, 2); return;
+	case 0x0B: ins.set(Op::DAA, 4); return;
+	case 0x0C: ins.set(Op::RCF, 2); return;
+	case 0x0D: ins.set(Op::SCF, 2); return;
+	case 0x0E: ins.set(Op::CCF, 2); return;
+	case 0x0F: ins.set(Op::DECX, 10, 6); ins.x = short_mem(); return;
+	case 0x10: ins.set(Op::CPL, 2); return;
+	case 0x11: ins.set(Op::NEG, 2); return;
 	case 0x12: case 0x13:
-		set(b0 == 0x12 ? Op::MUL : Op::DIV, 16); ins.y = imm(fetch()); return;
+		ins.set(b0 == 0x12 ? Op::MUL : Op::DIV, 16); ins.y = imm(fetch()); return;
 	case 0x14: case 0x15: case 0x16:
-		set(Op::ADD, 6); ins.wide = true; ins.x = reg16(static_cast<uint8_t>(IX + b0 - 0x14));
+		ins.set(Op::ADD, 6); ins.wide = true; ins.x = reg16(static_cast<uint8_t>(IX + b0 - 0x14));
 		ins.y = imm(fetch16()); return;
-	case 0x17: set(Op::LDAR, 8); ins.y = imm(static_cast<uint16_t>(fetch16() + m_pc - 1)); return;
-	case 0x18: set(Op::DJNZ, 10); ins.x = reg8(B); ins.y = imm(static_cast<uint16_t>(static_cast<int8_t>(fetch()) + m_pc)); return;
+	case 0x17: ins.set(Op::LDAR, 8); ins.y = imm(static_cast<uint16_t>(fetch16() + m_pc - 1)); return;
+	case 0x18: ins.set(Op::DJNZ, 10); ins.x = reg8(B); ins.y = imm(static_cast<uint16_t>(static_cast<int8_t>(fetch()) + m_pc)); return;
 	case 0x19:
-		set(Op::DJNZ, 10); ins.wide = true; ins.x = reg16(BC);
+		ins.set(Op::DJNZ, 10); ins.wide = true; ins.x = reg16(BC);
 		ins.y = imm(static_cast<uint16_t>(static_cast<int8_t>(fetch()) + m_pc)); return;
-	case 0x1A: set(Op::JP, 8); ins.x = imm(8); ins.y = imm(fetch16()); return;
-	case 0x1B: set(Op::JR, 10); ins.x = imm(8); ins.y = imm(static_cast<uint16_t>(fetch16() + m_pc - 1)); return;
-	case 0x1C: set(Op::CALL, 14); ins.x = imm(8); ins.y = imm(fetch16()); return;
-	case 0x1D: set(Op::CALLR, 16); ins.y = imm(static_cast<uint16_t>(fetch16() + m_pc - 1)); return;
-	case 0x1E: set(Op::RET, 10); ins.x = imm(8); return;
-	case 0x1F: set(Op::RETI, 14); return;
-	case 0xFF: set(Op::SWI, 20); return;
+	case 0x1A: ins.set(Op::JP, 8); ins.x = imm(8); ins.y = imm(fetch16()); return;
+	case 0x1B: ins.set(Op::JR, 10); ins.x = imm(8); ins.y = imm(static_cast<uint16_t>(fetch16() + m_pc - 1)); return;
+	case 0x1C: ins.set(Op::CALL, 14); ins.x = imm(8); ins.y = imm(fetch16()); return;
+	case 0x1D: ins.set(Op::CALLR, 16); ins.y = imm(static_cast<uint16_t>(fetch16() + m_pc - 1)); return;
+	case 0x1E: ins.set(Op::RET, 10); ins.x = imm(8); return;
+	case 0x1F: ins.set(Op::RETI, 14); return;
+	case 0xFF: ins.set(Op::SWI, 20); return;
 	default: break;
 	}
 
 	switch (b0 & 0xF8) {
 	case 0x20:
-		if (b0 == 0x27) { set(Op::LD, 8); ins.x = reg8(A); ins.y = short_mem(); }
-		else { set(Op::LD, 2); ins.x = reg8(A); ins.y = reg8(b0 & 7); }
+		if (b0 == 0x27) { ins.set(Op::LD, 8); ins.x = reg8(A); ins.y = short_mem(); }
+		else { ins.set(Op::LD, 2); ins.x = reg8(A); ins.y = reg8(b0 & 7); }
 		return;
 	case 0x28:
-		if (b0 == 0x2F) { set(Op::LD, 8); ins.x = short_mem(); ins.y = reg8(A); }
-		else { set(Op::LD, 2); ins.x = reg8(b0 & 7); ins.y = reg8(A); }
+		if (b0 == 0x2F) { ins.set(Op::LD, 8); ins.x = short_mem(); ins.y = reg8(A); }
+		else { ins.set(Op::LD, 2); ins.x = reg8(b0 & 7); ins.y = reg8(A); }
 		return;
 	case 0x30:
-		if (b0 == 0x37) { set(Op::LD, 10); ins.x = short_mem(); ins.y = imm(fetch()); }
-		else { set(Op::LD, 4); ins.x = reg8(b0 & 7); ins.y = imm(fetch()); }
+		if (b0 == 0x37) { ins.set(Op::LD, 10); ins.x = short_mem(); ins.y = imm(fetch()); }
+		else { ins.set(Op::LD, 4); ins.x = reg8(b0 & 7); ins.y = imm(fetch()); }
 		return;
 	case 0x38:
 		ins.wide = true;
-		if (b0 == 0x3F) { set(Op::LD, 14); ins.x = short_mem(); ins.y = imm(fetch16()); return; }
+		if (b0 == 0x3F) { ins.set(Op::LD, 14); ins.x = short_mem(); ins.y = imm(fetch16()); return; }
 		if (b0 == 0x3B) break;
-		set(Op::LD, 6); ins.x = reg16(b0 & 7); ins.y = imm(fetch16()); return;
+		ins.set(Op::LD, 6); ins.x = reg16(b0 & 7); ins.y = imm(fetch16()); return;
 	case 0x40:
 		ins.wide = true;
-		if (b0 == 0x47) { set(Op::LD, 10); ins.x = reg16(HL); ins.y = short_mem(); return; }
+		if (b0 == 0x47) { ins.set(Op::LD, 10); ins.x = reg16(HL); ins.y = short_mem(); return; }
 		if (b0 == 0x43) break;
-		set(Op::LD, 4); ins.x = reg16(HL); ins.y = reg16(b0 & 7); return;
+		ins.set(Op::LD, 4); ins.x = reg16(HL); ins.y = reg16(b0 & 7); return;
 	case 0x48:
 		ins.wide = true;
-		if (b0 == 0x4F) { set(Op::LD, 10); ins.x = short_mem(); ins.y = reg16(HL); return; }
+		if (b0 == 0x4F) { ins.set(Op::LD, 10); ins.x = short_mem(); ins.y = reg16(HL); return; }
 		if (b0 == 0x4B) break;
-		set(Op::LD, 4); ins.x = reg16(b0 & 7); ins.y = reg16(HL); return;
+		ins.set(Op::LD, 4); ins.x = reg16(b0 & 7); ins.y = reg16(HL); return;
 	case 0x50:
 	case 0x58:
 		if ((b0 & 7) == 3 || (b0 & 7) == 7)
 			break;
-		set(b0 < 0x58 ? Op::PUSH : Op::POP, b0 < 0x58 ? 8 : 10);
+		ins.set(b0 < 0x58 ? Op::PUSH : Op::POP, b0 < 0x58 ? 8 : 10);
 		ins.wide = true;
 		ins.x = reg16((b0 & 7) == SP ? AF : b0 & 7);
 		return;
-	case 0x60: set(alu(b0), 8); ins.x = reg8(A); ins.y = short_mem(); return;
-	case 0x68: set(alu(b0), 4); ins.x = reg8(A); ins.y = imm(fetch()); return;
-	case 0x70: set(alu(b0), 10); ins.wide = true; ins.x = reg16(HL); ins.y = short_mem(); return;
-	case 0x78: set(alu(b0), 6); ins.wide = true; ins.x = reg16(HL); ins.y = imm(fetch16()); return;
+	case 0x60: ins.set(alu_op(b0), 8); ins.x = reg8(A); ins.y = short_mem(); return;
+	case 0x68: ins.set(alu_op(b0), 4); ins.x = reg8(A); ins.y = imm(fetch()); return;
+	case 0x70: ins.set(alu_op(b0), 10); ins.wide = true; ins.x = reg16(HL); ins.y = short_mem(); return;
+	case 0x78: ins.set(alu_op(b0), 6); ins.wide = true; ins.x = reg16(HL); ins.y = imm(fetch16()); return;
 	case 0x80:
 	case 0x88:
-		set(b0 < 0x88 ? Op::INC : Op::DEC, (b0 & 7) == 7 ? 10 : 2);
+		ins.set(b0 < 0x88 ? Op::INC : Op::DEC, (b0 & 7) == 7 ? 10 : 2);
 		ins.x = (b0 & 7) == 7 ? short_mem() : reg8(b0 & 7);
 		return;
 	case 0x90:
 	case 0x98:
 		if ((b0 & 7) == 3)
 			break;
-		if ((b0 & 7) == 7) { set(b0 < 0x98 ? Op::INCW : Op::DECW, 14); ins.x = short_mem(); return; }
-		set(b0 < 0x98 ? Op::INC : Op::DEC, 4); ins.wide = true; ins.x = reg16(b0 & 7); return;
-	case 0xA0: set(shifter(b0), 2); ins.x = reg8(A); return;
-	case 0xA8: set(Op::BIT, 8); ins.x = imm(b0 & 7); ins.y = short_mem(); return;
-	case 0xB0: set(Op::RES, 12); ins.x = imm(b0 & 7); ins.y = short_mem(); return;
-	case 0xB8: set(Op::SET, 12); ins.x = imm(b0 & 7); ins.y = short_mem(); return;
+		if ((b0 & 7) == 7) { ins.set(b0 < 0x98 ? Op::INCW : Op::DECW, 14); ins.x = short_mem(); return; }
+		ins.set(b0 < 0x98 ? Op::INC : Op::DEC, 4); ins.wide = true; ins.x = reg16(b0 & 7); return;
+	case 0xA0: ins.set(shift_op(b0), 2); ins.x = reg8(A); return;
+	case 0xA8: ins.set(Op::BIT, 8); ins.x = imm(b0 & 7); ins.y = short_mem(); return;
+	case 0xB0: ins.set(Op::RES, 12); ins.x = imm(b0 & 7); ins.y = short_mem(); return;
+	case 0xB8: ins.set(Op::SET, 12); ins.x = imm(b0 & 7); ins.y = short_mem(); return;
 	case 0xC0:
 	case 0xC8:
-		set(Op::JR, 8, 4); ins.x = imm(b0 & 15);
+		ins.set(Op::JR, 8, 4); ins.x = imm(b0 & 15);
 		ins.y = imm(static_cast<uint16_t>(static_cast<int8_t>(fetch()) + m_pc));
 		return;
 	case 0xE0: case 0xE8: case 0xF0: case 0xF8:
@@ -358,7 +362,7 @@ Tlcs90::decode(Instruction &ins)
 	default:
 		break;
 	}
-	set(Op::UNKNOWN, 2);
+	ins.set(Op::UNKNOWN, 2);
 }
 
 /* The prefixes E0 to FE: a memory operand (E0-F7) or a register (F8-FE),
@@ -367,13 +371,6 @@ Tlcs90::decode(Instruction &ins)
 void
 Tlcs90::decode_prefixed(Instruction &ins, uint8_t b0)
 {
-	const auto set = [&ins](Op op, uint32_t states, uint32_t not_taken = 0) {
-		ins.op = op;
-		ins.states = states;
-		ins.states_not_taken = not_taken ? not_taken : states;
-	};
-	const auto alu = [](uint8_t n) { return static_cast<Op>(static_cast<uint8_t>(Op::ADD) + (n & 7)); };
-	const auto shifter = [](uint8_t n) { return static_cast<Op>(static_cast<uint8_t>(Op::RLC) + (n & 7)); };
 
 	if (b0 >= 0xF8) {
 		/* The register g: 8 bits B to A, or 16 bits BC to SP */
@@ -381,38 +378,38 @@ Tlcs90::decode_prefixed(Instruction &ins, uint8_t b0)
 
 		switch (b1 & 0xF8) {
 		case 0x10:
-			if (b1 == 0x12 || b1 == 0x13) { set(b1 == 0x12 ? Op::MUL : Op::DIV, 18); ins.y = reg8(g); return; }
+			if (b1 == 0x12 || b1 == 0x13) { ins.set(b1 == 0x12 ? Op::MUL : Op::DIV, 18); ins.y = reg8(g); return; }
 			if (b1 >= 0x14 && b1 <= 0x16) {
-				set(Op::ADD, 8); ins.wide = true; ins.x = reg16(static_cast<uint8_t>(IX + b1 - 0x14)); ins.y = reg16(g);
+				ins.set(Op::ADD, 8); ins.wide = true; ins.x = reg16(static_cast<uint8_t>(IX + b1 - 0x14)); ins.y = reg16(g);
 				return;
 			}
 			break;
-		case 0x18: set(Op::TSET, 8); ins.x = imm(b1 & 7); ins.y = reg8(g); return;
+		case 0x18: ins.set(Op::TSET, 8); ins.x = imm(b1 & 7); ins.y = reg8(g); return;
 		case 0x30:
 			if (b1 == 0x37) break;
-			set(Op::LD, 4); ins.x = reg8(b1 & 7); ins.y = reg8(g); return;
+			ins.set(Op::LD, 4); ins.x = reg8(b1 & 7); ins.y = reg8(g); return;
 		case 0x38:
 			if (b1 == 0x3B || b1 == 0x3F) break;
-			set(Op::LD, 6); ins.wide = true; ins.x = reg16(b1 & 7); ins.y = reg16(g); return;
+			ins.set(Op::LD, 6); ins.wide = true; ins.x = reg16(b1 & 7); ins.y = reg16(g); return;
 		case 0x58:
 			if (b0 != 0xFE) break;
-			set(static_cast<Op>(static_cast<uint8_t>(Op::LDI) + (b1 & 7)), 18, 14);
+			ins.set(static_cast<Op>(static_cast<uint8_t>(Op::LDI) + (b1 & 7)), 18, 14);
 			return;
-		case 0x60: set(alu(b1), 4); ins.x = reg8(A); ins.y = reg8(g); return;
-		case 0x68: set(alu(b1), 6); ins.x = reg8(g); ins.y = imm(fetch()); return;
-		case 0x70: set(alu(b1), 8); ins.wide = true; ins.x = reg16(HL); ins.y = reg16(g); return;
-		case 0xA0: set(shifter(b1), 4); ins.x = reg8(g); return;
-		case 0xA8: set(Op::BIT, 4); ins.x = imm(b1 & 7); ins.y = reg8(g); return;
-		case 0xB0: set(Op::RES, 4); ins.x = imm(b1 & 7); ins.y = reg8(g); return;
-		case 0xB8: set(Op::SET, 4); ins.x = imm(b1 & 7); ins.y = reg8(g); return;
+		case 0x60: ins.set(alu_op(b1), 4); ins.x = reg8(A); ins.y = reg8(g); return;
+		case 0x68: ins.set(alu_op(b1), 6); ins.x = reg8(g); ins.y = imm(fetch()); return;
+		case 0x70: ins.set(alu_op(b1), 8); ins.wide = true; ins.x = reg16(HL); ins.y = reg16(g); return;
+		case 0xA0: ins.set(shift_op(b1), 4); ins.x = reg8(g); return;
+		case 0xA8: ins.set(Op::BIT, 4); ins.x = imm(b1 & 7); ins.y = reg8(g); return;
+		case 0xB0: ins.set(Op::RES, 4); ins.x = imm(b1 & 7); ins.y = reg8(g); return;
+		case 0xB8: ins.set(Op::SET, 4); ins.x = imm(b1 & 7); ins.y = reg8(g); return;
 		case 0xD0:
 		case 0xD8:
 			if (b0 != 0xFE) break;
-			set(Op::RET, 14, 6); ins.x = imm(b1 & 15); return;
+			ins.set(Op::RET, 14, 6); ins.x = imm(b1 & 15); return;
 		default:
 			break;
 		}
-		set(Op::UNKNOWN, 2);
+		ins.set(Op::UNKNOWN, 2);
 		return;
 	}
 
@@ -430,72 +427,72 @@ Tlcs90::decode_prefixed(Instruction &ins, uint8_t b0)
 	if (!destination) {
 		switch (b1 & 0xF8) {
 		case 0x10:
-			if (b1 == 0x10 || b1 == 0x11) { set(b1 == 0x10 ? Op::RLD : Op::RRD, 12 + extra); ins.x = m; return; }
-			if (b1 == 0x12 || b1 == 0x13) { set(b1 == 0x12 ? Op::MUL : Op::DIV, 18 + extra); ins.y = m; return; }
+			if (b1 == 0x10 || b1 == 0x11) { ins.set(b1 == 0x10 ? Op::RLD : Op::RRD, 12 + extra); ins.x = m; return; }
+			if (b1 == 0x12 || b1 == 0x13) { ins.set(b1 == 0x12 ? Op::MUL : Op::DIV, 18 + extra); ins.y = m; return; }
 			if (b1 >= 0x14 && b1 <= 0x16) {
-				set(Op::ADD, 8 + extra); ins.wide = true; ins.x = reg16(static_cast<uint8_t>(IX + b1 - 0x14)); ins.y = m;
+				ins.set(Op::ADD, 8 + extra); ins.wide = true; ins.x = reg16(static_cast<uint8_t>(IX + b1 - 0x14)); ins.y = m;
 				return;
 			}
 			break;
-		case 0x18: set(Op::TSET, 12 + extra); ins.x = imm(b1 & 7); ins.y = m; return;
-		case 0x28: set(Op::LD, 6 + extra); ins.x = reg8(b1 & 7); ins.y = m; return;
+		case 0x18: ins.set(Op::TSET, 12 + extra); ins.x = imm(b1 & 7); ins.y = m; return;
+		case 0x28: ins.set(Op::LD, 6 + extra); ins.x = reg8(b1 & 7); ins.y = m; return;
 		case 0x48:
 			if (b1 == 0x4B || b1 == 0x4F) break;
-			set(Op::LD, 8 + extra); ins.wide = true; ins.x = reg16(b1 & 7); ins.y = m; return;
+			ins.set(Op::LD, 8 + extra); ins.wide = true; ins.x = reg16(b1 & 7); ins.y = m; return;
 		case 0x50:
 			if (b1 == 0x53 || b1 == 0x57) break;
-			set(Op::EX, 14 + extra); ins.wide = true; ins.x = m; ins.y = reg16(b1 & 7); return;
-		case 0x60: set(alu(b1), 6 + extra); ins.x = reg8(A); ins.y = m; return;
-		case 0x70: set(alu(b1), 8 + extra); ins.wide = true; ins.x = reg16(HL); ins.y = m; return;
+			ins.set(Op::EX, 14 + extra); ins.wide = true; ins.x = m; ins.y = reg16(b1 & 7); return;
+		case 0x60: ins.set(alu_op(b1), 6 + extra); ins.x = reg8(A); ins.y = m; return;
+		case 0x70: ins.set(alu_op(b1), 8 + extra); ins.wide = true; ins.x = reg16(HL); ins.y = m; return;
 		case 0x80:
-			if (b1 == 0x87) { set(Op::INC, 8 + extra); ins.x = m; return; }
+			if (b1 == 0x87) { ins.set(Op::INC, 8 + extra); ins.x = m; return; }
 			break;
 		case 0x88:
-			if (b1 == 0x8F) { set(Op::DEC, 8 + extra); ins.x = m; return; }
+			if (b1 == 0x8F) { ins.set(Op::DEC, 8 + extra); ins.x = m; return; }
 			break;
 		case 0x90:
-			if (b1 == 0x97) { set(Op::INCW, 12 + extra); ins.x = m; return; }
+			if (b1 == 0x97) { ins.set(Op::INCW, 12 + extra); ins.x = m; return; }
 			break;
 		case 0x98:
-			if (b1 == 0x9F) { set(Op::DECW, 12 + extra); ins.x = m; return; }
+			if (b1 == 0x9F) { ins.set(Op::DECW, 12 + extra); ins.x = m; return; }
 			break;
-		case 0xA0: set(shifter(b1), 8 + extra); ins.x = m; return;
-		case 0xA8: set(Op::BIT, 6 + extra); ins.x = imm(b1 & 7); ins.y = m; return;
-		case 0xB0: set(Op::RES, 10 + extra); ins.x = imm(b1 & 7); ins.y = m; return;
-		case 0xB8: set(Op::SET, 10 + extra); ins.x = imm(b1 & 7); ins.y = m; return;
+		case 0xA0: ins.set(shift_op(b1), 8 + extra); ins.x = m; return;
+		case 0xA8: ins.set(Op::BIT, 6 + extra); ins.x = imm(b1 & 7); ins.y = m; return;
+		case 0xB0: ins.set(Op::RES, 10 + extra); ins.x = imm(b1 & 7); ins.y = m; return;
+		case 0xB8: ins.set(Op::SET, 10 + extra); ins.x = imm(b1 & 7); ins.y = m; return;
 		default:
 			break;
 		}
-		set(Op::UNKNOWN, 2);
+		ins.set(Op::UNKNOWN, 2);
 		return;
 	}
 
 	switch (b1 & 0xF8) {
-	case 0x20: set(Op::LD, 6 + extra); ins.x = m; ins.y = reg8(b1 & 7); return;
+	case 0x20: ins.set(Op::LD, 6 + extra); ins.x = m; ins.y = reg8(b1 & 7); return;
 	case 0x30:
-		if (b1 == 0x37) { set(Op::LD, 8 + extra); ins.x = m; ins.y = imm(fetch()); return; }
+		if (b1 == 0x37) { ins.set(Op::LD, 8 + extra); ins.x = m; ins.y = imm(fetch()); return; }
 		break;
 	case 0x38:
-		if (b1 == 0x3F) { set(Op::LD, 12 + extra); ins.wide = true; ins.x = m; ins.y = imm(fetch16()); return; }
+		if (b1 == 0x3F) { ins.set(Op::LD, 12 + extra); ins.wide = true; ins.x = m; ins.y = imm(fetch16()); return; }
 		/* LDA rr, the address itself; only the indexed forms */
-		if (indexed && b1 != 0x3B) { set(Op::LDA, 6 + extra); ins.wide = true; ins.x = reg16(b1 & 7); ins.y = itself(m); return; }
+		if (indexed && b1 != 0x3B) { ins.set(Op::LDA, 6 + extra); ins.wide = true; ins.x = reg16(b1 & 7); ins.y = itself(m); return; }
 		break;
 	case 0x40:
 		if (b1 == 0x43 || b1 == 0x47) break;
-		set(Op::LD, 8 + extra); ins.wide = true; ins.x = m; ins.y = reg16(b1 & 7); return;
+		ins.set(Op::LD, 8 + extra); ins.wide = true; ins.x = m; ins.y = reg16(b1 & 7); return;
 	case 0x68:
-		set(alu(b1), (b1 == 0x6F ? 8 : 10) + extra); ins.x = m; ins.y = imm(fetch()); return;
+		ins.set(alu_op(b1), (b1 == 0x6F ? 8 : 10) + extra); ins.x = m; ins.y = imm(fetch()); return;
 	case 0xC0:
 	case 0xC8:
 		/* JP [cc,] to the address itself: (gg) is gg, (mn) is mn */
-		set(Op::JP, 8 + extra, 6 + extra); ins.x = imm(b1 & 15); ins.y = itself(m); return;
+		ins.set(Op::JP, 8 + extra, 6 + extra); ins.x = imm(b1 & 15); ins.y = itself(m); return;
 	case 0xD0:
 	case 0xD8:
-		set(Op::CALL, 14 + extra, 6 + extra); ins.x = imm(b1 & 15); ins.y = itself(m); return;
+		ins.set(Op::CALL, 14 + extra, 6 + extra); ins.x = imm(b1 & 15); ins.y = itself(m); return;
 	default:
 		break;
 	}
-	set(Op::UNKNOWN, 2);
+	ins.set(Op::UNKNOWN, 2);
 }
 
 void
@@ -649,6 +646,17 @@ Tlcs90::shift(Op op, uint8_t v, bool on_a)
 	return result;
 }
 
+/* The flags of an 8-bit increment or decrement to `v`: C kept, X when 0 */
+void
+Tlcs90::flags_inc_dec8(uint8_t v, bool up)
+{
+	m_f = static_cast<uint8_t>((m_f & (FLAG_I | FLAG_C)) | sz(v) | (v ? 0 : FLAG_X));
+	if (up)
+		m_f |= static_cast<uint8_t>((v == 0x80 ? FLAG_V : 0) | ((v & 15) == 0 ? FLAG_H : 0));
+	else
+		m_f |= static_cast<uint8_t>(FLAG_N | (v == 0x7F ? FLAG_V : 0) | ((v & 15) == 15 ? FLAG_H : 0));
+}
+
 void
 Tlcs90::daa()
 {
@@ -698,14 +706,11 @@ Tlcs90::execute(const Instruction &ins)
 	case Op::DECX: {
 		if (!(m_f & FLAG_X))
 			return ins.states_not_taken;
-		const uint8_t v = static_cast<uint8_t>(get8(x) + (ins.op == Op::INCX ? 1 : -1));
+		const bool up = ins.op == Op::INCX;
+		const uint8_t v = static_cast<uint8_t>(get8(x) + (up ? 1 : 0xFF));
 
 		put8(x, v);
-		m_f = static_cast<uint8_t>((m_f & (FLAG_I | FLAG_C)) | sz(v) | (v ? 0 : FLAG_X));
-		if (ins.op == Op::INCX)
-			m_f |= static_cast<uint8_t>((v == 0x80 ? FLAG_V : 0) | ((v & 15) == 0 ? FLAG_H : 0));
-		else
-			m_f |= static_cast<uint8_t>(FLAG_N | (v == 0x7F ? FLAG_V : 0) | ((v & 15) == 15 ? FLAG_H : 0));
+		flags_inc_dec8(v, up);
 		break;
 	}
 	case Op::EX:
@@ -847,14 +852,11 @@ Tlcs90::execute(const Instruction &ins)
 			put16(x, v);
 			m_f = static_cast<uint8_t>(v ? m_f & ~FLAG_X : m_f | FLAG_X);
 		} else {
-			const uint8_t v = static_cast<uint8_t>(get8(x) + (ins.op == Op::INC ? 1 : 0xFF));
+			const bool up = ins.op == Op::INC;
+			const uint8_t v = static_cast<uint8_t>(get8(x) + (up ? 1 : 0xFF));
 
 			put8(x, v);
-			m_f = static_cast<uint8_t>((m_f & (FLAG_I | FLAG_C)) | sz(v) | (v ? 0 : FLAG_X));
-			if (ins.op == Op::INC)
-				m_f |= static_cast<uint8_t>((v == 0x80 ? FLAG_V : 0) | ((v & 15) == 0 ? FLAG_H : 0));
-			else
-				m_f |= static_cast<uint8_t>(FLAG_N | (v == 0x7F ? FLAG_V : 0) | ((v & 15) == 15 ? FLAG_H : 0));
+			flags_inc_dec8(v, up);
 		}
 		break;
 	case Op::INCW:
