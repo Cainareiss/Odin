@@ -179,6 +179,8 @@ uint32_t Arm7::run_decoded(uint32_t done, uint32_t cycles)
 		}
 		const uint32_t addr = m_pc & ~3u;
 		const uint32_t at = addr & m_ram.mask;
+		/* in_decoded_memory() written out: the loop keeps its registers
+		 * across the instruction this way */
 		if (addr >= m_ram.size || at >= (DECODED_PAGES << DECODED_PAGE)) {
 			break;
 		}
@@ -196,14 +198,8 @@ uint32_t Arm7::run_decoded(uint32_t done, uint32_t cycles)
 			}
 		}
 
-		const uint8_t *p = m_ram.base + at;
-		Decoded &d = page[(at >> 2) & ((1u << (DECODED_PAGE - 2)) - 1)];
-		const uint32_t op = le32(p);
-		if (d.op != op || !d.run) {
-			d.op = op;
-			d.run = decode(op);
-		}
-		const Run does = d.run;
+		const uint32_t op = le32(m_ram.base + at);
+		const Run does = refreshed(page[word_in_page(at)], op);
 
 		m_cycles = 0;
 		m_op_pc = m_pc;
@@ -554,7 +550,7 @@ void Arm7::settle()
 	for (uint32_t i = 0; i < count; i++) {
 		const uint32_t addr = m_pc & ~3u;
 
-		if (m_decoded_on && addr < m_ram.size && (addr & m_ram.mask) < (DECODED_PAGES << DECODED_PAGE)) {
+		if (m_decoded_on && in_decoded_memory(addr)) {
 			step_decoded();
 		} else {
 			step();
@@ -916,20 +912,14 @@ uint32_t Arm7::step_decoded()
 	uint32_t op;
 	Run does;
 
-	if (addr < m_ram.size && at < (DECODED_PAGES << DECODED_PAGE)) {
-		const uint8_t *p = m_ram.base + at;
+	if (in_decoded_memory(addr)) {
 		Decoded *page = m_decoded[at >> DECODED_PAGE].get();
 
 		if (!page) {
 			page = decoded_page(at >> DECODED_PAGE);
 		}
-		Decoded &d = page[(at >> 2) & ((1u << (DECODED_PAGE - 2)) - 1)];
-		op = le32(p);
-		if (d.op != op || !d.run) {
-			d.op = op;
-			d.run = decode(op);
-		}
-		does = d.run;
+		op = le32(m_ram.base + at);
+		does = refreshed(page[word_in_page(at)], op);
 	} else {
 		op = m_bus.read32(addr);
 		does = decode(op);
@@ -951,7 +941,7 @@ uint16_t Arm7::condition_pass(uint32_t cc)
 
 Arm7::Decoded *Arm7::decoded_page(uint32_t page)
 {
-	m_decoded[page] = std::make_unique<Decoded[]>(1u << (DECODED_PAGE - 2));
+	m_decoded[page] = std::make_unique<Decoded[]>(DECODED_WORDS);
 	return m_decoded[page].get();
 }
 

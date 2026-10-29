@@ -260,6 +260,23 @@ private:
 	};
 	static constexpr uint32_t DECODED_PAGE = 12;
 	static constexpr uint32_t DECODED_PAGES = (8u << 20) >> DECODED_PAGE;
+	static constexpr uint32_t DECODED_WORDS = 1u << (DECODED_PAGE - 2);
+	/* The word of `at` in its page */
+	static uint32_t word_in_page(uint32_t at) { return (at >> 2) & (DECODED_WORDS - 1); }
+	/* Whether `addr` is in the memory that is decoded and translated */
+	bool in_decoded_memory(uint32_t addr) const
+	{
+		return addr < m_ram.size && (addr & m_ram.mask) < (DECODED_PAGES << DECODED_PAGE);
+	}
+	/* What runs `op`, as `d` keeps it: decoded again when the word changed */
+	static Run refreshed(Decoded &d, uint32_t op)
+	{
+		if (d.op != op || !d.run) {
+			d.op = op;
+			d.run = decode(op);
+		}
+		return d.run;
+	}
 	friend struct Arm7Ops;
 	static Run decode(uint32_t op);
 	Decoded *decoded_page(uint32_t page);

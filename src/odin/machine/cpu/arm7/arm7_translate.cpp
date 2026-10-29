@@ -34,8 +34,6 @@ namespace odin {
 
 namespace {
 
-constexpr uint32_t PAGE_WORDS = 1u << 10;	/* of a page of 4 KB */
-
 /* An instruction after which the program never goes on to the next one
  * when it runs: B, BL, BX, SWI, a load of PC alone or in a list. The
  * block stops there; any other change of PC is seen after the
@@ -102,7 +100,7 @@ uint32_t Arm7::run_translated(uint32_t done, uint32_t cycles)
 		}
 		const uint32_t addr = m_pc & ~3u;
 		const uint32_t at = addr & m_ram.mask;
-		if (addr >= m_ram.size || at >= (DECODED_PAGES << DECODED_PAGE)) {
+		if (!in_decoded_memory(addr)) {
 			break;
 		}
 		if (m_turn_kept && turn_watched()) {
@@ -142,7 +140,7 @@ void Arm7::drop_block(uint32_t addr)
 	const uint32_t at = addr & m_ram.mask;
 
 	if (uint32_t *page = m_blocks[at >> DECODED_PAGE].get()) {
-		page[(at >> 2) & (PAGE_WORDS - 1)] = 0;
+		page[word_in_page(at)] = 0;
 	}
 }
 
@@ -154,22 +152,22 @@ uint32_t Arm7::host_block(uint32_t addr, uint32_t at)
 		return 0;
 	}
 	std::unique_ptr<uint32_t[]> &page = m_blocks[at >> DECODED_PAGE];
-	if (page && page[(at >> 2) & (PAGE_WORDS - 1)]) {
-		return page[(at >> 2) & (PAGE_WORDS - 1)];
+	if (page && page[word_in_page(at)]) {
+		return page[word_in_page(at)];
 	}
 	if (!m_host->room()) {
 		drop_blocks();
 	}
 	if (!page) {
-		page = std::make_unique<uint32_t[]>(PAGE_WORDS);
-		m_block_words[at >> DECODED_PAGE] = std::make_unique<uint8_t[]>(PAGE_WORDS);
+		page = std::make_unique<uint32_t[]>(DECODED_WORDS);
+		m_block_words[at >> DECODED_PAGE] = std::make_unique<uint8_t[]>(DECODED_WORDS);
 	}
 
 	uint32_t words = 0;
 	const uint32_t place = translate(addr, words);
 
-	m_block_words[at >> DECODED_PAGE][(at >> 2) & (PAGE_WORDS - 1)] = static_cast<uint8_t>(words);
-	page[(at >> 2) & (PAGE_WORDS - 1)] = place;
+	m_block_words[at >> DECODED_PAGE][word_in_page(at)] = static_cast<uint8_t>(words);
+	page[word_in_page(at)] = place;
 	/* The branches to it written before, its own among them, go
 	 * straight to it now, as those written after it do. */
 	if (const auto waiting = m_unlinked.find(addr); waiting != m_unlinked.end()) {
@@ -187,7 +185,7 @@ uint32_t Arm7::host_block(uint32_t addr, uint32_t at)
 bool Arm7::turn_inside(uint32_t addr, uint32_t at) const
 {
 	const uint8_t *const words = m_block_words[at >> DECODED_PAGE].get();
-	const uint32_t end = addr + 4u * (words ? words[(at >> 2) & (PAGE_WORDS - 1)] : 0u);
+	const uint32_t end = addr + 4u * (words ? words[word_in_page(at)] : 0u);
 	const auto inside = [addr, end](uint32_t pc) { return pc > addr && pc < end; };
 
 	return inside(m_turn_start.pc) || (m_turn_left && inside(m_turn_left_state.pc));
@@ -198,11 +196,11 @@ uint32_t Arm7::block_at(uint32_t addr) const
 {
 	const uint32_t at = addr & m_ram.mask;
 
-	if ((addr & 3) || addr >= m_ram.size || at >= (DECODED_PAGES << DECODED_PAGE)) {
+	if ((addr & 3) || !in_decoded_memory(addr)) {
 		return 0;
 	}
 	const uint32_t *page = m_blocks[at >> DECODED_PAGE].get();
-	return page ? page[(at >> 2) & (PAGE_WORDS - 1)] : 0;
+	return page ? page[word_in_page(at)] : 0;
 }
 
 /* The instructions from `addr` on, up to one after which the program
@@ -608,13 +606,7 @@ bool Arm7::block_in_place(uint32_t pc, uint32_t op, Run does)
 /* For host code that went elsewhere: the block at PC, if it is written. */
 uintptr_t Arm7::linked(Arm7 &c)
 {
-	const uint32_t at = c.m_pc & c.m_ram.mask;
-
-	if ((c.m_pc & 3) || c.m_pc >= c.m_ram.size || at >= (DECODED_PAGES << DECODED_PAGE)) {
-		return 0;
-	}
-	const uint32_t *page = c.m_blocks[at >> DECODED_PAGE].get();
-	const uint32_t place = page ? page[(at >> 2) & (PAGE_WORDS - 1)] : 0;
+	const uint32_t place = c.block_at(c.m_pc);
 
 	if (!place) {
 		return 0;
@@ -626,7 +618,7 @@ uintptr_t Arm7::linked(Arm7 &c)
 
 		c.turn_away(now - c.m_turn_mark);
 		c.m_turn_mark = now;
-		if (c.m_turn_kept && (c.turn_watched() || c.turn_inside(c.m_pc, at))) {
+		if (c.m_turn_kept && (c.turn_watched() || c.turn_inside(c.m_pc, c.m_pc & c.m_ram.mask))) {
 			return 0;
 		}
 	}
