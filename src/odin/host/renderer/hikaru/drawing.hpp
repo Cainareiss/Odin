@@ -107,6 +107,8 @@ struct SceneDebug {
 class Drawing {
 public:
 	static constexpr unsigned KEPT = 5;
+	/* A kept picture as read_kept() gives it: RGBA at the size of the screen */
+	static constexpr size_t PICTURE_SIZE = size_t{SCREEN_WIDTH} * SCREEN_HEIGHT * 4;
 
 	/* With OpenGL, on the thread its context is current on; with Vulkan,
 	 * on that card (vk_common.hpp) */

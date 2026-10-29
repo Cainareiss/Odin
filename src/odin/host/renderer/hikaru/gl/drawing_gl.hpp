@@ -117,6 +117,10 @@ public:
 	}
 
 private:
+	/* Layers peeled at a time, each with a query of whether it drew, read
+	 * once the batch is done */
+	static constexpr unsigned PEEL_BATCH = 8;
+
 	unsigned width() const { return SCREEN_WIDTH * m_scale; }
 	unsigned height() const { return SCREEN_HEIGHT * m_scale; }
 	void build_pictures();
@@ -260,7 +264,7 @@ private:
 		GLuint depth, layer, info, layer_fb;
 		GLuint color[2], last[2], color_fb[2];
 		GLuint blend, show;
-		GLuint any[8];
+		GLuint any[PEEL_BATCH];
 	} m_peel{};
 
 	/* The stamps not in use, to be put again */

@@ -198,7 +198,7 @@ public:
 	 * saved, and comes back as all of them. The textures are decoded
 	 * again from the texture RAM. */
 	static constexpr unsigned PICTURES = Drawing::KEPT;
-	static constexpr size_t PICTURE_SIZE = size_t{WIDTH} * HEIGHT * 4;
+	static constexpr size_t PICTURE_SIZE = Drawing::PICTURE_SIZE;
 	struct Counters {
 		uint32_t num_lists;
 		uint32_t shown;
@@ -307,7 +307,8 @@ private:
 	odin_display_list_t *m_list;
 	Frame m_frame;
 	/* The command processor builds its lists in three buffers. */
-	ListTextures m_list_textures[3];
+	static constexpr unsigned LIST_BUFFERS = 3;
+	ListTextures m_list_textures[LIST_BUFFERS];
 
 	/* What the card of the host does for it */
 	std::unique_ptr<Drawing> m_card;

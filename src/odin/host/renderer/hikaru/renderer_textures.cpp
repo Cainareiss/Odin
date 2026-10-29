@@ -103,7 +103,8 @@ TextureCache::sampler(const odin_texhead_t &th)
 {
 	const uint32_t key = (odin_tex_mirroru(&th) << 0) | (odin_tex_repeatu(&th) << 1) |
 	                     (odin_tex_mirrorv(&th) << 2) | (odin_tex_repeatv(&th) << 3) |
-	                     (odin_tex_filter(&th) << 4) | ((th.w0C1 >> 20 & 0xFF) << 6);
+	                     (odin_tex_filter(&th) << 4) |
+	                     (static_cast<uint32_t>(static_cast<uint8_t>(odin_tex_bias(&th))) << 6);
 	const auto found = m_samplers.find(key);
 
 	if (found != m_samplers.end())

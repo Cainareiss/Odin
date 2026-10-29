@@ -297,7 +297,7 @@ Renderer::show()
 		 * fades in, as on the cabinet. */
 		m_last.back = (rate > 0 && n1 < 2 && n2 < 2) ? static_cast<int>(n2) : -1;
 		m_last.rate = rate;
-		m_last.slot = num % 3;
+		m_last.slot = num % LIST_BUFFERS;
 		m_last.views = 0;
 
 		/* Every list that has translucent fragments is then drawn
@@ -309,7 +309,7 @@ Renderer::show()
 		draw_list();
 
 		if (num > 0)
-			m_next = static_cast<int32_t>((num - 1) % 3);
+			m_next = static_cast<int32_t>((num - 1) % LIST_BUFFERS);
 		m_num_lists = num + 1;
 	}
 

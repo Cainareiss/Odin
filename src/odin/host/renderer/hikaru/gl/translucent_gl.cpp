@@ -47,7 +47,6 @@ constexpr GLsizeiptr NODE_SIZE = 32;
 /* The texture unit of the colour below the fragments */
 constexpr GLenum UNIT_BELOW = 5;
 constexpr GLenum UNIT_PEEL_COLOR = 10, UNIT_PEEL_LAYER = 11, UNIT_PEEL_INFO = 12;
-constexpr unsigned PEEL_BATCH = 8;
 
 GLuint
 pair_framebuffer(GLuint first, GLuint second)

@@ -42,7 +42,7 @@ namespace odin {
 /* Everything the command processor holds from one frame to the next.
  * Plain data. */
 struct AntarcticState {
-	static constexpr uint32_t VIEWPORTS = 8;
+	static constexpr uint32_t VIEWPORTS = ODIN_VIEWPORTS;
 	/* Base plus index on 16 bits (X360 8252EE98); von4 sets bases above
 	 * 0x5000. */
 	static constexpr uint32_t MATERIALS = 65536;

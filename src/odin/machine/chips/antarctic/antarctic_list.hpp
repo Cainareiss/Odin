@@ -56,8 +56,12 @@ enum {
 	ODIN_POLYTYPE_SHADOW_B = 3,
 	ODIN_POLYTYPE_TRANSPARENT = 4,	/* DreamZzz calls it punchthrough */
 	ODIN_POLYTYPE_BACKGROUND = 5,
-	ODIN_POLYTYPE_TRANSLUCENT = 6
+	ODIN_POLYTYPE_TRANSLUCENT = 6,
+	ODIN_POLYTYPES = 8		/* types of three bits */
 };
+
+/* The viewports of a list, each drawn from an empty depth buffer */
+enum { ODIN_VIEWPORTS = 8 };
 
 /* Which instructions an object has received */
 enum {
@@ -270,8 +274,8 @@ typedef struct {
 	/* The 194 table of the four lights of each lightset */
 	uint16_t		(*ls_tables)[4][16];
 
-	odin_mesh_t		*mesh_list[8][8];
-	uint32_t		 num_meshes[8][8];
+	odin_mesh_t		*mesh_list[ODIN_VIEWPORTS][ODIN_POLYTYPES];
+	uint32_t		 num_meshes[ODIN_VIEWPORTS][ODIN_POLYTYPES];
 	uint32_t		 total_meshes;
 
 	/* The vertices of all the meshes, and their triangles: three

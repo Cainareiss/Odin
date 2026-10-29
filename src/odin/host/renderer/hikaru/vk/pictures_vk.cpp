@@ -409,7 +409,7 @@ VkDrawing::draw_loading(std::span<const LoadingRect> rects, unsigned window_w, u
 void
 VkDrawing::read_kept(std::span<uint8_t> pictures)
 {
-	const size_t size = size_t{SCREEN_WIDTH} * SCREEN_HEIGHT * 4;
+	const size_t size = PICTURE_SIZE;
 	const VkCommandBuffer cb = m_card.commands();
 	vk::Buffer *out[KEPT];
 
@@ -437,7 +437,7 @@ VkDrawing::read_kept(std::span<uint8_t> pictures)
 void
 VkDrawing::write_kept(std::span<const uint8_t> pictures)
 {
-	const size_t size = size_t{SCREEN_WIDTH} * SCREEN_HEIGHT * 4;
+	const size_t size = PICTURE_SIZE;
 	const VkCommandBuffer cb = m_card.commands();
 	const VkBufferImageCopy region{ 0, 0, 0, { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 }, { 0, 0, 0 },
 	                                { SCREEN_WIDTH, SCREEN_HEIGHT, 1 } };

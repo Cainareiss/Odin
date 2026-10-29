@@ -603,7 +603,7 @@ GlDrawing::draw_loading(std::span<const LoadingRect> rects, unsigned, unsigned w
 void
 GlDrawing::read_kept(std::span<uint8_t> pictures)
 {
-	const size_t size = size_t{SCREEN_WIDTH} * SCREEN_HEIGHT * 4;
+	const size_t size = PICTURE_SIZE;
 	std::vector<uint8_t> whole(size_t{width()} * height() * 4);
 
 	glPixelStorei(GL_PACK_ALIGNMENT, 1);
@@ -640,7 +640,7 @@ GlDrawing::read_kept(std::span<uint8_t> pictures)
 void
 GlDrawing::write_kept(std::span<const uint8_t> pictures)
 {
-	const size_t size = size_t{SCREEN_WIDTH} * SCREEN_HEIGHT * 4;
+	const size_t size = PICTURE_SIZE;
 
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 	for (unsigned i = 0; i < KEPT; i++) {

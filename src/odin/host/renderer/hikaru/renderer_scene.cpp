@@ -417,7 +417,7 @@ Renderer::draw_scene()
 
 	/* Each viewport starts from an empty depth buffer, each family of the
 	 * 101 its own in a view that has both (depth_bias.hpp). */
-	for (unsigned vpi = 0; vpi < 8; vpi++) {
+	for (unsigned vpi = 0; vpi < ODIN_VIEWPORTS; vpi++) {
 		m_times.part(DrawTimes::PART_VERTICES);
 		m_card->clear_depth();
 		m_families_view = has_flagged(vpi);
