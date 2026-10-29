@@ -36,7 +36,7 @@
 
 namespace odin {
 
-/* A gamepad drawn in the menu (mock-up v50), as large as it fits in a box
+/* A gamepad drawn in the menu, as large as it fits in a box
  * and in its middle. Its parts light with what the gamepad does: a button
  * pressed fills with the accent, a trigger fills as far as it is pulled and
  * says how far, a stick moves; a chosen part is outlined with the accent,

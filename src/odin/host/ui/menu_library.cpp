@@ -23,7 +23,7 @@
  */
 
 /* The library: the games to choose from when Odin starts without one, as
- * the game picker of sm2-emu lays them out (mock-up v2), in the palette of
+ * the game picker of sm2-emu lays them out, in the palette of
  * the menu, under the bar. Tiles at the left, the game chosen framed; its
  * sheet at the right. Arrows or a gamepad choose, Enter, its button that
  * presses or a click on the game chosen plays it. */

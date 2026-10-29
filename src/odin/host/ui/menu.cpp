@@ -75,11 +75,11 @@ constexpr std::array<std::pair<const char *, const char *>, 2> MENU_HINTS = { {
 	{ SDL_HINT_MOUSE_AUTO_CAPTURE, "0" },
 } };
 
-/* The menu is made for 640 by 480 points (a window nearly square) or 960
- * by 540 (16:9 and wider), then larger by one factor as the window grows
- * (mock-up v50). It takes that share of the window, the game around it, at
- * the least the size it is made for where the window has room for it. The
- * cut of its corners and its padding, in points. */
+/* The menu is made for 640 by 480 points (a window nearly square) or 960 by
+ * 540 (16:9 and wider), then larger by one factor as the window grows. It
+ * takes that share of the window, the game around it, at the least the size it
+ * is made for where the window has room for it. The cut of its corners and its
+ * padding, in points. */
 constexpr float COMPACT_W = 640.0f;
 constexpr float COMPACT_H = 480.0f;
 constexpr float LARGE_W = 960.0f;
@@ -336,7 +336,7 @@ Menu::navigate(MenuState &state)
 	nav = {};
 }
 
-/* The menu grows with the window, by one factor for all (mock-up v50): as
+/* The menu grows with the window, by one factor for all: as
  * much as the menu made for 640 by 480, or 960 by 540 in a wide window,
  * takes to fill its share one way, the other way given the room left;
  * never smaller. In points: the pixels of a dense display are SDL's. Its
@@ -1092,7 +1092,7 @@ Menu::draw(unsigned window_w, unsigned window_h)
 	m_graphics.clear_window(window_w, window_h);
 
 	/* The picture of the game over the whole window, its middle kept
-	 * where the window is of another shape (mock-up v50); the window as it
+	 * where the window is of another shape; the window as it
 	 * was over all of it */
 	const PictureRect rect = picture_rect(window_w, window_h);
 	if (m_frozen && rect.w && rect.h) {

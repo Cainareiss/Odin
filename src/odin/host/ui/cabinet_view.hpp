@@ -46,7 +46,7 @@ struct CabinetNow {
 	std::string_view chosen = {};
 };
 
-/* The cabinet of a game drawn in a box (mock-up v50), as large as it fits
+/* The cabinet of a game drawn in a box, as large as it fits
  * and in its middle: its controls where the cabinet has them, which move
  * as they are worked and are outlined with the accent, the light of a
  * button lit; COIN, SERVICE and TEST under them. The control whose input

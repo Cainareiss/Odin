@@ -22,7 +22,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* The pages Audio, Hotkeys, Outputs and Paths of the menu (mock-up v50) */
+/* The pages Audio, Hotkeys, Outputs, Link and Paths of the menu */
 
 #include "odin/host/ui/menu.hpp"
 
@@ -46,14 +46,14 @@ namespace odin {
 namespace {
 
 /* A page in two: what it shows in a box at the left, its settings at the
- * right, as 1 to 1.15 (mock-up v50); the room between them and below the
+ * right, as 1 to 1.15; the room between them and below the
  * row of the games */
 constexpr float LEFT_SHARE = 1.0f / 2.15f;
 constexpr float SPLIT_GAP = 10.0f;
 constexpr float ROW_GAP = 6.0f;
 
 /* An output: its width at the least, the side of its icon, the room in it
- * and between two (mock-up v50) */
+ * and between two */
 constexpr float TILE_LEAST = 110.0f;
 constexpr float TILE_ICON = 26.0f;
 constexpr float TILE_PAD = 8.0f;
@@ -124,7 +124,7 @@ centred(ImVec2 top, float width, float size, const char *text, ImU32 colour)
 }
 
 /* What a box shows, `high` high: in its middle, or from its top in a
- * child that scrolls where it is higher than the box (mock-up v50).
+ * child that scrolls where it is higher than the box.
  * `draw` takes the top, and draws in the list of the window it is in. */
 template <typename Draw>
 void
@@ -341,7 +341,7 @@ boards_of(const std::string &game)
 	return OTHER_BOARDS;
 }
 
-/* The drawing of a card, in a space of 330 by 110 (mock-up v50) */
+/* The drawing of a card, in a space of 330 by 110 */
 constexpr float ROUTE_W = 330.0f;
 constexpr float ROUTE_H = 110.0f;
 constexpr float CARD_PAD = 8.0f;
@@ -618,7 +618,7 @@ cap_name(SDL_Keycode key)
 }
 
 /* The caps of a combination: its modifiers, then its key (Enter after
- * them as its sign, mock-up v50) */
+ * them as its sign) */
 std::vector<std::string>
 caps(const HotKey &key)
 {

@@ -103,7 +103,7 @@ public:
 	};
 
 	/* Where the card is: the sensors it covers, as the program counts its
-	 * positions (FUN_0000287e) */
+	 * positions (287E) */
 	enum Position : uint8_t {
 		NONE, S1, S1S2, S1S2S3, S2S3, S2S3S4, S3S4, S3S4S5, S4S5, S5
 	};

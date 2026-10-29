@@ -22,8 +22,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* The six cabinets of the mock-up v50, drawn as it draws them: the same
- * shapes at the same places, in its units. */
+/* The six cabinets, as drawn for the menu: the same shapes at the same
+ * places, in the units of that drawing. */
 
 #include "odin/host/ui/cabinet_view.hpp"
 
@@ -568,8 +568,7 @@ nascar(Pen &pen, const Controls &c)
 	pen.light();
 }
 
-/* A nozzle of Brave, as the maquette draws it lying, before it stands it
- * up: its hose, its body, FOG STREAM SW (the grip that turns) and
+/* A nozzle of Brave, drawn lying, then stood up: its hose, its body, FOG STREAM SW (the grip that turns) and
  * DRAINAGE (the button on top) */
 void
 nozzle(Pen &pen, const Controls &c, unsigned p)

@@ -22,8 +22,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* The bar over the game and the library (mock-up v3, Atelier), in the
- * palette of the menu: the six menus, the game and its speed at the right;
+/* The bar over the game and the library in the
+ * palette of the menu: the seven menus, the game and its speed at the right;
  * the rune and the name of Odin are those of the window.
  * The menu open has the accent under its name. */
 

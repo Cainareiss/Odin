@@ -439,7 +439,7 @@ MenuKit::dashed_pill(ImDrawList *list, ImVec2 a, ImVec2 b, ImU32 colour) const
 	dashes(list, pill_points(a, b), true, colour, stroke(), px(3.0f), px(2.0f));
 }
 
-/* The paths of the mock-up, in a square of 24 */
+/* The paths of the icons, in a square of 24 */
 void
 MenuKit::icon(ImDrawList *list, Icon icon, ImVec2 at, float side, ImU32 colour)
 {

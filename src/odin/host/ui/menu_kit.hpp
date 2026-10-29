@@ -39,7 +39,7 @@
 
 namespace odin {
 
-/* The colours of a palette of the menu (mock-up v50): the screen behind
+/* The colours of a palette of the menu: the screen behind
  * the pages, the frame, the ink and its two softer tones, the lines of the
  * frames and between rows, the outline of a control and its hovered fill,
  * the accent for what is touched and the ink on it, the action colour for
@@ -48,7 +48,7 @@ namespace odin {
  * details take the outline of a control), an arrow on a part; the lavender
  * of the cabinet (and of the titles of the groups), its strokes and its
  * details; the back of a tile of the library. Each is made of a few
- * colours of the mock-up: the screen, the two of the drawings, the ink and
+ * base colours: the screen, the two of the drawings, the ink and
  * its two tones, the accent and the ink on it, the action, the cabinet and
  * the page; the lines and the outlines are the ink, fainter. */
 struct MenuPalette {
@@ -163,7 +163,7 @@ struct MenuFocus {
 class MenuKit {
 public:
 	/* The sizes of the smaller texts, against the font (rows of 12.5
-	 * pixels in the mock-up): what a row does and a key cap (10.5); a
+	 * pixels at the size it is drawn for): what a row does and a key cap (10.5); a
 	 * title, a cell, a button, a pill and a caption (11); a word in small
 	 * capitals (10) */
 	static constexpr float NOTE = 10.5f / 12.5f;
@@ -188,7 +188,7 @@ public:
 	float stroke() const { return std::max(1.0f, std::round(m_scale)); }
 	/* That share of the font, in pixels. Its letters are drawn by pixels:
 	 * a size is a whole number of times the font's, at least once (the
-	 * texts smaller and larger in the mock-up are drawn at its size or
+	 * smaller and larger texts are drawn at its size or
 	 * twice it; their colours tell them apart). */
 	static float font(float share) { return text_size(ImGui::GetFontSize() * share); }
 	static float text_size(float size)
@@ -200,7 +200,7 @@ public:
 	/* A colour with that share of its opacity */
 	static ImU32 alpha(ImU32 colour, float share);
 
-	/* The icons of the menu (mock-up v50), drawn in a square of that side:
+	/* The icons of the menu, drawn in a square of that side:
 	 * a gamepad, a gamepad with its cross, a screen, a speaker, a keyboard
 	 * and a smaller one, a light with its rays, a folder, an i; the outputs
 	 * of a cabinet: a lamp, a shaker, a lock, a speaker crossed out; those

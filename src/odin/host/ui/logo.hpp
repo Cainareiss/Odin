@@ -27,12 +27,12 @@
 
 namespace odin {
 
-/* The logo of Odin: the rune ᚨ, ansuz, in gold (Valhöll, the colours of
- * the mock-ups). Its outline is that of Junicode 2.226, by Peter S. Baker
- * (SIL Open Font License 1.1, fonts/LICENSE-junicode), in a square of 24,
- * its ink from y 2 to 22: clockwise from the foot of the stem, up, then
- * the two branches down to the right. Regular in the menu, bold for the
- * icon of the window. Its gold: red, green, blue. */
+/* The logo of Odin: the rune ᚨ, ansuz, in gold. Its outline is that of
+ * Junicode 2.226, by Peter S. Baker (SIL Open Font License 1.1,
+ * fonts/LICENSE-junicode), in a square of 24, its ink from y 2 to 22:
+ * clockwise from the foot of the stem, up, then the two branches down to the
+ * right. Regular in the menu, bold for the icon of the window. Its gold: red,
+ * green, blue. */
 inline constexpr float RUNE_OUTLINE[11][2] = {
 	{ 8.77f, 22.0f }, { 8.77f, 2.0f }, { 10.81f, 2.0f }, { 15.17f, 5.56f }, { 14.23f, 6.88f }, { 10.81f, 4.21f },
 	{ 10.81f, 7.24f }, { 15.23f, 10.86f }, { 14.23f, 12.26f }, { 10.81f, 9.56f }, { 10.81f, 22.0f },

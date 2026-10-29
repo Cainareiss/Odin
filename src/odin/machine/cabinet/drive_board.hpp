@@ -81,7 +81,7 @@ struct DriveBoard {
 	 * next, 0 to 0xFFFF, the wheel having moved by wheel_moved (0 to 1 of
 	 * its way) in a frame of the last ones. NASCAR gives one torque of its
 	 * physics (0C03F34A: a float times 63, 40 added when it is below 0),
-	 * seven terms added (FUN_0C038F32): three follow the wheel (a hold that
+	 * seven terms added (0C038F32): three follow the wheel (a hold that
 	 * grows with the speed, the self-aligning of the front tyres, a damping
 	 * that kicks at each step the wheel takes), four the car (its front
 	 * suspensions, the walls, a buzz of 5 at most, the draft). A wall makes

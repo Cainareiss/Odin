@@ -41,11 +41,11 @@ constexpr uint32_t FRAME_OVERHEAD = 8;
 constexpr uint32_t REPLY_DATA = 6;
 constexpr uint32_t LEN_MIN = 6;
 
-/* The sensors each position covers (FUN_0000287e) */
+/* The sensors each position covers (287E) */
 constexpr std::array<uint8_t, 10> SENSORS = { 0x00, 0x01, 0x03, 0x07, 0x06, 0x0E, 0x0C, 0x1C, 0x18, 0x10 };
 
-/* What the decoders say of a track (FUN_000040d4, FUN_00004336,
- * FUN_0000457e): read, no start (blank), no end, LRC, parity */
+/* What the decoders say of a track (40D4, 4336,
+ * 457E): read, no start (blank), no end, LRC, parity */
 enum Track : uint8_t { GOOD = 'O', BLANK = 'S', NO_END = 'E', LRC = 'L', PARITY = 'P' };
 
 /* Track selector of 33 and 53: '0'-'2' one track, '3' T1 T2, '4' T1 T3,
@@ -87,7 +87,7 @@ bool CardReader::choose(const std::string &card_file)
 }
 
 /* The card at the entrance; a read that waits takes it in at its next
- * ENQ (FUN_0000aa32 state 3 ends when S1 is covered) */
+ * ENQ (AA32 state 3 ends when S1 is covered) */
 bool CardReader::insert()
 {
 	if (!m_in_hand || m_position != NONE || !m_shutter_open || !read_card(m_card_file, m_card))
@@ -123,7 +123,7 @@ CardReader::Where CardReader::where() const
 	return m_in_hand ? Where::IN_HAND : Where::NO_CARD;
 }
 
-/* FUN_000020ee: four tries, the shutter as its sensors are (closed at
+/* The routine at 20EE: four tries, the shutter as its sensors are (closed at
  * power-up here), the boot reply in the buffer for a bare ENQ */
 void CardReader::reset()
 {
@@ -153,8 +153,8 @@ uint8_t CardReader::status1() const
 	return static_cast<uint8_t>(SENSORS[m_position] | (m_stocker_full ? 0x20 : 0) | (m_shutter_open ? 0x80 : 0x40));
 }
 
-/* The line, byte by byte (FUN_000077fa). Outside a frame: ENQ runs the
- * command ACKed, or sends the reply again (FUN_00007fce), as NAK does;
+/* The line, byte by byte (77FA). Outside a frame: ENQ runs the
+ * command ACKed, or sends the reply again (7FCE), as NAK does;
  * STX starts a frame, which replaces one ACKed; anything else is let
  * go. */
 void CardReader::receive(uint8_t byte)
@@ -225,7 +225,7 @@ void CardReader::send(uint8_t byte)
 
 /* ETX in place and the BCC right: ACK, and the frame waits for its ENQ;
  * while a read waits for a card it is a second frame, kept when it is
- * one the program looks at then (FUN_00007ed2, FUN_000077fa states 7-8) */
+ * one the program looks at then (7ED2, 77FA states 7-8) */
 void CardReader::frame_complete()
 {
 	const std::span<const uint8_t> frame(m_rx.data(), m_rx_count);
@@ -259,7 +259,7 @@ void CardReader::frame_complete()
 }
 
 /* The ENQ after a second frame, while a read waits for a card
- * (FUN_000077fa state 9, FUN_000060d0): 40 cancels it (no card is in),
+ * (77FA state 9, 60D0): 40 cancels it (no card is in),
  * 20 gets the reply of the read again, 10 / 1C / E0 replace it, FF stops
  * the program and its watchdog resets the reader, with no reply. False:
  * nothing to send. */
@@ -285,7 +285,7 @@ bool CardReader::second_frame(std::span<const uint8_t> frame)
 }
 
 /* The command ACKed, on its ENQ, whose reply it builds (the command
- * dispatch FUN_00002492, MARKDOWN/96c § 1) */
+ * dispatch at 2492, MARKDOWN/96c § 1) */
 void CardReader::run(std::span<const uint8_t> frame)
 {
 	uint8_t cmd = frame[2];
@@ -401,7 +401,7 @@ void CardReader::run(std::span<const uint8_t> frame)
 		m_command_size = 0;
 }
 
-/* 33 mode parity track (FUN_00005d0a, the read op FUN_00009602): the card
+/* 33 mode parity track (5D0A, the read op 9602): the card
  * taken in and read, tracks T1 T2 T3 in order, 69 bytes each */
 void CardReader::read(std::span<const uint8_t> params)
 {
@@ -464,7 +464,7 @@ void CardReader::read(std::span<const uint8_t> params)
 	}
 	/* Read again on its way out, then the tries C1 gives, all the same
 	 * here: the card left at S1S2. One track, or none good: '1' without
-	 * the data; else the letter of the tracks that failed (FUN_00008230) */
+	 * the data; else the letter of the tracks that failed (8230) */
 	m_position = S1S2;
 	if (selected == 1 || good == 0) {
 		reply(CMD_READ, '1', '0');
@@ -491,7 +491,7 @@ void CardReader::read(std::span<const uint8_t> params)
 	reply(CMD_READ, letter, '0', std::span<const uint8_t>(data.data(), size));
 }
 
-/* 53 mode parity track data (FUN_0000652c, the write op FUN_0000974a): the
+/* 53 mode parity track data (652C, the write op 974A): the
  * tracks written as the program records them, the card left at S4S5. The
  * length of the frame is not checked against the tracks. */
 void CardReader::write(std::span<const uint8_t> params)
@@ -539,7 +539,7 @@ void CardReader::write(std::span<const uint8_t> params)
 	reply(CMD_WRITE, '0', '0');
 }
 
-/* The card pushed out to the slot (FUN_0000abe4), where it stays until
+/* The card pushed out to the slot (ABE4), where it stays until
  * the player takes it (take). The player's card kept in its file. */
 void CardReader::eject()
 {
@@ -550,7 +550,7 @@ void CardReader::eject()
 }
 
 /* The reply, kept until an ENQ asks for it; a reply that sees no card
- * clears the mark an eject leaves (FUN_00009418) */
+ * clears the mark an eject leaves (9418) */
 void CardReader::reply(uint8_t cmd, uint8_t st2, uint8_t st3, std::span<const uint8_t> data)
 {
 	data = data.first(std::min<size_t>(data.size(), FRAME_MAX - FRAME_OVERHEAD));
@@ -574,7 +574,7 @@ void CardReader::reply(uint8_t cmd, uint8_t st2, uint8_t st3, std::span<const ui
 }
 
 /* The reply on the line; sent once already, as the sensors are now, st2
- * '0' and st3 '0' unless '3' (FUN_00007fce) */
+ * '0' and st3 '0' unless '3' (7FCE) */
 void CardReader::send_reply()
 {
 	if (m_reply_sent) {

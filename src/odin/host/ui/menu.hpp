@@ -92,9 +92,8 @@ struct LibraryState {
 };
 
 /* The bar at the top of the window, over the game that goes on and over the
- * library (mock-up v3, Atelier): FILE, INPUT, VIDEO, AUDIO, DEBUG and
- * ABOUT, each a menu. What
- * they show and what was asked there; the thread of the board keeps it
+ * library: FILE, INPUT, DISPLAY, AUDIO, LINK, DEBUG and ABOUT, each a menu.
+ * What they show and what was asked there; the thread of the board keeps it
  * and does what was asked (session.cpp, library.cpp). */
 struct BarState {
 	/* At the right: the game and its frames a second. A note of Odin (what

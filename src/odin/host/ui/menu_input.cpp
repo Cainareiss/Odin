@@ -22,7 +22,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* The page Input of the menu (mock-up v50): the games, the device of each
+/* The page Input of the menu: the games, the device of each
  * player, and the gamepad drawn with the name of each control beside the
  * part that works it, or the controls as a list (Classic). */
 
@@ -118,7 +118,7 @@ family(int kind)
 
 /* The name of an input of a gamepad of that kind, as its maker prints it:
  * the marks of a PlayStation, a way of a stick or of the D-pad as an
- * arrow (mock-up v50) */
+ * arrow */
 std::string
 pad_label(const PadInput &pad, int kind)
 {
@@ -1455,7 +1455,7 @@ keyboard_box(const MenuKit &kit, MenuState &state, std::span<const InputRow> row
 {
 	ImDrawList *const list = ImGui::GetWindowDrawList();
 	const MenuPalette &palette = kit.palette();
-	/* The drawing of the mock-up, in its units: 640 by 220 from (0, 96) */
+	/* The drawing, in its own units: 640 by 220 from (0, 96) */
 	constexpr float W = 640.0f, H = 220.0f, TOP = 96.0f, U = 28.0f, X0 = 14.0f, Y0 = 130.0f, GAP = 3.0f;
 	const ImVec2 lo = { a.x + kit.px(MenuKit::BOX_INSIDE), a.y + corner + kit.px(MenuKit::BOX_INSIDE) };
 	const ImVec2 hi = { b.x - kit.px(MenuKit::BOX_INSIDE), b.y - kit.px(MenuKit::BOX_INSIDE) };
@@ -1550,8 +1550,7 @@ keyboard_box(const MenuKit &kit, MenuState &state, std::span<const InputRow> row
 	list->AddRect(at(580, 132), at(588, 154), palette.stroke, 4.0f * k, ImDrawFlags_None, kit.px(1.0f));
 }
 
-/* What the page asks while the next input of a part is caught (mock-up
- * v50) */
+/* What the page asks while the next input of a part is caught */
 std::string
 prompt(const MenuState &state, const MenuSlot &slot)
 {
@@ -1594,7 +1593,7 @@ list_box(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, I
 	ImVec2 lo = { a.x + kit.px(14.0f), a.y + kit.px(MenuKit::BOX_INSIDE) + corner };
 	const ImVec2 hi = { b.x - kit.px(14.0f), b.y - kit.px(MenuKit::BOX_INSIDE) };
 	const size_t half = (all.size() + 1) / 2;
-	/* As high as the room leaves them, at most as in the mock-up; when
+	/* As high as the room leaves them, a line and 16 points at most; when
 	 * they do not fit, the list scrolls, its bar beside the columns */
 	const float h = std::clamp((hi.y - lo.y) / static_cast<float>(std::max<size_t>(half, 1)), line + 2.0f * high + kit.px(4.0f),
 	                           line + kit.px(16.0f));
@@ -1767,7 +1766,7 @@ buttons_bar(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows
 	return height;
 }
 
-/* The advanced options of the device shown, over its box (mock-up v50):
+/* The advanced options of the device shown, over its box:
  * the vibration of the game; for a gamepad how hard it shakes, for a
  * joystick the force of the wheel and how far it turns for the steering;
  * in a game where player 1 has a sight, the light gun mode (the only
@@ -2022,7 +2021,7 @@ Menu::page_input(MenuKit &kit, MenuState &state) const
 	ImGui::Dummy({ width, room.y - kit.px(4.0f) });
 }
 
-/* What the page says at the bottom (mock-up v50): the part caught, what to
+/* What the page says at the bottom: the part caught, what to
  * do, Skip and Stop while each control is caught in turn; else the control
  * worked now and its inputs, filled as far as it is; else how it works */
 float

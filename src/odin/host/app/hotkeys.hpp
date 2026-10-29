@@ -47,7 +47,7 @@ struct HotKey {
 	bool operator==(const HotKey &) const = default;
 };
 
-/* What Odin does itself on a key or on a gamepad (mock-up v50, page
+/* What Odin does itself on a key or on a gamepad (the page
  * Hotkeys): up to two keys for each action, and a button pressed with Guide
  * held (Guide alone: tapped, the menu by default), as Batocera has its
  * hotkey. The user changes them in the menu; [hotkeys] of odin.ini keeps
