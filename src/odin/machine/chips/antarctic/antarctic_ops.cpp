@@ -1100,11 +1100,8 @@ Antarctic::op_material_commit(const uint32_t *inst)
 {
 	uint32_t index = m_s.mat.base + material_index(inst);
 
-	if (index >= AntarcticState::MATERIALS) {
-		error("CP: material commit index exceeds MAX (%u >= %u), skipping",
-		          index, AntarcticState::MATERIALS);
+	if (!in_table(index, AntarcticState::MATERIALS, "CP: material commit index exceeds MAX (%u >= %u), skipping"))
 		return;
-	}
 
 	m_s.mat.table[index] = m_s.mat.scratch;
 }
@@ -1129,11 +1126,8 @@ Antarctic::op_material_recall(const uint32_t *inst)
 		m_s.mat.base = index;
 	else {
 		index += m_s.mat.base;
-		if (index >= AntarcticState::MATERIALS) {
-			error("CP: material recall index exceeds MAX (%u >= %u), skipping",
-			          index, AntarcticState::MATERIALS);
+		if (!in_table(index, AntarcticState::MATERIALS, "CP: material recall index exceeds MAX (%u >= %u), skipping"))
 			return;
-		}
 
 		m_s.mat.scratch = m_s.mat.table[index];
 	}
@@ -1276,11 +1270,8 @@ Antarctic::op_texhead_commit(const uint32_t *inst)
 {
 	uint32_t index = m_s.tex.base + texhead_index(inst);
 
-	if (index >= AntarcticState::TEXHEADS) {
-		error("CP: texhead commit index exceeds MAX (%u >= %u), skipping",
-		          index, AntarcticState::TEXHEADS);
+	if (!in_table(index, AntarcticState::TEXHEADS, "CP: texhead commit index exceeds MAX (%u >= %u), skipping"))
 		return;
-	}
 
 	m_s.tex.table[index] = m_s.tex.scratch;
 }
@@ -1307,11 +1298,8 @@ Antarctic::op_texhead_recall(const uint32_t *inst)
 		m_s.tex.base = index;
 	else {
 		index += m_s.tex.base;
-		if (index >= AntarcticState::TEXHEADS) {
-			error("CP: texhead recall index exceeds MAX (%u >= %u), skipping",
-			          index, AntarcticState::TEXHEADS);
+		if (!in_table(index, AntarcticState::TEXHEADS, "CP: texhead recall index exceeds MAX (%u >= %u), skipping"))
 			return;
-		}
 
 		m_s.tex.scratch = m_s.tex.table[index];
 	}
@@ -1542,11 +1530,8 @@ Antarctic::op_lightset_commit(const uint32_t *inst)
 {
 	uint32_t index = m_s.lit.base + lightset_index(inst);
 
-	if (index >= AntarcticState::LIGHTSETS) {
-		error("CP: lightset commit index exceeds MAX (%u >= %u), skipping",
-		          index, AntarcticState::LIGHTSETS);
+	if (!in_table(index, AntarcticState::LIGHTSETS, "CP: lightset commit index exceeds MAX (%u >= %u), skipping"))
 		return;
-	}
 
 	AntarcticState::Lightset &set = m_s.lit.sets[index];
 
@@ -1588,11 +1573,8 @@ Antarctic::op_lightset_recall(const uint32_t *inst)
 		m_s.lit.base = index;
 
 	index += m_s.lit.base;
-	if (index >= AntarcticState::LIGHTSETS) {
-		error("CP: lightset recall index exceeds MAX (%u >= %u), skipping",
-		          index, AntarcticState::LIGHTSETS);
+	if (!in_table(index, AntarcticState::LIGHTSETS, "CP: lightset recall index exceeds MAX (%u >= %u), skipping"))
 		return;
-	}
 
 	const AntarcticState::Lightset &set = m_s.lit.sets[index];
 	odin_lightset_t &ls = m_s.lit.scratchset;

@@ -261,6 +261,15 @@ private:
 
 	[[noreturn]] void fatal(const char *what, uint32_t value) const;
 	void error(const char *fmt, ...) const __attribute__((format(printf, 2, 3)));
+	/* Whether `index` is in a table of `size` entries; if not, the error
+	 * `fmt` tells both */
+	bool in_table(uint32_t index, uint32_t size, const char *fmt) const __attribute__((format(printf, 4, 0)))
+	{
+		if (index < size)
+			return true;
+		error(fmt, index, size);
+		return false;
+	}
 
 	uint32_t &reg(uint32_t offs) { return m_s.regs[(offs & 0xFF) / 4]; }
 	uint32_t reg(uint32_t offs) const { return m_s.regs[(offs & 0xFF) / 4]; }
