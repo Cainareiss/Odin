@@ -42,7 +42,7 @@ namespace odin {
 namespace {
 
 /* For each condition, a bit for each value of NZCV (CPSR bits 31 to 28)
- * it passes with: what cond() answers, without its switch. */
+ * it passes with */
 constexpr std::array<uint16_t, 16> COND_PASS = [] {
 	std::array<uint16_t, 16> pass{};
 	for (uint32_t cc = 0; cc < 16; cc++) {
@@ -117,7 +117,7 @@ uint32_t Arm7::run(uint32_t cycles)
 		}
 	} else if (m_turn == Turn::Idle && !m_turn_kept) {
 		/* A turn of the program, not of an interrupt handler. */
-		bool taken = (m_fiq_line && (m_cpsr & FLAG_F) == 0) || (m_irq_line && (m_cpsr & FLAG_I) == 0);
+		bool taken = interrupt_pending();
 		if (m_turn_wait > 0) {
 			m_turn_wait--;
 		} else if (!taken && mode() != MODE_FIQ && mode() != MODE_IRQ) {
@@ -174,7 +174,7 @@ uint32_t Arm7::run_decoded(uint32_t done, uint32_t cycles)
 	Decoded *page = nullptr;
 
 	while (done < cycles) {
-		if ((m_fiq_line && (m_cpsr & FLAG_F) == 0) || (m_irq_line && (m_cpsr & FLAG_I) == 0)) {
+		if (interrupt_pending()) {
 			break;
 		}
 		const uint32_t addr = m_pc & ~3u;
@@ -1336,28 +1336,7 @@ void Arm7::set_pc(uint32_t v)
  * an ARMv4 core (ARM ARM A3.2.1). */
 bool Arm7::cond(uint32_t cc) const
 {
-	bool n = (m_cpsr & FLAG_N) != 0;
-	bool z = (m_cpsr & FLAG_Z) != 0;
-	bool c = (m_cpsr & FLAG_C) != 0;
-	bool v = (m_cpsr & FLAG_V) != 0;
-	switch (cc) {
-	case 0x0: return z;
-	case 0x1: return !z;
-	case 0x2: return c;
-	case 0x3: return !c;
-	case 0x4: return n;
-	case 0x5: return !n;
-	case 0x6: return v;
-	case 0x7: return !v;
-	case 0x8: return c && !z;
-	case 0x9: return !c || z;
-	case 0xA: return n == v;
-	case 0xB: return n != v;
-	case 0xC: return !z && n == v;
-	case 0xD: return z || n != v;
-	case 0xE: return true;
-	default: return false;
-	}
+	return (COND_PASS[cc & 15] >> (m_cpsr >> 28)) & 1;
 }
 
 /* Exceptions (data sheet 3.8). Entry: SPSR_new = CPSR, mode switch,

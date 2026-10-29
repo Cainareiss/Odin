@@ -487,10 +487,8 @@ void Arm7::block_transfer(uint32_t op)
  * plus 8. 2S + 1N. */
 void Arm7::branch(uint32_t op)
 {
-	uint32_t offset = (op & 0x00FFFFFF) << 2;
-	if (offset & 0x02000000) {
-		offset |= 0xFC000000;
-	}
+	const uint32_t offset = branch_offset(op);
+
 	if (op & (1u << 24)) {
 		m_r[14] = m_op_pc + 4;
 	}
@@ -724,10 +722,8 @@ struct Arm7Ops {
 	template <bool LINK>
 	static void branch(Arm7 &a, uint32_t op)
 	{
-		uint32_t offset = (op & 0x00FFFFFF) << 2;
-		if (offset & 0x02000000) {
-			offset |= 0xFC000000;
-		}
+		const uint32_t offset = Arm7::branch_offset(op);
+
 		if constexpr (LINK) {
 			a.m_r[14] = a.m_op_pc + 4;
 		}

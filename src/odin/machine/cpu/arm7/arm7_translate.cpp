@@ -97,7 +97,7 @@ uint32_t Arm7::run_translated(uint32_t done, uint32_t cycles)
 	bool stale = false;
 
 	while (done < cycles) {
-		if ((m_fiq_line && (m_cpsr & FLAG_F) == 0) || (m_irq_line && (m_cpsr & FLAG_I) == 0)) {
+		if (interrupt_pending()) {
 			break;
 		}
 		const uint32_t addr = m_pc & ~3u;
@@ -245,11 +245,7 @@ uint32_t Arm7::translate(uint32_t addr, uint32_t &words)
 			}
 			break;
 		case Form::Branch: {
-			uint32_t offset_words = (op & 0x00FFFFFF) << 2;
-			if (offset_words & 0x02000000) {
-				offset_words |= 0xFC000000;
-			}
-			const uint32_t target = pc + 8 + offset_words;
+			const uint32_t target = pc + 8 + branch_offset(op);
 			if (const uint32_t at = host.branch(pc, target, (op & (1u << 24)) != 0, block_at(target))) {
 				m_unlinked[target].push_back(at);
 			}

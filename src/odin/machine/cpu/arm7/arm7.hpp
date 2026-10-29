@@ -206,6 +206,15 @@ private:
 	uint32_t get_user_r(uint32_t idx);
 	void set_user_r(uint32_t idx, uint32_t v);
 	bool cond(uint32_t cc) const;
+	/* A FIQ or an IRQ is asked and not masked */
+	bool interrupt_pending() const { return (m_fiq_line && (m_cpsr & FLAG_F) == 0) || (m_irq_line && (m_cpsr & FLAG_I) == 0); }
+	/* The offset of B and BL: 24 signed bits of words */
+	static uint32_t branch_offset(uint32_t op)
+	{
+		const uint32_t offset = (op & 0x00FFFFFF) << 2;
+
+		return (offset & 0x02000000) ? offset | 0xFC000000 : offset;
+	}
 
 	/* Exceptions. */
 	void take_exception(uint32_t vector, uint32_t new_mode, uint32_t lr, bool mask_fiq);
