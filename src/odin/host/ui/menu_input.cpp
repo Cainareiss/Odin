@@ -965,6 +965,7 @@ devices_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width, bool t
 			state.player = player;
 			state.input_device[player] = chosen == 0 ? MenuState::Device::KEYBOARD :
 			                             chosen <= pads ? MenuState::Device::PAD : MenuState::Device::JOYSTICK;
+			state.device_picked = { player, state.input_device[player] };
 			state.catching.reset();
 			if (chosen >= 1 && chosen <= pads)
 				state.want = state.plugged[chosen - 1];
@@ -1766,9 +1767,10 @@ buttons_bar(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows
 }
 
 /* The advanced options of the gamepad or joystick shown, over its box
- * (mock-up v50): the vibration of the game, the force of its wheel and, for
- * a joystick, how far it turns for the steering; the dead zone and the
- * trigger threshold of the make and model of a gamepad; Close (B, Escape) */
+ * (mock-up v50): the vibration of the game; for a gamepad how hard it
+ * shakes, for a joystick the force of the wheel and how far it turns for
+ * the steering; the dead zone and the trigger threshold of the make and
+ * model of a gamepad; Close (B, Escape) */
 void
 advanced_box(const MenuKit &kit, MenuState &state, ImVec2 a, ImVec2 b)
 {
@@ -1778,7 +1780,8 @@ advanced_box(const MenuKit &kit, MenuState &state, ImVec2 a, ImVec2 b)
 	static_assert(std::size(TURNS) == std::size(WHEEL_ROTATIONS));
 	const bool pad = state.on_pad();
 	const bool turns = state.steers && !pad;
-	const char *const applies = state.can_force && turns ? "Vibration, wheel force and wheel rotation apply" :
+	const char *const applies = pad                      ? "Vibration and its force apply" :
+	                            state.can_force && turns ? "Vibration, wheel force and wheel rotation apply" :
 	                            state.can_force          ? "Vibration and wheel force apply" :
 	                            turns                    ? "Vibration and wheel rotation apply" :
 	                                                       "Vibration applies";
@@ -1853,7 +1856,9 @@ advanced_box(const MenuKit &kit, MenuState &state, ImVec2 a, ImVec2 b)
 		y += line + apart;
 	};
 
-	if (state.can_force)
+	if (state.can_shake && pad)
+		percent("Vibration force", state.vibration_force, MOST_VIBRATION_FORCE);
+	if (state.can_force && !pad)
 		percent("Wheel force", state.wheel_force, MOST_WHEEL_FORCE);
 	/* The degrees of the wheel from one end of the steering to the other;
 	 * the gamepad: left or right, or A, takes the next one */
@@ -1893,11 +1898,7 @@ Menu::page_input(MenuKit &kit, MenuState &state) const
 
 	using Icon = MenuKit::Icon;
 	const MenuPalette &palette = kit.palette();
-	const std::vector<GameControl> &controls = state.panel->controls();
-	/* Every cabinet has the SERVICE of player 2: a game of two players has
-	 * more of theirs */
-	const bool two = std::any_of(controls.begin(), controls.end(),
-	                             [](const GameControl &c) { return c.player == 1 && c.role != Role::SERVICE; });
+	const bool two = state.panel->two_players();
 
 	if (!two)
 		state.player = 0;

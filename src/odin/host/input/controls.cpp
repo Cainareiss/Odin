@@ -60,10 +60,13 @@ Controls::Controls(Keyboard &keys, const std::vector<GameControl> &controls, con
 			m_guns[key[3] - '1'] = value.substr(0, value.find(' '));
 		} else if (key == "joy1" || key == "joy2") {
 			m_joys_wanted[key[3] - '1'] = value.substr(0, value.find(' '));
-		} else if (key != "cabinet" && key != "card" &&	/* these five: main.cpp, menu_session.cpp */
-		           (key == "vibration"   ? value != "on" && value != "off" :
-		            key == "wheel_force" ? !wheel_force_named(value) :
-		                                   key != "wheel_rotation" || !wheel_rotation_named(value))) {
+		} else if ((key == "device1" || key == "device2") && device_named(value)) {
+			m_chosen[key[6] - '1'] = device_named(value);
+		} else if (key != "cabinet" && key != "card" &&	/* these six: main.cpp, menu_session.cpp */
+		           (key == "vibration"       ? value != "on" && value != "off" :
+		            key == "wheel_force"     ? !wheel_force_named(value) :
+		            key == "vibration_force" ? !vibration_force_named(value) :
+		                                       key != "wheel_rotation" || !wheel_rotation_named(value))) {
 			std::fprintf(stderr, "ERROR: settings: [players.%s]: not right: %s = %s\n", game.c_str(), key.c_str(),
 			             value.c_str());
 		}
@@ -476,7 +479,7 @@ Controls::turn_wheel(int torque)
 {
 	const Joy *const joy = joystick(0);
 
-	if (!joy || !m_drive_output || !m_rumble) {
+	if (!joy || !m_drive_output || !m_rumble || device(0) != InputDevice::JOYSTICK) {
 		if (m_force)
 			m_force->release();
 		return;
@@ -522,8 +525,10 @@ Controls::show(std::span<const uint8_t> outputs, std::span<const int16_t> option
 
 	for (unsigned player = 0; player < 2; player++) {
 		Pad *const seated = seat(player);
+		/* Only the device the player plays with shakes */
 		const bool on = m_rumble && any_on(m_outputs, GameOutput::Role::RUMBLE, outputs, static_cast<int>(player));
-		const Uint16 strength = std::max<Uint16>(on ? RUMBLE : 0, player ? 0 : felt);
+		const int shake = device(player) == InputDevice::PAD ? std::max<Uint16>(on ? RUMBLE : 0, player ? 0 : felt) : 0;
+		const Uint16 strength = static_cast<Uint16>(std::min(shake * m_vibration_force / VIBRATION_FORCE, 0xFFFF));
 
 		if (!seated)
 			continue;

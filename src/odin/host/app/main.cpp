@@ -148,6 +148,7 @@ play(const Options &given, const std::string &name, const GameList &games, Setti
 		std::printf("sound: the optional board at %+g dB in the mix\n", option_level);
 	controls.feel_game(*game, vibration);
 	controls.set_wheel_force(wheel_force_of(settings, game->name));
+	controls.set_vibration_force(vibration_force_of(settings, game->name));
 	controls.set_wheel_rotation(wheel_rotation_of(settings, game->name));
 	controls.ground(game->grounded);
 	if (vibration && (game->option_vibration || game->drive_first_output))

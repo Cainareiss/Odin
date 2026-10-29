@@ -373,6 +373,28 @@ wheel_force_of(const Settings &settings, const std::string &game)
 }
 
 std::optional<int>
+vibration_force_named(const std::string &value)
+{
+	char *end = nullptr;
+	const long percent = std::strtol(value.c_str(), &end, 10);
+
+	if (value.empty() || *end || percent < 0 || percent > MOST_VIBRATION_FORCE)
+		return std::nullopt;
+	return static_cast<int>(percent);
+}
+
+int
+vibration_force_of(const Settings &settings, const std::string &game)
+{
+	int percent = VIBRATION_FORCE;
+
+	for (const auto &[key, value] : settings.section("players." + game))
+		if (key == "vibration_force" && vibration_force_named(value))
+			percent = *vibration_force_named(value);
+	return percent;
+}
+
+std::optional<int>
 wheel_rotation_named(const std::string &value)
 {
 	char *end = nullptr;
@@ -393,6 +415,26 @@ wheel_rotation_of(const Settings &settings, const std::string &game)
 		if (key == "wheel_rotation" && wheel_rotation_named(value))
 			degrees = *wheel_rotation_named(value);
 	return degrees;
+}
+
+std::optional<InputDevice>
+device_named(const std::string &value)
+{
+	for (size_t i = 0; i < std::size(DEVICE_NAMES); i++)
+		if (value == DEVICE_NAMES[i])
+			return static_cast<InputDevice>(i);
+	return std::nullopt;
+}
+
+std::optional<InputDevice>
+device_chosen(const Settings &settings, const std::string &game, unsigned player)
+{
+	std::optional<InputDevice> chosen;
+
+	for (const auto &[key, value] : settings.section("players." + game))
+		if (key == (player ? "device2" : "device1") && device_named(value))
+			chosen = device_named(value);
+	return chosen;
 }
 
 std::string
@@ -520,11 +562,15 @@ known_settings(const GameList &games)
 		out.push_back({ "players." + name, "p2", "" });
 		out.push_back({ "players." + name, "joy1", "" });
 		out.push_back({ "players." + name, "joy2", "" });
+		out.push_back({ "players." + name, "device1", "" });
+		out.push_back({ "players." + name, "device2", "" });
 		for (const GameControl &control : game->controls)
 			if (control.role == Role::GUN_X)
 				out.push_back({ "players." + name, control.player ? "gun2" : "gun1", "" });
 		if (game->shakes())
 			out.push_back({ "players." + name, "vibration", "on" });
+		if (game->shakes())
+			out.push_back({ "players." + name, "vibration_force", std::to_string(VIBRATION_FORCE) });
 		if (game->drive_first_output)
 			out.push_back({ "players." + name, "wheel_force", std::to_string(WHEEL_FORCE) });
 		if (std::any_of(game->controls.begin(), game->controls.end(),

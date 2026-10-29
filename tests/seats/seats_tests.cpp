@@ -97,6 +97,27 @@ void test_picked()
 	      "player 2 keeps theirs when player 1 picks the other of their make");
 }
 
+/* The device a player plays with, the only one that shakes: the one chosen
+ * if they have it, else the wheel in a game that steers, else the pad */
+void test_device()
+{
+	using odin::InputDevice;
+	using odin::device_of;
+	const auto none = std::optional<InputDevice>();
+
+	check(device_of(none, true, true, true) == InputDevice::JOYSTICK, "nothing chosen, a game that steers: the wheel");
+	check(device_of(none, false, true, true) == InputDevice::PAD, "nothing chosen, a game without a wheel: the pad");
+	check(device_of(none, false, false, true) == InputDevice::JOYSTICK, "no pad: the joystick");
+	check(device_of(none, true, false, false) == InputDevice::KEYBOARD, "nothing plugged in: the keyboard");
+	check(device_of(InputDevice::PAD, true, true, true) == InputDevice::PAD, "the pad chosen: the pad, wheel or not");
+	check(device_of(InputDevice::KEYBOARD, true, true, true) == InputDevice::KEYBOARD,
+	      "the keyboard chosen: nothing shakes");
+	check(device_of(InputDevice::PAD, true, false, true) == InputDevice::JOYSTICK,
+	      "the pad chosen but not plugged in: the wheel");
+	check(device_of(InputDevice::JOYSTICK, true, true, false) == InputDevice::PAD,
+	      "the wheel chosen but not plugged in: the pad");
+}
+
 } /* namespace */
 
 int main()
@@ -104,6 +125,7 @@ int main()
 	test_plug_order();
 	test_wanted();
 	test_picked();
+	test_device();
 
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures ? 1 : 0;

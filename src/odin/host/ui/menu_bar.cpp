@@ -318,23 +318,30 @@ Menu::bar(BarState &state)
 					ask(Ask::QUIT);
 				break;
 			case 1:
-				/* The inputs of the game that runs: the gamepad of each
-				 * player, the tuning of that gamepad, its inputs back to
-				 * their defaults or cleared, kind by kind as the page
+				/* The inputs of the game that runs, for each of its
+				 * players: the device they play with (checked: it alone
+				 * shakes), the tuning of their gamepad, their inputs back
+				 * to their defaults or cleared, kind by kind as the page
 				 * Input shows them; the keys of each control stay in
 				 * Settings */
-				for (unsigned player = 0; player < 2; player++) {
+				for (unsigned player = 0; player < state.players; player++) {
 					char name[16];
 
 					std::snprintf(name, sizeof(name), "Player %u", player + 1);
 					if (!ImGui::BeginMenu(name, state.game))
 						continue;
 					framed();
+					if (item(DEVICE_KINDS[0], {}, state.plays_with[player] == InputDevice::KEYBOARD) &&
+					    state.plays_with[player] != InputDevice::KEYBOARD) {
+						state.asked_player = player;
+						ask(Ask::KEYBOARD);
+					}
 					if (state.pads.empty())
 						ImGui::TextDisabled("No controller plugged in");
 					for (size_t i = 0; i < state.pads.size(); i++) {
 						const BarState::Pad &pad = state.pads[i];
-						const bool mine = pad.player == static_cast<int>(player);
+						const bool mine = pad.player == static_cast<int>(player) &&
+						                  state.plays_with[player] == (pad.joystick ? InputDevice::JOYSTICK : InputDevice::PAD);
 
 						if (item(pad.label.c_str(), pad.off ? "not for this game" : "", mine, !pad.off) && !mine) {
 							state.asked_player = player;
@@ -342,7 +349,7 @@ Menu::bar(BarState &state)
 							ask(Ask::PAD);
 						}
 					}
-					if (state.dead_zone[player] >= 0) {
+					if (state.dead_zone[player] >= 0 && state.plays_with[player] == InputDevice::PAD) {
 						ImGui::Separator();
 						slider("Stick dead zone", "##dead", state.dead_zone[player], PadTuning::MOST_DEAD_ZONE);
 						slider("Trigger threshold", "##trigger", state.trigger_threshold[player],
@@ -372,7 +379,7 @@ Menu::bar(BarState &state)
 						ask(Ask::INPUTS_UNDO);
 					ImGui::EndMenu();
 				}
-				for (unsigned player = 0; player < 2; player++) {
+				for (unsigned player = 0; player < state.players; player++) {
 					char name[16];
 
 					std::snprintf(name, sizeof(name), "Light gun %u", player + 1);

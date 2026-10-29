@@ -41,6 +41,7 @@
 #include "odin/host/input/keyboard.hpp"
 #include "odin/host/video/picture.hpp"
 #include "odin/host/input/pointers.hpp"
+#include "odin/host/input/seats.hpp"
 #include "odin/host/input/wheel_force.hpp"
 
 namespace odin {
@@ -129,6 +130,14 @@ public:
 	void want_joystick(unsigned player, const std::string &guid, SDL_JoystickID picked = 0);
 	/* The id of the joystick of a player (0: none) */
 	SDL_JoystickID joystick_id(unsigned player) const { return joystick(player) ? m_joy_seats[player & 1] : 0; }
+	/* The kind of device a player plays with (seats.hpp): it alone shakes,
+	 * and turns if it is the wheel; the one they chose
+	 * ([players.<game>] device1, device2) if they have it */
+	InputDevice device(unsigned player) const
+	{
+		return device_of(m_chosen[player & 1], m_steers, seat(player) != nullptr, joystick(player) != nullptr);
+	}
+	void choose_device(unsigned player, InputDevice device) { m_chosen[player & 1] = device; }
 
 	void read_inputs(CabinetInputs &inputs) override
 	{
@@ -175,6 +184,9 @@ public:
 	/* How hard the wheel turns, in % of what the drive board asks
 	 * ([players.<game>] wheel_force, options.hpp) */
 	void set_wheel_force(int percent) { m_wheel_force = percent; }
+	/* How hard the pads shake, in % of the strength of each shake
+	 * ([players.<game>] vibration_force, options.hpp) */
+	void set_vibration_force(int percent) { m_vibration_force = percent; }
 	/* How far a wheel of the host turns for the steering of the game
 	 * ([players.<game>] wheel_rotation, options.hpp) */
 	void set_wheel_rotation(int degrees)
@@ -267,9 +279,11 @@ private:
 	Uint16 m_drive_level = 0;	/* how hard the felt shocks shake */
 	int m_force_was = 0;		/* the force of the last frame */
 	int m_wheel_force = 100;	/* the wheel turns at that % of it */
+	int m_vibration_force = 100;	/* the pads shake at that % of it */
 	int m_wheel_rotation = 0;	/* the degrees of a wheel for the steering, 0: its whole way */
 	bool m_wheel_reversed = false;	/* its low values on the right */
 	bool m_steers = false;	/* the game has a steering wheel: a wheel can be seated */
+	std::array<std::optional<InputDevice>, 2> m_chosen{};	/* the device each player chose, if any */
 	std::vector<JvsSwitch> m_grounded;
 	int m_wheel_channel = -1;	/* the steering wheel of player 1, if any */
 	uint16_t m_wheel_was = 0;

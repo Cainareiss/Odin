@@ -41,6 +41,7 @@
 #include "odin/host/app/hotkeys.hpp"
 #include "odin/host/ui/menu_kit.hpp"
 #include "odin/host/input/roles.hpp"
+#include "odin/host/input/seats.hpp"
 
 namespace odin {
 
@@ -155,9 +156,10 @@ struct BarState {
 	std::vector<std::string> devices;
 	std::string device;
 	std::vector<SoundGame> sound_games;
-	/* The game that runs: the gamepads and joysticks plugged in and the
-	 * player each is of (-1: none), its name shown (two of a make
-	 * numbered); the dead zone and the trigger threshold
+	/* The game that runs: its players (two in a game of two), the device
+	 * each plays with (the one checked: it alone shakes), the gamepads and
+	 * joysticks plugged in and the player each is of (-1: none), its name
+	 * shown (two of a make numbered); the dead zone and the trigger threshold
 	 * of the gamepad of each player, in % (-1: no gamepad); the light guns
 	 * seen, that of each player (its identity; empty: none), the players
 	 * with a sight; its pads shake, and do; Undo of Clear mapping offered */
@@ -172,6 +174,8 @@ struct BarState {
 		std::string identity, name;
 		bool present, aims;
 	};
+	unsigned players = 1;
+	std::array<InputDevice, 2> plays_with{};
 	std::vector<Pad> pads;
 	std::array<int, 2> dead_zone{ -1, -1 }, trigger_threshold{ -1, -1 };
 	std::vector<Gun> guns;
@@ -189,12 +193,12 @@ struct BarState {
 	/* What was asked; the page of the settings asked (Menu::Page, -1: the
 	 * one shown last); the card chosen (CARD_CHOOSE, -1: none); the name
 	 * of the new card (CARD_NEW); for the inputs of the game that runs
-	 * (PAD, GUN, INPUTS_*): the player, the gamepad or joystick chosen
-	 * (in pads), the light gun chosen (in guns, -1: none), the kind of
+	 * (PAD, KEYBOARD, GUN, INPUTS_*): the player, the gamepad or joystick
+	 * chosen (in pads), the light gun chosen (in guns, -1: none), the kind of
 	 * device whose inputs go back to their defaults or are cleared
 	 * (MenuState::Device) */
 	enum class Ask { NONE, OPEN, CLOSE, RESET, SAVE_STATE, LOAD_STATE, CARD, CARD_CHOOSE, CARD_NEW, SETTINGS, FULLSCREEN,
-	                 PAUSE, QUIT, PAD, GUN, INPUTS_DEFAULTS, INPUTS_CLEAR, INPUTS_UNDO, HOTKEYS_DEFAULTS };
+	                 PAUSE, QUIT, PAD, KEYBOARD, GUN, INPUTS_DEFAULTS, INPUTS_CLEAR, INPUTS_UNDO, HOTKEYS_DEFAULTS };
 	Ask ask = Ask::NONE;
 	int page = -1, card_chosen = -1;
 	std::string card_name;
@@ -380,20 +384,25 @@ struct MenuState {
 	std::array<bool, 2> sights{};
 	std::optional<std::pair<unsigned, Gun>> want_gun;
 	/* The player shown, and the inputs of each player shown: of the
-	 * keyboard (and the mouse), of the gamepad or of the joystick; what the
-	 * gamepad of each player does now; the controls as a list rather than
-	 * on the drawing */
-	enum class Device : uint8_t { KEYBOARD, PAD, JOYSTICK };
+	 * keyboard (and the mouse), of the gamepad or of the joystick (the
+	 * device each one plays with when the menu opens), the device a player
+	 * picked (it alone shakes: [players.<game>] device1, device2); what
+	 * the gamepad of each player does now; the controls as a list rather
+	 * than on the drawing */
+	using Device = InputDevice;
 	unsigned player = 0;
 	std::array<Device, 2> input_device{};
+	std::optional<std::pair<unsigned, Device>> device_picked;
 	std::array<PadState, 2> pad_states{};
 	/* The keys held now */
 	std::vector<SDL_Keycode> keys_held;
 	bool classic = false;
 	/* The game shown shakes the pads as its cabinet does (the nozzle of
-	 * Brave; experimental: the shaker of Racer, the shocks of NASCAR), and
-	 * whether it does */
+	 * Brave; experimental: the shaker of Racer, the shocks of NASCAR),
+	 * whether it does, and how hard, in % ([players.<game>]
+	 * vibration_force) */
 	bool can_shake = false, shake = true;
+	int vibration_force = 100;
 	/* What shakes on the cabinet ("from output NOZZLE VIBRATION") and
 	 * whether Odin makes it up (Game::shaker_experimental); the dead zone
 	 * and the trigger threshold of the gamepad shown (its make and

@@ -168,6 +168,7 @@ MenuSession::draw_menu()
 	state.shake_experimental = m_other ? m_other_experimental[state.player & 1] :
 	                           m_game && m_game->shaker_experimental(state.player & 1);
 	state.shake = vibration_on(m_settings, game_shown());
+	state.vibration_force = vibration_force_of(m_settings, game_shown());
 	/* The wheel the drive board turns, and how hard */
 	state.can_force = m_other ? m_other_forces : m_game && m_game->drive_first_output;
 	state.steers = std::any_of(panel_shown().controls().begin(), panel_shown().controls().end(),
@@ -338,6 +339,10 @@ MenuSession::draw_menu()
 		state.want_joystick.reset();
 		m_menu_pictures = MENU_PICTURES;
 	}
+	if (state.device_picked) {
+		keep_device(game_shown(), state.device_picked->first, state.device_picked->second, !m_other);
+		state.device_picked.reset();
+	}
 	if (state.ask == MenuState::Ask::DEFAULTS) {
 		change_inputs(true);
 	} else if (state.ask == MenuState::Ask::CLEAR) {
@@ -470,6 +475,8 @@ MenuSession::apply(const MenuState &was)
 	/* The vibration of the game shown: at once for the game that runs */
 	if (now.shake != was.shake && now.can_shake)
 		keep_vibration(game_shown(), now.shake, !m_other && m_game);
+	if (now.vibration_force != was.vibration_force && now.can_shake)
+		keep_vibration_force(game_shown(), now.vibration_force, !m_other && m_game);
 	/* The force of its wheel, at once too */
 	if (now.wheel_force != was.wheel_force && now.can_force)
 		keep_wheel_force(game_shown(), now.wheel_force, !m_other && m_game);
@@ -546,6 +553,16 @@ MenuSession::want_gun(const std::string &game, unsigned player, const std::strin
 		m_controls.want_gun(player, identity);
 }
 
+/* [players.<game>] device1 or device2: the device a player picked, which
+ * alone shakes */
+void
+MenuSession::keep_device(const std::string &game, unsigned player, InputDevice device, bool runs)
+{
+	if (runs)
+		m_controls.choose_device(player, device);
+	keep("players." + game, player ? "device2" : "device1", std::string(DEVICE_NAMES[static_cast<size_t>(device)]));
+}
+
 /* [players.<game>] vibration: a line only when off */
 void
 MenuSession::keep_vibration(const std::string &game, bool on, bool runs)
@@ -560,6 +577,16 @@ void
 MenuSession::keep_cabinet(const std::string &game, const std::string &id)
 {
 	keep("players." + game, "cabinet", id == "standard" ? std::nullopt : std::optional<std::string>(id));
+}
+
+/* [players.<game>] vibration_force: a line only when another than 100 % */
+void
+MenuSession::keep_vibration_force(const std::string &game, int percent, bool runs)
+{
+	if (runs)
+		m_controls.set_vibration_force(percent);
+	keep("players." + game, "vibration_force",
+	     percent == VIBRATION_FORCE ? std::nullopt : std::optional<std::string>(std::to_string(percent)));
 }
 
 /* [players.<game>] wheel_force: a line only when another than 100 % */

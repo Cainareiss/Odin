@@ -26,6 +26,8 @@
 #define ODIN_SEATS_HPP
 
 #include <array>
+#include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -74,6 +76,23 @@ seat_pads(const std::vector<OpenPad> &pads, const std::array<std::string, 2> &wa
 	for (unsigned player = 0; player < 2; player++)
 		take(player, [](const OpenPad &) { return true; });
 	return out;
+}
+
+/* The kind of device a player plays with, the only one that shakes, and
+ * turns if it is a wheel: the one they chose on the page Input or in the
+ * bar ([players.<game>] device1, device2, DEVICE_NAMES) */
+enum class InputDevice : uint8_t { KEYBOARD, PAD, JOYSTICK };
+inline constexpr const char *DEVICE_NAMES[] = { "keyboard", "pad", "joystick" };
+
+/* The device of a player: the one chosen if they have it, else their
+ * joystick in a game with a steering wheel, else their gamepad, else their
+ * joystick, else the keyboard */
+inline InputDevice
+device_of(std::optional<InputDevice> chosen, bool steers, bool pad, bool joystick)
+{
+	if (chosen && (*chosen == InputDevice::KEYBOARD || (*chosen == InputDevice::PAD ? pad : joystick)))
+		return *chosen;
+	return joystick && (steers || !pad) ? InputDevice::JOYSTICK : pad ? InputDevice::PAD : InputDevice::KEYBOARD;
 }
 
 } /* namespace odin */

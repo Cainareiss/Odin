@@ -570,22 +570,10 @@ MenuSession::open(int page)
 	if (m_audio)
 		m_audio->pause(true);
 	m_menu_state.hotkey_moved.reset();
-	/* The page Input shows the device of each player, until the user picks
-	 * one: their joystick in a game with a wheel, else their gamepad, else
-	 * their joystick, else the keyboard */
-	if (!m_menu_opened) {
-		using Device = MenuState::Device;
-		const bool wheel = m_game && std::any_of(m_game->controls.begin(), m_game->controls.end(),
-		                                         [](const GameControl &control) { return control.role == Role::STEER; });
-
-		for (unsigned player = 0; player < 2; player++) {
-			const bool pad = !m_controls.pad_name(player).empty(), joystick = m_controls.joystick_id(player) != 0;
-
-			m_menu_state.input_device[player] = joystick && (wheel || !pad) ? Device::JOYSTICK :
-			                                    pad                         ? Device::PAD : Device::KEYBOARD;
-		}
-	}
-	m_menu_opened = true;
+	/* The page Input shows the device each player plays with, the one that
+	 * shakes */
+	for (unsigned player = 0; player < 2; player++)
+		m_menu_state.input_device[player] = m_controls.device(player);
 	m_display.open_menu(page);
 	m_menu_pictures = MENU_PICTURES;
 }
@@ -733,8 +721,12 @@ MenuSession::fill_bar_inputs(BarState &bar) const
 	bar.trigger_threshold = { -1, -1 };
 	bar.can_shake = m_game && m_game->shakes();
 	bar.undo = m_undo_until && SDL_GetTicks() < m_undo_until;
+	bar.players = 1;
 	if (!m_game)
 		return;
+	bar.players = m_controls.panel().two_players() ? 2 : 1;
+	for (unsigned player = 0; player < 2; player++)
+		bar.plays_with[player] = m_controls.device(player);
 
 	const std::vector<GameControl> &controls = m_controls.panel().controls();
 	const bool steers = std::any_of(controls.begin(), controls.end(),
@@ -875,7 +867,12 @@ MenuSession::do_bar(BarState &bar)
 			const BarState::Pad &pad = bar.pads[static_cast<size_t>(bar.asked_pad)];
 
 			want_pad(m_game->name, player, pad.guid, pad.name, pad.joystick, true, pad.id);
+			keep_device(m_game->name, player, pad.joystick ? InputDevice::JOYSTICK : InputDevice::PAD, true);
 		}
+		return Ask::NONE;
+	case Ask::KEYBOARD:
+		if (m_game)
+			keep_device(m_game->name, player, InputDevice::KEYBOARD, true);
 		return Ask::NONE;
 	case Ask::GUN:
 		if (m_game && bar.asked_gun < static_cast<int>(bar.guns.size())) {

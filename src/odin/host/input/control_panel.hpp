@@ -154,6 +154,13 @@ public:
 	/* The controls of the panel, those of the game and those every
 	 * cabinet has, and their inputs */
 	const std::vector<GameControl> &controls() const { return m_controls; }
+	/* A game of two players: every cabinet has the SERVICE of player 2, a
+	 * game of two has more of theirs */
+	bool two_players() const
+	{
+		return std::any_of(m_controls.begin(), m_controls.end(),
+		                   [](const GameControl &c) { return c.player == 1 && c.role != Role::SERVICE; });
+	}
 	const Bindings &bindings() const { return m_bindings; }
 	/* Whether an input of a control of the panel, or of a role of the
 	 * cabinet, is held now: a stick of an analog control from half its

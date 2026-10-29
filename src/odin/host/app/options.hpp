@@ -36,6 +36,7 @@
 #include "odin/host/video/display_options.hpp"
 #include "odin/host/app/games.hpp"
 #include "odin/host/app/settings.hpp"
+#include "odin/host/input/seats.hpp"
 
 namespace odin {
 
@@ -128,6 +129,12 @@ bool vibration_on(const Settings &settings, const std::string &game);
 inline constexpr int WHEEL_FORCE = 100, MOST_WHEEL_FORCE = 200;
 std::optional<int> wheel_force_named(const std::string &value);
 int wheel_force_of(const Settings &settings, const std::string &game);
+/* [players.<game>] vibration_force: how hard the pads shake, in % of the
+ * strength Odin gives each shake (0 to MOST_VIBRATION_FORCE,
+ * VIBRATION_FORCE when it does not say); the last line says */
+inline constexpr int VIBRATION_FORCE = 100, MOST_VIBRATION_FORCE = 200;
+std::optional<int> vibration_force_named(const std::string &value);
+int vibration_force_of(const Settings &settings, const std::string &game);
 /* [players.<game>] wheel_rotation: the degrees a wheel of the host turns to
  * take the steering of the game from one end to the other, one of
  * WHEEL_ROTATIONS (0: the whole way of the wheel); WHEEL_ROTATION when it
@@ -137,6 +144,10 @@ inline constexpr int WHEEL_ROTATIONS[] = { 0, 270, 360, 540, 900, 1080 };
 inline constexpr int WHEEL_ROTATION = 270;
 std::optional<int> wheel_rotation_named(const std::string &value);
 int wheel_rotation_of(const Settings &settings, const std::string &game);
+/* [players.<game>] device1, device2: the kind of device a player chose
+ * (DEVICE_NAMES, seats.hpp; nothing: Odin picks); the last line says */
+std::optional<InputDevice> device_named(const std::string &value);
+std::optional<InputDevice> device_chosen(const Settings &settings, const std::string &game, unsigned player);
 /* [players.<game>] cabinet: the id of the cabinet of the game played
  * (Game::cabinets; "standard": that of the list, when it does not say) */
 std::string cabinet_of(const Settings &settings, const std::string &game);

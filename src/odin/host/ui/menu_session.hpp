@@ -231,7 +231,9 @@ private:
 	              bool joystick, bool runs, SDL_JoystickID picked = 0);
 	void want_gun(const std::string &game, unsigned player, const std::string &identity, const std::string &name,
 	              bool runs);
+	void keep_device(const std::string &game, unsigned player, InputDevice device, bool runs);
 	void keep_vibration(const std::string &game, bool on, bool runs);
+	void keep_vibration_force(const std::string &game, int percent, bool runs);
 	void keep_wheel_force(const std::string &game, int percent, bool runs);
 	void keep_wheel_rotation(const std::string &game, int degrees, bool runs);
 	void keep_cabinet(const std::string &game, const std::string &id);
@@ -297,7 +299,7 @@ private:
 	std::string m_card_keys;
 	std::string m_bar_note;
 	FolderDialog m_dialog;
-	bool m_menu_opened = false, m_closing = false, m_leaving = false;
+	bool m_closing = false, m_leaving = false;
 	/* A size of the window from the hands of the user, not kept yet */
 	bool m_custom_waits = false;
 	unsigned m_menu_pictures = 0;	/* still to draw */

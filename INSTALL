@@ -252,7 +252,10 @@ left lever, Space and Left Shift those of the right one.
 
 In Brave the pad of a player shakes while the nozzle of the cabinet does
 (Vibration in the advanced options of the page Input, or "vibration =
-off" in [players.braveff], stops it).
+off" in [players.braveff], stops it). Vibration force, in the options of
+a gamepad on the page Input ("vibration_force = 0" to 200 in
+[players.<game>], 100 by default), makes every shake of the pads in that
+game that much stronger or softer.
 The lamps and the other outputs of the cabinets go to other programs (a
 lamp or a force feedback program) as MAME gives them with its network
 output, when odin.ini says so (the menu, page Outputs, turns it on and
@@ -387,9 +390,10 @@ the game runs, the wheel's own centring spring is off and its gain at its
 highest, as SDL leaves them; the force lets go when the menu opens, and
 stops with the vibration of the page Input ("vibration = off" in
 [players.sgnascar]). The most force the game asks is the most of the
-wheel; Wheel force, in the options of the page Input ("wheel_force = 0"
-to 200 in [players.sgnascar], 100 by default), takes that share of it:
-above 100, the wheel reaches its most before the game asks it.
+wheel; Wheel force, in the options of the wheel on the page Input
+("wheel_force = 0" to 200 in [players.sgnascar], 100 by default), takes
+that share of it: above 100, the wheel reaches its most before the game
+asks it. The wheel turns only when it is the device the player plays with.
 
 NASCAR was also sold as a Deluxe cabinet, which its program tells apart
 by a switch its wiring ties to the ground ("GND (FOR DX)", read as 1P
@@ -400,6 +404,14 @@ its CABINET TYPE, reads VIEW CHANGE on 1P UP, and reads the wheel and
 turns it the other way, as the potentiometer and the motor of that
 cabinet are mounted: Odin turns both back, and the wheel of the player
 works the same in both.
+
+The device a player plays with, the one at the top of the page Input (or
+picked in the bar), is the only one that shakes, and the only wheel that
+turns: "device1 = keyboard", "pad" or "joystick" in [players.<game>]
+(device2: player 2), kept when the user picks one; the keyboard: nothing
+shakes. Without that line, or when the device chosen is not plugged in:
+the joystick in a game with a steering wheel, else the gamepad, else the
+joystick, else the keyboard.
 
 Gamepads: one for each player, in the order they are plugged in, or the
 one chosen for the game in the menu (Input). SELECT (SHARE) puts in a
