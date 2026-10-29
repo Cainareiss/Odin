@@ -438,7 +438,7 @@ VkPictureFilter::frame(unsigned w, unsigned h)
 	if (m_frame_size[0] != w || m_frame_size[1] != h) {
 		m_frame_size = { w, h };
 		m_frame.size = { static_cast<float>(w), static_cast<float>(h) };
-		m_frame.texture_size = { preset::power_of_two(m_frame.size[0]), preset::power_of_two(m_frame.size[1]) };
+		m_frame.texture_size = preset::texture_of(m_frame.size);
 		make_picture(m_frame, static_cast<unsigned>(m_frame.texture_size[0]),
 		             static_cast<unsigned>(m_frame.texture_size[1]));
 		m_window = {};
@@ -452,18 +452,14 @@ VkPictureFilter::frame(unsigned w, unsigned h)
 void
 VkPictureFilter::size(unsigned w, unsigned h)
 {
-	const float window[2] = { static_cast<float>(w), static_cast<float>(h) };
+	const std::array<float, 2> window = { static_cast<float>(w), static_cast<float>(h) };
 	const Picture *in = &m_frame;
 
 	m_window = { w, h };
 	for (Pass &pass : m_passes) {
-		for (size_t axis = 0; axis < 2; axis++)
-			pass.out.size[axis] = pass.scale_type[axis] == Scale::VIEWPORT ? window[axis] * pass.scale[axis] :
-			                      pass.scale_type[axis] == Scale::ABSOLUTE ? pass.scale[axis] :
-			                      in->size[axis] * pass.scale[axis];
+		pass.out.size = preset::pass_size(pass.scale_type, pass.scale, window, in->size);
 		if (!pass.window) {
-			const std::array<float, 2> texture_size = { preset::power_of_two(pass.out.size[0]),
-			                                            preset::power_of_two(pass.out.size[1]) };
+			const std::array<float, 2> texture_size = preset::texture_of(pass.out.size);
 
 			if (texture_size != pass.out.texture_size || !pass.out.image.image) {
 				pass.out.texture_size = texture_size;
@@ -474,10 +470,7 @@ VkPictureFilter::size(unsigned w, unsigned h)
 			}
 		}
 
-		/* TexCoord spans the picture of the input */
-		const float u = in->size[0] / in->texture_size[0], v = in->size[1] / in->texture_size[1];
-
-		pass.corners = { -1, -1, 0, 0, -1, 1, 0, v, 1, -1, u, 0, 1, 1, u, v };
+		pass.corners = preset::corners(in->size, in->texture_size);
 		in = &pass.out;
 	}
 }

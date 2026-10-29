@@ -97,6 +97,37 @@ power_of_two(float size)
 	return static_cast<float>(power);
 }
 
+/* The texture of a picture of that size */
+inline std::array<float, 2>
+texture_of(const std::array<float, 2> &size)
+{
+	return { power_of_two(size[0]), power_of_two(size[1]) };
+}
+
+/* The size a pass of that scale draws in a window of that size, from the
+ * size of its input */
+inline std::array<float, 2>
+pass_size(const std::array<Plan::Scale, 2> &type, const std::array<float, 2> &scale, const std::array<float, 2> &window,
+          const std::array<float, 2> &in)
+{
+	std::array<float, 2> out;
+
+	for (size_t axis = 0; axis < 2; axis++)
+		out[axis] = type[axis] == Plan::Scale::VIEWPORT ? window[axis] * scale[axis] :
+		            type[axis] == Plan::Scale::ABSOLUTE ? scale[axis] : in[axis] * scale[axis];
+	return out;
+}
+
+/* The four corners of a pass, VertexCoord then TexCoord: TexCoord spans the
+ * picture of its input in its texture */
+inline std::array<float, 16>
+corners(const std::array<float, 2> &size, const std::array<float, 2> &texture)
+{
+	const float u = size[0] / texture[0], v = size[1] / texture[1];
+
+	return { -1, -1, 0, 0, -1, 1, 0, v, 1, -1, u, 0, 1, 1, u, v };
+}
+
 } /* namespace odin::preset */
 
 #endif /* ODIN_PICTURE_PRESET_HPP */
