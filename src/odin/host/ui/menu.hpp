@@ -90,29 +90,62 @@ struct LibraryState {
 	std::string press;
 };
 
+/* The settings the pages and the bar both change: MenuState has them, the
+ * bar a copy (MenuSession::fill_bar), given back once changed there
+ * (do_bar) */
+struct BarSettings {
+	/* Display: the 3D that many times finer, how the flat meshes are drawn
+	 * when finer (DisplayUpscaleMode: 0 raw, 1 snap, 2 native), the texture
+	 * filter (1 for none), the window at start that many times the screen,
+	 * how the frames wait for the display (Display::Vsync: 0 not at all, 1
+	 * all, 2 those on time), around the picture where the window is wider
+	 * (Display::Sides: 0 black, 1 the picture blurred, 2 the bezel of the
+	 * game); the filter of the picture by its name ([display] filter;
+	 * empty: none); frames without a limit (at the next launch), the frames
+	 * a second in the title */
+	unsigned scale = 1, upscale_mode = 0, anisotropy = 1, window = 1, vsync = 0, sides = 2;
+	std::string filter;
+	bool unthrottled = false, show_speed = true;
+	/* Audio: the device chosen (empty: the system's), the volume of Odin
+	 * from 0 to 100, its sound kept while its window is in the background */
+	std::string device;
+	unsigned volume = 100;
+	bool background = true;
+	/* The board saying each access, at the next launch */
+	bool verbose = false;
+	/* The palette of the menu, the bar and the library ([menu] theme): one
+	 * of THEMES (menu_kit.hpp) */
+	unsigned theme = 0;
+	/* The outputs sent to the programs of lamps. The network board of the
+	 * games that link cabinets, at the next launch ([network]): none, alone
+	 * (its optical ring closed on itself) or linked to other Odins; the
+	 * port the previous cabinet comes in on; which cabinet of the link this
+	 * Odin is, 1 the master */
+	bool network = false;
+	int link_board = 0;
+	unsigned link_port = 13404, link_cabinet = 1;
+
+	bool operator==(const BarSettings &) const = default;
+};
+
 /* The bar at the top of the window, over the game that goes on and over the
  * library: FILE, INPUT, DISPLAY, AUDIO, LINK, DEBUG and ABOUT, each a menu.
  * What they show and what was asked there; the thread of the board keeps it
  * and does what was asked (session.cpp, library.cpp). */
-struct BarState {
+struct BarState : BarSettings {
 	/* At the right: the game and its frames a second. A note of Odin (what
 	 * it did, what went wrong) in the bottom-left corner, bar or not, and
 	 * how much of it shows (note_alpha: it fades out) */
 	std::string title, note;
 	float fps = 0.0f, note_alpha = 1.0f;
-	/* Shown checked or chosen, and changed there: the whole display, the
-	 * frames a second in the title, the game paused, its sound kept in the
-	 * background, the board saying each access (at the next launch), what
-	 * is around the picture (MenuState::sides), the volume */
-	bool fullscreen = false, show_speed = true, paused = false, background = true, verbose = false;
-	unsigned sides = 2, volume = 100;
+	/* Shown checked, and changed there: the whole display, the game
+	 * paused */
+	bool fullscreen = false, paused = false;
 	/* Said on the command line: shown, not changed; no sound to set */
 	bool verbose_given = false, silent = false;
 	/* A state of the game kept, to load; a game runs (not in the library:
-	 * nothing to close, save, load or pause); the palette (MenuState::theme),
-	 * of the library under the bar too */
+	 * nothing to close, save, load or pause) */
 	bool saved = false, game = true;
-	unsigned theme = 0;
 	/* The first key of each action of Odin (Hotkeys::Action), as odin.ini
 	 * says it */
 	std::array<std::string, Hotkeys::ACTIONS> keys;
@@ -126,23 +159,16 @@ struct BarState {
 	 * none) */
 	std::string card_keys;
 
-	/* The settings of the pages the bar offers as lists, as MenuState has
-	 * them; changed there, done as the menu does them (do_bar). The
-	 * display: the 3D that many times finer, its flat pieces, the texture
-	 * filter, the window at start (or the size given by hand, kept), how
-	 * the frames wait for the display, the filter of the picture by its
-	 * name, frames without a limit (at the next launch); those the command
-	 * line gives, and the vertical sync off at unlimited speed, are shown,
-	 * not changed. The graphics card. */
-	unsigned scale = 1, upscale_mode = 0, anisotropy = 1, window = 1, vsync = 0;
-	bool custom_window = false, unthrottled = false;
+	/* The display: the window at start of the size given by hand, kept;
+	 * what the command line gives, and the vertical sync off at unlimited
+	 * speed, shown, not changed. The graphics card. */
+	bool custom_window = false;
 	bool scale_given = false, anisotropy_given = false, window_given = false, unthrottled_given = false,
 	     vsync_locked = false;
-	std::string filter, gpu;
-	/* The sound: the devices (read while a menu of the bar is open) and the
-	 * one chosen (empty: the system's); the game that runs when it has an
-	 * optional sound board, how it plays it (Menu::PLAYED), its level in
-	 * dB */
+	std::string gpu;
+	/* The sound: the devices (read while a menu of the bar is open); the
+	 * game that runs when it has an optional sound board, how it plays it
+	 * (Menu::PLAYED), its level in dB */
 	struct SoundGame {
 		std::string name, title;
 		int played;
@@ -152,7 +178,6 @@ struct BarState {
 		bool later = false;
 	};
 	std::vector<std::string> devices;
-	std::string device;
 	std::vector<SoundGame> sound_games;
 	/* The game that runs: its players (two in a game of two), the device
 	 * each plays with (the one checked: it alone shakes), the gamepads and
@@ -180,12 +205,9 @@ struct BarState {
 	std::array<std::string, 2> gun;
 	std::array<bool, 2> sights{};
 	bool can_shake = false, shake = true, undo = false, light_gun = true;
-	/* The outputs sent to the programs of lamps; the network board at the
-	 * next launch (NetLinkSettings::Board), this cabinet, its port, the
-	 * next cabinet (typed in Settings), set by ODIN_NETBD */
-	bool lamps = false, link_given = false;
-	int link_board = 0;
-	unsigned link_cabinet = 1, link_port = 0;
+	/* The next cabinet of the link (typed in Settings); the link set by
+	 * ODIN_NETBD */
+	bool link_given = false;
 	std::string link_next;
 
 	/* What was asked; the page of the settings asked (Menu::Page, -1: the
@@ -210,26 +232,12 @@ struct BarState {
 
 /* What the pages of the menu show and change. The thread of the board
  * keeps it and does what changed (menu_session.cpp). */
-struct MenuState {
-	/* Display: the 3D that many times finer, the texture filter (1 for
-	 * none), the window at start that many times the screen, the whole
-	 * display, how the frames wait for the display (Display::Vsync: 0 not
-	 * at all, 1 all, 2 those on time), frames without a limit (at the
-	 * next launch), the frames a second in the title */
-	unsigned scale = 1, anisotropy = 1, window = 1, vsync = 0;
-	/* How the flat meshes are drawn when finer (DisplayUpscaleMode: 0
-	 * raw, 1 snap, 2 native) */
-	unsigned upscale_mode = 0;
-	/* The window at start of the size the user gave it by hand instead,
-	 * in points (Custom; 0: none); the size it has now */
+struct MenuState : BarSettings {
+	/* Display, but BarSettings: the window at start of the size the user
+	 * gave it by hand instead, in points (Custom; 0: none); the size it has
+	 * now; the whole display */
 	unsigned custom_w = 0, custom_h = 0, window_w = 0, window_h = 0;
-	/* Around the picture where the window is wider (Display::Sides: 0
-	 * black, 1 the picture blurred, 2 the bezel of the game) */
-	unsigned sides = 2;
-	/* The filter of the picture by its name ([display] filter); empty:
-	 * none */
-	std::string filter;
-	bool fullscreen = false, unthrottled = false, show_speed = true;
+	bool fullscreen = false;
 	/* Said on the command line: shown, not changed */
 	bool scale_given = false, anisotropy_given = false, window_given = false, fullscreen_given = false,
 	     unthrottled_given = false;
@@ -247,14 +255,9 @@ struct MenuState {
 	 * the library, no game runs. */
 	bool kept = true, library = false;
 
-	/* Audio: the devices the system plays on and the one chosen (empty:
-	 * the system's), the volume of Odin from 0 to 100, its sound kept while
-	 * its window is in the background; why there is no sound now (none:
-	 * there is) */
+	/* Audio, but BarSettings: the devices the system plays on; why there
+	 * is no sound now (none: there is) */
 	std::vector<std::string> devices;
-	std::string device;
-	unsigned volume = 100;
-	bool background = true;
 	const char *silent = nullptr;
 	/* The games whose optional sound board the user may hear: those with
 	 * speakers for it on the cabinet, and Racer, whose cabinet has it shake
@@ -291,33 +294,27 @@ struct MenuState {
 
 	/* Outputs: those of the cabinet of the game shown (their names, what
 	 * they are), lit while on in the game that runs; sent to the programs
-	 * of lamps, the port taken by another program, how many programs take
-	 * them */
+	 * of lamps (BarSettings::network), the port taken by another program,
+	 * how many programs take them */
 	struct Output {
 		std::string name;
 		GameOutput::Role role;
 		bool on;
 	};
 	std::vector<Output> outputs;
-	bool network = false, network_failed = false;
+	bool network_failed = false;
 	size_t programs = 0;
 
-	/* Link: the network board of the games that link cabinets, at the
-	 * next launch ([network]): none, alone (its optical ring closed on
-	 * itself) or linked to other Odins; the port the previous cabinet
-	 * comes in on; the next cabinet as kept and as being written (not an
-	 * address: not kept); ODIN_NETBD sets them. Then the game that runs:
-	 * it runs, it has the board, linked, its port taken, each end of the
-	 * cable plugged in. */
-	int link_board = 0;
-	unsigned link_port = 13404;
-	unsigned link_cabinet = 1;	/* which cabinet of the link this Odin is, 1 the master */
-	/* The game shown: its title, the most cabinets it links (0: none),
-	 * how its menu shows a seat */
+	/* Link, but BarSettings. The game shown: its title, the most cabinets
+	 * it links (0: none), how its menu shows a seat */
 	enum : int { SEAT_NONE, SEAT_NUMBER, SEAT_LETTER };
 	std::string link_shown_title;
 	unsigned link_shown_cabinets = 0;
 	int link_shown_seat = SEAT_NONE;
+	/* The next cabinet as kept and as being written (not an address: not
+	 * kept); ODIN_NETBD sets the link. Then the game that runs: it runs, it
+	 * has the board, linked, its port taken, each end of the cable plugged
+	 * in. */
 	std::string link_next, link_next_typed;
 	bool link_next_bad = false, link_given = false;
 	bool link_running = false, link_board_now = false, link_linked = false, link_failed = false;
@@ -327,11 +324,11 @@ struct MenuState {
 	 * empty, that of the games) and of their saves, at the next launch
 	 * (those the command line or ODIN_SAVES gives are shown, not changed),
 	 * of the save states; the settings file and the lists of the 3D
-	 * programs (empty: none). The board saying each access, at the next
-	 * launch. */
+	 * programs (empty: none). The board saying each access
+	 * (BarSettings::verbose) given on the command line. */
 	std::string roms, bios, saves, states, artwork, settings_file, shader_lists, log_file;
 	bool roms_given = false, bios_given = false, saves_given = false, artwork_given = false;
-	bool verbose = false, verbose_given = false;
+	bool verbose_given = false;
 	/* A folder to ask the system for; its picker is open; the system has
 	 * none */
 	enum class Folder { NONE, ROMS, BIOS, SAVES, STATES, ARTWORK } choose = Folder::NONE;
@@ -432,9 +429,6 @@ struct MenuState {
 	 * menu), the one shown at the last picture; while something moves the
 	 * menu draws on */
 	bool animations = true, moving = false;
-	/* The palette of the menu, the bar and the library ([menu] theme): one
-	 * of THEMES (menu_kit.hpp) */
-	unsigned theme = 0;
 	std::optional<size_t> games_was;	/* games by their place in `games` */
 	size_t games_from = 0;
 	double games_since = 0.0;

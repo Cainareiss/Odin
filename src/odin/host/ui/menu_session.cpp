@@ -659,24 +659,11 @@ MenuSession::fill_bar(BarState &bar) const
 {
 	const MenuState &state = m_menu_state;
 
+	static_cast<BarSettings &>(bar) = state;
 	bar.fullscreen = m_display.fullscreen();
-	bar.show_speed = state.show_speed;
-	bar.background = state.background;
-	bar.verbose = state.verbose;
 	bar.verbose_given = state.verbose_given;
-	bar.sides = state.sides;
-	bar.volume = state.volume;
 	bar.silent = state.silent != nullptr;
-	bar.theme = state.theme;
-	/* The settings of the pages the bar offers as lists */
-	bar.scale = state.scale;
-	bar.upscale_mode = state.upscale_mode;
-	bar.anisotropy = state.anisotropy;
-	bar.window = state.window;
 	bar.custom_window = state.custom_w != 0;
-	bar.vsync = state.vsync;
-	bar.filter = state.filter;
-	bar.unthrottled = state.unthrottled;
 	bar.scale_given = state.scale_given;
 	bar.anisotropy_given = state.anisotropy_given;
 	bar.window_given = state.window_given;
@@ -685,15 +672,10 @@ MenuSession::fill_bar(BarState &bar) const
 	bar.gpu = state.gpu;
 	if ((m_audio || m_listing) && (bar.open || bar.devices.empty()))
 		bar.devices = AudioOut::devices();
-	bar.device = state.device;
 	bar.sound_games.clear();
 	for (const MenuState::SoundGame &game : state.sound_games)
 		if (m_game && game.name == m_game->name)
 			bar.sound_games.push_back({ game.name, game.title, game.played, game.level, game.locked, game.later });
-	bar.lamps = state.network;
-	bar.link_board = state.link_board;
-	bar.link_cabinet = state.link_cabinet;
-	bar.link_port = state.link_port;
 	bar.link_given = state.link_given;
 	bar.link_next = state.link_next;
 	fill_bar_inputs(bar);
@@ -801,46 +783,23 @@ MenuSession::do_bar(BarState &bar)
 				return &one;
 		return nullptr;
 	};
-	bool sound = bar.device != state.device;
+	bool sound = false;
 
 	for (const BarState::SoundGame &game : bar.sound_games)
 		if (const MenuState::SoundGame *const one = sound_game(game))
 			sound = sound || game.played != one->played || game.level != one->level;
-	if (sound || bar.sides != state.sides || bar.volume != state.volume || bar.show_speed != state.show_speed ||
-	    bar.background != state.background || bar.verbose != state.verbose || bar.scale != state.scale ||
-	    bar.upscale_mode != state.upscale_mode || bar.anisotropy != state.anisotropy || bar.window != state.window ||
-	    bar.custom_window != (state.custom_w != 0) || bar.vsync != state.vsync || bar.filter != state.filter ||
-	    bar.unthrottled != state.unthrottled || bar.theme != state.theme || bar.lamps != state.network ||
-	    bar.link_board != state.link_board || bar.link_cabinet != state.link_cabinet ||
-	    bar.link_port != state.link_port) {
+	if (sound || static_cast<const BarSettings &>(bar) != state || bar.custom_window != (state.custom_w != 0)) {
 		const MenuState was = state;
 
-		state.sides = bar.sides;
-		state.volume = bar.volume;
-		state.show_speed = bar.show_speed;
-		state.background = bar.background;
-		state.verbose = bar.verbose;
-		state.scale = bar.scale;
-		state.upscale_mode = bar.upscale_mode;
-		state.anisotropy = bar.anisotropy;
-		state.window = bar.window;
+		static_cast<BarSettings &>(state) = bar;
 		/* A size chosen in the bar ends the one given by hand */
 		if (!bar.custom_window)
 			state.custom_w = state.custom_h = 0;
-		state.vsync = bar.vsync;
-		state.filter = bar.filter;
-		state.unthrottled = bar.unthrottled;
-		state.theme = bar.theme;
-		state.device = bar.device;
 		for (const BarState::SoundGame &game : bar.sound_games)
 			if (MenuState::SoundGame *const one = sound_game(game)) {
 				one->played = game.played;
 				one->level = game.level;
 			}
-		state.network = bar.lamps;
-		state.link_board = bar.link_board;
-		state.link_cabinet = bar.link_cabinet;
-		state.link_port = bar.link_port;
 		apply(was);
 		/* A mode that waits for the game to start again says so once the
 		 * menu of the bar is closed */

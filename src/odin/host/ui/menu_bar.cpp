@@ -416,8 +416,8 @@ Menu::bar(BarState &state)
 						ask(Ask::HOTKEYS_DEFAULTS);
 					ImGui::EndMenu();
 				}
-				if (item("Send outputs", {}, state.lamps))
-					state.lamps = !state.lamps;
+				if (item("Send outputs", {}, state.network))
+					state.network = !state.network;
 				break;
 			case 2: {
 				int window = state.custom_window ? CUSTOM : static_cast<int>(state.window) - 1;
