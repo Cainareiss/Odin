@@ -1032,15 +1032,14 @@ void Arm7::load(const Arm7State &in)
 bool Arm7::turn_registers_same(const Arm7State &as) const
 {
 	Arm7State now, start = as;
-	const uint32_t rank = mode() == MODE_FIQ ? 0 : mode() == MODE_IRQ ? 1 : mode() == MODE_SVC ? 2 :
-	                      mode() == MODE_ABT ? 3 : mode() == MODE_UND ? 4 : 5;
+	const uint32_t rank = spsr_index(mode());
 
 	save(now);
 	if (!m_turn_one_mode) {
 		return now == start;
 	}
 	bool same = now.pc == start.pc && now.cpsr == start.cpsr && now.irq_line == start.irq_line &&
-	            now.fiq_line == start.fiq_line && (rank == 5 || now.spsr[rank] == start.spsr[rank]);
+	            now.fiq_line == start.fiq_line && (rank == SPSRS || now.spsr[rank] == start.spsr[rank]);
 	for (uint32_t i = 0; i < 8; i++) {
 		same = same && now.r[i] == start.r[i];
 	}
@@ -1222,29 +1221,31 @@ uint32_t *Arm7::bank_slot(uint32_t mode_bits, uint32_t idx)
 	}
 }
 
-uint32_t *Arm7::spsr_slot(uint32_t mode_bits)
+uint32_t Arm7::spsr_index(uint32_t mode_bits)
 {
 	switch (mode_bits) {
-	case MODE_FIQ: return &m_spsr[0];
-	case MODE_IRQ: return &m_spsr[1];
-	case MODE_SVC: return &m_spsr[2];
-	case MODE_ABT: return &m_spsr[3];
-	case MODE_UND: return &m_spsr[4];
-	default: return nullptr;
+	case MODE_FIQ: return 0;
+	case MODE_IRQ: return 1;
+	case MODE_SVC: return 2;
+	case MODE_ABT: return 3;
+	case MODE_UND: return 4;
+	default: return SPSRS;
 	}
+}
+
+uint32_t *Arm7::spsr_slot(uint32_t mode_bits)
+{
+	const uint32_t index = spsr_index(mode_bits);
+
+	return index < SPSRS ? &m_spsr[index] : nullptr;
 }
 
 /* User and System have no SPSR; reading it gives the CPSR. */
 uint32_t Arm7::spsr() const
 {
-	switch (mode()) {
-	case MODE_FIQ: return m_spsr[0];
-	case MODE_IRQ: return m_spsr[1];
-	case MODE_SVC: return m_spsr[2];
-	case MODE_ABT: return m_spsr[3];
-	case MODE_UND: return m_spsr[4];
-	default: return m_cpsr;
-	}
+	const uint32_t index = spsr_index(mode());
+
+	return index < SPSRS ? m_spsr[index] : m_cpsr;
 }
 
 void Arm7::switch_mode(uint32_t new_mode)

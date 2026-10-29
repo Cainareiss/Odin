@@ -200,6 +200,10 @@ private:
 	uint32_t get_r(uint32_t idx) const { return idx == 15 ? m_pc + 4 : m_r[idx]; }
 	void set_pc(uint32_t v);
 	uint32_t *bank_slot(uint32_t mode_bits, uint32_t idx);
+	/* The SPSR of a mode in m_spsr (FIQ, IRQ, SVC, ABT, UND); SPSRS for
+	 * User and System, which have none */
+	static constexpr uint32_t SPSRS = 5;
+	static uint32_t spsr_index(uint32_t mode_bits);
 	uint32_t *spsr_slot(uint32_t mode_bits);
 	void switch_mode(uint32_t new_mode);
 	void set_cpsr_full(uint32_t v);
@@ -316,7 +320,7 @@ private:
 	uint32_t m_svc[2];
 	uint32_t m_abt[2];
 	uint32_t m_und[2];
-	uint32_t m_spsr[5];
+	uint32_t m_spsr[SPSRS];
 	bool m_irq_line, m_fiq_line;
 
 	/* Per-instruction scratch. */

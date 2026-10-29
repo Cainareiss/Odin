@@ -169,8 +169,8 @@ void Arm7::data_processing(uint32_t op)
 	if (rd == 15 && s) {
 		/* MOVS pc, lr and friends: exception return. Without an SPSR
 		 * (User and System) the flags computed above stand. */
-		if (spsr_slot(mode()) != nullptr) {
-			set_cpsr_full(spsr());
+		if (const uint32_t *const saved = spsr_slot(mode())) {
+			set_cpsr_full(*saved);
 		}
 	}
 	if ((opcode & 0xC) == 0x8) {
@@ -453,8 +453,10 @@ void Arm7::block_transfer(uint32_t op)
 			m_r[rn] = final;
 		}
 		if (pc_loaded) {
-			if (s && spsr_slot(mode()) != nullptr) {
-				set_cpsr_full(spsr());
+			const uint32_t *const saved = s ? spsr_slot(mode()) : nullptr;
+
+			if (saved) {
+				set_cpsr_full(*saved);
 			}
 			load_pc(new_pc);
 		}
