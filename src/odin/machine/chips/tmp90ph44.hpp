@@ -145,12 +145,14 @@ private:
 	uint8_t sfr_read(uint8_t reg);
 	void sfr_write(uint8_t reg, uint8_t value);
 	void tell_port(unsigned port);
+	uint8_t p67_driven(unsigned port) const;
 	void sync();
 	uint64_t next_event() const;
 	uint32_t timer_period(unsigned n) const;
 	unsigned ticks_to_match(unsigned n) const;
 	uint32_t watchdog_period() const;
 	void request(uint16_t vector) { m_requests |= 1u << (vector >> 3); }
+	bool requested(uint16_t vector) const { return (m_requests & (1u << (vector >> 3))) != 0; }
 
 	/* What spoils the turn on trial: something that may not come again
 	 * (an interrupt, an event, a byte of memory changed), or something no

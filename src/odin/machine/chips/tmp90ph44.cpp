@@ -42,6 +42,7 @@ enum : uint8_t {
 };
 
 constexpr uint16_t RAM_BASE = 0xFDC0;
+constexpr uint16_t SFR_BASE = 0xFFC0;
 
 [[noreturn]] void
 unknown(const char *what, unsigned value)
@@ -301,8 +302,8 @@ Tmp90ph44::peek(uint16_t addr) const
 {
 	if (addr < ROM_SIZE)
 		return m_rom[addr];
-	if (addr >= 0xFFC0)
-		return m_sfr[addr - 0xFFC0];
+	if (addr >= SFR_BASE)
+		return m_sfr[addr - SFR_BASE];
 	if (addr >= RAM_BASE)
 		return m_ram[addr - RAM_BASE];
 	return 0xFF;
@@ -313,8 +314,8 @@ Tmp90ph44::read8(uint16_t addr)
 {
 	if (addr < ROM_SIZE)
 		return m_rom[addr];
-	if (addr >= 0xFFC0)
-		return sfr_read(static_cast<uint8_t>(addr - 0xFFC0));
+	if (addr >= SFR_BASE)
+		return sfr_read(static_cast<uint8_t>(addr - SFR_BASE));
 	if (addr >= RAM_BASE)
 		return m_ram[addr - RAM_BASE];
 	spoil(Spoil::NEVER);
@@ -326,9 +327,9 @@ Tmp90ph44::write8(uint16_t addr, uint8_t value)
 {
 	if (addr < ROM_SIZE)
 		return;
-	if (addr >= 0xFFC0) {
+	if (addr >= SFR_BASE) {
 		spoil(Spoil::NEVER);
-		sfr_write(static_cast<uint8_t>(addr - 0xFFC0), value);
+		sfr_write(static_cast<uint8_t>(addr - SFR_BASE), value);
 	} else if (addr >= RAM_BASE) {
 		if (m_ram[addr - RAM_BASE] != value)
 			spoil(Spoil::AGAIN);
@@ -358,10 +359,11 @@ Tmp90ph44::sfr_read(uint8_t reg)
 	}
 	case P6:
 	case P7: {
-		/* Four bits each, driven as P67CR says */
-		const uint8_t out = reg == P6 ? m_sfr[P67CR] & 0x0F : m_sfr[P67CR] >> 4;
+		/* Four bits each */
+		const unsigned port = reg == P6 ? 6u : 7u;
+		const uint8_t out = p67_driven(port);
 
-		return static_cast<uint8_t>((m_sfr[reg] & out) | (pin(reg == P6 ? 6u : 7u) & ~out & 0x0F));
+		return static_cast<uint8_t>((m_sfr[reg] & out) | (pin(port) & ~out & 0x0F));
 	}
 	case P5:
 		/* HEURISTIC: the latch. The program reads P5 only to change P56
@@ -461,8 +463,14 @@ Tmp90ph44::tell_port(unsigned port)
 	else if (port == 5)
 		m_board.port_out(5, m_sfr[P5], 0xC0);
 	else
-		m_board.port_out(port, m_sfr[port == 6 ? P6 : P7] & 0x0F,
-		                 port == 6 ? m_sfr[P67CR] & 0x0F : static_cast<uint8_t>(m_sfr[P67CR] >> 4));
+		m_board.port_out(port, m_sfr[port == 6 ? P6 : P7] & 0x0F, p67_driven(port));
+}
+
+/* The pins of P6 or P7 the chip drives, as P67CR says */
+uint8_t
+Tmp90ph44::p67_driven(unsigned port) const
+{
+	return port == 6 ? m_sfr[P67CR] & 0x0F : static_cast<uint8_t>(m_sfr[P67CR] >> 4);
 }
 
 /* The states of a tick of timer n: T01MOD and T23MOD as MAME reads them
@@ -608,15 +616,15 @@ Tmp90ph44::interrupt(bool maskable)
 	const bool serial = (inteh & 0x48) == 0x48 && (m_sfr[INTEL] & 0x0C) == 0x0C;
 	uint16_t vector = 0;
 
-	if (m_requests & (1u << (VEC_WD >> 3)))
+	if (requested(VEC_WD))
 		vector = VEC_WD;
-	else if ((m_requests & (1u << (VEC_T1 >> 3))) && (inteh & 0x04))
+	else if (requested(VEC_T1) && (inteh & 0x04))
 		vector = VEC_T1;
-	else if ((m_requests & (1u << (VEC_T3 >> 3))) && (inteh & 0x01))
+	else if (requested(VEC_T3) && (inteh & 0x01))
 		vector = VEC_T3;
-	else if ((m_requests & (1u << (VEC_RX >> 3))) && serial)
+	else if (requested(VEC_RX) && serial)
 		vector = VEC_RX;
-	else if ((m_requests & (1u << (VEC_TX >> 3))) && serial)
+	else if (requested(VEC_TX) && serial)
 		vector = VEC_TX;
 	if (vector) {
 		m_requests &= ~(1u << (vector >> 3));
