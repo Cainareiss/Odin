@@ -568,6 +568,8 @@ void Arm7::undefined(uint32_t op)
 struct Arm7Ops {
 	/* The second operand of data processing, and the offset of LDR / STR */
 	enum : uint32_t { SHIFT_LSL, SHIFT_LSR, SHIFT_ASR, SHIFT_ROR, SHIFT_REG, IMMEDIATE };
+	/* single_transfer: its immediate offset, the last of its 5 forms */
+	static constexpr uint32_t TRANSFER_IMMEDIATE = 4;
 
 	/* shift_by() of an amount in the instruction (0 to 31) */
 	template <uint32_t TYPE>
@@ -753,7 +755,7 @@ struct Arm7Ops {
 	static constexpr std::array<Arm7::Run, sizeof...(I)> transfer_table(std::integer_sequence<uint32_t, I...>)
 	{
 		return { &single_transfer<((I / 5) & 16) != 0, ((I / 5) & 8) != 0, ((I / 5) & 4) != 0, ((I / 5) & 2) != 0,
-		                          ((I / 5) & 1) != 0, I % 5 == 4 ? IMMEDIATE : I % 5>... };
+		                          ((I / 5) & 1) != 0, I % 5 == TRANSFER_IMMEDIATE ? IMMEDIATE : I % 5>... };
 	}
 	static const std::array<Arm7::Run, 192> DATA;
 	static const std::array<Arm7::Run, 160> TRANSFER;
@@ -788,7 +790,8 @@ Arm7::Form Arm7::form_of(uint32_t op, Run run)
 	case 1:
 		return run == Arm7Ops::DATA[data_index(op, Arm7Ops::IMMEDIATE)] ? Form::Data : Form::Other;
 	case 2:
-		return run == Arm7Ops::TRANSFER[transfer_index(op, 4)] ? Form::Transfer : Form::Other;
+		return run == Arm7Ops::TRANSFER[transfer_index(op, Arm7Ops::TRANSFER_IMMEDIATE)] ? Form::Transfer
+		                                                                                 : Form::Other;
 	case 3:
 		return !(op & 0x10) && run == Arm7Ops::TRANSFER[transfer_index(op, (op >> 5) & 3)] ? Form::Transfer
 		                                                                                 : Form::Other;
@@ -836,7 +839,7 @@ Arm7::Run Arm7::decode(uint32_t op)
 		}
 		return Arm7Ops::DATA[data_index(op, Arm7Ops::IMMEDIATE)];
 	case 2:
-		return Arm7Ops::TRANSFER[transfer_index(op, 4)];
+		return Arm7Ops::TRANSFER[transfer_index(op, Arm7Ops::TRANSFER_IMMEDIATE)];
 	case 3:
 		return (op & 0x10) ? &Arm7Ops::exec : Arm7Ops::TRANSFER[transfer_index(op, (op >> 5) & 3)];
 	case 4:

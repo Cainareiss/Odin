@@ -217,9 +217,7 @@ void Arm7Host::link_to(uint32_t at, uint32_t place)
 
 void Arm7Host::failed(Jump skip, uint32_t pc)
 {
-	byte(0xE9);					/* jmp on */
-	m_used += 4;
-	const Jump on{m_used - 4};
+	const Jump on = skip_ahead();			/* jmp on */
 
 	bind(skip);
 	op_ri(0, R12, 1);

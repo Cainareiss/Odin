@@ -355,7 +355,7 @@ private:
 	static constexpr uint32_t TURN_AWAY = 1u << 16; /* instructions away from one kept */
 	static constexpr uint32_t TURN_READS = 16;   /* outside the memory */
 	static constexpr uint32_t TURN_STORES = 256; /* bytes changed */
-	static constexpr uint32_t TURN_PAGE = WATCH_PAGE; /* 4 KB */
+	static constexpr uint32_t TURN_BACKOFF = 64; /* calls of run() waited at most before a record */
 	struct TurnRead {
 		uint32_t index, addr, size, value;
 	};
