@@ -28,11 +28,14 @@
 
 #include <cstdio>
 
+#include "odin/machine/chips/aica/aica.hpp"
+
 namespace odin {
 
 namespace {
 
-constexpr int RATE = 44100;
+/* The rate the sound boards give their samples at */
+constexpr int RATE = static_cast<int>(Aica::SAMPLE_RATE);
 
 uint32_t
 channels(AudioOut::Mode mode)
