@@ -123,9 +123,8 @@ void Sh4Host::loop_if_told()
 
 Sh4Host::Jump Sh4Host::jump_if_told()
 {
-	bytes({0x48, 0x85, 0xC0, 0x0F, 0x85});		/* test rax, rax / jnz ... */
-	m_used += 4;
-	return Jump{m_used - 4};
+	bytes({0x48, 0x85, 0xC0});			/* test rax, rax */
+	return jump_if(JNZ);
 }
 
 void Sh4Host::go_where_told()

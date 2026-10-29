@@ -77,6 +77,9 @@ constexpr uint32_t tcr(uint32_t ch) { return TMU_TCR0 + ch * 12; }
 /* Bytes per transfer for CHCR.TS */
 constexpr uint32_t DMAC_UNIT[8] = {8, 1, 2, 4, 32, 0, 0, 0};
 
+/* The dividers of the CPU and bus clocks in FRQCR, IFC and BFC (section 10.2) */
+constexpr uint8_t FRQCR_DIVIDER[8] = { 1, 2, 3, 4, 6, 8, 0, 0 };
+
 } /* namespace */
 
 uint64_t Sh4::reg_get(uint32_t size, uint32_t addr) const
@@ -445,7 +448,6 @@ void Sh4::dmac_update(uint32_t request)
  * divided from the same clock by FRQCR (section 10.2). */
 uint32_t Sh4::pck_cycles() const
 {
-	static constexpr uint8_t IFC[8] = { 1, 2, 3, 4, 6, 8, 0, 0 };
 	static constexpr uint8_t PFC[8] = { 2, 3, 4, 6, 8, 0, 0, 0 };
 	/* The peripheral divider over the CPU's, 0 where it is not whole */
 	static constexpr auto RATIO = [] {
@@ -453,8 +455,8 @@ uint32_t Sh4::pck_cycles() const
 
 		for (uint32_t i = 0; i < 8; i++) {
 			for (uint32_t p = 0; p < 8; p++) {
-				if (IFC[i] && PFC[p] && PFC[p] % IFC[i] == 0) {
-					ratio[i][p] = static_cast<uint8_t>(PFC[p] / IFC[i]);
+				if (FRQCR_DIVIDER[i] && PFC[p] && PFC[p] % FRQCR_DIVIDER[i] == 0) {
+					ratio[i][p] = static_cast<uint8_t>(PFC[p] / FRQCR_DIVIDER[i]);
 				}
 			}
 		}
@@ -480,7 +482,6 @@ uint32_t Sh4::pck_cycles() const
  * manual calls reserved). */
 uint32_t Sh4::mpx_cycles(uint32_t addr, bool write) const
 {
-	static constexpr uint8_t DIVIDER[8] = { 1, 2, 3, 4, 6, 8, 0, 0 };
 	static constexpr uint8_t READ_WAITS[8] = { 1, 1, 2, 3, 1, 1, 2, 3 };
 	static constexpr uint8_t WRITE_WAITS[8] = { 0, 1, 2, 3, 0, 1, 2, 3 };
 	static constexpr uint8_t ANW_SHIFT[7] = { 3, 7, 10, 0, 17, 23, 29 };
@@ -496,7 +497,7 @@ uint32_t Sh4::mpx_cycles(uint32_t addr, bool write) const
 	}
 	const uint32_t anw = (static_cast<uint32_t>(reg_get(4, BSC_WCR2)) >> ANW_SHIFT[area]) & 7;
 	const uint32_t frqcr = static_cast<uint32_t>(reg_get(2, CPG_FRQCR));
-	const uint32_t cpu = DIVIDER[(frqcr >> 6) & 7], bus = DIVIDER[(frqcr >> 3) & 7];
+	const uint32_t cpu = FRQCR_DIVIDER[(frqcr >> 6) & 7], bus = FRQCR_DIVIDER[(frqcr >> 3) & 7];
 
 	if (cpu == 0 || bus == 0 || bus % cpu != 0) {
 		fatal("FRQCR with clock ratios that are not implemented", frqcr);

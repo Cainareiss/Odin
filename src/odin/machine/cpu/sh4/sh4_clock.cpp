@@ -154,6 +154,18 @@ bool Sh4::same_but(const Regs &a, const Regs &b, uint64_t free)
 	return x == y;
 }
 
+uint64_t Sh4::differ_of(Regs &a, Regs &b)
+{
+	uint64_t differ = 0;
+
+	for (uint32_t i = 0; i < USE_COUNT; i++) {
+		if (use_of(a, i) != use_of(b, i)) {
+			differ |= uint64_t{1} << i;
+		}
+	}
+	return differ;
+}
+
 void Sh4::clock_noted_read(uint32_t addr, uint32_t size, const void *at)
 {
 	const uint64_t value = load_bytes(static_cast<const uint8_t *>(at), size);
@@ -315,7 +327,7 @@ bool Sh4::clock_note(ClockTurn &turn)
 	m_clock_note = ClockNote{};
 	m_clock_note.on = true;
 	do {
-		if (m_hook_on && (m_r.pc & PHYSICAL) == m_hook_addr) {
+		if (hooked(m_r.pc)) {
 			ran = false;
 			break;
 		}
@@ -463,14 +475,9 @@ bool Sh4::clock_follow(ClockTurn &turn, std::vector<ClockStep> &steps)
 		}
 	}
 
-	uint64_t differ = 0;
 	Regs end = m_r;
+	const uint64_t differ = differ_of(end, turn.start);
 
-	for (uint32_t i = 0; i < USE_COUNT; i++) {
-		if (use_of(end, i) != use_of(turn.start, i)) {
-			differ |= uint64_t{1} << i;
-		}
-	}
 	if (std::popcount(differ) > static_cast<int>(DIFFER_MAX) || (differ & ~timed) || (timed & live) ||
 	    !same_but(end, turn.start, differ)) {
 		return false;
@@ -543,7 +550,7 @@ bool Sh4::clock_still(const ClockTurn &turn) const
 		return false;
 	}
 	for (const auto &[pc, word] : turn.code) {
-		if ((m_hook_on && (pc & PHYSICAL) == m_hook_addr) || !plain(pc & PHYSICAL, 2, word)) {
+		if (hooked(pc) || !plain(pc & PHYSICAL, 2, word)) {
 			return false;
 		}
 	}
@@ -774,13 +781,8 @@ bool Sh4::clock_wait(uint32_t &mark)
 			return false;
 		}
 		/* A TCNT read, few registers changed: worth a look */
-		uint64_t differ = 0;
+		const uint64_t differ = differ_of(m_r, m_wait.regs);
 
-		for (uint32_t i = 0; i < USE_COUNT; i++) {
-			if (use_of(m_r, i) != use_of(m_wait.regs, i)) {
-				differ |= uint64_t{1} << i;
-			}
-		}
 		if (!m_timer_read || std::popcount(differ) > static_cast<int>(DIFFER_MAX) ||
 		    !same_but(m_r, m_wait.regs, differ) || !clock_note(turn)) {
 			if (miss.pc != pc) {

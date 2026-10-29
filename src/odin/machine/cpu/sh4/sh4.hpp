@@ -521,8 +521,9 @@ private:
 	/* The end of an instruction run alone for clock_note(): on at `imm`,
 	 * no other block after it */
 	static void op_noted(Sh4 &c, const Sh4Op *op);
-	/* The same registers but those of `free` */
+	/* The same registers but those of `free`; the registers that differ */
 	static bool same_but(const Regs &a, const Regs &b, uint64_t free);
+	static uint64_t differ_of(Regs &a, Regs &b);
 	/* TCNT of a channel at a date, and the counts from a date to another,
 	 * without counting the timers (sh4_onchip.cpp) */
 	uint32_t tmu_count_at(uint32_t ch, uint64_t when) const;
@@ -621,13 +622,17 @@ private:
 		m_resumed = true;
 	}
 
+	/* The block of the near table for `pc`, and whether the hook of the
+	 * debugger is on an address */
+	Block &near_of(uint32_t pc) { return m_near[(pc >> 1) & (NEAR_SIZE - 1)]; }
+	bool hooked(uint32_t addr) const { return m_hook_on && (addr & PHYSICAL) == m_hook_addr; }
 	/* At the end of a block that nothing disturbed: the block at `pc`,
 	 * entered, when it is kept, was compared in this epoch and fits in
 	 * the slice, unless the search for waits has something to do here.
 	 * Otherwise nullptr, and the program is where it was. */
 	const Block *enter(uint32_t pc)
 	{
-		Block &b = m_near[(pc >> 1) & (NEAR_SIZE - 1)];
+		Block &b = near_of(pc);
 
 		if (b.pc != pc || b.checked != m_epoch || b.count > m_remaining) [[unlikely]] {
 			return nullptr;
@@ -654,7 +659,7 @@ private:
 	 * does not turn them into jumps, to the length of a slice. */
 	void chain(uint32_t pc)
 	{
-		const Block &near = m_near[(pc >> 1) & (NEAR_SIZE - 1)];
+		const Block &near = near_of(pc);
 
 		/* Host code is for the run loop to enter. */
 		if (near.host) [[unlikely]] {
@@ -671,7 +676,7 @@ private:
 	 * run loop, which a block without host code is left to. */
 	uintptr_t link(uint32_t pc)
 	{
-		const Block &near = m_near[(pc >> 1) & (NEAR_SIZE - 1)];
+		const Block &near = near_of(pc);
 
 		if (near.host == 0) [[unlikely]] {
 			return 1;

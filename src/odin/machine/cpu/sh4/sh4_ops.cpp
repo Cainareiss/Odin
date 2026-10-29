@@ -1072,45 +1072,27 @@ struct Sh4OpsT {
 		c.m_r.r[op->n] += 4;
 		return Way::stop(c, op);
 	}
-	static Ret ldcmgbr(Sh4 &c, const Op *op)
-	{
-		bool plain = c.read(op, c.m_r.r[op->n], c.m_r.gbr);
-		c.m_r.r[op->n] += 4;
-		return next(c, op, plain);
-	}
-	static Ret ldcmvbr(Sh4 &c, const Op *op)
-	{
-		bool plain = c.read(op, c.m_r.r[op->n], c.m_r.vbr);
-		c.m_r.r[op->n] += 4;
-		return next(c, op, plain);
-	}
+	static Ret ldcmgbr(Sh4 &c, const Op *op) { return pop(c, op, c.m_r.gbr); }
+	static Ret ldcmvbr(Sh4 &c, const Op *op) { return pop(c, op, c.m_r.vbr); }
 	static Ret ldcmssr(Sh4 &c, const Op *op)
 	{
 		need_privileged(c, op);
-		bool plain = c.read(op, c.m_r.r[op->n], c.m_r.ssr);
-		c.m_r.r[op->n] += 4;
-		return next(c, op, plain);
+		return pop(c, op, c.m_r.ssr);
 	}
 	static Ret ldcmspc(Sh4 &c, const Op *op)
 	{
 		need_privileged(c, op);
-		bool plain = c.read(op, c.m_r.r[op->n], c.m_r.spc);
-		c.m_r.r[op->n] += 4;
-		return next(c, op, plain);
+		return pop(c, op, c.m_r.spc);
 	}
 	static Ret ldcmdbr(Sh4 &c, const Op *op)
 	{
 		need_privileged(c, op);
-		bool plain = c.read(op, c.m_r.r[op->n], c.m_r.dbr);
-		c.m_r.r[op->n] += 4;
-		return next(c, op, plain);
+		return pop(c, op, c.m_r.dbr);
 	}
 	static Ret ldcmrbank(Sh4 &c, const Op *op)
 	{
 		need_privileged(c, op);
-		bool plain = c.read(op, c.m_r.r[op->n], c.m_r.rbank[op->m]);
-		c.m_r.r[op->n] += 4;
-		return next(c, op, plain);
+		return pop(c, op, c.m_r.rbank[op->m]);
 	}
 	static Ret ldsmach(Sh4 &c, const Op *op)
 	{
@@ -1127,24 +1109,9 @@ struct Sh4OpsT {
 		c.m_r.pr = c.m_r.r[op->n];
 		return go(c, op);
 	}
-	static Ret ldsmmach(Sh4 &c, const Op *op)
-	{
-		bool plain = c.read(op, c.m_r.r[op->n], c.m_r.mach);
-		c.m_r.r[op->n] += 4;
-		return next(c, op, plain);
-	}
-	static Ret ldsmmacl(Sh4 &c, const Op *op)
-	{
-		bool plain = c.read(op, c.m_r.r[op->n], c.m_r.macl);
-		c.m_r.r[op->n] += 4;
-		return next(c, op, plain);
-	}
-	static Ret ldsmpr(Sh4 &c, const Op *op)
-	{
-		bool plain = c.read(op, c.m_r.r[op->n], c.m_r.pr);
-		c.m_r.r[op->n] += 4;
-		return next(c, op, plain);
-	}
+	static Ret ldsmmach(Sh4 &c, const Op *op) { return pop(c, op, c.m_r.mach); }
+	static Ret ldsmmacl(Sh4 &c, const Op *op) { return pop(c, op, c.m_r.macl); }
+	static Ret ldsmpr(Sh4 &c, const Op *op) { return pop(c, op, c.m_r.pr); }
 	static Ret sleep(Sh4 &c, const Op *op)
 	{
 		c.set_run(Sh4Run::Sleeping);
@@ -1200,6 +1167,13 @@ struct Sh4OpsT {
 	{
 		c.m_r.r[op->n] -= 4;
 		return next(c, op, c.write(op, c.m_r.r[op->n], value));
+	}
+	/* The value at (Rn) to `to`, then Rn + 4 -> Rn */
+	static Ret pop(Sh4 &c, const Op *op, uint32_t &to)
+	{
+		const bool plain = c.read(op, c.m_r.r[op->n], to);
+		c.m_r.r[op->n] += 4;
+		return next(c, op, plain);
 	}
 	static Ret stcmsr(Sh4 &c, const Op *op) { return push(c, op, c.m_r.sr | c.m_r.t); }
 	static Ret stcmgbr(Sh4 &c, const Op *op) { return push(c, op, c.m_r.gbr); }
@@ -1291,9 +1265,7 @@ struct Sh4OpsT {
 	static Ret ldsmfpul(Sh4 &c, const Op *op)
 	{
 		need_fpu(c, op);
-		bool plain = c.read(op, c.m_r.r[op->n], c.m_r.fpul);
-		c.m_r.r[op->n] += 4;
-		return next(c, op, plain);
+		return pop(c, op, c.m_r.fpul);
 	}
 	static Ret stsfpul(Sh4 &c, const Op *op)
 	{
@@ -1398,7 +1370,7 @@ struct Sh4OpsT {
 		if (!(c.m_r.fpscr & Sh4::FPSCR_PR)) {
 			c.m_r.fr[op->n] = bits(static_cast<float>(v));
 		} else {
-			need(c, op, !(op->n & 1), "double precision with an odd register");
+			need_even_n(c, op);
 			set_dr(c, op->n, static_cast<double>(v));
 		}
 		return go(c, op);
@@ -1411,7 +1383,7 @@ struct Sh4OpsT {
 			float v = f32(c.m_r.fr[op->n]);
 			c.m_r.fpul = (v >= -2147483648.0f && v < 2147483648.0f) ? u32(static_cast<int32_t>(v)) : 0x80000000;
 		} else {
-			need(c, op, !(op->n & 1), "double precision with an odd register");
+			need_even_n(c, op);
 			double v = get_dr(c, op->n);
 			c.m_r.fpul = (v > -2147483649.0 && v < 2147483648.0) ? u32(static_cast<int32_t>(v)) : 0x80000000;
 		}
@@ -1419,32 +1391,38 @@ struct Sh4OpsT {
 	}
 	static Ret fcnvsd(Sh4 &c, const Op *op)
 	{
-		need(c, op, !(op->n & 1), "double precision with an odd register");
+		need_even_n(c, op);
 		set_dr(c, op->n, static_cast<double>(f32(c.m_r.fpul)));
 		return go(c, op);
 	}
 	static Ret fcnvds(Sh4 &c, const Op *op)
 	{
-		need(c, op, !(op->n & 1), "double precision with an odd register");
+		need_even_n(c, op);
 		c.m_r.fpul = bits(static_cast<float>(get_dr(c, op->n)));
 		return go(c, op);
 	}
 	/* The sign of a double is in FRn. */
 	static Ret fneg(Sh4 &c, const Op *op)
 	{
-		need(c, op, !(c.m_r.fpscr & Sh4::FPSCR_PR) || !(op->n & 1), "double precision with an odd register");
+		if (c.m_r.fpscr & Sh4::FPSCR_PR)
+			need_even_n(c, op);
 		c.m_r.fr[op->n] ^= 0x80000000;
 		return go(c, op);
 	}
 	static Ret fabs_(Sh4 &c, const Op *op)
 	{
-		need(c, op, !(c.m_r.fpscr & Sh4::FPSCR_PR) || !(op->n & 1), "double precision with an odd register");
+		if (c.m_r.fpscr & Sh4::FPSCR_PR)
+			need_even_n(c, op);
 		c.m_r.fr[op->n] &= 0x7FFFFFFF;
 		return go(c, op);
 	}
 	static void need_even(Sh4 &c, const Op *op)
 	{
 		need(c, op, !((op->n | op->m) & 1), "double precision with an odd register");
+	}
+	static void need_even_n(Sh4 &c, const Op *op)
+	{
+		need(c, op, !(op->n & 1), "double precision with an odd register");
 	}
 	static Ret fadd(Sh4 &c, const Op *op)
 	{
@@ -1499,7 +1477,7 @@ struct Sh4OpsT {
 		if (!(c.m_r.fpscr & Sh4::FPSCR_PR)) {
 			c.m_r.fr[op->n] = bits(std::sqrt(f32(c.m_r.fr[op->n])));
 		} else {
-			need(c, op, !(op->n & 1), "double precision with an odd register");
+			need_even_n(c, op);
 			set_dr(c, op->n, std::sqrt(get_dr(c, op->n)));
 		}
 		return go(c, op);

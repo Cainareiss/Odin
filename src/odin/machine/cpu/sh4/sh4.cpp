@@ -589,7 +589,7 @@ void Sh4::drop_blocks()
 bool Sh4::bad_slot(Kind kind, uint32_t at) const
 {
 	return kind == Kind::PcRelative || kind == Kind::Branch || kind == Kind::BranchDelayed
-		|| kind == Kind::Jump || (m_hook_on && (at & PHYSICAL) == m_hook_addr);
+		|| kind == Kind::Jump || hooked(at);
 }
 
 /* Decodes the block that starts at `pc`, `limit` instructions at most, at
@@ -613,7 +613,6 @@ bool Sh4::decode_block(uint32_t pc, uint32_t limit, Block &b, std::vector<Sh4Op>
 	uint32_t room = (PAGE_SIZE - (pc & (PAGE_SIZE - 1))) / 2;
 	uint32_t next_page = ((pc & PHYSICAL) >> PAGE_BITS) + 1;
 	bool more = next_page < ((PHYSICAL + 1) >> PAGE_BITS) && m_rd[next_page] == page + PAGE_SIZE;
-	auto hooked = [&](uint32_t at) { return m_hook_on && (at & PHYSICAL) == m_hook_addr; };
 
 	while (count < limit && count < room) {
 		uint32_t at = pc + 2 * count;
@@ -807,7 +806,7 @@ bool Sh4::run_cut(Block &b, uint32_t from, uint32_t limit)
  * what was decoded and the slice has the cycles for it. */
 void Sh4::chain_stale(uint32_t pc)
 {
-	Block &b = m_near[(pc >> 1) & (NEAR_SIZE - 1)];
+	Block &b = near_of(pc);
 
 	if (b.count > m_remaining || !same_code(b)) {
 		return;
@@ -817,7 +816,7 @@ void Sh4::chain_stale(uint32_t pc)
 
 uintptr_t Sh4::link_stale(uint32_t pc)
 {
-	Block &b = m_near[(pc >> 1) & (NEAR_SIZE - 1)];
+	Block &b = near_of(pc);
 
 	if (b.count > m_remaining || !same_code(b)) {
 		return 1;
@@ -841,7 +840,7 @@ bool Sh4::fits(Block &b, uint32_t from)
 /* Runs the block at `pc`. */
 void Sh4::run_at(uint32_t pc)
 {
-	Block &b = m_near[(pc >> 1) & (NEAR_SIZE - 1)];
+	Block &b = near_of(pc);
 	const bool resumed = m_resumed;
 
 	m_resumed = false;
@@ -858,7 +857,7 @@ void Sh4::run_at(uint32_t pc)
 void Sh4::run_far(uint32_t pc, bool resumed)
 {
 	uint32_t page = m_page_of[pc >> PAGE_BITS];
-	Block &near = m_near[(pc >> 1) & (NEAR_SIZE - 1)];
+	Block &near = near_of(pc);
 	uint32_t limit = std::min(BLOCK_MAX, static_cast<uint32_t>(m_remaining));
 	Block b;
 
@@ -869,7 +868,7 @@ void Sh4::run_far(uint32_t pc, bool resumed)
 		if (rank && (from == 0 || resumed) && fits(m_blocks[rank - 1], from)) {
 			/* A hooked address, or the middle of a block, is only
 			 * found here: chain() never runs over the hook. */
-			if (from || (m_hook_on && (pc & PHYSICAL) == m_hook_addr)) {
+			if (from || hooked(pc)) {
 				return run_block(m_blocks[rank - 1], from);
 			}
 			near = m_blocks[rank - 1];
@@ -928,7 +927,7 @@ void Sh4::run_far(uint32_t pc, bool resumed)
 			code.block[first + i] = rank | (i << PLACE_BITS);
 		}
 	}
-	if (!(m_hook_on && (pc & PHYSICAL) == m_hook_addr)) {
+	if (!hooked(pc)) {
 		near = b;
 	}
 	run_block(m_blocks.back());
@@ -1034,7 +1033,7 @@ int32_t Sh4::run_part(int32_t cycles, int32_t &used)
 		if (m_intc.pending) {
 			take_irq();
 		}
-		if (m_hook_on && (m_r.pc & PHYSICAL) == m_hook_addr) {
+		if (hooked(m_r.pc)) {
 			m_bus.hook();
 			new_epoch();
 		}
