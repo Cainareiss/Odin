@@ -384,6 +384,17 @@ Controls::close_joystick(SDL_JoystickID id)
 
 namespace {
 
+/* Where a point of the window falls on the picture, and whether it is off it */
+void
+aim_at(MouseState &aim, int x, int y, int w, int h, const PictureHole &hole)
+{
+	const PicturePoint point = picture_point(x, y, static_cast<unsigned>(w), static_cast<unsigned>(h), hole);
+
+	aim.x = point.x;
+	aim.y = point.y;
+	aim.off = point.x < 0.0 || point.x >= 1.0 || point.y < 0.0 || point.y >= 1.0;
+}
+
 /* A button down or up: one pressed and released before a frame saw it
  * stays pressed until that frame has run. */
 void
@@ -414,11 +425,7 @@ Controls::event(const SDL_Event &event)
 		int w = 0, h = 0;
 
 		SDL_GetWindowSize(SDL_GetWindowFromID(event.motion.windowID), &w, &h);
-		const PicturePoint point = picture_point(x, y, static_cast<unsigned>(w), static_cast<unsigned>(h), m_hole);
-
-		m_mouse.x = point.x;
-		m_mouse.y = point.y;
-		m_mouse.off = point.x < 0.0 || point.x >= 1.0 || point.y < 0.0 || point.y >= 1.0;
+		aim_at(m_mouse, x, y, w, h, m_hole);
 		if (!m_mouse_placed) {
 			m_mouse_placed = true;
 			m_mouse_from_x = x;
@@ -693,12 +700,7 @@ Controls::follow_guns()
 		if (!aim)
 			continue;
 
-		const PicturePoint point = picture_point(static_cast<int>(aim->x), static_cast<int>(aim->y),
-		                                         static_cast<unsigned>(w), static_cast<unsigned>(h), m_hole);
-
-		now.x = point.x;
-		now.y = point.y;
-		now.off = point.x < 0.0 || point.x >= 1.0 || point.y < 0.0 || point.y >= 1.0;
+		aim_at(now, static_cast<int>(aim->x), static_cast<int>(aim->y), w, h, m_hole);
 		for (unsigned button = 0; button < now.buttons.size(); button++)
 			now.buttons[button] = ((aim->buttons | aim->pressed) >> button) & 1;
 	}

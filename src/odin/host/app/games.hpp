@@ -91,6 +91,8 @@ struct GameControl {
 			return positive ? "_down" : "_up";
 		return nullptr;
 	}
+	/* Whether its low end is the far one of the axis of the host */
+	static bool turned_over(Low low) { return low == Low::RIGHT || low == Low::DOWN || low == Low::PRESSED; }
 
 	std::string name;
 	std::string id;

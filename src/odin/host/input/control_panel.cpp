@@ -160,7 +160,7 @@ ControlPanel::ControlPanel(const std::vector<GameControl> &controls, const Setti
 uint16_t
 ControlPanel::channel(const PadInput &input, GameControl::Low low, int16_t value)
 {
-	const bool over = low == GameControl::Low::RIGHT || low == GameControl::Low::DOWN || low == GameControl::Low::PRESSED;
+	const bool over = GameControl::turned_over(low);
 
 	if (input.is_trigger()) {
 		const int word = std::max<int>(value, 0) * 0xFFFF / 0x7FFF;
@@ -340,8 +340,7 @@ ControlPanel::now(const HostState &host, size_t control) const
 		                                                               std::nullopt) {
 			/* From its channel: a pedal from 0, the others from -1, the
 			 * way the game takes them turned back */
-			const bool over = c.low == GameControl::Low::RIGHT || c.low == GameControl::Low::DOWN ||
-			                  c.low == GameControl::Low::PRESSED;
+			const bool over = GameControl::turned_over(c.low);
 			const float word = static_cast<float>(over ? 0xFFFF - *at : *at) / 65535.0f;
 
 			v = GameControl::half(c.low, false) ? word * 2.0f - 1.0f : word;
