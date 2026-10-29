@@ -273,11 +273,7 @@ Hotkeys::parse(std::string_view line)
 
 	if (trimmed(line) == "none")
 		return binding;
-	while (!line.empty()) {
-		const size_t comma = line.find(',');
-		const std::string_view item = trimmed(line.substr(0, comma));
-
-		line = comma == std::string_view::npos ? std::string_view() : line.substr(comma + 1);
+	for (const std::string_view item : list_items(line)) {
 		if (item.starts_with("pad:")) {
 			const std::string_view pad = item.substr(4);
 

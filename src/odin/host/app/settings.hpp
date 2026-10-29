@@ -45,6 +45,22 @@ trimmed(std::string_view text)
 	return text;
 }
 
+/* The items of a list "a, b, c", each trimmed; the list ends where only
+ * spaces are left */
+inline std::vector<std::string_view>
+list_items(std::string_view text)
+{
+	std::vector<std::string_view> items;
+
+	while (!trimmed(text).empty()) {
+		const size_t comma = text.find(',');
+
+		items.push_back(trimmed(text.substr(0, comma)));
+		text.remove_prefix(comma == std::string_view::npos ? text.size() : comma + 1);
+	}
+	return items;
+}
+
 /* A line of odin.ini whose value is not right, said on stderr; Odin takes
  * the value by default instead */
 void refuse_setting(const std::string &section, const std::string &key, const std::string &value);

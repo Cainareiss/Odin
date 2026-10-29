@@ -30,7 +30,6 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
-#include <cstring>
 #include <filesystem>
 #include <vector>
 
@@ -288,12 +287,8 @@ parse_options(int argc, char **argv, Options &options)
 			options.state_path = optarg;
 			break;
 		case 's':
-			for (const char *s = optarg; s && *s;) {
-				options.save_frames.push_back(static_cast<unsigned>(std::atoi(s)));
-				s = std::strchr(s, ',');
-				if (s)
-					s++;
-			}
+			for (const std::string_view frame : list_items(optarg))
+				options.save_frames.push_back(static_cast<unsigned>(std::atoi(std::string(frame).c_str())));
 			break;
 		case 'o': {
 			const std::string mode = optarg;

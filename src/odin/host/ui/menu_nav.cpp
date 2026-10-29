@@ -64,15 +64,13 @@ parsed(std::string_view text)
 {
 	std::vector<HostInput> out;
 
-	while (!trimmed(text).empty()) {
-		const size_t comma = text.find(',');
-		const auto input = HostInput::parse(trimmed(text.substr(0, comma)));
+	for (const std::string_view item : list_items(text)) {
+		const auto input = HostInput::parse(item);
 
 		if (!input || input->kind == HostInput::Kind::MOUSE || input->kind == HostInput::Kind::JOY ||
 		    (input->kind == HostInput::Kind::PAD && (!input->pad.is_digital() || input->pad.with >= 0)))
 			return std::nullopt;
 		out.push_back(*input);
-		text.remove_prefix(comma == std::string_view::npos ? text.size() : comma + 1);
 	}
 	return out;
 }

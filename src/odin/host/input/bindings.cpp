@@ -143,9 +143,8 @@ parse_list(std::string_view value, Takes takes)
 {
 	std::vector<HostInput> inputs;
 
-	while (!trimmed(value).empty()) {
-		const size_t comma = value.find(',');
-		const auto input = HostInput::parse(trimmed(value.substr(0, comma)));
+	for (const std::string_view item : list_items(value)) {
+		const auto input = HostInput::parse(item);
 		const bool pressed = input && (input->kind == HostInput::Kind::PAD ? input->pad.is_digital() :
 		                               input->kind == HostInput::Kind::JOY ? input->joy.is_digital() :
 		                                                                     !input->is_axis());
@@ -153,7 +152,6 @@ parse_list(std::string_view value, Takes takes)
 		if (!input || (takes == Takes::PRESSED && !pressed) || (takes == Takes::AXIS && !input->is_axis()))
 			return std::nullopt;
 		inputs.push_back(*input);
-		value.remove_prefix(comma == std::string_view::npos ? value.size() : comma + 1);
 	}
 	return inputs;
 }
