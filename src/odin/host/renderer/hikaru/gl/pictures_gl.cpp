@@ -320,6 +320,7 @@ GlDrawing::scene_to_pipe(unsigned slot)
 {
 	set_2d_state();
 	glBindFramebuffer(GL_READ_FRAMEBUFFER, m_scene_fb);
+	gl::invalidate(GL_READ_FRAMEBUFFER, GL_DEPTH_ATTACHMENT);
 	glActiveTexture(GL_TEXTURE0 + 0);
 	glBindTexture(GL_TEXTURE_2D, m_pipe[slot]);
 	glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0,
@@ -336,7 +337,11 @@ void
 GlDrawing::blend_scene_to_pipe(unsigned slot, unsigned buffer, uint32_t rate)
 {
 	set_2d_state();
+	/* begin_scene clears the depth; the blender draws every pixel. */
+	glBindFramebuffer(GL_FRAMEBUFFER, m_scene_fb);
+	gl::invalidate(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT);
 	glBindFramebuffer(GL_FRAMEBUFFER, m_pipe_fb[slot]);
+	gl::invalidate(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0);
 	glUseProgram(m_blender);
 	glUniform1i(m_blender_rate, static_cast<GLint>(rate));
 
@@ -449,6 +454,7 @@ GlDrawing::compose(const Compose &c, unsigned shown, const bool layers[2])
 
 	set_2d_state();
 	glBindFramebuffer(GL_FRAMEBUFFER, m_frame_fb);
+	gl::invalidate(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0);
 	glUseProgram(m_compose);
 
 	glActiveTexture(GL_TEXTURE0 + 0);

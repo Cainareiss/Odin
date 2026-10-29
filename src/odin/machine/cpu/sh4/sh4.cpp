@@ -74,7 +74,8 @@ Sh4::Sh4(Sh4Bus &bus, std::span<uint8_t> onchip, bool master, bool little_endian
 	  m_r{}, m_run(Sh4Run::Stopped), m_remaining(0), m_over(0),
 	  m_blk(nullptr), m_resumed(false), m_epoch(1), m_code_epoch(PHYSICAL_PAGES, 0),
 	  m_rd(1u << (32 - PAGE_BITS), nullptr), m_wr(1u << (32 - PAGE_BITS), nullptr),
-	  m_quiet(PHYSICAL_PAGES, 0), m_shared(PHYSICAL_PAGES, 0), m_shared_code(false),
+	  m_quiet(PHYSICAL_PAGES, 0), m_shared(PHYSICAL_PAGES, 0),
+	  m_watch(PHYSICAL_PAGES, nullptr), m_shared_code(false),
 	  m_page_of(1u << (32 - PAGE_BITS), 0),
 	  m_near(NEAR_SIZE, Block{1, 0, 0, nullptr, nullptr, nullptr, 0, 0}),
 	  m_translate(false), m_hook_on(false), m_hook_addr(0),
@@ -134,6 +135,7 @@ void Sh4::share_page(const uint8_t *host, uint32_t page)
 	if (fresh || at->second == page) {
 		return;
 	}
+	m_watch[page] = m_watch[at->second] = nullptr;
 	for (uint32_t mirror = 0; mirror < 7; mirror++) {
 		m_wr[mirror * PHYSICAL_PAGES + page] = nullptr;
 		m_wr[mirror * PHYSICAL_PAGES + at->second] = nullptr;
@@ -153,6 +155,7 @@ void Sh4::map_page(uint32_t page, const uint8_t *read, uint8_t *write)
 	}
 	m_quiet[page] = 0;
 	m_shared[page] = 0;
+	m_watch[page] = nullptr;
 	if (read) {
 		share_page(read, page);
 	}
@@ -181,6 +184,45 @@ void Sh4::map_shared(uint32_t page)
 	if (page < PHYSICAL_PAGES) {
 		m_shared[page] = 1;
 	}
+}
+
+bool Sh4::watch(uint32_t page)
+{
+	if (page >= PHYSICAL_PAGES) {
+		return false;
+	}
+	if (m_watch[page]) {
+		return true;
+	}
+	uint8_t *const p = m_wr[page];
+
+	if (!p) {
+		return false;
+	}
+	m_watch[page] = p;
+	for (uint32_t mirror = 0; mirror < 7; mirror++) {
+		m_wr[mirror * PHYSICAL_PAGES + page] = nullptr;
+	}
+	return true;
+}
+
+/* A write in place to a watched page: the page is written in place again,
+ * at the address returned for the page; nullptr when it was not watched. */
+uint8_t *Sh4::unwatch(uint32_t addr)
+{
+	if (addr >= 0xE0000000) {
+		return nullptr;
+	}
+	const uint32_t page = (addr >> PAGE_BITS) & (PHYSICAL_PAGES - 1);
+	uint8_t *const p = m_watch[page];
+
+	if (p) {
+		for (uint32_t mirror = 0; mirror < 7; mirror++) {
+			m_wr[mirror * PHYSICAL_PAGES + page] = p;
+		}
+		m_watch[page] = nullptr;
+	}
+	return p;
 }
 
 void Sh4::written(uint32_t addr, size_t size)
@@ -400,6 +442,9 @@ bool Sh4::write_plain(uint32_t addr, uint32_t size, uint64_t value)
 {
 	uint8_t *p = m_wr[addr >> PAGE_BITS];
 
+	if (!p) {
+		p = unwatch(addr);
+	}
 	if (!p || (addr & (size - 1)) || m_code_epoch[(addr >> PAGE_BITS) & (PHYSICAL_PAGES - 1)] == m_epoch) {
 		return false;
 	}
@@ -481,6 +526,20 @@ bool Sh4::read_slow(const Sh4Op *op, uint32_t addr, uint32_t size, uint64_t &val
 bool Sh4::write_slow(const Sh4Op *op, uint32_t addr, uint32_t size, uint64_t value)
 {
 	int32_t bus = 0;
+
+	/* As if the page had not been watched */
+	if (!m_wr[addr >> PAGE_BITS] && unwatch(addr)) {
+		switch (size) {
+		case 1:
+			return write(op, addr, static_cast<uint8_t>(value));
+		case 2:
+			return write(op, addr, static_cast<uint16_t>(value));
+		case 4:
+			return write(op, addr, static_cast<uint32_t>(value));
+		default:
+			return write(op, addr, value);
+		}
+	}
 
 	if (!(op->flags & OP_SLOT)) {
 		m_r.pc = pc_of(op);

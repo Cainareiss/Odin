@@ -28,6 +28,7 @@
 #ifndef ODIN_EURASIA_HPP
 #define ODIN_EURASIA_HPP
 
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <span>
@@ -98,6 +99,13 @@ public:
 
 	/* Each blit is told there (GPU_LOG_DMA). */
 	void set_log(FILE *out) { m_log = out; }
+	/* The bytes of the framebuffer RAM a blit wrote are told there. */
+	using FbWritten = void (*)(void *ctx, size_t offs, size_t size);
+	void set_fb_written(FbWritten fn, void *ctx)
+	{
+		m_fb_written = fn;
+		m_fb_written_ctx = ctx;
+	}
 
 private:
 	[[noreturn]] void fatal(const char *what, uint32_t addr, uint32_t value) const;
@@ -113,6 +121,8 @@ private:
 	std::span<uint8_t> m_fb;
 	EurasiaState m_s;
 	FILE *m_log;
+	FbWritten m_fb_written;
+	void *m_fb_written_ctx;
 };
 
 } /* namespace odin */

@@ -162,7 +162,7 @@ GlDrawing::build_lists()
 	glUniform1i(gl::uniform(m_lists.program, "u_below"), UNIT_BELOW);
 	glUseProgram(0);
 
-	glGenBuffers(8, m_lists.count);
+	glGenBuffers(24, m_lists.count);
 	for (const GLuint count : m_lists.count) {
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, count);
 		glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(GLuint), nullptr, GL_DYNAMIC_COPY);
@@ -170,24 +170,21 @@ GlDrawing::build_lists()
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
 	/* The counts of a list are read once the next one is sent (see show):
-	 * the next one starts its own from zero. */
-	const GLsizeiptr readback = 3 * sizeof(m_lists.count);
-
-	glGenBuffers(1, &m_lists.readback);
-	glBindBuffer(GL_COPY_WRITE_BUFFER, m_lists.readback);
+	 * each list of the pipe has its own. */
+	m_lists.readback = 0;
 	m_lists.counts = nullptr;
 #ifndef ODIN_GLES
 	if (gl::buffer_storage()) {
 		const GLbitfield flags = GL_MAP_READ_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT;
 
-		glBufferStorage(GL_COPY_WRITE_BUFFER, readback, nullptr, flags);
-		m_lists.counts = static_cast<const GLuint *>(glMapBufferRange(GL_COPY_WRITE_BUFFER, 0, readback, flags));
-	} else
-#endif
-	{
-		glBufferData(GL_COPY_WRITE_BUFFER, readback, nullptr, GL_STREAM_READ);
+		glGenBuffers(1, &m_lists.readback);
+		glBindBuffer(GL_COPY_WRITE_BUFFER, m_lists.readback);
+		glBufferStorage(GL_COPY_WRITE_BUFFER, sizeof(m_lists.count), nullptr, flags);
+		m_lists.counts = static_cast<const GLuint *>(
+			glMapBufferRange(GL_COPY_WRITE_BUFFER, 0, sizeof(m_lists.count), flags));
+		glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
 	}
-	glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
+#endif
 
 	glGetInteger64v(GL_MAX_SHADER_STORAGE_BLOCK_SIZE, &limit);
 	m_lists.limit = static_cast<uint32_t>(std::min<GLint64>(limit / NODE_SIZE, UINT32_MAX));
@@ -209,7 +206,7 @@ GlDrawing::destroy_lists()
 		forget_counts(slot);
 	glDeleteBuffers(1, &m_lists.readback);
 	glDeleteBuffers(1, &m_lists.nodes);
-	glDeleteBuffers(8, m_lists.count);
+	glDeleteBuffers(24, m_lists.count);
 	glDeleteProgram(m_lists.program);
 }
 
@@ -279,7 +276,7 @@ GlDrawing::copy_solid_depth()
  * buffer that has grown bound again, and does not always reset an atomic
  * counter buffer: the count is in a storage buffer. */
 void
-GlDrawing::begin_collect(unsigned view)
+GlDrawing::begin_collect(unsigned view, unsigned slot)
 {
 	static const GLuint zero[4] = { 0, 0, 0, 0 };
 
@@ -290,7 +287,7 @@ GlDrawing::begin_collect(unsigned view)
 		return;
 	}
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, m_lists.nodes);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, m_lists.count[view]);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, m_lists.count[slot * 8 + view]);
 	glBindFramebuffer(GL_FRAMEBUFFER, m_lists.heads_fb);
 	glDisable(GL_SCISSOR_TEST);
 	glClearBufferuiv(GL_COLOR, 0, zero);
@@ -312,34 +309,35 @@ GlDrawing::end_collect()
 	glMemoryBarrier(GL_ALL_BARRIER_BITS);
 }
 
-/* Nobody waits for the card here: the count goes where it waits for
- * counted_fragments. */
+/* Nobody waits for the card here: the count waits for counted_fragments,
+ * copied where the processor sees it if it can be. Mesa v3d copies buffers
+ * on the processor, waiting for the card. */
 void
 GlDrawing::keep_count(unsigned view, unsigned slot)
 {
 	if (m_peel.on)
 		return;
-	glBindBuffer(GL_COPY_READ_BUFFER, m_lists.count[view]);
-	glBindBuffer(GL_COPY_WRITE_BUFFER, m_lists.readback);
-	glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, 0,
-	                    static_cast<GLintptr>((slot * 8 + view) * sizeof(GLuint)),
-	                    sizeof(GLuint));
-	glBindBuffer(GL_COPY_READ_BUFFER, 0);
-	glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
 	if (m_lists.counts) {
-		forget_counts(slot);
-		m_counted[slot] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+		const GLintptr at = static_cast<GLintptr>((slot * 8 + view) * sizeof(GLuint));
+
+		glBindBuffer(GL_COPY_READ_BUFFER, m_lists.count[slot * 8 + view]);
+		glBindBuffer(GL_COPY_WRITE_BUFFER, m_lists.readback);
+		glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, 0, at, sizeof(GLuint));
+		glBindBuffer(GL_COPY_READ_BUFFER, 0);
+		glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
 	}
+	forget_counts(slot);
+	m_counted[slot] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
 }
 
 uint32_t
-GlDrawing::count_now(unsigned view)
+GlDrawing::count_now(unsigned view, unsigned slot)
 {
 	GLuint used;
 
 	if (m_peel.on)
 		return m_peel.draws.empty() ? 0 : 1;
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_lists.count[view]);
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_lists.count[slot * 8 + view]);
 	gl::read_buffer(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &used);
 	return used;
 }
@@ -408,9 +406,8 @@ GlDrawing::counted_fragments(unsigned slot, uint32_t views)
 		if (m_lists.counts) {
 			count = m_lists.counts[at];
 		} else {
-			glBindBuffer(GL_COPY_READ_BUFFER, m_lists.readback);
-			gl::read_buffer(GL_COPY_READ_BUFFER, static_cast<GLintptr>(at * sizeof(GLuint)), sizeof(GLuint),
-			                &count);
+			glBindBuffer(GL_COPY_READ_BUFFER, m_lists.count[at]);
+			gl::read_buffer(GL_COPY_READ_BUFFER, 0, sizeof(GLuint), &count);
 			glBindBuffer(GL_COPY_READ_BUFFER, 0);
 		}
 		used = std::max(used, count);

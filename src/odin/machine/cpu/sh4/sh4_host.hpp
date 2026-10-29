@@ -48,9 +48,9 @@ struct Sh4Op;
 class Sh4Host : public HostCode {
 public:
 	using Call = uintptr_t (*)(Sh4 &, const Sh4Op *);
-	using HostCode::bind;
-	/* The register of the host a step works in. Nothing stays in it
-	 * from one instruction of the CPU to the next. */
+	/* The register of the host a step works in. Nothing of the program
+	 * stays in it that a later step relies on: a host may skip loading a
+	 * word it holds already, up to the next call, join or bind. */
 	enum class Reg : uint8_t { A };
 	/* Where host code finds the plain memory of the CPU, see Sh4::read()
 	 * and Sh4::write(): the page of an address to read and to write
@@ -64,9 +64,14 @@ public:
 		uint32_t page_bits, physical_pages;
 		int32_t epoch, touched;
 	};
-	/* Where the end of a block finds what it changes, from the CPU */
+	/* Where the end of a block finds what it changes, from the CPU; and
+	 * what Sh4::enter() looks at: the table of the blocks found first,
+	 * the layout of an entry, where the CPU keeps the rest. */
 	struct Places {
 		int32_t remaining;
+		int32_t event, blk, wait_pc, countdown;
+		const void *near;
+		uint32_t near_mask, block_size, block_pc, block_count, block_checked, block_host;
 	};
 	using Link = uintptr_t (*)(Sh4 &, uint32_t);
 	/* The jumps of an access to the call that makes it the long way: the
@@ -104,6 +109,13 @@ public:
 	void go_where_told();
 	/* Calls fn(cpu, pc), for the host code of the block at `pc` or 1. */
 	void call_link(Link fn, uint32_t pc);
+	/* Straight to the host code of the block at `pc` when Sh4::enter()
+	 * takes it with no pass of the wait left, as link() would; else on
+	 * with nothing changed, to the call that follows. */
+	void link_fast(uint32_t pc);
+	/* The same for an end that gives back `given` cycles first, to PC
+	 * (the word), when no event came: see end_leave. */
+	void leave_fast(uint32_t pc_rank, int32_t given);
 	/* A jump to a place bound later when the word is not 0, or when it
 	 * is 0. */
 	Jump jump_if_word(uint32_t rank, bool set);
@@ -137,6 +149,14 @@ public:
 	bool vectors() const;
 	void float_ipr(uint32_t n, uint32_t m);
 	void float_trv(uint32_t n, uint32_t x);
+	/* Instructions of the integer unit done whole, as sh4_ops.cpp does
+	 * them, on Rn and Rm (the words n and m), T and MACH, MACL (the words
+	 * mach and mach + 1). False, and nothing written, on a host without. */
+	enum class Whole : uint8_t {
+		SwapB, SwapW, Xtrct, AddC, SubC, NegC, MulL, MulSW, MulUW, DMulS, DMulU,
+		RotL, RotR, RotCL, RotCR, ShAd, ShLd
+	};
+	bool whole(Whole op, uint32_t n, uint32_t m, uint32_t t, uint32_t mach);
 	/* Two words that follow each other, the first one the low half of A */
 	void load_pair(uint32_t rank);
 	void store_pair(uint32_t rank);
@@ -166,6 +186,9 @@ public:
 	void read_at(const uint8_t *at, uint32_t size);
 	/* The jumps of an access to its long way, bound here */
 	void bind(const Slow &slow);
+	void bind(Jump jump);
+	/* Here, where a long way comes back to: A is not known there. */
+	uint32_t join();
 
 	/* Runs the blocks from that place until one asks for the run loop. */
 	void run(Sh4 &cpu, uint32_t place) const
@@ -185,6 +208,7 @@ private:
 #endif
 
 	void operand(uint8_t reg, uint32_t rank);
+	void enter_fast(bool known, uint32_t pc, int32_t given);
 	void page(uint8_t table, uint32_t size, Slow &slow);
 
 	uint32_t *m_words;
@@ -192,6 +216,7 @@ private:
 	Places m_places;
 	bool m_fused;
 	bool m_float_compared = false;	/* the flags are those of floats */
+	uint32_t m_held = ~0u;		/* the word A holds, ~0u: none known */
 	void (*m_enter)(Sh4 *, const uint8_t *);
 };
 

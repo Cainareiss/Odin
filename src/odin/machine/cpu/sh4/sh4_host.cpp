@@ -115,6 +115,11 @@ void Sh4Host::call_link(Link fn, uint32_t pc)
 	call_to(reinterpret_cast<uintptr_t>(fn));
 }
 
+/* The call does it all. */
+void Sh4Host::link_fast(uint32_t) {}
+void Sh4Host::leave_fast(uint32_t, int32_t) {}
+void Sh4Host::enter_fast(bool, uint32_t, int32_t) {}
+
 void Sh4Host::loop_if_told()
 {
 	bytes({0x48, 0x85, 0xC0, 0x0F, 0x85});		/* test rax, rax / jnz leave */
@@ -260,6 +265,7 @@ void Sh4Host::float_fused()
 bool Sh4Host::vectors() const { return false; }
 void Sh4Host::float_ipr(uint32_t, uint32_t) {}
 void Sh4Host::float_trv(uint32_t, uint32_t) {}
+bool Sh4Host::whole(Whole, uint32_t, uint32_t, uint32_t, uint32_t) { return false; }
 
 void Sh4Host::load_pair(uint32_t rank)
 {
@@ -292,6 +298,9 @@ void Sh4Host::bind(const Slow &slow)
 		bind(slow.jumps[k]);
 	}
 }
+
+void Sh4Host::bind(Jump jump) { HostCode::bind(jump); }
+uint32_t Sh4Host::join() { return here(); }
 
 /* rdx = the page of the address in A in the table of r13 or r14; the long
  * way when there is none or the address is not aligned. ecx keeps the
@@ -391,6 +400,9 @@ void Sh4Host::clear() {}
 uint32_t Sh4Host::begin(const Sh4Op *) { return 0; }
 void Sh4Host::call(Call, uint32_t) {}
 void Sh4Host::call_link(Link, uint32_t) {}
+void Sh4Host::link_fast(uint32_t) {}
+void Sh4Host::leave_fast(uint32_t, int32_t) {}
+void Sh4Host::enter_fast(bool, uint32_t, int32_t) {}
 Sh4Host::Jump Sh4Host::jump_if_word(uint32_t, bool) { return Jump{0}; }
 Sh4Host::Jump Sh4Host::jump_if_odd() { return Jump{0}; }
 Sh4Host::Jump Sh4Host::jump_if_bits(uint32_t, uint32_t, bool) { return Jump{0}; }
@@ -405,6 +417,7 @@ void Sh4Host::float_fused() {}
 bool Sh4Host::vectors() const { return false; }
 void Sh4Host::float_ipr(uint32_t, uint32_t) {}
 void Sh4Host::float_trv(uint32_t, uint32_t) {}
+bool Sh4Host::whole(Whole, uint32_t, uint32_t, uint32_t, uint32_t) { return false; }
 void Sh4Host::store_pair(uint32_t) {}
 void Sh4Host::add_remaining(int32_t) {}
 void Sh4Host::loop_if_told() {}
@@ -419,6 +432,8 @@ void Sh4Host::alu_value(Alu, Reg, uint32_t) {}
 void Sh4Host::shift(Shift, Reg, uint32_t) {}
 void Sh4Host::flag(If, uint32_t) {}
 void Sh4Host::bind(const Slow &) {}
+void Sh4Host::bind(Jump) {}
+uint32_t Sh4Host::join() { return 0; }
 void Sh4Host::page(uint8_t, uint32_t, Slow &) {}
 void Sh4Host::read(uint32_t, Slow &) {}
 void Sh4Host::write(uint32_t, uint32_t, Slow &) {}

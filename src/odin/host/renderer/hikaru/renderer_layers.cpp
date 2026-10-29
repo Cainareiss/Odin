@@ -26,6 +26,7 @@
  */
 
 #include "odin/host/renderer/hikaru/renderer.hpp"
+#include "odin/machine/boards/hikaru/fb_writes.hpp"
 
 #include <cstring>
 
@@ -59,17 +60,25 @@ Renderer::take_layer(unsigned i)
 	const odin_layer_t &layer = m_frame.layers.layer[0][i];
 	const size_t offs = size_t{layer.y0} * FB_PITCH + size_t{layer.x0} * 4;
 
+	/* A line nothing wrote since it was kept is still what was kept */
+	const uint64_t since = m_layer_offs[i] == offs ? m_layer_date[i] : 0;
+
 	if (offs + (HEIGHT - 1) * FB_PITCH + LAYER_PITCH > m_fb.size())
 		fatal("a layer outside the framebuffer RAM");
 	for (unsigned y = 0; y < HEIGHT; y++) {
 		uint8_t *const kept = &m_layer_ram[i][y * LAYER_PITCH];
-		const uint8_t *const line = &m_fb[offs + y * FB_PITCH];
+		const size_t at = offs + y * FB_PITCH;
+		const uint8_t *const line = &m_fb[at];
 
+		if (m_fb_writes && m_fb_writes->written(at, LAYER_PITCH) < since)
+			continue;
 		if (std::memcmp(kept, line, LAYER_PITCH) != 0) {
 			std::memcpy(kept, line, LAYER_PITCH);
 			m_layer_changed[i] = true;
 		}
 	}
+	m_layer_offs[i] = offs;
+	m_layer_date[i] = m_fb_writes ? m_fb_writes->next() : 0;
 }
 
 /* A 2D layer to m_card, when its RAM or its format changed. */

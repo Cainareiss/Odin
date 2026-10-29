@@ -269,19 +269,24 @@ AicaVoice::filter(const uint8_t *slot, int32_t sample)
 		return sample;
 
 	const uint32_t exponent = m_state.cutoff >> 9;
-	const uint64_t mantissa = (m_state.cutoff & 0x1FF) | 0x200;
-	const int64_t a0 = static_cast<int64_t>(((mantissa << 30) >> ((15 - exponent) * 2)) * ((mantissa - 1) / 8) >> 17);
-	int64_t f = static_cast<int64_t>(mantissa << exponent) << 5;
+	const uint64_t key = (static_cast<uint64_t>(m_state.cutoff) << 5) | q;
+	if (key != m_coef_key) {
+		const uint64_t mantissa = (m_state.cutoff & 0x1FF) | 0x200;
+		const int64_t a0 = static_cast<int64_t>(((mantissa << 30) >> ((15 - exponent) * 2)) * ((mantissa - 1) / 8) >> 17);
+		int64_t f = static_cast<int64_t>(mantissa << exponent) << 5;
 
-	f += Q_TABLE[q] * f / 4096;
+		f += Q_TABLE[q] * f / 4096;
 
-	const int64_t b1 = (1ll << 31) - (f + a0);
-	const int64_t b2 = (1ll << 30) - f;
+		m_coef_key = key;
+		m_a0 = a0;
+		m_b1 = (1ll << 31) - (f + a0);
+		m_b2 = (1ll << 30) - f;
+	}
 
 	if (exponent == 0)
 		m_state.rest = 0;
 
-	const int64_t sum = -a0 * sample + b1 * m_state.filtered[0] - b2 * m_state.filtered[1] - m_state.rest;
+	const int64_t sum = -m_a0 * sample + m_b1 * m_state.filtered[0] - m_b2 * m_state.filtered[1] - m_state.rest;
 	const int32_t out = static_cast<int32_t>(sum >> 30);
 
 	m_state.rest = static_cast<int32_t>((static_cast<int64_t>(out) << 30) - sum);

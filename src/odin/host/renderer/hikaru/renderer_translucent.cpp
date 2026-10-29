@@ -103,7 +103,7 @@ Renderer::draw_translucent(unsigned vpi, const odin_mesh_t *meshes, unsigned num
 	m_card->begin_translucent();
 	m_collect = true;
 	for (;;) {
-		m_card->begin_collect(vpi);
+		m_card->begin_collect(vpi, m_last.slot);
 		for (unsigned j = 0; j < num; j++) {
 			set_material_blend(meshes[j]);
 			draw_mesh(meshes[j]);
@@ -114,7 +114,7 @@ Renderer::draw_translucent(unsigned vpi, const odin_mesh_t *meshes, unsigned num
 			m_card->keep_count(vpi, m_last.slot);
 			break;
 		}
-		used = m_card->count_now(vpi);
+		used = m_card->count_now(vpi, m_last.slot);
 		if (used <= m_fragments_max || !grow_lists(used))
 			break;
 	}

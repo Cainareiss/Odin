@@ -66,10 +66,10 @@ public:
 	void begin_families() override;
 
 	void begin_translucent() override;
-	void begin_collect(unsigned view) override;
+	void begin_collect(unsigned view, unsigned slot) override;
 	void end_collect() override;
 	void keep_count(unsigned view, unsigned slot) override;
-	uint32_t count_now(unsigned view) override;
+	uint32_t count_now(unsigned view, unsigned slot) override;
 	void end_translucent(bool blend) override;
 	uint32_t counted_fragments(unsigned slot, uint32_t views) override;
 	void forget_counts(unsigned slot) override { m_counted[slot] = 0; }
@@ -177,6 +177,7 @@ private:
 	void open_family(unsigned family);
 	void set_scene_state(VkCommandBuffer cb, VkDescriptorSet set3);
 	void close_scene();
+	void use_depth();
 	void log(const char *fmt, ...) const __attribute__((format(printf, 2, 3)));
 	VkPipeline pipeline(const MeshVariant &variant, MeshBlend blend);
 	void read_cache(const std::string &path);
@@ -262,6 +263,11 @@ private:
 	/* Drawing into the scene: in a rendering of Vulkan now (copies and
 	 * barriers wait outside), between begin_scene and end_scene */
 	bool m_open = false;
+	/* The depth: not all far (or undefined), to be emptied before its next
+	 * use, stored by the open rendering; the translucent views to come,
+	 * which copy it (begin_translucent) */
+	bool m_depth_used = false, m_depth_wanted = false, m_depth_kept = true;
+	unsigned m_translucent_left = 0;
 	/* How the meshes of the polygon type being drawn are drawn */
 	struct {
 		float alpha_ref;	/* fragments at or below it are dropped */

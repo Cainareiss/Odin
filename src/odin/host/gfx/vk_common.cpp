@@ -1010,18 +1010,20 @@ Context::bind_images(VkCommandBuffer cb, const Pass &pass, std::initializer_list
 }
 
 void
-Context::begin_drawing(VkCommandBuffer cb, Image &image, const VkRect2D &area)
+Context::begin_drawing(VkCommandBuffer cb, Image &image, const VkRect2D &area, VkAttachmentLoadOp load)
 {
 	const VkRenderingAttachmentInfo colour{ VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO, nullptr, image.view,
 	                                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_RESOLVE_MODE_NONE,
-	                                        VK_NULL_HANDLE, VK_IMAGE_LAYOUT_UNDEFINED, VK_ATTACHMENT_LOAD_OP_LOAD,
-	                                        VK_ATTACHMENT_STORE_OP_STORE, {} };
+	                                        VK_NULL_HANDLE, VK_IMAGE_LAYOUT_UNDEFINED, load,
+	                                        VK_ATTACHMENT_STORE_OP_STORE, { { { 0.0f, 0.0f, 0.0f, 1.0f } } } };
 	const VkRenderingInfo rendering{ VK_STRUCTURE_TYPE_RENDERING_INFO, nullptr, 0, { { 0, 0 }, { image.w, image.h } },
 	                                 1, 0, 1, &colour, nullptr, nullptr };
 	const VkViewport viewport{ static_cast<float>(area.offset.x), static_cast<float>(area.offset.y),
 	                           static_cast<float>(area.extent.width), static_cast<float>(area.extent.height), 0.0f,
 	                           1.0f };
 
+	if (load != VK_ATTACHMENT_LOAD_OP_LOAD)
+		image.layout = VK_IMAGE_LAYOUT_UNDEFINED;
 	barrier(cb, image, DRAWN_IN);
 	m_fn.vkCmdBeginRendering(cb, &rendering);
 	m_fn.vkCmdSetViewport(cb, 0, 1, &viewport);

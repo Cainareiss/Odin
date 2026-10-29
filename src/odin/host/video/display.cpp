@@ -279,6 +279,7 @@ Display::attach(Hikaru &board, const std::string &title)
 	Renderer::Options looks;
 
 	memory.fb = board.framebuffer_ram();
+	memory.fb_writes = &board.framebuffer_writes();
 	memory.texram[0] = board.texture_ram(0);
 	memory.texram[1] = board.texture_ram(1);
 

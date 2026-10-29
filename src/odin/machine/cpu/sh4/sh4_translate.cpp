@@ -136,7 +136,10 @@ void Sh4::set_translate(bool on)
 		const Sh4Host::Memory memory{m_rd.data(), m_wr.data(), m_code_epoch.data(), PAGE_BITS, PHYSICAL_PAGES,
 		                             from_cpu(&m_epoch), from_cpu(&m_touched)};
 
-		const Sh4Host::Places places{from_cpu(&m_remaining)};
+		const Sh4Host::Places places{from_cpu(&m_remaining), from_cpu(&m_event), from_cpu(&m_blk),
+		                             from_cpu(&m_wait.regs.pc), from_cpu(&m_wait.countdown), m_near.data(),
+		                             NEAR_SIZE - 1, sizeof(Block), offsetof(Block, pc), offsetof(Block, count),
+		                             offsetof(Block, checked), offsetof(Block, host)};
 
 		m_host = std::make_unique<Sh4Host>(m_r.r, memory, places);
 	}
@@ -145,14 +148,19 @@ void Sh4::set_translate(bool on)
 }
 
 /* The steps of host code that do what the instruction does, on the
- * registers of the CPU, which stay where they are: no step leaves a value
- * of the program in a register of the host. False, and nothing written,
- * for an instruction that has no such steps. */
+ * registers of the CPU, which stay where they are: every step writes its
+ * result to them. False, and nothing written, for an instruction that has
+ * no such steps. */
 bool Sh4::translate_inline(Inline form, const Sh4Op &op)
 {
+	using Whole = Sh4Host::Whole;
 	static_assert(offsetof(Regs, r) == 0);
+	static_assert(offsetof(Regs, macl) == offsetof(Regs, mach) + 4);
+	constexpr uint32_t PR = offsetof(Regs, pr) / 4, GBR = offsetof(Regs, gbr) / 4;
+	constexpr uint32_t MACH = offsetof(Regs, mach) / 4, MACL = offsetof(Regs, macl) / 4;
 	const Words w{*m_host, offsetof(Regs, t) / 4};
 	const uint32_t n = op.n, m = op.m, imm = op.imm;
+	const auto whole = [&](Whole what) { return w.host.whole(what, n, m, w.t, MACH); };
 
 	switch (form) {
 	case Inline::Mov: w.copy(n, m); return true;
@@ -197,6 +205,32 @@ bool Sh4::translate_inline(Inline form, const Sh4Op &op)
 	case Inline::ClrT: w.host.store_value(w.t, 0); return true;
 	case Inline::SetT: w.host.store_value(w.t, 1); return true;
 	case Inline::Nop: return true;
+	case Inline::LdsMacH: w.copy(MACH, n); return true;
+	case Inline::LdsMacL: w.copy(MACL, n); return true;
+	case Inline::LdsPr: w.copy(PR, n); return true;
+	case Inline::LdcGbr: w.copy(GBR, n); return true;
+	case Inline::StsMacH: w.copy(n, MACH); return true;
+	case Inline::StsMacL: w.copy(n, MACL); return true;
+	case Inline::StsPr: w.copy(n, PR); return true;
+	case Inline::StcGbr: w.copy(n, GBR); return true;
+	case Inline::ClrMac: w.host.store_value(MACH, 0); w.host.store_value(MACL, 0); return true;
+	case Inline::SwapB: return whole(Whole::SwapB);
+	case Inline::SwapW: return whole(Whole::SwapW);
+	case Inline::Xtrct: return whole(Whole::Xtrct);
+	case Inline::AddC: return whole(Whole::AddC);
+	case Inline::SubC: return whole(Whole::SubC);
+	case Inline::NegC: return whole(Whole::NegC);
+	case Inline::MulL: return whole(Whole::MulL);
+	case Inline::MulSW: return whole(Whole::MulSW);
+	case Inline::MulUW: return whole(Whole::MulUW);
+	case Inline::DMulS: return whole(Whole::DMulS);
+	case Inline::DMulU: return whole(Whole::DMulU);
+	case Inline::RotL: return whole(Whole::RotL);
+	case Inline::RotR: return whole(Whole::RotR);
+	case Inline::RotCL: return whole(Whole::RotCL);
+	case Inline::RotCR: return whole(Whole::RotCR);
+	case Inline::ShAd: return whole(Whole::ShAd);
+	case Inline::ShLd: return whole(Whole::ShLd);
 	default: return false;
 	}
 }
@@ -250,7 +284,7 @@ bool Sh4::translate_access(Inline form, const Sh4Op &op, uint32_t i, std::vector
 			host.alu_value(Alu::Add, A, static_cast<uint32_t>(a.step));
 			host.store(a.base, A);
 		}
-		ways.push_back(LongWay{slow, i, host.here()});
+		ways.push_back(LongWay{slow, i, host.join()});
 	};
 	const auto write = [&](const Access &a) {
 		Sh4Host::Slow slow{};
@@ -262,7 +296,7 @@ bool Sh4::translate_access(Inline form, const Sh4Op &op, uint32_t i, std::vector
 			host.alu_value(Alu::Add, A, static_cast<uint32_t>(a.step));
 			host.store(a.base, A);
 		}
-		ways.push_back(LongWay{slow, i, host.here()});
+		ways.push_back(LongWay{slow, i, host.join()});
 	};
 	/* A read relative to PC: the page is known now, the value is read
 	 * when the block runs. */
@@ -335,7 +369,7 @@ bool Sh4::translate_access(Inline form, const Sh4Op &op, uint32_t i, std::vector
 			host.load(A, fpu(m));
 			host.store(fpu(n), A);
 		}
-		ways.push_back(LongWay{slow, i, host.here()});
+		ways.push_back(LongWay{slow, i, host.join()});
 		break;
 	}
 	default:
@@ -403,7 +437,7 @@ bool Sh4::translate_jump(const Block &b, const Sh4Op &op, uint32_t i, std::vecto
 		host.load(A, op.n);
 		slow.jumps[slow.count++] = host.jump_if_odd();
 		host.store(PC, A);
-		ways.push_back(LongWay{slow, i, host.here()});
+		ways.push_back(LongWay{slow, i, host.join()});
 		break;
 	}
 	case Inline::BraF:
@@ -440,6 +474,8 @@ bool Sh4::translate_float(Inline form, const Sh4Op &op, uint32_t i, std::vector<
 	switch (form) {
 	case Inline::FIpr:
 	case Inline::FTrv:
+	case Inline::LdsFpul:
+	case Inline::StsFpul:
 		return translate_vector(form, op, i, ways);
 	case Inline::FSts:
 		host.load(A, FPUL);
@@ -486,9 +522,7 @@ bool Sh4::translate_float(Inline form, const Sh4Op &op, uint32_t i, std::vector<
 	case Inline::FLdi1:
 		host.store_value(n, 0x3F800000);
 		break;
-	/* Which NaN comes out of two depends on the order of the operands:
-	 * the one the compiler gives the instruction (FRm + FRn, FRm * FRn,
-	 * FR0 * FRm + FRn), which test_host_float() holds to. */
+	/* FRm first, as the reader takes it: that picks the NaN of two */
 	case Inline::FAdd:
 	case Inline::FMul:
 		host.float_load(0, m);
@@ -514,28 +548,37 @@ bool Sh4::translate_float(Inline form, const Sh4Op &op, uint32_t i, std::vector<
 		host.float_store(n, 0);
 		break;
 	}
-	ways.push_back(LongWay{slow, i, host.here()});
+	ways.push_back(LongWay{slow, i, host.join()});
 	return true;
 }
 
-/* FIPR and FTRV where the host has vectors: the long way, a call of the
- * instruction, when SR.FD has the FPU disabled. False on another host. */
+/* FIPR and FTRV where the host has vectors, LDS and STS of FPUL: the long
+ * way, a call of the instruction, when SR.FD has the FPU disabled. False
+ * for FIPR and FTRV on another host. */
 bool Sh4::translate_vector(Inline form, const Sh4Op &op, uint32_t i, std::vector<LongWay> &ways)
 {
 	constexpr uint32_t FR = offsetof(Regs, fr) / 4, XF = offsetof(Regs, xf) / 4, SR = offsetof(Regs, sr) / 4;
+	constexpr uint32_t FPUL = offsetof(Regs, fpul) / 4;
 	Sh4Host &host = *m_host;
 	Sh4Host::Slow slow{};
+	const bool fpul = form == Inline::LdsFpul || form == Inline::StsFpul;
 
-	if (!host.vectors()) {
+	if (!fpul && !host.vectors()) {
 		return false;
 	}
 	slow.jumps[slow.count++] = host.jump_if_bits(SR, SR_FD, true);
-	if (form == Inline::FIpr) {
+	if (form == Inline::LdsFpul) {
+		host.load(A, op.n);
+		host.store(FPUL, A);
+	} else if (form == Inline::StsFpul) {
+		host.load(A, FPUL);
+		host.store(op.n, A);
+	} else if (form == Inline::FIpr) {
 		host.float_ipr(FR + op.n, FR + op.m);
 	} else {
 		host.float_trv(FR + op.n, XF);
 	}
-	ways.push_back(LongWay{slow, i, host.here()});
+	ways.push_back(LongWay{slow, i, host.join()});
 	return true;
 }
 
@@ -562,6 +605,14 @@ void Sh4::pairs_through(const Block &b, std::array<bool, BLOCK_MAX + 3> &pairs) 
 	pairs[0] = (m_r.fpscr & FPSCR_SZ) != 0;
 	for (uint32_t i = 0; i < b.count; i++) {
 		pairs[i + 1] = pairs[i] != (inlined(b.ops[i].run) == Inline::FSChg);
+	}
+}
+
+/* The fast way of an end that leaves, before its call. */
+void Sh4::leave_fast(const Sh4Op &end)
+{
+	if (end.run == op_leave) {
+		m_host->leave_fast(offsetof(Regs, pc) / 4, static_cast<int32_t>(end.imm));
 	}
 }
 
@@ -604,6 +655,7 @@ void Sh4::translate(Block &b)
 				host.call(called(ops[i].run), i);
 			}
 			translate_op(ops, i + 1, ways, pairs[i + 1]);
+			leave_fast(ops[i + 2]);
 			host.call(called(ops[i + 2].run), i + 2);
 			host.go_where_told();
 			jumped = true;
@@ -614,6 +666,7 @@ void Sh4::translate(Block &b)
 	/* The end of a block cut for its length, see end_next. */
 	if (!jumped) {
 		host.store_value(PC, ops[b.count].imm);
+		host.link_fast(ops[b.count].imm);
 		host.call_link(linked, ops[b.count].imm);
 		host.go_where_told();
 	}
@@ -629,9 +682,11 @@ void Sh4::translate(Block &b)
 			const uint32_t slot = i + ops[i].m;
 
 			translate_op(ops, slot, ways, pairs[i + 1]);
+			leave_fast(ops[slot + 1]);
 			host.call(called(ops[slot + 1].run), slot + 1);
 		} else if (taken[k].in_place) {
 			host.add_remaining(static_cast<int32_t>(b.count - i - 1));
+			host.link_fast(ops[i].imm);
 			host.call_link(linked, ops[i].imm);
 		}
 		host.go_where_told();

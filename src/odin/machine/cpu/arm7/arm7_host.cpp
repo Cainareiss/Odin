@@ -128,7 +128,7 @@ void Arm7Host::check(uint32_t at, uint32_t pc, uint32_t op)
 	m_stale.push_back({jump_if(JNZ), pc});
 }
 
-HostCode::Jump Arm7Host::unless(uint16_t pass)
+HostCode::Jump Arm7Host::unless(uint32_t, uint16_t pass)
 {
 	field(0x8B, RAX, m_places.cpsr);		/* mov eax, [cpsr] */
 	shift_ri(5, RAX, 28);				/* shr eax, 28 */
@@ -229,10 +229,15 @@ void Arm7Host::failed(Jump skip, uint32_t pc)
 	bind(on);
 }
 
-void Arm7Host::end(uint32_t next)
+uint32_t Arm7Host::end(uint32_t next, uint32_t direct)
 {
 	store_value(m_places.pc, next);
-	jump_back(m_follow);
+	field(0x80, 7, m_places.kept);			/* cmp byte [kept], 0 / jnz follow */
+	byte(0);
+	bytes({0x0F, JNZ});
+	jump_to(m_follow);
+	const uint32_t at = m_used + 1;
+	jump_back(direct ? direct : m_follow);
 	for (const Out &out : m_stale) {
 		bind(out.jump);
 		store_value(m_places.pc, out.pc);
@@ -246,6 +251,7 @@ void Arm7Host::end(uint32_t next)
 		store_value(m_places.pc, out.pc);
 		jump_back(m_leave);
 	}
+	return direct ? 0 : at;
 }
 
 void Arm7Host::load(Reg reg, uint32_t n)
@@ -446,14 +452,14 @@ void Arm7Host::count() {}
 void Arm7Host::cycles_spent(uint32_t) {}
 uint32_t Arm7Host::begin(uint32_t) { return 0; }
 void Arm7Host::check(uint32_t, uint32_t, uint32_t) {}
-HostCode::Jump Arm7Host::unless(uint16_t) { return Jump{0}; }
+HostCode::Jump Arm7Host::unless(uint32_t, uint16_t) { return Jump{0}; }
 void Arm7Host::call(uint32_t, uint32_t, Run) {}
 void Arm7Host::spent(uint32_t, uint32_t) {}
 void Arm7Host::went(uint32_t) {}
 uint32_t Arm7Host::branch(uint32_t, uint32_t, bool, uint32_t) { return 0; }
 void Arm7Host::link_to(uint32_t, uint32_t) {}
 void Arm7Host::failed(Jump, uint32_t) {}
-void Arm7Host::end(uint32_t) {}
+uint32_t Arm7Host::end(uint32_t, uint32_t) { return 0; }
 void Arm7Host::load(Reg, uint32_t) {}
 void Arm7Host::load_value(Reg, uint32_t) {}
 void Arm7Host::store(uint32_t, Reg) {}

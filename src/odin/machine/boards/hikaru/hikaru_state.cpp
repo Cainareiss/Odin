@@ -209,6 +209,7 @@ Hikaru::load_items(StateFile &state)
 	     get_bytes(state, m_memctl[MASTER].registers()) &&
 	     get_bytes(state, m_memctl[SLAVE].registers()) &&
 	     get_bytes(state, m_mscomm);
+	m_fb_writes.wrote_all();
 	if (ok && !m_rombd.local_ram().empty())
 		ok = get_bytes(state, m_rombd.local_ram());
 	ok = ok && get_bytes(state, m_iregs[MASTER]) && get_bytes(state, m_iregs[SLAVE]);

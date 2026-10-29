@@ -101,7 +101,11 @@ public:
 	uint16_t position() const { return static_cast<uint16_t>(m_state.position); }
 
 	const State &state() const { return m_state; }
-	void load(const State &in) { m_state = in; }
+	void load(const State &in)
+	{
+		m_state = in;
+		m_coef_key = ~0ull;
+	}
 
 private:
 	void envelope(const uint8_t *slot, uint32_t odometer);
@@ -116,6 +120,9 @@ private:
 	void stop();
 
 	State m_state;
+	/* The coefficients of filter() for the cutoff and Q of `m_coef_key` */
+	uint64_t m_coef_key = ~0ull;
+	int64_t m_a0 = 0, m_b1 = 0, m_b2 = 0;
 };
 
 } /* namespace odin */

@@ -531,6 +531,10 @@ VkDrawing::begin_scene(const odin_display_list_t &list, const SceneDebug &debug)
 
 	m_collecting = false;
 	m_pass.depth_write = true;
+	m_translucent_left = 0;
+	for (unsigned vpi = 0; vpi < 8; vpi++)
+		if (list.num_meshes[vpi][ODIN_POLYTYPE_TRANSLUCENT])
+			m_translucent_left++;
 	open_scene(true);
 }
 
@@ -554,6 +558,14 @@ VkDrawing::open_scene(bool clear, bool clear_depth)
 	VkRenderingAttachmentInfo depth = colour;
 	if (clear_depth)
 		depth.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	if (depth.loadOp == VK_ATTACHMENT_LOAD_OP_CLEAR) {
+		m_depth_used = false;
+		m_depth_wanted = false;
+	}
+	/* Nothing reads the depth after the last translucent view */
+	m_depth_kept = m_translucent_left > 0;
+	if (!m_depth_kept)
+		depth.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	depth.imageView = m_depth.view;
 	depth.imageLayout = m_depth.layout;
 	depth.clearValue.depthStencil = { 1.0f, 0 };
@@ -636,26 +648,38 @@ VkDrawing::close_scene()
 		return;
 	m_fn.vkCmdEndRendering(m_card.commands());
 	m_open = false;
+	if (!m_depth_kept)
+		m_depth_used = true;
 }
 
+/* Emptied when a mesh or a translucent view first needs it, and only if
+ * something was drawn into it */
 void
 VkDrawing::clear_depth()
+{
+	m_families_view = false;
+	if (m_depth_used)
+		m_depth_wanted = true;
+}
+
+/* Emptied in the scene, not in the depth of a family */
+void
+VkDrawing::use_depth()
 {
 	const VkClearAttachment depth{ VK_IMAGE_ASPECT_DEPTH_BIT, 0, { .depthStencil = { 1.0f, 0 } } };
 	const VkClearRect all{ { { 0, 0 }, { width(), height() } }, 0, 1 };
 
-	m_families_view = false;
+	if (!m_depth_wanted)
+		return;
 	/* MoltenVK clears the colour too with vkCmdClearAttachments */
-	if (m_card.portability_subset()) {
+	if (!m_open || m_family != NO_FAMILY || m_card.portability_subset()) {
 		close_scene();
 		open_scene(false, true);
 		return;
 	}
-	if (!m_open || m_family != NO_FAMILY) {
-		close_scene();
-		open_scene(false);
-	}
 	m_fn.vkCmdClearAttachments(m_card.commands(), 1, &depth, 1, &all);
+	m_depth_used = false;
+	m_depth_wanted = false;
 }
 
 /* The eye depths of both families and the depth of the flagged one
@@ -837,6 +861,7 @@ VkDrawing::draw_mesh(const odin_mesh_t &mesh, const MeshDraw &draw)
 		return;
 	/* Into the depth of its family, or the scene (begin_families) */
 	if (!variant.collect) {
+		use_depth();
 		const unsigned family = !variant.families ? NO_FAMILY :
 		                        depth_bias::flagged(static_cast<int>(mesh.depth_bias)) ? 1 : 0;
 
@@ -848,6 +873,7 @@ VkDrawing::draw_mesh(const odin_mesh_t &mesh, const MeshDraw &draw)
 				open_family(family);
 			}
 		}
+		m_depth_used = true;
 	}
 	if (mesh.vp_index >= m_list->num_vps || (variant.has_lighting && mesh.ls_index >= m_list->num_lss)) {
 		repeats::error("a mesh outside its list: vp %u, ls %u", mesh.vp_index, mesh.ls_index);

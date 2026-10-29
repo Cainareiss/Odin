@@ -169,13 +169,19 @@ GlDrawing::end_scene()
 }
 
 /* Each program draws a triangle without area once: the driver finishes its
- * work on it then. */
+ * work on it then. The fragment lists are bound for those that collect:
+ * Mesa V3D reads their buffers even for no fragment. */
 void
 GlDrawing::begin_preparing()
 {
 	static const odin_vertex_body_t none[3] = {};
 
 	upload_vertices(none, 3, nullptr, 0);
+	if (!m_peel.on) {
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, m_lists.nodes);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, m_lists.count[0]);
+		glBindImageTexture(0, m_lists.heads, 0, GL_FALSE, 0, GL_READ_WRITE, GL_R32UI);
+	}
 }
 
 void
