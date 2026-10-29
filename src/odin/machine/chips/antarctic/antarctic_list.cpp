@@ -276,10 +276,12 @@ light_str(const odin_light_t *lit)
 	return out;
 }
 
+/* Four lines of light_str, less than 512 characters each, and their
+ * newlines */
 const char *
 odin_lightset_str(const odin_lightset_t *ls)
 {
-	static char out[4 * 512];
+	static char out[4 * (512 + 1)];
 	char *tmp = out;
 
 	out[0] = '\0';
