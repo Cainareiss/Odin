@@ -317,7 +317,6 @@ MenuSession::draw_menu()
 		state.show.reset();
 		m_menu_pictures = MENU_PICTURES;
 	}
-	/* The gamepad a player wants for the game: [players.<game>] p1 or p2 */
 	/* The light gun a player wants for the game shown: kept, and taken at
 	 * once by the game that runs */
 	if (state.want_gun) {
@@ -327,6 +326,7 @@ MenuSession::draw_menu()
 		state.want_gun.reset();
 		m_menu_pictures = MENU_PICTURES;
 	}
+	/* The gamepad a player wants for the game: [players.<game>] p1 or p2 */
 	if (state.want) {
 		want_pad(game_shown(), state.player, state.want->guid, state.want->name, false, !m_other, state.want->id);
 		state.want.reset();

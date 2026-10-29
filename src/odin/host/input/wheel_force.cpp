@@ -83,8 +83,8 @@ constant(int id, int left)
 #endif
 
 /* The same on SDL's steering axis: a positive level to the left, as SDL
- * gives it to the drivers on Linux. GUESS elsewhere: no wheel with force
- * feedback has been tried on Windows yet. */
+ * gives it to the drivers on Linux. HEURISTIC elsewhere: no wheel with
+ * force feedback has been tried on Windows yet. */
 SDL_HapticEffect
 sdl_constant(int left)
 {

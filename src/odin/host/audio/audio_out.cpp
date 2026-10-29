@@ -83,7 +83,7 @@ AudioOut::make(Mode mode, double option_db, const std::string &device)
 		return nullptr;
 	}
 
-	/* The buffer of the device as before: 1024 frames */
+	/* The buffer of the device: 1024 frames */
 	SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, "1024");
 
 	SDL_AudioStream *const stream = open_stream(mode, device);

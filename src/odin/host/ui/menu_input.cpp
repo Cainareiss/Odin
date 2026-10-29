@@ -47,9 +47,7 @@ namespace odin {
 
 namespace {
 
-/* The room of the page, in points: between its rows; a label column at its
- * widest and narrowest, a label from the next, the room the leader lines
- * keep from the box's edges */
+/* The room between the rows of the page, in points */
 constexpr float ROW_GAP = 6.0f;
 /* Start mapping waits so long for each control */
 constexpr uint64_t MAPPING_MS = 6000;
@@ -57,6 +55,8 @@ constexpr uint64_t MAPPING_MS = 6000;
  * device, which takes this share of the width (1.4 to 1) */
 constexpr float WIDE = 1.5f;
 constexpr float PAD_SHARE = 1.4f / 2.4f;
+/* A label column at its narrowest (at its widest 0.3 of the box), a label
+ * from the next, the room the leader lines keep from the box's edges */
 constexpr float COLUMN_MIN = 90.0f;
 constexpr float LABEL_GAP = 19.0f;
 constexpr float LABEL_EDGE = 10.0f;
@@ -685,16 +685,8 @@ Menu::button_name(int button, int kind)
 	return pad_label(pad, kind);
 }
 
-/* The games: all their names where they fit, the one shown marked, a ▶
- * before the one that runs; else the one shown by its name between arrows,
- * the others as dots on each side, as many as come before and after it (a
- * ring for the one that runs), over a dot its name, a click going there, a change
- * moving the name to its dot and the dot of the game shown to the middle
- * (unless [menu] animations = off). The pills of the buttons of a gamepad
- * that change it at the ends, or else a row of the frame, left and right
- * changing it (`focusable`). Only the games that link cabinets with
- * `links_only`: a game shown that is not one of them gives its place to
- * the game that runs, or else to the first. Its bottom. */
+/* The games the row shows: all, or with `links_only` those that link
+ * cabinets */
 std::vector<size_t>
 Menu::row_games(const MenuState &state, bool links_only)
 {
@@ -706,6 +698,16 @@ Menu::row_games(const MenuState &state, bool links_only)
 	return games;
 }
 
+/* The games: all their names where they fit, the one shown marked, a ▶
+ * before the one that runs; else the one shown by its name between arrows,
+ * the others as dots on each side, as many as come before and after it (a
+ * ring for the one that runs), over a dot its name, a click going there, a change
+ * moving the name to its dot and the dot of the game shown to the middle
+ * (unless [menu] animations = off). The pills of the buttons of a gamepad
+ * that change it at the ends, or else a row of the frame, left and right
+ * changing it (`focusable`). Only the games that link cabinets with
+ * `links_only`: a game shown that is not one of them gives its place to
+ * the game that runs, or else to the first. Its bottom. */
 float
 Menu::games_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width, bool focusable, bool links_only)
 {

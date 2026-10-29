@@ -29,7 +29,7 @@
  * its variant (programs_gl.cpp): each define is a constant the
  * branches below test, which the compiler folds. With Vulkan, the variant
  * is in specialization constants instead, all but COLLECT: gl_PrimitiveID
- * needs geometry shaders of the card even in code never run; the data of
+ * needs geometry or tessellation shaders of the card even in code never run; the data of
  * the list in buffers, the numbers of the mesh's in push constants
  * (scene_vk.cpp). */
 
@@ -333,10 +333,6 @@ main (void)
 		}
 	}
 
-	/* The depth buffer holds the logarithm of the eye depth: with the
-	 * near planes the games send, the projected depth cannot tell apart
-	 * surfaces that the cabinets do (the shadow of the AIRTRIX combo
-	 * labels lies 0.06 behind them at a depth of 560). */
 	if (HAS_PATTERN != 0) {
 		/* 501: bit 0 is the top left pixel of the 4 x 4 pattern. The pattern
 		 * is laid in the pixels drawn: at a finer scale its dots are finer
@@ -345,6 +341,10 @@ main (void)
 		if (((u_pattern >> uint ((3 - dot.y) * 4 + dot.x)) & 1u) == 0u)
 			discard;
 	}
+	/* The depth buffer holds the logarithm of the eye depth: with the
+	 * near planes the games send, the projected depth cannot tell apart
+	 * surfaces that the cabinets do (the shadow of the AIRTRIX combo
+	 * labels lies 0.06 behind them at a depth of 560). */
 	float frag_depth = log2 (1.0 + 1.0 / gl_FragCoord.w) * (1.0 / 24.0);
 	gl_FragDepth = frag_depth;
 

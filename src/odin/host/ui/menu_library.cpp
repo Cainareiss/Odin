@@ -150,7 +150,7 @@ Menu::build_library(LibraryState &state, BarState &bar_state)
 	MenuKit::fading_line(list, margin, room.x - margin, under, kit.stroke() * 2.0f,
 	                     MenuKit::alpha(palette.accent, LINE_ALPHA), LINE_FADE);
 
-	/* The tiles at the left, as large as four on a row and their rows in
+	/* The tiles at the left, as large as COLUMNS on a row and their rows in
 	 * the height allow; the sheet at the right */
 	const float top = under + kit.px(14.0f), bottom = room.y - margin;
 	const float sheet_w = std::round((room.x - 2.0f * margin) * SHEET_SHARE);

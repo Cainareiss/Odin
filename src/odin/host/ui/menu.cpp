@@ -336,12 +336,6 @@ Menu::navigate(MenuState &state)
 	nav = {};
 }
 
-/* The menu grows with the window, by one factor for all: as
- * much as the menu made for 640 by 480, or 960 by 540 in a wide window,
- * takes to fill its share one way, the other way given the room left;
- * never smaller. In points: the pixels of a dense display are SDL's. Its
- * letters, drawn by pixels, grow by a whole factor in the pixels of the
- * display (LETTERS_UP), so that each stays a square of whole pixels. */
 void
 Menu::use_palette(unsigned theme)
 {
@@ -370,6 +364,12 @@ Menu::begin_frame(unsigned theme, MenuState *state)
 	close_bar_menus();
 }
 
+/* The menu grows with the window, by one factor for all: as
+ * much as the menu made for 640 by 480, or 960 by 540 in a wide window,
+ * takes to fill its share one way, the other way given the room left;
+ * never smaller. In points: the pixels of a dense display are SDL's. Its
+ * letters, drawn by pixels, grow by a whole factor in the pixels of the
+ * display (LETTERS_UP), so that each stays a square of whole pixels. */
 void
 Menu::follow_scale()
 {

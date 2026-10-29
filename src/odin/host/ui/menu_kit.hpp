@@ -205,7 +205,9 @@ public:
 	 * and a smaller one, a light with its rays, a folder, an i; the outputs
 	 * of a cabinet: a lamp, a shaker, a lock, a speaker crossed out; those
 	 * of the buttons: a list, two arrows that swap, an arrow that turns
-	 * back, a cross, a start and its bar, an arrow back; the rune ᚨ */
+	 * back, a cross, a start and its bar, an arrow back; the rune ᚨ; a
+	 * toothed wheel (the settings), a steering wheel, four cabinets in a
+	 * ring (the link) */
 	enum class Icon {
 		NONE, PAD, INPUT, DISPLAY, AUDIO, KEYBOARD, HOTKEYS, OUTPUTS, FOLDER, ABOUT, LAMP, RUMBLE, LOCK, MUTE,
 		LIST, SWAP, DEFAULTS, CLEAR, MAP, UNDO, RUNE, SETTINGS, WHEEL, LINK,

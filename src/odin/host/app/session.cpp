@@ -70,12 +70,9 @@ Session::load_or_save_state(bool load)
 	}
 }
 
-/* The hotkeys of the emulator (hotkeys.hpp): by default Escape or F10
- * opens the menu, which pauses the game, Ctrl+Q quits, P pauses (as in
- * MAME), F1 loads the state of the game and F4 saves it, F11 or Alt+Enter
- * takes the whole display; on a gamepad Guide alone the menu, and with
- * another button the others. The keys are the control panel's too, see
- * keyboard.hpp. True to quit. */
+/* The hotkeys of the emulator (their keys by default: STANDARD in
+ * hotkeys.cpp); the menu pauses the game. The keys are the control panel's
+ * too, see keyboard.hpp. True to quit. */
 bool
 Session::process_events()
 {
@@ -345,7 +342,7 @@ Session::do_bar()
 	}
 }
 
-/* At the right of the bar, shown a while */
+/* A note in the bottom-left corner, shown a while */
 void
 Session::say(const std::string &note)
 {

@@ -30,7 +30,7 @@
 
 /* What the renderer and the board drawing need around OpenGL: a program
  * from its two texts, a check after a stage, textures and framebuffers to
- * draw in, and the projection it computes for the shaders. */
+ * draw in. */
 
 /* OpenGL 4.3 through GLEW, or OpenGL ES 3.1+ (ODIN_GLES) */
 #ifdef ODIN_GLES

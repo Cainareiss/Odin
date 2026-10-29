@@ -93,14 +93,14 @@ struct Options {
 	DisplayVsync vsync = VSYNC;
 	/* [display] bezel: around the picture */
 	DisplaySides sides = SIDES;
-	/* What the command line says of the display: odin.ini does not change it */
+	/* What the command line gave: odin.ini does not change it */
 	struct {
 		bool scale = false, anisotropy = false, window = false, fullscreen = false, unthrottled = false;
 		bool roms = false, bios = false, verbose = false;
 	} given;
 };
 
-/* False when there is nothing to run: the help was shown. */
+/* RUN: go on; HELP_ASKED or WRONG: the help was shown (exit 0 or 1) */
 enum class Parsed { RUN, HELP_ASKED, WRONG };
 
 /* The help is shown for -h and for an option that is not right. Without
@@ -163,12 +163,13 @@ int played_of(AudioOut::Mode mode);
 /* And back */
 AudioOut::Mode mode_of(int played);
 
-/* The folder of the save states by default: <data>/odin/states, else the
- * folder Odin is started from (empty) */
+/* The folder of the save states by default: states in odin_data_dir(),
+ * else the folder Odin is started from (empty) */
 std::string default_states();
 
-/* The list of the games: in the folder Odin is started from, else in the
- * home of the user, else where an install to ~/.local puts it. */
+/* The list of the games: in the folder Odin is started from, else with the
+ * program (program_data_folders), else in the home of the user, else where
+ * an install to ~/.local puts it. */
 bool load_game_list(GameList &games);
 
 /* Every key of odin.ini, at its value by default, in the order the file

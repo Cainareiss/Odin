@@ -84,7 +84,7 @@ begin_settings(const MenuKit &kit, const Box &box, ImVec2 top, ImVec2 room)
 	                  ImGuiWindowFlags_NoBackground);
 }
 
-/* The page under them is as high as the room, with the room Menu::draw
+/* The page under them is as high as the room, with the room Menu::build
  * leaves under a page: it does not scroll */
 void
 end_settings(const MenuKit &kit, ImVec2 top, ImVec2 room)

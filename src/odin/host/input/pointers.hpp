@@ -42,7 +42,7 @@ namespace odin {
  * Input on Windows (rawinput.cpp), none elsewhere. A device keeps its
  * identity across replugs: on Linux its serial, else VID:PID, else its
  * port, else its name; on Windows VID:PID, else its port; two of a kind
- * take their ports. Ported from xemu's pointers (the same author). */
+ * take their ports. Ported from xemu's pointers. */
 class Pointers {
 public:
 	/* A device: its identity, "Product [VID:PID]", plugged in now (one

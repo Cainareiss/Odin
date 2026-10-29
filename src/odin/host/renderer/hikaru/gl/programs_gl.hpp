@@ -66,7 +66,8 @@ struct MeshProgram {
 		GLint family;
 	};
 	/* What it was given last, so as not to give it again: indices in
-	 * the display list being drawn, see Renderer::forget_held. */
+	 * the display list being drawn, forgotten at each scene
+	 * (GlDrawing::begin_scene counts them). */
 	struct Held {
 		uint32_t drawing = ~0u;
 		uint32_t vp_index, ls_index, ls_vp_index;

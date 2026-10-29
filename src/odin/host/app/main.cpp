@@ -268,11 +268,11 @@ main(int argc, char **argv)
 		list = comma == std::string::npos ? "" : list.substr(comma + 1);
 	}
 
-	/* Without a game, the odin::library: a game chosen there goes back to it
-	 * when it ends, but by the hotkey that quits. Close game goes back to
-	 * it from any game; Open... plays the game of an archive, from the
-	 * folder that holds it, as if chosen there. What the odin::library and each
-	 * game change in the settings holds for what comes after them. */
+	/* Without a game, the library: a game chosen there goes back to it when
+	 * it ends, but by the hotkey that quits. Close game goes back to it from
+	 * any game; Open... plays the game of an archive, from the folder that
+	 * holds it, as if chosen there. What the library and each game change in
+	 * the settings holds for what comes after them. */
 	std::string name = options.game, last, failed;
 	odin::Opened opened;
 	bool chosen = name.empty();

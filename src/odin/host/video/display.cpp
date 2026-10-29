@@ -596,7 +596,7 @@ Display::show_again(BarState *bar)
 	wait_drawing();
 }
 
-/* Built on this thread, drawn on the drawing thread meanwhile */
+/* The library draws with the menu: made here if it is not yet */
 void
 Display::open_library()
 {

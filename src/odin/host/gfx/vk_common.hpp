@@ -210,7 +210,7 @@ public:
 	/* Whether a pipeline made tells if it came from the cache */
 	bool creation_feedback() const { return m_creation_feedback; }
 	/* Whether fragment shaders read gl_PrimitiveID (the geometry shaders
-	 * of the card) */
+	 * of the card, or its tessellation shaders) */
 	bool primitive_ids() const { return m_primitive_ids; }
 	bool primitive_ids_tessellation() const { return m_primitive_ids_tessellation; }
 	bool geometry_shaders() const { return m_geometry_shaders; }

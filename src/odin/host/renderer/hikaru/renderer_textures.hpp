@@ -79,8 +79,8 @@ public:
 
 	/* The first level only, for looking at a scene */
 	void set_no_mipmaps(bool on) { m_no_mipmaps = on; }
-	/* Anisotropic filtering, 1 for none as on the board. The textures
-	 * held are decoded again. */
+	/* Anisotropic filtering, 1 for none as on the board. The samplers are
+	 * made again. */
 	void set_anisotropy(unsigned level);
 	/* Each texture decoded is told there; nullptr for none. */
 	void set_log(FILE *out) { m_log = out; }
