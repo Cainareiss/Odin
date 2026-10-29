@@ -528,6 +528,11 @@ Tlcs90::step()
 				o->value = address_of(*o);
 	} else {
 		decode(ins);
+		if (ins.op == Op::UNKNOWN) {
+			std::fprintf(stderr, "FATAL: TLCS-90: unknown instruction at %04X\n", static_cast<unsigned>(at));
+			std::abort();
+		}
+
 		const unsigned length = static_cast<uint16_t>(m_pc - at);
 
 		if (at + length <= m_decoded.size())
@@ -922,10 +927,8 @@ Tlcs90::execute(const Instruction &ins)
 		set_r16(AF, pop());
 		m_pc = pop();
 		break;
-	case Op::UNKNOWN:
-		std::fprintf(stderr, "FATAL: TLCS-90: unknown instruction at %04X\n",
-		             static_cast<unsigned>(m_pc));
-		std::abort();
+	case Op::UNKNOWN:	/* step() stops where it decodes one */
+		break;
 	}
 	return ins.states;
 }
