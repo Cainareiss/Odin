@@ -211,8 +211,8 @@ Session::close_menu()
 }
 
 /* The mouse moved shows the bar a while (not where the system first puts
- * it: no move); where it aims in the game, only from the top edge of the
- * window. Its buttons pressed on the bar, or with one of its menus open,
+ * it: no move), never where it aims in the game: all of it is the game's
+ * there. Its buttons pressed on the bar, or with one of its menus open,
  * are the bar's, and let go there; all the rest of the mouse is the game's
  * too. */
 bool
@@ -220,9 +220,8 @@ Session::bar_event(const SDL_Event &event)
 {
 	switch (event.type) {
 	case SDL_EVENT_MOUSE_MOTION:
-		if ((event.motion.xrel != 0.0f || event.motion.yrel != 0.0f) &&
-		    (!m_controls.aims() || event.motion.y < BAR_EDGE))
-			m_bar_until = std::max(m_bar_until, SDL_GetTicks() + (m_controls.aims() ? BAR_AIM_MS : BAR_MS));
+		if ((event.motion.xrel != 0.0f || event.motion.yrel != 0.0f) && !m_controls.aims())
+			m_bar_until = std::max(m_bar_until, SDL_GetTicks() + BAR_MS);
 		follow_bar();
 		m_display.bar_event(event);
 		return false;

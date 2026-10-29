@@ -66,13 +66,9 @@ public:
 	const Opened &opened() const { return m_opened; }
 
 private:
-	/* The bar: shown that long after the mouse moved; in a game the mouse
-	 * aims in, only from the top edge, that many points high, that long
-	 * (then while the mouse is on it); drawn that often while the game is
-	 * paused */
+	/* The bar: shown that long after the mouse moved, never in a game the
+	 * mouse aims in; drawn that often while the game is paused */
 	static constexpr Uint64 BAR_MS = 2500;
-	static constexpr Uint64 BAR_AIM_MS = 400;
-	static constexpr float BAR_EDGE = 2.0f;
 	static constexpr Sint32 BAR_PAUSED_MS = 16;
 
 	Ended frames();
