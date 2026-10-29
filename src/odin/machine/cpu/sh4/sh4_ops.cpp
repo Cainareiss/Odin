@@ -32,6 +32,7 @@
  * a product is fused with a sum only where std::fma says so. */
 
 #include "odin/machine/cpu/sh4/sh4.hpp"
+#include "odin/common/bytes.hpp"
 #include "odin/common/env.hpp"
 #include "odin/common/fma_by_double.hpp"
 #include "odin/machine/cpu/sh4/sh4_fsca.hpp"
@@ -59,19 +60,18 @@ template <float (*FMA)(float, float, float)>
 [[gnu::always_inline]] inline float
 fused_mac(uint32_t a, uint32_t b, uint32_t c)
 {
-	return FMA(std::bit_cast<float>(a), std::bit_cast<float>(b), std::bit_cast<float>(c));
+	return FMA(f32(a), f32(b), f32(c));
 }
 
 template <float (*FMA)(float, float, float)>
 [[gnu::always_inline]] inline float
 fused_ipr(const uint32_t *a, const uint32_t *b)
 {
-	const auto f = [](uint32_t w) { return std::bit_cast<float>(w); };
-	float sum = f(a[1]) * f(b[1]);
+	float sum = f32(a[1]) * f32(b[1]);
 
-	sum = FMA(f(a[0]), f(b[0]), sum);
-	sum = FMA(f(a[2]), f(b[2]), sum);
-	sum = FMA(f(a[3]), f(b[3]), sum);
+	sum = FMA(f32(a[0]), f32(b[0]), sum);
+	sum = FMA(f32(a[2]), f32(b[2]), sum);
+	sum = FMA(f32(a[3]), f32(b[3]), sum);
 	return sum;
 }
 
@@ -80,15 +80,14 @@ template <float (*FMA)(float, float, float)>
 [[gnu::always_inline]] inline void
 fused_trv(uint32_t *v, const uint32_t *x)
 {
-	const auto f = [](uint32_t w) { return std::bit_cast<float>(w); };
-	const float v0 = f(v[0]), v1 = f(v[1]), v2 = f(v[2]), v3 = f(v[3]);
+	const float v0 = f32(v[0]), v1 = f32(v[1]), v2 = f32(v[2]), v3 = f32(v[3]);
 
 	for (uint32_t i = 0; i < 4; i++) {
-		float sum = v1 * f(x[4 + i]);
+		float sum = v1 * f32(x[4 + i]);
 
-		sum = FMA(v0, f(x[i]), sum);
-		sum = FMA(v2, f(x[8 + i]), sum);
-		sum = FMA(v3, f(x[12 + i]), sum);
+		sum = FMA(v0, f32(x[i]), sum);
+		sum = FMA(v2, f32(x[8 + i]), sum);
+		sum = FMA(v3, f32(x[12 + i]), sum);
 		v[i] = std::bit_cast<uint32_t>(sum);
 	}
 }
@@ -165,7 +164,6 @@ struct Sh4OpsT {
 	static int32_t s8(uint32_t v) { return static_cast<int8_t>(v); }
 	static int32_t s16(uint32_t v) { return static_cast<int16_t>(v); }
 	static uint32_t u32(int32_t v) { return static_cast<uint32_t>(v); }
-	static float f32(uint32_t v) { return std::bit_cast<float>(v); }
 	static uint32_t bits(float v) { return std::bit_cast<uint32_t>(v); }
 
 	/* On to the next instruction of the block. */

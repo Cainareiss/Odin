@@ -53,6 +53,7 @@
  * is not kept. Once a turn is, a look inside it goes to its start. */
 
 #include "odin/machine/cpu/sh4/sh4.hpp"
+#include "odin/common/bytes.hpp"
 
 #include <algorithm>
 #include <bit>
@@ -79,7 +80,6 @@ void each_bit(uint64_t bits, F &&f)
 }
 
 int64_t wide(uint32_t v) { return static_cast<int64_t>(v); }
-float f32(uint32_t v) { return std::bit_cast<float>(v); }
 /* Integers with the same top bit are in the same order, signed or not. */
 bool same_half(uint32_t a, uint32_t b) { return ((a ^ b) >> 31) == 0; }
 
@@ -156,22 +156,18 @@ bool Sh4::same_but(const Regs &a, const Regs &b, uint64_t free)
 
 void Sh4::clock_noted_read(uint32_t addr, uint32_t size, const void *at)
 {
-	uint64_t value = 0;
+	const uint64_t value = load_bytes(static_cast<const uint8_t *>(at), size);
 
-	std::memcpy(&value, at, size);
 	m_clock_note.reads.push_back({addr, size, value, m_clock_note.step});
 }
 
 void Sh4::clock_noted_write(uint32_t addr, uint32_t size, const void *old, const void *value)
 {
-	uint64_t v = 0;
-
 	if (std::memcmp(old, value, size) != 0) {
 		m_clock_note.bad = true;
 		return;
 	}
-	std::memcpy(&v, value, size);
-	m_clock_note.writes.push_back({addr, size, v, m_clock_note.step});
+	m_clock_note.writes.push_back({addr, size, load_bytes(static_cast<const uint8_t *>(value), size), m_clock_note.step});
 }
 
 /* A read outside the plain memory: one of a TCNT only */
@@ -531,13 +527,10 @@ bool Sh4::clock_still(const ClockTurn &turn) const
 {
 	const auto plain = [this](uint32_t addr, uint32_t size, uint64_t value) {
 		const uint8_t *page = m_rd[addr >> PAGE_BITS];
-		uint64_t now = 0;
-
 		if (!page) {
 			return false;
 		}
-		std::memcpy(&now, page + (addr & (PAGE_SIZE - 1)), size);
-		return now == value;
+		return load_bytes(page + (addr & (PAGE_SIZE - 1)), size) == value;
 	};
 	Regs now = m_r, then = turn.start;
 
@@ -602,11 +595,8 @@ bool Sh4::clock_turn(const ClockTurn &turn, uint32_t value, ClockValues &out)
 		}
 		if (s.other != NO_USE) {
 			if (s.fresh) {
-				uint64_t loaded = 0;
-
-				std::memcpy(&loaded, m_rd[s.fresh_addr >> PAGE_BITS] + (s.fresh_addr & (PAGE_SIZE - 1)),
-				            s.fresh_size);
-				v[1] = static_cast<uint32_t>(loaded);
+				v[1] = static_cast<uint32_t>(
+					load_bytes(m_rd[s.fresh_addr >> PAGE_BITS] + (s.fresh_addr & (PAGE_SIZE - 1)), s.fresh_size));
 			} else {
 				Regs before = s.before;
 

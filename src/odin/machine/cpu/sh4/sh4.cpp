@@ -403,22 +403,7 @@ bool Sh4::write_plain(uint32_t addr, uint32_t size, uint64_t value)
 	if (!p || (addr & (size - 1)) || m_code_epoch[(addr >> PAGE_BITS) & (PHYSICAL_PAGES - 1)] == m_epoch) {
 		return false;
 	}
-	p += addr & (PAGE_SIZE - 1);
-	const auto put = [p](auto v) { std::memcpy(p, &v, sizeof(v)); };
-	switch (size) {
-	case 1:
-		put(static_cast<uint8_t>(value));
-		break;
-	case 2:
-		put(static_cast<uint16_t>(value));
-		break;
-	case 4:
-		put(static_cast<uint32_t>(value));
-		break;
-	default:
-		put(value);
-		break;
-	}
+	store_bytes(p + (addr & (PAGE_SIZE - 1)), size, value);
 	return true;
 }
 

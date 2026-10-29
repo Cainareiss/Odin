@@ -31,6 +31,7 @@
  * 64 KB image: bits 16-23 and 0-7 of the address. */
 
 #include "odin/machine/cpu/sh4/sh4.hpp"
+#include "odin/common/bytes.hpp"
 
 #include <algorithm>
 #include <bit>
@@ -224,10 +225,8 @@ uint64_t Sh4::dmac_get(uint32_t addr, uint32_t size)
 	const uint8_t *p = m_rd[addr >> PAGE_BITS];
 	uint64_t value = 0;
 
-	if (p && !(addr & (size - 1))) {
-		std::memcpy(&value, p + (addr & (PAGE_SIZE - 1)), size);
-		return value;
-	}
+	if (p && !(addr & (size - 1)))
+		return load_bytes(p + (addr & (PAGE_SIZE - 1)), size);
 	m_touched = true;
 	if (!read_any(addr, size, value)) {
 		value = 0;
@@ -242,7 +241,7 @@ void Sh4::dmac_put(uint32_t addr, uint32_t size, uint64_t value)
 
 	m_touched = true;
 	if (p && !(addr & (size - 1))) {
-		std::memcpy(p + (addr & (PAGE_SIZE - 1)), &value, size);
+		store_bytes(p + (addr & (PAGE_SIZE - 1)), size, value);
 		return;
 	}
 	if (!write_any(addr, size, value)) {
