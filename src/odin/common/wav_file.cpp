@@ -24,25 +24,9 @@
 
 #include "odin/common/wav_file.hpp"
 
+#include "odin/common/bytes.hpp"
+
 namespace odin {
-
-namespace {
-
-void
-put16(uint8_t *at, uint32_t value)
-{
-	at[0] = static_cast<uint8_t>(value);
-	at[1] = static_cast<uint8_t>(value >> 8);
-}
-
-void
-put32(uint8_t *at, uint32_t value)
-{
-	put16(at, value & 0xFFFF);
-	put16(at + 2, value >> 16);
-}
-
-} /* namespace */
 
 WavFile::WavFile(const std::string &path, uint32_t rate, uint16_t channels)
 	: m_file(std::fopen(path.c_str(), "wb")), m_rate(rate), m_channels(channels), m_bytes(0)
@@ -68,7 +52,7 @@ WavFile::write(std::span<const int16_t> samples)
 	size_t n = 0;
 
 	for (const int16_t sample : samples) {
-		put16(bytes + n, static_cast<uint16_t>(sample));
+		put_le16(bytes + n, static_cast<uint16_t>(sample));
 		n += 2;
 		if (n == sizeof(bytes)) {
 			std::fwrite(bytes, 1, n, m_file);
@@ -86,19 +70,19 @@ WavFile::header()
 {
 	uint8_t h[44] = { 'R', 'I', 'F', 'F', 0, 0, 0, 0, 'W', 'A', 'V', 'E', 'f', 'm', 't', ' ' };
 
-	put32(h + 4, 36 + m_bytes);
-	put32(h + 16, 16);
-	put16(h + 20, 1);	/* PCM */
-	put16(h + 22, m_channels);
-	put32(h + 24, m_rate);
-	put32(h + 28, m_rate * m_channels * 2);
-	put16(h + 32, m_channels * 2);
-	put16(h + 34, 16);
+	put_le32(h + 4, 36 + m_bytes);
+	put_le32(h + 16, 16);
+	put_le16(h + 20, 1);	/* PCM */
+	put_le16(h + 22, m_channels);
+	put_le32(h + 24, m_rate);
+	put_le32(h + 28, m_rate * m_channels * 2);
+	put_le16(h + 32, m_channels * 2);
+	put_le16(h + 34, 16);
 	h[36] = 'd';
 	h[37] = 'a';
 	h[38] = 't';
 	h[39] = 'a';
-	put32(h + 40, m_bytes);
+	put_le32(h + 40, m_bytes);
 	std::fseek(m_file, 0, SEEK_SET);
 	std::fwrite(h, 1, sizeof(h), m_file);
 }

@@ -12,6 +12,8 @@
 #include <format>
 #include <utility>
 
+#include "odin/common/bytes.hpp"
+
 namespace odin {
 
 namespace {
@@ -19,11 +21,6 @@ namespace {
 constexpr uint32_t bit(uint32_t x, uint32_t n)
 {
 	return (x >> n) & 1u;
-}
-
-constexpr uint16_t swap16(uint16_t v)
-{
-	return static_cast<uint16_t>((v << 8) | (v >> 8));
 }
 
 /* MAME's bitswap<16>: bits[0] is the source of result bit 15. */

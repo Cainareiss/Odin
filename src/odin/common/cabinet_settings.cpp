@@ -70,8 +70,7 @@ set_mie(std::span<uint8_t> chip, size_t at, unsigned shift, unsigned bits, unsig
 
 		const uint16_t sum = crc(chip.subspan(copy, MIE_SETTINGS));
 
-		chip[copy + MIE_SETTINGS] = static_cast<uint8_t>(sum);
-		chip[copy + MIE_SETTINGS + 1] = static_cast<uint8_t>(sum >> 8);
+		put_le16(&chip[copy + MIE_SETTINGS], sum);
 	}
 	return true;
 }
@@ -111,8 +110,7 @@ set_backup(std::span<uint8_t> bram, size_t at, unsigned shift, unsigned bits, un
 
 	const uint16_t sum = crc(bram.subspan(BACKUP_BLOCK, size));
 
-	bram[BACKUP_HEAD + 4] = static_cast<uint8_t>(sum);
-	bram[BACKUP_HEAD + 5] = static_cast<uint8_t>(sum >> 8);
+	put_le16(&bram[BACKUP_HEAD + 4], sum);
 	return true;
 }
 

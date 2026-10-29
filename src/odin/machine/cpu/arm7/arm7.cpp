@@ -537,10 +537,7 @@ void Arm7::settle()
 		uint8_t *p = m_ram.base + m_turn_counter;
 		uint32_t count = le32(p);
 		count += m_turn_laps * m_turn_delta;
-		p[0] = u8(count);
-		p[1] = u8(count >> 8);
-		p[2] = u8(count >> 16);
-		p[3] = u8(count >> 24);
+		put_le32(p, count);
 	}
 	m_turn_laps = 0;
 	/* The bus answers what it did when the turn was recorded: it may
@@ -1204,11 +1201,7 @@ void Arm7::wr32(uint32_t addr, uint32_t v)
 		turn_note_store(addr, 4, v);
 	}
 	if (addr < m_ram.size) {
-		uint8_t *p = m_ram.base + (addr & m_ram.mask);
-		p[0] = u8(v);
-		p[1] = u8(v >> 8);
-		p[2] = u8(v >> 16);
-		p[3] = u8(v >> 24);
+		put_le32(m_ram.base + (addr & m_ram.mask), v);
 	} else {
 		m_bus.write32(addr, v);
 	}

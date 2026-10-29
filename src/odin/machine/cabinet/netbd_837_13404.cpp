@@ -598,7 +598,7 @@ NetBoard837_13404::read16(uint32_t addr, unsigned)
 
 	switch ((addr >> 18) & 3) {
 	case MAP_RAM:
-		v = static_cast<uint16_t>((m_ram[off] << 8) | m_ram[off + 1]);
+		v = be16(&m_ram[off]);
 		break;
 	case MAP_CTRL:
 		m_touched = true;
@@ -647,8 +647,7 @@ NetBoard837_13404::write16(uint32_t addr, uint16_t value, unsigned)
 	m_touched = true;
 	switch ((addr >> 18) & 3) {
 	case MAP_RAM:
-		m_ram[off] = static_cast<uint8_t>(value >> 8);
-		m_ram[off + 1] = static_cast<uint8_t>(value);
+		put_be16(&m_ram[off], value);
 		break;
 	case MAP_CTRL:
 		ctrl_write(addr & 0xFF, value);
@@ -711,7 +710,7 @@ NetBoard837_13404::host_read(uint32_t offset, unsigned size)
 	if (offset & 2)
 		return 0;
 	const uint32_t a = ((offset - 0x20000) >> 1) & 0xFFFE;
-	return static_cast<uint32_t>((m_ram[a] << 8) | m_ram[a + 1]);
+	return be16(&m_ram[a]);
 }
 
 void
@@ -758,8 +757,7 @@ NetBoard837_13404::host_write(uint32_t offset, unsigned size, uint32_t value)
 	if (offset & 2)
 		return;
 	const uint32_t a = ((offset - 0x20000) >> 1) & 0xFFFE;
-	m_ram[a] = static_cast<uint8_t>(value >> 8);
-	m_ram[a + 1] = static_cast<uint8_t>(value);
+	put_be16(&m_ram[a], static_cast<uint16_t>(value));
 }
 
 } /* namespace odin */

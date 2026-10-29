@@ -285,10 +285,7 @@ RomBoard::RomBoard(const Config &config, std::span<const uint8_t> eprom, std::sp
 		/* The chip reads its input from the RAM, one byte-swapped word
 		 * at a time (MAME hikaru.cpp prot_ram_r). */
 		m_crypt->set_read([this](uint32_t addr) {
-			uint16_t word;
-
-			std::memcpy(&word, &m_local_ram[(addr & 0x7FFF) * 2], 2);
-			return static_cast<uint16_t>((word >> 8) | (word << 8));
+			return be16(&m_local_ram[(addr & 0x7FFF) * 2]);
 		});
 	}
 	/* 834-14125 ROM board: Actel A54SX32 stamped 317-0283-COM. The key is

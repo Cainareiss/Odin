@@ -113,6 +113,49 @@ le32(const uint8_t *at)
 	       static_cast<uint32_t>(at[3]) << 24;
 }
 
+/* And back: those bytes from 16 and 32 bits */
+inline void
+put_le16(uint8_t *at, uint16_t value)
+{
+	at[0] = static_cast<uint8_t>(value);
+	at[1] = static_cast<uint8_t>(value >> 8);
+}
+
+inline void
+put_le32(uint8_t *at, uint32_t value)
+{
+	put_le16(at, static_cast<uint16_t>(value));
+	put_le16(at + 2, static_cast<uint16_t>(value >> 16));
+}
+
+/* The same, the most significant byte first */
+inline uint16_t
+be16(const uint8_t *at)
+{
+	return static_cast<uint16_t>(at[0] << 8 | at[1]);
+}
+
+inline uint32_t
+be32(const uint8_t *at)
+{
+	return static_cast<uint32_t>(at[0]) << 24 | static_cast<uint32_t>(at[1]) << 16 | static_cast<uint32_t>(at[2]) << 8 |
+	       static_cast<uint32_t>(at[3]);
+}
+
+inline void
+put_be16(uint8_t *at, uint16_t value)
+{
+	at[0] = static_cast<uint8_t>(value >> 8);
+	at[1] = static_cast<uint8_t>(value);
+}
+
+/* The two bytes of 16 bits swapped */
+inline constexpr uint16_t
+swap16(uint16_t value)
+{
+	return static_cast<uint16_t>(value << 8 | value >> 8);
+}
+
 /* A word read as the float it holds */
 inline float
 f32(uint32_t word)

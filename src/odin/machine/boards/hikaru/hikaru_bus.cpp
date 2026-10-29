@@ -72,12 +72,6 @@ master_window(uint32_t addr)
 	return (addr >= 0x02000000 && addr <= 0x03FFFFFF) || (addr >= 0x16000000 && addr <= 0x17FFFFFF);
 }
 
-uint16_t
-swap16(uint64_t value)
-{
-	return static_cast<uint16_t>(((value & 0xFF) << 8) | ((value >> 8) & 0xFF));
-}
-
 /* Where a bit of an offset of the texture RAM goes when the bus writes it
  * untwiddled, see Hikaru::texram_write */
 const struct {
@@ -749,8 +743,8 @@ Hikaru::texram_store(unsigned bank, uint32_t offs, unsigned size, uint64_t value
 	}
 	if (size != 4)
 		fatal("a write to the texture RAM that is not 32 bits wide", offs, size);
-	store(m_texram[bank], twiddle((offs + 0) >> 1) << 1, 2, swap16(value));
-	store(m_texram[bank], twiddle((offs + 2) >> 1) << 1, 2, swap16(value >> 16));
+	store(m_texram[bank], twiddle((offs + 0) >> 1) << 1, 2, swap16(static_cast<uint16_t>(value)));
+	store(m_texram[bank], twiddle((offs + 2) >> 1) << 1, 2, swap16(static_cast<uint16_t>(value >> 16)));
 }
 
 /* The external bus, see memctl.cpp for what is on it. Bit 31 is the top bit

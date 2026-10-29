@@ -41,6 +41,8 @@
 #include <unistd.h>
 #endif
 
+#include "odin/common/bytes.hpp"
+
 namespace odin {
 
 namespace {
@@ -122,19 +124,6 @@ find_files()
 	return out;
 }
 
-uint32_t
-u32(const unsigned char *at)
-{
-	return static_cast<uint32_t>(at[0]) << 24 | static_cast<uint32_t>(at[1]) << 16 | static_cast<uint32_t>(at[2]) << 8 |
-	       at[3];
-}
-
-uint16_t
-u16(const unsigned char *at)
-{
-	return static_cast<uint16_t>(at[0] << 8 | at[1]);
-}
-
 /* The file mapped whole: nothing when it cannot be */
 const unsigned char *
 map_file(const std::string &path, size_t &size)
@@ -197,24 +186,24 @@ SystemFonts::readable(const unsigned char *data, size_t size)
 	if (!std::memcmp(data, "ttcf", 4)) {
 		if (size < 16)
 			return false;
-		start = u32(data + 12);
+		start = be32(data + 12);
 		if (start > size - 12)
 			return false;
 	}
 
-	const uint32_t version = u32(data + start);
+	const uint32_t version = be32(data + start);
 
 	if (version != 0x00010000 && std::memcmp(data + start, "true", 4) && std::memcmp(data + start, "OTTO", 4))
 		return false;
 
-	const uint16_t tables = u16(data + start + 4);
+	const uint16_t tables = be16(data + start + 4);
 	std::map<std::string, uint32_t> at;
 
 	if (start + 12 + size_t{tables} * 16 > size)
 		return false;
 	for (uint16_t i = 0; i < tables; i++) {
 		const unsigned char *const entry = data + start + 12 + size_t{i} * 16;
-		const uint32_t offset = u32(entry + 8), length = u32(entry + 12);
+		const uint32_t offset = be32(entry + 8), length = be32(entry + 12);
 
 		if (offset <= size && length <= size - offset)
 			at[std::string(reinterpret_cast<const char *>(entry), 4)] = offset;
@@ -230,9 +219,9 @@ SystemFonts::readable(const unsigned char *data, size_t size)
 
 	if (cmap + 4 > size)
 		return false;
-	for (uint16_t i = 0, count = u16(data + cmap + 2); i < count && cmap + 4 + size_t{i} * 8 + 8 <= size; i++) {
+	for (uint16_t i = 0, count = be16(data + cmap + 2); i < count && cmap + 4 + size_t{i} * 8 + 8 <= size; i++) {
 		const unsigned char *const record = data + cmap + 4 + size_t{i} * 8;
-		const uint16_t platform = u16(record), encoding = u16(record + 2);
+		const uint16_t platform = be16(record), encoding = be16(record + 2);
 
 		if (platform == 0 || (platform == 3 && (encoding == 1 || encoding == 10)))
 			return true;

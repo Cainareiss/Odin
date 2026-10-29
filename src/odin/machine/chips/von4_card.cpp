@@ -35,6 +35,8 @@
 
 #include <algorithm>
 
+#include "odin/common/bytes.hpp"
+
 namespace odin {
 
 namespace {
@@ -98,9 +100,7 @@ struct Key {
 
 uint32_t word(std::span<const uint8_t> program, uint32_t addr)
 {
-	const uint8_t *const at = program.data() + (addr - BASE);
-
-	return static_cast<uint32_t>(at[0] | at[1] << 8 | at[2] << 16 | at[3] << 24);
+	return le32(program.data() + (addr - BASE));
 }
 
 /* The 16 nibbles of a key, high bit first */
