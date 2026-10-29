@@ -26,7 +26,6 @@
 #define ODIN_TLCS90_HPP
 
 #include <cstdint>
-#include <cstdio>
 #include <vector>
 
 namespace odin {
@@ -80,9 +79,6 @@ public:
 
 	void save(Tlcs90State &out) const;
 	void load(const Tlcs90State &in);
-	/* Debug: one line per instruction to `out` (no switch sets it); nullptr
-	 * turns it off. */
-	void set_trace(FILE *out) { m_trace = out; }
 	/* The memory below `end` never changes (a ROM): its instructions are
 	 * decoded once, the address of a memory operand at a register taken
 	 * again each time. */
@@ -169,7 +165,6 @@ private:
 	uint8_t m_alt[8] = {};	/* B' C' D' E' H' L' A' F' */
 	uint16_t m_ix = 0, m_iy = 0, m_sp = 0, m_pc = 0;
 	bool m_halted = false, m_ei_pending = false;
-	FILE *m_trace = nullptr;
 	struct Decoded {
 		Instruction ins{};
 		uint8_t length = 0;	/* 0: not decoded yet */

@@ -11,7 +11,6 @@
 
 #include <array>
 #include <cstdint>
-#include <cstdio>
 #include <optional>
 #include <span>
 
@@ -76,9 +75,6 @@ public:
 	void load(const X76f100State &in);
 	std::span<uint8_t> data() { return m_image; }
 
-	/* Debug: its commands, passwords and accesses out of bounds told there
-	 * (no switch sets it) */
-	void set_log(FILE *out) { m_log = out; }
 
 private:
 	enum class State : uint8_t {
@@ -116,7 +112,6 @@ private:
 	uint8_t m_command;
 	uint8_t m_password_retry_counter;
 	bool m_is_password_accepted;
-	FILE *m_log;
 };
 
 /* Everything the chip keeps between two pin changes. Plain data. */

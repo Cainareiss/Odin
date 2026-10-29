@@ -24,6 +24,7 @@
 
 #include "odin/machine/cpu/tlcs90/tlcs90.hpp"
 
+#include <cstdio>
 #include <cstdlib>
 #include <utility>
 
@@ -537,10 +538,6 @@ Tlcs90::step()
 		if (at + length <= m_decoded.size())
 			m_decoded[at] = { ins, static_cast<uint8_t>(length) };
 	}
-	if (m_trace)
-		std::fprintf(m_trace, "%04X A%02X F%02X BC%04X DE%04X HL%04X IX%04X IY%04X SP%04X\n", at, m_r[A], m_f,
-		             r16(BC), r16(DE), r16(HL), m_ix, m_iy, m_sp);
-
 	const bool after_ei = m_ei_pending;
 	const uint32_t states = execute(ins);
 

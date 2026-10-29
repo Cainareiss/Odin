@@ -9,7 +9,6 @@
 #include "odin/machine/chips/x76f100.hpp"
 
 #include <algorithm>
-#include <format>
 
 namespace odin {
 
@@ -33,7 +32,6 @@ static_assert(X76f100::IMAGE_SIZE == 0x84);
 } /* namespace */
 
 X76f100::X76f100()
-	: m_log(nullptr)
 {
 	/* Blank chip: default response to reset, no passwords. */
 	m_image.fill(0);
@@ -120,9 +118,6 @@ void X76f100::on_cs(bool level)
 void X76f100::on_rst(bool level)
 {
 	if (!m_rst && level && !m_cs) {
-		if (m_log) {
-			std::fputs("x76f100: response to reset\n", m_log);
-		}
 		m_state = State::RESPONSE_TO_RESET;
 		m_bit = 0;
 		m_byte = 0;
@@ -224,9 +219,6 @@ void X76f100::on_byte_in()
 	switch (m_state) {
 	case State::LOAD_COMMAND:
 		m_command = m_shift;
-		if (m_log) {
-			std::fputs(std::format("x76f100: command {:02x}\n", m_command).c_str(), m_log);
-		}
 		/* The command is not checked for validity. */
 		m_state = State::LOAD_PASSWORD;
 		break;
@@ -248,11 +240,6 @@ void X76f100::on_byte_in()
 					std::ranges::fill(memory(), 0);
 					m_password_retry_counter = 0;
 				}
-			}
-			if (m_log) {
-				std::fputs(std::format("x76f100: password {} ({} wrong so far)\n",
-				                       m_is_password_accepted ? "accepted" : "refused",
-				                       m_password_retry_counter).c_str(), m_log);
 			}
 		}
 		break;
@@ -284,20 +271,12 @@ void X76f100::on_byte_in()
 			} else {
 				for (m_byte = 0; m_byte < PAGE_SIZE; m_byte++) {
 					const std::optional<uint32_t> offset = data_offset();
-					if (!offset) {
-						if (m_log) {
-							std::fputs("x76f100: write out of bounds\n", m_log);
-						}
+					if (!offset)
 						break;
-					}
 					memory()[*offset] = m_write_buffer[m_byte];
 				}
 			}
 			m_byte = 0;
-			if (m_log) {
-				std::fputs(std::format("x76f100: page flushed, command {:02x}\n", m_command).c_str(),
-				           m_log);
-			}
 		}
 		break;
 
@@ -317,9 +296,6 @@ void X76f100::on_read_clock()
 				m_shift = memory()[*offset];
 			} else {
 				m_shift = 0;
-				if (m_log) {
-					std::fputs("x76f100: read out of bounds\n", m_log);
-				}
 			}
 		}
 		m_sdar = (m_shift & 0x80) != 0;
