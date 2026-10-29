@@ -172,6 +172,9 @@ public:
 	void set_trace(FILE *out) { m_trace = out; }
 
 private:
+	/* The end of a track after its data: the end mark, then the LRC of
+	 * the data and that mark */
+	static void seal_track(uint8_t *track);
 	/* The exchange: a frame being received, a frame ACKed waiting for its
 	 * ENQ, a read waiting for a card */
 	enum Phase : uint8_t { IDLE, FRAME, ACKED, WAITING };

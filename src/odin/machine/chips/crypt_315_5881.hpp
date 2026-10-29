@@ -107,10 +107,6 @@ private:
 
 	void tell_unknown(char rw, uint32_t offset, unsigned size, uint32_t value);
 
-	void set_addr_low(uint16_t data);
-	void set_addr_high(uint16_t data);
-	void set_subkey(uint16_t data);
-
 	uint16_t do_decrypt();
 	uint16_t get_decrypted_16();
 	uint32_t get_compressed_bit();

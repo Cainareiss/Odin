@@ -148,6 +148,12 @@ uint8_t CardReader::frame_xor(std::span<const uint8_t> bytes)
 	return x;
 }
 
+void CardReader::seal_track(uint8_t *track)
+{
+	track[TRACK_DATA + 1] = 0xFF;
+	track[TRACK_DATA + 2] = frame_xor(std::span<const uint8_t>(track + 1, TRACK_DATA + 1));
+}
+
 uint8_t CardReader::status1() const
 {
 	return static_cast<uint8_t>(SENSORS[m_position] | (m_stocker_full ? 0x20 : 0) | (m_shutter_open ? 0x80 : 0x40));
@@ -531,8 +537,7 @@ void CardReader::write(std::span<const uint8_t> params)
 
 			raw[1 + i] = seven && !even_parity(b) ? static_cast<uint8_t>(b | 0x80) : b;
 		}
-		raw[TRACK_DATA + 1] = 0xFF;
-		raw[TRACK_DATA + 2] = frame_xor(std::span<const uint8_t>(raw + 1, TRACK_DATA + 1));
+		seal_track(raw);
 	}
 	m_position = S4S5;
 	if (!m_dispensed && !m_card_file.empty())
@@ -626,8 +631,7 @@ std::array<uint8_t, CardReader::CARD_SIZE> CardReader::blank_card()
 	std::array<uint8_t, CARD_SIZE> card{};
 
 	card[0] = 0xFF;
-	card[TRACK_DATA + 1] = 0xFF;
-	card[TRACK_DATA + 2] = frame_xor(std::span<const uint8_t>(card.data() + 1, TRACK_DATA + 1));
+	seal_track(card.data());
 	return card;
 }
 
@@ -640,8 +644,7 @@ std::array<uint8_t, CardReader::CARD_SIZE> CardReader::card_of(std::span<const u
 
 		raw[0] = 0xFF;
 		std::copy_n(data.begin() + t * TRACK_DATA, TRACK_DATA, raw + 1);
-		raw[TRACK_DATA + 1] = 0xFF;
-		raw[TRACK_DATA + 2] = frame_xor(std::span<const uint8_t>(raw + 1, TRACK_DATA + 1));
+		seal_track(raw);
 	}
 	return card;
 }

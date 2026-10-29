@@ -587,7 +587,8 @@ uint16_t Crypt315_5881::ready() const
 
 void Crypt315_5881::write_addr_lo(uint16_t data)
 {
-	set_addr_low(data);
+	m_prot_cur_address = (m_prot_cur_address & 0xffff0000) | data;
+	m_enc_ready = false;
 	m_first_read = true;
 }
 
@@ -598,7 +599,10 @@ void Crypt315_5881::write_addr_hi(uint16_t data)
 	if (m_log && data != 0) {
 		std::fputs(std::format("315-5881: address high {:04x} taken as 0\n", data).c_str(), m_log);
 	}
-	set_addr_high(0);
+	m_prot_cur_address &= 0x0000ffff;
+	m_enc_ready = false;
+	m_buffer_bit = 7;
+	m_buffer_bit2 = 15;
 	m_first_read = true;
 }
 
@@ -607,7 +611,8 @@ void Crypt315_5881::write_subkey(uint16_t data)
 	if (m_log) {
 		std::fputs(std::format("315-5881: subkey {:04x}\n", data).c_str(), m_log);
 	}
-	set_subkey(data);
+	m_subkey = data;
+	m_enc_ready = false;
 }
 
 /* The little-endian side of the chip: the stream word is byte-swapped
@@ -621,27 +626,6 @@ uint16_t Crypt315_5881::read_decrypt()
 		return 0;
 	}
 	return swap16(do_decrypt());
-}
-
-void Crypt315_5881::set_addr_low(uint16_t data)
-{
-	m_prot_cur_address = (m_prot_cur_address & 0xffff0000) | data;
-	m_enc_ready = false;
-}
-
-void Crypt315_5881::set_addr_high(uint16_t data)
-{
-	m_prot_cur_address = (m_prot_cur_address & 0x0000ffff) | (static_cast<uint32_t>(data) << 16);
-	m_enc_ready = false;
-
-	m_buffer_bit = 7;
-	m_buffer_bit2 = 15;
-}
-
-void Crypt315_5881::set_subkey(uint16_t data)
-{
-	m_subkey = data;
-	m_enc_ready = false;
 }
 
 /* The next stream word, big-endian as the buffers hold it. Two
