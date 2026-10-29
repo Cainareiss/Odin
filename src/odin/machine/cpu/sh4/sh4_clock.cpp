@@ -53,6 +53,7 @@
  * is not kept. Once a turn is, a look inside it goes to its start. */
 
 #include "odin/machine/cpu/sh4/sh4.hpp"
+#include "odin/machine/cpu/sh4/sh4_onchip.hpp"
 #include "odin/common/bytes.hpp"
 
 #include <algorithm>
@@ -68,7 +69,6 @@ constexpr uint32_t TURN_MAX = 128;	/* instructions of a turn looked at */
 constexpr uint32_t DIFFER_MAX = 8;	/* registers a turn may leave changed */
 constexpr size_t TURNS_KEPT = 16, MISSES = 4096;	/* misses: one place for each pc that falls there */
 constexpr uint32_t BACKOFF_MAX = 1u << 12;
-constexpr uint32_t TMU_TCNT0 = 0xD8000C;	/* as onchip_read() names it */
 constexpr uint32_t USE_COUNT = 35;	/* R0-R15, T, PR, FPUL, FR0-FR15 */
 
 template <typename F>

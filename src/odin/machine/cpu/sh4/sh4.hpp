@@ -272,6 +272,7 @@ private:
 
 	static constexpr uint32_t SR_T = 1u << 0, SR_S = 1u << 1, SR_Q = 1u << 8, SR_M = 1u << 9,
 		SR_FD = 1u << 15, SR_BL = 1u << 28, SR_RB = 1u << 29, SR_MD = 1u << 30;
+	static constexpr uint32_t SR_IMASK = 0xF0;	/* I3-I0: the level of the interrupts masked */
 	static constexpr uint32_t SR_MASK = 0x700083F3;
 	static constexpr uint32_t FPSCR_MASK = 0x003FFFFF;
 	static constexpr uint32_t FPSCR_PR = 1u << 19, FPSCR_SZ = 1u << 20, FPSCR_FR = 1u << 21;
@@ -281,6 +282,7 @@ private:
 	static constexpr uint32_t NEAR_SIZE = 1u << 16;	/* blocks found without the tables */
 	static constexpr uint32_t PHYSICAL = 0x1FFFFFFF;	/* the 29 address lines */
 	static constexpr uint32_t PHYSICAL_PAGES = 1u << (29 - PAGE_BITS);
+	static constexpr uint32_t MIRRORS = 7;	/* the physical memory again in each 512 MB below E0000000 */
 	static constexpr uint8_t OP_BAD_SLOT = 1;	/* the delay slot holds what it may not */
 	static constexpr uint8_t OP_SLOT = 2;		/* runs as a delay slot */
 	/* What a branch is, for the host code of its block */

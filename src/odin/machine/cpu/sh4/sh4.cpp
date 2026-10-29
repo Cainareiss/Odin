@@ -26,6 +26,7 @@
  * outside plain memory. */
 
 #include "odin/machine/cpu/sh4/sh4.hpp"
+#include "odin/machine/cpu/sh4/sh4_onchip.hpp"
 #include "odin/common/bytes.hpp"
 
 #include <algorithm>
@@ -36,11 +37,6 @@
 namespace odin {
 
 namespace {
-
-constexpr uint32_t CCN_INTEVT = 0x000028;
-constexpr uint32_t INTC_ICR = 0xD00000;
-constexpr uint32_t DMAC_DMAOR = 0xA00040;
-
 
 /* Table 19.5: where the handler is from VBR, and the code for INTEVT. The
  * priority of an external source is fixed, the one of an on-chip module
@@ -108,7 +104,7 @@ void Sh4::reset(bool hard)
 
 	m_r = {};
 	m_r.pc = 0xA0000000;
-	m_r.sr = SR_MD | SR_RB | SR_BL | 0xF0;
+	m_r.sr = SR_MD | SR_RB | SR_BL | SR_IMASK;
 	m_r.fpscr = 0x00040001;	/* DN set, round to zero */
 
 	onchip_reset(hard);
@@ -136,7 +132,7 @@ void Sh4::share_page(const uint8_t *host, uint32_t page)
 		return;
 	}
 	m_watch[page] = m_watch[at->second] = nullptr;
-	for (uint32_t mirror = 0; mirror < 7; mirror++) {
+	for (uint32_t mirror = 0; mirror < MIRRORS; mirror++) {
 		m_wr[mirror * PHYSICAL_PAGES + page] = nullptr;
 		m_wr[mirror * PHYSICAL_PAGES + at->second] = nullptr;
 	}
@@ -149,7 +145,7 @@ void Sh4::map_page(uint32_t page, const uint8_t *read, uint8_t *write)
 	if (page >= PHYSICAL_PAGES || (page >> (24 - PAGE_BITS)) == 0x1F) {
 		return;
 	}
-	for (uint32_t mirror = 0; mirror < 7; mirror++) {
+	for (uint32_t mirror = 0; mirror < MIRRORS; mirror++) {
 		m_rd[mirror * PHYSICAL_PAGES + page] = read;
 		m_wr[mirror * PHYSICAL_PAGES + page] = write;
 	}
@@ -200,7 +196,7 @@ bool Sh4::watch(uint32_t page)
 		return false;
 	}
 	m_watch[page] = p;
-	for (uint32_t mirror = 0; mirror < 7; mirror++) {
+	for (uint32_t mirror = 0; mirror < MIRRORS; mirror++) {
 		m_wr[mirror * PHYSICAL_PAGES + page] = nullptr;
 	}
 	return true;
@@ -217,7 +213,7 @@ uint8_t *Sh4::unwatch(uint32_t addr)
 	uint8_t *const p = m_watch[page];
 
 	if (p) {
-		for (uint32_t mirror = 0; mirror < 7; mirror++) {
+		for (uint32_t mirror = 0; mirror < MIRRORS; mirror++) {
 			m_wr[mirror * PHYSICAL_PAGES + page] = p;
 		}
 		m_watch[page] = nullptr;
@@ -274,7 +270,7 @@ void Sh4::set_sr(uint32_t value)
 	if (((old & SR_MD) && (old & SR_RB)) != ((m_r.sr & SR_MD) && (m_r.sr & SR_RB))) {
 		swap_r_banks();
 	}
-	if ((old ^ m_r.sr) & (SR_BL | 0xF0)) {
+	if ((old ^ m_r.sr) & (SR_BL | SR_IMASK)) {
 		update_irqs();
 	}
 }
@@ -307,7 +303,7 @@ void Sh4::update_irqs()
 	m_intc.index = -1;
 
 	if (m_intc.source[Sh4Source::NMI].raised) {
-		m_intc.pending = !(m_r.sr & SR_BL) || (icr & 0x200);
+		m_intc.pending = !(m_r.sr & SR_BL) || (icr & ICR_NMIB);
 		if (m_intc.pending) {
 			m_intc.index = Sh4Source::NMI;
 			return;
@@ -376,7 +372,7 @@ void Sh4::take_irq()
 {
 	Sh4IrqSource &source = m_intc.source[m_intc.index];
 
-	if (source.priority <= ((m_r.sr >> 4) & 15)) {
+	if (source.priority <= (m_r.sr & SR_IMASK) >> 4) {
 		return;
 	}
 	m_touched = true;
