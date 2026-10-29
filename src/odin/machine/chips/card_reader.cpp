@@ -696,7 +696,9 @@ bool CardReader::write_card(const std::string &path, std::span<const uint8_t, CA
  * copy <file>.bak (write_card) when that one is whole. */
 bool CardReader::read_card(const std::string &path, std::array<uint8_t, CARD_SIZE> &card) const
 {
-	if (read_card_file(path, card) == Read::WHOLE)
+	const Read read = read_card_file(path, card);
+
+	if (read == Read::WHOLE)
 		return true;
 
 	std::array<uint8_t, CARD_SIZE> kept;
@@ -707,7 +709,7 @@ bool CardReader::read_card(const std::string &path, std::array<uint8_t, CARD_SIZ
 		card = kept;
 		return true;
 	}
-	return read_card_file(path, card) != Read::NONE;
+	return read != Read::NONE;
 }
 
 CardReader::Read CardReader::read_card_file(const std::string &path, std::array<uint8_t, CARD_SIZE> &card) const
