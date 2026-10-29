@@ -89,6 +89,7 @@ public:
 	 * other it does not know */
 	enum : uint8_t {
 		CMD_INIT = 0x10,
+		CMD_INIT_SAME = 0x1C,	/* taken as 10 */
 		CMD_STATUS = 0x20,
 		CMD_READ = 0x33,
 		CMD_CANCEL = 0x40,
@@ -99,7 +100,9 @@ public:
 		CMD_CLEAN = 0xA0,
 		CMD_DISPENSE = 0xB0,
 		CMD_RETRIES = 0xC1,
-		CMD_SHUTTER = 0xD0
+		CMD_SHUTTER = 0xD0,
+		CMD_INIT_ZERO = 0xE0,	/* taken as 10, its parameter as '0' */
+		CMD_STOP = 0xFF		/* the program stops: its watchdog resets the reader */
 	};
 
 	/* Where the card is: the sensors it covers, as the program counts its

@@ -101,7 +101,6 @@ constexpr uint32_t UART_CLOCKS_PER_BIT = 16;
  * 16 MHz: with the divisor 8 the programs set (MIE program at 8677,
  * epr-21868 at 01A1) that is the 115200 bauds of JVS. Times on the line
  * are counted in ticks of 1/9.216 GHz, in which both clocks are whole. */
-constexpr uint32_t TICKS_PER_Z80_CYCLE = Mie::TICKS_PER_CYCLE;
 constexpr uint32_t TICKS_PER_UART_CLOCK = 625;
 /* For an I/O board whose program was not timed (JvsHost::reply_cycles), the
  * time from the end of the request to the end of the first byte of the
@@ -668,7 +667,7 @@ void Mie::uart_commit_frame()
 	if (!u.wire_count)
 		u.wire_ticks = 0;
 	else if (cycles)
-		u.wire_ticks = cycles * TICKS_PER_Z80_CYCLE + uart_byte_ticks();
+		u.wire_ticks = cycles * Mie::TICKS_PER_CYCLE + uart_byte_ticks();
 	else
 		u.wire_ticks = uart_byte_ticks() * JVS_TURNAROUND_BYTES;
 }
@@ -677,7 +676,7 @@ void Mie::uart_tick(uint32_t cycles)
 {
 	MieUartState &u = m_uart;
 	const uint32_t byte_ticks = uart_byte_ticks();
-	const uint64_t ticks = static_cast<uint64_t>(cycles) * TICKS_PER_Z80_CYCLE;
+	const uint64_t ticks = static_cast<uint64_t>(cycles) * Mie::TICKS_PER_CYCLE;
 
 	/* Transmitter: shift register then FIFO. */
 	uint64_t left = ticks;
@@ -847,7 +846,7 @@ void Mie::tick(uint32_t cycles)
 {
 	uart_tick(cycles);
 	serial_tick(cycles);
-	m_run_ticks += static_cast<uint64_t>(cycles) * TICKS_PER_Z80_CYCLE;
+	m_run_ticks += static_cast<uint64_t>(cycles) * Mie::TICKS_PER_CYCLE;
 }
 
 void Mie::line_received(uint8_t byte)
@@ -1197,7 +1196,7 @@ uint32_t Mie::uart_end(uint32_t done, uint32_t cycles) const
 	if (ticks == UINT64_MAX) {
 		return cycles;
 	}
-	return static_cast<uint32_t>(std::min<uint64_t>(cycles, done + ticks / TICKS_PER_Z80_CYCLE + 1));
+	return static_cast<uint32_t>(std::min<uint64_t>(cycles, done + ticks / Mie::TICKS_PER_CYCLE + 1));
 }
 
 uint32_t Mie::run(uint32_t cycles)

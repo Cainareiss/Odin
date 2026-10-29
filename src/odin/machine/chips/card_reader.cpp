@@ -247,7 +247,8 @@ void CardReader::frame_complete()
 	if (m_phase == WAITING) {
 		const uint8_t cmd = frame[2];
 
-		if (cmd == CMD_CANCEL || cmd == CMD_STATUS || cmd == CMD_INIT || cmd == 0x1C || cmd == 0xE0 || cmd == 0xFF) {
+		if (cmd == CMD_CANCEL || cmd == CMD_STATUS || cmd == CMD_INIT || cmd == CMD_INIT_SAME || cmd == CMD_INIT_ZERO ||
+		    cmd == CMD_STOP) {
 			m_second_size = std::min<uint32_t>(m_rx_count, static_cast<uint32_t>(m_second.size()));
 			std::copy_n(m_rx.begin(), m_second_size, m_second.begin());
 		}
@@ -275,7 +276,7 @@ bool CardReader::second_frame(std::span<const uint8_t> frame)
 		reply(CMD_CANCEL, '0', '0');
 	} else if (cmd == CMD_STATUS) {
 		reply(CMD_READ, '0', '4');
-	} else if (cmd == 0xFF) {
+	} else if (cmd == CMD_STOP) {
 		reset();
 		return false;
 	} else {
@@ -295,8 +296,8 @@ void CardReader::run(std::span<const uint8_t> frame)
 
 	std::copy_n(frame.begin() + FRAME_PARAMS, count, copy.begin());
 	m_phase = IDLE;
-	if (cmd == 0x1C || cmd == 0xE0) {
-		if (cmd == 0xE0 && count)
+	if (cmd == CMD_INIT_SAME || cmd == CMD_INIT_ZERO) {
+		if (cmd == CMD_INIT_ZERO && count)
 			copy[0] = '0';
 		cmd = CMD_INIT;
 	}
