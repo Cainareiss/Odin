@@ -205,6 +205,12 @@ private:
 	void catch_joystick(const SDL_Event &event, int was);
 	void button_on_analog();
 	void draw_menu();
+	void fill_display(MenuState &state);
+	void fill_inputs(MenuState &state);
+	void fill_game_shown(MenuState &state);
+	void fill_link(MenuState &state);
+	void fill_devices(MenuState &state);
+	void do_asked(MenuState &state);
 	void apply(const MenuState &was);
 	std::vector<HostInput> kind_changed(const std::vector<HostInput> &inputs, const std::vector<HostInput> &standard,
 	                                    bool to_defaults) const;

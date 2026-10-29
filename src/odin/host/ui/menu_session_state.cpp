@@ -84,14 +84,10 @@ MenuSession::show_game(size_t game)
 	m_other->set_wheel_rotation(wheel_rotation_of(m_settings, other->name));
 }
 
-/* The menu drawn once from what is so now (F11 may have changed the
- * display), then what it changed done */
+/* The display as it is now: F11 may have changed it */
 void
-MenuSession::draw_menu()
+MenuSession::fill_display(MenuState &state)
 {
-	MenuState &state = m_menu_state;
-
-	state.choosing = m_dialog.open();
 	state.fullscreen = m_display.fullscreen();
 	{
 		int w = 0, h = 0;
@@ -105,6 +101,13 @@ MenuSession::draw_menu()
 	state.refresh = m_display.refresh();
 	state.vsync_off = m_options.unthrottled ? "off at unlimited speed" : nullptr;
 	state.refresh_short = state.refresh > 0.0f && state.refresh < Display::LEAST_REFRESH;
+}
+
+/* What the controls of the game shown do now, the gamepads and the
+ * buttons the pills show, Undo, the hold of Skip */
+void
+MenuSession::fill_inputs(MenuState &state)
+{
 	state.panel = &panel_shown();
 	state.touched.clear();
 	state.now.clear();
@@ -158,10 +161,13 @@ MenuSession::draw_menu()
 			state.skip_hold = static_cast<float>(held) / SKIP_HOLD_MS;
 		}
 	}
-	for (size_t a = 0; a < Hotkeys::ACTIONS; a++)
-		state.hotkeys[a] = m_hotkeys.of(static_cast<Hotkeys::Action>(a));
-	if (m_audio || m_listing)
-		state.devices = AudioOut::devices();
+}
+
+/* What the game shown has: what shakes, its wheel, its cabinets, how it
+ * links cabinets, its outputs */
+void
+MenuSession::fill_game_shown(MenuState &state)
+{
 	/* The pad shakes as the cabinet of the game shown, unless
 	 * [players.<game>] says off (the last line says) */
 	state.can_shake = m_other ? m_other_shakes : m_game && m_game->shakes();
@@ -209,7 +215,12 @@ MenuSession::draw_menu()
 		m_outputs->welcome();
 		state.programs = m_outputs->clients();
 	}
-	/* The network board of the game that runs, as it is linked now */
+}
+
+/* The network board of the game that runs, as it is linked now */
+void
+MenuSession::fill_link(MenuState &state)
+{
 	state.link_running = m_board != nullptr;
 	if (m_board) {
 		const Hikaru::LinkStatus link = m_board->link_status();
@@ -223,6 +234,12 @@ MenuSession::draw_menu()
 		state.link_board_now = state.link_linked = state.link_failed = false;
 		state.link_previous = state.link_next_plugged = false;
 	}
+}
+
+/* The gamepads, the joysticks and the light guns, with their players */
+void
+MenuSession::fill_devices(MenuState &state)
+{
 	/* The gamepads and the joysticks plugged in and their players; those of
 	 * a game that does not run as its settings would seat them */
 	const auto list = [this, &state](std::vector<MenuState::Plugged> &out, const std::vector<Controls::Plugged> &plugged,
@@ -272,12 +289,12 @@ MenuSession::draw_menu()
 	if (Pointers *const pointers = m_controls.pointers())
 		pointers->poll();
 	light_guns(game_shown(), panel_shown().controls(), state.guns, state.gun, state.sights);
-	const MenuState was = state;
+}
 
-	m_display.draw_menu(state);
-	state.nav = {};
-	apply(was);
-
+/* What the menu asked as it was drawn, done */
+void
+MenuSession::do_asked(MenuState &state)
+{
 	if (state.hotkeys_default) {
 		m_hotkeys.reset();
 		keep_hotkeys();
@@ -338,6 +355,31 @@ MenuSession::draw_menu()
 	if (state.ask != MenuState::Ask::NONE)
 		m_menu_pictures = MENU_PICTURES;
 	state.ask = MenuState::Ask::NONE;
+}
+
+/* The menu drawn once from what is so now, then what it changed done */
+void
+MenuSession::draw_menu()
+{
+	MenuState &state = m_menu_state;
+
+	state.choosing = m_dialog.open();
+	fill_display(state);
+	fill_inputs(state);
+	for (size_t a = 0; a < Hotkeys::ACTIONS; a++)
+		state.hotkeys[a] = m_hotkeys.of(static_cast<Hotkeys::Action>(a));
+	if (m_audio || m_listing)
+		state.devices = AudioOut::devices();
+	fill_game_shown(state);
+	fill_link(state);
+	fill_devices(state);
+	const MenuState was = state;
+
+	m_display.draw_menu(state);
+	state.nav = {};
+	apply(was);
+
+	do_asked(state);
 	m_controls.settle();
 }
 
