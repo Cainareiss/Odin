@@ -1198,7 +1198,7 @@ texhead_index(const uint32_t *inst)
  *
  * w = Repeat (bit 22 for U, bit 23 for V); else clamp to edge.
  *
- *	Read in the X360 port (825C6C98, GPU-RE/05); the PH reading below
+ *	Read in the X360 port (825C6C98); the PH reading below
  *	had U and V swapped.
  *
  * H = log16 of Height

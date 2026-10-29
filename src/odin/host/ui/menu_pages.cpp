@@ -317,7 +317,7 @@ shown_path(const std::string &path, const char *none)
 }
 
 /* The two sound boards of a cabinet, as its wiring takes them (the manuals
- * and wiring diagrams of SEGA, note 69): its game, where each board plays,
+ * and wiring diagrams of SEGA): its game, where each board plays,
  * what sets the level of the optional one on the cabinet. The optional
  * board of Racer feeds the shaker of its panel, no speaker. */
 struct Boards {

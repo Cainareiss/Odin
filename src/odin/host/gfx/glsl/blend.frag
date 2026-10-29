@@ -30,7 +30,7 @@
  * buffer kept counts one more from 0x80 up, 0xFF keeps it whole, and each
  * product loses its fraction before the sum. */
 
-/* Vulkan (-DVULKAN, MARKDOWN/106): where the shader finds what it reads */
+/* Vulkan (-DVULKAN): where the shader finds what it reads */
 #ifdef VULKAN
 layout(location = 0) out vec4 fragColor;
 layout(set = 0, binding = 0) uniform sampler2D u_drawn;

@@ -26,8 +26,8 @@
  * of Odin runs (a constructor of the first priority, built for any x86-64):
  * a build for x86-64-v3 or v2 stops with a message on a processor that lacks
  * what it needs, rather than on an instruction the processor does not know.
- * The builds Odin is given out as: x86-64-v3, and an "old" one for x86-64-v2
- * (MARKDOWN/105 § 11). */
+ * The builds Odin is given out as: x86-64-v3, and an "old" one for
+ * x86-64-v2. */
 
 #include <cstdio>
 #include <cstdlib>

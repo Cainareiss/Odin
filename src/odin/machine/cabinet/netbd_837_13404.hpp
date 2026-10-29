@@ -161,7 +161,7 @@ private:
 	 * the board does not receive. The waits that save a ring from the
 	 * jitter of Odins linked by a network are shorter than 0.05 ms; a
 	 * board started late had frames wait for seconds, came in out of
-	 * time and never joined (MARKDOWN/98 section 18). */
+	 * time and never joined. */
 	static constexpr uint64_t HELD_MOST = 10000;
 
 	enum Irq : unsigned { IRQ2 = 1u << 2, IRQ4 = 1u << 4, IRQ5 = 1u << 5, IRQ6 = 1u << 6 };

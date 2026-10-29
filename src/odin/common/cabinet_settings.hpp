@@ -29,10 +29,9 @@
 #include <cstdint>
 #include <span>
 
-/* The settings a cabinet keeps without power that a link of cabinets
- * needs, written as the menus of the BOOTROM and of the games write them
- * (MARKDOWN/98 section 18): which cabinet is the master, and the seat of
- * each. */
+/* The settings a cabinet keeps without power that a link of cabinets needs,
+ * written as the menus of the BOOTROM and of the games write them: which
+ * cabinet is the master, and the seat of each. */
 namespace odin::cabinet {
 
 /* The CRC of the BOOTROM on the settings it keeps in the 93C46 of the MIE

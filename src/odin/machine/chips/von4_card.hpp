@@ -36,11 +36,11 @@
 
 namespace odin {
 
-/* The card of a new pilot of Virtual-On, as the terminal of the game makes
- * it (VIRTUAL-ON FORCE TERMINAL, MARKDOWN/107 § 17): the name the player
- * types on its keyboard, the first VR it shows, all else as the terminal
- * sets it, encrypted as the game encrypts it. The tables are those of the
- * program of the game, read where it keeps them. */
+/* The card of a new pilot of Virtual-On, as the terminal of the game makes it
+ * (VIRTUAL-ON FORCE TERMINAL): the name the player types on its keyboard, the
+ * first VR it shows, all else as the terminal sets it, encrypted as the game
+ * encrypts it. The tables are those of the program of the game, read where it
+ * keeps them. */
 class Von4Card {
 public:
 	static constexpr size_t NAME_SIZE = 8;

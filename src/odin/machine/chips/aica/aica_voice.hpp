@@ -36,17 +36,16 @@ namespace odin {
  * register file of the chip, which the voice reads at each sample period:
  * a new pitch or rate takes effect at once.
  *
- * Sources, compared point by point in the notes (MARKDOWN/30, section 5):
- * the sampler and its loops as Flycast has them from tests on the hardware
- * (core/hw/aica/sgc_if.cpp); the envelope as Neill Corlett steps it
- * (Highly Theoretical, yam.c), whose attack and decay times fall on the
- * table of the official manual; the rate of a step as Flycast computes it
- * (HEURISTIC: MAME and Corlett add the octave once, not twice); no change
- * at a rate of 0 (Saturn SCSP manual, 4.2.2). The levels and the LFO as
- * Corlett has them, in steps of 0.094 dB, with the LFO periods of Flycast,
- * which fall on the table of the manual (4.2.6). The low-pass filter as
- * Flycast has it from the hardware (HEURISTIC, one source: Corlett splits
- * FLV otherwise), its envelope stepped as that of the level. */
+ * Sources, compared point by point: the sampler and its loops as Flycast has
+ * them from tests on the hardware (core/hw/aica/sgc_if.cpp); the envelope as
+ * Neill Corlett steps it (Highly Theoretical, yam.c), whose attack and decay
+ * times fall on the table of the official manual; the rate of a step as
+ * Flycast computes it (HEURISTIC: MAME and Corlett add the octave once, not
+ * twice); no change at a rate of 0 (Saturn SCSP manual, 4.2.2). The levels
+ * and the LFO as Corlett has them, in steps of 0.094 dB, with the LFO periods
+ * of Flycast, which fall on the table of the manual (4.2.6). The low-pass
+ * filter as Flycast has it from the hardware (HEURISTIC, one source: Corlett
+ * splits FLV otherwise), its envelope stepped as that of the level. */
 class AicaVoice {
 public:
 	enum Segment : uint8_t { ATTACK, DECAY1, DECAY2, RELEASE };

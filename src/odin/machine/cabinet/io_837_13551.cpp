@@ -92,7 +92,7 @@ Io837_13551::run_until(uint64_t tick)
 
 /* The chip runs at most 64 us ahead of the MIE: a byte of the MIE is due
  * to it RX_TICKS (73.8 us) after it starts, later than where the chip is,
- * past those 64 us by an instruction at most (MARKDOWN/77). */
+ * past those 64 us by an instruction at most. */
 void
 Io837_13551::line_sent(uint8_t byte, uint64_t ticks)
 {

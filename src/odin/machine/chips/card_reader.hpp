@@ -37,11 +37,11 @@ namespace odin {
 
 /* The Sanwa CRP-1231BR-10, the magnetic card reader and writer of Virtual-On
  * Force with its card dispenser (Sega 601-11082), on the line of the serial
- * block of the MIE through the 838-13661 (MARKDOWN/96).
+ * block of the MIE through the 838-13661.
  *
  * Its program (crp1231br10_ver0107.ic2, an H8/3003, MAME's initd set) is
- * not run: the reader answers each command as that program does
- * (MARKDOWN/96c), at once (the time its mechanism takes is not counted).
+ * not run: the reader answers each command as that program does,
+ * at once (the time its mechanism takes is not counted).
  *
  * Host frame: 02 LEN CMD 00 00 00 [params] 03 BCC, LEN counting the bytes
  * after it, BCC the XOR of LEN..ETX. The reader answers ACK (06) or NAK
@@ -59,7 +59,7 @@ namespace odin {
  *
  * Its player inserts the card and takes it back (choose, insert, take): a
  * read waits for it as long as it takes, and the game goes on after an
- * eject only once the reader sees no card (MARKDOWN/96a, 0C180E20). */
+ * eject only once the reader sees no card (0C180E20). */
 struct CardReaderState;
 
 class CardReader : public MieSerialDevice {
@@ -85,7 +85,7 @@ public:
 		NAK = 0x15
 	};
 
-	/* The commands of the game (MARKDOWN/96a); the program refuses any
+	/* The commands of the game; the program refuses any
 	 * other it does not know */
 	enum : uint8_t {
 		CMD_INIT = 0x10,

@@ -337,7 +337,7 @@ Hikaru::Hikaru(const Game &game, const RomBoard::Config &rombd, bool verbose, co
 
 	build_sound(MASTER);
 	build_sound(SLAVE);
-	/* HEURISTIC (notes MARKDOWN/30, section 3): the optional board also
+	/* HEURISTIC: the optional board also
 	 * feeds the external inputs of the AICA of the main board. Air Trix
 	 * and Virtual-On play their music on it and open EXTS on the main
 	 * board, and the Air Trix cabinet has the board but main speakers
@@ -461,8 +461,7 @@ Hikaru::build_mie()
 		if (m_steer_channel >= 0)
 			m_wheel_seen = inputs.jvs_analog[m_steer_channel];
 		/* The reply of the drive board on PUSH3-PUSH6 of both players, low
-		 * when set: bit 0 on PUSH3 of player 1 to bit 7 on PUSH6 of player 2
-		 * (MARKDOWN/94) */
+		 * when set: bit 0 on PUSH3 of player 1 to bit 7 on PUSH6 of player 2 */
 		if (m_drive) {
 			const uint8_t reply = m_drive->reply();
 

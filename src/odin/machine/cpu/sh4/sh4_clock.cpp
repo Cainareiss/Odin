@@ -22,7 +22,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* Loops that wait on a timer (MARKDOWN/101): turns counted without being
+/* Loops that wait on a timer: turns counted without being
  * run, as long as each would have gone the way the noted one went.
  *
  * PHARRIER waits for a line of the screen by reading TCNT0 again and again:

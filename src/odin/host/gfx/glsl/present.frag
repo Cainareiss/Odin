@@ -33,7 +33,7 @@
  * not. u_rect: where the rectangle starts in the window, and the pixels of
  * the picture one pixel of the window covers each way. */
 
-/* Vulkan (glslang defines VULKAN, MARKDOWN/106): where the shader finds
+/* Vulkan (glslang defines VULKAN): where the shader finds
  * what it reads */
 #ifdef VULKAN
 layout(set = 0, binding = 0) uniform sampler2D u_picture;

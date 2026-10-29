@@ -38,7 +38,7 @@ namespace odin {
 
 /* The 837-13741, the I/O board of NASCAR, running its program (epr-21868,
  * the name its JVS TEST page shows in the manuals) on the JVS line from
- * UART 1 of the MIE (MARKDOWN/82): a 315-6146 like the MIE (Mie), its
+ * UART 1 of the MIE: a 315-6146 like the MIE (Mie), its
  * EPROM below 8000, 32 KB of SRAM above, the D71054 at ports A0-A3. As
  * the program reads and drives them (found by running it):
  * port 0 bits 6 and 7 TEST and TILT, 4 and 5 the coin switches, 2 and 3

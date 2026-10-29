@@ -73,8 +73,8 @@ struct Tmp90ph44State {
  * TLCS-90 CPU. No data sheet of the TMP90C844 was found: the addresses of
  * its registers are those MAME gives (tmp90844_regs); a block works as the
  * same block of the TMP90C840 in the 1988 Toshiba data book where the
- * register is the same, and as the program 315-6215 uses it otherwise
- * (MARKDOWN/75). A register value nothing tells the meaning of stops the
+ * register is the same, and as the program 315-6215 uses it otherwise.
+ * A register value nothing tells the meaning of stops the
  * emulator.
  *
  *  - Prescaler: fc/4 into 9 stages; the 8-bit timers count phiT1 (fc/8),
@@ -107,9 +107,9 @@ public:
 	 * ran. A loop proven idle is billed without being run: a turn that
 	 * comes back to its start in the same state, having changed nothing,
 	 * read nothing that changes and taken no interrupt, would do the same
-	 * up to the next event of a device (MARKDOWN/76). The proof holds into
+	 * up to the next event of a device. The proof holds into
 	 * the next run() if the CPU is where the turn has it and the pins the
-	 * turn read are the same (MARKDOWN/77). */
+	 * turn read are the same. */
 	uint32_t run(uint32_t states);
 	/* The data bits of a byte on the serial line have been sampled:
 	 * RX_STATES after its start. */

@@ -202,8 +202,8 @@ public:
 	 * aside, which it does not read. Nothing changes what it reads before
 	 * the chip is run again, or UART 1 changes: the turns up to there are
 	 * counted without being run, and still are in the calls after while
-	 * the memory is not written (MARKDOWN/78). Off, every turn is run;
-	 * the two must give the same. */
+	 * the memory is not written. Off, every turn is run; the two must give
+	 * the same. */
 	void set_waits_counted(bool on) { m_waits_counted = on; }
 	/* For the tests: the Z80 clocks counted that way so far */
 	uint64_t waits_counted() const { return m_wait_cycles; }

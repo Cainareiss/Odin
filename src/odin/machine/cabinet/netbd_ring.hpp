@@ -39,7 +39,7 @@
 
 namespace odin {
 
-/* Cabinets linked by the network of the computers (MARKDOWN/98 section 17).
+/* Cabinets linked by the network of the computers.
  *
  * The program of the boards needs a frame round the ring within a turn of its
  * IRQ5 counter, about 15 ms (measured with that program: 4 boards link with
@@ -55,8 +55,7 @@ namespace odin {
  * little: in a turn of 16.4 ms the small frame goes round the ring, one
  * hop after the other, then each board sends its part (0x4800 bytes for
  * four sites, 14.7 ms at 10 Mbit/s); a small frame that comes to a board
- * still busy with the parts is lost, and the ring stops (MARKDOWN/98
- * section 17). */
+ * still busy with the parts is lost, and the ring stops. */
 class NetBoardRunner {
 public:
 	/* The longest it sleeps: what the host waits at most for an answer */
@@ -82,8 +81,8 @@ public:
 	 * GAPS as 9 in 10 of them came, STEADY clocks (0.2 ms) at most; one
 	 * later than that comes as it comes. A fibre takes the same time for
 	 * each frame, and the programs time the frames of the master to a few
-	 * microseconds (MARKDOWN/98 section 18); a network does not, and each
-	 * hop it takes longer is taken from the turn of the ring. */
+	 * microseconds; a network does not, and each hop it takes longer is
+	 * taken from the turn of the ring. */
 	static constexpr uint64_t STEADY = 2000;
 	static constexpr size_t GAPS = 128;
 
@@ -108,9 +107,9 @@ private:
 	std::mutex m_inbox_lock;
 	std::condition_variable m_wake;
 #ifdef _WIN32
-	/* MinGW's timed waits last 15.6 ms at least, even for 20 us
-	 * (MARKDOWN/98 section 18): a timer of high resolution (0.8 ms on the
-	 * laptop) and an event set when a frame comes, as HANDLEs */
+	/* MinGW's timed waits last 15.6 ms at least, even for 20 us: a timer of
+	 * high resolution (0.8 ms on an i3-6100U) and an event set when a frame
+	 * comes, as HANDLEs */
 	void *m_timer = nullptr;
 	void *m_arrived = nullptr;
 #endif

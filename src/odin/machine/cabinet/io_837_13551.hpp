@@ -44,7 +44,7 @@ struct Io837_13551Pin {
 };
 
 /* The 837-13551 itself: the TMP90PH44 running 315-6215 on the JVS line
- * from UART 1 of the MIE (MARKDOWN/77). Its switches are those the tables
+ * from UART 1 of the MIE. Its switches are those the tables
  * of the program name, closed at 0 (PINS); a coin closes the switch of
  * its slot; the return pins of the coin meters read 1, the meters wired;
  * AN0-AN3 are channels 1-4 while P56 is 1, 5-8 while it is 0 (127E,

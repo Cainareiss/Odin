@@ -27,7 +27,7 @@
 
 /* The picture shown and the 2D layers, composed (compose.frag) */
 
-/* Vulkan (-DVULKAN, MARKDOWN/106): where the shader finds what it reads */
+/* Vulkan (-DVULKAN): where the shader finds what it reads */
 #ifdef VULKAN
 /* The four corners of the window, as OpenGL has them in its vertex array
  * (pictures_gl.cpp, build_quad), drawn as a strip */

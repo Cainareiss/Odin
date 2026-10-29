@@ -34,7 +34,7 @@
 namespace odin {
 
 /* The drive board of NASCAR's cabinet, the 838-13366 running its program
- * (epr-20512, the board and program of Sega Rally 2; MARKDOWN/94): a Z80
+ * (epr-20512, the board and program of Sega Rally 2): a Z80
  * at 8 MHz, its program below E000, 8 KB of RAM above, all its work in the
  * NMI that channel 1 of its CTC gives every 16000 clocks (500 Hz). Its
  * ports, as its program uses them: 10-13 the CTC; 20, 21 its DIP switches
@@ -99,8 +99,7 @@ public:
 	void load(const State &in);
 
 	/* For the tests: off, every turn of its main loop runs, none is
-	 * counted without being run (MARKDOWN/94 § D). The states must be the
-	 * same. */
+	 * counted without being run. The states must be the same. */
 	void set_waits_counted(bool on);
 	/* For the tests: the clocks counted so since it was made */
 	uint64_t waits_counted() const { return m_wait_cycles; }

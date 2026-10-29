@@ -61,7 +61,7 @@ layout(constant_id = 0) const int GL_CLIP_SPACE = 1;
 #define u_modelview2 u_modelviews[u_mv2]
 /* A matrix times a vector, its columns summed from the first, as Mesa's
  * OpenGL does: its SPIR-V path sums them from the last, which rounds
- * otherwise (MARKDOWN/106 § 12) */
+ * otherwise */
 vec4 mul (mat4 m, vec4 v) { return m[0] * v.x + m[1] * v.y + m[2] * v.z + m[3] * v.w; }
 vec3 mul (mat3 m, vec3 v) { return m[0] * v.x + m[1] * v.y + m[2] * v.z; }
 #else

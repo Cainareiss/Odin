@@ -31,8 +31,7 @@
  * scene_vk.cpp (the meshes of a list, their pipelines),
  * translucent_vk.cpp (their translucent fragments). The pictures
  * keep the lines in the order OpenGL gives them, the bottom one first:
- * drawn with the same coordinates, they hold the same bytes (MARKDOWN/106
- * § 2.2). */
+ * drawn with the same coordinates, they hold the same bytes. */
 
 #include <memory>
 #include <optional>

@@ -150,7 +150,7 @@ Antarctic::start(uint32_t pc, uint32_t sp0, uint32_t sp1)
 	 * either way. */
 
 	/* The static mesh scale (0x901) is a register of the CP that outlives
-	 * the list, like the X360 port's global 82E02B60 (GPU-RE/05). */
+	 * the list, like the X360 port's global 82E02B60. */
 	const float precision = m_s.poly.static_mesh_precision;
 	m_s.poly.type = 0;
 	m_s.poly.alpha = 0.0f;

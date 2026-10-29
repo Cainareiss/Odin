@@ -186,7 +186,7 @@ MieBoard::run(uint32_t cycles)
 /* The chip of the I/O board a piece ahead of the MIE, then the MIE up to
  * where the chip is, stopped where the board has something for it: a byte
  * or the sense line, which it then sees after the instruction that holds
- * the time they come, as UART 1 shows them (MARKDOWN/77). */
+ * the time they come, as UART 1 shows them. */
 void
 MieBoard::run_line(uint32_t share)
 {
@@ -217,7 +217,7 @@ MieBoard::run_line(uint32_t share)
 /* Byte-wide registers and memory on even addresses (hikaru.cpp
  * localbus_map, umask16 0x00ff). The odd byte of the port page reads 0xFF:
  * the BOOTROM sign-extends the 16-bit read of port A and derives the Test
- * and Service bits from it (doc 07, section 9); not measured on hardware. */
+ * and Service bits from it; not measured on hardware. */
 bool
 MieBoard::host_read(uint32_t offset, unsigned size, uint32_t &value)
 {

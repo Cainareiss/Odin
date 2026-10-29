@@ -68,7 +68,7 @@ inline constexpr float BLUR_STEP = 1.5f;
 inline constexpr unsigned BLUR_ROUNDS = 2;
 
 /* The graphics card of the host: the one door between Odin and the
- * graphics API (MARKDOWN/105). What Odin asks of the card is said here in
+ * graphics API. What Odin asks of the card is said here in
  * its own words, never in those of the API: show the window, lay the bezel
  * over it, blur the sides of the game, the background and the images of
  * the menu. host_graphics_gl.cpp does it with OpenGL, host_graphics_vk.cpp

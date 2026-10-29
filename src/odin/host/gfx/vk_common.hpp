@@ -26,11 +26,10 @@
 #define ODIN_VK_COMMON_HPP
 
 /* What the window (host_graphics_vk.cpp) and the board drawing
- * (drawing_vk.cpp) share with Vulkan: its functions, loaded through
- * SDL (Odin is not linked to the Vulkan loader); the instance, the card and
- * its queue; memory, images and buffers; the commands of each frame, sent
- * and waited for; the image of the window everything is drawn into before
- * it is shown (MARKDOWN/106).
+ * (drawing_vk.cpp) share with Vulkan: its functions, loaded through SDL (Odin
+ * is not linked to the Vulkan loader); the instance, the card and its queue;
+ * memory, images and buffers; the commands of each frame, sent and waited for;
+ * the image of the window everything is drawn into before it is shown.
  *
  * Odin asks the card for what Vulkan 1.3 has: rendering without render
  * passes, the second form of the barriers, the extended dynamic state; and
@@ -203,8 +202,7 @@ public:
 	/* The most anisotropic filtering, 1 for none */
 	float max_anisotropy() const { return m_max_anisotropy; }
 	/* The depth of the board drawing: 24 bits where the card has them,
-	 * else 32-bit floats, as each card's OpenGL compares (MARKDOWN/106
-	 * § 2.1) */
+	 * else 32-bit floats, as each card's OpenGL compares */
 	VkFormat depth_format() const { return m_depth_format; }
 	/* Whether pipelines clip z from -w to w, as OpenGL does
 	 * (VK_EXT_depth_clip_control); else from 0 to w */

@@ -35,8 +35,7 @@ namespace odin {
 namespace {
 
 /* The texels of the board as Vulkan keeps them, by Texels: formats every
- * card has, the colours put back in their place by the view (MARKDOWN/106
- * § 12) */
+ * card has, the colours put back in their place by the view */
 struct VkTexels {
 	VkFormat format;
 	VkComponentMapping swizzle;

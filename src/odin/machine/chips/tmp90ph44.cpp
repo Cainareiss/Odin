@@ -503,7 +503,7 @@ Tmp90ph44::watchdog_period() const
  * instruction. Nothing of theirs is seen by the CPU between their events
  * (the requests IRFH reads change only then), so the chip brings them up
  * to date only at an event, before a write to a register, and at the end
- * of run() (MARKDOWN/76). */
+ * of run(). */
 void
 Tmp90ph44::sync()
 {

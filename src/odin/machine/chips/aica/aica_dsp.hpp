@@ -39,12 +39,11 @@ namespace odin {
  * (COEF 0x3000, MADRS 0x3200, MPRO 0x3400); the working registers live
  * here and are seen at 0x4000-0x45C7.
  *
- * Sources, compared in the notes (MARKDOWN/30, section 5): the steps as
- * Corlett and Flycast agree on them (an empty step still computes, a read
- * of the memory comes two steps later, EFREG is set, not added); the
- * memory reached at the odd steps only (Flycast, MAME); the registers keep
- * their values from one sample period to the next, as a circuit does
- * (Corlett; Flycast and MAME clear some of them). */
+ * Sources, compared with each other: the steps as Corlett and Flycast agree
+ * on them (an empty step still computes, a read of the memory comes two steps
+ * later, EFREG is set, not added); the memory reached at the odd steps only
+ * (Flycast, MAME); the registers keep their values from one sample period to
+ * the next, as a circuit does (Corlett; Flycast and MAME clear some of them). */
 class AicaDsp {
 public:
 	/* Plain data, for the save states */

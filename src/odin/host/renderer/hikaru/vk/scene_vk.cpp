@@ -26,7 +26,7 @@
  * scene_gl.cpp draws them with OpenGL: the same rules of the board
  * (hikaru_draw.hpp), the data of the list in buffers the mesh shaders read
  * (glsl/mesh.*), a pipeline for each variant and blend, kept on disk by
- * Vulkan's cache of pipelines (MARKDOWN/106 § 12). */
+ * Vulkan's cache of pipelines. */
 
 #include "odin/host/renderer/hikaru/vk/drawing_vk.hpp"
 #include "odin/host/renderer/hikaru/depth_bias.hpp"
@@ -780,8 +780,7 @@ VkDrawing::write_lightset(unsigned index)
  * the pipeline. The pictures have the bottom line first, as OpenGL's: the
  * window of glScissor holds as it is, cut to the picture (Vulkan takes no
  * corner below 0); one OpenGL refuses (a width below 0) leaves the last
- * one. Vulkan counts the turn of a triangle the other way (MARKDOWN/106
- * § 2.2). */
+ * one. Vulkan counts the turn of a triangle the other way. */
 void
 VkDrawing::set_view(const odin_mesh_t &mesh)
 {

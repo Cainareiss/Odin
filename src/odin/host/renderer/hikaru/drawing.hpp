@@ -93,8 +93,7 @@ struct SceneDebug {
  * which draws the pictures of the board: the other side of the door of
  * host_graphics.hpp, said in the words of the board, never in those of the
  * API. HostGraphics makes one for each game, with the renderer, and it goes
- * with it. The *_gl.cpp files do it with OpenGL (MARKDOWN/105,
- * C3), drawing_vk.cpp with Vulkan (MARKDOWN/106).
+ * with it. The *_gl.cpp files do it with OpenGL, drawing_vk.cpp with Vulkan.
  *
  * The pictures it holds are `scale` times the screen of the hardware each
  * way (SCREEN_WIDTH by SCREEN_HEIGHT, hikaru_draw.hpp):

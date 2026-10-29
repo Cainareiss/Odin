@@ -285,7 +285,7 @@ bool CardReader::second_frame(std::span<const uint8_t> frame)
 }
 
 /* The command ACKed, on its ENQ, whose reply it builds (the command
- * dispatch at 2492, MARKDOWN/96c § 1) */
+ * dispatch at 2492) */
 void CardReader::run(std::span<const uint8_t> frame)
 {
 	uint8_t cmd = frame[2];

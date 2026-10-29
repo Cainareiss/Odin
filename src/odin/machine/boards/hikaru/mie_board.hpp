@@ -183,7 +183,7 @@ public:
 private:
 	/* The chip of the I/O board runs up to this many clocks of the Z80
 	 * ahead of the MIE, 64 us: less than a byte takes to go from the MIE
-	 * to it (MARKDOWN/77). */
+	 * to it. */
 	static constexpr uint32_t LINE_PIECE = 1024;
 
 	void poll_inputs();

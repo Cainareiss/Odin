@@ -964,14 +964,13 @@ uint8_t &reg_of(Z80State &s, unsigned r)
 
 } /* namespace */
 
-/* The turn from the mark does the same for any value of register `reg`
- * that it does not bring to 0: it reads it only in one DEC of it (or a
- * DJNZ of B), a jump on Z right after, no other flag of that DEC read
- * before it is written again, all of them written again before the DEC
- * comes round; and only instructions known to do no more than Effect
- * tells (MARKDOWN/78 § 8). 1 if so, 0 if so but the mark is where the
- * flags still hold what the DEC made of the count (then `dec_pc`, a
- * place for it), -1 if not. */
+/* The turn from the mark does the same for any value of register `reg` that it
+ * does not bring to 0: it reads it only in one DEC of it (or a DJNZ of B), a
+ * jump on Z right after, no other flag of that DEC read before it is written
+ * again, all of them written again before the DEC comes round; and only
+ * instructions known to do no more than Effect tells. 1 if so, 0 if so but the
+ * mark is where the flags still hold what the DEC made of the count (then
+ * `dec_pc`, a place for it), -1 if not. */
 int Mie::counts_down(unsigned reg, uint16_t &dec_pc)
 {
 	const uint8_t bit = static_cast<uint8_t>(1u << reg);

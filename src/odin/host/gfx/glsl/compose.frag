@@ -27,7 +27,7 @@
 
 /* The picture shown and the 2D layers, composed */
 
-/* Vulkan (-DVULKAN, MARKDOWN/106): where the shader finds what it reads */
+/* Vulkan (-DVULKAN): where the shader finds what it reads */
 #ifdef VULKAN
 layout(location = 0) out vec4 fragColor;
 layout(set = 0, binding = 0) uniform sampler2D u_front;
@@ -105,11 +105,10 @@ void main (void) {
 	color.a *= 1.0 - u_clear.a;
 	float cover_3d = (u_keyed_3d > 0.0) ? 1.0 - step (0.999, color.a) : 1.0;
 
-	/* A layer pixel with its alpha bit covers the 3D, black included
-	 * (the black bands of the Racer attract); the others are
-	 * transparent whatever their color (its green 0x03E0 boxes).
-	 * Layer 1 sits above layer 2 (its HUD text over the band).
-	 * Cabinet footage, GPU-RE/16 § 10.
+	/* A layer pixel with its alpha bit covers the 3D, black included (the
+	 * black bands of the Racer attract); the others are transparent
+	 * whatever their color (its green 0x03E0 boxes). Layer 1 sits above
+	 * layer 2 (its HUD text over the band), as the cabinet footage shows.
 	 *
 	 * A layer can sit below the 3D, which then shows it where nothing
 	 * was drawn (the AIRTRIX logo screens).

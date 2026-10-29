@@ -100,12 +100,12 @@ NetBoard837_13404::update_ipl()
 }
 
 /* HEURISTIC: a 15-bit counter turns all the time; IRQ5 comes each time it
- * reaches the value of 40000+C0; a write of 40000+E0 sets it back to 0,
- * with an IRQ5 at once when the count gave none since the write before
- * (MARKDOWN/98 section 18). So a slave that syncs on the frames of the
- * master gets one IRQ5 a frame: at the frame when it comes before its
- * count (the slave of m3_comm 1.3 wants an IRQ5 there, A6+16 < 2), at its
- * count otherwise (the program 1.2 switches its bank in IRQ5). */
+ * reaches the value of 40000+C0; a write of 40000+E0 sets it back to 0, with
+ * an IRQ5 at once when the count gave none since the write before. So a slave
+ * that syncs on the frames of the master gets one IRQ5 a frame: at the frame
+ * when it comes before its count (the slave of m3_comm 1.3 wants an IRQ5
+ * there, A6+16 < 2), at its count otherwise (the program 1.2 switches its bank
+ * in IRQ5). */
 void
 NetBoard837_13404::schedule_timer()
 {
@@ -426,13 +426,12 @@ NetBoard837_13404::receive(const NetFrame &frame, uint64_t latency)
 }
 
 /* A frame in while receiving: into the bank of the 68000 at the receive
- * address, as much as the receive size allows. HEURISTIC: one that comes
- * while its 68000 is held in reset is lost; one that comes while it runs
- * but does not receive waits in the chip, and comes in when it receives,
- * if it waited HELD_MOST at most (MARKDOWN/98 section 17: on the bench no
- * frame waits, Odins linked by a network may be late by more than the
- * 1.3 ms the program leaves in a turn, and a lost frame would stop the
- * ring). */
+ * address, as much as the receive size allows. HEURISTIC: one that comes while
+ * its 68000 is held in reset is lost; one that comes while it runs but does
+ * not receive waits in the chip, and comes in when it receives, if it waited
+ * HELD_MOST at most (on one computer no frame waits, Odins linked by a network
+ * may be late by more than the 1.3 ms the program leaves in a turn, and a lost
+ * frame would stop the ring). */
 void
 NetBoard837_13404::deliver(const NetFrame &frame)
 {

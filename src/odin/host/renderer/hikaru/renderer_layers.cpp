@@ -96,7 +96,7 @@ Renderer::send_layer(unsigned i)
 	if (layer.format == ODIN_FORMAT_ABGR1555) {
 		/* The two 16-bit pixels of each 32-bit word are stored
 		 * swapped, as the texture transfer does for the texture RAM
-		 * (MEASURED on the von4 title text, GPU-RE/16 § 9). */
+		 * (MEASURED on the von4 title text). */
 		for (unsigned y = 0; y < HEIGHT; y++) {
 			const uint8_t *row = data + y * LAYER_PITCH;
 			uint16_t *dst = &m_layer_pixels[size_t{y} * WIDTH];
