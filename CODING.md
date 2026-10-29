@@ -108,6 +108,8 @@ Not allowed:
   and the CPU program counter. Never return a silent zero.
 - Timing is driven by cycles, never by host time. A device must behave the
   same whether the host is fast or slow.
+- Runs are deterministic. The same ROM, the same inputs and the same frame
+  count give the same trace, every time.
 
 ## 5. Memory and buses
 
@@ -161,19 +163,10 @@ Not allowed:
 - The body, when needed, says what was measured and where the facts come
   from. No attribution trailers.
 - Only code and project files go in the repository: sources, headers,
-  build files, this charter, README, TODO. Study notes, dumps, captures,
-  logs and private tools live outside.
+  build files, this charter, README, TODO. Study notes, tests, dumps,
+  captures, logs and private tools live outside.
 
-## 10. Tests
-
-- A device gets a test as soon as it has a reference: a golden trace from
-  MAME, a datasheet sequence, or a measurement. The test replays the input
-  and compares the trace.
-- Runs are deterministic. The same ROM, the same inputs and the same frame
-  count give the same trace, every time.
-- A change that alters a golden trace explains why in the commit.
-
-## 11. Licensing
+## 10. Licensing
 
 - Odin is GPL-3.0. Code taken from MAME keeps its BSD-3-Clause header and
   its copyright holders. Code taken from Valkyrie keeps Stefano Teso's

@@ -11,7 +11,6 @@ include(GNUInstallDirs)
 
 option(ODIN_NATIVE "Tune for this machine's CPU (-march=native)" ON)
 option(ODIN_LTO "Link-time optimisation (-flto)" ON)
-option(ODIN_TESTS "Build the tests" OFF)
 option(ODIN_GLES "Use OpenGL ES for embedded systems" OFF)
 set(ODIN_OPT_FLAGS "-O3 -fomit-frame-pointer -fno-stack-protector" CACHE STRING
 	"Optimisation flags")
@@ -447,8 +446,3 @@ endif()
 add_custom_target(check-layers
 	COMMAND sh ${CMAKE_SOURCE_DIR}/tools/check-layers.sh
 	WORKING_DIRECTORY ${CMAKE_SOURCE_DIR} VERBATIM)
-
-if(ODIN_TESTS)
-	enable_testing()
-	add_subdirectory(tests)
-endif()

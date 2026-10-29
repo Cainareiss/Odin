@@ -591,8 +591,9 @@ Tmp90ph44::next_event() const
  * its start (0079), while the handler of INTWD opens them (019A). Taken
  * inside INTRX, INTWD would let the delay be taken and its flag cleared,
  * the poll then waiting for ever, and bytes be lost or sent twice
- * (tests/jvs/s6215_bench.cpp: the board dead from its 9th frame on, or
- * 93 frames of 572 wrong with the flag kept; none wrong this way).
+ * (measured with the program of the 315-6215: the board dead from its 9th
+ * frame on, or 93 frames of 572 wrong with the flag kept; none wrong this
+ * way).
  * HEURISTIC: INTEH bit 2 enables 0028 and bit 0 0038, as the program sets
  * and clears them (147C, 1499, 14B9, 14E3); the serial ones are taken as
  * enabled by the bits the program sets at its start and never clears

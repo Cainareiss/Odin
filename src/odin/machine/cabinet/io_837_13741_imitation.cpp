@@ -71,14 +71,14 @@ int32_t Io837_13741Imitation::switches(std::span<uint8_t> out, uint8_t players, 
 	return static_cast<int32_t>(pos);
 }
 
-/* The time to a reply, in clocks of its Z80: what tests/jvs/epr21868_bench
- * measured, epr-21868 run on the Z80 of Odin, the request ending anywhere
- * in a tick of its timer (the median of 32 phases; their spread is some
- * 20 clocks). A frame: the checksum of the request (0523, 26 a byte, the
- * address and the length with it), that of the reply (073B, 34 a byte, the
- * address and the length with it, the sum not), the rest; a command its own
- * part, by its parameters. A request ends when the stop bit of its last
- * byte does, a reply starts with the start bit of its first. */
+/* The time to a reply, in clocks of its Z80, measured with epr-21868 run on
+ * the Z80 of Odin, the request ending anywhere in a tick of its timer (the
+ * median of 32 phases; their spread is some 20 clocks). A frame: the checksum
+ * of the request (0523, 26 a byte, the address and the length with it), that
+ * of the reply (073B, 34 a byte, the address and the length with it, the sum
+ * not), the rest; a command its own part, by its parameters. A request ends
+ * when the stop bit of its last byte does, a reply starts with the start bit
+ * of its first. */
 uint32_t Io837_13741Imitation::frame_cycles(size_t request_bytes, size_t reply_bytes) const
 {
 	return static_cast<uint32_t>(941 + 26 * (request_bytes + 2) + 34 * (reply_bytes + 2));

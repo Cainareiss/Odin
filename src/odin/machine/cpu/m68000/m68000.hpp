@@ -70,7 +70,7 @@ public:
 
 /* Motorola 68000: instructions, exceptions and bus cycles as the M68000
  * User's Manual gives them, in the order of the SingleStepTests 680x0
- * suite (tests/m68000); every bus cycle takes 4 clocks (no wait state). */
+ * suite; every bus cycle takes 4 clocks (no wait state). */
 class M68000 {
 public:
 	explicit M68000(M68000Bus &bus);

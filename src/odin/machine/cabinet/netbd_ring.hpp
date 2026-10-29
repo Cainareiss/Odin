@@ -41,14 +41,13 @@ namespace odin {
 
 /* Cabinets linked by the network of the computers (MARKDOWN/98 section 17).
  *
- * The program of the boards needs a frame round the ring within a turn of
- * its IRQ5 counter, about 15 ms (tests/netbd/ring_bench.cpp, RING_LATENCY:
- * 4 boards link with 3.3 ms a hop, not with 4.2 ms). Odins that waited for
- * each other at each frame would be a frame apart at each hop; so each
- * board runs as on a cabinet: on a thread of its own, on the clock of the
- * computer, its frames sent at once. The host meets it in page 0E under
- * its lock, and the games of the cabinets keep their own pace, as each
- * cabinet keeps its own crystals. */
+ * The program of the boards needs a frame round the ring within a turn of its
+ * IRQ5 counter, about 15 ms (measured with that program: 4 boards link with
+ * 3.3 ms a hop, not with 4.2 ms). Odins that waited for each other at each
+ * frame would be a frame apart at each hop; so each board runs as on a
+ * cabinet: on a thread of its own, on the clock of the computer, its frames
+ * sent at once. The host meets it in page 0E under its lock, and the games of
+ * the cabinets keep their own pace, as each cabinet keeps its own crystals. */
 
 /* A network board on a thread of its own, run on the clock of the computer:
  * it wakes at its next event and when a frame comes, so that it answers

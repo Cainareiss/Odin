@@ -40,7 +40,7 @@
  * So that no host library decides: each value is the sine or the cosine in
  * double precision rounded to a single, which the libraries agree on, and
  * the 1 750 values glibc had one unit of the last place away from that are
- * listed below. The whole table is checked by tests/sh4.
+ * listed below.
  *
  * TO DO: replace all of this by the table of a real SH-4. */
 

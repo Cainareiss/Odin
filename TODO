@@ -60,7 +60,7 @@ processing with a value or a register shifted by a value, LDR and STR in
 the sound memory, B and BL are done in place, flags and cycles as the
 functions give them; the other instructions, and an access outside the
 memory, call those functions. The memory, the sound and the states are the
-same (tests/arm7, the six whole loops, the six attracts); the sound boards
+same (the six whole loops, the six attracts); the sound boards
 cost a quarter less on the PC, PHARRIER and VON4 2 to 4 ms less a frame on
 the i3-6100U.
 
@@ -180,7 +180,7 @@ the states are refused. Its 68000 (src/odin/machine/cpu/m68000/m68000.cpp,
 checked against the SingleStepTests 680x0 suite) runs the program the
 game uploads (m3_comm.asm 1.3: the same in VON4, SGNASCAR and SWRACER).
 HEURISTIC, deduced from that program and judged by it on a ring of 1 to
-8 boards (tests/netbd/ring_bench.cpp): the 68000 at 10 MHz; IRQ5 when a
+8 boards: the 68000 at 10 MHz; IRQ5 when a
 15-bit counter of 0.5 us ticks reaches the count in 40000+C0, the counter
 set back to 0 by a write of 40000+E0 (below); a frame goes out when
 1D = 8C (read at its start, 10 Mbit/s) and comes in when 17 = 8C, else is
@@ -219,10 +219,9 @@ head of a frame to every node, which it reads for nothing else
 the programs first test their memory (the MIE program waits 1.27 s
 before its next frame). The 837-13741 answers after the time its program
 takes (io_837_13741_imitation.cpp: a part for the frame, one for each command):
-tests/jvs/epr21868_bench.cpp runs epr-21868 on the board of Odin (below),
-against the imitation (2946 replies the same, 2F aside; the times the imitation
-gives half the time within 4 clocks); it needs the EPROM, not in the
-sets of Hikaru. There, HEURISTIC: the 315-6146 of that board runs at the
+run on the board of Odin (below), epr-21868 answers as the imitation does
+(2946 replies the same, 2F aside; the times the imitation gives half the
+time within 4 clocks); that EPROM is not in the sets of Hikaru. There, HEURISTIC: the 315-6146 of that board runs at the
 clock of the MIE (the same chip beside the same crystals); vector F8 is
 its UART, as its program tells; vector FE, the tick of its timer, comes
 every 1 ms. Not copied yet, HEURISTIC, where the imitation of the
@@ -250,19 +249,18 @@ MARKDOWN/75 to 77) runs 315-6215 on the JVS line for the games whose
 folder has it (section io_rom of odin-games.json, optional); without it
 (von4: not in its folder) or with ODIN_IO=imitation the imitation answers.
 io_837_13551.cpp is the board around the chip: its pins are those the
-tables of the program name, which tests/jvs/s6215_bench.cpp checks against
-the PROM. MieBoard runs the chip up to 64 us ahead of the MIE, then the
+tables of the program name (checked against
+the PROM). MieBoard runs the chip up to 64 us ahead of the MIE, then the
 MIE up to it, stopped where a byte or the sense line comes: a byte of the
 MIE takes longer than that to reach the chip, so each sees the other at
-the right time (tests/jvs/line_bench.cpp, the MIE asking F1 01 of the
+the right time (measured with the MIE asking F1 01 of the
 chip: the first byte 375 us after the request, 9 us later when the tick
 of the board holds the interrupt of the last byte; the same with the chip
 1 us ahead). HEURISTIC there: the 14.7456 MHz crystal of the board
 and that of the UART of the MIE are the same; a coin closes its switch
-50 ms, then leaves it open 50 ms. tests/jvs/s6215_bench.cpp runs 315-6215
-on the chip against the imitation, its switches, coins and analog
-channels on the pins its tables name (572
-replies the same); it needs the PROM of a game. There the board starts
+50 ms, then leaves it open 50 ms. Run on the chip, 315-6215 answers as the
+imitation does, its switches, coins and analog channels on the pins its
+tables name (572 replies the same; that needs the PROM of a game). There the board starts
 its reply 250 to 675 us after the request, the poll of the games
 (20 02 02 21 02 22 08) 590 us, 6.8 characters, where the imitation starts
 after 1 (JVS_TURNAROUND_BYTES); it reads its inputs at each INTWD, every
@@ -289,7 +287,7 @@ started both ways), so the EPROM is not needed. Its pins are those the
 program reads and drives,
 found by running it: port 0 TEST, TILT, the coins, the return pins of the
 meters and two DIP switches; ports 1, 2 and 6 the switches of the
-players; outputs 1-22 on ports 3-5. tests/jvs/line_bench.cpp runs it on
+players; outputs 1-22 on ports 3-5. It was also run on
 the line of the MIE as the 837-13551. HEURISTIC there: the D71054 counts
 the 16 MHz of the Z80 (OSC2 / 2), counter 2 clocking counters 0 and 1,
 the output of counter 0 the interrupt of the chip: a tick every 1 ms, the
@@ -907,7 +905,6 @@ registers and the memory of the Valkyrie interpreter it replaced at every
 slice of the six games. ODIN_SH4_TRACE=<prefix> writes the PC and a hash of
 the registers at every slice, ODIN_STATS=1 the host time of each part of the board
 and of the drawings.
-Tests: tests/sh4, and tests/sh4_host for the host code.
 
 Bus time (Sh4::mpx_cycles): a read or write of the CPU that goes out on
 the MPX bus takes its address phase, the waits of WCR2 and one data
@@ -937,7 +934,7 @@ with the calling convention of the system; elsewhere the blocks are read). Each 
 (Sh4OpsT) and handed over in two ways: the reader runs the next one by a
 tail call, the host code of a block calls its instructions in turn, all by
 direct calls. The two give the same registers, memories, cycles and
-pictures (tests/sh4_host, the six whole loops). On an i3-6100U the two SH-4 take
+pictures (the six whole loops). On an i3-6100U the two SH-4 take
 a fifth to a third less time that way; on a Ryzen 5600X next to nothing.
 The simple instructions on integers (copies, sums, logic, comparisons,
 shifts: Sh4::Inline) are not called: the host code does them itself, with a
@@ -1083,7 +1080,7 @@ fragments take 32 bytes each and their number grows as N x N: VON4 needs
 GeForce; a list that does not fit loses fragments and says so. At 6 the
 card holds up to 3.3 GB more; a card that runs out of memory stops the
 NVIDIA driver, and Odin with it.
-Tests: tests/antarctic, tests/eurasia, tests/hikaru_gpu. As Valkyrie had it,
+As Valkyrie had it,
 and HEURISTIC: a list is run one instruction a cycle of the SH-4 from its
 launch on, the end of its analysis and the end of its plot are told together
 when it stops, a texture transfer copies one entry a line and a blit is done

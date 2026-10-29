@@ -24,7 +24,6 @@ Options (-D<option>=<value>):
  ODIN_PGO=generate|use	profile-guided build
  ODIN_VERSION=<commit>	version string when building without git
  GLSLANG=<path>		glslangValidator to use
- ODIN_TESTS=ON		build the tests
  ODIN_GLES=ON		OpenGL ES 3.1+ instead of OpenGL (Linux)
  ODIN_BUNDLED_LIBS=ON	always use 3rdparty/ (OFF: never)
 
@@ -45,10 +44,8 @@ Cross build:
  $ cmake --build build -j
  $ DESTDIR=<target> cmake --install build --prefix /usr
 
-Tests and the layer check:
+The layer check:
 
- $ cmake -B build -DODIN_TESTS=ON && cmake --build build -j
- $ ctest --test-dir build
  $ cmake --build build --target check-layers
 
 On macOS, install the Xcode Command Line Tools, CMake (cmake.org or pip)
