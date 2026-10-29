@@ -33,13 +33,51 @@ M68000::M68000(M68000Bus &bus)
 }
 
 /* Bus cycles. A word or long access at an odd address faults before the
- * cycle starts. */
+ * cycle starts; after a fault, none starts. */
+
+void
+M68000::fault(uint32_t addr, bool write, bool program)
+{
+	m_faulting = true;
+	m_fault = { addr, write, program };
+	m_at_fault = { m_d, m_a, m_other_sp, m_pc, m_au, m_sr, m_ir, m_irc, m_ird, m_nmi_edge, m_stopped, m_halted, m_cycles };
+}
+
+/* Whether the instruction met a fault: the registers as they were at it */
+bool
+M68000::faulted()
+{
+	if (!m_faulting)
+		return false;
+
+	const Kept &k = m_at_fault;
+
+	m_faulting = false;
+	m_d = k.d;
+	m_a = k.a;
+	m_other_sp = k.other_sp;
+	m_pc = k.pc;
+	m_au = k.au;
+	m_sr = k.sr;
+	m_ir = k.ir;
+	m_irc = k.irc;
+	m_ird = k.ird;
+	m_nmi_edge = k.nmi_edge;
+	m_stopped = k.stopped;
+	m_halted = k.halted;
+	m_cycles = k.cycles;
+	return true;
+}
 
 uint16_t
 M68000::read_word(uint32_t addr)
 {
-	if (addr & 1)
-		throw AddressError{addr, false, false};
+	if (m_faulting)
+		return 0;
+	if (addr & 1) {
+		fault(addr, false, false);
+		return 0;
+	}
 	m_cycles += 4;
 	return m_bus.read16(addr & 0xFFFFFF, data_fc());
 }
@@ -47,8 +85,12 @@ M68000::read_word(uint32_t addr)
 uint16_t
 M68000::fetch_word(uint32_t addr)
 {
-	if (addr & 1)
-		throw AddressError{addr, false, true};
+	if (m_faulting)
+		return 0;
+	if (addr & 1) {
+		fault(addr, false, true);
+		return 0;
+	}
 	m_cycles += 4;
 	return m_bus.read16(addr & 0xFFFFFF, program_fc());
 }
@@ -56,6 +98,8 @@ M68000::fetch_word(uint32_t addr)
 uint8_t
 M68000::read_byte(uint32_t addr)
 {
+	if (m_faulting)
+		return 0;
 	m_cycles += 4;
 	return m_bus.read8(addr & 0xFFFFFF, data_fc());
 }
@@ -70,8 +114,12 @@ M68000::read_long(uint32_t addr)
 void
 M68000::write_word(uint32_t addr, uint16_t v)
 {
-	if (addr & 1)
-		throw AddressError{addr, true, false};
+	if (m_faulting)
+		return;
+	if (addr & 1) {
+		fault(addr, true, false);
+		return;
+	}
 	m_cycles += 4;
 	m_bus.write16(addr & 0xFFFFFF, v, data_fc());
 }
@@ -79,6 +127,8 @@ M68000::write_word(uint32_t addr, uint16_t v)
 void
 M68000::write_byte(uint32_t addr, uint8_t v)
 {
+	if (m_faulting)
+		return;
 	m_cycles += 4;
 	m_bus.write8(addr & 0xFFFFFF, v, data_fc());
 }
@@ -436,28 +486,26 @@ M68000::exception(unsigned vector, uint32_t return_pc)
 /* Group 0: the access that faulted, the instruction and the PC of the
  * prefetch go on the supervisor stack. A fault while doing so halts. */
 void
-M68000::address_error(const AddressError &e)
+M68000::address_error(AddressError e)
 {
 	const uint16_t old = m_sr;
 	const unsigned fc = e.program ? program_fc() : data_fc();
 	const uint16_t status = static_cast<uint16_t>((m_ird & 0xFFE0) | (e.write ? 0 : 0x10) | (e.program ? 0x08 : 0) | fc);
 	const uint32_t pc = m_au - 4;
 
-	try {
-		idle(4);
-		set_sr(static_cast<uint16_t>((m_sr | SR_S) & ~SR_T));
-		m_a[7] -= 14;
-		write_word(m_a[7] + 12, static_cast<uint16_t>(pc));
-		write_word(m_a[7] + 8, old);
-		write_word(m_a[7] + 10, static_cast<uint16_t>(pc >> 16));
-		write_word(m_a[7] + 6, m_ird);
-		write_word(m_a[7] + 4, static_cast<uint16_t>(e.addr));
-		write_word(m_a[7], status);
-		write_word(m_a[7] + 2, static_cast<uint16_t>(e.addr >> 16));
-		enter_vector(3);
-	} catch (const AddressError &) {
+	idle(4);
+	set_sr(static_cast<uint16_t>((m_sr | SR_S) & ~SR_T));
+	m_a[7] -= 14;
+	write_word(m_a[7] + 12, static_cast<uint16_t>(pc));
+	write_word(m_a[7] + 8, old);
+	write_word(m_a[7] + 10, static_cast<uint16_t>(pc >> 16));
+	write_word(m_a[7] + 6, m_ird);
+	write_word(m_a[7] + 4, static_cast<uint16_t>(e.addr));
+	write_word(m_a[7], status);
+	write_word(m_a[7] + 2, static_cast<uint16_t>(e.addr >> 16));
+	enter_vector(3);
+	if (faulted())
 		m_halted = true;
-	}
 }
 
 /* Interrupt acknowledge, then as a group 1 exception. HEURISTIC: the
@@ -515,13 +563,10 @@ M68000::reset()
 	m_halted = false;
 	m_nmi_edge = false;
 	m_sr = SR_S | SR_I;
-	try {
-		m_a[7] = read_long(0);
-		const uint32_t pc = read_long(4);
-		jump(pc);
-	} catch (const AddressError &) {
+	m_a[7] = read_long(0);
+	jump(read_long(4));
+	if (faulted())
 		m_halted = true;
-	}
 }
 
 void
@@ -542,27 +587,26 @@ M68000::step()
 		m_cycles += 4;
 		return 4;
 	}
-	try {
-		const unsigned mask_level = (m_sr & SR_I) >> 8;
-		if (m_nmi_edge) {
-			m_nmi_edge = false;
-			interrupt(7);
-		} else if (m_ipl > mask_level) {
-			interrupt(m_ipl);
-		} else if (m_stopped) {
-			m_cycles += 4;
-		} else {
-			const bool trace = (m_sr & SR_T) != 0;
-			m_ird = m_ir;
-			execute();
-			if (trace && !m_stopped) {
-				idle(4);
-				exception(9, m_pc);
-			}
+	const unsigned mask_level = (m_sr & SR_I) >> 8;
+
+	if (m_nmi_edge) {
+		m_nmi_edge = false;
+		interrupt(7);
+	} else if (m_ipl > mask_level) {
+		interrupt(m_ipl);
+	} else if (m_stopped) {
+		m_cycles += 4;
+	} else {
+		const bool trace = (m_sr & SR_T) != 0;
+		m_ird = m_ir;
+		execute();
+		if (trace && !m_stopped && !m_faulting) {
+			idle(4);
+			exception(9, m_pc);
 		}
-	} catch (const AddressError &e) {
-		address_error(e);
 	}
+	if (faulted())
+		address_error(m_fault);
 	return static_cast<uint32_t>(m_cycles - start);
 }
 

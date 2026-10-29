@@ -122,12 +122,23 @@ private:
 	enum Size : uint8_t { BYTE, WORD, LONG };
 
 	/* A word or long access at an odd address: the instruction stops
-	 * and the address error exception runs instead. */
+	 * and the address error exception runs instead. The access does
+	 * nothing, nor any after it; the registers go back to what they were
+	 * at it (Kept) when the instruction returns. */
 	struct AddressError {
 		uint32_t addr;
 		bool write;
 		bool program;
 	};
+	struct Kept {
+		std::array<uint32_t, 8> d, a;
+		uint32_t other_sp, pc, au;
+		uint16_t sr, ir, irc, ird;
+		bool nmi_edge, stopped, halted;
+		uint64_t cycles;
+	};
+	void fault(uint32_t addr, bool write, bool program);
+	bool faulted();
 
 	/* An operand once its extension words are read: in a register, in
 	 * memory at `addr`, or the immediate `imm`. */
@@ -184,7 +195,7 @@ private:
 	void enter_vector(uint32_t vector);
 	void divide_by_zero();
 	void exception(unsigned vector, uint32_t return_pc);
-	void address_error(const AddressError &e);
+	void address_error(AddressError e);
 	void interrupt(unsigned level);
 	void privilege();
 	void illegal(unsigned vector = 4);
@@ -256,6 +267,10 @@ private:
 	uint8_t m_ipl;
 	bool m_nmi_edge;
 	bool m_stopped, m_halted;
+	/* The address error the instruction met, and the CPU at it */
+	bool m_faulting = false;
+	AddressError m_fault{};
+	Kept m_at_fault{};
 	uint64_t m_cycles;
 	uint64_t m_run_end;	/* where the run in progress stops */
 };
