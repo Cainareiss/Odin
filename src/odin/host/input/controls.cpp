@@ -57,6 +57,16 @@ player_value_right(const std::string &key, const std::string &value)
 	return false;
 }
 
+/* A GUID of SDL as text: 32 hexadecimal figures */
+std::string
+guid_text(SDL_GUID guid)
+{
+	char text[33];
+
+	SDL_GUIDToString(guid, text, sizeof(text));
+	return text;
+}
+
 } /* namespace */
 
 bool
@@ -284,13 +294,11 @@ Controls::open(SDL_JoystickID id)
 	}
 
 	Pad pad;
-	char guid[33];
 
-	SDL_GUIDToString(SDL_GetGamepadGUIDForID(id), guid, sizeof(guid));
 	pad.handle = handle;
 	pad.id = id;
-	pad.guid = guid;
-	pad.tuning = PadTuning::of(m_settings, guid, true);
+	pad.guid = guid_text(SDL_GetGamepadGUIDForID(id));
+	pad.tuning = PadTuning::of(m_settings, pad.guid, true);
 	for (unsigned axis = 0; axis < SDL_GAMEPAD_AXIS_COUNT; axis++)
 		pad.axes[axis] = SDL_GetGamepadAxis(handle, static_cast<SDL_GamepadAxis>(axis));
 	shape(pad);
@@ -333,15 +341,13 @@ Controls::open_joystick(SDL_JoystickID id)
 	}
 
 	Joy joy;
-	char guid[33];
 	const int axes = std::max(SDL_GetNumJoystickAxes(handle), 0);
 	const int buttons = std::max(SDL_GetNumJoystickButtons(handle), 0);
 	const int hats = std::max(SDL_GetNumJoystickHats(handle), 0);
 
-	SDL_GUIDToString(SDL_GetJoystickGUIDForID(id), guid, sizeof(guid));
 	joy.handle = handle;
 	joy.id = id;
-	joy.guid = guid;
+	joy.guid = guid_text(SDL_GetJoystickGUIDForID(id));
 	joy.state.axes.assign(static_cast<size_t>(axes), 0);
 	joy.state.known.assign(static_cast<size_t>(axes), false);
 	joy.state.rest.assign(static_cast<size_t>(axes), 0);
