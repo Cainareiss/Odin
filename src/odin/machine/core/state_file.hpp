@@ -37,24 +37,8 @@ namespace odin {
  * out otherwise is refused instead of misread. */
 class StateFile {
 public:
-	/* 3: the command processor keeps its own state (antarctic.hpp);
-	 * 4: the light numbers are kept in a light set;
-	 * 5: the sound chips keep their voices (aica_voice.hpp);
-	 * 6: the effect processor no longer keeps the length of its program;
-	 * 7: a sound board keeps the cycles its ARM7 ran past a period;
-	 * 8: the MIE board keeps the clocks its Z80 ran past its share;
-	 * 9: it keeps the chip of the 837-13551 and its line;
-	 * 10: it keeps which processor asks for the bus of the MIE, the slave
-	 * reaching it through its own window;
-	 * 11: a ROM board without the 315-5881 keeps the RAM of its local bus;
-	 * 12: the MIE keeps its converter channel, its external interrupt
-	 * and the request of the transmitter of UART 1;
-	 * 13: it keeps the chip of the 837-13741 and its line;
-	 * 14: the SH-4 as its core keeps it, and none of the words the
-	 * board of Valkyrie kept;
-	 * 15: the card reader keeps where its card is and its tracks as on
-	 * the card;
-	 * 16: a card reader only for a cabinet that has one */
+	/* One more each time what a state keeps changes (the history of the
+	 * repository says what each version changed) */
 	static constexpr unsigned VERSION = 16;
 
 	enum class Mode {

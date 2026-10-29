@@ -201,12 +201,12 @@ Hikaru::quiet_windows()
  *		03000000-03FFFFFF Aperture-03
  * Area 1	04000000-0400003F Memory Controller [Master]
  * Area 3	0C000000-0DFFFFFF RAM
- * Area 5	14000000-140000FF Master/Slave Communication Box
- *		14000100-14FFFFFF Command RAM (4 MB and its mirrors)
+ * Area 5	14000000-1400002F Master/Slave Communication Box
+ *		14000030-14FFFFFF Command RAM (4 MB and its mirrors)
  *		15000000-150FFFFF Geometry Processor
  *		16000000-16FFFFFF Aperture-16
  *		17000000-17FFFFFF Aperture-17
- * Area 6	18001000-180010FF GPU Regs
+ * Area 6	18001000-1800101F GPU Regs
  *		1A000000-1A0FFFFF Image Generator
  *		1B000000-1B7FFFFF Frame Buffer
  *

@@ -141,16 +141,14 @@ HikaruGpu::set_reset_lines(bool gp_res, bool pci1_res)
  * back before it acknowledges them (@0C0102C0): were it to stay set until
  * written, every interrupt of the GPU 1A would be taken twice.
  *
- * Bits in 1A000088:
+ * Bits in 1A000018:
  *
  *  01, bit 0 = Unknown
  *  02, bit 1 = Vblank[1]
  *  04, bit 2 = GPU 1A plot done
- *  08, bit 4 = Unknown
+ *  08, bit 3 = Unknown
  *
- * IRQs at 1A000018 are most likely related to Texture/FB operations, that is,
- * anything related to the 1A00xxxx registers (including texture FIFO, etc.)
- * When raised, they set bit 8 in 15000088.
+ * When raised, they set bit 7 in 15000088.
  *
  * [1] This bit is checked at @0C001C08 and updates (0, GBR) and implies
  *     1A000000 = 1.
@@ -167,24 +165,12 @@ HikaruGpu::update_irq()
  * Command Processor
  * =================
  *
- * A list starts when 15000058 = 3; see src/odin/machine/chips/antarctic/antarctic.hpp for what it
- * does. When execution ends:
- *
- *  - 1A00000C bit 0 is set (not sure)
- *    - 1A000018 bit 1 is set as a consequence
- *      - 15000088 bit 7 is set as a consequence
- *  - 15000088 bit 1 is set; a GPU IRQ is raised (if not masked by 15000084)
- *  - 15002000 bit 0 is set on some HW revisions (not sure)
- *  - 1A000024 bit 0 is cleared if some additional condition occurred (not sure)
- *
- * 15002000 and 1A000024 signal different things; see the termination condition
- * in sync().
- *
- * (Guesstimate: 15000088 bit 1 is set when the CP ends verifying/processing
- * the CS (if there is such a thing!); 15002000 is cleared when the CP submits
- * the completely rasterized frame buffer to the GPU 1A; 1A000024 is cleared
- * when the GPU 1A is done compositing the frame buffer with the 2D layers and
- * has displayed them on-screen.)
+ * A list starts when 15000058 = 3; see
+ * src/odin/machine/chips/antarctic/antarctic.hpp for what it does. When it
+ * ends (list_ended): bit 0 of 1A000024, the plot busy, is cleared; bit 2 of
+ * 1A000018 (plot done) is raised, and with it bit 7 of 15000088; bit 2 of
+ * 15000088 (analysis done) is raised; a GPU IRQ follows unless 15000084 masks
+ * them.
  */
 
 /* 15000058 or 1A000024 was written. 15000058 = 3 launches the list;

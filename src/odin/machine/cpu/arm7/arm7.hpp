@@ -106,10 +106,11 @@ public:
 	uint32_t step();
 	/* The same, the instruction taken from what its word was decoded to
 	 * the last time it ran, decoded again when the word changed; not to
-	 * be used while a turn is recorded or settled, or with the trace. */
+	 * be used while a turn is recorded, or with the trace (settle() runs
+	 * the code of the memory with it). */
 	uint32_t step_decoded();
-	/* run() uses step_decoded() where it may (on by default); off is for
-	 * the tests, to compare with step(). */
+	/* run() uses step_decoded() where it may (on by default); off
+	 * (ODIN_ARM7_DECODED=0), it compares with step(). */
 	void set_decoded(bool on) { m_decoded_on = on; }
 	/* Where run() uses what was decoded, the blocks of the memory run as
 	 * host code instead (arm7_translate.cpp), when the host has it: the
@@ -257,7 +258,7 @@ private:
 	static uint16_t condition_pass(uint32_t cc);
 	/* What host code may do in place: data processing with a value or a
 	 * register shifted by a value, LDR and STR of a word or a byte with
-	 * such an offset, B and BL (arm7_ops.cpp) */
+	 * such an offset, LDM and STM (block_in_place), B and BL (arm7_ops.cpp) */
 	enum class Form : uint8_t { Other, Data, Transfer, Block, Branch };
 	static Form form_of(uint32_t op, Run run);
 

@@ -90,7 +90,7 @@ public:
 	void reset();
 
 	/* The processor side: the page 04000000-04FFFFFF, with the registers
-	 * in its first 40 bytes, and the windows at 02, 03, 16 and 17
+	 * in its first 0x40 bytes, and the windows at the 02, 03, 16, 17 and 18
 	 * million-pages. False when nothing answers on the external bus. */
 	bool read(uint32_t addr, unsigned size, uint64_t &value);
 	bool write(uint32_t addr, unsigned size, uint64_t value);

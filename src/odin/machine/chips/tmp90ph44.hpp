@@ -126,7 +126,7 @@ public:
 	uint64_t states() const { return m_states; }
 	/* For the tests: the states run() billed without running them */
 	uint64_t skipped() const { return m_skipped; }
-	/* For the tests: off, no loop is tried, every turn runs. The states
+	/* Off (ODIN_TURNS=0): no loop is tried, every turn runs. The states
 	 * must be the same. */
 	void set_waits_counted(bool on)
 	{

@@ -35,8 +35,8 @@
 namespace odin {
 
 /* A thread that does one job at a time for the thread that owns it. The
- * machine has the frames drawn this way: it gives the drawing of a frame
- * and runs the next one meanwhile.
+ * display draws a frame on it while the machine runs the next one
+ * (display.cpp).
  *
  * Every call comes from the owner. What a job and the owner both touch is
  * left alone by the owner from post to the end of wait. */

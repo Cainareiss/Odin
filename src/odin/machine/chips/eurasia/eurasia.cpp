@@ -128,8 +128,8 @@ namespace odin {
  *
  *	   		NOTEs:
  *	   		- 15000058 bits 0,1 and GPU jump instructions, see @0C0018B4
- *	   		- 15002000 bit 0, see @?
- *	   		- HW version, see @?
+ *	   		- 15002000 bit 0
+ *	   		- HW version
  *	   		- @0C0069E8 loops while the bit is set
  *	   		- it is set on frame change
  *	   		- Also related to GPU texture upload (acts as a busy bit); see SN-ROM:@0C070C9C
@@ -291,8 +291,8 @@ Eurasia::write(uint32_t addr, uint32_t value)
 		case 0x14:
 			/* Bit 0 is ANDNOT'ed on write: a 1 clears the cause,
 			 * a 0 leaves it (VON4 writes each bit of 1A000018
-			 * back to its register, @0C711F62). I have no clue
-			 * about the other bits. */
+			 * back to its register, @0C711F62). The other
+			 * bits are not known (they stop the emulator). */
 			if (value > 1)
 				fatal("interrupt acknowledge not known", addr, value);
 			reg(offs) &= ~value;
@@ -371,8 +371,8 @@ Eurasia::raise(uint32_t causes)
 void
 Eurasia::end_of_line(uint32_t line)
 {
-	/* Update the line counter; we ignore the _putative_ pixel counter
-	 * as it doesn't seem to be used so far. */
+	/* The line counter; a pixel counter, if there is one, is left out (no
+	 * game was seen reading it). */
 	reg(0x1C) = (reg(0x1C) & ~0x003FF800u) | (line << 11);
 }
 
@@ -471,8 +471,8 @@ Eurasia::frame_size(uint32_t &dots, uint32_t &lines, uint32_t &shown) const
  *			1 = layer 1 format
  *			2 = layer 2 format
  *
- *			If the format is 0, then the layer is A2BGR10;
- *			otherwise it is ABGR1555?
+ *			A layer whose bit is 0 is ABGR1555, 1 A2BGR10
+ *			(read_layers).
  *
  *			See PH:@0C01A1EA.
  *
@@ -557,7 +557,7 @@ Eurasia::read_layers()
  *
  * Copies texture data around within the FB. It's used to compose the intro
  * text of AIRTRIX and PHARRIER, for instance. It is controlled by the ports
- * at 1A0000{0,4,8,C} as follows:
+ * at 1A04000{0,4,8,C} as follows:
  *
  * 1A040000   W		Source coords
  *
@@ -605,7 +605,7 @@ Eurasia::blit()
 		             src_x, src_y, dst_x, dst_y, w, h);
 
 	/* The two 16-bit pixels of each 32-bit FB word are stored swapped
-	 * (see upload_layer): a copy between columns of different parity
+	 * (renderer_layers.cpp): a copy between columns of different parity
 	 * must follow the pixels, not the memory order (the small print of
 	 * the AIRTRIX title). */
 	for (uint32_t i = 0; i < h; i++) {

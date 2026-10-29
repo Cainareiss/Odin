@@ -309,7 +309,7 @@ Antarctic::set_display_irq(bool on)
  *
  *			a = BUS address of the IDMA table
  *
- * 15000010  RW		Indirect DMA lenght
+ * 15000010  RW		Indirect DMA length
  *
  *			-------- -------- nnnnnnnn nnnnnnnn
  *
@@ -324,7 +324,7 @@ Antarctic::set_display_irq(bool on)
  *			    or ready when read. Clearing it does not stop
  *			    the transfer.
  *
- * 1500001C points to a table in CMDRAM, defaulting to 483FC000. Each entry
+ * 1500000C points to a table in CMDRAM, defaulting to 483FC000. Each entry
  * is 4 words long, and has the following format:
  *
  *         MSB                               LSB

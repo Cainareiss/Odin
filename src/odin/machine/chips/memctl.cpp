@@ -46,9 +46,8 @@
  * memory controller decides which external device is mapped to what
  * part of the SH-4 address space.
  *
- * There are (very likely) two of these memory controllers, one for each
- * SH-4 CPU. They are likely the two xxx-xxxxx SEGA ICs conveniently placed
- * in the proximity of the two CPUs.
+ * There are two of these memory controllers, one for each SH-4: the two
+ * 315-6154 beside the two CPUs (MAME).
  *
  * Aside from memory device mapping, they also provide a DMA facility to
  * transfer data directly from different devices on the external BUS.
@@ -57,7 +56,7 @@
  * Mapping
  * =======
  *
- * Direct access to these extenral devices is possible by mapping them in
+ * Direct access to these external devices is possible by mapping them in
  * the SH-4 with the memory controller: in particular, they get mapped within
  * a couple of apertures: one is located at 02000000-03FFFFFF, the other
  * at 16000000-17FFFFFF. Other portions of the SH-4 address space (possibly
@@ -135,7 +134,7 @@
  *		v = Unknown			5E [m]
  *						EE [m] MIE	@0C00BDFC
  *		w = Unknown			F4 [m] (E4, B4, F4 while accessing banks D, E in AIRTRIX)
- *						FD [m] SNDBD	@0C001F3C, @oCooBDFC
+ *						FD [m] SNDBD	@0C001F3C, @0C00BDFC
  *		x = Unknown			CC [m]		@0C00BDFC, @0C007820 => NIBBLES
  * +0x30	S = DMA source address
  * +0x34	D = DMA destination address
@@ -156,7 +155,7 @@
  * fields E and F.
  *
  * NOTE: 0400001E (field 'o') may be related to cache and/or master-slave
- * syncrhonization. See PH:@0C0D6740 and its only caller.
+ * synchronization. See PH:@0C0D6740 and its only caller.
  *
  * NOTE: direct access to the external BUS is likely prohibited when the DMA
  * is running. See the IRL2 handler, AICA case.

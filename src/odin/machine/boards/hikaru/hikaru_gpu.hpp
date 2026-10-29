@@ -65,8 +65,8 @@ namespace odin {
  *
  * The wiring done here: bit 7 of 15000088 follows the causes of the display
  * chip; the end of a list ends the plot too and clears the busy bit of
- * 1A000024; a write to 1A000024 starts the list again while 15000058 asks
- * for one; the two reset lines. */
+ * 1A000024; a write to 1A000024 while no list is asked clears that bit at
+ * once (it never starts a list again); the two reset lines. */
 class HikaruGpu {
 public:
 	/* The memories the chips work on */

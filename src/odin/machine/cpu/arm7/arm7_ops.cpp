@@ -562,8 +562,9 @@ void Arm7::undefined(uint32_t op)
 
 /* Instructions decoded once (Arm7::step_decoded): a function per form, the
  * choices exec() and the functions above make at each instruction made by
- * templates instead. Each does what those functions do, step for step; the
- * rare forms and those that write r15 run exec() itself. */
+ * templates instead. Each does what those functions do, step for step;
+ * data processing that writes r15, the moves of the status registers and the
+ * rare forms run exec() itself (decode). */
 struct Arm7Ops {
 	/* The second operand of data processing, and the offset of LDR / STR */
 	enum : uint32_t { SHIFT_LSL, SHIFT_LSR, SHIFT_ASR, SHIFT_ROR, SHIFT_REG, IMMEDIATE };

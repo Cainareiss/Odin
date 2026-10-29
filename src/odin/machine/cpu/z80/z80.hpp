@@ -88,7 +88,7 @@ public:
 	void set_trace(FILE *out) { m_trace = out; }
 
 	uint16_t pc() const { return m_pc; }
-	/* bc and de for the tests */
+	/* Registers read from outside the core (the drive board reads R) */
 	uint16_t bc() const { return pair(m_b, m_c); }
 	uint16_t de() const { return pair(m_d, m_e); }
 	uint16_t hl() const { return pair(m_h, m_l); }

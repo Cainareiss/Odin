@@ -104,7 +104,8 @@ std::span<uint8_t> X76f100::memory()
 }
 
 /* Either edge of CS drops the command in progress. Whether SDA floats
- * once deselected is not known; it reads low here as in MAME. */
+ * once deselected is not known; sda_read() gives it high while deselected,
+ * as MAME does. */
 void X76f100::on_cs(bool level)
 {
 	if (m_cs != level) {

@@ -207,7 +207,8 @@ uint32_t Arm7::block_at(uint32_t addr) const
 
 /* The instructions from `addr` on, up to one after which the program
  * never goes on, the end of the page or BLOCK_MAX of them. Data
- * processing, LDR, STR, B and BL are done in place, the others called. */
+ * processing, LDR, STR, LDM, STM, B and BL are done in place, the others
+ * called. */
 uint32_t Arm7::translate(uint32_t addr, uint32_t &words)
 {
 	Arm7Host &host = *m_host;

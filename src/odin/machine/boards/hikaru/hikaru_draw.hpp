@@ -31,9 +31,9 @@
 #include "odin/machine/chips/eurasia/eurasia_layers.hpp"
 
 /* What the board asks to be drawn, worked out from its lists in plain data,
- * without a word of a graphics API: the rules of the board
- * are written here once, and the code of each API (OpenGL now) only turns
- * them into its own calls. */
+ * without a word of a graphics API: the rules of the board are written here
+ * once, and the code of each API (OpenGL, Vulkan) only turns them into its
+ * own calls. */
 
 namespace odin {
 

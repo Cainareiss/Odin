@@ -112,17 +112,16 @@ Antarctic::error(const char *fmt, ...) const
  * CP Execution
  * ============
  *
- * The games start a list by writing 15000058 = 3; it starts again when
- * 1A000024 is written with that value still there. It ends at a 1C2.
+ * The games start a list by writing 15000058 = 3 (a write of 1A000024 never
+ * starts one again, hikaru_gpu.cpp). It ends at a 1C2.
  *
  * (From a software perspective, the CP program is uploaded when both IRQs 2 of
  * GPU 15 and GPU 1A are fired, meaning that at this point the CP is supposed
  * to have consumed the previous command stream and is ready to accept a new
  * one.)
  *
- * Note also that a CP program is uploaded to two different areas in CMDRAM on
- * odd and even frames. This may mean that there are *two* CPs performing
- * double-buffered 3D rendering.
+ * A CP program is uploaded to two different areas in CMDRAM on odd and even
+ * frames (see the NOTE in hikaru_gpu.hpp).
  */
 
 void

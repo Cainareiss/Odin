@@ -77,14 +77,11 @@
  * Currently three different bios revisions are known: 0.84, 0.92, and 0.96
  * (see the MAME driver.)
  *
- * Any IRQ controller in there pumping stuff from the various devices to
- * the master SH-4 IRL pins and Port A?
- *
  * The master SH-4 is configured for external-request DMAC (DTD). Requests
  * are sent either to the master SH-4 or the slave SH-4.
  *
  * TMU Channel 2 is configured for input capture; the DMAC is automatically
- * activeted whenever the interrupt fires. Timed DMA, way to go!
+ * activated whenever the interrupt fires.
  *
  *
  * EEPROMs
@@ -93,7 +90,8 @@
  * The Hikaru hosts a few EEPROMs:
  *  - One on the MAINBD, connected to the master SH4 Port A.
  *  - One on the ROMBD, which likely holds game-specific data and protection.
- *  - One on the INPTBD, at 0800000[AC], unknown usage.
+ *  - The 93C46 of the MIE, reached through its ports at 0800000[AC]
+ *    (mie_board.hpp).
  *
  *
  * MAINBD EEPROM
@@ -119,7 +117,8 @@
  * ====================
  *
  * Located at 03000000, in bank_base + 0x14. It's a serial EEPROM of size
- * 128 x 8-bit entries. An 9C346. Bits (active low):
+ * 128 x 8-bit entries, a 93C46, which the BOOTROM can read; the ROM board
+ * of Odin has Type 2 (rom_board.cpp). Bits (active low):
  *
  *  bit 0	Output
  *  bit 1	Clock
@@ -132,7 +131,7 @@
  * ROMBD EEPROM, Type 2
  * ====================
  *
- * An 76X100 secure EEPROM.
+ * An X76F100 secure EEPROM (x76f100.cpp).
  *
  * MIE EEPROM
  * ==========
@@ -693,17 +692,9 @@ Hikaru::reset()
  * IRQ-related Registers
  * =====================
  *
- * The following registers are used in the IRL2 handling routine to check
- * what happened, see @0C00174C.
- *
- * PDTRA (active low):
- *
- *  0040	IRQ source is GPU
- *  0080	IRQ source is AICA/DMA
- *  0100	IRQ source is UNKNOWN [slave?], calls @0C000A30
- *  0200	Error
- *
- * For more informations on the GPU IRQs, see hikaru_gpu.hpp
+ * The IRL2 handler (@0C00174C) reads PDTRA, active low, to tell the
+ * sources apart (the table below; @0C000A30 is the one of PDTRA 0100). The
+ * causes of the GPU: hikaru_gpu.cpp.
  *
  * The interrupt controller
  * ========================

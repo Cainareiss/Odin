@@ -1829,7 +1829,7 @@ Antarctic::op_polygon_type(const uint32_t *inst)
  * x,y,z = Position
  * u,v,w = Normal
  *
- * For 1BX, the rest of the instruction looks like:
+ * For 1AX, the rest of the instruction looks like:
  *
  *	-------- -------- -------- --------
  *	xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx
@@ -1854,7 +1854,7 @@ Antarctic::op_polygon_type(const uint32_t *inst)
  * s,t = Texcoords
  *
  * Meshes come in two flavors: dynamic and static. Dynamic meshes are specified
- * with normal IEEE457 floating-point values. Static meshes are specified with
+ * with normal IEEE 754 floating-point values. Static meshes are specified with
  * variable fixed-point values; the fixed-point precision is defined by command
  * 901.
  *

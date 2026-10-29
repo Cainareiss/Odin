@@ -437,7 +437,8 @@ struct Sh4OpsT {
 	{
 		return next(c, op, c.write(op, c.m_r.gbr + op->imm, c.m_r.r[0]));
 	}
-	/* @(disp,Rm) with R0 */
+	/* With a displacement: the byte and word forms between R0 and
+	 * @(disp,Rm); MOV.L @(disp,Rm),Rn and MOV.L Rm,@(disp,Rn) */
 	static Ret movbl4(Sh4 &c, const Op *op)
 	{
 		uint8_t v;

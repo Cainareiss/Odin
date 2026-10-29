@@ -352,9 +352,6 @@ Antarctic::add_triangle()
 	const odin_vertex_body_t *c = &vc->body;
 	float e1[3], e2[3], n[3];
 
-	/* Bits 19:18 select a UV offset, not two-sided lighting (X360
-	 * port, 8252D590). */
-
 	/* Degenerate triangles are dropped, as in the X360 port
 	 * (825B6100); not when the vertices follow different
 	 * modelviews, the matrices give them their shape then (the

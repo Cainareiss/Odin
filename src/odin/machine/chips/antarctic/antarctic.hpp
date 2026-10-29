@@ -342,7 +342,7 @@ private:
 		bool rotate() const { return (full & 0x00002000) != 0; }
 		/* it takes the last row of its modelview */
 		bool translate() const { return (full & 0x00004000) != 0; }
-		/* selector of the UV offset table */
+		/* selector of the UV offset table (X360 port, 8252D590) */
 		uint32_t uv_offset() const { return (full >> 18) & 3; }
 		bool nocull() const { return (full & 0x00800000) != 0; }
 		uint32_t alpha() const { return full >> 24; }
