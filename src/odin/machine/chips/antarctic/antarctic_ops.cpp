@@ -33,8 +33,10 @@
 #include "odin/machine/chips/antarctic/antarctic.hpp"
 #include "odin/common/bytes.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <iterator>
 
 namespace odin {
 
@@ -65,6 +67,14 @@ static float
 s16(uint32_t word)
 {
 	return static_cast<float>(static_cast<int16_t>(word));
+}
+
+/* The two texture coordinates of a word, in sixteenths */
+static void
+read_texcoords(float uv[2], uint32_t word)
+{
+	uv[0] = s16(word) / 16.0f;
+	uv[1] = s16(word >> 16) / 16.0f;
 }
 
 static void
@@ -197,27 +207,28 @@ Antarctic::op_jump(const uint32_t *inst)
  * A = Address or Offset in 32-bit words.
  */
 
+/* The condition of a call or a return: always, or on the condition the
+ * last test of the level of detail left */
+bool
+Antarctic::call_condition(const uint32_t *inst) const
+{
+	switch ((inst[0] >> 12) & 0xF) {
+	case 0x0:
+		return true;
+	case 0x4:
+		return !m_s.lod.cond;
+	case 0x8:
+		return m_s.lod.cond != 0;
+	default:
+		fatal("condition not known", inst[0]);
+	}
+}
+
 void
 Antarctic::op_call(const uint32_t *inst)
 {
 	uint32_t addr = get_jump_address(inst);
-	bool jump;
-
-	switch ((inst[0] >> 12) & 0xF) {
-	case 0x0:
-		jump = true;
-		break;
-	case 0x4:
-		jump = !m_s.lod.cond;
-		break;
-	case 0x8:
-		jump = m_s.lod.cond != 0;
-		break;
-	default:
-		fatal("condition not known", inst[0]);
-	}
-
-	if (jump) {
+	if (call_condition(inst)) {
 		/* See 501 */
 		m_s.patterns = ((m_s.patterns << 5) | m_s.pattern) & 0x3FFFFFFF;
 		push_pc();
@@ -237,23 +248,7 @@ Antarctic::op_call(const uint32_t *inst)
 void
 Antarctic::op_return(const uint32_t *inst)
 {
-	bool jump;
-
-	switch ((inst[0] >> 12) & 0xF) {
-	case 0x0:
-		jump = true;
-		break;
-	case 0x4:
-		jump = !m_s.lod.cond;
-		break;
-	case 0x8:
-		jump = m_s.lod.cond != 0;
-		break;
-	default:
-		fatal("condition not known", inst[0]);
-	}
-
-	if (jump) {
+	if (call_condition(inst)) {
 		m_s.pattern = m_s.patterns & 0x1F;
 		m_s.patterns >>= 5;
 		pop_pc();
@@ -567,11 +562,7 @@ Antarctic::op_viewport_clear(const uint32_t *inst)
 	vp->color.clear[1] = byte(inst[1], 1);
 	vp->color.clear[2] = byte(inst[1], 2);
 	vp->color.clear[3] = ((inst[1] >> 24) & 1) ? 0xFF : 0;
-
-	m_s.fb.clear[0] = byte(inst[1], 0);
-	m_s.fb.clear[1] = byte(inst[1], 1);
-	m_s.fb.clear[2] = byte(inst[1], 2);
-	m_s.fb.clear[3] = ((inst[1] >> 24) & 1) ? 0xFF : 0;
+	std::copy(std::begin(vp->color.clear), std::end(vp->color.clear), m_s.fb.clear);
 
 	vp->flags |= ODIN_VP_HAS_191;
 }
@@ -1904,8 +1895,7 @@ Antarctic::op_push_all(const uint32_t *inst)
 
 	read_vector(v.body.normal, inst + 4);
 
-	v.body.texcoords[0] = s16(inst[4]) / 16.0f;
-	v.body.texcoords[1] = s16(inst[4] >> 16) / 16.0f;
+	read_texcoords(v.body.texcoords, inst[4]);
 
 	push_vertices(&v, PUSH_POS | PUSH_NRM | PUSH_TXC, 1);
 }
@@ -1945,8 +1935,7 @@ Antarctic::op_push_texcoords3(const uint32_t *inst)
 	for (unsigned i = 0; i < 3; i++) {
 		vs[i].info.full = inst[0] & 0xFFFF;
 
-		vs[i].body.texcoords[0] = s16(inst[i+1]) / 16.0f;
-		vs[i].body.texcoords[1] = s16(inst[i+1] >> 16) / 16.0f;
+		read_texcoords(vs[i].body.texcoords, inst[i + 1]);
 	}
 
 	push_vertices(&vs[0], PUSH_TXC, 3);
@@ -1968,8 +1957,7 @@ Antarctic::op_push_texcoords(const uint32_t *inst)
 
 	v.info.full = inst[0];
 
-	v.body.texcoords[0] = s16(inst[1]) / 16.0f;
-	v.body.texcoords[1] = s16(inst[1] >> 16) / 16.0f;
+	read_texcoords(v.body.texcoords, inst[1]);
 
 	push_vertices(&v, PUSH_TXC, 1);
 }

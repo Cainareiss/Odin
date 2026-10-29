@@ -273,6 +273,7 @@ private:
 
 	void op_nop(const uint32_t *inst);
 	void op_jump(const uint32_t *inst);
+	bool call_condition(const uint32_t *inst) const;
 	void op_call(const uint32_t *inst);
 	void op_return(const uint32_t *inst);
 	void op_end(const uint32_t *inst);
