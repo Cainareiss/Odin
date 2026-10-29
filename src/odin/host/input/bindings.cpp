@@ -483,11 +483,7 @@ Bindings::Bindings(const std::vector<GameControl> &panel, const Settings &settin
 {
 	/* The players with a sight: the mouse aims for them (player 2 with
 	 * their light gun) */
-	std::array<bool, 2> aims{};
-
-	for (const GameControl &control : panel)
-		if (control.role == Role::GUN_X)
-			aims[control.player & 1] = true;
+	const std::array<bool, 2> aims = sights_of(panel);
 
 	for (size_t c = 0; c < panel.size(); c++) {
 		const GameControl &control = panel[c];

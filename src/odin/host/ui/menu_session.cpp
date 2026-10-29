@@ -720,10 +720,7 @@ MenuSession::light_guns(const std::string &game, const std::vector<GameControl> 
 		if (std::none_of(guns.begin(), guns.end(), [&identity](const LightGun &one) { return one.identity == identity; }))
 			guns.push_back({ identity, space == std::string::npos ? identity : value.substr(space + 1), false, true });
 	}
-	sights = {};
-	for (const GameControl &control : controls)
-		if (control.role == Role::GUN_X)
-			sights[control.player & 1] = true;
+	sights = sights_of(controls);
 }
 
 /* The inputs of the game that runs, as the page Input shows them for the

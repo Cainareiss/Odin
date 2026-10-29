@@ -26,6 +26,7 @@
 #define ODIN_GAMES_HPP
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <optional>
 #include <span>
@@ -109,6 +110,19 @@ struct GameControl {
 	 * trigger is the trigger of a nozzle; none: those of the role */
 	std::vector<std::string> keys, pad;
 };
+
+/* The players with a sight among the controls of a game: player 1, then
+ * player 2 */
+inline std::array<bool, 2>
+sights_of(const std::vector<GameControl> &controls)
+{
+	std::array<bool, 2> sights{};
+
+	for (const GameControl &control : controls)
+		if (control.role == Role::GUN_X)
+			sights[control.player & 1] = true;
+	return sights;
+}
 
 /* An output of the I/O board of a cabinet, with the name its OUTPUT TEST
  * or its wiring gives it: "output", 1 to 32 as JVS counts them (output 1

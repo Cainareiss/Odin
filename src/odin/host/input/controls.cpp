@@ -104,9 +104,7 @@ Controls::Controls(Keyboard &keys, const std::vector<GameControl> &controls, con
 		return;
 	}
 	m_on = true;
-	for (const GameControl &control : controls)
-		if (control.role == Role::GUN_X && control.player == 0)
-			m_sight = true;
+	m_sight = sights_of(controls)[0];
 	follow_cursor();
 }
 
