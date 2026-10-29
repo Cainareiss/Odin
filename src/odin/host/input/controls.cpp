@@ -592,9 +592,9 @@ Controls::host() const
 }
 
 void
-Controls::rebind(const Settings &settings)
+Controls::rebind()
 {
-	m_panel = ControlPanel(m_game_controls, settings, m_game);
+	m_panel = ControlPanel(m_game_controls, m_settings, m_game);
 	m_panel.set_wheel_rotation(m_wheel_rotation);
 }
 

@@ -568,10 +568,10 @@ known_settings(const GameList &games)
 				if (!control.player)
 					out.push_back({ "players." + name, "light_gun_mode", "on" });
 			}
-		if (game->shakes())
+		if (game->shakes()) {
 			out.push_back({ "players." + name, "vibration", "on" });
-		if (game->shakes())
 			out.push_back({ "players." + name, "vibration_force", std::to_string(VIBRATION_FORCE) });
+		}
 		if (game->drive_first_output)
 			out.push_back({ "players." + name, "wheel_force", std::to_string(WHEEL_FORCE) });
 		if (std::any_of(game->controls.begin(), game->controls.end(),

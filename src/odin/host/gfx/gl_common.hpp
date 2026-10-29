@@ -55,8 +55,7 @@ void check(const char *stage);
 /* Says what went wrong on stderr and aborts. */
 [[noreturn]] void fatal(const char *what);
 
-/* Context features; on OpenGL ES, gl_PrimitiveID needs geometry shaders */
-bool es();
+/* Whether the context has an extension */
 bool has_extension(const char *name);
 bool fragment_lists();
 bool primitive_ids();

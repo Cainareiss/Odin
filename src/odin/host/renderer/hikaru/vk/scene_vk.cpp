@@ -532,7 +532,6 @@ VkDrawing::begin_scene(const odin_display_list_t &list, const SceneDebug &debug)
 		              VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, nullptr, &buffers[i], nullptr };
 	m_fn.vkUpdateDescriptorSets(m_card.device(), 3, writes, 0, nullptr);
 
-	m_in_scene = true;
 	m_collecting = false;
 	m_pass.depth_write = true;
 	open_scene(true);
@@ -717,7 +716,6 @@ void
 VkDrawing::end_scene()
 {
 	close_scene();
-	m_in_scene = false;
 }
 
 /* What a view gives the shaders: its projection (hikaru_draw.hpp), its depth

@@ -176,16 +176,6 @@ fatal(const char *what)
 }
 
 bool
-es()
-{
-#ifdef ODIN_GLES
-	return true;
-#else
-	return false;
-#endif
-}
-
-bool
 has_extension(const char *name)
 {
 	GLint count = 0;

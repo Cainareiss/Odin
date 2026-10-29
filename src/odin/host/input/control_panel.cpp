@@ -243,10 +243,10 @@ ControlPanel::held(const HostState &host, const HostInput &input, unsigned playe
 	if (input.kind == HostInput::Kind::JOY) {
 		const JoyState *const joy = host.joys[player & 1];
 		const JoyInput &in = input.joy;
-		const bool axis = joy && in.index < joy->axes.size() && joy->known[in.index];
-
 		if (!joy)
 			return false;
+
+		const bool axis = in.index < joy->axes.size() && joy->known[in.index];
 		switch (in.type) {
 		case JoyInput::Type::BUTTON:
 			return in.index < joy->buttons.size() && joy->buttons[in.index];

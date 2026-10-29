@@ -95,7 +95,7 @@ public:
 	/* The panel of the game and its inputs (control_panel.hpp), made
 	 * again when they change in the settings */
 	const ControlPanel &panel() const { return m_panel; }
-	void rebind(const Settings &settings);
+	void rebind();
 	/* The dead zone and the trigger threshold of each gamepad read again
 	 * from the settings (control_panel.hpp: PadTuning) */
 	void retune();

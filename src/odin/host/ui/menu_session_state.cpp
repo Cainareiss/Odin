@@ -119,8 +119,10 @@ MenuSession::draw_menu()
 			state.touched.push_back(state.panel->touched(host, role));
 		state.keys_held = m_keys.held();
 	}
+	std::array<std::string, 2> pads;
+
 	for (unsigned player = 0; player < 2; player++) {
-		state.pads[player] = m_controls.pad_name(player);
+		pads[player] = m_controls.pad_name(player);
 		state.pad_types[player] = m_controls.pad_type(player);
 		state.pad_states[player] = m_controls.pad_state(player);
 	}
@@ -128,8 +130,8 @@ MenuSession::draw_menu()
 	 * the pad of player 1 (else 2) names it */
 	{
 		using Nav = MenuNav;
-		const int kind = !state.pads[0].empty() ? state.pad_types[0] :
-		                 !state.pads[1].empty() ? state.pad_types[1] : SDL_GAMEPAD_TYPE_UNKNOWN;
+		const int kind = !pads[0].empty() ? state.pad_types[0] :
+		                 !pads[1].empty() ? state.pad_types[1] : SDL_GAMEPAD_TYPE_UNKNOWN;
 		const Nav::Action pills[] = { Nav::PAGE_BEFORE, Nav::PAGE_AFTER, Nav::GAME_BEFORE, Nav::GAME_AFTER,
 		                              Nav::PRESS,       Nav::CLEAR,      Nav::RESET };
 

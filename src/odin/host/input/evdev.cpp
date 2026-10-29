@@ -109,7 +109,6 @@ struct Entry {
 } /* namespace */
 
 struct Pointers::Backend {
-	SDL_Window *window;
 	std::vector<Entry> entries;
 	std::vector<Device> devices;
 	int notify = -1;
@@ -348,7 +347,6 @@ Pointers::Backend::list()
 
 Pointers::Pointers(SDL_Window *window) : m_window(window), m_backend(std::make_unique<Backend>())
 {
-	m_backend->window = window;
 	m_backend->scan();
 	/* IN_ATTRIB: udev gives the node its rights after it is made */
 	m_backend->notify = inotify_init1(IN_NONBLOCK | IN_CLOEXEC);
@@ -405,7 +403,7 @@ Pointers::take(const std::string &identity)
 
 	if (!e || e->fd < 0 || !e->seen)
 		return std::nullopt;
-	SDL_GetWindowSizeInPixels(m_backend->window, &w, &h);
+	SDL_GetWindowSizeInPixels(m_window, &w, &h);
 
 	const float fw = static_cast<float>(std::max(w, 1)), fh = static_cast<float>(std::max(h, 1));
 	Aim aim;

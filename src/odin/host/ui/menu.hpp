@@ -45,7 +45,6 @@
 
 namespace odin {
 
-class MenuKit;
 class SystemFonts;
 
 /* What the page Input changes: a part of a control of the panel (0 the
@@ -352,7 +351,6 @@ struct MenuState {
 	const ControlPanel *panel = nullptr;
 	std::vector<bool> touched;
 	std::vector<ControlNow> now;
-	std::array<std::string, 2> pads;
 	std::array<int, 2> pad_types{};
 	/* The gamepads plugged in (name, GUID, kind, the player it is the pad
 	 * of in the game shown, -1: none, by a wire or not, its id), the one

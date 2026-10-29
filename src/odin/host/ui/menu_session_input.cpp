@@ -62,7 +62,7 @@ MenuSession::catch_input(const SDL_Event &event)
 			return action != Hotkeys::Action::QUIT && action != Hotkeys::Action::FULLSCREEN;
 		}
 		/* The keys Odin works itself go to no control of the game */
-		if (event.key.key != SDLK_ESCAPE && !m_hotkeys.takes(event.key.key)) {
+		if (!m_hotkeys.takes(event.key.key)) {
 			HostInput input{};
 
 			input.kind = HostInput::Kind::KEY;
@@ -443,7 +443,7 @@ MenuSession::keep_binding(const Bindings::Line &line, const std::string &game)
 	const std::string section = "controls." + (game.empty() ? game_shown() : game);
 
 	keep(section, line.key, line.value);
-	m_controls.rebind(m_settings);
+	m_controls.rebind();
 	if (m_other) {
 		m_other.emplace(m_other_controls, m_settings, game_shown());
 		m_other->set_wheel_rotation(wheel_rotation_of(m_settings, game_shown()));

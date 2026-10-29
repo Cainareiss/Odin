@@ -219,7 +219,6 @@ Context::make_instance(std::string &why)
 	if (has(available, VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME)) {
 		extensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
 		flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
-		m_portability = true;
 	}
 
 	std::vector<const char *> layers;
@@ -267,12 +266,10 @@ Context::make_instance(std::string &why)
 
 VKAPI_ATTR VkBool32 VKAPI_CALL
 Context::message(VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT,
-                 const VkDebugUtilsMessengerCallbackDataEXT *data, void *self)
+                 const VkDebugUtilsMessengerCallbackDataEXT *data, void *)
 {
 	const bool error = severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
 
-	if (error)
-		static_cast<Context *>(self)->m_errors++;
 	std::fprintf(stderr, "vulkan: %s: %s\n", error ? "ERROR" : "warning", data->pMessage);
 	return VK_FALSE;
 }
@@ -672,7 +669,6 @@ Context::make_image(VkFormat format, unsigned w, unsigned h, unsigned levels, Vk
 		                                  VK_IMAGE_VIEW_TYPE_2D, format, swizzle, { seen, 0, levels, 0, 1 } };
 		check(m_fn.vkCreateImageView(m_device, &view, nullptr, &image.view), "the view of an image");
 	}
-	image.format = format;
 	image.w = w;
 	image.h = h;
 	image.levels = levels;

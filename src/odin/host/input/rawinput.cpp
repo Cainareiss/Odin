@@ -134,7 +134,6 @@ product_of(const wchar_t *wide)
 } /* namespace */
 
 struct Pointers::Backend {
-	SDL_Window *window = nullptr;
 	HWND hwnd = nullptr;
 	std::vector<Entry> entries;
 	std::vector<Device> devices;
@@ -331,7 +330,6 @@ Pointers::Pointers(SDL_Window *window) : m_window(window), m_backend(std::make_u
 {
 	Backend &b = *m_backend;
 
-	b.window = window;
 	b.hwnd = static_cast<HWND>(
 		SDL_GetPointerProperty(SDL_GetWindowProperties(window), SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr));
 	if (!b.hwnd) {
@@ -385,7 +383,7 @@ Pointers::take(const std::string &identity)
 
 	if (!e || !e->handle || !e->seen)
 		return std::nullopt;
-	SDL_GetWindowSizeInPixels(m_backend->window, &w, &h);
+	SDL_GetWindowSizeInPixels(m_window, &w, &h);
 
 	const float fw = static_cast<float>(std::max(w, 1)), fh = static_cast<float>(std::max(h, 1));
 	Aim aim;

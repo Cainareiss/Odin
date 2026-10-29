@@ -115,7 +115,6 @@ struct Image {
 	uint32_t block = OWN_MEMORY;
 	VkDeviceSize offset = 0, size = 0;	/* in the block */
 	VkImageView view = VK_NULL_HANDLE;
-	VkFormat format = VK_FORMAT_UNDEFINED;
 	VkImageAspectFlags aspects = VK_IMAGE_ASPECT_COLOR_BIT;
 	unsigned w = 0, h = 0, levels = 1;
 	VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -222,8 +221,6 @@ public:
 	bool stamps() const { return m_stamp_bits > 0 && m_host_query_reset; }
 	uint32_t stamp_bits() const { return m_stamp_bits; }
 	float stamp_period() const { return m_properties.limits.timestampPeriod; }
-	/* How many errors the validation layer told (Debug) */
-	unsigned validation_errors() const { return m_errors; }
 
 	/* The commands of the frame being written, begun when first asked
 	 * for; sent and waited for: what was written so far done, a new
@@ -355,10 +352,8 @@ private:
 	bool m_host_query_reset = false;
 	uint32_t m_stamp_bits = 0;
 	bool m_validation = false;
-	bool m_portability = false;
 	bool m_portability_subset = false;
 	bool m_core13 = false;
-	unsigned m_errors = 0;
 	/* The extensions the device was made with */
 	std::vector<const char *> m_extensions;
 

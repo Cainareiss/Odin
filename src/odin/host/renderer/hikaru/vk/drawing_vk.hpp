@@ -261,7 +261,7 @@ private:
 	MeshPush m_push{};
 	/* Drawing into the scene: in a rendering of Vulkan now (copies and
 	 * barriers wait outside), between begin_scene and end_scene */
-	bool m_open = false, m_in_scene = false;
+	bool m_open = false;
 	/* How the meshes of the polygon type being drawn are drawn */
 	struct {
 		float alpha_ref;	/* fragments at or below it are dropped */
