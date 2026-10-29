@@ -374,6 +374,9 @@ public:
 	static float small_caps_width(const char *text);
 
 private:
+	/* The title of a group or of a paragraph, in small capitals, its room
+	 * above and below */
+	void group_title(const char *title);
 	/* The top of the row, its line above it when it is not the first of
 	 * its group, and the room left for its texts */
 	ImVec2 begin_row(float &width);

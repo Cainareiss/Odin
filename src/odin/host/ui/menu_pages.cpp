@@ -461,7 +461,7 @@ route_card(const MenuKit &kit, const MenuState::SoundGame &game, ImVec2 at, floa
 	const float small = MenuKit::font(MenuKit::SMALL);
 
 	kit.frame(list, at, { at.x + width, at.y + h }, kit.px(MenuKit::BOX_CUT), 0, palette.line);
-	MenuKit::write(list, { at.x + pad, at.y + pad + line - small }, palette.dim, title.c_str(), small, small * 0.12f);
+	MenuKit::small_caps(list, { at.x + pad, at.y + pad + line - small }, palette.dim, title.c_str());
 	route_box(kit, p(4, 6), p(144, 48), "Main board", "Main", boards.main, true);
 	route_box(kit, p(4, 62), p(144, 104), "Optional board", "Optional", boards.option, option);
 	if (four) {

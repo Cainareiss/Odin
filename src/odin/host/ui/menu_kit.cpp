@@ -330,6 +330,14 @@ plain(std::span<const std::string> labels)
 	return items;
 }
 
+
+/* The box from a to b, its corners cut by `cut`, clockwise from the top left */
+std::array<ImVec2, 8>
+octagon(ImVec2 a, ImVec2 b, float cut)
+{
+	return { { { a.x + cut, a.y }, { b.x - cut, a.y }, { b.x, a.y + cut }, { b.x, b.y - cut },
+	           { b.x - cut, b.y }, { a.x + cut, b.y }, { a.x, b.y - cut }, { a.x, a.y + cut } } };
+}
 } /* namespace */
 
 ImU32
@@ -373,13 +381,12 @@ MenuKit::fitted(const std::string &text, float width, float size)
 void
 MenuKit::frame(ImDrawList *list, ImVec2 a, ImVec2 b, float cut, ImU32 fill, ImU32 border, float strokes) const
 {
-	const ImVec2 points[8] = { { a.x + cut, a.y }, { b.x - cut, a.y }, { b.x, a.y + cut }, { b.x, b.y - cut },
-	                           { b.x - cut, b.y }, { a.x + cut, b.y }, { a.x, b.y - cut }, { a.x, a.y + cut } };
+	const std::array<ImVec2, 8> points = octagon(a, b, cut);
 
 	if (fill)
-		list->AddConvexPolyFilled(points, 8, fill);
+		list->AddConvexPolyFilled(points.data(), 8, fill);
 	if (border)
-		list->AddPolyline(points, 8, border, ImDrawFlags_Closed, stroke() * strokes);
+		list->AddPolyline(points.data(), 8, border, ImDrawFlags_Closed, stroke() * strokes);
 }
 
 void
@@ -426,11 +433,7 @@ MenuKit::dashes(ImDrawList *list, std::span<const ImVec2> points, bool closed, I
 void
 MenuKit::dashed_frame(ImDrawList *list, ImVec2 a, ImVec2 b, ImU32 colour) const
 {
-	const float cut = px(CONTROL_CUT);
-	const ImVec2 points[8] = { { a.x + cut, a.y }, { b.x - cut, a.y }, { b.x, a.y + cut }, { b.x, b.y - cut },
-	                           { b.x - cut, b.y }, { a.x + cut, b.y }, { a.x, b.y - cut }, { a.x, a.y + cut } };
-
-	dashes(list, points, true, colour, stroke(), px(3.0f), px(2.0f));
+	dashes(list, octagon(a, b, px(CONTROL_CUT)), true, colour, stroke(), px(3.0f), px(2.0f));
 }
 
 void
@@ -712,14 +715,19 @@ MenuKit::tabs(std::span<const char *const> names, std::span<const Icon> icons, b
 }
 
 void
+MenuKit::group_title(const char *title)
+{
+	ImGui::Dummy({ 0.0f, px(10.0f) });
+	small_caps(ImGui::GetWindowDrawList(), ImGui::GetCursorScreenPos(), m_palette.cabinet, title);
+	ImGui::Dummy({ 0.0f, font(SMALL) + px(5.0f) });
+}
+
+void
 MenuKit::begin_group(const char *title)
 {
 	ImDrawList *const list = ImGui::GetWindowDrawList();
-	const float size = font(SMALL);
 
-	ImGui::Dummy({ 0.0f, px(10.0f) });
-	write(list, ImGui::GetCursorScreenPos(), m_palette.cabinet, title, size, size * TITLE_SPACING);
-	ImGui::Dummy({ 0.0f, size + px(5.0f) });
+	group_title(title);
 	m_group_top = ImGui::GetCursorScreenPos();
 	m_first_row = true;
 	m_row_tip.clear();
@@ -1576,9 +1584,7 @@ MenuKit::paragraph(const char *title, const char *text)
 	ImDrawList *const list = ImGui::GetWindowDrawList();
 	const float width = ImGui::GetContentRegionAvail().x, size = font(SMALL);
 
-	ImGui::Dummy({ 0.0f, px(10.0f) });
-	write(list, ImGui::GetCursorScreenPos(), m_palette.cabinet, title, size, size * TITLE_SPACING);
-	ImGui::Dummy({ 0.0f, size + px(5.0f) });
+	group_title(title);
 	list->AddText(ImGui::GetFont(), size, ImGui::GetCursorScreenPos(), m_palette.faint, text, nullptr, width);
 	ImGui::Dummy({ 0.0f, wrapped_h(text, size, width) });
 }
