@@ -140,7 +140,6 @@ public:
 private:
 	enum : uint32_t {
 		REG_CONTROL = 0x2800,
-		REG_RBP = 0x2804,
 		REG_MIDI = 0x2808,
 		REG_MONITOR_SELECT = 0x280C,
 		REG_EG_MONITOR = 0x2810,
@@ -164,11 +163,7 @@ private:
 		REG_ARM_RESET = 0x2C00,
 		REG_INT_LEVEL = 0x2D00,
 		REG_INT_CLEAR = 0x2D04,
-		REG_EFFECT_SEND = 0x2000,	/* EFSDL, EFPAN: 16 for EFREG, 2 for EXTS */
-		REG_DSP_PROGRAM = 0x3400,
-		REG_DSP_PROGRAM_END = 0x3C00,
-		REG_DSP_WORK = 0x4000,		/* TEMP, MEMS, MIXS, EFREG, EXTS */
-		REG_DSP_END = 0x45C8
+		REG_EFFECT_SEND = 0x2000	/* EFSDL, EFPAN: 16 for EFREG, 2 for EXTS */
 	};
 
 	/* Interrupt sources, bit numbers shared by SCIxx and MCIxx
@@ -199,6 +194,7 @@ private:
 	AicaVoice &monitored();
 	/* The voices, direct and through the DSP, to the 16 bits of the DAC */
 	void mix();
+	uint32_t timer_period(uint32_t index) const;
 	void timer_write(uint32_t index);
 	void timer_tick(uint32_t index);
 	void raise(uint16_t sources);

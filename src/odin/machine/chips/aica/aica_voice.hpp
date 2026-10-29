@@ -94,10 +94,9 @@ public:
 
 	bool silent() const { return m_state.level == OFF; }
 	/* 0x2810 for this slot: LP in bit 15, the segment in bits 14-13, the
-	 * level in the bits below; LP is cleared when `clear`. */
-	uint16_t monitor(bool clear);
-	/* The same with the filter envelope (AFSEL) */
-	uint16_t filter_monitor(bool clear);
+	 * level in the bits below, of the filter envelope when `filter` (AFSEL);
+	 * LP is cleared when `clear`. */
+	uint16_t monitor(bool filter, bool clear);
 	/* CA, 0x2814 */
 	uint16_t position() const { return static_cast<uint16_t>(m_state.position); }
 

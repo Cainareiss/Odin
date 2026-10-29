@@ -126,13 +126,13 @@ Aica::reg_value(uint32_t offset, uint32_t size, bool effects)
 		/* Reading the high byte clears LP, as a whole read does (Flycast);
 		 * AFSEL shows the filter envelope (Corlett) */
 		const bool clear = effects && (size != 1 || (offset & 1) != 0);
-		value = (rd16(REG_MONITOR_SELECT) & 0x4000) ? monitored().filter_monitor(clear) : monitored().monitor(clear);
+		value = monitored().monitor((rd16(REG_MONITOR_SELECT) & 0x4000) != 0, clear);
 	}
 	else if (word == REG_CA_MONITOR)
 		value = monitored().position();
-	else if (word >= REG_CONTROL && word < 0x3000)
+	else if (word >= REG_CONTROL && word < AicaDsp::REG_COEF)
 		value = read_common(word, effects);
-	else if (word >= REG_DSP_WORK && word < REG_DSP_END)
+	else if (word >= AicaDsp::REG_TEMP && word < AicaDsp::REG_END)
 		value = m_dsp.read(word);
 	else
 		value = rd16(word);
@@ -147,7 +147,7 @@ Aica::write_reg(uint32_t offset, uint32_t size, uint32_t value)
 	offset &= REG_SIZE - 1;
 	const uint32_t word = offset & ~3u;
 	const uint32_t shift = (offset & 3) * 8;
-	const bool work = word >= REG_DSP_WORK && word < REG_DSP_END;
+	const bool work = word >= AicaDsp::REG_TEMP && word < AicaDsp::REG_END;
 	uint16_t merged = work ? m_dsp.read(word) : rd16(word);
 
 	if (shift >= 16)
@@ -159,7 +159,7 @@ Aica::write_reg(uint32_t offset, uint32_t size, uint32_t value)
 		merged = static_cast<uint16_t>(value & 0xFFFF);
 	}
 
-	if (word < 0x2000) {
+	if (word < SLOTS * SLOT_SIZE) {
 		/* KYONEX acts and is not kept (MAME, Flycast) */
 		if ((word & (SLOT_SIZE - 1)) == 0 && (merged & 0x8000)) {
 			wr16(word, static_cast<uint16_t>(merged & 0x7FFF));
@@ -167,17 +167,17 @@ Aica::write_reg(uint32_t offset, uint32_t size, uint32_t value)
 		} else {
 			wr16(word, merged);
 		}
-	} else if (word < 0x2048) {
+	} else if (word < REG_EFFECT_SEND + 18 * 4) {
 		/* EFSDL/EFPAN, 18 words. */
 		wr16(word, merged);
-	} else if (word >= REG_CONTROL && word < 0x3000) {
+	} else if (word >= REG_CONTROL && word < AicaDsp::REG_COEF) {
 		write_common(word, merged);
 	} else if (work) {
 		m_dsp.write(word, merged);
-	} else if (word < REG_DSP_END) {
+	} else if (word < AicaDsp::REG_END) {
 		/* DSP coefficients, addresses and program */
 		wr16(word, merged);
-		if (word >= REG_DSP_PROGRAM && word < REG_DSP_PROGRAM_END)
+		if (word >= AicaDsp::REG_MPRO && word < AicaDsp::REG_MPRO_END)
 			m_dsp.program_written(m_regs.data());
 	} else {
 		log_unknown('W', offset, size, value);
@@ -213,7 +213,7 @@ Aica::write_common(uint32_t word, uint16_t value)
 		wr16(word, value);
 		m_mem8mb = (value & 0x0200) != 0;
 		break;
-	case REG_RBP:
+	case AicaDsp::REG_RING:
 	case REG_MIDI:
 	case REG_MONITOR_SELECT:
 	case REG_DMEA_HI:
@@ -477,6 +477,12 @@ Aica::write_rtc(uint32_t offset, uint32_t value)
 
 /* -- timers and interrupts ----------------------------------------------- */
 
+uint32_t
+Aica::timer_period(uint32_t index) const
+{
+	return 1u << ((rd16(REG_TIMA + index * 4) >> 8) & 7);
+}
+
 void
 Aica::timer_write(uint32_t index)
 {
@@ -484,9 +490,8 @@ Aica::timer_write(uint32_t index)
 	 * once every 2^prescaler samples and interrupts when it overflows
 	 * (SCSP manual TIMA/TACTL; Flycast AicaTimer). MAME fires one
 	 * increment earlier. */
-	const uint16_t reg = rd16(REG_TIMA + index * 4);
-	m_timer_count[index] = reg & 0xFF;
-	m_timer_step[index] = 1u << ((reg >> 8) & 7);
+	m_timer_count[index] = rd16(REG_TIMA + index * 4) & 0xFF;
+	m_timer_step[index] = timer_period(index);
 }
 
 void
@@ -565,7 +570,7 @@ Aica::tick(uint32_t n)
 		m_odometer++;
 		for (uint32_t t = 0; t < 3; t++) {
 			if (--m_timer_step[t] == 0) {
-				m_timer_step[t] = 1u << ((rd16(REG_TIMA + t * 4) >> 8) & 7);
+				m_timer_step[t] = timer_period(t);
 				timer_tick(t);
 			}
 		}

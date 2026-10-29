@@ -139,6 +139,13 @@ effective_rate(uint32_t rate, const uint8_t *slot)
 	return std::min(effective, FASTEST);
 }
 
+/* How far a decay step moves the level at this rate */
+uint32_t
+decay_size(uint32_t effective, uint32_t odometer)
+{
+	return effective >= 0x30 ? FAST_DECAY[effective - 0x30][odometer & 3] : 1;
+}
+
 /* Whether the envelope moves at this sample period: below rate 0x30, once
  * in 2^n periods along a pattern of eight; from 0x30, every second one. */
 bool
@@ -314,21 +321,11 @@ AicaVoice::step(const uint8_t *slot, const WaveMemory &memory, uint32_t odometer
 }
 
 uint16_t
-AicaVoice::filter_monitor(bool clear)
+AicaVoice::monitor(bool filter, bool clear)
 {
-	const uint16_t value = static_cast<uint16_t>((m_state.looped ? 0x8000 : 0) |
-	                                             (m_state.cutoff_segment << 13) | m_state.cutoff);
-
-	if (clear)
-		m_state.looped = 0;
-	return value;
-}
-
-uint16_t
-AicaVoice::monitor(bool clear)
-{
-	const uint16_t value = static_cast<uint16_t>((m_state.looped ? 0x8000 : 0) |
-	                                             (m_state.segment << 13) | m_state.level);
+	const uint32_t segment = filter ? m_state.cutoff_segment : m_state.segment;
+	const uint16_t value = static_cast<uint16_t>((m_state.looped ? 0x8000 : 0) | (segment << 13) |
+	                                             (filter ? m_state.cutoff : m_state.level));
 
 	if (clear)
 		m_state.looped = 0;
@@ -413,7 +410,7 @@ AicaVoice::envelope(const uint8_t *slot, uint32_t odometer)
 			m_state.segment = DECAY1;
 		return;
 	}
-	m_state.level += effective >= 0x30 ? FAST_DECAY[effective - 0x30][odometer & 3] : 1;
+	m_state.level += decay_size(effective, odometer);
 	if (m_state.segment == DECAY1 && (m_state.level >> 5) >= ((decay >> 5) & 0x1F))
 		m_state.segment = DECAY2;
 	if (m_state.level >= SILENT)
@@ -428,7 +425,6 @@ AicaVoice::cutoff_envelope(const uint8_t *slot, uint32_t odometer)
 {
 	const uint32_t rates = aica_reg(slot, REG_CUTOFF_RATES);
 	const uint32_t release = aica_reg(slot, REG_CUTOFF_RELEASE);
-	static constexpr uint32_t TARGET[4] = { 1, 2, 3, 4 };
 	uint32_t rate;
 
 	switch (m_state.cutoff_segment) {
@@ -453,8 +449,9 @@ AicaVoice::cutoff_envelope(const uint8_t *slot, uint32_t odometer)
 	if (!steps(effective, odometer))
 		return;
 
-	const uint32_t size = effective >= 0x30 ? FAST_DECAY[effective - 0x30][odometer & 3] : 1;
-	const uint32_t target = aica_reg(slot, REG_FLV0 + TARGET[m_state.cutoff_segment] * 4) & 0x1FFF;
+	const uint32_t size = decay_size(effective, odometer);
+	/* FLV1 to FLV4 */
+	const uint32_t target = aica_reg(slot, REG_FLV0 + (m_state.cutoff_segment + 1u) * 4) & 0x1FFF;
 	uint32_t &cutoff = m_state.cutoff;
 
 	if (cutoff < target)

@@ -30,18 +30,6 @@ namespace odin {
 
 namespace {
 
-enum : uint32_t {
-	REG_RING = 0x2804,	/* RBL 14:13, RBP 11:0 */
-	REG_COEF = 0x3000,
-	REG_MADRS = 0x3200,
-	REG_MPRO = 0x3400,
-	REG_TEMP = 0x4000,
-	REG_MEMS = 0x4400,
-	REG_MIXS = 0x4500,
-	REG_EFREG = 0x4580,
-	REG_EXTS = 0x45C0
-};
-
 int32_t
 sign24(int32_t value)
 {

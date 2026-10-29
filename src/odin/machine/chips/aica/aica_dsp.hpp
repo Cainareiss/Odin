@@ -36,8 +36,8 @@ namespace odin {
  * sample period over the sends of the voices (MIXS), the external inputs
  * (EXTS) and a ring buffer in the wave memory, into 16 outputs (EFREG).
  * The program, its coefficients and addresses stay in the register file
- * (COEF 0x3000, MADRS 0x3200, MPRO 0x3400); the working registers live
- * here and are seen at 0x4000-0x45C7.
+ * (REG_COEF, REG_MADRS, REG_MPRO); the working registers live here and are
+ * seen from REG_TEMP to REG_END.
  *
  * Sources, compared with each other: the steps as Corlett and Flycast agree
  * on them (an empty step still computes, a read of the memory comes two steps
@@ -46,6 +46,21 @@ namespace odin {
  * the next, as a circuit does (Corlett; Flycast and MAME clear some of them). */
 class AicaDsp {
 public:
+	/* Its registers, by their offset in the register file of the AICA */
+	enum : uint32_t {
+		REG_RING = 0x2804,	/* RBL 14:13, RBP 11:0 */
+		REG_COEF = 0x3000,
+		REG_MADRS = 0x3200,
+		REG_MPRO = 0x3400,
+		REG_MPRO_END = 0x3C00,
+		REG_TEMP = 0x4000,	/* the working registers: TEMP, MEMS, MIXS, EFREG, EXTS */
+		REG_MEMS = 0x4400,
+		REG_MIXS = 0x4500,
+		REG_EFREG = 0x4580,
+		REG_EXTS = 0x45C0,
+		REG_END = 0x45C8
+	};
+
 	/* Plain data, for the save states */
 	struct State {
 		std::array<int32_t, 128> temp;	/* 24 bits */
