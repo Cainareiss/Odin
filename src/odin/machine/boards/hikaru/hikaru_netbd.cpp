@@ -33,6 +33,7 @@
 #include <cstdlib>
 
 #include "odin/common/cabinet_settings.hpp"
+#include "odin/common/clock_ratio.hpp"
 #include "odin/common/env.hpp"
 
 namespace odin {
@@ -205,12 +206,7 @@ Hikaru::link_status() const
 void
 Hikaru::run_netbd(uint32_t cycles)
 {
-	m_netbd_acc += static_cast<uint64_t>(cycles) * NetBoard837_13404::CLOCK_HZ;
-
-	const uint64_t clocks = m_netbd_acc / m_clock;
-
-	m_netbd_acc -= clocks * m_clock;
-	m_netbd_owed += clocks;
+	m_netbd_owed += take_ticks(m_netbd_acc, cycles, NetBoard837_13404::CLOCK_HZ, m_clock);
 }
 
 void

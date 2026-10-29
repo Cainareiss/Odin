@@ -26,6 +26,8 @@
 
 #include <utility>
 
+#include "odin/common/clock_ratio.hpp"
+
 namespace odin {
 
 namespace {
@@ -152,9 +154,8 @@ SoundBoard::host_ram_write(uint32_t offset)
 void
 SoundBoard::run(uint32_t cycles)
 {
-	m_sample_acc += static_cast<uint64_t>(cycles) * Aica::SAMPLE_RATE;
-	const uint64_t samples = m_sample_acc / m_clock_hz;
-	m_sample_acc -= samples * m_clock_hz;
+	const uint64_t samples = take_ticks(m_sample_acc, cycles, Aica::SAMPLE_RATE, m_clock_hz);
+
 	for (uint64_t s = 0; s < samples; s++) {
 		if (m_source) {
 			const std::vector<int16_t> &in = m_source->m_samples;
@@ -183,9 +184,8 @@ SoundBoard::run(uint32_t cycles)
 void
 SoundBoard::silence(uint32_t cycles)
 {
-	m_silence_acc += static_cast<uint64_t>(cycles) * Aica::SAMPLE_RATE;
-	const uint64_t samples = m_silence_acc / m_clock_hz;
-	m_silence_acc -= samples * m_clock_hz;
+	const uint64_t samples = take_ticks(m_silence_acc, cycles, Aica::SAMPLE_RATE, m_clock_hz);
+
 	m_samples.insert(m_samples.end(), 2 * samples, 0);
 }
 

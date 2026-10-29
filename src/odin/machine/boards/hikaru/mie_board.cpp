@@ -30,6 +30,8 @@
 #include <string>
 #include <utility>
 
+#include "odin/common/clock_ratio.hpp"
+
 namespace odin {
 
 namespace {
@@ -164,9 +166,8 @@ MieBoard::reset()
 void
 MieBoard::run(uint32_t cycles)
 {
-	m_cycle_acc += static_cast<uint64_t>(cycles) * Mie::CLOCK_HZ;
-	const uint64_t z80_cycles = m_cycle_acc / m_clock_hz;
-	m_cycle_acc -= z80_cycles * m_clock_hz;
+	const uint64_t z80_cycles = take_ticks(m_cycle_acc, cycles, Mie::CLOCK_HZ, m_clock_hz);
+
 	if (z80_cycles) {
 		const uint32_t share = static_cast<uint32_t>(z80_cycles);
 
