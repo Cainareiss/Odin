@@ -226,6 +226,10 @@ private:
 
 	void set_window(unsigned times, bool fullscreen);
 	void set_window_size(int w, int h, bool fullscreen);
+	bool covers_display(int w, int h) const;
+	void retitle();
+	/* The menu, made the first time the bar, a note or the library needs it */
+	void make_menu();
 	void prepare_programs(const std::string &title);
 	/* Waits for the frame being drawn. */
 	void finish();
@@ -264,9 +268,6 @@ private:
 	std::string m_program_list;
 	std::string m_title = "Odin";	/* without the speed */
 	bool m_paused = false;
-	void retitle();
-	/* The menu, made the first time the bar, a note or the library needs it */
-	void make_menu();
 	/* What it draws with, and the renderer of the board */
 	std::unique_ptr<HostGraphics> m_graphics;
 	std::unique_ptr<Renderer> m_renderer;

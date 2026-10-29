@@ -84,12 +84,19 @@ bool
 Display::fullscreen() const
 {
 	int w = 0, h = 0;
-	SDL_Rect whole{};
 
 	if (SDL_GetWindowFlags(m_window) & SDL_WINDOW_FULLSCREEN)
 		return true;
-	return m_fullscreen_asked && SDL_GetWindowSize(m_window, &w, &h) &&
-	       SDL_GetDisplayBounds(SDL_GetDisplayForWindow(m_window), &whole) && w >= whole.w && h >= whole.h;
+	return m_fullscreen_asked && SDL_GetWindowSize(m_window, &w, &h) && covers_display(w, h);
+}
+
+/* A window of that size as large as its display */
+bool
+Display::covers_display(int w, int h) const
+{
+	SDL_Rect whole{};
+
+	return SDL_GetDisplayBounds(SDL_GetDisplayForWindow(m_window), &whole) && w >= whole.w && h >= whole.h;
 }
 
 void
@@ -119,10 +126,8 @@ bool
 Display::hand_size(unsigned &w, unsigned &h)
 {
 	int now_w = 0, now_h = 0;
-	SDL_Rect whole{};
 	const bool sized = SDL_GetWindowSize(m_window, &now_w, &now_h) && now_w > 0 && now_h > 0;
-	const bool everything = SDL_GetDisplayBounds(SDL_GetDisplayForWindow(m_window), &whole) && now_w >= whole.w &&
-	                        now_h >= whole.h;
+	const bool everything = covers_display(now_w, now_h);
 
 	if (sized && !everything &&
 	    !(SDL_GetWindowFlags(m_window) & (SDL_WINDOW_FULLSCREEN | SDL_WINDOW_MAXIMIZED | SDL_WINDOW_MINIMIZED)) &&
