@@ -245,7 +245,7 @@ AicaVoice::output(const uint8_t *slot, uint32_t &noise)
 
 /* A two-pole low-pass on 20 bits: y = -a0 x + b1 y1 - b2 y2, its
  * coefficients from the cutoff (4 bits of exponent, 9 of mantissa) and Q
- * (Flycast lowPassFilter, 2025). Left out while it is wide open. */
+ * (lowPassFilter of Flycast). Left out while it is wide open. */
 int32_t
 AicaVoice::filter(const uint8_t *slot, int32_t sample)
 {

@@ -40,7 +40,7 @@ namespace odin {
  * the name its JVS TEST page shows in the manuals) on the JVS line from
  * UART 1 of the MIE (MARKDOWN/82): a 315-6146 like the MIE (Mie), its
  * EPROM below 8000, 32 KB of SRAM above, the D71054 at ports A0-A3. As
- * the program reads and drives them (found by running it, 18/10/2026):
+ * the program reads and drives them (found by running it):
  * port 0 bits 6 and 7 TEST and TILT, 4 and 5 the coin switches, 2 and 3
  * the return pins of the coin meters (wired: 0), 0 and 1 DIP switches
  * (off: 1); port 1 the first eight switches of player 1 in JVS order,

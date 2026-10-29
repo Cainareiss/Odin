@@ -66,8 +66,8 @@ constexpr float ACCENT = 2.0f;
 /* The bar lets the game show through, a little */
 constexpr float BAR_ALPHA = 0.96f;
 /* A note: its letters the same share of the height of the window at every
- * size (Reda, 27/10: in steps of whole pixels as the menus, it looked a
- * third smaller at 1280 by 720 than at 1920 by 1080), never smaller than
+ * size (in steps of whole pixels, as the menus are, it looked a third
+ * smaller at 1280 by 720 than at 1920 by 1080), never smaller than
  * those of the menus; from the bottom-left corner, the room around its
  * words and the cut of its corners, in letters */
 constexpr float NOTE_LETTERS = 0.024f;

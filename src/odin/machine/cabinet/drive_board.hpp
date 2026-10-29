@@ -85,8 +85,8 @@ struct DriveBoard {
 	 * grows with the speed, the self-aligning of the front tyres, a damping
 	 * that kicks at each step the wheel takes), four the car (its front
 	 * suspensions, the walls, a buzz of 5 at most, the draft). A wall makes
-	 * it jump by up to 51 with the wheel still (measured in Odin,
-	 * 17/10/2026). HEURISTIC: 4 of a jump goes, and what the move of the
+	 * it jump by up to 51 with the wheel still (measured in Odin).
+	 * HEURISTIC: 4 of a jump goes, and what the move of the
 	 * wheel can give, the rest twice over against MOST. */
 	static uint16_t jolt_of(int jump, double wheel_moved)
 	{
