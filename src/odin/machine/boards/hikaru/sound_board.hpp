@@ -113,6 +113,10 @@ public:
 	/* The same while the reset pin of the board is low: no sample period
 	 * passes for the chip, the output stays at 0 for that time. */
 	void silence(uint32_t cycles);
+	/* What silence() keeps of its count from one call to the next, which
+	 * the state of the board carries apart from State */
+	uint64_t silence_rest() const { return m_silence_acc; }
+	void set_silence_rest(uint64_t rest) { m_silence_acc = rest; }
 	/* The output since the last clear: left and right, 16 bits each,
 	 * 44 100 pairs a second */
 	const std::vector<int16_t> &samples() const { return m_samples; }

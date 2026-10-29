@@ -88,6 +88,14 @@ struct NetbdItem {
 	uint64_t acc, owed;
 };
 
+/* What the two sound boards keep of their count of the silence, after the
+ * boards a cabinet may not have: known by its size as they are */
+struct SilenceItem {
+	uint64_t rest[2];
+};
+
+static_assert(sizeof(SilenceItem) != sizeof(Drive838_13366::State) && sizeof(SilenceItem) != sizeof(NetbdItem));
+
 } /* namespace */
 
 bool
@@ -161,6 +169,11 @@ Hikaru::save_items(StateFile &state)
 		item->acc = m_netbd_acc;
 		item->owed = m_netbd_owed;
 		ok = state.put(*item) && put_bytes(state, m_netbd->frames_save());
+	}
+	if (ok) {
+		const SilenceItem silence = { { m_sound[MASTER]->silence_rest(), m_sound[SLAVE]->silence_rest() } };
+
+		ok = state.put(silence);
 	}
 	if (!ok)
 		std::fprintf(stderr, "ERROR: save state: cannot save machine\n");
@@ -263,6 +276,17 @@ Hikaru::load_items(StateFile &state)
 	if (!ok) {
 		std::fprintf(stderr, "ERROR: load state: cannot load the drive or network board\n");
 		return false;
+	}
+	/* A state made before the count of the silence was kept: none */
+	{
+		SilenceItem silence = {};
+
+		if (state.next_size() == sizeof(SilenceItem) && !state.get(silence)) {
+			std::fprintf(stderr, "ERROR: load state: cannot load the silence of the sound boards\n");
+			return false;
+		}
+		m_sound[MASTER]->set_silence_rest(silence.rest[0]);
+		m_sound[SLAVE]->set_silence_rest(silence.rest[1]);
 	}
 	if (m_drive)
 		m_drive_owed = m_drive->clocks();
