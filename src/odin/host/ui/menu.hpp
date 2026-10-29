@@ -609,6 +609,14 @@ private:
 	 * start of a frame, the menus of a bar hidden since the last one
 	 * closed */
 	void bar(BarState &state);
+	struct BarItems;
+	void bar_file(BarItems &b);
+	void bar_input(BarItems &b);
+	void bar_display(BarItems &b);
+	void bar_audio(BarItems &b);
+	void bar_link(BarItems &b);
+	void bar_debug(BarItems &b);
+	void bar_about(BarItems &b);
 	void new_card(BarState &state, const MenuKit &kit);
 	void note(const BarState &state, const MenuKit &kit);
 	void close_bar_menus();

@@ -76,7 +76,9 @@ constexpr float NOTE_WIDE = 0.77f;
 constexpr float NOTE_HIGH = 0.46f;
 constexpr float NOTE_CUT = 0.46f;
 
-constexpr const char *NAMES[] = { "FILE", "INPUT", "DISPLAY", "AUDIO", "LINK", "DEBUG", "ABOUT" };
+using Ask = BarState::Ask;
+using Action = Hotkeys::Action;
+
 /* The kinds of device whose inputs go back to their defaults or are
  * cleared, in the order of MenuState::Device */
 constexpr const char *DEVICE_KINDS[] = { "Keyboard and mouse", "Controller", "Joystick" };
@@ -170,33 +172,30 @@ Menu::note(const BarState &state, const MenuKit &kit)
 	              shown.c_str());
 }
 
-void
-Menu::bar(BarState &state)
-{
-	using Ask = BarState::Ask;
-	using Action = Hotkeys::Action;
-	const MenuKit kit(*m_palette, m_scale);
-	const MenuPalette &p = kit.palette();
-	ImGuiStyle &style = ImGui::GetStyle();
-	const ImVec2 safe = style.DisplaySafeAreaPadding;
-	const float line = ImGui::GetTextLineHeight();
+/* What the menus of the bar draw with */
+struct Menu::BarItems {
+	BarState &state;
+	const MenuKit &kit;
+
 	/* What is asked, and on which page */
-	const auto ask = [&state](Ask what, int page = -1) {
+	void ask(Ask what, int page = -1) const
+	{
 		state.ask = what;
 		state.page = page;
-	};
+	}
 	/* The first key of an action, as odin.ini says it */
-	const auto key = [&state](Action action) -> const std::string & { return state.keys[static_cast<size_t>(action)]; };
+	const std::string &key(Action action) const { return state.keys[static_cast<size_t>(action)]; }
 	/* A menu: a frame with its corners cut, behind its items */
-	const auto framed = [&kit, &p] {
+	void framed() const
+	{
 		const ImVec2 a = ImGui::GetWindowPos(), b = { a.x + ImGui::GetWindowWidth(), a.y + ImGui::GetWindowHeight() };
 
-		kit.frame(ImGui::GetWindowDrawList(), a, b, kit.px(MENU_CUT), p.screen, p.outline);
-	};
+		kit.frame(ImGui::GetWindowDrawList(), a, b, kit.px(MENU_CUT), kit.palette().screen, kit.palette().outline);
+	}
 	/* A list in a menu of its own, the one chosen checked: whether another
 	 * was chosen */
-	const auto choose = [&framed](const char *label, std::span<const char *const> labels, int &chosen,
-	                              bool enabled = true) {
+	bool choose(const char *label, std::span<const char *const> labels, int &chosen, bool enabled = true) const
+	{
 		bool changed = false;
 
 		if (ImGui::BeginMenu(label, enabled)) {
@@ -209,17 +208,34 @@ Menu::bar(BarState &state)
 			ImGui::EndMenu();
 		}
 		return changed;
-	};
+	}
 	/* A value in %, from 0 to `most`, its name above it */
-	const auto slider = [&kit](const char *name, const char *id, int &value, int most) {
+	void slider(const char *name, const char *id, int &value, int most) const
+	{
 		ImGui::TextUnformatted(name);
 		ImGui::SetNextItemWidth(kit.px(150.0f));
 		ImGui::SliderInt(id, &value, 0, most, "%d %%", ImGuiSliderFlags_AlwaysClamp);
-	};
+	}
 	/* A line to read only: what, and what it is */
-	const auto greyed = [](const char *what, const std::string &value) {
-		ImGui::TextDisabled("%s: %s", what, value.c_str());
-	};
+	static void greyed(const char *what, const std::string &value) { ImGui::TextDisabled("%s: %s", what, value.c_str()); }
+};
+
+void
+Menu::bar(BarState &state)
+{
+	const MenuKit kit(*m_palette, m_scale);
+	const MenuPalette &p = kit.palette();
+	ImGuiStyle &style = ImGui::GetStyle();
+	const ImVec2 safe = style.DisplaySafeAreaPadding;
+	const float line = ImGui::GetTextLineHeight();
+	BarItems items{ state, kit };
+	/* The menus of the bar, in their order */
+	static constexpr struct {
+		const char *name;
+		void (Menu::*draw)(BarItems &);
+	} MENUS[] = { { "FILE", &Menu::bar_file },   { "INPUT", &Menu::bar_input }, { "DISPLAY", &Menu::bar_display },
+	              { "AUDIO", &Menu::bar_audio }, { "LINK", &Menu::bar_link },   { "DEBUG", &Menu::bar_debug },
+	              { "ABOUT", &Menu::bar_about } };
 
 	style.DisplaySafeAreaPadding = { 0.0f, 0.0f };
 	const std::pair<ImGuiCol, ImU32> colours[] = {
@@ -252,16 +268,16 @@ Menu::bar(BarState &state)
 		list->AddLine({ top.x, bottom - kit.stroke() / 2.0f }, { top.x + size.x, bottom - kit.stroke() / 2.0f }, p.line,
 		              kit.stroke());
 
-		for (int m = 0; m < static_cast<int>(std::size(NAMES)); m++) {
+		for (int m = 0; m < static_cast<int>(std::size(MENUS)); m++) {
 			const float at = ImGui::GetCursorScreenPos().x + std::trunc(style.ItemSpacing.x * 0.5f);
-			const float w = ImGui::CalcTextSize(NAMES[m]).x;
+			const float w = ImGui::CalcTextSize(MENUS[m].name).x;
 
 			if (m == state.open_test) {
 				state.open_test = -1;
-				ImGui::OpenPopup(NAMES[m]);
+				ImGui::OpenPopup(MENUS[m].name);
 			}
 			ImGui::PushStyleColor(ImGuiCol_Text, p.dim);
-			const bool shown = ImGui::BeginMenu(NAMES[m]);
+			const bool shown = ImGui::BeginMenu(MENUS[m].name);
 			ImGui::PopStyleColor();
 			if (!shown)
 				continue;
@@ -269,343 +285,8 @@ Menu::bar(BarState &state)
 			list->AddLine({ at - style.ItemSpacing.x, bottom - kit.px(ACCENT) / 2.0f },
 			              { at + w + style.ItemSpacing.x, bottom - kit.px(ACCENT) / 2.0f }, p.accent, kit.px(ACCENT));
 
-			framed();
-			switch (m) {
-			case 0:
-				if (item("Open game..."))
-					ask(Ask::OPEN);
-				if (item("Close game", {}, false, state.game))
-					ask(Ask::CLOSE);
-				if (item("Reset", key(Action::RESET), false, state.game))
-					ask(Ask::RESET);
-				ImGui::Separator();
-				if (item("Save state", key(Action::SAVE_STATE), false,
-				         state.game))
-					ask(Ask::SAVE_STATE);
-				if (item("Load state", key(Action::LOAD_STATE), false,
-				         state.game && state.saved))
-					ask(Ask::LOAD_STATE);
-				ImGui::Separator();
-				/* The player's card: in or out as at the cabinet; the
-				 * one in hand while it is not in the reader */
-				if (state.game && state.card_reader) {
-					using Where = CardReader::Where;
-					const auto where = static_cast<Where>(state.card_where);
-					const bool at_slot = where == Where::AT_SLOT;
-
-					if (item(at_slot ? "Remove card" : "Insert card", key(Action::CARD),
-					         false, at_slot || (where == Where::IN_HAND && state.card_slot_open)))
-						ask(Ask::CARD);
-					if (ImGui::BeginMenu("Card in hand", where != Where::INSIDE && !at_slot)) {
-						framed();
-						if (item("None", {}, state.card < 0)) {
-							state.card_chosen = -1;
-							ask(Ask::CARD_CHOOSE);
-						}
-						for (size_t c = 0; c < state.cards.size(); c++)
-							if (item(state.cards[c].c_str(), {}, state.card == static_cast<int>(c))) {
-								state.card_chosen = static_cast<int>(c);
-								ask(Ask::CARD_CHOOSE);
-							}
-						ImGui::EndMenu();
-					}
-					if (!state.card_keys.empty() &&
-					    item("New card...", {}, false, where != Where::INSIDE && !at_slot))
-						m_new_card = true;
-					ImGui::Separator();
-				}
-				if (item("Settings...", key(Action::MENU)))
-					ask(Ask::SETTINGS);
-				ImGui::Separator();
-				if (item("Quit", key(Action::QUIT)))
-					ask(Ask::QUIT);
-				break;
-			case 1:
-				/* The inputs of the game that runs, for each of its
-				 * players: the device they play with (checked: it alone
-				 * shakes), the tuning of their gamepad, their inputs back
-				 * to their defaults or cleared, kind by kind as the page
-				 * Input shows them; the keys of each control stay in
-				 * Settings */
-				for (unsigned player = 0; player < state.players; player++) {
-					char name[16];
-
-					std::snprintf(name, sizeof(name), "Player %u", player + 1);
-					if (!ImGui::BeginMenu(name, state.game))
-						continue;
-					framed();
-					if (item(DEVICE_KINDS[0], {}, state.plays_with[player] == InputDevice::KEYBOARD) &&
-					    state.plays_with[player] != InputDevice::KEYBOARD) {
-						state.asked_player = player;
-						ask(Ask::KEYBOARD);
-					}
-					if (state.pads.empty())
-						ImGui::TextDisabled("No controller plugged in");
-					for (size_t i = 0; i < state.pads.size(); i++) {
-						const BarState::Pad &pad = state.pads[i];
-						const bool mine = pad.player == static_cast<int>(player) &&
-						                  state.plays_with[player] == (pad.joystick ? InputDevice::JOYSTICK : InputDevice::PAD);
-
-						if (item(pad.label.c_str(), pad.off ? "not for this game" : "", mine, !pad.off) && !mine) {
-							state.asked_player = player;
-							state.asked_pad = static_cast<int>(i);
-							ask(Ask::PAD);
-						}
-					}
-					if (state.dead_zone[player] >= 0 && state.plays_with[player] == InputDevice::PAD) {
-						ImGui::Separator();
-						slider("Stick dead zone", "##dead", state.dead_zone[player], PadTuning::MOST_DEAD_ZONE);
-						slider("Trigger threshold", "##trigger", state.trigger_threshold[player],
-						       PadTuning::MOST_TRIGGER_THRESHOLD);
-					}
-					ImGui::Separator();
-					const bool joysticks = std::any_of(state.pads.begin(), state.pads.end(),
-					                                   [](const BarState::Pad &pad) { return pad.joystick; });
-
-					for (const bool to_defaults : { true, false }) {
-						if (!ImGui::BeginMenu(to_defaults ? "Restore defaults" : "Clear all"))
-							continue;
-						framed();
-						/* Clear all leaves the menu open: Undo shows
-						 * at once, for its few seconds */
-						ImGui::PushItemFlag(ImGuiItemFlags_AutoClosePopups, to_defaults);
-						for (int kind = 0; kind < (joysticks ? 3 : 2); kind++)
-							if (item(DEVICE_KINDS[kind])) {
-								state.asked_player = player;
-								state.asked_kind = kind;
-								ask(to_defaults ? Ask::INPUTS_DEFAULTS : Ask::INPUTS_CLEAR);
-							}
-						ImGui::PopItemFlag();
-						ImGui::EndMenu();
-					}
-					if (state.undo && item("Undo clear all"))
-						ask(Ask::INPUTS_UNDO);
-					ImGui::EndMenu();
-				}
-				for (unsigned player = 0; player < state.players; player++) {
-					char name[16];
-
-					std::snprintf(name, sizeof(name), "Light gun %u", player + 1);
-					if (!state.sights[player] || !ImGui::BeginMenu(name, state.game))
-						continue;
-					framed();
-					if (item(player ? "None: player 2 does not aim" : "None: the mouse aims", {},
-					         state.gun[player].empty()) && !state.gun[player].empty()) {
-						state.asked_player = player;
-						state.asked_gun = -1;
-						ask(Ask::GUN);
-					}
-					for (size_t g = 0; g < state.guns.size(); g++) {
-						const LightGun &gun = state.guns[g];
-						const std::string label = gun.name + (gun.aims ? "" : " · mouse") +
-						                          (gun.present ? "" : " · unplugged");
-						const bool mine = gun.identity == state.gun[player];
-
-						if (item(label.c_str(), {}, mine, gun.present || mine) && !mine) {
-							state.asked_player = player;
-							state.asked_gun = static_cast<int>(g);
-							ask(Ask::GUN);
-						}
-					}
-					ImGui::EndMenu();
-				}
-				if (state.can_shake && item("Vibration", {}, state.shake, state.game))
-					state.shake = !state.shake;
-				if (state.sights[0] && item("Light gun mode", key(Action::LIGHT_GUN), state.light_gun, state.game))
-					state.light_gun = !state.light_gun;
-				ImGui::Separator();
-				if (ImGui::BeginMenu("Hotkeys")) {
-					framed();
-					if (item("Restore defaults"))
-						ask(Ask::HOTKEYS_DEFAULTS);
-					ImGui::EndMenu();
-				}
-				if (item("Send outputs", {}, state.network))
-					state.network = !state.network;
-				break;
-			case 2: {
-				int window = state.custom_window ? CUSTOM : static_cast<int>(state.window) - 1;
-				int scale = static_cast<int>(state.scale) - 1, mode = static_cast<int>(state.upscale_mode);
-				int filter = -1, sync = static_cast<int>(state.vsync), pace = state.unthrottled ? 1 : 0;
-				int theme = static_cast<int>(state.theme);
-
-				for (size_t f = 0; f < std::size(ANISOTROPY); f++)
-					if (ANISOTROPY[f] == state.anisotropy)
-						filter = static_cast<int>(f);
-				if (item("Full screen", key(Action::FULLSCREEN), state.fullscreen))
-					ask(Ask::FULLSCREEN);
-				/* The sizes of the window; one given by hand is kept,
-				 * shown, and set in Settings */
-				if (ImGui::BeginMenu("Window size", !state.window_given && !state.fullscreen)) {
-					framed();
-					for (int sized = 0; sized < CUSTOM; sized++)
-						if (item(WINDOW_SIZES[sized], {}, window == sized) && window != sized) {
-							state.window = static_cast<unsigned>(sized) + 1;
-							state.custom_window = false;
-						}
-					if (state.custom_window)
-						item("Custom (in Settings)", {}, true, false);
-					ImGui::EndMenu();
-				}
-				ImGui::Separator();
-				if (choose("Internal resolution", SCALES, scale, !state.scale_given))
-					state.scale = static_cast<unsigned>(scale) + 1;
-				if (choose("Upscaling mode", UPSCALE_MODES_SHOWN, mode))
-					state.upscale_mode = static_cast<unsigned>(mode);
-				if (choose("Anisotropic filtering", FILTERS, filter, !state.anisotropy_given))
-					state.anisotropy = ANISOTROPY[filter];
-				if (choose("Vertical sync", SYNCS, sync, !state.vsync_locked))
-					state.vsync = static_cast<unsigned>(sync);
-				ImGui::Separator();
-				if (ImGui::BeginMenu("Bezel")) {
-					framed();
-					for (unsigned s = 0; s < std::size(SIDES_SHOWN); s++)
-						if (item(SIDES_SHOWN[s], {}, state.sides == s))
-							state.sides = s;
-					ImGui::EndMenu();
-				}
-				/* The screens of the cabinets; another filter odin.ini
-				 * names is shown by its name, taken before a click
-				 * changes it ("" for None has no name to show) */
-				if (ImGui::BeginMenu("CRT screen")) {
-					bool known = false;
-
-					for (const char *preset : PRESETS)
-						known = known || state.filter == preset;
-					const std::string other = known ? std::string() : state.filter;
-
-					framed();
-					for (size_t s = 0; s < std::size(PRESETS); s++)
-						if (item(SCREENS[s], {}, state.filter == PRESETS[s]))
-							state.filter = PRESETS[s];
-					if (!other.empty())
-						item(other.c_str(), {}, true, false);
-					ImGui::EndMenu();
-				}
-				if (choose("Speed limit (next launch)", PACES, pace, !state.unthrottled_given))
-					state.unthrottled = pace == 1;
-				if (item("Show FPS", {}, state.show_speed))
-					state.show_speed = !state.show_speed;
-				ImGui::Separator();
-				if (ImGui::BeginMenu("Menu theme")) {
-					framed();
-					for (size_t t = 0; t < std::size(THEMES); t++)
-						if (item(THEMES[t].name, {}, theme == static_cast<int>(t)))
-							state.theme = static_cast<unsigned>(t);
-					ImGui::EndMenu();
-				}
-				ImGui::Separator();
-				greyed("Graphics card", state.gpu);
-				break;
-			}
-			case 3: {
-				int volume = static_cast<int>(state.volume);
-
-				ImGui::BeginDisabled(state.silent);
-				ImGui::TextUnformatted("Volume");
-				ImGui::SetNextItemWidth(kit.px(150.0f));
-				if (ImGui::SliderInt("##volume", &volume, 0, 100, "%d %%", ImGuiSliderFlags_AlwaysClamp))
-					state.volume = static_cast<unsigned>(volume);
-				if (item("Sound in the background", {}, state.background))
-					state.background = !state.background;
-				ImGui::EndDisabled();
-				ImGui::Separator();
-				/* Where the sound plays: the system's device, or one
-				 * of those it has (one kept and gone stays listed,
-				 * taken before a click changes it) */
-				if (ImGui::BeginMenu("Device", !state.silent)) {
-					bool listed = state.device.empty();
-
-					for (const std::string &device : state.devices)
-						listed = listed || device == state.device;
-					const std::string gone = listed ? std::string() : state.device;
-
-					framed();
-					if (item("System default", {}, state.device.empty()))
-						state.device.clear();
-					for (const std::string &device : state.devices)
-						if (item(device.c_str(), {}, device == state.device))
-							state.device = device;
-					if (!gone.empty())
-						item(gone.c_str(), {}, true, false);
-					ImGui::EndMenu();
-				}
-				/* The game that runs, when it has an optional sound
-				 * board, that game alone: how it plays, and its level,
-				 * with Both */
-				for (BarState::SoundGame &game : state.sound_games) {
-					if (!ImGui::BeginMenu(game.title.c_str()))
-						continue;
-					framed();
-					ImGui::BeginDisabled(game.locked);
-					for (int how = 0; how < static_cast<int>(std::size(PLAYED)); how++)
-						if (item(PLAYED[how], {}, game.played == how))
-							game.played = how;
-					ImGui::EndDisabled();
-					/* To or from Quad waits for the game to start again */
-					if (game.later)
-						ImGui::TextDisabled("Reset the game to apply");
-					ImGui::Separator();
-					ImGui::BeginDisabled(game.played != 1);
-					ImGui::TextUnformatted("Optional board level");
-					ImGui::SetNextItemWidth(kit.px(150.0f));
-					if (ImGui::SliderFloat("##level", &game.level, -60.0f, 12.0f, "%+.0f dB", ImGuiSliderFlags_AlwaysClamp))
-						game.level = std::round(game.level);
-					ImGui::EndDisabled();
-					ImGui::EndMenu();
-				}
-				break;
-			}
-			case 4: {
-				/* The network board, a menu of its own, at the next
-				 * launch; the address of the next cabinet is typed in
-				 * Settings */
-				using Board = NetLinkSettings::Board;
-				const bool on = state.link_board == static_cast<int>(Board::RING);
-
-				if (item("Link cabinets", {}, on, !state.link_given))
-					state.link_board = static_cast<int>(on ? Board::NONE : Board::RING);
-				if (ImGui::BeginMenu("This cabinet", on && !state.link_given)) {
-					framed();
-					for (unsigned n = 1; n <= NetLinkSettings::MOST_CABINETS; n++) {
-						const std::string number = n == 1 ? "1 · master" : std::to_string(n);
-
-						if (item(number.c_str(), {}, state.link_cabinet == n))
-							state.link_cabinet = n;
-					}
-					ImGui::EndMenu();
-				}
-				if (ImGui::BeginMenu("Port", on && !state.link_given)) {
-					framed();
-					for (unsigned port = NetCable::PORT; port < NetCable::PORT + LINK_PORTS; port++)
-						if (item(std::to_string(port).c_str(), {}, state.link_port == port))
-							state.link_port = port;
-					/* Another port odin.ini gives, shown */
-					if (state.link_port < NetCable::PORT || state.link_port >= NetCable::PORT + LINK_PORTS)
-						item(std::to_string(state.link_port).c_str(), {}, true, false);
-					ImGui::EndMenu();
-				}
-				ImGui::Separator();
-				greyed("Next cabinet", state.link_next.empty() ? std::string("none (set it in Settings)") : state.link_next);
-				ImGui::TextDisabled(state.link_given ? "Set by ODIN_NETBD" : "Applies when a game starts");
-				break;
-			}
-			case 5:
-				if (item("Pause", key(Action::PAUSE), state.paused, state.game))
-					ask(Ask::PAUSE);
-				if (item("Detailed log (next launch)", {}, state.verbose, !state.verbose_given))
-					state.verbose = !state.verbose;
-				break;
-			default:
-				/* The page About, as Settings */
-				if (item("About Odin..."))
-					ask(Ask::SETTINGS, ABOUT);
-				if (*odin_version()) {
-					ImGui::Separator();
-					ImGui::TextDisabled("%s", odin_version());
-				}
-				break;
-			}
+			items.framed();
+			(this->*MENUS[m].draw)(items);
 			ImGui::EndMenu();
 		}
 
@@ -634,6 +315,371 @@ Menu::bar(BarState &state)
 	ImGui::PopStyleColor(static_cast<int>(std::size(colours)));
 	style.DisplaySafeAreaPadding = safe;
 	state.wants_mouse = ImGui::GetIO().WantCaptureMouse;
+}
+
+void
+Menu::bar_file(BarItems &b)
+{
+	BarState &state = b.state;
+
+	if (item("Open game..."))
+		b.ask(Ask::OPEN);
+	if (item("Close game", {}, false, state.game))
+		b.ask(Ask::CLOSE);
+	if (item("Reset", b.key(Action::RESET), false, state.game))
+		b.ask(Ask::RESET);
+	ImGui::Separator();
+	if (item("Save state", b.key(Action::SAVE_STATE), false,
+	         state.game))
+		b.ask(Ask::SAVE_STATE);
+	if (item("Load state", b.key(Action::LOAD_STATE), false,
+	         state.game && state.saved))
+		b.ask(Ask::LOAD_STATE);
+	ImGui::Separator();
+	/* The player's card: in or out as at the cabinet; the
+	 * one in hand while it is not in the reader */
+	if (state.game && state.card_reader) {
+		using Where = CardReader::Where;
+		const auto where = static_cast<Where>(state.card_where);
+		const bool at_slot = where == Where::AT_SLOT;
+
+		if (item(at_slot ? "Remove card" : "Insert card", b.key(Action::CARD),
+		         false, at_slot || (where == Where::IN_HAND && state.card_slot_open)))
+			b.ask(Ask::CARD);
+		if (ImGui::BeginMenu("Card in hand", where != Where::INSIDE && !at_slot)) {
+			b.framed();
+			if (item("None", {}, state.card < 0)) {
+				state.card_chosen = -1;
+				b.ask(Ask::CARD_CHOOSE);
+			}
+			for (size_t c = 0; c < state.cards.size(); c++)
+				if (item(state.cards[c].c_str(), {}, state.card == static_cast<int>(c))) {
+					state.card_chosen = static_cast<int>(c);
+					b.ask(Ask::CARD_CHOOSE);
+				}
+			ImGui::EndMenu();
+		}
+		if (!state.card_keys.empty() &&
+		    item("New card...", {}, false, where != Where::INSIDE && !at_slot))
+			m_new_card = true;
+		ImGui::Separator();
+	}
+	if (item("Settings...", b.key(Action::MENU)))
+		b.ask(Ask::SETTINGS);
+	ImGui::Separator();
+	if (item("Quit", b.key(Action::QUIT)))
+		b.ask(Ask::QUIT);
+}
+
+void
+Menu::bar_input(BarItems &b)
+{
+	BarState &state = b.state;
+
+	/* The inputs of the game that runs, for each of its
+	 * players: the device they play with (checked: it alone
+	 * shakes), the tuning of their gamepad, their inputs back
+	 * to their defaults or cleared, kind by kind as the page
+	 * Input shows them; the keys of each control stay in
+	 * Settings */
+	for (unsigned player = 0; player < state.players; player++) {
+		char name[16];
+
+		std::snprintf(name, sizeof(name), "Player %u", player + 1);
+		if (!ImGui::BeginMenu(name, state.game))
+			continue;
+		b.framed();
+		if (item(DEVICE_KINDS[0], {}, state.plays_with[player] == InputDevice::KEYBOARD) &&
+		    state.plays_with[player] != InputDevice::KEYBOARD) {
+			state.asked_player = player;
+			b.ask(Ask::KEYBOARD);
+		}
+		if (state.pads.empty())
+			ImGui::TextDisabled("No controller plugged in");
+		for (size_t i = 0; i < state.pads.size(); i++) {
+			const BarState::Pad &pad = state.pads[i];
+			const bool mine = pad.player == static_cast<int>(player) &&
+			                  state.plays_with[player] == (pad.joystick ? InputDevice::JOYSTICK : InputDevice::PAD);
+
+			if (item(pad.label.c_str(), pad.off ? "not for this game" : "", mine, !pad.off) && !mine) {
+				state.asked_player = player;
+				state.asked_pad = static_cast<int>(i);
+				b.ask(Ask::PAD);
+			}
+		}
+		if (state.dead_zone[player] >= 0 && state.plays_with[player] == InputDevice::PAD) {
+			ImGui::Separator();
+			b.slider("Stick dead zone", "##dead", state.dead_zone[player], PadTuning::MOST_DEAD_ZONE);
+			b.slider("Trigger threshold", "##trigger", state.trigger_threshold[player],
+			       PadTuning::MOST_TRIGGER_THRESHOLD);
+		}
+		ImGui::Separator();
+		const bool joysticks = std::any_of(state.pads.begin(), state.pads.end(),
+		                                   [](const BarState::Pad &pad) { return pad.joystick; });
+
+		for (const bool to_defaults : { true, false }) {
+			if (!ImGui::BeginMenu(to_defaults ? "Restore defaults" : "Clear all"))
+				continue;
+			b.framed();
+			/* Clear all leaves the menu open: Undo shows
+			 * at once, for its few seconds */
+			ImGui::PushItemFlag(ImGuiItemFlags_AutoClosePopups, to_defaults);
+			for (int kind = 0; kind < (joysticks ? 3 : 2); kind++)
+				if (item(DEVICE_KINDS[kind])) {
+					state.asked_player = player;
+					state.asked_kind = kind;
+					b.ask(to_defaults ? Ask::INPUTS_DEFAULTS : Ask::INPUTS_CLEAR);
+				}
+			ImGui::PopItemFlag();
+			ImGui::EndMenu();
+		}
+		if (state.undo && item("Undo clear all"))
+			b.ask(Ask::INPUTS_UNDO);
+		ImGui::EndMenu();
+	}
+	for (unsigned player = 0; player < state.players; player++) {
+		char name[16];
+
+		std::snprintf(name, sizeof(name), "Light gun %u", player + 1);
+		if (!state.sights[player] || !ImGui::BeginMenu(name, state.game))
+			continue;
+		b.framed();
+		if (item(player ? "None: player 2 does not aim" : "None: the mouse aims", {},
+		         state.gun[player].empty()) && !state.gun[player].empty()) {
+			state.asked_player = player;
+			state.asked_gun = -1;
+			b.ask(Ask::GUN);
+		}
+		for (size_t g = 0; g < state.guns.size(); g++) {
+			const LightGun &gun = state.guns[g];
+			const std::string label = gun.name + (gun.aims ? "" : " · mouse") +
+			                          (gun.present ? "" : " · unplugged");
+			const bool mine = gun.identity == state.gun[player];
+
+			if (item(label.c_str(), {}, mine, gun.present || mine) && !mine) {
+				state.asked_player = player;
+				state.asked_gun = static_cast<int>(g);
+				b.ask(Ask::GUN);
+			}
+		}
+		ImGui::EndMenu();
+	}
+	if (state.can_shake && item("Vibration", {}, state.shake, state.game))
+		state.shake = !state.shake;
+	if (state.sights[0] && item("Light gun mode", b.key(Action::LIGHT_GUN), state.light_gun, state.game))
+		state.light_gun = !state.light_gun;
+	ImGui::Separator();
+	if (ImGui::BeginMenu("Hotkeys")) {
+		b.framed();
+		if (item("Restore defaults"))
+			b.ask(Ask::HOTKEYS_DEFAULTS);
+		ImGui::EndMenu();
+	}
+	if (item("Send outputs", {}, state.network))
+		state.network = !state.network;
+}
+
+void
+Menu::bar_display(BarItems &b)
+{
+	BarState &state = b.state;
+
+	int window = state.custom_window ? CUSTOM : static_cast<int>(state.window) - 1;
+	int scale = static_cast<int>(state.scale) - 1, mode = static_cast<int>(state.upscale_mode);
+	int filter = -1, sync = static_cast<int>(state.vsync), pace = state.unthrottled ? 1 : 0;
+	int theme = static_cast<int>(state.theme);
+
+	for (size_t f = 0; f < std::size(ANISOTROPY); f++)
+		if (ANISOTROPY[f] == state.anisotropy)
+			filter = static_cast<int>(f);
+	if (item("Full screen", b.key(Action::FULLSCREEN), state.fullscreen))
+		b.ask(Ask::FULLSCREEN);
+	/* The sizes of the window; one given by hand is kept,
+	 * shown, and set in Settings */
+	if (ImGui::BeginMenu("Window size", !state.window_given && !state.fullscreen)) {
+		b.framed();
+		for (int sized = 0; sized < CUSTOM; sized++)
+			if (item(WINDOW_SIZES[sized], {}, window == sized) && window != sized) {
+				state.window = static_cast<unsigned>(sized) + 1;
+				state.custom_window = false;
+			}
+		if (state.custom_window)
+			item("Custom (in Settings)", {}, true, false);
+		ImGui::EndMenu();
+	}
+	ImGui::Separator();
+	if (b.choose("Internal resolution", SCALES, scale, !state.scale_given))
+		state.scale = static_cast<unsigned>(scale) + 1;
+	if (b.choose("Upscaling mode", UPSCALE_MODES_SHOWN, mode))
+		state.upscale_mode = static_cast<unsigned>(mode);
+	if (b.choose("Anisotropic filtering", FILTERS, filter, !state.anisotropy_given))
+		state.anisotropy = ANISOTROPY[filter];
+	if (b.choose("Vertical sync", SYNCS, sync, !state.vsync_locked))
+		state.vsync = static_cast<unsigned>(sync);
+	ImGui::Separator();
+	if (ImGui::BeginMenu("Bezel")) {
+		b.framed();
+		for (unsigned s = 0; s < std::size(SIDES_SHOWN); s++)
+			if (item(SIDES_SHOWN[s], {}, state.sides == s))
+				state.sides = s;
+		ImGui::EndMenu();
+	}
+	/* The screens of the cabinets; another filter odin.ini
+	 * names is shown by its name, taken before a click
+	 * changes it ("" for None has no name to show) */
+	if (ImGui::BeginMenu("CRT screen")) {
+		bool known = false;
+
+		for (const char *preset : PRESETS)
+			known = known || state.filter == preset;
+		const std::string other = known ? std::string() : state.filter;
+
+		b.framed();
+		for (size_t s = 0; s < std::size(PRESETS); s++)
+			if (item(SCREENS[s], {}, state.filter == PRESETS[s]))
+				state.filter = PRESETS[s];
+		if (!other.empty())
+			item(other.c_str(), {}, true, false);
+		ImGui::EndMenu();
+	}
+	if (b.choose("Speed limit (next launch)", PACES, pace, !state.unthrottled_given))
+		state.unthrottled = pace == 1;
+	if (item("Show FPS", {}, state.show_speed))
+		state.show_speed = !state.show_speed;
+	ImGui::Separator();
+	if (ImGui::BeginMenu("Menu theme")) {
+		b.framed();
+		for (size_t t = 0; t < std::size(THEMES); t++)
+			if (item(THEMES[t].name, {}, theme == static_cast<int>(t)))
+				state.theme = static_cast<unsigned>(t);
+		ImGui::EndMenu();
+	}
+	ImGui::Separator();
+	b.greyed("Graphics card", state.gpu);
+}
+
+void
+Menu::bar_audio(BarItems &b)
+{
+	BarState &state = b.state;
+	const MenuKit &kit = b.kit;
+
+	int volume = static_cast<int>(state.volume);
+
+	ImGui::BeginDisabled(state.silent);
+	ImGui::TextUnformatted("Volume");
+	ImGui::SetNextItemWidth(kit.px(150.0f));
+	if (ImGui::SliderInt("##volume", &volume, 0, 100, "%d %%", ImGuiSliderFlags_AlwaysClamp))
+		state.volume = static_cast<unsigned>(volume);
+	if (item("Sound in the background", {}, state.background))
+		state.background = !state.background;
+	ImGui::EndDisabled();
+	ImGui::Separator();
+	/* Where the sound plays: the system's device, or one
+	 * of those it has (one kept and gone stays listed,
+	 * taken before a click changes it) */
+	if (ImGui::BeginMenu("Device", !state.silent)) {
+		bool listed = state.device.empty();
+
+		for (const std::string &device : state.devices)
+			listed = listed || device == state.device;
+		const std::string gone = listed ? std::string() : state.device;
+
+		b.framed();
+		if (item("System default", {}, state.device.empty()))
+			state.device.clear();
+		for (const std::string &device : state.devices)
+			if (item(device.c_str(), {}, device == state.device))
+				state.device = device;
+		if (!gone.empty())
+			item(gone.c_str(), {}, true, false);
+		ImGui::EndMenu();
+	}
+	/* The game that runs, when it has an optional sound
+	 * board, that game alone: how it plays, and its level,
+	 * with Both */
+	for (BarState::SoundGame &game : state.sound_games) {
+		if (!ImGui::BeginMenu(game.title.c_str()))
+			continue;
+		b.framed();
+		ImGui::BeginDisabled(game.locked);
+		for (int how = 0; how < static_cast<int>(std::size(PLAYED)); how++)
+			if (item(PLAYED[how], {}, game.played == how))
+				game.played = how;
+		ImGui::EndDisabled();
+		/* To or from Quad waits for the game to start again */
+		if (game.later)
+			ImGui::TextDisabled("Reset the game to apply");
+		ImGui::Separator();
+		ImGui::BeginDisabled(game.played != 1);
+		ImGui::TextUnformatted("Optional board level");
+		ImGui::SetNextItemWidth(kit.px(150.0f));
+		if (ImGui::SliderFloat("##level", &game.level, -60.0f, 12.0f, "%+.0f dB", ImGuiSliderFlags_AlwaysClamp))
+			game.level = std::round(game.level);
+		ImGui::EndDisabled();
+		ImGui::EndMenu();
+	}
+}
+
+void
+Menu::bar_link(BarItems &b)
+{
+	BarState &state = b.state;
+
+	/* The network board, a menu of its own, at the next
+	 * launch; the address of the next cabinet is typed in
+	 * Settings */
+	using Board = NetLinkSettings::Board;
+	const bool on = state.link_board == static_cast<int>(Board::RING);
+
+	if (item("Link cabinets", {}, on, !state.link_given))
+		state.link_board = static_cast<int>(on ? Board::NONE : Board::RING);
+	if (ImGui::BeginMenu("This cabinet", on && !state.link_given)) {
+		b.framed();
+		for (unsigned n = 1; n <= NetLinkSettings::MOST_CABINETS; n++) {
+			const std::string number = n == 1 ? "1 · master" : std::to_string(n);
+
+			if (item(number.c_str(), {}, state.link_cabinet == n))
+				state.link_cabinet = n;
+		}
+		ImGui::EndMenu();
+	}
+	if (ImGui::BeginMenu("Port", on && !state.link_given)) {
+		b.framed();
+		for (unsigned port = NetCable::PORT; port < NetCable::PORT + LINK_PORTS; port++)
+			if (item(std::to_string(port).c_str(), {}, state.link_port == port))
+				state.link_port = port;
+		/* Another port odin.ini gives, shown */
+		if (state.link_port < NetCable::PORT || state.link_port >= NetCable::PORT + LINK_PORTS)
+			item(std::to_string(state.link_port).c_str(), {}, true, false);
+		ImGui::EndMenu();
+	}
+	ImGui::Separator();
+	b.greyed("Next cabinet", state.link_next.empty() ? std::string("none (set it in Settings)") : state.link_next);
+	ImGui::TextDisabled(state.link_given ? "Set by ODIN_NETBD" : "Applies when a game starts");
+}
+
+void
+Menu::bar_debug(BarItems &b)
+{
+	BarState &state = b.state;
+
+	if (item("Pause", b.key(Action::PAUSE), state.paused, state.game))
+		b.ask(Ask::PAUSE);
+	if (item("Detailed log (next launch)", {}, state.verbose, !state.verbose_given))
+		state.verbose = !state.verbose;
+}
+
+void
+Menu::bar_about(BarItems &b)
+{
+	/* The page About, as Settings */
+	if (item("About Odin..."))
+		b.ask(Ask::SETTINGS, ABOUT);
+	if (*odin_version()) {
+		ImGui::Separator();
+		ImGui::TextDisabled("%s", odin_version());
+	}
 }
 
 /* New card...: the pilot's name as the keyboard of the terminal of the game
