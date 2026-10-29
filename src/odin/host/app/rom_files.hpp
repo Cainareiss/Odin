@@ -100,6 +100,9 @@ private:
 		std::string path;
 		Archive *archive;
 		size_t entry;
+
+		/* The file, or the archive and its entry */
+		std::string text() const;
 	};
 
 	std::optional<Place> locate(const std::string &game, const File &file);

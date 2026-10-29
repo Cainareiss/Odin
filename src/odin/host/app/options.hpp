@@ -88,7 +88,9 @@ struct Options {
 	std::string sound_device;
 	unsigned volume = 100;
 	bool background = true;
-	DisplayOptions display = { 1, 1, 0, false, true, DisplayVsync::OFF, 0, 0, "", API, DisplayUpscaleMode::RAW };
+	DisplayOptions display = { .scale = 1, .anisotropy = 1, .window = 0, .fullscreen = false, .show_speed = true,
+	                           .vsync = DisplayVsync::OFF, .window_w = 0, .window_h = 0, .filter = "", .api = API,
+	                           .upscale_mode = DisplayUpscaleMode::RAW };
 	/* [display] vsync: the display gets it when the frames are paced */
 	DisplayVsync vsync = VSYNC;
 	/* [display] bezel: around the picture */

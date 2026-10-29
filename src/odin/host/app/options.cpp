@@ -31,6 +31,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <optional>
+#include <span>
 #include <vector>
 
 #include <unistd.h>
@@ -45,6 +47,15 @@
 namespace odin {
 
 namespace {
+
+/* The place of `value` among `names`, none when it is not one */
+std::optional<size_t>
+index_named(std::span<const char *const> names, const std::string &value)
+{
+	const auto at = std::find(names.begin(), names.end(), value);
+
+	return at == names.end() ? std::nullopt : std::optional<size_t>(static_cast<size_t>(at - names.begin()));
+}
 
 std::optional<DisplayVsync>
 vsync_named(const std::string &name)
@@ -128,17 +139,12 @@ read_display(const Settings &settings, Options &options)
 			options.vsync = *vsync_named(value);
 		} else if (key == "filter" && !value.empty()) {
 			options.display.filter = value == "none" ? std::string() : value;
-		} else if (key == "api" && std::find(std::begin(APIS), std::end(APIS), value) != std::end(APIS)) {
-			options.display.api = static_cast<DisplayApi>(std::find(std::begin(APIS), std::end(APIS), value) -
-			                                              std::begin(APIS));
-		} else if (key == "upscale_mode" && std::find(std::begin(UPSCALE_MODES), std::end(UPSCALE_MODES), value) !=
-		                                            std::end(UPSCALE_MODES)) {
-			options.display.upscale_mode = static_cast<DisplayUpscaleMode>(
-				std::find(std::begin(UPSCALE_MODES), std::end(UPSCALE_MODES), value) - std::begin(UPSCALE_MODES));
-		} else if (key == "bezel" && std::find(std::begin(SIDES_NAMES), std::end(SIDES_NAMES), value) !=
-		                                     std::end(SIDES_NAMES)) {
-			options.sides = static_cast<DisplaySides>(
-				std::find(std::begin(SIDES_NAMES), std::end(SIDES_NAMES), value) - std::begin(SIDES_NAMES));
+		} else if (key == "api" && index_named(APIS, value)) {
+			options.display.api = static_cast<DisplayApi>(*index_named(APIS, value));
+		} else if (key == "upscale_mode" && index_named(UPSCALE_MODES, value)) {
+			options.display.upscale_mode = static_cast<DisplayUpscaleMode>(*index_named(UPSCALE_MODES, value));
+		} else if (key == "bezel" && index_named(SIDES_NAMES, value)) {
+			options.sides = static_cast<DisplaySides>(*index_named(SIDES_NAMES, value));
 		} else {
 			refuse_setting("display", key, value);
 		}
@@ -548,12 +554,8 @@ known_settings(const GameList &games)
 		}
 		for (const auto &[key, value] : ControlPanel(game->controls, Settings(), name).bindings().standard_lines())
 			out.push_back({ "controls." + name, key, value });
-		out.push_back({ "players." + name, "p1", "" });
-		out.push_back({ "players." + name, "p2", "" });
-		out.push_back({ "players." + name, "joy1", "" });
-		out.push_back({ "players." + name, "joy2", "" });
-		out.push_back({ "players." + name, "device1", "" });
-		out.push_back({ "players." + name, "device2", "" });
+		for (const char *key : { "p1", "p2", "joy1", "joy2", "device1", "device2" })
+			out.push_back({ "players." + name, key, "" });
 		for (const GameControl &control : game->controls)
 			if (control.role == Role::GUN_X) {
 				out.push_back({ "players." + name, control.player ? "gun2" : "gun1", "" });

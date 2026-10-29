@@ -24,6 +24,7 @@
 
 #include "odin/machine/cabinet/io_837_13741_imitation.hpp"
 
+#include <algorithm>
 #include <array>
 
 namespace odin {
@@ -44,8 +45,7 @@ int32_t Io837_13741Imitation::function_list(std::span<uint8_t> out)
 		jvs::FUNC_GENERAL_OUTPUT, 22, 0, 0
 	};
 
-	for (size_t i = 0; i < list.size(); i++)
-		out[i] = list[i];
+	std::copy(list.begin(), list.end(), out.begin());
 	return static_cast<int32_t>(list.size());
 }
 

@@ -42,6 +42,16 @@ int32_t refused(std::span<uint8_t> out, uint32_t &used, size_t left, uint32_t re
 	return static_cast<int32_t>(request < left ? request : left);
 }
 
+/* The sum of a frame, of every byte after the sync */
+uint8_t sum_of(std::span<const uint8_t> bytes)
+{
+	uint8_t sum = 0;
+
+	for (const uint8_t b : bytes)
+		sum = static_cast<uint8_t>(sum + b);
+	return sum;
+}
+
 } /* namespace */
 
 /* Host */
@@ -93,11 +103,7 @@ void JvsHost::commit_encoded()
 	m_send_size = 0;
 	/* The checksum is the sum of every byte after the sync; a node
 	 * answers status 3 when it does not match (JVS sum error). */
-	uint8_t sum = 0;
-	for (uint32_t i = 0; i < size; i++) {
-		sum = static_cast<uint8_t>(sum + m_send[i]);
-	}
-	commit_raw(std::span<const uint8_t>(m_send.data(), size), sum == m_send[size]);
+	commit_raw(std::span<const uint8_t>(m_send.data(), size), sum_of(std::span<const uint8_t>(m_send.data(), size)) == m_send[size]);
 }
 
 void JvsHost::commit_raw(std::span<const uint8_t> frame, bool sum_ok)
@@ -161,11 +167,8 @@ uint32_t JvsHost::encode(std::span<uint8_t> buffer, uint32_t size)
 	if (size == 0 || size + 1 > BUFFER_SIZE) {
 		return 0;
 	}
-	uint8_t sum = 0;
-	for (uint32_t i = 0; i < size; i++) {
-		sum = static_cast<uint8_t>(sum + buffer[i]);
-	}
-	buffer[size++] = sum;
+	buffer[size] = sum_of(buffer.first(size));
+	size++;
 	uint32_t add = 1;
 	for (uint32_t i = 0; i < size; i++) {
 		if (buffer[i] == MARK || buffer[i] == SYNC) {
@@ -384,8 +387,7 @@ int32_t JvsDevice::handle_message(std::span<const uint8_t> in, std::span<uint8_t
 JvsIoBoard::JvsIoBoard(JvsInputs &inputs)
 	: m_inputs(inputs)
 {
-	m_coin_counter.fill(0);
-	m_outputs.fill(0);
+	JvsIoBoard::device_reset();
 }
 
 void JvsIoBoard::device_reset()

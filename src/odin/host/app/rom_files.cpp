@@ -383,7 +383,13 @@ RomFiles::find(const std::string &game, const File &file)
 
 	if (!place)
 		return {};
-	return place->archive ? place->path + ": " + place->archive->entries()[place->entry].name : place->path;
+	return place->text();
+}
+
+std::string
+RomFiles::Place::text() const
+{
+	return archive ? path + ": " + archive->entries()[entry].name : path;
 }
 
 std::optional<std::vector<uint8_t>>
@@ -394,7 +400,7 @@ RomFiles::read(const std::string &game, const File &file, std::string &where)
 	if (!place)
 		return std::nullopt;
 	if (place->archive) {
-		where = place->path + ": " + place->archive->entries()[place->entry].name;
+		where = place->text();
 		return place->archive->read(place->entry);
 	}
 	where = place->path;

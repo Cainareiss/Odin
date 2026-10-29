@@ -17,6 +17,8 @@
 
 #include "odin/machine/cabinet/io_837_13551_imitation.hpp"
 
+#include <algorithm>
+
 namespace odin {
 
 /* Identification string reported by the 315-6215 firmware of the Type 1
@@ -34,9 +36,7 @@ int32_t Io837_13551Imitation::function_list(std::span<uint8_t> out)
 		jvs::FUNC_ANALOG_INPUT, ANALOG_CHANNELS, 0, 0,	/* bits not told (block at 3079) */
 		jvs::FUNC_GENERAL_OUTPUT, 6, 0, 0		/* 6 driver outputs */
 	};
-	for (size_t i = 0; i < list.size(); i++) {
-		out[i] = list[i];
-	}
+	std::copy(list.begin(), list.end(), out.begin());
 	return static_cast<int32_t>(list.size());
 }
 
