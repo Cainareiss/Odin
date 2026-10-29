@@ -215,6 +215,51 @@ read_sound(const Settings &settings, Options &options)
 	}
 }
 
+/* A whole number from `lo` to `hi`, written in full */
+std::optional<int>
+whole_named(const std::string &value, long lo, long hi)
+{
+	char *end = nullptr;
+	const long number = std::strtol(value.c_str(), &end, 10);
+
+	if (value.empty() || *end || number < lo || number > hi)
+		return std::nullopt;
+	return static_cast<int>(number);
+}
+
+std::optional<bool>
+on_off_named(const std::string &value)
+{
+	if (value == "on" || value == "off")
+		return value == "on";
+	return std::nullopt;
+}
+
+/* What [players.<game>] says of a key, its last right line; `standard`
+ * without one */
+bool
+player_on(const Settings &settings, const std::string &game, const char *key, bool standard)
+{
+	bool on = standard;
+
+	for (const auto &[name, value] : settings.section("players." + game))
+		if (name == key && on_off_named(value))
+			on = *on_off_named(value);
+	return on;
+}
+
+int
+player_number(const Settings &settings, const std::string &game, const char *key, int standard,
+              std::optional<int> (*named)(const std::string &))
+{
+	int number = standard;
+
+	for (const auto &[name, value] : settings.section("players." + game))
+		if (name == key && named(value))
+			number = *named(value);
+	return number;
+}
+
 } /* namespace */
 
 Parsed
@@ -337,90 +382,53 @@ level_named(const std::string &value)
 bool
 vibration_on(const Settings &settings, const std::string &game)
 {
-	bool on = true;
-
-	for (const auto &[key, value] : settings.section("players." + game))
-		if (key == "vibration" && (value == "on" || value == "off"))
-			on = value == "on";
-	return on;
+	return player_on(settings, game, "vibration", true);
 }
 
 bool
 light_gun_mode_on(const Settings &settings, const std::string &game)
 {
-	bool on = true;
-
-	for (const auto &[key, value] : settings.section("players." + game))
-		if (key == "light_gun_mode" && (value == "on" || value == "off"))
-			on = value == "on";
-	return on;
+	return player_on(settings, game, "light_gun_mode", true);
 }
 
 std::optional<int>
 wheel_force_named(const std::string &value)
 {
-	char *end = nullptr;
-	const long percent = std::strtol(value.c_str(), &end, 10);
-
-	if (value.empty() || *end || percent < 0 || percent > MOST_WHEEL_FORCE)
-		return std::nullopt;
-	return static_cast<int>(percent);
+	return whole_named(value, 0, MOST_WHEEL_FORCE);
 }
 
 int
 wheel_force_of(const Settings &settings, const std::string &game)
 {
-	int percent = WHEEL_FORCE;
-
-	for (const auto &[key, value] : settings.section("players." + game))
-		if (key == "wheel_force" && wheel_force_named(value))
-			percent = *wheel_force_named(value);
-	return percent;
+	return player_number(settings, game, "wheel_force", WHEEL_FORCE, wheel_force_named);
 }
 
 std::optional<int>
 vibration_force_named(const std::string &value)
 {
-	char *end = nullptr;
-	const long percent = std::strtol(value.c_str(), &end, 10);
-
-	if (value.empty() || *end || percent < 0 || percent > MOST_VIBRATION_FORCE)
-		return std::nullopt;
-	return static_cast<int>(percent);
+	return whole_named(value, 0, MOST_VIBRATION_FORCE);
 }
 
 int
 vibration_force_of(const Settings &settings, const std::string &game)
 {
-	int percent = VIBRATION_FORCE;
-
-	for (const auto &[key, value] : settings.section("players." + game))
-		if (key == "vibration_force" && vibration_force_named(value))
-			percent = *vibration_force_named(value);
-	return percent;
+	return player_number(settings, game, "vibration_force", VIBRATION_FORCE, vibration_force_named);
 }
 
 std::optional<int>
 wheel_rotation_named(const std::string &value)
 {
-	char *end = nullptr;
-	const long degrees = std::strtol(value.c_str(), &end, 10);
+	const std::optional<int> degrees = whole_named(value, 0, std::end(WHEEL_ROTATIONS)[-1]);
 
-	if (value.empty() || *end || std::find(std::begin(WHEEL_ROTATIONS), std::end(WHEEL_ROTATIONS), degrees) ==
-	                                     std::end(WHEEL_ROTATIONS))
+	if (!degrees || std::find(std::begin(WHEEL_ROTATIONS), std::end(WHEEL_ROTATIONS), *degrees) == std::end(WHEEL_ROTATIONS))
 		return std::nullopt;
-	return static_cast<int>(degrees);
+	return degrees;
 }
 
 int
 wheel_rotation_of(const Settings &settings, const std::string &game)
 {
-	int degrees = WHEEL_ROTATION;
-
-	for (const auto &[key, value] : settings.section("players." + game))
-		if (key == "wheel_rotation" && wheel_rotation_named(value))
-			degrees = *wheel_rotation_named(value);
-	return degrees;
+	return player_number(settings, game, "wheel_rotation", WHEEL_ROTATION, wheel_rotation_named);
 }
 
 std::optional<InputDevice>
