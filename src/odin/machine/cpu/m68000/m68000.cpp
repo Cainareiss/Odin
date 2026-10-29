@@ -291,12 +291,12 @@ M68000::index(uint16_t ext) const
 }
 
 /* Reads the extension words of an operand and works out where it is.
- * (An)+ and -(An) change An here; A7 moves by 2 for a byte. */
+ * (An)+ and -(An) change An here. */
 M68000::Ea
 M68000::ea(unsigned mode, unsigned reg, Size s)
 {
 	Ea e{Ea::MEM, static_cast<uint8_t>(reg), 0, 0};
-	const uint32_t step = s == BYTE ? (reg == 7 ? 2u : 1u) : s == WORD ? 2u : 4u;
+	const uint32_t step = step_of(s, reg);
 
 	switch (mode) {
 	case 0:
@@ -382,6 +382,45 @@ M68000::control_address(unsigned mode, unsigned reg)
 
 /* Exceptions */
 
+/* The frame of groups 1 and 2 on the supervisor stack: the low word of the
+ * return PC first, then SR, then its high word */
+void
+M68000::push_frame(uint16_t sr, uint32_t return_pc)
+{
+	m_a[7] -= 6;
+	write_word(m_a[7] + 4, static_cast<uint16_t>(return_pc));
+	write_word(m_a[7], sr);
+	write_word(m_a[7] + 2, static_cast<uint16_t>(return_pc >> 16));
+}
+
+/* That frame taken back by RTE and RTR: its SR, and the PC it returns to */
+uint32_t
+M68000::pop_frame(uint16_t &sr)
+{
+	const uint32_t hi = read_word(m_a[7] + 2);
+
+	sr = read_word(m_a[7]);
+
+	const uint32_t lo = read_word(m_a[7] + 4);
+
+	m_a[7] += 6;
+	return (hi << 16) | lo;
+}
+
+/* The new PC from the vector, and the queue filled from there */
+void
+M68000::enter_vector(uint32_t vector)
+{
+	const uint32_t target = read_long(vector * 4);
+
+	m_au = target;
+	m_ir = fetch_word(m_au);
+	idle(2);
+	m_irc = fetch_word(m_au + 2);
+	m_au += 4;
+	m_pc = target;
+}
+
 /* Groups 1 and 2: the return PC and SR go on the supervisor stack, then
  * the new PC comes from the vector. */
 void
@@ -390,17 +429,8 @@ M68000::exception(unsigned vector, uint32_t return_pc)
 	const uint16_t old = m_sr;
 
 	set_sr(static_cast<uint16_t>((m_sr | SR_S) & ~SR_T));
-	m_a[7] -= 6;
-	write_word(m_a[7] + 4, static_cast<uint16_t>(return_pc));
-	write_word(m_a[7], old);
-	write_word(m_a[7] + 2, static_cast<uint16_t>(return_pc >> 16));
-	const uint32_t target = read_long(vector * 4);
-	m_au = target;
-	m_ir = fetch_word(m_au);
-	idle(2);
-	m_irc = fetch_word(m_au + 2);
-	m_au += 4;
-	m_pc = target;
+	push_frame(old, return_pc);
+	enter_vector(vector);
 }
 
 /* Group 0: the access that faulted, the instruction and the PC of the
@@ -424,13 +454,7 @@ M68000::address_error(const AddressError &e)
 		write_word(m_a[7] + 4, static_cast<uint16_t>(e.addr));
 		write_word(m_a[7], status);
 		write_word(m_a[7] + 2, static_cast<uint16_t>(e.addr >> 16));
-		const uint32_t target = read_long(3 * 4);
-		m_au = target;
-		m_ir = fetch_word(m_au);
-		idle(2);
-		m_irc = fetch_word(m_au + 2);
-		m_au += 4;
-		m_pc = target;
+		enter_vector(3);
 	} catch (const AddressError &) {
 		m_halted = true;
 	}
@@ -454,17 +478,17 @@ M68000::interrupt(unsigned level)
 		idle(4);
 	}
 	set_sr(static_cast<uint16_t>(((m_sr | SR_S) & ~(SR_T | SR_I)) | (level << 8)));
-	m_a[7] -= 6;
-	write_word(m_a[7] + 4, static_cast<uint16_t>(return_pc));
-	write_word(m_a[7], old);
-	write_word(m_a[7] + 2, static_cast<uint16_t>(return_pc >> 16));
-	const uint32_t target = read_long(static_cast<uint32_t>(vector) * 4);
-	m_au = target;
-	m_ir = fetch_word(m_au);
-	idle(2);
-	m_irc = fetch_word(m_au + 2);
-	m_au += 4;
-	m_pc = target;
+	push_frame(old, return_pc);
+	enter_vector(static_cast<uint32_t>(vector));
+}
+
+/* DIVU and DIVS by 0: the flags, then the trap of vector 5 */
+void
+M68000::divide_by_zero()
+{
+	m_sr = static_cast<uint16_t>((m_sr & ~(SR_N | SR_V | SR_C)) | SR_Z);
+	idle(8);
+	exception(5, m_au - 2);
 }
 
 /* Privilege violation and illegal instructions: the PC of the instruction */

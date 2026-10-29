@@ -179,6 +179,10 @@ private:
 	void flags_sub(Size s, uint32_t a, uint32_t b, uint32_t r);
 
 	/* Exceptions. */
+	void push_frame(uint16_t sr, uint32_t return_pc);
+	uint32_t pop_frame(uint16_t &sr);
+	void enter_vector(uint32_t vector);
+	void divide_by_zero();
 	void exception(unsigned vector, uint32_t return_pc);
 	void address_error(const AddressError &e);
 	void interrupt(unsigned level);
@@ -218,6 +222,8 @@ private:
 	void op_exg();
 
 	uint32_t alu(unsigned kind, Size s, uint32_t dst, uint32_t src);
+	void alu_to_ea(unsigned kind, Size s, unsigned mode, unsigned reg, unsigned dreg);
+	void alu_to_dn(unsigned kind, Size s, unsigned mode, unsigned reg, unsigned dreg);
 	uint32_t bcd(bool add, uint32_t dst, uint32_t src);
 
 	static uint32_t mask(Size s) { return s == BYTE ? 0xFFu : s == WORD ? 0xFFFFu : 0xFFFFFFFFu; }
@@ -227,6 +233,8 @@ private:
 		return s == BYTE ? static_cast<uint32_t>(static_cast<int8_t>(v))
 		       : s == WORD ? static_cast<uint32_t>(static_cast<int16_t>(v)) : v;
 	}
+	/* How far (An)+ and -(An) move An: A7 by 2 for a byte, to stay even */
+	static uint32_t step_of(Size s, unsigned reg) { return s == BYTE ? (reg == 7 ? 2u : 1u) : s == WORD ? 2u : 4u; }
 	static Size size_bits_to(unsigned bits) { return bits == 0 ? BYTE : bits == 1 ? WORD : LONG; }
 	void set_d(unsigned n, Size s, uint32_t v)
 	{

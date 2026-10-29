@@ -75,6 +75,30 @@ M68000::alu(unsigned kind, Size s, uint32_t dst, uint32_t src)
 	}
 }
 
+/* The ALU on <ea> and Dn, its result to <ea> */
+void
+M68000::alu_to_ea(unsigned kind, Size s, unsigned mode, unsigned reg, unsigned dreg)
+{
+	const Ea e = ea(mode, reg, s);
+	const uint32_t r = alu(kind, s, get(e, s), m_d[dreg] & mask(s));
+
+	prefetch();
+	write_rmw(s, e.addr, r);
+}
+
+/* The ALU on Dn and <ea>, its result to Dn */
+void
+M68000::alu_to_dn(unsigned kind, Size s, unsigned mode, unsigned reg, unsigned dreg)
+{
+	const Ea e = ea(mode, reg, s);
+	const uint32_t r = alu(kind, s, m_d[dreg] & mask(s), get(e, s));
+
+	prefetch();
+	set_d(dreg, s, r);
+	if (s == LONG)
+		idle(e.kind == Ea::MEM ? 2 : 4);
+}
+
 void
 M68000::execute()
 {
@@ -334,7 +358,7 @@ M68000::op_move(Size s)
 		prefetch();
 		return;
 	}
-	const uint32_t step = s == BYTE ? (dreg == 7 ? 2u : 1u) : s == WORD ? 2u : 4u;
+	const uint32_t step = step_of(s, dreg);
 	uint32_t addr;
 
 	switch (dmode) {
@@ -755,12 +779,11 @@ M68000::op_misc_4e()
 			privilege();
 			return;
 		}
-		const uint32_t hi = read_word(m_a[7] + 2);
-		const uint16_t sr = read_word(m_a[7]);
-		const uint32_t lo = read_word(m_a[7] + 4);
-		m_a[7] += 6;
+		uint16_t sr;
+		const uint32_t pc = pop_frame(sr);
+
 		set_sr(sr);
-		jump((hi << 16) | lo);
+		jump(pc);
 		return;
 	}
 	case 0x4E75:						/* RTS */
@@ -772,12 +795,11 @@ M68000::op_misc_4e()
 			exception(7, m_pc);
 		return;
 	case 0x4E77: {						/* RTR */
-		const uint32_t hi = read_word(m_a[7] + 2);
-		const uint16_t ccr = read_word(m_a[7]);
-		const uint32_t lo = read_word(m_a[7] + 4);
-		m_a[7] += 6;
+		uint16_t ccr;
+		const uint32_t pc = pop_frame(ccr);
+
 		set_ccr(ccr);
-		jump((hi << 16) | lo);
+		jump(pc);
 		return;
 	}
 	default:
@@ -984,22 +1006,14 @@ M68000::op_1000()
 			illegal();
 			return;
 		}
-		const Ea e = ea(mode, reg, s);
-		const uint32_t r = alu(ALU_OR, s, get(e, s), m_d[dreg] & mask(s));
-		prefetch();
-		write_rmw(s, e.addr, r);
+		alu_to_ea(ALU_OR, s, mode, reg, dreg);
 		return;
 	}
 	if (mode == 1 || (mode == 7 && reg > 4)) {
 		illegal();
 		return;
 	}
-	const Ea e = ea(mode, reg, s);					/* OR <ea>,Dn */
-	const uint32_t r = alu(ALU_OR, s, m_d[dreg] & mask(s), get(e, s));
-	prefetch();
-	set_d(dreg, s, r);
-	if (s == LONG)
-		idle(e.kind == Ea::MEM ? 2 : 4);
+	alu_to_dn(ALU_OR, s, mode, reg, dreg);				/* OR <ea>,Dn */
 }
 
 /* 1001 and 1101: SUB and ADD, SUBA and ADDA, SUBX and ADDX */
@@ -1034,22 +1048,14 @@ M68000::op_add_sub(bool add)
 			illegal();
 			return;
 		}
-		const Ea e = ea(mode, reg, s);
-		const uint32_t r = alu(kind, s, get(e, s), m_d[dreg] & mask(s));
-		prefetch();
-		write_rmw(s, e.addr, r);
+		alu_to_ea(kind, s, mode, reg, dreg);
 		return;
 	}
 	if ((s == BYTE && mode == 1) || (mode == 7 && reg > 4)) {	/* <ea>,Dn */
 		illegal();
 		return;
 	}
-	const Ea e = ea(mode, reg, s);
-	const uint32_t r = alu(kind, s, m_d[dreg] & mask(s), get(e, s));
-	prefetch();
-	set_d(dreg, s, r);
-	if (s == LONG)
-		idle(e.kind == Ea::MEM ? 2 : 4);
+	alu_to_dn(kind, s, mode, reg, dreg);
 }
 
 /* ADDX and SUBX: Z only cleared; -(An),-(An) reads and writes a long
@@ -1065,8 +1071,8 @@ M68000::op_addx_subx(bool add)
 	uint32_t src, dst, daddr = 0;
 
 	if (op & 8) {
-		const uint32_t step = s == BYTE ? (rx == 7 ? 2u : 1u) : s == WORD ? 2u : 4u;
-		const uint32_t dstep = s == BYTE ? (ry == 7 ? 2u : 1u) : s == WORD ? 2u : 4u;
+		const uint32_t step = step_of(s, rx);
+		const uint32_t dstep = step_of(s, ry);
 		idle(2);
 		if (s == LONG) {
 			/* a word at a time, the low one first */
@@ -1213,22 +1219,14 @@ M68000::op_1100()
 			illegal();
 			return;
 		}
-		const Ea e = ea(mode, reg, s);
-		const uint32_t r = alu(ALU_AND, s, get(e, s), m_d[dreg] & mask(s));
-		prefetch();
-		write_rmw(s, e.addr, r);
+		alu_to_ea(ALU_AND, s, mode, reg, dreg);
 		return;
 	}
 	if (mode == 1 || (mode == 7 && reg > 4)) {
 		illegal();
 		return;
 	}
-	const Ea e = ea(mode, reg, s);					/* AND <ea>,Dn */
-	const uint32_t r = alu(ALU_AND, s, m_d[dreg] & mask(s), get(e, s));
-	prefetch();
-	set_d(dreg, s, r);
-	if (s == LONG)
-		idle(e.kind == Ea::MEM ? 2 : 4);
+	alu_to_dn(ALU_AND, s, mode, reg, dreg);				/* AND <ea>,Dn */
 }
 
 void
@@ -1300,9 +1298,7 @@ M68000::op_divu()
 	uint32_t dividend = m_d[dreg];
 
 	if (divisor == 0) {
-		m_sr = static_cast<uint16_t>((m_sr & ~(SR_N | SR_V | SR_C)) | SR_Z);
-		idle(8);
-		exception(5, m_au - 2);
+		divide_by_zero();
 		return;
 	}
 	if ((dividend >> 16) >= divisor) {
@@ -1351,9 +1347,7 @@ M68000::op_divs()
 	const int32_t dividend = static_cast<int32_t>(m_d[dreg]);
 
 	if (divisor == 0) {
-		m_sr = static_cast<uint16_t>((m_sr & ~(SR_N | SR_V | SR_C)) | SR_Z);
-		idle(8);
-		exception(5, m_au - 2);
+		divide_by_zero();
 		return;
 	}
 	/* 6 or 7 microcycles into the loop; an overflow stops there */
@@ -1423,9 +1417,9 @@ M68000::op_abcd_sbcd(bool add)
 
 	if (op & 8) {
 		idle(2);
-		m_a[rx] -= rx == 7 ? 2 : 1;
+		m_a[rx] -= step_of(BYTE, rx);
 		const uint32_t src = read_byte(m_a[rx]);
-		m_a[ry] -= ry == 7 ? 2 : 1;
+		m_a[ry] -= step_of(BYTE, ry);
 		const uint32_t dst = read_byte(m_a[ry]);
 		const uint32_t r = bcd(add, dst, src);
 		prefetch();
