@@ -31,7 +31,6 @@
 /* The mesh programs of the board drawing with OpenGL (drawing_gl.hpp). */
 
 #include <cstdint>
-#include <cstdio>
 #include <string>
 #include <unordered_map>
 

@@ -30,13 +30,10 @@
  * list (ODIN_LIST_FP). */
 
 #include "odin/host/renderer/hikaru/renderer.hpp"
-#include "odin/machine/boards/hikaru/hikaru_gpu.hpp"
 
 #include <cinttypes>
 #include <cstdarg>
 #include <cstdio>
-#include <cstdlib>
-#include <string>
 
 namespace odin {
 

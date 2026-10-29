@@ -25,7 +25,6 @@
 #ifndef ODIN_SH4_HOST_HPP
 #define ODIN_SH4_HOST_HPP
 
-#include <cstddef>
 #include <cstdint>
 
 #include "odin/machine/core/host_code.hpp"

@@ -38,7 +38,6 @@
 #include <utility>
 
 #include "imgui/imgui.h"
-#include "imgui/imgui_impl_sdl3.h"
 /* Its menus closed from outside them, Dear ImGui's own code */
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wconversion"

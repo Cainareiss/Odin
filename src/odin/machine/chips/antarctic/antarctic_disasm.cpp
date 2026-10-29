@@ -32,7 +32,6 @@
 #include "odin/common/bytes.hpp"
 
 #include <array>
-#include <bit>
 #include <cmath>
 #include <cstdarg>
 #include <cstdio>

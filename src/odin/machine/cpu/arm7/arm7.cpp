@@ -33,7 +33,6 @@
 #include "odin/common/bytes.hpp"
 
 #include <algorithm>
-#include <bit>
 #include <cstring>
 #include <format>
 #include <unordered_map>

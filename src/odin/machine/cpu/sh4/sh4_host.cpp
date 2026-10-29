@@ -27,7 +27,6 @@
 #include "odin/common/env.hpp"
 #include "odin/machine/cpu/sh4/sh4.hpp"
 
-#include <cstring>
 
 namespace odin {
 

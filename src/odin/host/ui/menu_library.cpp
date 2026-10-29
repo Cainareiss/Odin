@@ -37,7 +37,6 @@
 #include <utility>
 
 #include "imgui/imgui.h"
-#include "imgui/imgui_impl_sdl3.h"
 #include "odin/host/ui/menu_kit.hpp"
 
 namespace odin {

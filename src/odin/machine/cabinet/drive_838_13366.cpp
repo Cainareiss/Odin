@@ -25,7 +25,6 @@
 #include "odin/machine/cabinet/drive_838_13366.hpp"
 
 #include <algorithm>
-#include <cstring>
 
 namespace odin {
 

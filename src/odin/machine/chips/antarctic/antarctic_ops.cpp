@@ -33,7 +33,6 @@
 #include "odin/machine/chips/antarctic/antarctic.hpp"
 #include "odin/common/bytes.hpp"
 
-#include <bit>
 #include <cmath>
 #include <cstring>
 

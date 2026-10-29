@@ -25,7 +25,6 @@
 #ifndef ODIN_ENV_HPP
 #define ODIN_ENV_HPP
 
-#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <string>

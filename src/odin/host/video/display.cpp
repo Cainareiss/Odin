@@ -27,11 +27,9 @@
 
 #include "odin/host/video/display.hpp"
 
-#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cinttypes>
-#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
