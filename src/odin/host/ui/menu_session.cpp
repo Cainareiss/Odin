@@ -65,8 +65,6 @@ open_archive(const FolderDialog::Answer &answer, const GameList &games, std::str
 	return std::nullopt;
 }
 
-/* [outputs] network: the outputs sent to the programs of lamps. The last
- * line says. */
 bool
 network_on(const Settings &settings)
 {
@@ -111,7 +109,6 @@ link_settings(const Settings &settings)
 	return link;
 }
 
-/* ODIN_MENU_TEST: Escape pressed and released */
 void
 press_escape()
 {

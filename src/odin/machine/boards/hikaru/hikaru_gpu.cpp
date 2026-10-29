@@ -137,9 +137,8 @@ HikaruGpu::set_reset_lines(bool gp_res, bool pci1_res)
  * (@0C01B020, mask 0x7A) and then goes through a recovery that writes 0x02
  * to 15000084 (@0C012752). None of them is raised here.
  *
- * HEURISTIC: bit 7 follows the causes of 1A000018. The handler writes it
- * back before it acknowledges them (@0C0102C0): were it to stay set until
- * written, every interrupt of the GPU 1A would be taken twice.
+ * Bit 7 follows the causes of 1A000018: the HEURISTIC at
+ * Antarctic::set_display_irq.
  *
  * Bits in 1A000018:
  *

@@ -217,8 +217,6 @@ read_sound(const Settings &settings, Options &options)
 
 } /* namespace */
 
-/* The help is shown for -h and for an option that is not right. Without
- * options Odin opens its window and waits. */
 Parsed
 parse_options(int argc, char **argv, Options &options)
 {
@@ -305,9 +303,6 @@ parse_options(int argc, char **argv, Options &options)
 	return wrong ? Parsed::WRONG : Parsed::HELP_ASKED;
 }
 
-/* What the command line says, and odin.ini where it says nothing: read
- * again after the library and each game, which change odin.ini (a line
- * gone, its value by default again) */
 Options
 with_settings(const Options &command, const Settings &settings)
 {
@@ -514,9 +509,6 @@ load_game_list(GameList &games)
 	return false;
 }
 
-/* Every key of odin.ini, at its value by default, in the order the file
- * shows them: what holds for every game (INSTALL), then the sound, the
- * controls and the gamepads of each game of the list */
 std::vector<Settings::Known>
 known_settings(const GameList &games)
 {

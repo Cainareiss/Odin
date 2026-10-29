@@ -88,6 +88,9 @@ class Worker;
  *				starts when the board has run the next one,
  *				or has to wait for it. The pictures must be
  *				the same.
+ *  ODIN_WINDOW_SHOT=<prefix>	the whole window as drawn, to
+ *				<prefix>-<what>-<frame>.ppm, every
+ *				ODIN_SCREENSHOT_EVERY frames
  *
  * and for the looks at what is drawn, see Renderer::Options: HR_LOG,
  * HR_LOG_FRAME, ODIN_LIST_FP, ODIN_LIST_DUMP, ODIN_LISTS_TEST,
@@ -294,26 +297,21 @@ private:
 	/* The debug switches as text, for the title */
 	std::string m_message;
 
-	/* For the tests: ODIN_LATE_DRAW, the drawing given last waits for the
-	 * semaphore */
+	/* ODIN_LATE_DRAW: the drawing given last waits for the semaphore */
 	bool m_late;
 	bool m_held;
 	std::binary_semaphore m_late_draw;
 
-	/* Debug: what the environment asks for (ODIN_SCREENSHOT,
-	 * ODIN_SCREENSHOT_EVERY, ODIN_PICTURE_FP, ODIN_WINDOW_FP, ODIN_SPEED);
-	 * for the tests: ODIN_WINDOW_SHOT=<prefix>, the whole window as drawn
-	 * written to <prefix>-<what>-<frame>.ppm, each ODIN_SCREENSHOT_EVERY
-	 * frames */
+	/* What the environment asks for (the list above) */
 	const char *m_shot_prefix, *m_window_shot;
 	unsigned m_shot_every;
 	bool m_fingerprint, m_window_fp;
 	std::vector<uint8_t> m_pixels, m_window_pixels;
 	bool m_speed;
 	uint64_t m_speed_since, m_speed_last, m_speed_longest;
-	/* Debug: ODIN_STATS, the host time of the drawings on their thread,
-	 * and what the board waited for them: at the end of a frame, and
-	 * before it changed what a drawing reads */
+	/* ODIN_STATS: the host time of the drawings on their thread, and what
+	 * the board waited for them: at the end of a frame, and before it
+	 * changed what a drawing reads */
 	bool m_stats;
 	uint64_t m_draw_ns, m_wait_frame_ns, m_wait_write_ns;
 	unsigned m_drawn;

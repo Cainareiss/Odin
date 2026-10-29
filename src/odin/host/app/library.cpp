@@ -79,12 +79,6 @@ library_pictures(Display &display, const LibraryState &state, const std::string 
 
 } /* namespace */
 
-/* The library, Odin started without a game, until one is chosen there or
- * by Open... (its name, and the folder of its archive: empty, that of the
- * games), or Odin is to quit (no name). The game played before is chosen
- * again; `failed`, one that did not start, says so. The bar is over it, at
- * all times; the menu opens over it as over a game, its page Input on the
- * game chosen. What they change is kept in odin.ini and taken at once. */
 Opened
 library(const Options &command, const GameList &games, Settings &settings, const std::string &settings_file,
         Display &display, Keyboard &keys, Pointers *pointers, const std::string &last, const std::string &failed)

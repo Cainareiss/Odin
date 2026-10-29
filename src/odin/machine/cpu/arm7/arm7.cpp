@@ -962,9 +962,6 @@ Arm7::Decoded *Arm7::decoded_page(uint32_t page)
 	return m_decoded[page].get();
 }
 
-/* Save and load fold the active bank into the mode banks so that the
- * layout of Arm7State does not depend on the mode. */
-
 namespace {
 
 uint32_t *state_slot(Arm7State &s, uint32_t mode, uint32_t idx)

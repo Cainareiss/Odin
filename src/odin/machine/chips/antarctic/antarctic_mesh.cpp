@@ -426,16 +426,13 @@ Antarctic::push_vertices(const Vertex *v, uint32_t flags, uint32_t num)
 			last.info.full = 0;
 			last.body = odin_vertex_body_t{};
 
-			/* Set the position, colors and alpha. */
 			for (unsigned i = 0; i < 3; i++)
 				last.body.position[i] = v->body.position[i];
 			copy_colors(last, *v);
 
-			/* Account for the added vertex. */
 			m_push.num_verts += 1;
 		}
 
-		/* Set the normal. */
 		if (flags & PUSH_NRM)
 			for (unsigned i = 0; i < 3; i++)
 				tmp(2).body.normal[i] = v->body.normal[i];
@@ -450,7 +447,6 @@ Antarctic::push_vertices(const Vertex *v, uint32_t flags, uint32_t num)
 				(v->info.rotate() ? 0 : 64) +
 				(v->info.translate() ? 0 : 128));
 
-		/* Set the texcoords. */
 		if (flags & PUSH_TXC)
 			copy_texcoords(tmp(2), *v);
 
@@ -464,7 +460,7 @@ Antarctic::push_vertices(const Vertex *v, uint32_t flags, uint32_t num)
 			copy_texcoords(tmp(2 - i), v[i]);
 	}
 
-	/* Finish the previous triangle. */
+	/* A vertex whose tricap is 7 closes its triangle */
 	if (v[0].info.tricap() == 7) {
 		tmp(2).info.full = v[0].info.full;
 		add_triangle();

@@ -143,8 +143,7 @@ struct Sh4Threaded {
 };
 
 /* Host code calls each instruction of a block in turn and is told what
- * comes next: 0, the block goes on; 1, back to the run loop; anything else,
- * the host code of the block to go to. */
+ * comes next, as sh4_host.hpp says */
 struct Sh4Called {
 	using Ret = uintptr_t;
 
@@ -1253,7 +1252,8 @@ struct Sh4OpsT {
 	static Ret trapa(Sh4 &c, const Op *op) { fail(c, op, "TRAPA is not implemented"); }
 
 	/* Cache and store queues: there is no cache, and a store queue write
-	 * goes to its target at once, so PREF has nothing left to send. */
+	 * went to its target at once (the HEURISTIC in sh4.cpp), so PREF has
+	 * nothing left to send. */
 	static Ret movca(Sh4 &c, const Op *op) { return next(c, op, c.write(op, c.m_r.r[op->n], c.m_r.r[0])); }
 
 	/* FPU registers */

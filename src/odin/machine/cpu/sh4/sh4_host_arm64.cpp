@@ -272,7 +272,6 @@ void Sh4Host::float_to(uint32_t rank)
 	emit(CSEL | (X10 << 16) | (VC << 12) | (A << 5) | A);
 }
 
-/* s0 = s0 * s2 + s1 */
 void Sh4Host::float_fused()
 {
 	emit(FMADD | (2 << 16) | (1 << 10) | (0 << 5) | 0);

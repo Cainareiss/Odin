@@ -411,14 +411,12 @@ Antarctic::step_texture_transfer()
 		fatal("texture transfer table out of the command RAM", reg(0x0C));
 	std::memcpy(entry, &m_cmdram[table], sizeof(entry));
 
-	/* If the entry supplies a positive size, process it */
 	if (entry[1]) {
 		transfer_texture(entry);
 		reg(0x0C) += 0x10;
 		m_s.transfer_left--;
 	}
 
-	/* If there are no more entries, stop */
 	if (m_s.transfer_left == 0) {
 		reg(0x14) = 0;
 		raise(IRQ_TRANSFER_END);
@@ -522,15 +520,14 @@ Antarctic::copy_texture(uint32_t bus_addr, uint32_t size, const odin_texhead_t &
 		copy_level(src, m_texram[bank], bus_addr + size_copied,
 		           dstx, dsty, level_w, level_h);
 
-		/* Update the number of transferred bytes. */
 		size_copied += level_w * level_h * 2;
 
-		/* Update the destination coords for the next level. */
+		/* The next level: halfway to the right and bottom edges of the
+		 * texture RAM, in the other bank */
 		dstx += (2048 - dstx) / 2;
 		dsty += (1024 - dsty) / 2;
 		bank ^= 1;
 
-		/* Update the level depth and sizes. */
 		level_w = std::max(level_w >> 1, 1u);
 		level_h = std::max(level_h >> 1, 1u);
 		level += 1;
