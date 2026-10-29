@@ -26,6 +26,7 @@
 #define ODIN_ARM7_HPP
 
 #include <array>
+#include <bit>
 #include <cstdint>
 #include <cstdio>
 #include <memory>
@@ -181,7 +182,7 @@ public:
 private:
 	static uint8_t u8(uint32_t v) { return static_cast<uint8_t>(v); }
 	static uint16_t u16(uint32_t v) { return static_cast<uint16_t>(v); }
-	static uint32_t ror(uint32_t v, uint32_t n) { n &= 31; return n ? ((v >> n) | (v << (32 - n))) : v; }
+	static uint32_t ror(uint32_t v, uint32_t n) { return std::rotr(v, static_cast<int>(n & 31)); }
 	static uint32_t bit(uint32_t v, uint32_t n) { return (v >> n) & 1; }
 
 	/* Bus access with the trace point. */

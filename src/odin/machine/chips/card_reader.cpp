@@ -25,6 +25,7 @@
 #include "odin/machine/chips/card_reader.hpp"
 
 #include <algorithm>
+#include <bit>
 #include <format>
 
 #include "odin/host/app/user_files.hpp"
@@ -58,7 +59,7 @@ uint8_t tracks_of(uint8_t selector)
 
 bool even_parity(uint8_t byte)
 {
-	return (__builtin_popcount(byte) & 1) == 0;
+	return (std::popcount(byte) & 1) == 0;
 }
 
 } /* namespace */

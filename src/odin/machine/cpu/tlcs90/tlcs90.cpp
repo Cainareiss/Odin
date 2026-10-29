@@ -24,6 +24,7 @@
 
 #include "odin/machine/cpu/tlcs90/tlcs90.hpp"
 
+#include <bit>
 #include <cstdio>
 #include <cstdlib>
 #include <utility>
@@ -47,10 +48,7 @@ namespace {
 uint8_t
 parity_flag(uint8_t v)
 {
-	v ^= static_cast<uint8_t>(v >> 4);
-	v ^= static_cast<uint8_t>(v >> 2);
-	v ^= static_cast<uint8_t>(v >> 1);
-	return (v & 1) ? 0 : Tlcs90::FLAG_V;
+	return (std::popcount(v) & 1) ? 0 : Tlcs90::FLAG_V;
 }
 
 uint8_t

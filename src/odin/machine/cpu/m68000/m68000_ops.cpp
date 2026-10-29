@@ -36,14 +36,6 @@ namespace {
 
 enum Alu : unsigned { ALU_OR, ALU_AND, ALU_SUB, ALU_ADD, ALU_EOR = 5, ALU_CMP };
 
-unsigned ones(uint32_t v)
-{
-	unsigned n = 0;
-	for (; v; v &= v - 1)
-		n++;
-	return n;
-}
-
 } /* namespace */
 
 /* OR, AND, SUB, ADD, EOR and CMP: the result and the flags */
@@ -1280,10 +1272,10 @@ M68000::op_mul(bool is_signed)
 	if (is_signed) {
 		r = static_cast<uint32_t>(static_cast<int32_t>(static_cast<int16_t>(src)) *
 		                          static_cast<int32_t>(static_cast<int16_t>(m_d[dreg])));
-		n = ones(((src << 1) ^ src) & 0xFFFF);
+		n = static_cast<unsigned>(std::popcount(((src << 1) ^ src) & 0xFFFF));
 	} else {
 		r = src * (m_d[dreg] & 0xFFFF);
-		n = ones(src);
+		n = static_cast<unsigned>(std::popcount(src));
 	}
 	m_d[dreg] = r;
 	flags_nz(LONG, r);

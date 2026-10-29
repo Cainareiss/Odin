@@ -112,7 +112,7 @@ private:
 	void wr16(uint16_t addr, uint16_t v);
 	void push(uint16_t v);
 	uint16_t pop();
-	void incr_r() { m_r = u8((m_r & 0x80) | ((m_r + 1) & 0x7F)); }
+	void incr_r() { add_refresh(1); }
 
 	/* Register file views. */
 	void set_bc(uint16_t v) { m_b = u8(v >> 8); m_c = u8(v); }
