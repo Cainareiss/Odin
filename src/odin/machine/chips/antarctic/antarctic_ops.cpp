@@ -87,11 +87,11 @@ set_flag(uint32_t &word, uint32_t flag, bool on)
  * Control Flow
  * ============
  *
- * The CP supports jumps and subroutine calls, including conditional calls
- * (for selecting the right mesh LOD probably?)
+ * The CP supports jumps and subroutine calls, including conditional calls.
  *
- * The call stack is probably held in CMDRAM at the addresses specified by
- * MMIOs 1500007{4,8}.
+ * HEURISTIC: the call stack is in the command RAM, from the addresses the
+ * registers 1500007{4,8} give (push_pc, pop_pc). The games run right with
+ * it; a stack out of the command RAM stops Odin.
  */
 
 uint32_t
