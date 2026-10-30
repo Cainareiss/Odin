@@ -7,6 +7,7 @@
  *  ╚═════╝ ╚═════╝ ╚═╝╚═╝  ╚═══╝
  *
  * Copyright (C) 2026 Réda Chérif-Touil
+ * Copyright (C) 2026 Daniel Martin
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
