@@ -306,6 +306,15 @@ VkDrawing::present(PictureRect rect, unsigned window_w, unsigned window_h)
 	vk::Image &window = m_card.window_image(window_w, window_h);
 	const int32_t x = static_cast<int32_t>(rect.x), y = static_cast<int32_t>(rect.y);
 	const bool around = w != window_w || h != window_h;
+	/* The frame through the presentation into an image, in that rectangle */
+	const auto through = [&](vk::Image &to, const VkRect2D &area, const PresentPush &push, VkAttachmentLoadOp load) {
+		m_card.barrier(cb, m_frame, vk::SAMPLED);
+		m_card.begin_drawing(cb, to, area, load);
+		m_card.bind_images(cb, m_presenter, { &m_frame }, m_nearest);
+		m_fn.vkCmdPushConstants(cb, m_presenter.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
+		m_fn.vkCmdDraw(cb, 3, 1, 0, 0);
+		m_card.end_drawing(cb);
+	};
 
 	if (around && (m_filter || (w == width() && h == height())))
 		clear(cb, window, 1.0f);
@@ -316,12 +325,7 @@ VkDrawing::present(PictureRect rect, unsigned window_w, unsigned window_h)
 		vk::Image &frame = m_filter->frame(SCREEN_WIDTH, SCREEN_HEIGHT);
 		const PresentPush push{ { 0.0f, 0.0f, static_cast<float>(m_scale), static_cast<float>(m_scale) }, 0.0f };
 
-		m_card.barrier(cb, m_frame, vk::SAMPLED);
-		m_card.begin_drawing(cb, frame, { { 0, 0 }, { SCREEN_WIDTH, SCREEN_HEIGHT } });
-		m_card.bind_images(cb, m_presenter, { &m_frame }, m_nearest);
-		m_fn.vkCmdPushConstants(cb, m_presenter.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
-		m_fn.vkCmdDraw(cb, 3, 1, 0, 0);
-		m_card.end_drawing(cb);
+		through(frame, { { 0, 0 }, { SCREEN_WIDTH, SCREEN_HEIGHT } }, push, VK_ATTACHMENT_LOAD_OP_LOAD);
 		m_filter->draw(window, x, y, w, h, m_filter_frames++);
 		return;
 	}
@@ -343,13 +347,7 @@ VkDrawing::present(PictureRect rect, unsigned window_w, unsigned window_h)
 	                          static_cast<float>(height()) / static_cast<float>(h) },
 	                        static_cast<float>(window_h) };
 
-	m_card.barrier(cb, m_frame, vk::SAMPLED);
-	m_card.begin_drawing(cb, window, { { x, y }, { w, h } },
-	                     around ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD);
-	m_card.bind_images(cb, m_presenter, { &m_frame }, m_nearest);
-	m_fn.vkCmdPushConstants(cb, m_presenter.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
-	m_fn.vkCmdDraw(cb, 3, 1, 0, 0);
-	m_card.end_drawing(cb);
+	through(window, { { x, y }, { w, h } }, push, around ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD);
 }
 
 /* The filter before goes once the card is done with the frames it drew */
