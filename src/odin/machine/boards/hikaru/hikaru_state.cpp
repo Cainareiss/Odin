@@ -98,6 +98,18 @@ static_assert(sizeof(SilenceItem) != sizeof(Drive838_13366::State) && sizeof(Sil
 
 } /* namespace */
 
+/* The memories of a state, in its order: the main RAMs, the command RAM,
+ * the frame buffer, the texture RAMs, the sound RAMs, the RAM of the MIE,
+ * the backup RAM, the registers of the two memory controllers and the box
+ * of the master and the slave */
+std::array<std::span<uint8_t>, 13>
+Hikaru::state_memories()
+{
+	return { m_ram[MASTER], m_ram[SLAVE], m_cmdram, m_fb, m_texram[0], m_texram[1], m_sound_ram[MASTER],
+		 m_sound_ram[SLAVE], m_mie_ram, m_bram, m_memctl[MASTER].registers(), m_memctl[SLAVE].registers(),
+		 m_mscomm };
+}
+
 bool
 Hikaru::save_items(StateFile &state)
 {
@@ -116,14 +128,9 @@ Hikaru::save_items(StateFile &state)
 	}
 
 	/* The memories */
-	ok = put_bytes(state, m_ram[MASTER]) && put_bytes(state, m_ram[SLAVE]) &&
-	     put_bytes(state, m_cmdram) && put_bytes(state, m_fb) &&
-	     put_bytes(state, m_texram[0]) && put_bytes(state, m_texram[1]) &&
-	     put_bytes(state, m_sound_ram[MASTER]) && put_bytes(state, m_sound_ram[SLAVE]) &&
-	     put_bytes(state, m_mie_ram) && put_bytes(state, m_bram) &&
-	     put_bytes(state, m_memctl[MASTER].registers()) &&
-	     put_bytes(state, m_memctl[SLAVE].registers()) &&
-	     put_bytes(state, m_mscomm);
+	ok = true;
+	for (const std::span<uint8_t> memory : state_memories())
+		ok = ok && put_bytes(state, memory);
 	if (ok && !m_rombd.local_ram().empty())
 		ok = put_bytes(state, m_rombd.local_ram());
 	ok = ok && put_bytes(state, m_iregs[MASTER]) && put_bytes(state, m_iregs[SLAVE]);
@@ -201,14 +208,9 @@ Hikaru::load_items(StateFile &state)
 		return false;
 	}
 
-	ok = get_bytes(state, m_ram[MASTER]) && get_bytes(state, m_ram[SLAVE]) &&
-	     get_bytes(state, m_cmdram) && get_bytes(state, m_fb) &&
-	     get_bytes(state, m_texram[0]) && get_bytes(state, m_texram[1]) &&
-	     get_bytes(state, m_sound_ram[MASTER]) && get_bytes(state, m_sound_ram[SLAVE]) &&
-	     get_bytes(state, m_mie_ram) && get_bytes(state, m_bram) &&
-	     get_bytes(state, m_memctl[MASTER].registers()) &&
-	     get_bytes(state, m_memctl[SLAVE].registers()) &&
-	     get_bytes(state, m_mscomm);
+	ok = true;
+	for (const std::span<uint8_t> memory : state_memories())
+		ok = ok && get_bytes(state, memory);
 	m_fb_writes.wrote_all();
 	if (ok && !m_rombd.local_ram().empty())
 		ok = get_bytes(state, m_rombd.local_ram());

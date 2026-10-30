@@ -247,6 +247,7 @@ private:
 	/* hikaru_state.cpp */
 	bool save_items(StateFile &state);
 	bool load_items(StateFile &state);
+	std::array<std::span<uint8_t>, 13> state_memories();
 
 	const Game &m_game;
 	bool m_verbose;
