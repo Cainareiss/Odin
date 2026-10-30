@@ -88,10 +88,10 @@ public:
 
 private:
 	/* The program of an image over a viewport, made when first drawn */
-	bool image_program();
+	void image_program();
 	/* Those of the sides lit by the picture, and the filtering sampler
 	 * they read with, made when first drawn */
-	bool sides_programs();
+	void sides_programs();
 	/* The two textures of the background, at the size of the half
 	 * picture; the background from that framebuffer and buffer, w by h */
 	void size_background(unsigned w, unsigned h);
@@ -199,7 +199,7 @@ GlGraphics::forget_image(HostImage image)
 		glDeleteTextures(1, &image.id);
 }
 
-bool
+void
 GlGraphics::image_program()
 {
 	if (!m_image_program) {
@@ -207,10 +207,9 @@ GlGraphics::image_program()
 		m_image_light = glGetUniformLocation(m_image_program, "light");
 		glGenVertexArrays(1, &m_image_vao);
 	}
-	return m_image_program != 0;
 }
 
-bool
+void
 GlGraphics::sides_programs()
 {
 	if (!m_sides) {
@@ -233,7 +232,6 @@ GlGraphics::sides_programs()
 		glSamplerParameteri(m_linear, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 		glSamplerParameteri(m_linear, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	}
-	return m_average != 0 && m_sides != 0 && m_stretch != 0;
 }
 
 void
@@ -241,8 +239,9 @@ GlGraphics::draw_bezel(HostImage bezel, unsigned window_w, unsigned window_h)
 {
 	const float ww = static_cast<float>(window_w), wh = static_cast<float>(window_h);
 
-	if (!bezel.id || !image_program())
+	if (!bezel.id)
 		return;
+	image_program();
 
 	const float k = std::min(ww / bezel.w, wh / bezel.h);
 	const GLsizei w = static_cast<GLsizei>(std::lround(bezel.w * k)), h = static_cast<GLsizei>(std::lround(bezel.h * k));
@@ -269,8 +268,8 @@ GlGraphics::draw_blurred_sides(HostPicture picture, PictureRect rect, unsigned w
 	const GLint ww = static_cast<GLint>(window_w), wh = static_cast<GLint>(window_h);
 	GLint texture = 0;
 
-	if (!image_program() || !sides_programs())
-		return;
+	image_program();
+	sides_programs();
 	if (!m_sides_fb[0]) {
 		glGenFramebuffers(3, m_sides_fb);
 		glGenTextures(3, m_sides_tex);
