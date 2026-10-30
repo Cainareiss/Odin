@@ -225,13 +225,10 @@ GlDrawing::upload_viewport(const odin_mesh_t &mesh)
 	 * hikaru_draw.hpp), whatever the program; OpenGL counts the lines from
 	 * the bottom. */
 	if (m_scissor_vp_index != mesh.vp_index) {
-		const GLint n = static_cast<GLint>(m_scale);
+		const ClipWindow clip = clip_window(vp, m_scale);
 
 		m_scissor_vp_index = mesh.vp_index;
-		glScissor(static_cast<GLint>(vp.clip.l) * n,
-		          (static_cast<GLint>(SCREEN_HEIGHT) - static_cast<GLint>(vp.clip.t)) * n,
-		          static_cast<GLsizei>(vp.clip.r - vp.clip.l) * n,
-		          static_cast<GLsizei>(vp.clip.t - vp.clip.b) * n);
+		glScissor(clip.x, clip.y, clip.w, clip.h);
 		glFrontFace(view_turned_over(vp) ? GL_CW : GL_CCW);
 	}
 

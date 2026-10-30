@@ -790,11 +790,7 @@ VkDrawing::set_view(const odin_mesh_t &mesh)
 	const VkCommandBuffer cb = m_card.commands();
 
 	if (m_scissor_vp_index != mesh.vp_index) {
-		const int32_t n = static_cast<int32_t>(m_scale);
-		const int32_t x = static_cast<int32_t>(vp.clip.l) * n;
-		const int32_t y = (static_cast<int32_t>(SCREEN_HEIGHT) - static_cast<int32_t>(vp.clip.t)) * n;
-		const int32_t w = static_cast<int32_t>(vp.clip.r - vp.clip.l) * n;
-		const int32_t h = static_cast<int32_t>(vp.clip.t - vp.clip.b) * n;
+		const auto [x, y, w, h] = clip_window(vp, m_scale);
 
 		m_scissor_vp_index = mesh.vp_index;
 		if (w >= 0 && h >= 0) {

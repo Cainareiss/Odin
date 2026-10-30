@@ -159,6 +159,20 @@ public:
 		if (vp.clip.l >= vp.clip.r || vp.clip.b >= vp.clip.t || vp.clip.n >= std::fabs(vp.clip.f))
 			repeats::error("inverted viewport clipping planes: %s", odin_viewport_str(&vp));
 	}
+	/* The clip window of a view in the pixels of a picture `scale` times
+	 * the screen, its lines counted from the bottom as the pictures keep
+	 * them; the scissor cuts what leaves the screen */
+	struct ClipWindow {
+		int32_t x, y, w, h;
+	};
+	static ClipWindow clip_window(const odin_viewport_t &vp, unsigned scale)
+	{
+		const int32_t n = static_cast<int32_t>(scale);
+
+		return { static_cast<int32_t>(vp.clip.l) * n,
+			 (static_cast<int32_t>(SCREEN_HEIGHT) - static_cast<int32_t>(vp.clip.t)) * n,
+			 static_cast<int32_t>(vp.clip.r - vp.clip.l) * n, static_cast<int32_t>(vp.clip.t - vp.clip.b) * n };
+	}
 	/* Its second modelview: the first one where it has none */
 	static uint32_t modelview2_of(const odin_display_list_t &list, const odin_mesh_t &mesh, uint32_t first)
 	{
