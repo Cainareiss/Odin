@@ -42,9 +42,11 @@ namespace odin {
 
 namespace {
 
-/* The texture unit of the colour below the fragments */
+/* The texture unit of the colour below the fragments, and those of the
+ * peeling; the others are MeshPrograms' (programs_gl.hpp) */
 constexpr GLenum UNIT_BELOW = 5;
 constexpr GLenum UNIT_PEEL_COLOR = 10, UNIT_PEEL_LAYER = 11, UNIT_PEEL_INFO = 12;
+static_assert(UNIT_BELOW < MeshPrograms::UNIT_SOLID_DEPTH && UNIT_PEEL_COLOR > MeshPrograms::UNIT_FLAGGED_EYE);
 
 GLuint
 pair_framebuffer(GLuint first, GLuint second)

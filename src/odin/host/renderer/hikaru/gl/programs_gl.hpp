@@ -92,7 +92,8 @@ struct MeshProgram {
  * when the game starts. */
 class MeshPrograms {
 public:
-	/* The texture units the programs read, set once */
+	/* The texture units the programs read, set once; those of the
+	 * translucent passes are in translucent_gl.cpp */
 	enum : GLint {
 		UNIT_TEXTURE = 0,
 		UNIT_SOLID_DEPTH = 6,
