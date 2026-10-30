@@ -331,6 +331,7 @@ private:
 	                     bool reset_ext);
 	void choose_depth_format();
 	bool make_device(std::string &why);
+	void make_frames();
 	uint32_t memory_type(uint32_t types, VkMemoryPropertyFlags flags) const;
 	Image make_image(VkFormat format, unsigned w, unsigned h, unsigned levels, VkImageUsageFlags usage,
 	                 const VkComponentMapping &swizzle, bool placed);

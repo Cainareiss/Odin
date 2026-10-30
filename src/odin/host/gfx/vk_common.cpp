@@ -469,6 +469,15 @@ Context::make_device(std::string &why)
 #undef ODIN_VK_LOAD2
 	m_fn.vkGetDeviceQueue(m_device, m_queue_family, 0, &m_queue);
 
+	make_frames();
+	return true;
+}
+
+/* What each frame in flight has of its own: its command buffers (one for
+ * the uploads), its fence, its descriptors */
+void
+Context::make_frames()
+{
 	for (Frame &frame : m_frames) {
 		const VkCommandPoolCreateInfo pool{ VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO, nullptr,
 		                                    VK_COMMAND_POOL_CREATE_TRANSIENT_BIT, m_queue_family };
@@ -493,7 +502,6 @@ Context::make_device(std::string &why)
 		                                              sizes };
 		check(m_fn.vkCreateDescriptorPool(m_device, &descriptors, nullptr, &frame.descriptors), "a descriptor pool");
 	}
-	return true;
 }
 
 void
