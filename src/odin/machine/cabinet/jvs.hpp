@@ -118,6 +118,20 @@ enum Function : uint8_t {
 	FUNC_BACKUP = 0x15,
 };
 
+/* The outputs of a board as GENERIC_OUTPUT_1 sends them: output n (from 0)
+ * is bit 7 - n % 8 of byte n / 8. Whether one is on, and one turned on. */
+inline bool
+output_on(std::span<const uint8_t> outputs, unsigned n)
+{
+	return n / 8 < outputs.size() && (outputs[n / 8] & (0x80u >> (n % 8)));
+}
+
+inline void
+set_output(std::span<uint8_t> outputs, unsigned n)
+{
+	outputs[n / 8] = static_cast<uint8_t>(outputs[n / 8] | 0x80u >> (n % 8));
+}
+
 } /* namespace jvs */
 
 /* What an I/O board reads on its connectors. JVS bit order (§ 4.3.10):

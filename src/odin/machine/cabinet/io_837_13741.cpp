@@ -148,7 +148,7 @@ Io837_13741::outputs() const
 		const unsigned bit = n <= 6 ? n + 1 : n <= 14 ? n - 7 : n - 15;
 
 		if (m_chip.gpio_is_output(port) && !(m_chip.gpio_latch(port) & (1u << bit)))
-			m_outputs[(n - 1) / 8] = static_cast<uint8_t>(m_outputs[(n - 1) / 8] | 0x80u >> ((n - 1) % 8));
+			jvs::set_output(m_outputs, n - 1);
 	}
 	return m_outputs;
 }

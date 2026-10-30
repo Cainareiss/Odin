@@ -36,6 +36,7 @@
 
 #include "odin/host/input/roles.hpp"
 #include "odin/host/app/rom_files.hpp"
+#include "odin/machine/cabinet/jvs.hpp"
 
 struct json_t;
 
@@ -145,9 +146,7 @@ struct GameOutput {
 	/* Whether it is on, among the outputs of the board */
 	bool on(std::span<const uint8_t> outputs) const
 	{
-		const unsigned bit = output - 1;
-
-		return bit / 8 < outputs.size() && (outputs[bit / 8] & (0x80 >> (bit % 8)));
+		return jvs::output_on(outputs, output - 1);
 	}
 };
 

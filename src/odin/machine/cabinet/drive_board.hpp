@@ -30,6 +30,8 @@
 #include <cstdint>
 #include <span>
 
+#include "odin/machine/cabinet/jvs.hpp"
+
 namespace odin {
 
 /* The drive board of a cabinet, the motor of its wheel, as the outputs of
@@ -51,12 +53,9 @@ struct DriveBoard {
 	{
 		uint8_t set = 0;
 
-		for (unsigned bit = 0; bit < 8; bit++) {
-			const unsigned output = first_output + bit - 1;
-
-			if (output / 8 < outputs.size() && (outputs[output / 8] & (0x80 >> (output % 8))))
+		for (unsigned bit = 0; bit < 8; bit++)
+			if (jvs::output_on(outputs, first_output + bit - 1))
 				set = static_cast<uint8_t>(set | (1u << bit));
-		}
 		return static_cast<uint8_t>(~set);
 	}
 
