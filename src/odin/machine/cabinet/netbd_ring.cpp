@@ -322,7 +322,8 @@ NetCable::receive_frames(intptr_t from)
 	std::vector<uint8_t> data;
 
 	if (!receive_all(from, &header, sizeof header, m_stop) || header.kind != FRAME ||
-	    header.size < sizeof duration + sizeof start || header.size > sizeof duration + sizeof start + 0x10000 ||
+	    header.size < sizeof duration + sizeof start ||
+	    header.size > sizeof duration + sizeof start + NetBoard837_13404::COMM_SIZE ||
 	    !receive_all(from, &duration, sizeof duration, m_stop) || !receive_all(from, &start, sizeof start, m_stop))
 		return false;
 	data.resize(header.size - sizeof duration - sizeof start);

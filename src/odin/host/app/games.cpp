@@ -156,7 +156,7 @@ parse_switch(const json_t *value)
 
 	if (!text || (std::strncmp(text, "1P ", 3) && std::strncmp(text, "2P ", 3)))
 		return std::nullopt;
-	for (unsigned i = 0; i < 16; i++)
+	for (unsigned i = 0; i < std::size(NAMES); i++)
 		if (!std::strcmp(text + 3, NAMES[i]))
 			return JvsSwitch{ static_cast<uint8_t>(text[0] - '1'), static_cast<uint16_t>(0x8000 >> i) };
 	return std::nullopt;

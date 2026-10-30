@@ -147,14 +147,7 @@ public:
 };
 
 class JvsDevice;
-
-/* The frame being sent and the last reply. Plain data. */
-struct JvsHostState {
-	std::array<uint8_t, 512> send;
-	std::array<uint8_t, 512> recv;
-	uint32_t send_size;
-	uint32_t recv_size;
-};
+struct JvsHostState;
 
 /* What the generic part of a node keeps. Plain data. */
 struct JvsDeviceState {
@@ -202,6 +195,14 @@ private:
 	uint32_t m_send_size;
 	uint32_t m_recv_size;
 	uint32_t m_reply_cycles;
+};
+
+/* The frame being sent and the last reply. Plain data. */
+struct JvsHostState {
+	std::array<uint8_t, JvsHost::BUFFER_SIZE> send;
+	std::array<uint8_t, JvsHost::BUFFER_SIZE> recv;
+	uint32_t send_size;
+	uint32_t recv_size;
 };
 
 /* One node on the cable. The commands every board answers the same way
