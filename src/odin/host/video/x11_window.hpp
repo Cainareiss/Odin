@@ -32,9 +32,9 @@ namespace odin {
 /* Tells the window manager of X11 that the window leaves the whole display.
  * SDL tells it only when the manager said the window was on it, and some
  * do not say it (gamescope): such a manager keeps the window as large as
- * the display. False where the window is not one of X11 (Windows,
+ * the display. Nothing where the window is not one of X11 (Windows,
  * Wayland). */
-bool x11_leave_fullscreen(SDL_Window *window);
+void x11_leave_fullscreen(SDL_Window *window);
 
 } /* namespace odin */
 

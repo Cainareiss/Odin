@@ -120,8 +120,6 @@ public:
 	 * the board goes. Then the window is black again. */
 	void attach(Hikaru &board, const std::string &title);
 	void detach();
-	/* Black again, the board detached, when the window has to be drawn */
-	void show_black();
 
 	/* A frame of the board: begin_frame before the board runs it,
 	 * end_frame once it has, with its number, whether it ended after its
@@ -227,6 +225,8 @@ private:
 	void set_window_size(int w, int h, bool fullscreen);
 	bool covers_display(int w, int h) const;
 	void retitle();
+	/* Black again, the board detached, when the window has to be drawn */
+	void show_black();
 	/* The menu, made the first time the bar, a note or the library needs it */
 	void make_menu();
 	void prepare_programs(const std::string &title);

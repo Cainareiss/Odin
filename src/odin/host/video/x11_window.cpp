@@ -37,7 +37,7 @@ namespace odin {
 
 /* As SDL sends it (SDL_x11window.c): _NET_WM_STATE, remove FULLSCREEN, to
  * the root window */
-bool
+void
 x11_leave_fullscreen(SDL_Window *window)
 {
 	const SDL_PropertiesID props = SDL_GetWindowProperties(window);
@@ -48,7 +48,7 @@ x11_leave_fullscreen(SDL_Window *window)
 	XEvent e{};
 
 	if (!display || !xwindow)
-		return false;
+		return;
 	e.xclient.type = ClientMessage;
 	e.xclient.window = xwindow;
 	e.xclient.message_type = XInternAtom(display, "_NET_WM_STATE", False);
@@ -57,15 +57,13 @@ x11_leave_fullscreen(SDL_Window *window)
 	e.xclient.data.l[1] = static_cast<long>(XInternAtom(display, "_NET_WM_STATE_FULLSCREEN", False));
 	XSendEvent(display, XDefaultRootWindow(display), False, SubstructureNotifyMask | SubstructureRedirectMask, &e);
 	XFlush(display);
-	return true;
 }
 
 #else
 
-bool
+void
 x11_leave_fullscreen(SDL_Window *)
 {
-	return false;
 }
 
 #endif
