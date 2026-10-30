@@ -36,6 +36,12 @@ if(ODIN_NATIVE)
 endif()
 # No implicit FMA: identical results on every CPU
 list(APPEND OPT_FLAGS -ffp-contract=off)
+# Each function starts a line of 64 bytes: its loops keep their place in the
+# lines when other code moves (a loop moved across a line changed the time of
+# the sound by up to 10 %), so that a build is as fast as the code it has
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|amd64")
+	list(APPEND OPT_FLAGS -falign-functions=64)
+endif()
 if(ODIN_PGO STREQUAL "generate")
 	list(APPEND OPT_FLAGS -fprofile-generate -fprofile-update=single)
 elseif(ODIN_PGO STREQUAL "use")
