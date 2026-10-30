@@ -736,9 +736,9 @@ bool Sh4::onchip_write(uint32_t addr, uint32_t size, uint64_t value)
 	case INTC_ICR: {
 		uint32_t old = static_cast<uint32_t>(reg_get(2, addr));
 		sized(2);
-		only(0xC380);
+		only(ICR_NMIL | ICR_MAI | ICR_NMIB | ICR_NMIE | ICR_IRLM);
 		/* NMIL is read only */
-		reg_put(2, addr, (old & 0x8000) | (v & 0x7FFF));
+		reg_put(2, addr, (old & ICR_NMIL) | (v & ~ICR_NMIL));
 		update_irqs();
 		return true;
 	}

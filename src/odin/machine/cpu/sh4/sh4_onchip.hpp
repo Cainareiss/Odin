@@ -52,9 +52,12 @@ constexpr uint32_t TMU_TOCR = 0xD80000, TMU_TSTR = 0xD80004, TMU_TCOR0 = 0xD8000
 constexpr uint32_t SCI_SCBRR1 = 0xE00004, SCI_SCTDR1 = 0xE0000C, SCI_SCSSR1 = 0xE00010;
 constexpr uint32_t SCIF_SCBRR2 = 0xE80004, SCIF_SCFSR2 = 0xE80010;
 constexpr uint32_t UDI_SDIR = 0xF00000;
-/* ICR: an NMI taken even with SR.BL set (NMIB), the level of the NMI pin
- * (NMIL) */
-constexpr uint32_t ICR_NMIB = 1u << 9, ICR_NMIL = 1u << 15;
+/* ICR (hardware manual, 19.3.2): the IRL pins as four requests (IRLM), the
+ * edge of the NMI pin that asks (NMIE), an NMI taken even with SR.BL set
+ * (NMIB), every interrupt masked while the NMI pin is low (MAI), the level of
+ * the NMI pin (NMIL) */
+constexpr uint32_t ICR_IRLM = 1u << 7, ICR_NMIE = 1u << 8, ICR_NMIB = 1u << 9;
+constexpr uint32_t ICR_MAI = 1u << 14, ICR_NMIL = 1u << 15;
 
 } /* namespace odin */
 
