@@ -326,14 +326,7 @@ Context::choose_gpu(std::string &why)
 		m_fn.vkGetPhysicalDeviceQueueFamilyProperties(gpu, &n, nullptr);
 		std::vector<VkQueueFamilyProperties> families(n);
 		m_fn.vkGetPhysicalDeviceQueueFamilyProperties(gpu, &n, families.data());
-		std::optional<uint32_t> family;
-		for (uint32_t f = 0; f < n && !family; f++) {
-			VkBool32 shows = VK_FALSE;
-
-			m_fn.vkGetPhysicalDeviceSurfaceSupportKHR(gpu, f, m_surface, &shows);
-			if ((families[f].queueFlags & VK_QUEUE_GRAPHICS_BIT) && shows)
-				family = f;
-		}
+		const std::optional<uint32_t> family = shown_family(gpu, families);
 		if (!family)
 			continue;
 
@@ -352,34 +345,65 @@ Context::choose_gpu(std::string &why)
 		m_host_query_reset = reset && features.reset.hostQueryReset;
 		m_stamp_bits = families[*family].timestampValidBits;
 		m_creation_feedback = core13 || has(extensions, VK_EXT_PIPELINE_CREATION_FEEDBACK_EXTENSION_NAME);
-		m_extensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
-		/* Dear ImGui asks for this one by name, even under 1.3 */
-		if (has(extensions, VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME))
-			m_extensions.push_back(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
-		if (!core13)
-			for (const char *e : extensions_below_13(api))
-				if (std::strcmp(e, VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME) != 0)
-					m_extensions.push_back(e);
-		m_portability_subset = has(extensions, VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME);
-		if (m_portability_subset)
-			m_extensions.push_back(VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME);
-		if (m_gl_clip_space)
-			m_extensions.push_back(VK_EXT_DEPTH_CLIP_CONTROL_EXTENSION_NAME);
-		if (m_host_query_reset && reset_ext)
-			m_extensions.push_back(VK_EXT_HOST_QUERY_RESET_EXTENSION_NAME);
-		if (!core13 && m_creation_feedback)
-			m_extensions.push_back(VK_EXT_PIPELINE_CREATION_FEEDBACK_EXTENSION_NAME);
+		list_extensions(extensions, api, core13, reset_ext);
 		m_api_version = api;
 	}
 	if (!m_gpu)
 		return false;
 	why.clear();
 	m_fn.vkGetPhysicalDeviceMemoryProperties(m_gpu, &m_memory);
+	choose_depth_format();
+	return true;
+}
 
-	/* The depth is also copied for the translucent fragments, and read */
+/* The first queue family of the card that draws and shows in the window */
+std::optional<uint32_t>
+Context::shown_family(VkPhysicalDevice gpu, const std::vector<VkQueueFamilyProperties> &families) const
+{
+	for (uint32_t f = 0; f < families.size(); f++) {
+		VkBool32 shows = VK_FALSE;
+
+		m_fn.vkGetPhysicalDeviceSurfaceSupportKHR(gpu, f, m_surface, &shows);
+		if ((families[f].queueFlags & VK_QUEUE_GRAPHICS_BIT) && shows)
+			return f;
+	}
+	return std::nullopt;
+}
+
+/* The extensions of the device for the card chosen: those Odin needs
+ * (below Vulkan 1.3, those that are core from it), and those it uses when
+ * the card has them */
+void
+Context::list_extensions(const std::vector<VkExtensionProperties> &extensions, uint32_t api, bool core13, bool reset_ext)
+{
+	m_extensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+	/* Dear ImGui asks for this one by name, even under 1.3 */
+	if (has(extensions, VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME))
+		m_extensions.push_back(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
+	if (!core13)
+		for (const char *e : extensions_below_13(api))
+			if (std::strcmp(e, VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME) != 0)
+				m_extensions.push_back(e);
+	m_portability_subset = has(extensions, VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME);
+	if (m_portability_subset)
+		m_extensions.push_back(VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME);
+	if (m_gl_clip_space)
+		m_extensions.push_back(VK_EXT_DEPTH_CLIP_CONTROL_EXTENSION_NAME);
+	if (m_host_query_reset && reset_ext)
+		m_extensions.push_back(VK_EXT_HOST_QUERY_RESET_EXTENSION_NAME);
+	if (!core13 && m_creation_feedback)
+		m_extensions.push_back(VK_EXT_PIPELINE_CREATION_FEEDBACK_EXTENSION_NAME);
+}
+
+/* The format of the depth, which is also copied for the translucent
+ * fragments, and read */
+void
+Context::choose_depth_format()
+{
 	const VkFormatFeatureFlags depth = VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT |
 	                                   VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT | VK_FORMAT_FEATURE_TRANSFER_SRC_BIT |
 	                                   VK_FORMAT_FEATURE_TRANSFER_DST_BIT;
+
 	for (const VkFormat format : { VK_FORMAT_X8_D24_UNORM_PACK32, VK_FORMAT_D24_UNORM_S8_UINT }) {
 		VkFormatProperties props;
 
@@ -389,7 +413,6 @@ Context::choose_gpu(std::string &why)
 			break;
 		}
 	}
-	return true;
 }
 
 bool

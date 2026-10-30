@@ -45,6 +45,7 @@
 #include <initializer_list>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -324,6 +325,11 @@ private:
 	bool load(std::string &why);
 	bool make_instance(std::string &why);
 	bool choose_gpu(std::string &why);
+	std::optional<uint32_t> shown_family(VkPhysicalDevice gpu,
+	                                     const std::vector<VkQueueFamilyProperties> &families) const;
+	void list_extensions(const std::vector<VkExtensionProperties> &extensions, uint32_t api, bool core13,
+	                     bool reset_ext);
+	void choose_depth_format();
 	bool make_device(std::string &why);
 	uint32_t memory_type(uint32_t types, VkMemoryPropertyFlags flags) const;
 	Image make_image(VkFormat format, unsigned w, unsigned h, unsigned levels, VkImageUsageFlags usage,
