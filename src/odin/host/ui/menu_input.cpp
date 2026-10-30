@@ -285,9 +285,8 @@ input_rows(const MenuState &state)
 		});
 		rows.push_back({ std::move(name), slot, std::move(inputs), lit, catchable });
 	};
-	/* After the controls in `touched`: COIN1, COIN2, TEST */
 	const auto worked = [&state, &controls](size_t i) {
-		return state.touched.size() == controls.size() + 3 && state.touched[i];
+		return state.touched.size() == controls.size() + MenuState::TOUCHED_ROLES && state.touched[i];
 	};
 
 	for (size_t c = 0; c < controls.size(); c++) {
@@ -336,11 +335,13 @@ input_rows(const MenuState &state)
 
 	const Role coin = state.player ? Role::COIN2 : Role::COIN1;
 
-	add("COIN", { -1, 0, coin }, bindings.cabinet(coin), worked(controls.size() + state.player), true);
+	add("COIN", { -1, 0, coin }, bindings.cabinet(coin),
+	    worked(controls.size() + MenuState::TOUCHED_COIN1 + state.player), true);
 	if (service)
 		rows.push_back(*service);
 	if (state.player == 0)
-		add("TEST", { -1, 0, Role::TEST }, bindings.cabinet(Role::TEST), worked(controls.size() + 2), true);
+		add("TEST", { -1, 0, Role::TEST }, bindings.cabinet(Role::TEST),
+		    worked(controls.size() + MenuState::TOUCHED_TEST), true);
 	return rows;
 }
 
@@ -745,7 +746,8 @@ Menu::games_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width, bo
 		names.push_back(MenuKit::capitals(state.games[g].second));
 
 	static const std::string none;
-	const std::string &before = focusable ? none : state.pills[2], &after = focusable ? none : state.pills[3];
+	const std::string &before = focusable ? none : state.pills[MenuState::PILL_GAME_BEFORE];
+	const std::string &after = focusable ? none : state.pills[MenuState::PILL_GAME_AFTER];
 	const float before_w = before.empty() ? 0.0f : kit.pill_size(before.c_str()).x + spacing;
 	const float after_w = after.empty() ? 0.0f : kit.pill_size(after.c_str()).x + spacing;
 	/* The names whole, with as much room between their letters as the
@@ -1160,9 +1162,9 @@ cabinet_box(const MenuKit &kit, MenuState &state, ImVec2 a, ImVec2 b, bool frame
 	                                  [](const GameControl &c) { return c.role == Role::SERVICE && c.player == 0; });
 	CabinetNow now{ controls, state.now };
 
-	if (state.touched.size() == n + 3) {
-		now.coin = state.touched[n];
-		now.test = state.touched[n + 2];
+	if (state.touched.size() == n + MenuState::TOUCHED_ROLES) {
+		now.coin = state.touched[n + MenuState::TOUCHED_COIN1];
+		now.test = state.touched[n + MenuState::TOUCHED_TEST];
 	}
 	if (service != controls.end() && static_cast<size_t>(service - controls.begin()) < state.now.size())
 		now.service = state.now[static_cast<size_t>(service - controls.begin())].on;
@@ -2073,8 +2075,8 @@ Menu::input_foot(const MenuKit &kit, MenuState &state, ImVec2 at, float width, f
 					all++, done += r <= *state.mapping;
 			say(std::to_string(done) + " / " + std::to_string(all), palette.accent);
 			after = ImGui::CalcTextSize("6 s").x + space + kit.button_size("Skip ›").x + space + kit.button_size("Stop").x;
-			if (state.on_pad() && !state.pills[4].empty())
-				after += kit.pill_size(state.pills[4].c_str()).x + kit.px(4.0f);
+			if (state.on_pad() && !state.pills[MenuState::PILL_PRESS].empty())
+				after += kit.pill_size(state.pills[MenuState::PILL_PRESS].c_str()).x + kit.px(4.0f);
 		}
 		say(caught->name, palette.accent);
 
@@ -2096,10 +2098,10 @@ Menu::input_foot(const MenuKit &kit, MenuState &state, ImVec2 at, float width, f
 		say(std::to_string(left) + " s", palette.faint);
 		/* On a gamepad, the button that presses held is Skip: its pill,
 		 * and the button filling as it is held */
-		if (state.on_pad() && !state.pills[4].empty()) {
-			const ImVec2 pill = kit.pill_size(state.pills[4].c_str());
+		if (state.on_pad() && !state.pills[MenuState::PILL_PRESS].empty()) {
+			const ImVec2 pill = kit.pill_size(state.pills[MenuState::PILL_PRESS].c_str());
 
-			kit.pill(list, { x, at.y + (height - pill.y) / 2.0f }, state.pills[4].c_str());
+			kit.pill(list, { x, at.y + (height - pill.y) / 2.0f }, state.pills[MenuState::PILL_PRESS].c_str());
 			x += pill.x + kit.px(4.0f);
 		}
 
@@ -2144,11 +2146,11 @@ Menu::input_foot(const MenuKit &kit, MenuState &state, ImVec2 at, float width, f
 		x += chip_w + space;
 		if (picked == all.end())
 			return height;
-		/* What the buttons do to it */
+		/* What the buttons do to it, PILL_PRESS to PILL_RESET */
 		static constexpr const char *WORDS[] = { "change", "clear", "reset" };
 
 		for (size_t i = 0; i < std::size(WORDS); i++) {
-			const std::string &name = state.pills[4 + i];
+			const std::string &name = state.pills[MenuState::PILL_PRESS + i];
 			const float pill_w = kit.pill_size(name.c_str()).x, word_w = ImGui::CalcTextSize(WORDS[i]).x;
 
 			if (name.empty() || x + pill_w + kit.px(4.0f) + word_w > right)

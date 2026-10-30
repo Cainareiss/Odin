@@ -118,6 +118,7 @@ MenuSession::fill_inputs(MenuState &state)
 			state.now.push_back(state.panel->now(host, c));
 			state.touched.push_back(state.now.back().on);
 		}
+		/* In the order of MenuState::TOUCHED_COIN1... */
 		for (const Role role : { Role::COIN1, Role::COIN2, Role::TEST })
 			state.touched.push_back(state.panel->touched(host, role));
 		state.keys_held = m_keys.held();
@@ -137,6 +138,7 @@ MenuSession::fill_inputs(MenuState &state)
 		                 !pads[1].empty() ? state.pad_types[1] : SDL_GAMEPAD_TYPE_UNKNOWN;
 		const Nav::Action pills[] = { Nav::PAGE_BEFORE, Nav::PAGE_AFTER, Nav::GAME_BEFORE, Nav::GAME_AFTER,
 		                              Nav::PRESS,       Nav::CLEAR,      Nav::RESET };
+		static_assert(std::size(pills) == MenuState::PILLS);
 
 		for (size_t i = 0; i < state.pills.size(); i++) {
 			const std::vector<HostInput> &inputs = m_nav.inputs(pills[i]);

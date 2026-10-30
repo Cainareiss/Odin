@@ -351,6 +351,7 @@ struct MenuState : BarSettings {
 	 * TEST) and where its controls are, the gamepad of each player (its
 	 * name, its kind: pad_drawing.hpp) */
 	const ControlPanel *panel = nullptr;
+	enum : size_t { TOUCHED_COIN1, TOUCHED_COIN2, TOUCHED_TEST, TOUCHED_ROLES };
 	std::vector<bool> touched;
 	std::vector<ControlNow> now;
 	std::array<int, 2> pad_types{};
@@ -481,7 +482,11 @@ struct MenuState : BarSettings {
 	/* The names of the buttons that change the page and the game, before
 	 * and after, then of those that change, clear and set to its default
 	 * the part picked, on the gamepad of player 1 (empty: no pill) */
-	std::array<std::string, 7> pills;
+	enum Pill : size_t {
+		PILL_PAGE_BEFORE, PILL_PAGE_AFTER, PILL_GAME_BEFORE, PILL_GAME_AFTER, PILL_PRESS, PILL_CLEAR, PILL_RESET,
+		PILLS
+	};
+	std::array<std::string, PILLS> pills;
 };
 
 /* The menu of Odin, drawn with Dear ImGui over the picture of the last
