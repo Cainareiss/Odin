@@ -959,8 +959,9 @@ time once the scenes are compared again:
 - FTRC gives 0x80000000 out of range, the SH-4 saturates; FSRRA, FIPR and
   FTRV are computed by the host, the SH-4 has its own tables and error
   bounds; a NaN comes out as the host makes it, the SH-4 gives 0x7FBFFFFF
-  (of two NaN, the one the order of the operands picks: host code takes
-  them in the order the compiler gave the instruction, test_host_float);
+  (0x7FF7FFFFFFFFFFFF in double precision) whatever its operands (hardware
+  manual, 6.2.2); of two NaN, FADD and FMUL give that of FRm (DRm), in the
+  reader and in host code alike (test_host_float);
 - FROZEN FOR NOW, to be replaced by the table of a real SH-4 when a source
   that can be trusted gives it: the sines and cosines of FSCA
   (src/odin/machine/cpu/sh4/sh4_fsca.cpp). They are the values the references were made

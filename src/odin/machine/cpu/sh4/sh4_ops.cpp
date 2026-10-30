@@ -116,7 +116,10 @@ void trv(uint32_t *v, const uint32_t *x) { HAS_FMA ? trv_fma(v, x) : trv_any(v, 
 #endif
 
 /* a + b and a * b with a the first operand of the host's instruction, which
- * picks the NaN of two: the compiler may swap the operands otherwise */
+ * picks the NaN of two: the compiler may swap the operands otherwise. The
+ * reader and the host code thus give the same NaN. HEURISTIC: the SH-4
+ * gives its own, 7FBFFFFF or 7FF7FFFF FFFFFFFF, whatever its operands
+ * (hardware manual, 6.2.2). */
 #if defined(__GNUC__) && defined(__aarch64__)
 #define ODIN_FLOAT_OP(name, type, insn, reg) \
 	type name(type a, type b) { type r; asm(insn " %" reg "0, %" reg "1, %" reg "2" : "=w"(r) : "w"(a), "w"(b)); return r; }
