@@ -70,6 +70,38 @@ commented(std::string_view line)
 	return std::pair(key, trimmed(line.substr(equal + 1)));
 }
 
+/* The name of the section a trimmed line "[name]" opens; none for
+ * another line */
+std::optional<std::string_view>
+section_of(std::string_view line)
+{
+	if (line.size() > 2 && line.front() == '[' && line.back() == ']')
+		return trimmed(line.substr(1, line.size() - 2));
+	return std::nullopt;
+}
+
+/* A trimmed line "key = value" that is no comment: the key (maybe empty)
+ * and the value */
+std::optional<std::pair<std::string_view, std::string_view>>
+setting_of(std::string_view line)
+{
+	const size_t equal = line.find('=');
+
+	if (line.empty() || line.front() == '#' || line.front() == ';' || equal == std::string_view::npos)
+		return std::nullopt;
+	return std::pair(trimmed(line.substr(0, equal)), trimmed(line.substr(equal + 1)));
+}
+
+/* A key Odin knows in a section; none when it knows no such key */
+const Settings::Known *
+known_of(const std::vector<Settings::Known> &keys, std::string_view section, std::string_view key)
+{
+	for (const Settings::Known &known : keys)
+		if (known.section == section && known.key == key)
+			return &known;
+	return nullptr;
+}
+
 std::string
 comment(const std::string &key, const std::string &value)
 {
@@ -151,19 +183,18 @@ Settings::parse(std::string_view text, const std::string &origin)
 		number++;
 		if (line.empty() || line.front() == '#' || line.front() == ';')
 			continue;
-		if (line.front() == '[' && line.back() == ']' && line.size() > 2) {
-			section = &m_sections[std::string(trimmed(line.substr(1, line.size() - 2)))];
+		if (const std::optional<std::string_view> name = section_of(line)) {
+			section = &m_sections[std::string(*name)];
 			continue;
 		}
-		const size_t equal = line.find('=');
-		const std::string_view key = trimmed(line.substr(0, equal));
+		const auto setting = setting_of(line);
 
-		if (equal == std::string_view::npos || key.empty()) {
+		if (!setting || setting->first.empty()) {
 			repeats::print(stderr, "ERROR: settings: %s:%u: not a setting: %.*s\n", origin.c_str(), number,
 			             static_cast<int>(line.size()), line.data());
 			continue;
 		}
-		section->emplace_back(std::string(key), std::string(trimmed(line.substr(equal + 1))));
+		section->emplace_back(std::string(setting->first), std::string(setting->second));
 	}
 }
 
@@ -196,10 +227,9 @@ Settings::changed(std::string_view text, const std::string &section, const std::
 		place = 0;
 	for (size_t i = 0; i < lines.size(); i++) {
 		const std::string_view line = trimmed(lines[i]);
-		const size_t equal = line.find('=');
 
-		if (line.size() > 2 && line.front() == '[' && line.back() == ']') {
-			inside = trimmed(line.substr(1, line.size() - 2)) == section;
+		if (const std::optional<std::string_view> name = section_of(line)) {
+			inside = *name == section;
 			if (inside)
 				place = i + 1;
 			continue;
@@ -207,8 +237,7 @@ Settings::changed(std::string_view text, const std::string &section, const std::
 		if (!inside || line.empty())
 			continue;
 		place = i + 1;
-		if (line.front() != '#' && line.front() != ';' && equal != std::string_view::npos &&
-		    trimmed(line.substr(0, equal)) == key)
+		if (const auto setting = setting_of(line); setting && setting->first == key)
 			found.push_back(i);
 		else if (const auto held = commented(line); standard && held && held->first == key)
 			found.push_back(i);
@@ -259,22 +288,15 @@ Settings::completed(std::string_view text, const std::vector<Known> &keys)
 	/* Where each section ends (after its last line that is not blank, or
 	 * its header), the keys it has; the comments of a value by default made
 	 * right */
-	const auto known = [&keys](const std::string &section, std::string_view key) -> const Known * {
-		for (const Known &k : keys)
-			if (k.section == section && k.key == key)
-				return &k;
-		return nullptr;
-	};
 	std::map<std::string, size_t> ends;
 	std::map<std::string, std::set<std::string>> has;
 	std::string inside;
 
 	for (size_t i = 0; i < lines.size(); i++) {
 		const std::string_view line = trimmed(lines[i]);
-		const size_t equal = line.find('=');
 
-		if (line.size() > 2 && line.front() == '[' && line.back() == ']') {
-			inside = trimmed(line.substr(1, line.size() - 2));
+		if (const std::optional<std::string_view> name = section_of(line)) {
+			inside = *name;
 			ends[inside] = i + 1;
 			continue;
 		}
@@ -282,14 +304,14 @@ Settings::completed(std::string_view text, const std::vector<Known> &keys)
 			continue;
 		ends[inside] = i + 1;
 		if (const auto held = commented(line)) {
-			const Known *const k = known(inside, held->first);
+			const Known *const k = known_of(keys, inside, held->first);
 
 			if (k && held->second != k->value)
 				lines[i] = comment(k->key, k->value) + eol;
 			if (k)
 				has[inside].insert(k->key);
-		} else if (line.front() != '#' && line.front() != ';' && equal != std::string_view::npos) {
-			has[inside].insert(std::string(trimmed(line.substr(0, equal))));
+		} else if (const auto setting = setting_of(line)) {
+			has[inside].insert(std::string(setting->first));
 		}
 	}
 
@@ -349,9 +371,8 @@ Settings::change(const std::string &path, const std::string &section, const std:
 
 	if (!text)
 		return false;
-	for (const Known &known : m_known)
-		if (known.section == section && known.key == key)
-			standard = known.value;
+	if (const Known *const known = known_of(m_known, section, key))
+		standard = known->value;
 	return write(path, changed(*text, section, key, value, standard));
 }
 
