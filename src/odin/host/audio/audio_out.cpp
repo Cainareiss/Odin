@@ -46,7 +46,7 @@ channels(AudioOut::Mode mode)
 /* A stream of the mode on the device of that name, else on the one the
  * system gives; paused. Nothing, said on stderr, when it cannot be. */
 SDL_AudioStream *
-open_stream(AudioOut::Mode mode, const std::string &device)
+open_stream(AudioOut::Mode mode, const std::string &device, int rate)
 {
 	SDL_AudioDeviceID id = SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK;
 
@@ -69,7 +69,7 @@ open_stream(AudioOut::Mode mode, const std::string &device)
 			             device.c_str());
 	}
 
-	const SDL_AudioSpec spec = { SDL_AUDIO_S16, static_cast<int>(channels(mode)), RATE };
+	const SDL_AudioSpec spec = { SDL_AUDIO_S16, static_cast<int>(channels(mode)), rate };
 	SDL_AudioStream *const stream = SDL_OpenAudioDeviceStream(id, &spec, nullptr, nullptr);
 
 	if (!stream)
@@ -80,8 +80,10 @@ open_stream(AudioOut::Mode mode, const std::string &device)
 } /* namespace */
 
 std::unique_ptr<AudioOut>
-AudioOut::make(Mode mode, double option_db, const std::string &device)
+AudioOut::make(Mode mode, double option_db, const std::string &device, int rate)
 {
+	const int board_rate = rate ? rate : RATE;
+
 	if (!SDL_InitSubSystem(SDL_INIT_AUDIO)) {
 		std::fprintf(stderr, "ERROR: sound: %s\n", SDL_GetError());
 		return nullptr;
@@ -90,13 +92,13 @@ AudioOut::make(Mode mode, double option_db, const std::string &device)
 	/* The buffer of the device: 1024 frames */
 	SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, "1024");
 
-	SDL_AudioStream *const stream = open_stream(mode, device);
+	SDL_AudioStream *const stream = open_stream(mode, device, board_rate);
 	if (!stream) {
 		SDL_QuitSubSystem(SDL_INIT_AUDIO);
 		return nullptr;
 	}
 	SDL_ResumeAudioStreamDevice(stream);
-	return std::unique_ptr<AudioOut>(new AudioOut(stream, mode, gain_of(option_db)));
+	return std::unique_ptr<AudioOut>(new AudioOut(stream, mode, gain_of(option_db), board_rate));
 }
 
 std::vector<std::string>
@@ -116,7 +118,7 @@ AudioOut::devices()
 bool
 AudioOut::change(Mode mode, const std::string &device)
 {
-	SDL_AudioStream *const stream = open_stream(mode, device);
+	SDL_AudioStream *const stream = open_stream(mode, device, m_rate);
 
 	if (!stream)
 		return false;
@@ -167,7 +169,7 @@ AudioOut::play(std::span<const int16_t> main, std::span<const int16_t> option)
 
 	const uint32_t frame_bytes = n * uint32_t{sizeof(int16_t)};
 	const uint32_t queued = static_cast<uint32_t>(std::max(SDL_GetAudioStreamQueued(m_stream), 0)) / frame_bytes;
-	const uint32_t low = RATE * 30 / 1000, high = RATE * 120 / 1000;
+	const uint32_t low = static_cast<uint32_t>(m_rate) * 30 / 1000, high = static_cast<uint32_t>(m_rate) * 120 / 1000;
 
 	/* After a pause or a stall, start again from what is due now */
 	if (queued > 4 * high)

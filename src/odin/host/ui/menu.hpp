@@ -64,8 +64,8 @@ struct MenuSlot {
 std::string shown_path(const std::string &path, const char *none);
 
 /* A folder the library or the menu asks the system for (the library the
- * first two only) */
-enum class MenuFolder { NONE, ROMS, BIOS, SAVES, STATES, ARTWORK, LOG };
+ * first three only) */
+enum class MenuFolder { NONE, ROMS, BIOS, GAELCO, SAVES, STATES, ARTWORK, LOG };
 
 /* The library, what Odin shows when it starts without a game (as a double
  * click starts it): the games of the list, each with the files it lacks
@@ -81,6 +81,7 @@ struct LibraryState {
 	struct Game {
 		std::string name, title, parent;
 		std::vector<std::string> missing;
+		bool gaelco;
 	};
 
 	std::vector<Game> games;
@@ -88,7 +89,7 @@ struct LibraryState {
 	LibraryFilter filter;
 	std::vector<std::string> systems;
 	size_t hidden = 0;
-	std::string roms, bios;
+	std::string roms, bios, gaelco;
 	bool roms_given = false, bios_given = false;
 	using Folder = MenuFolder;
 	Folder choose = Folder::NONE;
@@ -342,7 +343,7 @@ struct MenuState : BarSettings {
 	 * of the save states; the settings file and the lists of the 3D
 	 * programs (empty: none). The board saying each access
 	 * (BarSettings::verbose) given on the command line. */
-	std::string roms, bios, saves, states, artwork, settings_file, shader_lists, log_file;
+	std::string roms, bios, gaelco, saves, states, artwork, settings_file, shader_lists, log_file;
 	bool roms_given = false, bios_given = false, saves_given = false, artwork_given = false;
 	/* The folder of the log from the next launch ([paths] log; empty: by
 	 * default), and ODIN_LOG giving the file instead */
@@ -591,10 +592,11 @@ public:
 	static std::string cabinet_number(unsigned n) { return n == 1 ? "1 · master" : std::to_string(n); }
 	/* What Odin is, and the libraries it is made with: who wrote them,
 	 * their licence */
-	static constexpr const char *WHAT = "Sega Hikaru emulator, as close to the hardware as it gets";
+	static constexpr const char *WHAT = "Sega Hikaru and Gaelco ATV Track emulator";
 	static constexpr const char *LICENCES[][3] = {
 		{ "Odin", "Réda Chérif-Touil", "GPL 3.0 or later" },
 		{ "Valkyrie (the start of Odin)", "Stefano Teso", "GPL 3.0 or later" },
+		{ "ATV Track boot program", "Samuele Zannoli (MAME)", "BSD-3-Clause" },
 		{ "Dear ImGui", "Omar Cornut", "MIT" },
 		{ "SDL 3", "Sam Lantinga", "zlib" },
 		{ "GLEW", "Milan Ikits, Marcelo Magallon", "BSD / MIT" },

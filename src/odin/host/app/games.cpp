@@ -869,6 +869,14 @@ GameList::has(const std::string &name) const
 	return m_root && find(name) != nullptr;
 }
 
+std::string
+GameList::machine(const std::string &name) const
+{
+	const char *const machine = json_string_value(json_object_get(find(name), "mach"));
+
+	return machine ? machine : "";
+}
+
 std::vector<std::pair<std::string, std::string>>
 GameList::titles(const std::string &machine) const
 {
@@ -902,6 +910,17 @@ GameList::entries() const
 		if (json_array_size(json_object_get(rom, "controls")) > 0)
 			out.push_back({ name, title ? title : name, json_string_value(json_object_get(rom, "mach")),
 			                parent ? parent : "" });
+	}
+	return out;
+}
+
+std::vector<std::pair<std::string, std::string>>
+GameList::titles() const
+{
+	std::vector<std::pair<std::string, std::string>> out;
+
+	for (const Entry &entry : entries()) {
+		out.emplace_back(entry.name, entry.title);
 	}
 	return out;
 }

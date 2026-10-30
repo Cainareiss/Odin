@@ -177,7 +177,7 @@ apart by commas (see INPUTS below).
                                Default off.
  variants      on, off         Also show versions of a game (airtrixo...).
                                Default on.
- systems       hikaru,...      Only these systems, apart by commas.
+ systems       hikaru, gaelco  Only these systems, apart by commas.
                                Default: all.
 
 [paths]
@@ -186,6 +186,7 @@ apart by commas (see INPUTS below).
                                library or with -R).
  bios          a folder        Shared sets (hikaru, mie...). Default:
                                roms.
+ gaelco        a folder        Gaelco games. Default: roms.
  saves         a folder        What each game keeps without power.
                                Default: saves/ in Odin's folder.
  states        a folder        Saved states (F2, F4).

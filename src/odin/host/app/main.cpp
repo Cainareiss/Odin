@@ -34,6 +34,7 @@
 
 #include "odin/host/video/display.hpp"
 #include "odin/host/app/games.hpp"
+#include "odin/host/app/atvtrack_play.hpp"
 #include "odin/machine/boards/hikaru/hikaru.hpp"
 #include "odin/host/input/keyboard.hpp"
 #include "odin/host/app/library.hpp"
@@ -55,7 +56,7 @@ namespace {
 std::optional<Game>
 load_or_tell(const Options &options, const std::string &name, const GameList &games, const Settings &settings)
 {
-	RomFiles files(options.rom_path, options.bios_path);
+	RomFiles files(options.roms_of(games.machine(name)), options.bios_path);
 	std::optional<Game> loaded = games.load_game(files, name);
 
 	if (loaded) {
@@ -120,6 +121,24 @@ open_sound(Options &options, const Game &game, const Settings &settings)
  * end; the game of an archive Open... gave in `opened`. The options of the
  * command line and odin.ini hold for it, what it changes of them for itself
  * does not stay. */
+class HikaruGame final : public GameBoard {
+public:
+	explicit HikaruGame(Hikaru &board) : m_board(board) {}
+
+	const std::string &game_name() const override { return m_board.game_name(); }
+	unsigned frame() const override { return m_board.frame(); }
+	void run_frame() override { m_board.run_frame(); }
+	bool restart_asked() const override { return m_board.restart_asked(); }
+	bool save_state(const std::string &path) override { return m_board.save_state(path); }
+	bool load_state(const std::string &path) override { return m_board.load_state(path); }
+	std::span<const uint8_t> io_outputs() const override { return m_board.io_outputs(); }
+	const std::vector<int16_t> &sound(bool optional) const override { return m_board.sound(optional); }
+	std::optional<int> drive_torque() const override { return m_board.drive_torque(); }
+
+private:
+	Hikaru &m_board;
+};
+
 Ended
 play(const Options &given, const std::string &name, const GameList &games, Settings &settings,
      const std::string &settings_file, Display &display, Keyboard &keys, Pointers *pointers, Opened &opened)
@@ -136,6 +155,13 @@ play(const Options &given, const std::string &name, const GameList &games, Setti
 	if (!game) {
 		std::fprintf(stderr, "ERROR: failed to load '%s': can't load game files\n", name.c_str());
 		return Ended::FAILED;
+	}
+	if (game->machine == "atvtrack" || game->machine == "smashdrv") {
+		const Ended ended = play_atvtrack(options, *game, games, settings, settings_file, display, keys, pointers,
+		                                  opened);
+
+		repeats::end();
+		return ended;
 	}
 	if (game->machine != "hikaru") {
 		std::fprintf(stderr, "ERROR: failed to load '%s': it is a %s game, not a Hikaru game\n", name.c_str(),
@@ -186,7 +212,9 @@ play(const Options &given, const std::string &name, const GameList &games, Setti
 	Ended ended = Ended::FAILED;
 
 	if (started) {
-		Session session(options, *game, *board, display, keys, controls, audio.get(), std::move(outputs), network,
+		HikaruGame running(*board);
+		Session session(options, *game, running, board.get(), display, keys, controls, audio.get(), std::move(outputs),
+		                network,
 		                settings, settings_file, games);
 
 		std::printf("Running\n");
@@ -340,7 +368,7 @@ main(int argc, char **argv)
 
 		odin::Options launch = options;
 		if (!opened.folder.empty())
-			launch.rom_path = opened.folder;
+			launch.rom_path = launch.gaelco_path = opened.folder;
 		opened = {};
 
 		odin::Ended ended =

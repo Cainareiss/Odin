@@ -42,12 +42,14 @@ namespace odin {
 
 namespace {
 
-/* time / period, for a timer. No division where the period is a power of
- * two, as it is unless the peripheral clock is a third or a sixth of the
- * CPU's: a game may read a timer thousands of times in a frame. */
+/* time / period, avoiding a variable division for common periods: a game may
+ * read a timer thousands of times a frame. */
 uint64_t periods(uint64_t time, uint64_t period)
 {
-	return std::has_single_bit(period) ? time >> std::countr_zero(period) : time / period;
+	const unsigned shift = static_cast<unsigned>(std::countr_zero(period));
+	const uint64_t odd = period >> shift;
+
+	return odd == 1 ? time >> shift : odd == 3 ? (time >> shift) / 3 : time / period;
 }
 
 /* Bytes per transfer for CHCR.TS */
@@ -613,6 +615,10 @@ bool Sh4::onchip_read(uint32_t addr, uint32_t size, uint64_t &value)
 		sized(4);
 		return true;
 	}
+	/* The serial ports send at once, so their transmitters are always
+	 * empty */
+	if ((reg >= SCI_SCBRR1 - 4 && reg < SCI_END) || (reg >= SCIF_SCBRR2 - 4 && reg < SCIF_END))
+		return true;
 	switch (reg) {
 	/* HEURISTIC: RFCR and WTCSR also read as port A. */
 	case BSC_RFCR:
@@ -650,12 +656,14 @@ bool Sh4::onchip_read(uint32_t addr, uint32_t size, uint64_t &value)
 		value = m_tmu_counter[(reg - TMU_TCNT0) / 12];
 		m_timer_read = true;
 		return true;
+	/* HEURISTIC: read as 32 bits, the register is the low half */
 	case tcr(0):
 	case tcr(1):
 	case tcr(2):
-		sized(2);
+		if (size != 4)
+			sized(2);
 		tmu_sync(m_at);
-		value = reg_get(size, addr);
+		value = reg_get(2, addr);
 		return true;
 	case PM_PMCTR1H:
 		value = (m_pm_counter[0] >> 32) & 0xFFFF;
@@ -695,6 +703,16 @@ bool Sh4::onchip_write(uint32_t addr, uint32_t size, uint64_t value)
 		reg_put(size, addr, value);
 		return true;
 	}
+	if (reg >= SCI_SCBRR1 - 4 && reg < SCI_END) {
+		/* TDRE and TEND stay set */
+		reg_put(size, addr, reg == SCI_SCSSR1 ? (v | 0x84) : v);
+		return true;
+	}
+	if (reg >= SCIF_SCBRR2 - 4 && reg < SCIF_END) {
+		/* TEND and TDFE stay set */
+		reg_put(size, addr, reg == SCIF_SCFSR2 ? (v | 0x60) : v);
+		return true;
+	}
 
 	switch (reg) {
 	case CPG_STBCR:
@@ -731,20 +749,27 @@ bool Sh4::onchip_write(uint32_t addr, uint32_t size, uint64_t value)
 	case INTC_ICR: {
 		uint32_t old = static_cast<uint32_t>(reg_get(2, addr));
 		sized(2);
+		/* HEURISTIC: reserved bits 13-10 are dropped */
+		v &= ~0x3C00u;
 		only(ICR_NMIL | ICR_MAI | ICR_NMIB | ICR_NMIE | ICR_IRLM);
 		/* NMIL is read only */
 		reg_put(2, addr, (old & ICR_NMIL) | (v & ~ICR_NMIL));
 		update_irqs();
 		return true;
 	}
+	/* HEURISTIC: written as 32 bits, the low half is used */
 	case INTC_IPRA:
 	case INTC_IPRC:
-		sized(2);
+		if (size != 4)
+			sized(2);
+		v &= 0xFFFF;
 		reg_put(2, addr, v);
 		update_irq_priorities();
 		return true;
 	case INTC_IPRB:
-		sized(2);
+		if (size != 4)
+			sized(2);
+		v &= 0xFFFF;
 		only(0xFFF0);
 		reg_put(2, addr, v);
 		update_irq_priorities();

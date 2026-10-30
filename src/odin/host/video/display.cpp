@@ -317,8 +317,72 @@ Display::attach(Hikaru &board, const std::string &title)
 }
 
 void
+Display::attach_scenes(const std::string &title)
+{
+	run([this] {
+		m_own = m_graphics->make_drawing();
+		m_own_built = 1;
+		m_own_native = m_own->draws_native();
+		m_graphics->set_waits(false);
+		m_waits = false;
+	});
+	m_own_fresh = false;
+	m_frame = 0;
+	m_speed_since = m_speed_last = m_speed_longest = 0;
+	m_title_since = 0;
+	m_fps = 0.0f;
+	m_title = std::string("Odin - ") + title + " [" + m_graphics->api() + "]";
+	SDL_SetWindowTitle(m_window, m_title.c_str());
+	set_vsync(m_vsync);
+}
+
+/* The last one may still be drawing */
+void
+Display::set_scene(PmxScene scene)
+{
+	finish();
+	m_own_scene = std::move(scene);
+	m_own_fresh = true;
+}
+
+/* On the drawing thread */
+void
+Display::draw_own(bool late, unsigned w, unsigned h, bool bar)
+{
+	m_own->set_filter(m_filter);
+	if (m_own_fresh) {
+		/* It rebuilds its pictures each time */
+		if (m_scale != m_own_built) {
+			m_own->set_scale(m_scale);
+			m_own_built = m_scale;
+		}
+		m_own->draw_pmx(m_own_scene, m_anisotropy);
+		m_own_fresh = false;
+	}
+	m_own->present(picture_rect(w, h, m_hole), w, h);
+	m_picture = m_own->frame_picture();
+	screenshot();
+	draw_over(w, h, bar);
+	if (const bool wait = late ? m_wait_late : m_wait_on_time; wait != m_waits) {
+		m_graphics->set_waits(wait);
+		m_waits = wait;
+	}
+	present(w, h, "game");
+}
+
+void
 Display::detach()
 {
+	if (m_own) {
+		run([this] { m_own.reset(); });
+		m_own_scene = {};
+		m_own_fresh = false;
+		m_picture.id = 0;
+		m_title = "Odin";
+		SDL_SetWindowTitle(m_window, "Odin");
+		show_black();
+		return;
+	}
 	if (!m_board)
 		return;
 	m_board->set_screen(nullptr);
@@ -453,7 +517,7 @@ Display::open_menu(int page)
 	m_menu->open(page);
 	/* Behind it, the last picture of the game, or the library as it was
 	 * drawn last */
-	if (m_board) {
+	if (m_board || m_own) {
 		run([this] { m_menu->freeze(m_picture); });
 	} else {
 		int w, h;
@@ -485,7 +549,7 @@ Display::set_paused(bool paused)
 void
 Display::retitle()
 {
-	if (!m_board)
+	if (!m_board && !m_own)
 		return;
 	m_title_since = 0;
 	SDL_SetWindowTitle(m_window, m_menu_shown || m_paused ? (m_title + " (paused)").c_str() : m_title.c_str());
@@ -581,11 +645,17 @@ Display::show_again(BarState *bar)
 {
 	int w, h;
 
-	if (!m_renderer)
+	if (!m_renderer && !m_own)
 		return;
 	finish();
 
 	const bool over = build_bar(bar);
+
+	if (m_own) {
+		SDL_GetWindowSizeInPixels(m_window, &w, &h);
+		run([this, w, h, over] { draw_own(false, static_cast<unsigned>(w), static_cast<unsigned>(h), over); });
+		return;
+	}
 
 	SDL_GetWindowSizeInPixels(m_window, &w, &h);
 	m_drawing->post([this, w, h, over] {
@@ -654,6 +724,8 @@ Display::draw_menu(MenuState &state)
 void
 Display::begin_frame()
 {
+	if (m_own)
+		return;
 	m_renderer->begin_frame();
 }
 
@@ -671,6 +743,16 @@ Display::end_frame(unsigned frame, bool late, BarState *bar)
 	m_wait_write_ns = waited;
 	m_frame = frame;
 	SDL_GetWindowSizeInPixels(m_window, &w, &h);
+	if (m_own) {
+		const bool over = build_bar(bar);
+
+		/* Drawn while the board keeps running */
+		m_drawing->post([this, late, w, h, over] {
+			draw_own(late, static_cast<unsigned>(w), static_cast<unsigned>(h), over);
+		});
+		show_speed();
+		return;
+	}
 	m_renderer->take_frame(frame, static_cast<unsigned>(w), static_cast<unsigned>(h), m_hole);
 	m_logged = m_renderer->frame_is_logged();
 	m_message = m_renderer->message();

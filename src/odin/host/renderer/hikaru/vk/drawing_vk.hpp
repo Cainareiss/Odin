@@ -107,6 +107,7 @@ public:
 	void set_layer(unsigned i, LayerTexels texels, const void *pixels) override;
 	void compose(const Compose &compose, unsigned shown, const bool layers[2]) override;
 	void present(PictureRect rect, unsigned window_w, unsigned window_h) override;
+	void draw_pmx(const PmxScene &scene, unsigned anisotropy) override;
 	HostPicture frame_picture() const override { return { FRAME_PICTURE, width(), height() }; }
 	void set_filter(const std::string &preset) override;
 	void draw_loading(std::span<const LoadingRect> rects, unsigned window_w, unsigned window_h) override;
@@ -120,6 +121,8 @@ public:
 	void forget_sampler(HostSampler sampler) override;
 
 private:
+	struct Pmx;
+	std::shared_ptr<Pmx> m_pmx;
 	/* Descriptor sets of one layout, each kept until it is freed, from
 	 * pools made as they fill */
 	struct KeptSets {

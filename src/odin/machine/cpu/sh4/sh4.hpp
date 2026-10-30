@@ -211,6 +211,7 @@ public:
 	void set_nmi(bool high);
 	/* The time of the machine, in cycles since reset, where run() goes
 	 * on from: for a machine that loads a state. */
+	uint64_t time() const { return m_cycles; }
 	void set_time(uint64_t now)
 	{
 		m_cycles = now;
@@ -228,6 +229,10 @@ public:
 	/* Whether the turns of a loop that waits on a timer are counted
 	 * without being run (see clock_wait()); on by default. */
 	void set_clock_waits(bool on);
+	/* Also count loops that only poll memory, if their stores restore
+	 * what was there (see clock_note()). The bus must then read quiet
+	 * pages without side effects. */
+	void set_still_turns(bool on) { m_still_on = on; }
 
 	/* The state between two calls of run(). */
 	void save(Sh4State &out) const;
@@ -443,9 +448,9 @@ private:
 	 * the other inputs the same: Rn op Rm or FRn op FRm, Rn for one alone
 	 * (see clock_ordered()). None: no way that is known. */
 	enum class Order : uint8_t {
-		None, Same, Add, Sub, Neg, ShiftLeft, ShiftRight, ToFloat, ToInt,
+		None, Same, Add, Sub, Neg, Not, ShiftLeft, ShiftRight, ToFloat, ToInt,
 		FMul, FAdd, FSub, FDiv, FNeg,
-		Above, AtLeast, Greater, GreaterEq, NotNegative, Positive, FGreater
+		Above, AtLeast, Greater, GreaterEq, NotNegative, Positive, FGreater, Store
 	};
 	/* What an instruction reads and writes of them (sh4_ops.cpp), for the
 	 * forms these loops are made of; false for any other. */
@@ -457,14 +462,15 @@ private:
 		bool on_t;		/* such a branch goes when T is set */
 		bool target;		/* a branch to the address a register holds */
 		bool twice;		/* Rn op Rn, FRn op FRn: one register for both */
+		bool still;		/* set_still_turns() only */
 		Order order;
 		uint8_t shift;		/* of ShiftLeft and ShiftRight */
 	};
 	static bool uses(const Sh4Op &op, Uses &out);
-	/* An instruction of a turn of such a loop: the read of the timer, one
-	 * whose input comes from that read, a choice made on such an input,
-	 * or one that does the same at every turn. */
-	enum class ClockRole : uint8_t { Same, Read, Follows, Choice };
+	/* An instruction of such a loop: the timer read, one fed by it, a
+	 * choice on such an input, one that repeats every turn, a store of
+	 * such an input, or a load of that store (see clock_follow()). */
+	enum class ClockRole : uint8_t { Same, Read, Follows, Choice, Stored, Taken };
 	static constexpr uint8_t NO_USE = 0xFF;
 	struct ClockStep {
 		Sh4Op op;
@@ -478,6 +484,7 @@ private:
 		uint8_t from, other, to;
 		bool fresh, from_n;	/* from_n: the input from the read is Rn or FRn */
 		uint32_t fresh_addr, fresh_size;
+		uint32_t stored;	/* for Taken: the step of its Stored */
 		Sh4Host::Call call;
 		Regs before;
 	};
@@ -485,6 +492,8 @@ private:
 		uint32_t addr, size;
 		uint64_t value;
 		uint32_t step;		/* of the turn being noted */
+		bool changed = false;	/* a store did not restore memory */
+		uint64_t old = 0;	/* what it found at that time */
 	};
 	/* A turn that only reads the timer, kept for the next times the loop
 	 * is at its start */
@@ -495,6 +504,7 @@ private:
 		uint32_t length;	/* cycles */
 		uint32_t read_at;	/* the cycle of the read */
 		uint32_t channel;	/* of the timer */
+		bool still = false;	/* no timer read: all turns alike */
 		std::vector<ClockStep> steps;	/* the read, what follows it and the choices */
 		std::vector<std::pair<uint32_t, uint16_t>> code;	/* every instruction */
 		std::vector<ClockAccess> reads, writes;	/* of the plain memory, to be the same */
@@ -534,9 +544,14 @@ private:
 	bool clock_turn(const ClockTurn &turn, uint32_t value, ClockValues &out);
 	static bool clock_ordered(const ClockTurn &turn, const ClockValues &a, const ClockValues &b);
 	bool clock_skip(const ClockTurn &turn);
+	void clock_put_back();
 	void clock_noted_read(uint32_t addr, uint32_t size, const void *at);
 	void clock_noted_write(uint32_t addr, uint32_t size, const void *old, const void *value);
-	void clock_noted_slow(uint32_t addr, uint32_t size);
+	void clock_noted_slow(uint32_t addr, uint32_t size, uint64_t value);
+	bool still_page(uint32_t addr) const
+	{
+		return m_still_on && addr < 0xE0000000 && m_quiet[(addr & PHYSICAL) >> PAGE_BITS];
+	}
 	static uint32_t &use_of(Regs &r, uint32_t i);
 	/* The end of an instruction run alone for clock_note(): on at `imm`,
 	 * no other block after it */
@@ -826,6 +841,7 @@ private:
 
 	/* Loops that wait on a timer, see clock_wait() */
 	bool m_clock_on;
+	bool m_still_on = false;
 	ClockNote m_clock_note;
 	std::vector<ClockTurn> m_clock_turns;	/* the last ones found */
 	ClockValues m_clock_values[2];

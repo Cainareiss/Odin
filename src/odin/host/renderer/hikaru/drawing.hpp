@@ -36,6 +36,7 @@
 
 #include "odin/common/repeats.hpp"
 #include "odin/machine/chips/antarctic/antarctic_list.hpp"
+#include "odin/machine/boards/atvtrack/pmx1_scene.hpp"
 #include "odin/machine/boards/hikaru/hikaru_draw.hpp"
 #include "odin/host/gfx/host_graphics.hpp"
 #include "odin/host/ui/loading_screen.hpp"
@@ -278,6 +279,9 @@ public:
 	 * covers; through the filter if there is one */
 	virtual void present(PictureRect rect, unsigned window_w, unsigned window_h) = 0;
 	virtual HostPicture frame_picture() const = 0;
+	/* Draws a Neon 250 scene (pmx_gl.cpp) as the frame's picture, at the
+	 * picture scale, with that texture anisotropy */
+	virtual void draw_pmx(const PmxScene &scene, unsigned anisotropy) = 0;
 	/* The filter of a preset (picture_filter_gl.hpp), built when the path
 	 * changes; none with an empty path, or when it does not build (said
 	 * once on stderr) */

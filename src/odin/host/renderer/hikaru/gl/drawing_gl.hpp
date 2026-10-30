@@ -98,6 +98,7 @@ public:
 	void set_layer(unsigned i, LayerTexels texels, const void *pixels) override;
 	void compose(const Compose &compose, unsigned shown, const bool layers[2]) override;
 	void present(PictureRect rect, unsigned window_w, unsigned window_h) override;
+	void draw_pmx(const PmxScene &scene, unsigned anisotropy) override;
 	HostPicture frame_picture() const override { return { m_frame_fb, width(), height() }; }
 	void set_filter(const std::string &preset) override;
 	void draw_loading(std::span<const LoadingRect> rects, unsigned window_w, unsigned window_h) override;
@@ -117,6 +118,8 @@ public:
 	}
 
 private:
+	struct Pmx;
+	std::shared_ptr<Pmx> m_pmx;
 	/* Layers peeled at a time, each with a query of whether it drew, read
 	 * once the batch is done */
 	static constexpr unsigned PEEL_BATCH = 8;

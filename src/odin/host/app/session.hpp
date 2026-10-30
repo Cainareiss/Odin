@@ -45,16 +45,31 @@ namespace odin {
  * taken (Hikaru::restart_asked) */
 enum class Ended { QUIT, LAST_FRAME, FAILED, CLOSED, OPENED, RESTART };
 
+/* What Session needs from a running board */
+class GameBoard {
+public:
+	virtual ~GameBoard() = default;
+	virtual const std::string &game_name() const = 0;
+	virtual unsigned frame() const = 0;
+	virtual void run_frame() = 0;
+	virtual bool restart_asked() const = 0;
+	virtual bool save_state(const std::string &path) = 0;
+	virtual bool load_state(const std::string &path) = 0;
+	virtual std::span<const uint8_t> io_outputs() const = 0;
+	virtual const std::vector<int16_t> &sound(bool optional) const = 0;
+	virtual std::optional<int> drive_torque() const = 0;
+};
+
 /* A game being run: its board, with the window, the keyboard and the
  * gamepads around it, the menu and the bar over it */
 class Session {
 public:
-	Session(const Options &options, const Game &game, Hikaru &board, Display &display, Keyboard &keys,
-	        Controls &controls, AudioOut *audio, std::unique_ptr<OutputsNetwork> outputs, bool network,
+	Session(const Options &options, const Game &game, GameBoard &board, Hikaru *hikaru, Display &display,
+	        Keyboard &keys, Controls &controls, AudioOut *audio, std::unique_ptr<OutputsNetwork> outputs, bool network,
 	        Settings &settings, const std::string &settings_file, const GameList &games)
 		: m_options(options), m_game(game), m_board(board), m_display(display), m_keys(keys), m_controls(controls),
 		  m_audio(audio), m_games(games),
-		  m_menus(options, display, keys, controls, settings, settings_file, games, &game, &board, audio,
+		  m_menus(options, display, keys, controls, settings, settings_file, games, &game, hikaru, audio,
 		          std::move(outputs), network),
 		  m_paused(false), m_next()
 	{
@@ -99,7 +114,7 @@ private:
 
 	const Options &m_options;
 	const Game &m_game;
-	Hikaru &m_board;
+	GameBoard &m_board;
 	Display &m_display;
 	Keyboard &m_keys;
 	Controls &m_controls;

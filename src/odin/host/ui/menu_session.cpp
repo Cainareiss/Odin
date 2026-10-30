@@ -54,7 +54,7 @@ open_archive(const FolderDialog::Answer &answer, const GameList &games, std::str
 
 	std::transform(name.begin(), name.end(), name.begin(),
 	               [](unsigned char c) { return static_cast<char>(c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c); });
-	for (const auto &[game, title] : games.titles("hikaru"))
+	for (const auto &[game, title] : games.titles())
 		if (game == name)
 			return Opened{ game, file.parent_path().string() };
 	std::fprintf(stderr,
@@ -154,6 +154,7 @@ MenuSession::MenuSession(const Options &options, Display &display, Keyboard &key
 	state.roms_given = options.given.roms;
 	state.bios = options.bios_path;
 	state.bios_given = options.given.bios;
+	state.gaelco = options.gaelco_path;
 	state.saves = SaveFolder::root(options.saves);
 	state.saves_given = !env_text("ODIN_SAVES").empty();
 	state.states = m_states = options.states.empty() ? default_states() : options.states;
@@ -194,7 +195,7 @@ MenuSession::MenuSession(const Options &options, Display &display, Keyboard &key
 	read_menu_settings();
 	state.shown = state.running = state.games.size();
 	for (size_t g = 0; g < state.games.size(); g++)
-		if (board && state.games[g].first == board->game_name())
+		if (game && state.games[g].first == game->name)
 			state.shown = state.running = g;
 	/* The BIOS alone, or no game: the page Input shows the first one */
 	if (state.running == state.games.size())
@@ -210,7 +211,7 @@ MenuSession::fill_games()
 {
 	MenuState &state = m_menu_state;
 
-	state.games = m_games.titles("hikaru");
+	state.games = m_games.titles();
 	for (const auto &[name, title] : state.games) {
 		const bool runs = m_game && name == m_game->name;
 		const std::optional<Game> other = runs ? std::nullopt : m_games.describe(name);
@@ -965,6 +966,10 @@ MenuSession::take_folder()
 		state.bios = folder;
 		keep("paths", "bios", folder);
 		break;
+	case Folder::GAELCO:
+		state.gaelco = folder;
+		keep("paths", "gaelco", folder);
+		break;
 	case Folder::SAVES:
 		state.saves = folder;
 		keep("paths", "saves", folder == SaveFolder::root() ? std::nullopt : std::optional(folder));
@@ -1003,6 +1008,7 @@ MenuSession::ask_folder(MenuState::Folder folder)
 	state.no_picker = false;
 	m_dialog.ask(m_display.window(), folder == Folder::ROMS ? state.roms :
 	             folder == Folder::BIOS ? (state.bios.empty() ? state.roms : state.bios) :
+	             folder == Folder::GAELCO ? (state.gaelco.empty() ? state.roms : state.gaelco) :
 	             folder == Folder::SAVES ? state.saves :
 	             folder == Folder::ARTWORK ? state.artwork :
 	             folder == Folder::LOG ? (state.log_folder.empty() ? odin_data_dir() : state.log_folder) :
