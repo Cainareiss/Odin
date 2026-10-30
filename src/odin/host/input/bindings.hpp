@@ -146,13 +146,10 @@ public:
 	 * analog control the axes of a pad */
 	const std::vector<HostInput> &of(size_t control) const { return m_controls[control][0]; }
 	/* Those that move a lever down or up */
-	const std::vector<HostInput> &lever(size_t control, bool up) const { return m_controls[control][1 + up]; }
+	const std::vector<HostInput> &lever(size_t control, bool up) const { return part(control, 1u + up); }
 	/* Those that move an analog control left or up, right or down
 	 * (positive), a pedal down (positive) */
-	const std::vector<HostInput> &toward(size_t control, bool positive) const
-	{
-		return m_controls[control][1 + positive];
-	}
+	const std::vector<HostInput> &toward(size_t control, bool positive) const { return part(control, 1u + positive); }
 	/* Those of a role of the cabinet */
 	const std::vector<HostInput> &cabinet(Role role) const;
 	/* A part of a control (0 the control, 1 and 2 its halves or a lever

@@ -187,11 +187,18 @@ readable(intptr_t s, int wait_ms)
 	return readable(s, s, wait_ms) != 0;
 }
 
+/* The wait of select() */
+static timeval
+waiting(int wait_ms)
+{
+	return timeval{ wait_ms / 1000, (wait_ms % 1000) * 1000 };
+}
+
 unsigned
 readable(intptr_t a, intptr_t b, int wait_ms)
 {
 	fd_set set;
-	timeval wait{ wait_ms / 1000, (wait_ms % 1000) * 1000 };
+	timeval wait = waiting(wait_ms);
 
 	FD_ZERO(&set);
 	FD_SET(static_cast<Socket>(a), &set);
@@ -219,7 +226,7 @@ connect_to(const std::string &host, uint16_t port, int wait_ms)
 
 		if (!connected && connect_pending()) {
 			fd_set set;
-			timeval wait{ wait_ms / 1000, (wait_ms % 1000) * 1000 };
+			timeval wait = waiting(wait_ms);
 			int error = 0;
 			socklen_t length = sizeof error;
 

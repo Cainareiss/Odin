@@ -104,6 +104,13 @@ panel_of(const std::vector<GameControl> &controls)
 	return panel;
 }
 
+/* Rounded to the nearest, held to the range of an axis */
+int16_t
+axis_value(double value)
+{
+	return static_cast<int16_t>(std::clamp(std::lround(value), -32768L, 32767L));
+}
+
 } /* namespace */
 
 PadTuning
@@ -137,8 +144,8 @@ PadTuning::shape(int16_t &x, int16_t &y) const
 	const double fx = x / 32767.0, fy = y / 32767.0, length = std::hypot(fx, fy), edge = dead_zone / 100.0;
 	const double k = length <= edge ? 0.0 : (length - edge) / (1.0 - edge) / length;
 
-	x = static_cast<int16_t>(std::clamp(std::lround(fx * k * 32767.0), -32768L, 32767L));
-	y = static_cast<int16_t>(std::clamp(std::lround(fy * k * 32767.0), -32768L, 32767L));
+	x = axis_value(fx * k * 32767.0);
+	y = axis_value(fy * k * 32767.0);
 }
 
 ControlPanel::ControlPanel(const std::vector<GameControl> &controls, const Settings &settings, const std::string &game)
@@ -193,8 +200,7 @@ ControlPanel::joy_channel(const JoyState *joy, const JoyInput &input, const Game
 
 	if (control.role != Role::STEER)
 		return channel(input, control.low, value);
-	return channel(input, control.low,
-	               static_cast<int16_t>(std::clamp(std::lround(value * m_steer_scale), -32768L, 32767L)));
+	return channel(input, control.low, axis_value(value * m_steer_scale));
 }
 
 uint16_t

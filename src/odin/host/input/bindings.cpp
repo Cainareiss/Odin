@@ -205,6 +205,23 @@ is_pedal(const GameControl &control)
 	return control.type == GameControl::Type::ANALOG && !GameControl::half(control.low, false);
 }
 
+/* The end of the key of a half of a control: a lever down or up, an analog
+ * control as GameControl::half() names it */
+const char *
+half_of(const GameControl &control, bool positive)
+{
+	if (control.type == GameControl::Type::POSITIONS)
+		return positive ? "_up" : "_down";
+	return GameControl::half(control.low, positive);
+}
+
+/* The value of a line of [controls.<game>]: none for the defaults */
+std::optional<std::string>
+value_of(const std::vector<HostInput> &inputs, const std::vector<HostInput> &standard)
+{
+	return inputs == standard ? std::nullopt : std::optional<std::string>(HostInput::text(inputs));
+}
+
 constexpr std::pair<std::string_view, uint8_t> HAT_WAYS[] = {
 	{ "_up", SDL_HAT_UP }, { "_right", SDL_HAT_RIGHT }, { "_down", SDL_HAT_DOWN }, { "_left", SDL_HAT_LEFT },
 };
@@ -516,12 +533,11 @@ Bindings::Bindings(const std::vector<GameControl> &panel, const Settings &settin
 			const GameControl &control = panel[c];
 			const bool lever = control.type == GameControl::Type::POSITIONS;
 			const bool analog = control.type == GameControl::Type::ANALOG;
-			const bool pedal = analog && !GameControl::half(control.low, false);
+			const bool pedal = is_pedal(control);
 
 			if (lever || (analog && !pedal))
 				for (const bool positive : { false, true }) {
-					const char *const half = lever ? (positive ? "_up" : "_down")
-					                               : GameControl::half(control.low, positive);
+					const char *const half = half_of(control, positive);
 
 					if (key == control.id + half)
 						target = &m_controls[c][1 + positive];
@@ -571,9 +587,6 @@ Bindings::Line
 Bindings::line(size_t control, unsigned part, const std::vector<HostInput> &inputs) const
 {
 	const GameControl &c = m_panel[control];
-	const auto value = [](const std::vector<HostInput> &now, const std::vector<HostInput> &standard) {
-		return now == standard ? std::nullopt : std::optional<std::string>(HostInput::text(now));
-	};
 
 	if (is_pedal(c)) {
 		std::vector<HostInput> both = part == 0 ? inputs : m_controls[control][0];
@@ -583,16 +596,14 @@ Bindings::line(size_t control, unsigned part, const std::vector<HostInput> &inpu
 			both.push_back(input);
 		for (const HostInput &input : m_defaults[control][2])
 			standard.push_back(input);
-		return { c.id, value(both, standard) };
+		return { c.id, value_of(both, standard) };
 	}
 
 	std::string key = c.id;
 
-	if (part && c.type == GameControl::Type::POSITIONS)
-		key += part == 2 ? "_up" : "_down";
-	else if (part)
-		key += GameControl::half(c.low, part == 2);
-	return { key, value(inputs, m_defaults[control][part]) };
+	if (part)
+		key += half_of(c, part == 2);
+	return { key, value_of(inputs, m_defaults[control][part]) };
 }
 
 std::vector<std::pair<std::string, std::string>>
@@ -624,7 +635,7 @@ Bindings::cabinet_line(Role role, const std::vector<HostInput> &inputs) const
 {
 	const std::vector<HostInput> &standard = m_cabinet_defaults[cabinet_index(role)];
 
-	return { role_name(role), inputs == standard ? std::nullopt : std::optional<std::string>(HostInput::text(inputs)) };
+	return { role_name(role), value_of(inputs, standard) };
 }
 
 } /* namespace odin */
