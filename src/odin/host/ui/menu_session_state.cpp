@@ -45,6 +45,19 @@ pad_shown(const MenuState &state)
 	return {};
 }
 
+/* A setting as odin.ini keeps it: none when it is the one by default */
+std::optional<std::string>
+kept_number(unsigned value, unsigned standard)
+{
+	return value == standard ? std::nullopt : std::optional<std::string>(std::to_string(value));
+}
+
+std::optional<std::string>
+kept_on_off(bool value, bool standard)
+{
+	return value == standard ? std::nullopt : std::optional<std::string>(value ? "on" : "off");
+}
+
 } /* namespace */
 
 std::string
@@ -389,17 +402,20 @@ MenuSession::draw_menu()
 void
 MenuSession::apply(const MenuState &was)
 {
+	apply_display(was);
+	apply_sound(was);
+	apply_game(was);
+	apply_link(was);
+}
+
+void
+MenuSession::apply_display(const MenuState &was)
+{
 	const MenuState &now = m_menu_state;
-	const auto number = [](unsigned value, unsigned standard) {
-		return value == standard ? std::nullopt : std::optional<std::string>(std::to_string(value));
-	};
-	const auto on_off = [](bool value, bool standard) {
-		return value == standard ? std::nullopt : std::optional<std::string>(value ? "on" : "off");
-	};
 
 	if (now.scale != was.scale) {
 		m_display.set_scale(now.scale);
-		keep("scale", number(now.scale, 1));
+		keep("scale", kept_number(now.scale, 1));
 	}
 	if (now.filter != was.filter) {
 		m_display.set_filter(now.filter);
@@ -407,7 +423,7 @@ MenuSession::apply(const MenuState &was)
 	}
 	if (now.anisotropy != was.anisotropy) {
 		m_display.set_anisotropy(now.anisotropy);
-		keep("anisotropy", number(now.anisotropy, 1));
+		keep("anisotropy", kept_number(now.anisotropy, 1));
 	}
 	if (now.upscale_mode != was.upscale_mode && now.upscale_mode < std::size(UPSCALE_MODES)) {
 		m_display.set_upscale_mode(static_cast<DisplayUpscaleMode>(now.upscale_mode));
@@ -416,7 +432,7 @@ MenuSession::apply(const MenuState &was)
 	}
 	if (now.fullscreen != was.fullscreen) {
 		m_display.set_fullscreen(now.fullscreen);
-		keep("fullscreen", on_off(now.fullscreen, false));
+		keep("fullscreen", kept_on_off(now.fullscreen, false));
 	}
 	if (now.window != was.window || now.custom_w != was.custom_w || now.custom_h != was.custom_h) {
 		/* Custom keeps the window where it is, of the size it has */
@@ -440,18 +456,25 @@ MenuSession::apply(const MenuState &was)
 		keep("vsync", vsync == VSYNC ? std::nullopt : std::optional<std::string>(VSYNCS[now.vsync]));
 	}
 	if (now.unthrottled != was.unthrottled)
-		keep("unthrottled", on_off(now.unthrottled, false));
+		keep("unthrottled", kept_on_off(now.unthrottled, false));
 	if (now.show_speed != was.show_speed) {
 		m_display.set_show_speed(now.show_speed);
-		keep("show_speed", on_off(now.show_speed, true));
+		keep("show_speed", kept_on_off(now.show_speed, true));
 	}
 	if (now.classic != was.classic && !m_settings_file.empty())
-		m_settings.change(m_settings_file, "menu", "classic", on_off(now.classic, false));
+		m_settings.change(m_settings_file, "menu", "classic", kept_on_off(now.classic, false));
 	if (now.theme != was.theme)
 		keep("menu", "theme", now.theme ? std::optional<std::string>(THEMES[now.theme].key) : std::nullopt);
 	if (now.verbose != was.verbose)
-		keep("log", "verbose", on_off(now.verbose, false));
-	/* The sound: at once for the game that runs */
+		keep("log", "verbose", kept_on_off(now.verbose, false));
+}
+
+/* The sound: at once for the game that runs */
+void
+MenuSession::apply_sound(const MenuState &was)
+{
+	const MenuState &now = m_menu_state;
+
 	if (now.device != was.device) {
 		if (m_audio)
 			m_audio->change(m_audio->mode(), now.device);
@@ -460,12 +483,12 @@ MenuSession::apply(const MenuState &was)
 	if (now.volume != was.volume) {
 		if (m_audio)
 			m_audio->set_volume(static_cast<float>(now.volume) / 100.0f);
-		keep("sound", "volume", number(now.volume, 100));
+		keep("sound", "volume", kept_number(now.volume, 100));
 	}
 	if (now.background != was.background) {
 		if (m_audio)
 			m_audio->set_heard(m_focused || now.background);
-		keep("sound", "background", on_off(now.background, true));
+		keep("sound", "background", kept_on_off(now.background, true));
 	}
 	for (size_t g = 0; g < now.sound_games.size() && g < was.sound_games.size(); g++) {
 		const SoundGame &game = now.sound_games[g], &before = was.sound_games[g];
@@ -493,6 +516,13 @@ MenuSession::apply(const MenuState &was)
 			keep(section, "option_level", game.level == game.standard ? std::nullopt : std::optional<std::string>(db));
 		}
 	}
+}
+
+void
+MenuSession::apply_game(const MenuState &was)
+{
+	const MenuState &now = m_menu_state;
+
 	/* The vibration of the game shown: at once for the game that runs */
 	if (now.shake != was.shake && now.can_shake)
 		keep_vibration(game_shown(), now.shake, !m_other && m_game);
@@ -513,16 +543,23 @@ MenuSession::apply(const MenuState &was)
 	/* The dead zone and the trigger threshold of the gamepad shown */
 	if (const std::string guid = pad_shown(now); !guid.empty())
 		keep_tuning(guid, now.tuning, was.tuning);
+}
+
+void
+MenuSession::apply_link(const MenuState &was)
+{
+	const MenuState &now = m_menu_state;
+
 	/* The network board: for the games that start from now */
 	if (now.link_board != was.link_board)
 		keep("network", "board", now.link_board == 0 ? std::nullopt :
 		     std::optional<std::string>(NetLinkSettings::board_name(static_cast<NetLinkSettings::Board>(now.link_board))));
 	if (now.link_port != was.link_port)
-		keep("network", "port", number(now.link_port, NetCable::PORT));
+		keep("network", "port", kept_number(now.link_port, NetCable::PORT));
 	if (now.link_next != was.link_next)
 		keep("network", "next", now.link_next.empty() ? std::nullopt : std::optional<std::string>(now.link_next));
 	if (now.link_cabinet != was.link_cabinet)
-		keep("network", "cabinet", number(now.link_cabinet, 1));
+		keep("network", "cabinet", kept_number(now.link_cabinet, 1));
 	/* The programs of lamps: the port opened or closed now, for the game
 	 * that runs */
 	if (now.network != was.network) {
@@ -532,7 +569,7 @@ MenuSession::apply(const MenuState &was)
 			m_outputs.reset();
 		m_menu_state.network_failed = now.network && m_game && !m_outputs;
 		m_menu_state.programs = 0;
-		keep("outputs", "network", on_off(now.network, false));
+		keep("outputs", "network", kept_on_off(now.network, false));
 	}
 }
 

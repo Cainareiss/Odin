@@ -222,6 +222,10 @@ private:
 	void fill_devices(MenuState &state);
 	void do_asked(MenuState &state);
 	void apply(const MenuState &was);
+	void apply_display(const MenuState &was);
+	void apply_sound(const MenuState &was);
+	void apply_game(const MenuState &was);
+	void apply_link(const MenuState &was);
 	std::vector<HostInput> kind_changed(const std::vector<HostInput> &inputs, const std::vector<HostInput> &standard,
 	                                    bool to_defaults) const;
 	void change_part(const MenuSlot &slot, bool to_defaults);
