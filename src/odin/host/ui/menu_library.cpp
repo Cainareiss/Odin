@@ -230,6 +230,9 @@ Menu::build_library(LibraryState &state, BarState &bar_state)
 		}
 		if (!playable) {
 			list->AddRectFilled({ a.x, b.y - inside - line - kit.px(4.0f) }, b, MenuKit::alpha(palette.tile, 0.85f));
+			/* Its corners cut again, as those of the tile */
+			list->AddTriangleFilled(b, { b.x - cut, b.y }, { b.x, b.y - cut }, palette.screen);
+			list->AddTriangleFilled({ a.x, b.y }, { a.x, b.y - cut }, { a.x + cut, b.y }, palette.screen);
 			MenuKit::small_caps(list, { a.x + inside, b.y - inside - line }, palette.accent, "MISSING");
 		}
 		list->PopClipRect();
