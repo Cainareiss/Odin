@@ -464,14 +464,7 @@ Hikaru::run_drive(uint32_t cycles)
 		                   static_cast<uint8_t>(m_wheel_seen >> 8));
 }
 
-/* The MIE: the chip, its ROM and its board.
- *
- * The CRP-1231BR-10 card reader (card_reader.hpp) goes on its serial
- * block when the cabinet has one ("card_reader" in the list):
- * ODIN_CARD=none leaves the line open, ODIN_CARD=reader attaches it to any
- * game (a test), ODIN_CARD_FILE=<path> is the player's card (its three
- * tracks as on the card, 216 bytes; 207, their data only, is read too),
- * ODIN_CARD_TRACE=1 logs every frame on the line to stderr. */
+/* The MIE: the chip, its ROM and its board */
 void
 Hikaru::build_mie()
 {
@@ -499,9 +492,25 @@ Hikaru::build_mie()
 	std::printf("I/O board %s: %s\n", m_game.io_board.c_str(),
 	            m_mie->runs_io_program() ? "its program run (io_rom)" : "its imitation");
 
-	/* The drive board 838-13366 of NASCAR (drive_838_13366.hpp): without
-	 * its program, the host takes the force of each command as it comes
-	 * (drive_board.hpp) */
+	build_drive();
+	m_mie->set_port_d([this](uint8_t pins) { set_resets(pins); });
+	m_mie->set_log(stderr);
+	/* For the tests: ODIN_TURNS=0, the programs of the MIE and of the chip
+	 * of its I/O board run every turn of their waits. The memory and the
+	 * states must be the same. */
+	m_mie->set_waits_counted(env_flag("ODIN_TURNS", true));
+	open_mie_trace();
+	attach_card_reader();
+	std::printf("MIE: LLE (315-6146 ROM + uploaded Z80 program)\n");
+	std::printf("JVS: I/O board %s\n", m_game.io_board.c_str());
+}
+
+/* The drive board 838-13366 of NASCAR (drive_838_13366.hpp): without
+ * its program, the host takes the force of each command as it comes
+ * (drive_board.hpp) */
+void
+Hikaru::build_drive()
+{
 	const char *const drive = std::getenv("ODIN_DRIVE");
 
 	if (m_game.drive_first_output && m_game.section("drive_rom").size() == Drive838_13366::ROM_SIZE &&
@@ -516,16 +525,14 @@ Hikaru::build_mie()
 			m_steer_channel = control.analog;
 	if (m_game.drive_first_output)
 		std::printf("drive board: %s\n", m_drive ? "its program run (drive_rom)" : "its imitation");
-	m_mie->set_port_d([this](uint8_t pins) { set_resets(pins); });
-	m_mie->set_log(stderr);
-	/* For the tests: ODIN_TURNS=0, the programs of the MIE and of the chip
-	 * of its I/O board run every turn of their waits. The memory and the
-	 * states must be the same. */
-	m_mie->set_waits_counted(env_flag("ODIN_TURNS", true));
+}
 
-	/* Debug: ODIN_MIE_TRACE=<path>, the bus of the Z80 for
-	 * ODIN_MIE_TRACE_N instructions, from the first time its PC is
-	 * ODIN_MIE_TRACE_START */
+/* Debug: ODIN_MIE_TRACE=<path>, the bus of the Z80 for
+ * ODIN_MIE_TRACE_N instructions, from the first time its PC is
+ * ODIN_MIE_TRACE_START */
+void
+Hikaru::open_mie_trace()
+{
 	if (const char *path = std::getenv("ODIN_MIE_TRACE")) {
 		const unsigned count = static_cast<unsigned>(env_int("ODIN_MIE_TRACE_N", 300000));
 		const char *const start = std::getenv("ODIN_MIE_TRACE_START");
@@ -539,29 +546,38 @@ Hikaru::build_mie()
 				std::fprintf(stderr, "ERROR: MIE: can't open trace file '%s'\n", path);
 		}
 	}
+}
 
+/* The CRP-1231BR-10 card reader (card_reader.hpp) goes on the serial block
+ * of the MIE when the cabinet has one ("card_reader" in the list):
+ * ODIN_CARD=none leaves the line open, ODIN_CARD=reader attaches it to any
+ * game (a test), ODIN_CARD_FILE=<path> is the player's card (its three
+ * tracks as on the card, 216 bytes; 207, their data only, is read too),
+ * ODIN_CARD_TRACE=1 logs every frame on the line to stderr. */
+void
+Hikaru::attach_card_reader()
+{
 	const char *const card = std::getenv("ODIN_CARD");
 
 	if (card && std::strcmp(card, "none") && std::strcmp(card, "reader"))
 		std::fprintf(stderr, "ERROR: MIE: ODIN_CARD=%s unknown, taken as the list says\n", card);
 	if (card && !std::strcmp(card, "none")) {
 		std::printf("MIE: card reader: none (ODIN_CARD=none)\n");
-	} else if (m_game.card_reader.empty() && !(card && !std::strcmp(card, "reader"))) {
-		/* none on its cabinet */
-	} else {
-		const char *const file = std::getenv("ODIN_CARD_FILE");
-		/* Debug: ODIN_CARD_TRACE=1, what the reader says and is told */
-		const char *const trace = std::getenv("ODIN_CARD_TRACE");
-		const bool loaded = m_mie->attach_card(file, (trace && std::atoi(trace)) ? stderr : nullptr);
-		if (file)
-			std::printf("MIE: card reader CRP-1231BR-10 (its replies), card file '%s'%s\n",
-			            file, loaded ? "" : " not found: the player has no card");
-		else
-			std::printf("MIE: card reader CRP-1231BR-10 (its replies), no card file\n");
+		return;
 	}
+	/* None on its cabinet */
+	if (m_game.card_reader.empty() && !(card && !std::strcmp(card, "reader")))
+		return;
 
-	std::printf("MIE: LLE (315-6146 ROM + uploaded Z80 program)\n");
-	std::printf("JVS: I/O board %s\n", m_game.io_board.c_str());
+	const char *const file = std::getenv("ODIN_CARD_FILE");
+	/* Debug: ODIN_CARD_TRACE=1, what the reader says and is told */
+	const char *const trace = std::getenv("ODIN_CARD_TRACE");
+	const bool loaded = m_mie->attach_card(file, (trace && std::atoi(trace)) ? stderr : nullptr);
+	if (file)
+		std::printf("MIE: card reader CRP-1231BR-10 (its replies), card file '%s'%s\n",
+		            file, loaded ? "" : " not found: the player has no card");
+	else
+		std::printf("MIE: card reader CRP-1231BR-10 (its replies), no card file\n");
 }
 
 void

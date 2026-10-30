@@ -178,6 +178,9 @@ private:
 
 	/* hikaru.cpp */
 	void build_mie();
+	void build_drive();
+	void open_mie_trace();
+	void attach_card_reader();
 	void build_netbd(NetLinkSettings link);
 	void load_eeproms();
 	void build_gpu();
