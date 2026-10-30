@@ -39,6 +39,7 @@
 #include "odin/host/ui/loading_screen.hpp"
 #include "odin/host/video/picture.hpp"
 #include "odin/host/renderer/hikaru/renderer_programs.hpp"
+#include "odin/host/renderer/hikaru/depth_bias.hpp"
 
 namespace odin {
 
@@ -117,6 +118,14 @@ public:
 	static constexpr size_t PICTURE_SIZE = size_t{SCREEN_WIDTH} * SCREEN_HEIGHT * 4;
 	/* Bytes of a node_t of the shaders: a translucent fragment in its list */
 	static constexpr unsigned NODE_SIZE = 32;
+	/* The family of the 101 (depth_bias.hpp) whose depth a mesh of that
+	 * variant is drawn into in a view with both, 1 flagged or 0;
+	 * NO_FAMILY: a variant without families, into the scene */
+	static constexpr unsigned NO_FAMILY = 2;
+	static unsigned family_of(const odin_mesh_t &mesh, const MeshVariant &variant)
+	{
+		return !variant.families ? NO_FAMILY : depth_bias::flagged(static_cast<int>(mesh.depth_bias)) ? 1 : 0;
+	}
 	/* Where the count of the fragments of a view is kept, for the list of
 	 * a picture of the pipe */
 	static constexpr unsigned count_index(unsigned slot, unsigned view) { return slot * ODIN_VIEWPORTS + view; }

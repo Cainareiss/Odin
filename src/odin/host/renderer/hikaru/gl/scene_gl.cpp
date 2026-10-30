@@ -409,9 +409,7 @@ GlDrawing::draw_mesh(const odin_mesh_t &mesh, const MeshDraw &draw)
 	}
 	/* Into the depth of its family, the other family's eye depth read; a
 	 * mesh of no family into the scene (its colour alone) */
-	if (const unsigned family = !draw.variant.families ? NO_FAMILY :
-	                            depth_bias::flagged(static_cast<int>(mesh.depth_bias)) ? 1 : 0;
-	    family != m_family && !draw.variant.collect) {
+	if (const unsigned family = family_of(mesh, draw.variant); family != m_family && !draw.variant.collect) {
 		m_family = family;
 		glBindFramebuffer(GL_FRAMEBUFFER, family == NO_FAMILY ? m_scene_fb : m_family_fb[family]);
 		if (family != NO_FAMILY) {
@@ -479,7 +477,7 @@ GlDrawing::draw_mesh(const odin_mesh_t &mesh, const MeshDraw &draw)
 	 * both, if the view has flagged meshes (0: it has none) */
 	if (m_variant.collect) {
 		glUniform1ui(locs.blend_mode, draw.blend_mode);
-		glUniform1f(locs.family, !m_families_view ? 0.0f : depth_bias::flagged(bias) ? -1.0f : 1.0f);
+		glUniform1f(locs.family, depth_bias::family_sign(m_families_view, bias));
 	}
 
 	for (unsigned i = 0; i < mesh.num_instances; i++)

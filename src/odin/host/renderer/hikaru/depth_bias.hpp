@@ -62,6 +62,13 @@ constexpr bool flagged(int bias)
 	return (bias & 0x400) != 0;
 }
 
+/* What a translucent fragment of a mesh tells the sort of the families:
+ * 0 in a view without both, -1 flagged, 1 not */
+constexpr float family_sign(bool both, int bias)
+{
+	return !both ? 0.0f : flagged(bias) ? -1.0f : 1.0f;
+}
+
 /* Whether a pixel of a mesh at the eye depth `w` keeps its place against
  * one at `other_w`, as the depth tests weigh them (equal depths keep it) */
 constexpr bool before(float w, int bias, float other_w, int other)

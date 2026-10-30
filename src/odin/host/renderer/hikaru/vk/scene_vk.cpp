@@ -861,8 +861,7 @@ VkDrawing::draw_mesh(const odin_mesh_t &mesh, const MeshDraw &draw)
 	/* Into the depth of its family, or the scene (begin_families) */
 	if (!variant.collect) {
 		use_depth();
-		const unsigned family = !variant.families ? NO_FAMILY :
-		                        depth_bias::flagged(static_cast<int>(mesh.depth_bias)) ? 1 : 0;
+		const unsigned family = family_of(mesh, variant);
 
 		if (!m_open || family != m_family) {
 			if (family == NO_FAMILY) {
@@ -906,7 +905,7 @@ VkDrawing::draw_mesh(const odin_mesh_t &mesh, const MeshDraw &draw)
 	m_push.scale = static_cast<float>(m_scale);
 	/* A translucent mesh meets what kept each pixel by the families of
 	 * both, in a view with both (0: one without) */
-	m_push.family = !m_families_view ? 0.0f : depth_bias::flagged(bias) ? -1.0f : 1.0f;
+	m_push.family = depth_bias::family_sign(m_families_view, bias);
 
 	/* Something is drawn anyway with no modelview, as with OpenGL */
 	const bool none = mesh.mv_index == NONE;

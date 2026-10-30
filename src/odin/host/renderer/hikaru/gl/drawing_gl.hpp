@@ -164,7 +164,6 @@ private:
 	 * that eye depth, a depth (the unflagged family that of the scene, the
 	 * flagged one its own); the family drawn into now, NO_FAMILY: the
 	 * scene */
-	static constexpr unsigned NO_FAMILY = 2;
 	GLuint m_eye[2], m_flag_depth, m_family_fb[2];
 	bool m_families_view = false;
 	unsigned m_family = NO_FAMILY;

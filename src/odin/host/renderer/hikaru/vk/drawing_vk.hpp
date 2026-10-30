@@ -290,7 +290,6 @@ private:
 	 * pixel in each family, the depth of the flagged one, the set each
 	 * family reads the other's eye depths through, the family drawn into
 	 * now (NO_FAMILY: the scene) */
-	static constexpr unsigned NO_FAMILY = 2;
 	static constexpr VkFormat EYE_FORMAT = VK_FORMAT_R32G32_SFLOAT;
 	vk::Image m_eye[2], m_flag_depth;
 	VkDescriptorSet m_family_set[2] = { VK_NULL_HANDLE, VK_NULL_HANDLE };
