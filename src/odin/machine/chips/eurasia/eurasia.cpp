@@ -31,6 +31,7 @@
 #include <cstring>
 
 #include "odin/machine/chips/antarctic/antarctic_list.hpp"
+#include "odin/common/stop_message.hpp"
 
 namespace odin {
 
@@ -233,8 +234,7 @@ Eurasia::reset()
 void
 Eurasia::fatal(const char *what, uint32_t addr, uint32_t value) const
 {
-	std::fprintf(stderr, "eurasia: %s (%08X = %08X)\n", what, addr, value);
-	std::abort();
+	stop_fatal("eurasia: %s (%08X = %08X)", what, addr, value);
 }
 
 bool
