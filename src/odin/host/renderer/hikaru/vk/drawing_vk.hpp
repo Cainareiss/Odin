@@ -47,6 +47,12 @@
 
 namespace odin {
 
+/* The 16-bit pixels of the board (ABGR1555), a little-endian word each with
+ * the alpha on top and the red at the bottom: Vulkan's A1R5G5B5 with its red
+ * and blue swapped */
+inline constexpr VkComponentMapping ABGR1555_SWIZZLE = { VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_G,
+	                                                 VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_A };
+
 class VkDrawing : public Drawing {
 public:
 	explicit VkDrawing(vk::Context &card);
