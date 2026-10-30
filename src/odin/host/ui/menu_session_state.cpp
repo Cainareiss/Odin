@@ -180,8 +180,7 @@ MenuSession::fill_game_shown(MenuState &state)
 	state.light_gun = light_gun_mode_on(m_settings, game_shown());
 	/* The wheel the drive board turns, and how hard */
 	state.can_force = m_other ? m_other_forces : m_game && m_game->drive_first_output;
-	state.steers = std::any_of(panel_shown().controls().begin(), panel_shown().controls().end(),
-	                           [](const GameControl &control) { return control.role == Role::STEER; });
+	state.steers = steers_of(panel_shown().controls());
 	state.wheel_force = wheel_force_of(m_settings, game_shown());
 	state.wheel_rotation = wheel_rotation_of(m_settings, game_shown());
 	/* Its cabinets, and the one chosen; the game that runs plays the one it

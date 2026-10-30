@@ -125,6 +125,14 @@ sights_of(const std::vector<GameControl> &controls)
 	return sights;
 }
 
+/* Whether one of the controls of a game steers (Role::STEER) */
+inline bool
+steers_of(const std::vector<GameControl> &controls)
+{
+	return std::any_of(controls.begin(), controls.end(),
+	                   [](const GameControl &control) { return control.role == Role::STEER; });
+}
+
 /* An output of the I/O board of a cabinet, with the name its OUTPUT TEST
  * or its wiring gives it: "output", 1 to 32 as JVS counts them (output 1
  * is bit 7 of the first byte), and "role", what the host does with it:

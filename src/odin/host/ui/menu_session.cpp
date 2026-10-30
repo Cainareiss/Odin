@@ -745,8 +745,7 @@ MenuSession::fill_bar_inputs(BarState &bar) const
 		bar.plays_with[player] = m_controls.device(player);
 
 	const std::vector<GameControl> &controls = m_controls.panel().controls();
-	const bool steers = std::any_of(controls.begin(), controls.end(),
-	                                [](const GameControl &control) { return control.role == Role::STEER; });
+	const bool steers = steers_of(controls);
 	const auto add = [&bar, steers](const std::vector<Controls::Plugged> &plugged, bool joystick) {
 		for (size_t i = 0; i < plugged.size(); i++) {
 			const Controls::Plugged &one = plugged[i];
