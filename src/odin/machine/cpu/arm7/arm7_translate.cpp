@@ -55,9 +55,7 @@ bool always_leaves(uint32_t op)
 void Arm7::set_translate(bool on)
 {
 	if (on && !m_host) {
-		const auto from_cpu = [this](const void *at) {
-			return static_cast<int32_t>(static_cast<const uint8_t *>(at) - reinterpret_cast<const uint8_t *>(this));
-		};
+		const auto from_cpu = [this](const void *at) { return HostCode::place_in(this, at); };
 		const Arm7Host::Places places{from_cpu(&m_r[0]), from_cpu(&m_pc), from_cpu(&m_op_pc), from_cpu(&m_cpsr),
 		                              from_cpu(&m_cycles), from_cpu(&m_instructions), from_cpu(&m_irq_line),
 		                              from_cpu(&m_fiq_line), from_cpu(&m_ram.base), from_cpu(&m_host_stale),

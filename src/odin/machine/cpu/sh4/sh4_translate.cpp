@@ -130,9 +130,7 @@ struct Words {
 void Sh4::set_translate(bool on)
 {
 	if (on && !m_host) {
-		const auto from_cpu = [this](const void *at) {
-			return static_cast<int32_t>(static_cast<const uint8_t *>(at) - reinterpret_cast<const uint8_t *>(this));
-		};
+		const auto from_cpu = [this](const void *at) { return HostCode::place_in(this, at); };
 		const Sh4Host::Memory memory{m_rd.data(), m_wr.data(), m_code_epoch.data(), PAGE_BITS, PHYSICAL_PAGES,
 		                             from_cpu(&m_epoch), from_cpu(&m_touched)};
 

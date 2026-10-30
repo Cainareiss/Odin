@@ -53,6 +53,13 @@ public:
 		uint32_t from;
 	};
 
+	/* Where `at` is in the CPU `cpu`, in bytes: the code written finds it
+	 * there from the register that holds the CPU */
+	static int32_t place_in(const void *cpu, const void *at)
+	{
+		return static_cast<int32_t>(static_cast<const uint8_t *>(at) - static_cast<const uint8_t *>(cpu));
+	}
+
 	explicit HostCode(uint32_t size);
 	~HostCode();
 	HostCode(const HostCode &) = delete;
