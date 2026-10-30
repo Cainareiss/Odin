@@ -900,13 +900,13 @@ drawing_of(const std::string &game)
 
 } /* namespace */
 
-bool
+void
 draw_cabinet(const MenuKit &kit, const std::string &game, const CabinetNow &now, ImVec2 a, ImVec2 b)
 {
 	const Drawing drawing = drawing_of(game);
 
 	if (!drawing)
-		return false;
+		return;
 
 	/* Measured at rest, so that it does not move as its controls do: the
 	 * row of COIN, SERVICE and TEST centred under it */
@@ -923,7 +923,6 @@ draw_cabinet(const MenuKit &kit, const std::string &game, const CabinetNow &now,
 	pen.place(a, b);
 	drawing(pen, worked);
 	cabinet_row(pen, worked, row.x, row.y);
-	return true;
 }
 
 } /* namespace odin */

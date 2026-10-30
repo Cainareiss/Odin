@@ -50,8 +50,8 @@ struct CabinetNow {
  * and in its middle: its controls where the cabinet has them, which move
  * as they are worked and are outlined with the accent, the light of a
  * button lit; COIN, SERVICE and TEST under them. The control whose input
- * is caught is in the accent too. False for a game it has no drawing of. */
-bool draw_cabinet(const MenuKit &kit, const std::string &game, const CabinetNow &now, ImVec2 a, ImVec2 b);
+ * is caught is in the accent too. Nothing for a game it has no drawing of. */
+void draw_cabinet(const MenuKit &kit, const std::string &game, const CabinetNow &now, ImVec2 a, ImVec2 b);
 
 } /* namespace odin */
 

@@ -53,12 +53,12 @@ public:
 	/* In the order they are looked into */
 	const std::vector<Font> &fonts() const { return m_fonts; }
 
+private:
 	/* Whether Dear ImGui reads the first font of the file: a font or a
 	 * collection of them, with the tables it needs, TrueType or CFF
 	 * outlines, and Unicode */
 	static bool readable(const unsigned char *data, size_t size);
 
-private:
 	std::vector<Font> m_fonts;
 };
 
