@@ -31,6 +31,8 @@
 #include <utility>
 
 #include "odin/common/clock_ratio.hpp"
+#include "odin/machine/cabinet/io_837_13551_imitation.hpp"
+#include "odin/machine/cabinet/io_837_13741_imitation.hpp"
 
 namespace odin {
 

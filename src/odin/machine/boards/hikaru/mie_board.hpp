@@ -41,8 +41,6 @@
 #include "odin/machine/cabinet/io_837_13551.hpp"
 #include "odin/machine/cabinet/io_837_13741.hpp"
 #include "odin/machine/cabinet/jvs.hpp"
-#include "odin/machine/cabinet/io_837_13551_imitation.hpp"
-#include "odin/machine/cabinet/io_837_13741_imitation.hpp"
 #include "odin/machine/chips/mie.hpp"
 
 namespace odin {
