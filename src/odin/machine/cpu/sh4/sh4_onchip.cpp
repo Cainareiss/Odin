@@ -50,11 +50,6 @@ uint64_t periods(uint64_t time, uint64_t period)
 	return std::has_single_bit(period) ? time >> std::countr_zero(period) : time / period;
 }
 
-/* The three timer channels are 12 bytes apart. */
-constexpr uint32_t tcor(uint32_t ch) { return TMU_TCOR0 + ch * 12; }
-constexpr uint32_t tcnt(uint32_t ch) { return TMU_TCNT0 + ch * 12; }
-constexpr uint32_t tcr(uint32_t ch) { return TMU_TCR0 + ch * 12; }
-
 /* Bytes per transfer for CHCR.TS */
 constexpr uint32_t DMAC_UNIT[8] = {8, 1, 2, 4, 32, 0, 0, 0};
 
@@ -642,22 +637,22 @@ bool Sh4::onchip_read(uint32_t addr, uint32_t size, uint64_t &value)
 	case TMU_TSTR:
 		sized(1);
 		return true;
-	case TMU_TCOR0:
-	case TMU_TCOR0 + 12:
-	case TMU_TCOR0 + 24:
+	case tcor(0):
+	case tcor(1):
+	case tcor(2):
 		sized(4);
 		return true;
-	case TMU_TCNT0:
-	case TMU_TCNT0 + 12:
-	case TMU_TCNT0 + 24:
+	case tcnt(0):
+	case tcnt(1):
+	case tcnt(2):
 		sized(4);
 		tmu_sync(m_at);
 		value = m_tmu_counter[(reg - TMU_TCNT0) / 12];
 		m_timer_read = true;
 		return true;
-	case TMU_TCR0:
-	case TMU_TCR0 + 12:
-	case TMU_TCR0 + 24:
+	case tcr(0):
+	case tcr(1):
+	case tcr(2):
 		sized(2);
 		tmu_sync(m_at);
 		value = reg_get(size, addr);
@@ -829,8 +824,8 @@ bool Sh4::onchip_write(uint32_t addr, uint32_t size, uint64_t value)
 			m_tmu_running[ch] = (v >> ch) & 1;
 		}
 		return true;
-	case TMU_TCR0:
-	case TMU_TCR0 + 12: {
+	case tcr(0):
+	case tcr(1): {
 		tmu_sync(m_at);
 		m_event = m_retime = true;
 		uint32_t old = static_cast<uint32_t>(reg_get(size, addr));
@@ -841,7 +836,7 @@ bool Sh4::onchip_write(uint32_t addr, uint32_t size, uint64_t value)
 		tmu_update_irq(reg == TMU_TCR0 ? 0 : 1);
 		return true;
 	}
-	case TMU_TCR0 + 24: {
+	case tcr(2): {
 		tmu_sync(m_at);
 		m_event = m_retime = true;
 		uint32_t old = static_cast<uint32_t>(reg_get(size, addr));
@@ -852,16 +847,16 @@ bool Sh4::onchip_write(uint32_t addr, uint32_t size, uint64_t value)
 		tmu_update_irq(2);
 		return true;
 	}
-	case TMU_TCOR0:
-	case TMU_TCOR0 + 12:
-	case TMU_TCOR0 + 24:
+	case tcor(0):
+	case tcor(1):
+	case tcor(2):
 		sized(4);
 		tmu_sync(m_at);
 		m_event = m_retime = true;
 		break;
-	case TMU_TCNT0:
-	case TMU_TCNT0 + 12:
-	case TMU_TCNT0 + 24:
+	case tcnt(0):
+	case tcnt(1):
+	case tcnt(2):
 		sized(4);
 		tmu_sync(m_at);
 		m_event = m_retime = true;

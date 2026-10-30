@@ -189,7 +189,7 @@ void Sh4::clock_noted_slow(uint32_t addr, uint32_t size)
 	uint32_t channel = 3;
 
 	for (uint32_t ch = 0; ch < 3; ch++) {
-		if (reg == TMU_TCNT0 + 12 * ch) {
+		if (reg == tcnt(ch)) {
 			channel = ch;
 		}
 	}

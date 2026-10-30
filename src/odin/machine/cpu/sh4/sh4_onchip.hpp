@@ -49,6 +49,10 @@ constexpr uint32_t CPG_FRQCR = 0xC00000, CPG_STBCR = 0xC00004, CPG_WTCSR = 0xC00
 constexpr uint32_t INTC_ICR = 0xD00000, INTC_IPRA = 0xD00004, INTC_IPRB = 0xD00008, INTC_IPRC = 0xD0000C;
 constexpr uint32_t TMU_TOCR = 0xD80000, TMU_TSTR = 0xD80004, TMU_TCOR0 = 0xD80008, TMU_TCNT0 = 0xD8000C,
 	TMU_TCR0 = 0xD80010;
+/* The three timer channels are 12 bytes apart */
+constexpr uint32_t tcor(uint32_t ch) { return TMU_TCOR0 + ch * 12; }
+constexpr uint32_t tcnt(uint32_t ch) { return TMU_TCNT0 + ch * 12; }
+constexpr uint32_t tcr(uint32_t ch) { return TMU_TCR0 + ch * 12; }
 constexpr uint32_t SCI_SCBRR1 = 0xE00004, SCI_SCTDR1 = 0xE0000C, SCI_SCSSR1 = 0xE00010;
 constexpr uint32_t SCIF_SCBRR2 = 0xE80004, SCIF_SCFSR2 = 0xE80010;
 constexpr uint32_t UDI_SDIR = 0xF00000;
