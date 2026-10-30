@@ -112,9 +112,8 @@ public:
 
 	/* A key of a section given a value, or taken out (nullopt: the value
 	 * by default then; a key Odin knows goes back to its comment): the
-	 * file is read again, changed, written whole to a file beside it and
-	 * renamed over it, then read here again. False, said on stderr, if it
-	 * cannot be written. */
+	 * file is read again, changed and written (write). False, said on
+	 * stderr, if it cannot be written. */
 	bool change(const std::string &path, const std::string &section, const std::string &key,
 	            const std::optional<std::string> &value);
 	/* The same change here only, for the time Odin runs */
@@ -130,6 +129,8 @@ public:
 	                           const std::optional<std::string> &standard = std::nullopt);
 
 private:
+	/* The text written whole to a file beside it and renamed over it,
+	 * then read here again */
 	bool write(const std::string &path, const std::string &text);
 
 	std::map<std::string, Lines> m_sections;

@@ -30,10 +30,8 @@
 
 namespace odin {
 
-/* What Odin says, on its terminal as before and in a file too: odin.log in
- * the data folder of Odin (beside saves/), the one of the launch before
- * kept as odin-previous.log; ODIN_LOG=<file> another file, ODIN_LOG=none
- * none. stdout and stderr each go through a pipe that a thread of its own
+/* What Odin says, on its terminal as before and in a file too (path()), the
+ * one of the launch before kept as odin-previous.log. stdout and stderr each go through a pipe that a thread of its own
  * empties into the terminal and the file, so that all is caught, what the
  * libraries say too, and stdout and stderr stay apart on the terminal.
  * The file stops at a size (the detailed log says a lot); the terminal
@@ -43,8 +41,8 @@ class LogFile {
 public:
 	static constexpr uint64_t MOST_BYTES = 64ull << 20;
 
-	/* The file: ODIN_LOG, else odin.log in the data folder; empty with
-	 * ODIN_LOG=none or without a data folder */
+	/* The file: ODIN_LOG=<file>, else odin.log in the data folder of Odin
+	 * (beside saves/); empty with ODIN_LOG=none or without a data folder */
 	static std::string path();
 	/* Where the one before goes */
 	static std::string previous(const std::string &path);

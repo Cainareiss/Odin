@@ -389,8 +389,6 @@ Settings::complete(const std::string &path)
 	return out == *text || write(path, out);
 }
 
-/* Written whole to a file beside it and renamed over it, then read here
- * again */
 bool
 Settings::write(const std::string &path, const std::string &out)
 {

@@ -75,10 +75,9 @@ class SaveFolder {
 public:
 	/* <folder>/<game> with ODIN_SAVES=<folder>; else <chosen>/<game>, the
 	 * folder the settings give; else saves/<game> in odin_data_dir():
-	 * beside a portable Odin, or in <data>/odin, <data> being %APPDATA% on
-	 * Windows, ~/Library/Application Support on macOS, XDG_DATA_HOME or
-	 * ~/.local/share elsewhere. None with ODIN_SAVES=none, or when there
-	 * is no such place. */
+	 * beside a portable Odin, or in <data>/odin, <data> being
+	 * user_data_dir(). None with ODIN_SAVES=none, or when there is no such
+	 * place. */
 	static SaveFolder of_game(const std::string &game, const std::string &chosen = "");
 	/* The folder of the folders of the games; empty: none */
 	static std::string root(const std::string &chosen = "");
