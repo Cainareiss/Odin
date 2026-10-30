@@ -65,6 +65,18 @@ guid_text(SDL_GUID guid)
 	return text;
 }
 
+/* The make a player asks for, by its GUID, and the very one picked (0:
+ * any of that make), which the other player lets go of */
+void
+choose(std::array<std::string, 2> &wanted, std::array<SDL_JoystickID, 2> &picked, unsigned player,
+       const std::string &guid, SDL_JoystickID one)
+{
+	wanted[player & 1] = guid;
+	picked[player & 1] = one;
+	if (one && picked[~player & 1] == one)
+		picked[~player & 1] = 0;
+}
+
 } /* namespace */
 
 bool
@@ -244,10 +256,7 @@ Controls::plugged() const
 void
 Controls::want(unsigned player, const std::string &guid, SDL_JoystickID picked)
 {
-	m_wanted[player & 1] = guid;
-	m_picked[player & 1] = picked;
-	if (picked && m_picked[~player & 1] == picked)
-		m_picked[~player & 1] = 0;
+	choose(m_wanted, m_picked, player, guid, picked);
 	reseat();
 }
 
@@ -269,10 +278,7 @@ Controls::joysticks() const
 void
 Controls::want_joystick(unsigned player, const std::string &guid, SDL_JoystickID picked)
 {
-	m_joys_wanted[player & 1] = guid;
-	m_joys_picked[player & 1] = picked;
-	if (picked && m_joys_picked[~player & 1] == picked)
-		m_joys_picked[~player & 1] = 0;
+	choose(m_joys_wanted, m_joys_picked, player, guid, picked);
 	reseat();
 }
 
