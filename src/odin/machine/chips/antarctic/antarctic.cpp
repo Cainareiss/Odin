@@ -121,7 +121,7 @@ Antarctic::error(const char *fmt, ...) const
  * one.)
  *
  * A CP program is uploaded to two different areas in CMDRAM on odd and even
- * frames (see the NOTE in hikaru_gpu.hpp).
+ * frames.
  */
 
 void
@@ -144,9 +144,8 @@ Antarctic::start(uint32_t pc, uint32_t sp0, uint32_t sp1)
 
 	/* HEURISTIC: a list starts with the stacks and the bases cleared, and
 	 * the scratch objects empty; the current viewport, the matrices and
-	 * the tables stay. Valkyrie cleared them at every vertical blanking,
-	 * a list running or not; the six attract loops send the same lists
-	 * either way. */
+	 * the tables stay. Cleared at every vertical blanking instead, a list
+	 * running or not, the six attract loops send the same lists. */
 
 	/* The static mesh scale (0x901) is a register of the CP that outlives
 	 * the list, like the X360 port's global 82E02B60. */

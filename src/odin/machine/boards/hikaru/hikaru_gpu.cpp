@@ -120,13 +120,12 @@ HikaruGpu::set_reset_lines(bool gp_res, bool pci1_res)
  * 15000088: a cause whose bit is SET there does not interrupt. The system
  * library (PHARRIER @0C010AB6, the same in the BOOTROM) writes 0x72 to
  * 15000088, which clears the causes 0, 2, 3 and 7, then 0x72 to 15000084:
- * it clears what it lets through. Valkyrie took a set bit for a cause let
- * through, and with it had to make up an interrupt at every frame.
+ * it clears what it lets through.
  *
  * Bits in 15000088:
  *
  *  01, bit 0 = GPU 15 indirect DMA done
- *  02, bit 1 = an error (Valkyrie: GPU 15 polygon-out done)
+ *  02, bit 1 = an error
  *  04, bit 2 = GPU 15 command analysis done
  *  08, bit 3 = an error
  *  10, bit 4 = an error
@@ -174,9 +173,9 @@ HikaruGpu::update_irq()
  */
 
 /* 15000058 or 1A000024 was written. 15000058 = 3 launches the list;
- * 1A000024 does not launch it again (Valkyrie had it do so: BRAVEFF writes it
- * the instruction after 15000058, and its list ran twice once the command
- * processor ran from its launch on; SGNASCAR writes it the other way round). */
+ * 1A000024 does not launch it again: BRAVEFF writes it the instruction after
+ * 15000058, and a launch by both would run its list twice; SGNASCAR writes it
+ * the other way round. */
 void
 HikaruGpu::list_control_written(bool launch)
 {
