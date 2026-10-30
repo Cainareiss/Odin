@@ -93,6 +93,7 @@ private:
 	void take_folder();
 	void load_or_save_state(bool load);
 	std::string state_path() const;
+	bool state_saved() const;
 	void save_state_at_frame();
 	void capture_title();
 	void limit_frame_rate();

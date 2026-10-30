@@ -81,6 +81,9 @@ public:
 		uint64_t size;
 		std::optional<uint32_t> crc;
 		std::string set;
+
+		/* The set MAME keeps it in, for a file of `game` */
+		const std::string &set_of(const std::string &game) const { return set.empty() ? game : set; }
 	};
 
 	/* Either folder may be empty: none */

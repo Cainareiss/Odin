@@ -48,6 +48,15 @@ Session::state_path() const
 	return (states.empty() ? "" : states + "/") + m_board.game_name() + ".odinstate";
 }
 
+/* A state of the game saved there: the bar offers to load it */
+bool
+Session::state_saved() const
+{
+	std::error_code error;
+
+	return std::filesystem::exists(state_path(), error);
+}
+
 void
 Session::load_or_save_state(bool load)
 {
@@ -266,7 +275,6 @@ Session::follow_bar()
 {
 	const bool held = m_display.bar_shown() && (m_bar.wants_mouse || m_bar.open || m_bar_buttons);
 	const bool shown = !m_display.menu_shown() && (SDL_GetTicks() < m_bar_until || held);
-	std::error_code error;
 
 	if (shown == m_display.bar_shown())
 		return;
@@ -274,7 +282,7 @@ Session::follow_bar()
 	m_bar.wants_mouse = m_bar.open = false;
 	m_bar_buttons = 0;
 	if (shown)
-		m_bar.saved = std::filesystem::exists(state_path(), error);
+		m_bar.saved = state_saved();
 	else if (m_paused)
 		m_display.show_again(nullptr);
 }
@@ -296,7 +304,6 @@ void
 Session::do_bar()
 {
 	using Ask = BarState::Ask;
-	std::error_code error;
 
 	const Ask asked = m_menus.do_bar(m_bar);
 
@@ -311,7 +318,7 @@ Session::do_bar()
 		break;
 	case Ask::SAVE_STATE:
 		load_or_save_state(false);
-		m_bar.saved = std::filesystem::exists(state_path(), error);
+		m_bar.saved = state_saved();
 		break;
 	case Ask::LOAD_STATE:
 		load_or_save_state(true);

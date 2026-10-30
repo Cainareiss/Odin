@@ -47,7 +47,7 @@ scan_library(LibraryState &state, const GameList &games, const Options &options,
 		LibraryState::Game game{ name, title, {} };
 
 		for (const RomFiles::File &file : games.missing(files, name))
-			game.missing.push_back(file.name + " (" + (file.set.empty() ? name : file.set) + ".zip)");
+			game.missing.push_back(file.name + " (" + file.set_of(name) + ".zip)");
 		if (name == chosen)
 			state.selected = static_cast<int>(state.games.size());
 		state.games.push_back(std::move(game));

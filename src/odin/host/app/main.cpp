@@ -88,7 +88,7 @@ play(const Options &given, const std::string &name, const GameList &games, Setti
 				std::snprintf(crc, sizeof(crc), ", CRC %08X", *file.crc);
 			std::fprintf(stderr, "ERROR: '%s': %s (%llu bytes%s) is missing; MAME keeps it in %s.zip\n", name.c_str(),
 			             file.name.c_str(), static_cast<unsigned long long>(file.size), crc,
-			             (file.set.empty() ? name : file.set).c_str());
+			             file.set_of(name).c_str());
 		}
 		return loaded;
 	}();
