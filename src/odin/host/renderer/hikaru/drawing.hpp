@@ -25,6 +25,7 @@
 #ifndef ODIN_BOARD_DRAWING_HPP
 #define ODIN_BOARD_DRAWING_HPP
 
+#include <cmath>
 #include <cstdarg>
 #include <cstdint>
 #include <cstdio>
@@ -147,6 +148,16 @@ public:
 			return list.num_mvs;
 		}
 		return mesh.mv_index + i;
+	}
+	/* The clipping planes of a view said on stderr where they are not
+	 * right: the far one not finite, the near one below 0, or the planes
+	 * the wrong way round */
+	static void check_view(const odin_viewport_t &vp)
+	{
+		if (!std::isfinite(vp.clip.f) || !(std::isfinite(vp.clip.n) && vp.clip.n >= 0.0f))
+			repeats::error("non-positive viewport clipping planes: %s", odin_viewport_str(&vp));
+		if (vp.clip.l >= vp.clip.r || vp.clip.b >= vp.clip.t || vp.clip.n >= std::fabs(vp.clip.f))
+			repeats::error("inverted viewport clipping planes: %s", odin_viewport_str(&vp));
 	}
 	/* Its second modelview: the first one where it has none */
 	static uint32_t modelview2_of(const odin_display_list_t &list, const odin_mesh_t &mesh, uint32_t first)

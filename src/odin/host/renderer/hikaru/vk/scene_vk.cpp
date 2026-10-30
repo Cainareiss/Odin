@@ -50,12 +50,6 @@ namespace {
 
 constexpr uint32_t NONE = ~0u;
 
-bool
-is_nonnegative(float x)
-{
-	return std::isfinite(x) && x >= 0.0f;
-}
-
 /* A view and a lightset as the mesh shaders read them (std430) */
 struct ViewData {
 	float projection[4][4];
@@ -741,10 +735,7 @@ VkDrawing::write_view(unsigned index)
 	ViewData view{};
 
 	m_view_written[index] = true;
-	if (!std::isfinite(vp.clip.f) || !is_nonnegative(vp.clip.n))
-		repeats::error("non-positive viewport clipping planes: %s", odin_viewport_str(&vp));
-	if (vp.clip.l >= vp.clip.r || vp.clip.b >= vp.clip.t || vp.clip.n >= std::fabs(vp.clip.f))
-		repeats::error("inverted viewport clipping planes: %s", odin_viewport_str(&vp));
+	check_view(vp);
 	if (m_debug.log)
 		log("vp  = %s", odin_viewport_str(&vp));
 
