@@ -1508,11 +1508,8 @@ MenuKit::shortcut(const char *name, std::span<const std::vector<std::string>> ke
 	const ImVec2 at = begin_row(width);
 	const float control = keys_w + px(GAP) + pad_w;
 	/* Where the name has not room enough beside them, they go under it */
-	const bool under = width - control - px(GAP) - 2.0f * pad_room < px(TEXT_LEAST);
-	const float text_w = under ? width - 2.0f * pad_room : width - control - px(GAP) - 2.0f * pad_room;
-	const float text_h = texts({ at.x + pad_room, at.y + pad_room }, text_w, name, nullptr, nullptr);
-	const float h = (under ? text_h + px(6.0f) + cap_h : std::max(text_h, cap_h)) + 2.0f * pad_room;
-	const float y = under ? at.y + pad_room + text_h + px(6.0f) : at.y + (h - cap_h) / 2.0f;
+	const Placed placed = place(at, width, control, cap_h, name, nullptr, nullptr);
+	const float h = placed.h, y = placed.top;
 	float x = at.x + width - pad_room - control;
 	int clicked = -1;
 	/* The gamepad: left or right to a key or the buttons, A to catch it */
