@@ -1275,8 +1275,7 @@ void Mie::log_unknown(char rw, const char *space, uint32_t addr, uint32_t value)
 	const std::string line = std::format("{}: unknown {} {} {:04x} pc {:04x} value {:02x}\n",
 	                                     m_external ? "i/o board" : "mie", space, rw, addr, m_cpu.pc(), value);
 
-	if (m_log != stderr || repeats::say(KIND, line))
-		std::fputs(line.c_str(), m_log);
+	repeats::put(m_log, KIND, line.c_str());
 }
 
 void Mie::save(MieState &out) const

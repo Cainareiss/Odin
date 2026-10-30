@@ -111,6 +111,15 @@ say(const void *kind, std::string_view line)
 	return true;
 }
 
+/* fputs, unless the line repeats on stderr: a file of its own gets them
+ * all */
+inline void
+put(std::FILE *out, const void *kind, const char *line)
+{
+	if (out != stderr || say(kind, line))
+		std::fputs(line, out);
+}
+
 /* fprintf, unless the line repeats */
 inline void print(std::FILE *out, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 

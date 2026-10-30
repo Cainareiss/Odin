@@ -673,8 +673,7 @@ Aica::log_unknown(char rw, uint32_t offset, uint32_t size, uint32_t value)
 		return;
 	m_unknown_logged++;
 	std::snprintf(line, sizeof(line), FORMAT, rw, offset, size, value);
-	if (m_log != stderr || repeats::say(FORMAT, line))
-		std::fputs(line, m_log);
+	repeats::put(m_log, FORMAT, line);
 }
 
 } /* namespace odin */
