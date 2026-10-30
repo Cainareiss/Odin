@@ -36,6 +36,7 @@
 #include <cstring>
 
 #include "odin/common/bytes.hpp"
+#include "odin/common/stop_message.hpp"
 
 namespace odin {
 
@@ -44,8 +45,7 @@ namespace {
 [[noreturn]] void
 fatal(const char *what, uint32_t addr, unsigned size)
 {
-	std::fprintf(stderr, "FATAL: %s (%u bytes at %08X)\n", what, size, addr);
-	std::abort();
+	stop_fatal("%s (%u bytes at %08X)", what, size, addr);
 }
 
 /* A value of a memory, least significant byte first */
@@ -1075,10 +1075,8 @@ Hikaru::Bus::port_a_write(uint16_t pins)
 		/* Bit 0 is the line of the slave to the master, on IRL3 for
 		 * MAME (hikaru.cpp, slave SH4 port A); the games leave it
 		 * high. */
-		if (!(pins & 1)) {
-			std::fprintf(stderr, "FATAL: the slave SH-4 pulls its line to the master, which is not implemented\n");
-			std::abort();
-		}
+		if (!(pins & 1))
+			stop_fatal("the slave SH-4 pulls its line to the master, which is not implemented");
 		return;
 	}
 
