@@ -54,8 +54,9 @@ enum : uint32_t {
 NetBoard837_13404::NetBoard837_13404()
 	: m_cpu(*this), m_ram(RAM_SIZE), m_comm{std::vector<uint8_t>(COMM_SIZE), std::vector<uint8_t>(COMM_SIZE)},
 	  m_bank(0), m_io{}, m_rx_addr(0), m_rx_size(0), m_tx_addr(0), m_tx_size(0), m_status0(0), m_status1(0),
-	  m_rx_armed(false), m_tx_busy(false), m_tx_end(0), m_timer(0), m_ticked(false), m_timer_zero(0), m_timer_next(0), m_leds(0), m_irq(0),
-	  m_host_regs{}, m_running(false), m_clock(0), m_cpu_base(0), m_next(nullptr)
+	  m_rx_armed(false), m_tx_busy(false), m_tx_end(0), m_timer(0), m_ticked(false), m_timer_zero(0),
+	  m_timer_next(UINT64_MAX), m_leds(0), m_irq(0), m_host_regs{}, m_running(false), m_clock(0), m_cpu_base(0),
+	  m_next(nullptr)
 {
 }
 
