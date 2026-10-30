@@ -562,8 +562,9 @@ VkDrawing::open_scene(bool clear, bool clear_depth)
 		m_depth_used = false;
 		m_depth_wanted = false;
 	}
-	/* Nothing reads the depth after the last translucent view */
-	m_depth_kept = m_translucent_left > 0;
+	/* Nothing reads the depth after the last translucent view, but family
+	 * 0 of the 101 in a view that has both (open_family) */
+	m_depth_kept = m_translucent_left > 0 || m_families_view;
 	if (!m_depth_kept)
 		depth.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	depth.imageView = m_depth.view;
