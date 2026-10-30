@@ -335,6 +335,8 @@ private:
 	void choose_depth_format();
 	bool make_device(std::string &why);
 	void make_frames();
+	Pass pass_layout(const std::vector<VkDescriptorSetLayoutBinding> &bindings, uint32_t push);
+	VkShaderModule shader_module(const Spirv &code);
 	uint32_t memory_type(uint32_t types, VkMemoryPropertyFlags flags) const;
 	Image make_image(VkFormat format, unsigned w, unsigned h, unsigned levels, VkImageUsageFlags usage,
 	                 const VkComponentMapping &swizzle, bool placed);

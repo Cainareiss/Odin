@@ -957,23 +957,12 @@ Pass
 Context::make_pass(const Spirv &vertex, const Spirv &fragment, const std::vector<VkDescriptorSetLayoutBinding> &bindings,
                    uint32_t push, VkPrimitiveTopology topology, VkFormat format, bool over)
 {
-	Pass pass;
-	const VkDescriptorSetLayoutCreateInfo set{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO, nullptr, 0,
-	                                           static_cast<uint32_t>(bindings.size()), bindings.data() };
-	check(m_fn.vkCreateDescriptorSetLayout(m_device, &set, nullptr, &pass.images), "the images of a pass");
-
-	const VkPushConstantRange range{ VK_SHADER_STAGE_FRAGMENT_BIT, 0, push };
-	const VkPipelineLayoutCreateInfo layout{ VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO, nullptr, 0, 1, &pass.images,
-	                                         push ? 1u : 0u, &range };
-	check(m_fn.vkCreatePipelineLayout(m_device, &layout, nullptr, &pass.layout), "the layout of a pass");
-
+	Pass pass = pass_layout(bindings, push);
 	VkShaderModule modules[2];
 	const Spirv *const code[2] = { &vertex, &fragment };
-	for (unsigned i = 0; i < 2; i++) {
-		const VkShaderModuleCreateInfo info{ VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO, nullptr, 0, code[i]->bytes,
-		                                     code[i]->code };
-		check(m_fn.vkCreateShaderModule(m_device, &info, nullptr, &modules[i]), "a shader");
-	}
+
+	for (unsigned i = 0; i < 2; i++)
+		modules[i] = shader_module(*code[i]);
 	const VkPipelineShaderStageCreateInfo stages[2] = {
 		{ VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_VERTEX_BIT, modules[0],
 		  "main", nullptr },
@@ -1029,6 +1018,34 @@ Context::make_pass(const Spirv &vertex, const Spirv &fragment, const std::vector
 	for (const VkShaderModule module : modules)
 		m_fn.vkDestroyShaderModule(m_device, module, nullptr);
 	return pass;
+}
+
+/* A pass with its images (its descriptors) and its push constants laid
+ * out, no pipeline yet */
+Pass
+Context::pass_layout(const std::vector<VkDescriptorSetLayoutBinding> &bindings, uint32_t push)
+{
+	Pass pass;
+	const VkDescriptorSetLayoutCreateInfo set{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO, nullptr, 0,
+	                                           static_cast<uint32_t>(bindings.size()), bindings.data() };
+	check(m_fn.vkCreateDescriptorSetLayout(m_device, &set, nullptr, &pass.images), "the images of a pass");
+
+	const VkPushConstantRange range{ VK_SHADER_STAGE_FRAGMENT_BIT, 0, push };
+	const VkPipelineLayoutCreateInfo layout{ VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO, nullptr, 0, 1, &pass.images,
+	                                         push ? 1u : 0u, &range };
+	check(m_fn.vkCreatePipelineLayout(m_device, &layout, nullptr, &pass.layout), "the layout of a pass");
+	return pass;
+}
+
+VkShaderModule
+Context::shader_module(const Spirv &code)
+{
+	const VkShaderModuleCreateInfo info{ VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO, nullptr, 0, code.bytes,
+	                                     code.code };
+	VkShaderModule module;
+
+	check(m_fn.vkCreateShaderModule(m_device, &info, nullptr, &module), "a shader");
+	return module;
 }
 
 void
