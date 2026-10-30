@@ -56,8 +56,8 @@ public:
 	/* Its DIP switches, read 1 while off: DIP1 bits 7-6 off for its own
 	 * program (on: its self-test, its demo), bits 4-2 the strength of the
 	 * spring of the motor board when the game asks for it (B0, B1); DIP2
-	 * what its digits show. HEURISTIC: all off, the manual of NASCAR does
-	 * not give them. */
+	 * what its digits show. All off, as the manual of NASCAR asks: "Set all
+	 * the DIP switches (837-13844 and 838-13366) to OFF". */
 	static constexpr uint8_t DIP1 = 0xFF, DIP2 = 0xFF;
 	/* The torque register of the motor board; the most it is told each
 	 * way is DriveBoard::MOST */
