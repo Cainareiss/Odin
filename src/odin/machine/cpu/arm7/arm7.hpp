@@ -170,7 +170,7 @@ public:
 	uint32_t pc() const { return m_pc; }
 	uint32_t cpsr() const { return m_cpsr; }
 	uint32_t mode() const { return m_cpsr & 0x1F; }
-	uint32_t reg(uint32_t idx) const { return m_r[idx & 15]; }
+	uint32_t reg(uint32_t idx) const { return (idx & 15) == 15 ? m_pc : m_r[idx & 15]; }
 	void set_reg(uint32_t idx, uint32_t v);
 	uint32_t spsr() const;
 	/* For the tests: the instructions whose condition passed since reset */
