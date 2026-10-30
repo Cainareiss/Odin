@@ -38,6 +38,7 @@
 
 #include "odin/machine/chips/antarctic/antarctic_disasm.hpp"
 #include "odin/common/repeats.hpp"
+#include "odin/common/stop_message.hpp"
 
 namespace odin {
 
@@ -87,8 +88,7 @@ Antarctic::load(const AntarcticState &in)
 void
 Antarctic::fatal(const char *what, uint32_t value) const
 {
-	std::fprintf(stderr, "antarctic: %s (%08X) at %08X\n", what, value, m_s.pc);
-	std::abort();
+	stop_fatal("antarctic: %s (%08X) at %08X", what, value, m_s.pc);
 }
 
 /* A list sends the same thing at every frame: on stderr, what repeats is
