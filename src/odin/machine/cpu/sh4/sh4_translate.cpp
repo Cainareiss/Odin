@@ -40,7 +40,6 @@ namespace {
 using Alu = Sh4Host::Alu;
 using If = Sh4Host::If;
 using Shift = Sh4Host::Shift;
-constexpr Sh4Host::Reg A = Sh4Host::Reg::A;
 
 /* The steps most simple instructions are made of, on the words of the
  * registers of the CPU named by their rank; `t` is the word of T. */
@@ -51,76 +50,76 @@ struct Words {
 	/* to = from */
 	void copy(uint32_t to, uint32_t from) const
 	{
-		host.load(A, from);
-		host.store(to, A);
+		host.load(from);
+		host.store(to);
 	}
 	/* reg = reg <alu> other */
 	void both(Alu alu, uint32_t reg, uint32_t other) const
 	{
-		host.load(A, reg);
-		host.alu(alu, A, other);
-		host.store(reg, A);
+		host.load(reg);
+		host.alu(alu, other);
+		host.store(reg);
 	}
 	/* to = from <alu> value */
 	void with_value(Alu alu, uint32_t to, uint32_t from, uint32_t value) const
 	{
-		host.load(A, from);
-		host.alu_value(alu, A, value);
-		host.store(to, A);
+		host.load(from);
+		host.alu_value(alu, value);
+		host.store(to);
 	}
 	/* T = reg <alu> other <found>: Compare for a comparison, And for a test */
 	void compare(Alu alu, If found, uint32_t reg, uint32_t other) const
 	{
-		host.load(A, reg);
-		host.alu(alu, A, other);
+		host.load(reg);
+		host.alu(alu, other);
 		host.flag(found, t);
 	}
 	void compare_value(Alu alu, If found, uint32_t reg, uint32_t value) const
 	{
-		host.load(A, reg);
-		host.alu_value(alu, A, value);
+		host.load(reg);
+		host.alu_value(alu, value);
 		host.flag(found, t);
 	}
 	/* to = 0 - from: every bit turned over, plus one */
 	void negate(uint32_t to, uint32_t from) const
 	{
-		host.load(A, from);
-		host.alu_value(Alu::Xor, A, 0xFFFFFFFF);
-		host.alu_value(Alu::Add, A, 1);
-		host.store(to, A);
+		host.load(from);
+		host.alu_value(Alu::Xor, 0xFFFFFFFF);
+		host.alu_value(Alu::Add, 1);
+		host.store(to);
 	}
 	/* to = the low `bits` of from, extended by their sign */
 	void extend(uint32_t to, uint32_t from, uint32_t bits) const
 	{
-		host.load(A, from);
-		host.shift(Shift::Left, A, 32 - bits);
-		host.shift(Shift::RightSigned, A, 32 - bits);
-		host.store(to, A);
+		host.load(from);
+		host.shift(Shift::Left, 32 - bits);
+		host.shift(Shift::RightSigned, 32 - bits);
+		host.store(to);
 	}
 	void shift(Shift kind, uint32_t reg, uint32_t count) const
 	{
-		host.load(A, reg);
-		host.shift(kind, A, count);
-		host.store(reg, A);
+		host.load(reg);
+		host.shift(kind, count);
+		host.store(reg);
 	}
 	/* The same by one bit, T taking the bit that leaves. */
 	void shift_out(Shift kind, uint32_t reg) const
 	{
-		host.load(A, reg);
+		host.load(reg);
 		if (kind == Shift::Left) {
-			host.shift(Shift::Right, A, 31);
+			host.shift(Shift::Right, 31);
 		} else {
-			host.alu_value(Alu::And, A, 1);
+			host.alu_value(Alu::And, 1);
 		}
-		host.store(t, A);
+		host.store(t);
 		shift(kind, reg, 1);
 	}
 	/* reg = reg - 1, T set when it reaches 0 (DT) */
 	void decrement(uint32_t reg) const
 	{
-		host.load(A, reg);
-		host.alu_value(Alu::Sub, A, 1);
-		host.store(reg, A);
+		host.load(reg);
+		host.alu_value(Alu::Sub, 1);
+		host.store(reg);
 		host.flag(If::Equal, t);
 	}
 };
@@ -259,12 +258,12 @@ bool Sh4::translate_access(Inline form, const Sh4Op &op, uint32_t i, std::vector
 		if (a.fpu) {
 			slow.jumps[slow.count++] = host.jump_if_bits(FPSCR, FPSCR_SZ, !pairs);
 		}
-		host.load(A, a.base);
+		host.load(a.base);
 		if (a.index != NONE) {
-			host.alu(Alu::Add, A, a.index);
+			host.alu(Alu::Add, a.index);
 		}
 		if (a.disp) {
-			host.alu_value(Alu::Add, A, a.disp);
+			host.alu_value(Alu::Add, a.disp);
 		}
 	};
 	const auto read = [&](const Access &a) {
@@ -275,12 +274,12 @@ bool Sh4::translate_access(Inline form, const Sh4Op &op, uint32_t i, std::vector
 		if (a.size == 8) {
 			host.store_pair(a.reg);
 		} else {
-			host.store(a.reg, A);
+			host.store(a.reg);
 		}
 		if (a.step && a.reg != a.base) {
-			host.load(A, a.base);
-			host.alu_value(Alu::Add, A, static_cast<uint32_t>(a.step));
-			host.store(a.base, A);
+			host.load(a.base);
+			host.alu_value(Alu::Add, static_cast<uint32_t>(a.step));
+			host.store(a.base);
 		}
 		ways.push_back(LongWay{slow, i, host.join()});
 	};
@@ -290,9 +289,9 @@ bool Sh4::translate_access(Inline form, const Sh4Op &op, uint32_t i, std::vector
 		address(a, slow);
 		host.write(a.size, a.reg, slow);
 		if (a.step) {
-			host.load(A, a.base);
-			host.alu_value(Alu::Add, A, static_cast<uint32_t>(a.step));
-			host.store(a.base, A);
+			host.load(a.base);
+			host.alu_value(Alu::Add, static_cast<uint32_t>(a.step));
+			host.store(a.base);
 		}
 		ways.push_back(LongWay{slow, i, host.join()});
 	};
@@ -305,7 +304,7 @@ bool Sh4::translate_access(Inline form, const Sh4Op &op, uint32_t i, std::vector
 			return false;
 		}
 		host.read_at(page + (op.imm & (PAGE_SIZE - 1)), size);
-		host.store(n, A);
+		host.store(n);
 		return true;
 	};
 	const auto pre = [](uint32_t size) { return static_cast<uint32_t>(-static_cast<int32_t>(size)); };
@@ -364,8 +363,8 @@ bool Sh4::translate_access(Inline form, const Sh4Op &op, uint32_t i, std::vector
 			host.load_pair(fpu(m));
 			host.store_pair(fpu(n));
 		} else {
-			host.load(A, fpu(m));
-			host.store(fpu(n), A);
+			host.load(fpu(m));
+			host.store(fpu(n));
 		}
 		ways.push_back(LongWay{slow, i, host.join()});
 		break;
@@ -420,33 +419,33 @@ bool Sh4::translate_jump(const Block &b, const Sh4Op &op, uint32_t i, std::vecto
 		host.store_value(PC, op.imm);
 		break;
 	case Inline::Rts:
-		host.load(A, PR);
-		host.store(PC, A);
+		host.load(PR);
+		host.store(PC);
 		break;
 	case Inline::Jsr:
-		host.load(A, op.n);
-		host.store(PC, A);
+		host.load(op.n);
+		host.store(PC);
 		host.store_value(PR, here + 4);
 		break;
 	case Inline::Jmp: {
 		/* An odd address: the instruction itself stops the program. */
 		Sh4Host::Slow slow{};
 
-		host.load(A, op.n);
+		host.load(op.n);
 		slow.jumps[slow.count++] = host.jump_if_odd();
-		host.store(PC, A);
+		host.store(PC);
 		ways.push_back(LongWay{slow, i, host.join()});
 		break;
 	}
 	case Inline::BraF:
-		host.load(A, op.n);
-		host.alu_value(Alu::Add, A, here + 4);
-		host.store(PC, A);
+		host.load(op.n);
+		host.alu_value(Alu::Add, here + 4);
+		host.store(PC);
 		break;
 	case Inline::BsrF:
-		host.load(A, op.n);
-		host.alu_value(Alu::Add, A, here + 4);
-		host.store(PC, A);
+		host.load(op.n);
+		host.alu_value(Alu::Add, here + 4);
+		host.store(PC);
 		host.store_value(PR, here + 4);
 		break;
 	default:
@@ -476,12 +475,12 @@ bool Sh4::translate_float(Inline form, const Sh4Op &op, uint32_t i, std::vector<
 	case Inline::StsFpul:
 		return translate_vector(form, op, i, ways);
 	case Inline::FSts:
-		host.load(A, FPUL);
-		host.store(n, A);
+		host.load(FPUL);
+		host.store(n);
 		return true;
 	case Inline::FLds:
-		host.load(A, n);
-		host.store(FPUL, A);
+		host.load(n);
+		host.store(FPUL);
 		return true;
 	case Inline::FLt: case Inline::FTrc: case Inline::FNeg: case Inline::FAbs: case Inline::FLdi0:
 	case Inline::FLdi1: case Inline::FAdd: case Inline::FSub: case Inline::FMul: case Inline::FCmpGt:
@@ -502,17 +501,17 @@ bool Sh4::translate_float(Inline form, const Sh4Op &op, uint32_t i, std::vector<
 		break;
 	case Inline::FTrc:
 		host.float_to(n);
-		host.store(FPUL, A);
+		host.store(FPUL);
 		break;
 	case Inline::FNeg:
-		host.load(A, n);
-		host.alu_value(Alu::Xor, A, 0x80000000);
-		host.store(n, A);
+		host.load(n);
+		host.alu_value(Alu::Xor, 0x80000000);
+		host.store(n);
 		break;
 	case Inline::FAbs:
-		host.load(A, n);
-		host.alu_value(Alu::And, A, 0x7FFFFFFF);
-		host.store(n, A);
+		host.load(n);
+		host.alu_value(Alu::And, 0x7FFFFFFF);
+		host.store(n);
 		break;
 	case Inline::FLdi0:
 		host.store_value(n, 0x00000000);
@@ -566,11 +565,11 @@ bool Sh4::translate_vector(Inline form, const Sh4Op &op, uint32_t i, std::vector
 	}
 	slow.jumps[slow.count++] = host.jump_if_bits(SR, SR_FD, true);
 	if (form == Inline::LdsFpul) {
-		host.load(A, op.n);
-		host.store(FPUL, A);
+		host.load(op.n);
+		host.store(FPUL);
 	} else if (form == Inline::StsFpul) {
-		host.load(A, FPUL);
-		host.store(op.n, A);
+		host.load(FPUL);
+		host.store(op.n);
 	} else if (form == Inline::FIpr) {
 		host.float_ipr(FR + op.n, FR + op.m);
 	} else {

@@ -200,7 +200,7 @@ void Sh4Host::operand(uint8_t, uint32_t) {}
 
 /* A word A holds already is not loaded again: every step that changes A or
  * the word another way, every call and every join forgets it. */
-void Sh4Host::load(Reg, uint32_t rank)
+void Sh4Host::load(uint32_t rank)
 {
 	if (m_held == rank) {
 		return;
@@ -209,7 +209,7 @@ void Sh4Host::load(Reg, uint32_t rank)
 	m_held = rank;
 }
 
-void Sh4Host::store(uint32_t rank, Reg)
+void Sh4Host::store(uint32_t rank)
 {
 	HostCode::store(A, WORDS, at(rank), 4);
 	m_held = rank;
@@ -230,7 +230,7 @@ void Sh4Host::store_value(uint32_t rank, uint32_t value)
 
 /* Add, Sub, And, Or, Xor, Compare: the last three of the six set the
  * flags that flag() reads, as x86 does */
-void Sh4Host::alu(Alu op, Reg, uint32_t rank)
+void Sh4Host::alu(Alu op, uint32_t rank)
 {
 	static constexpr uint32_t CODE[] = { ADD, SUBS, ANDS, ORR, EOR, SUBS };
 
@@ -242,7 +242,7 @@ void Sh4Host::alu(Alu op, Reg, uint32_t rank)
 	}
 }
 
-void Sh4Host::alu_value(Alu op, Reg, uint32_t value)
+void Sh4Host::alu_value(Alu op, uint32_t value)
 {
 	uint32_t n, r, s;
 	const uint8_t to = op == Alu::Compare ? ZR : A;
@@ -283,7 +283,7 @@ void Sh4Host::alu_value(Alu op, Reg, uint32_t value)
 	}
 }
 
-void Sh4Host::shift(Shift kind, Reg, uint32_t count)
+void Sh4Host::shift(Shift kind, uint32_t count)
 {
 	const uint32_t code = kind == Shift::Left ? lsl(count) : kind == Shift::Right ? lsr(count) : asr(count);
 

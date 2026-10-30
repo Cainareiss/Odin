@@ -54,10 +54,6 @@ bool host_has_fma();
 class Sh4Host : public HostCode {
 public:
 	using Call = uintptr_t (*)(Sh4 &, const Sh4Op *);
-	/* The register of the host a step works in. Nothing of the program
-	 * stays in it that a later step relies on: a host may skip loading a
-	 * word it holds already, up to the next call, join or bind. */
-	enum class Reg : uint8_t { A };
 	/* Where host code finds the plain memory of the CPU, see Sh4::read()
 	 * and Sh4::write(): the page of an address to read and to write
 	 * (nullptr: not plain), the epoch each physical page of code was last
@@ -169,14 +165,17 @@ public:
 	/* Adds to the cycles left in the slice. */
 	void add_remaining(int32_t value);
 
-	/* The steps of an instruction written in place. */
-	void load(Reg reg, uint32_t rank);
-	void store(uint32_t rank, Reg reg);
+	/* The steps of an instruction written in place, in the one register
+	 * of the host they work in, A. Nothing of the program stays in it that
+	 * a later step relies on: a host may skip loading a word it holds
+	 * already, up to the next call, join or bind. */
+	void load(uint32_t rank);
+	void store(uint32_t rank);
 	void store_value(uint32_t rank, uint32_t value);
-	/* reg = reg <op> the word, or the value; Compare changes nothing. */
-	void alu(Alu op, Reg reg, uint32_t rank);
-	void alu_value(Alu op, Reg reg, uint32_t value);
-	void shift(Shift kind, Reg reg, uint32_t count);
+	/* A = A <op> the word, or the value; Compare changes nothing. */
+	void alu(Alu op, uint32_t rank);
+	void alu_value(Alu op, uint32_t value);
+	void shift(Shift kind, uint32_t count);
 	/* The word takes 1 or 0. Nothing but load() and store() may come
 	 * between the step that found it and this one. Uses the register A. */
 	void flag(If found, uint32_t rank);

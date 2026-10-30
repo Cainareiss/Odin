@@ -44,8 +44,8 @@ constexpr uint32_t MIDDLE = 128;
 constexpr uint8_t EAX = 0, ECX = 1;
 constexpr uint8_t READS = 5, WRITES = 6;	/* r13, r14 */
 
-/* The register of the host a step works in, and what x86 calls the steps. */
-constexpr uint8_t number(Sh4Host::Reg) { return EAX; }
+/* The register A of the steps, and what x86 calls the steps. */
+constexpr uint8_t A = EAX;
 constexpr uint8_t ALU[] = { 0, 5, 4, 1, 6, 7 };			/* add, sub, and, or, xor, cmp */
 constexpr uint8_t SHIFT[] = { 4, 5, 7 };			/* shl, shr, sar */
 constexpr uint8_t SET[] = { 0x94, 0x93, 0x97, 0x9D, 0x9F };	/* sete, setae, seta, setge, setg */
@@ -150,16 +150,16 @@ void Sh4Host::operand(uint8_t reg, uint32_t rank)
 	}
 }
 
-void Sh4Host::load(Reg reg, uint32_t rank)
+void Sh4Host::load(uint32_t rank)
 {
-	byte(0x8B);					/* mov reg, [the word] */
-	operand(number(reg), rank);
+	byte(0x8B);					/* mov A, [the word] */
+	operand(A, rank);
 }
 
-void Sh4Host::store(uint32_t rank, Reg reg)
+void Sh4Host::store(uint32_t rank)
 {
-	byte(0x89);					/* mov [the word], reg */
-	operand(number(reg), rank);
+	byte(0x89);					/* mov [the word], A */
+	operand(A, rank);
 }
 
 void Sh4Host::store_value(uint32_t rank, uint32_t value)
@@ -169,27 +169,27 @@ void Sh4Host::store_value(uint32_t rank, uint32_t value)
 	word(value);
 }
 
-void Sh4Host::alu(Alu op, Reg reg, uint32_t rank)
+void Sh4Host::alu(Alu op, uint32_t rank)
 {
-	byte(static_cast<uint8_t>(ALU[static_cast<uint8_t>(op)] * 8 + 3));	/* op reg, [the word] */
-	operand(number(reg), rank);
+	byte(static_cast<uint8_t>(ALU[static_cast<uint8_t>(op)] * 8 + 3));	/* op A, [the word] */
+	operand(A, rank);
 }
 
-void Sh4Host::alu_value(Alu op, Reg reg, uint32_t value)
+void Sh4Host::alu_value(Alu op, uint32_t value)
 {
-	const uint8_t which = static_cast<uint8_t>(0xC0 | (ALU[static_cast<uint8_t>(op)] << 3) | number(reg));
+	const uint8_t which = static_cast<uint8_t>(0xC0 | (ALU[static_cast<uint8_t>(op)] << 3) | A);
 
 	if (static_cast<int32_t>(value) == static_cast<int8_t>(value)) {
-		bytes({0x83, which, static_cast<uint8_t>(value)});	/* op reg, a byte with its sign */
+		bytes({0x83, which, static_cast<uint8_t>(value)});	/* op A, a byte with its sign */
 	} else {
-		bytes({0x81, which});					/* op reg, value */
+		bytes({0x81, which});					/* op A, value */
 		word(value);
 	}
 }
 
-void Sh4Host::shift(Shift kind, Reg reg, uint32_t count)
+void Sh4Host::shift(Shift kind, uint32_t count)
 {
-	bytes({0xC1, static_cast<uint8_t>(0xC0 | (SHIFT[static_cast<uint8_t>(kind)] << 3) | number(reg)),
+	bytes({0xC1, static_cast<uint8_t>(0xC0 | (SHIFT[static_cast<uint8_t>(kind)] << 3) | A),
 	       static_cast<uint8_t>(count)});
 }
 
@@ -197,7 +197,7 @@ void Sh4Host::flag(If found, uint32_t rank)
 {
 	bytes({0x0F, SET[static_cast<uint8_t>(found)], 0xC0});	/* set<found> al */
 	bytes({0x0F, 0xB6, 0xC0});				/* movzx eax, al */
-	store(rank, Reg::A);
+	store(rank);
 }
 
 Sh4Host::Jump Sh4Host::jump_if_word(uint32_t rank, bool set)
@@ -421,12 +421,12 @@ void Sh4Host::loop_if_told() {}
 Sh4Host::Jump Sh4Host::jump_if_told() { return Jump{0}; }
 void Sh4Host::go_where_told() {}
 void Sh4Host::operand(uint8_t, uint32_t) {}
-void Sh4Host::load(Reg, uint32_t) {}
-void Sh4Host::store(uint32_t, Reg) {}
+void Sh4Host::load(uint32_t) {}
+void Sh4Host::store(uint32_t) {}
 void Sh4Host::store_value(uint32_t, uint32_t) {}
-void Sh4Host::alu(Alu, Reg, uint32_t) {}
-void Sh4Host::alu_value(Alu, Reg, uint32_t) {}
-void Sh4Host::shift(Shift, Reg, uint32_t) {}
+void Sh4Host::alu(Alu, uint32_t) {}
+void Sh4Host::alu_value(Alu, uint32_t) {}
+void Sh4Host::shift(Shift, uint32_t) {}
 void Sh4Host::flag(If, uint32_t) {}
 void Sh4Host::bind(const Slow &) {}
 void Sh4Host::bind(Jump) {}
