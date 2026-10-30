@@ -222,7 +222,8 @@ public:
 	/* Texture transfer: copies one entry of the table. True when the
 	 * transfer ended at this call. */
 	bool step_texture_transfer();
-	/* 1500008C: the texture RAM twiddles what the bus writes to it */
+	/* 1500008C: true when the bus writes the texture RAM as it is, false
+	 * when each word goes where its bank twiddles it (Hikaru::texram_write) */
 	bool texture_ram_twiddled() const { return reg(0x8C) == 0x02020202; }
 	/* Called with each rectangle of texels of a bank a transfer is about
 	 * to write. */
