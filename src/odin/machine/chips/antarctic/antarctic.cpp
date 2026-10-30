@@ -296,11 +296,7 @@ Antarctic::run(uint32_t &budget)
 void
 Antarctic::push_pc()
 {
-	const uint32_t offs = m_s.sp[0] & 0x3FFFFFF;
-
-	if ((m_s.sp[0] >> 24) != 0x48 || offs + 4 > m_cmdram.size())
-		fatal("stack out of the command RAM", m_s.sp[0]);
-	std::memcpy(&m_cmdram[offs], &m_s.pc, 4);
+	std::memcpy(&m_cmdram[stack_offset()], &m_s.pc, 4);
 	m_s.sp[0] -= 4;
 }
 
@@ -308,13 +304,20 @@ void
 Antarctic::pop_pc()
 {
 	m_s.sp[0] += 4;
+	std::memcpy(&m_s.pc, &m_cmdram[stack_offset()], 4);
+	m_s.pc += 8;
+}
 
-	const uint32_t offs = m_s.sp[0] & 0x3FFFFFF;
+/* Where the stack pointer is in the command RAM, the only place for it
+ * known; anywhere else stops Odin */
+uint32_t
+Antarctic::stack_offset() const
+{
+	const uint32_t offs = m_s.sp[0] & 0x00FFFFFF;
 
 	if ((m_s.sp[0] >> 24) != 0x48 || offs + 4 > m_cmdram.size())
 		fatal("stack out of the command RAM", m_s.sp[0]);
-	std::memcpy(&m_s.pc, &m_cmdram[offs], 4);
-	m_s.pc += 8;
+	return offs;
 }
 
 } /* namespace odin */

@@ -281,6 +281,7 @@ private:
 	bool fetch(uint32_t inst[8]) const;
 	void push_pc();
 	void pop_pc();
+	uint32_t stack_offset() const;
 
 	/* antarctic_ops.cpp: the instructions */
 
