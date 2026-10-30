@@ -35,6 +35,10 @@ namespace odin {
 namespace {
 
 enum Alu : unsigned { ALU_OR, ALU_AND, ALU_SUB, ALU_ADD, ALU_EOR = 5, ALU_CMP };
+/* BTST, BCHG, BCLR, BSET (bits 7-6 of the word); ASd, LSd, ROXd, ROd (the
+ * type of the shift) */
+enum BitOp : unsigned { BIT_TEST, BIT_CHANGE, BIT_CLEAR, BIT_SET };
+enum ShiftOp : unsigned { SHIFT_ARITH, SHIFT_LOGICAL, ROTATE_X, ROTATE };
 
 } /* namespace */
 
@@ -180,7 +184,7 @@ M68000::op_bit(unsigned kind, bool dynamic)
 	const unsigned mode = (op >> 3) & 7, reg = op & 7;
 	uint32_t bit = dynamic ? m_d[(op >> 9) & 7] : next_word();
 
-	if (mode == 1 || (mode == 7 && reg > (kind == 0 ? 4u : 1u)) || (!dynamic && mode == 7 && reg == 4)) {
+	if (mode == 1 || (mode == 7 && reg > (kind == BIT_TEST ? 4u : 1u)) || (!dynamic && mode == 7 && reg == 4)) {
 		illegal();
 		return;
 	}
@@ -191,14 +195,14 @@ M68000::op_bit(unsigned kind, bool dynamic)
 		m_sr = static_cast<uint16_t>(was ? m_sr & ~SR_Z : m_sr | SR_Z);
 		prefetch();
 		switch (kind) {
-		case 0:
+		case BIT_TEST:
 			idle(2);
 			break;
-		case 1:
+		case BIT_CHANGE:
 			d ^= 1u << bit;
 			idle(bit < 16 ? 2 : 4);
 			break;
-		case 2:
+		case BIT_CLEAR:
 			d &= ~(1u << bit);
 			idle(bit < 16 ? 4 : 6);
 			break;
@@ -213,15 +217,15 @@ M68000::op_bit(unsigned kind, bool dynamic)
 	uint32_t v = get(e, BYTE);
 	bit &= 7;
 	m_sr = static_cast<uint16_t>(((v >> bit) & 1) ? m_sr & ~SR_Z : m_sr | SR_Z);
-	if (kind == 0) {
+	if (kind == BIT_TEST) {
 		prefetch();
 		if (e.kind == Ea::IMM)
 			idle(2);
 		return;
 	}
-	if (kind == 1)
+	if (kind == BIT_CHANGE)
 		v ^= 1u << bit;
-	else if (kind == 2)
+	else if (kind == BIT_CLEAR)
 		v &= ~(1u << bit);
 	else
 		v |= 1u << bit;
@@ -1477,7 +1481,7 @@ shift_bits(unsigned kind, bool left, uint32_t v, uint32_t m, uint32_t top, unsig
 	ShiftResult r{v & m, false, x, false};
 
 	if (count == 0) {
-		r.c = kind == 2 ? x : false;
+		r.c = kind == ROTATE_X ? x : false;
 		return r;
 	}
 	for (unsigned i = 0; i < count; i++) {
@@ -1486,33 +1490,33 @@ shift_bits(unsigned kind, bool left, uint32_t v, uint32_t m, uint32_t top, unsig
 		if (left) {
 			out = (old & top) != 0;
 			uint32_t in = 0;
-			if (kind == 3)
+			if (kind == ROTATE)
 				in = out;
-			else if (kind == 2)
+			else if (kind == ROTATE_X)
 				in = r.x;
 			r.value = ((old << 1) | in) & m;
-			if (kind == 0 && ((old ^ r.value) & top))
+			if (kind == SHIFT_ARITH && ((old ^ r.value) & top))
 				r.v = true;
 		} else {
 			out = (old & 1) != 0;
 			uint32_t in = 0;
-			if (kind == 0)
+			if (kind == SHIFT_ARITH)
 				in = (old & top) ? top : 0;
-			else if (kind == 3)
+			else if (kind == ROTATE)
 				in = out ? top : 0;
-			else if (kind == 2)
+			else if (kind == ROTATE_X)
 				in = r.x ? top : 0;
 			r.value = ((old >> 1) | in) & m;
 		}
 		r.c = out;
-		if (kind != 3)
+		if (kind != ROTATE)
 			r.x = out;
 	}
-	if (kind == 2)
+	if (kind == ROTATE_X)
 		r.c = r.x;
 	/* ASR past the size: C and X cleared, as the suite has it (Musashi
 	 * gives the sign there; not checked on a chip) */
-	if (kind == 0 && !left && count > static_cast<unsigned>(std::countr_zero(top)) + 1)
+	if (kind == SHIFT_ARITH && !left && count > static_cast<unsigned>(std::countr_zero(top)) + 1)
 		r.c = r.x = false;
 	return r;
 }
@@ -1530,10 +1534,10 @@ M68000::op_shift_register()
 	const unsigned count = (op & 0x20) ? (m_d[(op >> 9) & 7] & 63) : (((op >> 9) & 7) ? ((op >> 9) & 7) : 8);
 	const ShiftResult r = shift_bits(kind, left, m_d[reg], mask(s), msb(s), count, (m_sr & SR_X) != 0);
 
-	uint16_t f = m_sr & static_cast<uint16_t>(~(SR_N | SR_Z | SR_V | SR_C | (count && kind != 3 ? SR_X : 0)));
+	uint16_t f = m_sr & static_cast<uint16_t>(~(SR_N | SR_Z | SR_V | SR_C | (count && kind != ROTATE ? SR_X : 0)));
 	if (r.c)
 		f |= SR_C;
-	if (count && kind != 3 && r.x)
+	if (count && kind != ROTATE && r.x)
 		f |= SR_X;
 	if (r.v)
 		f |= SR_V;
@@ -1562,10 +1566,10 @@ M68000::op_shift_memory()
 	const Ea e = ea(mode, reg, WORD);
 	const ShiftResult r = shift_bits(kind, left, read_word(e.addr), 0xFFFF, 0x8000, 1, (m_sr & SR_X) != 0);
 
-	uint16_t f = m_sr & static_cast<uint16_t>(~(SR_N | SR_Z | SR_V | SR_C | (kind != 3 ? SR_X : 0)));
+	uint16_t f = m_sr & static_cast<uint16_t>(~(SR_N | SR_Z | SR_V | SR_C | (kind != ROTATE ? SR_X : 0)));
 	if (r.c)
 		f |= SR_C;
-	if (kind != 3 && r.x)
+	if (kind != ROTATE && r.x)
 		f |= SR_X;
 	if (r.v)
 		f |= SR_V;
