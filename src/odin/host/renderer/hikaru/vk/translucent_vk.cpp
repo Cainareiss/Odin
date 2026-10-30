@@ -44,7 +44,7 @@ namespace {
 
 /* Where the processor reads the counts: those of the three last lists,
  * eight views each, then the one read now */
-constexpr uint32_t COUNT_NOW = 3 * ODIN_VIEWPORTS;
+constexpr uint32_t COUNT_NOW = Drawing::PIPE * ODIN_VIEWPORTS;
 
 /* The last fragment of each pixel: emptied, then written and read by the
  * fragment shaders */

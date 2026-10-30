@@ -159,7 +159,7 @@ GlDrawing::build_lists()
 	glUniform1i(gl::uniform(m_lists.program, "u_below"), UNIT_BELOW);
 	glUseProgram(0);
 
-	glGenBuffers(24, m_lists.count);
+	glGenBuffers(PIPE * ODIN_VIEWPORTS, m_lists.count);
 	for (const GLuint count : m_lists.count) {
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, count);
 		glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(GLuint), nullptr, GL_DYNAMIC_COPY);
@@ -199,11 +199,11 @@ GlDrawing::destroy_lists()
 		glDeleteProgram(m_peel.show);
 		return;
 	}
-	for (unsigned slot = 0; slot < 3; slot++)
+	for (unsigned slot = 0; slot < PIPE; slot++)
 		forget_counts(slot);
 	glDeleteBuffers(1, &m_lists.readback);
 	glDeleteBuffers(1, &m_lists.nodes);
-	glDeleteBuffers(24, m_lists.count);
+	glDeleteBuffers(PIPE * ODIN_VIEWPORTS, m_lists.count);
 	glDeleteProgram(m_lists.program);
 }
 

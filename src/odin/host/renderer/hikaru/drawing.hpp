@@ -106,7 +106,8 @@ struct SceneDebug {
  * On the drawing thread (display.hpp), as the renderer. */
 class Drawing {
 public:
-	static constexpr unsigned KEPT = 5;
+	/* The kept pictures: the 3D buffers, then the places of the pipe */
+	static constexpr unsigned BUFFERS = 2, PIPE = 3, KEPT = BUFFERS + PIPE;
 	/* A kept picture as read_kept() gives it: RGBA at the size of the screen */
 	static constexpr size_t PICTURE_SIZE = size_t{SCREEN_WIDTH} * SCREEN_HEIGHT * 4;
 	/* Bytes of a node_t of the shaders: a translucent fragment in its list */

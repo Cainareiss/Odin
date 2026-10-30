@@ -532,7 +532,7 @@ VkDrawing::begin_scene(const odin_display_list_t &list, const SceneDebug &debug)
 	m_collecting = false;
 	m_pass.depth_write = true;
 	m_translucent_left = 0;
-	for (unsigned vpi = 0; vpi < 8; vpi++)
+	for (unsigned vpi = 0; vpi < ODIN_VIEWPORTS; vpi++)
 		if (list.num_meshes[vpi][ODIN_POLYTYPE_TRANSLUCENT])
 			m_translucent_left++;
 	open_scene(true);

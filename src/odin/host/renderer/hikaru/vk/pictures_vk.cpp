@@ -195,7 +195,7 @@ void
 VkDrawing::scene_to_pipe(unsigned slot)
 {
 	const VkCommandBuffer cb = m_card.commands();
-	vk::Image &to = kept(2 + slot);
+	vk::Image &to = kept(BUFFERS + slot);
 	const VkImageCopy copy{ { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 }, { 0, 0, 0 }, { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 },
 	                        { 0, 0, 0 }, { width(), height(), 1 } };
 
@@ -215,7 +215,7 @@ VkDrawing::blend_scene_to_pipe(unsigned slot, unsigned buffer, uint32_t rate)
 
 	m_card.barrier(cb, m_scene, vk::SAMPLED);
 	m_card.barrier(cb, kept(buffer), vk::SAMPLED);
-	m_card.begin_drawing(cb, kept(2 + slot), { { 0, 0 }, { width(), height() } }, VK_ATTACHMENT_LOAD_OP_DONT_CARE);
+	m_card.begin_drawing(cb, kept(BUFFERS + slot), { { 0, 0 }, { width(), height() } }, VK_ATTACHMENT_LOAD_OP_DONT_CARE);
 	m_card.bind_images(cb, m_blender, { &m_scene, &kept(buffer) }, m_nearest);
 	m_fn.vkCmdPushConstants(cb, m_blender.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
 	m_fn.vkCmdDraw(cb, 3, 1, 0, 0);
@@ -226,7 +226,7 @@ void
 VkDrawing::keep_picture(unsigned slot, unsigned buffer)
 {
 	const VkCommandBuffer cb = m_card.commands();
-	vk::Image &from = kept(2 + slot), &to = kept(buffer);
+	vk::Image &from = kept(BUFFERS + slot), &to = kept(buffer);
 	const VkImageCopy copy{ { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 }, { 0, 0, 0 }, { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 },
 	                        { 0, 0, 0 }, { width(), height(), 1 } };
 
@@ -274,7 +274,7 @@ VkDrawing::compose(const Compose &c, unsigned shown, const bool layers[2])
 	vk::Image *const layer[2] = { layers[0] && m_layers[0].image ? &m_layers[0] : &m_none,
 	                              layers[1] && m_layers[1].image ? &m_layers[1] : &m_none };
 	const auto source = [&](Compose::Source s) -> vk::Image * {
-		return s == Compose::Source::PICTURE ? &kept(2 + shown) : s == Compose::Source::LAYER_1 ? layer[0] : layer[1];
+		return s == Compose::Source::PICTURE ? &kept(BUFFERS + shown) : s == Compose::Source::LAYER_1 ? layer[0] : layer[1];
 	};
 	vk::Image *const inputs[4] = { source(c.front), source(c.back), c.alone[0] ? layer[0] : &m_none,
 	                               c.alone[1] ? layer[1] : &m_none };

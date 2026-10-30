@@ -152,7 +152,7 @@ GlDrawing::build_pictures()
 		}
 	}
 	/* The blender of the 3D buffers writes to the pictures. */
-	for (unsigned i = 0; i < 3; i++)
+	for (unsigned i = 0; i < PIPE; i++)
 		m_pipe_fb[i] = gl::new_framebuffer(m_pipe[i]);
 
 	/* The picture of the frame */

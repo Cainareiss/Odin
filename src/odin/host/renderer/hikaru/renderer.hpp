@@ -306,8 +306,9 @@ private:
 	odin_display_list_t *m_building;
 	odin_display_list_t *m_list;
 	Frame m_frame;
-	/* The command processor builds its lists in three buffers. */
-	static constexpr unsigned LIST_BUFFERS = 3;
+	/* The command processor builds its lists in three buffers, the picture
+	 * of each in its place of the pipe. */
+	static constexpr unsigned LIST_BUFFERS = Drawing::PIPE;
 	ListTextures m_list_textures[LIST_BUFFERS];
 
 	/* What the card of the host does for it */

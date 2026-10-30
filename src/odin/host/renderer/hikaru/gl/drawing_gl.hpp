@@ -125,7 +125,7 @@ private:
 	unsigned height() const { return SCREEN_HEIGHT * m_scale; }
 	void build_pictures();
 	void destroy_pictures(bool kept_too);
-	GLuint &kept(unsigned i) { return (i < 2) ? m_buffers[i] : m_pipe[i - 2]; }
+	GLuint &kept(unsigned i) { return (i < BUFFERS) ? m_buffers[i] : m_pipe[i - BUFFERS]; }
 	void copy_picture(GLuint from, unsigned from_w, unsigned from_h, GLuint to, unsigned to_w, unsigned to_h);
 	void build_blender();
 	void build_quad();
@@ -170,9 +170,9 @@ private:
 	unsigned m_family = NO_FAMILY;
 	/* The two 3D buffers of the hardware: the picture last blended into
 	 * each */
-	GLuint m_buffers[2];
+	GLuint m_buffers[BUFFERS];
 	/* The pictures of the last three lists */
-	GLuint m_pipe[3], m_pipe_fb[3];
+	GLuint m_pipe[PIPE], m_pipe_fb[PIPE];
 	/* For copy_picture, and a picture of the size of the screen of the
 	 * hardware for the save states */
 	GLuint m_copy_fb[2];
@@ -243,7 +243,7 @@ private:
 		GLuint program;		/* blends them */
 		GLuint heads, heads_fb;	/* the last one of each pixel */
 		GLuint nodes;
-		GLuint count[3 * ODIN_VIEWPORTS];	/* one per viewport of each list of the pipe */
+		GLuint count[PIPE * ODIN_VIEWPORTS];	/* one per viewport of each list of the pipe */
 		/* Their copy where the processor reads them, with
 		 * ARB_buffer_storage, else 0 and nullptr */
 		GLuint readback;
@@ -252,7 +252,7 @@ private:
 		GLuint below;		/* the colour under them */
 	} m_lists;
 	/* Each list of the pipe: its counts kept, or nullptr */
-	GLsync m_counted[3] = { nullptr, nullptr, nullptr };
+	GLsync m_counted[PIPE] = {};
 	struct PeelDraw {
 		const odin_mesh_t *mesh;
 		MeshDraw draw;

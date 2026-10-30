@@ -298,7 +298,7 @@ private:
 	vk::Image m_solid_depth, m_heads, m_below;
 	vk::Buffer m_nodes, m_counts, m_readback;
 	VkDeviceSize m_count_stride = 4;
-	uint64_t m_counted[3] = { 0, 0, 0 };
+	uint64_t m_counted[PIPE] = {};
 	vk::Pass m_sorter;
 	bool m_said_no_lists = false;
 };
