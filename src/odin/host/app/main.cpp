@@ -204,6 +204,67 @@ play(const Options &given, const std::string &name, const GameList &games, Setti
 	return ended;
 }
 
+/* What Odin says goes to odin.log too, from its first line; on Windows,
+ * with no console of its own after a double click. A board that cannot go
+ * on says why in a box too (ODIN_STOP_BOX=0: not, as in the tests, which
+ * nobody watches) */
+void
+start_log(Options &options)
+{
+	LogFile::leave_own_console();
+	if (const std::string log = LogFile::path(); LogFile::start(log))
+		options.log_file = log;
+	if (env_flag("ODIN_STOP_BOX", true))
+		stop_message = [](const char *text) {
+			SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Odin stopped", text, nullptr);
+		};
+}
+
+void
+print_banner()
+{
+	std::printf(" ██████╗ ██████╗ ██╗███╗   ██╗\n"
+		    "██╔═══██╗██╔══██╗██║████╗  ██║\n"
+		    "██║   ██║██║  ██║██║██╔██╗ ██║\n"
+		    "██║   ██║██║  ██║██║██║╚██╗██║\n"
+		    "╚██████╔╝██████╔╝██║██║ ╚████║\n"
+		    " ╚═════╝ ╚═════╝ ╚═╝╚═╝  ╚═══╝\n\n");
+	std::printf("Odin (ᚨ), Copyright(C) 2026 Réda Chérif-Touil\n");
+	std::printf("A hard fork of Valkyrie, Copyright(C) 2011-2013 Stefano Teso\n");
+	std::printf("Released under the GPL3 License.\n");
+}
+
+/* odin.ini of the user (of this folder for a portable Odin), each key Odin
+ * knows written in it; its path, empty when there is none */
+std::string
+load_settings(Settings &settings, const GameList &games)
+{
+	if (const std::string portable = portable_folder(); !portable.empty())
+		std::printf("portable: the files of this Odin in '%s'\n", portable.c_str());
+
+	const std::string settings_file = Settings::user_file();
+
+	if (!settings_file.empty() && settings.load(settings_file)) {
+		std::printf("settings: '%s'\n", settings_file.c_str());
+		settings.know(known_settings(games));
+		settings.complete(settings_file);
+	}
+	return settings_file;
+}
+
+/* For the tests: ODIN_GAMES_TEST=<game>,..., these games after the first,
+ * each from its power-on to its frame -n, in the same window */
+std::vector<std::string>
+games_test_list()
+{
+	std::vector<std::string> next;
+	const char *const games_test = std::getenv("ODIN_GAMES_TEST");
+
+	for (const std::string_view game : list_items(games_test ? games_test : ""))
+		next.emplace_back(game);
+	return next;
+}
+
 } /* namespace */
 } /* namespace odin */
 
@@ -217,27 +278,8 @@ main(int argc, char **argv)
 	 * without what its buffers still hold: it goes out here. */
 	std::atexit([] { std::fflush(nullptr); });
 
-	/* What Odin says goes to odin.log too, from its first line; on
-	 * Windows, with no console of its own after a double click */
-	odin::LogFile::leave_own_console();
-	if (const std::string log = odin::LogFile::path(); odin::LogFile::start(log))
-		options.log_file = log;
-	/* A board that cannot go on says why in a box too (ODIN_STOP_BOX=0:
-	 * not, as in the tests, which nobody watches) */
-	if (odin::env_flag("ODIN_STOP_BOX", true))
-		odin::stop_message = [](const char *text) {
-			SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Odin stopped", text, nullptr);
-		};
-
-	std::printf(" ██████╗ ██████╗ ██╗███╗   ██╗\n"
-		    "██╔═══██╗██╔══██╗██║████╗  ██║\n"
-		    "██║   ██║██║  ██║██║██╔██╗ ██║\n"
-		    "██║   ██║██║  ██║██║██║╚██╗██║\n"
-		    "╚██████╔╝██████╔╝██║██║ ╚████║\n"
-		    " ╚═════╝ ╚═════╝ ╚═╝╚═╝  ╚═══╝\n\n");
-	std::printf("Odin (ᚨ), Copyright(C) 2026 Réda Chérif-Touil\n");
-	std::printf("A hard fork of Valkyrie, Copyright(C) 2011-2013 Stefano Teso\n");
-	std::printf("Released under the GPL3 License.\n");
+	odin::start_log(options);
+	odin::print_banner();
 
 	if (const odin::Parsed parsed = odin::parse_options(argc, argv, options); parsed != odin::Parsed::RUN)
 		return parsed == odin::Parsed::HELP_ASKED ? 0 : 1;
@@ -248,14 +290,7 @@ main(int argc, char **argv)
 	}
 
 	odin::Settings settings;
-	if (const std::string portable = odin::portable_folder(); !portable.empty())
-		std::printf("portable: the files of this Odin in '%s'\n", portable.c_str());
-	const std::string settings_file = odin::Settings::user_file();
-	if (!settings_file.empty() && settings.load(settings_file)) {
-		std::printf("settings: '%s'\n", settings_file.c_str());
-		settings.know(odin::known_settings(games));
-		settings.complete(settings_file);
-	}
+	const std::string settings_file = odin::load_settings(settings, games);
 	odin::Options command = options;
 	options = odin::with_settings(command, settings);
 	odin::repeats::begin(options.verbose);
@@ -271,12 +306,7 @@ main(int argc, char **argv)
 	const std::unique_ptr<odin::Pointers> pointers =
 		odin::Controls::all_off() ? nullptr : std::make_unique<odin::Pointers>(display->window());
 
-	/* For the tests: ODIN_GAMES_TEST=<game>,..., these games after the
-	 * first, each from its power-on to its frame -n, in the same window */
-	std::vector<std::string> next;
-	const char *const games_test = std::getenv("ODIN_GAMES_TEST");
-	for (const std::string_view game : odin::list_items(games_test ? games_test : ""))
-		next.emplace_back(game);
+	const std::vector<std::string> next = odin::games_test_list();
 
 	/* Without a game, the library: a game chosen there goes back to it when
 	 * it ends, but by the hotkey that quits. Close game goes back to it from
