@@ -165,6 +165,16 @@ VkDrawing::copy_picture(VkCommandBuffer cb, vk::Image &from, vk::Image &to)
 }
 
 void
+VkDrawing::copy_whole(VkCommandBuffer cb, vk::Image &from, vk::Image &to, VkImageAspectFlags aspect)
+{
+	const VkImageCopy copy{ { aspect, 0, 0, 1 }, { 0, 0, 0 }, { aspect, 0, 0, 1 }, { 0, 0, 0 }, { width(), height(), 1 } };
+
+	m_card.barrier(cb, from, vk::COPIED_FROM);
+	m_card.barrier(cb, to, vk::COPIED_TO);
+	m_fn.vkCmdCopyImage(cb, from.image, from.layout, to.image, to.layout, 1, &copy);
+}
+
+void
 VkDrawing::set_scale(unsigned scale)
 {
 	vk::Image old[KEPT];
@@ -188,14 +198,7 @@ VkDrawing::set_scale(unsigned scale)
 void
 VkDrawing::scene_to_pipe(unsigned slot)
 {
-	const VkCommandBuffer cb = m_card.commands();
-	vk::Image &to = kept(BUFFERS + slot);
-	const VkImageCopy copy{ { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 }, { 0, 0, 0 }, { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 },
-	                        { 0, 0, 0 }, { width(), height(), 1 } };
-
-	m_card.barrier(cb, m_scene, vk::COPIED_FROM);
-	m_card.barrier(cb, to, vk::COPIED_TO);
-	m_fn.vkCmdCopyImage(cb, m_scene.image, m_scene.layout, to.image, to.layout, 1, &copy);
+	copy_whole(m_card.commands(), m_scene, kept(BUFFERS + slot));
 }
 
 /* The blender output is what the 3D buffer of the list keeps: the other one
@@ -219,14 +222,7 @@ VkDrawing::blend_scene_to_pipe(unsigned slot, unsigned buffer, uint32_t rate)
 void
 VkDrawing::keep_picture(unsigned slot, unsigned buffer)
 {
-	const VkCommandBuffer cb = m_card.commands();
-	vk::Image &from = kept(BUFFERS + slot), &to = kept(buffer);
-	const VkImageCopy copy{ { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 }, { 0, 0, 0 }, { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 },
-	                        { 0, 0, 0 }, { width(), height(), 1 } };
-
-	m_card.barrier(cb, from, vk::COPIED_FROM);
-	m_card.barrier(cb, to, vk::COPIED_TO);
-	m_fn.vkCmdCopyImage(cb, from.image, from.layout, to.image, to.layout, 1, &copy);
+	copy_whole(m_card.commands(), kept(BUFFERS + slot), kept(buffer));
 }
 
 /* The image of a layer is made the first time, and made again when what it

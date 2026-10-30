@@ -129,8 +129,6 @@ void
 VkDrawing::begin_translucent()
 {
 	const VkCommandBuffer cb = m_card.commands();
-	const VkImageCopy copy{ { VK_IMAGE_ASPECT_DEPTH_BIT, 0, 0, 1 }, { 0, 0, 0 }, { VK_IMAGE_ASPECT_DEPTH_BIT, 0, 0, 1 },
-	                        { 0, 0, 0 }, { width(), height(), 1 } };
 
 	use_depth();
 	close_scene();
@@ -142,9 +140,7 @@ VkDrawing::begin_translucent()
 		m_said_no_lists = true;
 		return;
 	}
-	m_card.barrier(cb, m_depth, vk::COPIED_FROM);
-	m_card.barrier(cb, m_solid_depth, vk::COPIED_TO);
-	m_fn.vkCmdCopyImage(cb, m_depth.image, m_depth.layout, m_solid_depth.image, m_solid_depth.layout, 1, &copy);
+	copy_whole(cb, m_depth, m_solid_depth, VK_IMAGE_ASPECT_DEPTH_BIT);
 	m_card.barrier(cb, m_solid_depth, vk::SAMPLED);
 	/* What each family left, in a view with both (begin_families) */
 	for (vk::Image &eye : m_eye)
@@ -258,12 +254,8 @@ VkDrawing::end_translucent(bool blend)
 	if (!m_card.primitive_ids() || !blend)
 		return;
 	const VkCommandBuffer cb = m_card.commands();
-	const VkImageCopy copy{ { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 }, { 0, 0, 0 }, { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 },
-	                        { 0, 0, 0 }, { width(), height(), 1 } };
 
-	m_card.barrier(cb, m_scene, vk::COPIED_FROM);
-	m_card.barrier(cb, m_below, vk::COPIED_TO);
-	m_fn.vkCmdCopyImage(cb, m_scene.image, m_scene.layout, m_below.image, m_below.layout, 1, &copy);
+	copy_whole(cb, m_scene, m_below);
 	m_card.barrier(cb, m_below, vk::SAMPLED);
 	m_card.barrier(cb, m_heads, HEADS_USED);
 

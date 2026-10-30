@@ -167,6 +167,10 @@ private:
 	void clear(VkCommandBuffer cb, vk::Image &image, float alpha);
 	/* A copy, each pixel the nearest */
 	void copy_picture(VkCommandBuffer cb, vk::Image &from, vk::Image &to);
+	/* All of a picture of the scale into another as it is: its colour, or
+	 * its depth */
+	void copy_whole(VkCommandBuffer cb, vk::Image &from, vk::Image &to,
+	                VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT);
 	void clear_window(unsigned window_w, unsigned window_h);
 
 	/* drawing_vk.cpp */
