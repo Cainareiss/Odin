@@ -98,6 +98,7 @@ private:
 	VkPictureFilter(vk::Context &card) : m_card(card), m_fn(card.fn()) {}
 	bool build(const preset::Plan &plan);
 	bool build_pass(Pass &pass, const preset::Plan::Pass &from);
+	bool lay_out(Pass &pass, const std::string &file);
 	void size(unsigned w, unsigned h);
 	void make_picture(Picture &picture, unsigned w, unsigned h);
 	void clear(Picture &picture);

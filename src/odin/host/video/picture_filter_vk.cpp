@@ -199,6 +199,28 @@ constexpr vk::Use READ = { VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 	                   VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
 	                   VK_ACCESS_2_SHADER_SAMPLED_READ_BIT };
 
+/* The values of the preset, by the numbers the build gave them; 0 for one
+ * it does not declare, as OpenGL leaves a uniform not set */
+void
+preset_values(const Reflected (&reflected)[2], const std::vector<std::pair<std::string, float>> &parameters,
+              std::vector<VkSpecializationMapEntry> &entries, std::vector<float> &values)
+{
+	std::set<uint32_t> given;
+
+	for (unsigned s = 0; s < 2; s++)
+		for (const auto &[name, id] : reflected[s].constants) {
+			float value = 0.0f;
+
+			if (!given.insert(id).second)
+				continue;
+			for (const auto &[parameter, preset_value] : parameters)
+				if (parameter == name)
+					value = preset_value;
+			entries.push_back({ id, static_cast<uint32_t>(values.size() * sizeof(float)), sizeof(float) });
+			values.push_back(value);
+		}
+}
+
 } /* namespace */
 
 std::unique_ptr<VkPictureFilter>
@@ -278,47 +300,13 @@ VkPictureFilter::build_pass(Pass &pass, const preset::Plan::Pass &from)
 		pass.textures.insert(reflected[s].textures.begin(), reflected[s].textures.end());
 	}
 
-	/* The two blocks, then the textures, each at its own binding */
-	std::vector<VkDescriptorSetLayoutBinding> bindings;
-	std::set<uint32_t> taken;
-	const VkShaderStageFlags both = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-	for (unsigned s = 0; s < 2; s++)
-		if (pass.blocks[s].binding != UINT32_MAX) {
-			bindings.push_back({ pass.blocks[s].binding, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1,
-			                     s ? VK_SHADER_STAGE_FRAGMENT_BIT : VK_SHADER_STAGE_VERTEX_BIT, nullptr });
-			taken.insert(pass.blocks[s].binding);
-		}
-	for (const auto &[name, binding] : pass.textures) {
-		if (!taken.insert(binding).second) {
-			std::fprintf(stderr, "ERROR: filter: '%s' has two things at binding %u\n", from.file.c_str(), binding);
-			return false;
-		}
-		bindings.push_back({ binding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, both, nullptr });
-	}
-	const VkDescriptorSetLayoutCreateInfo set{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO, nullptr, 0,
-	                                           static_cast<uint32_t>(bindings.size()), bindings.data() };
-	m_card.check(m_fn.vkCreateDescriptorSetLayout(device, &set, nullptr, &pass.set), "a pass of a filter");
-	const VkPipelineLayoutCreateInfo layout{ VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO, nullptr, 0, 1, &pass.set, 0,
-	                                         nullptr };
-	m_card.check(m_fn.vkCreatePipelineLayout(device, &layout, nullptr, &pass.layout), "a pass of a filter");
+	if (!lay_out(pass, from.file))
+		return false;
 
-	/* The values of the preset, by the numbers the build gave them; 0
-	 * for one it does not declare, as OpenGL leaves a uniform not set */
 	std::vector<VkSpecializationMapEntry> entries;
 	std::vector<float> values;
-	std::set<uint32_t> given;
-	for (unsigned s = 0; s < 2; s++)
-		for (const auto &[name, id] : reflected[s].constants) {
-			float value = 0.0f;
 
-			if (!given.insert(id).second)
-				continue;
-			for (const auto &[parameter, preset_value] : m_parameters)
-				if (parameter == name)
-					value = preset_value;
-			entries.push_back({ id, static_cast<uint32_t>(values.size() * sizeof(float)), sizeof(float) });
-			values.push_back(value);
-		}
+	preset_values(reflected, m_parameters, entries, values);
 	const VkSpecializationInfo constants{ static_cast<uint32_t>(entries.size()), entries.data(),
 		                              values.size() * sizeof(float), values.data() };
 	const VkPipelineShaderStageCreateInfo stages[2] = {
@@ -381,6 +369,38 @@ VkPictureFilter::build_pass(Pass &pass, const preset::Plan::Pass &from)
 	info.layout = pass.layout;
 	m_card.check(m_fn.vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &pass.pipeline),
 	             "a pass of a filter");
+	return true;
+}
+
+/* The set of a pass: its two blocks, then its textures, each at its own
+ * binding; its layout */
+bool
+VkPictureFilter::lay_out(Pass &pass, const std::string &file)
+{
+	const VkDevice device = m_card.device();
+	std::vector<VkDescriptorSetLayoutBinding> bindings;
+	std::set<uint32_t> taken;
+	const VkShaderStageFlags both = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+
+	for (unsigned s = 0; s < 2; s++)
+		if (pass.blocks[s].binding != UINT32_MAX) {
+			bindings.push_back({ pass.blocks[s].binding, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1,
+			                     s ? VK_SHADER_STAGE_FRAGMENT_BIT : VK_SHADER_STAGE_VERTEX_BIT, nullptr });
+			taken.insert(pass.blocks[s].binding);
+		}
+	for (const auto &[name, binding] : pass.textures) {
+		if (!taken.insert(binding).second) {
+			std::fprintf(stderr, "ERROR: filter: '%s' has two things at binding %u\n", file.c_str(), binding);
+			return false;
+		}
+		bindings.push_back({ binding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, both, nullptr });
+	}
+	const VkDescriptorSetLayoutCreateInfo set{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO, nullptr, 0,
+	                                           static_cast<uint32_t>(bindings.size()), bindings.data() };
+	m_card.check(m_fn.vkCreateDescriptorSetLayout(device, &set, nullptr, &pass.set), "a pass of a filter");
+	const VkPipelineLayoutCreateInfo layout{ VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO, nullptr, 0, 1, &pass.set, 0,
+	                                         nullptr };
+	m_card.check(m_fn.vkCreatePipelineLayout(device, &layout, nullptr, &pass.layout), "a pass of a filter");
 	return true;
 }
 
