@@ -744,6 +744,8 @@ pad_drawing(int kind)
 	case SDL_GAMEPAD_TYPE_PS5: return PAD_PS5;
 	case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_PRO:
 	case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_PAIR: return PAD_SWITCH_PRO;
+	/* A single Joy-Con has no drawing of its own: the generic one, with
+	 * the names of its buttons still those of the Switch (menu_input) */
 	default: return PAD_GENERIC;
 	}
 }
