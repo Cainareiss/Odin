@@ -181,6 +181,7 @@ private:
 	void build_netbd(NetLinkSettings link);
 	void take_cabinet();
 	bool take_seat();
+	unsigned link_cabinet() const;
 	void build_sound(unsigned which);
 	void reset_sound(unsigned which);
 	void update_irqs();

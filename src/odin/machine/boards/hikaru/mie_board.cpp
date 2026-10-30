@@ -331,7 +331,7 @@ MieBoard::save(State &out)
 	out.cycle_acc = m_cycle_acc;
 	out.mie_ahead = m_mie_ahead;
 	out.z80_time = m_z80_time;
-	out.has_line = m_line_13551 ? 1 : m_line_13741 ? 2 : 0;
+	out.has_line = line_kind();
 	if (m_line_13551)
 		m_line_13551->save(out.line);
 	if (m_line_13741)
@@ -349,7 +349,7 @@ MieBoard::save(State &out)
 bool
 MieBoard::load(const State &in)
 {
-	if ((in.has_card != 0) != (m_card != nullptr) || in.has_line != (m_line_13551 ? 1 : m_line_13741 ? 2 : 0))
+	if ((in.has_card != 0) != (m_card != nullptr) || in.has_line != line_kind())
 		return false;
 	m_cycle_acc = in.cycle_acc;
 	m_mie_ahead = in.mie_ahead;

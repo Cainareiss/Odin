@@ -188,6 +188,8 @@ private:
 
 	void poll_inputs();
 	void run_line(uint32_t share);
+	/* State::has_line of the I/O board on the line */
+	uint8_t line_kind() const { return m_line_13551 ? 1 : m_line_13741 ? 2 : 0; }
 
 	std::function<void(Inputs &)> m_read_inputs;
 	uint32_t m_clock_hz;

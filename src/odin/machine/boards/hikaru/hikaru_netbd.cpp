@@ -133,7 +133,7 @@ Hikaru::build_netbd(NetLinkSettings link)
 void
 Hikaru::take_cabinet()
 {
-	const unsigned cabinet = m_link.board == NetLinkSettings::Board::LOOP ? 1 : m_link.cabinet;
+	const unsigned cabinet = link_cabinet();
 	const std::span<uint8_t> chip = m_mie->eeprom().data();
 
 	if (cabinet == 0 || !m_game.link.cabinets)
@@ -165,13 +165,21 @@ Hikaru::take_cabinet()
 	std::printf("network board: the seat waits for the settings the game makes at its first power-on\n");
 }
 
+/* The cabinet of the link this one is: the first with the cable looped
+ * back on it */
+unsigned
+Hikaru::link_cabinet() const
+{
+	return m_link.board == NetLinkSettings::Board::LOOP ? 1 : m_link.cabinet;
+}
+
 /* The seat of the cabinet in its settings; false when the game has not
  * made its block of settings yet */
 bool
 Hikaru::take_seat()
 {
 	const Game::Link &link = m_game.link;
-	const unsigned cabinet = m_link.board == NetLinkSettings::Board::LOOP ? 1 : m_link.cabinet;
+	const unsigned cabinet = link_cabinet();
 	const unsigned seat = link.seat_first + cabinet - 1;
 	const bool taken = link.seat_in == Game::Link::In::MIE ?
 	                   cabinet::set_mie(m_mie->eeprom().data(), link.seat_byte, link.seat_shift, link.seat_bits, seat) :
