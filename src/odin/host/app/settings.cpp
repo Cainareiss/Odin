@@ -25,15 +25,14 @@
 #include "odin/host/app/settings.hpp"
 
 #include "odin/common/repeats.hpp"
+#include "odin/host/app/file_bytes.hpp"
 #include "odin/host/app/user_files.hpp"
 
 #include <algorithm>
 #include <cstdio>
 #include <filesystem>
-#include <fstream>
 #include <map>
 #include <set>
-#include <sstream>
 #include <system_error>
 
 namespace odin {
@@ -140,15 +139,13 @@ read_text(const std::string &path)
 	if (!std::filesystem::exists(path, error))
 		return std::string();
 
-	std::ifstream file(path, std::ios::binary);
-	std::stringstream text;
+	const std::optional<std::vector<uint8_t>> bytes = read_file(path);
 
-	text << file.rdbuf();
-	if (!file) {
+	if (!bytes) {
 		std::fprintf(stderr, "ERROR: settings: cannot read '%s'\n", path.c_str());
 		return std::nullopt;
 	}
-	return text.str();
+	return std::string(bytes->begin(), bytes->end());
 }
 
 } /* namespace */

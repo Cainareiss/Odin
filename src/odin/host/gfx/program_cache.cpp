@@ -85,23 +85,5 @@ std::optional<KeptProgram> program_from_file(std::span<const uint8_t> file, cons
 	return program;
 }
 
-std::optional<std::vector<uint8_t>> read_file(const std::string &path)
-{
-	std::FILE *const file = std::fopen(path.c_str(), "rb");
-	std::vector<uint8_t> bytes;
-	uint8_t chunk[65536];
-	size_t got;
-
-	if (!file)
-		return std::nullopt;
-	while ((got = std::fread(chunk, 1, sizeof(chunk), file)) > 0)
-		bytes.insert(bytes.end(), chunk, chunk + got);
-	const bool failed = std::ferror(file) != 0;
-
-	std::fclose(file);
-	if (failed)
-		return std::nullopt;
-	return bytes;
-}
 
 } /* namespace odin */

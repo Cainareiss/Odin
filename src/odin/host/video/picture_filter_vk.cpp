@@ -23,12 +23,12 @@
  */
 
 #include "odin/host/video/picture_filter_vk.hpp"
+#include "odin/host/app/file_bytes.hpp"
 
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <fstream>
 #include <iterator>
 #include <set>
 
@@ -181,13 +181,14 @@ reflect(const std::vector<uint32_t> &code, Reflected &out)
 std::vector<uint32_t>
 read_spirv(const std::string &path)
 {
-	std::ifstream file(path, std::ios::binary);
-	const std::string bytes(std::istreambuf_iterator<char>(file), {});
-	std::vector<uint32_t> words(bytes.size() / 4);
+	const std::optional<std::vector<uint8_t>> bytes = read_file(path);
 
-	if (!file.eof() && !file)
+	if (!bytes)
 		return {};
-	std::memcpy(words.data(), bytes.data(), words.size() * 4);
+
+	std::vector<uint32_t> words(bytes->size() / 4);
+
+	std::memcpy(words.data(), bytes->data(), words.size() * 4);
 	return words;
 }
 

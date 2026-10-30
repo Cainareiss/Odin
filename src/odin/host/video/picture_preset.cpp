@@ -23,13 +23,13 @@
  */
 
 #include "odin/host/video/picture_preset.hpp"
+#include "odin/host/app/file_bytes.hpp"
 #include "odin/host/app/settings.hpp"
 
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
-#include <fstream>
 #include <iterator>
 
 namespace odin::preset {
@@ -39,10 +39,10 @@ namespace {
 std::string
 read_text(const std::filesystem::path &path, bool &ok)
 {
-	std::ifstream file(path, std::ios::binary);
+	const std::optional<std::vector<uint8_t>> bytes = read_file(path.string());
 
-	ok = static_cast<bool>(file);
-	return ok ? std::string(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()) : std::string();
+	ok = bytes.has_value();
+	return ok ? std::string(bytes->begin(), bytes->end()) : std::string();
 }
 
 std::string

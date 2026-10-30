@@ -31,6 +31,8 @@
  * same driver for the same sources, which the driver checks again. No
  * OpenGL here. */
 
+#include "odin/host/app/file_bytes.hpp"
+
 #include <cstdint>
 #include <optional>
 #include <span>
@@ -52,9 +54,6 @@ std::vector<uint8_t> program_file(const std::string &driver, const std::string &
  * sources; nothing for any other file, or one cut short. */
 std::optional<KeptProgram> program_from_file(std::span<const uint8_t> file, const std::string &driver,
                                              const std::string &vertex, const std::string &fragment);
-
-/* All the bytes of a file, nothing when it cannot be read. */
-std::optional<std::vector<uint8_t>> read_file(const std::string &path);
 
 } /* namespace odin */
 
