@@ -29,6 +29,8 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "odin/common/stop_message.hpp"
+
 namespace odin {
 
 namespace {
@@ -47,8 +49,7 @@ constexpr uint16_t SFR_BASE = 0xFFC0;
 [[noreturn]] void
 unknown(const char *what, unsigned value)
 {
-	std::fprintf(stderr, "FATAL: TMP90PH44: %s %02X, which is not known\n", what, value);
-	std::abort();
+	stop_fatal("TMP90PH44: %s %02X, which is not known", what, value);
 }
 
 } /* namespace */
