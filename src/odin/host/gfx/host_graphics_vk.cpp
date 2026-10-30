@@ -167,7 +167,7 @@ private:
 	 * of the picture at two sizes and the sides in a small image of the
 	 * window, the background at half the size blurred back and forth (the
 	 * result in the first) and whether it has its bottom line first */
-	vk::Pass m_image_over, m_image, m_blur, m_show, m_average, m_sides_lit;
+	vk::Pass m_image_over, m_blur, m_show, m_average, m_sides_lit;
 	VkSampler m_linear = VK_NULL_HANDLE, m_levels[2] = {};
 	vk::Image m_sides[3], m_blurred[2];
 	bool m_blurred_turned = false;
@@ -196,8 +196,8 @@ VkGraphics::~VkGraphics()
 	for (vk::Image *image : { &m_sides[0], &m_sides[1], &m_sides[2], &m_blurred[0], &m_blurred[1] })
 		if (image->image)
 			m_card->destroy_image(*image);
-	if (m_image.pipeline) {
-		for (vk::Pass *pass : { &m_image_over, &m_image, &m_blur, &m_show, &m_average, &m_sides_lit })
+	if (m_image_over.pipeline) {
+		for (vk::Pass *pass : { &m_image_over, &m_blur, &m_show, &m_average, &m_sides_lit })
 			m_card->destroy_pass(*pass);
 		for (const VkSampler sampler : { m_linear, m_levels[0], m_levels[1] })
 			m_fn.vkDestroySampler(m_card->device(), sampler, nullptr);
@@ -463,12 +463,10 @@ VkGraphics::forget_image(HostImage image)
 void
 VkGraphics::make_passes()
 {
-	if (m_image.pipeline)
+	if (m_image_over.pipeline)
 		return;
 	m_image_over = m_card->make_pass(ODIN_SPIRV_OF(image_vert), ODIN_SPIRV_OF(image_frag), 1, sizeof(float),
 	                                 VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, UI_FORMAT, true);
-	m_image = m_card->make_pass(ODIN_SPIRV_OF(image_vert), ODIN_SPIRV_OF(image_frag), 1, sizeof(float),
-	                            VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, UI_FORMAT);
 	m_blur = m_card->make_pass(ODIN_SPIRV_OF(whole_window_vert), ODIN_SPIRV_OF(blur_frag), 1, 2 * sizeof(float),
 	                           VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, UI_FORMAT);
 	m_show = m_card->make_pass(ODIN_SPIRV_OF(whole_window_vert), ODIN_SPIRV_OF(show_frag), 1, 2 * sizeof(float),
