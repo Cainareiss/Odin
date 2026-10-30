@@ -8,10 +8,12 @@
 
 #include "odin/machine/chips/actel_m1.hpp"
 
+#include "odin/common/bytes.hpp"
+
 namespace odin {
 
 ActelM1::ActelM1(uint32_t key, uint16_t id)
-	: m_key(((key & 0xFF) << 24) | ((key & 0xFF00) << 8) | ((key >> 8) & 0xFF00) | (key >> 24)),
+	: m_key(swap32(key)),
 	  m_id(id)
 {
 	reset();

@@ -156,6 +156,13 @@ swap16(uint16_t value)
 	return static_cast<uint16_t>(value << 8 | value >> 8);
 }
 
+/* The four bytes of 32 bits the other way round */
+inline constexpr uint32_t
+swap32(uint32_t value)
+{
+	return static_cast<uint32_t>(swap16(static_cast<uint16_t>(value))) << 16 | swap16(static_cast<uint16_t>(value >> 16));
+}
+
 /* A word read as the float it holds */
 inline float
 f32(uint32_t word)
