@@ -564,5 +564,10 @@ ODIN_LOG=<file> writes another file, ODIN_LOG=none none. The file stops at
 64 MB (the detailed log of -v says a lot); after a crash it holds the last
 words of Odin.
 
+When the emulated board cannot go on (a screen Odin does not support yet,
+for one), Odin says why in odin.log and in a box, then stops.
+ODIN_STOP_BOX=0 leaves the box out, for a frontend or a cabinet where
+nobody is there to close it.
+
 The comments at the top of the source files tell the other variables of the
 environment; they are for debugging.

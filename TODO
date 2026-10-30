@@ -1039,6 +1039,8 @@ builds, and the framebuffer each frame shows; ODIN_LIST_DUMP=<frame> adds one
 line for each mesh of that frame.
 ODIN_PICTURE_FP=1 prints a fingerprint of the picture of each frame.
 ODIN_SPEED=1 prints the frames a second of each 60 frames.
+ODIN_GAMES_TEST=<game>,... plays these games after the one of -r, each from
+its power-on to the frame of -n, in the same window.
 ODIN_LOG_REPEATS=1 keeps the lines that repeat, which a game tells once and
 a kind of message eight times at most (repeats.hpp), as -v does.
 
