@@ -530,6 +530,9 @@ public:
 	static std::string first_key(const MenuState &state, Hotkeys::Action action);
 	/* The ports the page Link offers, from NetCable::PORT */
 	static constexpr unsigned LINK_PORTS = 8;
+	/* The number of a cabinet of a link, as the page Link and the bar show
+	 * it: the first leads the others */
+	static std::string cabinet_number(unsigned n) { return n == 1 ? "1 · master" : std::to_string(n); }
 	/* What Odin is, and the libraries it is made with: who wrote them,
 	 * their licence */
 	static constexpr const char *WHAT = "Sega Hikaru emulator, as close to the hardware as it gets";

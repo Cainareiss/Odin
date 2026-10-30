@@ -927,7 +927,7 @@ Menu::page_link(MenuKit &kit, MenuState &state) const
 		int cabinet = static_cast<int>(state.link_cabinet) - 1;
 
 		for (unsigned n = 1; n <= NetLinkSettings::MOST_CABINETS; n++)
-			numbers.push_back(n == 1 ? "1 · master" : std::to_string(n));
+			numbers.push_back(cabinet_number(n));
 		if (locked)
 			kit.text("This cabinet", locked, cabinet >= 0 ? numbers[static_cast<size_t>(cabinet)].c_str() : "as it is");
 		else {

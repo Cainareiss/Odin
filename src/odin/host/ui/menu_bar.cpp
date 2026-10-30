@@ -636,7 +636,7 @@ Menu::bar_link(BarItems &b)
 	if (ImGui::BeginMenu("This cabinet", on && !state.link_given)) {
 		b.framed();
 		for (unsigned n = 1; n <= NetLinkSettings::MOST_CABINETS; n++) {
-			const std::string number = n == 1 ? "1 · master" : std::to_string(n);
+			const std::string number = cabinet_number(n);
 
 			if (item(number.c_str(), {}, state.link_cabinet == n))
 				state.link_cabinet = n;
