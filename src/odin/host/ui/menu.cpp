@@ -902,8 +902,10 @@ Menu::preview(const MenuKit &kit, const MenuState &state, int which, ImVec2 a, I
 	case PREVIEW_FILTER: {
 		const int filter = index_of(ANISOTROPY, state.anisotropy);
 		static constexpr const char *NAMES[] = { "OFF", "2×", "4×", "8×", "16×" };
+		/* A level of odin.ini or -a that the menu does not list, as it is */
+		const std::string chosen = filter >= 0 ? NAMES[filter] : std::to_string(state.anisotropy) + "×";
 
-		pair("ANISOTROPIC FILTERING", FILTER, filter > 0 ? FILTER + filter : -1, "OFF · THE CABINET", NAMES[filter],
+		pair("ANISOTROPIC FILTERING", FILTER, filter > 0 ? FILTER + filter : -1, "OFF · THE CABINET", chosen,
 		     "Captured in Odin: the distant road in Planet Harriers, at 1×.");
 		break;
 	}
