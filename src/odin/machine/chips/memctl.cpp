@@ -211,6 +211,22 @@ fatal(const char *what, unsigned size, uint32_t addr)
 	std::abort();
 }
 
+/* The page of the bridge, 04000000-04FFFFFF, with the registers in its
+ * first NUM_REGS bytes */
+constexpr uint32_t BRIDGE_PAGE = 0x04000000;
+
+bool
+in_registers(uint32_t addr)
+{
+	return addr >= BRIDGE_PAGE && addr < BRIDGE_PAGE + MemCtl::NUM_REGS;
+}
+
+bool
+in_bridge_page(uint32_t addr)
+{
+	return addr >= BRIDGE_PAGE && addr <= BRIDGE_PAGE + 0xFFFFFF;
+}
+
 } /* namespace */
 
 MemCtl::MemCtl(Host &host, bool master)
@@ -290,7 +306,7 @@ MemCtl::tell_bridge_page(char rw, unsigned size, uint32_t addr, uint64_t value)
 bool
 MemCtl::read(uint32_t addr, unsigned size, uint64_t &value)
 {
-	if (addr >= 0x04000000 && addr <= 0x0400003F) {
+	if (in_registers(addr)) {
 		if (size == 8) {
 			value = reg(addr & 0x3F, 4) | (static_cast<uint64_t>(reg((addr & 0x3F) + 4, 4)) << 32);
 			return true;
@@ -298,7 +314,7 @@ MemCtl::read(uint32_t addr, unsigned size, uint64_t &value)
 		value = reg(addr & 0x3F, size);
 		return true;
 	}
-	if (addr >= 0x04000040 && addr <= 0x04FFFFFF) {
+	if (in_bridge_page(addr)) {
 		/* Rest of the bridge page: registers 40-FF (MAME hikaru.cpp
 		 * sh4_map_main maps 04000000-040000FF) and nothing above. The
 		 * game loader reads 04000040-04FF03FF for SWRACER and SGNASCAR,
@@ -316,7 +332,7 @@ MemCtl::read(uint32_t addr, unsigned size, uint64_t &value)
 bool
 MemCtl::write(uint32_t addr, unsigned size, uint64_t value)
 {
-	if (addr >= 0x04000000 && addr <= 0x0400003F) {
+	if (in_registers(addr)) {
 		switch (addr & 0xFF) {
 		case 0x04: {
 			if (size != 2)
@@ -349,7 +365,7 @@ MemCtl::write(uint32_t addr, unsigned size, uint64_t value)
 			run_transfer();
 		return true;
 	}
-	if (addr >= 0x04000040 && addr <= 0x04FFFFFF) {
+	if (in_bridge_page(addr)) {
 		tell_bridge_page('W', size, addr, value);
 		return true;
 	}
@@ -360,7 +376,7 @@ MemCtl::write(uint32_t addr, unsigned size, uint64_t value)
 std::span<const uint8_t>
 MemCtl::read_span(uint32_t addr)
 {
-	if (addr >= 0x04000000 && addr <= 0x04FFFFFF)
+	if (in_bridge_page(addr))
 		return {};
 
 	const uint32_t offs = addr & 0xFFFFFF;
@@ -372,7 +388,7 @@ MemCtl::read_span(uint32_t addr)
 std::span<uint8_t>
 MemCtl::write_span(uint32_t addr)
 {
-	if (addr >= 0x04000000 && addr <= 0x04FFFFFF)
+	if (in_bridge_page(addr))
 		return {};
 
 	const uint32_t offs = addr & 0xFFFFFF;
