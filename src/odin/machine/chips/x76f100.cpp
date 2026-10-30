@@ -227,20 +227,7 @@ void X76f100::on_byte_in()
 		m_write_buffer[m_byte++] = m_shift;
 		if (m_byte == PASSWORD_SIZE) {
 			m_state = State::VERIFY_PASSWORD;
-			/* Compared here and not on each 0x55 poll: the poll is
-			 * repeated and would run the retry counter over. */
-			const std::span<uint8_t> expected = password();
-			m_is_password_accepted = std::equal(m_write_buffer.begin(), m_write_buffer.end(),
-			                                    expected.begin());
-			if (!m_is_password_accepted) {
-				m_password_retry_counter++;
-				if (m_password_retry_counter >= PASSWORD_RETRIES) {
-					std::ranges::fill(read_password(), 0);
-					std::ranges::fill(write_password(), 0);
-					std::ranges::fill(memory(), 0);
-					m_password_retry_counter = 0;
-				}
-			}
+			check_password();
 		}
 		break;
 
@@ -263,26 +250,50 @@ void X76f100::on_byte_in()
 			break;
 		}
 		m_write_buffer[m_byte++] = m_shift;
-		if (m_byte == PAGE_SIZE) {
-			if (m_command == COMMAND_CHANGE_WRITE_PASSWORD) {
-				std::ranges::copy(m_write_buffer, write_password().begin());
-			} else if (m_command == COMMAND_CHANGE_READ_PASSWORD) {
-				std::ranges::copy(m_write_buffer, read_password().begin());
-			} else {
-				for (m_byte = 0; m_byte < PAGE_SIZE; m_byte++) {
-					const std::optional<uint32_t> offset = data_offset();
-					if (!offset)
-						break;
-					memory()[*offset] = m_write_buffer[m_byte];
-				}
-			}
-			m_byte = 0;
-		}
+		if (m_byte == PAGE_SIZE)
+			store_page();
 		break;
 
 	default:
 		break;
 	}
+}
+
+/* The password just received against the one of the command. Compared
+ * here and not on each 0x55 poll: the poll is repeated and would run the
+ * retry counter over. */
+void X76f100::check_password()
+{
+	const std::span<uint8_t> expected = password();
+
+	m_is_password_accepted = std::equal(m_write_buffer.begin(), m_write_buffer.end(), expected.begin());
+	if (!m_is_password_accepted) {
+		m_password_retry_counter++;
+		if (m_password_retry_counter >= PASSWORD_RETRIES) {
+			std::ranges::fill(read_password(), 0);
+			std::ranges::fill(write_password(), 0);
+			std::ranges::fill(memory(), 0);
+			m_password_retry_counter = 0;
+		}
+	}
+}
+
+/* A page received whole: a password, or the bytes of the memory */
+void X76f100::store_page()
+{
+	if (m_command == COMMAND_CHANGE_WRITE_PASSWORD) {
+		std::ranges::copy(m_write_buffer, write_password().begin());
+	} else if (m_command == COMMAND_CHANGE_READ_PASSWORD) {
+		std::ranges::copy(m_write_buffer, read_password().begin());
+	} else {
+		for (m_byte = 0; m_byte < PAGE_SIZE; m_byte++) {
+			const std::optional<uint32_t> offset = data_offset();
+			if (!offset)
+				break;
+			memory()[*offset] = m_write_buffer[m_byte];
+		}
+	}
+	m_byte = 0;
 }
 
 /* SCL rising in a read: 8 data bits out, MSB first, then the host's

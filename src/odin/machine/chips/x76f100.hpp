@@ -92,6 +92,8 @@ private:
 	void on_scl(bool level);
 	void on_sda(bool level);
 	void on_byte_in();
+	void check_password();
+	void store_page();
 	void on_read_clock();
 
 	std::span<uint8_t> response_to_reset();
