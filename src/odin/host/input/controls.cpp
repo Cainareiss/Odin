@@ -28,8 +28,6 @@
 #include "odin/host/app/options.hpp"
 #include "odin/machine/cabinet/drive_board.hpp"
 #include "odin/host/ui/pad_drawing.hpp"
-#include "odin/host/video/picture.hpp"
-#include "odin/host/input/seats.hpp"
 
 #include <cstdio>
 #include <cstdlib>
