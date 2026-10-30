@@ -110,7 +110,8 @@ WheelForce::WheelForce(SDL_Joystick *joystick) : m_backend(std::make_unique<Back
 #ifdef __linux__
 	/* The event node SDL reads the wheel from; HIDAPI and virtual
 	 * joysticks have none */
-	if (const char *const path = SDL_GetJoystickPath(joystick); path && std::strncmp(path, "/dev/input/", 11) == 0) {
+	if (const char *const path = SDL_GetJoystickPath(joystick);
+	    path && std::string_view(path).starts_with("/dev/input/")) {
 		unsigned long bits[longs_for(FF_MAX)] = {};
 		const int fd = ::open(path, O_RDWR | O_CLOEXEC);
 		ff_effect effect = constant(-1, 0);

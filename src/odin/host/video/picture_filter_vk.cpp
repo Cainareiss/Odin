@@ -521,23 +521,23 @@ VkPictureFilter::draw(vk::Image &window, int x, int y, unsigned w, unsigned h, u
 		const float output[2] = { static_cast<float>(w), static_cast<float>(h) };
 		const int32_t frame = static_cast<int32_t>(count), direction = 1;
 
-		put("InputSize", in->size.data(), 8);
-		put("TextureSize", in->texture_size.data(), 8);
-		put("OutputSize", output, 8);
-		put("FrameCount", &frame, 4);
-		put("FrameDirection", &direction, 4);
+		put("InputSize", in->size.data(), sizeof(in->size));
+		put("TextureSize", in->texture_size.data(), sizeof(in->texture_size));
+		put("OutputSize", output, sizeof(output));
+		put("FrameCount", &frame, sizeof(frame));
+		put("FrameDirection", &direction, sizeof(direction));
 		put("MVPMatrix", IDENTITY, sizeof(IDENTITY));
 		for (const auto &[parameter, value] : m_parameters)
-			put(parameter, &value, 4);
+			put(parameter, &value, sizeof(value));
 		if (i > 0) {
-			put("OrigInputSize", m_frame.size.data(), 8);
-			put("OrigTextureSize", m_frame.texture_size.data(), 8);
+			put("OrigInputSize", m_frame.size.data(), sizeof(m_frame.size));
+			put("OrigTextureSize", m_frame.texture_size.data(), sizeof(m_frame.texture_size));
 			for (size_t k = 0; k < i; k++) {
 				const Picture &read = k ? m_passes[k - 1].out : m_frame;
 				const std::string before = "Pass" + std::to_string(k + 1);
 
-				put(before + "TextureSize", read.texture_size.data(), 8);
-				put(before + "InputSize", read.size.data(), 8);
+				put(before + "TextureSize", read.texture_size.data(), sizeof(read.texture_size));
+				put(before + "InputSize", read.size.data(), sizeof(read.size));
 			}
 		}
 
@@ -565,8 +565,8 @@ VkPictureFilter::draw(vk::Image &window, int x, int y, unsigned w, unsigned h, u
 			if (name == "OrigTexture" && i > 0) {
 				picture = &m_frame;
 				picture_linear = m_frame.linear;
-			} else if (name.starts_with("Pass") && name.ends_with("Texture")) {
-				const size_t n = static_cast<size_t>(std::atoi(name.c_str() + 4));
+			} else if (constexpr std::string_view PASS = "Pass"; name.starts_with(PASS) && name.ends_with("Texture")) {
+				const size_t n = static_cast<size_t>(std::atoi(name.c_str() + PASS.size()));
 
 				if (n >= 1 && n <= i) {
 					picture = &m_passes[n - 1].out;

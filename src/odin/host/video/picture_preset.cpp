@@ -104,6 +104,7 @@ key_on(const std::map<std::string, std::string> &keys, const std::string &name)
 std::string
 part(const std::string &source, const char *which)
 {
+	constexpr std::string_view VERSION = "#version";
 	std::string text = source, version;
 
 	for (const char *start : { "#pragma parameter", "#define texture" })
@@ -112,8 +113,8 @@ part(const std::string &source, const char *which)
 
 			text.replace(at, end - at, end - at, ' ');
 		}
-	if (const size_t at = text.find("#version"); at != std::string::npos) {
-		size_t end = text.find_first_not_of(" \t", at + 8);
+	if (const size_t at = text.find(VERSION); at != std::string::npos) {
+		size_t end = text.find_first_not_of(" \t", at + VERSION.size());
 
 		end = text.find_first_of(" \t\r\n", end);
 		version = text.substr(at, end - at);
