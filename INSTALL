@@ -107,9 +107,11 @@ Batocera beside it says (swracer_logo.png, swracer_bezel.png). bezel in
 [display] (page Display) says what is around the game there: off, black;
 blur, the light of its edges, softer and dimmer away from it; image, its
 bezel, black without one. The games are those of odin-games.json, by the
-names of their MAME sets: airtrix, braveff, pharrier, sgnascar, swracer and
-von4. The file is looked for in the current directory, then in $HOME, then
-in ~/.local/share/odin.
+names of their MAME sets: airtrix, airtrixo, braveff, pharrier, sgnascar,
+sgnascaro, swracer and von4. airtrixo and sgnascaro, the first programs of
+Air Trix and NASCAR, take the other files from airtrix and sgnascar. The
+file is looked for in the current directory, then in $HOME, then in
+~/.local/share/odin.
 The ROM directory holds each game as MAME keeps it: a directory, a zip or a
 7z of the name of the game, with the files odin-games.json lists for it. The
 files a game shares with others, in the sets of MAME hikaru (the BIOS), mie,

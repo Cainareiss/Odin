@@ -326,6 +326,7 @@ struct Boards {
 
 constexpr Boards BOARDS[] = {
 	{ "sgnascar", "front (FRONT)", "seat backs (REAR)", ", like the cabinet's REAR knob" },
+	{ "sgnascaro", "front (FRONT)", "seat backs (REAR)", ", like the cabinet's REAR knob" },
 	{ "pharrier", "monitor speakers + woofer", "seat backs (REAR)", "" },
 	{ "swracer", "seat + woofer", "panel shaker (VIBRATION)",
 	  ". The cabinet sends it to the shaker only" },
