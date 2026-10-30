@@ -156,17 +156,6 @@ colour_style(ImGuiStyle &style, const MenuPalette &palette)
 	style.Colors[ImGuiCol_NavCursor] = colour(0);
 }
 
-/* Which of the values is the one; -1 for none */
-template <typename T, size_t N>
-int
-index_of(const T (&values)[N], T value)
-{
-	for (size_t i = 0; i < N; i++)
-		if (values[i] == value)
-			return static_cast<int>(i);
-	return -1;
-}
-
 /* How much light the background keeps */
 constexpr float LIGHT = 0.55f;
 
@@ -185,6 +174,14 @@ std::string
 Menu::first_key(const MenuState &state, Hotkeys::Action action)
 {
 	return Hotkeys::first_text(state.hotkeys[static_cast<size_t>(action)]);
+}
+
+int
+Menu::anisotropy_index(unsigned anisotropy)
+{
+	const auto at = std::find(std::begin(ANISOTROPY), std::end(ANISOTROPY), anisotropy);
+
+	return at == std::end(ANISOTROPY) ? -1 : static_cast<int>(at - std::begin(ANISOTROPY));
 }
 
 Menu::Menu(SDL_Window *window, HostGraphics &graphics)
@@ -631,7 +628,7 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 			state.upscale_mode = static_cast<unsigned>(upscale_mode);
 	});
 
-	int filter = index_of(ANISOTROPY, state.anisotropy);
+	int filter = anisotropy_index(state.anisotropy);
 
 	kit.next_tip("Sharpens distant textures, such as roads and floors (NASCAR, Virtual-On). The cabinet has none.");
 	watch(PREVIEW_FILTER, [&] {
@@ -890,7 +887,7 @@ Menu::preview(const MenuKit &kit, const MenuState &state, int which, ImVec2 a, I
 		break;
 	}
 	case PREVIEW_FILTER: {
-		const int filter = index_of(ANISOTROPY, state.anisotropy);
+		const int filter = anisotropy_index(state.anisotropy);
 		static constexpr const char *NAMES[] = { "OFF", "2×", "4×", "8×", "16×" };
 		/* A level of odin.ini or -a that the menu does not list, as it is */
 		const std::string chosen = filter >= 0 ? NAMES[filter] : std::to_string(state.anisotropy) + "×";

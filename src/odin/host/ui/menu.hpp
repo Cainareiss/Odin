@@ -515,6 +515,8 @@ public:
 	static constexpr const char *UPSCALE_MODES_SHOWN[] = { "Raw", "Snap 2D", "Native 2D" };
 	static constexpr const char *FILTERS[] = { "Off", "2×", "4×", "8×", "16×" };
 	static constexpr unsigned ANISOTROPY[] = { 1, 2, 4, 8, 16 };
+	/* The place of an anisotropy among them; -1 for another */
+	static int anisotropy_index(unsigned anisotropy);
 	static constexpr const char *WINDOW_SIZES[] = { "640 × 480", "1280 × 960", "1920 × 1440", "2560 × 1920", "Custom" };
 	static constexpr const char *WINDOW_WIDTHS[] = { "640", "1280", "1920", "2560", "Custom" };
 	static constexpr int CUSTOM = 4;

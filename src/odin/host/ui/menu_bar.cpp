@@ -496,12 +496,10 @@ Menu::bar_display(BarItems &b)
 
 	int window = state.custom_window ? CUSTOM : static_cast<int>(state.window) - 1;
 	int scale = static_cast<int>(state.scale) - 1, mode = static_cast<int>(state.upscale_mode);
-	int filter = -1, sync = static_cast<int>(state.vsync), pace = state.unthrottled ? 1 : 0;
+	int filter = anisotropy_index(state.anisotropy), sync = static_cast<int>(state.vsync);
+	int pace = state.unthrottled ? 1 : 0;
 	int theme = static_cast<int>(state.theme), sides = static_cast<int>(state.sides);
 
-	for (size_t f = 0; f < std::size(ANISOTROPY); f++)
-		if (ANISOTROPY[f] == state.anisotropy)
-			filter = static_cast<int>(f);
 	if (item("Full screen", b.key(Action::FULLSCREEN), state.fullscreen))
 		b.ask(Ask::FULLSCREEN);
 	/* The sizes of the window; one given by hand is kept,
