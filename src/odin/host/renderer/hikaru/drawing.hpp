@@ -27,6 +27,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <memory>
 #include <span>
 #include <string>
@@ -235,6 +236,19 @@ public:
 	 * anisotropic filtering, 1 for none; forgotten */
 	virtual HostSampler make_sampler(const TextureSampling &sampling, unsigned anisotropy) = 0;
 	virtual void forget_sampler(HostSampler sampler) = 0;
+
+protected:
+	/* A kept picture as read_kept() gives it, from the whole of one `scale`
+	 * times finer (RGBA, its lines in the same order) */
+	static void screen_of(const uint8_t *whole, unsigned scale, uint8_t *out)
+	{
+		for (unsigned y = 0; y < SCREEN_HEIGHT; y++) {
+			const uint8_t *row = whole + size_t{y} * scale * SCREEN_WIDTH * scale * 4;
+
+			for (unsigned x = 0; x < SCREEN_WIDTH; x++, out += 4)
+				std::memcpy(out, row + size_t{x} * scale * 4, 4);
+		}
+	}
 };
 
 } /* namespace odin */

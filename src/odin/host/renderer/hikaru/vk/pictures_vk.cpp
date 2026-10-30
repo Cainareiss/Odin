@@ -404,8 +404,6 @@ VkDrawing::draw_loading(std::span<const LoadingRect> rects, unsigned window_w, u
 	m_card.end_drawing(cb);
 }
 
-/* As pictures_gl.cpp: the first pixel of each scale x scale, the
- * bottom line first */
 void
 VkDrawing::read_kept(std::span<uint8_t> pictures)
 {
@@ -422,16 +420,8 @@ VkDrawing::read_kept(std::span<uint8_t> pictures)
 		m_fn.vkCmdCopyImageToBuffer(cb, kept(i).image, kept(i).layout, out[i]->buffer, 1, &region);
 	}
 	m_card.send_and_wait();
-	for (unsigned i = 0; i < KEPT; i++) {
-		uint8_t *to = &pictures[i * size];
-
-		for (unsigned y = 0; y < SCREEN_HEIGHT; y++) {
-			const uint8_t *row = out[i]->bytes + size_t{y} * m_scale * width() * 4;
-
-			for (unsigned x = 0; x < SCREEN_WIDTH; x++, to += 4)
-				std::memcpy(to, row + size_t{x} * m_scale * 4, 4);
-		}
-	}
+	for (unsigned i = 0; i < KEPT; i++)
+		screen_of(out[i]->bytes, m_scale, &pictures[i * size]);
 }
 
 void

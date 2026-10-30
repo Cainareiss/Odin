@@ -608,8 +608,6 @@ GlDrawing::read_kept(std::span<uint8_t> pictures)
 
 	glPixelStorei(GL_PACK_ALIGNMENT, 1);
 	for (unsigned i = 0; i < KEPT; i++) {
-		uint8_t *out = &pictures[i * size];
-
 #ifdef ODIN_GLES
 		/* OpenGL ES reads a texture through a framebuffer only */
 		GLuint fb;
@@ -626,12 +624,7 @@ GlDrawing::read_kept(std::span<uint8_t> pictures)
 		glBindTexture(GL_TEXTURE_2D, kept(i));
 		glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, whole.data());
 #endif
-		for (unsigned y = 0; y < SCREEN_HEIGHT; y++) {
-			const uint8_t *row = &whole[size_t{y} * m_scale * width() * 4];
-
-			for (unsigned x = 0; x < SCREEN_WIDTH; x++, out += 4)
-				std::memcpy(out, row + size_t{x} * m_scale * 4, 4);
-		}
+		screen_of(whole.data(), m_scale, &pictures[i * size]);
 	}
 	glBindTexture(GL_TEXTURE_2D, 0);
 	gl::check("saving the pictures");
