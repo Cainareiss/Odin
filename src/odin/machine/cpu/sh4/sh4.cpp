@@ -28,6 +28,7 @@
 #include "odin/machine/cpu/sh4/sh4.hpp"
 #include "odin/machine/cpu/sh4/sh4_onchip.hpp"
 #include "odin/common/bytes.hpp"
+#include "odin/common/stop_message.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -92,9 +93,8 @@ Sh4::Sh4(Sh4Bus &bus, std::span<uint8_t> onchip, bool master, bool little_endian
 
 void Sh4::fatal(const char *what, uint32_t value) const
 {
-	std::fprintf(stderr, "FATAL: sh4 %c pc %08X pr %08X sr %08X: %s (%08X)\n",
-	             m_master ? 'M' : 'S', m_r.pc, m_r.pr, m_r.sr | m_r.t, what, value);
-	std::abort();
+	stop_fatal("sh4 %c pc %08X pr %08X sr %08X: %s (%08X)", m_master ? 'M' : 'S', m_r.pc, m_r.pr, m_r.sr | m_r.t, what,
+	           value);
 }
 
 void Sh4::reset(bool hard)
