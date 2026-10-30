@@ -38,22 +38,19 @@ constexpr char MAGIC[] = "odin program 1\n";
 constexpr size_t MAGIC_SIZE = sizeof(MAGIC) - 1;
 constexpr size_t HEAD_SIZE = MAGIC_SIZE + 5 * 4;
 
-void put32(std::vector<uint8_t> &out, uint32_t value)
-{
-	for (unsigned i = 0; i < 4; i++)
-		out.push_back(static_cast<uint8_t>(value >> (8 * i)));
-}
-
 } /* namespace */
 
 std::vector<uint8_t> program_file(const std::string &driver, const std::string &vertex,
                                   const std::string &fragment, const KeptProgram &program)
 {
-	std::vector<uint8_t> out(MAGIC, MAGIC + MAGIC_SIZE);
+	const size_t sizes[4] = { driver.size(), vertex.size(), fragment.size(), program.binary.size() };
+	std::vector<uint8_t> out(HEAD_SIZE);
+	uint8_t *const at = out.data() + MAGIC_SIZE;
 
-	put32(out, program.format);
-	for (const size_t size : { driver.size(), vertex.size(), fragment.size(), program.binary.size() })
-		put32(out, static_cast<uint32_t>(size));
+	std::memcpy(out.data(), MAGIC, MAGIC_SIZE);
+	put_le32(at, program.format);
+	for (unsigned i = 0; i < 4; i++)
+		put_le32(at + 4 * (i + 1), static_cast<uint32_t>(sizes[i]));
 	for (const std::string *text : { &driver, &vertex, &fragment })
 		out.insert(out.end(), text->begin(), text->end());
 	out.insert(out.end(), program.binary.begin(), program.binary.end());
