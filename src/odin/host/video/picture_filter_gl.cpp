@@ -24,8 +24,6 @@
 
 #include "odin/host/video/picture_filter_gl.hpp"
 
-#include "odin/host/video/picture_preset.hpp"
-
 #include <cstdio>
 #include <cstring>
 

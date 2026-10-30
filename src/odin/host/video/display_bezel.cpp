@@ -31,6 +31,7 @@
 #include "odin/host/video/display.hpp"
 
 #include <algorithm>
+#include <cstdio>
 #include <filesystem>
 #include <system_error>
 #include <utility>

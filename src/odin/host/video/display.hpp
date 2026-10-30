@@ -30,7 +30,6 @@
 
 #include <atomic>
 #include <cstdint>
-#include <cstdio>
 #include <functional>
 #include <memory>
 #include <semaphore>

@@ -30,6 +30,8 @@
 
 #include "odin/host/video/display.hpp"
 
+#include <cstdio>
+
 #include "odin/host/renderer/hikaru/renderer.hpp"
 #include "odin/host/video/x11_window.hpp"
 
