@@ -137,10 +137,7 @@ library(const Options &command, const GameList &games, Settings &settings, const
 					library_pictures(display, state, options.artwork);
 				continue;
 			}
-			if (event.type == SDL_EVENT_WINDOW_DISPLAY_CHANGED)
-				display.display_changed();
-			if (event.type == SDL_EVENT_WINDOW_FOCUS_GAINED || event.type == SDL_EVENT_WINDOW_FOCUS_LOST)
-				menus.focus(event.type == SDL_EVENT_WINDOW_FOCUS_GAINED);
+			menus.window_event(event);
 			if (display.menu_shown()) {
 				const MenuSession::Asked asked = menus.event(event);
 
@@ -210,9 +207,7 @@ library(const Options &command, const GameList &games, Settings &settings, const
 		state.press = menus.press_name();
 		menus.fill_bar(bar);
 		bar.game = false;
-		bar.note_alpha = note_alpha(note_until);
-		if (SDL_GetTicks() >= note_until)
-			bar.note.clear();
+		show_note(bar, note_until);
 		display.draw_library(state, bar);
 		/* Without a game, the bar has no game to close, save, load or
 		 * pause */

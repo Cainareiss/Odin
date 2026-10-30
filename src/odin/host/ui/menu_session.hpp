@@ -66,6 +66,13 @@ inline float note_alpha(Uint64 until)
 
 	return now >= until ? 0.0f : std::min(1.0f, static_cast<float>(until - now) / static_cast<float>(NOTE_FADE_MS));
 }
+/* The note of the bar as it shows until `until`: fading, then gone */
+inline void show_note(BarState &bar, Uint64 until)
+{
+	bar.note_alpha = note_alpha(until);
+	if (SDL_GetTicks() >= until)
+		bar.note.clear();
+}
 /* The picker of an archive, asked for by Open...: no folder of the menu */
 inline constexpr int ARCHIVE_ASKED = -1;
 
@@ -127,6 +134,9 @@ public:
 	void show(const std::string &game);
 	/* The window is the active one, or in the background */
 	void focus(bool focused);
+	/* What the window says, with a game or not: the display it went to,
+	 * the focus */
+	void window_event(const SDL_Event &event);
 	/* The picker of the system: the event of its answer; the folder it
 	 * gave, taken (the answer for an archive, Open..., is the caller's);
 	 * a folder asked for; whether it is open */

@@ -606,6 +606,15 @@ MenuSession::focus(bool focused)
 }
 
 void
+MenuSession::window_event(const SDL_Event &event)
+{
+	if (event.type == SDL_EVENT_WINDOW_DISPLAY_CHANGED)
+		m_display.display_changed();
+	if (event.type == SDL_EVENT_WINDOW_FOCUS_GAINED || event.type == SDL_EVENT_WINDOW_FOCUS_LOST)
+		focus(event.type == SDL_EVENT_WINDOW_FOCUS_GAINED);
+}
+
+void
 MenuSession::wait()
 {
 	const Uint64 now = SDL_GetTicks();

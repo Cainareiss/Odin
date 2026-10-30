@@ -96,10 +96,7 @@ Session::process_events()
 			take_folder();
 			continue;
 		}
-		if (event.type == SDL_EVENT_WINDOW_DISPLAY_CHANGED)
-			m_display.display_changed();
-		if (event.type == SDL_EVENT_WINDOW_FOCUS_GAINED || event.type == SDL_EVENT_WINDOW_FOCUS_LOST)
-			m_menus.focus(event.type == SDL_EVENT_WINDOW_FOCUS_GAINED);
+		m_menus.window_event(event);
 		if (m_display.menu_shown()) {
 			const MenuSession::Asked asked = m_menus.event(event);
 
@@ -295,9 +292,7 @@ Session::fill_bar()
 	m_bar.fps = m_display.fps();
 	m_bar.paused = m_paused;
 	m_bar.game = true;
-	m_bar.note_alpha = note_alpha(m_note_until);
-	if (SDL_GetTicks() >= m_note_until)
-		m_bar.note.clear();
+	show_note(m_bar, m_note_until);
 }
 
 void
