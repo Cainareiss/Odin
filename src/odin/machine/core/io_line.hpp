@@ -26,12 +26,11 @@
 #define ODIN_IO_LINE_HPP
 
 #include "odin/machine/chips/mie.hpp"
+#include "odin/common/stop_message.hpp"
 
 #include <algorithm>
 #include <array>
 #include <cstdint>
-#include <cstdio>
-#include <cstdlib>
 #include <span>
 
 namespace odin {
@@ -59,15 +58,10 @@ struct IoLineWays {
 	/* A byte of the MIE due to the chip at `due`, the chip being at `now` */
 	void byte_to_chip(const char *board, uint64_t due, uint64_t now, uint8_t byte)
 	{
-		if (due < now) {
-			std::fprintf(stderr, "FATAL: %s: a byte of the MIE due where the chip has been: the chip too far ahead\n",
-			             board);
-			std::abort();
-		}
-		if (to_chip_count == to_chip.size()) {
-			std::fprintf(stderr, "FATAL: %s: more bytes from the MIE than the line holds\n", board);
-			std::abort();
-		}
+		if (due < now)
+			stop_fatal("%s: a byte of the MIE due where the chip has been: the chip too far ahead", board);
+		if (to_chip_count == to_chip.size())
+			stop_fatal("%s: more bytes from the MIE than the line holds", board);
 		to_chip[to_chip_count++] = { due, IoLineEvent::BYTE, byte };
 	}
 	/* The tick of the next byte for the chip, UINT64_MAX for none */
@@ -86,10 +80,8 @@ struct IoLineWays {
 	 * once */
 	void for_mie(const char *board, uint64_t tick, uint8_t kind, uint8_t value)
 	{
-		if (to_mie_count == to_mie.size()) {
-			std::fprintf(stderr, "FATAL: %s: more for the MIE than the line holds\n", board);
-			std::abort();
-		}
+		if (to_mie_count == to_mie.size())
+			stop_fatal("%s: more for the MIE than the line holds", board);
 		uint32_t n = to_mie_count++;
 
 		for (; n > 0 && to_mie[n - 1].tick > tick; n--)
