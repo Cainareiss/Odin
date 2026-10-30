@@ -50,13 +50,6 @@ namespace {
 
 constexpr uint32_t NONE = ~0u;
 
-const odin_modelview_t IDENTITY = { {
-	{ 1.0f, 0.0f, 0.0f, 0.0f },
-	{ 0.0f, 1.0f, 0.0f, 0.0f },
-	{ 0.0f, 0.0f, 1.0f, 0.0f },
-	{ 0.0f, 0.0f, 0.0f, 1.0f }
-} };
-
 bool
 is_nonnegative(float x)
 {
@@ -907,19 +900,11 @@ VkDrawing::draw_mesh(const odin_mesh_t &mesh, const MeshDraw &draw)
 	 * both, in a view with both (0: one without) */
 	m_push.family = depth_bias::family_sign(m_families_view, bias);
 
-	/* Something is drawn anyway with no modelview, as with OpenGL */
-	const bool none = mesh.mv_index == NONE;
-	if (none)
-		repeats::error("attempting to draw with no modelview!");
 	for (unsigned i = 0; i < mesh.num_instances; i++) {
-		uint32_t mv = none ? m_identity : mesh.mv_index + i;
+		const uint32_t mv = modelview_of(*m_list, mesh, i);
 
-		if (mv > m_identity) {
-			repeats::error("a modelview outside its list: %u", mv);
-			mv = m_identity;
-		}
 		m_push.mv = mv;
-		m_push.mv2 = mesh.mv2_index < m_identity ? mesh.mv2_index : mv;
+		m_push.mv2 = modelview2_of(*m_list, mesh, mv);
 		m_push.order = m_pass.order;
 		if (variant.collect)
 			m_pass.order += mesh.num_tris;

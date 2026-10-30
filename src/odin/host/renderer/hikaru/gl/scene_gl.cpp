@@ -282,12 +282,6 @@ GlDrawing::upload_viewport(const odin_mesh_t &mesh)
 void
 GlDrawing::upload_modelview(const odin_mesh_t &mesh, unsigned i)
 {
-	static const odin_modelview_t identity = { {
-		{ 1.0f, 0.0f, 0.0f, 0.0f },
-		{ 0.0f, 1.0f, 0.0f, 0.0f },
-		{ 0.0f, 0.0f, 1.0f, 0.0f },
-		{ 0.0f, 0.0f, 0.0f, 1.0f }
-	} };
 	const MeshProgram::Locations &locs = m_program->locs;
 	MeshProgram::Held &held = m_program->held;
 	const bool none = mesh.mv_index == NONE;
@@ -297,18 +291,15 @@ GlDrawing::upload_modelview(const odin_mesh_t &mesh, unsigned i)
 	held.mv_index = none ? NONE : mesh.mv_index + i;
 	held.mv2_index = mesh.mv2_index;
 
-	/* Something is drawn anyway. */
-	if (none)
-		repeats::error("attempting to draw with no modelview!");
-	const odin_modelview_t *mv = none ? &identity : &m_list->mv_list[mesh.mv_index + i];
+	const odin_display_list_t &list = *m_list;
+	const uint32_t at = modelview_of(list, mesh, i), second = modelview2_of(list, mesh, at);
+	const odin_modelview_t &mv = at == list.num_mvs ? IDENTITY : list.mv_list[at];
+	const odin_modelview_t &mv2 = second == list.num_mvs ? IDENTITY : list.mv_list[second];
 
 	if (m_debug.log)
-		log("mv  = [%u+%u] %s", mesh.mv_index, i, odin_modelview_str(mv));
-	glUniformMatrix4fv(locs.modelview, 1, GL_FALSE, &mv->mtx[0][0]);
-
-	if (mesh.mv2_index < m_list->num_mvs)
-		mv = &m_list->mv_list[mesh.mv2_index];
-	glUniformMatrix4fv(locs.modelview2, 1, GL_FALSE, &mv->mtx[0][0]);
+		log("mv  = [%u+%u] %s", mesh.mv_index, i, odin_modelview_str(&mv));
+	glUniformMatrix4fv(locs.modelview, 1, GL_FALSE, &mv.mtx[0][0]);
+	glUniformMatrix4fv(locs.modelview2, 1, GL_FALSE, &mv2.mtx[0][0]);
 }
 
 /* The texture of the mesh on the unit 0. The texture of a texhead and its

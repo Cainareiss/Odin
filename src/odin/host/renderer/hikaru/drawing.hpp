@@ -33,6 +33,7 @@
 #include <span>
 #include <string>
 
+#include "odin/common/repeats.hpp"
 #include "odin/machine/chips/antarctic/antarctic_list.hpp"
 #include "odin/machine/boards/hikaru/hikaru_draw.hpp"
 #include "odin/host/gfx/host_graphics.hpp"
@@ -125,6 +126,32 @@ public:
 	static unsigned family_of(const odin_mesh_t &mesh, const MeshVariant &variant)
 	{
 		return !variant.families ? NO_FAMILY : depth_bias::flagged(static_cast<int>(mesh.depth_bias)) ? 1 : 0;
+	}
+	/* The modelview of instance i of a mesh: its place in the list, or the
+	 * place after the last (num_mvs) for IDENTITY where the mesh has none
+	 * or one out of the list, said (something is drawn anyway) */
+	static constexpr odin_modelview_t IDENTITY = { {
+		{ 1.0f, 0.0f, 0.0f, 0.0f },
+		{ 0.0f, 1.0f, 0.0f, 0.0f },
+		{ 0.0f, 0.0f, 1.0f, 0.0f },
+		{ 0.0f, 0.0f, 0.0f, 1.0f },
+	} };
+	static uint32_t modelview_of(const odin_display_list_t &list, const odin_mesh_t &mesh, unsigned i)
+	{
+		if (mesh.mv_index == ~0u) {
+			repeats::error("attempting to draw with no modelview!");
+			return list.num_mvs;
+		}
+		if (mesh.mv_index + i >= list.num_mvs) {
+			repeats::error("a modelview outside its list: %u", mesh.mv_index + i);
+			return list.num_mvs;
+		}
+		return mesh.mv_index + i;
+	}
+	/* Its second modelview: the first one where it has none */
+	static uint32_t modelview2_of(const odin_display_list_t &list, const odin_mesh_t &mesh, uint32_t first)
+	{
+		return mesh.mv2_index < list.num_mvs ? mesh.mv2_index : first;
 	}
 	/* Where the count of the fragments of a view is kept, for the list of
 	 * a picture of the pipe */
