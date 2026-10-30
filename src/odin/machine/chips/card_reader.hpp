@@ -209,7 +209,10 @@ private:
 	bool m_ejected;		/* the program's 'F': refused until a reply sees no card */
 	bool m_shutter_open;
 	bool m_stocker_full;
-	uint8_t m_retries;	/* command C1 */
+	/* The tries of command C1: kept and saved, but each try reads the same
+	 * here and the time the mechanism takes is not counted, so nothing
+	 * reads it */
+	uint8_t m_retries;
 
 	Phase m_phase;
 	std::array<uint8_t, FRAME_MAX> m_rx;
