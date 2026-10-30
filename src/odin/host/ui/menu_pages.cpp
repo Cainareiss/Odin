@@ -295,8 +295,6 @@ link_tiles(const MenuKit &kit, const MenuState &state, const Box &box, bool on)
 
 } /* namespace */
 
-/* A path as the user knows it: the home folder as ~; on Windows with its
- * separators, as its own dialogs give them */
 std::string
 shown_path(const std::string &path, const char *none)
 {

@@ -37,9 +37,6 @@
 
 namespace odin {
 
-/* An archive Open... gave: its game, as MAME names its archive (the BIOS is
- * none), and the folder that holds it; else nothing, and what went wrong
- * for the bar to say (empty: nothing was chosen) */
 std::optional<Opened>
 open_archive(const FolderDialog::Answer &answer, const GameList &games, std::string &note)
 {

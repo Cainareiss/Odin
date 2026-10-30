@@ -400,9 +400,7 @@ struct MenuState : BarSettings {
 	 * ([players.<game>] light_gun_mode) */
 	bool light_gun = true;
 	/* What shakes on the cabinet ("from output NOZZLE VIBRATION") and
-	 * whether Odin makes it up (Game::shaker_experimental); the dead zone
-	 * and the trigger threshold of the gamepad shown (its make and
-	 * model's); its options open over the drawing */
+	 * whether Odin makes it up (Game::shaker_experimental) */
 	std::string shake_from;
 	bool shake_experimental = false;
 	/* The game shown turns the wheel through the drive board of its
@@ -421,6 +419,8 @@ struct MenuState : BarSettings {
 	std::vector<std::string> cabinet_ids, cabinet_names;
 	int cabinet = 0;
 	bool cabinet_later = false;
+	/* The dead zone and the trigger threshold of the gamepad shown (its
+	 * make and model's); its options open over the drawing */
 	PadTuning tuning;
 	bool advanced = false;
 	/* The animations of the menu ([menu] animations): the row of the
@@ -447,9 +447,7 @@ struct MenuState : BarSettings {
 		return on_pad() ? HostInput::Kind::PAD : on_joystick() ? HostInput::Kind::JOY : HostInput::Kind::KEY;
 	}
 	/* The part whose next input is caught, and those caught after it, in
-	 * turn; the part the frame of the gamepad is on (drawn as if caught);
-	 * what the page asks of the inputs of the player and the device shown,
-	 * of all its parts or of that part, Undo while it is offered */
+	 * turn; the part the frame of the gamepad is on (drawn as if caught) */
 	std::optional<MenuSlot> catching, picked;
 	std::vector<MenuSlot> catch_next;
 	/* Start mapping: each control of the player in turn, the place of the
@@ -465,8 +463,10 @@ struct MenuState : BarSettings {
 	}
 	/* How far the button that presses is held toward Skip, 0 to 1 */
 	float skip_hold = 0.0f;
-	/* Close game, at the foot of the menu over a game, pressed twice; back
-	 * to the game or the library, a click beside the frame */
+	/* What the page asks of the inputs of the player and the device shown,
+	 * of all its parts or of that part; Close game, at the foot of the menu
+	 * over a game, pressed twice; back to the game or the library, a click
+	 * beside the frame. Undo while it is offered. */
 	enum class Ask { NONE, DEFAULTS, CLEAR, UNDO, PART_DEFAULTS, PART_CLEAR, CLOSE_GAME, BACK } ask = Ask::NONE;
 	bool undo = false;
 
