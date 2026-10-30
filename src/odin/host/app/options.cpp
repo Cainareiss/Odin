@@ -57,13 +57,16 @@ index_named(std::span<const char *const> names, const std::string &value)
 	return at == names.end() ? std::nullopt : std::optional<size_t>(static_cast<size_t>(at - names.begin()));
 }
 
-std::optional<DisplayVsync>
-vsync_named(const std::string &name)
+/* A whole number from `lo` to `hi`, written in full */
+std::optional<int>
+whole_named(const std::string &value, long lo, long hi)
 {
-	for (unsigned i = 0; i < std::size(VSYNCS); i++)
-		if (name == VSYNCS[i])
-			return static_cast<DisplayVsync>(i);
-	return std::nullopt;
+	char *end = nullptr;
+	const long number = std::strtol(value.c_str(), &end, 10);
+
+	if (value.empty() || *end || number < lo || number > hi)
+		return std::nullopt;
+	return static_cast<int>(number);
 }
 
 const char HELP[] = "Usage: %s [options]\n"
@@ -105,21 +108,19 @@ void
 read_display(const Settings &settings, Options &options)
 {
 	for (const auto &[key, value] : settings.section("display")) {
-		char *end = nullptr;
-		const long number = std::strtol(value.c_str(), &end, 10);
-		const bool whole = !value.empty() && !*end;
-		const bool on = value == "on", off = value == "off";
+		const std::optional<int> times = whole_named(value, 1, 6), anisotropy = whole_named(value, 1, 16);
+		const std::optional<bool> on_off = on_off_named(value);
 		unsigned w = 0, h = 0;
 
-		if (key == "scale" && whole && number >= 1 && number <= 6) {
+		if (key == "scale" && times) {
 			if (!options.given.scale)
-				options.display.scale = static_cast<unsigned>(number);
-		} else if (key == "anisotropy" && whole && number >= 1 && number <= 16) {
+				options.display.scale = static_cast<unsigned>(*times);
+		} else if (key == "anisotropy" && anisotropy) {
 			if (!options.given.anisotropy)
-				options.display.anisotropy = static_cast<unsigned>(number);
-		} else if (key == "window" && whole && number >= 1 && number <= 6) {
+				options.display.anisotropy = static_cast<unsigned>(*anisotropy);
+		} else if (key == "window" && times) {
 			if (!options.given.window) {
-				options.display.window = static_cast<unsigned>(number);
+				options.display.window = static_cast<unsigned>(*times);
 				options.display.window_w = options.display.window_h = 0;
 			}
 		} else if (key == "window" && window_size(value, w, h)) {
@@ -127,16 +128,16 @@ read_display(const Settings &settings, Options &options)
 				options.display.window_w = w;
 				options.display.window_h = h;
 			}
-		} else if (key == "fullscreen" && (on || off)) {
+		} else if (key == "fullscreen" && on_off) {
 			if (!options.given.fullscreen)
-				options.display.fullscreen = on;
-		} else if (key == "unthrottled" && (on || off)) {
+				options.display.fullscreen = *on_off;
+		} else if (key == "unthrottled" && on_off) {
 			if (!options.given.unthrottled)
-				options.unthrottled = on;
-		} else if (key == "show_speed" && (on || off)) {
-			options.display.show_speed = on;
-		} else if (key == "vsync" && vsync_named(value)) {
-			options.vsync = *vsync_named(value);
+				options.unthrottled = *on_off;
+		} else if (key == "show_speed" && on_off) {
+			options.display.show_speed = *on_off;
+		} else if (key == "vsync" && index_named(VSYNCS, value)) {
+			options.vsync = static_cast<DisplayVsync>(*index_named(VSYNCS, value));
 		} else if (key == "filter" && !value.empty()) {
 			options.display.filter = value == "none" ? std::string() : value;
 		} else if (key == "api" && index_named(APIS, value)) {
@@ -178,9 +179,9 @@ read_paths(const Settings &settings, Options &options)
 		}
 	}
 	for (const auto &[key, value] : settings.section("log")) {
-		if (key == "verbose" && (value == "on" || value == "off")) {
+		if (key == "verbose" && on_off_named(value)) {
 			if (!options.given.verbose)
-				options.verbose = value == "on";
+				options.verbose = *on_off_named(value);
 		} else {
 			refuse_setting("log", key, value);
 		}
@@ -206,38 +207,17 @@ void
 read_sound(const Settings &settings, Options &options)
 {
 	for (const auto &[key, value] : settings.section("sound")) {
-		char *end = nullptr;
-		const long number = std::strtol(value.c_str(), &end, 10);
+		const std::optional<int> volume = whole_named(value, 0, 100);
 
 		if (key == "device" && !value.empty())
 			options.sound_device = value;
-		else if (key == "volume" && !value.empty() && !*end && number >= 0 && number <= 100)
-			options.volume = static_cast<unsigned>(number);
-		else if (key == "background" && (value == "on" || value == "off"))
-			options.background = value == "on";
+		else if (key == "volume" && volume)
+			options.volume = static_cast<unsigned>(*volume);
+		else if (key == "background" && on_off_named(value))
+			options.background = *on_off_named(value);
 		else
 			refuse_setting("sound", key, value);
 	}
-}
-
-/* A whole number from `lo` to `hi`, written in full */
-std::optional<int>
-whole_named(const std::string &value, long lo, long hi)
-{
-	char *end = nullptr;
-	const long number = std::strtol(value.c_str(), &end, 10);
-
-	if (value.empty() || *end || number < lo || number > hi)
-		return std::nullopt;
-	return static_cast<int>(number);
-}
-
-std::optional<bool>
-on_off_named(const std::string &value)
-{
-	if (value == "on" || value == "off")
-		return value == "on";
-	return std::nullopt;
 }
 
 /* What [players.<game>] says of a key, its last right line; `standard`
@@ -363,9 +343,8 @@ with_settings(const Options &command, const Settings &settings)
 std::optional<AudioOut::Mode>
 mode_named(const std::string &name)
 {
-	for (int played = 0; played < static_cast<int>(std::size(MODE_NAMES)); played++)
-		if (name == MODE_NAMES[played])
-			return mode_of(played);
+	if (const std::optional<size_t> played = index_named(MODE_NAMES, name))
+		return mode_of(static_cast<int>(*played));
 	return std::nullopt;
 }
 
@@ -435,9 +414,8 @@ wheel_rotation_of(const Settings &settings, const std::string &game)
 std::optional<InputDevice>
 device_named(const std::string &value)
 {
-	for (size_t i = 0; i < std::size(DEVICE_NAMES); i++)
-		if (value == DEVICE_NAMES[i])
-			return static_cast<InputDevice>(i);
+	if (const std::optional<size_t> device = index_named(DEVICE_NAMES, value))
+		return static_cast<InputDevice>(*device);
 	return std::nullopt;
 }
 

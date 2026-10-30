@@ -47,7 +47,7 @@ player_value_right(const std::string &key, const std::string &value)
 	if (key == "cabinet" || key == "card")
 		return true;
 	if (key == "vibration")
-		return value == "on" || value == "off";
+		return on_off_named(value).has_value();
 	if (key == "wheel_force")
 		return wheel_force_named(value).has_value();
 	if (key == "vibration_force")
@@ -100,8 +100,8 @@ Controls::Controls(Keyboard &keys, const std::vector<GameControl> &controls, con
 			m_joys_wanted[key[3] - '1'] = value.substr(0, value.find(' '));
 		} else if ((key == "device1" || key == "device2") && device_named(value)) {
 			m_chosen[key[6] - '1'] = device_named(value);
-		} else if (key == "light_gun_mode" && (value == "on" || value == "off")) {
-			m_light_gun_mode = value == "on";
+		} else if (key == "light_gun_mode" && on_off_named(value)) {
+			m_light_gun_mode = *on_off_named(value);
 		} else if (!player_value_right(key, value)) {
 			refuse_setting("players." + game, key, value);
 		}

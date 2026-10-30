@@ -61,6 +61,15 @@ list_items(std::string_view text)
 	return items;
 }
 
+/* A value "on" or "off"; none when it is neither */
+inline std::optional<bool>
+on_off_named(std::string_view value)
+{
+	if (value == "on" || value == "off")
+		return value == "on";
+	return std::nullopt;
+}
+
 /* A line of odin.ini whose value is not right, said on stderr; Odin takes
  * the value by default instead */
 void refuse_setting(const std::string &section, const std::string &key, const std::string &value);

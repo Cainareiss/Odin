@@ -71,8 +71,8 @@ network_on(const Settings &settings)
 	bool network = false;
 
 	for (const auto &[key, value] : settings.section("outputs")) {
-		if (key == "network" && (value == "on" || value == "off"))
-			network = value == "on";
+		if (key == "network" && on_off_named(value))
+			network = *on_off_named(value);
 		else
 			refuse_setting("outputs", key, value);
 	}
@@ -229,10 +229,10 @@ MenuSession::MenuSession(const Options &options, Display &display, Keyboard &key
 		state.game_links.push_back(listed && listed->link.cabinets);
 	}
 	for (const auto &[key, value] : settings.section("menu")) {
-		if (key == "classic" && (value == "on" || value == "off"))
-			state.classic = value == "on";
-		else if (key == "animations" && (value == "on" || value == "off"))
-			state.animations = value == "on";
+		if (key == "classic" && on_off_named(value))
+			state.classic = *on_off_named(value);
+		else if (key == "animations" && on_off_named(value))
+			state.animations = *on_off_named(value);
 		else if (key == "theme" && theme_named(value) >= 0)
 			state.theme = static_cast<unsigned>(theme_named(value));
 		else if (!MenuNav::knows(key))
