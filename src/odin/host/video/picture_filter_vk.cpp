@@ -60,18 +60,8 @@ spirv_string(const uint32_t *words, size_t count)
 	return text;
 }
 
-/* False when the words are not SPIR-V */
-bool
-reflect(const std::vector<uint32_t> &code, Reflected &out)
-{
-	enum : uint32_t {
-		NAME = 5, MEMBER_NAME = 6, TYPE_INT = 21, TYPE_FLOAT = 22, TYPE_VECTOR = 23, TYPE_MATRIX = 24,
-		TYPE_SAMPLED_IMAGE = 27, TYPE_ARRAY = 28, TYPE_STRUCT = 30, TYPE_POINTER = 32, CONSTANT = 43,
-		SPEC_CONSTANT_TRUE = 48, SPEC_CONSTANT_FALSE = 49, SPEC_CONSTANT = 50, VARIABLE = 59, DECORATE = 71,
-		MEMBER_DECORATE = 72
-	};
-	enum : uint32_t { SPEC_ID = 1, ARRAY_STRIDE = 6, LOCATION = 30, BINDING = 33, OFFSET = 35 };
-	enum : uint32_t { UNIFORM_CONSTANT = 0, INPUT = 1, UNIFORM = 2 };
+/* What a module of SPIR-V declares, by id */
+struct SpirvModule {
 	std::map<uint32_t, std::string> names;
 	std::map<std::pair<uint32_t, uint32_t>, std::string> member_names;
 	std::map<std::pair<uint32_t, uint32_t>, uint32_t> member_offsets;
@@ -80,6 +70,19 @@ reflect(const std::vector<uint32_t> &code, Reflected &out)
 	std::map<uint32_t, uint32_t> pointees;
 	std::set<uint32_t> sampled, spec_constants;
 	std::vector<std::array<uint32_t, 3>> variables;
+};
+
+/* The declarations of a module; false when the words are not SPIR-V */
+bool
+read_module(const std::vector<uint32_t> &code, SpirvModule &m)
+{
+	enum : uint32_t {
+		NAME = 5, MEMBER_NAME = 6, TYPE_INT = 21, TYPE_FLOAT = 22, TYPE_VECTOR = 23, TYPE_MATRIX = 24,
+		TYPE_SAMPLED_IMAGE = 27, TYPE_ARRAY = 28, TYPE_STRUCT = 30, TYPE_POINTER = 32, CONSTANT = 43,
+		SPEC_CONSTANT_TRUE = 48, SPEC_CONSTANT_FALSE = 49, SPEC_CONSTANT = 50, VARIABLE = 59, DECORATE = 71,
+		MEMBER_DECORATE = 72
+	};
+	enum : uint32_t { SPEC_ID = 1, ARRAY_STRIDE = 6, LOCATION = 30, BINDING = 33, OFFSET = 35 };
 
 	if (code.size() < 5 || code[0] != 0x07230203)
 		return false;
@@ -91,89 +94,100 @@ reflect(const std::vector<uint32_t> &code, Reflected &out)
 			return false;
 		switch (op) {
 		case NAME:
-			names[w[0]] = spirv_string(w + 1, count - 2);
+			m.names[w[0]] = spirv_string(w + 1, count - 2);
 			break;
 		case MEMBER_NAME:
-			member_names[{ w[0], w[1] }] = spirv_string(w + 2, count - 3);
+			m.member_names[{ w[0], w[1] }] = spirv_string(w + 2, count - 3);
 			break;
 		case DECORATE:
 			if (w[1] == BINDING)
-				bindings[w[0]] = w[2];
+				m.bindings[w[0]] = w[2];
 			else if (w[1] == LOCATION)
-				locations[w[0]] = w[2];
+				m.locations[w[0]] = w[2];
 			else if (w[1] == SPEC_ID)
-				spec_ids[w[0]] = w[2];
+				m.spec_ids[w[0]] = w[2];
 			else if (w[1] == ARRAY_STRIDE)
-				strides[w[0]] = w[2];
+				m.strides[w[0]] = w[2];
 			break;
 		case MEMBER_DECORATE:
 			if (w[2] == OFFSET)
-				member_offsets[{ w[0], w[1] }] = w[3];
+				m.member_offsets[{ w[0], w[1] }] = w[3];
 			break;
 		case TYPE_INT:
 		case TYPE_FLOAT:
-			sizes[w[0]] = w[1] / 8;
+			m.sizes[w[0]] = w[1] / 8;
 			break;
 		case TYPE_VECTOR:
-			sizes[w[0]] = sizes[w[1]] * w[2];
+			m.sizes[w[0]] = m.sizes[w[1]] * w[2];
 			break;
 		case TYPE_MATRIX:
 			/* Its columns 16 bytes apart (std140) */
-			sizes[w[0]] = 16 * w[2];
+			m.sizes[w[0]] = 16 * w[2];
 			break;
 		case TYPE_ARRAY:
-			sizes[w[0]] = strides[w[0]] * values[w[2]];
+			m.sizes[w[0]] = m.strides[w[0]] * m.values[w[2]];
 			break;
 		case TYPE_SAMPLED_IMAGE:
-			sampled.insert(w[0]);
+			m.sampled.insert(w[0]);
 			break;
 		case TYPE_STRUCT:
-			structs[w[0]].assign(w + 1, w + count - 1);
+			m.structs[w[0]].assign(w + 1, w + count - 1);
 			break;
 		case TYPE_POINTER:
-			pointees[w[0]] = w[2];
+			m.pointees[w[0]] = w[2];
 			break;
 		case CONSTANT:
-			values[w[1]] = w[2];
+			m.values[w[1]] = w[2];
 			break;
 		case SPEC_CONSTANT_TRUE:
 		case SPEC_CONSTANT_FALSE:
 		case SPEC_CONSTANT:
-			spec_constants.insert(w[1]);
+			m.spec_constants.insert(w[1]);
 			break;
 		case VARIABLE:
-			variables.push_back({ w[0], w[1], w[2] });
+			m.variables.push_back({ w[0], w[1], w[2] });
 			break;
 		default:
 			break;
 		}
 		at += count;
 	}
+	return true;
+}
 
-	for (const auto &[type, id, storage] : variables) {
-		const uint32_t pointee = pointees[type];
+/* False when the words are not SPIR-V */
+bool
+reflect(const std::vector<uint32_t> &code, Reflected &out)
+{
+	enum : uint32_t { UNIFORM_CONSTANT = 0, INPUT = 1, UNIFORM = 2 };
+	SpirvModule m;
 
-		if (storage == UNIFORM && names[pointee] == "gl_DefaultUniformBlock") {
-			const std::vector<uint32_t> &members = structs[pointee];
+	if (!read_module(code, m))
+		return false;
+	for (const auto &[type, id, storage] : m.variables) {
+		const uint32_t pointee = m.pointees[type];
 
-			out.block_binding = bindings.contains(id) ? bindings[id] : 0;
-			for (uint32_t m = 0; m < members.size(); m++) {
-				const uint32_t offset = member_offsets[{ pointee, m }];
-				const uint32_t size = sizes.contains(members[m]) ? sizes[members[m]] : 64;
+		if (storage == UNIFORM && m.names[pointee] == "gl_DefaultUniformBlock") {
+			const std::vector<uint32_t> &members = m.structs[pointee];
 
-				out.offsets[member_names[{ pointee, m }]] = offset;
+			out.block_binding = m.bindings.contains(id) ? m.bindings[id] : 0;
+			for (uint32_t i = 0; i < members.size(); i++) {
+				const uint32_t offset = m.member_offsets[{ pointee, i }];
+				const uint32_t size = m.sizes.contains(members[i]) ? m.sizes[members[i]] : 64;
+
+				out.offsets[m.member_names[{ pointee, i }]] = offset;
 				out.block_size = std::max(out.block_size, offset + size);
 			}
 			out.block_size = (out.block_size + 15) / 16 * 16;
-		} else if (storage == UNIFORM_CONSTANT && sampled.contains(pointee) && bindings.contains(id)) {
-			out.textures[names[id]] = bindings[id];
-		} else if (storage == INPUT && locations.contains(id)) {
-			out.inputs[names[id]] = locations[id];
+		} else if (storage == UNIFORM_CONSTANT && m.sampled.contains(pointee) && m.bindings.contains(id)) {
+			out.textures[m.names[id]] = m.bindings[id];
+		} else if (storage == INPUT && m.locations.contains(id)) {
+			out.inputs[m.names[id]] = m.locations[id];
 		}
 	}
-	for (const uint32_t id : spec_constants)
-		if (spec_ids.contains(id) && names.contains(id))
-			out.constants[names[id]] = spec_ids[id];
+	for (const uint32_t id : m.spec_constants)
+		if (m.spec_ids.contains(id) && m.names.contains(id))
+			out.constants[m.names[id]] = m.spec_ids[id];
 	return true;
 }
 
