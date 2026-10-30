@@ -29,6 +29,7 @@
 #include "odin/host/input/pointers.hpp"
 
 #include "odin/host/input/evdev_bits.hpp"
+#include "odin/host/input/pointer_names.hpp"
 #include "odin/host/input/seats.hpp"
 
 #ifdef __linux__
@@ -183,13 +184,11 @@ Pointers::Backend::open_node(const std::string &node)
 
 	const std::string name = trimmed_text(name_text), phys = trimmed_text(phys_text);
 	const std::string uniq = trimmed_text(uniq_text);
-	char vidpid[16];
 
-	std::snprintf(vidpid, sizeof(vidpid), "%04x:%04x", id.vendor, id.product);
 	/* A serial under 8 characters is a placeholder of the firmware, the
 	 * same in every unit; two of a kind take their port, then their node */
 	std::string identity = uniq.size() >= 8               ? "uniq:" + identity_text(uniq) :
-	                       id.vendor && id.product         ? std::string("vidpid:") + vidpid :
+	                       id.vendor && id.product         ? vidpid_identity(id.vendor, id.product) :
 	                       !phys.empty()                   ? "path:" + identity_text(phys) :
 	                       !name.empty()                   ? "name:" + identity_text(name) : "node:" + node;
 	Entry *e = find_identity(identity);
@@ -210,13 +209,7 @@ Pointers::Backend::open_node(const std::string &node)
 	close_entry(*e);
 	e->fd = fd;
 	e->node = node;
-	e->device.name = (name.empty() ? std::string("Pointer") : name);
-	if (id.vendor && id.product) {
-		char tag[16];
-
-		std::snprintf(tag, sizeof(tag), " [%04X:%04X]", id.vendor, id.product);
-		e->device.name += tag;
-	}
+	e->device.name = pointer_name(name, id.vendor, id.product);
 	e->device.present = true;
 	e->device.absolute = absolute;
 	e->touch_is_left = !left;

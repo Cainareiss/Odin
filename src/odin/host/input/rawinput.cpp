@@ -30,6 +30,7 @@
  * ui/xemu-pointer-rawinput.c, after the RawInputSource of PCSX2X6. */
 
 #include "odin/host/input/pointers.hpp"
+#include "odin/host/input/pointer_names.hpp"
 
 #ifdef _WIN32
 
@@ -174,12 +175,10 @@ Pointers::Backend::open_device(HANDLE handle, const wchar_t *wide, const std::st
 
 	const auto [vid, pid] = vidpid_of(path);
 	const std::string name = product_of(wide);
-	char vidpid[16];
 
-	std::snprintf(vidpid, sizeof(vidpid), "%04x:%04x", vid, pid);
 	/* VID:PID, which stays when the port changes, as in PCSX2X6; two of a
 	 * kind take their port */
-	std::string identity = vid && pid ? std::string("vidpid:") + vidpid : path_identity(path);
+	std::string identity = vid && pid ? vidpid_identity(vid, pid) : path_identity(path);
 	Entry *e = find_identity(identity);
 
 	if (e && e->handle)
@@ -196,13 +195,7 @@ Pointers::Backend::open_device(HANDLE handle, const wchar_t *wide, const std::st
 	close_entry(*e);
 	e->handle = handle;
 	e->path = path;
-	e->device.name = name.empty() ? std::string("Pointer") : name;
-	if (vid && pid) {
-		char tag[16];
-
-		std::snprintf(tag, sizeof(tag), " [%04X:%04X]", vid, pid);
-		e->device.name += tag;
-	}
+	e->device.name = pointer_name(name, vid, pid);
 	e->device.present = true;
 	/* Aiming or moving: the first packet says */
 	e->placed = false;
