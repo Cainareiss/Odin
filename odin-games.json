@@ -114,6 +114,95 @@
 			]
 		},
 		{
+			"name" : "airtrixo",
+			"title" : "Air Trix (original)",
+			"title_frame" : 4100,
+			"mach" : "hikaru",
+			"rom_board" : { "eprom_mb" : 4, "315-5881" : "291B02C7" },
+			"mie_eeprom" : "42434f30010101001800040101010100121200000000000000000000060041495254524958300000000000000100010100000000000000000000000000007e4442434f30010101001800040101010100121200000000000000000000060041495254524958300000000000000100010100000000000000000000000000007e44",
+			"controls" : [
+				{ "name" : "START", "id" : "start", "switch" : "1P START", "role" : "start" },
+				{ "name" : "LEFT", "id" : "left", "switch" : "1P PUSH1", "role" : "left", "keys" : [ "X" ] },
+				{ "name" : "RIGHT", "id" : "right", "switch" : "1P PUSH2", "role" : "right", "keys" : [ "C" ] },
+				{ "name" : "UP", "id" : "up", "switch" : "1P UP", "role" : "button5", "keys" : [ "Up" ] },
+				{ "name" : "DOWN", "id" : "down", "switch" : "1P DOWN", "role" : "button6", "keys" : [ "Down" ] },
+				{ "name" : "YAW", "id" : "yaw", "analog" : 0, "low" : "left", "role" : "stick_x" },
+				{ "name" : "ROLL", "id" : "roll", "analog" : 1, "low" : "left", "role" : "stick2_x" }
+			],
+			"outputs" : [
+				{ "name" : "LOCK MECHA.", "id" : "lock_mecha", "output" : 1, "role" : "lock" },
+				{ "name" : "LEFT LOWER LAMP", "id" : "left_lower_lamp", "output" : 2, "role" : "lamp" },
+				{ "name" : "START LAMP", "id" : "start_lamp", "output" : 3, "role" : "lamp" },
+				{ "name" : "LEFT UPPER LAMP", "id" : "left_upper_lamp", "output" : 4, "role" : "lamp" },
+				{ "name" : "RIGHT UPPER LAMP", "id" : "right_upper_lamp", "output" : 5, "role" : "lamp" },
+				{ "name" : "RIGHT LOWER LAMP", "id" : "right_lower_lamp", "output" : 6, "role" : "lamp" }
+			],
+			"sections" : [
+				{
+					"name" : "mie",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "315-6146.bin", "size" : 2048, "crc" : "9b197e35", "set" : "mie" }
+					]
+				},
+				{
+					"name" : "io_rom",
+					"type" : "alternative",
+					"optional" : true,
+					"data" : [
+						{ "name" : "315-6215.bin", "size" : 16384, "crc" : "98202738", "set" : "jvs13551" }
+					]
+				},
+				{
+					"name" : "eeprom",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "93c46.ic115", "size" : 128, "crc" : "737dc714", "set" : "hikaru" }
+					]
+				},
+				{
+					"name" : "rombd_eeprom",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "x76f100.ic85", "size" : 132, "crc" : "194c6c18", "set" : "hikaru" }
+					]
+				},
+				{
+					"name" : "bootrom",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "hikaru_0.96.bin", "size" : 2097152, "crc" : "2aa906a7", "set" : "hikaru" },
+						{ "name" : "hikaru_0.92.bin", "size" : 2097152, "crc" : "3d557104", "set" : "hikaru" },
+						{ "name" : "hikaru_0.84.bin", "size" : 2097152, "crc" : "d96298b6", "set" : "hikaru" }
+					]
+				},
+				{
+					"name" : "eprom",
+					"type" : "interleave",
+					"amnt" : 2,
+					"data" : [
+						{ "name" : "epr-23601.ic29", "size" : 4194304, "crc" : "e0c642cb", "set" : "airtrix" },
+						{ "name" : "epr-23602.ic30", "size" : 4194304, "crc" : "fac11d21", "set" : "airtrix" }
+					]
+				},
+				{
+					"name" : "maskrom",
+					"type" : "interleave",
+					"amnt" : 2,
+					"data" : [
+						{ "name" : "mpr-23573.ic37", "size" : 16777216, "crc" : "e22a0734", "set" : "airtrix" },
+						{ "name" : "mpr-23577.ic38", "size" : 16777216, "crc" : "d007680d", "set" : "airtrix" },
+						{ "name" : "mpr-23574.ic41", "size" : 16777216, "crc" : "a77034a5", "set" : "airtrix" },
+						{ "name" : "mpr-23578.ic42", "size" : 16777216, "crc" : "db612dd6", "set" : "airtrix" },
+						{ "name" : "mpr-23575.ic45", "size" : 16777216, "crc" : "fe660f06", "set" : "airtrix" },
+						{ "name" : "mpr-23579.ic46", "size" : 16777216, "crc" : "55e656d2", "set" : "airtrix" },
+						{ "name" : "mpr-23576.ic49", "size" : 16777216, "crc" : "c01e0329", "set" : "airtrix" },
+						{ "name" : "mpr-23580.ic50", "size" : 16777216, "crc" : "d260f39c", "set" : "airtrix" }
+					]
+				}
+			]
+		},
+		{
 			"name" : "braveff",
 			"title" : "Brave Fire Fighters",
 			"title_frame" : 720,
@@ -557,6 +646,120 @@
 						{ "name" : "mpr-23483.ic32", "size" : 16777216, "crc" : "c37adebe" },
 						{ "name" : "mpr-23480.ic33", "size" : 16777216, "crc" : "f517b8b3" },
 						{ "name" : "mpr-23484.ic34", "size" : 16777216, "crc" : "2ebe1aa1" }
+					]
+				}
+			]
+		},
+		{
+			"name" : "sgnascaro",
+			"title" : "NASCAR Arcade (original)",
+			"title_frame" : 6200,
+			"link" : { "cabinets" : 8, "seat" : { "in" : "backup", "byte" : "14E3", "shift" : 2, "bits" : 4, "first" : 1 } },
+			"mach" : "hikaru",
+			"rom_board" : { "eprom_mb" : 4, "actel" : { "key" : "56DEDF33", "id" : "4252" } },
+			"option_speakers" : true,
+			"option_level" : -12,
+			"drive_board" : { "first_output" : 15 },
+			"mie_eeprom" : "424252000101010018000401010101001000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000031a5424252000101010018000401010101001000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000031a5",
+			"io" : "837-13741",
+			"controls" : [
+				{ "name" : "STEERING WHEEL", "id" : "steering_wheel", "analog" : 0, "low" : "left", "role" : "steer" },
+				{ "name" : "GAS PEDAL", "id" : "gas_pedal", "analog" : 1, "low" : "released", "role" : "accel" },
+				{ "name" : "BRAKE PEDAL", "id" : "brake_pedal", "analog" : 2, "low" : "released", "role" : "brake" },
+				{ "name" : "GEAR POSITION", "id" : "gear", "positions" : [
+					{ "name" : "N", "switches" : [] },
+					{ "name" : "1", "switches" : [ "2P LEFT", "2P UP" ] },
+					{ "name" : "2", "switches" : [ "2P LEFT", "2P DOWN" ] },
+					{ "name" : "3", "switches" : [ "2P UP" ] },
+					{ "name" : "4", "switches" : [ "2P DOWN" ] } ],
+					"role" : "gear" },
+				{ "name" : "START BUTTON", "id" : "start", "switch" : "1P START", "role" : "start" },
+				{ "name" : "VIEW CHANGE BUTTON", "id" : "view_change", "switch" : "1P DOWN", "role" : "button4" }
+			],
+			"outputs" : [
+				{ "name" : "BASS SHAKER MUTE", "id" : "bass_shaker_mute", "output" : 14, "role" : "mute" }
+			],
+			"cabinets" : [
+				{ "id" : "deluxe", "name" : "Deluxe", "grounded" : [ "1P PUSH1" ],
+				  "controls" : { "steering_wheel" : { "low" : "right" }, "view_change" : { "switch" : "1P UP" } } }
+			],
+			"sections" : [
+				{
+					"name" : "mie",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "315-6146.bin", "size" : 2048, "crc" : "9b197e35", "set" : "mie" }
+					]
+				},
+				{
+					"name" : "io_rom",
+					"type" : "alternative",
+					"optional" : true,
+					"data" : [
+						{ "name" : "epr-21868.ic7", "size" : 65536, "crc" : "c306a51f", "set" : "18wheelr" }
+					]
+				},
+				{
+					"name" : "drive_rom",
+					"type" : "alternative",
+					"optional" : true,
+					"data" : [
+						{ "name" : "epr-20512.bin", "size" : 65536, "crc" : "cf64350d", "set" : "srally2" }
+					]
+				},
+				{
+					"name" : "eeprom",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "93c46.ic115", "size" : 128, "crc" : "737dc714", "set" : "hikaru" }
+					]
+				},
+				{
+					"name" : "rombd_eeprom",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "x76f100.ic85", "size" : 132, "crc" : "194c6c18", "set" : "hikaru" }
+					]
+				},
+				{
+					"name" : "bootrom",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "hikaru_0.96.bin", "size" : 2097152, "crc" : "2aa906a7", "set" : "hikaru" },
+						{ "name" : "hikaru_0.92.bin", "size" : 2097152, "crc" : "3d557104", "set" : "hikaru" },
+						{ "name" : "hikaru_0.84.bin", "size" : 2097152, "crc" : "d96298b6", "set" : "hikaru" }
+					]
+				},
+				{
+					"name" : "eprom",
+					"type" : "interleave",
+					"amnt" : 2,
+					"data" : [
+						{ "name" : "epr-23485.ic35", "size" : 4194304, "crc" : "13b44fbf", "set" : "sgnascar" },
+						{ "name" : "epr-23486.ic36", "size" : 4194304, "crc" : "ac3acd19", "set" : "sgnascar" }
+					]
+				},
+				{
+					"name" : "maskrom",
+					"type" : "interleave",
+					"amnt" : 2,
+					"data" : [
+						{ "name" : "mpr-23469.ic19", "size" : 16777216, "crc" : "89cbad8d", "set" : "sgnascar" },
+						{ "name" : "mpr-23473.ic20", "size" : 16777216, "crc" : "977b87d6", "set" : "sgnascar" },
+						{ "name" : "mpr-23470.ic21", "size" : 16777216, "crc" : "faf4940f", "set" : "sgnascar" },
+						{ "name" : "mpr-23474.ic22", "size" : 16777216, "crc" : "faf69ac5", "set" : "sgnascar" },
+						{ "name" : "mpr-23471.ic23", "size" : 16777216, "crc" : "a3aad8ac", "set" : "sgnascar" },
+						{ "name" : "mpr-23475.ic24", "size" : 16777216, "crc" : "5f51597c", "set" : "sgnascar" },
+						{ "name" : "mpr-23472.ic25", "size" : 16777216, "crc" : "2495f678", "set" : "sgnascar" },
+						{ "name" : "mpr-23476.ic26", "size" : 16777216, "crc" : "927cf31c", "set" : "sgnascar" },
+						{ "name" : "mpr-23477.ic27", "size" : 16777216, "crc" : "b4b7c477", "set" : "sgnascar" },
+						{ "name" : "mpr-23481.ic28", "size" : 16777216, "crc" : "27b8eb7d", "set" : "sgnascar" },
+						{ "name" : "mpr-23478.ic29", "size" : 16777216, "crc" : "1fac431c", "set" : "sgnascar" },
+						{ "name" : "mpr-23482.ic30", "size" : 16777216, "crc" : "2e9a0420", "set" : "sgnascar" },
+						{ "name" : "mpr-23479.ic31", "size" : 16777216, "crc" : "9704e393", "set" : "sgnascar" },
+						{ "name" : "mpr-23483.ic32", "size" : 16777216, "crc" : "c37adebe", "set" : "sgnascar" },
+						{ "name" : "mpr-23480.ic33", "size" : 16777216, "crc" : "f517b8b3", "set" : "sgnascar" },
+						{ "name" : "mpr-23484.ic34", "size" : 16777216, "crc" : "2ebe1aa1", "set" : "sgnascar" }
 					]
 				}
 			]
