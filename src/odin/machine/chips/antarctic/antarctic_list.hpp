@@ -242,7 +242,7 @@ typedef struct {
 	uint32_t vp_index;
 	uint32_t mv_index;
 	uint32_t mv2_index;	/* second modelview */
-	uint32_t num_instances;
+	uint32_t num_instances;	/* always 1: no instancing is known (161) */
 	uint32_t mat_index;
 	uint32_t tex_index;
 	uint32_t ls_index;

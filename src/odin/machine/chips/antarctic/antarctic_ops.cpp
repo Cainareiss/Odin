@@ -647,7 +647,8 @@ Antarctic::op_viewport_recall(const uint32_t *inst)
  *
  * The CP uses command 161 to upload each (row) vector of the modelview matrix
  * separately.  The CP can also perform instanced drawing, and instructed to do
- * so through command 161.
+ * so through command 161 (HYPOTHESIS: no source says so, and no bit of 161 is
+ * known for it; each mesh is drawn once).
  *
  * The other commands here set various vectors used for lighting (i.e. light
  * position and direction) but are not well understood.
