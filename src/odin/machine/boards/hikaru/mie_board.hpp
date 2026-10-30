@@ -52,11 +52,10 @@ namespace odin {
  * and the Test and Service switches, active low, on bits 2 and 3. Port A is
  * an unpopulated DIP switch, D the resets, E the LEDs.
  *
- * Ports B and C are the interrupt controller of the board, with the names
- * of the schematics. B reads what is pending: bit 0 ANT_INT (the command
- * processor), 4 SZK_INT (the sound boards), 5 CN4_INT, 6 CN3_INT0, 7
- * CN3_INT1, and on bits 1 to 3 what the chip itself puts on pins 4 to 6 of
- * port F. C is the mask of what reaches IRL2 of the main SH-4. */
+ * Ports B and C are the interrupt controller of the board. B reads what is
+ * pending: the five lines on bits 0 and 4 to 7 (hikaru.cpp, the interrupt
+ * controller), and on bits 1 to 3 what the chip itself puts on pins 4 to 6
+ * of port F. C is the mask of what reaches IRL2 of the main SH-4. */
 class MieBoard : public MieHost, public JvsInputs {
 public:
 	/* What the cabinet feeds the board (hikaru_host.hpp) */
