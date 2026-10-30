@@ -111,9 +111,12 @@ private:
 
 	/* The slot a texhead reads, if it reads one */
 	static bool slot_of(const odin_texhead_t &th, uint32_t &bank, size_t &index);
+	/* The texture held at that slot for the texhead; nullptr for none */
+	const Texture *find(const odin_texhead_t &th, uint32_t bank, size_t index) const;
 	static unsigned levels_of(const odin_texhead_t &th, Level (&levels)[MAX_LEVELS]);
 	static bool reads(const Texture &t, unsigned bank, uint32_t x, uint32_t y, uint32_t w, uint32_t h);
-	HostTexture decode(const odin_texhead_t &th) const;
+	/* Made from its levels (levels_of), all of them or the first alone */
+	HostTexture decode(const odin_texhead_t &th, const Level (&levels)[MAX_LEVELS], uint32_t all_levels) const;
 	std::vector<uint16_t> decode_i4(uint32_t bank, uint32_t w, uint32_t h,
 	                                uint32_t x0, uint32_t y0) const;
 	void clear_bank(unsigned bank);

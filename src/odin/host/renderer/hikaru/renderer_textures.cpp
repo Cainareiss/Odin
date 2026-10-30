@@ -182,11 +182,9 @@ TextureCache::reads(const Texture &t, unsigned bank, uint32_t x, uint32_t y, uin
 }
 
 HostTexture
-TextureCache::decode(const odin_texhead_t &th) const
+TextureCache::decode(const odin_texhead_t &th, const Level (&levels)[MAX_LEVELS], uint32_t all_levels) const
 {
 	const uint32_t format = odin_tex_format(&th);
-	Level levels[MAX_LEVELS];
-	const uint32_t all_levels = levels_of(th, levels);
 	const uint32_t num_levels = m_no_mipmaps ? 1 : all_levels;
 	Texels texels;
 
@@ -243,18 +241,22 @@ TextureCache::slot_of(const odin_texhead_t &th, uint32_t &bank, size_t &index)
 	return true;
 }
 
+const TextureCache::Texture *
+TextureCache::find(const odin_texhead_t &th, uint32_t bank, size_t index) const
+{
+	for (const Texture &held : m_slots[bank][index])
+		if (same_texture(th, held.th))
+			return &held;
+	return nullptr;
+}
+
 bool
 TextureCache::holds(const odin_texhead_t &th) const
 {
 	uint32_t bank;
 	size_t index;
 
-	if (!slot_of(th, bank, index))
-		return true;
-	for (const Texture &held : m_slots[bank][index])
-		if (same_texture(th, held.th))
-			return true;
-	return false;
+	return !slot_of(th, bank, index) || find(th, bank, index);
 }
 
 HostTexture
@@ -266,14 +268,16 @@ TextureCache::get(const odin_texhead_t &th)
 	if (!slot_of(th, bank, index))
 		return {};
 
+	if (const Texture *const held = find(th, bank, index))
+		return held->id;
+
 	Slot &slot = m_slots[bank][index];
-	for (const Texture &held : slot)
-		if (same_texture(th, held.th))
-			return held.id;
+	Level levels[MAX_LEVELS]{};
+	const unsigned all_levels = levels_of(th, levels);
 
 	if (m_log)
 		std::fprintf(m_log, "\tHR: TEXUPLOAD %s\n", odin_texhead_str(&th));
-	const HostTexture texture = decode(th);
+	const HostTexture texture = decode(th, levels, all_levels);
 	if (!texture.id)
 		return {};
 
@@ -282,9 +286,9 @@ TextureCache::get(const odin_texhead_t &th)
 
 		used.insert(std::lower_bound(used.begin(), used.end(), index), static_cast<uint32_t>(index));
 	}
-	Texture &held = slot.emplace_back(Texture{texture, th, 0, {}});
+	Texture &held = slot.emplace_back(Texture{texture, th, all_levels, {}});
 
-	held.num_levels = levels_of(th, held.levels);
+	std::copy(std::begin(levels), std::end(levels), held.levels);
 	return texture;
 }
 
