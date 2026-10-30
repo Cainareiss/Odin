@@ -132,14 +132,11 @@ public:
 	/* A program that waits goes round a loop, and every turn reads the
 	 * same things and leaves the registers and the memory as they were,
 	 * but for one word it may count its turns in; or a few turns do, one
-	 * after the other, and make one. With this on, such a
-	 * turn is run once, then only counted for as long as what it read
-	 * stays the same; and once the program has left it, for an interrupt
-	 * say, it is counted again as soon as the program is back where it
-	 * left it, or at its start, with everything it read as it was. The
-	 * machine must then call ram_write() before it changes the plain
-	 * memory itself, ram_read() before it reads it, settle() before it
-	 * saves the state, and its bus must peek() without side effects. */
+	 * after the other, and make one. With this on, such a turn is run
+	 * once, then only counted (arm7.cpp, before set_turn_replay, says
+	 * when). The machine must then call ram_write() before it changes the
+	 * plain memory itself, ram_read() before it reads it, settle() before
+	 * it saves the state, and its bus must peek() without side effects. */
 	void set_turn_replay(bool on);
 	void ram_read(uint32_t addr, uint32_t size);
 	void ram_write(uint32_t addr, uint32_t size);
