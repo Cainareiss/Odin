@@ -109,6 +109,11 @@ public:
 	static constexpr unsigned KEPT = 5;
 	/* A kept picture as read_kept() gives it: RGBA at the size of the screen */
 	static constexpr size_t PICTURE_SIZE = size_t{SCREEN_WIDTH} * SCREEN_HEIGHT * 4;
+	/* Bytes of a node_t of the shaders: a translucent fragment in its list */
+	static constexpr unsigned NODE_SIZE = 32;
+	/* Where the count of the fragments of a view is kept, for the list of
+	 * a picture of the pipe */
+	static constexpr unsigned count_index(unsigned slot, unsigned view) { return slot * ODIN_VIEWPORTS + view; }
 
 	/* With OpenGL, on the thread its context is current on; with Vulkan,
 	 * on that card (vk_common.hpp) */

@@ -42,11 +42,9 @@ namespace odin {
 
 namespace {
 
-/* Bytes of a node_t of the shaders */
-constexpr VkDeviceSize NODE_SIZE = 32;
 /* Where the processor reads the counts: those of the three last lists,
  * eight views each, then the one read now */
-constexpr uint32_t COUNT_NOW = 3 * 8;
+constexpr uint32_t COUNT_NOW = 3 * ODIN_VIEWPORTS;
 
 /* The last fragment of each pixel: emptied, then written and read by the
  * fragment shaders */
@@ -71,7 +69,7 @@ VkDrawing::build_lists()
 	m_sorter = m_card.make_pass(ODIN_SPIRV_OF(whole_picture_vert), ODIN_SPIRV_OF(sort_frag), sort, 0,
 	                            VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, PICTURE_FORMAT);
 	m_count_stride = std::max<VkDeviceSize>(m_card.limits().minStorageBufferOffsetAlignment, 4);
-	m_counts = m_card.make_card_buffer(8 * m_count_stride, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+	m_counts = m_card.make_card_buffer(ODIN_VIEWPORTS * m_count_stride, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
 	                                                               VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
 	                                                               VK_BUFFER_USAGE_TRANSFER_DST_BIT);
 	m_readback = m_card.make_buffer((COUNT_NOW + 1) * sizeof(uint32_t), VK_BUFFER_USAGE_TRANSFER_DST_BIT);
@@ -110,12 +108,14 @@ VkDrawing::build_list_pictures()
 void
 VkDrawing::size_fragments(uint32_t max)
 {
+	const VkDeviceSize bytes = VkDeviceSize{std::max(max, 1u)} * NODE_SIZE;
+
 	if (m_nodes.buffer) {
 		vk::Buffer old = m_nodes;
 
 		m_card.later([card = &m_card, old]() mutable { card->destroy_buffer(old); });
 	}
-	m_nodes = m_card.make_card_buffer(std::max(max, 1u) * NODE_SIZE, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+	m_nodes = m_card.make_card_buffer(bytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
 }
 
 uint32_t
@@ -224,7 +224,7 @@ VkDrawing::keep_count(unsigned view, unsigned slot)
 	if (!m_card.primitive_ids())
 		return;
 	const VkCommandBuffer cb = m_card.commands();
-	const VkBufferCopy copy{ view * m_count_stride, (slot * 8 + view) * sizeof(uint32_t), sizeof(uint32_t) };
+	const VkBufferCopy copy{ view * m_count_stride, count_index(slot, view) * sizeof(uint32_t), sizeof(uint32_t) };
 
 	m_fn.vkCmdCopyBuffer(cb, m_counts.buffer, m_readback.buffer, 1, &copy);
 	m_card.memory_barrier(cb, VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
@@ -299,12 +299,12 @@ VkDrawing::counted_fragments(unsigned slot, uint32_t views)
 		m_card.wait_sent(m_counted[slot]);
 		m_counted[slot] = 0;
 	}
-	for (unsigned vpi = 0; vpi < 8; vpi++) {
+	for (unsigned vpi = 0; vpi < ODIN_VIEWPORTS; vpi++) {
 		uint32_t count;
 
 		if (!(views & (1u << vpi)))
 			continue;
-		std::memcpy(&count, m_readback.bytes + (slot * 8 + vpi) * sizeof(uint32_t), sizeof(count));
+		std::memcpy(&count, m_readback.bytes + count_index(slot, vpi) * sizeof(uint32_t), sizeof(count));
 		used = std::max(used, count);
 	}
 	return used;

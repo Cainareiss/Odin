@@ -243,7 +243,7 @@ private:
 		GLuint program;		/* blends them */
 		GLuint heads, heads_fb;	/* the last one of each pixel */
 		GLuint nodes;
-		GLuint count[24];	/* one per viewport of each list of the pipe */
+		GLuint count[3 * ODIN_VIEWPORTS];	/* one per viewport of each list of the pipe */
 		/* Their copy where the processor reads them, with
 		 * ARB_buffer_storage, else 0 and nullptr */
 		GLuint readback;

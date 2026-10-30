@@ -42,8 +42,6 @@ namespace odin {
 
 namespace {
 
-/* Bytes of a node_t of the shaders */
-constexpr GLsizeiptr NODE_SIZE = 32;
 /* The texture unit of the colour below the fragments */
 constexpr GLenum UNIT_BELOW = 5;
 constexpr GLenum UNIT_PEEL_COLOR = 10, UNIT_PEEL_LAYER = 11, UNIT_PEEL_INFO = 12;
@@ -286,7 +284,7 @@ GlDrawing::begin_collect(unsigned view, unsigned slot)
 		return;
 	}
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, m_lists.nodes);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, m_lists.count[slot * 8 + view]);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, m_lists.count[count_index(slot, view)]);
 	glBindFramebuffer(GL_FRAMEBUFFER, m_lists.heads_fb);
 	glDisable(GL_SCISSOR_TEST);
 	glClearBufferuiv(GL_COLOR, 0, zero);
@@ -317,9 +315,9 @@ GlDrawing::keep_count(unsigned view, unsigned slot)
 	if (m_peel.on)
 		return;
 	if (m_lists.counts) {
-		const GLintptr at = static_cast<GLintptr>((slot * 8 + view) * sizeof(GLuint));
+		const GLintptr at = static_cast<GLintptr>(count_index(slot, view) * sizeof(GLuint));
 
-		glBindBuffer(GL_COPY_READ_BUFFER, m_lists.count[slot * 8 + view]);
+		glBindBuffer(GL_COPY_READ_BUFFER, m_lists.count[count_index(slot, view)]);
 		glBindBuffer(GL_COPY_WRITE_BUFFER, m_lists.readback);
 		glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, 0, at, sizeof(GLuint));
 		glBindBuffer(GL_COPY_READ_BUFFER, 0);
@@ -336,7 +334,7 @@ GlDrawing::count_now(unsigned view, unsigned slot)
 
 	if (m_peel.on)
 		return m_peel.draws.empty() ? 0 : 1;
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_lists.count[slot * 8 + view]);
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_lists.count[count_index(slot, view)]);
 	gl::read_buffer(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &used);
 	return used;
 }
@@ -396,8 +394,8 @@ GlDrawing::counted_fragments(unsigned slot, uint32_t views)
 			gl::fatal("waiting for the count of the translucent fragments");
 		forget_counts(slot);
 	}
-	for (unsigned vpi = 0; vpi < 8; vpi++) {
-		const uint32_t at = slot * 8 + vpi;
+	for (unsigned vpi = 0; vpi < ODIN_VIEWPORTS; vpi++) {
+		const uint32_t at = count_index(slot, vpi);
 		GLuint count;
 
 		if (!(views & (1u << vpi)))
