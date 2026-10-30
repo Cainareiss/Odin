@@ -149,6 +149,47 @@ declared(const std::string &source, std::vector<std::pair<std::string, float>> &
 	}
 }
 
+namespace {
+/* What a pass draws: read as the next pass says, with its own wrap; at
+ * what scale */
+void
+read_drawing(const std::map<std::string, std::string> &keys, int i, Plan::Pass &pass)
+{
+	const std::string n = std::to_string(i);
+	const std::string wrap = key_or(keys, "wrap_mode" + n, "");
+
+	pass.linear = key_on(keys, "filter_linear" + std::to_string(i + 1));
+	pass.is_float = key_on(keys, "float_framebuffer" + n);
+	pass.wrap = wrap == "repeat" ? Plan::Wrap::REPEAT : wrap == "mirrored_repeat" ? Plan::Wrap::MIRRORED :
+	            wrap == "clamp_to_edge" ? Plan::Wrap::EDGE : Plan::Wrap::BORDER;
+	for (size_t axis = 0; axis < 2; axis++) {
+		const std::string ax = axis ? "y" : "x";
+		const std::string type = key_or(keys, "scale_type" + n, key_or(keys, "scale_type_" + ax + n, "source"));
+
+		pass.scale_type[axis] = type == "viewport" ? Plan::Scale::VIEWPORT :
+		                        type == "absolute" ? Plan::Scale::ABSOLUTE : Plan::Scale::SOURCE;
+		pass.scale[axis] = std::strtof(key_or(keys, "scale" + n, key_or(keys, "scale_" + ax + n, "1.0")).c_str(),
+		                               nullptr);
+	}
+}
+
+/* The values the preset sets */
+void
+read_values(const std::map<std::string, std::string> &keys, Plan &plan)
+{
+	for (std::string names = key_or(keys, "parameters", ""); !names.empty();) {
+		const size_t end = names.find(';');
+		const std::string name = names.substr(0, end);
+
+		for (auto &[have, value] : plan.parameters)
+			if (have == name)
+				value = std::strtof(key_or(keys, name, "0").c_str(), nullptr);
+		names = end == std::string::npos ? std::string() : names.substr(end + 1);
+	}
+}
+
+} /* namespace */
+
 std::optional<Plan>
 read_plan(const std::string &preset)
 {
@@ -172,7 +213,6 @@ read_plan(const std::string &preset)
 	plan.passes.resize(static_cast<size_t>(count));
 	for (int i = 0; i < count; i++) {
 		const std::string n = std::to_string(i);
-		const std::string wrap = key_or(keys, "wrap_mode" + n, "");
 		Plan::Pass &pass = plan.passes[static_cast<size_t>(i)];
 
 		pass.file = (folder / key_or(keys, "shader" + n, "")).string();
@@ -182,20 +222,7 @@ read_plan(const std::string &preset)
 			return std::nullopt;
 		}
 		declared(pass.source, plan.parameters);
-		/* What it draws: read as the next pass says, with its own wrap */
-		pass.linear = key_on(keys, "filter_linear" + std::to_string(i + 1));
-		pass.is_float = key_on(keys, "float_framebuffer" + n);
-		pass.wrap = wrap == "repeat" ? Plan::Wrap::REPEAT : wrap == "mirrored_repeat" ? Plan::Wrap::MIRRORED :
-		            wrap == "clamp_to_edge" ? Plan::Wrap::EDGE : Plan::Wrap::BORDER;
-		for (size_t axis = 0; axis < 2; axis++) {
-			const std::string ax = axis ? "y" : "x";
-			const std::string type = key_or(keys, "scale_type" + n, key_or(keys, "scale_type_" + ax + n, "source"));
-
-			pass.scale_type[axis] = type == "viewport" ? Plan::Scale::VIEWPORT :
-			                        type == "absolute" ? Plan::Scale::ABSOLUTE : Plan::Scale::SOURCE;
-			pass.scale[axis] = std::strtof(key_or(keys, "scale" + n, key_or(keys, "scale_" + ax + n, "1.0")).c_str(),
-			                               nullptr);
-		}
+		read_drawing(keys, i, pass);
 	}
 
 	const Plan::Pass &last = plan.passes.back();
@@ -204,16 +231,7 @@ read_plan(const std::string &preset)
 		std::fprintf(stderr, "ERROR: filter: the last pass of '%s' has a scale: not taken\n", preset.c_str());
 		return std::nullopt;
 	}
-	/* The values the preset sets */
-	for (std::string names = key_or(keys, "parameters", ""); !names.empty();) {
-		const size_t end = names.find(';');
-		const std::string name = names.substr(0, end);
-
-		for (auto &[have, value] : plan.parameters)
-			if (have == name)
-				value = std::strtof(key_or(keys, name, "0").c_str(), nullptr);
-		names = end == std::string::npos ? std::string() : names.substr(end + 1);
-	}
+	read_values(keys, plan);
 	return plan;
 }
 
