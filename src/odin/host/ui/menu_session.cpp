@@ -183,12 +183,32 @@ MenuSession::MenuSession(const Options &options, Display &display, Keyboard &key
 	               !options.sound ? "set on the command line: -o off" :
 	               !audio && !m_listing ? "no sound device" : nullptr;
 	state.library = !game;
-	state.games = games.titles("hikaru");
-	for (const auto &[name, title] : state.games) {
-		const bool runs = game && name == game->name;
-		const std::optional<Game> other = runs ? std::nullopt : games.describe(name);
+	fill_games();
+	read_menu_settings();
+	state.shown = state.running = state.games.size();
+	for (size_t g = 0; g < state.games.size(); g++)
+		if (board && state.games[g].first == board->game_name())
+			state.shown = state.running = g;
+	/* The BIOS alone, or no game: the page Input shows the first one */
+	if (state.running == state.games.size())
+		show_game(0);
+	take_card();
+}
 
-		const Game *const described = runs ? game : other ? &*other : nullptr;
+/* Each game of the list: the ones whose optional sound board the user may
+ * hear, as the cabinet plays it unless the settings or -o say; whether it
+ * links cabinets */
+void
+MenuSession::fill_games()
+{
+	MenuState &state = m_menu_state;
+
+	state.games = m_games.titles("hikaru");
+	for (const auto &[name, title] : state.games) {
+		const bool runs = m_game && name == m_game->name;
+		const std::optional<Game> other = runs ? std::nullopt : m_games.describe(name);
+
+		const Game *const described = runs ? m_game : other ? &*other : nullptr;
 
 		state.game_links.push_back(described && described->link.cabinets);
 		if (!described || !(described->option_speakers || described->option_vibration))
@@ -200,19 +220,27 @@ MenuSession::MenuSession(const Options &options, Display &display, Keyboard &key
 		SoundGame sound = { name, title, cabinet, cabinet, 0.0f, 0.0f, false };
 
 		sound.level = sound.standard = static_cast<float>(described->option_level);
-		for (const auto &[key, value] : settings.section("sound." + name)) {
+		for (const auto &[key, value] : m_settings.section("sound." + name)) {
 			if (key == "mode" && mode_named(value))
 				sound.played = played_of(*mode_named(value));
 			else if (key == "option_level" && level_named(value))
 				sound.level = static_cast<float>(*level_named(value));
 		}
-		if (runs && options.sound_asked) {
-			sound.played = options.sound ? played_of(*options.sound) : -1;
+		if (runs && m_options.sound_asked) {
+			sound.played = m_options.sound ? played_of(*m_options.sound) : -1;
 			sound.locked = true;
 		}
 		state.sound_games.push_back(sound);
 	}
-	for (const auto &[key, value] : settings.section("menu")) {
+}
+
+/* [menu] of odin.ini */
+void
+MenuSession::read_menu_settings()
+{
+	MenuState &state = m_menu_state;
+
+	for (const auto &[key, value] : m_settings.section("menu")) {
 		if (key == "classic" && on_off_named(value))
 			state.classic = *on_off_named(value);
 		else if (key == "animations" && on_off_named(value))
@@ -222,23 +250,21 @@ MenuSession::MenuSession(const Options &options, Display &display, Keyboard &key
 		else if (!MenuNav::knows(key))
 			refuse_setting("menu", key, value);
 	}
-	state.shown = state.running = state.games.size();
-	for (size_t g = 0; g < state.games.size(); g++)
-		if (board && state.games[g].first == board->game_name())
-			state.shown = state.running = g;
-	/* The BIOS alone, or no game: the page Input shows the first one */
-	if (state.running == state.games.size())
-		show_game(0);
-	/* The card in hand: the one of the settings (ODIN_CARD_FILE first); new
-	 * cards, when the program of the game has what makes them */
-	if (game && board && board->card_reader()) {
-		if (const Von4Card maker(board->program()); maker.valid())
+}
+
+/* The card in hand: the one of the settings (ODIN_CARD_FILE first); new
+ * cards, when the program of the game has what makes them */
+void
+MenuSession::take_card()
+{
+	if (m_game && m_board && m_board->card_reader()) {
+		if (const Von4Card maker(m_board->program()); maker.valid())
 			m_card_keys = maker.keys();
 		list_cards();
-		for (const auto &[key, value] : settings.section("players." + game->name))
+		for (const auto &[key, value] : m_settings.section("players." + m_game->name))
 			if (key == "card" && !std::getenv("ODIN_CARD_FILE") &&
 			    std::find(m_cards.begin(), m_cards.end(), value) != m_cards.end())
-				board->card_reader()->choose(card_file(value));
+				m_board->card_reader()->choose(card_file(value));
 	}
 }
 

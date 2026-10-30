@@ -270,6 +270,9 @@ private:
 	void light_guns(const std::string &game, const std::vector<GameControl> &controls, std::vector<LightGun> &guns,
 	                std::array<std::string, 2> &gun, std::array<bool, 2> &sights) const;
 	void keep_binding(const Bindings::Line &line, const std::string &game = "");
+	void fill_games();
+	void read_menu_settings();
+	void take_card();
 	/* The cards in the folder of the game, by name; the file of one */
 	void list_cards();
 	std::string card_file(const std::string &name) const;
