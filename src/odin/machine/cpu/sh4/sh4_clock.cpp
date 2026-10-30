@@ -358,6 +358,31 @@ bool Sh4::clock_note(ClockTurn &turn)
 bool Sh4::clock_follow(ClockTurn &turn, std::vector<ClockStep> &steps)
 {
 	enum : uint8_t { NONE, INT, FLOAT, FLAG };
+	/* What an instruction of `order` makes of a value of type `in`: NONE
+	 * when the turn cannot follow it */
+	const auto type_after = [](Order order, uint8_t in) -> uint8_t {
+		switch (order) {
+		case Order::Same:
+			return in;
+		case Order::Add: case Order::Sub: case Order::Neg:
+		case Order::ShiftLeft: case Order::ShiftRight:
+			return in == INT ? INT : NONE;
+		case Order::ToFloat:
+			return in == INT ? FLOAT : NONE;
+		case Order::ToInt:
+			return in == FLOAT ? INT : NONE;
+		case Order::FMul: case Order::FAdd: case Order::FSub: case Order::FDiv: case Order::FNeg:
+			return in == FLOAT ? FLOAT : NONE;
+		case Order::Above: case Order::AtLeast: case Order::Greater: case Order::GreaterEq:
+		case Order::NotNegative: case Order::Positive:
+			return in == INT ? FLAG : NONE;
+		case Order::FGreater:
+			return in == FLOAT ? FLAG : NONE;
+		case Order::None:
+			break;
+		}
+		return NONE;
+	};
 	const std::vector<ClockAccess> &reads = m_clock_note.reads;
 	uint64_t timed = 0, seen = 0, live = 0;
 	uint8_t type[USE_COUNT] = {};
@@ -402,36 +427,8 @@ bool Sh4::clock_follow(ClockTurn &turn, std::vector<ClockStep> &steps)
 				s.role = ClockRole::Choice;
 				s.t = s.before.t;
 			} else {
-				const uint8_t in = type[s.from];
-				uint8_t out = NONE;
+				const uint8_t out = type_after(u.order, type[s.from]);
 
-				switch (u.order) {
-				case Order::Same:
-					out = in;
-					break;
-				case Order::Add: case Order::Sub: case Order::Neg:
-				case Order::ShiftLeft: case Order::ShiftRight:
-					out = in == INT ? INT : NONE;
-					break;
-				case Order::ToFloat:
-					out = in == INT ? FLOAT : NONE;
-					break;
-				case Order::ToInt:
-					out = in == FLOAT ? INT : NONE;
-					break;
-				case Order::FMul: case Order::FAdd: case Order::FSub: case Order::FDiv: case Order::FNeg:
-					out = in == FLOAT ? FLOAT : NONE;
-					break;
-				case Order::Above: case Order::AtLeast: case Order::Greater: case Order::GreaterEq:
-				case Order::NotNegative: case Order::Positive:
-					out = in == INT ? FLAG : NONE;
-					break;
-				case Order::FGreater:
-					out = in == FLOAT ? FLAG : NONE;
-					break;
-				case Order::None:
-					break;
-				}
 				if (out == NONE || !std::has_single_bit(u.writes)) {
 					return false;
 				}
