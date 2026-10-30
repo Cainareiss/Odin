@@ -183,12 +183,14 @@ MenuSession::MenuSession(const Options &options, Display &display, Keyboard &key
 	               !options.sound ? "set on the command line: -o off" :
 	               !audio && !m_listing ? "no sound device" : nullptr;
 	state.library = !game;
-	for (const auto &[name, title] : games.titles("hikaru")) {
+	state.games = games.titles("hikaru");
+	for (const auto &[name, title] : state.games) {
 		const bool runs = game && name == game->name;
 		const std::optional<Game> other = runs ? std::nullopt : games.describe(name);
 
 		const Game *const described = runs ? game : other ? &*other : nullptr;
 
+		state.game_links.push_back(described && described->link.cabinets);
 		if (!described || !(described->option_speakers || described->option_vibration))
 			continue;
 
@@ -209,12 +211,6 @@ MenuSession::MenuSession(const Options &options, Display &display, Keyboard &key
 			sound.locked = true;
 		}
 		state.sound_games.push_back(sound);
-	}
-	state.games = games.titles("hikaru");
-	for (const auto &[name, title] : state.games) {
-		const std::optional<Game> listed = games.describe(name);
-
-		state.game_links.push_back(listed && listed->link.cabinets);
 	}
 	for (const auto &[key, value] : settings.section("menu")) {
 		if (key == "classic" && on_off_named(value))
