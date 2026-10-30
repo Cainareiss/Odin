@@ -76,27 +76,21 @@ VkDrawing::keep_set(KeptSets &sets)
 {
 	constexpr uint32_t SETS = 1024;
 	KeptSet kept;
+	const auto allocate = [&](VkDescriptorPool pool) {
+		const VkDescriptorSetAllocateInfo info{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO, nullptr, pool, 1,
+		                                        &sets.layout };
 
-	if (!sets.pools.empty()) {
-		const VkDescriptorSetAllocateInfo allocate{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO, nullptr,
-		                                            sets.pools.back(), 1, &sets.layout };
+		kept.pool = pool;
+		return m_fn.vkAllocateDescriptorSets(m_card.device(), &info, &kept.set);
+	};
 
-		if (m_fn.vkAllocateDescriptorSets(m_card.device(), &allocate, &kept.set) == VK_SUCCESS) {
-			kept.pool = sets.pools.back();
-			return kept;
-		}
-	}
+	if (!sets.pools.empty() && allocate(sets.pools.back()) == VK_SUCCESS)
+		return kept;
 	/* The last pool is full: the sets freed in the others are taken
 	 * again from them first */
-	for (const VkDescriptorPool pool : sets.pools) {
-		const VkDescriptorSetAllocateInfo allocate{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO, nullptr, pool, 1,
-		                                            &sets.layout };
-
-		if (m_fn.vkAllocateDescriptorSets(m_card.device(), &allocate, &kept.set) == VK_SUCCESS) {
-			kept.pool = pool;
+	for (size_t i = 0; i + 1 < sets.pools.size(); i++)
+		if (allocate(sets.pools[i]) == VK_SUCCESS)
 			return kept;
-		}
-	}
 
 	const VkDescriptorPoolSize size{ sets.type, SETS };
 	const VkDescriptorPoolCreateInfo info{ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO, nullptr,
@@ -105,10 +99,7 @@ VkDrawing::keep_set(KeptSets &sets)
 
 	m_card.check(m_fn.vkCreateDescriptorPool(m_card.device(), &info, nullptr, &pool), "a descriptor pool");
 	sets.pools.push_back(pool);
-	const VkDescriptorSetAllocateInfo allocate{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO, nullptr, pool, 1,
-	                                            &sets.layout };
-	m_card.check(m_fn.vkAllocateDescriptorSets(m_card.device(), &allocate, &kept.set), "a descriptor set");
-	kept.pool = pool;
+	m_card.check(allocate(pool), "a descriptor set");
 	return kept;
 }
 
