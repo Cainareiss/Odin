@@ -53,6 +53,26 @@ namespace odin {
 
 namespace {
 
+/* A file of the data of Odin, as "shaders/<game>.txt": where the list of
+ * the games is, else with the program, else in the data of Odin in the home
+ * of the user; empty when it is in none */
+std::string
+find_data_file(const std::string &name)
+{
+	const std::string home = home_dir();
+	std::error_code error;
+	std::vector<std::string> paths = { name };
+
+	for (const std::string &folder : program_data_folders())
+		paths.push_back(folder + "/" + name);
+	if (!home.empty())
+		paths.push_back(home + "/.local/share/odin/" + name);
+	for (const std::string &path : paths)
+		if (std::filesystem::exists(path, error))
+			return path;
+	return {};
+}
+
 /* The lists of the mesh programs of a game (read_program_list): the one that
  * comes with Odin, in shaders/ where the list of the games is, and the one
  * kept for the user, in the cache of their home (in cache/ beside a portable
@@ -69,18 +89,7 @@ find_program_lists(const std::string &game, std::string &seed, std::string &kept
 
 	kept.clear();
 	made.clear();
-	seed.clear();
-	std::vector<std::string> seeds = { "shaders/" + game + ".txt" };
-
-	for (const std::string &folder : program_data_folders())
-		seeds.push_back(folder + "/shaders/" + game + ".txt");
-	if (!home.empty())
-		seeds.push_back(home + "/.local/share/odin/shaders/" + game + ".txt");
-	for (const std::string &path : seeds)
-		if (std::filesystem::exists(path, error)) {
-			seed = path;
-			break;
-		}
+	seed = find_data_file("shaders/" + game + ".txt");
 
 	if (!portable.empty())
 		dir = portable + "/cache";
@@ -95,28 +104,19 @@ find_program_lists(const std::string &game, std::string &seed, std::string &kept
 	made = dir + "/programs";
 }
 
-/* The preset of a filter of the picture by its name: filters/<name>.glslp
- * where the list of the games is, else with the program, else in the data
- * of Odin in the home of the user; empty, said on stderr, when it is in
- * none */
+/* The preset of a filter of the picture by its name, filters/<name>.glslp
+ * (find_data_file); empty, said on stderr, when it is in none */
 std::string
 find_filter(const std::string &name)
 {
-	const std::string home = home_dir();
-	std::error_code error;
-	std::vector<std::string> paths = { "filters/" + name + ".glslp" };
-
 	if (name.empty())
 		return {};
-	for (const std::string &folder : program_data_folders())
-		paths.push_back(folder + "/filters/" + name + ".glslp");
-	if (!home.empty())
-		paths.push_back(home + "/.local/share/odin/filters/" + name + ".glslp");
-	for (const std::string &path : paths)
-		if (std::filesystem::exists(path, error))
-			return path;
-	std::fprintf(stderr, "ERROR: filter: '%s' not found (filters/%s.glslp)\n", name.c_str(), name.c_str());
-	return {};
+
+	const std::string path = find_data_file("filters/" + name + ".glslp");
+
+	if (path.empty())
+		std::fprintf(stderr, "ERROR: filter: '%s' not found (filters/%s.glslp)\n", name.c_str(), name.c_str());
+	return path;
 }
 
 /* Whether the point x, y of the square of 24 is inside the bold rune:
