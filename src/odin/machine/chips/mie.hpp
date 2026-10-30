@@ -268,6 +268,7 @@ private:
 	uint32_t resume(uint32_t cycles);
 	uint32_t bill(uint32_t done, uint32_t cycles);
 	uint32_t uart_end(uint32_t done, uint32_t cycles) const;
+	uint32_t turns_before_end(uint32_t done, uint32_t cycles, uint32_t turn) const;
 	uint8_t uart_lsr() const;
 	int counts_down(unsigned reg, uint16_t &dec_pc);
 	void log_once(bool &said, char rw, const char *space, uint32_t addr, uint32_t value);

@@ -1024,6 +1024,15 @@ void Mie::wait_mark(uint32_t done)
 	m_cpu.forget_refresh_read();
 }
 
+/* The whole turns of `turn` cycles from `done` that end before the call
+ * does, and before UART 1 can change what a turn that reads it reads */
+uint32_t Mie::turns_before_end(uint32_t done, uint32_t cycles, uint32_t turn) const
+{
+	const uint32_t end = m_wait.lsr ? uart_end(done, cycles) : cycles;
+
+	return end > done ? (end - done - 1) / turn : 0;
+}
+
 /* Back at the mark with the registers it had, R aside, and nothing written,
  * no port used and R not read since: only the memory was read, which nothing
  * changes before the end of the call, so every further turn is the same. The whole
@@ -1071,8 +1080,7 @@ uint32_t Mie::wait_check(uint32_t done, uint32_t cycles)
 			m_proof.cpu[0] = m_wait.regs;
 			return bill(done, cycles);
 		}
-		const uint32_t end = m_wait.lsr ? uart_end(done, cycles) : cycles;
-		const uint32_t turns = end > done ? (end - done - 1) / turn : 0;
+		const uint32_t turns = turns_before_end(done, cycles, turn);
 
 		counted = turns * turn;
 		tick(counted);
@@ -1083,9 +1091,8 @@ uint32_t Mie::wait_check(uint32_t done, uint32_t cycles)
 		/* A loop that counts down, by one a turn: whole turns, while its
 		 * DEC does not give 0 */
 		const unsigned r = static_cast<unsigned>(count);
-		const uint32_t end = m_wait.lsr ? uart_end(done, cycles) : cycles;
 		const uint32_t turns = std::min<uint32_t>(static_cast<uint8_t>(reg_of(now, r) - 1),
-		                                          end > done ? (end - done - 1) / turn : 0);
+		                                          turns_before_end(done, cycles, turn));
 		Z80State regs;
 
 		counted = turns * turn;
