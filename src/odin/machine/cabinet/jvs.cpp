@@ -313,36 +313,26 @@ int32_t JvsDevice::handle_message(std::span<const uint8_t> in, std::span<uint8_t
 	case IO_IDENTIFY: {
 		const char *id = device_id();
 		const size_t len = std::strlen(id) + 1;
-		out[0] = REPORT_NORMAL;
 		std::memcpy(out.data() + 1, id, len);
-		used = static_cast<uint32_t>(1 + len);
-		return 1;
+		return done(out, used, static_cast<int32_t>(len), 1);
 	}
 
 	case COMMAND_REVISION:
-		out[0] = REPORT_NORMAL;
 		out[1] = command_format_version();
-		used = 2;
-		return 1;
+		return done(out, used, 1, 1);
 
 	case JVS_REVISION:
-		out[0] = REPORT_NORMAL;
 		out[1] = jvs_standard_version();
-		used = 2;
-		return 1;
+		return done(out, used, 1, 1);
 
 	case COMM_VERSION:
-		out[0] = REPORT_NORMAL;
 		out[1] = comm_method_version();
-		used = 2;
-		return 1;
+		return done(out, used, 1, 1);
 
 	case FEATURE_CHECK: {
-		out[0] = REPORT_NORMAL;
 		const int32_t n = function_list(out.subspan(1));
 		out[1 + static_cast<uint32_t>(n)] = FUNC_END;
-		used = static_cast<uint32_t>(2 + n);
-		return 1;
+		return done(out, used, n + 1, 1);
 	}
 
 	case SWITCH_INPUTS: {
