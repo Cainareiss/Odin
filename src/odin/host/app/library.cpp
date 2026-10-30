@@ -228,8 +228,7 @@ library(const Options &command, const GameList &games, Settings &settings, const
 		if (state.play)
 			return { *state.play, {} };
 		if (state.choose != LibraryState::Folder::NONE) {
-			menus.ask_folder(state.choose == LibraryState::Folder::ROMS ? MenuState::Folder::ROMS :
-			                                                                    MenuState::Folder::BIOS);
+			menus.ask_folder(state.choose);
 			state.choose = LibraryState::Folder::NONE;
 		}
 		state.choosing = menus.choosing();

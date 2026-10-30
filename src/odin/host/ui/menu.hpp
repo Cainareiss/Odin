@@ -60,6 +60,10 @@ struct MenuSlot {
  * separators, as its own dialogs give them; `none` when it is empty */
 std::string shown_path(const std::string &path, const char *none);
 
+/* A folder the library or the menu asks the system for (the library the
+ * first two only) */
+enum class MenuFolder { NONE, ROMS, BIOS, SAVES, STATES, ARTWORK };
+
 /* The library, what Odin shows when it starts without a game (as a double
  * click starts it): the games of the list, each with the files it lacks
  * (none: it can be played), the one chosen; the folders of the games and
@@ -79,7 +83,8 @@ struct LibraryState {
 	int selected = 0;
 	std::string roms, bios;
 	bool roms_given = false, bios_given = false;
-	enum class Folder { NONE, ROMS, BIOS } choose = Folder::NONE;
+	using Folder = MenuFolder;
+	Folder choose = Folder::NONE;
 	bool choosing = false;
 	std::optional<std::string> play;
 	std::string failed;
@@ -336,7 +341,8 @@ struct MenuState : BarSettings {
 	bool verbose_given = false;
 	/* A folder to ask the system for; its picker is open; the system has
 	 * none */
-	enum class Folder { NONE, ROMS, BIOS, SAVES, STATES, ARTWORK } choose = Folder::NONE;
+	using Folder = MenuFolder;
+	Folder choose = Folder::NONE;
 	bool choosing = false, no_picker = false;
 
 	/* Input: the games of the list (name, title), the one whose controls
