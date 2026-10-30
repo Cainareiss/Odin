@@ -55,10 +55,10 @@ namespace odin {
  * "Africa", two 315-6197 "Atlantis", 315-6085 "America" with the two texture
  * RAM chips 315-6084 "Australia"): the renderer stands for them.
  *
- * NOTE: there may be two command processors. Notice how there are a bunch
- * of symmetrical graphical-related ICs on the motherboard, and many MMIOs
- * contain mirrors that get filled with the same values plus an offset, for
- * instance 150000{18+,38+} and 1500007{4,8}.
+ * HYPOTHESIS, nothing relies on it: there may be two command processors.
+ * Many graphics chips of the board come in pairs, and many registers have
+ * a mirror filled with the same values plus an offset, as 150000{18+,38+}
+ * and 1500007{4,8}.
  *
  * There are two main boards, 837-13402 and 837-14097: the bootrom tells them
  * apart with bit 0 of register 15002000, see Antarctic::read_register.
