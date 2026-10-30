@@ -89,8 +89,6 @@ struct MeshVariant {
  * unread. */
 inline constexpr char PROGRAM_LIST_HEADER[] = "odin mesh programs 1\n";
 std::vector<uint64_t> read_program_list(const std::string &path);
-/* The file, open after its first line, or nullptr if it is not a list */
-std::FILE *open_program_list(const std::string &path);
 
 /* A list of programs kept up to date: the programs made from now on listed
  * in the file, after the ones it lists already; a new list where there is

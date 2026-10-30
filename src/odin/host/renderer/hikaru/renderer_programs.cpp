@@ -35,6 +35,9 @@
 
 namespace odin {
 
+namespace {
+
+/* The file, open after its first line, or nullptr if it is not a list */
 std::FILE *
 open_program_list(const std::string &path)
 {
@@ -49,6 +52,8 @@ open_program_list(const std::string &path)
 	}
 	return file;
 }
+
+} /* namespace */
 
 uint64_t
 MeshVariant::key() const
