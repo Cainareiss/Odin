@@ -41,6 +41,45 @@ namespace odin {
 
 namespace {
 
+/* Bytes written two hexadecimal figures each */
+std::optional<std::vector<uint8_t>>
+parse_hex(const char *text)
+{
+	const auto figure = [](char c) {
+		if (c >= '0' && c <= '9')
+			return c - '0';
+		if (c >= 'a' && c <= 'f')
+			return c - 'a' + 10;
+		if (c >= 'A' && c <= 'F')
+			return c - 'A' + 10;
+		return -1;
+	};
+	std::vector<uint8_t> bytes;
+
+	if (!text)
+		return std::nullopt;
+	for (const char *c = text; *c; c += 2) {
+		if (!c[1] || figure(c[0]) < 0 || figure(c[1]) < 0)
+			return std::nullopt;
+		bytes.push_back(static_cast<uint8_t>(figure(c[0]) << 4 | figure(c[1])));
+	}
+	return bytes;
+}
+
+/* A number of `bytes` bytes written in hexadecimal, most significant first */
+std::optional<uint32_t>
+parse_hex_number(const json_t *value, size_t bytes)
+{
+	const auto figures = parse_hex(json_string_value(value));
+	uint32_t number = 0;
+
+	if (!figures || figures->size() != bytes)
+		return std::nullopt;
+	for (uint8_t b : *figures)
+		number = number << 8 | b;
+	return number;
+}
+
 /* A file of a section: {"name": ..., "size": ..., "crc": "<8 hexadecimal
  * digits>", "set": ...}, the CRC and the set MAME keeps it in when the
  * list tells them */
@@ -58,12 +97,11 @@ file_of(const json_t *datum)
 	RomFiles::File file = { name, static_cast<uint64_t>(size), std::nullopt, set ? set : "" };
 
 	if (crc) {
-		char *end = nullptr;
-		const unsigned long value = std::strtoul(crc, &end, 16);
+		const std::optional<uint32_t> value = parse_hex_number(json_object_get(datum, "crc"), 4);
 
-		if (std::strlen(crc) != 8 || *end)
+		if (!value)
 			return std::nullopt;
-		file.crc = static_cast<uint32_t>(value);
+		file.crc = *value;
 	}
 	return file;
 }
@@ -176,31 +214,6 @@ parse_low(const json_t *value)
 		if (text && !std::strcmp(text, name))
 			return low;
 	return std::nullopt;
-}
-
-/* Bytes written two hexadecimal figures each */
-std::optional<std::vector<uint8_t>>
-parse_hex(const char *text)
-{
-	const auto figure = [](char c) {
-		if (c >= '0' && c <= '9')
-			return c - '0';
-		if (c >= 'a' && c <= 'f')
-			return c - 'a' + 10;
-		if (c >= 'A' && c <= 'F')
-			return c - 'A' + 10;
-		return -1;
-	};
-	std::vector<uint8_t> bytes;
-
-	if (!text)
-		return std::nullopt;
-	for (const char *c = text; *c; c += 2) {
-		if (!c[1] || figure(c[0]) < 0 || figure(c[1]) < 0)
-			return std::nullopt;
-		bytes.push_back(static_cast<uint8_t>(figure(c[0]) << 4 | figure(c[1])));
-	}
-	return bytes;
 }
 
 /* small letters, figures and _ */
@@ -339,20 +352,6 @@ parse_output(const json_t *output)
 		return out;
 	}
 	return std::nullopt;
-}
-
-/* A number of `bytes` bytes written in hexadecimal, most significant first */
-std::optional<uint32_t>
-parse_hex_number(const json_t *value, size_t bytes)
-{
-	const auto figures = parse_hex(json_string_value(value));
-	uint32_t number = 0;
-
-	if (!figures || figures->size() != bytes)
-		return std::nullopt;
-	for (uint8_t b : *figures)
-		number = number << 8 | b;
-	return number;
 }
 
 /* "link" of a game (Game::Link) */
