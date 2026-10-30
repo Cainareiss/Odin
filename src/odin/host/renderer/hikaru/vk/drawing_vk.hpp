@@ -182,6 +182,8 @@ private:
 
 	/* scene_vk.cpp */
 	void build_meshes();
+	void make_mesh_shaders();
+	void make_mesh_layout();
 	void destroy_meshes();
 	void open_scene(bool clear, bool clear_depth = false);
 	void open_family(unsigned family);

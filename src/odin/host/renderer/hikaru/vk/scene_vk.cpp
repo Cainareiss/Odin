@@ -134,6 +134,26 @@ VkDrawing::log(const char *fmt, ...) const
 void
 VkDrawing::build_meshes()
 {
+	make_mesh_shaders();
+	make_mesh_layout();
+
+	const VkDevice device = m_card.device();
+
+	m_none_set = image_set(m_none);
+	m_nearest_set = keep_set(m_sampler_sets);
+	const VkDescriptorImageInfo nearest{ m_nearest, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_UNDEFINED };
+	const VkWriteDescriptorSet write{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, m_nearest_set.set, 0, 0, 1,
+		                          VK_DESCRIPTOR_TYPE_SAMPLER, &nearest, nullptr, nullptr };
+	m_fn.vkUpdateDescriptorSets(device, 1, &write, 0, nullptr);
+
+	const VkPipelineCacheCreateInfo cache{ VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO, nullptr, 0, 0, nullptr };
+	m_card.check(m_fn.vkCreatePipelineCache(device, &cache, nullptr, &m_cache), "a pipeline cache");
+}
+
+/* The shaders of the meshes: those the card can run */
+void
+VkDrawing::make_mesh_shaders()
+{
 	const VkDevice device = m_card.device();
 	vk::Spirv code[5] = { ODIN_SPIRV_OF(mesh_vert), ODIN_SPIRV_OF(mesh_frag), ODIN_SPIRV_OF(mesh_collect_frag),
 		              ODIN_SPIRV_OF(mesh_geom), ODIN_SPIRV_OF(mesh_families_frag) };
@@ -160,6 +180,14 @@ VkDrawing::build_meshes()
 		                                     code[i].code };
 		m_card.check(m_fn.vkCreateShaderModule(device, &info, nullptr, modules[i]), "a mesh shader");
 	}
+}
+
+/* The sets of a list, of the textures, of the samplers, of the translucent
+ * fragments, and the layout of the meshes that takes them */
+void
+VkDrawing::make_mesh_layout()
+{
+	const VkDevice device = m_card.device();
 
 	/* The views, the modelviews, the lightsets */
 	const VkDescriptorSetLayoutBinding list[3] = {
@@ -197,16 +225,6 @@ VkDrawing::build_meshes()
 	const VkPipelineLayoutCreateInfo layout{ VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO, nullptr, 0, 4, sets, 1,
 	                                         &push };
 	m_card.check(m_fn.vkCreatePipelineLayout(device, &layout, nullptr, &m_mesh_layout), "the layout of the meshes");
-
-	m_none_set = image_set(m_none);
-	m_nearest_set = keep_set(m_sampler_sets);
-	const VkDescriptorImageInfo nearest{ m_nearest, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_UNDEFINED };
-	const VkWriteDescriptorSet write{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, m_nearest_set.set, 0, 0, 1,
-		                          VK_DESCRIPTOR_TYPE_SAMPLER, &nearest, nullptr, nullptr };
-	m_fn.vkUpdateDescriptorSets(device, 1, &write, 0, nullptr);
-
-	const VkPipelineCacheCreateInfo cache{ VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO, nullptr, 0, 0, nullptr };
-	m_card.check(m_fn.vkCreatePipelineCache(device, &cache, nullptr, &m_cache), "a pipeline cache");
 }
 
 /* The card is done with them: the frames were waited for. */
