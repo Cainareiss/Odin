@@ -243,7 +243,7 @@ MenuSession::fill_devices(MenuState &state)
 	/* The gamepads and the joysticks plugged in and their players; those of
 	 * a game that does not run as its settings would seat them */
 	const auto list = [this, &state](std::vector<MenuState::Plugged> &out, const std::vector<Controls::Plugged> &plugged,
-	                                 const char *keys) {
+	                                 const char *keys, bool pads) {
 		std::array<SDL_JoystickID, 2> seats{};
 
 		if (m_other) {
@@ -255,7 +255,7 @@ MenuSession::fill_devices(MenuState &state)
 					if (key == keys + std::to_string(player + 1))
 						wanted[player] = value.substr(0, value.find(' '));
 			for (const Controls::Plugged &one : plugged)
-				if (state.steers || keys[0] == 'p' || one.kind != SDL_JOYSTICK_TYPE_WHEEL)
+				if (state.steers || pads || one.kind != SDL_JOYSTICK_TYPE_WHEEL)
 					open.push_back({ one.id, one.guid });
 			seats = seat_pads(open, wanted, {}, {});
 		}
@@ -266,8 +266,8 @@ MenuSession::fill_devices(MenuState &state)
 			                one.connection, one.id });
 	};
 
-	list(state.plugged, m_controls.plugged(), "p");
-	list(state.joysticks, m_controls.joysticks(), "joy");
+	list(state.plugged, m_controls.plugged(), "p", true);
+	list(state.joysticks, m_controls.joysticks(), "joy", false);
 	/* A player without the device shown is shown on the keyboard */
 	for (unsigned player = 0; player < 2; player++) {
 		const std::vector<MenuState::Plugged> &shown =

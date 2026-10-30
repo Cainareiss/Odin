@@ -64,6 +64,8 @@ constexpr float DASH_OFF = 3.5f;
 constexpr float REST_ALPHA = 0.3f;
 constexpr float HOT_WIDTH = 1.8f;
 constexpr float DOT = 2.0f;
+/* The accent on the share of a chip an amount fills */
+constexpr float AMOUNT_ALPHA = 0.55f;
 /* A stick touched from there, a trigger from there */
 constexpr float STICK_TOUCHED = 0.3f;
 constexpr int16_t TRIGGER_TOUCHED = 6554;
@@ -1682,7 +1684,7 @@ list_box(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, I
 		               MenuKit::fitted(group.name, ca.x - at.x - kit.px(14.0f)).c_str());
 		if (group.amount > 0.01f) {
 			list->PushClipRect(ca, { ca.x + chip_w * group.amount, cb.y }, true);
-			list->AddRectFilled(ca, cb, MenuKit::alpha(palette.accent, 0.55f), (cb.y - ca.y) / 2.0f);
+			list->AddRectFilled(ca, cb, MenuKit::alpha(palette.accent, AMOUNT_ALPHA), (cb.y - ca.y) / 2.0f);
 			list->PopClipRect();
 		}
 		if (empty)
@@ -1973,7 +1975,7 @@ Menu::page_input(MenuKit &kit, MenuState &state) const
 		else if (state.nav.reset)
 			state.ask = MenuState::Ask::PART_DEFAULTS;
 	}
-	const float bottom = top.y + room.y - kit.px(4.0f);
+	const float bottom = top.y + room.y - kit.px(MenuKit::PAGE_FOOT);
 	const float split = wide ? top.x + (width - gap) * PAD_SHARE : top.x + width;
 	const ImVec2 a = { top.x, y }, b = { split, bottom };
 	/* The buttons at the bottom of the box, under a line (none while the
@@ -2019,7 +2021,7 @@ Menu::page_input(MenuKit &kit, MenuState &state) const
 		buttons_bar(kit, state, rows, { bar_at.x, bar_top }, bar_w, true);
 	}
 	ImGui::SetCursorScreenPos(top);
-	ImGui::Dummy({ width, room.y - kit.px(4.0f) });
+	ImGui::Dummy({ width, room.y - kit.px(MenuKit::PAGE_FOOT) });
 }
 
 /* What the page says at the bottom: the part caught, what to
@@ -2133,7 +2135,7 @@ Menu::input_foot(const MenuKit &kit, MenuState &state, ImVec2 at, float width, f
 
 		if (group.amount > 0.01f) {
 			list->PushClipRect(ca, { ca.x + chip_w * group.amount, cb.y }, true);
-			list->AddRectFilled(ca, cb, MenuKit::alpha(palette.accent, 0.55f), kit.px(5.0f));
+			list->AddRectFilled(ca, cb, MenuKit::alpha(palette.accent, AMOUNT_ALPHA), kit.px(5.0f));
 			list->PopClipRect();
 		}
 		list->AddRect(ca, cb, palette.stroke, kit.px(5.0f), ImDrawFlags_None, kit.stroke());

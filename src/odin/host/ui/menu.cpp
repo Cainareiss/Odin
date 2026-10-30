@@ -90,6 +90,9 @@ constexpr float LARGE_H = 540.0f;
 constexpr float SHARE = 0.88f;
 constexpr float CUT = 8.0f;
 constexpr float PADDING = 10.0f;
+/* The settings of the page Display, that wide at the least in points, show
+ * the sizes of the window whole, else their widths */
+constexpr float SIZES_WHOLE = 560.0f;
 /* The line under the tabs, of the accent of the palette: what it leaves
  * at each end of the width (it spans the row of the games under it), how
  * much of it fades in and out at each end, its opacity; how far under the
@@ -522,7 +525,7 @@ Menu::build(MenuState &state)
 		page_paths(kit, state);
 	else
 		page_about(kit);
-	ImGui::Dummy({ 0.0f, kit.px(4.0f) });
+	ImGui::Dummy({ 0.0f, kit.px(MenuKit::PAGE_FOOT) });
 	ImGui::EndChild();
 	ImGui::PopID();
 	m_focus.last = m_focus.count;
@@ -572,7 +575,7 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 	static constexpr double FADE_S = 0.15;
 	char about[160];
 	const ImVec2 top = ImGui::GetCursorScreenPos(), room = ImGui::GetContentRegionAvail();
-	const float gap = kit.px(14.0f), left = std::floor((room.x - gap) * SHARE), high = room.y - kit.px(4.0f);
+	const float gap = kit.px(14.0f), left = std::floor((room.x - gap) * SHARE), high = room.y - kit.px(MenuKit::PAGE_FOOT);
 	std::optional<int> pointed, framed;
 	/* A row, and whether the mouse or the frame is on it */
 	const auto watch = [&](int which, const auto &row) {
@@ -590,7 +593,7 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 	ImGui::SetCursorScreenPos({ top.x + left + gap, top.y });
 	ImGui::BeginChild("settings", { room.x - left - gap, high }, ImGuiChildFlags_None, ImGuiWindowFlags_NoBackground);
 
-	const bool narrow = ImGui::GetContentRegionAvail().x < kit.px(560.0f);
+	const bool narrow = ImGui::GetContentRegionAvail().x < kit.px(SIZES_WHOLE);
 
 	kit.begin_group("RENDERER");
 	kit.next_tip("Chosen by the system, not by Odin.");
@@ -769,7 +772,7 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 	if (kit.dropdown("Menu theme", nullptr, themes, theme))
 		state.theme = static_cast<unsigned>(theme);
 	kit.end_group();
-	ImGui::Dummy({ 0.0f, kit.px(4.0f) });
+	ImGui::Dummy({ 0.0f, kit.px(MenuKit::PAGE_FOOT) });
 	ImGui::EndChild();
 
 	/* The left, fading from what it showed to what it shows now */

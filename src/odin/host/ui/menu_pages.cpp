@@ -89,10 +89,10 @@ begin_settings(const MenuKit &kit, const Box &box, ImVec2 top, ImVec2 room)
 void
 end_settings(const MenuKit &kit, ImVec2 top, ImVec2 room)
 {
-	ImGui::Dummy({ 0.0f, kit.px(4.0f) });
+	ImGui::Dummy({ 0.0f, kit.px(MenuKit::PAGE_FOOT) });
 	ImGui::EndChild();
 	ImGui::SetCursorScreenPos(top);
-	ImGui::Dummy({ room.x, room.y - kit.px(4.0f) - ImGui::GetStyle().ItemSpacing.y });
+	ImGui::Dummy({ room.x, room.y - kit.px(MenuKit::PAGE_FOOT) - ImGui::GetStyle().ItemSpacing.y });
 }
 
 /* A text on as many lines as that width takes, each in its middle, from

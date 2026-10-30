@@ -176,6 +176,9 @@ public:
 	 * points */
 	static constexpr float BOX_CUT = 5.0f;
 	static constexpr float BOX_INSIDE = 8.0f;
+	/* The room under a page, in points, that every layout of a page
+	 * leaves (end_settings) */
+	static constexpr float PAGE_FOOT = 4.0f;
 
 	MenuKit(const MenuPalette &palette, float scale, MenuFocus *focus = nullptr)
 		: m_palette(palette), m_scale(scale), m_focus(focus)

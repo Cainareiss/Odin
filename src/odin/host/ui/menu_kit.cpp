@@ -53,6 +53,9 @@ constexpr float TEXT_LEAST = 120.0f;
 /* A tip goes on to the next line at that width, in heights of the font;
  * the mark of a row that has one, that far after its name in points */
 constexpr float TIP_EMS = 26.0f;
+/* The track of a slider, and the room between it and its value, in points */
+constexpr float TRACK_W = 64.0f;
+constexpr float TRACK_GAP = 8.0f;
 constexpr char ASK[] = "(?)";
 constexpr float ASK_GAP = 5.0f;
 /* What is left of a colour on a row that cannot change; of the action
@@ -1368,7 +1371,7 @@ MenuKit::track_size(const char *shown, const char *widest) const
 {
 	const float size = font(SMALL);
 
-	return { px(64.0f) + px(8.0f) + std::max(measure(shown, size), measure(widest, size)), ImGui::GetTextLineHeight() };
+	return { px(TRACK_W) + px(TRACK_GAP) + std::max(measure(shown, size), measure(widest, size)), ImGui::GetTextLineHeight() };
 }
 
 bool
@@ -1376,7 +1379,7 @@ MenuKit::track(ImVec2 at, float &value, float low, float high, float step, const
                bool still) const
 {
 	ImDrawList *const list = ImGui::GetWindowDrawList();
-	const float track_w = px(64.0f), track_h = px(6.0f), space = px(8.0f), size = font(SMALL);
+	const float track_w = px(TRACK_W), track_h = px(6.0f), space = px(TRACK_GAP), size = font(SMALL);
 	const float line = ImGui::GetTextLineHeight(), mid = at.y + line / 2.0f;
 	const ImVec2 a = { at.x, mid - track_h / 2.0f }, b = { a.x + track_w, a.y + track_h };
 	const float was = value;
