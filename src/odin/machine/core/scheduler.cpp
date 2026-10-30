@@ -27,14 +27,14 @@
 #include <cstdio>
 #include <cstdlib>
 
+#include "odin/common/stop_message.hpp"
+
 namespace odin {
 
 void Scheduler::fatal(const char *what, uint64_t value) const
 {
-	std::fprintf(stderr, "FATAL: scheduler at %llu: %s (%llu)\n",
-	             static_cast<unsigned long long>(m_now), what,
-	             static_cast<unsigned long long>(value));
-	std::abort();
+	stop_fatal("scheduler at %llu: %s (%llu)", static_cast<unsigned long long>(m_now), what,
+	           static_cast<unsigned long long>(value));
 }
 
 void Scheduler::reset()
