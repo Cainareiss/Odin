@@ -523,7 +523,9 @@ bool Sh4::write_slow(const Sh4Op *op, uint32_t addr, uint32_t size, uint64_t val
 {
 	int32_t bus = 0;
 
-	/* As if the page had not been watched */
+	/* As if the page had not been watched, before anything below counts
+	 * (the time, the cycles of the bus): the game runs the same whether
+	 * the renderer watches its pages or not */
 	if (!m_wr[addr >> PAGE_BITS] && unwatch(addr)) {
 		switch (size) {
 		case 1:
