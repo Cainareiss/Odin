@@ -512,6 +512,16 @@ Bindings::with_kind(const std::vector<HostInput> &inputs, const std::vector<Host
 Bindings::Bindings(const std::vector<GameControl> &panel, const Settings &settings, const std::string &game)
 	: m_panel(panel), m_controls(panel.size())
 {
+	set_defaults(game);
+	read_settings(settings, game);
+}
+
+/* The inputs of each control and of the cabinet when odin.ini says
+ * nothing, kept as such */
+void
+Bindings::set_defaults(const std::string &game)
+{
+	const std::vector<GameControl> &panel = m_panel;
 	/* The players with a sight: the mouse aims for them (player 2 with
 	 * their light gun) */
 	const std::array<bool, 2> aims = sights_of(panel);
@@ -537,6 +547,13 @@ Bindings::Bindings(const std::vector<GameControl> &panel, const Settings &settin
 		m_cabinet[r] = defaults(cabinet_role(r), 0);
 	m_defaults = m_controls;
 	m_cabinet_defaults = m_cabinet;
+}
+
+/* [controls.<game>]: what the user chose instead, line by line */
+void
+Bindings::read_settings(const Settings &settings, const std::string &game)
+{
+	const std::vector<GameControl> &panel = m_panel;
 
 	for (const auto &[key, value] : settings.section("controls." + game)) {
 		std::vector<HostInput> *target = nullptr;
@@ -584,6 +601,7 @@ Bindings::Bindings(const std::vector<GameControl> &panel, const Settings &settin
 			(input.is_axis() ? target : pedal_down)->push_back(input);
 	}
 }
+
 
 const std::vector<HostInput> &
 Bindings::cabinet(Role role) const

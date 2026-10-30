@@ -191,6 +191,9 @@ public:
 	                                        HostInput::Kind kind, bool to_defaults);
 
 private:
+	void set_defaults(const std::string &game);
+	void read_settings(const Settings &settings, const std::string &game);
+
 	std::vector<GameControl> m_panel;
 	/* As the settings leave them, and before them: the defaults */
 	std::vector<std::array<std::vector<HostInput>, 3>> m_controls, m_defaults;
