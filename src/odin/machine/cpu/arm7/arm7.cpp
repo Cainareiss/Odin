@@ -948,6 +948,8 @@ Arm7::Decoded *Arm7::decoded_page(uint32_t page)
 
 namespace {
 
+/* The slot of a banked register in a saved state: the map of bank_slot(),
+ * an illegal mode taking the user set without a note */
 uint32_t *state_slot(Arm7State &s, uint32_t mode, uint32_t idx)
 {
 	if (idx < 13) {
