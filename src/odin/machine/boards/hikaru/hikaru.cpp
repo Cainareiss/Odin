@@ -187,22 +187,6 @@ sh4_clock()
 	return static_cast<uint32_t>((mhz < 1 || mhz > 200) ? 200 : mhz) * 1000000u;
 }
 
-[[noreturn]] void
-fatal(const char *fmt, ...)
-{
-	char text[1024];
-	va_list args;
-
-	va_start(args, fmt);
-	std::vsnprintf(text, sizeof(text), fmt, args);
-	va_end(args);
-	std::fprintf(stderr, "FATAL: %s\n", text);
-	std::fflush(stderr);
-	if (stop_message)
-		stop_message(text);
-	std::abort();
-}
-
 /* The text at an offset of a ROM, as far as it goes */
 std::string
 text_at(std::span<const uint8_t> rom, size_t offs)
@@ -825,10 +809,10 @@ Hikaru::set_resets(uint8_t pins)
 	m_mie_port_d = pins;
 
 	if ((pins & 0xC0) != 0xC0)
-		fatal("The 24 kHz screen is not supported yet (video clock %u).\n"
-		      "DISPLAY MODE 24KHz was not kept: start the game again.", pins >> 6);
+		stop_fatal("The 24 kHz screen is not supported yet (video clock %u).\n"
+		           "DISPLAY MODE 24KHz was not kept: start the game again.", pins >> 6);
 	if (~pins & 0x09)
-		fatal("resets %02X asked on port D of the MIE, which are not implemented", ~pins & 0x09);
+		stop_fatal("resets %02X asked on port D of the MIE, which are not implemented", ~pins & 0x09);
 
 	set_gpu_reset_lines();
 
@@ -950,9 +934,10 @@ Hikaru::begin_frame()
 	m_lines_per_frame = lines;
 	m_lines_shown = shown;
 	if (m_dots_per_line != 818)
-		fatal("A screen of %u dots a line is not supported yet.\nOdin has only the 31 kHz one.", m_dots_per_line);
+		stop_fatal("A screen of %u dots a line is not supported yet.\nOdin has only the 31 kHz one.",
+		           m_dots_per_line);
 	if (m_lines_shown == 0 || m_lines_shown >= m_lines_per_frame)
-		fatal("a screen of %u lines with %u shown", m_lines_per_frame, m_lines_shown);
+		stop_fatal("a screen of %u lines with %u shown", m_lines_per_frame, m_lines_shown);
 
 	m_line = 0;
 	m_sched.set(EVENT_LINE, m_sched.now() + line_cycles());

@@ -26,12 +26,36 @@
 #ifndef ODIN_STOP_MESSAGE_HPP
 #define ODIN_STOP_MESSAGE_HPP
 
+#include <cstdarg>
+#include <cstdio>
+#include <cstdlib>
+
 namespace odin {
 
-/* What a board says when it cannot go on, before Odin quits (fatal): the
- * application shows it to the player when it set where to */
+/* What a board says when it cannot go on, before Odin quits (stop_fatal):
+ * the application shows it to the player when it set where to */
 using StopMessage = void (*)(const char *text);
 inline StopMessage stop_message = nullptr;
+
+/* The emulated machine cannot go on: why, on stderr after "FATAL: " and in
+ * the stop message, then Odin stops */
+[[noreturn]] inline void stop_fatal(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+
+[[noreturn]] inline void
+stop_fatal(const char *fmt, ...)
+{
+	char text[1024];
+	va_list args;
+
+	va_start(args, fmt);
+	std::vsnprintf(text, sizeof(text), fmt, args);
+	va_end(args);
+	std::fprintf(stderr, "FATAL: %s\n", text);
+	std::fflush(stderr);
+	if (stop_message)
+		stop_message(text);
+	std::abort();
+}
 
 } /* namespace odin */
 
