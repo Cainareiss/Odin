@@ -38,6 +38,8 @@
 #include <fcntl.h>
 #include <linux/input.h>
 #include <sys/ioctl.h>
+
+#include "odin/host/input/evdev_bits.hpp"
 #include <unistd.h>
 #endif
 
@@ -46,14 +48,6 @@ namespace odin {
 namespace {
 
 #ifdef __linux__
-constexpr size_t LONG_BITS = 8 * sizeof(unsigned long);
-
-bool
-has(const unsigned long *bits, unsigned bit)
-{
-	return (bits[bit / LONG_BITS] >> (bit % LONG_BITS)) & 1;
-}
-
 bool
 write_ff(int fd, uint16_t code, int32_t value)
 {
@@ -117,22 +111,22 @@ WheelForce::WheelForce(SDL_Joystick *joystick) : m_backend(std::make_unique<Back
 	/* The event node SDL reads the wheel from; HIDAPI and virtual
 	 * joysticks have none */
 	if (const char *const path = SDL_GetJoystickPath(joystick); path && std::strncmp(path, "/dev/input/", 11) == 0) {
-		unsigned long bits[(FF_CNT + LONG_BITS - 1) / LONG_BITS] = {};
+		unsigned long bits[longs_for(FF_MAX)] = {};
 		const int fd = ::open(path, O_RDWR | O_CLOEXEC);
 		ff_effect effect = constant(-1, 0);
 
 		if (fd < 0)
 			std::fprintf(stderr, "ERROR: wheel force: %s: %s\n", path, std::strerror(errno));
-		else if (ioctl(fd, EVIOCGBIT(EV_FF, sizeof(bits)), bits) < 0 || !has(bits, FF_CONSTANT) ||
+		else if (ioctl(fd, EVIOCGBIT(EV_FF, sizeof(bits)), bits) < 0 || !has_bit(bits, FF_CONSTANT) ||
 		         ioctl(fd, EVIOCSFF, &effect) < 0)
 			::close(fd);
 		else {
 			b.fd = fd;
 			b.effect = effect.id;
 			b.name = "evdev";
-			if (has(bits, FF_GAIN))
+			if (has_bit(bits, FF_GAIN))
 				write_ff(fd, FF_GAIN, 0xFFFF);
-			if (has(bits, FF_AUTOCENTER))
+			if (has_bit(bits, FF_AUTOCENTER))
 				write_ff(fd, FF_AUTOCENTER, 0);
 			write_ff(fd, static_cast<uint16_t>(b.effect), 1);
 		}

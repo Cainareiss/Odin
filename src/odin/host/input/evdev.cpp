@@ -28,6 +28,8 @@
 
 #include "odin/host/input/pointers.hpp"
 
+#include "odin/host/input/evdev_bits.hpp"
+
 #ifdef __linux__
 
 #include <algorithm>
@@ -47,17 +49,6 @@
 namespace odin {
 
 namespace {
-
-constexpr size_t LONG_BITS = 8 * sizeof(unsigned long);
-
-template <size_t N> using Bits = std::array<unsigned long, (N + LONG_BITS) / LONG_BITS>;
-
-template <size_t N>
-bool
-has(const Bits<N> &bits, unsigned bit)
-{
-	return (bits[bit / LONG_BITS] >> (bit % LONG_BITS)) & 1;
-}
 
 /* The bit of a button in Pointers::Aim, -1 for none: a touch is the left
  * button of a device that has none */
@@ -157,21 +148,20 @@ Pointers::Backend::open_node(const std::string &node)
 	if (fd < 0)
 		return;
 
-	Bits<EV_MAX> ev{};
-	Bits<KEY_MAX> key{};
-	Bits<ABS_MAX> abs{};
-	Bits<REL_MAX> rel{};
+	std::array<unsigned long, longs_for(EV_MAX)> ev{};
+	std::array<unsigned long, longs_for(KEY_MAX)> key{};
+	std::array<unsigned long, longs_for(ABS_MAX)> abs{};
+	std::array<unsigned long, longs_for(REL_MAX)> rel{};
 
 	ioctl(fd, EVIOCGBIT(0, sizeof(ev)), ev.data());
 	ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(key)), key.data());
 	ioctl(fd, EVIOCGBIT(EV_ABS, sizeof(abs)), abs.data());
 	ioctl(fd, EVIOCGBIT(EV_REL, sizeof(rel)), rel.data());
 
-	const bool left = has<KEY_MAX>(key, BTN_LEFT), pointer = left || has<KEY_MAX>(key, BTN_TOUCH);
-	const bool pad = !left && (has<KEY_MAX>(key, BTN_SOUTH) || has<KEY_MAX>(key, BTN_JOYSTICK) ||
-	                           has<KEY_MAX>(key, BTN_TRIGGER));
-	bool absolute = has<EV_MAX>(ev, EV_ABS) && has<ABS_MAX>(abs, ABS_X) && has<ABS_MAX>(abs, ABS_Y);
-	const bool relative = has<EV_MAX>(ev, EV_REL) && has<REL_MAX>(rel, REL_X) && has<REL_MAX>(rel, REL_Y);
+	const bool left = has_bit(key, BTN_LEFT), pointer = left || has_bit(key, BTN_TOUCH);
+	const bool pad = !left && (has_bit(key, BTN_SOUTH) || has_bit(key, BTN_JOYSTICK) || has_bit(key, BTN_TRIGGER));
+	bool absolute = has_bit(ev, EV_ABS) && has_bit(abs, ABS_X) && has_bit(abs, ABS_Y);
+	const bool relative = has_bit(ev, EV_REL) && has_bit(rel, REL_X) && has_bit(rel, REL_Y);
 	input_absinfo ax{}, ay{};
 
 	if (absolute && (ioctl(fd, EVIOCGABS(ABS_X), &ax) < 0 || ioctl(fd, EVIOCGABS(ABS_Y), &ay) < 0 ||
@@ -262,7 +252,7 @@ Pointers::Backend::resync(Entry &e)
 {
 	static constexpr uint16_t CODES[] = { BTN_LEFT, BTN_MIDDLE, BTN_RIGHT, BTN_SIDE, BTN_EXTRA, BTN_TOUCH, BTN_1,
 		                              BTN_2,    BTN_3,      BTN_4,     BTN_5,    BTN_6,     BTN_7,     BTN_8 };
-	Bits<KEY_MAX> key{};
+	std::array<unsigned long, longs_for(KEY_MAX)> key{};
 
 	if (e.device.absolute && ioctl(e.fd, EVIOCGABS(ABS_X), &e.abs_x) >= 0 &&
 	    ioctl(e.fd, EVIOCGABS(ABS_Y), &e.abs_y) >= 0) {
@@ -274,7 +264,7 @@ Pointers::Backend::resync(Entry &e)
 		return;
 	e.buttons = 0;
 	for (const uint16_t code : CODES)
-		if (const int bit = button_bit(code, e.touch_is_left); bit >= 0 && has<KEY_MAX>(key, code))
+		if (const int bit = button_bit(code, e.touch_is_left); bit >= 0 && has_bit(key, code))
 			e.buttons |= 1u << bit;
 	e.pressed |= e.buttons;
 }
