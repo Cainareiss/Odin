@@ -197,7 +197,7 @@ MenuSession::MenuSession(const Options &options, Display &display, Keyboard &key
 		/* As the cabinet: both boards in the speakers where it has
 		 * some for the optional one */
 		const int cabinet = described->option_speakers ? 1 : 0;
-		MenuState::SoundGame sound = { name, title, cabinet, cabinet, 0.0f, 0.0f, false };
+		SoundGame sound = { name, title, cabinet, cabinet, 0.0f, 0.0f, false };
 
 		sound.level = sound.standard = static_cast<float>(described->option_level);
 		for (const auto &[key, value] : settings.section("sound." + name)) {
@@ -659,9 +659,9 @@ MenuSession::fill_bar(BarState &bar) const
 	if ((m_audio || m_listing) && (bar.open || bar.devices.empty()))
 		bar.devices = AudioOut::devices();
 	bar.sound_games.clear();
-	for (const MenuState::SoundGame &game : state.sound_games)
+	for (const SoundGame &game : state.sound_games)
 		if (m_game && game.name == m_game->name)
-			bar.sound_games.push_back({ game.name, game.title, game.played, game.level, game.locked, game.later });
+			bar.sound_games.push_back(game);
 	bar.link_given = state.link_given;
 	bar.link_next = state.link_next;
 	fill_bar_inputs(bar);
@@ -768,16 +768,16 @@ MenuSession::do_bar(BarState &bar)
 	using Ask = BarState::Ask;
 	MenuState &state = m_menu_state;
 	/* The games of the bar among those of the menu, by name */
-	const auto sound_game = [&state](const BarState::SoundGame &game) -> MenuState::SoundGame * {
-		for (MenuState::SoundGame &one : state.sound_games)
+	const auto sound_game = [&state](const SoundGame &game) -> SoundGame * {
+		for (SoundGame &one : state.sound_games)
 			if (one.name == game.name)
 				return &one;
 		return nullptr;
 	};
 	bool sound = false;
 
-	for (const BarState::SoundGame &game : bar.sound_games)
-		if (const MenuState::SoundGame *const one = sound_game(game))
+	for (const SoundGame &game : bar.sound_games)
+		if (const SoundGame *const one = sound_game(game))
 			sound = sound || game.played != one->played || game.level != one->level;
 	if (sound || static_cast<const BarSettings &>(bar) != state || bar.custom_window != (state.custom_w != 0)) {
 		const MenuState was = state;
@@ -786,8 +786,8 @@ MenuSession::do_bar(BarState &bar)
 		/* A size chosen in the bar ends the one given by hand */
 		if (!bar.custom_window)
 			state.custom_w = state.custom_h = 0;
-		for (const BarState::SoundGame &game : bar.sound_games)
-			if (MenuState::SoundGame *const one = sound_game(game)) {
+		for (const SoundGame &game : bar.sound_games)
+			if (SoundGame *const one = sound_game(game)) {
 				one->played = game.played;
 				one->level = game.level;
 			}

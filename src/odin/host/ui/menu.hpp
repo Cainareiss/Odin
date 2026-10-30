@@ -102,6 +102,21 @@ struct LightGun {
 	bool present = false, aims = false;
 };
 
+/* A game whose optional sound board the user may hear, as the menu and the
+ * bar show it: how it is played (Menu::PLAYED: 0 the main board, 1 both on
+ * two channels, 2 the four channels apart; -1 another way the command line
+ * says, for the game that runs, which `locked` says) and how the cabinet
+ * plays it; the level of the optional board in the two channels and the
+ * one of the list, in dB. Four channels chosen for the game that runs on
+ * two, or two on four, wait for it to start again (`later`) */
+struct SoundGame {
+	std::string name, title;
+	int played, cabinet_played;
+	float level, standard;
+	bool locked;
+	bool later = false;
+};
+
 /* The settings the pages and the bar both change: MenuState has them, the
  * bar a copy (MenuSession::fill_bar), given back once changed there
  * (do_bar) */
@@ -179,16 +194,7 @@ struct BarState : BarSettings {
 	     vsync_locked = false;
 	std::string gpu;
 	/* The sound: the devices (read while a menu of the bar is open); the
-	 * game that runs when it has an optional sound board, how it plays it
-	 * (Menu::PLAYED), its level in dB */
-	struct SoundGame {
-		std::string name, title;
-		int played;
-		float level;
-		bool locked;
-		/* Its mode changed to or from Quad: the game must be reset */
-		bool later = false;
-	};
+	 * game that runs when it has an optional sound board */
 	std::vector<std::string> devices;
 	std::vector<SoundGame> sound_games;
 	/* The game that runs: its players (two in a game of two), the device
@@ -271,19 +277,7 @@ struct MenuState : BarSettings {
 	const char *silent = nullptr;
 	/* The games whose optional sound board the user may hear: those with
 	 * speakers for it on the cabinet, and Racer, whose cabinet has it shake
-	 * the panel. How they are played (0 the main board, 1 both on two
-	 * channels, 2 the four channels apart; -1 another way the command line
-	 * says, for the game that runs, which `locked` says) and how the cabinet
-	 * plays them; the level of the optional board in the two channels and
-	 * the one of the list, in dB. Four channels chosen for the game that
-	 * runs on two, or two on four, wait for it to start again (`later`) */
-	struct SoundGame {
-		std::string name, title;
-		int played, cabinet_played;
-		float level, standard;
-		bool locked;
-		bool later = false;
-	};
+	 * the panel */
 	std::vector<SoundGame> sound_games;
 
 	/* Hotkeys: the keys and the gamepad buttons of each action of Odin; the

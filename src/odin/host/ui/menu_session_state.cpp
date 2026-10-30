@@ -468,7 +468,7 @@ MenuSession::apply(const MenuState &was)
 		keep("sound", "background", on_off(now.background, true));
 	}
 	for (size_t g = 0; g < now.sound_games.size() && g < was.sound_games.size(); g++) {
-		const MenuState::SoundGame &game = now.sound_games[g], &before = was.sound_games[g];
+		const SoundGame &game = now.sound_games[g], &before = was.sound_games[g];
 		const std::string section = "sound." + game.name;
 		const bool runs = m_game && game.name == m_game->name && m_audio;
 

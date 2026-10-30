@@ -443,7 +443,7 @@ route_line(const MenuKit &kit, ImVec2 p, ImVec2 q, bool on, const std::string &l
  * its line. In a card with the game's name; its height, drawn when
  * `draw`. */
 float
-route_card(const MenuKit &kit, const MenuState::SoundGame &game, ImVec2 at, float width, bool draw)
+route_card(const MenuKit &kit, const SoundGame &game, ImVec2 at, float width, bool draw)
 {
 	ImDrawList *const list = ImGui::GetWindowDrawList();
 	const MenuPalette &palette = kit.palette();
@@ -492,7 +492,7 @@ route_cards(const MenuKit &kit, const MenuState &state, const Box &box)
 	for (const auto &[name, title] : state.games) {
 		bool two = false;
 
-		for (const MenuState::SoundGame &game : state.sound_games)
+		for (const SoundGame &game : state.sound_games)
 			two = two || game.name == name;
 		if (!two)
 			titles.push_back(title);
@@ -504,11 +504,11 @@ route_cards(const MenuKit &kit, const MenuState &state, const Box &box)
 
 	float all_h = titles.empty() ? -gap : centred({}, width, size, others.c_str(), 0);
 
-	for (const MenuState::SoundGame &game : state.sound_games)
+	for (const SoundGame &game : state.sound_games)
 		all_h += route_card(kit, game, {}, width, false) + gap;
 
 	in_box(kit, box, all_h, [&](float y) {
-		for (const MenuState::SoundGame &game : state.sound_games)
+		for (const SoundGame &game : state.sound_games)
 			y += route_card(kit, game, { x, y }, width, true) + gap;
 		if (!titles.empty())
 			centred({ x, y }, width, size, others.c_str(), kit.palette().faint);
@@ -563,7 +563,7 @@ Menu::page_audio(MenuKit &kit, MenuState &state) const
 
 	kit.paragraph("SOUND BOARDS", "By default, as on the cabinet. Racer's optional board only drives its panel "
 	              "shaker (see the Input page).");
-	for (MenuState::SoundGame &game : state.sound_games) {
+	for (SoundGame &game : state.sound_games) {
 		const std::string title = MenuKit::capitals(game.title);
 		char about[160];
 

@@ -597,7 +597,7 @@ Menu::bar_audio(BarItems &b)
 	/* The game that runs, when it has an optional sound
 	 * board, that game alone: how it plays, and its level,
 	 * with Both */
-	for (BarState::SoundGame &game : state.sound_games) {
+	for (SoundGame &game : state.sound_games) {
 		if (!ImGui::BeginMenu(game.title.c_str()))
 			continue;
 		b.framed();
