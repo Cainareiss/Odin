@@ -57,11 +57,9 @@ GlDrawing::log(const char *fmt, ...) const
 {
 	va_list args;
 
-	std::fputs("\tHR: ", m_debug.log);
 	va_start(args, fmt);
-	std::vfprintf(m_debug.log, fmt, args);
+	log_line(m_debug.log, fmt, args);
 	va_end(args);
-	std::fputc('\n', m_debug.log);
 }
 
 /* Nothing a program holds, nothing bound is of the list about to be drawn:

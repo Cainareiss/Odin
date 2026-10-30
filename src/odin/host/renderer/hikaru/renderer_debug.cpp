@@ -112,15 +112,21 @@ Renderer::update_debug()
 }
 
 void
+log_line(std::FILE *log, const char *fmt, va_list args)
+{
+	std::fputs("\tHR: ", log);
+	std::vfprintf(log, fmt, args);
+	std::fputc('\n', log);
+}
+
+void
 Renderer::log(const char *fmt, ...) const
 {
 	va_list args;
 
-	std::fputs("\tHR: ", stdout);
 	va_start(args, fmt);
-	std::vprintf(fmt, args);
+	log_line(stdout, fmt, args);
 	va_end(args);
-	std::fputc('\n', stdout);
 }
 
 /* The mesh about to be drawn and the objects of the list it is drawn

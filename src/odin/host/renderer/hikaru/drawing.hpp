@@ -25,6 +25,7 @@
 #ifndef ODIN_BOARD_DRAWING_HPP
 #define ODIN_BOARD_DRAWING_HPP
 
+#include <cstdarg>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -89,6 +90,9 @@ struct SceneDebug {
 	std::FILE *log;
 	bool no_ambient, no_diffuse;
 };
+
+/* A line of that log, of the renderer's too: "\tHR: ", what fmt says */
+void log_line(std::FILE *log, const char *fmt, va_list args);
 
 /* What the graphics card of the host does for the renderer (renderer.hpp),
  * which draws the pictures of the board: the other side of the door of
