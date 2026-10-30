@@ -231,10 +231,10 @@ public:
 protected:
 	JvsDevice();
 
-	virtual const char *device_id() const { return ""; }
-	virtual uint8_t command_format_version() const { return 0x13; }
-	virtual uint8_t jvs_standard_version() const { return 0x30; }
-	virtual uint8_t comm_method_version() const { return 0x10; }
+	virtual const char *device_id() const = 0;
+	virtual uint8_t command_format_version() const = 0;
+	virtual uint8_t jvs_standard_version() const = 0;
+	virtual uint8_t comm_method_version() const = 0;
 	/* Each hook appends to `out` and returns the bytes written, or
 	 * -1 when the parameters are refused. */
 	virtual int32_t function_list(std::span<uint8_t>) { return 0; }
@@ -245,12 +245,12 @@ protected:
 	virtual bool swoutputs(std::span<const uint8_t>) { return false; }
 	/* Whether a refused GENERIC_OUTPUT_1 skips its data bytes, or leaves
 	 * them to be read as the next commands. */
-	virtual bool refused_outputs_skip_data() const { return true; }
+	virtual bool refused_outputs_skip_data() const = 0;
 	/* Where a RESET is taken: as any command of a frame the node reads,
 	 * its second byte not looked at, or only as F0 D9 at the head of a
 	 * frame to every node, which is read for nothing else but
 	 * SET_ADDRESS. */
-	virtual bool reset_in_any_frame() const { return false; }
+	virtual bool reset_in_any_frame() const = 0;
 	virtual void device_reset() {}
 	/* The clocks of its Z80 the program of the board takes before it
 	 * answers, for a program that was timed: for the frame (its bytes of
