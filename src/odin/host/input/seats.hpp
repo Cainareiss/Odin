@@ -25,6 +25,7 @@
 #ifndef ODIN_SEATS_HPP
 #define ODIN_SEATS_HPP
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <optional>
@@ -41,6 +42,15 @@ inline std::string
 identity_of(const std::string &value)
 {
 	return value.substr(0, value.find(' '));
+}
+
+/* A text made fit to be such an identity: its spaces as '_', since the
+ * identity ends at the first space */
+inline std::string
+identity_text(std::string text)
+{
+	std::replace(text.begin(), text.end(), ' ', '_');
+	return text;
 }
 
 /* A gamepad open: its id, and the GUID of its make and model */

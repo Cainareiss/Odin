@@ -29,6 +29,7 @@
 #include "odin/host/input/pointers.hpp"
 
 #include "odin/host/input/evdev_bits.hpp"
+#include "odin/host/input/seats.hpp"
 
 #ifdef __linux__
 
@@ -187,14 +188,14 @@ Pointers::Backend::open_node(const std::string &node)
 	std::snprintf(vidpid, sizeof(vidpid), "%04x:%04x", id.vendor, id.product);
 	/* A serial under 8 characters is a placeholder of the firmware, the
 	 * same in every unit; two of a kind take their port, then their node */
-	std::string identity = uniq.size() >= 8               ? "uniq:" + uniq :
+	std::string identity = uniq.size() >= 8               ? "uniq:" + identity_text(uniq) :
 	                       id.vendor && id.product         ? std::string("vidpid:") + vidpid :
-	                       !phys.empty()                   ? "path:" + phys :
-	                       !name.empty()                   ? "name:" + name : "node:" + node;
+	                       !phys.empty()                   ? "path:" + identity_text(phys) :
+	                       !name.empty()                   ? "name:" + identity_text(name) : "node:" + node;
 	Entry *e = find_identity(identity);
 
 	if (e && e->fd >= 0 && !phys.empty())
-		e = find_identity(identity = "path:" + phys);
+		e = find_identity(identity = "path:" + identity_text(phys));
 	if (e && e->fd >= 0)
 		e = find_identity(identity = "node:" + node);
 	if (!e) {
