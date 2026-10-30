@@ -29,6 +29,8 @@
 #include <cstdlib>
 #include <utility>
 
+#include "odin/common/stop_message.hpp"
+
 namespace odin {
 
 /* The groups of eight follow the low three bits of their opcodes. */
@@ -528,10 +530,8 @@ Tlcs90::step()
 				o->value = address_of(*o);
 	} else {
 		decode(ins);
-		if (ins.op == Op::UNKNOWN) {
-			std::fprintf(stderr, "FATAL: TLCS-90: unknown instruction at %04X\n", static_cast<unsigned>(at));
-			std::abort();
-		}
+		if (ins.op == Op::UNKNOWN)
+			stop_fatal("TLCS-90: unknown instruction at %04X", static_cast<unsigned>(at));
 
 		const unsigned length = static_cast<uint16_t>(m_pc - at);
 
