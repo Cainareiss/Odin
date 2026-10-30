@@ -42,7 +42,8 @@
  * the MAME hikaru driver.) The EPROM/MASKROM external BUS address can be
  * recovered from information at offset +13C of the EPROM data.
  *
- * This is what this data looks like:
+ * This is what this data looks like (the tables of the other games are
+ * read the same way):
  *
  *	AIRTRIX (Type 1)		ICs	Size
  *	================		===	====
@@ -68,102 +69,6 @@
  *	ffff 0000 0000 0000 0000 
  *	ffff 0000 0000 0000 0000 
  *	
- *	BRAVEFF (Type ?)		ICs	Size
- *	================		===	====
- *	
- *	0002 0000 0000 0000 0000 	29,30	2 x 2MB
- *	0002 be43 7023 7077 f161	31,32	2 x 2MB
- *	0002 c60d d4f0 b533 8f66	33,34	2 x 2MB
- *	ffff 0000 0000 0000 0000 
- *	0004 8613 2876 3700 2f6d 		2 x 4MB
- *	0004 f545 a454 b97e bb4c 
- *	0004 d6ff 6fe3 df40 f343 
- *	0004 e3b6 2f23 b2b6 61c7 
- *	0004 4792 7015 853b faf1 
- *	0004 c44b 7a18 24dc e336 
- *	0004 e3b0 e492 17bb e589 
- *	0004 cd9f 08f3 3183 cd5c 
- *	0004 8fb6 3fa8 ebbb 9ed9 
- *	0004 2316 c644 66cc b590 
- *	0004 47d0 320d e677 85ad 
- *	0004 d76d cf62 4d9e 8564 
- *	ffff 0000 0000 0000 0000 
- *	ffff 0000 0000 0000 0000 
- *	ffff 0000 0000 0000 0000 
- *	ffff 0000 0000 0000 0000 
- *	
- *	PHARRIER			ICs	Size
- *	========			===	====
- *	
- *	0003 0000 0000 0000 0000	29,30	2 x 4MB 
- *	0003 388c 13b5 d289 5910	31,32	2 x 4MB
- *	0003 09a8 578f 73e5 94f7	33,34	2 x 4MB
- *	0003 b1de 6dad 9019 6dd5	35,36	2 x 4MB
- *	0005 7f16 2c37 1f9f aae5	37,38	2 x 16MB
- *	ffff 0000 0000 0000 0000	
- *	0005 986c 8d7a bd1d 5304	41,42	2 x 16MB
- *	ffff 0000 0000 0000 0000	
- *	0005 9784 b33d cb75 b08b	45,46	2 x 16MB
- *	ffff 0000 0000 0000 0000	
- *	0005 5056 b3a9 cbde be85	49,50	2 x 16MB
- *	ffff 0000 0000 0000 0000	
- *	0005 3d36 05bf d629 8ed6	53,54	2 x 16MB
- *	ffff 0000 0000 0000 0000	
- *	0005 b9f5 0082 5875 8163	57,58	2 x 16MB
- *	ffff 0000 0000 0000 0000	
- *	0005 b19d e7cc 158c d180	61,62	2 x 16MB
- *	ffff 0000 0000 0000 0000	
- *	0005 34bc 677b 5524 349e	65,66	2 x 16MB
- *	ffff 0000 0000 0000 0000	
- *	
- *	SWRACER (Type 2)		ICs	Size
- *	================		===	====	
- *	
- *	0003 0000 0000 0000 0000	29,30	2 x 4MB
- *	0003 5f01 4174 3594 38b3	31,32	2 x 4MB
- *	ffff 0000 0000 0000 0000	
- *	ffff 0000 0000 0000 0000	
- *	0004 7993 8e18 4d44 d239	37,38	2 x 8MB
- *	0004 4135 beab f0c8 04e2	39,40	2 x 8MB
- *	0004 9532 4c1c 925d 02fb	41,42	2 x 8MB
- *	0004 0809 7050 72bc 9311	43,44	2 x 8MB
- *	0004 de84 9d8a 7a5c e7fc	45,46	2 x 8MB
- *	0004 6806 1392 edf1 7bd1	47,48	2 x 8MB
- *	0004 b82d e114 5792 e5e5	49,50	2 x 8MB
- *	0004 3af3 a97c a8cc 721d	51,52	2 x 8MB
- *	0004 ced7 d3cf 6b67 fc76	53,54	2 x 8MB
- *	0004 586c 6954 13a0 db38	55,56	2 x 8MB
- *	0004 4f03 42bf 8ea6 adb6	57,58	2 x 8MB
- *	0004 8645 fc30 3847 ca6b	59,60	2 x 8MB
- *	0004 4140 01c4 ebe6 8085	61,62	2 x 8MB
- *	0004 b68b 7467 4715 4787	63,64	2 x 8MB
- *	0004 3cd6 144a e5d3 ba35	65,66	2 x 8MB
- *	0004 e668 08ed 1fe8 c4a1	67,68	2 x 8MB
- *	
- *	SGNASCAR (Type 2)		ICs	Size		Bus Bank
- *	=================		===	====		========
- *	
- *	0003 0000 0000 0000 0000	35,36	2 x 4MB		10,11
- *	ffff 0000 0000 0000 0000 
- *	ffff 0000 0000 0000 0000 
- *	ffff 0000 0000 0000 0000 
- *	0005 0352 d263 49fd 4ad3	19,20	2 x 16MB 	20,21
- *	0005 e717 d635 3637 0e8e	21,22			22,23
- *	0005 4001 8dab c65d bde3	23,24			24,25
- *	0005 615c 293d 7507 1d85	25,26			26,27
- *	0005 90a2 eccc 2b1e 2f9b	27,28			28,29
- *	0005 c98b 3ffb 51e3 701b	29,30			2A,2B
- *	0005 523f 2979 953c 2e5c	31,32			2C,2D
- *	0005 28cf 283f f17b 74fb	33,34			2E,2F
- *	ffff 0000 0000 0000 0000 
- *	ffff 0000 0000 0000 0000 
- *	ffff 0000 0000 0000 0000 
- *	ffff 0000 0000 0000 0000 
- *	ffff 0000 0000 0000 0000 
- *	ffff 0000 0000 0000 0000 
- *	ffff 0000 0000 0000 0000 
- *	ffff 0000 0000 0000 0000 
- *
  * The mapping from IC numbers to entries has been determined by matching
  * the CRCs in the entries and the CRC values reported in the MAME driver.
  *
