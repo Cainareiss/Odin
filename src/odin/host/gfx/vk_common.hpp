@@ -324,6 +324,9 @@ private:
 	Context() = default;
 	bool load(std::string &why);
 	bool make_instance(std::string &why);
+	std::vector<const char *> validation_layers(const std::vector<VkExtensionProperties> &available,
+	                                            std::vector<const char *> &extensions);
+	void listen_to_validation();
 	bool choose_gpu(std::string &why);
 	std::optional<uint32_t> shown_family(VkPhysicalDevice gpu,
 	                                     const std::vector<VkQueueFamilyProperties> &families) const;

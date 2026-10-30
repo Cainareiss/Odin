@@ -221,24 +221,7 @@ Context::make_instance(std::string &why)
 		flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
 	}
 
-	std::vector<const char *> layers;
-	if (m_validation) {
-		std::vector<VkLayerProperties> known;
-
-		m_fn.vkEnumerateInstanceLayerProperties(&count, nullptr);
-		known.resize(count);
-		m_fn.vkEnumerateInstanceLayerProperties(&count, known.data());
-		const bool found = std::any_of(known.begin(), known.end(), [](const VkLayerProperties &l) {
-			return std::strcmp(l.layerName, "VK_LAYER_KHRONOS_validation") == 0;
-		});
-		if (found && has(available, VK_EXT_DEBUG_UTILS_EXTENSION_NAME)) {
-			layers.push_back("VK_LAYER_KHRONOS_validation");
-			extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-		} else {
-			std::fprintf(stderr, "ERROR: vulkan: no validation layer\n");
-			m_validation = false;
-		}
-	}
+	const std::vector<const char *> layers = validation_layers(available, extensions);
 
 	const VkApplicationInfo app{ VK_STRUCTURE_TYPE_APPLICATION_INFO, nullptr, "Odin", 1, "Odin", 1, m_api_version };
 	const VkInstanceCreateInfo info{ VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO, nullptr, flags, &app,
@@ -252,16 +235,55 @@ Context::make_instance(std::string &why)
 	ODIN_VK_INSTANCE(ODIN_VK_LOAD)
 #undef ODIN_VK_LOAD
 
-	if (m_validation && m_fn.vkCreateDebugUtilsMessengerEXT) {
-		const VkDebugUtilsMessengerCreateInfoEXT messages{
-			VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT, nullptr, 0,
-			VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
-			VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-				VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
-			&Context::message, this };
-		m_fn.vkCreateDebugUtilsMessengerEXT(m_instance, &messages, nullptr, &m_messenger);
-	}
+	listen_to_validation();
 	return true;
+}
+
+/* The validation layer, when asked for (it says what Odin does wrong) and
+ * there: its name, and the extension of its messages added to those of
+ * the instance; none, said, when it is not there */
+std::vector<const char *>
+Context::validation_layers(const std::vector<VkExtensionProperties> &available, std::vector<const char *> &extensions)
+{
+	std::vector<const char *> layers;
+	uint32_t count = 0;
+
+	if (!m_validation)
+		return layers;
+
+	std::vector<VkLayerProperties> known;
+
+	m_fn.vkEnumerateInstanceLayerProperties(&count, nullptr);
+	known.resize(count);
+	m_fn.vkEnumerateInstanceLayerProperties(&count, known.data());
+	const bool found = std::any_of(known.begin(), known.end(), [](const VkLayerProperties &l) {
+		return std::strcmp(l.layerName, "VK_LAYER_KHRONOS_validation") == 0;
+	});
+	if (found && has(available, VK_EXT_DEBUG_UTILS_EXTENSION_NAME)) {
+		layers.push_back("VK_LAYER_KHRONOS_validation");
+		extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+	} else {
+		std::fprintf(stderr, "ERROR: vulkan: no validation layer\n");
+		m_validation = false;
+	}
+	return layers;
+}
+
+/* The warnings and errors of the validation layer, to stderr (message) */
+void
+Context::listen_to_validation()
+{
+	if (!m_validation || !m_fn.vkCreateDebugUtilsMessengerEXT)
+		return;
+
+	const VkDebugUtilsMessengerCreateInfoEXT messages{
+		VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT, nullptr, 0,
+		VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+		VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+			VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
+		&Context::message, this };
+
+	m_fn.vkCreateDebugUtilsMessengerEXT(m_instance, &messages, nullptr, &m_messenger);
 }
 
 VKAPI_ATTR VkBool32 VKAPI_CALL
