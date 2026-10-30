@@ -55,12 +55,6 @@ public:
 	void wait();
 	/* Waits for it at most that long: whether it is done. */
 	bool wait_for(std::chrono::milliseconds time);
-	/* Gives a job and waits for it. */
-	void run(std::function<void()> job)
-	{
-		post(std::move(job));
-		wait();
-	}
 
 private:
 	void loop();
