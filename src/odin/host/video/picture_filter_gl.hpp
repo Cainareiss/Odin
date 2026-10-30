@@ -102,6 +102,8 @@ private:
 
 	PictureFilter() = default;
 	bool build(const preset::Plan &plan);
+	void find_uniforms(Pass &pass, size_t i, const std::vector<std::pair<std::string, float>> &parameters);
+	void make_corners(Pass &pass);
 	void size(unsigned w, unsigned h);
 	GLuint sampler(bool linear, GLint wrap);
 

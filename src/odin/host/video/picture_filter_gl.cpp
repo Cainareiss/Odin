@@ -177,61 +177,74 @@ PictureFilter::build(const preset::Plan &plan)
 	}
 	m_passes.back().window = true;
 
-	static constexpr GLfloat QUAD[16] = {};
-
 	for (size_t i = 0; i < m_passes.size(); i++) {
 		Pass &pass = m_passes[i];
 		std::string source = plan.passes[i].source;
-		const auto uniform = [&pass](const std::string &uniform_name) {
-			return glGetUniformLocation(pass.program, uniform_name.c_str());
-		};
 
 		with_constants(source, plan.parameters);
 		pass.program = build_program(source, plan.passes[i].file);
 		if (!pass.program)
 			return false;
-		pass.texture = uniform("Texture");
-		pass.input_size = uniform("InputSize");
-		pass.texture_size = uniform("TextureSize");
-		pass.output_size = uniform("OutputSize");
-		pass.frame_count = uniform("FrameCount");
-		pass.frame_direction = uniform("FrameDirection");
-		pass.mvp = uniform("MVPMatrix");
-		pass.orig_texture = uniform("OrigTexture");
-		pass.orig_input_size = uniform("OrigInputSize");
-		pass.orig_texture_size = uniform("OrigTextureSize");
-		for (size_t k = 1; k <= i; k++) {
-			const std::string before = "Pass" + std::to_string(k);
-
-			pass.passes.push_back({ uniform(before + "Texture"), uniform(before + "TextureSize"),
-			                        uniform(before + "InputSize") });
-		}
-		for (const auto &[parameter, value] : plan.parameters)
-			if (const GLint at = uniform(parameter); at >= 0)
-				pass.parameters.emplace_back(at, value);
-
-		/* Four corners: VertexCoord, then TexCoord, set by size() */
-		const GLint vertex = glGetAttribLocation(pass.program, "VertexCoord");
-		const GLint tex = glGetAttribLocation(pass.program, "TexCoord");
-
-		glGenVertexArrays(1, &pass.vao);
-		glGenBuffers(1, &pass.vbo);
-		glBindVertexArray(pass.vao);
-		glBindBuffer(GL_ARRAY_BUFFER, pass.vbo);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(QUAD), QUAD, GL_DYNAMIC_DRAW);
-		if (vertex >= 0) {
-			glEnableVertexAttribArray(static_cast<GLuint>(vertex));
-			glVertexAttribPointer(static_cast<GLuint>(vertex), 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), nullptr);
-		}
-		if (tex >= 0) {
-			glEnableVertexAttribArray(static_cast<GLuint>(tex));
-			glVertexAttribPointer(static_cast<GLuint>(tex), 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat),
-			                      reinterpret_cast<const void *>(2 * sizeof(GLfloat)));
-		}
-		glBindVertexArray(0);
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		find_uniforms(pass, i, plan.parameters);
+		make_corners(pass);
 	}
 	return true;
+}
+
+/* The uniforms of a pass the frames set: its texture and sizes, those of
+ * the source and of each pass before it, the parameters of the preset */
+void
+PictureFilter::find_uniforms(Pass &pass, size_t i, const std::vector<std::pair<std::string, float>> &parameters)
+{
+	const auto uniform = [&pass](const std::string &uniform_name) {
+		return glGetUniformLocation(pass.program, uniform_name.c_str());
+	};
+
+	pass.texture = uniform("Texture");
+	pass.input_size = uniform("InputSize");
+	pass.texture_size = uniform("TextureSize");
+	pass.output_size = uniform("OutputSize");
+	pass.frame_count = uniform("FrameCount");
+	pass.frame_direction = uniform("FrameDirection");
+	pass.mvp = uniform("MVPMatrix");
+	pass.orig_texture = uniform("OrigTexture");
+	pass.orig_input_size = uniform("OrigInputSize");
+	pass.orig_texture_size = uniform("OrigTextureSize");
+	for (size_t k = 1; k <= i; k++) {
+		const std::string before = "Pass" + std::to_string(k);
+
+		pass.passes.push_back({ uniform(before + "Texture"), uniform(before + "TextureSize"),
+		                        uniform(before + "InputSize") });
+	}
+	for (const auto &[parameter, value] : parameters)
+		if (const GLint at = uniform(parameter); at >= 0)
+			pass.parameters.emplace_back(at, value);
+}
+
+/* Four corners: VertexCoord, then TexCoord, set by size() */
+void
+PictureFilter::make_corners(Pass &pass)
+{
+	static constexpr GLfloat QUAD[16] = {};
+	const GLint vertex = glGetAttribLocation(pass.program, "VertexCoord");
+	const GLint tex = glGetAttribLocation(pass.program, "TexCoord");
+
+	glGenVertexArrays(1, &pass.vao);
+	glGenBuffers(1, &pass.vbo);
+	glBindVertexArray(pass.vao);
+	glBindBuffer(GL_ARRAY_BUFFER, pass.vbo);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(QUAD), QUAD, GL_DYNAMIC_DRAW);
+	if (vertex >= 0) {
+		glEnableVertexAttribArray(static_cast<GLuint>(vertex));
+		glVertexAttribPointer(static_cast<GLuint>(vertex), 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), nullptr);
+	}
+	if (tex >= 0) {
+		glEnableVertexAttribArray(static_cast<GLuint>(tex));
+		glVertexAttribPointer(static_cast<GLuint>(tex), 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat),
+		                      reinterpret_cast<const void *>(2 * sizeof(GLfloat)));
+	}
+	glBindVertexArray(0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
 PictureFilter::~PictureFilter()
