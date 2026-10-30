@@ -179,9 +179,10 @@ GlDrawing::begin_preparing()
 void
 GlDrawing::prepare_program(uint64_t key)
 {
-	/* Not those the card cannot run (draw_mesh, draws_native) */
+	/* Not a key of no variant, nor those the card cannot run (draw_mesh,
+	 * draws_native) */
 	if (const std::optional<MeshVariant> v = MeshVariant::from_key(key);
-	    v && ((v->collect && !gl::primitive_ids()) || (v->native && !gl::geometry_shaders())))
+	    !v || (v->collect && !gl::primitive_ids()) || (v->native && !gl::geometry_shaders()))
 		return;
 	/* Back from the loading screen, drawn in the window */
 	glBindVertexArray(m_mesh_vao);
