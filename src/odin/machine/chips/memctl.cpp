@@ -33,6 +33,7 @@
 #include <cstdlib>
 
 #include "odin/common/bytes.hpp"
+#include "odin/common/stop_message.hpp"
 
 /*
  * Memory Controller
@@ -207,8 +208,7 @@ namespace {
 [[noreturn]] void
 fatal(const char *what, unsigned size, uint32_t addr)
 {
-	std::fprintf(stderr, "FATAL: memory controller: %s (%u bytes at %08X)\n", what, size, addr);
-	std::abort();
+	stop_fatal("memory controller: %s (%u bytes at %08X)", what, size, addr);
 }
 
 /* The page of the bridge, 04000000-04FFFFFF, with the registers in its
@@ -433,10 +433,8 @@ MemCtl::run_transfer()
 	set_reg(0x34, 4, dst);
 	set_reg(0x38, 4, 0);
 	set_reg(0x04, 2, 0x1000);
-	if (!m_master) {
-		std::fprintf(stderr, "FATAL: the bridge of the slave ended a DMA: where its interrupt goes is not known\n");
-		std::abort();
-	}
+	if (!m_master)
+		stop_fatal("the bridge of the slave ended a DMA: where its interrupt goes is not known");
 	m_host.memctl_irq_changed();
 }
 
