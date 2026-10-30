@@ -256,14 +256,14 @@ MenuSession::fill_devices(MenuState &state)
 					if (key == keys + std::to_string(player + 1))
 						wanted[player] = identity_of(value);
 			for (const Controls::Plugged &one : plugged)
-				if (state.steers || pads || one.kind != SDL_JOYSTICK_TYPE_WHEEL)
+				if (pads || joystick_fits(one.kind, state.steers))
 					open.push_back({ one.id, one.guid });
 			seats = seat_pads(open, wanted, {}, {});
 		}
 		out.clear();
 		for (const Controls::Plugged &one : plugged)
 			out.push_back({ one.name, one.guid, one.kind,
-			                !m_other ? one.player : one.id == seats[0] ? 0 : one.id == seats[1] ? 1 : -1,
+			                !m_other ? one.player : player_seated(one.id, seats),
 			                one.connection, one.id });
 	};
 

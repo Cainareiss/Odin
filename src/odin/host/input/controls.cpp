@@ -195,9 +195,8 @@ Controls::reseat()
 
 	for (const Pad &pad : m_pads)
 		pads.push_back({ pad.id, pad.guid });
-	/* A wheel is for a game that steers with one */
 	for (const Joy &joy : m_joys)
-		if (m_steers || SDL_GetJoystickType(joy.handle) != SDL_JOYSTICK_TYPE_WHEEL)
+		if (joystick_fits(SDL_GetJoystickType(joy.handle), m_steers))
 			joys.push_back({ joy.id, joy.guid });
 
 	const std::array<SDL_JoystickID, 2> seats = seat_pads(pads, m_wanted, m_picked, m_seats);
@@ -238,7 +237,7 @@ Controls::plugged() const
 		out.push_back({ name ? name : "", pad.guid,
 		                pad_kind(SDL_GetGamepadType(pad.handle), SDL_GetGamepadVendor(pad.handle),
 		                         SDL_GetGamepadProduct(pad.handle)),
-		                pad.id, pad.id == m_seats[0] ? 0 : pad.id == m_seats[1] ? 1 : -1,
+		                pad.id, player_seated(pad.id, m_seats),
 		                SDL_GetGamepadConnectionState(pad.handle) });
 	}
 	return out;
@@ -263,7 +262,7 @@ Controls::joysticks() const
 		const char *const name = SDL_GetJoystickName(joy.handle);
 
 		out.push_back({ name ? name : "", joy.guid, static_cast<int>(SDL_GetJoystickType(joy.handle)), joy.id,
-		                joy.id == m_joy_seats[0] ? 0 : joy.id == m_joy_seats[1] ? 1 : -1,
+		                player_seated(joy.id, m_joy_seats),
 		                SDL_GetJoystickConnectionState(joy.handle) });
 	}
 	return out;

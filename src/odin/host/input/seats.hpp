@@ -49,6 +49,21 @@ struct OpenPad {
 	std::string guid;
 };
 
+/* The player a device open is seated for, 0 or 1; -1 for none */
+inline int
+player_seated(SDL_JoystickID id, const std::array<SDL_JoystickID, 2> &seats)
+{
+	return id == seats[0] ? 0 : id == seats[1] ? 1 : -1;
+}
+
+/* Whether a joystick of that kind (SDL_JoystickType) may seat a player: a
+ * wheel only in a game that steers with one */
+inline bool
+joystick_fits(int kind, bool steers)
+{
+	return steers || kind != SDL_JOYSTICK_TYPE_WHEEL;
+}
+
 /* The gamepad of each player (0: none), from those open in the order they
  * were plugged in, the GUID each player wants (empty: any), the very pad
  * each one picked (0: none; two of a make share their GUID) and the ones
