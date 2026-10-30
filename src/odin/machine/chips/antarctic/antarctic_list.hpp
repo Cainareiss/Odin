@@ -63,7 +63,9 @@ enum {
 /* The viewports of a list, each drawn from an empty depth buffer */
 enum { ODIN_VIEWPORTS = 8 };
 
-/* Which instructions an object has received */
+/* Which instructions an object has received (these and the other
+ * ODIN_*_HAS_* below): no code tests them, but they are among the bytes
+ * compared to tell two objects apart (list_object, the texhead of 0E8) */
 enum {
 	ODIN_VP_HAS_021 = 1 << 0,
 	ODIN_VP_HAS_221 = 1 << 1,
