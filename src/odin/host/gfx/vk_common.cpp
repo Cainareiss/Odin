@@ -880,6 +880,15 @@ Context::barrier(VkCommandBuffer cb, Image &image, const Use &next, unsigned lev
 	image.layout = next.layout;
 }
 
+void
+Context::clear(VkCommandBuffer cb, Image &image, const VkClearColorValue &colour)
+{
+	const VkImageSubresourceRange all{ VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+
+	barrier(cb, image, COPIED_TO);
+	m_fn.vkCmdClearColorImage(cb, image.image, image.layout, &colour, 1, &all);
+}
+
 Pass
 Context::make_pass(const Spirv &vertex, const Spirv &fragment, unsigned images, uint32_t push,
                    VkPrimitiveTopology topology, VkFormat format, bool over)

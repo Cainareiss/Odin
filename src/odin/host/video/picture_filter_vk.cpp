@@ -424,12 +424,7 @@ VkPictureFilter::make_picture(Picture &picture, unsigned w, unsigned h)
 void
 VkPictureFilter::clear(Picture &picture)
 {
-	const VkCommandBuffer cb = m_card.commands();
-	const VkClearColorValue black{ { 0.0f, 0.0f, 0.0f, 1.0f } };
-	const VkImageSubresourceRange all{ VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
-
-	m_card.barrier(cb, picture.image, vk::COPIED_TO);
-	m_fn.vkCmdClearColorImage(cb, picture.image.image, picture.image.layout, &black, 1, &all);
+	m_card.clear(m_card.commands(), picture.image, { { 0.0f, 0.0f, 0.0f, 1.0f } });
 }
 
 vk::Image &

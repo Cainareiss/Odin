@@ -112,11 +112,7 @@ VkDrawing::make_picture(unsigned w, unsigned h)
 void
 VkDrawing::clear(VkCommandBuffer cb, vk::Image &image, float alpha)
 {
-	const VkClearColorValue colour{ { 0.0f, 0.0f, 0.0f, alpha } };
-	const VkImageSubresourceRange all{ VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
-
-	m_card.barrier(cb, image, vk::COPIED_TO);
-	m_fn.vkCmdClearColorImage(cb, image.image, image.layout, &colour, 1, &all);
+	m_card.clear(cb, image, { { 0.0f, 0.0f, 0.0f, alpha } });
 }
 
 /* The two 3D buffers and the pictures of the last three lists, empty: an

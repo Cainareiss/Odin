@@ -290,13 +290,7 @@ VkGraphics::make_swapchain()
 void
 VkGraphics::clear_window(unsigned window_w, unsigned window_h)
 {
-	const VkCommandBuffer cb = m_card->commands();
-	vk::Image &window = m_card->window_image(window_w, window_h);
-	const VkClearColorValue black{ { 0.0f, 0.0f, 0.0f, 1.0f } };
-	const VkImageSubresourceRange all{ VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
-
-	m_card->barrier(cb, window, vk::COPIED_TO);
-	m_fn.vkCmdClearColorImage(cb, window.image, window.layout, &black, 1, &all);
+	m_card->clear(m_card->commands(), m_card->window_image(window_w, window_h), { { 0.0f, 0.0f, 0.0f, 1.0f } });
 }
 
 /* The window image into the image of the chain that is free, each pixel

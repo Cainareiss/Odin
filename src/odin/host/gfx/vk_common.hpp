@@ -268,6 +268,9 @@ public:
 	/* The image from its last use to the next one, all its levels; the
 	 * levels from `level` on only (they are taken as one use) */
 	void barrier(VkCommandBuffer cb, Image &image, const Use &next, unsigned level = 0);
+	/* Level 0 of a colour image all of `colour`, the image moved to be
+	 * copied to */
+	void clear(VkCommandBuffer cb, Image &image, const VkClearColorValue &colour);
 	/* Those accesses of those stages done and seen by the next ones */
 	void memory_barrier(VkCommandBuffer cb, VkPipelineStageFlags2 stages, VkAccessFlags2 access,
 	                    VkPipelineStageFlags2 next_stages, VkAccessFlags2 next_access);
