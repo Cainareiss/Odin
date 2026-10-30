@@ -260,7 +260,9 @@ Drive838_13366::bill(uint64_t to)
 int
 Drive838_13366::torque() const
 {
-	return std::clamp(0x80 - static_cast<int>(m_state.torque_value), -MOST, MOST);
+	const int most = DriveBoard::MOST;
+
+	return std::clamp(0x80 - static_cast<int>(m_state.torque_value), -most, most);
 }
 
 uint8_t

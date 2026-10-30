@@ -25,6 +25,7 @@
 #ifndef ODIN_DRIVE_838_13366_HPP
 #define ODIN_DRIVE_838_13366_HPP
 
+#include "odin/machine/cabinet/drive_board.hpp"
 #include "odin/machine/cpu/z80/z80.hpp"
 
 #include <array>
@@ -58,10 +59,9 @@ public:
 	 * what its digits show. HEURISTIC: all off, the manual of NASCAR does
 	 * not give them. */
 	static constexpr uint8_t DIP1 = 0xFF, DIP2 = 0xFF;
-	/* The torque register of the motor board and the most it is told each
-	 * way */
+	/* The torque register of the motor board; the most it is told each
+	 * way is DriveBoard::MOST */
 	static constexpr uint8_t TORQUE = 0xFE;
-	static constexpr int MOST = 0x3F;
 
 	/* What it keeps, plain data */
 	struct State {
@@ -91,8 +91,9 @@ public:
 
 	/* Its reply to the game, as it left it */
 	uint8_t reply() const { return m_state.reply; }
-	/* The torque it tells the motor board, -MOST (all to the left) to MOST
-	 * (all to the right); 0 with the motor at rest */
+	/* The torque it tells the motor board, -DriveBoard::MOST (all to the
+	 * left) to DriveBoard::MOST (all to the right); 0 with the motor at
+	 * rest */
 	int torque() const;
 
 	void save(State &out) const;
