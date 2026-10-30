@@ -943,13 +943,7 @@ Menu::page_link(MenuKit &kit, MenuState &state) const
 		                          "the address of cabinet " + std::to_string(state.link_cabinet + 1);
 
 		if (kit.edit("Next cabinet", about.c_str(), state.link_next_typed, "192.168.1.20", 63, locked)) {
-			NetLinkSettings tried;
-			std::string host;
-			uint16_t port;
-
-			tried.port = static_cast<uint16_t>(state.link_port);
-			tried.next = state.link_next_typed;
-			state.link_next_bad = !tried.next_cabinet(host, port);
+			state.link_next_bad = !NetLinkSettings::next_right(state.link_next_typed);
 			if (!state.link_next_bad)
 				state.link_next = state.link_next_typed;
 		}

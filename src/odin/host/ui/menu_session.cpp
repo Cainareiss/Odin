@@ -90,16 +90,9 @@ link_settings(const Settings &settings)
 			continue;
 		if (key == "cabinet" && NetLinkSettings::cabinet_named(value, link.cabinet))
 			continue;
-		if (key == "next") {
-			NetLinkSettings tried = link;
-			std::string host;
-			uint16_t port;
-
-			tried.next = value;
-			if (tried.next_cabinet(host, port)) {
-				link.next = value;
-				continue;
-			}
+		if (key == "next" && NetLinkSettings::next_right(value)) {
+			link.next = value;
+			continue;
 		}
 		refuse_setting("network", key, value);
 	}

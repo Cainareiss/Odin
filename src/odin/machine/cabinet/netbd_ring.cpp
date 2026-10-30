@@ -503,4 +503,15 @@ NetLinkSettings::next_cabinet(std::string &host, uint16_t &next_port) const
 	return true;
 }
 
+bool
+NetLinkSettings::next_right(const std::string &next)
+{
+	NetLinkSettings tried;
+	std::string host;
+	uint16_t port;
+
+	tried.next = next;
+	return tried.next_cabinet(host, port);
+}
+
 } /* namespace odin */

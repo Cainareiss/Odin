@@ -199,6 +199,8 @@ struct NetLinkSettings {
 	/* The address and the port of the next cabinet; false when `next` is
 	 * not one */
 	bool next_cabinet(std::string &host, uint16_t &next_port) const;
+	/* Whether a text is right as `next` (whatever the port) */
+	static bool next_right(const std::string &next);
 };
 
 } /* namespace odin */
