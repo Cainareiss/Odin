@@ -334,7 +334,6 @@ private:
 	void op_alpha_table(const uint32_t *inst);
 	void op_light_table(const uint32_t *inst);
 
-	uint32_t get_jump_address(const uint32_t *inst) const;
 	float get_lod_size() const;
 	bool is_lod_sphere_visible() const;
 	/* The modelview the vertices go through: the local matrix, if any,

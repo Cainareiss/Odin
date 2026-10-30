@@ -29,6 +29,7 @@
  * processor. See antarctic_ops.cpp for what they do. */
 
 #include "odin/machine/chips/antarctic/antarctic_disasm.hpp"
+#include "odin/machine/chips/antarctic/antarctic_decode.hpp"
 #include "odin/common/bytes.hpp"
 
 #include <array>
@@ -61,22 +62,6 @@ struct Out {
 		unhandled = true;
 	}
 };
-
-uint32_t
-jump_address(uint32_t pc, const uint32_t *inst)
-{
-	uint32_t addr = inst[1] * 4;
-
-	if (inst[0] & 0x800)
-		addr += pc;
-	return addr;
-}
-
-float
-clip_xy(uint32_t c)
-{
-	return static_cast<float>(static_cast<int16_t>(c));
-}
 
 /* The condition of a call and of a return, bits 12-15 */
 const char *const CALL_COND[16] = {
@@ -177,8 +162,8 @@ text_viewport_set(Out &o, const uint32_t *inst)
 		o.unhandled |= !!(inst[0] & 0xFFFFF800);
 	
 		o.print("vp: set clip XY [clipxy=(%f %f %f %f) offs=(%f,%f)]",
-		        clip_xy(inst[2]), clip_xy(inst[3]),
-		        clip_xy(inst[2] >> 16), clip_xy(inst[3] >> 16),
+		        s16(inst[2]), s16(inst[3]),
+		        s16(inst[2] >> 16), s16(inst[3] >> 16),
 		        (float) (int16_t) (inst[1] & 0xFFFF),
 		        (float) (int16_t) (inst[1] >> 16));
 		break;
@@ -778,7 +763,7 @@ antarctic_disassemble(uint32_t pc, const uint32_t inst[8], bool in_mesh,
                       bool &unhandled)
 {
 	const Text text = texts()[inst[0] & 0x1FF];
-	const uint32_t words = 1u << ((inst[0] >> 4) & 3);
+	const uint32_t words = insn_size(inst[0]) / 4;
 	char line[512], *tmp = line;
 	Out o{};
 

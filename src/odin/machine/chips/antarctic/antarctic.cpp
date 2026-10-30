@@ -28,6 +28,7 @@
 /* Power-on, the launch of a list and the loop that executes it. */
 
 #include "odin/machine/chips/antarctic/antarctic.hpp"
+#include "odin/machine/chips/antarctic/antarctic_decode.hpp"
 
 #include <algorithm>
 #include <cstdarg>
@@ -174,13 +175,6 @@ Antarctic::end_open_mesh()
 		end_mesh(m_s.pc);
 		m_s.in_mesh = 0;
 	}
-}
-
-/* The size of an instruction, in bytes */
-static uint32_t
-insn_size(uint32_t word)
-{
-	return 1u << (((word >> 4) & 3) + 2);
 }
 
 /* Reads the instruction at the program counter: its words, zeroes after

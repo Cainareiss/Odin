@@ -31,6 +31,7 @@
  * gives each opcode its function. */
 
 #include "odin/machine/chips/antarctic/antarctic.hpp"
+#include "odin/machine/chips/antarctic/antarctic_decode.hpp"
 #include "odin/common/bytes.hpp"
 
 #include <algorithm>
@@ -62,13 +63,6 @@ half(uint32_t word, unsigned n)
 	return static_cast<uint16_t>(word >> (16 * n));
 }
 
-/* The low 16 bits of a word as a signed number */
-static float
-s16(uint32_t word)
-{
-	return static_cast<float>(static_cast<int16_t>(word));
-}
-
 /* The two texture coordinates of a word, in sixteenths */
 static void
 read_texcoords(float uv[2], uint32_t word)
@@ -93,18 +87,6 @@ set_flag(uint32_t &word, uint32_t flag, bool on)
  * registers 1500007{4,8} give (push_pc, pop_pc). The games run right with
  * it; a stack out of the command RAM stops Odin.
  */
-
-uint32_t
-Antarctic::get_jump_address(const uint32_t *inst) const
-{
-	uint32_t addr;
-
-	addr = inst[1] * 4;
-	if (inst[0] & 0x800)
-		addr += m_s.pc;
-
-	return addr;
-}
 
 /* 000	Nop
  *
@@ -159,7 +141,7 @@ Antarctic::get_lod_size() const
 void
 Antarctic::op_jump(const uint32_t *inst)
 {
-	uint32_t addr = get_jump_address(inst);
+	uint32_t addr = jump_address(m_s.pc, inst);
 	uint32_t branch_id = inst[0] >> 16;
 	bool jump;
 
@@ -227,7 +209,7 @@ Antarctic::call_condition(const uint32_t *inst) const
 void
 Antarctic::op_call(const uint32_t *inst)
 {
-	uint32_t addr = get_jump_address(inst);
+	uint32_t addr = jump_address(m_s.pc, inst);
 	if (call_condition(inst)) {
 		/* See 501 */
 		m_s.patterns = ((m_s.patterns << 5) | m_s.pattern) & 0x3FFFFFFF;
