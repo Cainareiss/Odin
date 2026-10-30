@@ -89,7 +89,6 @@ public:
 	void set_picture_hole(const PictureHole &hole) { m_hole = hole; }
 	/* Once a frame, before it runs. */
 	void update();
-	void follow_guns();
 	/* While the menu is open: what was let go of is let go of, as a frame
 	 * would */
 	void settle();
@@ -169,27 +168,11 @@ public:
 	 * guns are the desktop's again */
 	void quiet();
 	/* The light gun of each player ([players.<game>] gun1 and gun2,
-	 * "<identity> <name>"), read by those pointers (nullptr: none) */
-	bool wants_guns() const { return !m_guns[0].empty() || !m_guns[1].empty(); }
+	 * "<identity> <name>") is read by those pointers (nullptr: none) */
 	void set_pointers(Pointers *pointers) { m_pointers = pointers; }
 	Pointers *pointers() const { return m_pointers; }
 	/* The light gun a player wants now (its identity; empty: none) */
 	void want_gun(unsigned player, const std::string &identity) { m_guns[player & 1] = identity; }
-	/* The pads feel the rumble outputs (the nozzle of Brave): unless the
-	 * user turns the vibration off */
-	void feel_outputs(bool on) { m_rumble = on; }
-	/* EXPERIMENTAL: the pad of player 1 feels the sound of the optional
-	 * board, as the vibration device of the cabinet it feeds */
-	void feel_option_board(bool on) { m_felt = on; }
-	/* The drive board, TX0 on that output (0: none): the wheel of player 1
-	 * turns as it is told; EXPERIMENTAL, the pad of player 1 feels the
-	 * shocks among those forces, not what the moves of the wheel give; the
-	 * stronger of the two */
-	void feel_drive_board(unsigned first_output)
-	{
-		m_drive_output = first_output;
-		m_force.reset();
-	}
 	/* How hard the wheel turns, in % of what the drive board asks
 	 * ([players.<game>] wheel_force, options.hpp) */
 	void set_wheel_force(int percent) { m_wheel_force = percent; }
@@ -206,7 +189,9 @@ public:
 	/* The switches the wiring of the cabinet ties to the ground
 	 * (Game::grounded): closed for the game whatever the player does */
 	void ground(std::vector<JvsSwitch> switches) { m_grounded = std::move(switches); }
-	/* All three as the cabinet of that game shakes, or none (`on` false) */
+	/* The pads, the pad of player 1 and the wheel as the cabinet of that
+	 * game shakes (feel_outputs, feel_option_board, feel_drive_board), or
+	 * none (`on` false) */
 	void feel_game(const Game &game, bool on)
 	{
 		feel_option_board(on && game.option_vibration);
@@ -269,6 +254,23 @@ private:
 	/* Each player takes the gamepad and the joystick seats.hpp gives them */
 	void reseat();
 	HostState host() const;
+	void follow_guns();
+	bool wants_guns() const { return !m_guns[0].empty() || !m_guns[1].empty(); }
+	/* The pads feel the rumble outputs (the nozzle of Brave): unless the
+	 * user turns the vibration off */
+	void feel_outputs(bool on) { m_rumble = on; }
+	/* EXPERIMENTAL: the pad of player 1 feels the sound of the optional
+	 * board, as the vibration device of the cabinet it feeds */
+	void feel_option_board(bool on) { m_felt = on; }
+	/* The drive board, TX0 on that output (0: none): the wheel of player 1
+	 * turns as it is told; EXPERIMENTAL, the pad of player 1 feels the
+	 * shocks among those forces, not what the moves of the wheel give; the
+	 * stronger of the two */
+	void feel_drive_board(unsigned first_output)
+	{
+		m_drive_output = first_output;
+		m_force.reset();
+	}
 
 	Keyboard &m_keys;
 	const Settings &m_settings;	/* the session's, which the menu changes */
