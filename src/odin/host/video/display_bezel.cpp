@@ -70,7 +70,7 @@ find_hole(const SDL_Surface &rgba)
 		right = std::max(right, x);
 		top = std::min(top, y);
 		bottom = std::max(bottom, y);
-		for (const auto [dx, dy] : { std::pair{ 1, 0 }, std::pair{ -1, 0 }, std::pair{ 0, 1 }, std::pair{ 0, -1 } }) {
+		for (const auto &[dx, dy] : { std::pair{ 1, 0 }, std::pair{ -1, 0 }, std::pair{ 0, 1 }, std::pair{ 0, -1 } }) {
 			const int nx = x + dx, ny = y + dy;
 			const size_t at = static_cast<size_t>(ny) * static_cast<size_t>(w) + static_cast<size_t>(nx);
 
