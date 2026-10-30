@@ -160,14 +160,12 @@ MenuSession::MenuSession(const Options &options, Display &display, Keyboard &key
 	state.bios = options.bios_path;
 	state.bios_given = options.given.bios;
 	state.saves = SaveFolder::root(options.saves);
-	const char *const saves = std::getenv("ODIN_SAVES");
-	state.saves_given = saves && saves[0];
+	state.saves_given = !env_text("ODIN_SAVES").empty();
 	state.states = m_states = options.states.empty() ? default_states() : options.states;
 	state.settings_file = settings_file;
 	state.log_file = options.log_file;
 	state.artwork = artwork_folder(options.artwork);
-	const char *const artwork = std::getenv("ODIN_ARTWORK");
-	state.artwork_given = artwork && artwork[0];
+	state.artwork_given = !env_text("ODIN_ARTWORK").empty();
 	if (game) {
 		display.set_sides(options.sides, artwork_file(state.artwork, game->name, "bezel"));
 		controls.set_picture_hole(display.picture_hole());

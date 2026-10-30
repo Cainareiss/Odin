@@ -1082,7 +1082,7 @@ Hikaru::kept_path(const std::string &name) const
 {
 	const char *const variable = name == "mie_eeprom" ? "ODIN_MIE_EEPROM" : name == "clock" ? "ODIN_CLOCK_FILE" : nullptr;
 
-	if (const char *const path = variable ? std::getenv(variable) : nullptr; path && path[0])
+	if (const std::string path = variable ? env_text(variable) : std::string(); !path.empty())
 		return path;
 	return m_saves.path(name);
 }

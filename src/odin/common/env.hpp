@@ -56,13 +56,22 @@ env_int(const char *name, int fallback)
 	return value ? std::atoi(value) : fallback;
 }
 
+/* And as text; empty when it is not set */
+inline std::string
+env_text(const char *name)
+{
+	const char *const value = std::getenv(name);
+
+	return value ? value : std::string();
+}
+
 /* The folder of the user, HOME, or USERPROFILE where there is no HOME; empty
  * when neither is set. */
 inline std::string
 home_dir()
 {
 	for (const char *name : { "HOME", "USERPROFILE" })
-		if (const char *const value = std::getenv(name); value && value[0])
+		if (std::string value = env_text(name); !value.empty())
 			return value;
 	return {};
 }

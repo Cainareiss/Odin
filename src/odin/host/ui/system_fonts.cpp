@@ -42,6 +42,7 @@
 #endif
 
 #include "odin/common/bytes.hpp"
+#include "odin/common/env.hpp"
 
 namespace odin {
 
@@ -83,9 +84,9 @@ find_files()
 	std::vector<std::string> folders;
 
 #ifdef _WIN32
-	const char *const windows = std::getenv("WINDIR");
+	const std::string windows = env_text("WINDIR");
 
-	folders.push_back(std::string(windows && windows[0] ? windows : "C:\\Windows") + "\\Fonts");
+	folders.push_back((windows.empty() ? "C:\\Windows" : windows) + "\\Fonts");
 #elif defined(__APPLE__)
 	const char *const home = std::getenv("HOME");
 
@@ -94,15 +95,14 @@ find_files()
 	folders.push_back("/Library/Fonts");
 	folders.push_back("/System/Library/Fonts");
 #else
-	const char *const home = std::getenv("HOME");
-	const char *const data = std::getenv("XDG_DATA_HOME");
+	const std::string home = env_text("HOME"), data = env_text("XDG_DATA_HOME");
 
-	if (data && data[0])
-		folders.push_back(std::string(data) + "/fonts");
-	else if (home && home[0])
-		folders.push_back(std::string(home) + "/.local/share/fonts");
-	if (home && home[0])
-		folders.push_back(std::string(home) + "/.fonts");
+	if (!data.empty())
+		folders.push_back(data + "/fonts");
+	else if (!home.empty())
+		folders.push_back(home + "/.local/share/fonts");
+	if (!home.empty())
+		folders.push_back(home + "/.fonts");
 	folders.push_back("/usr/local/share/fonts");
 	folders.push_back("/usr/share/fonts");
 #endif

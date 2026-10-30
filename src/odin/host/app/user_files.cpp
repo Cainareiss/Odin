@@ -78,9 +78,9 @@ executable_folder()
 std::string
 program_folder()
 {
-	const char *const appimage = std::getenv("APPIMAGE");
+	const std::string appimage = env_text("APPIMAGE");
 
-	if (appimage && appimage[0])
+	if (!appimage.empty())
 		return std::filesystem::path(appimage).parent_path().string();
 	return executable_folder();
 }
@@ -102,18 +102,16 @@ std::string
 user_data_dir()
 {
 #if defined(_WIN32)
-	const char *const appdata = std::getenv("APPDATA");
-
-	return appdata && appdata[0] ? appdata : std::string();
+	return env_text("APPDATA");
 #elif defined(__APPLE__)
 	const std::string home = home_dir();
 
 	return home.empty() ? home : home + "/Library/Application Support";
 #else
-	const char *const data = std::getenv("XDG_DATA_HOME");
+	const std::string data = env_text("XDG_DATA_HOME");
 	const std::string home = home_dir();
 
-	if (data && data[0])
+	if (!data.empty())
 		return data;
 	return home.empty() ? home : home + "/.local/share";
 #endif
@@ -147,11 +145,11 @@ odin_data_dir()
 std::string
 user_path(const char *variable, const std::string &chosen, const char *name)
 {
-	const char *const given = std::getenv(variable);
+	const std::string given = env_text(variable);
 	const std::string dir = odin_data_dir();
 
-	if (given && given[0])
-		return std::strcmp(given, "none") ? given : "";
+	if (!given.empty())
+		return given != "none" ? given : "";
 	if (!chosen.empty())
 		return chosen;
 	return dir.empty() ? dir : dir + "/" + name;

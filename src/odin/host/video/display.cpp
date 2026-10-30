@@ -63,7 +63,7 @@ find_program_lists(const std::string &game, std::string &seed, std::string &kept
 {
 	const std::string home = home_dir();
 	const std::string portable = portable_folder();
-	const char *const cache = std::getenv("XDG_CACHE_HOME");
+	const std::string cache = env_text("XDG_CACHE_HOME");
 	std::error_code error;
 	std::string dir;
 
@@ -84,8 +84,8 @@ find_program_lists(const std::string &game, std::string &seed, std::string &kept
 
 	if (!portable.empty())
 		dir = portable + "/cache";
-	else if (cache && cache[0])
-		dir = std::string(cache) + "/odin";
+	else if (!cache.empty())
+		dir = cache + "/odin";
 	else if (!home.empty())
 		dir = home + "/.cache/odin";
 	else
