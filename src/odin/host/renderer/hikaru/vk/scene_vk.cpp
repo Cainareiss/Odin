@@ -323,9 +323,12 @@ VkDrawing::pipeline(const MeshVariant &variant, MeshBlend blend)
 	const uint64_t index = key * 8 + static_cast<unsigned>(blend);
 	const auto found = m_pipelines.find(index);
 
-	if (found != m_pipelines.end())
-		return found->second;
+	return found != m_pipelines.end() ? found->second : make_pipeline(variant, blend, key, index);
+}
 
+VkPipeline
+VkDrawing::make_pipeline(const MeshVariant &variant, MeshBlend blend, uint64_t key, uint64_t index)
+{
 	Constants c{};
 	c.gl_clip_space = m_card.gl_clip_space();
 	c.has_texture = variant.has_texture;

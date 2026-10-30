@@ -190,6 +190,8 @@ private:
 	void use_depth();
 	void log(const char *fmt, ...) const __attribute__((format(printf, 2, 3)));
 	VkPipeline pipeline(const MeshVariant &variant, MeshBlend blend);
+	/* The first time one is asked for: made, and kept by `index` */
+	VkPipeline make_pipeline(const MeshVariant &variant, MeshBlend blend, uint64_t key, uint64_t index);
 	void read_cache(const std::string &path);
 	void write_cache();
 	void write_view(unsigned index);
