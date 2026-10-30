@@ -83,8 +83,7 @@ public:
 	void save(Z80State &out) const;
 	void load(const Z80State &in);
 
-	/* Debug (ODIN_MIE_TRACE): trace lines go to `out`; nullptr turns
-	 * tracing off. */
+	/* Debug: trace lines go to `out`; nullptr turns tracing off. */
 	void set_trace(FILE *out) { m_trace = out; }
 
 	uint16_t pc() const { return m_pc; }
