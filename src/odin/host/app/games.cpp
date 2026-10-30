@@ -215,6 +215,20 @@ is_id(const char *text)
 	return true;
 }
 
+/* "player" of a control or an output: 1 or 2, or none (the first) */
+bool
+player_right(const json_t *player)
+{
+	return !player || json_integer_value(player) == 1 || json_integer_value(player) == 2;
+}
+
+/* The player of a right "player" from 0 */
+uint8_t
+player_of(const json_t *player)
+{
+	return player ? static_cast<uint8_t>(json_integer_value(player) - 1) : 0;
+}
+
 /* A control: {"name": ..., "id": ..., then "switch", "analog" with "low",
  * or "positions"; "role", and "player" when it is 2; a switch may have
  * "keys", a list of key names, and "pad", a list of inputs of the
@@ -236,13 +250,13 @@ parse_control(const json_t *control)
 	const auto parsed_role = role ? parse_role(role) : std::nullopt;
 
 	if (!name || !name[0] || !is_id(id) || (button != nullptr) + (analog != nullptr) + (positions != nullptr) != 1 ||
-	    !parsed_role || (player && json_integer_value(player) != 1 && json_integer_value(player) != 2) ||
+	    !parsed_role || !player_right(player) ||
 	    (keys && (!button || !json_array_size(keys))) || (pad && (!button || !json_array_size(pad))))
 		return std::nullopt;
 	out.name = name;
 	out.id = id;
 	out.role = *parsed_role;
-	out.player = player ? static_cast<uint8_t>(json_integer_value(player) - 1) : 0;
+	out.player = player_of(player);
 	for (const auto &[list, names] : { std::pair{ keys, &out.keys }, std::pair{ pad, &out.pad } })
 		for (size_t k = 0; k < json_array_size(list); k++) {
 			const char *const input = json_string_value(json_array_get(list, k));
@@ -312,8 +326,7 @@ parse_output(const json_t *output)
 	GameOutput out{};
 
 	if (!name || !name[0] || !is_id(id) || !json_is_integer(number) || json_integer_value(number) < 1 ||
-	    json_integer_value(number) > 32 || !role ||
-	    (player && json_integer_value(player) != 1 && json_integer_value(player) != 2))
+	    json_integer_value(number) > 32 || !role || !player_right(player))
 		return std::nullopt;
 	for (const auto &[role_name, value] : ROLES) {
 		if (std::strcmp(role, role_name))
@@ -322,7 +335,7 @@ parse_output(const json_t *output)
 		out.id = id;
 		out.output = static_cast<unsigned>(json_integer_value(number));
 		out.role = value;
-		out.player = player ? static_cast<uint8_t>(json_integer_value(player) - 1) : 0;
+		out.player = player_of(player);
 		return out;
 	}
 	return std::nullopt;
@@ -610,26 +623,30 @@ read_cabinets(const json_t *rom, Game &game)
 	return true;
 }
 
+/* A key of a game that is true or false, into `on` where the game has
+ * it; false, said on stderr, when it is neither */
+bool
+read_true_false(const json_t *rom, const char *key, const char *name, bool &on)
+{
+	if (const json_t *const value = json_object_get(rom, key)) {
+		if (!json_is_boolean(value)) {
+			std::fprintf(stderr, "ERROR: game '%s': \"%s\" is not true or false\n", name, key);
+			return false;
+		}
+		on = json_is_true(value);
+	}
+	return true;
+}
+
 /* What the optional sound board drives */
 bool
 read_options(const json_t *rom, Game &game)
 {
 	const char *const name = game.name.c_str();
 
-	if (const json_t *const speakers = json_object_get(rom, "option_speakers")) {
-		if (!json_is_boolean(speakers)) {
-			std::fprintf(stderr, "ERROR: game '%s': \"option_speakers\" is not true or false\n", name);
-			return false;
-		}
-		game.option_speakers = json_is_true(speakers);
-	}
-	if (const json_t *const shaken = json_object_get(rom, "option_vibration")) {
-		if (!json_is_boolean(shaken)) {
-			std::fprintf(stderr, "ERROR: game '%s': \"option_vibration\" is not true or false\n", name);
-			return false;
-		}
-		game.option_vibration = json_is_true(shaken);
-	}
+	if (!read_true_false(rom, "option_speakers", name, game.option_speakers) ||
+	    !read_true_false(rom, "option_vibration", name, game.option_vibration))
+		return false;
 	if (const json_t *const level = json_object_get(rom, "option_level")) {
 		const double db = json_number_value(level);
 
@@ -931,7 +948,7 @@ GameList::load_game(RomFiles &files, const std::string &name) const
 		}
 		if (!bytes)
 			return std::nullopt;
-		game->sections.emplace_back(json_string_value(json_object_get(section, "name")), std::move(*bytes));
+		game->sections.emplace_back(section_name, std::move(*bytes));
 	}
 	return game;
 }
