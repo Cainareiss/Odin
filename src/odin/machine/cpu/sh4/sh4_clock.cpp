@@ -362,10 +362,11 @@ bool Sh4::clock_follow(ClockTurn &turn, std::vector<ClockStep> &steps)
 	uint64_t timed = 0, seen = 0, live = 0;
 	uint8_t type[USE_COUNT] = {};
 	/* For each register, the load whose value it holds; for each load:
-	 * 1 taken by instructions that follow the read only so far, 2 by
-	 * another, 3 done (written again after those only) */
+	 * taken by instructions that follow the read only so far, by another,
+	 * or done (written again after those only) */
+	enum : uint8_t { NO_LOAD, FOLLOWERS_ONLY, ANOTHER, DONE };
 	int32_t load_of[USE_COUNT];
-	std::vector<uint8_t> fresh_load(steps.size(), 0);
+	std::vector<uint8_t> fresh_load(steps.size(), NO_LOAD);
 
 	std::fill(std::begin(load_of), std::end(load_of), -1);
 	for (size_t i = 0; i < steps.size(); i++) {
@@ -450,21 +451,21 @@ bool Sh4::clock_follow(ClockTurn &turn, std::vector<ClockStep> &steps)
 		}
 
 		each_bit(u.reads, [&](uint32_t r) {
-			if (load_of[r] >= 0 && fresh_load[static_cast<size_t>(load_of[r])] == 1 &&
+			if (load_of[r] >= 0 && fresh_load[static_cast<size_t>(load_of[r])] == FOLLOWERS_ONLY &&
 			    s.role != ClockRole::Follows) {
-				fresh_load[static_cast<size_t>(load_of[r])] = 2;
+				fresh_load[static_cast<size_t>(load_of[r])] = ANOTHER;
 			}
 		});
 		each_bit(u.writes, [&](uint32_t r) {
-			if (load_of[r] >= 0 && fresh_load[static_cast<size_t>(load_of[r])] == 1) {
-				fresh_load[static_cast<size_t>(load_of[r])] = 3;
+			if (load_of[r] >= 0 && fresh_load[static_cast<size_t>(load_of[r])] == FOLLOWERS_ONLY) {
+				fresh_load[static_cast<size_t>(load_of[r])] = DONE;
 			}
 			load_of[r] = -1;
 		});
 		if (s.role == ClockRole::Same && u.memory && std::has_single_bit(u.loaded) &&
 		    std::countr_zero(u.loaded) < 16) {
 			load_of[std::countr_zero(u.loaded)] = static_cast<int32_t>(i);
-			fresh_load[i] = 1;
+			fresh_load[i] = FOLLOWERS_ONLY;
 		}
 		if (s.role == ClockRole::Read) {
 			timed = (timed & ~u.writes) | u.loaded;
@@ -497,7 +498,7 @@ bool Sh4::clock_follow(ClockTurn &turn, std::vector<ClockStep> &steps)
 			if (!(steps[j].use.writes & (uint64_t{1} << s.other))) {
 				continue;
 			}
-			if (fresh_load[j] == 3) {
+			if (fresh_load[j] == DONE) {
 				for (size_t k = 0; k < reads.size(); k++) {
 					if (reads[k].step == j) {
 						s.fresh = true;
@@ -585,16 +586,16 @@ bool Sh4::clock_turn(const ClockTurn &turn, uint32_t value, ClockValues &out)
 	out.step.resize(turn.steps.size());
 	for (size_t i = 0; i < turn.steps.size(); i++) {
 		const ClockStep &s = turn.steps[i];
-		std::array<uint32_t, 3> &v = out.step[i];
+		StepValues &v = out.step[i];
 
 		if (s.role == ClockRole::Read) {
 			out.timed[s.to] = value;
 			v = {0, 0, value};
 			continue;
 		}
-		v[0] = out.timed[s.from];
+		v.from_time = out.timed[s.from];
 		if (s.role == ClockRole::Choice) {
-			if (v[0] != s.t) {
+			if (v.from_time != s.t) {
 				out.same = false;
 				break;
 			}
@@ -602,18 +603,18 @@ bool Sh4::clock_turn(const ClockTurn &turn, uint32_t value, ClockValues &out)
 		}
 		if (s.other != NO_USE) {
 			if (s.fresh) {
-				v[1] = static_cast<uint32_t>(
+				v.other = static_cast<uint32_t>(
 					load_bytes(m_rd[s.fresh_addr >> PAGE_BITS] + (s.fresh_addr & (PAGE_SIZE - 1)), s.fresh_size));
 			} else {
 				Regs before = s.before;
 
-				v[1] = use_of(before, s.other);
+				v.other = use_of(before, s.other);
 			}
-			use_of(m_r, s.other) = v[1];
+			use_of(m_r, s.other) = v.other;
 		}
-		use_of(m_r, s.from) = v[0];
+		use_of(m_r, s.from) = v.from_time;
 		s.call(*this, &s.op);
-		v[2] = out.timed[s.to] = use_of(m_r, s.to);
+		v.written = out.timed[s.to] = use_of(m_r, s.to);
 	}
 	m_r = kept;
 	return out.same;
@@ -629,13 +630,13 @@ bool Sh4::clock_ordered(const ClockTurn &turn, const ClockValues &a, const Clock
 	const auto in_range = [](uint32_t v) { return f32(v) >= -2147483648.0f && f32(v) < 2147483648.0f; };
 	/* The exact change of an integer result for the exact change of its
 	 * input: the same, the opposite, or that many times */
-	const auto moved = [](const std::array<uint32_t, 3> &x, const std::array<uint32_t, 3> &y, int64_t times) {
-		return wide(y[2]) - wide(x[2]) == (wide(y[0]) - wide(x[0])) * times;
+	const auto moved = [](const StepValues &x, const StepValues &y, int64_t times) {
+		return wide(y.written) - wide(x.written) == (wide(y.from_time) - wide(x.from_time)) * times;
 	};
 
 	for (size_t i = 0; i < turn.steps.size(); i++) {
 		const ClockStep &s = turn.steps[i];
-		const std::array<uint32_t, 3> &x = a.step[i], &y = b.step[i];
+		const StepValues &x = a.step[i], &y = b.step[i];
 		bool ok = false;
 
 		if (s.role != ClockRole::Follows) {
@@ -646,42 +647,42 @@ bool Sh4::clock_ordered(const ClockTurn &turn, const ClockValues &a, const Clock
 			ok = true;
 			break;
 		case Order::Add:
-			ok = same_half(x[0], y[0]) && moved(x, y, 1);
+			ok = same_half(x.from_time, y.from_time) && moved(x, y, 1);
 			break;
 		case Order::Sub:
-			ok = same_half(x[0], y[0]) && moved(x, y, s.from_n ? 1 : -1);
+			ok = same_half(x.from_time, y.from_time) && moved(x, y, s.from_n ? 1 : -1);
 			break;
 		case Order::Neg:
-			ok = same_half(x[0], y[0]) && moved(x, y, -1);
+			ok = same_half(x.from_time, y.from_time) && moved(x, y, -1);
 			break;
 		case Order::ShiftLeft:
-			ok = same_half(x[0], y[0]) && moved(x, y, int64_t{1} << s.use.shift);
+			ok = same_half(x.from_time, y.from_time) && moved(x, y, int64_t{1} << s.use.shift);
 			break;
 		case Order::ShiftRight:
 		case Order::ToFloat:
-			ok = same_half(x[0], y[0]);
+			ok = same_half(x.from_time, y.from_time);
 			break;
 		case Order::ToInt:
-			ok = number(x[0]) && number(y[0]) && in_range(x[0]) && in_range(y[0]);
+			ok = number(x.from_time) && number(y.from_time) && in_range(x.from_time) && in_range(y.from_time);
 			break;
 		case Order::FMul:
 		case Order::FAdd:
 		case Order::FSub:
-			ok = finite(x[1]) && number(x[0]) && number(y[0]) && number(x[2]) && number(y[2]);
+			ok = finite(x.other) && number(x.from_time) && number(y.from_time) && number(x.written) && number(y.written);
 			break;
 		case Order::FDiv:
-			ok = finite(x[1]) && f32(x[1]) != 0.0f && number(x[0]) && number(y[0]) && number(x[2]) &&
-			     number(y[2]);
+			ok = finite(x.other) && f32(x.other) != 0.0f && number(x.from_time) && number(y.from_time) && number(x.written) &&
+			     number(y.written);
 			break;
 		case Order::FNeg:
-			ok = number(x[0]) && number(y[0]);
+			ok = number(x.from_time) && number(y.from_time);
 			break;
 		case Order::Above: case Order::AtLeast: case Order::Greater: case Order::GreaterEq:
 		case Order::NotNegative: case Order::Positive:
-			ok = same_half(x[0], y[0]) && x[2] == y[2];
+			ok = same_half(x.from_time, y.from_time) && x.written == y.written;
 			break;
 		case Order::FGreater:
-			ok = number(x[0]) && number(y[0]) && number(x[1]) && x[2] == y[2];
+			ok = number(x.from_time) && number(y.from_time) && number(x.other) && x.written == y.written;
 			break;
 		case Order::None:
 			break;

@@ -501,8 +501,11 @@ private:
 	};
 	/* What a turn gave for one value of the timer: for each of its steps,
 	 * the input from the time, the other input, what it wrote */
+	struct StepValues {
+		uint32_t from_time, other, written;
+	};
 	struct ClockValues {
-		std::vector<std::array<uint32_t, 3>> step;
+		std::vector<StepValues> step;
 		uint32_t timed[64];
 		bool same;
 	};
