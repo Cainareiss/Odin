@@ -81,7 +81,7 @@ Display::set_window_size(int w, int h, bool fullscreen)
 }
 
 /* On the whole display: as the system says, or asked and as large as the
- * display (gamescope does not say it) */
+ * display (covers_display) */
 bool
 Display::fullscreen() const
 {
@@ -92,7 +92,8 @@ Display::fullscreen() const
 	return m_fullscreen_asked && SDL_GetWindowSize(m_window, &w, &h) && covers_display(w, h);
 }
 
-/* A window of that size as large as its display */
+/* A window of that size as large as its display: it takes the whole
+ * display, whether the system says so or not (gamescope does not) */
 bool
 Display::covers_display(int w, int h) const
 {
@@ -122,8 +123,8 @@ Display::resize_to(unsigned w, unsigned h)
 		set_window_size(static_cast<int>(w), static_cast<int>(h), false);
 }
 
-/* A window as large as its display takes the whole display, whether the
- * system says so or not (gamescope does not) */
+/* A window as large as its display (covers_display) takes the whole
+ * display */
 bool
 Display::hand_size(unsigned &w, unsigned &h)
 {

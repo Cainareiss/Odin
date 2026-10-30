@@ -227,8 +227,7 @@ public:
 	static constexpr Uint32 FELT_MS = 50;
 
 private:
-	/* A pad and its buttons: a button pressed and released before a frame
-	 * saw it stays pressed until that frame has run. */
+	/* A pad and its buttons, held as press() keeps them (controls.cpp) */
 	struct Pad {
 		SDL_Gamepad *handle = nullptr;
 		SDL_JoystickID id = 0;
