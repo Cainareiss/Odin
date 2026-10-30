@@ -35,6 +35,14 @@
 
 namespace odin {
 
+/* The device a line of [players.<game>] names (p1, joy1, gun1...): the
+ * text before its first space, a name of it after */
+inline std::string
+identity_of(const std::string &value)
+{
+	return value.substr(0, value.find(' '));
+}
+
 /* A gamepad open: its id, and the GUID of its make and model */
 struct OpenPad {
 	SDL_JoystickID id;

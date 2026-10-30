@@ -254,7 +254,7 @@ MenuSession::fill_devices(MenuState &state)
 			for (const auto &[key, value] : m_settings.section("players." + game_shown()))
 				for (unsigned player = 0; player < 2; player++)
 					if (key == keys + std::to_string(player + 1))
-						wanted[player] = value.substr(0, value.find(' '));
+						wanted[player] = identity_of(value);
 			for (const Controls::Plugged &one : plugged)
 				if (state.steers || pads || one.kind != SDL_JOYSTICK_TYPE_WHEEL)
 					open.push_back({ one.id, one.guid });

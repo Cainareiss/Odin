@@ -93,11 +93,11 @@ Controls::Controls(Keyboard &keys, const std::vector<GameControl> &controls, con
 		return;
 	for (const auto &[key, value] : settings.section("players." + game)) {
 		if (key == "p1" || key == "p2") {
-			m_wanted[key[1] - '1'] = value.substr(0, value.find(' '));
+			m_wanted[key[1] - '1'] = identity_of(value);
 		} else if (key == "gun1" || key == "gun2") {
-			m_guns[key[3] - '1'] = value.substr(0, value.find(' '));
+			m_guns[key[3] - '1'] = identity_of(value);
 		} else if (key == "joy1" || key == "joy2") {
-			m_joys_wanted[key[3] - '1'] = value.substr(0, value.find(' '));
+			m_joys_wanted[key[3] - '1'] = identity_of(value);
 		} else if ((key == "device1" || key == "device2") && device_named(value)) {
 			m_chosen[key[6] - '1'] = device_named(value);
 		} else if (key == "light_gun_mode" && on_off_named(value)) {
