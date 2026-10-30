@@ -62,6 +62,41 @@ bool even_parity(uint8_t byte)
 	return (std::popcount(byte) & 1) == 0;
 }
 
+/* What a track of the card reads as; a read of seven bits and parity
+ * also wants each byte even */
+Track track_status(const uint8_t *raw, bool seven)
+{
+	if (raw[0] != 0xFF)
+		return BLANK;
+	if (raw[CardReader::TRACK_DATA + 1] != 0xFF)
+		return NO_END;
+	if (CardReader::frame_xor(std::span<const uint8_t>(raw + 1, CardReader::TRACK_DATA + 1)) !=
+	    raw[CardReader::TRACK_DATA + 2])
+		return LRC;
+	for (uint32_t i = 1; seven && i <= CardReader::TRACK_DATA; i++)
+		if (!even_parity(raw[i]))
+			return PARITY;
+	return GOOD;
+}
+
+/* The letter of the tracks asked that failed (8230), some of them good */
+uint8_t failure_letter(uint8_t mask, const std::array<uint8_t, CardReader::TRACKS> &status)
+{
+	const bool bad1 = (mask & 1) && status[0] != GOOD;
+	const bool bad2 = (mask & 2) && status[1] != GOOD;
+	const bool bad3 = (mask & 4) && status[2] != GOOD;
+
+	if (bad1 && bad2)
+		return 'T';
+	if (bad1 && bad3)
+		return 'U';
+	if (bad2 && bad3)
+		return 'V';
+	if (bad1)
+		return 'Q';
+	return bad2 ? 'R' : 'S';
+}
+
 } /* namespace */
 
 CardReader::CardReader(std::string card_file)
@@ -447,18 +482,7 @@ void CardReader::read(std::span<const uint8_t> params)
 		if (!(mask & (1u << t)))
 			continue;
 		selected++;
-		if (raw[0] != 0xFF) {
-			status[t] = BLANK;
-		} else if (raw[TRACK_DATA + 1] != 0xFF) {
-			status[t] = NO_END;
-		} else if (frame_xor(std::span<const uint8_t>(raw + 1, TRACK_DATA + 1)) != raw[TRACK_DATA + 2]) {
-			status[t] = LRC;
-		} else {
-			status[t] = GOOD;
-			for (uint32_t i = 1; seven && i <= TRACK_DATA; i++)
-				if (!even_parity(raw[i]))
-					status[t] = PARITY;
-		}
+		status[t] = track_status(raw, seven);
 		good += status[t] == GOOD;
 		for (uint32_t i = 0; i < TRACK_DATA; i++)
 			data[size++] = status[t] == BLANK ? 0 : static_cast<uint8_t>(seven ? raw[1 + i] & 0x7F : raw[1 + i]);
@@ -477,25 +501,7 @@ void CardReader::read(std::span<const uint8_t> params)
 		reply(CMD_READ, '1', '0');
 		return;
 	}
-
-	const bool bad1 = (mask & 1) && status[0] != GOOD;
-	const bool bad2 = (mask & 2) && status[1] != GOOD;
-	const bool bad3 = (mask & 4) && status[2] != GOOD;
-	uint8_t letter;
-
-	if (bad1 && bad2)
-		letter = 'T';
-	else if (bad1 && bad3)
-		letter = 'U';
-	else if (bad2 && bad3)
-		letter = 'V';
-	else if (bad1)
-		letter = 'Q';
-	else if (bad2)
-		letter = 'R';
-	else
-		letter = 'S';
-	reply(CMD_READ, letter, '0', std::span<const uint8_t>(data.data(), size));
+	reply(CMD_READ, failure_letter(mask, status), '0', std::span<const uint8_t>(data.data(), size));
 }
 
 /* 53 mode parity track data (652C, the write op 974A): the
