@@ -303,48 +303,31 @@ joy_text(const JoyInput &joy)
 	return "axis" + index + (joy.inverted ? ":invert" : "");
 }
 
-} /* namespace */
-
-bool
-PadInput::is_trigger() const
-{
-	return type == Type::AXIS && index >= SDL_GAMEPAD_AXIS_LEFT_TRIGGER;
-}
-
+/* "left", "middle", "right", "x", "y", "off" */
 std::optional<HostInput>
-HostInput::parse(std::string_view text)
+parse_mouse(std::string_view text)
 {
+	static const std::pair<std::string_view, MouseInput> NAMES[] = {
+		{ "left", { MouseInput::Type::BUTTON, 0 } }, { "middle", { MouseInput::Type::BUTTON, 1 } },
+		{ "right", { MouseInput::Type::BUTTON, 2 } }, { "x", { MouseInput::Type::X, 0 } },
+		{ "y", { MouseInput::Type::Y, 0 } }, { "off", { MouseInput::Type::OFF, 0 } },
+	};
 	HostInput out{};
 
-	if (text.substr(0, 4) == "key:") {
-		const std::string name(text.substr(4));
+	out.kind = HostInput::Kind::MOUSE;
+	for (const auto &[name, mouse] : NAMES)
+		if (text == name) {
+			out.mouse = mouse;
+			return out;
+		}
+	return std::nullopt;
+}
 
-		out.kind = Kind::KEY;
-		out.key = SDL_GetKeyFromName(name.c_str());
-		if (out.key == SDLK_UNKNOWN)
-			return std::nullopt;
-		return out;
-	}
-	if (text.substr(0, 6) == "mouse:") {
-		static const std::pair<std::string_view, MouseInput> NAMES[] = {
-			{ "left", { MouseInput::Type::BUTTON, 0 } }, { "middle", { MouseInput::Type::BUTTON, 1 } },
-			{ "right", { MouseInput::Type::BUTTON, 2 } }, { "x", { MouseInput::Type::X, 0 } },
-			{ "y", { MouseInput::Type::Y, 0 } }, { "off", { MouseInput::Type::OFF, 0 } },
-		};
-
-		out.kind = Kind::MOUSE;
-		for (const auto &[name, mouse] : NAMES)
-			if (text.substr(6) == name) {
-				out.mouse = mouse;
-				return out;
-			}
-		return std::nullopt;
-	}
-	if (text.substr(0, 4) == "joy:")
-		return parse_joy(text.substr(4));
-	if (text.substr(0, 4) != "pad:")
-		return std::nullopt;
-	text.remove_prefix(4);
+/* "a", "leftx", "-lefty", "rightx:invert", "back+start" */
+std::optional<HostInput>
+parse_pad(std::string_view text)
+{
+	HostInput out{};
 
 	/* A button held first, then another */
 	if (const size_t plus = text.find('+', 1); plus != std::string_view::npos) {
@@ -354,7 +337,7 @@ HostInput::parse(std::string_view text)
 
 		if (with == SDL_GAMEPAD_BUTTON_INVALID || button == SDL_GAMEPAD_BUTTON_INVALID || with == button)
 			return std::nullopt;
-		out.kind = Kind::PAD;
+		out.kind = HostInput::Kind::PAD;
 		out.pad = PadInput{ PadInput::Type::BUTTON, static_cast<uint8_t>(button) };
 		out.pad.with = static_cast<int8_t>(with);
 		return out;
@@ -377,7 +360,7 @@ HostInput::parse(std::string_view text)
 	const SDL_GamepadAxis axis = SDL_GetGamepadAxisFromString(name.c_str());
 	const SDL_GamepadButton button = SDL_GetGamepadButtonFromString(name.c_str());
 
-	out.kind = Kind::PAD;
+	out.kind = HostInput::Kind::PAD;
 	if (axis != SDL_GAMEPAD_AXIS_INVALID) {
 		/* Half a trigger is no input, a stick is turned over whole */
 		if (half != PadInput::Type::AXIS && axis >= SDL_GAMEPAD_AXIS_LEFT_TRIGGER)
@@ -391,6 +374,37 @@ HostInput::parse(std::string_view text)
 		return std::nullopt;
 	out.pad = PadInput{ PadInput::Type::BUTTON, static_cast<uint8_t>(button) };
 	return out;
+}
+
+} /* namespace */
+
+bool
+PadInput::is_trigger() const
+{
+	return type == Type::AXIS && index >= SDL_GAMEPAD_AXIS_LEFT_TRIGGER;
+}
+
+std::optional<HostInput>
+HostInput::parse(std::string_view text)
+{
+	HostInput out{};
+
+	if (text.substr(0, 4) == "key:") {
+		const std::string name(text.substr(4));
+
+		out.kind = Kind::KEY;
+		out.key = SDL_GetKeyFromName(name.c_str());
+		if (out.key == SDLK_UNKNOWN)
+			return std::nullopt;
+		return out;
+	}
+	if (text.substr(0, 6) == "mouse:")
+		return parse_mouse(text.substr(6));
+	if (text.substr(0, 4) == "joy:")
+		return parse_joy(text.substr(4));
+	if (text.substr(0, 4) != "pad:")
+		return std::nullopt;
+	return parse_pad(text.substr(4));
 }
 
 std::string
