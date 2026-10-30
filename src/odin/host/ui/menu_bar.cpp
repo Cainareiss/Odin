@@ -93,6 +93,14 @@ item(const char *label, const std::string &key = {}, bool checked = false, bool 
 	return ImGui::MenuItem(label, key.empty() ? nullptr : key.c_str(), checked, enabled);
 }
 
+/* An item checked while `on`, which a click turns over */
+void
+toggle(const char *label, const std::string &key, bool &on, bool enabled = true)
+{
+	if (item(label, key, on, enabled))
+		on = !on;
+}
+
 } /* namespace */
 
 void
@@ -212,12 +220,12 @@ struct Menu::BarItems {
 		}
 		return changed;
 	}
-	/* A value in %, from 0 to `most`, its name above it */
-	void slider(const char *name, const char *id, int &value, int most) const
+	/* A value in %, from 0 to `most`, its name above it: whether it moved */
+	bool slider(const char *name, const char *id, int &value, int most) const
 	{
 		ImGui::TextUnformatted(name);
 		ImGui::SetNextItemWidth(kit.px(SLIDER_W));
-		ImGui::SliderInt(id, &value, 0, most, "%d %%", ImGuiSliderFlags_AlwaysClamp);
+		return ImGui::SliderInt(id, &value, 0, most, "%d %%", ImGuiSliderFlags_AlwaysClamp);
 	}
 	/* A line to read only: what, and what it is */
 	static void greyed(const char *what, const std::string &value) { ImGui::TextDisabled("%s: %s", what, value.c_str()); }
@@ -467,10 +475,10 @@ Menu::bar_input(BarItems &b)
 		}
 		ImGui::EndMenu();
 	}
-	if (state.can_shake && item("Vibration", {}, state.shake, state.game))
-		state.shake = !state.shake;
-	if (state.sights[0] && item("Light gun mode", b.key(Action::LIGHT_GUN), state.light_gun, state.game))
-		state.light_gun = !state.light_gun;
+	if (state.can_shake)
+		toggle("Vibration", {}, state.shake, state.game);
+	if (state.sights[0])
+		toggle("Light gun mode", b.key(Action::LIGHT_GUN), state.light_gun, state.game);
 	ImGui::Separator();
 	if (ImGui::BeginMenu("Hotkeys")) {
 		b.framed();
@@ -478,8 +486,7 @@ Menu::bar_input(BarItems &b)
 			b.ask(Ask::HOTKEYS_DEFAULTS);
 		ImGui::EndMenu();
 	}
-	if (item("Send outputs", {}, state.network))
-		state.network = !state.network;
+	toggle("Send outputs", {}, state.network);
 }
 
 void
@@ -490,7 +497,7 @@ Menu::bar_display(BarItems &b)
 	int window = state.custom_window ? CUSTOM : static_cast<int>(state.window) - 1;
 	int scale = static_cast<int>(state.scale) - 1, mode = static_cast<int>(state.upscale_mode);
 	int filter = -1, sync = static_cast<int>(state.vsync), pace = state.unthrottled ? 1 : 0;
-	int theme = static_cast<int>(state.theme);
+	int theme = static_cast<int>(state.theme), sides = static_cast<int>(state.sides);
 
 	for (size_t f = 0; f < std::size(ANISOTROPY); f++)
 		if (ANISOTROPY[f] == state.anisotropy)
@@ -520,13 +527,8 @@ Menu::bar_display(BarItems &b)
 	if (b.choose("Vertical sync", SYNCS, sync, !state.vsync_locked))
 		state.vsync = static_cast<unsigned>(sync);
 	ImGui::Separator();
-	if (ImGui::BeginMenu("Bezel")) {
-		b.framed();
-		for (unsigned s = 0; s < std::size(SIDES_SHOWN); s++)
-			if (item(SIDES_SHOWN[s], {}, state.sides == s))
-				state.sides = s;
-		ImGui::EndMenu();
-	}
+	if (b.choose("Bezel", SIDES_SHOWN, sides))
+		state.sides = static_cast<unsigned>(sides);
 	/* The screens of the cabinets; another filter odin.ini
 	 * names is shown by its name, taken before a click
 	 * changes it ("" for None has no name to show) */
@@ -547,8 +549,7 @@ Menu::bar_display(BarItems &b)
 	}
 	if (b.choose("Speed limit (next launch)", PACES, pace, !state.unthrottled_given))
 		state.unthrottled = pace == 1;
-	if (item("Show FPS", {}, state.show_speed))
-		state.show_speed = !state.show_speed;
+	toggle("Show FPS", {}, state.show_speed);
 	ImGui::Separator();
 	if (ImGui::BeginMenu("Menu theme")) {
 		b.framed();
@@ -570,12 +571,9 @@ Menu::bar_audio(BarItems &b)
 	int volume = static_cast<int>(state.volume);
 
 	ImGui::BeginDisabled(state.silent);
-	ImGui::TextUnformatted("Volume");
-	ImGui::SetNextItemWidth(kit.px(SLIDER_W));
-	if (ImGui::SliderInt("##volume", &volume, 0, 100, "%d %%", ImGuiSliderFlags_AlwaysClamp))
+	if (b.slider("Volume", "##volume", volume, 100))
 		state.volume = static_cast<unsigned>(volume);
-	if (item("Sound in the background", {}, state.background))
-		state.background = !state.background;
+	toggle("Sound in the background", {}, state.background);
 	ImGui::EndDisabled();
 	ImGui::Separator();
 	/* Where the sound plays: the system's device, or one
@@ -669,8 +667,7 @@ Menu::bar_debug(BarItems &b)
 
 	if (item("Pause", b.key(Action::PAUSE), state.paused, state.game))
 		b.ask(Ask::PAUSE);
-	if (item("Detailed log (next launch)", {}, state.verbose, !state.verbose_given))
-		state.verbose = !state.verbose;
+	toggle("Detailed log (next launch)", {}, state.verbose, !state.verbose_given);
 }
 
 void
