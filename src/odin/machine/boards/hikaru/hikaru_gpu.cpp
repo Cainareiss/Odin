@@ -40,6 +40,7 @@ HikaruGpu::HikaruGpu(const Memory &memory, const Hooks &hooks)
 	  m_pci1_res(false)
 {
 	m_antarctic.set_before_texture_write(m_hooks.before_texture_write, m_hooks.ctx);
+	m_eurasia.set_fb_written(m_hooks.fb_written, m_hooks.ctx);
 }
 
 void

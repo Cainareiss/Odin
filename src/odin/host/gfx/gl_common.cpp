@@ -348,6 +348,16 @@ read_buffer(GLenum target, GLintptr offset, GLsizeiptr size, void *out)
 #endif
 }
 
+void
+invalidate(GLenum target, GLenum attachment)
+{
+#ifndef ODIN_GLES
+	if (!GLEW_VERSION_4_3 && !GLEW_ARB_invalidate_subdata)
+		return;
+#endif
+	glInvalidateFramebuffer(target, 1, &attachment);
+}
+
 GLuint
 new_texture(GLenum format, unsigned w, unsigned h)
 {

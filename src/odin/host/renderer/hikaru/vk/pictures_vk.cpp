@@ -215,7 +215,7 @@ VkDrawing::blend_scene_to_pipe(unsigned slot, unsigned buffer, uint32_t rate)
 
 	m_card.barrier(cb, m_scene, vk::SAMPLED);
 	m_card.barrier(cb, kept(buffer), vk::SAMPLED);
-	m_card.begin_drawing(cb, kept(2 + slot), { { 0, 0 }, { width(), height() } });
+	m_card.begin_drawing(cb, kept(2 + slot), { { 0, 0 }, { width(), height() } }, VK_ATTACHMENT_LOAD_OP_DONT_CARE);
 	m_card.bind_images(cb, m_blender, { &m_scene, &kept(buffer) }, m_nearest);
 	m_fn.vkCmdPushConstants(cb, m_blender.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
 	m_fn.vkCmdDraw(cb, 3, 1, 0, 0);
@@ -286,7 +286,7 @@ VkDrawing::compose(const Compose &c, unsigned shown, const bool layers[2])
 	for (vk::Image *input : inputs)
 		if (input->layout != VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
 			m_card.barrier(cb, *input, vk::SAMPLED);
-	m_card.begin_drawing(cb, m_frame, { { 0, 0 }, { width(), height() } });
+	m_card.begin_drawing(cb, m_frame, { { 0, 0 }, { width(), height() } }, VK_ATTACHMENT_LOAD_OP_DONT_CARE);
 	m_card.bind_images(cb, m_compose, { inputs[0], inputs[1], inputs[2], inputs[3] }, m_nearest);
 	m_fn.vkCmdPushConstants(cb, m_compose.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
 	m_fn.vkCmdDraw(cb, 4, 1, 0, 0);
@@ -315,8 +315,9 @@ VkDrawing::present(PictureRect rect, unsigned window_w, unsigned window_h)
 	const VkCommandBuffer cb = m_card.commands();
 	vk::Image &window = m_card.window_image(window_w, window_h);
 	const int32_t x = static_cast<int32_t>(rect.x), y = static_cast<int32_t>(rect.y);
+	const bool around = w != window_w || h != window_h;
 
-	if (w != window_w || h != window_h)
+	if (around && (m_filter || (w == width() && h == height())))
 		clear(cb, window, 1.0f);
 
 	/* A filter takes the picture at the size of the screen of the
@@ -353,7 +354,8 @@ VkDrawing::present(PictureRect rect, unsigned window_w, unsigned window_h)
 	                        static_cast<float>(window_h) };
 
 	m_card.barrier(cb, m_frame, vk::SAMPLED);
-	m_card.begin_drawing(cb, window, { { x, y }, { w, h } });
+	m_card.begin_drawing(cb, window, { { x, y }, { w, h } },
+	                     around ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD);
 	m_card.bind_images(cb, m_presenter, { &m_frame }, m_nearest);
 	m_fn.vkCmdPushConstants(cb, m_presenter.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
 	m_fn.vkCmdDraw(cb, 3, 1, 0, 0);

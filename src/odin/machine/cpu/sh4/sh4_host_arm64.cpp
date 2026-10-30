@@ -39,11 +39,28 @@ namespace {
 constexpr uint32_t SIZE = 32u << 20;
 
 /* x19 the CPU, x20 its registers, x21 and x22 the tables of pages, x23 the
- * epochs of the code, x24 the instructions of the block; A is w0 */
-constexpr uint8_t WORDS = 20, READS = 21, WRITES = 22, EPOCHS = 23, OPS = 24;
+ * epochs of the code, x24 the instructions of the block, x25 the blocks
+ * found first, x26 the host code; A is w0 */
+constexpr uint8_t WORDS = 20, READS = 21, WRITES = 22, EPOCHS = 23, OPS = 24, NEAR = 25, CODE = 26;
 constexpr uint8_t A = 0;
+constexpr uint8_t X12 = 12, X13 = 13, X14 = 14;
+constexpr uint32_t NONE = ~0u;
 
 int64_t at(uint32_t rank) { return 4 * static_cast<int64_t>(rank); }
+
+constexpr uint32_t MUL = 0x1B007C00, SMULL = 0x9B207C00, UMULL = 0x9BA07C00, LSLV = 0x1AC02000,
+	ASRV = 0x1AC02800, REV16 = 0x5AC00400, BFM = 0x33000000;
+
+/* rd = rn rotated right by `count` */
+constexpr uint32_t ror(uint8_t rd, uint8_t rn, uint32_t count)
+{
+	return EXTR | (uint32_t{rn} << 16) | (count << 10) | (uint32_t{rn} << 5) | rd;
+}
+/* rd = cond ? 1 : 0 */
+constexpr uint32_t cset(uint8_t rd, uint32_t cond)
+{
+	return CSINC | (31u << 16) | ((cond ^ 1u) << 12) | (31u << 5) | rd;
+}
 
 } /* namespace */
 
@@ -64,6 +81,8 @@ void Sh4Host::clear()
 	move(READS, reinterpret_cast<uintptr_t>(m_memory.reads), true);
 	move(WRITES, reinterpret_cast<uintptr_t>(m_memory.writes), true);
 	move(EPOCHS, reinterpret_cast<uintptr_t>(m_memory.code_epochs), true);
+	move(NEAR, reinterpret_cast<uintptr_t>(m_places.near), true);
+	move(CODE, reinterpret_cast<uintptr_t>(m_code), true);
 	way_in_end();
 	way_out();
 	m_enter = reinterpret_cast<void (*)(Sh4 *, const uint8_t *)>(m_code);
@@ -75,6 +94,7 @@ uint32_t Sh4Host::begin(const Sh4Op *ops)
 
 	writable();
 	move(OPS, reinterpret_cast<uintptr_t>(ops), true);
+	m_held = NONE;
 	return place;
 }
 
@@ -83,6 +103,7 @@ void Sh4Host::call(Call fn, uint32_t op)
 	copy(X0, X19, true);
 	add_value(X1, OPS, int64_t{op} * static_cast<int64_t>(sizeof(Sh4Op)));
 	call_to(reinterpret_cast<uintptr_t>(fn));
+	m_held = NONE;
 }
 
 void Sh4Host::call_link(Link fn, uint32_t pc)
@@ -90,6 +111,72 @@ void Sh4Host::call_link(Link fn, uint32_t pc)
 	copy(X0, X19, true);
 	move(X1, pc);
 	call_to(reinterpret_cast<uintptr_t>(fn));
+	m_held = NONE;
+}
+
+void Sh4Host::link_fast(uint32_t pc)
+{
+	enter_fast(true, pc, 0);
+}
+
+void Sh4Host::leave_fast(uint32_t pc_rank, int32_t given)
+{
+	enter_fast(false, pc_rank, given);
+}
+
+/* link() and enter() at once, with the pc in w1, the entry in x10, the
+ * cycles left in w14: every test before anything is stored, the misses to
+ * the call, which then decides as if nothing ran. */
+void Sh4Host::enter_fast(bool known, uint32_t pc, int32_t given)
+{
+	const Places &p = m_places;
+	Jump miss[8];
+	uint32_t misses = 0;
+
+	if (known) {
+		move(X1, pc);
+		add_value(X10, NEAR, int64_t{(pc >> 1) & p.near_mask} * p.block_size, true);
+	} else {
+		HostCode::load(X9, X19, p.event, 1);
+		miss[misses++] = jump_if_zero(X9, false, false);
+		HostCode::load(X1, WORDS, at(pc), 4);
+		emit(ubfx(1, static_cast<uint32_t>(__builtin_popcount(p.near_mask))) | (X1 << 5) | X10);
+		move(X11, p.block_size);
+		emit(UMADDL | (X11 << 16) | (NEAR << 10) | (X10 << 5) | X10);	/* x10 = near + w10 * w11 */
+	}
+	HostCode::load(X16, X10, p.block_host, 4);
+	miss[misses++] = jump_if_zero(X16, true, false);
+	HostCode::load(X12, X10, p.block_pc, 4);
+	emit(SUBS | (X1 << 16) | (X12 << 5) | ZR);
+	miss[misses++] = jump_if(NE);
+	HostCode::load(X12, X10, p.block_checked, 4);
+	HostCode::load(X9, X19, m_memory.epoch, 4);
+	emit(SUBS | (X9 << 16) | (X12 << 5) | ZR);
+	miss[misses++] = jump_if(NE);
+	HostCode::load(X13, X10, p.block_count, 2);
+	HostCode::load(X14, X19, p.remaining, 4);
+	if (given != 0) {
+		add_value(X14, X14, given, false);
+	}
+	emit(SUBS | (X14 << 16) | (X13 << 5) | ZR);
+	miss[misses++] = jump_if(GT);
+	/* The wait: its passes are for the call to count. */
+	HostCode::load(X9, X19, p.wait_pc, 4);
+	emit(SUBS | (X9 << 16) | (X1 << 5) | ZR);
+	miss[misses++] = jump_if(EQ);
+	HostCode::load(X9, X19, p.countdown, 4);
+	emit(SUBS_VALUE | (1 << 10) | (X9 << 5) | ZR);
+	miss[misses++] = jump_if(LE);
+	emit(SUB_VALUE | (1 << 10) | (X9 << 5) | X9);
+	HostCode::store(X9, X19, p.countdown, 4);
+	HostCode::store(X10, X19, p.blk, 8);
+	emit(SUB | (X13 << 16) | (X14 << 5) | X14);
+	HostCode::store(X14, X19, p.remaining, 4);
+	emit(ADD | WIDE | (X16 << 16) | (CODE << 5) | X0);
+	emit(BR | (X0 << 5));
+	for (uint32_t k = 0; k < misses; k++) {
+		bind(miss[k]);
+	}
 }
 
 void Sh4Host::loop_if_told()
@@ -111,18 +198,28 @@ void Sh4Host::go_where_told()
 
 void Sh4Host::operand(uint8_t, uint32_t) {}
 
+/* A word A holds already is not loaded again: every step that changes A or
+ * the word another way, every call and every join forgets it. */
 void Sh4Host::load(Reg, uint32_t rank)
 {
+	if (m_held == rank) {
+		return;
+	}
 	HostCode::load(A, WORDS, at(rank), 4);
+	m_held = rank;
 }
 
 void Sh4Host::store(uint32_t rank, Reg)
 {
 	HostCode::store(A, WORDS, at(rank), 4);
+	m_held = rank;
 }
 
 void Sh4Host::store_value(uint32_t rank, uint32_t value)
 {
+	if (m_held == rank) {
+		m_held = NONE;
+	}
 	if (value == 0) {
 		HostCode::store(ZR, WORDS, at(rank), 4);
 		return;
@@ -140,6 +237,9 @@ void Sh4Host::alu(Alu op, Reg, uint32_t rank)
 	HostCode::load(X9, WORDS, at(rank), 4);
 	emit(CODE[static_cast<uint8_t>(op)] | (X9 << 16) | (A << 5) | (op == Alu::Compare ? ZR : A));
 	m_float_compared = false;
+	if (op != Alu::Compare) {
+		m_held = NONE;
+	}
 }
 
 void Sh4Host::alu_value(Alu op, Reg, uint32_t value)
@@ -148,6 +248,9 @@ void Sh4Host::alu_value(Alu op, Reg, uint32_t value)
 	const uint8_t to = op == Alu::Compare ? ZR : A;
 
 	m_float_compared = false;
+	if (op != Alu::Compare) {
+		m_held = NONE;
+	}
 	switch (op) {
 	case Alu::Add:
 		add_value(A, A, value, false);
@@ -185,6 +288,7 @@ void Sh4Host::shift(Shift kind, Reg, uint32_t count)
 	const uint32_t code = kind == Shift::Left ? lsl(count) : kind == Shift::Right ? lsr(count) : asr(count);
 
 	emit(code | (A << 5) | A);
+	m_held = NONE;
 }
 
 /* x86 tells "above" after a comparison of floats as GT does: false when
@@ -196,10 +300,14 @@ void Sh4Host::flag(If found, uint32_t rank)
 
 	emit(CSINC | (ZR << 16) | ((cond ^ 1u) << 12) | (ZR << 5) | A);	/* cset */
 	HostCode::store(A, WORDS, at(rank), 4);
+	m_held = rank;
 }
 
 Sh4Host::Jump Sh4Host::jump_if_word(uint32_t rank, bool set)
 {
+	if (m_held == rank) {
+		return jump_if_zero(A, !set);
+	}
 	HostCode::load(X9, WORDS, at(rank), 4);
 	return jump_if_zero(X9, !set);
 }
@@ -231,19 +339,19 @@ void Sh4Host::float_load(uint32_t f, uint32_t rank)
 
 void Sh4Host::float_store(uint32_t rank, uint32_t f)
 {
+	if (m_held == rank) {
+		m_held = NONE;
+	}
 	store_float(static_cast<uint8_t>(f), WORDS, at(rank));
 }
 
-/* Which NaN of two comes out goes by their order: the one the compiler
- * gives the reader here, the word first for a sum or a product */
+/* s<f> first, as the reader and x86 take it: that picks the NaN of two */
 void Sh4Host::float_op(Float op, uint32_t f, uint32_t rank)
 {
+	static constexpr uint32_t CODE[] = { FADD, FSUB, FMUL };
+
 	load_float(3, WORDS, at(rank));
-	if (op == Float::Sub) {
-		emit(FSUB | (3 << 16) | (f << 5) | f);
-	} else {
-		emit((op == Float::Add ? FADD : FMUL) | (f << 16) | (3 << 5) | f);
-	}
+	emit(CODE[static_cast<uint8_t>(op)] | (3 << 16) | (f << 5) | f);
 }
 
 void Sh4Host::float_compare(uint32_t f, uint32_t rank)
@@ -263,6 +371,7 @@ void Sh4Host::float_from(uint32_t f, uint32_t rank)
  * the reader gives it: the conversion on 64 bits, kept when it fits */
 void Sh4Host::float_to(uint32_t rank)
 {
+	m_held = NONE;
 	load_float(3, WORDS, at(rank));
 	emit(FCVTZS_X | (3 << 5) | X9);
 	move(X10, 0x80000000);
@@ -282,6 +391,7 @@ bool Sh4Host::vectors() const { return true; }
 /* As sh4_ops.cpp computes it: a1 * b1, then a0, a2, a3 fused in turn */
 void Sh4Host::float_ipr(uint32_t n, uint32_t m)
 {
+	m_held = NONE;
 	load_float(0, WORDS, at(n + 1));
 	load_float(1, WORDS, at(m + 1));
 	emit(FMUL | (1 << 16) | (0 << 5) | 2);
@@ -300,6 +410,7 @@ void Sh4Host::float_trv(uint32_t n, uint32_t x)
 {
 	static constexpr uint32_t ORDER[4][2] = { {1, 5}, {0, 4}, {2, 6}, {3, 7} };
 
+	m_held = NONE;
 	add_value(X9, WORDS, at(n));
 	add_value(X10, WORDS, at(x));
 	emit(LDR_Q | (X9 << 5) | 0);
@@ -313,14 +424,144 @@ void Sh4Host::float_trv(uint32_t n, uint32_t x)
 	emit(STR_Q | (X9 << 5) | 2);
 }
 
+/* w9 Rn, w10 Rm, w11 T, as the reader computes them; T taken from the
+ * carries of each of its two steps, as it does */
+bool Sh4Host::whole(Whole op, uint32_t n, uint32_t m, uint32_t t, uint32_t mach)
+{
+	const auto get = [this](uint8_t reg, uint32_t rank) { HostCode::load(reg, WORDS, at(rank), 4); };
+	const auto put = [this](uint32_t rank, uint8_t reg) { HostCode::store(reg, WORDS, at(rank), 4); };
+	const auto two = [&](uint32_t code) {
+		get(X9, n);
+		get(X10, m);
+		emit(code | (X10 << 16) | (X9 << 5) | X9);
+	};
+	/* w9 = w9 + w10 + w11 or w9 - w10 - w11, w12 the carry or the
+	 * borrow of either */
+	const auto chain = [&](uint32_t code, Cond carry) {
+		emit(code | (X10 << 16) | (X9 << 5) | X9);
+		emit(cset(12, carry));
+		emit(code | (X11 << 16) | (X9 << 5) | X9);
+		emit(CSINC | (12u << 5) | (ZR << 16) | (static_cast<uint32_t>(carry ^ 1) << 12) | 12);
+		put(n, X9);
+		put(t, 12);
+	};
+	m_held = NONE;
+	switch (op) {
+	case Whole::SwapB:
+		get(X10, m);
+		emit(REV16 | (X10 << 5) | X11);
+		emit(BFM | (15u << 10) | (X11 << 5) | X10);		/* bfxil w10, w11, 0, 16 */
+		put(n, X10);
+		return true;
+	case Whole::SwapW:
+		get(X10, m);
+		emit(ror(X10, X10, 16));
+		put(n, X10);
+		return true;
+	case Whole::Xtrct:
+		get(X9, n);
+		get(X10, m);
+		emit(EXTR | (X9 << 16) | (16u << 10) | (X10 << 5) | X9);	/* Rm:Rn >> 16 */
+		put(n, X9);
+		return true;
+	case Whole::AddC:
+		get(X9, n);
+		get(X10, m);
+		get(X11, t);
+		chain(ADDS, HS);
+		return true;
+	case Whole::SubC:
+		get(X9, n);
+		get(X10, m);
+		get(X11, t);
+		chain(SUBS, LO);
+		return true;
+	case Whole::NegC:
+		emit(MOVZ | X9);
+		get(X10, m);
+		get(X11, t);
+		chain(SUBS, LO);
+		return true;
+	case Whole::MulL:
+		two(MUL);
+		put(mach + 1, X9);
+		return true;
+	case Whole::MulSW:
+	case Whole::MulUW: {
+		const uint32_t half = (op == Whole::MulSW ? SBFM : UBFM) | (15u << 10);
+
+		get(X9, n);
+		get(X10, m);
+		emit(half | (X9 << 5) | X9);
+		emit(half | (X10 << 5) | X10);
+		emit(MUL | (X10 << 16) | (X9 << 5) | X9);
+		put(mach + 1, X9);
+		return true;
+	}
+	case Whole::DMulS:
+	case Whole::DMulU:
+		/* MACH:MACL, MACL the high word in memory */
+		two(op == Whole::DMulS ? SMULL : UMULL);
+		emit(EXTR | WIDE | (1u << 22) | (X9 << 16) | (32u << 10) | (X9 << 5) | X9);
+		HostCode::store(X9, WORDS, at(mach), 8);
+		return true;
+	case Whole::RotL:
+	case Whole::RotR:
+		get(X9, n);
+		if (op == Whole::RotL) {
+			emit(lsr(31) | (X9 << 5) | X11);
+		} else {
+			emit(AND_VALUE | (X9 << 5) | X11);			/* and w11, w9, 1 */
+		}
+		emit(ror(X9, X9, op == Whole::RotL ? 31 : 1));
+		put(n, X9);
+		put(t, X11);
+		return true;
+	case Whole::RotCL:
+		get(X9, n);
+		get(X11, t);
+		emit(lsr(31) | (X9 << 5) | 12);
+		emit(ORR | (X9 << 16) | (1u << 10) | (X11 << 5) | X9);	/* orr w9, w11, w9, lsl 1 */
+		put(n, X9);
+		put(t, 12);
+		return true;
+	case Whole::RotCR:
+		get(X9, n);
+		get(X11, t);
+		emit(AND_VALUE | (X9 << 5) | 12);
+		emit(lsr(1) | (X9 << 5) | X9);
+		emit(ORR | (X11 << 16) | (31u << 10) | (X9 << 5) | X9);	/* orr w9, w9, w11, lsl 31 */
+		put(n, X9);
+		put(t, 12);
+		return true;
+	case Whole::ShAd:
+	case Whole::ShLd:
+		/* Rm < 0: Rn >> (~Rm & 31) then >> 1, which is all of the sign or 0
+		 * for a count of 32 */
+		get(X9, n);
+		get(X10, m);
+		emit(LSLV | (X10 << 16) | (X9 << 5) | 12);
+		emit(ORN | (X10 << 16) | (ZR << 5) | 13);			/* mvn w13, w10 */
+		emit((op == Whole::ShAd ? ASRV : LSRV) | (13u << 16) | (X9 << 5) | 13);
+		emit((op == Whole::ShAd ? asr(1) : lsr(1)) | (13u << 5) | 13);
+		emit(ANDS_VALUE | (1u << 16) | (X10 << 5) | ZR);		/* tst w10, 0x80000000 */
+		emit(CSEL | (12u << 16) | (NE << 12) | (13u << 5) | X9);	/* csel w9, w13, w12, ne */
+		put(n, X9);
+		return true;
+	}
+	return false;
+}
+
 void Sh4Host::load_pair(uint32_t rank)
 {
 	HostCode::load(A, WORDS, at(rank), 8);
+	m_held = NONE;
 }
 
 void Sh4Host::store_pair(uint32_t rank)
 {
 	HostCode::store(A, WORDS, at(rank), 8);
+	m_held = NONE;
 }
 
 void Sh4Host::add_remaining(int32_t value)
@@ -337,11 +578,24 @@ void Sh4Host::bind(const Slow &slow)
 	}
 }
 
+void Sh4Host::bind(Jump jump)
+{
+	HostCode::bind(jump);
+	m_held = NONE;
+}
+
+uint32_t Sh4Host::join()
+{
+	m_held = NONE;
+	return here();
+}
+
 /* x2 = the page of the address in w0 in that table; the long way when
  * there is none or the address is not aligned. w1 keeps the address over
  * the bits of the page, w0 the offset in it. */
 void Sh4Host::page(uint8_t table, uint32_t size, Slow &slow)
 {
+	m_held = NONE;
 	emit(lsr(m_memory.page_bits) | (A << 5) | X1);
 	emit(indexed(LDR_X) | (1 << 12) | (X1 << 16) | (table << 5) | X2);	/* ldr x2, [table, x1, lsl 3] */
 	slow.jumps[slow.count++] = jump_if_zero(X2, true, true);
@@ -381,6 +635,7 @@ void Sh4Host::write(uint32_t size, uint32_t rank, Slow &slow)
 
 void Sh4Host::read_at(const uint8_t *where, uint32_t size)
 {
+	m_held = NONE;
 	move(X0, reinterpret_cast<uintptr_t>(where), true);
 	HostCode::load(A, X0, 0, size == 1 ? 1 : size == 2 ? 2 : 4, size < 4);
 }

@@ -65,10 +65,10 @@ public:
 	void begin_families() override;
 
 	void begin_translucent() override;
-	void begin_collect(unsigned view) override;
+	void begin_collect(unsigned view, unsigned slot) override;
 	void end_collect() override;
 	void keep_count(unsigned view, unsigned slot) override;
-	uint32_t count_now(unsigned view) override;
+	uint32_t count_now(unsigned view, unsigned slot) override;
 	void end_translucent(bool blend) override;
 	uint32_t counted_fragments(unsigned slot, uint32_t views) override;
 	void forget_counts(unsigned slot) override;
@@ -239,16 +239,15 @@ private:
 		GLuint program;		/* blends them */
 		GLuint heads, heads_fb;	/* the last one of each pixel */
 		GLuint nodes;
-		GLuint count[8];	/* one per viewport */
-		/* The counts of each of the three last lists, copied once
-		 * collected; where the processor reads them, with
-		 * ARB_buffer_storage, else nullptr */
+		GLuint count[24];	/* one per viewport of each list of the pipe */
+		/* Their copy where the processor reads them, with
+		 * ARB_buffer_storage, else 0 and nullptr */
 		GLuint readback;
 		const GLuint *counts;
 		uint32_t limit;		/* nodes the graphics card takes in a buffer */
 		GLuint below;		/* the colour under them */
 	} m_lists;
-	/* Each list of the pipe: its counts copied, or nullptr */
+	/* Each list of the pipe: its counts kept, or nullptr */
 	GLsync m_counted[3] = { nullptr, nullptr, nullptr };
 	struct PeelDraw {
 		const odin_mesh_t *mesh;

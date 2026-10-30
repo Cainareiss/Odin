@@ -145,10 +145,10 @@ public:
 	 * pipe, or waited for now; then end_translucent blends them over the
 	 * colour below, or not. */
 	virtual void begin_translucent() = 0;
-	virtual void begin_collect(unsigned view) = 0;
+	virtual void begin_collect(unsigned view, unsigned slot) = 0;
 	virtual void end_collect() = 0;
 	virtual void keep_count(unsigned view, unsigned slot) = 0;
-	virtual uint32_t count_now(unsigned view) = 0;
+	virtual uint32_t count_now(unsigned view, unsigned slot) = 0;
 	virtual void end_translucent(bool blend) = 0;
 	/* The most fragments a view of the list of that picture left, its
 	 * counts waited for and forgotten; or forgotten unread */

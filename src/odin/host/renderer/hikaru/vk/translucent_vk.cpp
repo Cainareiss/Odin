@@ -132,7 +132,10 @@ VkDrawing::begin_translucent()
 	const VkImageCopy copy{ { VK_IMAGE_ASPECT_DEPTH_BIT, 0, 0, 1 }, { 0, 0, 0 }, { VK_IMAGE_ASPECT_DEPTH_BIT, 0, 0, 1 },
 	                        { 0, 0, 0 }, { width(), height(), 1 } };
 
+	use_depth();
 	close_scene();
+	if (m_translucent_left)
+		m_translucent_left--;
 	if (!m_card.primitive_ids()) {
 		if (!m_said_no_lists)
 			std::fprintf(stderr, "ERROR: vulkan: no translucent polygons on this card (no geometry nor tessellation shaders)\n");
@@ -152,7 +155,7 @@ VkDrawing::begin_translucent()
  * last blending read is read before (glMemoryBarrier of all in OpenGL). Each
  * viewport has its count, as with OpenGL. */
 void
-VkDrawing::begin_collect(unsigned view)
+VkDrawing::begin_collect(unsigned view, unsigned)
 {
 	if (!m_card.primitive_ids())
 		return;
@@ -232,7 +235,7 @@ VkDrawing::keep_count(unsigned view, unsigned slot)
 /* The commands sent and waited for: the next ones begin another command
  * buffer, which the scene sets up again when it opens. */
 uint32_t
-VkDrawing::count_now(unsigned view)
+VkDrawing::count_now(unsigned view, unsigned)
 {
 	if (!m_card.primitive_ids())
 		return 0;

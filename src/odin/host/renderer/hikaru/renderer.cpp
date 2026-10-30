@@ -38,7 +38,7 @@
 namespace odin {
 
 Renderer::Renderer(HostGraphics &graphics, const Memory &memory, const Options &options)
-	: m_gpu(nullptr), m_fb(memory.fb), m_options(options), m_building(nullptr), m_list(nullptr),
+	: m_gpu(nullptr), m_fb(memory.fb), m_fb_writes(memory.fb_writes), m_options(options), m_building(nullptr), m_list(nullptr),
 	  m_frame{}, m_card(graphics.make_drawing()), m_textures(*m_card, memory.texram),
 	  m_times(*m_card, options.times),
 	  m_bound_tex_index(~0u), m_draw{}, m_collect(false), m_families_view(false), m_families(false),
@@ -46,7 +46,7 @@ Renderer::Renderer(HostGraphics &graphics, const Memory &memory, const Options &
 	  m_fragments_full(false), m_scale(1), m_upscale_mode(DisplayUpscaleMode::RAW), m_num_lists(0), m_shown(2), m_next(-1), m_launched(0), m_last{},
 	  m_layer_ram{std::vector<uint8_t>(size_t{WIDTH} * HEIGHT * 4),
 	              std::vector<uint8_t>(size_t{WIDTH} * HEIGHT * 4)},
-	  m_layer_changed{true, true}, m_layer_pixels(size_t{WIDTH} * HEIGHT),
+	  m_layer_changed{true, true}, m_layer_offs{}, m_layer_date{}, m_layer_pixels(size_t{WIDTH} * HEIGHT),
 	  m_layer_format{~0u, ~0u}, m_message{}
 {
 	for (ListTextures &textures : m_list_textures) {

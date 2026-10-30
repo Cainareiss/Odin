@@ -263,7 +263,7 @@ Hikaru::Hikaru(const Game &game, const RomBoard::Config &rombd, bool verbose, co
 	: m_game(game), m_verbose(verbose), m_screen(nullptr), m_panel(nullptr), m_clock(sh4_clock()), m_frame(0),
 	  m_resetting(true), m_current(MASTER),
 	  m_ram{std::vector<uint8_t>(32 * MB), std::vector<uint8_t>(32 * MB)},
-	  m_cmdram(4 * MB), m_fb(8 * MB),
+	  m_cmdram(4 * MB), m_fb(8 * MB), m_fb_writes(8 * MB),
 	  m_texram{std::vector<uint8_t>(4 * MB), std::vector<uint8_t>(4 * MB)},
 	  m_sound_ram{std::vector<uint8_t>(8 * MB), std::vector<uint8_t>(8 * MB)},
 	  m_mie_ram(32 * KB), m_bram(64 * KB), m_mscomm{},
@@ -328,6 +328,9 @@ Hikaru::Hikaru(const Game &game, const RomBoard::Config &rombd, bool verbose, co
 		if (board->m_screen)
 			board->m_screen->before_texture_write(bank, x, y, w, h);
 	};
+	hooks.fb_written = [](void *ctx, size_t offs, size_t size) {
+		static_cast<Hikaru *>(ctx)->m_fb_writes.wrote(offs, size);
+	};
 	m_gpu = std::make_unique<HikaruGpu>(memory, hooks);
 	/* Debug: the instructions of the GPU, its texture transfers and its
 	 * DMA, on stdout */
@@ -377,6 +380,7 @@ Hikaru::Hikaru(const Game &game, const RomBoard::Config &rombd, bool verbose, co
 			m_sh_trace[which] = std::fopen(path.c_str(), "w");
 		}
 	}
+	m_fb_writes.set_cpu(m_sh[MASTER].get(), 0x1B000000 / Sh4::PAGE_SIZE);
 
 	m_resetting = false;
 }
@@ -624,6 +628,7 @@ Hikaru::reset()
 	}
 	std::fill(m_cmdram.begin(), m_cmdram.end(), 0);
 	std::fill(m_fb.begin(), m_fb.end(), 0);
+	m_fb_writes.wrote_all();
 	std::fill(m_mie_ram.begin(), m_mie_ram.end(), 0);
 
 	m_memctl[MASTER].reset();

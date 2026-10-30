@@ -277,7 +277,7 @@ set(ARCHIVE_SOURCES 7zAlloc.c 7zArcIn.c 7zBuf.c 7zBuf2.c 7zCrc.c
 	Bra.c Bra86.c BraIA64.c CpuArch.c Delta.c
 	Lzma2Dec.c LzmaDec.c Ppmd7.c Ppmd7Dec.c)
 list(TRANSFORM ARCHIVE_SOURCES PREPEND src/lzma/)
-list(PREPEND ARCHIVE_SOURCES src/miniz/miniz.c)
+list(PREPEND ARCHIVE_SOURCES src/miniz/miniz.c src/odin/host/app/zip_crc.cpp)
 
 # ImGui uses Odin's Vulkan function pointers
 set(VULKAN_FLAGS IMGUI_IMPL_VULKAN_NO_PROTOTYPES)
@@ -291,6 +291,10 @@ target_link_libraries(odin_imgui PRIVATE odin_sdl odin_vulkan_headers)
 
 add_library(odin_archive OBJECT ${ARCHIVE_SOURCES})
 target_compile_options(odin_archive PRIVATE ${OPT_FLAGS})
+# miniz's CRC-32 comes from zip_crc.cpp
+set_source_files_properties(src/miniz/miniz.c PROPERTIES COMPILE_DEFINITIONS USE_EXTERNAL_MZCRC)
+set_source_files_properties(src/odin/host/app/zip_crc.cpp PROPERTIES
+	COMPILE_OPTIONS "-isystem;${CMAKE_SOURCE_DIR}/src/miniz")
 
 # Vulkan shaders to SPIR-V
 set(GLSL ${CMAKE_SOURCE_DIR}/src/odin/host/gfx/glsl)

@@ -50,6 +50,8 @@
 
 namespace odin {
 
+class FbWrites;
+
 class HikaruGpu;
 
 /* Draws what the graphics chips of the Hikaru hand over, through the card of
@@ -87,6 +89,7 @@ public:
 	struct Memory {
 		std::span<const uint8_t> fb;		/* framebuffer RAM, 8 MB */
 		std::span<const uint8_t> texram[2];	/* texture RAM, two banks of 4 MB */
+		FbWrites *fb_writes = nullptr;		/* the dates of its writes */
 	};
 	/* Debug: for looking at what is drawn (HR_LOG, HR_LOG_FRAME,
 	 * ODIN_LIST_FP, ODIN_LIST_DUMP, ODIN_DRAW_TIMES, ODIN_DEBUG_KEYS;
@@ -295,6 +298,7 @@ private:
 
 	HikaruGpu *m_gpu;
 	std::span<const uint8_t> m_fb;
+	FbWrites *m_fb_writes;
 	Options m_options;
 
 	/* The list the command processor builds, and the one of the frame
@@ -343,6 +347,10 @@ private:
 	 * m_card, and the pixels of a layer on their way there */
 	std::vector<uint8_t> m_layer_ram[2];
 	bool m_layer_changed[2];
+	/* Where m_layer_ram was taken from, and the date after which a write
+	 * there may have changed it (0: any) */
+	size_t m_layer_offs[2];
+	uint64_t m_layer_date[2];
 	std::vector<uint16_t> m_layer_pixels;
 	/* The format of each layer last sent (~0u before the first) */
 	uint32_t m_layer_format[2];

@@ -242,6 +242,9 @@ void Sh4::dmac_put(uint32_t addr, uint32_t size, uint64_t value)
 {
 	uint8_t *p = m_wr[addr >> PAGE_BITS];
 
+	if (!p) {
+		p = unwatch(addr);
+	}
 	m_touched = true;
 	if (p && !(addr & (size - 1))) {
 		store_bytes(p + (addr & (PAGE_SIZE - 1)), size, value);
@@ -263,6 +266,10 @@ uint32_t Sh4::dmac_copy(uint32_t sar, uint32_t dar, uint32_t unit, uint32_t coun
 {
 	const uint8_t *rp = m_rd[sar >> PAGE_BITS];
 	uint8_t *wp = m_wr[dar >> PAGE_BITS];
+
+	if (!wp) {
+		wp = unwatch(dar);
+	}
 	std::span<const uint8_t> from;
 	std::span<uint8_t> to;
 

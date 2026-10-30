@@ -290,8 +290,10 @@ public:
 	void bind_images(VkCommandBuffer cb, const Pass &pass, std::initializer_list<const Image *> images,
 	                 VkSampler sampler);
 	/* Drawing into the image, in that rectangle of it (its viewport and
-	 * scissor), what it holds kept; then done */
-	void begin_drawing(VkCommandBuffer cb, Image &image, const VkRect2D &area);
+	 * scissor), what it holds kept, or all of it made opaque black (CLEAR),
+	 * or thrown away (DONT_CARE: the drawing covers it all); then done */
+	void begin_drawing(VkCommandBuffer cb, Image &image, const VkRect2D &area,
+	                   VkAttachmentLoadOp load = VK_ATTACHMENT_LOAD_OP_LOAD);
 	void end_drawing(VkCommandBuffer cb) { m_fn.vkCmdEndRendering(cb); }
 
 	/* The image of the window: everything is drawn into it, then it is

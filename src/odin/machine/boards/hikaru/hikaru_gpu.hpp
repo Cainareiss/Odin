@@ -83,6 +83,8 @@ public:
 		void (*list_started)(void *ctx);	/* a display list was launched */
 		/* a rectangle of texels of a bank is about to be written */
 		Antarctic::TexelsWritten before_texture_write;
+		/* bytes of the framebuffer RAM a blit wrote */
+		Eurasia::FbWritten fb_written = nullptr;
 	};
 
 	HikaruGpu(const Memory &memory, const Hooks &hooks);

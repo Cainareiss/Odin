@@ -159,25 +159,34 @@ Hikaru::map_pages()
 	shared(*m_sh[MASTER], 0x1B000000, 0x1B800000);
 	shared(*m_sh[SLAVE], 0x10001000, 0x10400000);
 
-	/* The window of the master on the MIE and its bus request register,
+	/* The windows of the CPUs on the MIE and their bus request registers,
 	 * which the games poll all along: the MIE has no way to the memory
-	 * of the master, see mie_read() and mie_write(). */
+	 * of a CPU, see mie_read() and mie_write(). */
 	for (uint32_t addr = 0x00800000; addr < 0x00840000; addr += page_size)
 		m_sh[MASTER]->map_quiet(addr / page_size);
 	m_sh[MASTER]->map_quiet(0x01000000 / page_size);
+	m_sh[SLAVE]->map_quiet(0x1B000000 / page_size);
+	/* The registers of the display chip, which the master polls: they
+	 * change nothing but the chip and its interrupt (Eurasia::write). */
+	m_sh[MASTER]->map_quiet(0x1A000000 / page_size);
 	quiet_windows();
 }
 
 /* The windows of the master open on the ROM board (pages 10 to 3F of the
- * external bus): the board answers there without writing the memory of a
- * CPU or raising anything. */
+ * external bus) or on the wave memory of a sound board (the upper half of
+ * pages 0C and 0D): what answers there writes no memory of a CPU, and
+ * what it raises it tells the CPU. */
 void
 Hikaru::quiet_windows()
 {
-	for (uint32_t window : { 0x02000000u, 0x03000000u, 0x16000000u, 0x17000000u }) {
-		const uint32_t page = m_memctl[MASTER].window_page(window);
+	const uint32_t pages = 0x1000000 / Sh4::PAGE_SIZE;
 
-		m_sh[MASTER]->set_quiet(window / Sh4::PAGE_SIZE, 0x1000000 / Sh4::PAGE_SIZE, page >= 0x10 && page <= 0x3F);
+	for (uint32_t window : { 0x02000000u, 0x03000000u, 0x16000000u, 0x17000000u }) {
+		const uint32_t page = m_memctl[MASTER].window_page(window), first = window / Sh4::PAGE_SIZE;
+
+		m_sh[MASTER]->set_quiet(first, pages, page >= 0x10 && page <= 0x3F);
+		if (page == 0x0C || page == 0x0D)
+			m_sh[MASTER]->set_quiet(first + pages / 2, pages / 2, true);
 	}
 }
 
@@ -347,6 +356,7 @@ Hikaru::master_write(uint32_t addr, unsigned size, uint64_t value)
 	}
 	if (addr >= 0x1B000000 && addr <= 0x1B7FFFFF) {
 		store(m_fb, addr & 0x007FFFFF, size, value);
+		m_fb_writes.wrote(addr & 0x007FFFFF, size);
 		return true;
 	}
 	return false;

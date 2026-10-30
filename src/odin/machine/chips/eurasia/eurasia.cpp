@@ -219,7 +219,7 @@ namespace odin {
  */
 
 Eurasia::Eurasia(std::span<uint8_t> fb)
-	: m_fb(fb), m_log(nullptr)
+	: m_fb(fb), m_log(nullptr), m_fb_written(nullptr), m_fb_written_ctx(nullptr)
 {
 	reset();
 }
@@ -617,6 +617,11 @@ Eurasia::blit()
 				fatal("blit out of the framebuffer RAM", m_s.blit[0], m_s.blit[1]);
 			std::memcpy(&m_fb[dst], &m_fb[src], 2);
 		}
+	}
+	if (m_fb_written && h != 0 && w != 0) {
+		const size_t end = size_t{dst_y + h - 1} * 4096 + size_t{(dst_x + w - 1) | 1} * 2 + 2;
+
+		m_fb_written(m_fb_written_ctx, size_t{dst_y} * 4096, end - size_t{dst_y} * 4096);
 	}
 
 	/* The copy is immediate, so the busy bit (1A000024 bit 0) is never

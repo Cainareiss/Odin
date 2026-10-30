@@ -54,7 +54,9 @@ inline constexpr uint32_t MOVZ = 0x52800000, MOVN = 0x12800000, MOVK = 0x7280000
  * conditional selects (cond << 12) */
 inline constexpr uint32_t UBFM = 0x53000000, SBFM = 0x13000000, EXTR = 0x13800000, RORV = 0x1AC02C00,
 	LSRV = 0x1AC02400, CSEL = 0x1A800000, CSINC = 0x1A800400;
-inline constexpr uint32_t MRS_NZCV = 0xD53B4200;
+inline constexpr uint32_t MRS_NZCV = 0xD53B4200, MSR_NZCV = 0xD51B4200;
+/* Xd = Xa + Wn * Wm, unsigned (Rm << 16, Ra << 10) */
+inline constexpr uint32_t UMADDL = 0x9BA00000;
 /* x9 compared with w9 extended by its sign: SUBS xzr, x9, w9, SXTW */
 inline constexpr uint32_t CMP_SXTW = 0xEB20C000;
 

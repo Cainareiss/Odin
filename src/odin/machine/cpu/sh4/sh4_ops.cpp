@@ -115,6 +115,32 @@ float ipr(const uint32_t *a, const uint32_t *b) { return HAS_FMA ? ipr_fma(a, b)
 void trv(uint32_t *v, const uint32_t *x) { HAS_FMA ? trv_fma(v, x) : trv_any(v, x); }
 #endif
 
+/* a + b and a * b with a the first operand of the host's instruction, which
+ * picks the NaN of two: the compiler may swap the operands otherwise */
+#if defined(__GNUC__) && defined(__aarch64__)
+#define ODIN_FLOAT_OP(name, type, insn, reg) \
+	type name(type a, type b) { type r; asm(insn " %" reg "0, %" reg "1, %" reg "2" : "=w"(r) : "w"(a), "w"(b)); return r; }
+ODIN_FLOAT_OP(add_first, float, "fadd", "s")
+ODIN_FLOAT_OP(mul_first, float, "fmul", "s")
+ODIN_FLOAT_OP(add_first, double, "fadd", "d")
+ODIN_FLOAT_OP(mul_first, double, "fmul", "d")
+#elif defined(__GNUC__) && defined(__x86_64__)
+#define ODIN_FLOAT_OP(name, type, insn) \
+	type name(type a, type b) { asm(insn " %1, %0" : "+x"(a) : "x"(b)); return a; }
+ODIN_FLOAT_OP(add_first, float, "addss")
+ODIN_FLOAT_OP(mul_first, float, "mulss")
+ODIN_FLOAT_OP(add_first, double, "addsd")
+ODIN_FLOAT_OP(mul_first, double, "mulsd")
+#else
+#define ODIN_FLOAT_OP(name, type, op) \
+	type name(type a, type b) { return a op b; }
+ODIN_FLOAT_OP(add_first, float, +)
+ODIN_FLOAT_OP(mul_first, float, *)
+ODIN_FLOAT_OP(add_first, double, +)
+ODIN_FLOAT_OP(mul_first, double, *)
+#endif
+#undef ODIN_FLOAT_OP
+
 } /* namespace */
 
 /* How an instruction hands over to what comes next. The reader does it by
@@ -1427,10 +1453,10 @@ struct Sh4OpsT {
 	static Ret fadd(Sh4 &c, const Op *op)
 	{
 		if (!(c.m_r.fpscr & Sh4::FPSCR_PR)) {
-			c.m_r.fr[op->n] = bits(f32(c.m_r.fr[op->n]) + f32(c.m_r.fr[op->m]));
+			c.m_r.fr[op->n] = bits(add_first(f32(c.m_r.fr[op->m]), f32(c.m_r.fr[op->n])));
 		} else {
 			need_even(c, op);
-			set_dr(c, op->n, get_dr(c, op->n) + get_dr(c, op->m));
+			set_dr(c, op->n, add_first(get_dr(c, op->m), get_dr(c, op->n)));
 		}
 		return go(c, op);
 	}
@@ -1447,10 +1473,10 @@ struct Sh4OpsT {
 	static Ret fmul(Sh4 &c, const Op *op)
 	{
 		if (!(c.m_r.fpscr & Sh4::FPSCR_PR)) {
-			c.m_r.fr[op->n] = bits(f32(c.m_r.fr[op->n]) * f32(c.m_r.fr[op->m]));
+			c.m_r.fr[op->n] = bits(mul_first(f32(c.m_r.fr[op->m]), f32(c.m_r.fr[op->n])));
 		} else {
 			need_even(c, op);
-			set_dr(c, op->n, get_dr(c, op->n) * get_dr(c, op->m));
+			set_dr(c, op->n, mul_first(get_dr(c, op->m), get_dr(c, op->n)));
 		}
 		return go(c, op);
 	}
@@ -1612,13 +1638,13 @@ const typename Sh4OpsT<Way>::Entry Sh4OpsT<Way>::table[] = {
 	{0xF000, 0x5000, movll4, F::NMDisp2, K::Plain, H::MovLL4},
 	{0xFF00, 0xC700, mova, F::PcAddr, K::PcRelative, H::MovA},
 	{0xF0FF, 0x0029, movt, F::N, K::Plain, H::MovT},
-	{0xF00F, 0x6008, swapb, F::NM, K::Plain},
-	{0xF00F, 0x6009, swapw, F::NM, K::Plain},
-	{0xF00F, 0x200D, xtrct, F::NM, K::Plain},
+	{0xF00F, 0x6008, swapb, F::NM, K::Plain, H::SwapB},
+	{0xF00F, 0x6009, swapw, F::NM, K::Plain, H::SwapW},
+	{0xF00F, 0x200D, xtrct, F::NM, K::Plain, H::Xtrct},
 
 	{0xF00F, 0x300C, add, F::NM, K::Plain, H::Add},
 	{0xF000, 0x7000, addi, F::NImm, K::Plain, H::AddI},
-	{0xF00F, 0x300E, addc, F::NM, K::Plain},
+	{0xF00F, 0x300E, addc, F::NM, K::Plain, H::AddC},
 	{0xF00F, 0x300F, addv, F::NM, K::Plain},
 	{0xFF00, 0x8800, cmpim, F::ImmSigned, K::Plain, H::CmpIm},
 	{0xF00F, 0x3000, cmpeq, F::NM, K::Plain, H::CmpEq},
@@ -1632,8 +1658,8 @@ const typename Sh4OpsT<Way>::Entry Sh4OpsT<Way>::table[] = {
 	{0xF00F, 0x3004, div1, F::NM, K::Plain},
 	{0xF00F, 0x2007, div0s, F::NM, K::Plain},
 	{0xFFFF, 0x0019, div0u, F::None, K::Plain},
-	{0xF00F, 0x300D, dmuls, F::NM, K::Plain},
-	{0xF00F, 0x3005, dmulu, F::NM, K::Plain},
+	{0xF00F, 0x300D, dmuls, F::NM, K::Plain, H::DMulS},
+	{0xF00F, 0x3005, dmulu, F::NM, K::Plain, H::DMulU},
 	{0xF0FF, 0x4010, dt, F::N, K::Plain, H::Dt},
 	{0xF00F, 0x600E, extsb, F::NM, K::Plain, H::ExtSB},
 	{0xF00F, 0x600F, extsw, F::NM, K::Plain, H::ExtSW},
@@ -1641,13 +1667,13 @@ const typename Sh4OpsT<Way>::Entry Sh4OpsT<Way>::table[] = {
 	{0xF00F, 0x600D, extuw, F::NM, K::Plain, H::ExtUW},
 	{0xF00F, 0x000F, macl, F::NM, K::Plain},
 	{0xF00F, 0x400F, macw, F::NM, K::Plain},
-	{0xF00F, 0x0007, mull, F::NM, K::Plain},
-	{0xF00F, 0x200F, mulsw, F::NM, K::Plain},
-	{0xF00F, 0x200E, muluw, F::NM, K::Plain},
+	{0xF00F, 0x0007, mull, F::NM, K::Plain, H::MulL},
+	{0xF00F, 0x200F, mulsw, F::NM, K::Plain, H::MulSW},
+	{0xF00F, 0x200E, muluw, F::NM, K::Plain, H::MulUW},
 	{0xF00F, 0x600B, neg, F::NM, K::Plain, H::Neg},
-	{0xF00F, 0x600A, negc, F::NM, K::Plain},
+	{0xF00F, 0x600A, negc, F::NM, K::Plain, H::NegC},
 	{0xF00F, 0x3008, sub, F::NM, K::Plain, H::Sub},
-	{0xF00F, 0x300A, subc, F::NM, K::Plain},
+	{0xF00F, 0x300A, subc, F::NM, K::Plain, H::SubC},
 	{0xF00F, 0x300B, subv, F::NM, K::Plain},
 
 	{0xF00F, 0x2009, and_, F::NM, K::Plain, H::And},
@@ -1665,10 +1691,10 @@ const typename Sh4OpsT<Way>::Entry Sh4OpsT<Way>::table[] = {
 	{0xFF00, 0xCA00, xori, F::Imm, K::Plain, H::XorI},
 	{0xFF00, 0xCE00, xorm, F::Imm, K::Plain},
 
-	{0xF0FF, 0x4004, rotl, F::N, K::Plain},
-	{0xF0FF, 0x4005, rotr, F::N, K::Plain},
-	{0xF0FF, 0x4024, rotcl, F::N, K::Plain},
-	{0xF0FF, 0x4025, rotcr, F::N, K::Plain},
+	{0xF0FF, 0x4004, rotl, F::N, K::Plain, H::RotL},
+	{0xF0FF, 0x4005, rotr, F::N, K::Plain, H::RotR},
+	{0xF0FF, 0x4024, rotcl, F::N, K::Plain, H::RotCL},
+	{0xF0FF, 0x4025, rotcr, F::N, K::Plain, H::RotCR},
 	{0xF0FF, 0x4020, shll, F::N, K::Plain, H::ShLL},	/* SHAL: the same result */
 	{0xF0FF, 0x4021, shar, F::N, K::Plain, H::ShAR},
 	{0xF0FF, 0x4000, shll, F::N, K::Plain, H::ShLL},
@@ -1679,8 +1705,8 @@ const typename Sh4OpsT<Way>::Entry Sh4OpsT<Way>::table[] = {
 	{0xF0FF, 0x4019, shlr8, F::N, K::Plain, H::ShLR8},
 	{0xF0FF, 0x4028, shll16, F::N, K::Plain, H::ShLL16},
 	{0xF0FF, 0x4029, shlr16, F::N, K::Plain, H::ShLR16},
-	{0xF00F, 0x400C, shad, F::NM, K::Plain},
-	{0xF00F, 0x400D, shld, F::NM, K::Plain},
+	{0xF00F, 0x400C, shad, F::NM, K::Plain, H::ShAd},
+	{0xF00F, 0x400D, shld, F::NM, K::Plain, H::ShLd},
 
 	{0xFF00, 0x8B00, bf, F::Branch8, K::Branch, H::Bf},
 	{0xFF00, 0x8F00, bfs, F::Branch8, K::BranchDelayed, H::BfS},
@@ -1699,12 +1725,12 @@ const typename Sh4OpsT<Way>::Entry Sh4OpsT<Way>::table[] = {
 	{0xFFFF, 0x0018, sett, F::None, K::Plain, H::SetT},
 	{0xFFFF, 0x0048, clrs, F::None, K::Plain},
 	{0xFFFF, 0x0058, sets, F::None, K::Plain},
-	{0xFFFF, 0x0028, clrmac, F::None, K::Plain},
+	{0xFFFF, 0x0028, clrmac, F::None, K::Plain, H::ClrMac},
 	{0xFFFF, 0x0009, nop, F::None, K::Plain, H::Nop},
 	{0xFFFF, 0x001B, sleep, F::None, K::End},
 	{0xFF00, 0xC300, trapa, F::Imm, K::End},
 	{0xF0FF, 0x400E, ldcsr, F::N, K::End},
-	{0xF0FF, 0x401E, ldcgbr, F::N, K::Plain},
+	{0xF0FF, 0x401E, ldcgbr, F::N, K::Plain, H::LdcGbr},
 	{0xF0FF, 0x402E, ldcvbr, F::N, K::Plain},
 	{0xF0FF, 0x403E, ldcssr, F::N, K::Plain},
 	{0xF0FF, 0x404E, ldcspc, F::N, K::Plain},
@@ -1717,14 +1743,14 @@ const typename Sh4OpsT<Way>::Entry Sh4OpsT<Way>::table[] = {
 	{0xF0FF, 0x4047, ldcmspc, F::N, K::Plain},
 	{0xF0FF, 0x40F6, ldcmdbr, F::N, K::Plain},
 	{0xF08F, 0x4087, ldcmrbank, F::NBank, K::Plain},
-	{0xF0FF, 0x400A, ldsmach, F::N, K::Plain},
-	{0xF0FF, 0x401A, ldsmacl, F::N, K::Plain},
-	{0xF0FF, 0x402A, ldspr, F::N, K::Plain},
+	{0xF0FF, 0x400A, ldsmach, F::N, K::Plain, H::LdsMacH},
+	{0xF0FF, 0x401A, ldsmacl, F::N, K::Plain, H::LdsMacL},
+	{0xF0FF, 0x402A, ldspr, F::N, K::Plain, H::LdsPr},
 	{0xF0FF, 0x4006, ldsmmach, F::N, K::Plain},
 	{0xF0FF, 0x4016, ldsmmacl, F::N, K::Plain},
 	{0xF0FF, 0x4026, ldsmpr, F::N, K::Plain, H::LdsMPr},
 	{0xF0FF, 0x0002, stcsr, F::N, K::Plain},
-	{0xF0FF, 0x0012, stcgbr, F::N, K::Plain},
+	{0xF0FF, 0x0012, stcgbr, F::N, K::Plain, H::StcGbr},
 	{0xF0FF, 0x0022, stcvbr, F::N, K::Plain},
 	{0xF0FF, 0x0032, stcssr, F::N, K::Plain},
 	{0xF0FF, 0x0042, stcspc, F::N, K::Plain},
@@ -1739,9 +1765,9 @@ const typename Sh4OpsT<Way>::Entry Sh4OpsT<Way>::table[] = {
 	{0xF0FF, 0x4032, stcmsgr, F::N, K::Plain},
 	{0xF0FF, 0x40F2, stcmdbr, F::N, K::Plain},
 	{0xF08F, 0x4083, stcmrbank, F::NBank, K::Plain},
-	{0xF0FF, 0x000A, stsmach, F::N, K::Plain},
-	{0xF0FF, 0x001A, stsmacl, F::N, K::Plain},
-	{0xF0FF, 0x002A, stspr, F::N, K::Plain},
+	{0xF0FF, 0x000A, stsmach, F::N, K::Plain, H::StsMacH},
+	{0xF0FF, 0x001A, stsmacl, F::N, K::Plain, H::StsMacL},
+	{0xF0FF, 0x002A, stspr, F::N, K::Plain, H::StsPr},
 	{0xF0FF, 0x4002, stsmmach, F::N, K::Plain},
 	{0xF0FF, 0x4012, stsmmacl, F::N, K::Plain},
 	{0xF0FF, 0x4022, stsmpr, F::N, K::Plain, H::StsMPr},
@@ -1754,11 +1780,11 @@ const typename Sh4OpsT<Way>::Entry Sh4OpsT<Way>::table[] = {
 	{0xF0FF, 0x00B3, nop, F::N, K::Plain, H::Nop},
 	{0xF0FF, 0x00C3, movca, F::N, K::Plain, H::MovCA},
 
-	{0xF0FF, 0x405A, ldsfpul, F::N, K::Plain},
+	{0xF0FF, 0x405A, ldsfpul, F::N, K::Plain, H::LdsFpul},
 	{0xF0FF, 0x406A, ldsfpscr, F::N, K::Plain},
 	{0xF0FF, 0x4056, ldsmfpul, F::N, K::Plain},
 	{0xF0FF, 0x4066, ldsmfpscr, F::N, K::Plain},
-	{0xF0FF, 0x005A, stsfpul, F::N, K::Plain},
+	{0xF0FF, 0x005A, stsfpul, F::N, K::Plain, H::StsFpul},
 	{0xF0FF, 0x006A, stsfpscr, F::N, K::Plain},
 	{0xF0FF, 0x4052, stsmfpul, F::N, K::Plain},
 	{0xF0FF, 0x4062, stsmfpscr, F::N, K::Plain},

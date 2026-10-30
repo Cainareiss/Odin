@@ -184,6 +184,13 @@ public:
 	/* Others write that page in place too: the code compared on it is
 	 * compared again at each slice. Until the page is mapped again. */
 	void map_shared(uint32_t page);
+	/* The program's writes in place to that page go the long way, where
+	 * the first of them ends the watch and is made in place as before.
+	 * For the machine to know whether the program wrote the page since.
+	 * False when the page is not written in place. Mapping the page again
+	 * ends the watch. */
+	bool watch(uint32_t page);
+	bool watched(uint32_t page) const { return page < PHYSICAL_PAGES && m_watch[page]; }
 	/* Others wrote the plain memory of this CPU, `size` bytes from the
 	 * physical address `addr` on: the code compared there is compared
 	 * again before it runs. */
@@ -327,6 +334,11 @@ private:
 		ExtSB, ExtSW, ExtUB, ExtUW,
 		ShLL, ShLR, ShAR, ShLL2, ShLL8, ShLL16, ShLR2, ShLR8, ShLR16,
 		Dt, ClrT, SetT, Nop,
+		/* the system registers to and from Rn */
+		LdsMacH, LdsMacL, LdsPr, LdcGbr, StsMacH, StsMacL, StsPr, StcGbr, ClrMac,
+		/* done whole where the host has them, see Sh4Host::whole() */
+		SwapB, SwapW, Xtrct, AddC, SubC, NegC, MulL, MulSW, MulUW, DMulS, DMulU,
+		RotL, RotR, RotCL, RotCR, ShAd, ShLd,
 		/* the memory, plain memory in place and the long way through
 		 * the instruction: what is read, then from where */
 		MovLL, MovWL, MovBL,		/* Rn = @Rm */
@@ -354,7 +366,9 @@ private:
 		/* single precision, the long way when FPSCR.PR is set */
 		FSts, FLds, FLt, FTrc, FNeg, FAbs, FLdi0, FLdi1, FAdd, FSub, FMul, FCmpGt, FMac,
 		/* where the host has vectors; the long way when SR.FD is set */
-		FIpr, FTrv
+		FIpr, FTrv,
+		/* the long way when SR.FD is set */
+		LdsFpul, StsFpul
 	};
 	/* The long way of an access to the memory in host code: the call of
 	 * the instruction `op`, back at `back`. */
@@ -410,6 +424,7 @@ private:
 	bool translate_vector(Inline form, const Sh4Op &op, uint32_t i, std::vector<LongWay> &ways);
 	bool translate_jump(const Block &b, const Sh4Op &op, uint32_t i, std::vector<LongWay> &ways);
 	static uintptr_t linked(Sh4 &c, uint32_t pc);
+	void leave_fast(const Sh4Op &end);
 	void pairs_through(const Block &b, std::array<bool, BLOCK_MAX + 3> &pairs) const;
 
 	/* sh4.cpp: the waits, the interrupts, the registers that change the
@@ -546,6 +561,7 @@ private:
 	bool read_any(uint32_t addr, uint32_t size, uint64_t &value);
 	bool write_any(uint32_t addr, uint32_t size, uint64_t value);
 	bool write_plain(uint32_t addr, uint32_t size, uint64_t value);
+	uint8_t *unwatch(uint32_t addr);
 	void outside();
 
 	/* sh4_ops.cpp */
@@ -765,6 +781,7 @@ private:
 	std::vector<uint8_t *> m_wr;
 	std::vector<uint8_t> m_quiet;	/* by physical page, see map_quiet() */
 	std::vector<uint8_t> m_shared;	/* by physical page, see map_shared() */
+	std::vector<uint8_t *> m_watch;	/* by physical page: where it is written, while watched */
 	bool m_shared_code;		/* code on a shared page compared in this epoch */
 
 	/* The blocks: page of the entry address, then its rank in the page.

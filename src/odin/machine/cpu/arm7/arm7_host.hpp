@@ -60,10 +60,13 @@ public:
 	/* Where the host code finds the state of the CPU, in bytes from it;
 	 * `r` is r0 of the active registers, `kept` the byte that is not 0
 	 * while a turn is kept and `failed` the count of the instructions
-	 * whose condition failed (see Arm7::run_translated). */
+	 * whose condition failed (see Arm7::run_translated). `blocks` is the
+	 * table of pages of Arm7::linked(), `blocks_end` (a value) the end of
+	 * the memory it covers. */
 	struct Places {
 		int32_t r, pc, op_pc, cpsr, cycles, instructions, irq_line, fiq_line, ram_base, stale, stale_block, kept,
-		        failed;
+		        failed, ram_size, ram_mask, blocks;
+		uint32_t blocks_end;
 	};
 
 	Arm7Host(const Places &places, Link link);
@@ -78,9 +81,9 @@ public:
 	/* Back to C++ before the instruction at `pc`, at offset `at` of the
 	 * memory, when the memory holds another word than `op` there. */
 	void check(uint32_t at, uint32_t pc, uint32_t op);
-	/* A jump past the instruction when its condition fails: `pass` has
-	 * the bit of each value of NZCV it passes with. */
-	Jump unless(uint16_t pass);
+	/* A jump past the instruction when its condition `cc` fails: `pass`
+	 * has the bit of each value of NZCV it passes with. */
+	Jump unless(uint32_t cc, uint16_t pass);
 	/* The instruction called, then what may follow it: an interrupt to
 	 * take, the cycles spent, another PC. */
 	void call(uint32_t pc, uint32_t op, Run does);
@@ -99,8 +102,9 @@ public:
 	void link_to(uint32_t at, uint32_t place);
 	/* The instruction at `pc` whose condition failed: the fetch alone. */
 	void failed(Jump skip, uint32_t pc);
-	/* The end of the block, on to `next`, then its ways out. */
-	void end(uint32_t next);
+	/* The end of the block, on to `next` as branch() goes to its target,
+	 * then its ways out; returns as branch() does. */
+	uint32_t end(uint32_t next, uint32_t direct);
 
 	/* The steps of an instruction done in place, on the registers of
 	 * the ARM7 where they are and four registers of the host that nothing
@@ -182,6 +186,12 @@ private:
 	/* Its ways back to C++: for a word that changed before the
 	 * instruction at pc, and with PC to write */
 	std::vector<Out> m_stale, m_exits;
+#if defined(ODIN_HOST_AARCH64)
+	/* The words the block was written for, loaded from after it, and the
+	 * page of the memory x24 holds for it, ~0 for none */
+	std::vector<Out> m_words;
+	uint32_t m_page = 0;
+#endif
 	uint32_t (*m_enter)(Arm7 *, const uint8_t *, uint32_t, uint32_t);
 };
 

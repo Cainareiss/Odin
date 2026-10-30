@@ -72,6 +72,9 @@ const char *es_version_head();
 void storage(GLsizei levels, GLenum format, GLsizei w, GLsizei h);
 /* Reads back the buffer bound to `target` */
 void read_buffer(GLenum target, GLintptr offset, GLsizeiptr size, void *out);
+/* The attachment of the framebuffer bound to `target` is not read again
+ * before it is drawn over: a tiler neither stores nor loads it. */
+void invalidate(GLenum target, GLenum attachment);
 /* A texture of one level read pixel for pixel; a framebuffer that draws
  * to a texture. Each is left bound. */
 GLuint new_texture(GLenum format, unsigned w, unsigned h);

@@ -37,9 +37,13 @@ namespace {
 constexpr uint32_t SIZE = 8u << 20;
 
 /* x19 the CPU, w20 the cycles spent, w21 those to spend, x22 the memory
- * of the ARM7, x23 the instructions run; A, B, D, E in w0 to w3, and the
- * carry of the host in w15, as x86 leaves it in CF */
-constexpr uint8_t SPENT = 20, LIMIT = 21, RAM = 22, COUNT = 23, CARRY = 15;
+ * of the ARM7, x23 the instructions run, x24 the page of the memory of the
+ * block running, x25 the table of the blocks; A, B, D, E in w0 to w3, and
+ * the carry of the host in w15, as x86 leaves it in CF */
+constexpr uint8_t SPENT = 20, LIMIT = 21, RAM = 22, COUNT = 23, PAGE = 24, BLOCKS = 25, CARRY = 15;
+constexpr uint32_t LDR_LITERAL_W = 0x18000000, ADR = 0x10000000;
+/* The page of x24, and the bytes a load reaches from x22 alone */
+constexpr uint32_t PAGE_BYTES = 1u << 12, NEAR = 4 * 4096, NONE = ~0u;
 
 uint8_t r(Arm7Host::Reg reg) { return static_cast<uint8_t>(reg); }
 
@@ -61,6 +65,7 @@ void Arm7Host::clear()
 	HostCode::copy(LIMIT, X3);
 	HostCode::load(RAM, X19, m_places.ram_base, 8);
 	HostCode::copy(COUNT, ZR, true);
+	HostCode::add_value(BLOCKS, X19, m_places.blocks);
 	way_in_end();
 	HostCode::load(X9, X19, m_places.instructions, 8);
 	emit(ADD | WIDE | (COUNT << 16) | (X9 << 5) | X9);
@@ -68,10 +73,38 @@ void Arm7Host::clear()
 	HostCode::copy(X0, SPENT);
 	way_out();
 
+	/* The way on: Arm7::linked() done here while no turn is kept, its
+	 * tests in the same order; back to C++ where it gives 0. */
+	const Places &p = m_places;
 	m_follow = m_used;
-	HostCode::load(X9, X19, m_places.instructions, 8);
+	HostCode::load(X9, X19, p.kept, 1);
+	const Jump kept = jump_if_zero(X9, false);
+	HostCode::load(X9, X19, p.pc, 4);
+	emit(ANDS_VALUE | (1 << 10) | (X9 << 5) | ZR);			/* tst w9, #3 */
+	jump_to_if(NE, m_leave);
+	HostCode::load(X10, X19, p.ram_size, 4);
+	emit(SUBS | (X10 << 16) | (X9 << 5) | ZR);
+	jump_to_if(HS, m_leave);
+	HostCode::load(X10, X19, p.ram_mask, 4);
+	emit(AND | (X10 << 16) | (X9 << 5) | X10);			/* at */
+	move(X11, p.blocks_end);
+	emit(SUBS | (X11 << 16) | (X10 << 5) | ZR);
+	jump_to_if(HS, m_leave);
+	emit(lsr(12) | (X10 << 5) | X11);
+	emit(indexed(LDR_X) | (1 << 12) | (X11 << 16) | (BLOCKS << 5) | X11);	/* the page */
+	jump_to_if_zero(X11, true, m_leave);
+	emit(ubfx(2, 10) | (X10 << 5) | X10);
+	emit(indexed(LDR_W) | (1 << 12) | (X10 << 16) | (X11 << 5) | X10);	/* the place */
+	jump_to_if_zero(X10, true, m_leave);
+	const uint32_t back = (0u - m_used) & 0x1FFFFF;			/* adr x11, the code */
+	emit(ADR | ((back & 3) << 29) | ((back >> 2) << 5) | X11);
+	emit(ADD | WIDE | (X10 << 16) | (X11 << 5) | X0);
+	emit(BR | (X0 << 5));
+
+	bind(kept);
+	HostCode::load(X9, X19, p.instructions, 8);
 	emit(ADD | WIDE | (COUNT << 16) | (X9 << 5) | X9);
-	HostCode::store(X9, X19, m_places.instructions, 8);
+	HostCode::store(X9, X19, p.instructions, 8);
 	HostCode::copy(COUNT, ZR, true);
 	HostCode::copy(X0, X19, true);
 	call_to(reinterpret_cast<uintptr_t>(m_link));
@@ -108,26 +141,43 @@ uint32_t Arm7Host::begin(uint32_t pc)
 	m_block = pc;
 	m_stale.clear();
 	m_exits.clear();
+	m_words.clear();
+	m_page = NONE;
 	return m_used;
 }
 
+/* The word in the memory from x22, or from x24 past what x22 reaches; the
+ * word it should be from after the block. A block keeps to one page. */
 void Arm7Host::check(uint32_t at, uint32_t pc, uint32_t op)
 {
-	HostCode::load(X9, RAM, at, 4);
-	move(X10, op);
+	const uint32_t page = at & ~(PAGE_BYTES - 1);
+	const bool near = page + PAGE_BYTES <= NEAR;
+
+	if (!near && m_page == NONE && (page >> 12) < 4096) {
+		emit(ADD_VALUE | WIDE | (1 << 22) | ((page >> 12) << 10) | (RAM << 5) | PAGE);
+		m_page = page;
+	}
+	if (page == m_page) {
+		HostCode::load(X9, PAGE, at - page, 4);
+	} else {
+		HostCode::load(X9, RAM, at, 4);
+	}
+	emit(LDR_LITERAL_W | X10);
+	m_words.push_back({Jump{m_used - 4}, op});
 	emit(SUBS | (X10 << 16) | (X9 << 5) | ZR);
 	m_stale.push_back({jump_if(NE), pc});
 }
 
-/* The bit of NZCV in `pass` */
-HostCode::Jump Arm7Host::unless(uint16_t pass)
+/* CPSR keeps NZCV where the host does, and conditions 0x0 to 0xD mean the
+ * same on both. 0xF never passes on the ARM7 but always on the host. */
+HostCode::Jump Arm7Host::unless(uint32_t cc, uint16_t)
 {
+	if (cc == 0xF) {
+		return jump_ahead();
+	}
 	HostCode::load(X9, X19, m_places.cpsr, 4);
-	emit(lsr(28) | (X9 << 5) | X9);
-	move(X10, pass);
-	emit(LSRV | (X9 << 16) | (X10 << 5) | X10);
-	emit(ANDS_VALUE | (X10 << 5) | ZR);
-	return jump_if(EQ);
+	emit(MSR_NZCV | X9);
+	return jump_if(static_cast<Cond>(cc ^ 1));
 }
 
 void Arm7Host::call(uint32_t pc, uint32_t op, Run does)
@@ -214,10 +264,13 @@ void Arm7Host::failed(Jump skip, uint32_t pc)
 	bind(on);
 }
 
-void Arm7Host::end(uint32_t next)
+uint32_t Arm7Host::end(uint32_t next, uint32_t direct)
 {
 	store_value(m_places.pc, next);
-	jump_back(m_follow);
+	HostCode::load(X9, X19, m_places.kept, 1);
+	jump_to_if_zero(X9, false, m_follow);
+	const uint32_t at = m_used;
+	jump_back(direct ? direct : m_follow);
 	for (const Out &out : m_stale) {
 		bind(out.jump);
 		store_value(m_places.pc, out.pc);
@@ -231,6 +284,11 @@ void Arm7Host::end(uint32_t next)
 		store_value(m_places.pc, out.pc);
 		jump_back(m_leave);
 	}
+	for (const Out &word : m_words) {
+		bind(word.jump);
+		emit(word.pc);
+	}
+	return direct ? 0 : at;
 }
 
 void Arm7Host::load(Reg reg, uint32_t n)

@@ -251,8 +251,7 @@ Antarctic::copy_material(Vertex &dst)
 	const odin_material_t &mat = m_s.mat.scratch;
 
 	dst.changed();
-	for (unsigned i = 0; i < 3; i++)
-		dst.body.diffuse[i] = mat.diffuse[i];
+	std::memcpy(dst.body.diffuse, mat.diffuse, sizeof(dst.body.diffuse));
 
 	/* The 691 colour is the ambient of the shading mode 1 and the
 	 * emission of the mode 2, 255 for 1.0. The port saturates it there
@@ -264,17 +263,13 @@ Antarctic::copy_material(Vertex &dst)
 		for (unsigned i = 0; i < 3; i++)
 			m_push.ambient[i] = mat.unknown[i] / 255.0f;
 	}
-	for (unsigned i = 0; i < 3; i++)
-		dst.body.ambient[i] = m_push.ambient[i];
+	std::memcpy(dst.body.ambient, m_push.ambient, sizeof(dst.body.ambient));
 
 	/* The 491 colour is in 1/64: PHARRIER sets 0x40 and SGNASCAR goes up
 	 * to 0x7F. The port multiplies it by 4 and wraps to 8 bits (825B4DE8),
 	 * the same thing below 0x40; the shader scales it. */
-	for (unsigned i = 0; i < 4; i++)
-		dst.body.specular[i] = mat.specular[i];
-
-	for (unsigned i = 0; i < 3; i++)
-		dst.body.color1[i] = mat.ambient[i];
+	std::memcpy(dst.body.specular, mat.specular, sizeof(dst.body.specular));
+	std::memcpy(dst.body.color1, mat.ambient, sizeof(dst.body.color1));
 }
 
 void
@@ -422,7 +417,9 @@ Antarctic::push_vertices(const Vertex *v, uint32_t flags, uint32_t num)
 			Vertex &last = tmp(2);
 
 			last.info.full = 0;
-			last.body = odin_vertex_body_t{};
+			/* Push all writes every field below. */
+			if ((flags & (PUSH_NRM | PUSH_TXC)) != (PUSH_NRM | PUSH_TXC))
+				last.body = odin_vertex_body_t{};
 
 			for (unsigned i = 0; i < 3; i++)
 				last.body.position[i] = v->body.position[i];

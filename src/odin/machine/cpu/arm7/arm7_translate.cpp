@@ -34,6 +34,9 @@ namespace odin {
 
 namespace {
 
+/* The host code reads the pages of m_blocks as plain pointers */
+static_assert(sizeof(std::unique_ptr<uint32_t[]>) == sizeof(uint32_t *));
+
 /* An instruction after which the program never goes on to the next one
  * when it runs: B, BL, BX, SWI, a load of PC alone or in a list. The
  * block stops there; any other change of PC is seen after the
@@ -58,7 +61,9 @@ void Arm7::set_translate(bool on)
 		const Arm7Host::Places places{from_cpu(&m_r[0]), from_cpu(&m_pc), from_cpu(&m_op_pc), from_cpu(&m_cpsr),
 		                              from_cpu(&m_cycles), from_cpu(&m_instructions), from_cpu(&m_irq_line),
 		                              from_cpu(&m_fiq_line), from_cpu(&m_ram.base), from_cpu(&m_host_stale),
-		                              from_cpu(&m_host_stale_block), from_cpu(&m_turn_kept), from_cpu(&m_failed)};
+		                              from_cpu(&m_host_stale_block), from_cpu(&m_turn_kept), from_cpu(&m_failed),
+		                              from_cpu(&m_ram.size), from_cpu(&m_ram.mask), from_cpu(&m_blocks),
+		                              DECODED_PAGES << DECODED_PAGE};
 
 		m_host = std::make_unique<Arm7Host>(places, &Arm7::linked);
 	}
@@ -212,6 +217,7 @@ uint32_t Arm7::translate(uint32_t addr, uint32_t &words)
 	Arm7Host &host = *m_host;
 	const uint32_t place = host.begin(addr);
 	uint32_t pc = addr;
+	bool leaves = false;
 
 	for (uint32_t i = 0; i < BLOCK_MAX; i++) {
 		const uint32_t offset = pc & m_ram.mask;
@@ -226,7 +232,7 @@ uint32_t Arm7::translate(uint32_t addr, uint32_t &words)
 		const bool conditional = pass != 0xFFFF;
 
 		host.check(offset, pc, op);
-		const HostCode::Jump skip = conditional ? host.unless(pass) : HostCode::Jump{0};
+		const HostCode::Jump skip = conditional ? host.unless(op >> 28, pass) : HostCode::Jump{0};
 		switch (form_of(op, does)) {
 		case Form::Data:
 			data_in_place(pc, op);
@@ -258,11 +264,15 @@ uint32_t Arm7::translate(uint32_t addr, uint32_t &words)
 		}
 		pc += 4;
 		if (always_leaves(op)) {
+			leaves = true;
 			break;
 		}
 	}
 	words = (pc - addr) / 4;
-	host.end(pc);
+	/* A block that falls through goes on to the next as a branch does */
+	if (const uint32_t at = host.end(pc, leaves ? 0 : block_at(pc)); at && !leaves) {
+		m_unlinked[pc].push_back(at);
+	}
 	return place;
 }
 

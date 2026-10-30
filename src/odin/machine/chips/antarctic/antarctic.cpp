@@ -221,8 +221,23 @@ Antarctic::fetch(uint32_t inst[8]) const
 
 	std::memset(inst, 0, 8 * sizeof(uint32_t));
 	std::memcpy(inst, &mem[offs], 4);
-	std::memcpy(inst, &mem[offs],
-	            std::min<size_t>(insn_size(inst[0]), mem.size() - offs));
+	const uint32_t size = insn_size(inst[0]);
+	if (offs + size > mem.size()) {
+		std::memcpy(inst, &mem[offs], mem.size() - offs);
+		return true;
+	}
+	/* Fixed sizes, copied inline */
+	switch (size) {
+	case 8:
+		std::memcpy(inst, &mem[offs], 8);
+		break;
+	case 16:
+		std::memcpy(inst, &mem[offs], 16);
+		break;
+	case 32:
+		std::memcpy(inst, &mem[offs], 32);
+		break;
+	}
 	return true;
 }
 

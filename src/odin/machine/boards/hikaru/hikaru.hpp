@@ -44,6 +44,7 @@
 #include "odin/machine/cabinet/netbd_ring.hpp"
 #include "odin/machine/chips/eeprom_93c46.hpp"
 #include "odin/host/app/games.hpp"
+#include "odin/machine/boards/hikaru/fb_writes.hpp"
 #include "odin/machine/boards/hikaru/hikaru_gpu.hpp"
 #include "odin/machine/boards/hikaru/hikaru_host.hpp"
 #include "odin/machine/chips/memctl.hpp"
@@ -89,6 +90,7 @@ public:
 	 * from. */
 	HikaruGpu &gpu() { return *m_gpu; }
 	std::span<const uint8_t> framebuffer_ram() const { return m_fb; }
+	FbWrites &framebuffer_writes() { return m_fb_writes; }
 	std::span<const uint8_t> texture_ram(unsigned bank) const { return m_texram[bank]; }
 
 	const std::string &game_name() const { return m_game.name; }
@@ -254,6 +256,7 @@ private:
 	std::vector<uint8_t> m_ram[2];		/* 32 MB each */
 	std::vector<uint8_t> m_cmdram;		/* 4 MB */
 	std::vector<uint8_t> m_fb;		/* 8 MB */
+	FbWrites m_fb_writes;
 	std::vector<uint8_t> m_texram[2];	/* 4 MB each */
 	std::vector<uint8_t> m_sound_ram[2];	/* 8 MB each */
 	std::vector<uint8_t> m_mie_ram;		/* 32 KB */

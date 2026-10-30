@@ -146,6 +146,9 @@ AicaDsp::run(const uint8_t *regs, const WaveMemory &memory)
 		const uint32_t ring = aica_reg(regs, REG_RING);
 		const uint32_t base = (ring & 0xFFF) << 11;
 		const uint32_t length = (8192u << ((ring >> 13) & 3)) - 1;
+		/* In locals: the stores into TEMP, MEMS and the memory would reload them */
+		int32_t acc = s.acc, frc = s.frc, y_reg = s.y, adrs = s.adrs;
+		const uint32_t mdec = s.mdec;
 
 		for (uint32_t n = 0; n < m_size; n++) {
 			const Step &step = m_steps[n];
@@ -162,47 +165,47 @@ AicaDsp::run(const uint8_t *regs, const WaveMemory &memory)
 			if (flags & IWT)
 				s.mems[step.iwa] = s.reads[i & 3];
 
-			const int32_t temp = s.temp[(step.tra + s.mdec) & 0x7F];
-			int32_t b = (flags & BZERO) ? 0 : (flags & BACC) ? s.acc : temp;
+			const int32_t temp = s.temp[(step.tra + mdec) & 0x7F];
+			int32_t b = (flags & BZERO) ? 0 : (flags & BACC) ? acc : temp;
 			if (flags & NEGB)
 				b = -b;
 			const int32_t x = (flags & XSEL) ? input : temp;
 			int32_t y;
 			switch (step.ysel) {
 			case 0:
-				y = s.frc;
+				y = frc;
 				break;
 			case 1:
 				y = static_cast<int16_t>(aica_reg(regs, REG_COEF + i * 4)) >> 3;
 				break;
 			case 2:
-				y = s.y >> 11;
+				y = y_reg >> 11;
 				break;
 			default:
-				y = (s.y >> 4) & 0xFFF;
+				y = (y_reg >> 4) & 0xFFF;
 				break;
 			}
 			if (flags & YRL)
-				s.y = input;
+				y_reg = input;
 
 			/* The sum of the step before, as SHIFT gives it: doubled
 			 * for 1 and 2, held to 24 bits for 0 and 1 */
-			int32_t shifted = (shift == 1 || shift == 2) ? s.acc * 2 : s.acc;
+			int32_t shifted = (shift == 1 || shift == 2) ? acc * 2 : acc;
 			shifted = shift < 2 ? std::clamp(shifted, -0x800000, 0x7FFFFF) : sign24(shifted);
-			s.acc = static_cast<int32_t>((static_cast<int64_t>(x) * y) >> 12) + b;
+			acc = static_cast<int32_t>((static_cast<int64_t>(x) * y) >> 12) + b;
 
 			if (flags & TWT)
-				s.temp[(step.twa + s.mdec) & 0x7F] = shifted;
+				s.temp[(step.twa + mdec) & 0x7F] = shifted;
 			if (flags & FRCL)
-				s.frc = shift == 3 ? shifted & 0xFFF : shifted >> 11;
+				frc = shift == 3 ? shifted & 0xFFF : shifted >> 11;
 			if (flags & MEMORY) {
 				uint32_t addr = aica_reg(regs, REG_MADRS + step.masa * 4u);
 
 				if (flags & ADREB)
-					addr += static_cast<uint32_t>(s.adrs) & 0xFFF;
+					addr += static_cast<uint32_t>(adrs) & 0xFFF;
 				if (flags & NXADR)
 					addr++;
-				addr = (flags & TABLE) ? addr & 0xFFFF : (addr + s.mdec) & length;
+				addr = (flags & TABLE) ? addr & 0xFFFF : (addr + mdec) & length;
 
 				const uint32_t byte = base + addr * 2;
 				if (flags & MRD) {
@@ -215,10 +218,14 @@ AicaDsp::run(const uint8_t *regs, const WaveMemory &memory)
 				}
 			}
 			if (flags & ADRL)
-				s.adrs = (shift == 3 ? shifted >> 12 : input >> 16) & 0xFFF;
+				adrs = (shift == 3 ? shifted >> 12 : input >> 16) & 0xFFF;
 			if (flags & EWT)
 				s.efreg[step.ewa] = static_cast<int16_t>(shifted >> 8);
 		}
+		s.acc = acc;
+		s.frc = frc;
+		s.y = y_reg;
+		s.adrs = adrs;
 	}
 	s.mdec--;
 }
