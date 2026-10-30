@@ -810,7 +810,8 @@ GameList::load(const std::string &path)
 	m_root = json_loadf(file, 0, &error);
 	std::fclose(file);
 	if (!m_root) {
-		std::fprintf(stderr, "ERROR: can't load game list '%s'\n", error.text);
+		std::fprintf(stderr, "ERROR: can't load game list '%s': %s (line %d, column %d)\n", path.c_str(),
+		             error.text, error.line, error.column);
 		return false;
 	}
 
