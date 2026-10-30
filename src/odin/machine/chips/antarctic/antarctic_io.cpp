@@ -373,7 +373,7 @@ Antarctic::set_display_irq(bool on)
  *		0 = ABGR1555
  *		1 = ABGR4444
  *		2 = I4 (4 bits a texel, 2 x 2 texels a word)
- *		4 = A8?
+ *		4 = LA8 (HEURISTIC: as the renderer reads it, ODIN_FORMAT_LA8)
  *
  *	b = Destination TEXRAM bank
  *

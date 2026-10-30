@@ -235,8 +235,8 @@ const char *
 odin_texhead_str(const odin_texhead_t *th)
 {
 	static const char *name[8] = {
-		"RGBA5551",
-		"RGBA4444",
+		"ABGR1555",
+		"ABGR4444",
 		"I4      ",
 		"???3??? ",
 		"LA8     ",
