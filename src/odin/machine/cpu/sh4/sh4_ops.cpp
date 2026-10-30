@@ -43,6 +43,15 @@
 
 namespace odin {
 
+#if defined(ODIN_HOST_X86_64)
+bool
+host_has_fma()
+{
+	__builtin_cpu_init();
+	return __builtin_cpu_supports("fma") != 0 && !env_flag("ODIN_SH4_NO_FMA");
+}
+#endif
+
 namespace {
 
 /* The products FMAC, FIPR and FTRV fuse with a sum, rounded once. A build
@@ -104,11 +113,7 @@ void trv(uint32_t *v, const uint32_t *x) { fused_trv<fma_one>(v, x); }
 [[gnu::noinline]] float ipr_any(const uint32_t *a, const uint32_t *b) { return fused_ipr<fma_by_double>(a, b); }
 [[gnu::noinline]] void trv_any(uint32_t *v, const uint32_t *x) { fused_trv<fma_by_double>(v, x); }
 
-/* For the tests: ODIN_SH4_NO_FMA=1 takes the way of the hosts without FMA */
-const bool HAS_FMA = [] {
-	__builtin_cpu_init();
-	return __builtin_cpu_supports("fma") != 0 && !env_flag("ODIN_SH4_NO_FMA");
-}();
+const bool HAS_FMA = host_has_fma();
 
 float mac(uint32_t a, uint32_t b, uint32_t c) { return HAS_FMA ? mac_fma(a, b, c) : mac_any(a, b, c); }
 float ipr(const uint32_t *a, const uint32_t *b) { return HAS_FMA ? ipr_fma(a, b) : ipr_any(a, b); }

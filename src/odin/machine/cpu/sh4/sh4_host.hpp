@@ -34,6 +34,12 @@ namespace odin {
 class Sh4;
 struct Sh4Op;
 
+#if defined(ODIN_HOST_X86_64)
+/* Whether the host does FMA, for the reader (sh4_ops.cpp) and the host code;
+ * for the tests, ODIN_SH4_NO_FMA=1 takes the way of the hosts without it */
+bool host_has_fma();
+#endif
+
 /* Host code for the blocks of a SH-4: the memory it is written in, and the
  * few host instructions a block is made of. A block calls its instructions
  * one after the other; each call returns 0 when the block goes on, 1 when
