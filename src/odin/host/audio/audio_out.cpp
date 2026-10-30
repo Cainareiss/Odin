@@ -164,7 +164,8 @@ AudioOut::play(std::span<const int16_t> main, std::span<const int16_t> option)
 	if (m_frames.size() < n)
 		return;
 
-	const uint32_t queued = static_cast<uint32_t>(std::max(SDL_GetAudioStreamQueued(m_stream), 0)) / (n * 2);
+	const uint32_t frame_bytes = n * uint32_t{sizeof(int16_t)};
+	const uint32_t queued = static_cast<uint32_t>(std::max(SDL_GetAudioStreamQueued(m_stream), 0)) / frame_bytes;
 	const uint32_t low = RATE * 30 / 1000, high = RATE * 120 / 1000;
 
 	/* After a pause or a stall, start again from what is due now */
@@ -176,7 +177,7 @@ AudioOut::play(std::span<const int16_t> main, std::span<const int16_t> option)
 		const std::vector<int16_t> last(m_frames.end() - n, m_frames.end());
 		m_frames.insert(m_frames.end(), last.begin(), last.end());
 	}
-	SDL_PutAudioStreamData(m_stream, m_frames.data(), static_cast<int>(m_frames.size() * 2));
+	SDL_PutAudioStreamData(m_stream, m_frames.data(), static_cast<int>(m_frames.size() * sizeof(int16_t)));
 }
 
 void
