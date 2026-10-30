@@ -36,6 +36,7 @@
 #include "odin/host/gfx/spirv.hpp"
 #include "odin/host/app/user_files.hpp"
 
+#include <array>
 #include <cinttypes>
 #include <cmath>
 #include <cstdarg>
@@ -113,6 +114,52 @@ cache_fits(const std::vector<uint8_t> &bytes, const VkPhysicalDeviceProperties &
 	return header.headerSize >= sizeof(header) && header.headerVersion == VK_PIPELINE_CACHE_HEADER_VERSION_ONE &&
 	       header.vendorID == card.vendorID && header.deviceID == card.deviceID &&
 	       std::memcmp(header.pipelineCacheUUID, card.pipelineCacheUUID, VK_UUID_SIZE) == 0;
+}
+
+/* The constants of a variant (Constants) */
+Constants
+constants_of(const MeshVariant &variant, bool gl_clip_space)
+{
+	Constants c{};
+
+	c.gl_clip_space = gl_clip_space;
+	c.has_texture = variant.has_texture;
+	c.has_lighting = variant.has_lighting;
+	c.shading_mode = static_cast<int32_t>(variant.shading_mode);
+	c.alpha_mode = variant.alpha_mode;
+	c.tex_mode = static_cast<int32_t>(variant.tex_mode);
+	for (unsigned i = 0; i < 4; i++) {
+		c.has_light[i] = variant.lights[i].on;
+		c.light_type[i] = static_cast<int32_t>(variant.lights[i].type);
+		c.light_att_type[i] = static_cast<int32_t>(variant.lights[i].attenuation);
+	}
+	c.has_fog = variant.has_fog;
+	c.has_cue = variant.has_cue;
+	c.has_pattern = variant.has_pattern;
+	c.native_2d = variant.native;
+	return c;
+}
+
+/* How the colours of a mesh are blended (BLENDS), nothing written by a
+ * collecting one. The families of the 101 leave their eye depths too, not
+ * blended; on a card where the blend is the same for all, the alpha of 1
+ * of those fragments keeps them with the blends of the depth-writing types
+ * (scene_gl.cpp) */
+std::array<VkPipelineColorBlendAttachmentState, 2>
+mix_of(MeshBlend blend, bool collect, bool independent_blend)
+{
+	const VkBlendFactor *const f = BLENDS[static_cast<unsigned>(blend)];
+	const VkColorComponentFlags rgba = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT |
+	                                   VK_COLOR_COMPONENT_A_BIT;
+	std::array<VkPipelineColorBlendAttachmentState, 2> mix = { {
+		{ VK_TRUE, f[0], f[1], VK_BLEND_OP_ADD, f[2], f[3], VK_BLEND_OP_ADD, collect ? 0u : rgba },
+		{ VK_FALSE, VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ZERO, VK_BLEND_OP_ADD, VK_BLEND_FACTOR_ONE,
+		  VK_BLEND_FACTOR_ZERO, VK_BLEND_OP_ADD, VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT },
+	} };
+
+	if (!independent_blend)
+		mix[1] = mix[0];
+	return mix;
 }
 
 } /* namespace */
@@ -347,22 +394,7 @@ VkDrawing::pipeline(const MeshVariant &variant, MeshBlend blend)
 VkPipeline
 VkDrawing::make_pipeline(const MeshVariant &variant, MeshBlend blend, uint64_t key, uint64_t index)
 {
-	Constants c{};
-	c.gl_clip_space = m_card.gl_clip_space();
-	c.has_texture = variant.has_texture;
-	c.has_lighting = variant.has_lighting;
-	c.shading_mode = static_cast<int32_t>(variant.shading_mode);
-	c.alpha_mode = variant.alpha_mode;
-	c.tex_mode = static_cast<int32_t>(variant.tex_mode);
-	for (unsigned i = 0; i < 4; i++) {
-		c.has_light[i] = variant.lights[i].on;
-		c.light_type[i] = static_cast<int32_t>(variant.lights[i].type);
-		c.light_att_type[i] = static_cast<int32_t>(variant.lights[i].attenuation);
-	}
-	c.has_fog = variant.has_fog;
-	c.has_cue = variant.has_cue;
-	c.has_pattern = variant.has_pattern;
-	c.native_2d = variant.native;
+	const Constants c = constants_of(variant, m_card.gl_clip_space());
 	VkSpecializationMapEntry entries[NUM_CONSTANTS];
 	for (uint32_t i = 0; i < NUM_CONSTANTS; i++)
 		entries[i] = { i, i * static_cast<uint32_t>(sizeof(int32_t)), sizeof(int32_t) };
@@ -417,24 +449,12 @@ VkDrawing::make_pipeline(const MeshVariant &variant, MeshBlend blend, uint64_t k
 	depth.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
 	depth.depthTestEnable = depth.depthWriteEnable = VK_TRUE;
 	depth.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
-	const VkBlendFactor *const f = BLENDS[static_cast<unsigned>(blend)];
-	const VkColorComponentFlags rgba = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT |
-	                                   VK_COLOR_COMPONENT_A_BIT;
-	/* The families of the 101 leave their eye depths too, not blended;
-	 * on a card where the blend is the same for all, the alpha of 1 of
-	 * those fragments keeps them with the blends of the depth-writing
-	 * types (scene_gl.cpp) */
-	VkPipelineColorBlendAttachmentState mix[2] = {
-		{ VK_TRUE, f[0], f[1], VK_BLEND_OP_ADD, f[2], f[3], VK_BLEND_OP_ADD, variant.collect ? 0u : rgba },
-		{ VK_FALSE, VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ZERO, VK_BLEND_OP_ADD, VK_BLEND_FACTOR_ONE,
-		  VK_BLEND_FACTOR_ZERO, VK_BLEND_OP_ADD, VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT },
-	};
-	if (!m_card.independent_blend())
-		mix[1] = mix[0];
+	const std::array<VkPipelineColorBlendAttachmentState, 2> mix =
+		mix_of(blend, variant.collect, m_card.independent_blend());
 	VkPipelineColorBlendStateCreateInfo blending{};
 	blending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
 	blending.attachmentCount = variant.families ? 2 : 1;
-	blending.pAttachments = mix;
+	blending.pAttachments = mix.data();
 	const VkDynamicState states[7] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR,
 		                           VK_DYNAMIC_STATE_CULL_MODE, VK_DYNAMIC_STATE_FRONT_FACE,
 		                           VK_DYNAMIC_STATE_DEPTH_TEST_ENABLE, VK_DYNAMIC_STATE_DEPTH_WRITE_ENABLE,
