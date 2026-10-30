@@ -855,6 +855,18 @@ MenuKit::choice(const char *name, const char *about, std::span<const char *const
 	return changed;
 }
 
+bool
+MenuKit::choice(const char *name, const char *about, std::span<const char *const> labels, bool &on,
+                const char *locked, bool off, const char *warning)
+{
+	int chosen = on ? 1 : 0;
+
+	if (!choice(name, about, labels, chosen, locked, off, warning))
+		return false;
+	on = chosen == 1;
+	return true;
+}
+
 ImVec2
 MenuKit::segments_size(std::span<const char *const> labels) const
 {

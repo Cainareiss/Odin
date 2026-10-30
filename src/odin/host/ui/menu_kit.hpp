@@ -290,6 +290,9 @@ public:
 	 * the user must do in place of what it does. */
 	bool choice(const char *name, const char *about, std::span<const char *const> labels, int &chosen,
 	            const char *locked = nullptr, bool off = false, const char *warning = nullptr);
+	/* The same between two labels, `on` the second one */
+	bool choice(const char *name, const char *about, std::span<const char *const> labels, bool &on,
+	            const char *locked = nullptr, bool off = false, const char *warning = nullptr);
 	/* The choice alone, at that place: its size first */
 	ImVec2 segments_size(std::span<const char *const> labels) const;
 	bool segments(ImVec2 at, std::span<const char *const> labels, int &chosen, bool still = false) const;

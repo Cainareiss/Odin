@@ -884,12 +884,9 @@ Menu::page_outputs(MenuKit &kit, MenuState &state) const
 	begin_settings(kit, box, top, room);
 
 	kit.begin_group("OUTPUT PROGRAMS");
-	int send = state.network ? 1 : 0;
-
 	kit.next_tip("Sends the cabinet's outputs to LEDBlinky, MAMEHooker or DOFLinx, as MAME's network output does: "
 	             "this computer, port 8000.");
-	if (kit.choice("Send outputs", nullptr, OFF_ON, send))
-		state.network = send == 1;
+	kit.choice("Send outputs", nullptr, OFF_ON, state.network);
 	if (state.network)
 		kit.text("Connected programs", state.network_failed ? "port 8000 is used by another program: nothing is sent" :
 		                                                      nullptr,
@@ -1056,12 +1053,9 @@ Menu::page_paths(MenuKit &kit, MenuState &state) const
 	kit.next_tip("Odin's messages since it started. The previous run's are in odin-previous.log.");
 	kit.value("Log file", nullptr, shown_path(state.log_file, "none: ODIN_LOG=none").c_str(), nullptr, "READ ONLY");
 
-	int verbose = state.verbose ? 1 : 0;
-
 	kit.next_tip("Logs every access of the board, to the terminal and the log file.");
-	if (kit.choice("Detailed log", "much slower · at the next launch", OFF_ON, verbose,
-	               state.verbose_given ? "set on the command line: -v" : nullptr))
-		state.verbose = verbose == 1;
+	kit.choice("Detailed log", "much slower · at the next launch", OFF_ON, state.verbose,
+	           state.verbose_given ? "set on the command line: -v" : nullptr);
 	kit.end_group();
 }
 

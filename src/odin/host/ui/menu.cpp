@@ -643,7 +643,6 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 
 	kit.begin_group("SCREEN");
 	static constexpr const char *MODES[] = { "Window", "Full screen" };
-	int mode = state.fullscreen ? 1 : 0;
 	/* The keys of full screen, as the user set them */
 	const Hotkeys::Binding &full = state.hotkeys[static_cast<size_t>(Hotkeys::Action::FULLSCREEN)];
 	std::string shortcut;
@@ -655,9 +654,8 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 	              state.display_h, shortcut.c_str(), shortcut.empty() ? "" : ".");
 	kit.next_tip(about);
 	watch(PREVIEW_SCREEN, [&] {
-		if (kit.choice("Display mode", nullptr, MODES, mode,
-		               state.fullscreen_given ? "set on the command line: -f" : nullptr))
-			state.fullscreen = mode == 1;
+		kit.choice("Display mode", nullptr, MODES, state.fullscreen,
+		           state.fullscreen_given ? "set on the command line: -f" : nullptr);
 	});
 
 	int window = state.custom_w ? CUSTOM : state.window <= CUSTOM ? static_cast<int>(state.window) - 1 : -1;
@@ -738,22 +736,14 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 	kit.end_group();
 
 	kit.begin_group("SPEED");
-	int pace = state.unthrottled ? 1 : 0;
-
 	kit.next_tip("Unlimited runs as fast as the computer can.");
 	watch(PREVIEW_SCREEN, [&] {
-		if (kit.choice("Speed limit", "unlimited: no sound · at the next launch", PACES, pace,
-		               state.unthrottled_given ? "set on the command line: -u" : nullptr))
-			state.unthrottled = pace == 1;
+		kit.choice("Speed limit", "unlimited: no sound · at the next launch", PACES, state.unthrottled,
+		           state.unthrottled_given ? "set on the command line: -u" : nullptr);
 	});
-
-	int speed = state.show_speed ? 1 : 0;
 
 	kit.next_tip("Shows frames per second in the window title and the bar.");
-	watch(PREVIEW_SCREEN, [&] {
-		if (kit.choice("Show FPS", nullptr, OFF_ON, speed))
-			state.show_speed = speed == 1;
-	});
+	watch(PREVIEW_SCREEN, [&] { kit.choice("Show FPS", nullptr, OFF_ON, state.show_speed); });
 	kit.end_group();
 
 	/* Each palette by four of its colours: the screen, a drawing, the ink,
