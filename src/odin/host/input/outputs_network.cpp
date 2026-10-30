@@ -61,7 +61,7 @@ OutputsNetwork::~OutputsNetwork()
 {
 	for (Client &client : m_clients)
 		client.queued += "mame_stop = 1\r";
-	send_all();
+	flush();
 	for (const Client &client : m_clients)
 		close_socket(client.socket);
 	close_socket(m_listener);
@@ -88,7 +88,7 @@ void
 OutputsNetwork::welcome()
 {
 	accept_all();
-	send_all();
+	flush();
 }
 
 void
@@ -116,14 +116,13 @@ OutputsNetwork::show(std::span<const uint8_t> outputs)
 
 	for (Client &client : m_clients)
 		client.queued += lines;
-	send_all();
+	flush();
 }
 
-/* What each client is owed goes as far as it takes it; what it sends is
- * dropped, a few reads a frame at most; a client gone, failing or too
- * slow is closed. */
+/* What each client is owed goes as far as it takes it, and what it sent
+ * is read; a client gone, failing or too slow is closed. */
 void
-OutputsNetwork::send_all()
+OutputsNetwork::flush()
 {
 	char dropped[256];
 
