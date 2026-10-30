@@ -284,14 +284,40 @@ Hikaru::Hikaru(const Game &game, const RomBoard::Config &rombd, bool verbose, co
 
 	build_mie();
 	build_netbd(link);
+	load_eeproms();
+	build_gpu();
+	build_sound(MASTER);
+	build_sound(SLAVE);
+	/* HEURISTIC: the optional board also
+	 * feeds the external inputs of the AICA of the main board. Air Trix
+	 * and Virtual-On play their music on it and open EXTS on the main
+	 * board, and the Air Trix cabinet has the board but main speakers
+	 * only. */
+	m_sound[MASTER]->set_source(m_sound[SLAVE].get());
+	/* Debug: ODIN_WAV=<path>, the sound of the main board in a WAV file */
+	if (const char *path = std::getenv("ODIN_WAV")) {
+		m_wav = std::make_unique<WavFile>(path, Aica::SAMPLE_RATE, 2);
+		if (!m_wav->ok())
+			std::fprintf(stderr, "ERROR: ODIN_WAV: cannot write '%s'\n", path);
+	}
 
-	if (const std::span<const uint8_t> image = game.section("eeprom"); !image.empty()) {
+	build_cpus();
+	m_resetting = false;
+}
+
+/* The EEPROMs of the main board and of the ROM board: their images in the
+ * list, else blank; the chips of the ROM board that guard its programs,
+ * said */
+void
+Hikaru::load_eeproms()
+{
+	if (const std::span<const uint8_t> image = m_game.section("eeprom"); !image.empty()) {
 		m_eeprom.load(image);
 		std::printf("main board EEPROM: 93c46 image loaded\n");
 	} else {
 		std::printf("main board EEPROM: no image, blank\n");
 	}
-	if (const std::span<const uint8_t> image = game.section("rombd_eeprom"); !image.empty()) {
+	if (const std::span<const uint8_t> image = m_game.section("rombd_eeprom"); !image.empty()) {
 		m_rombd.eeprom().load(image);
 		std::printf("ROM board EEPROM: x76f100 image loaded\n");
 	} else {
@@ -301,7 +327,12 @@ Hikaru::Hikaru(const Game &game, const RomBoard::Config &rombd, bool verbose, co
 		std::printf("ROM board 315-5881: key %08X, 64 KB RAM\n", m_rombd.config().crypt_key);
 	if (m_rombd.fpga())
 		std::printf("ROM board security FPGA: 317-0283-COM, ID 4252\n");
+}
 
+/* The GPU on the memories of the board, its hooks into the board */
+void
+Hikaru::build_gpu()
+{
 	HikaruGpu::Memory memory;
 	HikaruGpu::Hooks hooks;
 
@@ -337,22 +368,12 @@ Hikaru::Hikaru(const Game &game, const RomBoard::Config &rombd, bool verbose, co
 	m_gpu->antarctic().set_disasm(env_flag("GPU_LOG_CP") ? stdout : nullptr);
 	m_gpu->antarctic().set_transfer_log(env_flag("GPU_LOG_IDMA") ? stdout : nullptr);
 	m_gpu->eurasia().set_log(env_flag("GPU_LOG_DMA") ? stdout : nullptr);
+}
 
-	build_sound(MASTER);
-	build_sound(SLAVE);
-	/* HEURISTIC: the optional board also
-	 * feeds the external inputs of the AICA of the main board. Air Trix
-	 * and Virtual-On play their music on it and open EXTS on the main
-	 * board, and the Air Trix cabinet has the board but main speakers
-	 * only. */
-	m_sound[MASTER]->set_source(m_sound[SLAVE].get());
-	/* Debug: ODIN_WAV=<path>, the sound of the main board in a WAV file */
-	if (const char *path = std::getenv("ODIN_WAV")) {
-		m_wav = std::make_unique<WavFile>(path, Aica::SAMPLE_RATE, 2);
-		if (!m_wav->ok())
-			std::fprintf(stderr, "ERROR: ODIN_WAV: cannot write '%s'\n", path);
-	}
-
+/* The two SH-4 */
+void
+Hikaru::build_cpus()
+{
 	/* Clock operating mode 5: a 33.3333 MHz crystal, the CPU at six times
 	 * that and the peripheral clock at 50 MHz. The timers of PHARRIER
 	 * count 0.08 microseconds (@0C0CF150), a quarter of that clock; MAME
@@ -381,8 +402,6 @@ Hikaru::Hikaru(const Game &game, const RomBoard::Config &rombd, bool verbose, co
 		}
 	}
 	m_fb_writes.set_cpu(m_sh[MASTER].get(), 0x1B000000 / Sh4::PAGE_SIZE);
-
-	m_resetting = false;
 }
 
 Hikaru::~Hikaru()

@@ -179,6 +179,9 @@ private:
 	/* hikaru.cpp */
 	void build_mie();
 	void build_netbd(NetLinkSettings link);
+	void load_eeproms();
+	void build_gpu();
+	void build_cpus();
 	void take_cabinet();
 	bool take_seat();
 	unsigned link_cabinet() const;
