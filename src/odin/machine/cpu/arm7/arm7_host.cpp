@@ -33,7 +33,9 @@ namespace odin {
 namespace {
 
 constexpr uint32_t SIZE = 8u << 20;
-constexpr uint32_t N = 0x80000000u;
+/* The CPSR: the bits of the flags, of the masks of FIQ (F) and IRQ (I) */
+constexpr unsigned BIT_N = 31, BIT_Z = 30, BIT_C = 29, BIT_V = 28, BIT_I = 7, BIT_F = 6;
+constexpr uint32_t FLAG_N = 1u << BIT_N, FLAG_Z = 1u << BIT_Z, FLAG_C = 1u << BIT_C, FLAG_V = 1u << BIT_V;
 
 } /* namespace */
 
@@ -131,7 +133,7 @@ void Arm7Host::check(uint32_t at, uint32_t pc, uint32_t op)
 HostCode::Jump Arm7Host::unless(uint32_t, uint16_t pass)
 {
 	field(0x8B, RAX, m_places.cpsr);		/* mov eax, [cpsr] */
-	shift_ri(5, RAX, 28);				/* shr eax, 28 */
+	shift_ri(5, RAX, BIT_V);				/* shr eax, 28 */
 	mov_ri(RCX, pass);
 	bytes({0x0F, 0xA3, 0xC1});			/* bt ecx, eax */
 	return jump_if(JNC);
@@ -155,8 +157,8 @@ void Arm7Host::call(uint32_t pc, uint32_t op, Run does)
 	field(0xB6, RAX, p.fiq_line);
 	bytes({0x0F});					/* movzx ecx, byte [irq_line] */
 	field(0xB6, RCX, p.irq_line);
-	shift_ri(4, RAX, 6);
-	shift_ri(4, RCX, 7);
+	shift_ri(4, RAX, BIT_F);
+	shift_ri(4, RCX, BIT_I);
 	op_rr(0x09, RAX, RCX);
 	field(0x8B, RCX, p.cpsr);
 	not_r(RCX);
@@ -305,7 +307,7 @@ void Arm7Host::carry_from_c(bool inverted)
 {
 	bytes({0x0F});					/* bt dword [cpsr], 29 */
 	field(0xBA, 4, m_places.cpsr);
-	byte(29);
+	byte(BIT_C);
 	if (inverted) {
 		byte(0xF5);				/* cmc */
 	}
@@ -325,18 +327,18 @@ void Arm7Host::flags_arithmetic(Reg result, bool borrow)
 	if (borrow) {
 		op_ri(6, RDX, 1);
 	}
-	shift_ri(4, RDX, 29);
-	shift_ri(4, R9, 28);
+	shift_ri(4, RDX, BIT_C);
+	shift_ri(4, R9, BIT_V);
 	op_rr(0x09, RDX, R9);
 	op_rr(0x89, R9, res);				/* N */
-	op_ri(4, R9, N);
+	op_ri(4, R9, FLAG_N);
 	op_rr(0x09, RDX, R9);
 	op_rr(0x85, res, res);				/* Z */
 	flag_r(4, R9);
-	shift_ri(4, R9, 30);
+	shift_ri(4, R9, BIT_Z);
 	op_rr(0x09, RDX, R9);
 	field(0x8B, R10, m_places.cpsr);
-	op_ri(4, R10, 0x0FFFFFFF);
+	op_ri(4, R10, ~(FLAG_N | FLAG_Z | FLAG_C | FLAG_V));
 	op_rr(0x09, R10, RDX);
 	field(0x89, R10, m_places.cpsr);
 }
@@ -346,18 +348,18 @@ void Arm7Host::flags_logical(Reg result, const Reg *carry)
 	const uint8_t res = host(result);
 
 	op_rr(0x89, RDX, res);				/* N */
-	op_ri(4, RDX, N);
+	op_ri(4, RDX, FLAG_N);
 	op_rr(0x85, res, res);				/* Z */
 	flag_r(4, R9);
-	shift_ri(4, R9, 30);
+	shift_ri(4, R9, BIT_Z);
 	op_rr(0x09, RDX, R9);
 	if (carry) {
 		op_rr(0x89, R9, host(*carry));
-		shift_ri(4, R9, 29);
+		shift_ri(4, R9, BIT_C);
 		op_rr(0x09, RDX, R9);
 	}
 	field(0x8B, R10, m_places.cpsr);
-	op_ri(4, R10, carry ? 0x1FFFFFFF : 0x3FFFFFFF);
+	op_ri(4, R10, carry ? ~(FLAG_N | FLAG_Z | FLAG_C) : ~(FLAG_N | FLAG_Z));
 	op_rr(0x09, R10, RDX);
 	field(0x89, R10, m_places.cpsr);
 }
@@ -367,16 +369,16 @@ void Arm7Host::flags_logical_value(Reg result, bool carry)
 	const uint8_t res = host(result);
 
 	op_rr(0x89, RDX, res);				/* N */
-	op_ri(4, RDX, N);
+	op_ri(4, RDX, FLAG_N);
 	op_rr(0x85, res, res);				/* Z */
 	flag_r(4, R9);
-	shift_ri(4, R9, 30);
+	shift_ri(4, R9, BIT_Z);
 	op_rr(0x09, RDX, R9);
 	if (carry) {
-		op_ri(1, RDX, 0x20000000);
+		op_ri(1, RDX, FLAG_C);
 	}
 	field(0x8B, R10, m_places.cpsr);
-	op_ri(4, R10, 0x1FFFFFFF);
+	op_ri(4, R10, ~(FLAG_N | FLAG_Z | FLAG_C));
 	op_rr(0x09, R10, RDX);
 	field(0x89, R10, m_places.cpsr);
 }
