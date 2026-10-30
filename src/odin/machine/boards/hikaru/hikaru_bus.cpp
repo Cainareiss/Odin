@@ -575,6 +575,7 @@ Hikaru::mie_write(unsigned which, uint32_t addr, unsigned size, uint64_t value)
  * 1400000C 1000000C	Box Port 1
  * 14000010 10000010	Box Port 2
  * 14000014 10000014	Box Port 3
+ * 14000020 10000020	Unknown, as 24 and 28: 32-bit writes kept, reads not answered
  * /        /
  * 1400002E 1000002E	Unknown; 3 is written in __slave_init and read from the master
  */
