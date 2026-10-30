@@ -49,6 +49,73 @@
 namespace odin {
 namespace {
 
+/* The files of a game read, the archives let go of then; the cabinet of
+ * [players.<game>]. None, and what is missing told, when they are not all
+ * there */
+std::optional<Game>
+load_or_tell(const Options &options, const std::string &name, const GameList &games, const Settings &settings)
+{
+	RomFiles files(options.rom_path, options.bios_path);
+	std::optional<Game> loaded = games.load_game(files, name);
+
+	if (loaded) {
+		const std::string cabinet = cabinet_of(settings, name);
+
+		if (!loaded->use_cabinet(cabinet))
+			std::fprintf(stderr, "ERROR: settings: [players.%s]: not right: cabinet = %s\n", name.c_str(),
+			             cabinet.c_str());
+		else if (cabinet != "standard")
+			std::printf("cabinet: %s\n", cabinet.c_str());
+		return loaded;
+	}
+	for (const RomFiles::File &file : games.missing(files, name)) {
+		char crc[16] = "";
+
+		if (file.crc)
+			std::snprintf(crc, sizeof(crc), ", CRC %08X", *file.crc);
+		std::fprintf(stderr, "ERROR: '%s': %s (%llu bytes%s) is missing; MAME keeps it in %s.zip\n", name.c_str(),
+		             file.name.c_str(), static_cast<unsigned long long>(file.size), crc, file.set_of(name).c_str());
+	}
+	return loaded;
+}
+
+/* The sound of a game: the mode of -o, else of [sound.<game>], else the
+ * mix where its cabinet has speakers for the optional board; the optional
+ * board in the mix at the level of the list, or of the last lines of
+ * [sound.<game>]. None at unthrottled frames, which do not keep time (-u) */
+std::unique_ptr<AudioOut>
+open_sound(Options &options, const Game &game, const Settings &settings)
+{
+	if (!options.sound_asked && game.option_speakers)
+		options.sound = AudioOut::Mode::MIX;
+	for (const auto &[key, value] : settings.section("sound." + game.name))
+		if (key == "mode" && !options.sound_asked && mode_named(value))
+			options.sound = mode_named(value);
+
+	double option_level = game.option_level;
+
+	for (const auto &[key, value] : settings.section("sound." + game.name)) {
+		if (key == "option_level" && level_named(value))
+			option_level = *level_named(value);
+		else if (key == "mode" && mode_named(value))
+			continue;
+		else
+			odin::refuse_setting("sound." + game.name, key, value);
+	}
+
+	std::unique_ptr<AudioOut> audio;
+
+	if (options.sound && options.unthrottled && options.sound_asked)
+		std::fprintf(stderr, "sound: not with -u\n");
+	else if (options.sound && !options.unthrottled)
+		audio = AudioOut::make(*options.sound, option_level, options.sound_device);
+	if (audio && options.volume != 100)
+		audio->set_volume(static_cast<float>(options.volume) / 100.0f);
+	if (audio && options.sound == AudioOut::Mode::MIX && option_level != 0)
+		std::printf("sound: the optional board at %+g dB in the mix\n", option_level);
+	return audio;
+}
+
 /* A game in the window, from its power-on, or from the state of -l, to its
  * end; the game of an archive Open... gave in `opened`. The options of the
  * command line and odin.ini hold for it, what it changes of them for itself
@@ -65,33 +132,7 @@ play(const Options &given, const std::string &name, const GameList &games, Setti
 		return Ended::FAILED;
 	}
 
-	/* The archives are let go of once the files are read; the cabinet of
-	 * [players.<game>] */
-	const std::optional<Game> game = [&] {
-		RomFiles files(options.rom_path, options.bios_path);
-		std::optional<Game> loaded = games.load_game(files, name);
-
-		if (loaded) {
-			const std::string cabinet = cabinet_of(settings, name);
-
-			if (!loaded->use_cabinet(cabinet))
-				std::fprintf(stderr, "ERROR: settings: [players.%s]: not right: cabinet = %s\n", name.c_str(),
-				             cabinet.c_str());
-			else if (cabinet != "standard")
-				std::printf("cabinet: %s\n", cabinet.c_str());
-			return loaded;
-		}
-		for (const RomFiles::File &file : games.missing(files, name)) {
-			char crc[16] = "";
-
-			if (file.crc)
-				std::snprintf(crc, sizeof(crc), ", CRC %08X", *file.crc);
-			std::fprintf(stderr, "ERROR: '%s': %s (%llu bytes%s) is missing; MAME keeps it in %s.zip\n", name.c_str(),
-			             file.name.c_str(), static_cast<unsigned long long>(file.size), crc,
-			             file.set_of(name).c_str());
-		}
-		return loaded;
-	}();
+	const std::optional<Game> game = load_or_tell(options, name, games, settings);
 	if (!game) {
 		std::fprintf(stderr, "ERROR: failed to load '%s': can't load game files\n", name.c_str());
 		return Ended::FAILED;
@@ -116,35 +157,10 @@ play(const Options &given, const std::string &name, const GameList &games, Setti
 	std::unique_ptr<OutputsNetwork> outputs =
 		network ? OutputsNetwork::open(game->name, game->outputs) : nullptr;
 
-	if (!options.sound_asked && game->option_speakers)
-		options.sound = AudioOut::Mode::MIX;
-	for (const auto &[key, value] : settings.section("sound." + game->name))
-		if (key == "mode" && !options.sound_asked && mode_named(value))
-			options.sound = mode_named(value);
-
-	/* The optional board in the mix: the list, or the last lines of
-	 * [sound.<game>]; the pads shake unless [players.<game>] says off */
-	double option_level = game->option_level;
+	const std::unique_ptr<AudioOut> audio = open_sound(options, *game, settings);
+	/* The pads shake unless [players.<game>] says off */
 	const bool vibration = vibration_on(settings, game->name);
-	for (const auto &[key, value] : settings.section("sound." + game->name)) {
-		if (key == "option_level" && level_named(value))
-			option_level = *level_named(value);
-		else if (key == "mode" && mode_named(value))
-			continue;
-		else
-			odin::refuse_setting("sound." + game->name, key, value);
-	}
 
-	/* Unthrottled frames do not keep time: no sound with -u */
-	std::unique_ptr<AudioOut> audio;
-	if (options.sound && options.unthrottled && options.sound_asked)
-		std::fprintf(stderr, "sound: not with -u\n");
-	else if (options.sound && !options.unthrottled)
-		audio = AudioOut::make(*options.sound, option_level, options.sound_device);
-	if (audio && options.volume != 100)
-		audio->set_volume(static_cast<float>(options.volume) / 100.0f);
-	if (audio && options.sound == AudioOut::Mode::MIX && option_level != 0)
-		std::printf("sound: the optional board at %+g dB in the mix\n", option_level);
 	controls.feel_game(*game, vibration);
 	controls.set_wheel_force(wheel_force_of(settings, game->name));
 	controls.set_vibration_force(vibration_force_of(settings, game->name));
