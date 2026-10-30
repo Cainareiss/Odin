@@ -296,7 +296,7 @@ parse_options(int argc, char **argv, Options &options)
 			options.unthrottled = options.given.unthrottled = true;
 			break;
 		case 'x':
-			if (const int scale = std::atoi(optarg); scale >= 2 && scale <= 6) {
+			if (const int scale = std::atoi(optarg); scale >= 1 && scale <= 6) {
 				options.display.scale = static_cast<unsigned>(scale);
 				options.given.scale = true;
 			}
