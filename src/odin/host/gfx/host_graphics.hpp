@@ -25,6 +25,8 @@
 #ifndef ODIN_HOST_GRAPHICS_HPP
 #define ODIN_HOST_GRAPHICS_HPP
 
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -53,6 +55,21 @@ struct HostImage {
 	uint32_t id = 0;
 	float w = 0.0f, h = 0.0f;
 };
+
+/* Where a bezel goes over a window: the largest of its size that fits, in
+ * the middle; x from the left, `below` from the bottom, in pixels */
+struct BezelArea {
+	int x, below, w, h;
+};
+
+inline BezelArea
+bezel_area(HostImage bezel, unsigned window_w, unsigned window_h)
+{
+	const float k = std::min(static_cast<float>(window_w) / bezel.w, static_cast<float>(window_h) / bezel.h);
+	const int w = static_cast<int>(std::lround(bezel.w * k)), h = static_cast<int>(std::lround(bezel.h * k));
+
+	return { (static_cast<int>(window_w) - w) / 2, (static_cast<int>(window_h) - h) / 2, w, h };
+}
 
 /* The sides lit by the picture (sides.frag): the mean of the picture at
  * the first two sizes, each texel the mean of what it covers; the sides

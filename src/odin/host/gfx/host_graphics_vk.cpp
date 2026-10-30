@@ -491,19 +491,17 @@ void
 VkGraphics::draw_bezel(HostImage bezel, unsigned window_w, unsigned window_h)
 {
 	const auto found = m_images.find(bezel.id);
-	const float ww = static_cast<float>(window_w), wh = static_cast<float>(window_h);
 
 	if (found == m_images.end())
 		return;
 	make_passes();
 
-	const float k = std::min(ww / bezel.w, wh / bezel.h);
-	const int w = static_cast<int>(std::lround(bezel.w * k)), h = static_cast<int>(std::lround(bezel.h * k));
-	const int x = (static_cast<int>(window_w) - w) / 2, below = (static_cast<int>(window_h) - h) / 2;
+	const BezelArea area = bezel_area(bezel, window_w, window_h);
 	const VkCommandBuffer cb = m_card->commands();
 	vk::Image &window = m_card->window_image(window_w, window_h);
-	const VkViewport viewport{ static_cast<float>(x), static_cast<float>(static_cast<int>(window_h) - h - below),
-	                           static_cast<float>(w), static_cast<float>(h), 0.0f, 1.0f };
+	const VkViewport viewport{ static_cast<float>(area.x),
+	                           static_cast<float>(static_cast<int>(window_h) - area.h - area.below),
+	                           static_cast<float>(area.w), static_cast<float>(area.h), 0.0f, 1.0f };
 	const float light = 1.0f;
 
 	m_card->begin_drawing(cb, window, { { 0, 0 }, { window_w, window_h } });

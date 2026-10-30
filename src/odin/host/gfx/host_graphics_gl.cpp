@@ -237,17 +237,14 @@ GlGraphics::sides_programs()
 void
 GlGraphics::draw_bezel(HostImage bezel, unsigned window_w, unsigned window_h)
 {
-	const float ww = static_cast<float>(window_w), wh = static_cast<float>(window_h);
-
 	if (!bezel.id)
 		return;
 	image_program();
 
-	const float k = std::min(ww / bezel.w, wh / bezel.h);
-	const GLsizei w = static_cast<GLsizei>(std::lround(bezel.w * k)), h = static_cast<GLsizei>(std::lround(bezel.h * k));
+	const BezelArea area = bezel_area(bezel, window_w, window_h);
 
 	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-	glViewport((static_cast<GLsizei>(window_w) - w) / 2, (static_cast<GLsizei>(window_h) - h) / 2, w, h);
+	glViewport(area.x, area.below, area.w, area.h);
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	glUseProgram(m_image_program);
