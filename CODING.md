@@ -10,6 +10,16 @@ written so that everyone knows what to do.
 - All the code is C++20, in the sober subset described in section 3.
 - Build flags: `-std=c++20 -Wall -Wextra -Wpedantic -Wconversion
   -Wshadow`. Every file compiles warning-free. No compiler extensions.
+  The known ones, which GCC and Clang both take:
+  `__attribute__((format(printf, ...)))` on the helpers that print, so
+  that the compiler checks their formats; the `constructor` and `target`
+  attributes and `__builtin_cpu_supports` of `host/app/cpu_check.cpp`,
+  which says before anything runs that the processor lacks what the build
+  was made for; `__builtin_cpu_supports` and `[[gnu::target]]`,
+  `[[gnu::always_inline]]`, `[[gnu::noinline]]` on the fused
+  multiply-adds of the SH-4 (`machine/cpu/sh4/sh4_ops.cpp`); and
+  `__builtin_popcount`, `__builtin___clear_cache` in the writers of host
+  code (`machine/core/`, `machine/cpu/sh4/sh4_host_arm64.cpp`).
   Dear ImGui (`src/imgui`), miniz (`src/miniz`) and the LZMA SDK
   (`src/lzma`) are not ours: they are kept as they come and built with
   their own flags.
@@ -32,7 +42,12 @@ written so that everyone knows what to do.
   `tick()`, interrupt lines in and out, `save(state&)` / `load(state&)`,
   and a trace hook (section 6).
 - Inheritance is one level deep at most: an interface and its
-  implementations. No deeper hierarchies, no mix-ins.
+  implementations. No deeper hierarchies, no mix-ins. The known
+  exceptions: the JVS boards, `JvsDevice` (a node of the cable) ←
+  `JvsIoBoard` (what the Sega I/O boards share: the coins, the outputs)
+  ← each imitation (`machine/cabinet/jvs.hpp`); and `MieLine` ←
+  `IoLineBoard` ← the two I/O boards on the line of the MIE, interfaces
+  only (`machine/core/io_line.hpp`).
 - A device knows its own silicon only. It never knows which game is
   running.
 - The sources are in three layers, and an include goes one way only:
@@ -69,14 +84,20 @@ Allowed and encouraged:
 - Fixed-width integers (`uint8_t`, `uint16_t`, `uint32_t`, `uint64_t`,
   `int32_t`). Never a bare `int` for anything that models hardware.
 - Simple templates for sized bus access (`read<uint16_t>(addr)`), nothing
-  more clever than that.
+  more clever than that. The known exception: the instructions of the
+  interpreters of the CPUs, one function for each form, so that the
+  decoder chooses once what an instruction does and its run tests
+  nothing more: the forms of the ARM7 and their tables, built at compile
+  time from a `std::integer_sequence` (`machine/cpu/arm7/arm7_ops.cpp`);
+  the instructions of the SH-4 for each way they are run (`Sh4OpsT<Way>`)
+  and for each fused multiply-add (`sh4.hpp`, `sh4_ops.cpp`).
 - Ranges only where a loop would be less readable.
 
 Not allowed:
 
 - Exceptions, RTTI (`dynamic_cast`, `typeid`), coroutines, modules.
 - Template metaprogramming, SFINAE tricks, CRTP, variadic templates
-  outside of a logging helper.
+  outside of a logging helper (and of the tables of the ARM7 above).
 - Raw `new` / `delete`. Use values, `std::unique_ptr`, or containers.
 - Global mutable state. Devices own their state; the machine owns the
   devices.
