@@ -537,7 +537,7 @@ Controls::turn_wheel(int torque)
 	 * potentiometer and the motor of that cabinet are reversed together */
 	const double way = m_wheel_reversed ? -1.0 : 1.0;
 
-	m_force->push(way * torque / DriveBoard::MOST * m_wheel_force / WHEEL_FORCE);
+	m_force->push(way * torque / DriveBoard::MOST * m_wheel_force / 100);
 }
 
 void
@@ -573,7 +573,7 @@ Controls::show(std::span<const uint8_t> outputs, std::span<const int16_t> option
 		/* Only the device the player plays with shakes */
 		const bool on = m_rumble && any_on(m_outputs, GameOutput::Role::RUMBLE, outputs, static_cast<int>(player));
 		const int shake = device(player) == InputDevice::PAD ? std::max<Uint16>(on ? RUMBLE : 0, player ? 0 : felt) : 0;
-		const Uint16 strength = static_cast<Uint16>(std::min(shake * m_vibration_force / VIBRATION_FORCE, 0xFFFF));
+		const Uint16 strength = static_cast<Uint16>(std::min(shake * m_vibration_force / 100, 0xFFFF));
 
 		if (!seated)
 			continue;
