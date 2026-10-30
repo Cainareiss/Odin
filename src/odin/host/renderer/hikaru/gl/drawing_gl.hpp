@@ -160,10 +160,10 @@ private:
 	GLuint m_scene_fb, m_scene_color, m_scene_depth;
 	/* A view with both families of the 101 (begin_families): for each,
 	 * the eye depth of the mesh that keeps each pixel (0: none) and the
-	 * scale its 101 gives, and
-	 * where it is drawn: the colour of the scene, that eye depth, a
-	 * depth (the unflagged family that of the scene, the flagged one its
-	 * own); the family drawn into now, NO_FAMILY: the scene */
+	 * scale its 101 gives, and where it is drawn: the colour of the scene,
+	 * that eye depth, a depth (the unflagged family that of the scene, the
+	 * flagged one its own); the family drawn into now, NO_FAMILY: the
+	 * scene */
 	static constexpr unsigned NO_FAMILY = 2;
 	GLuint m_eye[2], m_flag_depth, m_family_fb[2];
 	bool m_families_view = false;

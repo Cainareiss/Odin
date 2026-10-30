@@ -236,10 +236,9 @@ private:
 	/* The meshes: their depth, shaders (the fragment shader of the
 	 * translucent ones apart), layout (the set of the list, then those of
 	 * the texture, the sampler and the translucent fragments), pipelines
-	 * by variant
-	 * and blend, the variants that have one, the cache of the pipelines
-	 * (its folder, the start of the names of the caches of the card, its
-	 * file), the list of the programs of the game */
+	 * by variant and blend, the variants that have one, the cache of the
+	 * pipelines (its folder, the start of the names of the caches of the
+	 * card, its file), the list of the programs of the game */
 	vk::Image m_depth;
 	VkShaderModule m_mesh_vert = VK_NULL_HANDLE, m_mesh_frag = VK_NULL_HANDLE, m_mesh_collect = VK_NULL_HANDLE;
 	VkShaderModule m_mesh_families = VK_NULL_HANDLE;
@@ -283,11 +282,7 @@ private:
 	} m_pass{};
 
 	/* The translucent fragments, see translucent_vk.cpp: being
-	 * collected, and their set; the depth the other types left, the last
-	 * fragment of each pixel, the colour under them; the fragments, the
-	 * count of each view (each `m_count_stride` bytes), the counts the
-	 * processor reads, and for each list of the pipe the sending its
-	 * counts go with (0: none); the pass that blends them */
+	 * collected, and their set (the rest of them after the families) */
 	bool m_collecting = false;
 	VkDescriptorSet m_collect_set = VK_NULL_HANDLE;
 	/* A view with both families of the 101 (begin_families, as
@@ -301,6 +296,11 @@ private:
 	VkDescriptorSet m_family_set[2] = { VK_NULL_HANDLE, VK_NULL_HANDLE };
 	bool m_families_view = false;
 	unsigned m_family = NO_FAMILY;
+	/* The translucent fragments again: the depth the other types left, the
+	 * last fragment of each pixel, the colour under them; the fragments,
+	 * the count of each view (each `m_count_stride` bytes), the counts the
+	 * processor reads, and for each list of the pipe the sending its counts
+	 * go with (0: none); the pass that blends them */
 	vk::Image m_solid_depth, m_heads, m_below;
 	vk::Buffer m_nodes, m_counts, m_readback;
 	VkDeviceSize m_count_stride = 4;
