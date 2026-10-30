@@ -481,7 +481,9 @@ bool Arm7::turn_counts(uint32_t counter)
 		return false;
 	}
 
-	uint32_t before = 0, after = 0;
+	const uint32_t after = le32(m_ram.base + counter);
+	uint32_t before = 0;
+
 	for (uint32_t b = 0; b < 4; b++) {
 		uint8_t old = m_ram.base[counter + b];
 		for (uint32_t k = 0; k < m_turn_num_stores; k++) {
@@ -490,7 +492,6 @@ bool Arm7::turn_counts(uint32_t counter)
 			}
 		}
 		before |= static_cast<uint32_t>(old) << (8 * b);
-		after |= static_cast<uint32_t>(m_ram.base[counter + b]) << (8 * b);
 	}
 	m_turn_counter = counter;
 	m_turn_delta = after - before;
