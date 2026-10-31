@@ -1,5 +1,5 @@
 #!/bin/sh
-# Includes must go common <- machine <- host (CODING.md, section 2)
+# Includes must go common <- machine <- host: a layer includes only the ones before it
 INCLUDE='^[[:space:]]*#[[:space:]]*include[[:space:]]*'
 bad=$(
 	grep -rnE --include='*.cpp' --include='*.hpp' --include='*.h' "$INCLUDE\"odin/host/" src/odin/machine | grep -vE \
