@@ -150,6 +150,8 @@ Controls::follow_cursor()
 /* The next game, or the window without one, finds the cursor as it was */
 Controls::~Controls()
 {
+	if (m_pointers)
+		m_pointers->hold({});
 	if (m_cursor_hidden)
 		SDL_ShowCursor();
 	if (!m_on)
@@ -685,7 +687,7 @@ Controls::update()
 
 /* Where the light guns aim on the picture, as the mouse does, and their
  * buttons: one pressed and let go within the frame is down for it; held
- * from the desktop while the game runs */
+ * from the desktop while the game runs in front */
 void
 Controls::follow_guns(bool hold)
 {
@@ -697,6 +699,7 @@ Controls::follow_guns(bool hold)
 	std::vector<std::string> held;
 	int w = 0, h = 0;
 
+	hold = hold && (SDL_GetWindowFlags(m_pointers->window()) & SDL_WINDOW_INPUT_FOCUS);
 	for (const std::string &gun : m_guns)
 		if (!gun.empty() && hold)
 			held.push_back(gun);

@@ -86,6 +86,16 @@ trimmed_text(char *text)
 	return s;
 }
 
+/* A key or a button of the node held down */
+bool
+any_down(int fd)
+{
+	std::array<unsigned long, longs_for(KEY_MAX)> key{};
+
+	return ioctl(fd, EVIOCGKEY(sizeof(key)), key.data()) >= 0 &&
+	       std::any_of(key.begin(), key.end(), [](unsigned long bits) { return bits != 0; });
+}
+
 /* A device of a node: where it points (absolute, in its units; relative,
  * in pixels of the window), its buttons */
 struct Entry {
@@ -425,8 +435,20 @@ Pointers::hold(std::span<const std::string> identities)
 
 		if (e.fd < 0 || want == e.held)
 			continue;
-		if (ioctl(e.fd, EVIOCGRAB, want ? 1 : 0) >= 0 || !want)
-			e.held = want;
+		if (!want) {
+			ioctl(e.fd, EVIOCGRAB, 0);
+			e.held = false;
+			continue;
+		}
+		/* Taken with all its buttons up, looked at again once taken: one
+		 * down as it is taken stays down for the desktop, which never sees
+		 * it let go */
+		if (any_down(e.fd) || ioctl(e.fd, EVIOCGRAB, 1) < 0)
+			continue;
+		if (any_down(e.fd))
+			ioctl(e.fd, EVIOCGRAB, 0);
+		else
+			e.held = true;
 	}
 }
 
