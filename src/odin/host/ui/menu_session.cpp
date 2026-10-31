@@ -57,7 +57,8 @@ open_archive(const FolderDialog::Answer &answer, const GameList &games, std::str
 	for (const auto &[game, title] : games.titles("hikaru"))
 		if (game == name)
 			return Opened{ game, file.parent_path().string() };
-	std::fprintf(stderr, "ERROR: '%s' is no game of the list: an archive takes the name MAME gives its game\n",
+	std::fprintf(stderr,
+	             "ERROR: '%s' is not a known game: the archive must have the game's MAME name (braveff.zip)\n",
 	             answer.folder.c_str());
 	note = file.filename().string() + ": not a game Odin knows";
 	return std::nullopt;

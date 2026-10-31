@@ -593,7 +593,7 @@ load_game_list(GameList &games)
 		std::printf("loading game list from '%s'\n", path.c_str());
 		return true;
 	}
-	std::fprintf(stderr, "ERROR: no list of the games: '%s', nor with the program, '%s' nor '%s'\n",
+	std::fprintf(stderr, "ERROR: game list not found in '%s', next to the program ('%s') or in '%s'\n",
 	             paths.front().c_str(), paths[paths.size() - 2].c_str(), paths.back().c_str());
 	return false;
 }

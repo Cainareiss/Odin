@@ -438,7 +438,8 @@ Menu::add_fonts()
 		fonts.AddFontFromMemoryTTF(const_cast<unsigned char *>(font.data), static_cast<int>(font.size), 0.0f, &more);
 		names += (names.empty() ? "" : ", ") + font.path;
 	}
-	std::printf("menu: letters of other languages from %s\n", names.empty() ? "no font of the system" : names.c_str());
+	std::printf("menu: fonts for other alphabets: %s\n",
+	            names.empty() ? "none found on this system" : names.c_str());
 }
 
 /* The frame in the middle of the window: the tabs at the top, the page
@@ -744,8 +745,8 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 
 	int sides = static_cast<int>(state.sides);
 
-	kit.next_tip("What fills the sides of a wide window: black, the game blurred, or its bezel from the Artwork "
-	             "folder (Paths page).");
+	kit.next_tip("What fills the sides of a wide window: Off (black), Blur (the game's edges blurred) or Bezel "
+	             "(its bezel from the Artwork folder, Paths page).");
 	watch(PREVIEW_SCREEN, [&] {
 		if (kit.choice("Bezel", nullptr, SIDES_SHOWN, sides))
 			state.sides = static_cast<unsigned>(sides);

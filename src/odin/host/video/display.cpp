@@ -209,7 +209,7 @@ open_window(DisplayApi api, const std::string &gpu, SDL_Window *&window, std::un
 			graphics = HostGraphics::make_vk(window, Renderer::WIDTH, Renderer::HEIGHT, gpu);
 		if (graphics)
 			return true;
-		std::fprintf(stderr, "ERROR: Vulkan cannot draw on this computer: OpenGL draws\n");
+		std::fprintf(stderr, "ERROR: Vulkan does not work on this computer: using OpenGL\n");
 		if (window)
 			SDL_DestroyWindow(window);
 	}

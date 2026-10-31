@@ -65,7 +65,8 @@ open_stream(AudioOut::Mode mode, const std::string &device)
 		}
 		SDL_free(ids);
 		if (!found)
-			std::fprintf(stderr, "sound: no device '%s' now, the one of the system\n", device.c_str());
+			std::fprintf(stderr, "sound: device '%s' not found, using the system default\n",
+			             device.c_str());
 	}
 
 	const SDL_AudioSpec spec = { SDL_AUDIO_S16, static_cast<int>(channels(mode)), RATE };

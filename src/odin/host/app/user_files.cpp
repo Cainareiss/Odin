@@ -217,7 +217,7 @@ read_kept(const std::string &path, size_t size)
 
 	std::fclose(file);
 	if (got != size) {
-		std::fprintf(stderr, "ERROR: '%s' does not hold %zu bytes: not loaded\n", path.c_str(), size);
+		std::fprintf(stderr, "ERROR: '%s' is not %zu bytes long: not loaded\n", path.c_str(), size);
 		return std::nullopt;
 	}
 	bytes.resize(size);

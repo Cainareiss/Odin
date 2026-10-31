@@ -475,7 +475,7 @@ read_controls(const json_t *rom, Game &game)
 		auto control = parse_control(json_array_get(controls, i));
 
 		if (!control) {
-			std::fprintf(stderr, "ERROR: game '%s': control %zu is not one\n", game.name.c_str(), i + 1);
+			std::fprintf(stderr, "ERROR: game '%s': control %zu is not valid\n", game.name.c_str(), i + 1);
 			return false;
 		}
 		game.controls.push_back(std::move(*control));
@@ -496,7 +496,7 @@ read_outputs(const json_t *rom, Game &game)
 		auto output = parse_output(json_array_get(outputs, i));
 
 		if (!output) {
-			std::fprintf(stderr, "ERROR: game '%s': output %zu is not one\n", game.name.c_str(), i + 1);
+			std::fprintf(stderr, "ERROR: game '%s': output %zu is not valid\n", game.name.c_str(), i + 1);
 			return false;
 		}
 		game.outputs.push_back(std::move(*output));
@@ -511,7 +511,8 @@ ids_once(const Game &game)
 	std::vector<std::string> ids(std::begin(GameControl::CABINET_IDS), std::end(GameControl::CABINET_IDS));
 	const auto take = [&ids, &game](const std::string &id) {
 		if (std::find(ids.begin(), ids.end(), id) != ids.end()) {
-			std::fprintf(stderr, "ERROR: game '%s': the id '%s' is taken twice\n", game.name.c_str(), id.c_str());
+			std::fprintf(stderr, "ERROR: game '%s': the id '%s' is used twice\n", game.name.c_str(),
+			             id.c_str());
 			return false;
 		}
 		ids.push_back(id);
@@ -570,7 +571,7 @@ read_cabinet(const json_t *rom, const json_t *cabinet, size_t c, Game &game)
 	    std::any_of(game.cabinets.begin(), game.cabinets.end(), [id](const Game::Cabinet &other) {
 		    return other.id == id;
 	    })) {
-		std::fprintf(stderr, "ERROR: game '%s': cabinet %zu is not one\n", name, c + 1);
+		std::fprintf(stderr, "ERROR: game '%s': cabinet %zu is not valid\n", name, c + 1);
 		return false;
 	}
 	kept.id = id;
@@ -588,7 +589,8 @@ read_cabinet(const json_t *rom, const json_t *cabinet, size_t c, Game &game)
 
 		json_decref(control);
 		if (!parsed || parsed->id != game.controls[i].id) {
-			std::fprintf(stderr, "ERROR: game '%s': cabinet '%s': control %zu is not one\n", name, id, i + 1);
+			std::fprintf(stderr, "ERROR: game '%s': cabinet '%s': control %zu is not valid\n", name, id,
+			             i + 1);
 			return false;
 		}
 		kept.controls.push_back(std::move(*parsed));
@@ -714,7 +716,7 @@ read_chips(const json_t *rom, Game &game)
 	if (json_t *const board = json_object_get(rom, "rom_board")) {
 		game.rom_board = parse_rom_board(board);
 		if (!game.rom_board) {
-			std::fprintf(stderr, "ERROR: game '%s': \"rom_board\" is not one\n", game.name.c_str());
+			std::fprintf(stderr, "ERROR: game '%s': \"rom_board\" is not valid\n", game.name.c_str());
 			return false;
 		}
 	}
@@ -819,7 +821,7 @@ GameList::load(const std::string &path)
 	bool right = true;
 
 	if (!json_is_integer(version)) {
-		std::fprintf(stderr, "ERROR: not game list version\n");
+		std::fprintf(stderr, "ERROR: the game list has no version number\n");
 		right = false;
 	} else if (json_integer_value(version) != static_cast<json_int_t>(VERSION)) {
 		std::fprintf(stderr, "ERROR: invalid game list version: found %u, expected %u\n",
@@ -966,7 +968,7 @@ GameList::load_game(RomFiles &files, const std::string &name) const
 		                   j < json_array_size(data); j++) {
 			if (json_integer_value(json_object_get(json_array_get(data, j), "size")) !=
 			    static_cast<json_int_t>(game->rom_board->eprom_mb) << 20) {
-				std::fprintf(stderr, "ERROR: game '%s': an EPROM is not of %u MB\n", name.c_str(),
+				std::fprintf(stderr, "ERROR: game '%s': an EPROM is not %u MB\n", name.c_str(),
 				             game->rom_board->eprom_mb);
 				return std::nullopt;
 			}

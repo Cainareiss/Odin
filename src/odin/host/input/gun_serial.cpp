@@ -165,7 +165,8 @@ GunSerial::open(std::string_view identity, std::string_view name)
 	const std::string port = port_of(*product);
 
 	if (port.empty()) {
-		std::fprintf(stderr, "ERROR: gun: no serial port for the XGunner P%u: it does not shake\n", *product);
+		std::fprintf(stderr, "ERROR: gun: no serial port for the XGunner P%u: no vibration or recoil\n",
+		             *product);
 		return nullptr;
 	}
 #ifdef _WIN32
@@ -173,8 +174,9 @@ GunSerial::open(std::string_view identity, std::string_view name)
 	                                  OPEN_EXISTING, 0, nullptr);
 
 	if (handle == INVALID_HANDLE_VALUE) {
-		std::fprintf(stderr, "ERROR: gun: %s cannot be opened (%lu): the XGunner P%u does not shake\n", port.c_str(),
-		             GetLastError(), *product);
+		std::fprintf(stderr,
+		             "ERROR: gun: %s cannot be opened (%lu): no vibration or recoil for the XGunner P%u\n",
+		             port.c_str(), GetLastError(), *product);
 		return nullptr;
 	}
 
@@ -197,7 +199,9 @@ GunSerial::open(std::string_view identity, std::string_view name)
 	const int fd = ::open(port.c_str(), O_RDWR | O_NOCTTY | O_NONBLOCK);
 
 	if (fd < 0) {
-		std::fprintf(stderr, "ERROR: gun: %s: %s (the user in the group of the port, uucp or dialout): the XGunner P%u does not shake\n",
+		std::fprintf(stderr,
+		             "ERROR: gun: %s: %s (add your user to the port's group: uucp or dialout): no vibration or "
+		             "recoil for the XGunner P%u\n",
 		             port.c_str(), std::strerror(errno), *product);
 		return nullptr;
 	}
@@ -214,7 +218,7 @@ GunSerial::open(std::string_view identity, std::string_view name)
 
 	std::unique_ptr<GunSerial> gun(new GunSerial(fd));
 #endif
-	std::printf("gun: XGunner P%u on %s, shaken by the game\n", *product, port.c_str());
+	std::printf("gun: XGunner P%u on %s, vibration and recoil driven by the game\n", *product, port.c_str());
 	gun->send("S6");
 	return gun;
 }

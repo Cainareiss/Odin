@@ -861,8 +861,11 @@ Menu::hotkeys_help(const MenuState &state)
 
 	const std::string name = HOTKEY_NAMES[state.hotkey_catching->first];
 
-	if (state.hotkey_catching->second == Hotkeys::KEYS)
-		return name + ": hold Guide and press a button, or tap Guide alone. Esc cancels.";
+	if (state.hotkey_catching->second == Hotkeys::KEYS) {
+		const std::string guide = button_name(SDL_GAMEPAD_BUTTON_GUIDE, state.pad_types[0]);
+
+		return name + ": hold " + guide + " and press a button, or tap " + guide + " alone. Esc cancels.";
+	}
 	return name + ": press the new key, with Ctrl, Alt or Shift if you like. Esc cancels.";
 }
 
@@ -896,7 +899,8 @@ route_item(const MenuState &state, const OutputRoute &route)
 	}
 	if (route.to != OutputRoute::To::NOTHING) {
 		item.off = !gun || !GunSerial::shakes(gun->identity, gun->name);
-		item.about = !gun ? "no light gun chosen (page Input)" : item.off ? gun->name + ": takes no orders" : gun->name;
+		item.about = !gun ? "no light gun chosen (Input page)" :
+		             item.off ? gun->name + ": no vibration or recoil control" : gun->name;
 	}
 	return item;
 }
@@ -938,9 +942,9 @@ Menu::page_outputs(MenuKit &kit, MenuState &state) const
 
 			int chosen = static_cast<int>(std::find(routes.begin(), routes.end(), output.route) - routes.begin());
 
-			kit.next_tip("The light gun the game's vibration goes to, as the cabinet drives it: its motor or its "
-			             "recoil, for a gun that takes orders (an XGunner). A gamepad shakes as its options on "
-			             "the page Input say.");
+			kit.next_tip("Which light gun gets the game's vibration, as on the cabinet: its motor or "
+			             "its recoil. Needs a gun that accepts commands, such as an XGunner. Controller "
+			             "vibration is set on the Input page.");
 			if (kit.dropdown(output.name.c_str(), nullptr, items, chosen) && chosen >= 0 &&
 			    static_cast<size_t>(chosen) < routes.size() && !items[static_cast<size_t>(chosen)].off)
 				output.route = routes[static_cast<size_t>(chosen)];

@@ -138,7 +138,7 @@ play(const Options &given, const std::string &name, const GameList &games, Setti
 		return Ended::FAILED;
 	}
 	if (game->machine != "hikaru") {
-		std::fprintf(stderr, "ERROR: failed to load '%s': a game of the %s, not of the Hikaru\n", name.c_str(),
+		std::fprintf(stderr, "ERROR: failed to load '%s': it is a %s game, not a Hikaru game\n", name.c_str(),
 		             game->machine.c_str());
 		return Ended::FAILED;
 	}
@@ -230,9 +230,9 @@ print_banner()
 		    "██║   ██║██║  ██║██║██║╚██╗██║\n"
 		    "╚██████╔╝██████╔╝██║██║ ╚████║\n"
 		    " ╚═════╝ ╚═════╝ ╚═╝╚═╝  ╚═══╝\n\n");
-	std::printf("Odin (ᚨ), Copyright(C) 2026 Réda Chérif-Touil\n");
-	std::printf("A hard fork of Valkyrie, Copyright(C) 2011-2013 Stefano Teso\n");
-	std::printf("Released under the GPL3 License.\n");
+	std::printf("Odin (ᚨ), Copyright (C) 2026 Réda Chérif-Touil\n");
+	std::printf("A hard fork of Valkyrie, Copyright (C) 2011-2013 Stefano Teso\n");
+	std::printf("Released under the GNU GPL, version 3 or later.\n");
 }
 
 /* odin.ini of the user (of this folder for a portable Odin), each key Odin
