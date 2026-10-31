@@ -159,6 +159,8 @@ MenuSession::MenuSession(const Options &options, Display &display, Keyboard &key
 	state.states = m_states = options.states.empty() ? default_states() : options.states;
 	state.settings_file = settings_file;
 	state.log_file = options.log_file;
+	state.log_folder = options.log_folder;
+	state.log_given = !env_text("ODIN_LOG").empty();
 	state.artwork = artwork_folder(options.artwork);
 	state.artwork_given = !env_text("ODIN_ARTWORK").empty();
 	if (game) {
@@ -965,6 +967,10 @@ MenuSession::take_folder()
 		state.saves = folder;
 		keep("paths", "saves", folder == SaveFolder::root() ? std::nullopt : std::optional(folder));
 		break;
+	case Folder::LOG:
+		state.log_folder = folder;
+		keep("paths", "log", folder == odin_data_dir() ? std::nullopt : std::optional(folder));
+		break;
 	case Folder::STATES:
 		state.states = m_states = folder;
 		keep("paths", "states", folder == default_states() ? std::nullopt : std::optional(folder));
@@ -996,7 +1002,9 @@ MenuSession::ask_folder(MenuState::Folder folder)
 	m_dialog.ask(m_display.window(), folder == Folder::ROMS ? state.roms :
 	             folder == Folder::BIOS ? (state.bios.empty() ? state.roms : state.bios) :
 	             folder == Folder::SAVES ? state.saves :
-	             folder == Folder::ARTWORK ? state.artwork : state.states, static_cast<int>(folder));
+	             folder == Folder::ARTWORK ? state.artwork :
+	             folder == Folder::LOG ? (state.log_folder.empty() ? odin_data_dir() : state.log_folder) :
+	                                     state.states, static_cast<int>(folder));
 	m_menu_pictures = MENU_PICTURES;
 }
 

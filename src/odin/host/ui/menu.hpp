@@ -65,7 +65,7 @@ std::string shown_path(const std::string &path, const char *none);
 
 /* A folder the library or the menu asks the system for (the library the
  * first two only) */
-enum class MenuFolder { NONE, ROMS, BIOS, SAVES, STATES, ARTWORK };
+enum class MenuFolder { NONE, ROMS, BIOS, SAVES, STATES, ARTWORK, LOG };
 
 /* The library, what Odin shows when it starts without a game (as a double
  * click starts it): the games of the list, each with the files it lacks
@@ -344,6 +344,10 @@ struct MenuState : BarSettings {
 	 * (BarSettings::verbose) given on the command line. */
 	std::string roms, bios, saves, states, artwork, settings_file, shader_lists, log_file;
 	bool roms_given = false, bios_given = false, saves_given = false, artwork_given = false;
+	/* The folder of the log from the next launch ([paths] log; empty: by
+	 * default), and ODIN_LOG giving the file instead */
+	std::string log_folder;
+	bool log_given = false;
 	bool verbose_given = false;
 	/* A folder to ask the system for; its picker is open; the system has
 	 * none */

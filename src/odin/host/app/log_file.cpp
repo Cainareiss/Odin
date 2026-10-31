@@ -205,9 +205,9 @@ on_crash(int signal)
 } /* namespace */
 
 std::string
-LogFile::path()
+LogFile::path(const std::string &folder)
 {
-	return user_path("ODIN_LOG", {}, "odin.log");
+	return user_path("ODIN_LOG", folder.empty() ? folder : folder + "/odin.log", "odin.log");
 }
 
 std::string

@@ -87,9 +87,10 @@ public:
 		std::string section, key, value;
 	};
 
-	/* ODIN_CONFIG=<file>; none with ODIN_CONFIG=none; else odin.ini in
-	 * the data folder of Odin, beside saves/. Empty when there is none. */
-	static std::string user_file();
+	/* ODIN_CONFIG=<file>; none with ODIN_CONFIG=none; else the one chosen
+	 * (-c), else odin.ini in the data folder of Odin, beside saves/. Empty
+	 * when there is none. */
+	static std::string user_file(const std::string &chosen = {});
 
 	/* A missing file is an empty one. A line that is neither a section, a
 	 * key nor a comment is said on stderr and skipped. False, said on

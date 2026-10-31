@@ -72,6 +72,7 @@ whole_named(const std::string &value, long lo, long hi)
 const char HELP[] = "Usage: %s [options]\n"
 "	-R <path>	Path to the ROM directory\n"
 "	-B <path>	Path to the BIOS directory (hikaru.zip...); none: the ROM directory\n"
+"	-c <file>	Settings file (default: odin.ini in Odin's folder)\n"
 "	-r <string>	Name of the game to run (none: the library of the games)\n"
 "	-n <num>	Stop after the frame num\n"
 "	-l <path>	Load a state at startup\n"
@@ -176,6 +177,8 @@ read_paths(const Settings &settings, Options &options)
 			options.artwork = value;
 		} else if (key == "states" && !value.empty()) {
 			options.states = value;
+		} else if (key == "log" && !value.empty()) {
+			options.log_folder = value;
 		} else {
 			refuse_setting("paths", key, value);
 		}
@@ -255,8 +258,11 @@ parse_options(int argc, char **argv, Options &options)
 	int opt = 0;
 	bool wrong = false;
 
-	while (opt != 'h' && (opt = getopt(argc, argv, "R:B:r:n:l:s:ux:a:w:fo:vh?")) != -1) {
+	while (opt != 'h' && (opt = getopt(argc, argv, "R:B:c:r:n:l:s:ux:a:w:fo:vh?")) != -1) {
 		switch (opt) {
+		case 'c':
+			options.config = optarg;
+			break;
 		case 'R':
 			options.rom_path = optarg;
 			options.given.roms = true;
@@ -327,8 +333,13 @@ parse_options(int argc, char **argv, Options &options)
 	}
 	if (opt != 'h')
 		return Parsed::RUN;
-	std::printf(HELP, argv[0]);
 	return wrong ? Parsed::WRONG : Parsed::HELP_ASKED;
+}
+
+void
+print_help(const char *program)
+{
+	std::printf(HELP, program);
 }
 
 Options
@@ -621,7 +632,7 @@ known_settings(const GameList &games)
 	                        { "network", "cabinet", "1" },
 	                        { "paths", "roms", "" }, { "paths", "bios", "" },
 	                        { "paths", "saves", SaveFolder::root() }, { "paths", "states", default_states() },
-	                        { "paths", "artwork", artwork_folder() },
+	                        { "paths", "artwork", artwork_folder() }, { "paths", "log", odin_data_dir() },
 	                        { "log", "verbose", "off" }, { "library", "owned_only", "off" },
 	                        { "library", "variants", "on" }, { "library", "systems", "" },
 	                        { "menu", "classic", "off" },

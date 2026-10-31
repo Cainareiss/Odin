@@ -71,8 +71,11 @@ struct Options {
 	 * default), user_files.hpp */
 	std::string artwork;
 	std::string game;
-	/* The file of what Odin says; empty: none */
-	std::string log_file;
+	/* The file of what Odin says; empty: none. The folder odin.ini gives
+	 * it (empty: by default) */
+	std::string log_file, log_folder;
+	/* The settings file the command line gives (-c; empty: by default) */
+	std::string config;
 	unsigned num_frames = 0;
 	std::string state_path;
 	std::vector<unsigned> save_frames;
@@ -103,8 +106,10 @@ struct Options {
 	} given;
 };
 
-/* RUN: go on; HELP_ASKED or WRONG: the help was shown (exit 0 or 1) */
+/* RUN: go on; HELP_ASKED or WRONG: the help is to be shown (exit 0 or 1),
+ * print_help */
 enum class Parsed { RUN, HELP_ASKED, WRONG };
+void print_help(const char *program);
 
 /* The help is shown for -h and for an option that is not right. Without
  * options Odin opens its window and waits. */

@@ -151,9 +151,9 @@ read_text(const std::string &path)
 } /* namespace */
 
 std::string
-Settings::user_file()
+Settings::user_file(const std::string &chosen)
 {
-	return user_path("ODIN_CONFIG", {}, "odin.ini");
+	return user_path("ODIN_CONFIG", chosen, "odin.ini");
 }
 
 bool

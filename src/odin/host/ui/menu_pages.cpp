@@ -1106,7 +1106,7 @@ Menu::page_paths(MenuKit &kit, MenuState &state) const
 	kit.end_group();
 
 	kit.begin_group("ODIN FILES");
-	kit.next_tip("odin.ini, where this menu saves your settings.");
+	kit.next_tip("odin.ini, where this menu saves your settings. Another one: start Odin with -c <file>.");
 	kit.value("Configuration", nullptr, shown_path(state.settings_file, "none: ODIN_CONFIG=none").c_str(), nullptr);
 	kit.next_tip("The shaders each game uses, listed so Odin can prepare them when the game starts.");
 	kit.value("Shader lists", nullptr, shown_path(state.shader_lists, "none").c_str(), nullptr, "READ ONLY");
@@ -1114,7 +1114,14 @@ Menu::page_paths(MenuKit &kit, MenuState &state) const
 
 	kit.begin_group("LOG");
 	kit.next_tip("Odin's messages since it started. The previous run's are in odin-previous.log.");
-	kit.value("Log file", nullptr, shown_path(state.log_file, "none: ODIN_LOG=none").c_str(), nullptr, "READ ONLY");
+	/* The file of this launch; the one of the folder chosen for the next */
+	const std::string next_log = state.log_folder.empty() ? std::string() : state.log_folder + "/odin.log";
+	const bool log_moves = !state.log_given && !next_log.empty() && next_log != state.log_file;
+
+	if (kit.value("Log file", log_moves ? "at the next launch" : nullptr,
+	              shown_path(log_moves ? next_log : state.log_file, "none: ODIN_LOG=none").c_str(), change, nullptr,
+	              state.log_given ? "set by ODIN_LOG" : nullptr))
+		state.choose = MenuState::Folder::LOG;
 
 	kit.next_tip("Logs every access of the board, to the terminal and the log file.");
 	kit.choice("Detailed log", "much slower · at the next launch", OFF_ON, state.verbose,

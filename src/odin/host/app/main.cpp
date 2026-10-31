@@ -205,15 +205,22 @@ play(const Options &given, const std::string &name, const GameList &games, Setti
 	return ended;
 }
 
-/* What Odin says goes to odin.log too, from its first line; on Windows,
- * with no console of its own after a double click. A board that cannot go
- * on says why in a box too (ODIN_STOP_BOX=0: not, as in the tests, which
- * nobody watches) */
+/* What Odin says goes to odin.log too, from its first line, in the folder
+ * odin.ini gives it ([paths] log); on Windows, with no console of its own
+ * after a double click. A board that cannot go on says why in a box too
+ * (ODIN_STOP_BOX=0: not, as in the tests, which nobody watches) */
 void
 start_log(Options &options)
 {
+	Settings settings;
+	std::string folder;
+
 	LogFile::leave_own_console();
-	if (const std::string log = LogFile::path(); LogFile::start(log))
+	if (const std::string file = Settings::user_file(options.config); !file.empty() && settings.load(file))
+		for (const auto &[key, value] : settings.section("paths"))
+			if (key == "log" && !value.empty())
+				folder = value;
+	if (const std::string log = LogFile::path(folder); LogFile::start(log))
 		options.log_file = log;
 	if (env_flag("ODIN_STOP_BOX", true))
 		stop_message = [](const char *text) {
@@ -235,15 +242,15 @@ print_banner()
 	std::printf("Released under the GNU GPL, version 3 or later.\n");
 }
 
-/* odin.ini of the user (of this folder for a portable Odin), each key Odin
- * knows written in it; its path, empty when there is none */
+/* odin.ini of the user (of this folder for a portable Odin; the one of -c),
+ * each key Odin knows written in it; its path, empty when there is none */
 std::string
-load_settings(Settings &settings, const GameList &games)
+load_settings(Settings &settings, const GameList &games, const std::string &chosen)
 {
 	if (const std::string portable = portable_folder(); !portable.empty())
 		std::printf("portable: the files of this Odin in '%s'\n", portable.c_str());
 
-	const std::string settings_file = Settings::user_file();
+	const std::string settings_file = Settings::user_file(chosen);
 
 	if (!settings_file.empty() && settings.load(settings_file)) {
 		std::printf("settings: '%s'\n", settings_file.c_str());
@@ -279,11 +286,15 @@ main(int argc, char **argv)
 	 * without what its buffers still hold: it goes out here. */
 	std::atexit([] { std::fflush(nullptr); });
 
+	/* The options first: -c names the settings, where the log is */
+	const odin::Parsed parsed = odin::parse_options(argc, argv, options);
+
 	odin::start_log(options);
 	odin::print_banner();
-
-	if (const odin::Parsed parsed = odin::parse_options(argc, argv, options); parsed != odin::Parsed::RUN)
+	if (parsed != odin::Parsed::RUN) {
+		odin::print_help(argv[0]);
 		return parsed == odin::Parsed::HELP_ASKED ? 0 : 1;
+	}
 
 	if (!odin::load_game_list(games)) {
 		std::fprintf(stderr, "ERROR: failed to load the game list\n");
@@ -291,7 +302,7 @@ main(int argc, char **argv)
 	}
 
 	odin::Settings settings;
-	const std::string settings_file = odin::load_settings(settings, games);
+	const std::string settings_file = odin::load_settings(settings, games, options.config);
 	odin::Options command = options;
 	options = odin::with_settings(command, settings);
 	odin::repeats::begin(options.verbose);

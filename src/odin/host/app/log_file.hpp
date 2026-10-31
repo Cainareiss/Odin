@@ -41,9 +41,10 @@ class LogFile {
 public:
 	static constexpr uint64_t MOST_BYTES = 64ull << 20;
 
-	/* The file: ODIN_LOG=<file>, else odin.log in the data folder of Odin
-	 * (beside saves/); empty with ODIN_LOG=none or without a data folder */
-	static std::string path();
+	/* The file: ODIN_LOG=<file>, else odin.log in the folder chosen
+	 * ([paths] log), else in the data folder of Odin (beside saves/);
+	 * empty with ODIN_LOG=none or without a data folder */
+	static std::string path(const std::string &folder = {});
 	/* Where the one before goes */
 	static std::string previous(const std::string &path);
 	/* Windows: the console a double click opened for Odin alone is let
