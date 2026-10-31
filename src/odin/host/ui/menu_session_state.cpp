@@ -193,6 +193,7 @@ MenuSession::fill_game_shown(MenuState &state)
 	state.shake = vibration_on(m_settings, game_shown());
 	state.vibration_force = vibration_force_of(m_settings, game_shown());
 	state.light_gun = light_gun_mode_on(m_settings, game_shown());
+	state.sinden_border = sinden_border_of(m_settings, game_shown());
 	/* The wheel the drive board turns, and how hard */
 	state.can_force = m_other ? m_other_forces : m_game && m_game->drive_first_output;
 	state.steers = steers_of(panel_shown().controls());
@@ -531,6 +532,9 @@ MenuSession::apply_game(const MenuState &was)
 	/* Its light gun mode: the pointer follows when the menu closes */
 	if (now.light_gun != was.light_gun && now.sights[0])
 		keep_light_gun(game_shown(), now.light_gun, !m_other && m_game);
+	/* Its white border for a light gun, at once too */
+	if (now.sinden_border != was.sinden_border && now.sights[0])
+		keep_sinden_border(game_shown(), now.sinden_border, !m_other && m_game);
 	/* The force of its wheel, at once too */
 	if (now.wheel_force != was.wheel_force && now.can_force)
 		keep_wheel_force(game_shown(), now.wheel_force, !m_other && m_game);
@@ -647,6 +651,21 @@ MenuSession::keep_light_gun(const std::string &game, bool on, bool runs)
 	if (runs)
 		m_controls.set_light_gun_mode(on);
 	keep("players." + game, "light_gun_mode", on ? std::nullopt : std::optional<std::string>("off"));
+}
+
+/* [players.<game>] sinden_border, sinden_border_style and
+ * sinden_border_size: a line only for another than off, game and
+ * SINDEN_BORDER_SIZE */
+void
+MenuSession::keep_sinden_border(const std::string &game, const SindenBorder &border, bool runs)
+{
+	if (runs)
+		m_display.set_sinden_border(border);
+	keep("players." + game, "sinden_border", border.on ? std::optional<std::string>("on") : std::nullopt);
+	keep("players." + game, "sinden_border_style",
+	     border.window ? std::optional<std::string>(SINDEN_BORDER_STYLES[1]) : std::nullopt);
+	keep("players." + game, "sinden_border_size",
+	     border.size == SINDEN_BORDER_SIZE ? std::nullopt : std::optional<std::string>(std::to_string(border.size)));
 }
 
 /* [players.<game>] vibration_force: a line only when another than 100 % */

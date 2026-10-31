@@ -167,4 +167,25 @@ Display::draw_blur(unsigned window_w, unsigned window_h)
 	m_graphics->draw_blurred_sides(m_picture, rect, window_w, window_h);
 }
 
+void
+Display::set_sinden_border(const SindenBorder &border)
+{
+	finish();
+	m_sinden_border = border;
+}
+
+/* Inside the edges of the window, or of the picture where the game draws
+ * it, over all that shows */
+void
+Display::draw_sinden_border(unsigned window_w, unsigned window_h)
+{
+	if (!m_sinden_border.on)
+		return;
+
+	const PictureRect rect =
+		m_sinden_border.window ? PictureRect{ 0, 0, window_w, window_h } : picture_rect(window_w, window_h, m_hole);
+
+	m_graphics->draw_white_border(rect, m_sinden_border.size, window_w, window_h);
+}
+
 } /* namespace odin */

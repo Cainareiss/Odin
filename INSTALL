@@ -352,6 +352,20 @@ keeps the mouse. On Linux the guns chosen stop moving the pointer of the
 desktop while the game runs, and move it again in the menu.
 ODIN_CONTROLLERS=none leaves them out too.
 
+A light gun that finds the screen by a white border (a Sinden) has one
+drawn over the game and its menu, as xemu's Chihiro draws it: Sinden
+border in the options of the page Input, or:
+
+ [players.braveff]
+ sinden_border = on
+ sinden_border_style = game
+ sinden_border_size = 2
+
+off by default; game (4:3 in the menu), inside the edges of the picture
+of the game, or window (Full), of the whole window; 2 to 30 pixels of
+the window wide, 2 by default. How the aim of the gun spans what the border holds is for its
+own software to say.
+
 A wheel, its pedals or another joystick that is no gamepad (a flight
 stick): one for each player, in the order they are plugged in, or the one
 of "joy1 = <GUID> <name>" (joy2: player 2) in [players.<game>]. Odin's log

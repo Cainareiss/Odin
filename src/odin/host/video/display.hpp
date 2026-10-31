@@ -195,6 +195,10 @@ public:
 	/* The hole of the bezel, where the picture goes (none: no bezel, or
 	 * one with no see-through middle) */
 	const PictureHole &picture_hole() const { return m_hole; }
+	/* The white border of a light gun that finds the screen by it, over
+	 * the game and its menu, as the game that runs has it (none when it
+	 * stops) */
+	void set_sinden_border(const SindenBorder &border);
 	bool menu_popup_open() const;
 	/* The keyboard writes in a field of the menu */
 	bool menu_typing() const;
@@ -243,6 +247,7 @@ private:
 	void make_bezel(SDL_Surface *rgba);
 	void draw_bezel(unsigned window_w, unsigned window_h);
 	void draw_blur(unsigned window_w, unsigned window_h);
+	void draw_sinden_border(unsigned window_w, unsigned window_h);
 	void draw_over(unsigned w, unsigned h, bool bar);
 	bool build_bar(BarState *bar);
 	void read_picture(uint8_t *pixels);
@@ -296,6 +301,7 @@ private:
 	HostImage m_bezel;
 	std::atomic<Sides> m_sides{ Sides::OFF };
 	PictureHole m_hole;
+	SindenBorder m_sinden_border;
 	/* The debug switches as text, for the title */
 	std::string m_message;
 

@@ -48,6 +48,18 @@ enum class DisplayApi : uint8_t { OPENGL, VULKAN };
  * hardware's screen; or over the pixels they cover there (Renderer) */
 enum class DisplayUpscaleMode : uint8_t { RAW, SNAP, NATIVE };
 
+/* A white border over the window for a light gun that finds the screen by
+ * it (a Sinden): whether there is one, inside the edges of the window or of
+ * the picture of the game, so many pixels of the window wide */
+inline constexpr unsigned SINDEN_BORDER_SIZE = 2, LEAST_SINDEN_BORDER_SIZE = 2, MOST_SINDEN_BORDER_SIZE = 30;
+struct SindenBorder {
+	bool on = false;
+	bool window = false;
+	unsigned size = SINDEN_BORDER_SIZE;
+
+	bool operator==(const SindenBorder &) const = default;
+};
+
 struct DisplayOptions {
 	unsigned scale;		/* the 3D that many times finer than the screen, 1 to 6 */
 	unsigned anisotropy;	/* of the texture filter, 1 for none as on the board */

@@ -165,6 +165,7 @@ play(const Options &given, const std::string &name, const GameList &games, Setti
 	controls.set_wheel_force(wheel_force_of(settings, game->name));
 	controls.set_vibration_force(vibration_force_of(settings, game->name));
 	controls.set_wheel_rotation(wheel_rotation_of(settings, game->name));
+	display.set_sinden_border(sights_of(game->controls)[0] ? sinden_border_of(settings, game->name) : SindenBorder());
 	controls.ground(game->grounded);
 	if (vibration && (game->option_vibration || game->drive_first_output))
 		std::printf("controls: the pad of player 1 shakes as the%s%s of the cabinet (experimental)\n",

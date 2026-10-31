@@ -42,6 +42,7 @@
 #include "odin/host/ui/menu_kit.hpp"
 #include "odin/host/input/roles.hpp"
 #include "odin/host/input/seats.hpp"
+#include "odin/host/video/display_options.hpp"
 
 namespace odin {
 
@@ -400,6 +401,10 @@ struct MenuState : BarSettings {
 	/* Player 1 has a sight (sights): the mouse aims there, or is a pointer
 	 * ([players.<game>] light_gun_mode) */
 	bool light_gun = true;
+	/* Its white border for a light gun that finds the screen by it
+	 * ([players.<game>] sinden_border, sinden_border_style,
+	 * sinden_border_size) */
+	SindenBorder sinden_border;
 	/* What shakes on the cabinet ("from output NOZZLE VIBRATION") and
 	 * whether Odin makes it up (Game::shaker_experimental) */
 	std::string shake_from;

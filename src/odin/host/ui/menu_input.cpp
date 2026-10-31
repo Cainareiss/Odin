@@ -1774,8 +1774,9 @@ buttons_bar(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows
 /* The advanced options of the device shown, over its box:
  * the vibration of the game; for a gamepad how hard it shakes, for a
  * joystick the force of the wheel and how far it turns for the steering;
- * in a game where player 1 has a sight, the light gun mode (the only
- * option of the keyboard and the mouse); the dead zone and the trigger
+ * in a game where player 1 has a sight, the light gun mode and the white
+ * border of a light gun (the only options of the keyboard and the mouse);
+ * the dead zone and the trigger
  * threshold of the make and model of a gamepad; Close (B, Escape) */
 void
 advanced_box(const MenuKit &kit, MenuState &state, ImVec2 a, ImVec2 b)
@@ -1797,8 +1798,10 @@ advanced_box(const MenuKit &kit, MenuState &state, ImVec2 a, ImVec2 b)
 		game_rows.push_back("wheel force");
 	if (turns)
 		game_rows.push_back("wheel rotation");
-	if (gun)
+	if (gun) {
 		game_rows.push_back(keys ? "Light gun mode" : "light gun mode");
+		game_rows.push_back("Sinden border");
+	}
 
 	std::string foot;
 
@@ -1911,6 +1914,53 @@ advanced_box(const MenuKit &kit, MenuState &state, ImVec2 a, ImVec2 b)
 		if (kit.segments({ hi.x - cells.x, y + (h - cells.y) / 2.0f }, Menu::OFF_ON, on))
 			state.light_gun = on == 1;
 		y += h + apart;
+	}
+	/* The white border of a light gun that finds the screen by it; once
+	 * on, around the picture of the game (4:3) or the whole window, and
+	 * how wide (the gamepad: left, right or A switches it or takes the
+	 * other one) */
+	if (gun) {
+		static constexpr char UNDER[] = "white, for a light gun that finds the screen by it";
+		static constexpr const char *AROUND[] = { "4:3", "Full" };
+		SindenBorder &border = state.sinden_border;
+		const ImVec2 cells = kit.segments_size(Menu::OFF_ON);
+		const float h = std::max(line + kit.px(2.0f) + note, cells.y);
+		int on = border.on ? 1 : 0;
+
+		ImGui::PushID("Sinden border");
+		list->AddText({ lo.x, y }, palette.ink, "Sinden border");
+		MenuKit::write(list, { lo.x, y + line + kit.px(2.0f) }, palette.dim, UNDER, note);
+		if (kit.focus({ lo.x, y }, { hi.x, y + h }, kit.px(4.0f)) && (kit.side() || kit.pressed()))
+			on = kit.side() ? kit.side() > 0 : !on;
+		kit.segments({ hi.x - cells.x, y + (h - cells.y) / 2.0f }, Menu::OFF_ON, on);
+		border.on = on == 1;
+		y += h + apart;
+		if (border.on) {
+			const ImVec2 sides = kit.segments_size(AROUND);
+			const float sh = std::max(line, sides.y);
+			int window = border.window ? 1 : 0;
+			char shown[16];
+
+			list->AddText({ lo.x, y + (sh - line) / 2.0f }, palette.ink, "Border style");
+			if (kit.focus({ lo.x, y }, { hi.x, y + sh }, kit.px(4.0f)) && (kit.side() || kit.pressed()))
+				window = kit.side() ? kit.side() > 0 : !window;
+			kit.segments({ hi.x - sides.x, y + (sh - sides.y) / 2.0f }, AROUND, window);
+			border.window = window == 1;
+			y += sh + apart;
+
+			std::snprintf(shown, sizeof(shown), "%u px", border.size);
+
+			const float control = kit.track_size(shown, "30 px").x;
+			const bool focused = kit.focus({ lo.x, y }, { hi.x, y + line }, kit.px(4.0f));
+			float moved = static_cast<float>(border.size);
+
+			list->AddText({ lo.x, y }, palette.ink, "Border size");
+			if (kit.track({ hi.x - control, y }, moved, static_cast<float>(LEAST_SINDEN_BORDER_SIZE),
+			              static_cast<float>(MOST_SINDEN_BORDER_SIZE), 1.0f, shown, focused))
+				border.size = static_cast<unsigned>(std::lround(moved));
+			y += line + apart;
+		}
+		ImGui::PopID();
 	}
 	if (pad) {
 		percent("Stick dead zone", state.tuning.dead_zone, PadTuning::MOST_DEAD_ZONE);

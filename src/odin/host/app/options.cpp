@@ -372,6 +372,32 @@ light_gun_mode_on(const Settings &settings, const std::string &game)
 }
 
 std::optional<int>
+sinden_border_style_named(const std::string &value)
+{
+	if (const std::optional<size_t> style = index_named(SINDEN_BORDER_STYLES, value))
+		return static_cast<int>(*style);
+	return std::nullopt;
+}
+
+std::optional<int>
+sinden_border_size_named(const std::string &value)
+{
+	return whole_named(value, LEAST_SINDEN_BORDER_SIZE, MOST_SINDEN_BORDER_SIZE);
+}
+
+SindenBorder
+sinden_border_of(const Settings &settings, const std::string &game)
+{
+	SindenBorder border;
+
+	border.on = player_on(settings, game, "sinden_border", false);
+	border.window = player_number(settings, game, "sinden_border_style", 0, sinden_border_style_named) == 1;
+	border.size = static_cast<unsigned>(
+		player_number(settings, game, "sinden_border_size", SINDEN_BORDER_SIZE, sinden_border_size_named));
+	return border;
+}
+
+std::optional<int>
 wheel_force_named(const std::string &value)
 {
 	return whole_named(value, 0, MOST_WHEEL_FORCE);
@@ -538,7 +564,11 @@ known_settings(const GameList &games)
 			if (control.role == Role::GUN_X) {
 				out.push_back({ "players." + name, control.player ? "gun2" : "gun1", "" });
 				if (!control.player)
-					out.push_back({ "players." + name, "light_gun_mode", "on" });
+					out.insert(out.end(), { { "players." + name, "light_gun_mode", "on" },
+					                        { "players." + name, "sinden_border", "off" },
+					                        { "players." + name, "sinden_border_style", SINDEN_BORDER_STYLES[0] },
+					                        { "players." + name, "sinden_border_size",
+					                          std::to_string(SINDEN_BORDER_SIZE) } });
 			}
 		if (game->shakes()) {
 			out.push_back({ "players." + name, "vibration", "on" });

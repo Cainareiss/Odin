@@ -26,6 +26,7 @@
 #define ODIN_HOST_GRAPHICS_HPP
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <memory>
@@ -69,6 +70,18 @@ bezel_area(HostImage bezel, unsigned window_w, unsigned window_h)
 	const int w = static_cast<int>(std::lround(bezel.w * k)), h = static_cast<int>(std::lround(bezel.h * k));
 
 	return { (static_cast<int>(window_w) - w) / 2, (static_cast<int>(window_h) - h) / 2, w, h };
+}
+
+/* The four bands of a border `size` pixels wide inside `rect`, from the top
+ * left corner of the window: the top, the bottom, then the left and the
+ * right between them; thinner where the rectangle has no room */
+inline std::array<PictureRect, 4>
+border_bands(PictureRect rect, unsigned size)
+{
+	const unsigned t = std::min({ size, rect.w / 2, rect.h / 2 }), side = rect.h - 2 * t;
+
+	return { { { rect.x, rect.y, rect.w, t }, { rect.x, rect.y + rect.h - t, rect.w, t },
+	           { rect.x, rect.y + t, t, side }, { rect.x + rect.w - t, rect.y + t, t, side } } };
 }
 
 /* The sides lit by the picture (sides.frag): the mean of the picture at
@@ -139,6 +152,9 @@ public:
 	/* The picture, placed at `rect`, blurred and dimmer around itself
 	 * over the whole window */
 	virtual void draw_blurred_sides(HostPicture picture, PictureRect rect, unsigned window_w, unsigned window_h) = 0;
+	/* A white border inside `rect` over what the window shows
+	 * (border_bands) */
+	virtual void draw_white_border(PictureRect rect, unsigned size, unsigned window_w, unsigned window_h) = 0;
 
 	/* The background of the menu: a picture, or the window as drawn,
 	 * blurred at half its size; then drawn over the window, w by h in its

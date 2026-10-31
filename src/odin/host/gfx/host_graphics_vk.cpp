@@ -109,6 +109,7 @@ public:
 
 	void draw_bezel(HostImage bezel, unsigned window_w, unsigned window_h) override;
 	void draw_blurred_sides(HostPicture picture, PictureRect rect, unsigned window_w, unsigned window_h) override;
+	void draw_white_border(PictureRect rect, unsigned size, unsigned window_w, unsigned window_h) override;
 
 	void blur_background(HostPicture picture) override;
 	void blur_window(unsigned window_w, unsigned window_h) override;
@@ -509,6 +510,28 @@ VkGraphics::draw_bezel(HostImage bezel, unsigned window_w, unsigned window_h)
 	m_card->bind_images(cb, m_image_over, { &found->second }, m_levels[m_smooth[bezel.id]]);
 	m_fn.vkCmdPushConstants(cb, m_image_over.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(light), &light);
 	m_fn.vkCmdDraw(cb, 3, 1, 0, 0);
+	m_card->end_drawing(cb);
+}
+
+/* Each band cleared white in the image of the window */
+void
+VkGraphics::draw_white_border(PictureRect rect, unsigned size, unsigned window_w, unsigned window_h)
+{
+	VkClearRect bands[4];
+	uint32_t count = 0;
+
+	for (const PictureRect &band : border_bands(rect, size))
+		if (band.w && band.h)
+			bands[count++] = { { { static_cast<int32_t>(band.x), static_cast<int32_t>(band.y) }, { band.w, band.h } },
+				           0, 1 };
+	if (!count)
+		return;
+
+	const VkCommandBuffer cb = m_card->commands();
+	const VkClearAttachment white{ VK_IMAGE_ASPECT_COLOR_BIT, 0, { { { 1.0f, 1.0f, 1.0f, 1.0f } } } };
+
+	m_card->begin_drawing(cb, m_card->window_image(window_w, window_h), { { 0, 0 }, { window_w, window_h } });
+	m_fn.vkCmdClearAttachments(cb, 1, &white, count, bands);
 	m_card->end_drawing(cb);
 }
 

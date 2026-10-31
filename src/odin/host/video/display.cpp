@@ -326,6 +326,7 @@ Display::detach()
 	run([this] { m_renderer.reset(); });
 	m_board = nullptr;
 	m_picture.id = 0;
+	m_sinden_border = {};
 	m_program_list.clear();
 	m_title = "Odin";
 	SDL_SetWindowTitle(m_window, "Odin");
@@ -559,7 +560,7 @@ Display::build_bar(BarState *bar)
 }
 
 /* Over the picture of the game: the bezel, the game blurred at its sides,
- * the bar or a note */
+ * the bar or a note, the white border of a light gun */
 void
 Display::draw_over(unsigned w, unsigned h, bool bar)
 {
@@ -567,6 +568,7 @@ Display::draw_over(unsigned w, unsigned h, bool bar)
 	draw_blur(w, h);
 	if (bar)
 		m_menu->draw_bar(w, h);
+	draw_sinden_border(w, h);
 }
 
 void
@@ -668,6 +670,7 @@ Display::draw_menu(MenuState &state)
 	SDL_GetWindowSizeInPixels(m_window, &w, &h);
 	run([this, w, h] {
 		m_menu->draw(static_cast<unsigned>(w), static_cast<unsigned>(h));
+		draw_sinden_border(static_cast<unsigned>(w), static_cast<unsigned>(h));
 		present(static_cast<unsigned>(w), static_cast<unsigned>(h), "menu");
 	});
 }

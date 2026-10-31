@@ -128,6 +128,17 @@ bool vibration_on(const Settings &settings, const std::string &game);
  * the mouse aims and shoots there, no pointer, no bar (on, when it does
  * not say), or is a pointer again (off); the last line says */
 bool light_gun_mode_on(const Settings &settings, const std::string &game);
+/* [players.<game>] sinden_border: a white border for a light gun that
+ * finds the screen by it, in a game with one, as xemu's Chihiro draws it:
+ * off when it does not say, or on; sinden_border_style: inside the edges of
+ * the picture of the game (game, when it does not say) or of the window
+ * (window); sinden_border_size: so many pixels of the window wide,
+ * LEAST_SINDEN_BORDER_SIZE to MOST_SINDEN_BORDER_SIZE (SINDEN_BORDER_SIZE
+ * when it does not say); the last right line of each says */
+inline constexpr const char *SINDEN_BORDER_STYLES[] = { "game", "window" };
+std::optional<int> sinden_border_style_named(const std::string &value);
+std::optional<int> sinden_border_size_named(const std::string &value);
+SindenBorder sinden_border_of(const Settings &settings, const std::string &game);
 /* [players.<game>] wheel_force: how hard the wheel turns as the drive board
  * tells it, in % of its force (0 to MOST_WHEEL_FORCE; at WHEEL_FORCE, when
  * it does not say, the force the board asks at its most is the most of the

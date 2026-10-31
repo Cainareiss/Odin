@@ -52,6 +52,12 @@ player_value_right(const std::string &key, const std::string &value)
 		return vibration_force_named(value).has_value();
 	if (key == "wheel_rotation")
 		return wheel_rotation_named(value).has_value();
+	if (key == "sinden_border")
+		return on_off_named(value).has_value();
+	if (key == "sinden_border_style")
+		return sinden_border_style_named(value).has_value();
+	if (key == "sinden_border_size")
+		return sinden_border_size_named(value).has_value();
 	return false;
 }
 

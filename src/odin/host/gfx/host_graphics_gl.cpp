@@ -74,6 +74,7 @@ public:
 
 	void draw_bezel(HostImage bezel, unsigned window_w, unsigned window_h) override;
 	void draw_blurred_sides(HostPicture picture, PictureRect rect, unsigned window_w, unsigned window_h) override;
+	void draw_white_border(PictureRect rect, unsigned size, unsigned window_w, unsigned window_h) override;
 
 	void blur_background(HostPicture picture) override;
 	void blur_window(unsigned window_w, unsigned window_h) override;
@@ -257,6 +258,23 @@ GlGraphics::draw_bezel(HostImage bezel, unsigned window_w, unsigned window_h)
 	glBindTexture(GL_TEXTURE_2D, 0);
 	glUseProgram(0);
 	glDisable(GL_BLEND);
+}
+
+/* Each band cleared white, counted from the bottom as OpenGL counts */
+void
+GlGraphics::draw_white_border(PictureRect rect, unsigned size, unsigned, unsigned window_h)
+{
+	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+	glEnable(GL_SCISSOR_TEST);
+	glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+	for (const PictureRect &band : border_bands(rect, size)) {
+		if (!band.w || !band.h)
+			continue;
+		glScissor(static_cast<GLint>(band.x), static_cast<GLint>(window_h - band.y - band.h),
+		          static_cast<GLsizei>(band.w), static_cast<GLsizei>(band.h));
+		glClear(GL_COLOR_BUFFER_BIT);
+	}
+	glDisable(GL_SCISSOR_TEST);
 }
 
 void
