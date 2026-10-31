@@ -28,6 +28,8 @@
 #include <cctype>
 #include <string>
 
+#include "odin/host/input/gun_serial.hpp"
+
 namespace odin {
 
 namespace {
@@ -1161,16 +1163,8 @@ gun_inputs(GunKind kind, std::string_view name, std::string_view identity)
 	for (size_t b = 0; b < GUN_BUTTONS; b++)
 		if (texts[b])
 			out[b] = HostInput::parse(texts[b]);
-	/* Its number by its name ("XGUNNER-P3"), else by its PID (1209:0003) */
-	if (kind == GunKind::XGUNNER && !batocera) {
-		const size_t p = name.find("-P");
-		const auto one_to_four = [](char c) { return c >= '1' && c <= '4'; };
-		char number = p != std::string_view::npos && p + 2 < name.size() ? name[p + 2] : '0';
-
-		if (!one_to_four(number))
-			number = identity.starts_with("vidpid:1209:000") ? identity.back() : '1';
-		out[GUN_START] = HostInput::parse(std::string("key:") + (one_to_four(number) ? number : '1'));
-	}
+	if (kind == GunKind::XGUNNER && !batocera)
+		out[GUN_START] = HostInput::parse("key:" + std::to_string(xgunner_player(identity, name).value_or(1)));
 	return out;
 }
 

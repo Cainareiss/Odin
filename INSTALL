@@ -269,6 +269,21 @@ off, and shows the outputs of each game light):
 or "<id> = 0" as each output of the game changes, its id in
 odin-games.json, and "mame_stop = 1" at the end.)
 
+A vibration of the cabinet (the nozzles of Brave) goes to the light gun
+of a player that takes the game's orders, an XGunner (its receiver is a
+serial port: on Linux the user in its group, uucp or dialout), when the
+page Outputs says so (Light guns: the motor or the recoil of the gun of
+a player), or:
+
+ [outputs.braveff]
+ 1p_nozzle_vibration = gun1
+
+(gun1, gun2 its motor; gun1 recoil, gun2 recoil its solenoid; none, by
+default, nothing). Odin sends the output as the game drives it, frame by
+frame, and the gun does what it can of it: an XGunner runs its motor some
+0.4 s at a time, at full strength. A gamepad shakes as its options on the
+page Input say.
+
 Virtual-On Force, NASCAR, Star Wars Racer Arcade and Planet Harriers link
 cabinets with the network board 837-13404. Each cabinet is an Odin; the
 optical cable of each goes to the next cabinet, the one of the last to the

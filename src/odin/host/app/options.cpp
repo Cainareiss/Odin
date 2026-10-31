@@ -365,6 +365,53 @@ vibration_on(const Settings &settings, const std::string &game)
 	return player_on(settings, game, "vibration", true);
 }
 
+std::optional<OutputRoute>
+output_route_named(const std::string &value)
+{
+	using To = OutputRoute::To;
+
+	for (const unsigned player : { 0u, 1u }) {
+		const std::string number = std::to_string(player + 1);
+
+		if (value == "gun" + number)
+			return OutputRoute{ To::GUN, player };
+		if (value == "gun" + number + " recoil")
+			return OutputRoute{ To::GUN_RECOIL, player };
+	}
+	if (value == "none")
+		return OutputRoute{};
+	return std::nullopt;
+}
+
+std::string
+output_route_name(const OutputRoute &route)
+{
+	const std::string number = std::to_string(route.player + 1);
+
+	switch (route.to) {
+	case OutputRoute::To::GUN: return "gun" + number;
+	case OutputRoute::To::GUN_RECOIL: return "gun" + number + " recoil";
+	case OutputRoute::To::NOTHING: break;
+	}
+	return "none";
+}
+
+std::optional<OutputRoute>
+output_route_of(const Settings &settings, const std::string &game, const std::string &id, bool tell)
+{
+	std::optional<OutputRoute> route;
+
+	for (const auto &[key, value] : settings.section("outputs." + game)) {
+		if (key != id || value.empty())
+			continue;
+		if (const std::optional<OutputRoute> named = output_route_named(value))
+			route = named;
+		else if (tell)
+			refuse_setting("outputs." + game, key, value);
+	}
+	return route;
+}
+
 bool
 light_gun_mode_on(const Settings &settings, const std::string &game)
 {
@@ -574,6 +621,9 @@ known_settings(const GameList &games)
 			out.push_back({ "players." + name, "vibration", "on" });
 			out.push_back({ "players." + name, "vibration_force", std::to_string(VIBRATION_FORCE) });
 		}
+		for (const GameOutput &output : game->outputs)
+			if (output.role == GameOutput::Role::RUMBLE)
+				out.push_back({ "outputs." + name, output.id, "" });
 		if (game->drive_first_output)
 			out.push_back({ "players." + name, "wheel_force", std::to_string(WHEEL_FORCE) });
 		if (steers_of(game->controls))

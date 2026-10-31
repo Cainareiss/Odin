@@ -214,7 +214,7 @@ set(ODIN_SOURCES
 	host/ui/gun_drawings.cpp
 	host/input/keyboard.cpp host/app/log_file.cpp
 	host/app/version.cpp host/app/hotkeys.cpp host/input/controls.cpp
-	host/input/pointers.cpp host/input/wheel_force.cpp
+	host/input/pointers.cpp host/input/wheel_force.cpp host/input/gun_serial.cpp
 	host/input/evdev.cpp host/input/rawinput.cpp
 	host/input/outputs_network.cpp host/input/sockets.cpp
 	common/cabinet_settings.cpp host/input/control_panel.cpp
@@ -413,7 +413,7 @@ if(UNIX)
 	target_link_libraries(odin PRIVATE m)
 endif()
 if(WIN32)
-	target_link_libraries(odin PRIVATE ws2_32 hid)
+	target_link_libraries(odin PRIVATE ws2_32 hid setupapi)
 	target_link_options(odin PRIVATE -static)
 endif()
 target_link_libraries(odin PRIVATE odin_deps odin_sdl)

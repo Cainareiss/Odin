@@ -124,6 +124,23 @@ std::optional<double> level_named(const std::string &value);
 /* [players.<game>] vibration: the pads shake unless it says off (the last
  * line says) */
 bool vibration_on(const Settings &settings, const std::string &game);
+/* [outputs.<game>] <id of an output>: the light gun a vibration of the
+ * cabinet goes to: none (when it does not say), the motor of the gun of a
+ * player (gun1, gun2) or its solenoid (gun1 recoil, gun2 recoil); the last
+ * right line says. (A gamepad shakes as its options on the page Input
+ * say: [players.<game>] vibration.) */
+struct OutputRoute {
+	enum class To : uint8_t { NOTHING, GUN, GUN_RECOIL };
+
+	To to = To::NOTHING;
+	unsigned player = 0;
+
+	bool operator==(const OutputRoute &) const = default;
+};
+std::optional<OutputRoute> output_route_named(const std::string &value);
+std::string output_route_name(const OutputRoute &route);
+std::optional<OutputRoute> output_route_of(const Settings &settings, const std::string &game, const std::string &id,
+                                           bool tell = true);
 /* [players.<game>] light_gun_mode: in a game where player 1 has a sight,
  * the mouse aims and shoots there, no pointer, no bar (on, when it does
  * not say), or is a pointer again (off); the last line says */

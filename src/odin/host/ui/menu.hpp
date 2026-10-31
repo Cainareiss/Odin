@@ -37,6 +37,7 @@
 #include <SDL3/SDL.h>
 
 #include "imgui/imgui.h"
+#include "odin/host/app/options.hpp"
 #include "odin/host/input/control_panel.hpp"
 #include "odin/host/gfx/host_graphics.hpp"
 #include "odin/host/app/hotkeys.hpp"
@@ -297,13 +298,16 @@ struct MenuState : BarSettings {
 	std::optional<HotkeyMoved> hotkey_moved;
 
 	/* Outputs: those of the cabinet of the game shown (their names, what
-	 * they are), lit while on in the game that runs; sent to the programs
-	 * of lamps (BarSettings::network), the port taken by another program,
-	 * how many programs take them */
+	 * they are), lit while on in the game that runs, where a vibration goes
+	 * ([outputs.<game>]); sent to the programs of lamps
+	 * (BarSettings::network), the port taken by another program, how many
+	 * programs take them */
 	struct Output {
 		std::string name;
 		GameOutput::Role role;
 		bool on;
+		std::string id;
+		OutputRoute route;
 	};
 	std::vector<Output> outputs;
 	bool network_failed = false;

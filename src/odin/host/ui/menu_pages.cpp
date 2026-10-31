@@ -38,6 +38,7 @@
 
 #include "imgui/imgui.h"
 #include "odin/common/env.hpp"
+#include "odin/host/input/gun_serial.hpp"
 #include "odin/host/ui/menu_kit.hpp"
 #include "odin/machine/cabinet/netbd_ring.hpp"
 
@@ -865,8 +866,47 @@ Menu::hotkeys_help(const MenuState &state)
 	return name + ": press the new key, with Ctrl, Alt or Shift if you like. Esc cancels.";
 }
 
+namespace {
+
+/* The light guns a vibration of the cabinet can go to, in the order listed
+ * (one player or two), and how the list says each: one only if the player
+ * has a gun that takes the game's orders (an XGunner) */
+std::vector<OutputRoute>
+vibration_routes(bool two)
+{
+	using To = OutputRoute::To;
+	std::vector<OutputRoute> out = { {} };
+
+	for (unsigned player = 0; player < (two ? 2u : 1u); player++)
+		out.insert(out.end(), { { To::GUN, player }, { To::GUN_RECOIL, player } });
+	return out;
+}
+
+MenuKit::Item
+route_item(const MenuState &state, const OutputRoute &route)
+{
+	const std::string player = route.player ? "P2" : "P1";
+	const LightGun *const gun = route.to != OutputRoute::To::NOTHING ? state.gun_of(route.player) : nullptr;
+	MenuKit::Item item;
+
+	switch (route.to) {
+	case OutputRoute::To::NOTHING: item.name = "Nothing"; break;
+	case OutputRoute::To::GUN: item.name = "Light gun of " + player + " · motor"; break;
+	case OutputRoute::To::GUN_RECOIL: item.name = "Light gun of " + player + " · recoil"; break;
+	}
+	if (route.to != OutputRoute::To::NOTHING) {
+		item.off = !gun || !GunSerial::shakes(gun->identity, gun->name);
+		item.about = !gun ? "no light gun chosen (page Input)" : item.off ? gun->name + ": takes no orders" : gun->name;
+	}
+	return item;
+}
+
+} /* namespace */
+
 /* Outputs: those of the cabinet of the game shown, lit as the game lights
- * them; sent to the programs of lamps, for every game */
+ * them, and the light gun each vibration goes to (a gamepad shakes as its
+ * options on the page Input say); sent to the programs of lamps, for every
+ * game */
 void
 Menu::page_outputs(MenuKit &kit, MenuState &state) const
 {
@@ -880,6 +920,33 @@ Menu::page_outputs(MenuKit &kit, MenuState &state) const
 
 	output_tiles(kit, state, box);
 	begin_settings(kit, box, top, room);
+
+	const bool shakes = std::any_of(state.outputs.begin(), state.outputs.end(), [](const MenuState::Output &output) {
+		return output.role == GameOutput::Role::RUMBLE;
+	});
+
+	if (shakes) {
+		const std::vector<OutputRoute> routes = vibration_routes(state.panel && state.panel->two_players());
+		std::vector<MenuKit::Item> items;
+
+		for (const OutputRoute &route : routes)
+			items.push_back(route_item(state, route));
+		kit.begin_group("LIGHT GUNS");
+		for (MenuState::Output &output : state.outputs) {
+			if (output.role != GameOutput::Role::RUMBLE)
+				continue;
+
+			int chosen = static_cast<int>(std::find(routes.begin(), routes.end(), output.route) - routes.begin());
+
+			kit.next_tip("The light gun the game's vibration goes to, as the cabinet drives it: its motor or its "
+			             "recoil, for a gun that takes orders (an XGunner). A gamepad shakes as its options on "
+			             "the page Input say.");
+			if (kit.dropdown(output.name.c_str(), nullptr, items, chosen) && chosen >= 0 &&
+			    static_cast<size_t>(chosen) < routes.size() && !items[static_cast<size_t>(chosen)].off)
+				output.route = routes[static_cast<size_t>(chosen)];
+		}
+		kit.end_group();
+	}
 
 	kit.begin_group("OUTPUT PROGRAMS");
 	kit.next_tip("Sends the cabinet's outputs to LEDBlinky, MAMEHooker or DOFLinx, as MAME's network output does: "

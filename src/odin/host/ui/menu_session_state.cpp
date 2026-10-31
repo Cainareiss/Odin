@@ -223,10 +223,13 @@ MenuSession::fill_game_shown(MenuState &state)
 	state.link_shown_cabinets = shown_link.cabinets;
 	state.link_shown_seat = shown_link.seat_in == Game::Link::In::NONE ? MenuState::SEAT_NONE :
 	                        shown_link.seat_letter ? MenuState::SEAT_LETTER : MenuState::SEAT_NUMBER;
-	/* The outputs of the game shown, lit as the board left them */
+	/* The outputs of the game shown, lit as the board left them; the light
+	 * gun a vibration goes to */
 	state.outputs.clear();
 	for (const GameOutput &output : m_other || !m_game ? m_other_outputs : m_game->outputs)
-		state.outputs.push_back({ output.name, output.role, !m_other && m_board && output.on(m_board->io_outputs()) });
+		state.outputs.push_back({ output.name, output.role, !m_other && m_board && output.on(m_board->io_outputs()),
+		                          output.id,
+		                          output_route_of(m_settings, game_shown(), output.id, false).value_or(OutputRoute{}) });
 	if (m_outputs) {
 		m_outputs->welcome();
 		state.programs = m_outputs->clients();
@@ -598,6 +601,14 @@ MenuSession::apply_link(const MenuState &was)
 		m_menu_state.programs = 0;
 		keep("outputs", "network", kept_on_off(now.network, false));
 	}
+	/* Where a vibration goes: kept, and taken at once by the game that
+	 * runs */
+	for (size_t o = 0; o < now.outputs.size() && o < was.outputs.size(); o++)
+		if (now.outputs[o].route != was.outputs[o].route) {
+			keep("outputs." + game_shown(), now.outputs[o].id, output_route_name(now.outputs[o].route));
+			if (!m_other)
+				m_controls.route_outputs();
+		}
 }
 
 /* Clear mapping: all the inputs of the player shown, none; Undo offered a

@@ -105,6 +105,7 @@ Controls::Controls(Keyboard &keys, const std::vector<GameControl> &controls, con
 			m_wheel_reversed = control.low == GameControl::Low::RIGHT;
 		}
 	}
+	route_outputs();
 	if (all_off())
 		return;
 	for (const auto &[key, value] : settings.section("players." + game)) {
@@ -581,6 +582,18 @@ Controls::show(std::span<const uint8_t> outputs, std::span<const int16_t> option
 
 	const Uint16 felt = std::max(m_felt_level, m_drive_level) / FELT_STEP * FELT_STEP;
 
+	/* Each vibration of the cabinet to the light gun it goes to, as the
+	 * game drives it this frame (the page Outputs) */
+	std::array<bool, 2> gun_run{}, gun_kick{};
+
+	for (size_t o = 0; o < m_outputs.size() && o < m_routes.size(); o++) {
+		if (m_outputs[o].role != GameOutput::Role::RUMBLE || !m_outputs[o].on(outputs))
+			continue;
+		if (m_routes[o].to == OutputRoute::To::GUN)
+			gun_run[m_routes[o].player & 1] = true;
+		else if (m_routes[o].to == OutputRoute::To::GUN_RECOIL)
+			gun_kick[m_routes[o].player & 1] = true;
+	}
 	for (unsigned player = 0; player < 2; player++) {
 		Pad *const seated = seat(player);
 		/* Only the device the player plays with shakes */
@@ -588,6 +601,7 @@ Controls::show(std::span<const uint8_t> outputs, std::span<const int16_t> option
 		const int shake = device(player) == InputDevice::PAD ? std::max<Uint16>(on ? RUMBLE : 0, player ? 0 : felt) : 0;
 		const Uint16 strength = static_cast<Uint16>(std::min(shake * m_vibration_force / 100, 0xFFFF));
 
+		shake_gun(player, gun_run[player], gun_kick[player]);
 		if (!seated)
 			continue;
 
@@ -602,6 +616,46 @@ Controls::show(std::span<const uint8_t> outputs, std::span<const int16_t> option
 		pad.rumbling = strength;
 		pad.rumbled = now;
 	}
+}
+
+void
+Controls::route_outputs()
+{
+	m_routes.assign(m_outputs.size(), OutputRoute{});
+	m_gun_routed = {};
+	for (size_t o = 0; o < m_outputs.size(); o++) {
+		if (m_outputs[o].role != GameOutput::Role::RUMBLE)
+			continue;
+		m_routes[o] = output_route_of(m_settings, m_game, m_outputs[o].id).value_or(OutputRoute{});
+		if (m_routes[o].to != OutputRoute::To::NOTHING)
+			m_gun_routed[m_routes[o].player & 1] = true;
+	}
+}
+
+/* The outputs as the game drives them, frame by frame, the gun doing what
+ * it can of them: each frame one is on, the motor asked to run (an XGunner
+ * takes it once its run is over), or the solenoid to kick. Its port opened
+ * while outputs go to the gun chosen. */
+void
+Controls::shake_gun(unsigned player, bool run, bool kick)
+{
+	const std::string wanted = m_gun_routed[player] ? m_guns[player] : std::string();
+
+	if (m_gun_ported[player] != wanted) {
+		std::string name;
+
+		for (const Pointers::Device &device : m_pointers ? m_pointers->devices() : std::vector<Pointers::Device>())
+			if (device.identity == wanted)
+				name = device.name;
+		m_gun_ports[player].reset();
+		m_gun_ported[player] = wanted;
+		if (!wanted.empty())
+			m_gun_ports[player] = GunSerial::open(wanted, name);
+	}
+	if (m_gun_ports[player] && run)
+		m_gun_ports[player]->rumble();
+	if (m_gun_ports[player] && kick)
+		m_gun_ports[player]->recoil();
 }
 
 void

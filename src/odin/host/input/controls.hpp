@@ -34,8 +34,10 @@
 
 #include <SDL3/SDL.h>
 
+#include "odin/host/app/options.hpp"
 #include "odin/host/input/bindings.hpp"
 #include "odin/host/input/control_panel.hpp"
+#include "odin/host/input/gun_serial.hpp"
 #include "odin/host/app/games.hpp"
 #include "odin/machine/boards/hikaru/hikaru_host.hpp"
 #include "odin/host/input/keyboard.hpp"
@@ -182,6 +184,9 @@ public:
 	Pointers *pointers() const { return m_pointers; }
 	/* The light gun a player wants now (its identity; empty: none) */
 	void want_gun(unsigned player, const std::string &identity) { m_guns[player & 1] = identity; }
+	/* The light gun each vibration of the cabinet goes to
+	 * ([outputs.<game>], OutputRoute), read again */
+	void route_outputs();
 	/* How hard the wheel turns, in % of what the drive board asks
 	 * ([players.<game>] wheel_force, options.hpp) */
 	void set_wheel_force(int percent) { m_wheel_force = percent; }
@@ -249,6 +254,9 @@ private:
 
 	/* The wheel of player 1 turns with the drive board, when it can */
 	void turn_wheel(int torque);
+	/* The light gun of a player run (its motor) or kicked (its solenoid) as
+	 * the outputs sent to it are this frame */
+	void shake_gun(unsigned player, bool run, bool kick);
 	/* What a pad gives the game of its axes */
 	static void shape(Pad &pad);
 	void open(SDL_JoystickID id);
@@ -327,6 +335,14 @@ private:
 	std::array<std::string, 2> m_guns;
 	std::array<MouseState, 2> m_gun_aims{};
 	std::array<bool, 2> m_gun_seen{};
+	/* The light gun each output goes to (OutputRoute), and the players
+	 * whose light gun some go to */
+	std::vector<OutputRoute> m_routes;
+	std::array<bool, 2> m_gun_routed{};
+	/* The serial port of the light gun of each player that outputs go to
+	 * (an XGunner), and the gun it was opened for */
+	std::array<std::unique_ptr<GunSerial>, 2> m_gun_ports;
+	std::array<std::string, 2> m_gun_ported;
 	MouseState m_mouse;
 	bool m_mouse_seen;		/* it has moved on the window */
 	bool m_mouse_placed;		/* the system has told where it is */
