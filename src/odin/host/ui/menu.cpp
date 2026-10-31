@@ -25,6 +25,7 @@
 #include "odin/host/ui/menu.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cfloat>
 #include <cmath>
 #include <optional>
@@ -51,6 +52,11 @@
 PICTURE(upscale_1) PICTURE(upscale_2) PICTURE(upscale_3) PICTURE(upscale_4) PICTURE(upscale_5) PICTURE(upscale_6)
 PICTURE(filter_1) PICTURE(filter_2) PICTURE(filter_4) PICTURE(filter_8) PICTURE(filter_16) PICTURE(screen)
 PICTURE(whole) PICTURE(torn) PICTURE(mode_cabinet) PICTURE(mode_raw) PICTURE(mode_snap) PICTURE(mode_native)
+PICTURE(crt_none) PICTURE(crt_sega_monitor_29) PICTURE(crt_sega_projector_50) PICTURE(crt_pc_monitor_vga)
+PICTURE(crt_pc_monitor_vga_flat) PICTURE(crt_pc_monitor_vga_good) PICTURE(crt_pc_monitor_vga_good_flat)
+PICTURE(crt_pc_monitor_vga_premium) PICTURE(crt_pc_monitor_vga_premium_flat)
+PICTURE(crt_pc_monitor_vga_premium_plus) PICTURE(crt_pc_monitor_vga_premium_plus_flat)
+PICTURE(crt_pc_monitor_vga_extreme) PICTURE(crt_pc_monitor_vga_extreme_flat)
 #undef PICTURE
 /* The font of the menu (menu_fonts.S) */
 extern "C" const unsigned char odin_font_cozette[], odin_font_cozette_end[];
@@ -73,6 +79,19 @@ const std::pair<const unsigned char *, const unsigned char *> PICTURE_FILES[] = 
 	{ odin_picture_whole, odin_picture_whole_end }, { odin_picture_torn, odin_picture_torn_end },
 	{ odin_picture_mode_cabinet, odin_picture_mode_cabinet_end }, { odin_picture_mode_raw, odin_picture_mode_raw_end },
 	{ odin_picture_mode_snap, odin_picture_mode_snap_end }, { odin_picture_mode_native, odin_picture_mode_native_end },
+	{ odin_picture_crt_none, odin_picture_crt_none_end },
+	{ odin_picture_crt_sega_monitor_29, odin_picture_crt_sega_monitor_29_end },
+	{ odin_picture_crt_sega_projector_50, odin_picture_crt_sega_projector_50_end },
+	{ odin_picture_crt_pc_monitor_vga, odin_picture_crt_pc_monitor_vga_end },
+	{ odin_picture_crt_pc_monitor_vga_flat, odin_picture_crt_pc_monitor_vga_flat_end },
+	{ odin_picture_crt_pc_monitor_vga_good, odin_picture_crt_pc_monitor_vga_good_end },
+	{ odin_picture_crt_pc_monitor_vga_good_flat, odin_picture_crt_pc_monitor_vga_good_flat_end },
+	{ odin_picture_crt_pc_monitor_vga_premium, odin_picture_crt_pc_monitor_vga_premium_end },
+	{ odin_picture_crt_pc_monitor_vga_premium_flat, odin_picture_crt_pc_monitor_vga_premium_flat_end },
+	{ odin_picture_crt_pc_monitor_vga_premium_plus, odin_picture_crt_pc_monitor_vga_premium_plus_end },
+	{ odin_picture_crt_pc_monitor_vga_premium_plus_flat, odin_picture_crt_pc_monitor_vga_premium_plus_flat_end },
+	{ odin_picture_crt_pc_monitor_vga_extreme, odin_picture_crt_pc_monitor_vga_extreme_end },
+	{ odin_picture_crt_pc_monitor_vga_extreme_flat, odin_picture_crt_pc_monitor_vga_extreme_flat_end },
 };
 
 /* The hints of the mouse Dear ImGui sets for itself (imgui_impl_sdl3.cpp):
@@ -770,7 +789,7 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 	kit.next_tip("Imitates a screen (Lola Retro filters): the cabinets' screens from Sega's manuals, a monitor for "
 	             "Planet Harriers and NASCAR, a projector for the other games; or a PC monitor of the VGA days. "
 	             "Demanding on the graphics card.");
-	watch(PREVIEW_SCREEN, [&] {
+	watch(PREVIEW_CRT, [&] {
 		if (kit.dropdown("CRT screen", nullptr, screens, screen) && screen >= 0 &&
 		    static_cast<size_t>(screen) < std::size(PRESETS))
 			state.filter = PRESETS[screen];
@@ -858,7 +877,7 @@ Menu::preview(const MenuKit &kit, const MenuState &state, int which, ImVec2 a, I
 	 * cabinet's), side by side or one above the other, as they are the
 	 * biggest; what they are under them, where they come from at the foot */
 	const auto pair = [&](const char *title, int cabinet, int chosen, const char *cabinet_name, const std::string &chosen_name,
-	                      const char *source) {
+	                      const char *source, const char *pick = "pick 2× or more to see the difference") {
 		const float apart = kit.px(12.0f), under = caps + kit.px(16.0f);
 		const float source_h = MenuKit::wrapped_h(source, note, width);
 		const float room = hi.y - lo.y - caps - kit.px(10.0f) - source_h - kit.px(12.0f);
@@ -877,7 +896,6 @@ Menu::preview(const MenuKit &kit, const MenuState &state, int which, ImVec2 a, I
 				picture(list, which_picture, at, to, shown);
 				list->AddRect(at, to, faded(palette.line), 0.0f, ImDrawFlags_None, kit.stroke());
 			} else {
-				const char *const pick = "pick 2× or more to see the difference";
 				const ImVec2 text = ImGui::GetFont()->CalcTextSizeA(note, FLT_MAX, w - kit.px(16.0f), pick);
 
 				kit.dashed_frame(list, at, to, faded(palette.outline));
@@ -939,6 +957,20 @@ Menu::preview(const MenuKit &kit, const MenuState &state, int which, ImVec2 a, I
 
 		pair("ANISOTROPIC FILTERING", FILTER, filter > 0 ? FILTER + filter : -1, "OFF · THE CABINET", chosen,
 		     "Captured in Odin: the distant road in Planet Harriers, at 1×.");
+		break;
+	}
+	case PREVIEW_CRT: {
+		const auto at = std::find(std::begin(PRESETS), std::end(PRESETS), state.filter);
+		const int screen = at == std::end(PRESETS) ? -1 : static_cast<int>(at - std::begin(PRESETS));
+
+		std::string chosen = screen >= 0 ? SCREENS[screen] : state.filter;
+
+		for (char &c : chosen)
+			c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+		pair("CRT SCREEN", CRT, screen >= 0 ? CRT + screen : -1, "NONE", chosen,
+		     "Captured in Odin: a close-up of the title of Planet Harriers in a 2560 × 1440 window. The look "
+		     "changes with the size of your display.",
+		     "no close-up of this filter");
 		break;
 	}
 	case PREVIEW_VSYNC: {

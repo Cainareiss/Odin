@@ -665,11 +665,14 @@ private:
 	/* The pictures of the page Display (menu_pictures.S): real captures
 	 * of Odin, the same place at each scale and at each filter, a frame
 	 * whole and torn, the timer of VON4 at 1× and in each upscaling mode
-	 * at 4× */
-	enum Picture { UPSCALE = 0, FILTER = UPSCALE + 6, SCREEN = FILTER + 5, WHOLE, TORN, MODE, PICTURES = MODE + 4 };
+	 * at 4×, a close-up of each CRT screen (in the order of PRESETS) */
+	enum Picture { UPSCALE = 0, FILTER = UPSCALE + 6, SCREEN = FILTER + 5, WHOLE, TORN, MODE, CRT = MODE + 4,
+	               PICTURES = CRT + 13 };
 	/* What the left of the page Display shows: what the row pointed at
 	 * or in the frame does */
-	enum Preview { PREVIEW_CARD, PREVIEW_UPSCALE, PREVIEW_MODE, PREVIEW_FILTER, PREVIEW_SCREEN, PREVIEW_VSYNC };
+	enum Preview {
+		PREVIEW_CARD, PREVIEW_UPSCALE, PREVIEW_MODE, PREVIEW_FILTER, PREVIEW_SCREEN, PREVIEW_VSYNC, PREVIEW_CRT
+	};
 
 	void follow_scale();
 	void add_fonts();
