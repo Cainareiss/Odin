@@ -767,8 +767,9 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 		screens.push_back(state.filter);
 		screen = static_cast<int>(screens.size()) - 1;
 	}
-	kit.next_tip("Imitates the cabinets' screens, from Sega's manuals (Lola Retro filters): a monitor for Planet "
-	             "Harriers and NASCAR, a projector for the other games. Demanding on the graphics card.");
+	kit.next_tip("Imitates a screen (Lola Retro filters): the cabinets' screens from Sega's manuals, a monitor for "
+	             "Planet Harriers and NASCAR, a projector for the other games; or a PC monitor of the VGA days. "
+	             "Demanding on the graphics card.");
 	watch(PREVIEW_SCREEN, [&] {
 		if (kit.dropdown("CRT screen", nullptr, screens, screen) && screen >= 0 &&
 		    static_cast<size_t>(screen) < std::size(PRESETS))

@@ -549,8 +549,8 @@ public:
 	 * filtering (ANISOTROPY: its values), the window (that many times the
 	 * screen; its sizes shorter where the row is narrow; Custom among them:
 	 * the size the user gives the window by hand), how frames wait for the
-	 * display, the screens of the cabinets (PRESETS: the filters they
-	 * name), the speed limit */
+	 * display, the screens (PRESETS: the filters they name; the cabinets'
+	 * first, then Lola Retro's PC monitors), the speed limit */
 	static constexpr const char *SCALES[] = { "1×", "2×", "3×", "4×", "5×", "6×" };
 	static constexpr const char *UPSCALE_MODES_SHOWN[] = { "Raw", "Snap 2D", "Native 2D" };
 	static constexpr const char *FILTERS[] = { "Off", "2×", "4×", "8×", "16×" };
@@ -562,8 +562,20 @@ public:
 	static constexpr int CUSTOM = 4;
 	static constexpr const char *SYNCS[] = { "Off", "On", "Adaptive" };
 	static constexpr const char *APIS_SHOWN[] = { "OpenGL", "Vulkan" };
-	static constexpr const char *SCREENS[] = { "None", "Monitor 29\"", "Projector 50\"" };
-	static constexpr const char *PRESETS[] = { "", "lola-retro/sega-monitor-29", "lola-retro/sega-projector-50" };
+	static constexpr const char *SCREENS[] = {
+		"None", "Monitor 29\"", "Projector 50\"", "PC monitor", "PC monitor, flat", "PC monitor good",
+		"PC monitor good, flat", "PC monitor premium", "PC monitor premium, flat", "PC monitor premium+",
+		"PC monitor premium+, flat", "PC monitor extreme", "PC monitor extreme, flat",
+	};
+	static constexpr const char *PRESETS[] = {
+		"", "lola-retro/sega-monitor-29", "lola-retro/sega-projector-50", "lola-retro/pc-monitor-vga",
+		"lola-retro/pc-monitor-vga-flat", "lola-retro/pc-monitor-vga-good",
+		"lola-retro/pc-monitor-vga-good-flat", "lola-retro/pc-monitor-vga-premium",
+		"lola-retro/pc-monitor-vga-premium-flat",
+		"lola-retro/pc-monitor-vga-premium-plus", "lola-retro/pc-monitor-vga-premium-plus-flat",
+		"lola-retro/pc-monitor-vga-extreme", "lola-retro/pc-monitor-vga-extreme-flat",
+	};
+	static_assert(std::size(SCREENS) == std::size(PRESETS));
 	static constexpr const char *PACES[] = { "60 fps (cabinet)", "Unlimited" };
 	/* How a game with an optional sound board plays it (page Audio) */
 	static constexpr const char *PLAYED[] = { "Main", "Both", "Quad" };
