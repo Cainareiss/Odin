@@ -358,8 +358,10 @@ its identity as Odin's log says it ("pointer: <name> = <node> (aims,
 <identity>)"): its serial, else VID:PID, else its port. It aims as the
 mouse does, with its buttons, for its player alone; player 1 without one
 keeps the mouse. A player with a light gun plays with it and the
-keyboard: the page Input shows those, and their gamepad no longer shakes
-(choosing the gamepad again takes the gun away). On Linux the guns
+keyboard: the page Input draws the gun (a Sinden, an XGunner, an Aimtrak,
+a GunCon 2 or 3, an AE; any other as the Aimtrak), each control beside
+the button that works it as the gun comes, and their gamepad no longer
+shakes (choosing the gamepad again takes the gun away). On Linux the guns
 chosen stop moving the pointer of the desktop while the game runs, and
 move it again in the menu.
 ODIN_CONTROLLERS=none leaves them out too.

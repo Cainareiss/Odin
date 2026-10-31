@@ -28,6 +28,7 @@
 #include <cstdio>
 
 #include "odin/host/app/user_files.hpp"
+#include "odin/host/ui/gun_drawing.hpp"
 #include "odin/host/input/seats.hpp"
 
 namespace odin {
@@ -305,6 +306,21 @@ MenuSession::fill_devices(MenuState &state)
 		pointers->poll();
 	light_guns(game_shown(), panel_shown().controls(), state.guns, state.gun, state.sights);
 
+	/* What the light gun of each player presses now, lit on its drawing */
+	const HostState host = m_controls.host_state();
+
+	for (unsigned player = 0; player < 2; player++) {
+		const LightGun *const gun = state.gun_of(player);
+
+		state.gun_states[player] = {};
+		if (!gun)
+			continue;
+
+		const auto inputs = gun_inputs(gun_kind(gun->name, gun->identity), gun->name, gun->identity);
+
+		for (size_t b = 0; b < GUN_BUTTONS; b++)
+			state.gun_states[player].buttons[b] = inputs[b] && panel_shown().held(host, *inputs[b], player);
+	}
 }
 
 /* What the menu asked as it was drawn, done */

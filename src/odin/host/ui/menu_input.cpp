@@ -37,6 +37,7 @@
 #include "imgui/imgui.h"
 #include "odin/host/app/options.hpp"
 #include "odin/host/ui/cabinet_view.hpp"
+#include "odin/host/ui/gun_drawing.hpp"
 #include "odin/host/input/control_panel.hpp"
 #include "odin/host/ui/menu_kit.hpp"
 #include "odin/host/ui/pad_view.hpp"
@@ -1190,6 +1191,79 @@ sort_rows(const MenuState &state, std::span<const InputRow> rows, const PadDrawi
 	return out;
 }
 
+/* The controls of the player sorted for the drawing of their light gun:
+ * on a button of it, an input it sends as it comes; where it aims, and
+ * what it does not send that the user added (a pedal, a button of the
+ * gamepad), said elsewhere; the keys and the buttons of the gamepad a
+ * control has by default, and the halves of an axis (the gun aims it
+ * whole), not at all (the list shows them) */
+Sorted
+sort_gun_rows(const MenuState &state, std::span<const InputRow> rows, const PadDrawing &drawing,
+              std::span<const std::optional<HostInput>> sends)
+{
+	const PadState &now = state.gun_states[state.player & 1];
+	const std::vector<GameControl> &controls = state.panel->controls();
+	const Bindings &bindings = state.panel->bindings();
+	std::vector<std::string> aims;
+	std::optional<size_t> aim_row;
+	Sorted out;
+
+	for (size_t r = 0; r < rows.size(); r++) {
+		const InputRow &row = rows[r];
+		const int c = row.slot.control;
+		const std::vector<HostInput> &standard = c >= 0 ? bindings.standard(static_cast<size_t>(c), row.slot.part) :
+		                                         bindings.cabinet_standard(row.slot.role);
+		bool shown = false;
+
+		if (c >= 0 && controls[static_cast<size_t>(c)].type == GameControl::Type::ANALOG && row.slot.part != 0)
+			continue;
+		for (const HostInput &input : row.inputs) {
+			const auto sent = std::find(sends.begin(), sends.end(), input);
+			const int key = static_cast<int>(sent - sends.begin());
+			const auto part = std::find_if(drawing.parts.begin(), drawing.parts.end(),
+			                               [key](const PadPart &p) { return p.input == key; });
+
+			if (input.kind == HostInput::Kind::MOUSE && input.mouse.is_axis()) {
+				aims.push_back(row.name);
+				aim_row = aim_row.value_or(r);
+				shown = true;
+				continue;
+			}
+			if (sent == sends.end() || part == drawing.parts.end()) {
+				const bool standing = input.kind == HostInput::Kind::KEY || input.kind == HostInput::Kind::PAD;
+
+				if (!standing || std::find(standard.begin(), standard.end(), input) == standard.end()) {
+					out.elsewhere.push_back({ r, row.name + " · " + label(input, state.pad_types[state.player & 1]) });
+					shown = true;
+				}
+				continue;
+			}
+			shown = true;
+
+			const auto it = std::find_if(out.labels.begin(), out.labels.end(), [key](const Label &l) { return l.key == key; });
+
+			if (it != out.labels.end()) {
+				it->names.push_back(row.name);
+				it->chosen |= is_chosen(state, row.slot);
+				continue;
+			}
+
+			Label l{ { row.name }, r, key, static_cast<size_t>(part - drawing.parts.begin()) };
+
+			l.chosen = is_chosen(state, row.slot);
+			l.hot = now.buttons[static_cast<size_t>(key)];
+			out.labels.push_back(std::move(l));
+		}
+		if (!shown)
+			out.empty.push_back(r);
+	}
+	if (aim_row)
+		out.elsewhere.insert(out.elsewhere.begin(), { *aim_row, label_text(aims) + " · aim" });
+	for (Label &l : out.labels)
+		l.text = label_text(l.names);
+	return out;
+}
+
 /* Each column from the top down, each label at the height of its part or
  * under the one above, then from the bottom up; the right one starts under
  * the corner of the box */
@@ -1241,9 +1315,9 @@ draw_label(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows,
 }
 
 /* The controls on an input the drawing has not, at the foot of the column
- * with fewer names */
+ * with fewer names; a click on one catches */
 void
-draw_elsewhere(const MenuKit &kit, const MenuState &state, std::span<const InputRow> rows, const Sorted &sorted,
+draw_elsewhere(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, const Sorted &sorted,
                ImVec2 a, ImVec2 b, float bottom)
 {
 	if (sorted.elsewhere.empty())
@@ -1266,8 +1340,18 @@ draw_elsewhere(const MenuKit &kit, const MenuState &state, std::span<const Input
 		const std::string text = MenuKit::fitted(whole, w);
 		const float tw = MenuKit::measure(text.c_str());
 		const ImVec2 at = { left ? a.x + kit.px(6.0f) : b.x - kit.px(6.0f) - tw, y - line / 2.0f };
+		const bool chosen = is_chosen(state, rows[r].slot);
 
-		MenuKit::write(list, at, is_chosen(state, rows[r].slot) ? kit.palette().accent : kit.palette().dim,
+		ImGui::SetCursorScreenPos(at);
+		ImGui::PushID(static_cast<int>(1000 + r));
+		if (ImGui::InvisibleButton("elsewhere", { tw, line }) && rows[r].catchable)
+			catch_parts(state, chosen ? std::vector<MenuSlot>() : std::vector<MenuSlot>{ rows[r].slot });
+
+		const bool hovered = ImGui::IsItemHovered() && rows[r].catchable;
+
+		ImGui::PopID();
+		MenuKit::write(list, at,
+		               chosen || rows[r].lit ? kit.palette().accent : hovered ? kit.palette().action : kit.palette().dim,
 		               text.c_str());
 		y += gap;
 	}
@@ -1285,7 +1369,9 @@ drawn_box(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, 
 	const float tray = not_mapped(kit, state, rows, sorted.empty, a, b, false);
 	const float column = column_width(kit, sorted.labels, b.x - a.x), inside = kit.px(MenuKit::BOX_INSIDE);
 	const float bottom = b.y - kit.px(LABEL_EDGE) - tray;
-	const PadView view(drawing, { a.x + column, a.y + inside }, { b.x - column, b.y - inside - tray });
+	/* Under the drawing, the room of what is said at the foot */
+	const float foot = static_cast<float>(sorted.elsewhere.size()) * kit.px(LABEL_GAP);
+	const PadView view(drawing, { a.x + column, a.y + inside }, { b.x - column, b.y - inside - tray - foot });
 	uint32_t chosen = 0;
 
 	for (Label &l : sorted.labels) {
@@ -1314,6 +1400,20 @@ pad_box(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, Im
 	Sorted sorted = sort_rows(state, rows, drawing, kind);
 
 	drawn_box(kit, state, rows, a, b, corner, drawing, sorted, state.pad_states[me]);
+}
+
+/* The light gun of the player, by its kind */
+void
+gun_box(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, ImVec2 a, ImVec2 b, float corner)
+{
+	const unsigned me = state.player & 1;
+	const LightGun &gun = *state.gun_of(me);
+	const GunKind kind = gun_kind(gun.name, gun.identity);
+	const PadDrawing &drawing = gun_drawing(kind);
+	const auto sends = gun_inputs(kind, gun.name, gun.identity);
+	Sorted sorted = sort_gun_rows(state, rows, drawing, sends);
+
+	drawn_box(kit, state, rows, a, b, corner, drawing, sorted, state.gun_states[me]);
 }
 
 /* The keys of the drawing of the keyboard, row by row: the key, its name,
@@ -1954,6 +2054,8 @@ Menu::page_input(MenuKit &kit, MenuState &state) const
 		list_box(kit, state, rows, a, inside, corner);
 	else if (state.on_pad())
 		pad_box(kit, state, rows, a, inside, corner);
+	else if (state.gun_of(state.player))
+		gun_box(kit, state, rows, a, inside, corner);
 	else
 		keyboard_box(kit, state, rows, a, inside, corner);
 	if (wide)
@@ -1984,7 +2086,7 @@ float
 Menu::input_foot(const MenuKit &kit, MenuState &state, ImVec2 at, float width, float height, bool draw)
 {
 	/* How it works: on the keyboard drawn, its keys are clicked */
-	const char *const told = state.classic || state.on_pad() || state.on_joystick() ?
+	const char *const told = state.classic || state.on_pad() || state.on_joystick() || state.gun_of(state.player) ?
 	                         "Press or move a control to see it light up. Click a name to change it." :
 	                         "Press or move a control to see it light up. Click a key to change it.";
 	const float line = ImGui::GetTextLineHeight();

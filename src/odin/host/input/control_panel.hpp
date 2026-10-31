@@ -197,8 +197,10 @@ public:
 	 * the whole way of the channel, the left or the top at 0. */
 	static uint16_t pointed(GameControl::Low low, double at);
 
-private:
+	/* Whether an input is held now, for a player */
 	bool held(const HostState &host, const HostInput &input, unsigned player) const;
+
+private:
 	/* The channel an axis of the joystick of the player gives that control
 	 * (nothing: no such axis, or no value yet); a steering one, as far as
 	 * the rotation of the wheel takes it */

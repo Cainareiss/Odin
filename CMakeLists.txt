@@ -211,6 +211,7 @@ set(ODIN_SOURCES
 	host/ui/system_fonts.cpp host/app/rom_files.cpp
 	host/ui/folder_dialog.cpp host/ui/pad_view.cpp
 	host/ui/pad_drawings.cpp host/ui/pad_drawings_al2009man.cpp
+	host/ui/gun_drawings.cpp
 	host/input/keyboard.cpp host/app/log_file.cpp
 	host/app/version.cpp host/app/hotkeys.cpp host/input/controls.cpp
 	host/input/pointers.cpp host/input/wheel_force.cpp

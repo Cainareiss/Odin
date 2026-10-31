@@ -388,6 +388,9 @@ struct MenuState : BarSettings {
 	std::array<Device, 2> input_device{};
 	std::optional<std::pair<unsigned, Device>> device_picked;
 	std::array<PadState, 2> pad_states{};
+	/* What the light gun of each player presses now, its buttons by
+	 * GunButton (gun_drawing.hpp) */
+	std::array<PadState, 2> gun_states{};
 	/* The keys held now */
 	std::vector<SDL_Keycode> keys_held;
 	bool classic = false;
