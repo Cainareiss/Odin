@@ -278,14 +278,15 @@ void Arm7::swap(uint32_t op)
 	m_cycles += 4;
 }
 
-/* Offset of LDR/STR: 12-bit immediate, or Rm shifted by an immediate. */
+/* Offset of LDR/STR: 12-bit immediate, or Rm shifted by an immediate;
+ * RRX takes C in on top (ARM DDI 0100I, A5.2.4). */
 uint32_t Arm7::single_transfer_offset(uint32_t op)
 {
 	if ((op & (1u << 25)) == 0) {
 		return op & 0xFFF;
 	}
-	uint32_t unused_carry = 0;
-	return shift_by((op >> 5) & 3, get_r(op & 0xF), (op >> 7) & 0x1F, false, unused_carry);
+	uint32_t carry = (m_cpsr & FLAG_C) ? 1 : 0;
+	return shift_by((op >> 5) & 3, get_r(op & 0xF), (op >> 7) & 0x1F, false, carry);
 }
 
 /* A load into r15 flushes the pipeline: 2 more cycles. */
@@ -685,8 +686,8 @@ struct Arm7Ops {
 		if constexpr (FORM == IMMEDIATE) {
 			offset = op & 0xFFF;
 		} else {
-			uint32_t unused_carry = 0;
-			offset = shift_imm<FORM>(a.get_r(op & 0xF), (op >> 7) & 0x1F, unused_carry);
+			uint32_t carry = (a.m_cpsr & Arm7::FLAG_C) ? 1 : 0;
+			offset = shift_imm<FORM>(a.get_r(op & 0xF), (op >> 7) & 0x1F, carry);
 		}
 		const uint32_t base = a.get_r(rn);
 		const uint32_t indexed = UP ? base + offset : base - offset;

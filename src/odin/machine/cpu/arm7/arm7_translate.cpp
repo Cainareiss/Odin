@@ -495,8 +495,13 @@ bool Arm7::transfer_in_place(uint32_t pc, uint32_t op, Run does)
 			host.shift(Shift::RightSigned, Reg::B, amount ? amount : 31);
 			break;
 		default:
-			/* RRX of an offset: a carry of 0 comes in */
-			host.shift(amount ? Shift::Rotate : Shift::Right, Reg::B, amount ? amount : 1);
+			if (amount) {
+				host.shift(Shift::Rotate, Reg::B, amount);
+			} else {
+				/* RRX: C in at the top */
+				host.carry_from_c(false);
+				host.rotate_through_carry(Reg::B);
+			}
 			break;
 		}
 	}
