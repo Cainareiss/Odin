@@ -131,7 +131,7 @@ result_name(VkResult result)
 } /* namespace */
 
 std::unique_ptr<Context>
-Context::make(SDL_Window *window, std::string &why)
+Context::make(SDL_Window *window, const std::string &gpu, std::string &why)
 {
 	std::unique_ptr<Context> card(new Context());
 
@@ -142,9 +142,53 @@ Context::make(SDL_Window *window, std::string &why)
 		why = std::string("no surface for the window: ") + SDL_GetError();
 		return nullptr;
 	}
-	if (!card->choose_gpu(why) || !card->make_device(why))
+	if (!card->choose_gpu(gpu, why) || !card->make_device(why))
 		return nullptr;
 	return card;
+}
+
+/* An instance of its own: OpenGL may be drawing, and SDL has not loaded
+ * Vulkan for it */
+std::vector<std::string>
+Context::gpus()
+{
+	std::vector<std::string> out;
+	const bool loaded = SDL_Vulkan_LoadLibrary(nullptr);
+
+	{
+		Context card;
+		std::string why;
+
+		if (card.load(why) && card.make_instance(why)) {
+			uint32_t count = 0;
+
+			card.m_fn.vkEnumeratePhysicalDevices(card.m_instance, &count, nullptr);
+			std::vector<VkPhysicalDevice> gpus(count);
+			card.m_fn.vkEnumeratePhysicalDevices(card.m_instance, &count, gpus.data());
+
+			out = card.names_of(gpus);
+		}
+	}
+	if (loaded)
+		SDL_Vulkan_UnloadLibrary();
+	return out;
+}
+
+std::vector<std::string>
+Context::names_of(const std::vector<VkPhysicalDevice> &gpus) const
+{
+	std::vector<std::string> plain, out;
+
+	for (const VkPhysicalDevice gpu : gpus) {
+		VkPhysicalDeviceProperties props;
+
+		m_fn.vkGetPhysicalDeviceProperties(gpu, &props);
+		const auto before = std::count(plain.begin(), plain.end(), props.deviceName);
+
+		plain.emplace_back(props.deviceName);
+		out.push_back(before ? plain.back() + " (" + std::to_string(before + 1) + ")" : plain.back());
+	}
+	return out;
 }
 
 Context::~Context()
@@ -297,9 +341,10 @@ Context::message(VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMe
 }
 
 /* The card that has all Odin needs and a queue that draws and shows in
- * the window; a card of its own before one of the processor */
+ * the window: the one `wanted`, else a card of its own before one of the
+ * processor */
 bool
-Context::choose_gpu(std::string &why)
+Context::choose_gpu(const std::string &wanted, std::string &why)
 {
 	const uint32_t instance_api = m_api_version;
 	uint32_t count = 0;
@@ -308,10 +353,15 @@ Context::choose_gpu(std::string &why)
 	m_fn.vkEnumeratePhysicalDevices(m_instance, &count, nullptr);
 	std::vector<VkPhysicalDevice> gpus(count);
 	m_fn.vkEnumeratePhysicalDevices(m_instance, &count, gpus.data());
+
+	const std::vector<std::string> names = names_of(gpus);
+	bool found = wanted.empty();
+
 	why = "no graphics card has Vulkan 1.1 with what Odin needs (rendering without render passes, synchronization2, "
 	      "the extended dynamic state, fragment shaders that write to buffers)";
 
-	for (const VkPhysicalDevice gpu : gpus) {
+	for (size_t i = 0; i < gpus.size(); i++) {
+		const VkPhysicalDevice gpu = gpus[i];
 		VkPhysicalDeviceProperties props;
 		uint32_t n = 0;
 
@@ -352,8 +402,12 @@ Context::choose_gpu(std::string &why)
 		if (!family)
 			continue;
 
-		const int score = props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU ? 3 :
+		const bool chosen = names[i] == wanted;
+		const int score = chosen ? 4 :
+		                  props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU ? 3 :
 		                  props.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU ? 2 : 1;
+
+		found = found || chosen;
 		if (score <= best)
 			continue;
 		best = score;
@@ -370,6 +424,8 @@ Context::choose_gpu(std::string &why)
 		list_extensions(extensions, api, core13, reset_ext);
 		m_api_version = api;
 	}
+	if (!found)
+		std::fprintf(stderr, "ERROR: vulkan: no card '%s' can draw: the best one does\n", wanted.c_str());
 	if (!m_gpu)
 		return false;
 	why.clear();

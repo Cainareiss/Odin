@@ -33,6 +33,7 @@
 
 #include "odin/common/env.hpp"
 #include "odin/host/app/user_files.hpp"
+#include "odin/host/gfx/host_graphics.hpp"
 #include "odin/machine/chips/von4_card.hpp"
 
 namespace odin {
@@ -136,6 +137,7 @@ MenuSession::MenuSession(const Options &options, Display &display, Keyboard &key
 	state.unthrottled = options.unthrottled;
 	state.show_speed = options.display.show_speed;
 	state.vsync = static_cast<unsigned>(options.vsync);
+	state.api = static_cast<unsigned>(options.display.api);
 	state.sides = static_cast<unsigned>(options.sides);
 	state.scale_given = options.given.scale;
 	state.anisotropy_given = options.given.anisotropy;
@@ -143,6 +145,8 @@ MenuSession::MenuSession(const Options &options, Display &display, Keyboard &key
 	state.fullscreen_given = options.given.fullscreen;
 	state.unthrottled_given = options.given.unthrottled;
 	state.gpu = display.gpu();
+	state.gpu_chosen = options.display.gpu;
+	state.gpus = HostGraphics::gpus();
 	state.vulkan = display.vulkan();
 	state.kept = !settings_file.empty();
 	state.roms = options.rom_path;

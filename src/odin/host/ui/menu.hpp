@@ -132,9 +132,13 @@ struct BarSettings {
 	 * (Display::Sides: 0 black, 1 the picture blurred, 2 the bezel of the
 	 * game); the filter of the picture by its name ([display] filter;
 	 * empty: none); frames without a limit (at the next launch), the frames
-	 * a second in the title */
-	unsigned scale = 1, upscale_mode = 0, anisotropy = 1, window = 1, vsync = 0, sides = 2;
-	std::string filter;
+	 * a second in the title; what draws (DisplayApi) and the card it draws
+	 * on (HostGraphics::gpus, empty: the best one), at the next launch */
+	unsigned scale = 1, upscale_mode = 0, anisotropy = 1, window = 1, vsync = 0, sides = 2, api = 0;
+	std::string filter, gpu_chosen;
+	std::vector<std::string> gpus;	/* the cards of the computer */
+	/* Only Vulkan can be told which card, with more than one to tell */
+	bool picks_gpu() const { return gpus.size() > 1 && static_cast<DisplayApi>(api) == DisplayApi::VULKAN; }
 	bool unthrottled = false, show_speed = true;
 	/* Audio: the device chosen (empty: the system's), the volume of Odin
 	 * from 0 to 100, its sound kept while its window is in the background */
@@ -553,6 +557,7 @@ public:
 	static constexpr const char *WINDOW_WIDTHS[] = { "640", "1280", "1920", "2560", "Custom" };
 	static constexpr int CUSTOM = 4;
 	static constexpr const char *SYNCS[] = { "Off", "On", "Adaptive" };
+	static constexpr const char *APIS_SHOWN[] = { "OpenGL", "Vulkan" };
 	static constexpr const char *SCREENS[] = { "None", "Monitor 29\"", "Projector 50\"" };
 	static constexpr const char *PRESETS[] = { "", "lola-retro/sega-monitor-29", "lola-retro/sega-projector-50" };
 	static constexpr const char *PACES[] = { "60 fps (cabinet)", "Unlimited" };

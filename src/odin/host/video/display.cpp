@@ -196,7 +196,7 @@ make_window(uint64_t flags)
  * the calling thread: with Vulkan when odin.ini asks for it and the card
  * has what Odin needs, else with OpenGL */
 bool
-open_window(DisplayApi api, SDL_Window *&window, std::unique_ptr<HostGraphics> &graphics)
+open_window(DisplayApi api, const std::string &gpu, SDL_Window *&window, std::unique_ptr<HostGraphics> &graphics)
 {
 	if (!SDL_Init(SDL_INIT_VIDEO)) {
 		std::fprintf(stderr, "ERROR: could not initialize SDL: '%s'\n", SDL_GetError());
@@ -206,7 +206,7 @@ open_window(DisplayApi api, SDL_Window *&window, std::unique_ptr<HostGraphics> &
 	if (api == DisplayApi::VULKAN) {
 		window = make_window(HostGraphics::window_flags_vk());
 		if (window)
-			graphics = HostGraphics::make_vk(window, Renderer::WIDTH, Renderer::HEIGHT);
+			graphics = HostGraphics::make_vk(window, Renderer::WIDTH, Renderer::HEIGHT, gpu);
 		if (graphics)
 			return true;
 		std::fprintf(stderr, "ERROR: Vulkan cannot draw on this computer: OpenGL draws\n");
@@ -230,7 +230,7 @@ Display::make(const Keyboard &keys, const Options &options)
 	SDL_Window *window = nullptr;
 	std::unique_ptr<HostGraphics> graphics;
 
-	if (!open_window(options.api, window, graphics))
+	if (!open_window(options.api, options.gpu, window, graphics))
 		return nullptr;
 	return std::unique_ptr<Display>(new Display(keys, options, window, std::move(graphics)));
 }

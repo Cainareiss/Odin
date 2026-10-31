@@ -183,7 +183,9 @@ public:
 	/* The card for that window, or nothing with the reason in `why`. Debug:
 	 * ODIN_VK_VALIDATION=1, Vulkan's validation layer, its messages on
 	 * stderr. */
-	static std::unique_ptr<Context> make(SDL_Window *window, std::string &why);
+	static std::unique_ptr<Context> make(SDL_Window *window, const std::string &gpu, std::string &why);
+	/* The cards of the computer, with or without a window */
+	static std::vector<std::string> gpus();
 	~Context();
 	Context(const Context &) = delete;
 	Context &operator=(const Context &) = delete;
@@ -327,7 +329,9 @@ private:
 	std::vector<const char *> validation_layers(const std::vector<VkExtensionProperties> &available,
 	                                            std::vector<const char *> &extensions);
 	void listen_to_validation();
-	bool choose_gpu(std::string &why);
+	bool choose_gpu(const std::string &wanted, std::string &why);
+	/* Their names as HostGraphics::gpus() has them */
+	std::vector<std::string> names_of(const std::vector<VkPhysicalDevice> &gpus) const;
 	std::optional<uint32_t> shown_family(VkPhysicalDevice gpu,
 	                                     const std::vector<VkQueueFamilyProperties> &families) const;
 	void list_extensions(const std::vector<VkExtensionProperties> &extensions, uint32_t api, bool core13,

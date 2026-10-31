@@ -482,6 +482,10 @@ MenuSession::apply_display(const MenuState &was)
 		m_display.set_vsync(m_options.unthrottled ? Display::Vsync::OFF : vsync);
 		keep("vsync", vsync == VSYNC ? std::nullopt : std::optional<std::string>(VSYNCS[now.vsync]));
 	}
+	if (now.gpu_chosen != was.gpu_chosen)
+		keep("gpu", now.gpu_chosen.empty() ? std::nullopt : std::optional<std::string>(now.gpu_chosen));
+	if (now.api != was.api)
+		keep("api", static_cast<DisplayApi>(now.api) == API ? std::nullopt : std::optional<std::string>(APIS[now.api]));
 	if (now.unthrottled != was.unthrottled)
 		keep("unthrottled", kept_on_off(now.unthrottled, false));
 	if (now.show_speed != was.show_speed) {
