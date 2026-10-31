@@ -66,8 +66,10 @@ std::vector<std::string> program_data_folders();
  * around the game. */
 std::string artwork_folder(const std::string &chosen = {});
 /* That picture of that game in the folder, its name in any case (as
- * Swracer_Bezel.png): empty when there is none */
-std::string artwork_file(const std::string &folder, const std::string &game, const std::string &kind);
+ * Swracer_Bezel.png), else that of its parent (a version of it takes its
+ * pictures): empty when there is none */
+std::string artwork_file(const std::string &folder, const std::string &game, const std::string &kind,
+                         const std::string &parent = {});
 
 /* The folder where a game keeps what its board holds without power, one
  * file for each memory. Nothing is read or written when there is none. */

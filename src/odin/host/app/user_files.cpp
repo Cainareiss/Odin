@@ -162,7 +162,7 @@ artwork_folder(const std::string &chosen)
 }
 
 std::string
-artwork_file(const std::string &folder, const std::string &game, const std::string &kind)
+artwork_file(const std::string &folder, const std::string &game, const std::string &kind, const std::string &parent)
 {
 	const auto lower = [](std::string text) {
 		for (char &c : text)
@@ -180,7 +180,7 @@ artwork_file(const std::string &folder, const std::string &game, const std::stri
 	     it.increment(error))
 		if (lower(it->path().filename().string()) == wanted)
 			return it->path().string();
-	return {};
+	return parent.empty() ? std::string() : artwork_file(folder, parent, kind);
 }
 
 std::string

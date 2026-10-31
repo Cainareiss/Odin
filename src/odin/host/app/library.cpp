@@ -43,8 +43,12 @@ scan_library(LibraryState &state, const GameList &games, const Options &options,
 
 	state.games.clear();
 	state.selected = 0;
-	for (const auto &[name, title] : games.titles("hikaru")) {
-		LibraryState::Game game{ name, title, {} };
+	for (const GameList::Entry &entry : games.entries()) {
+		if (entry.machine != "hikaru")
+			continue;
+
+		const std::string &name = entry.name;
+		LibraryState::Game game{ name, entry.title, entry.parent, {} };
 
 		for (const RomFiles::File &file : games.missing(files, name))
 			game.missing.push_back(file.name + " (" + file.set_of(name) + ".zip)");
@@ -60,15 +64,20 @@ scan_library(LibraryState &state, const GameList &games, const Options &options,
 
 /* The pictures of the games in the library, from the folder of the
  * artwork: the user's <game>_logo.png, else the <game>_title.png Odin
- * kept; a game with none there forgets the one it had */
+ * kept, else those of its parent; a game with none there forgets the one
+ * it had */
 void
 library_pictures(Display &display, const LibraryState &state, const std::string &artwork)
 {
 	const std::string folder = artwork_folder(artwork);
+	const auto picture = [&folder](const std::string &game) {
+		const std::string logo = game.empty() ? "" : artwork_file(folder, game, "logo");
+
+		return logo.empty() && !game.empty() ? artwork_file(folder, game, "title") : logo;
+	};
 
 	for (const LibraryState::Game &game : state.games) {
-		const std::string logo = folder.empty() ? "" : artwork_file(folder, game.name, "logo");
-		const std::string path = logo.empty() && !folder.empty() ? artwork_file(folder, game.name, "title") : logo;
+		const std::string own = picture(game.name), path = own.empty() ? picture(game.parent) : own;
 		SDL_Surface *const png = path.empty() ? nullptr : SDL_LoadPNG(path.c_str());
 		SDL_Surface *const rgba = png ? SDL_ConvertSurface(png, SDL_PIXELFORMAT_RGBA32) : nullptr;
 

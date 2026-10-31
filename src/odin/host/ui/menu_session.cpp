@@ -161,7 +161,7 @@ MenuSession::MenuSession(const Options &options, Display &display, Keyboard &key
 	state.artwork = artwork_folder(options.artwork);
 	state.artwork_given = !env_text("ODIN_ARTWORK").empty();
 	if (game) {
-		display.set_sides(options.sides, artwork_file(state.artwork, game->name, "bezel"));
+		display.set_sides(options.sides, artwork_file(state.artwork, game->name, "bezel", game->parent));
 		controls.set_picture_hole(display.picture_hole());
 	}
 	state.shader_lists = std::filesystem::path(display.program_list()).parent_path().string();
@@ -973,7 +973,7 @@ MenuSession::take_folder()
 		keep("paths", "artwork", folder == artwork_folder() ? std::nullopt : std::optional(folder));
 		if (m_game) {
 			m_display.set_sides(static_cast<Display::Sides>(state.sides),
-			                    artwork_file(folder, m_game->name, "bezel"));
+			                    artwork_file(folder, m_game->name, "bezel", m_game->parent));
 			m_controls.set_picture_hole(m_display.picture_hole());
 		}
 		break;

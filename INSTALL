@@ -103,7 +103,9 @@ no key or button pressed since its power-on, is its picture in the library;
 <game>_bezel.png is laid over the window where it is wider than the screen
 of the game, the game in its hole: the part not opaque joined to its middle
 (the glass of a screen often is half so), or as the <game>_bezel.info of
-Batocera beside it says (swracer_logo.png, swracer_bezel.png). bezel in
+Batocera beside it says (swracer_logo.png, swracer_bezel.png). A version
+of a game without pictures of its own takes those of its parent ("parent"
+in odin-games.json: airtrixo those of airtrix). bezel in
 [display] (page Display) says what is around the game there: off, black;
 blur, the light of its edges, softer and dimmer away from it; image, its
 bezel, black without one. The games are those of odin-games.json, by the

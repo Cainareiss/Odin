@@ -472,7 +472,8 @@ MenuSession::apply_display(const MenuState &was)
 	if (now.sides != was.sides) {
 		const auto sides = static_cast<Display::Sides>(now.sides);
 
-		m_display.set_sides(sides, m_game ? artwork_file(now.artwork, m_game->name, "bezel") : std::string());
+		m_display.set_sides(sides, m_game ? artwork_file(now.artwork, m_game->name, "bezel", m_game->parent) :
+		                                    std::string());
 		m_controls.set_picture_hole(m_display.picture_hole());
 		keep("bezel", sides == SIDES ? std::nullopt : std::optional<std::string>(SIDES_NAMES[now.sides]));
 	}

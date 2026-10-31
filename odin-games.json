@@ -116,6 +116,7 @@
 		{
 			"name" : "airtrixo",
 			"title" : "Air Trix (original)",
+			"parent" : "airtrix",
 			"title_frame" : 4100,
 			"mach" : "hikaru",
 			"rom_board" : { "eprom_mb" : 4, "315-5881" : "291B02C7" },
@@ -653,6 +654,7 @@
 		{
 			"name" : "sgnascaro",
 			"title" : "NASCAR Arcade (original)",
+			"parent" : "sgnascar",
 			"title_frame" : 6200,
 			"link" : { "cabinets" : 8, "seat" : { "in" : "backup", "byte" : "14E3", "shift" : 2, "bits" : 4, "first" : 1 } },
 			"mach" : "hikaru",

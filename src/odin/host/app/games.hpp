@@ -191,6 +191,10 @@ struct Game {
 	std::string title;
 	static constexpr size_t MAX_TITLE = 48;
 	std::string machine;
+	/* The game it is a version of (MAME's cloneof), whose pictures it
+	 * takes when it has none: "parent" in the list; none when it does not
+	 * say. */
+	std::string parent;
 	/* The JVS I/O board of its cabinet: "io" in the list, 837-13551 when
 	 * the list does not say. */
 	std::string io_board;
@@ -315,6 +319,11 @@ public:
 	/* The names and titles of the games of a machine, in the order of the
 	 * list: those that have controls (not the BIOS alone) */
 	std::vector<std::pair<std::string, std::string>> titles(const std::string &machine) const;
+	/* Those of every machine, with their machine and their parent */
+	struct Entry {
+		std::string name, title, machine, parent;
+	};
+	std::vector<Entry> entries() const;
 	/* What the list tells of a game, without its files: nothing when it is
 	 * not in the list, or not right */
 	std::optional<Game> describe(const std::string &name) const;

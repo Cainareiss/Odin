@@ -78,7 +78,7 @@ enum class MenuFolder { NONE, ROMS, BIOS, SAVES, STATES, ARTWORK };
  * changed (library.cpp). */
 struct LibraryState {
 	struct Game {
-		std::string name, title;
+		std::string name, title, parent;
 		std::vector<std::string> missing;
 	};
 

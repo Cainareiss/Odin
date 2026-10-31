@@ -840,6 +840,19 @@ GameList::load(const std::string &path)
 			}
 		}
 	}
+	/* A parent is another game of the list */
+	for (size_t i = 0; right && i < json_array_size(roms); i++) {
+		const json_t *const rom = json_array_get(roms, i);
+		const json_t *const parent = json_object_get(rom, "parent");
+		const char *const of = json_string_value(parent);
+		const json_t *const found = of ? find(of) : nullptr;
+
+		if (parent && (!found || found == rom)) {
+			std::fprintf(stderr, "ERROR: game '%s': \"parent\" is not another game of the list\n",
+			             json_string_value(json_object_get(rom, "name")));
+			right = false;
+		}
+	}
 	if (!right) {
 		json_decref(m_root);
 		m_root = nullptr;
@@ -881,6 +894,25 @@ GameList::titles(const std::string &machine) const
 		if (machine == json_string_value(json_object_get(rom, "mach")) &&
 		    json_array_size(json_object_get(rom, "controls")) > 0)
 			out.emplace_back(name, title ? title : name);
+	}
+	return out;
+}
+
+std::vector<GameList::Entry>
+GameList::entries() const
+{
+	const json_t *const roms = json_object_get(m_root, "roms");
+	std::vector<Entry> out;
+
+	for (size_t i = 0; i < json_array_size(roms); i++) {
+		const json_t *const rom = json_array_get(roms, i);
+		const char *const name = json_string_value(json_object_get(rom, "name"));
+		const char *const title = json_string_value(json_object_get(rom, "title"));
+		const char *const parent = json_string_value(json_object_get(rom, "parent"));
+
+		if (json_array_size(json_object_get(rom, "controls")) > 0)
+			out.push_back({ name, title ? title : name, json_string_value(json_object_get(rom, "mach")),
+			                parent ? parent : "" });
 	}
 	return out;
 }
@@ -963,6 +995,8 @@ GameList::describe(const std::string &name) const
 		return std::nullopt;
 	game.name = name;
 	game.machine = json_string_value(json_object_get(rom, "mach"));
+	if (const char *const parent = json_string_value(json_object_get(rom, "parent")))
+		game.parent = parent;
 	const char *const io = json_string_value(json_object_get(rom, "io"));
 	game.io_board = io ? io : "837-13551";
 	if (!read_title(rom, game) || !read_controls(rom, game) || !read_outputs(rom, game) || !ids_once(game) ||
