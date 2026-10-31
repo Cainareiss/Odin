@@ -931,8 +931,12 @@ guns_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width, bool two)
 		}
 		ImGui::PushID(static_cast<int>(player));
 		if (kit.picker("gun", { at.x + static_cast<float>(player) * (each + spacing) + past, at.y }, each - past, items,
-		               chosen, MenuKit::Icon::NONE, FOOT))
+		               chosen, MenuKit::Icon::NONE, FOOT)) {
+			/* That player shown, as for a device */
+			state.player = player;
+			state.catching.reset();
 			state.want_gun = std::pair(player, chosen ? state.guns[static_cast<size_t>(chosen) - 1] : LightGun());
+		}
 		ImGui::PopID();
 	}
 	return at.y + h;
@@ -1266,9 +1270,9 @@ sort_gun_rows(const MenuState &state, std::span<const InputRow> rows, const PadD
 
 /* Each column from the top down, each label at the height of its part or
  * under the one above, then from the bottom up; the right one starts under
- * the corner of the box */
+ * the corner of the box, the left one too in a game of two (1P and 2P) */
 void
-place_labels(const MenuKit &kit, std::span<Label> labels, float top, float corner, float bottom)
+place_labels(const MenuKit &kit, std::span<Label> labels, float top, float corner, float left_corner, float bottom)
 {
 	const float gap = kit.px(LABEL_GAP);
 
@@ -1283,7 +1287,7 @@ place_labels(const MenuKit &kit, std::span<Label> labels, float top, float corne
 		float y = -1e9f;
 
 		for (Label *l : side)
-			y = l->y = std::max({ (l->lo.y + l->hi.y) / 2.0f, y + gap, top + (left ? 0.0f : corner) });
+			y = l->y = std::max({ (l->lo.y + l->hi.y) / 2.0f, y + gap, top + (left ? left_corner : corner) });
 		y = 1e9f;
 		for (auto it = side.rbegin(); it != side.rend(); ++it)
 			y = (*it)->y = std::min({ (*it)->y, y - gap, bottom });
@@ -1383,7 +1387,8 @@ drawn_box(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, 
 			chosen |= 1u << l.part;
 	}
 	view.draw(ImGui::GetWindowDrawList(), kit.palette(), now, chosen, kit.px(1.0f));
-	place_labels(kit, sorted.labels, a.y + kit.px(LABEL_EDGE), corner, bottom);
+	place_labels(kit, sorted.labels, a.y + kit.px(LABEL_EDGE), corner, state.panel->two_players() ? corner : 0.0f,
+	             bottom);
 	for (Label &l : sorted.labels)
 		draw_label(kit, state, rows, l, l.left ? a.x + column : b.x - column, column - kit.px(10.0f));
 	draw_elsewhere(kit, state, rows, sorted, a, b, bottom);
@@ -2037,13 +2042,16 @@ Menu::page_input(MenuKit &kit, MenuState &state) const
 	const float bar_w = b.x - a.x - kit.px(20.0f);
 	const float bar_top = cabinet || options ? b.y : b.y - buttons_bar(kit, state, rows, bar_at, bar_w, false);
 	const ImVec2 inside = { b.x, bar_top };
-	/* The buttons in the corner of the box: List (the classic view) for a
+	/* The buttons in the corners of the box: List (the classic view) for a
 	 * gamepad or the keyboard (a joystick has a list alone), the swap of the
-	 * device and the cabinet in a narrow window */
+	 * device and the cabinet in a narrow window; in a game of two, the
+	 * player shown */
 	const char *const swap = cabinet ? "Device" : "Cabinet";
 	const bool classic = !cabinet && !options && !state.on_joystick();
+	const bool players = two && !cabinet && !options;
 	const ImVec2 classic_size = kit.button_size("List", Icon::LIST), swap_size = kit.button_size(swap, Icon::SWAP);
-	const float corner = classic || !wide ? std::max(classic_size.y, swap_size.y) + kit.px(5.0f) : 0.0f;
+	const float corner =
+		classic || players || !wide ? std::max(classic_size.y, swap_size.y) + kit.px(5.0f) : 0.0f;
 
 	kit.frame(ImGui::GetWindowDrawList(), a, b, kit.px(MenuKit::BOX_CUT), 0, palette.line);
 	if (cabinet)
@@ -2071,6 +2079,17 @@ Menu::page_input(MenuKit &kit, MenuState &state) const
 	}
 	if (classic && kit.button("List", { x - classic_size.x, a.y + kit.px(5.0f) }, state.classic, Icon::LIST))
 		state.classic = !state.classic;
+	x = a.x + kit.px(6.0f);
+	for (unsigned player = 0; players && player < 2; player++) {
+		const char *const name = player ? "2P" : "1P";
+
+		if (kit.button(name, { x, a.y + kit.px(5.0f) }, state.player == player)) {
+			state.player = player;
+			state.catching.reset();
+			state.catch_next.clear();
+		}
+		x += kit.button_size(name).x + kit.px(4.0f);
+	}
 	if (!cabinet && !options) {
 		ImGui::GetWindowDrawList()->AddLine({ a.x + 1.0f, bar_top }, { b.x - 1.0f, bar_top }, palette.line, kit.stroke());
 		buttons_bar(kit, state, rows, { bar_at.x, bar_top }, bar_w, true);
