@@ -259,6 +259,10 @@ Tlcs90::decode(Instruction &ins)
 {
 	const uint8_t b0 = fetch();
 	const auto short_mem = [this] { return mem(static_cast<uint16_t>(0xFF00 | fetch())); };
+	/* The displacement is read before the PC it counts from; every relative form counts from the instruction + 2
+	 * (TMP90C840 data book, MPU90-15); after a 16-bit displacement the PC is one past that. */
+	const auto rel8 = [this] { const auto d = static_cast<int8_t>(fetch()); return imm(static_cast<uint16_t>(d + m_pc)); };
+	const auto rel16 = [this] { const uint16_t d = fetch16(); return imm(static_cast<uint16_t>(d + m_pc - 1)); };
 
 	ins.wide = false;
 	ins.x = ins.y = Operand();
@@ -283,15 +287,15 @@ Tlcs90::decode(Instruction &ins)
 	case 0x14: case 0x15: case 0x16:
 		ins.set(Op::ADD, 6); ins.wide = true; ins.x = reg16(static_cast<uint8_t>(IX + b0 - 0x14));
 		ins.y = imm(fetch16()); return;
-	case 0x17: ins.set(Op::LDAR, 8); ins.y = imm(static_cast<uint16_t>(fetch16() + m_pc - 1)); return;
-	case 0x18: ins.set(Op::DJNZ, 10); ins.x = reg8(B); ins.y = imm(static_cast<uint16_t>(static_cast<int8_t>(fetch()) + m_pc)); return;
+	case 0x17: ins.set(Op::LDAR, 8); ins.y = rel16(); return;
+	case 0x18: ins.set(Op::DJNZ, 10); ins.x = reg8(B); ins.y = rel8(); return;
 	case 0x19:
 		ins.set(Op::DJNZ, 10); ins.wide = true; ins.x = reg16(BC);
-		ins.y = imm(static_cast<uint16_t>(static_cast<int8_t>(fetch()) + m_pc)); return;
+		ins.y = rel8(); return;
 	case 0x1A: ins.set(Op::JP, 8); ins.x = imm(8); ins.y = imm(fetch16()); return;
-	case 0x1B: ins.set(Op::JR, 10); ins.x = imm(8); ins.y = imm(static_cast<uint16_t>(fetch16() + m_pc - 1)); return;
+	case 0x1B: ins.set(Op::JR, 10); ins.x = imm(8); ins.y = rel16(); return;
 	case 0x1C: ins.set(Op::CALL, 14); ins.x = imm(8); ins.y = imm(fetch16()); return;
-	case 0x1D: ins.set(Op::CALLR, 16); ins.y = imm(static_cast<uint16_t>(fetch16() + m_pc - 1)); return;
+	case 0x1D: ins.set(Op::CALLR, 16); ins.y = rel16(); return;
 	case 0x1E: ins.set(Op::RET, 10); ins.x = imm(8); return;
 	case 0x1F: ins.set(Op::RETI, 14); return;
 	case 0xFF: ins.set(Op::SWI, 20); return;
@@ -356,7 +360,7 @@ Tlcs90::decode(Instruction &ins)
 	case 0xC0:
 	case 0xC8:
 		ins.set(Op::JR, 8, 4); ins.x = imm(b0 & 15);
-		ins.y = imm(static_cast<uint16_t>(static_cast<int8_t>(fetch()) + m_pc));
+		ins.y = rel8();
 		return;
 	case 0xE0: case 0xE8: case 0xF0: case 0xF8:
 		decode_prefixed(ins, b0);
