@@ -140,9 +140,12 @@ public:
 	SDL_JoystickID joystick_id(unsigned player) const { return joystick(player) ? m_joy_seats[player & 1] : 0; }
 	/* The kind of device a player plays with (seats.hpp): it alone shakes,
 	 * and turns if it is the wheel; the one they chose
-	 * ([players.<game>] device1, device2) if they have it */
+	 * ([players.<game>] device1, device2) if they have it. With a light
+	 * gun, the keyboard: the gun is their mouse, and no gamepad shakes. */
 	InputDevice device(unsigned player) const
 	{
+		if (!m_guns[player & 1].empty())
+			return InputDevice::KEYBOARD;
 		return device_of(m_chosen[player & 1], m_steers, seat(player) != nullptr, joystick(player) != nullptr);
 	}
 	void choose_device(unsigned player, InputDevice device) { m_chosen[player & 1] = device; }
@@ -167,6 +170,12 @@ public:
 	/* No pad shakes and the wheel lets go (the emulation stops); the light
 	 * guns are the desktop's again */
 	void quiet();
+	/* In the menu: where the light guns aim and their buttons, read without
+	 * holding them (they work the pointer of the desktop there), for the
+	 * drawing of the cabinet; whether that changed since the last call */
+	bool follow_guns_in_menu();
+	/* A light gun is chosen for a player, and read */
+	bool follows_guns() const { return m_pointers && wants_guns(); }
 	/* The light gun of each player ([players.<game>] gun1 and gun2,
 	 * "<identity> <name>") is read by those pointers (nullptr: none) */
 	void set_pointers(Pointers *pointers) { m_pointers = pointers; }
@@ -254,7 +263,7 @@ private:
 	/* Each player takes the gamepad and the joystick seats.hpp gives them */
 	void reseat();
 	HostState host() const;
-	void follow_guns();
+	void follow_guns(bool hold);
 	bool wants_guns() const { return !m_guns[0].empty() || !m_guns[1].empty(); }
 	/* The pads feel the rumble outputs (the nozzle of Brave): unless the
 	 * user turns the vibration off */
@@ -323,8 +332,8 @@ private:
 	bool m_mouse_placed;		/* the system has told where it is */
 	PictureHole m_hole;
 	int m_mouse_from_x, m_mouse_from_y;	/* where */
-	std::array<bool, 3> m_mouse_fresh;
-	std::array<bool, 3> m_mouse_release;
+	std::array<bool, MOUSE_BUTTONS> m_mouse_fresh;
+	std::array<bool, MOUSE_BUTTONS> m_mouse_release;
 };
 
 } /* namespace odin */

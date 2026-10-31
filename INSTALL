@@ -219,8 +219,9 @@ zip or the 7z of a game, the game of its name in MAME, from its directory;
 Close game goes back to the library, Reset switches the cabinet off and
 on; the state of the game saved and loaded, the menu (Settings...), Quit.
 INPUT, for the game that runs: the gamepad of each player, the dead zone
-and the trigger threshold of that gamepad, its inputs restored to their
-defaults or cleared, kind of device by kind (Undo a few seconds), the
+and the trigger threshold of that gamepad, all the inputs of the player,
+of every device, restored to their defaults or cleared (Undo a few
+seconds), the
 light gun of each player and the vibration where the game has them; the
 hotkeys restored to their defaults, sending the outputs. DISPLAY: the
 whole display, the window size, the internal resolution and the upscaling
@@ -337,6 +338,14 @@ no pointer and no bar; off (F7, Light gun mode in the bar or in the
 options of the page Input, "light_gun_mode = off" in [players.braveff]),
 the mouse is a pointer again, does nothing in the game and shows the bar.
 
+On the page Input a click on a control catches its next input, whatever
+device the page shows: a key, a button of the mouse or of the light gun
+(the trigger, the pump...) clicked where the menu has nothing, a key the
+gun sends, a button or an axis of the player's gamepad or joystick (a
+gun that is one, a pedal). Each takes the place of the input of its kind
+the control had. A click on a button, a tab or a row of the menu works
+that one; Escape lets the control be.
+
 A light gun (or a second mouse) for each player, read on its own (evdev
 on Linux: the user in the group input; Raw Input on Windows), chosen on
 the page Input under the device of the player (Light gun), or:
@@ -348,8 +357,11 @@ the page Input under the device of the player (Light gun), or:
 its identity as Odin's log says it ("pointer: <name> = <node> (aims,
 <identity>)"): its serial, else VID:PID, else its port. It aims as the
 mouse does, with its buttons, for its player alone; player 1 without one
-keeps the mouse. On Linux the guns chosen stop moving the pointer of the
-desktop while the game runs, and move it again in the menu.
+keeps the mouse. A player with a light gun plays with it and the
+keyboard: the page Input shows those, and their gamepad no longer shakes
+(choosing the gamepad again takes the gun away). On Linux the guns
+chosen stop moving the pointer of the desktop while the game runs, and
+move it again in the menu.
 ODIN_CONTROLLERS=none leaves them out too.
 
 A light gun that finds the screen by a white border (a Sinden) has one
@@ -459,8 +471,11 @@ under the id odin-games.json gives it:
  stick_h_right = key:D
 
 (pad:-lefty is the left stick up, pad:+leftx the stick to the right,
-mouse:left, mouse:middle, mouse:right its buttons, mouse:x and mouse:y
-where it points, mouse:off away from the picture;
+mouse:left, mouse:middle, mouse:right, mouse:side, mouse:extra its
+buttons (those of the light gun of the player, for a control of a player
+who has one), mouse:x and mouse:y where it points (the OUT OF SCREEN of
+Brave needs no line: the gun or the mouse aiming off the picture presses
+it);
 pad:lefty:invert the whole axis turned over: Planet Harriers then goes up
 when the stick goes up, where its cabinet stick, a flight stick, goes up
 when pulled.) An analog control takes the axes of a pad on its line, and

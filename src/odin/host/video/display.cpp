@@ -506,6 +506,12 @@ Display::menu_popup_open() const
 }
 
 bool
+Display::menu_item_at(MenuState &state, float x, float y)
+{
+	return m_menu && m_menu->item_at(state, x, y);
+}
+
+bool
 Display::menu_typing() const
 {
 	return m_menu && m_menu->typing();

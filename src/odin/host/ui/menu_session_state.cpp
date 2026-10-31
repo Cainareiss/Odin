@@ -304,6 +304,7 @@ MenuSession::fill_devices(MenuState &state)
 	if (Pointers *const pointers = m_controls.pointers())
 		pointers->poll();
 	light_guns(game_shown(), panel_shown().controls(), state.guns, state.gun, state.sights);
+
 }
 
 /* What the menu asked as it was drawn, done */
@@ -332,6 +333,12 @@ MenuSession::do_asked(MenuState &state)
 		const auto &[player, gun] = *state.want_gun;
 
 		want_gun(game_shown(), player, gun.identity, gun.name, !m_other);
+		/* The gun is the player's device, with the keyboard; none, the
+		 * device they had */
+		if (!gun.identity.empty())
+			state.input_device[player] = MenuState::Device::KEYBOARD;
+		else if (!state.device_picked && !m_other)
+			state.input_device[player] = m_controls.device(player);
 		state.want_gun.reset();
 		m_menu_pictures = MENU_PICTURES;
 	}
@@ -577,8 +584,8 @@ MenuSession::apply_link(const MenuState &was)
 	}
 }
 
-/* Clear mapping: the inputs of the device shown of the player shown, none;
- * Undo offered a while */
+/* Clear mapping: all the inputs of the player shown, none; Undo offered a
+ * while */
 void
 MenuSession::clear_inputs()
 {

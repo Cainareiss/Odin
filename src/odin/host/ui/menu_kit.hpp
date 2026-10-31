@@ -261,11 +261,10 @@ public:
 	 * its ends (that share of its length each) */
 	static void fading_line(ImDrawList *list, float left, float right, float y, float thick, ImU32 colour, float fade);
 	/* A line of dashes along points, `on` long and `off` apart; a frame of
-	 * them with its corners cut, a pill of them */
+	 * them with its corners cut */
 	static void dashes(ImDrawList *list, std::span<const ImVec2> points, bool closed, ImU32 colour, float width,
 	                   float on, float off);
 	void dashed_frame(ImDrawList *list, ImVec2 a, ImVec2 b, ImU32 colour) const;
-	void dashed_pill(ImDrawList *list, ImVec2 a, ImVec2 b, ImU32 colour) const;
 
 	/* The tabs in the middle of the width, each its icon and its name (the
 	 * one chosen only, when `narrow`), between the pills of the buttons of

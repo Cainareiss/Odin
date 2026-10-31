@@ -505,6 +505,13 @@ MenuSession::event(const SDL_Event &event)
 		pad = true;
 		break;
 	}
+	case SDL_EVENT_MOUSE_MOTION:
+	case SDL_EVENT_MOUSE_BUTTON_DOWN:
+	case SDL_EVENT_MOUSE_BUTTON_UP:
+		/* The mouse aims and presses for player 1 on the drawing of the
+		 * cabinet, as in the game; it works the menu as ever */
+		m_controls.event(event);
+		break;
 	case SDL_EVENT_WINDOW_MOUSE_LEAVE:
 	case SDL_EVENT_JOYSTICK_ADDED:
 	case SDL_EVENT_JOYSTICK_REMOVED:
@@ -658,6 +665,12 @@ MenuSession::wait()
 
 	if ((m_menu_state.undo && SDL_GetTicks() >= m_undo_until) || m_menu_state.moving)
 		m_menu_pictures = std::max(m_menu_pictures, 1u);
+	/* The drawing of the cabinet follows where the light guns aim, and
+	 * lights their buttons */
+	const bool guns = m_controls.follows_guns();
+
+	if (guns && m_controls.follow_guns_in_menu())
+		m_menu_pictures = std::max(m_menu_pictures, 1u);
 	if (caught && SDL_GetTicks() - m_menu_drawn >= CATCH_TICK_MS)
 		m_menu_pictures = std::max(m_menu_pictures, 1u);
 	if (!m_menu_pictures) {
@@ -665,6 +678,8 @@ MenuSession::wait()
 			SDL_WaitEventTimeout(nullptr, static_cast<Sint32>(CATCH_TICK_MS));
 		else if (m_menu_state.undo)
 			SDL_WaitEventTimeout(nullptr, static_cast<Sint32>(m_undo_until - std::min(m_undo_until, SDL_GetTicks())));
+		else if (guns)
+			SDL_WaitEventTimeout(nullptr, static_cast<Sint32>(MENU_PICTURE_MS));
 		else
 			SDL_WaitEvent(nullptr);
 		return;
@@ -868,6 +883,9 @@ MenuSession::do_bar(BarState &bar)
 			const BarState::Pad &pad = bar.pads[static_cast<size_t>(bar.asked_pad)];
 
 			want_pad(m_game->name, player, pad.guid, pad.name, pad.joystick, true, pad.id);
+			/* In the place of the light gun */
+			if (!bar.gun[player].empty())
+				want_gun(m_game->name, player, {}, {}, true);
 			keep_device(m_game->name, player, pad.joystick ? InputDevice::JOYSTICK : InputDevice::PAD, true);
 		}
 		return Ask::NONE;
@@ -884,12 +902,11 @@ MenuSession::do_bar(BarState &bar)
 		return Ask::NONE;
 	case Ask::INPUTS_DEFAULTS:
 	case Ask::INPUTS_CLEAR:
-		/* As the page does them, on the game that runs, for that player
-		 * and that kind of device: the page shows them so from now on */
+		/* As the page does them, on the game that runs, for that player:
+		 * the page shows them so from now on */
 		if (m_game) {
 			show_game(state.running);
 			state.player = player;
-			state.input_device[player] = static_cast<MenuState::Device>(std::clamp(bar.asked_kind, 0, 2));
 			if (ask == Ask::INPUTS_DEFAULTS)
 				change_inputs(true);
 			else

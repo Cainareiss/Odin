@@ -337,15 +337,19 @@ ControlPanel::now(const HostState &host, size_t control) const
 		out.value = on ? 1.0f : GameControl::half(c.low, false) ? -1.0f : 0.0f;
 	for (const HostInput &input : m_bindings.of(control)) {
 		const JoyState *const joy = host.joys[c.player & 1];
+		const MouseState *const aim = host.mice[c.player & 1];
 		float v = 0.0f;
 
 		if (input.kind == HostInput::Kind::PAD && input.pad.type == PadInput::Type::AXIS && pad) {
 			v = std::clamp(static_cast<float>(pad->axes[input.pad.index]) / 32767.0f, -1.0f, 1.0f);
 			v = input.pad.inverted ? -v : v;
 		} else if (const auto at = input.kind == HostInput::Kind::JOY ? joy_channel(joy, input.joy, c) :
+		                           input.kind == HostInput::Kind::MOUSE && input.mouse.is_axis() && aim ?
+		                           std::optional<uint16_t>(pointed(c.low, input.mouse.type == MouseInput::Type::X ? aim->x : aim->y)) :
 		                                                               std::nullopt) {
-			/* From its channel: a pedal from 0, the others from -1, the
-			 * way the game takes them turned back */
+			/* From its channel (a joystick, where the mouse or the light
+			 * gun points): a pedal from 0, the others from -1, the way the
+			 * game takes them turned back */
 			const bool over = GameControl::turned_over(c.low);
 			const float word = static_cast<float>(over ? 0xFFFF - *at : *at) / 65535.0f;
 

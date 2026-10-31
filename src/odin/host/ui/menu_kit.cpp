@@ -302,26 +302,6 @@ run(ImDrawList *list, ImVec2 at, ImU32 colour, const char *text, float size, flo
 	return x - at.x;
 }
 
-/* The points of the outline of a pill */
-std::vector<ImVec2>
-pill_points(ImVec2 a, ImVec2 b)
-{
-	const float r = (b.y - a.y) / 2.0f, pi = std::numbers::pi_v<float>;
-	std::vector<ImVec2> points;
-
-	for (int i = 0; i <= 8; i++) {
-		const float t = -pi / 2.0f + pi * static_cast<float>(i) / 8.0f;
-
-		points.push_back({ b.x - r + r * std::cos(t), a.y + r + r * std::sin(t) });
-	}
-	for (int i = 0; i <= 8; i++) {
-		const float t = pi / 2.0f + pi * static_cast<float>(i) / 8.0f;
-
-		points.push_back({ a.x + r + r * std::cos(t), a.y + r + r * std::sin(t) });
-	}
-	return points;
-}
-
 /* The lines of a list that has only names */
 std::vector<MenuKit::Item>
 plain(std::span<const std::string> labels)
@@ -437,12 +417,6 @@ void
 MenuKit::dashed_frame(ImDrawList *list, ImVec2 a, ImVec2 b, ImU32 colour) const
 {
 	dashes(list, octagon(a, b, px(CONTROL_CUT)), true, colour, stroke(), px(3.0f), px(2.0f));
-}
-
-void
-MenuKit::dashed_pill(ImDrawList *list, ImVec2 a, ImVec2 b, ImU32 colour) const
-{
-	dashes(list, pill_points(a, b), true, colour, stroke(), px(3.0f), px(2.0f));
 }
 
 /* The paths of the icons, in a square of 24 */

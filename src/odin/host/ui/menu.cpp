@@ -34,6 +34,11 @@
 
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_sdl3.h"
+/* The item under a click, Dear ImGui's own code */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wconversion"
+#include "imgui/imgui_internal.h"
+#pragma GCC diagnostic pop
 #include "odin/host/input/control_panel.hpp"
 #include "odin/host/ui/menu_kit.hpp"
 #include "odin/host/video/picture.hpp"
@@ -258,6 +263,16 @@ Menu::event(const SDL_Event &event)
 {
 	ImGui::SetCurrentContext(m_imgui);
 	ImGui_ImplSDL3_ProcessEvent(&event);
+}
+
+bool
+Menu::item_at(MenuState &state, float x, float y)
+{
+	ImGui::SetCurrentContext(m_imgui);
+	ImGui::GetIO().AddMousePosEvent(x, y);
+	build(state);
+	/* This frame's alone: IsAnyItemHovered also counts the one before */
+	return GImGui->HoveredId != 0;
 }
 
 bool

@@ -25,13 +25,19 @@
 #include "odin/host/ui/menu_session.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 namespace odin {
 
-/* The page Input waits for an input: Escape lets it go; a key, or on a
- * gamepad a button (Guide held, then another: both), a stick or a trigger
- * from half its way, or on a joystick a button, a hat or an axis from half
- * its way off where it rested, is the one. True when the event was
+/* The page Input waits for an input, whatever device it shows (a light
+ * gun clicks, sends keys or is a gamepad; a pedal is a key or a
+ * joystick): Escape lets it go; a key, or a button of the mouse (or of a
+ * light gun that moves the pointer) clicked where the menu has nothing (a
+ * click on a button of it, Skip, Stop, a tab or a row, works that), or on
+ * the player's gamepad a button (Guide held, then another: both), a stick
+ * or a trigger from half its way, or on their joystick a button, a hat or
+ * an axis from half its way off where it rested, or for a sight the way
+ * the mouse or the light gun aims, is the one. True when the event was
  * taken. */
 bool
 MenuSession::catch_input(const SDL_Event &event)
@@ -39,12 +45,11 @@ MenuSession::catch_input(const SDL_Event &event)
 	MenuState &state = m_menu_state;
 
 	/* The buttons of the menu follow what is held, as ever */
-	const std::vector<MenuNav::Action> nav = m_nav.event(event);
-	const bool back = std::find(nav.begin(), nav.end(), MenuNav::BACK) != nav.end();
+	m_nav.event(event);
 
 	switch (event.type) {
 	case SDL_EVENT_KEY_DOWN:
-	case SDL_EVENT_KEY_UP:
+	case SDL_EVENT_KEY_UP: {
 		m_keys.set(event.key.key, event.key.down);
 		if (!event.key.down || event.key.repeat)
 			return true;
@@ -52,22 +57,23 @@ MenuSession::catch_input(const SDL_Event &event)
 			state.stop_catching();
 			return true;
 		}
-		/* A gamepad or a joystick is caught: the keys of quitting and of the
-		 * whole display work as in the rest of the menu */
-		if (state.on_pad() || state.on_joystick()) {
+		/* The keys Odin works itself go to no control of the game; those
+		 * of quitting and of the whole display work as in the rest of the
+		 * menu */
+		if (m_hotkeys.takes(event.key.key)) {
 			const auto action = m_hotkeys.key_action(event.key.key, event.key.mod);
 
 			return action != Hotkeys::Action::QUIT && action != Hotkeys::Action::FULLSCREEN;
 		}
-		/* The keys Odin works itself go to no control of the game */
-		if (!m_hotkeys.takes(event.key.key)) {
-			HostInput input{};
 
-			input.kind = HostInput::Kind::KEY;
-			input.key = event.key.key;
-			caught(input);
-		}
+		HostInput input{};
+
+		input.kind = HostInput::Kind::KEY;
+		input.key = event.key.key;
+		button_on_analog();
+		caught(input);
 		return true;
+	}
 	case SDL_EVENT_GAMEPAD_BUTTON_UP:
 		m_controls.event(event);
 		m_controls.guide_tapped();
@@ -87,12 +93,6 @@ MenuSession::catch_input(const SDL_Event &event)
 	case SDL_EVENT_GAMEPAD_AXIS_MOTION: {
 		m_controls.event(event);
 		m_controls.guide_combo();
-		/* A key is caught: B of a gamepad lets it go */
-		if (!state.on_pad()) {
-			if (back)
-				state.stop_catching();
-			return true;
-		}
 
 		const bool axis = event.type == SDL_EVENT_GAMEPAD_AXIS_MOTION;
 		const int value = axis ? event.gaxis.value : 0;
@@ -112,6 +112,30 @@ MenuSession::catch_input(const SDL_Event &event)
 		catch_pad(axis, axis ? event.gaxis.axis : event.gbutton.button, value);
 		return true;
 	}
+	case SDL_EVENT_MOUSE_BUTTON_DOWN: {
+		const int button = mouse_button_of(event.button.button);
+
+		if (button < 0)
+			return false;
+
+		/* What is there, on a copy that moves nothing (the moves of the
+		 * gamepad wait for the frame drawn) */
+		MenuState probe = state;
+
+		probe.nav = {};
+		if (m_display.menu_item_at(probe, event.button.x, event.button.y))
+			return false;
+
+		HostInput input{};
+
+		input.kind = HostInput::Kind::MOUSE;
+		input.mouse = { MouseInput::Type::BUTTON, static_cast<uint8_t>(button) };
+		button_on_analog();
+		caught(input);
+		return true;
+	}
+	case SDL_EVENT_MOUSE_MOTION:
+		return catch_aim(event);
 	case SDL_EVENT_JOYSTICK_AXIS_MOTION:
 	case SDL_EVENT_JOYSTICK_BUTTON_DOWN:
 	case SDL_EVENT_JOYSTICK_BUTTON_UP:
@@ -124,8 +148,7 @@ MenuSession::catch_input(const SDL_Event &event)
 		const int was = event.type == SDL_EVENT_JOYSTICK_AXIS_MOTION && joy && axis < joy->axes.size() ? joy->axes[axis] : 0;
 
 		m_controls.event(event);
-		if (state.on_joystick())
-			catch_joystick(event, was);
+		catch_joystick(event, was);
 		return true;
 	}
 	default:
@@ -218,6 +241,47 @@ MenuSession::catch_joystick(const SDL_Event &event, int was)
 		return;
 	}
 	caught(input);
+}
+
+/* A sight caught whole on the keyboard or a light gun: the way the mouse
+ * or the gun then goes far enough (a fifth of the window), across or up
+ * and down, is its axis. True when the event was taken. */
+bool
+MenuSession::catch_aim(const SDL_Event &event)
+{
+	static constexpr float AIM_MOVED = 0.2f;
+	const MenuState &state = m_menu_state;
+	const MenuSlot slot = *state.catching;
+
+	if (slot.control < 0 || slot.part != 0 || state.on_pad() || state.on_joystick())
+		return false;
+
+	const Role role = panel_shown().controls()[static_cast<size_t>(slot.control)].role;
+
+	if (role != Role::GUN_X && role != Role::GUN_Y)
+		return false;
+	if (!m_aim_from || m_aim_from->slot.control != slot.control || m_aim_from->slot.part != slot.part) {
+		m_aim_from = AimFrom{ slot, event.motion.x, event.motion.y };
+		return false;
+	}
+
+	int w = 0, h = 0;
+
+	SDL_GetWindowSize(m_display.window(), &w, &h);
+
+	const float across = std::abs(event.motion.x - m_aim_from->x) / static_cast<float>(std::max(w, 1));
+	const float down = std::abs(event.motion.y - m_aim_from->y) / static_cast<float>(std::max(h, 1));
+
+	if (std::max(across, down) < AIM_MOVED)
+		return false;
+
+	HostInput input{};
+
+	input.kind = HostInput::Kind::MOUSE;
+	input.mouse = { across >= down ? MouseInput::Type::X : MouseInput::Type::Y, 0 };
+	m_aim_from.reset();
+	caught(input);
+	return true;
 }
 
 /* Whether a button of a gamepad presses in the menu (menu_nav.hpp) */
@@ -347,15 +411,17 @@ MenuSession::caught(const HostInput &input)
 	}
 }
 
-/* Defaults and Clear mapping: the inputs of the device shown, of every
+/* Defaults and Clear mapping: all the inputs, of every device, of every
  * part of the controls of the player and their coin (and TEST for player
  * 1), back to their defaults or none */
 void
 MenuSession::change_inputs(bool to_defaults)
 {
+	static constexpr HostInput::Kind ALL[] = { HostInput::Kind::KEY, HostInput::Kind::PAD, HostInput::Kind::MOUSE,
+		                                    HostInput::Kind::JOY };
 	const MenuState &state = m_menu_state;
 	const auto changed = [&](const std::vector<HostInput> &inputs, const std::vector<HostInput> &standard) {
-		return kind_changed(inputs, standard, to_defaults);
+		return Bindings::with_kinds(inputs, standard, ALL, to_defaults);
 	};
 	std::vector<Bindings::Line> lines;
 	{
@@ -363,7 +429,7 @@ MenuSession::change_inputs(bool to_defaults)
 		const std::vector<GameControl> &controls = panel_shown().controls();
 
 		for (size_t c = 0; c < controls.size(); c++) {
-			if (controls[c].player != state.player)
+			if (controls[c].player != state.player || controls[c].role == Role::GUN_OFFSCREEN)
 				continue;
 			const bool parts = controls[c].type != GameControl::Type::BUTTON;
 
@@ -380,15 +446,17 @@ MenuSession::change_inputs(bool to_defaults)
 	}
 	for (const Bindings::Line &line : lines)
 		keep_binding(line);
-}
 
-/* The inputs of a part without those of the device shown, or with those
- * of its defaults */
-std::vector<HostInput>
-MenuSession::kind_changed(const std::vector<HostInput> &inputs, const std::vector<HostInput> &standard,
-                          bool to_defaults) const
-{
-	return Bindings::with_kind(inputs, standard, m_menu_state.shown_kind(), to_defaults);
+	/* The whole axis of a pedal, on the line of its button kept just now */
+	const std::vector<GameControl> &controls = panel_shown().controls();
+
+	for (size_t c = 0; c < controls.size(); c++)
+		if (controls[c].player == state.player && controls[c].type == GameControl::Type::ANALOG &&
+		    !GameControl::half(controls[c].low, false)) {
+			const Bindings &bindings = panel_shown().bindings();
+
+			keep_binding(bindings.line(c, 0, changed(bindings.part(c, 0), bindings.standard(c, 0))));
+		}
 }
 
 /* X and Y of a gamepad on the part picked: its inputs of the device shown
@@ -399,15 +467,16 @@ MenuSession::change_part(const MenuSlot &slot, bool to_defaults)
 	const Bindings &bindings = panel_shown().bindings();
 
 	if (slot.control < 0) {
-		keep_binding(bindings.cabinet_line(slot.role, kind_changed(bindings.cabinet(slot.role),
-		                                                          bindings.cabinet_standard(slot.role), to_defaults)));
+		keep_binding(bindings.cabinet_line(slot.role, Bindings::with_kinds(bindings.cabinet(slot.role),
+		                                                                   bindings.cabinet_standard(slot.role),
+		                                                                   m_menu_state.shown_kinds(), to_defaults)));
 		return;
 	}
 
 	const size_t c = static_cast<size_t>(slot.control);
 
-	keep_binding(bindings.line(c, slot.part, kind_changed(bindings.part(c, slot.part), bindings.standard(c, slot.part),
-	                                                      to_defaults)));
+	keep_binding(bindings.line(c, slot.part, Bindings::with_kinds(bindings.part(c, slot.part), bindings.standard(c, slot.part),
+	                                                               m_menu_state.shown_kinds(), to_defaults)));
 }
 
 /* The inputs back as Clear mapping found them */

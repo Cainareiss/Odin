@@ -28,6 +28,7 @@
 #include <algorithm>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -213,6 +214,7 @@ private:
 	bool presses(int button) const;
 	void catch_pad(bool axis, int index, int value);
 	void catch_joystick(const SDL_Event &event, int was);
+	bool catch_aim(const SDL_Event &event);
 	void button_on_analog();
 	void draw_menu();
 	void fill_display(MenuState &state);
@@ -226,8 +228,6 @@ private:
 	void apply_sound(const MenuState &was);
 	void apply_game(const MenuState &was);
 	void apply_link(const MenuState &was);
-	std::vector<HostInput> kind_changed(const std::vector<HostInput> &inputs, const std::vector<HostInput> &standard,
-	                                    bool to_defaults) const;
 	void change_part(const MenuSlot &slot, bool to_defaults);
 	void keep(const char *key, const std::optional<std::string> &value);
 	void keep(const std::string &section, const std::string &key, const std::optional<std::string> &value);
@@ -321,6 +321,12 @@ private:
 		bool skipped;
 	};
 	std::optional<Held> m_held;
+	/* A sight caught whole: where the pointer was as it began */
+	struct AimFrom {
+		MenuSlot slot;
+		float x, y;
+	};
+	std::optional<AimFrom> m_aim_from;
 	/* The window is the active one */
 	bool m_focused = true;
 	/* The folder of the save states, and the picker of the system that

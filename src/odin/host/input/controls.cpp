@@ -450,8 +450,7 @@ Controls::event(const SDL_Event &event)
 	}
 	case SDL_EVENT_MOUSE_BUTTON_DOWN:
 	case SDL_EVENT_MOUSE_BUTTON_UP: {
-		const int index = event.button.button == SDL_BUTTON_LEFT ? 0 : event.button.button == SDL_BUTTON_MIDDLE ? 1
-		                : event.button.button == SDL_BUTTON_RIGHT ? 2 : -1;
+		const int index = mouse_button_of(event.button.button);
 
 		if (index >= 0)
 			press(m_mouse.buttons[index], m_mouse_fresh[index], m_mouse_release[index],
@@ -679,7 +678,7 @@ Controls::pad_type(unsigned player) const
 void
 Controls::update()
 {
-	follow_guns();
+	follow_guns(true);
 	m_panel.update(host());
 	settle();
 }
@@ -688,7 +687,7 @@ Controls::update()
  * buttons: one pressed and let go within the frame is down for it; held
  * from the desktop while the game runs */
 void
-Controls::follow_guns()
+Controls::follow_guns(bool hold)
 {
 	if (!m_pointers || !wants_guns()) {
 		m_gun_seen = {};
@@ -699,7 +698,7 @@ Controls::follow_guns()
 	int w = 0, h = 0;
 
 	for (const std::string &gun : m_guns)
-		if (!gun.empty())
+		if (!gun.empty() && hold)
 			held.push_back(gun);
 	m_pointers->poll();
 	m_pointers->hold(held);
@@ -717,6 +716,16 @@ Controls::follow_guns()
 		for (unsigned button = 0; button < now.buttons.size(); button++)
 			now.buttons[button] = ((aim->buttons | aim->pressed) >> button) & 1;
 	}
+}
+
+bool
+Controls::follow_guns_in_menu()
+{
+	const std::array<MouseState, 2> aims = m_gun_aims;
+	const std::array<bool, 2> seen = m_gun_seen;
+
+	follow_guns(false);
+	return m_gun_seen != seen || m_gun_aims != aims;
 }
 
 void
@@ -738,7 +747,7 @@ Controls::settle()
 		joy.release.assign(joy.release.size(), false);
 		joy.state.hats = joy.hats;
 	}
-	for (unsigned button = 0; button < 3; button++)
+	for (unsigned button = 0; button < MOUSE_BUTTONS; button++)
 		if (m_mouse_release[button])
 			m_mouse.buttons[button] = false;
 	m_mouse_fresh = {};

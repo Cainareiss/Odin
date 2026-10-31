@@ -303,13 +303,14 @@ joy_text(const JoyInput &joy)
 	return "axis" + index + (joy.inverted ? ":invert" : "");
 }
 
-/* "left", "middle", "right", "x", "y", "off" */
+/* "left", "middle", "right", "side", "extra", "x", "y", "off" */
 std::optional<HostInput>
 parse_mouse(std::string_view text)
 {
 	static const std::pair<std::string_view, MouseInput> NAMES[] = {
 		{ "left", { MouseInput::Type::BUTTON, 0 } }, { "middle", { MouseInput::Type::BUTTON, 1 } },
-		{ "right", { MouseInput::Type::BUTTON, 2 } }, { "x", { MouseInput::Type::X, 0 } },
+		{ "right", { MouseInput::Type::BUTTON, 2 } }, { "side", { MouseInput::Type::BUTTON, 3 } },
+		{ "extra", { MouseInput::Type::BUTTON, 4 } }, { "x", { MouseInput::Type::X, 0 } },
 		{ "y", { MouseInput::Type::Y, 0 } }, { "off", { MouseInput::Type::OFF, 0 } },
 	};
 	HostInput out{};
@@ -410,7 +411,8 @@ HostInput::parse(std::string_view text)
 std::string
 HostInput::text() const
 {
-	static const char *const BUTTONS[] = { "left", "middle", "right" };
+	static const char *const BUTTONS[] = { "left", "middle", "right", "side", "extra" };
+	static_assert(std::size(BUTTONS) == MOUSE_BUTTONS);
 
 	switch (kind) {
 	case Kind::KEY:
@@ -419,7 +421,7 @@ HostInput::text() const
 		return std::string("mouse:") + (mouse.type == MouseInput::Type::X   ? "x" :
 		                                mouse.type == MouseInput::Type::Y   ? "y" :
 		                                mouse.type == MouseInput::Type::OFF ? "off" :
-		                                                                      BUTTONS[mouse.button % 3]);
+		                                                                      BUTTONS[mouse.button % MOUSE_BUTTONS]);
 	case Kind::JOY:
 		return "joy:" + joy_text(joy);
 	case Kind::PAD:
@@ -491,20 +493,23 @@ Bindings::keys_toward(Role role, unsigned player, bool positive)
 }
 
 std::vector<HostInput>
-Bindings::with_kind(const std::vector<HostInput> &inputs, const std::vector<HostInput> &standard, HostInput::Kind kind,
-                    bool to_defaults)
+Bindings::with_kinds(const std::vector<HostInput> &inputs, const std::vector<HostInput> &standard,
+                     std::span<const HostInput::Kind> kinds, bool to_defaults)
 {
 	const auto has = [](const std::vector<HostInput> &list, const HostInput &input) {
 		return std::find(list.begin(), list.end(), input) != list.end();
+	};
+	const auto of = [kinds](const HostInput &input) {
+		return std::find(kinds.begin(), kinds.end(), input.kind) != kinds.end();
 	};
 	std::vector<HostInput> out;
 
 	if (to_defaults)
 		for (const HostInput &input : standard)
-			if (input.kind == kind || has(inputs, input))
+			if (of(input) || has(inputs, input))
 				out.push_back(input);
 	for (const HostInput &input : inputs)
-		if (input.kind != kind && !has(out, input))
+		if (!of(input) && !has(out, input))
 			out.push_back(input);
 	return out;
 }
@@ -560,6 +565,12 @@ Bindings::read_settings(const Settings &settings, const std::string &game)
 		std::vector<HostInput> *pedal_down = nullptr;	/* a pedal: where what is pressed goes */
 		Takes takes = Takes::PRESSED;
 
+		/* Away from the picture is the sight's own: the light gun or the
+		 * mouse aiming off it presses it, whatever the line says */
+		if (std::any_of(panel.begin(), panel.end(), [&key](const GameControl &control) {
+			    return control.role == Role::GUN_OFFSCREEN && key == control.id;
+		    }))
+			continue;
 		for (size_t c = 0; c < panel.size() && !target; c++) {
 			const GameControl &control = panel[c];
 			const bool lever = control.type == GameControl::Type::POSITIONS;
@@ -647,6 +658,10 @@ Bindings::standard_lines() const
 		const GameControl &control = m_panel[c];
 		const bool whole = control.type == GameControl::Type::BUTTON || is_pedal(control);
 		const unsigned first = control.type == GameControl::Type::POSITIONS ? 1 : 0;
+
+		/* Away from the picture has no line (read_settings) */
+		if (control.role == Role::GUN_OFFSCREEN)
+			continue;
 
 		for (unsigned part = first; part <= (whole ? 0u : 2u); part++) {
 			std::vector<HostInput> inputs = m_defaults[c][part];

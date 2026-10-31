@@ -54,16 +54,10 @@ constexpr uint64_t MAPPING_MS = 6000;
 constexpr float WIDE = 1.5f;
 constexpr float PAD_SHARE = 1.4f / 2.4f;
 /* A label column at its narrowest (at its widest 0.3 of the box), a label
- * from the next, the room the leader lines keep from the box's edges */
+ * from the next, the room the labels keep from the box's edges */
 constexpr float COLUMN_MIN = 90.0f;
 constexpr float LABEL_GAP = 19.0f;
 constexpr float LABEL_EDGE = 10.0f;
-/* A leader line at rest: its dashes; touched: its width; its dot */
-constexpr float DASH_ON = 1.5f;
-constexpr float DASH_OFF = 3.5f;
-constexpr float REST_ALPHA = 0.3f;
-constexpr float HOT_WIDTH = 1.8f;
-constexpr float DOT = 2.0f;
 /* The accent on the share of a chip an amount fills */
 constexpr float AMOUNT_ALPHA = 0.55f;
 /* A stick touched from there, a trigger from there */
@@ -206,7 +200,7 @@ joy_label(const JoyInput &joy)
 std::string
 label(const HostInput &input, int kind)
 {
-	static const char *const MOUSE[] = { "Mouse left", "Mouse middle", "Mouse right" };
+	static const char *const MOUSE[] = { "Mouse left", "Mouse middle", "Mouse right", "Mouse side", "Mouse extra" };
 
 	switch (input.kind) {
 	case HostInput::Kind::KEY:
@@ -236,7 +230,7 @@ label(const HostInput &input, int kind)
 	case MouseInput::Type::OFF: return "Mouse off-screen";
 	case MouseInput::Type::BUTTON: break;
 	}
-	return MOUSE[input.mouse.button % 3];
+	return MOUSE[input.mouse.button % MOUSE_BUTTONS];
 }
 
 std::string
@@ -277,11 +271,16 @@ input_rows(const MenuState &state)
 	/* A gamepad or a joystick has axes: the whole of an analog control */
 	const HostInput::Kind kind = state.shown_kind();
 	const bool pad = kind != HostInput::Kind::KEY;
+	/* A light gun: a mouse, keys, a joystick's buttons, and what the user
+	 * put on another device (the gamepad) */
+	const bool gun = !pad && state.gun_of(state.player);
 	std::vector<InputRow> rows;
 	std::optional<InputRow> service;
 	const auto add = [&](std::string name, MenuSlot slot, std::vector<HostInput> inputs, bool lit, bool catchable) {
-		std::erase_if(inputs, [kind](const HostInput &in) {
-			return (in.kind == HostInput::Kind::MOUSE ? HostInput::Kind::KEY : in.kind) != kind;
+		std::erase_if(inputs, [kind, gun](const HostInput &in) {
+			const bool keys = in.kind == HostInput::Kind::MOUSE || (gun && in.kind != HostInput::Kind::KEY);
+
+			return (keys ? HostInput::Kind::KEY : in.kind) != kind;
 		});
 		rows.push_back({ std::move(name), slot, std::move(inputs), lit, catchable });
 	};
@@ -294,7 +293,8 @@ input_rows(const MenuState &state)
 		const int i = static_cast<int>(c);
 		const bool lit = worked(c);
 
-		if (control.player != state.player)
+		/* Away from the picture works itself (Bindings::read_settings) */
+		if (control.player != state.player || control.role == Role::GUN_OFFSCREEN)
 			continue;
 		if (control.role == Role::SERVICE) {
 			add("SERVICE", { i, 0, Role::SERVICE }, bindings.part(c, 0), lit, true);
@@ -315,9 +315,11 @@ input_rows(const MenuState &state)
 			const char *const right = GameControl::half(control.low, true);
 			const bool mouse = std::any_of(bindings.part(c, 0).begin(), bindings.part(c, 0).end(),
 			                               [](const HostInput &in) { return in.kind == HostInput::Kind::MOUSE; });
+			/* A sight: an axis whole, which the mouse or the light gun aims */
+			const bool whole = pad || control.role == Role::GUN_X || control.role == Role::GUN_Y;
 
-			if (pad || mouse)
-				add(control.name, { i, 0, control.role }, bindings.part(c, 0), lit, pad);
+			if (whole || mouse)
+				add(control.name, { i, 0, control.role }, bindings.part(c, 0), lit, whole);
 			if (!left || !right) {
 				add(pad ? control.name + " (button)" : control.name, { i, 2, control.role }, bindings.part(c, 2), lit,
 				    true);
@@ -325,9 +327,9 @@ input_rows(const MenuState &state)
 				break;
 			}
 			add(control.name + " " + MenuKit::capitals(left + 1), { i, 1, control.role }, bindings.part(c, 1), lit, true);
-			rows.back().half = pad;
+			rows.back().half = whole;
 			add(control.name + " " + MenuKit::capitals(right + 1), { i, 2, control.role }, bindings.part(c, 2), lit, true);
-			rows.back().half = pad;
+			rows.back().half = whole;
 			break;
 		}
 		}
@@ -525,7 +527,7 @@ taken(const PadInput &input, int key, const PadState &now)
 
 /* A name beside the drawing: the controls on one input of it, their text,
  * the first of them caught by a click; the box of its part, the side it is
- * on, its height and its leader line */
+ * on, its height */
 struct Label {
 	std::vector<std::string> names;
 	size_t row;
@@ -535,14 +537,13 @@ struct Label {
 	ImVec2 lo = {}, hi = {};
 	bool left = false, chosen = false, hot = false;
 	float y = 0.0f;
-	std::vector<ImVec2> line = {};
 };
 
 /* The text of a label: its names, the words they begin with said once
- * ("1P START · WATER"); names that differ only by their last word are one
- * control, its directions say nothing more, when there are three of them
- * or more ("LEFT-LEVER") or when that word is an axis or an arrow ("1P
- * SIGHT LOCATION", for X and Y) */
+ * ("1P START · WATER", "1P X AXIS · Y AXIS"); names that differ only by
+ * their last word are one control, its directions say nothing more, when
+ * there are three of them or more ("LEFT-LEVER") or when that word is an
+ * axis or an arrow ("GEAR", for ▲ and ▼) */
 std::string
 label_text(std::span<const std::string> names)
 {
@@ -565,107 +566,20 @@ label_text(std::span<const std::string> names)
 	    (names.size() >= 3 || std::all_of(names.begin(), names.end(), mark)))
 		return first;
 
+	/* How much of a name, whole words, the one before begins with too */
+	const auto shared = [](const std::string &before, const std::string &now) {
+		size_t words = 0;
+
+		for (size_t i = 0; i < std::min(before.size(), now.size()) && before[i] == now[i]; i++)
+			if (now[i] == ' ')
+				words = i + 1;
+		return words;
+	};
 	std::string text = names[0];
 
-	for (size_t i = 1; i < names.size(); i++) {
-		const std::string before = stem(names[i - 1]), now = stem(names[i]);
-
-		text += " · " + (!now.empty() && now == before ? names[i].substr(now.size() + 1) : names[i]);
-	}
+	for (size_t i = 1; i < names.size(); i++)
+		text += " · " + names[i].substr(shared(names[i - 1], names[i]));
 	return text;
-}
-
-/* Whether the segment p-q crosses a box */
-bool
-crosses(ImVec2 p, ImVec2 q, ImVec2 lo, ImVec2 hi)
-{
-	float t0 = 0.0f, t1 = 1.0f;
-	const float sides[4][2] = { { p.x - q.x, p.x - lo.x }, { q.x - p.x, hi.x - p.x },
-	                            { p.y - q.y, p.y - lo.y }, { q.y - p.y, hi.y - p.y } };
-
-	for (const auto &[a, b] : sides) {
-		if (a == 0.0f) {
-			if (b < 0.0f)
-				return false;
-			continue;
-		}
-
-		const float t = b / a;
-
-		if (a < 0.0f) {
-			if (t > t1)
-				return false;
-			t0 = std::max(t0, t);
-		} else {
-			if (t < t0)
-				return false;
-			t1 = std::min(t1, t);
-		}
-	}
-	return true;
-}
-
-/* Where the line from s towards c leaves a box */
-ImVec2
-edge_of(ImVec2 s, ImVec2 c, ImVec2 lo, ImVec2 hi)
-{
-	float t = 1.0f;
-	const float sides[2][4] = { { s.x, c.x - s.x, lo.x, hi.x }, { s.y, c.y - s.y, lo.y, hi.y } };
-
-	for (const auto &[from, by, a, b] : sides) {
-		if (by == 0.0f)
-			continue;
-		for (const float side : { a, b }) {
-			const float u = (side - from) / by;
-			const ImVec2 o = { s.x + (c.x - s.x) * u, s.y + (c.y - s.y) * u };
-
-			if (u >= 0.0f && u < t && o.x >= lo.x - 0.5f && o.x <= hi.x + 0.5f && o.y >= lo.y - 0.5f &&
-			    o.y <= hi.y + 0.5f)
-				t = u;
-		}
-	}
-	return { s.x + (c.x - s.x) * t, s.y + (c.y - s.y) * t };
-}
-
-/* The leader line of a label: from its column to its part, the way that
- * crosses the fewest other parts, then the shortest, with the fewest
- * bends */
-std::vector<ImVec2>
-route(const Label &label, float from, float knee, std::span<const std::pair<ImVec2, ImVec2>> parts, const MenuKit &kit)
-{
-	const ImVec2 lo = { label.lo.x - kit.px(2.0f), label.lo.y - kit.px(2.0f) };
-	const ImVec2 hi = { label.hi.x + kit.px(2.0f), label.hi.y + kit.px(2.0f) };
-	const ImVec2 c = { (label.lo.x + label.hi.x) / 2.0f, (label.lo.y + label.hi.y) / 2.0f };
-	const float y = label.y, side = label.left ? lo.x : hi.x;
-	std::vector<std::vector<ImVec2>> ways;
-
-	ways.push_back({ { from, y }, { knee, y }, edge_of({ knee, y }, c, lo, hi) });
-	if (y > lo.y && y < hi.y)
-		ways.push_back({ { from, y }, { knee, y }, { side, y } });
-	else
-		ways.push_back({ { from, y }, { knee, y }, { c.x, y }, { c.x, y < lo.y ? lo.y : hi.y } });
-	ways.push_back({ { from, y }, { knee, y }, { knee, c.y }, { side, c.y } });
-	for (const float dy : { 10.0f, 24.0f, 40.0f, 58.0f })
-		for (const float yy : { lo.y - kit.px(dy), hi.y + kit.px(dy) })
-			ways.push_back({ { from, y }, { knee, y }, { knee, yy }, { c.x, yy }, { c.x, yy < lo.y ? lo.y : hi.y } });
-
-	const auto mine = [&](const std::pair<ImVec2, ImVec2> &box) {
-		return box.first.x >= lo.x && box.second.x <= hi.x && box.first.y >= lo.y && box.second.y <= hi.y;
-	};
-	const auto cost = [&](const std::vector<ImVec2> &way) {
-		float crossings = 0.0f, length = 0.0f;
-
-		for (size_t i = 1; i < way.size(); i++) {
-			length += std::hypot(way[i].x - way[i - 1].x, way[i].y - way[i - 1].y);
-			for (const auto &box : parts)
-				if (!mine(box) && crosses(way[i - 1], way[i], box.first, box.second))
-					crossings += 1.0f;
-		}
-		return crossings * 1e4f + length + static_cast<float>(way.size() - 3) * kit.px(14.0f);
-	};
-
-	return *std::min_element(ways.begin(), ways.end(),
-	                         [&](const auto &a, const auto &b) { return cost(a) < cost(b); });
 }
 
 } /* namespace */
@@ -974,6 +888,9 @@ devices_row(const MenuKit &kit, MenuState &state, ImVec2 at, float width, bool t
 			                             chosen <= pads ? MenuState::Device::PAD : MenuState::Device::JOYSTICK;
 			state.device_picked = { player, state.input_device[player] };
 			state.catching.reset();
+			/* A gamepad or a joystick takes the place of the light gun */
+			if (chosen >= 1 && !state.gun[player].empty())
+				state.want_gun = std::pair(player, LightGun());
 			if (chosen >= 1 && chosen <= pads)
 				state.want = state.plugged[chosen - 1];
 			else if (chosen > pads && chosen - pads - 1 < state.joysticks.size())
@@ -1100,7 +1017,7 @@ not_mapped(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows,
 			else if (hovered)
 				kit.frame(list, { x, y }, { x + w, y + h }, kit.px(3.0f), 0, palette.action);
 			else
-				kit.dashed_frame(list, { x, y }, { x + w, y + h }, MenuKit::alpha(palette.action, MenuKit::ACTION_LINE));
+				kit.frame(list, { x, y }, { x + w, y + h }, kit.px(3.0f), 0, MenuKit::alpha(palette.action, MenuKit::ACTION_LINE));
 			MenuKit::write(list, { x + wide, y + high }, picked ? palette.accent : palette.action, row.name.c_str());
 			x += w + gap;
 		}
@@ -1299,29 +1216,13 @@ place_labels(const MenuKit &kit, std::span<Label> labels, float top, float corne
 	}
 }
 
-/* A label: its leader line from the edge of its column, then its name, as
- * wide as the room; a click on it catches */
+/* A label: its name at the edge of its column, as wide as the room; a
+ * click on it catches */
 void
-draw_label(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, Label &l, float edge, float room,
-           std::span<const std::pair<ImVec2, ImVec2>> parts)
+draw_label(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, const Label &l, float edge, float room)
 {
 	ImDrawList *const list = ImGui::GetWindowDrawList();
 	const MenuPalette &palette = kit.palette();
-	const float from = l.left ? edge - kit.px(2.0f) : edge + kit.px(2.0f);
-	const float knee = l.left ? from + kit.px(10.0f) : from - kit.px(10.0f);
-
-	l.line = route(l, from, knee, parts, kit);
-	if (l.hot) {
-		list->AddPolyline(l.line.data(), static_cast<int>(l.line.size()), palette.accent, ImDrawFlags_None,
-		                  kit.px(HOT_WIDTH));
-		list->AddCircleFilled(l.line.back(), kit.px(DOT), palette.accent);
-	} else {
-		const ImU32 rest = MenuKit::alpha(palette.stroke, REST_ALPHA);
-
-		MenuKit::dashes(list, l.line, false, rest, kit.stroke(), kit.px(DASH_ON), kit.px(DASH_OFF));
-		list->AddCircleFilled(l.line.back(), kit.px(DOT), rest);
-	}
-
 	const std::string text = MenuKit::fitted(l.text, room);
 	const float line = ImGui::GetTextLineHeight(), w = MenuKit::measure(text.c_str());
 	const ImVec2 at = { l.left ? edge - kit.px(6.0f) - w : edge + kit.px(6.0f), l.y - line / 2.0f };
@@ -1372,33 +1273,21 @@ draw_elsewhere(const MenuKit &kit, const MenuState &state, std::span<const Input
 	}
 }
 
-/* The gamepad drawn in the box, the name of each control beside the part
- * that works it, joined by a leader line: pale dashes at rest, the accent
- * while it is worked. A control on an input the drawing has not is said at
- * the foot of a column; a control on nothing waits in the row at the bottom
- * (Not mapped). A click on a name, or in that row, catches its next
- * input. */
+/* A device drawn in the box (a gamepad, a light gun), the name of each
+ * control beside the part that works it, both in the accent while it is
+ * worked. A control on an input the drawing has not is said at the foot of
+ * a column; a control on nothing waits in the row at the bottom (Not
+ * mapped). A click on a name, or in that row, catches its next input. */
 void
-pad_box(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, ImVec2 a, ImVec2 b, float corner)
+drawn_box(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, ImVec2 a, ImVec2 b, float corner,
+          const PadDrawing &drawing, Sorted &sorted, const PadState &now)
 {
-	const unsigned me = state.player & 1;
-	const int kind = state.pad_types[me];
-	const PadDrawing &drawing = pad_drawing(kind);
-	Sorted sorted = sort_rows(state, rows, drawing, kind);
 	const float tray = not_mapped(kit, state, rows, sorted.empty, a, b, false);
 	const float column = column_width(kit, sorted.labels, b.x - a.x), inside = kit.px(MenuKit::BOX_INSIDE);
 	const float bottom = b.y - kit.px(LABEL_EDGE) - tray;
 	const PadView view(drawing, { a.x + column, a.y + inside }, { b.x - column, b.y - inside - tray });
-	std::vector<std::pair<ImVec2, ImVec2>> parts;
 	uint32_t chosen = 0;
 
-	/* What a leader line should not cross: each part, a little smaller */
-	for (size_t p = 0; p < drawing.parts.size(); p++) {
-		const auto [lo, hi] = view.box(p);
-		const float in = kit.px(1.5f);
-
-		parts.push_back({ { lo.x + in, lo.y + in }, { hi.x - in, hi.y - in } });
-	}
 	for (Label &l : sorted.labels) {
 		const auto [lo, hi] = view.box(l.part);
 
@@ -1407,12 +1296,24 @@ pad_box(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, Im
 		if (l.chosen)
 			chosen |= 1u << l.part;
 	}
-	view.draw(ImGui::GetWindowDrawList(), kit.palette(), state.pad_states[me], chosen, kit.px(1.0f));
+	view.draw(ImGui::GetWindowDrawList(), kit.palette(), now, chosen, kit.px(1.0f));
 	place_labels(kit, sorted.labels, a.y + kit.px(LABEL_EDGE), corner, bottom);
 	for (Label &l : sorted.labels)
-		draw_label(kit, state, rows, l, l.left ? a.x + column : b.x - column, column - kit.px(10.0f), parts);
+		draw_label(kit, state, rows, l, l.left ? a.x + column : b.x - column, column - kit.px(10.0f));
 	draw_elsewhere(kit, state, rows, sorted, a, b, bottom);
 	not_mapped(kit, state, rows, sorted.empty, a, b, true);
+}
+
+/* The gamepad of the player */
+void
+pad_box(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, ImVec2 a, ImVec2 b, float corner)
+{
+	const unsigned me = state.player & 1;
+	const int kind = state.pad_types[me];
+	const PadDrawing &drawing = pad_drawing(kind);
+	Sorted sorted = sort_rows(state, rows, drawing, kind);
+
+	drawn_box(kit, state, rows, a, b, corner, drawing, sorted, state.pad_states[me]);
 }
 
 /* The keys of the drawing of the keyboard, row by row: the key, its name,
@@ -1562,7 +1463,7 @@ std::string
 prompt(const MenuState &state, const MenuSlot &slot)
 {
 	const bool joystick = state.on_joystick();
-	const std::string thing = state.on_pad() || joystick ? "button" : "key";
+	const std::string thing = state.on_pad() || joystick || !state.gun[state.player & 1].empty() ? "button" : "key";
 	const GameControl *const control = slot.control >= 0 ? &state.panel->controls()[static_cast<size_t>(slot.control)] :
 	                                   nullptr;
 
@@ -1574,10 +1475,13 @@ prompt(const MenuState &state, const MenuSlot &slot)
 	const bool two_ways = GameControl::half(control->low, false);
 	const bool vertical = control->low == GameControl::Low::UP || control->low == GameControl::Low::DOWN;
 
+	if (slot.part == 0 && !two_ways)
+		return "Press the trigger or pedal you want";
 	if (slot.part == 0)
-		return two_ways ? joystick ? "Move an axis the same way, or press a button for each direction" :
-		                             "Move a stick the same way, or press a button for each direction" :
-		                  "Press the trigger or pedal you want";
+		return joystick        ? "Move an axis the same way, or press a button for each direction" :
+		       state.on_pad()  ? "Move a stick the same way, or press a button for each direction" :
+		       thing == "key"  ? "Move the mouse the same way, or press a key for each direction" :
+		                         "Aim the light gun the same way, or press a button for each direction";
 	if (!two_ways)
 		return "Press the " + thing + " you want";
 	return "Press the " + thing + " for " +
@@ -1689,11 +1593,8 @@ list_box(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, I
 			list->AddRectFilled(ca, cb, MenuKit::alpha(palette.accent, AMOUNT_ALPHA), (cb.y - ca.y) / 2.0f);
 			list->PopClipRect();
 		}
-		if (empty)
-			kit.dashed_pill(list, ca, cb, palette.outline);
-		else
-			list->AddRect(ca, cb, group.chosen || group.lit ? palette.accent : palette.outline, (cb.y - ca.y) / 2.0f,
-			              ImDrawFlags_None, kit.stroke());
+		list->AddRect(ca, cb, group.chosen || group.lit ? palette.accent : palette.outline, (cb.y - ca.y) / 2.0f,
+		              ImDrawFlags_None, kit.stroke());
 		x = ca.x + wide + (chip_w - 2.0f * wide - total) / 2.0f;
 		for (size_t p = 0; p < n; p++) {
 			const InputRow &row = rows[group.parts[p].row];

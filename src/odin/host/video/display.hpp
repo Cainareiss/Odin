@@ -200,6 +200,9 @@ public:
 	 * stops) */
 	void set_sinden_border(const SindenBorder &border);
 	bool menu_popup_open() const;
+	/* A click at that point of the window falls on something of the menu
+	 * (Menu::item_at) */
+	bool menu_item_at(MenuState &state, float x, float y);
 	/* The keyboard writes in a field of the menu */
 	bool menu_typing() const;
 	/* The bar at the top of the window (menu.hpp: BarState), over the

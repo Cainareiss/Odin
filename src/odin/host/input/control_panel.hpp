@@ -75,11 +75,14 @@ struct PadState {
 
 /* The mouse as the host sees it now: where it points on the picture, 0 to
  * 1 each way from the top left corner, off when away from it (or from the
- * window), and its buttons, left, middle, right. */
+ * window), and its buttons, left, middle, right, the side one and the
+ * extra one (MouseInput). */
 struct MouseState {
 	double x = 0.5, y = 0.5;
 	bool off = false;
-	std::array<bool, 3> buttons{};
+	std::array<bool, MOUSE_BUTTONS> buttons{};
+
+	bool operator==(const MouseState &) const = default;
 };
 
 /* A joystick that is no gamepad (a wheel) as the host sees it now, all

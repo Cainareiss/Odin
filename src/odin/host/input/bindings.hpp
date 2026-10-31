@@ -28,6 +28,7 @@
 #include <array>
 #include <cstdint>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -60,14 +61,15 @@ struct PadInput {
 	bool is_digital() const { return type != Type::AXIS || is_trigger(); }
 };
 
-/* The mouse: a button, "left", "middle" or "right"; where it points on the
- * picture, "x" or "y"; "off", pointing away from the picture while it
- * aims. */
+/* The mouse: a button, "left", "middle", "right", "side" or "extra";
+ * where it points on the picture, "x" or "y"; "off", pointing away from the
+ * picture while it aims. A light gun is the mouse of its player. */
+inline constexpr size_t MOUSE_BUTTONS = 5;
 struct MouseInput {
 	enum class Type { BUTTON, X, Y, OFF };
 
 	Type type;
-	uint8_t button;	/* 0 left, 1 middle, 2 right */
+	uint8_t button;	/* 0 left, 1 middle, 2 right, 3 side, 4 extra */
 
 	/* Where it points: an axis */
 	bool is_axis() const { return type == Type::X || type == Type::Y; }
@@ -90,6 +92,14 @@ struct JoyInput {
 	/* A button, half an axis or a way of a hat: pressed or not */
 	bool is_digital() const { return type != Type::AXIS; }
 };
+
+/* The button of the mouse of an SDL button (SDL_BUTTON_LEFT...), -1 for
+ * none */
+inline int
+mouse_button_of(uint8_t sdl_button)
+{
+	return sdl_button >= SDL_BUTTON_LEFT && sdl_button <= SDL_BUTTON_X2 ? sdl_button - SDL_BUTTON_LEFT : -1;
+}
 
 /* What the host gives: a key, by the name SDL gives it ("Left Ctrl",
  * "Z", "F2"), an input of the gamepad of the player, of their joystick, or
@@ -183,12 +193,13 @@ public:
 	/* The keys that move an analog control of that role and player left
 	 * or up, right or down (positive), a pedal down (positive) */
 	static std::vector<HostInput> keys_toward(Role role, unsigned player, bool positive);
-	/* The inputs of a part without those of a kind (a device: keys, a
-	 * gamepad...), or with that kind's of its defaults in their place
-	 * (`standard`): then in the order of the defaults, those of the other
-	 * kinds after, so that a part put back whole is its defaults again */
-	static std::vector<HostInput> with_kind(const std::vector<HostInput> &inputs, const std::vector<HostInput> &standard,
-	                                        HostInput::Kind kind, bool to_defaults);
+	/* The inputs of a part without those of some kinds (a device: keys
+	 * and the mouse, a gamepad...), or with those of its defaults in their
+	 * place (`standard`): then in the order of the defaults, those of the
+	 * other kinds after, so that a part put back whole is its defaults
+	 * again */
+	static std::vector<HostInput> with_kinds(const std::vector<HostInput> &inputs, const std::vector<HostInput> &standard,
+	                                         std::span<const HostInput::Kind> kinds, bool to_defaults);
 
 private:
 	void set_defaults(const std::string &game);

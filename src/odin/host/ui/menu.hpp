@@ -25,6 +25,7 @@
 #ifndef ODIN_MENU_HPP
 #define ODIN_MENU_HPP
 
+#include <algorithm>
 #include <array>
 #include <map>
 #include <memory>
@@ -229,16 +230,14 @@ struct BarState : BarSettings {
 	 * one shown last); the card chosen (CARD_CHOOSE, -1: none); the name
 	 * of the new card (CARD_NEW); for the inputs of the game that runs
 	 * (PAD, KEYBOARD, GUN, INPUTS_*): the player, the gamepad or joystick
-	 * chosen (in pads), the light gun chosen (in guns, -1: none), the kind of
-	 * device whose inputs go back to their defaults or are cleared
-	 * (MenuState::Device) */
+	 * chosen (in pads), the light gun chosen (in guns, -1: none) */
 	enum class Ask { NONE, OPEN, CLOSE, RESET, SAVE_STATE, LOAD_STATE, CARD, CARD_CHOOSE, CARD_NEW, SETTINGS, FULLSCREEN,
 	                 PAUSE, QUIT, PAD, KEYBOARD, GUN, INPUTS_DEFAULTS, INPUTS_CLEAR, INPUTS_UNDO, HOTKEYS_DEFAULTS };
 	Ask ask = Ask::NONE;
 	int page = -1, card_chosen = -1;
 	std::string card_name;
 	unsigned asked_player = 0;
-	int asked_pad = -1, asked_gun = -1, asked_kind = 0;
+	int asked_pad = -1, asked_gun = -1;
 	/* The mouse is on the bar or a menu of it is open: its buttons are the
 	 * bar's, not the game's; the bottom of the bar, in points */
 	bool wants_mouse = false, open = false;
@@ -444,6 +443,14 @@ struct MenuState : BarSettings {
 	/* In a window not wide enough for both, the cabinet in place of the
 	 * device */
 	bool cabinet_shown = false;
+	/* The light gun of a player in the game shown (nullptr: none) */
+	const LightGun *gun_of(unsigned who) const
+	{
+		const auto it = std::find_if(guns.begin(), guns.end(),
+		                             [&](const LightGun &one) { return !gun[who & 1].empty() && one.identity == gun[who & 1]; });
+
+		return it == guns.end() ? nullptr : &*it;
+	}
 	bool on_pad() const { return input_device[player & 1] == Device::PAD; }
 	bool on_joystick() const { return input_device[player & 1] == Device::JOYSTICK; }
 	/* The kind of input of the device shown (the mouse goes with the
@@ -451,6 +458,19 @@ struct MenuState : BarSettings {
 	HostInput::Kind shown_kind() const
 	{
 		return on_pad() ? HostInput::Kind::PAD : on_joystick() ? HostInput::Kind::JOY : HostInput::Kind::KEY;
+	}
+	/* The kinds of input the page shows, which Clear and Defaults change:
+	 * the keyboard with the mouse; with a light gun, whatever the user
+	 * put on another device too */
+	std::vector<HostInput::Kind> shown_kinds() const
+	{
+		using Kind = HostInput::Kind;
+
+		if (on_pad() || on_joystick())
+			return { shown_kind() };
+		if (gun_of(player))
+			return { Kind::KEY, Kind::MOUSE, Kind::JOY, Kind::PAD };
+		return { Kind::KEY, Kind::MOUSE };
 	}
 	/* The part whose next input is caught, and those caught after it, in
 	 * turn; the part the frame of the gamepad is on (drawn as if caught) */
@@ -591,6 +611,10 @@ public:
 	void add_library_picture(const std::string &game, SDL_Surface *rgba);
 	/* A list dropped open, which Escape closes before the menu */
 	bool popup_open() const;
+	/* Whether a click at that point of the window falls on something of
+	 * the menu (a button, a tab, a row): the frame built again from the
+	 * state with the pointer there, not drawn */
+	bool item_at(MenuState &state, float x, float y);
 	/* The keyboard writes in a field of the menu */
 	bool typing() const;
 

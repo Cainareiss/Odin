@@ -213,14 +213,14 @@
 				{ "name" : "1P WATER", "id" : "1p_water", "switch" : "1P PUSH1", "role" : "button1", "pad" : [ "righttrigger" ] },
 				{ "name" : "1P FOG", "id" : "1p_fog", "switch" : "1P PUSH3", "role" : "button2", "pad" : [ "lefttrigger" ] },
 				{ "name" : "1P START", "id" : "1p_start", "switch" : "1P START", "role" : "start" },
-				{ "name" : "1P SIGHT LOCATION X", "id" : "1p_sight_x", "analog" : 0, "low" : "left", "role" : "gun_x" },
-				{ "name" : "1P SIGHT LOCATION Y", "id" : "1p_sight_y", "analog" : 1, "low" : "up", "role" : "gun_y" },
+				{ "name" : "1P X AXIS", "id" : "1p_sight_x", "analog" : 0, "low" : "left", "role" : "gun_x" },
+				{ "name" : "1P Y AXIS", "id" : "1p_sight_y", "analog" : 1, "low" : "up", "role" : "gun_y" },
 				{ "name" : "1P OUT OF SCREEN", "id" : "1p_out_of_screen", "switch" : "1P PUSH2", "role" : "gun_offscreen" },
 				{ "name" : "2P WATER", "id" : "2p_water", "switch" : "2P PUSH1", "role" : "button1", "player" : 2, "pad" : [ "righttrigger" ] },
 				{ "name" : "2P FOG", "id" : "2p_fog", "switch" : "2P PUSH3", "role" : "button2", "player" : 2, "pad" : [ "lefttrigger" ] },
 				{ "name" : "2P START", "id" : "2p_start", "switch" : "2P START", "role" : "start", "player" : 2 },
-				{ "name" : "2P SIGHT LOCATION X", "id" : "2p_sight_x", "analog" : 2, "low" : "left", "role" : "gun_x", "player" : 2 },
-				{ "name" : "2P SIGHT LOCATION Y", "id" : "2p_sight_y", "analog" : 3, "low" : "up", "role" : "gun_y", "player" : 2 },
+				{ "name" : "2P X AXIS", "id" : "2p_sight_x", "analog" : 2, "low" : "left", "role" : "gun_x", "player" : 2 },
+				{ "name" : "2P Y AXIS", "id" : "2p_sight_y", "analog" : 3, "low" : "up", "role" : "gun_y", "player" : 2 },
 				{ "name" : "2P OUT OF SCREEN", "id" : "2p_out_of_screen", "switch" : "2P PUSH2", "role" : "gun_offscreen", "player" : 2 }
 			],
 			"outputs" : [

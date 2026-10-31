@@ -425,24 +425,15 @@ Menu::bar_input(BarItems &b)
 			       PadTuning::MOST_TRIGGER_THRESHOLD);
 		}
 		ImGui::Separator();
-		const bool joysticks = std::any_of(state.pads.begin(), state.pads.end(),
-		                                   [](const BarState::Pad &pad) { return pad.joystick; });
-
+		/* All the inputs of the player, of every device; Clear all leaves
+		 * the menu open: Undo shows at once, for its few seconds */
 		for (const bool to_defaults : { true, false }) {
-			if (!ImGui::BeginMenu(to_defaults ? "Restore defaults" : "Clear all"))
-				continue;
-			b.framed();
-			/* Clear all leaves the menu open: Undo shows
-			 * at once, for its few seconds */
 			ImGui::PushItemFlag(ImGuiItemFlags_AutoClosePopups, to_defaults);
-			for (int kind = 0; kind < (joysticks ? 3 : 2); kind++)
-				if (item(DEVICE_KINDS[kind])) {
-					state.asked_player = player;
-					state.asked_kind = kind;
-					b.ask(to_defaults ? Ask::INPUTS_DEFAULTS : Ask::INPUTS_CLEAR);
-				}
+			if (item(to_defaults ? "Restore defaults" : "Clear all")) {
+				state.asked_player = player;
+				b.ask(to_defaults ? Ask::INPUTS_DEFAULTS : Ask::INPUTS_CLEAR);
+			}
 			ImGui::PopItemFlag();
-			ImGui::EndMenu();
 		}
 		if (state.undo && item("Undo clear all"))
 			b.ask(Ask::INPUTS_UNDO);

@@ -659,7 +659,7 @@ brave(Pen &pen, const Controls &c)
 		         Align::RIGHT);
 		pen.light();
 	}
-	pen.text(X, Y - 12, "SIGHT LOCATION", Align::LEFT);
+	pen.text(X, Y - 12, "AIM", Align::LEFT);
 }
 
 void
