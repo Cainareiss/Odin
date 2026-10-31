@@ -350,6 +350,44 @@ mode_named(const std::string &name)
 	return std::nullopt;
 }
 
+std::string
+LibraryFilter::systems_line() const
+{
+	std::string line;
+
+	for (const std::string &system : systems)
+		line += (line.empty() ? "" : ",") + system;
+	return line;
+}
+
+LibraryFilter
+library_filter_of(const Settings &settings)
+{
+	LibraryFilter filter;
+
+	for (const auto &[key, value] : settings.section("library")) {
+		if (key == "owned_only" && on_off_named(value)) {
+			filter.owned_only = *on_off_named(value);
+		} else if (key == "variants" && on_off_named(value)) {
+			filter.variants = *on_off_named(value);
+		} else if (key == "systems") {
+			filter.systems.clear();
+			for (size_t at = 0; at <= value.size();) {
+				const size_t comma = std::min(value.find(',', at), value.size());
+				std::string system = value.substr(at, comma - at);
+
+				std::erase(system, ' ');
+				if (!system.empty())
+					filter.systems.push_back(system);
+				at = comma + 1;
+			}
+		} else {
+			refuse_setting("library", key, value);
+		}
+	}
+	return filter;
+}
+
 std::optional<double>
 level_named(const std::string &value)
 {
@@ -584,7 +622,9 @@ known_settings(const GameList &games)
 	                        { "paths", "roms", "" }, { "paths", "bios", "" },
 	                        { "paths", "saves", SaveFolder::root() }, { "paths", "states", default_states() },
 	                        { "paths", "artwork", artwork_folder() },
-	                        { "log", "verbose", "off" }, { "menu", "classic", "off" },
+	                        { "log", "verbose", "off" }, { "library", "owned_only", "off" },
+	                        { "library", "variants", "on" }, { "library", "systems", "" },
+	                        { "menu", "classic", "off" },
 	                        { "menu", "animations", "on" }, { "menu", "theme", THEMES[0].key } });
 	for (size_t a = 0; a < MenuNav::ACTIONS; a++) {
 		const auto action = static_cast<MenuNav::Action>(a);

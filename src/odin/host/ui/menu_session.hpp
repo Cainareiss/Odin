@@ -119,6 +119,10 @@ public:
 	MenuSession(const MenuSession &) = delete;
 	MenuSession &operator=(const MenuSession &) = delete;
 
+	/* A line of odin.ini changed (none: taken away), for the time Odin
+	 * runs without one */
+	void keep(const std::string &section, const std::string &key, const std::optional<std::string> &value);
+
 	/* The menu at that page (-1: the one shown last): the game waits, no
 	 * pad shakes, its sound stops where it is. Closed, the keys held then
 	 * are not the game's. */
@@ -230,7 +234,6 @@ private:
 	void apply_link(const MenuState &was);
 	void change_part(const MenuSlot &slot, bool to_defaults);
 	void keep(const char *key, const std::optional<std::string> &value);
-	void keep(const std::string &section, const std::string &key, const std::optional<std::string> &value);
 	/* [display] window: the size of Custom, or how many times the screen;
 	 * the size the user gave the window by hand, Custom from now on
 	 * (followed at each picture of the menu, kept in odin.ini when Odin is

@@ -31,10 +31,13 @@
 #include "odin/host/ui/menu.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cfloat>
 #include <cmath>
+#include <span>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "imgui/imgui.h"
 #include "odin/host/ui/menu_kit.hpp"
@@ -85,6 +88,114 @@ wrapped(ImDrawList *list, ImVec2 at, float width, float size, ImU32 colour, cons
 
 	list->AddText(font, size, at, colour, text.c_str(), nullptr, width);
 	return font->CalcTextSizeA(size, FLT_MAX, width, text.c_str()).y;
+}
+
+/* The button of the filter, lit while it hides some games, its right edge
+ * at `right`; under it, while open, what the library shows: only the games
+ * whose files are all there, the versions of a game too, the games of each
+ * system when the list has several (one at least shown); how many it
+ * hides. Its width. */
+float
+filter_button(const MenuKit &kit, LibraryState &state, ImVec2 at, float right)
+{
+	static constexpr const char *OFF_ON[] = { "Off", "On" }, *HIDE_SHOW[] = { "Hide", "Show" };
+	static constexpr char LABEL[] = "Filter";
+	const MenuPalette &palette = kit.palette();
+	LibraryFilter &filter = state.filter;
+	const ImVec2 size = kit.button_size(LABEL), cells = kit.segments_size(HIDE_SHOW);
+	const float line = ImGui::GetTextLineHeight(), row = std::max(line, cells.y), apart = kit.px(8.0f);
+	const float pad = kit.px(12.0f), gap = kit.px(24.0f);
+	const bool systems = state.systems.size() > 1;
+	const auto shown = [&filter](const std::string &system) {
+		return filter.systems.empty() || std::find(filter.systems.begin(), filter.systems.end(), system) !=
+		                                 filter.systems.end();
+	};
+	const auto title = [](std::string name) {
+		if (!name.empty())
+			name[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(name[0])));
+		return name;
+	};
+	std::vector<std::string> names = { "Owned only", "Variants" };
+
+	at.x = right - size.x;
+	if (kit.button(LABEL, at, filter != LibraryFilter()))
+		ImGui::OpenPopup("filter");
+	if (systems)
+		for (const std::string &system : state.systems)
+			names.push_back(title(system));
+
+	float widest = 0.0f;
+
+	for (const std::string &name : names)
+		widest = std::max(widest, ImGui::CalcTextSize(name.c_str()).x);
+
+	const float width = 2.0f * pad + widest + gap + cells.x;
+
+	ImGui::SetNextWindowPos({ right - width, at.y + size.y + kit.px(6.0f) });
+	ImGui::SetNextWindowSize({ width, 0.0f });
+	ImGui::PushStyleColor(ImGuiCol_PopupBg, palette.screen);
+	ImGui::PushStyleColor(ImGuiCol_Border, palette.stroke);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { pad, pad });
+	ImGui::PushStyleVar(ImGuiStyleVar_PopupBorderSize, kit.stroke());
+	ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, 0.0f);
+	if (ImGui::BeginPopup("filter")) {
+		ImDrawList *const list = ImGui::GetWindowDrawList();
+		const ImVec2 top = ImGui::GetCursorScreenPos();
+		float y = top.y;
+		/* A row: its name at the left, its two choices at the right */
+		const auto choose = [&](const std::string &name, std::span<const char *const> labels, int &chosen,
+		                        bool still) {
+			ImGui::PushID(name.c_str());
+			list->AddText({ top.x, y + (row - line) / 2.0f }, still ? palette.faint : palette.ink,
+			              name.c_str());
+
+			const bool changed = kit.segments({ top.x + width - 2.0f * pad - kit.segments_size(labels).x,
+			                                    y + (row - cells.y) / 2.0f }, labels, chosen, still);
+
+			ImGui::PopID();
+			y += row + apart;
+			return changed;
+		};
+		int owned = filter.owned_only ? 1 : 0, variants = filter.variants ? 1 : 0;
+
+		if (choose(names[0], OFF_ON, owned, false))
+			filter.owned_only = owned == 1;
+		if (choose(names[1], HIDE_SHOW, variants, false))
+			filter.variants = variants == 1;
+		for (size_t s = 0; systems && s < state.systems.size(); s++) {
+			const std::string &system = state.systems[s];
+			const auto on = std::count_if(state.systems.begin(), state.systems.end(), shown);
+			int chosen = shown(system) ? 1 : 0;
+
+			if (s == 0) {
+				y += apart;
+				MenuKit::small_caps(list, { top.x, y }, palette.dim, "SYSTEMS");
+				y += line + apart;
+			}
+			if (!choose(names[2 + s], HIDE_SHOW, chosen, chosen && on == 1))
+				continue;
+
+			std::vector<std::string> now;
+
+			for (const std::string &other : state.systems)
+				if (other == system ? chosen == 1 : shown(other))
+					now.push_back(other);
+			filter.systems = now.size() == state.systems.size() ? std::vector<std::string>() : now;
+		}
+		if (state.hidden) {
+			const std::string told =
+				std::to_string(state.hidden) + (state.hidden == 1 ? " game hidden" : " games hidden");
+
+			list->AddText({ top.x, y }, palette.dim, told.c_str());
+			y += line;
+		}
+		ImGui::SetCursorScreenPos(top);
+		ImGui::Dummy({ width - 2.0f * pad, y - top.y - (state.hidden ? 0.0f : apart) });
+		ImGui::EndPopup();
+	}
+	ImGui::PopStyleVar(3);
+	ImGui::PopStyleColor(2);
+	return size.x;
 }
 
 } /* namespace */
@@ -144,7 +255,12 @@ Menu::build_library(LibraryState &state, BarState &bar_state)
 	                         (quit.empty() ? "" : "    " + quit + ": quit");
 
 	MenuKit::write(list, { margin, below + margin }, palette.cabinet, "SELECT A GAME", size, size * TITLE_SPACING);
-	list->AddText({ room.x - margin - ImGui::CalcTextSize(keys.c_str()).x, below + margin }, palette.faint, keys.c_str());
+
+	const float keys_x = room.x - margin - ImGui::CalcTextSize(keys.c_str()).x;
+	const float filter_h = kit.button_size("Filter").y;
+
+	list->AddText({ keys_x, below + margin }, palette.faint, keys.c_str());
+	filter_button(kit, state, { 0.0f, below + margin + (line - filter_h) / 2.0f }, keys_x - kit.px(20.0f));
 
 	const float under = below + margin + line + kit.px(8.0f);
 
@@ -170,7 +286,8 @@ Menu::build_library(LibraryState &state, BarState &bar_state)
 
 	/* The arrows and the gamepad move the choice, as the tiles lie; Enter
 	 * or its button plays. With a menu of the bar open, they are its own. */
-	if (const LibraryState::Nav nav = std::exchange(state.nav, {}); count && !bar_state.open) {
+	if (const LibraryState::Nav nav = std::exchange(state.nav, {});
+	    count && !bar_state.open && !ImGui::IsPopupOpen("filter")) {
 		const auto pressed = [](ImGuiKey key) { return ImGui::IsKeyPressed(key, true) ? 1 : 0; };
 		const int across = pressed(ImGuiKey_RightArrow) - pressed(ImGuiKey_LeftArrow) + nav.across;
 		const int down = pressed(ImGuiKey_DownArrow) - pressed(ImGuiKey_UpArrow) + nav.down;
@@ -251,6 +368,8 @@ Menu::build_library(LibraryState &state, BarState &bar_state)
 	float y = sa.y + inside;
 
 	kit.frame(list, sa, sb, kit.px(SHEET_CUT), palette.body, 0);
+	if (!count && state.hidden)
+		wrapped(list, { x, y }, width, size, palette.dim, "The filter hides every game.");
 	if (count) {
 		const LibraryState::Game &game = state.games[static_cast<size_t>(state.selected)];
 

@@ -24,6 +24,8 @@
 
 #include "odin/host/app/library.hpp"
 
+#include <algorithm>
+
 #include <SDL3/SDL.h>
 
 #include "odin/host/input/controls.hpp"
@@ -34,24 +36,29 @@ namespace odin {
 
 namespace {
 
-/* The games of the list in the library, each with the files it lacks in
- * the folders now; that one chosen */
+/* The games of the list the filter shows in the library, each with the
+ * files it lacks in the folders now; that one chosen */
 void
 scan_library(LibraryState &state, const GameList &games, const Options &options, const std::string &chosen)
 {
 	RomFiles files(options.rom_path, options.bios_path);
 
 	state.games.clear();
+	state.systems.clear();
 	state.selected = 0;
+	state.hidden = 0;
 	for (const GameList::Entry &entry : games.entries()) {
-		if (entry.machine != "hikaru")
-			continue;
-
 		const std::string &name = entry.name;
 		LibraryState::Game game{ name, entry.title, entry.parent, {} };
 
+		if (std::find(state.systems.begin(), state.systems.end(), entry.machine) == state.systems.end())
+			state.systems.push_back(entry.machine);
 		for (const RomFiles::File &file : games.missing(files, name))
 			game.missing.push_back(file.name + " (" + file.set_of(name) + ".zip)");
+		if (!state.filter.shows(entry.machine, !entry.parent.empty(), game.missing.empty())) {
+			state.hidden++;
+			continue;
+		}
 		if (name == chosen)
 			state.selected = static_cast<int>(state.games.size());
 		state.games.push_back(std::move(game));
@@ -117,7 +124,9 @@ library(const Options &command, const GameList &games, Settings &settings, const
 		note_until = SDL_GetTicks() + NOTE_MS;
 	};
 
+	state.filter = library_filter_of(settings);
 	scan_library(state, games, options, last);
+	LibraryFilter filter = state.filter;
 	state.failed = failed;
 	display.open_library();
 	SDL_ShowCursor();
@@ -218,6 +227,19 @@ library(const Options &command, const GameList &games, Settings &settings, const
 		bar.game = false;
 		show_note(bar, note_until);
 		display.draw_library(state, bar);
+		/* What it shows changed: kept, the games looked at again */
+		if (state.filter != filter) {
+			const auto line = [](bool kept, const char *value) {
+				return kept ? std::optional<std::string>(value) : std::nullopt;
+			};
+
+			filter = state.filter;
+			menus.keep("library", "owned_only", line(filter.owned_only, "on"));
+			menus.keep("library", "variants", line(!filter.variants, "off"));
+			menus.keep("library", "systems", line(!filter.systems.empty(), filter.systems_line().c_str()));
+			scan_library(state, games, options, chosen());
+			library_pictures(display, state, options.artwork);
+		}
 		/* Without a game, the bar has no game to close, save, load or
 		 * pause */
 		switch (menus.do_bar(bar)) {

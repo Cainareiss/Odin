@@ -74,8 +74,9 @@ enum class MenuFolder { NONE, ROMS, BIOS, SAVES, STATES, ARTWORK };
  * system for; the game to play, and why the one before did not start; what
  * the gamepad asked since the last picture (menu_nav.hpp: the choice moved
  * across and down, the game chosen played) and the name of its button that
- * plays (empty: no gamepad). The thread of the board keeps it and does what
- * changed (library.cpp). */
+ * plays (empty: no gamepad); the games it shows ([library]), the systems
+ * of the list, how many games it hides. The thread of the board keeps it
+ * and does what changed (library.cpp). */
 struct LibraryState {
 	struct Game {
 		std::string name, title, parent;
@@ -84,6 +85,9 @@ struct LibraryState {
 
 	std::vector<Game> games;
 	int selected = 0;
+	LibraryFilter filter;
+	std::vector<std::string> systems;
+	size_t hidden = 0;
 	std::string roms, bios;
 	bool roms_given = false, bios_given = false;
 	using Folder = MenuFolder;

@@ -93,7 +93,11 @@ gamepad (as [menu] press says) or a second click plays it, and when it ends
 (but by Ctrl+Q, which quits) the library comes back, as it does after Close
 game of the bar from any game. The bar is over the library at all times,
 and the menu (Escape, F10 or Guide) opens there as in a game, its page Input
-on the game chosen. The pictures of the games
+on the game chosen. Its Filter button chooses what it shows, kept in
+[library] of odin.ini: only the games whose files are all there
+(owned_only = on), the versions of a game too or not (variants = off), the
+games of some systems (systems = hikaru, apart by commas; all when it does
+not say). The pictures of the games
 are in the folder of the artwork (artwork/ in the data folder of Odin,
 beside saves/; artwork in [paths], page Paths; ODIN_ARTWORK=<folder> another
 one, none none), named after the game in MAME, in any case:

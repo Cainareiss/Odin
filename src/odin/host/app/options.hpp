@@ -28,6 +28,7 @@
 #ifndef ODIN_OPTIONS_HPP
 #define ODIN_OPTIONS_HPP
 
+#include <algorithm>
 #include <optional>
 #include <string>
 #include <vector>
@@ -124,6 +125,26 @@ std::optional<double> level_named(const std::string &value);
 /* [players.<game>] vibration: the pads shake unless it says off (the last
  * line says) */
 bool vibration_on(const Settings &settings, const std::string &game);
+/* [library]: the games the library shows, of the list: owned_only, only
+ * those whose files are all there (off, when it does not say, or on);
+ * variants, the versions of a game ("parent" in the list) too (on, when it
+ * does not say, or off); systems, those of these machines ("hikaru",
+ * apart by commas; all, when it does not say). The last right line of
+ * each says. */
+struct LibraryFilter {
+	bool owned_only = false, variants = true;
+	std::vector<std::string> systems;	/* none: all */
+
+	bool operator==(const LibraryFilter &) const = default;
+	bool shows(const std::string &machine, bool variant, bool owned) const
+	{
+		return (variants || !variant) && (!owned_only || owned) &&
+		       (systems.empty() || std::find(systems.begin(), systems.end(), machine) != systems.end());
+	}
+	/* The line of odin.ini of its systems */
+	std::string systems_line() const;
+};
+LibraryFilter library_filter_of(const Settings &settings);
 /* [outputs.<game>] <id of an output>: the light gun a vibration of the
  * cabinet goes to: none (when it does not say), the motor of the gun of a
  * player (gun1, gun2) or its solenoid (gun1 recoil, gun2 recoil); the last
