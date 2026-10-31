@@ -850,12 +850,20 @@ HostGraphics::window_flags_vk()
 	return SDL_WINDOW_VULKAN;
 }
 
+const std::vector<std::string> &
+HostGraphics::gpus()
+{
+	static const std::vector<std::string> all = vk::Context::gpus();
+
+	return all;
+}
+
 /* Vulkan for that window, or nothing with the reason on stderr */
 std::unique_ptr<HostGraphics>
-HostGraphics::make_vk(SDL_Window *window, unsigned, unsigned)
+HostGraphics::make_vk(SDL_Window *window, unsigned, unsigned, const std::string &gpu)
 {
 	std::string why;
-	std::unique_ptr<vk::Context> card = vk::Context::make(window, why);
+	std::unique_ptr<vk::Context> card = vk::Context::make(window, gpu, why);
 
 	if (!card) {
 		std::fprintf(stderr, "ERROR: vulkan: %s\n", why.c_str());

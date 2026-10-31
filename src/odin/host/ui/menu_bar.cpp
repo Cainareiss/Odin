@@ -488,7 +488,7 @@ Menu::bar_display(BarItems &b)
 	int window = state.custom_window ? CUSTOM : static_cast<int>(state.window) - 1;
 	int scale = static_cast<int>(state.scale) - 1, mode = static_cast<int>(state.upscale_mode);
 	int filter = anisotropy_index(state.anisotropy), sync = static_cast<int>(state.vsync);
-	int pace = state.unthrottled ? 1 : 0;
+	int pace = state.unthrottled ? 1 : 0, api = static_cast<int>(state.api);
 	int theme = static_cast<int>(state.theme), sides = static_cast<int>(state.sides);
 
 	if (item("Full screen", b.key(Action::FULLSCREEN), state.fullscreen))
@@ -507,6 +507,22 @@ Menu::bar_display(BarItems &b)
 		ImGui::EndMenu();
 	}
 	ImGui::Separator();
+	if (b.choose("Graphics API", APIS_SHOWN, api))
+		state.api = static_cast<unsigned>(api);
+	if (state.picks_gpu() && ImGui::BeginMenu("Graphics card")) {
+		const bool known = std::find(state.gpus.begin(), state.gpus.end(), state.gpu_chosen) != state.gpus.end();
+
+		b.framed();
+		if (item("Automatic", {}, state.gpu_chosen.empty()))
+			state.gpu_chosen.clear();
+		for (const std::string &card : state.gpus)
+			if (item(card.c_str(), {}, state.gpu_chosen == card))
+				state.gpu_chosen = card;
+		/* Named in the settings, not in this computer */
+		if (!known && !state.gpu_chosen.empty())
+			item(state.gpu_chosen.c_str(), {}, true, false);
+		ImGui::EndMenu();
+	}
 	if (b.choose("Internal resolution", SCALES, scale, !state.scale_given))
 		state.scale = static_cast<unsigned>(scale) + 1;
 	if (b.choose("Upscaling mode", UPSCALE_MODES_SHOWN, mode))
@@ -548,7 +564,7 @@ Menu::bar_display(BarItems &b)
 		ImGui::EndMenu();
 	}
 	ImGui::Separator();
-	b.greyed("Graphics card", state.gpu);
+	b.greyed(state.picks_gpu() ? "In use" : "Graphics card", state.gpu);
 }
 
 void

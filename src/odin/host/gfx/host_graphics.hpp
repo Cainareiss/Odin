@@ -31,6 +31,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "odin/host/video/picture.hpp"
 
@@ -111,16 +112,22 @@ inline constexpr unsigned BLUR_ROUNDS = 2;
  * thread (display.hpp), but making it, which takes it, and destroying it. */
 class HostGraphics {
 public:
+	/* The cards Vulkan sees, as [display] gpu names them (the second of a
+	 * make "... (2)"), or none: asked once */
+	static const std::vector<std::string> &gpus();
+
 	/* OpenGL: what SDL must be told before the window is made, the flags
 	 * of the window; then the card for that window, made that size,
 	 * taken by the calling thread, or nothing, with the reason on stderr */
 	static void prepare_gl();
 	static uint64_t window_flags_gl();
 	static std::unique_ptr<HostGraphics> make_gl(SDL_Window *window, unsigned window_w, unsigned window_h);
-	/* Vulkan: the flags of the window, then the card for it
-	 * (host_graphics_vk.cpp), or nothing with the reason on stderr */
+	/* Vulkan: the flags of the window, then the card for it, the one named
+	 * `gpu` if it can (empty: the best one) (host_graphics_vk.cpp), or
+	 * nothing with the reason on stderr */
 	static uint64_t window_flags_vk();
-	static std::unique_ptr<HostGraphics> make_vk(SDL_Window *window, unsigned window_w, unsigned window_h);
+	static std::unique_ptr<HostGraphics> make_vk(SDL_Window *window, unsigned window_w, unsigned window_h,
+	                                             const std::string &gpu);
 	virtual ~HostGraphics() = default;
 
 	/* The name of the card, whether Vulkan draws on it (else OpenGL), and

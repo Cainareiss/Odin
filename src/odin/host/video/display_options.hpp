@@ -75,6 +75,9 @@ struct DisplayOptions {
 	std::string filter;
 	DisplayApi api;
 	DisplayUpscaleMode upscale_mode;
+	/* The card Vulkan draws on by its name (HostGraphics::gpus); empty: the
+	 * best one */
+	std::string gpu;
 };
 
 } /* namespace odin */

@@ -608,9 +608,37 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 	const bool narrow = ImGui::GetContentRegionAvail().x < kit.px(SIZES_WHOLE);
 
 	kit.begin_group("RENDERER");
-	kit.next_tip("Chosen by the system, not by Odin.");
+	int api = static_cast<int>(state.api);
+
+	kit.next_tip("What draws the picture. If Vulkan cannot start on this computer, OpenGL draws instead.");
 	watch(PREVIEW_CARD, [&] {
-		kit.text("Graphics card", nullptr, state.gpu.c_str());
+		if (kit.choice("Graphics API", "at the next launch", APIS_SHOWN, api))
+			state.api = static_cast<unsigned>(api);
+	});
+
+	if (state.picks_gpu()) {
+		std::vector<std::string> cards = { "Automatic" };
+		int card = 0;
+
+		cards.insert(cards.end(), state.gpus.begin(), state.gpus.end());
+		for (size_t i = 1; i < cards.size(); i++)
+			if (cards[i] == state.gpu_chosen)
+				card = static_cast<int>(i);
+		/* Named in the settings, not in this computer */
+		if (card == 0 && !state.gpu_chosen.empty()) {
+			card = static_cast<int>(cards.size());
+			cards.push_back(state.gpu_chosen);
+		}
+		kit.next_tip("The card that draws. Automatic takes the fastest kind.");
+		watch(PREVIEW_CARD, [&] {
+			if (kit.value_list("Graphics card", "at the next launch", cards[static_cast<size_t>(card)].c_str(),
+			                   "Change...", cards, card))
+				state.gpu_chosen = card == 0 ? "" : cards[static_cast<size_t>(card)];
+		});
+	}
+	kit.next_tip(state.picks_gpu() ? "The card drawing now." : "Chosen by the system, not by Odin.");
+	watch(PREVIEW_CARD, [&] {
+		kit.text(state.picks_gpu() ? "In use" : "Graphics card", nullptr, state.gpu.c_str());
 	});
 	kit.end_group();
 

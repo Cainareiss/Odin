@@ -142,6 +142,8 @@ read_display(const Settings &settings, Options &options)
 			options.display.filter = value == "none" ? std::string() : value;
 		} else if (key == "api" && index_named(APIS, value)) {
 			options.display.api = static_cast<DisplayApi>(*index_named(APIS, value));
+		} else if (key == "gpu") {
+			options.display.gpu = value;
 		} else if (key == "upscale_mode" && index_named(UPSCALE_MODES, value)) {
 			options.display.upscale_mode = static_cast<DisplayUpscaleMode>(*index_named(UPSCALE_MODES, value));
 		} else if (key == "bezel" && index_named(SIDES_NAMES, value)) {
@@ -567,7 +569,7 @@ known_settings(const GameList &games)
 		{ "display", "fullscreen", "off" }, { "display", "vsync", VSYNCS[static_cast<unsigned>(VSYNC)] },
 		{ "display", "bezel", SIDES_NAMES[static_cast<unsigned>(SIDES)] },
 		{ "display", "unthrottled", "off" }, { "display", "show_speed", "on" }, { "display", "filter", "none" },
-		{ "display", "api", APIS[static_cast<unsigned>(API)] },
+		{ "display", "api", APIS[static_cast<unsigned>(API)] }, { "display", "gpu", "" },
 		{ "sound", "device", "" }, { "sound", "volume", "100" }, { "sound", "background", "on" },
 	};
 

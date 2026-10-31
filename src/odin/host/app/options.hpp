@@ -90,7 +90,7 @@ struct Options {
 	bool background = true;
 	DisplayOptions display = { .scale = 1, .anisotropy = 1, .window = 0, .fullscreen = false, .show_speed = true,
 	                           .vsync = DisplayVsync::OFF, .window_w = 0, .window_h = 0, .filter = "", .api = API,
-	                           .upscale_mode = DisplayUpscaleMode::RAW };
+	                           .upscale_mode = DisplayUpscaleMode::RAW, .gpu = "" };
 	/* [display] vsync: the display gets it when the frames are paced */
 	DisplayVsync vsync = VSYNC;
 	/* [display] bezel: around the picture */
