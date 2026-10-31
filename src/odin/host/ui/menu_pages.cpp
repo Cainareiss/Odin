@@ -1073,7 +1073,7 @@ Menu::page_paths(MenuKit &kit, MenuState &state) const
 	if (kit.value("Games (ROMs)", "at the next launch", shown_path(state.roms, "not set").c_str(), change, nullptr,
 	              state.roms_given ? "set on the command line: -R" : nullptr))
 		state.choose = MenuState::Folder::ROMS;
-	kit.next_tip("hikaru, mie and jvs13551, named as in MAME.");
+	kit.next_tip("hikaru and mie, named as in MAME; jvs13551, 18wheelr and srally2 are optional.");
 	if (kit.value("BIOS", "at the next launch", shown_path(state.bios, "the games folder").c_str(), change, nullptr,
 	              state.bios_given ? "set on the command line: -B" : nullptr))
 		state.choose = MenuState::Folder::BIOS;
