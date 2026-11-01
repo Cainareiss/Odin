@@ -95,7 +95,7 @@ jobs:
         run: |
           dir="odin-${VERSION}-linux-${{ matrix.arch }}"
           cmake --install build --strip --prefix "$dir"
-          cp README LICENSE "$dir/"
+          cp README INSTALL OPTIONS LICENSE "$dir/"
           tar czf "out/$dir.tar.gz" "$dir"
 
       - uses: actions/upload-artifact@v4
@@ -146,6 +146,7 @@ jobs:
         run: |
           mkdir -p dmg out
           cp -R Odin.app dmg/
+          cp README INSTALL OPTIONS LICENSE dmg/
           ln -s /Applications dmg/Applications
           hdiutil create -volname Odin -srcfolder dmg -ov -format UDZO out/odin-macos.dmg
 
@@ -194,7 +195,7 @@ jobs:
           dir="odin-${VERSION}-windows-x86_64"
           cmake --install build --strip --prefix stage
           mkdir -p "$dir" out
-          cp stage/bin/odin.exe README LICENSE "$dir/"
+          cp stage/bin/odin.exe README INSTALL OPTIONS LICENSE "$dir/"
           cp -R stage/share/odin/. "$dir/"
           "$dir/odin.exe" -h > /dev/null
           objdump -p "$dir/odin.exe" | grep "DLL Name"
