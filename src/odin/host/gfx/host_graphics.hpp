@@ -178,6 +178,10 @@ public:
 	/* The images in blocks (make_image) drawn in blocks in the list from
 	 * here on, till `on` false: Dear ImGui would smooth them */
 	virtual void ui_blocks(ImDrawList *list, bool on) const = 0;
+	/* The images drawn smaller in the list from here on, till `on` false,
+	 * read over their levels (make_image): Dear ImGui's OpenGL reads only
+	 * the largest */
+	virtual void ui_levels(ImDrawList *list, bool on) const = 0;
 
 	/* What the card does for the renderer of a game */
 	virtual std::unique_ptr<Drawing> make_drawing() = 0;

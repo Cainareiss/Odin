@@ -334,9 +334,11 @@ Menu::build_library(LibraryState &state, BarState &bar_state)
 			const ImVec2 pa = { std::round(a.x + (tile_w - picture->second.w * k) / 2.0f),
 				            std::round(a.y + (tile_h - picture->second.h * k) / 2.0f) };
 
+			m_graphics.ui_levels(list, true);
 			list->AddImage(ImTextureRef(static_cast<ImTextureID>(m_graphics.ui_image(picture->second))), pa,
 			               { pa.x + std::round(picture->second.w * k), pa.y + std::round(picture->second.h * k) },
 			               { 0.0f, 0.0f }, { 1.0f, 1.0f }, playable ? IM_COL32_WHITE : DIMMED);
+			m_graphics.ui_levels(list, false);
 			list->AddTriangleFilled(a, { a.x + cut, a.y }, { a.x, a.y + cut }, palette.screen);
 			list->AddTriangleFilled({ b.x, a.y }, { b.x, a.y + cut }, { b.x - cut, a.y }, palette.screen);
 			list->AddTriangleFilled(b, { b.x - cut, b.y }, { b.x, b.y - cut }, palette.screen);

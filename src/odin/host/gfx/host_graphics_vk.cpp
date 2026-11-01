@@ -119,6 +119,8 @@ public:
 	void stop_ui() override;
 	uint64_t ui_image(HostImage image) const override;
 	void ui_blocks(ImDrawList *list, bool on) const override;
+	/* Dear ImGui's smooth sampler reads the levels already */
+	void ui_levels(ImDrawList *, bool) const override {}
 
 	std::unique_ptr<Drawing> make_drawing() override { return Drawing::make_vk(*m_card); }
 

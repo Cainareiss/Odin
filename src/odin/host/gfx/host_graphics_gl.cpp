@@ -84,6 +84,7 @@ public:
 	void stop_ui() override;
 	uint64_t ui_image(HostImage image) const override { return image.id; }
 	void ui_blocks(ImDrawList *list, bool on) const override;
+	void ui_levels(ImDrawList *list, bool on) const override { ui_blocks(list, on); }
 
 	std::unique_ptr<Drawing> make_drawing() override { return Drawing::make_gl(); }
 
@@ -183,8 +184,9 @@ GlGraphics::make_image(const SDL_Surface &rgba, bool smooth)
 	return { texture, static_cast<float>(rgba.w), static_cast<float>(rgba.h) };
 }
 
-/* Dear ImGui binds a smooth sampler of its own over the filters of the
- * texture */
+/* Dear ImGui binds a sampler of its own, smooth and of one level, over the
+ * filters of the texture: the images in blocks and those made smaller
+ * (ui_levels) are read with their own */
 void
 GlGraphics::ui_blocks(ImDrawList *list, bool on) const
 {
