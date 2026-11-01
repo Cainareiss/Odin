@@ -6,6 +6,10 @@ if(NOT CMAKE_ASM_COMPILER)
 	set(CMAKE_ASM_COMPILER "${CMAKE_CXX_COMPILER}")
 endif()
 enable_language(ASM)
+# Windows: odin.rc, the manifest and the icon of odin.exe
+if(WIN32)
+	enable_language(RC)
+endif()
 
 include(GNUInstallDirs)
 
@@ -415,6 +419,10 @@ endif()
 if(WIN32)
 	target_link_libraries(odin PRIVATE ws2_32 hid setupapi)
 	target_link_options(odin PRIVATE -static)
+	# The manifest (UTF-8) and the icon of odin.exe, found beside odin.rc
+	target_sources(odin PRIVATE src/odin/host/app/odin.rc)
+	set_property(SOURCE src/odin/host/app/odin.rc APPEND PROPERTY INCLUDE_DIRECTORIES
+		${CMAKE_SOURCE_DIR}/src/odin/host/app)
 endif()
 target_link_libraries(odin PRIVATE odin_deps odin_sdl)
 

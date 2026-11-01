@@ -22,5 +22,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* Windows: the manifest of odin.exe (1, RT_MANIFEST) */
+/* Windows: the manifest of odin.exe (1, RT_MANIFEST); its icon, the logo
+ * of dist/odin.svg from 16 to 256 pixels */
 1 24 "odin.manifest"
+1 ICON "odin.ico"
