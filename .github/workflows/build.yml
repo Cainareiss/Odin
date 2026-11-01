@@ -74,6 +74,7 @@ jobs:
       - name: Build AppImage
         run: |
           DESTDIR=$PWD/AppDir cmake --install build --strip
+          cp dist/odin.png AppDir/odin.png
           wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-${{ matrix.arch }}.AppImage
           chmod +x linuxdeploy-${{ matrix.arch }}.AppImage
           ./linuxdeploy-${{ matrix.arch }}.AppImage --appimage-extract-and-run \
@@ -104,7 +105,7 @@ jobs:
 
   macos:
     name: macOS (dmg)
-    runs-on: macos-14
+    runs-on: macos-15
     env:
       VERSION: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
     steps:
