@@ -40,8 +40,8 @@ constexpr const char *IDS[Hotkeys::ACTIONS] = { "menu", "pause", "save_state", "
  * saves the state and F4 loads it (as in RetroArch); Ctrl+R switches the
  * cabinet off and on; F11 or Alt+Enter the whole display; F6 the card in
  * or out; F7 the light gun mode; Ctrl+C closes the game (back to the
- * library); Ctrl+Q quits. On a gamepad Guide held with Back, RB, LB, Y or
- * Start, as Batocera, which has no button to reset. */
+ * library); Ctrl+Q quits. On a gamepad Guide held with Back, RB, LB, Y, B
+ * or Start, as Batocera, which has no button to reset. */
 const Hotkeys::Binding STANDARD[Hotkeys::ACTIONS] = {
 	{ { { { SDLK_ESCAPE, SDL_KMOD_NONE }, { SDLK_F10, SDL_KMOD_NONE } } }, Hotkeys::GUIDE_ALONE },
 	{ { { { SDLK_P, SDL_KMOD_NONE }, {} } }, SDL_GAMEPAD_BUTTON_BACK },
@@ -51,7 +51,7 @@ const Hotkeys::Binding STANDARD[Hotkeys::ACTIONS] = {
 	{ { { { SDLK_F11, SDL_KMOD_NONE }, { SDLK_RETURN, SDL_KMOD_ALT } } }, Hotkeys::NO_PAD },
 	{ { { { SDLK_F6, SDL_KMOD_NONE }, {} } }, SDL_GAMEPAD_BUTTON_NORTH },
 	{ { { { SDLK_F7, SDL_KMOD_NONE }, {} } }, Hotkeys::NO_PAD },
-	{ { { { SDLK_C, SDL_KMOD_CTRL }, {} } }, Hotkeys::NO_PAD },
+	{ { { { SDLK_C, SDL_KMOD_CTRL }, {} } }, SDL_GAMEPAD_BUTTON_EAST },
 	{ { { { SDLK_Q, SDL_KMOD_CTRL }, {} } }, SDL_GAMEPAD_BUTTON_START },
 };
 
