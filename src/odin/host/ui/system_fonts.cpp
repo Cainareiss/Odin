@@ -50,11 +50,12 @@ namespace {
 
 #ifdef _WIN32
 /* In the folder of the fonts of Windows 10 and 11, whatever their
- * language: Latin, Greek, Cyrillic, Arabic, Hebrew (Segoe UI); Indian
+ * language: Latin, Greek, Cyrillic, Arabic, Hebrew (Segoe UI); the signs
+ * of the gamepads, ✕ ○ □ △ and the arrows (Segoe UI Symbol); Indian
  * scripts (Nirmala UI); Thai (Leelawadee UI); Japanese (Yu Gothic, else
  * MS Gothic); Chinese (Microsoft YaHei, JhengHei); Korean (Malgun Gothic) */
 const std::vector<std::vector<const char *>> WANTED = {
-	{ "segoeui.ttf" }, { "Nirmala.ttf" }, { "LeelawUI.ttf" }, { "YuGothR.ttc", "msgothic.ttc" },
+	{ "segoeui.ttf" }, { "seguisym.ttf" }, { "Nirmala.ttf" }, { "LeelawUI.ttf" }, { "YuGothR.ttc", "msgothic.ttc" },
 	{ "msyh.ttc" }, { "msjh.ttc" }, { "malgun.ttf" },
 };
 #elif defined(__APPLE__)
