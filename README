@@ -5,62 +5,69 @@
 ╚██████╔╝██████╔╝██║██║ ╚████║
  ╚═════╝ ╚═════╝ ╚═╝╚═╝  ╚═══╝
 
-Odin (ᚨ), Copyright (c) 2026 Réda Chérif-Touil
-Released under the GPL v3 License, see the LICENSE file.
+Odin (ᚨ), Copyright (C) 2026 Réda Chérif-Touil
+Released under the GNU GPL, version 3 or later (see LICENSE).
 
-Odin is a low-level emulator of the SEGA Hikaru arcade board: it runs the
-programs of the real chips wherever they are known, and draws the games with
-OpenGL or Vulkan.
+Odin is a low-level emulator of the SEGA Hikaru arcade board, for Linux,
+Windows and macOS. It runs the programs of the real chips wherever they
+are known, and draws with OpenGL or Vulkan.
+
+Odin runs the six Hikaru games, two of them in two versions. They play
+with a keyboard, gamepads, wheels with force feedback (NASCAR) or light
+guns (Brave Firefighters). Virtual-On saves to its card. Odin links
+cabinets over the network and sends the cabinet outputs as MAME does.
 
 
 GAMES
 =====
 
-The games of odin-games.json, by the names of their MAME sets:
+ airtrix    Air Trix
+ airtrixo   Air Trix (original)
+ braveff    Brave Firefighters
+ pharrier   Planet Harriers
+ sgnascar   NASCAR Arcade
+ sgnascaro  NASCAR Arcade (original)
+ swracer    Star Wars Racer Arcade
+ von4       Cyber Troopers Virtual-On Force
 
- airtrix   Air Trix
- braveff   Brave Firefighters
- pharrier  Planet Harriers
- sgnascar  NASCAR Arcade
- swracer   Star Wars Racer Arcade
- von4      Cyber Troopers Virtual-On Force
+Each name is a MAME set. The games also need the shared sets hikaru and
+mie; jvs13551, 18wheelr and srally2 are optional.
 
-
-STATUS
-======
-
-A work in progress. The six games run from power-on through their attract
-loops, and what each one keeps without power (its settings, its records,
-the clock) is kept between runs. Gamepads, wheels, light guns and force
-feedback are being written: until then the keyboard is the control panel
-(see INSTALL). TODO lists what is missing and what is guessed.
+The title screens and bezels of the games come in a separate pack,
+Odin-Artwork.zip, released with Odin: extract it beside the program. All
+rights to these pictures are reserved by SEGA.
 
 
-FILES
-=====
+INSTALL tells how to build and start Odin, OPTIONS lists every option and
+setting, TODO what is missing or guessed.
 
- INSTALL    building and running
- TODO       what is missing, and what is guessed (HEURISTIC)
+
+REPORTING A PROBLEM
+===================
+
+Ask for help in the Arcade Community Discord: https://arcade.community
+Report a bug of Odin on GitHub: https://github.com/Tovarichtch/Odin/issues
+
+Odin writes what it does to odin.log, in its folder (see FILES in INSTALL),
+at each start; the start before is kept as odin-previous.log. When
+something goes wrong, send odin.log (and odin-previous.log after a crash)
+with your report: what you did, which game, which computer.
+
+If we ask for more: turn on the detailed log (page Paths, Detailed log, or
+the bar, DEBUG), start the game again and send the new odin.log. It makes
+the game much slower and the file much bigger: turn it off afterwards.
 
 
 CREDITS
 =======
 
-Odin is a hard fork of Valkyrie, Copyright (c) 2011-2013 Stefano Teso,
-released under the GPL v3 License. Valkyrie thanked the MAME developers for
-the hardware description and the memory map of their Hikaru driver, and the
-MAME, nullDC, lxdream and Demul developers for their work and findings.
+Odin is a hard fork of Valkyrie, the Hikaru emulator by Stefano Teso,
+Copyright (C) 2011-2013, GNU GPL version 3 or later.
 
-The menu is drawn with Dear ImGui, Copyright (c) 2014-2026 Omar Cornut,
-released under the MIT License (src/imgui/LICENSE.txt). Its gamepads are
-drawn from AL2009man's Gamepad-Asset-Pack, Copyright (c) 2024 Al. Lopez,
-released under the MIT License (src/odin/host/ui/pad_drawings_al2009man.cpp). Its
-letters are those of Cozette, by the-moonwitch, released under the MIT
-License (src/odin/host/ui/fonts/LICENSE-cozette). The rune of Odin's logo is the one
-of Junicode, Copyright (c) 2025 Peter S. Baker, released under the SIL Open
-Font License 1.1 (src/odin/host/ui/fonts/LICENSE-junicode).
-The archives of the games are read with miniz, Copyright (c) 2010-2014 Rich
-Geldreich and Tenacious Software LLC, 2013-2014 RAD Game Tools and Valve
-Software, released under the MIT License (src/miniz/LICENSE), and the 7z
-reader of the LZMA SDK by Igor Pavlov, in the public domain
-(src/lzma/lzma-sdk.txt).
+Thanks to the developers of MAME (its Hikaru driver) and Flycast, and to
+Neill Corlett for his documentation of the AICA.
+
+Odin also uses Dear ImGui, SDL 3, GLEW, Jansson, Vulkan-Headers, miniz,
+the LZMA SDK, the Lola Retro CRT filters, the Cozette and Junicode fonts
+and AL2009man's gamepad drawings. Their licences are on the page About of
+the menu and beside their sources.
