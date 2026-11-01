@@ -44,7 +44,7 @@ class Settings;
  * frame of focus goes up, down, left or right, A presses, B goes back,
  * X clears and Y sets back to the default (page Input), LB and RB change
  * the page, LT and RT the game. [menu] of odin.ini gives each its inputs
- * as [controls.<game>] does: "page_after = pad:rightshoulder, key:F2". */
+ * as [controls.<game>] does: "page_after = pad:rightshoulder, key:F3". */
 class MenuNav {
 public:
 	enum Action : uint8_t {

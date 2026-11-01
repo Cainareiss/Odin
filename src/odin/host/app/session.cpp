@@ -39,7 +39,7 @@ constexpr std::chrono::nanoseconds FRAME(1000000000 / 60);
 
 } /* namespace */
 
-/* F1 and F4: <game>.odinstate in the folder of the save states */
+/* F2 and F4: <game>.odinstate in the folder of the save states */
 std::string
 Session::state_path() const
 {
