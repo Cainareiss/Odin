@@ -136,7 +136,7 @@ struct HostInput {
 };
 
 /* The inputs that work each control of a panel (any one of them) and each
- * control of the cabinet: the defaults of their roles (the keys as INSTALL
+ * control of the cabinet: the defaults of their roles (the keys as OPTIONS
  * tells them, the gamepad of the player and the first axis of their
  * joystick for the wheel, or the keys and the inputs of the gamepad the
  * list of games gives a button), then the lines of

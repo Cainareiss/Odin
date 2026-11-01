@@ -48,7 +48,7 @@ namespace {
 /* The word on top of odin.ini */
 constexpr std::string_view HEADER[] = {
 	"# The settings of Odin. A line that starts with # is a setting at its value",
-	"# by default: take the # away and change the value to change it. INSTALL",
+	"# by default: take the # away and change the value to change it. OPTIONS",
 	"# tells what each one does.",
 };
 

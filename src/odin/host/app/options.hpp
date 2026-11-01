@@ -228,7 +228,7 @@ std::string default_states();
 bool load_game_list(GameList &games);
 
 /* Every key of odin.ini, at its value by default, in the order the file
- * shows them: what holds for every game (INSTALL), then the sound, the
+ * shows them: what holds for every game (OPTIONS), then the sound, the
  * controls and the gamepads of each game of the list */
 std::vector<Settings::Known> known_settings(const GameList &games);
 

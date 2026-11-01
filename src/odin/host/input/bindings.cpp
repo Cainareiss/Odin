@@ -38,7 +38,7 @@ namespace odin {
 
 namespace {
 
-/* The keys of the cabinet as INSTALL tells them, and the gamepad of each
+/* The keys of the cabinet as OPTIONS tells them, and the gamepad of each
  * player: a stick on the keys of the directions, the second stick of
  * player 1 on those of player 2, the gears on the keys of LB and RB.
  * TEST and SERVICE are the buttons of the cabinet, on its I/O board,
