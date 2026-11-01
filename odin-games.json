@@ -182,8 +182,8 @@
 					"type" : "interleave",
 					"amnt" : 2,
 					"data" : [
-						{ "name" : "epr-23601.ic29", "size" : 4194304, "crc" : "e0c642cb", "set" : "airtrix" },
-						{ "name" : "epr-23602.ic30", "size" : 4194304, "crc" : "fac11d21", "set" : "airtrix" }
+						{ "name" : "epr-23601.ic29", "size" : 4194304, "crc" : "e0c642cb" },
+						{ "name" : "epr-23602.ic30", "size" : 4194304, "crc" : "fac11d21" }
 					]
 				},
 				{
@@ -737,8 +737,8 @@
 					"type" : "interleave",
 					"amnt" : 2,
 					"data" : [
-						{ "name" : "epr-23485.ic35", "size" : 4194304, "crc" : "13b44fbf", "set" : "sgnascar" },
-						{ "name" : "epr-23486.ic36", "size" : 4194304, "crc" : "ac3acd19", "set" : "sgnascar" }
+						{ "name" : "epr-23485.ic35", "size" : 4194304, "crc" : "13b44fbf" },
+						{ "name" : "epr-23486.ic36", "size" : 4194304, "crc" : "ac3acd19" }
 					]
 				},
 				{

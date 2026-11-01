@@ -343,9 +343,9 @@ RomFiles::in_folder(const std::string &folder, const File &file, bool by_crc)
 }
 
 /* The folder and the archives of the game in that of the ROMs, the
- * archives and the folder of its set in that of the BIOS, then in that of
- * the ROMs; last, the files of its size of those folders, read for their
- * CRC */
+ * archives and the folder of its set, then of its parent, in that of the
+ * BIOS, then in that of the ROMs; last, the files of its size of those
+ * folders, read for their CRC */
 std::optional<RomFiles::Place>
 RomFiles::locate(const std::string &game, const File &file)
 {
@@ -358,16 +358,18 @@ RomFiles::locate(const std::string &game, const File &file)
 		if (!m_roms.empty())
 			if (auto place = in_archive(m_roms + "/" + game + kind, file))
 				return place;
-	if (!file.set.empty()) {
+	for (const std::string *const set : { &file.set, &file.parent }) {
+		if (set->empty() || (set == &file.parent && file.parent == file.set))
+			continue;
 		for (const std::string &dir : { m_bios, m_roms }) {
 			if (dir.empty())
 				continue;
 			for (const char *const kind : ARCHIVES)
-				if (auto place = in_archive(dir + "/" + file.set + kind, file))
+				if (auto place = in_archive(dir + "/" + *set + kind, file))
 					return place;
-			if (auto place = in_folder(dir + "/" + file.set, file, false))
+			if (auto place = in_folder(dir + "/" + *set, file, false))
 				return place;
-			folders.push_back(dir + "/" + file.set);
+			folders.push_back(dir + "/" + *set);
 		}
 	}
 	for (const std::string &folder : folders)

@@ -75,12 +75,14 @@ uint32_t crc32(const std::vector<uint8_t> &bytes);
 class RomFiles {
 public:
 	/* A file the game list names: its CRC (MAME's) when it gives one, the
-	 * set MAME keeps it in when it is not the game's */
+	 * set MAME keeps it in when it is not the game's, the parent of the
+	 * game (a merged set keeps the game's own files in its archive) */
 	struct File {
 		std::string name;
 		uint64_t size;
 		std::optional<uint32_t> crc;
 		std::string set;
+		std::string parent = {};
 
 		/* The set MAME keeps it in, for a file of `game` */
 		const std::string &set_of(const std::string &game) const { return set.empty() ? game : set; }

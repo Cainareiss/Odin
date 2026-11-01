@@ -82,9 +82,9 @@ parse_hex_number(const json_t *value, size_t bytes)
 
 /* A file of a section: {"name": ..., "size": ..., "crc": "<8 hexadecimal
  * digits>", "set": ...}, the CRC and the set MAME keeps it in when the
- * list tells them */
+ * list tells them; the parent of its game */
 std::optional<RomFiles::File>
-file_of(const json_t *datum)
+file_of(const json_t *datum, const std::string &parent)
 {
 	const char *const name = json_string_value(json_object_get(datum, "name"));
 	const json_int_t size = json_integer_value(json_object_get(datum, "size"));
@@ -94,7 +94,7 @@ file_of(const json_t *datum)
 	if (!name || size <= 0)
 		return std::nullopt;
 
-	RomFiles::File file = { name, static_cast<uint64_t>(size), std::nullopt, set ? set : "" };
+	RomFiles::File file = { name, static_cast<uint64_t>(size), std::nullopt, set ? set : "", parent };
 
 	if (crc) {
 		const std::optional<uint32_t> value = parse_hex_number(json_object_get(datum, "crc"), 4);
@@ -107,14 +107,14 @@ file_of(const json_t *datum)
 }
 
 std::optional<std::vector<uint8_t>>
-load_datum(const json_t *datum, RomFiles &files, const std::string &game)
+load_datum(const json_t *datum, RomFiles &files, const Game &game)
 {
-	const std::optional<RomFiles::File> file = file_of(datum);
+	const std::optional<RomFiles::File> file = file_of(datum, game.parent);
 	std::string where;
 
 	if (!file)
 		return std::nullopt;
-	std::optional<std::vector<uint8_t>> bytes = files.read(game, *file, where);
+	std::optional<std::vector<uint8_t>> bytes = files.read(game.name, *file, where);
 	/* A line for each file in the detailed log only: tens of them */
 	if (bytes && repeats::detailed())
 		std::printf("Loading %u bytes from '%s'\n", static_cast<unsigned>(file->size), where.c_str());
@@ -122,7 +122,7 @@ load_datum(const json_t *datum, RomFiles &files, const std::string &game)
 }
 
 std::optional<std::vector<uint8_t>>
-load_section(const json_t *section, RomFiles &files, const std::string &game)
+load_section(const json_t *section, RomFiles &files, const Game &game)
 {
 	const char *const name = json_string_value(json_object_get(section, "name"));
 	const char *const type = json_string_value(json_object_get(section, "type"));
@@ -922,7 +922,9 @@ GameList::entries() const
 std::vector<RomFiles::File>
 GameList::missing(RomFiles &files, const std::string &name) const
 {
-	const json_t *const sections = json_object_get(find(name), "sections");
+	const json_t *const rom = find(name);
+	const json_t *const sections = json_object_get(rom, "sections");
+	const char *const parent = json_string_value(json_object_get(rom, "parent"));
 	std::vector<RomFiles::File> out;
 
 	for (size_t i = 0; i < json_array_size(sections); i++) {
@@ -935,7 +937,7 @@ GameList::missing(RomFiles &files, const std::string &name) const
 		if (json_is_true(json_object_get(section, "optional")))
 			continue;
 		for (size_t j = 0; j < json_array_size(data); j++) {
-			const std::optional<RomFiles::File> file = file_of(json_array_get(data, j));
+			const std::optional<RomFiles::File> file = file_of(json_array_get(data, j), parent ? parent : "");
 
 			if (!file)
 				gone.push_back({ "?", 0, std::nullopt, "" });
@@ -973,7 +975,7 @@ GameList::load_game(RomFiles &files, const std::string &name) const
 				return std::nullopt;
 			}
 		}
-		auto bytes = load_section(section, files, name);
+		auto bytes = load_section(section, files, *game);
 
 		/* "optional": true, a section the game runs without */
 		if (!bytes && json_is_true(json_object_get(section, "optional"))) {
