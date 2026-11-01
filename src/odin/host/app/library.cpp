@@ -69,10 +69,46 @@ scan_library(LibraryState &state, const GameList &games, const Options &options,
 	state.bios_given = options.given.bios;
 }
 
+/* The picture of the library, taken, no wider than 1280 pixels (its tiles
+ * are smaller on any screen): averaged by blocks of k x k pixels when its
+ * sides divide by k, as a title taken at six times 640 by 480 by 3 x 3
+ * (a linear scaling reads only 2 x 2 of them and skips the rest), else
+ * scaled; the picture as it was when no smaller one can be made */
+SDL_Surface *
+shrink_picture(SDL_Surface *rgba)
+{
+	constexpr int WIDEST = 1280;
+	const int k = rgba ? (rgba->w + WIDEST - 1) / WIDEST : 0;
+
+	if (k < 2)
+		return rgba;
+
+	const bool blocks = rgba->w % k == 0 && rgba->h % k == 0;
+	SDL_Surface *const small =
+		blocks ? SDL_CreateSurface(rgba->w / k, rgba->h / k, SDL_PIXELFORMAT_RGBA32) :
+		         SDL_ScaleSurface(rgba, WIDEST, std::max(1, rgba->h * WIDEST / rgba->w), SDL_SCALEMODE_LINEAR);
+
+	if (!small)
+		return rgba;
+	for (int y = 0; blocks && y < small->h; y++)
+		for (int x = 0; x < small->w; x++)
+			for (int c = 0; c < 4; c++) {
+				const auto *const from = static_cast<const uint8_t *>(rgba->pixels);
+				unsigned sum = 0;
+
+				for (int j = 0; j < k; j++)
+					for (int i = 0; i < k; i++)
+						sum += from[(y * k + j) * rgba->pitch + (x * k + i) * 4 + c];
+				static_cast<uint8_t *>(small->pixels)[y * small->pitch + x * 4 + c] =
+					static_cast<uint8_t>((sum + k * k / 2) / (k * k));
+			}
+	SDL_DestroySurface(rgba);
+	return small;
+}
+
 /* The pictures of the games in the library, from the folder of the
- * artwork: the user's <game>_logo.png, else the <game>_title.png Odin
- * kept, else those of its parent; a game with none there forgets the one
- * it had */
+ * artwork: the user's <game>_logo.png, else its <game>_title.png, else
+ * those of its parent; a game with none there forgets the one it had */
 void
 library_pictures(Display &display, const LibraryState &state, const std::string &artwork)
 {
@@ -89,7 +125,7 @@ library_pictures(Display &display, const LibraryState &state, const std::string 
 		SDL_Surface *const rgba = png ? SDL_ConvertSurface(png, SDL_PIXELFORMAT_RGBA32) : nullptr;
 
 		SDL_DestroySurface(png);
-		display.add_library_picture(game.name, rgba);
+		display.add_library_picture(game.name, shrink_picture(rgba));
 	}
 }
 
