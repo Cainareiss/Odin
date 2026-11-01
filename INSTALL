@@ -1,625 +1,197 @@
-BUILDING
-========
+INSTALL
+=======
 
-Odin is built on GNU/Linux with GCC (C++20), CMake 3.20+ and pkg-config.
-It needs SDL 3, GLEW, Jansson, the Vulkan headers, glslangValidator and an
-OpenGL 4.3 driver (4.1 on macOS). SDL 3, GLEW, Jansson and the Vulkan
-headers not found by pkg-config are built from the submodules in 3rdparty/:
+How to build Odin, install it and start playing. Every option and setting
+is in OPTIONS.
+
+
+BUILD
+-----
+
+Linux. You need GCC (C++20), CMake 3.20 or later, pkg-config, awk,
+glslangValidator, the OpenGL and X11 development files and an OpenGL 4.3
+driver. SDL 3, GLEW, Jansson and the Vulkan headers come from the system,
+or from 3rdparty/ when it has none:
 
  $ git clone --recurse-submodules <repository> odin && cd odin
  $ cmake -B build
  $ cmake --build build -j
 
-The binary is build/bin/odin, with its data in build/share/odin. To install
-(default prefix /usr/local):
+The program is build/bin/odin, its data build/share/odin.
 
- $ cmake -B build -DCMAKE_INSTALL_PREFIX=$HOME/.local
- $ cmake --build build -j && cmake --install build
-
-Options (-D<option>=<value>):
-
- ODIN_NATIVE=OFF	no -march=native, for packages and cross builds
- ODIN_LTO=OFF		no -flto
- ODIN_OPT_FLAGS=<flags>	default "-O3 -fomit-frame-pointer -fno-stack-protector"
- ODIN_PGO=generate|use	profile-guided build
- ODIN_VERSION=<commit>	version string when building without git
- GLSLANG=<path>		glslangValidator to use
- ODIN_GLES=ON		OpenGL ES 3.1+ instead of OpenGL (Linux)
- ODIN_BUNDLED_LIBS=ON	always use 3rdparty/ (OFF: never)
-
-OpenGL ES 3.1 needs GL_EXT_geometry_shader for translucent polygons.
-
-Leave CMAKE_BUILD_TYPE empty: Release adds -DNDEBUG, which drops asserts.
-
-Profile-guided build (4-15 % faster):
-
- $ cmake -B build -DODIN_PGO=generate && cmake --build build -j
- $ build/bin/odin ...
- $ cmake -B build -DODIN_PGO=use && cmake --build build -j
-
-Cross build:
-
- $ cmake -B build -DCMAKE_TOOLCHAIN_FILE=<toolchain.cmake> -DODIN_NATIVE=OFF \
-       -DGLSLANG=<host>/bin/glslangValidator -DODIN_VERSION=<commit>
- $ cmake --build build -j
- $ DESTDIR=<target> cmake --install build --prefix /usr
-
-The layer check:
-
- $ cmake --build build --target check-layers
-
-On macOS, install the Xcode Command Line Tools, CMake (cmake.org or pip)
-and the LunarG Vulkan SDK (with System Global Installation):
-
- $ xcode-select --install
- $ source ~/VulkanSDK/<version>/setup-env.sh
- $ cmake -B build && cmake --build build -j
-
-Or with Homebrew:
-
- $ brew install cmake pkgconf sdl3 glew jansson vulkan-headers vulkan-loader \
-       molten-vk glslang
- $ cmake -B build && cmake --build build -j
-
-Vulkan draws there by default, through MoltenVK. OpenGL stops at 4.1 on
-macOS: with api = opengl Odin draws with it all the same, its translucent
-fragments peeled one layer at a time instead of put in lists (the same
-pictures, slower where they pile up).
-
-To make Odin.app:
-
- $ cmake --install build --prefix stage
- $ dist/macos/make-app.sh stage Odin.app
-
-On Windows, build with MSYS2 UCRT64 (MSVC lacks .incbin):
+Windows. Build with MSYS2 UCRT64:
 
  $ pacman -S mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake \
        mingw-w64-ucrt-x86_64-ninja mingw-w64-ucrt-x86_64-glslang gawk git
  $ cmake -B build -G Ninja -DODIN_BUNDLED_LIBS=ON && cmake --build build
 
+macOS. Install the Xcode Command Line Tools, CMake and the LunarG Vulkan
+SDK (then: source ~/VulkanSDK/<version>/setup-env.sh), or use Homebrew:
 
-RUNNING
-=======
-
- $ build/bin/odin -R <ROM directory> -r <game>
-
-(-R may be left out once the menu, page Paths, keeps the folder: roms in
-[paths] of odin.ini.) Without -r, as a double click starts it, Odin opens
-its library: the games of the list, those whose files are missing said so
-with the files and the sets of MAME that hold them, and buttons to choose
-the folders of the games and of the BIOS (kept in [paths]); the arrows, the
-D-pad or the stick of a gamepad, or a click choose a game, Enter, A of the
-gamepad (as [menu] press says) or a second click plays it, and when it ends
-(but by Ctrl+Q, which quits) the library comes back, as it does after Close
-game of the bar from any game. The bar is over the library at all times,
-and the menu (Escape, F10 or Guide) opens there as in a game, its page Input
-on the game chosen. Its Filter button chooses what it shows, kept in
-[library] of odin.ini: only the games whose files are all there
-(owned_only = on), the versions of a game too or not (variants = off), the
-games of some systems (systems = hikaru, apart by commas; all when it does
-not say). The pictures of the games
-are in the folder of the artwork (artwork/ in the data folder of Odin,
-beside saves/; artwork in [paths], page Paths; ODIN_ARTWORK=<folder> another
-one, none none), named after the game in MAME, in any case:
-<game>_title.png, the title Odin keeps the first time the game shows it with
-no key or button pressed since its power-on, is its picture in the library;
-<game>_logo.png, a picture of the user, is shown there instead;
-<game>_bezel.png is laid over the window where it is wider than the screen
-of the game, the game in its hole: the part not opaque joined to its middle
-(the glass of a screen often is half so), or as the <game>_bezel.info of
-Batocera beside it says (swracer_logo.png, swracer_bezel.png). A version
-of a game without pictures of its own takes those of its parent ("parent"
-in odin-games.json: airtrixo those of airtrix). bezel in
-[display] (page Display) says what is around the game there: off, black;
-blur, the light of its edges, softer and dimmer away from it; image, its
-bezel, black without one. The games are those of odin-games.json, by the
-names of their MAME sets: airtrix, airtrixo, braveff, pharrier, sgnascar,
-sgnascaro, swracer and von4. airtrixo and sgnascaro, the first programs of
-Air Trix and NASCAR, take the other files from airtrix and sgnascar. The
-file is looked for in the current directory, then in $HOME, then in
-~/.local/share/odin.
-The ROM directory holds each game as MAME keeps it: a directory, a zip or a
-7z of the name of the game, with the files odin-games.json lists for it. The
-files a game shares with others, in the sets of MAME hikaru (the BIOS), mie,
-jvs13551 and 18wheelr, are looked for in the BIOS directory (-B <path>, bios
-in [paths], page Paths), then in the ROM directory: hikaru.zip, hikaru.7z or
-a directory hikaru; they may be in the directory or the archive of the game
-too. A file is the one of its size and of the CRC MAME gives it: in an
-archive by its CRC, whatever its name; in a directory by its name, with or
-without dashes, in any case, else by its CRC. One found by its name with
-another CRC is said, and taken (another dump of the chip). When a file is
-missing, Odin says which, and the set of MAME that holds it. The directories
-may have names in any language (on Windows, 10 version 1903 or later); the
-menu writes them with its own font, Cozette, drawn by pixels (Latin, Greek,
-Cyrillic, Vietnamese), its letters as large as whole pixels allow, and the
-other letters with the fonts the system has: on Windows those it comes
-with, on Linux DejaVu Sans and, for Chinese, Japanese and Korean, Noto Sans
-CJK, Droid Sans Fallback or WenQuanYi, on macOS Arial Unicode, Hiragino
-Sans GB and Apple SD Gothic Neo. The programs of the I/O boards of
-SWRACER (315-6215.bin) and NASCAR (epr-21868.ic7, from the 18wheelr set of
-MAME) may be left out: an imitation of the board answers then, made from
-that program and checked against it. The games play the same without them,
-and NASCAR sends its wheel (the force feedback) the same orders; with them
-the board runs its own program, a little slower. So does the program of the
-drive board of NASCAR, the board that drives the motor of its wheel
-(epr-20512.bin, from the srally2 set of MAME): with it, a wheel with force
-feedback turns as that board tells its motor, the board starting with the
-game (about 11 s, when it turns the wheel back to its centre by itself, as
-on the cabinet) and answering it; without it (or with ODIN_DRIVE=imitation),
-the wheel takes the force of each order of the game at once.
-
-Options:
-
- -n <frame>		stops after that frame
- -s <frame>[,...]	saves <game>-<frame>.odinstate after these frames
- -l <file>		loads a state at startup
- -u			lifts the limit of 60 frames per second
- -x <num>		draws the 3D num times finer than 640 by 480 (1 to 6)
- -a <num>		filters the textures with an anisotropy of num (2 to
-			16); the board has none
- -w <num>		makes the window num times 640 by 480
- -f			takes the whole display (F11 or Alt+Enter goes back
-			and forth)
- -v			says each access of the board (slow; also "verbose = on"
-			in [log] of odin.ini, page Paths of the menu)
-
-Keys: Escape or F10 opens the menu, which pauses the game (its Display
-page sets the window and the picture, kept in [display] of odin.ini:
-scale = 1 to 6, upscale_mode = raw, snap or native (see below),
-anisotropy = 1 to 16, window = 1 to 6 or a size, 1600x900
-(Custom: the window resized by hand keeps its size for the next start),
-vsync = off, on or adaptive (the frames on time wait for the display, a
-late one does not), fullscreen, unthrottled and show_speed = on or off,
-api = opengl or vulkan (what draws, from the next start of Odin; Vulkan
-1.3, or 1.1 with the same as extensions, else OpenGL draws; OpenGL 4.3,
-else 4.1 as on macOS; vulkan by default on macOS, opengl elsewhere);
-the options say the same and come first; no vsync at an unlimited pace,
-nor vsync = on on a display slower than 60 frames a second),
-Ctrl+Q quits, P pauses, F4 saves <game>.odinstate and F1 loads it, in
-~/.local/share/odin/states (states in [paths] of odin.ini, page Paths),
-Ctrl+R resets (the cabinet switched off and on), F11 or Alt+Enter takes
-the whole display, F6 puts the card of Virtual-On in or takes it out, F7
-turns the light gun mode of Brave off or on (see below). The page Hotkeys
-of the menu changes these keys and the buttons
-below, kept in [hotkeys] of odin.ini:
-
- [hotkeys]
- pause = Pause, pad:guide+x
-
-(menu, pause, save_state, load_state, reset, fullscreen, card and quit: two keys
-at most, Ctrl+Q written so, and a button held with Guide,
-pad:guide+<button>, or pad:guide for Guide alone; none for nothing.)
-
-The picture can go through a CRT filter, off by default: page Display,
-FILTER, or in [display] of odin.ini
-
- [display]
- filter = lola-retro/sega-monitor-29
-
-none, lola-retro/sega-monitor-29 (the 29-inch 31 kHz monitor of Planet
-Harriers and NASCAR Arcade) or lola-retro/sega-projector-50 (the 50-inch
-31 kHz projector of the other deluxe cabinets), after Sega's manuals, on
-the shaders of Lola Retro (by Zoki, MIT); or one of Lola's own monitors,
-lola-retro/pc-monitor-vga and its -good, -premium, -premium-plus,
--extreme and -flat. It draws the 640 x 480 picture of the board as the
-tube shows it and asks much of the graphics card (a weak one cannot keep
-60 frames a second). Its files are in filters/, where odin-games.json is
-(with Vulkan, the SPIR-V the build leaves beside its shaders too).
-
-At a scale above 1, the pieces of the picture flat to the screen (the HUD,
-its text) can be drawn as the 640 x 480 screen of the board has them: page
-Display, Upscaling mode, or upscale_mode in [display]. raw, by default,
-draws them finer as the rest: thin lines may show between pieces the
-games leave a fraction of a pixel apart (around the timer of Virtual-On);
-snap puts their corners on the pixels of that screen, their slanted edges
-smooth; native has them cover the pixels they cover there, their textures
-finer, their edges as on the cabinet (with Vulkan, on a card with geometry
-shaders; snap on another). Both may split a piece made of a flat part and
-a tilted one (the lock-on of Planet Harriers).
-
-In a game, the mouse moved over the window shows the bar at its top a
-while, the game going on under it; never while the mouse aims in the game
-(the light gun mode of Brave Fire Fighters, F7). Its lists set what the
-pages of the menu set, without opening it. FILE: Open game... plays the
-zip or the 7z of a game, the game of its name in MAME, from its directory;
-Close game goes back to the library, Reset switches the cabinet off and
-on; the state of the game saved and loaded, the menu (Settings...), Quit.
-INPUT, for the game that runs: the gamepad of each player, the dead zone
-and the trigger threshold of that gamepad, all the inputs of the player,
-of every device, restored to their defaults or cleared (Undo a few
-seconds), the
-light gun of each player and the vibration where the game has them; the
-hotkeys restored to their defaults, sending the outputs. DISPLAY: the
-whole display, the window size, the internal resolution and the upscaling
-mode, the anisotropic filtering, the vertical sync, the bezel, the CRT
-screen, the speed limit (at the next launch), the FPS in the title, the
-menu theme. AUDIO: the volume, the sound in the background, the device,
-and how the game that runs plays its optional sound board. LINK: the
-network board, on or off, this cabinet and its port (at the next game).
-DEBUG pauses the game and turns the detailed log on (at the next launch).
-ABOUT opens the page About. The keys of each control and hotkey, the
-folders, the address of the next cabinet and a window of a size given by
-hand are set in the menu. What the bar changes is kept in odin.ini as the
-menu keeps it. What Odin does or cannot do (a state saved, the card taken
-in) is said a few seconds in the bottom-left corner, bar or not. In the
-library, Close game, Reset, the states, Pause and the players of INPUT are
-greyed out.
-
-0 is TEST and 9 SERVICE, the buttons of the cabinet: they open and work
-the menu of the BOOTROM and the test menus of the games (both together
-leave INPUT TEST); 5 and 6 are the coins. Player 1
-has 1 for Start, the arrows, and Left Ctrl, Left Alt, Left Shift, Z, X, C;
-player 2 has 2 for Start, R F D G, and A, S, Q, W, E, T. The arrows also
-move a wheel, a stick or a sight, a step each frame, and back when let go;
-Up is the gas and Down the brake; the second stick of player 1 (ROLL of
-Air Trix, the right lever of Racer) is on R F D G. X and C shift the gears
-down and up. Virtual-On has the keys of MAME: E S D F the left lever, I J
-K L the right one, Left Ctrl and Left Alt the shot and the dash of the
-left lever, Space and Left Shift those of the right one.
-
-In Brave the pad of a player shakes while the nozzle of the cabinet does
-(Vibration in the advanced options of the page Input, or "vibration =
-off" in [players.braveff], stops it). Vibration force, in the options of
-a gamepad on the page Input ("vibration_force = 0" to 200 in
-[players.<game>], 100 by default), makes every shake of the pads in that
-game that much stronger or softer.
-The lamps and the other outputs of the cabinets go to other programs (a
-lamp or a force feedback program) as MAME gives them with its network
-output, when odin.ini says so (the menu, page Outputs, turns it on and
-off, and shows the outputs of each game light):
-
- [outputs]
- network = on
-
-(port 8000 of this computer only: "mame_start = <game>", then "<id> = 1"
-or "<id> = 0" as each output of the game changes, its id in
-odin-games.json, and "mame_stop = 1" at the end.)
-
-A vibration of the cabinet (the nozzles of Brave) goes to the light gun
-of a player that takes the game's orders, an XGunner (its receiver is a
-serial port: on Linux the user in its group, uucp or dialout), when the
-page Outputs says so (Light guns: the motor or the recoil of the gun of
-a player), or:
-
- [outputs.braveff]
- 1p_nozzle_vibration = gun1
-
-(gun1, gun2 its motor; gun1 recoil, gun2 recoil its solenoid; none, by
-default, nothing). Odin sends the output as the game drives it, frame by
-frame, and the gun does what it can of it: an XGunner runs its motor some
-0.4 s at a time, at full strength. A gamepad shakes as its options on the
-page Input say.
-
-Virtual-On Force, NASCAR, Star Wars Racer Arcade and Planet Harriers link
-cabinets with the network board 837-13404. Each cabinet is an Odin; the
-optical cable of each goes to the next cabinet, the one of the last to the
-first, through the network of the computers (the menu, page Link, or
-odin.ini):
-
- [network]
- board = ring
- port = 13404
- next = 192.168.1.20
- cabinet = 1
-
-board: none (no board, as by default), loop (the cable looped back on the
-same cabinet), ring (linked to other Odins). port: where the cabinet
-before comes in; two Odins of one computer each take their own (13404,
-13405...). next: the address of the cabinet after, ":port" after it when
-it is not 13404; empty, this cabinet again. cabinet: which cabinet of the
-link this one is, 1 to 8, each its own. Odin sets the game as the BIOS
-menu and the test menu of the game would: cabinet 1 MASTER, the others
-SLAVE (SYSTEM ASSIGNMENTS, COMMUNICATION MODE), and the seat of the
-cabinet (Virtual-On A, B...; Racer and NASCAR 1, 2...); a game that has
-never run on that computer starts once more to take its seat, and with
-board = none it goes back to NO LINK. Two Odins of one computer each have
-their own odin.ini, so their own saves: each a portable copy in its own
-folder (portable.txt beside it, see below), or ODIN_CONFIG=<file> before
-odin, its [paths] saves another folder. Virtual-On in U.S.A. links 2 cabinets
-at most. The program of the board needs a frame round the ring in less
-than about 15 ms: a network by cable, not by radio, and no further than
-the local network.
-
-NASCAR and Planet Harriers have a second sound board for speakers of
-their own (the backrest of the seat). Odin plays the two boards on two
-speakers, the second one at the level odin-games.json gives it
-(option_level, in dB), as the volumes of the cabinet set it; odin.ini
-turns that knob, in the section of the game:
-
- [sound.sgnascar]
- option_level = -15
-
-(-60 to 12 dB; -o quad plays the four channels apart, -o main and
--o option one board alone; "mode = quad" or "mode = main" in that section
-too.) The menu, page Audio, sets them, and in [sound] the device the sound
-plays on, the volume of Odin and its sound while the window is in the
-background:
-
- [sound]
- device = <a name the page lists>
- volume = 80
- background = off
- In Racer the second board feeds the vibration
-device of the control panel, not speakers: the pad of player 1 shakes as
-hard as its sound; the page Audio plays it in the speakers too, where the
-user wants it ("mode = mix", -13 dB by default, or "mode = quad" in
-[sound.swracer]). In NASCAR the pad of player 1 shakes with the shocks
-the game gives the wheel, not with the hold and the damping that follow
-the moves of the wheel (experimental; Vibration in the advanced options
-of the page Input, or "vibration = off" in [players.swracer] or
-[players.sgnascar], stops it).
-
-The mouse aims for player 1 in Brave: the sight where it points on the
-picture, water on the left button, fog on the right one, Start on the
-middle one; off the picture, the nozzle points away from the screen. Of
-the keys, a stick and the mouse, the last that moved works a control. The
-sight meets the pointer once NOZZLE SENSOR SETTING (in the test menu of
-the game) has been done with the mouse. That is the light gun mode, with
-no pointer and no bar; off (F7, Light gun mode in the bar or in the
-options of the page Input, "light_gun_mode = off" in [players.braveff]),
-the mouse is a pointer again, does nothing in the game and shows the bar.
-
-On the page Input a click on a control catches its next input, whatever
-device the page shows: a key, a button of the mouse or of the light gun
-(the trigger, the pump...) clicked where the menu has nothing, a key the
-gun sends, a button or an axis of the player's gamepad or joystick (a
-gun that is one, a pedal). Each takes the place of the input of its kind
-the control had. A click on a button, a tab or a row of the menu works
-that one; Escape lets the control be.
-
-A light gun (or a second mouse) for each player, read on its own (evdev
-on Linux: the user in the group input; Raw Input on Windows), chosen on
-the page Input under the device of the player (Light gun), or:
-
- [players.braveff]
- gun1 = vidpid:1209:0001 GUN4IR
- gun2 = uniq:A1B2C3D4E5 Sinden Lightgun
-
-its identity as Odin's log says it ("pointer: <name> = <node> (aims,
-<identity>)"): its serial, else VID:PID, else its port. It aims as the
-mouse does, with its buttons, for its player alone; player 1 without one
-keeps the mouse. A player with a light gun plays with it and the
-keyboard: the page Input draws the gun (a Sinden, an XGunner, an Aimtrak,
-a GunCon 2 or 3, an AE; any other as the Aimtrak), each control beside
-the button that works it as the gun comes, and their gamepad no longer
-shakes (choosing the gamepad again takes the gun away). On Linux the guns
-chosen stop moving the pointer of the desktop while the game runs, and
-move it again in the menu.
-ODIN_CONTROLLERS=none leaves them out too.
-
-A light gun that finds the screen by a white border (a Sinden) has one
-drawn over the game and its menu, as xemu's Chihiro draws it: Sinden
-border in the options of the page Input, or:
-
- [players.braveff]
- sinden_border = on
- sinden_border_style = game
- sinden_border_size = 2
-
-off by default; game (4:3 in the menu), inside the edges of the picture
-of the game, or window (Full), of the whole window; 2 to 30 pixels of
-the window wide, 2 by default. How the aim of the gun spans what the border holds is for its
-own software to say.
-
-A wheel, its pedals or another joystick that is no gamepad (a flight
-stick): one for each player, in the order they are plugged in, or the one
-of "joy1 = <GUID> <name>" (joy2: player 2) in [players.<game>]. Odin's log
-names each one ("joystick: '<name>' plugged, 4 axes, 25 buttons, 1
-hats"). It is read all of its way (the steering as far as Wheel rotation
-below says), without a dead zone, by the numbers SDL gives its inputs,
-those EmulationStation gives them on Batocera:
-joy:axis0 an axis (the first one steers by default: that of a wheel),
-joy:axis2:invert an axis turned over (a pedal at rest at the top of its
-axis), joy:-axis1 and joy:+axis1 its halves, joy:button4 a button,
-joy:hat0_up a way of a hat. The page Input lists them with the gamepads
-(a wheel first in a game with one): a click on a control there, then the
-pedal pressed or the button, takes it. The pedals and the buttons change
-from one wheel to another; for a Logitech G29 on Linux:
-
- [controls.sgnascar]
- gas_pedal = key:Up, pad:righttrigger, joy:axis2:invert
- brake_pedal = key:Down, pad:lefttrigger, joy:axis3:invert
- gear_up = key:C, pad:rightshoulder, joy:button4
- gear_down = key:X, pad:leftshoulder, joy:button5
-
-The wheel stays with the driver of the system: SDL's own driver of the
-Logitech wheels, which would turn their centring spring off, is off
-unless SDL_JOYSTICK_HIDAPI_LG4FF=1 is in the environment.
-
-The axis of a joystick that steers is taken as a wheel that turns 900
-degrees from one end to the other, as most do (a G29, a G920, a T300).
-Wheel rotation, in the options of the page Input ("wheel_rotation = 270"
-in [players.<game>], or 360, 540, 900, 1080; 0 for the whole way of the
-wheel), is how far it turns to take the steering of the game from one
-end to the other: 270 by default, as xemu's Chihiro wheels; never
-further than the wheel goes.
-
-In NASCAR the wheel of player 1, when it has force feedback, turns as the
-game tells the drive board of the cabinet (see the programs above): on
-Linux through its event node (the user in the group input, or the rules of
-the system that let joysticks be written to), elsewhere through SDL. While
-the game runs, the wheel's own centring spring is off and its gain at its
-highest, as SDL leaves them; the force lets go when the menu opens, and
-stops with the vibration of the page Input ("vibration = off" in
-[players.sgnascar]). The most force the game asks is the most of the
-wheel; Wheel force, in the options of the wheel on the page Input
-("wheel_force = 0" to 200 in [players.sgnascar], 100 by default), takes
-that share of it: above 100, the wheel reaches its most before the game
-asks it. The wheel turns only when it is the device the player plays with.
-
-NASCAR was also sold as a Deluxe cabinet, which its program tells apart
-by a switch its wiring ties to the ground ("GND (FOR DX)", read as 1P
-PUSH1): Standard or Deluxe at the top of the cabinet on the page Input
-("cabinet = deluxe" in [players.sgnascar]), taken when the game is reset.
-On a Deluxe the game shows the bass shakers in its OUTPUT TEST and DX as
-its CABINET TYPE, reads VIEW CHANGE on 1P UP, and reads the wheel and
-turns it the other way, as the potentiometer and the motor of that
-cabinet are mounted: Odin turns both back, and the wheel of the player
-works the same in both.
-
-The device a player plays with, the one at the top of the page Input (or
-picked in the bar), is the only one that shakes, and the only wheel that
-turns: "device1 = keyboard", "pad" or "joystick" in [players.<game>]
-(device2: player 2), kept when the user picks one; the keyboard: nothing
-shakes. Without that line, or when the device chosen is not plugged in:
-the joystick in a game with a steering wheel, else the gamepad, else the
-joystick, else the keyboard.
-
-Gamepads: one for each player, in the order they are plugged in, or the
-one chosen for the game in the menu (Input). SELECT (SHARE) puts in a
-coin for the player of the pad. Guide alone opens the menu; at its foot,
-Close game (up from its first row), pressed twice, goes back to the
-library, as the mouse and the keyboard can there too. Guide held
-with Back pauses, with RB saves the state, with LB loads it, with Start
-quits (a button pressed with Guide is not the game's), with the left stick
-pressed is SERVICE, with the right one TEST. Start, the D-pad, A, B,
-X, Y, LB, RB, LT, RT, the sticks and the triggers work the controls of
-each game as their roles tell (odin-games.json): for NASCAR,
-the wheel on the left stick, the pedals on the triggers, the gears on LB
-and RB, the view change on Y (or Z); for Brave, the sight where the left
-stick points, the water on RT and the fog on LT; for Planet Harriers,
-BULLET on RT, MISSILE on LT and BOMB on A; for Racer, BRAKE on RT and
-BOOST on A. Every control of a game can take other keys and pad inputs
-in odin.ini, beside the saves (see below), in the section of that game,
-under the id odin-games.json gives it:
-
- [controls.sgnascar]
- view_change = key:Space, pad:b
- gear_up = pad:a
- coin1 = key:5
-
- [controls.pharrier]
- stick_v = pad:lefty:invert
- stick_h_left = key:A
- stick_h_right = key:D
-
-(pad:-lefty is the left stick up, pad:+leftx the stick to the right,
-mouse:left, mouse:middle, mouse:right, mouse:side, mouse:extra its
-buttons (those of the light gun of the player, for a control of a player
-who has one), mouse:x and mouse:y where it points (the OUT OF SCREEN of
-Brave needs no line: the gun or the mouse aiming off the picture presses
-it);
-pad:lefty:invert the whole axis turned over: Planet Harriers then goes up
-when the stick goes up, where its cabinet stick, a flight stick, goes up
-when pulled.) An analog control takes the axes of a pad on its line, and
-keys and buttons on the halves of its way: <id>_left and <id>_right, or
-<id>_up and <id>_down; a pedal takes them on its own line, with its axes
-(gas_pedal = pad:righttrigger, key:Up).
-
-(pad:guide+leftstick is a button held with Guide.) The menu (Escape, F10
-or Guide) writes these lines itself, and the gamepad chosen for a player:
-
- [players.braveff]
- p1 = 030000005e0400008e02000014010000 Xbox 360 Controller
-
-and for the gamepads the dead zone of their sticks, in % of the way (a
-circle round the centre where a stick gives nothing; past it the way
-starts from 0), and how far a trigger goes before it presses a button
-(the advanced options of the page Input; 0 to 30 and 0 to 50):
-
- [gamepads]
- dead_zone = 3
- trigger_threshold = 3
-
-a make and model its own in [gamepad.<GUID>], the GUID of its line in
-[players.<game>]:
-
- [gamepad.030000005e0400008e02000014010000]
- dead_zone = 8
-
-and the controls of the page Input as a list rather than on the drawing
-(the button List):
-
- [menu]
- classic = on
-
-(animations = off: in a small window the row of the games, a name
-between dots, changes at once rather than moving; theme = runasteinn,
-edda, raf or heimdall: the colours of the menu, the bar and the library,
-page Display.)
-
-In the menu, LB and RB of a gamepad change the page, LT and RT the game
-(on the page Input they are tested as the controls they work: there the
-first two rows of the frame, the tabs and the games, change them), B goes
-back (a list dropped open closes first, then the options, a key caught is
-let go, else the game goes on). The D-pad or the left stick moves a frame
-from row to row; left and right change a choice or a slider, A presses. On
-the page Input the frame goes from control to control: A changes it, X
-clears it and Y sets it back to its default, on the device shown; during
-Map all, A held a second skips a control (let go sooner, it is the button
-the control takes). [menu] gives them other inputs, as [controls.<game>]
-does: up, down, left, right, press, back, clear, default, page_before,
-page_after, game_before, game_after.
-
-Odin writes every key it knows in odin.ini, at the start, those at their
-value by default as comments ("# volume = 100"): taking the # away and
-changing the value changes it. The menu writes a change in place, and
-the comment again for a value set back to its default.
-
-The cabinet has 1p_service and 2p_service, coin1 and coin2, test (of the
-I/O board), board_test and board_service; a game without controls in the
-list has 1p_start, 1p_up, 1p_down, 1p_left, 1p_right, 1p_push1 to 1p_push6,
-and the same for 2p. The keys and pad inputs it starts with are in
-src/odin/host/input/bindings.cpp; odin-games.json gives a few buttons their own keys
-("keys") and pad inputs ("pad").
-
-What the board keeps without power (the settings of the BIOS, the records
-and settings of the game, the clock) is read at start and written on exit,
-in a folder for each game: ~/.local/share/odin/saves/<game> (under
-XDG_DATA_HOME when it is set), %APPDATA%\odin\saves\<game> on Windows,
-~/Library/Application Support/odin/saves/<game> on macOS, or the folder
-saves in [paths] of odin.ini (page Paths). ODIN_SAVES=<folder> takes
-another folder before it, ODIN_SAVES=none keeps nothing. The files have the names
-MAME gives them: mie_eeprom (the SYSTEM MENU of the BIOS: country, coins,
-cabinet type, sound of the attract), nvram (the game), main_eeprom and
-rombd_eeprom (the serial number of the main board, the security of the ROM
-board). A game without mie_eeprom starts as a new cabinet left the
-factory: U.S.A. with the settings of its manual, Virtual-On Japan (it was
-sold there only). Odin calibrates no control in
-advance: the board of Air Trix steers once it is calibrated in the test
-menu of the game (CALIBRATION), with the controller you play with, and
-the other games have their own pages for it. The settings of Odin are in
-odin.ini in the same odin folder; ODIN_CONFIG=<file> reads another one.
-
-The card of Virtual-On goes in and out as at the cabinet, by the player:
-nothing goes in by itself. The cards are kept with the saves of the game,
-in its folder cards (<name>.card); the menu FILE > Card in hand chooses
-the one in hand ([players.von4] card = <name>). When the game asks for a
-card (choosing the robot), F6 or FILE > Insert card puts it into the slot;
-at the end of the game the reader writes it and ejects it, and the game
-waits until the player takes it back, F6 or FILE > Remove card. A new card
-comes from the cabinet set as a terminal (the test menu of the game, GAME
-ASSIGNMENTS, GAME START MODE = VENDOR, with FREE PLAY): taken back, it is
-kept as card-<n>. Faster, FILE > New card... makes the card that terminal
-makes for a new pilot of the name typed (up to 8 characters of its
-keyboard: A to Z, 0 to 9, space and @,./~_:;^!?<>+-*=%'"()), on the first
-VR of its list, and puts it in hand as <name>.card (a number after the
-name when that file is there already). A note says when the reader takes
-the card in and when a card comes out at the slot. A card file is written
-whole or not at all, the card it held before kept beside it as
-<name>.card.bak, which Odin reads in its place should the card file be cut
-short. Virtual-On reads cards in the country Japan only, the one it
-starts in; elsewhere it never asks for one.
-
-A portable Odin keeps its files in its own folder: put an empty file
-portable.txt beside the program (odin.exe, or the AppImage), or its
-odin.ini. Its odin.ini, saves, states, odin.log and the cache of its
-shaders are then there, apart from those of any other copy; it says
-"portable:" and the folder at the start. The variables above still come
-first.
-
-What Odin says (in the terminal it was started from; on Windows, opened by
-a double click, it has none) is written to odin.log in the same odin folder
-too, from scratch at each launch; the log of the launch before is kept as
-odin-previous.log.
-ODIN_LOG=<file> writes another file, ODIN_LOG=none none. The file stops at
-64 MB (the detailed log of -v says a lot); after a crash it holds the last
-words of Odin.
-
-When the emulated board cannot go on (a screen Odin does not support yet,
-for one), Odin says why in odin.log and in a box, then stops.
-ODIN_STOP_BOX=0 leaves the box out, for a frontend or a cabinet where
-nobody is there to close it.
-
-The comments at the top of the source files tell the other variables of the
-environment; they are for debugging.
+ $ brew install cmake pkgconf sdl3 glew jansson vulkan-headers vulkan-loader \
+       molten-vk glslang
+ $ cmake -B build && cmake --build build -j
+ $ cmake --install build --prefix stage
+ $ MOLTENVK=$(brew --prefix molten-vk)/lib/libMoltenVK.dylib \
+       dist/macos/make-app.sh stage Odin.app
+
+Build options (cmake -B build -D<option>=<value>):
+
+ ODIN_NATIVE=OFF         No -march=native (for packages).
+ ODIN_LTO=OFF            No link-time optimization.
+ ODIN_PGO=generate|use   Profile-guided build: 4 to 15 % faster.
+ ODIN_GLES=ON            OpenGL ES 3.1 instead of OpenGL (Linux).
+ ODIN_BUNDLED_LIBS=ON    Always use 3rdparty/ (OFF: never).
+ ODIN_OPT_FLAGS=<flags>  Default "-O3 -fomit-frame-pointer
+                         -fno-stack-protector".
+ ODIN_VERSION=<text>     The version, when building without git.
+ GLSLANG=<path>          The glslangValidator to use.
+
+Leave CMAKE_BUILD_TYPE empty (Release turns the asserts off).
+
+Profile-guided build: build with ODIN_PGO=generate, play a few games, then
+build again with ODIN_PGO=use.
+
+
+INSTALL
+-------
+
+ $ cmake -B build -DCMAKE_INSTALL_PREFIX=$HOME/.local
+ $ cmake --build build -j && cmake --install build
+
+The default prefix is /usr/local. For a package:
+
+ $ DESTDIR=<root> cmake --install build --prefix /usr
+
+
+FIRST START
+-----------
+
+1. Put the games in one folder, as MAME keeps them: a zip, a 7z or a folder
+   per game, named after its MAME set: airtrix, airtrixo, braveff,
+   pharrier, sgnascar, sgnascaro, swracer, von4. Two shared sets are
+   needed too, in the same folder (or in a BIOS folder): hikaru and mie.
+
+2. Start Odin. Its library shows the games. Click "Games folder..." and
+   choose your folder. A game with missing files says which files, and in
+   which MAME set they are.
+
+3. Choose a game with the arrows, a gamepad or the mouse, then press Enter
+   (or click it again).
+
+4. The first time you play a game, calibrate its controls first, in its
+   test menu (TEST: key 0, or Guide held with R3), as on the cabinet:
+   every game has a page for it (Air Trix: CALIBRATION, Brave
+   Firefighters: NOZZLE SENSOR SETTING...). The game then reads your
+   controls right.
+
+From a terminal:
+
+ $ odin -R <games folder> -r <game>
+
+Pictures: the title screens of the library and the bezels (around the
+game, page Display, Bezel) come in Odin-Artwork.zip, released with Odin.
+Extract it beside the program: it makes the folder artwork/ there, which
+Odin then uses (an installed Odin: extract it into Odin's folder, see
+FILES). Pictures of your own go there under the same names.
+
+Optional sets: jvs13551 (the program of the I/O board), and for NASCAR
+18wheelr (its I/O board) and srally2 (its drive board, the motor of the
+wheel). Without them Odin imitates those boards; the games play the same.
+
+
+PLAYING
+-------
+
+Keyboard (all keys can be changed, page Hotkeys and page Input):
+
+ Escape, F10   menu (the game pauses)
+ 1, 2          Start of player 1, 2
+ 5, 6          coins
+ 0, 9          TEST and SERVICE (the test menus)
+ P             pause
+ F2, F4        save, load the state
+ Ctrl+R        reset
+ F11           full screen
+ F6            Virtual-On card in or out
+ F7            light gun mode (Brave Firefighters)
+ Ctrl+C        close the game (back to the library)
+ Ctrl+Q        quit
+
+Gamepad: Guide opens the menu, Select puts in a coin. Guide held with
+Start quits, with Back pauses, with RB saves, with LB loads, with B
+closes the game.
+
+Moving the mouse over the window shows a bar at its top: it sets the same
+things as the menu, without pausing the game (not while the mouse aims in
+Brave Firefighters: F7 turns light gun mode off).
+
+
+LIGHT GUNS
+----------
+
+In Brave Firefighters the mouse aims for player 1. A light gun (Sinden,
+GUN4IR, XGunner, Aimtrak, GunCon...) or a second mouse can play for each
+player: choose it on the page Input. On Linux your user must be in the
+group input.
+
+A Sinden needs its white border: page Input, options, Sinden border.
+
+Light guns with recoil or a vibration motor can follow the game, as on
+the cabinet (the nozzle of Brave Firefighters). Turn on page Outputs, Send
+outputs: a program that reads the outputs of MAME (Hook Of The Reaper,
+QMamehook, OutputHooker, the Sinden software) then drives the gun. Odin
+can also drive some guns itself, without such a program: page Outputs,
+Light guns lists them. On Linux your user must be in the group of the
+gun's serial port (uucp or dialout).
+
+
+WHEELS
+------
+
+NASCAR is the game with a wheel: one player per cabinet, so one wheel per
+Odin (link cabinets to race each other). Choose the wheel on the page
+Input; click a control there, then move the pedal or press the button you
+want for it. A wheel with force feedback turns as the game asks. Set how
+far it turns (Wheel rotation) and how hard (Wheel force) in its options on
+the page Input. On Linux your user must be in the group input for the
+force feedback.
+
+Other joysticks (a flight stick for Planet Harriers) are set the same way.
+
+
+LINKED CABINETS
+---------------
+
+Linked cabinets: Planet Harriers 2, Star Wars Racer and Virtual-On 4,
+NASCAR 8. Each cabinet is one Odin, on one computer or several of a local
+network (by cable). On the page Link of each Odin: the network board on, a
+cabinet number (1 is the master), and the address of the next cabinet;
+the last one points to the first. Two Odins on one computer each need
+their own folder (portable copies, see FILES) and their own port (page
+Link, Port), each pointing at the other: 127.0.0.1:<its port>.
+
+
+VIRTUAL-ON CARD
+---------------
+
+Virtual-On saves the player's progress on a card, as the cabinet did (the
+Japanese cabinet only, Odin's default). FILE > New card... makes one;
+F6 puts it in when the game asks, and takes it back at the end.
+
+
+FILES
+-----
+
+Odin keeps its settings (odin.ini), the saves of each game, the states,
+the artwork and its log (odin.log) in its folder:
+
+ Linux    ~/.local/share/odin
+ Windows  %APPDATA%\odin
+ macOS    ~/Library/Application Support/odin
+
+Each folder can be changed on the page Paths of the menu (games, BIOS,
+artwork, saves, states, log). Another settings file: odin -c <file>.
+
+Portable copy: put an empty file portable.txt beside the program; Odin
+then keeps everything in that folder.
