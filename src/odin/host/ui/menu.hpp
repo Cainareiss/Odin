@@ -593,7 +593,8 @@ public:
 	 * their licence */
 	static constexpr const char *WHAT = "Sega Hikaru emulator, as close to the hardware as it gets";
 	static constexpr const char *LICENCES[][3] = {
-		{ "Odin", "Réda Chérif-Touil · Valkyrie, Stefano Teso", "GPL 3.0 or later" },
+		{ "Odin", "Réda Chérif-Touil", "GPL 3.0 or later" },
+		{ "Valkyrie (the start of Odin)", "Stefano Teso", "GPL 3.0 or later" },
 		{ "Dear ImGui", "Omar Cornut", "MIT" },
 		{ "SDL 3", "Sam Lantinga", "zlib" },
 		{ "GLEW", "Milan Ikits, Marcelo Magallon", "BSD / MIT" },
