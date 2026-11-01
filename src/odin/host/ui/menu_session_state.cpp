@@ -385,8 +385,6 @@ MenuSession::do_asked(MenuState &state)
 		clear_inputs();
 	} else if (state.ask == MenuState::Ask::UNDO) {
 		undo();
-	} else if (state.ask == MenuState::Ask::CLOSE_GAME) {
-		m_closing = true;
 	} else if (state.ask == MenuState::Ask::BACK) {
 		m_leaving = true;
 	} else if ((state.ask == MenuState::Ask::PART_DEFAULTS || state.ask == MenuState::Ask::PART_CLEAR) &&

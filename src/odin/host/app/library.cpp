@@ -191,6 +191,10 @@ library(const Options &command, const GameList &games, Settings &settings, const
 					library_pictures(display, state, options.artwork);
 				continue;
 			}
+			/* A key let go here is let go for the next game: the one that
+			 * closed the last game may still be held */
+			if (event.type == SDL_EVENT_KEY_UP)
+				keys.set(event.key.key, false);
 			menus.window_event(event);
 			if (display.menu_shown()) {
 				const MenuSession::Asked asked = menus.event(event);

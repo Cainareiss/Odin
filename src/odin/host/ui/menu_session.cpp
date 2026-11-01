@@ -533,6 +533,8 @@ MenuSession::event(const SDL_Event &event)
 	}
 	if (action == Action::QUIT)
 		return Asked::QUIT;
+	if (action == Action::CLOSE_GAME && m_game)
+		return Asked::CLOSE_GAME;
 	if (action == Action::MENU)
 		return Asked::CLOSE;
 	if (action == Action::FULLSCREEN)

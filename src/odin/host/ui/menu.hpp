@@ -509,10 +509,9 @@ struct MenuState : BarSettings {
 	/* How far the button that presses is held toward Skip, 0 to 1 */
 	float skip_hold = 0.0f;
 	/* What the page asks of the inputs of the player and the device shown,
-	 * of all its parts or of that part; Close game, at the foot of the menu
-	 * over a game, pressed twice; back to the game or the library, a click
-	 * beside the frame. Undo while it is offered. */
-	enum class Ask { NONE, DEFAULTS, CLEAR, UNDO, PART_DEFAULTS, PART_CLEAR, CLOSE_GAME, BACK } ask = Ask::NONE;
+	 * of all its parts or of that part; back to the game or the library, a
+	 * click beside the frame. Undo while it is offered. */
+	enum class Ask { NONE, DEFAULTS, CLEAR, UNDO, PART_DEFAULTS, PART_CLEAR, BACK } ask = Ask::NONE;
 	bool undo = false;
 
 	/* What the gamepad asked since the last picture (menu_nav.hpp): the
@@ -737,9 +736,8 @@ private:
 	float m_scale, m_density = 1.0f;
 	int m_page;
 	const MenuPalette *m_palette = &RUNASTEINN;
-	/* The frame the gamepad moves on the page; Close game pressed once */
+	/* The frame the gamepad moves on the page */
 	MenuFocus m_focus;
-	bool m_closing = false;
 	/* What Odin had where Dear ImGui changes it while the menu is open:
 	 * two hints of the mouse, the pointer shown or hidden */
 	std::array<std::optional<std::string>, 2> m_hints;

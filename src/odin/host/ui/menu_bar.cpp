@@ -335,7 +335,7 @@ Menu::bar_file(BarItems &b)
 
 	if (item("Open game..."))
 		b.ask(Ask::OPEN);
-	if (item("Close game", {}, false, state.game))
+	if (item("Close game", b.key(Action::CLOSE_GAME), false, state.game))
 		b.ask(Ask::CLOSE);
 	if (item("Reset", b.key(Action::RESET), false, state.game))
 		b.ask(Ask::RESET);

@@ -99,12 +99,15 @@ Session::process_events()
 
 			if (asked == MenuSession::Asked::CLOSE)
 				close_menu();
+			else if (asked == MenuSession::Asked::CLOSE_GAME)
+				act(Hotkeys::Action::CLOSE_GAME);
 			quit = asked == MenuSession::Asked::QUIT || quit;
 			continue;
 		}
 		/* A menu of the bar open: the keys are its own (Escape closes it)
-		 * but those of quitting and of the whole display; a key let go is
-		 * let go for the game too */
+		 * but those of quitting, of the whole display and of closing the
+		 * game (not while a field is typed in, Ctrl+C copies there); a key
+		 * let go is let go for the game too */
 		if ((event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_KEY_UP) && m_display.bar_shown() &&
 		    m_bar.open) {
 			const std::optional<Hotkeys::Action> action =
@@ -113,7 +116,8 @@ Session::process_events()
 
 			if (!event.key.down)
 				m_keys.set(event.key.key, false);
-			if (action == Hotkeys::Action::QUIT || action == Hotkeys::Action::FULLSCREEN)
+			if (action == Hotkeys::Action::QUIT || action == Hotkeys::Action::FULLSCREEN ||
+			    (action == Hotkeys::Action::CLOSE_GAME && !m_display.menu_typing()))
 				quit = act(*action) || quit;
 			else
 				m_display.bar_event(event);
@@ -194,6 +198,9 @@ Session::act(Hotkeys::Action action)
 			say(note);
 		if (m_controls.aims())
 			m_bar_until = 0;
+		break;
+	case Action::CLOSE_GAME:
+		m_end = Ended::CLOSED;
 		break;
 	case Action::QUIT:
 		return true;
@@ -303,7 +310,7 @@ Session::do_bar()
 		say(note);
 	switch (asked) {
 	case Ask::CLOSE:
-		m_end = Ended::CLOSED;
+		act(Hotkeys::Action::CLOSE_GAME);
 		break;
 	case Ask::RESET:
 		act(Hotkeys::Action::RESET);
@@ -422,9 +429,7 @@ Session::frames()
 			return Ended::LAST_FRAME;
 		if (m_display.menu_shown()) {
 			m_menus.wait();
-			if (m_menus.closing())
-				m_end = Ended::CLOSED;
-			else if (m_menus.leaving())
+			if (m_menus.leaving())
 				close_menu();
 			continue;
 		}

@@ -102,9 +102,9 @@ void press_escape();
  * pictures, which closes it. The pictures of the game must be the same. */
 class MenuSession {
 public:
-	/* What an event asks of the game or the library: the menu closed, Odin
-	 * to quit */
-	enum class Asked { NONE, CLOSE, QUIT };
+	/* What an event asks of the game or the library: the menu closed, the
+	 * game closed (back to the library), Odin to quit */
+	enum class Asked { NONE, CLOSE, CLOSE_GAME, QUIT };
 
 	MenuSession(const Options &options, Display &display, Keyboard &keys, Controls &controls, Settings &settings,
 	            const std::string &settings_file, const GameList &games, const Game *game, Hikaru *board,
@@ -128,8 +128,9 @@ public:
 	 * are not the game's. */
 	void open(int page = -1);
 	void close();
-	/* With the menu open: its hotkey asks to close it and that of
-	 * quitting to quit; that of the whole display still works. The
+	/* With the menu open: its hotkey asks to close it, that of closing the
+	 * game (over one) to close the game and that of quitting to quit; that
+	 * of the whole display still works. The
 	 * keyboard and the gamepads are followed as they go; all the rest is
 	 * the menu's. */
 	Asked event(const SDL_Event &event);
@@ -179,8 +180,6 @@ public:
 	 * ODIN_BAR_MENU, the bar instead, that menu of it open (Menu::bar) */
 	bool tested_at(unsigned frame) const { return m_menu_test && frame % m_menu_test == 0; }
 	int bar_tested() const { return m_bar_test; }
-	/* Close game was pressed again in the menu, taken */
-	bool closing() { return std::exchange(m_closing, false); }
 	/* A click beside the frame asked to go back to the game or the
 	 * library, taken */
 	bool leaving() { return std::exchange(m_leaving, false); }
@@ -342,7 +341,7 @@ private:
 	std::string m_card_keys;
 	std::string m_bar_note;
 	FolderDialog m_dialog;
-	bool m_closing = false, m_leaving = false;
+	bool m_leaving = false;
 	/* A size of the window from the hands of the user, not kept yet */
 	bool m_custom_waits = false;
 	unsigned m_menu_pictures = 0;	/* still to draw */
