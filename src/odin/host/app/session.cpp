@@ -89,9 +89,6 @@ Session::process_events()
 	bool quit = false;
 
 	while (SDL_PollEvent(&event)) {
-		if (event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
-		    event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN || event.type == SDL_EVENT_JOYSTICK_BUTTON_DOWN)
-			m_touched = true;
 		if (event.type == m_menus.picker_event()) {
 			take_folder();
 			continue;
@@ -317,7 +314,6 @@ Session::do_bar()
 		break;
 	case Ask::LOAD_STATE:
 		load_or_save_state(true);
-		m_touched = true;
 		break;
 	case Ask::CARD:
 		act(Hotkeys::Action::CARD);
@@ -365,24 +361,6 @@ Session::take_folder()
 			say(note);
 		}
 	}
-}
-
-/* The picture of its title for the library (<game>_title.png in the
- * folder of the artwork), once: at its title_frame, the game left to
- * itself since power-on, when none is kept yet */
-void
-Session::capture_title()
-{
-	const std::string &folder = m_menus.state().artwork;
-
-	if (!m_game.title_frame || m_board.frame() != m_game.title_frame || m_touched || folder.empty() ||
-	    !artwork_file(folder, m_game.name, "title").empty())
-		return;
-
-	const std::string path = folder + "/" + m_game.name + "_title.png";
-
-	if (m_display.save_picture(path))
-		std::printf("library: the title of %s kept in '%s'\n", m_game.name.c_str(), path.c_str());
 }
 
 /* -s: <game>-<frame>.odinstate, written once the frame is drawn */
@@ -485,7 +463,6 @@ Session::frames()
 		if (bar)
 			do_bar();
 		save_state_at_frame();
-		capture_title();
 		if (m_menus.tested_at(m_board.frame())) {
 			if (m_menus.bar_tested() < 0) {
 				press_escape();

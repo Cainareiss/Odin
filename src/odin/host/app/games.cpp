@@ -696,19 +696,6 @@ read_boards(const json_t *rom, Game &game)
 	return true;
 }
 
-bool
-read_title_frame(const json_t *rom, Game &game)
-{
-	if (const json_t *const frame = json_object_get(rom, "title_frame")) {
-		if (!json_is_integer(frame) || json_integer_value(frame) < 1) {
-			std::fprintf(stderr, "ERROR: game '%s': \"title_frame\" is not a frame\n", game.name.c_str());
-			return false;
-		}
-		game.title_frame = static_cast<unsigned>(json_integer_value(frame));
-	}
-	return true;
-}
-
 /* Its ROM board, and the 93C46 of the MIE of a new cabinet */
 bool
 read_chips(const json_t *rom, Game &game)
@@ -1004,8 +991,7 @@ GameList::describe(const std::string &name) const
 	const char *const io = json_string_value(json_object_get(rom, "io"));
 	game.io_board = io ? io : "837-13551";
 	if (!read_title(rom, game) || !read_controls(rom, game) || !read_outputs(rom, game) || !ids_once(game) ||
-	    !read_cabinets(rom, game) || !read_options(rom, game) || !read_boards(rom, game) ||
-	    !read_title_frame(rom, game) || !read_chips(rom, game))
+	    !read_cabinets(rom, game) || !read_options(rom, game) || !read_boards(rom, game) || !read_chips(rom, game))
 		return std::nullopt;
 	return game;
 }

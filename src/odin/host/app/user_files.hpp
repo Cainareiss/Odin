@@ -61,7 +61,7 @@ std::vector<std::string> program_data_folders();
 /* The folder of the pictures of the games, as MAME has one: ODIN_ARTWORK,
  * else the one chosen ([paths] artwork), else artwork in the data folder
  * of Odin (beside saves/); empty with ODIN_ARTWORK=none. A picture of a
- * game there is named <game>_<kind>.png: _title, the title Odin keeps;
+ * game there is named <game>_<kind>.png: _title, its title screen;
  * _logo, the picture of the user the library shows instead; _bezel, laid
  * around the game. */
 std::string artwork_folder(const std::string &chosen = {});

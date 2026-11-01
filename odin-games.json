@@ -27,7 +27,6 @@
 		{
 			"name" : "airtrix",
 			"title" : "Air Trix",
-			"title_frame" : 4100,
 			"mach" : "hikaru",
 			"rom_board" : { "eprom_mb" : 4, "315-5881" : "291B02C7" },
 			"mie_eeprom" : "42434f30010101001800040101010100121200000000000000000000060041495254524958300000000000000100010100000000000000000000000000007e4442434f30010101001800040101010100121200000000000000000000060041495254524958300000000000000100010100000000000000000000000000007e44",
@@ -117,7 +116,6 @@
 			"name" : "airtrixo",
 			"title" : "Air Trix (original)",
 			"parent" : "airtrix",
-			"title_frame" : 4100,
 			"mach" : "hikaru",
 			"rom_board" : { "eprom_mb" : 4, "315-5881" : "291B02C7" },
 			"mie_eeprom" : "42434f30010101001800040101010100121200000000000000000000060041495254524958300000000000000100010100000000000000000000000000007e4442434f30010101001800040101010100121200000000000000000000060041495254524958300000000000000100010100000000000000000000000000007e44",
@@ -206,7 +204,6 @@
 		{
 			"name" : "braveff",
 			"title" : "Brave Firefighters",
-			"title_frame" : 720,
 			"mach" : "hikaru",
 			"rom_board" : { "eprom_mb" : 2 },
 			"mie_eeprom" : "42414b300201010018000401010101002211111100000000000000000600010010a1040404003083de1770d03c7cc52083b50080ff000000000000000000f1cc42414b300201010018000401010101002211111100000000000000000600010010a1040404003083de1770d03c7cc52083b50080ff000000000000000000f1cc",
@@ -320,7 +317,6 @@
 		{
 			"name" : "pharrier",
 			"title" : "Planet Harriers",
-			"title_frame" : 3870,
 			"link" : { "cabinets" : 2 },
 			"mach" : "hikaru",
 			"rom_board" : { "eprom_mb" : 4, "315-5881" : "2912C68A" },
@@ -425,7 +421,6 @@
 		{
 			"name" : "swracer",
 			"title" : "Star Wars Racer Arcade",
-			"title_frame" : 6000,
 			"link" : { "cabinets" : 4, "seat" : { "in" : "backup", "byte" : "0007", "bits" : 2 } },
 			"mach" : "hikaru",
 			"rom_board" : { "eprom_mb" : 4, "315-5881" : "2903DAD5" },
@@ -540,7 +535,6 @@
 		{
 			"name" : "sgnascar",
 			"title" : "NASCAR Arcade",
-			"title_frame" : 6200,
 			"link" : { "cabinets" : 8, "seat" : { "in" : "backup", "byte" : "14E3", "shift" : 2, "bits" : 4, "first" : 1 } },
 			"mach" : "hikaru",
 			"rom_board" : { "eprom_mb" : 4, "actel" : { "key" : "56DEDF33", "id" : "4252" } },
@@ -655,7 +649,6 @@
 			"name" : "sgnascaro",
 			"title" : "NASCAR Arcade (original)",
 			"parent" : "sgnascar",
-			"title_frame" : 6200,
 			"link" : { "cabinets" : 8, "seat" : { "in" : "backup", "byte" : "14E3", "shift" : 2, "bits" : 4, "first" : 1 } },
 			"mach" : "hikaru",
 			"rom_board" : { "eprom_mb" : 4, "actel" : { "key" : "56DEDF33", "id" : "4252" } },
@@ -769,7 +762,6 @@
 		{
 			"name" : "von4",
 			"title" : "Virtual-On",
-			"title_frame" : 2796,
 			"link" : { "cabinets" : 4, "seat" : { "in" : "mie", "byte" : "001E", "letter" : true } },
 			"mach" : "hikaru",
 			"card_reader" : "CRP-1231BR-10",

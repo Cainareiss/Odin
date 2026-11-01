@@ -185,9 +185,6 @@ public:
 	/* A picture of a game for the library, RGBA (the menu takes it; none:
 	 * the one it had forgotten), after it is opened */
 	void add_library_picture(const std::string &game, SDL_Surface *rgba);
-	/* The picture of the last frame in a PNG file, no larger than 640 by
-	 * 480 (the folder made): false, said on stderr, when it cannot be */
-	bool save_picture(const std::string &path);
 	/* What is around the picture; with BEZEL, a PNG laid over the window
 	 * where it is wider than the screen of the hardware, as large as the
 	 * window holds it, the picture in its hole (empty: none) */

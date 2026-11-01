@@ -266,10 +266,6 @@ struct Game {
 		unsigned seat_byte = 0, seat_shift = 0, seat_bits = 8, seat_first = 0;
 		bool seat_letter = false;	/* the menu shows it as A, B... */
 	} link;
-	/* The frame of its attract, from power-on, that shows its title: the
-	 * picture of the game the library shows. "title_frame" in the list; 0
-	 * when it does not say. */
-	unsigned title_frame = 0;
 	/* Its ROM board: "rom_board" in the list; none when it does not say,
 	 * as for the BOOTROM alone. */
 	std::optional<GameRomBoard> rom_board;

@@ -1077,8 +1077,8 @@ Menu::page_paths(MenuKit &kit, MenuState &state) const
 	if (kit.value("BIOS", "at the next launch", shown_path(state.bios, "the games folder").c_str(), change, nullptr,
 	              state.bios_given ? "set on the command line: -B" : nullptr))
 		state.choose = MenuState::Folder::BIOS;
-	kit.next_tip("Files named after the game's MAME name: swracer_logo.png for the library, swracer_bezel.png for "
-	             "the bezel. Odin saves swracer_title.png here.");
+	kit.next_tip("Files named after the game's MAME name: swracer_title.png for the library (swracer_logo.png "
+	             "instead, if there is one), swracer_bezel.png for the bezel.");
 	if (kit.value("Artwork", nullptr, shown_path(state.artwork, "none").c_str(), change, nullptr,
 	              state.artwork_given ? "set by ODIN_ARTWORK" : nullptr))
 		state.choose = MenuState::Folder::ARTWORK;

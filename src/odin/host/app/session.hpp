@@ -56,7 +56,7 @@ public:
 		  m_audio(audio), m_games(games),
 		  m_menus(options, display, keys, controls, settings, settings_file, games, &game, &board, audio,
 		          std::move(outputs), network),
-		  m_paused(false), m_touched(!options.state_path.empty()), m_next()
+		  m_paused(false), m_next()
 	{
 	}
 
@@ -95,7 +95,6 @@ private:
 	std::string state_path() const;
 	bool state_saved() const;
 	void save_state_at_frame();
-	void capture_title();
 	void limit_frame_rate();
 
 	const Options &m_options;
@@ -116,9 +115,6 @@ private:
 	std::optional<Ended> m_end;
 	Opened m_opened;
 	bool m_paused;
-	/* A key or a button was pressed, or a state loaded: the game may no
-	 * longer be at its title at its title_frame */
-	bool m_touched;
 	std::chrono::steady_clock::time_point m_next;	/* when the next frame is due */
 };
 
