@@ -936,7 +936,7 @@ Menu::preview(const MenuKit &kit, const MenuState &state, int which, ImVec2 a, I
 
 		std::snprintf(chosen, sizeof(chosen), "%u×", scale);
 		pair("INTERNAL RESOLUTION", UPSCALE, scale > 1 ? static_cast<int>(UPSCALE + scale - 1) : -1, "1× · THE CABINET", chosen,
-		     "Captured in Odin: Brave Fire Fighters, the same picture at each scale.");
+		     "Captured in Odin: Brave Firefighters, the same picture at each scale.");
 		break;
 	}
 	case PREVIEW_MODE: {
@@ -978,7 +978,7 @@ Menu::preview(const MenuKit &kit, const MenuState &state, int which, ImVec2 a, I
 
 		pair("VERTICAL SYNC", WHOLE, state.vsync == 0 ? TORN : WHOLE, "WHOLE · THE CABINET",
 		     NAMES[std::min(state.vsync, 2u)],
-		     "Captured in Odin: two frames in a row of Brave Fire Fighters; when torn, the top of one meets the "
+		     "Captured in Odin: two frames in a row of Brave Firefighters; when torn, the top of one meets the "
 		     "bottom of the next.");
 		break;
 	}

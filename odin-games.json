@@ -205,7 +205,7 @@
 		},
 		{
 			"name" : "braveff",
-			"title" : "Brave Fire Fighters",
+			"title" : "Brave Firefighters",
 			"title_frame" : 720,
 			"mach" : "hikaru",
 			"rom_board" : { "eprom_mb" : 2 },

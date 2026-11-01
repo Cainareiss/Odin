@@ -64,7 +64,7 @@ class Hotkeys {
 public:
 	/* CARD: the player's card into the slot of the card reader, or back
 	 * out of it (Virtual-On); LIGHT_GUN: the mouse aims in the game, or is
-	 * a pointer again (Brave Fire Fighters) */
+	 * a pointer again (Brave Firefighters) */
 	enum class Action : uint8_t { MENU, PAUSE, SAVE_STATE, LOAD_STATE, RESET, FULLSCREEN, CARD, LIGHT_GUN, QUIT };
 	static constexpr size_t ACTIONS = static_cast<size_t>(Action::QUIT) + 1;
 	static constexpr size_t KEYS = 2;
