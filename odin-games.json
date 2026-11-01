@@ -769,7 +769,7 @@
 		{
 			"name" : "von4",
 			"title" : "Virtual-On",
-			"title_frame" : 1740,
+			"title_frame" : 2796,
 			"link" : { "cabinets" : 4, "seat" : { "in" : "mie", "byte" : "001E", "letter" : true } },
 			"mach" : "hikaru",
 			"card_reader" : "CRP-1231BR-10",
