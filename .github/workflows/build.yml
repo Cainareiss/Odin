@@ -1,5 +1,7 @@
 name: Build
 
+# A push to Odin updates the dev pre-release; only a tag v* publishes a
+# release, with the artwork pack.
 on:
   push:
     branches: [ Odin ]
@@ -90,6 +92,7 @@ jobs:
         with:
           name: odin-linux-${{ matrix.arch }}-appimage
           path: out/odin-${{ matrix.arch }}.AppImage
+          retention-days: 7
 
       - name: Build tarball
         run: |
@@ -102,6 +105,7 @@ jobs:
         with:
           name: odin-linux-${{ matrix.arch }}-tarball
           path: out/odin-${{ env.VERSION }}-linux-${{ matrix.arch }}.tar.gz
+          retention-days: 7
 
   macos:
     name: macOS (dmg)
@@ -154,6 +158,7 @@ jobs:
         with:
           name: odin-macos-dmg
           path: out/odin-macos.dmg
+          retention-days: 7
 
   windows:
     name: Windows x86_64 (zip)
@@ -205,6 +210,7 @@ jobs:
         with:
           name: odin-windows-x86_64-zip
           path: out/odin-${{ env.VERSION }}-windows-x86_64.zip
+          retention-days: 7
 
   release:
     name: Publish release
@@ -218,6 +224,19 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
+
+      # The artwork pack (titles and bezels), kept in the draft release
+      # Artwork, which is never published
+      - name: Add the artwork pack
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          id=$(gh api --paginate "repos/${{ github.repository }}/releases" \
+            --jq '.[] | select(.draft and .name == "Artwork") | .assets[] | select(.name == "Odin-Artwork.zip") | .id')
+          test -n "$id"
+          gh api -H "Accept: application/octet-stream" "repos/${{ github.repository }}/releases/assets/$id" \
+            > artifacts/Odin-Artwork.zip
+          unzip -tq artifacts/Odin-Artwork.zip
 
       - uses: softprops/action-gh-release@v2
         with:
