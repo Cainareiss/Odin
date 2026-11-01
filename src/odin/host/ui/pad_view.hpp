@@ -68,9 +68,12 @@ private:
 	ImVec2 point(uint32_t index, const Move &m) const;
 	void fill(ImDrawList *list, const PadShape &shape, const Move &m, ImU32 colour) const;
 	void stroke(ImDrawList *list, const PadShape &shape, const Move &m, ImU32 colour, float width) const;
-	void lit(ImDrawList *list, const MenuPalette &palette, const PadPart &part, const PadState &now) const;
+	size_t drawn_after(uint16_t shape, uint16_t after) const;
+	/* The shapes of the part drawn after the shape `after` */
+	void lit(ImDrawList *list, const MenuPalette &palette, const PadPart &part, const PadState &now,
+	         size_t after) const;
 	void outline(ImDrawList *list, const MenuPalette &palette, const PadPart &part, const PadState &now,
-	             float px) const;
+	             float px, size_t after) const;
 
 	const PadDrawing &m_drawing;
 	ImVec2 m_origin;

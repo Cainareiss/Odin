@@ -78,8 +78,9 @@ enum class PadPartKind : uint8_t { BUTTON, TRIGGER, STICK, WELL };
  * leader line points at. A well: the circle its stick's direction is shown
  * on; a trigger: where its value is written (centre, baseline, size), in it
  * or above it. Its lit shapes are drawn after the shape `lit_after`, the
- * shapes that show it chosen after `sel_after` (in `PadDrawing::lists`); an
- * arrow that turns dark on gold (-1: none). */
+ * shapes that show it chosen after `sel_after` (in `PadDrawing::lists`), or
+ * before a body that comes first (PadView::drawn_after); an arrow that
+ * turns dark on gold (-1: none). */
 struct PadPart {
 	PadPartKind kind;
 	uint8_t input;

@@ -188,10 +188,23 @@ PadView::stroke(ImDrawList *list, const PadShape &shape, const Move &m, ImU32 co
 	}
 }
 
+/* The shape after which a lit or chosen shape is drawn: `after`, or the
+ * last before a body that comes first. A gun is drawn from both sides: the
+ * body of each side covers its own part, lit as at rest. */
+size_t
+PadView::drawn_after(uint16_t shape, uint16_t after) const
+{
+	for (size_t s = shape + 1u; s <= after; s++)
+		if (m_drawing.shapes[s].fill == PadTone::BODY)
+			return s - 1;
+	return after;
+}
+
 /* The shapes that light, the accent as strong as the part is worked; a
  * trigger fills from the bottom of each shape as far as it is pulled */
 void
-PadView::lit(ImDrawList *list, const MenuPalette &palette, const PadPart &part, const PadState &now) const
+PadView::lit(ImDrawList *list, const MenuPalette &palette, const PadPart &part, const PadState &now,
+             size_t after) const
 {
 	const float v = value(part, now);
 
@@ -201,8 +214,11 @@ PadView::lit(ImDrawList *list, const MenuPalette &palette, const PadPart &part, 
 	const Move m = move(part, now);
 
 	for (uint16_t k = 0; k < part.lits; k++) {
-		const PadShape &shape = m_drawing.shapes[m_drawing.lists[part.first_lit + k]];
+		const uint16_t index = m_drawing.lists[part.first_lit + k];
+		const PadShape &shape = m_drawing.shapes[index];
 
+		if (drawn_after(index, part.lit_after) != after)
+			continue;
 		if (part.kind != PadPartKind::TRIGGER) {
 			fill(list, shape, m, with_alpha(palette.accent, v));
 			continue;
@@ -230,13 +246,16 @@ PadView::lit(ImDrawList *list, const MenuPalette &palette, const PadPart &part, 
  * accent; its details keep their width */
 void
 PadView::outline(ImDrawList *list, const MenuPalette &palette, const PadPart &part, const PadState &now,
-                 float px) const
+                 float px, size_t after) const
 {
 	const Move m = move(part, now);
 
 	for (uint16_t k = 0; k < part.sels; k++) {
-		const PadShape &shape = m_drawing.shapes[m_drawing.lists[part.first_sel + k]];
+		const uint16_t index = m_drawing.lists[part.first_sel + k];
+		const PadShape &shape = m_drawing.shapes[index];
 
+		if (drawn_after(index, part.sel_after) != after)
+			continue;
 		if (shape.fill == PadTone::LINE)
 			fill(list, shape, m, palette.accent);
 		else
@@ -277,10 +296,9 @@ PadView::draw(ImDrawList *list, const MenuPalette &palette, const PadState &now,
 			const PadPart &part = parts[p];
 			const bool hot = part.kind == PadPartKind::STICK && !wells && moved(part) > STICK_HOT;
 
-			if (part.lit_after == s)
-				lit(list, palette, part, now);
-			if (part.sel_after == s && ((p < 32 && (chosen >> p & 1)) || hot))
-				outline(list, palette, part, now, px);
+			lit(list, palette, part, now, s);
+			if ((p < 32 && (chosen >> p & 1)) || hot)
+				outline(list, palette, part, now, px, s);
 		}
 	}
 
