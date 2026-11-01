@@ -17,6 +17,10 @@ concurrency:
 permissions:
   contents: read
 
+# The version Odin shows (page About): the name of a tag, else its commit
+env:
+  ODIN_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+
 jobs:
   linux:
     strategy:
@@ -63,7 +67,7 @@ jobs:
             -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_C_FLAGS="${{ matrix.flags }}" -DCMAKE_CXX_FLAGS="${{ matrix.flags }}" \
             -DODIN_NATIVE=OFF -DODIN_BUNDLED_LIBS=ON ${{ matrix.options }} \
-            -DCMAKE_INSTALL_PREFIX=/usr
+            -DCMAKE_INSTALL_PREFIX=/usr -DODIN_VERSION="$ODIN_VERSION"
 
       - name: Build
         run: cmake --build build
@@ -127,7 +131,7 @@ jobs:
         run: |
           cmake -S . -B build -G "Unix Makefiles" \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=13.3 \
-            -DODIN_NATIVE=OFF -DODIN_BUNDLED_LIBS=ON
+            -DODIN_NATIVE=OFF -DODIN_BUNDLED_LIBS=ON -DODIN_VERSION="$ODIN_VERSION"
 
       - name: Build
         run: cmake --build build -j "$(sysctl -n hw.ncpu)"
@@ -190,7 +194,7 @@ jobs:
           cmake -S . -B build -G Ninja \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_C_FLAGS=-march=x86-64-v2 -DCMAKE_CXX_FLAGS=-march=x86-64-v2 \
-            -DODIN_NATIVE=OFF -DODIN_BUNDLED_LIBS=ON
+            -DODIN_NATIVE=OFF -DODIN_BUNDLED_LIBS=ON -DODIN_VERSION="$ODIN_VERSION"
 
       - name: Build
         run: cmake --build build
