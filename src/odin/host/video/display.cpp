@@ -27,6 +27,7 @@
 
 #include "odin/host/video/display.hpp"
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cinttypes>
@@ -317,12 +318,23 @@ Display::attach(Hikaru &board, const std::string &title)
 }
 
 void
-Display::attach_scenes(const std::string &title)
+Display::attach_scenes(const std::string &game, const std::string &title)
 {
-	run([this] {
+	std::string seed, kept, made;
+	std::vector<uint64_t> keys;
+
+	find_program_lists(game, seed, kept, made);
+	for (const std::string *list : { &seed, &kept })
+		if (!list->empty())
+			for (const uint64_t key : read_pmx_list(*list))
+				if (std::find(keys.begin(), keys.end(), key) == keys.end())
+					keys.push_back(key);
+	run([this, &made] {
 		m_own = m_graphics->make_drawing();
+		m_own->keep_programs_in(made);
 		m_own_built = 1;
 		m_own_native = m_own->draws_native();
+		m_own_sorts = m_own->sorts_per_pixel();
 		m_graphics->set_waits(false);
 		m_waits = false;
 	});
@@ -333,6 +345,9 @@ Display::attach_scenes(const std::string &title)
 	m_fps = 0.0f;
 	m_title = std::string("Odin - ") + title + " [" + m_graphics->api() + "]";
 	SDL_SetWindowTitle(m_window, m_title.c_str());
+	prepare_scenes(title, keys);
+	if (!kept.empty())
+		run([this, &kept] { m_own->list_pmx_in(kept); });
 	set_vsync(m_vsync);
 }
 
@@ -362,6 +377,7 @@ Display::draw_own(bool late, unsigned w, unsigned h, bool bar)
 	m_own->present(picture_rect(w, h, m_hole), w, h);
 	m_picture = m_own->frame_picture();
 	screenshot();
+	print_fingerprint();
 	draw_over(w, h, bar);
 	if (const bool wait = late ? m_wait_late : m_wait_on_time; wait != m_waits) {
 		m_graphics->set_waits(wait);
@@ -411,11 +427,46 @@ Display::show_black()
 }
 
 /* The programs of the lists of the game are compiled before its first
- * frame, on the drawing thread, with the loading screen drawn at most 60
- * times a second. The window answers meanwhile; its events wait in their
- * queue for the game. */
+ * frame (load) */
 void
 Display::prepare_programs(const std::string &title)
+{
+	load([this](const Progress &progress) { m_renderer->prepare_programs(progress); },
+	     [this, &title](unsigned done, unsigned total, unsigned w, unsigned h) {
+		     m_renderer->draw_loading(title, done, total, w, h);
+	     });
+}
+
+/* The programs of the Neon 250 are made before the first scene, with those
+ * of the keys of the lists of the game (load), the loading screen where the
+ * picture will be */
+void
+Display::prepare_scenes(const std::string &title, const std::vector<uint64_t> &keys)
+{
+	load([this, &keys](const Progress &progress) {
+		     const uint64_t began = host_ns();
+
+		     m_own->prepare_pmx(keys, progress);
+
+		     const unsigned read = m_own->programs_read_back(), compiled = m_own->programs_compiled();
+
+		     std::printf("programs: %u ready in %.1f s, %u of them read back, %u compiled\n", read + compiled,
+		                 static_cast<double>(host_ns() - began) / 1e9, read, compiled);
+	     },
+	     [this, &title](unsigned done, unsigned total, unsigned w, unsigned h) {
+		     const PictureRect rect = picture_rect(w, h);
+
+		     m_own->draw_loading(LoadingScreen::placed(title, done, total, rect.x, rect.y, rect.w, rect.h), w,
+		                         h);
+	     });
+}
+
+/* `make` runs on the drawing thread, its progress drawn by `draw` at most 60
+ * times a second, with the size of the window. The window answers
+ * meanwhile; its events wait in their queue for the game. */
+void
+Display::load(const std::function<void(const Progress &)> &make,
+              const std::function<void(unsigned, unsigned, unsigned, unsigned)> &draw)
 {
 	constexpr uint64_t EVERY_NS = 1000000000 / 60;
 	const auto window_size = [this] {
@@ -429,15 +480,14 @@ Display::prepare_programs(const std::string &title)
 
 	finish();
 	m_drawing->post([&] {
-		m_renderer->prepare_programs([&](unsigned done, unsigned total) {
+		make([&](unsigned done, unsigned total) {
 			const uint64_t now = host_ns();
 
 			if (done && done < total && now - shown < EVERY_NS)
 				return;
 			shown = now;
 			const uint64_t wh = size;
-			m_renderer->draw_loading(title, done, total, static_cast<unsigned>(wh >> 32),
-			                         static_cast<unsigned>(wh));
+			draw(done, total, static_cast<unsigned>(wh >> 32), static_cast<unsigned>(wh));
 			present(static_cast<unsigned>(wh >> 32), static_cast<unsigned>(wh), "loading");
 		});
 	});

@@ -62,6 +62,7 @@ public:
 
 	void set_scale(unsigned scale) override;
 	bool draws_native() const override { return m_card.geometry_shaders(); }
+	bool sorts_per_pixel() const override { return m_card.geometry_shaders(); }
 
 	void begin_scene(const odin_display_list_t &list, const SceneDebug &debug) override;
 	void clear_depth() override;
@@ -108,6 +109,9 @@ public:
 	void compose(const Compose &compose, unsigned shown, const bool layers[2]) override;
 	void present(PictureRect rect, unsigned window_w, unsigned window_h) override;
 	void draw_pmx(const PmxScene &scene, unsigned anisotropy) override;
+	void prepare_pmx(const std::vector<uint64_t> &keys,
+	                 const std::function<void(unsigned, unsigned)> &progress) override;
+	void list_pmx_in(const std::string &path) override;
 	HostPicture frame_picture() const override { return { FRAME_PICTURE, width(), height() }; }
 	void set_filter(const std::string &preset) override;
 	void draw_loading(std::span<const LoadingRect> rects, unsigned window_w, unsigned window_h) override;
@@ -261,6 +265,8 @@ private:
 	VkPipelineCache m_cache = VK_NULL_HANDLE;
 	std::string m_cache_folder, m_cache_card, m_cache_path;
 	ProgramList m_program_list;
+	/* The pipelines draw_pmx makes after prepare_pmx */
+	ProgramList m_pmx_list;
 	unsigned m_read_back = 0, m_compiled = 0;
 	bool m_preparing = false;
 

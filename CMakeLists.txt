@@ -195,7 +195,8 @@ endif()
 set(ODIN_SOURCES
 	host/app/main.cpp host/app/cpu_check.cpp host/app/options.cpp host/app/atvtrack_play.cpp
 	machine/boards/atvtrack/atvtrack.cpp machine/boards/atvtrack/atvtrack_state.cpp machine/boards/atvtrack/atvtrack_fpga.cpp
-	machine/boards/atvtrack/pmx1.cpp machine/boards/atvtrack/pmx1_scene.cpp
+	machine/chips/pmx1/pmx1.cpp machine/chips/pmx1/pmx1_core.cpp machine/chips/pmx1/pmx1_scene.cpp
+	machine/chips/pmx1/pmx1_host.cpp machine/chips/pmx1/pmx1_ta.cpp
 	host/ui/menu_session.cpp host/ui/menu_session_input.cpp
 	host/ui/menu_session_state.cpp host/app/session.cpp
 	host/app/library.cpp host/video/display.cpp
@@ -214,7 +215,7 @@ set(ODIN_SOURCES
 	host/renderer/hikaru/gl/translucent_gl.cpp
 	host/video/x11_window.cpp host/ui/menu.cpp host/ui/menu_input.cpp
 	host/ui/menu_pages.cpp host/ui/menu_library.cpp
-	host/ui/menu_bar.cpp host/ui/cabinet_view.cpp
+	host/ui/menu_bar.cpp host/ui/cabinet_view.cpp host/ui/sound_parts.cpp host/ui/sound_view.cpp
 	host/ui/menu_kit.cpp host/ui/menu_nav.cpp
 	host/ui/system_fonts.cpp host/app/rom_files.cpp
 	host/ui/folder_dialog.cpp host/ui/pad_view.cpp
@@ -317,7 +318,8 @@ set(SPIRV_DIR ${CMAKE_BINARY_DIR}/spirv)
 file(MAKE_DIRECTORY ${SPIRV_DIR}/glsl)
 set(SPIRV)
 foreach(shader whole_picture.vert blend.frag compose.vert compose.frag present.frag
-		mesh.vert mesh.geom mesh.frag sort.frag image.vert image.frag pmx.vert pmx.geom pmx.frag whole_window.vert
+		mesh.vert mesh.geom mesh.frag sort.frag image.vert image.frag pmx.vert pmx.geom pmx.frag pmx_sort.frag
+		whole_window.vert
 		blur.frag show.frag average.frag sides.frag)
 	string(REGEX REPLACE ".*\\." "" stage ${shader})
 	set(out ${SPIRV_DIR}/glsl/${shader}.spv)
@@ -345,6 +347,19 @@ add_custom_command(OUTPUT ${out}
 		${GLSLANG} ${out} ${GLSL}/pmx.frag
 	DEPENDS ${GLSL}/pmx.frag VERBATIM)
 list(APPEND SPIRV ${out})
+foreach(variant list native_list)
+	set(out ${SPIRV_DIR}/glsl/pmx_${variant}.frag.spv)
+	if(variant STREQUAL "list")
+		set(defines "echo '#define LIST 1'")
+	else()
+		set(defines "echo '#define NATIVE 1'; echo '#define LIST 1'")
+	endif()
+	add_custom_command(OUTPUT ${out}
+		COMMAND sh -c "{ echo '#version 450'; ${defines}; cat \"$2\"; } | \"$0\" -V --stdin -S frag -o \"$1\""
+			${GLSLANG} ${out} ${GLSL}/pmx.frag
+		DEPENDS ${GLSL}/pmx.frag VERBATIM)
+	list(APPEND SPIRV ${out})
+endforeach()
 set(out ${SPIRV_DIR}/glsl/mesh_families.frag.spv)
 add_custom_command(OUTPUT ${out}
 	COMMAND sh -c "{ echo '#version 450'; echo '#define FAMILIES 1'; cat \"$2\"; } | \"$0\" -V --stdin -S frag -o \"$1\""

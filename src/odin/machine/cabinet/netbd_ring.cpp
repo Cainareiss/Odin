@@ -234,7 +234,7 @@ constexpr size_t MOST_WAITING = 256;
 
 } /* namespace */
 
-NetCable::NetCable(NetBoardRunner &runner, const std::string &game, uint16_t port, const std::string &next_host,
+NetCable::NetCable(NetArrivals &runner, const std::string &game, uint16_t port, const std::string &next_host,
                    uint16_t next_port)
 	: m_runner(runner), m_game(game), m_port(port), m_next_host(next_host), m_next_port(next_port), m_listener(NONE)
 {

@@ -44,8 +44,12 @@ uniform float u_most_w;
 #endif
 
 #ifdef GL_ES
+/* GLSL ES has no noperspective: the colours times w, and w, go with the
+ * perspective; pmx.frag and pmx.geom divide the one by the other, which
+ * gives the colours straight across the screen, as noperspective does */
 layout(location = 0) out vec4 v_color;
 layout(location = 1) out vec4 v_offset;
+layout(location = 3) out float v_w;
 #else
 layout(location = 0) noperspective out vec4 v_color;
 layout(location = 1) noperspective out vec4 v_offset;
@@ -72,4 +76,9 @@ main()
 	/* Bytes B, G, R, A */
 	v_color = a_color.bgra;
 	v_offset = a_offset.bgra;
+#ifdef GL_ES
+	v_color *= w;
+	v_offset *= w;
+	v_w = w;
+#endif
 }

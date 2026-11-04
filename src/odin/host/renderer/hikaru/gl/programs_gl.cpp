@@ -86,11 +86,9 @@ MeshPrograms::keep_in(const std::string &folder)
 	}
 }
 
-/* The program of these sources (with a geometry shader, unless its text is
- * empty): the one kept for the key, when this driver made it from them and
- * takes it back, else compiled and kept. */
 GLuint
-MeshPrograms::link(uint64_t key, const std::string &vertex, const std::string &fragment, const std::string &geometry)
+MeshPrograms::link(const std::string &name, const std::string &vertex, const std::string &fragment,
+                   const std::string &geometry)
 {
 	const char *const between = geometry.empty() ? nullptr : geometry.c_str();
 	/* The kept file is checked against the vertex shader and the geometry
@@ -102,10 +100,7 @@ MeshPrograms::link(uint64_t key, const std::string &vertex, const std::string &f
 		return gl::compile_program(vertex.c_str(), fragment.c_str(), false, between);
 	}
 
-	char name[32];
-
-	std::snprintf(name, sizeof(name), "/%016" PRIx64 ".bin", key);
-	const std::string path = m_kept + name;
+	const std::string path = m_kept + "/" + name + ".bin";
 
 	if (const std::optional<std::vector<uint8_t>> file = read_file(path)) {
 		if (const std::optional<KeptProgram> kept = program_from_file(*file, m_driver, first, fragment)) {
@@ -177,8 +172,13 @@ MeshPrograms::compile(const MeshVariant &variant)
 	define("NATIVE_2D", variant.native);
 	define("FAMILIES", variant.families);
 
+	/* Kept under the key, in hexadecimal */
+	char hex[17];
+
+	std::snprintf(hex, sizeof(hex), "%016" PRIx64, variant.key());
+
 	MeshProgram program;
-	program.id = link(variant.key(), defines + odin_glsl_mesh_vert, defines + odin_glsl_mesh_frag,
+	program.id = link(hex, defines + odin_glsl_mesh_vert, defines + odin_glsl_mesh_frag,
 	                  variant.native ? odin_glsl_mesh_geom : "");
 
 	const auto find = [&](const char *name) {

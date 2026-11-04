@@ -46,7 +46,7 @@ extern const char odin_glsl_compose_vert[], odin_glsl_compose_frag[];
  * whole viewport and, for it, a blur and a picture at a light (the
  * background of the menu), the mean of a picture and the sides it lights */
 extern const char odin_glsl_image_vert[], odin_glsl_image_frag[];
-extern const char odin_glsl_pmx_vert[], odin_glsl_pmx_frag[], odin_glsl_pmx_geom[];
+extern const char odin_glsl_pmx_vert[], odin_glsl_pmx_frag[], odin_glsl_pmx_geom[], odin_glsl_pmx_sort_frag[];
 extern const char odin_glsl_whole_window_vert[], odin_glsl_blur_frag[], odin_glsl_show_frag[];
 extern const char odin_glsl_average_frag[], odin_glsl_sides_frag[];
 

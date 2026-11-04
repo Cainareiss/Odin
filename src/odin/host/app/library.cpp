@@ -25,6 +25,7 @@
 #include "odin/host/app/library.hpp"
 
 #include <algorithm>
+#include <cctype>
 
 #include <SDL3/SDL.h>
 
@@ -46,29 +47,45 @@ scan_library(LibraryState &state, const GameList &games, const Options &options,
 	state.selected = 0;
 	state.hidden = 0;
 
-	RomFiles hikaru(options.roms_of("hikaru"), options.bios_path), gaelco(options.roms_of("atvtrack"), options.bios_path);
+	RomFiles files(options.rom_path, options.bios_path);
 
 	for (const GameList::Entry &entry : games.entries()) {
 		const std::string &name = entry.name;
 		const bool theirs = entry.machine != "hikaru";
 		const std::string system = theirs ? "gaelco" : entry.machine;
-		LibraryState::Game game{ name, entry.title, entry.parent, {}, theirs };
+		LibraryState::Game game{ name, entry.title, entry.parent, {}, theirs, system };
 
 		if (std::find(state.systems.begin(), state.systems.end(), system) == state.systems.end())
 			state.systems.push_back(system);
-		for (const RomFiles::File &file : games.missing(theirs ? gaelco : hikaru, name))
+		for (const RomFiles::File &file : games.missing(files, name))
 			game.missing.push_back(file.name + " (" + file.set_of(name) + ".zip)");
 		if (!state.filter.shows(system, !entry.parent.empty(), game.missing.empty())) {
 			state.hidden++;
 			continue;
 		}
-		if (name == chosen)
-			state.selected = static_cast<int>(state.games.size());
 		state.games.push_back(std::move(game));
 	}
+
+	/* By system, in the order of the list, and by title in each */
+	const auto rank = [&state](const LibraryState::Game &game) {
+		return std::find(state.systems.begin(), state.systems.end(), game.system) - state.systems.begin();
+	};
+	const auto lower = [](char a, char b) {
+		return std::tolower(static_cast<unsigned char>(a)) < std::tolower(static_cast<unsigned char>(b));
+	};
+	const auto before = [&](const LibraryState::Game &a, const LibraryState::Game &b) {
+		if (rank(a) != rank(b))
+			return rank(a) < rank(b);
+		return std::lexicographical_compare(a.title.begin(), a.title.end(), b.title.begin(), b.title.end(),
+		                                    lower);
+	};
+
+	std::stable_sort(state.games.begin(), state.games.end(), before);
+	for (size_t i = 0; i < state.games.size(); i++)
+		if (state.games[i].name == chosen)
+			state.selected = static_cast<int>(i);
 	state.roms = options.rom_path;
 	state.bios = options.bios_path;
-	state.gaelco = options.roms_of("atvtrack");
 	state.roms_given = options.given.roms;
 	state.bios_given = options.given.bios;
 }

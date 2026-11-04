@@ -1043,7 +1043,8 @@ Menu::help(int page, const MenuState &state)
 	case DISPLAY:
 		return std::string("These settings apply to every game") + kept;
 	case AUDIO:
-		return std::string("Sound only: vibration is on the Input page") + kept;
+		return state.kept ? "Cabinet sound is set per game. Vibration is on the Input page." :
+		                    std::string("Cabinet sound is set per game. Vibration is on the Input page. ") + NOT_SAVED;
 	case HOTKEYS:
 		return state.hotkey_catching || state.kept ? hotkeys_help(state) :
 		       hotkeys_help(state) + " " + NOT_SAVED;

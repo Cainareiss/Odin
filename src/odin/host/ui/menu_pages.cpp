@@ -33,6 +33,7 @@
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -40,6 +41,7 @@
 #include "odin/common/env.hpp"
 #include "odin/host/input/gun_serial.hpp"
 #include "odin/host/ui/menu_kit.hpp"
+#include "odin/host/ui/sound_view.hpp"
 #include "odin/machine/cabinet/netbd_ring.hpp"
 
 namespace odin {
@@ -161,6 +163,8 @@ icon_of(GameOutput::Role role)
 		return MenuKit::Icon::RUMBLE;
 	case GameOutput::Role::MUTE:
 		return MenuKit::Icon::MUTE;
+	case GameOutput::Role::COUNTER:
+		return MenuKit::Icon::COIN;
 	default:
 		return MenuKit::Icon::LAMP;
 	}
@@ -317,218 +321,178 @@ shown_path(const std::string &path, const char *none)
 
 namespace {
 
-/* The two sound boards of a cabinet, as its wiring takes them (the manuals
- * and wiring diagrams of SEGA): its game, where each board plays,
- * what sets the level of the optional one on the cabinet. The optional
- * board of Racer feeds the shaker of its panel, no speaker. */
-struct Boards {
-	const char *game, *main, *option, *knob;
-};
-
-constexpr Boards BOARDS[] = {
-	{ "sgnascar", "front (FRONT)", "seat backs (REAR)", ", like the cabinet's REAR knob" },
-	{ "sgnascaro", "front (FRONT)", "seat backs (REAR)", ", like the cabinet's REAR knob" },
-	{ "pharrier", "monitor speakers + woofer", "seat backs (REAR)", "" },
-	{ "swracer", "seat + woofer", "panel shaker (VIBRATION)",
-	  ". The cabinet sends it to the shaker only" },
-};
-constexpr Boards OTHER_BOARDS = { "", "main speakers", "optional speakers", "" };
-
-const Boards &
-boards_of(const std::string &game)
-{
-	for (const Boards &boards : BOARDS)
-		if (game == boards.game)
-			return boards;
-	return OTHER_BOARDS;
-}
-
-/* The drawing of a card, in a space of 330 by 110 */
-constexpr float ROUTE_W = 330.0f;
-constexpr float ROUTE_H = 110.0f;
+/* The room between the frame of the drawing and its title */
 constexpr float CARD_PAD = 8.0f;
 
-/* A level as the cabinet says it: "-12 dB", "0 dB", "+3 dB" */
+/* What sets the level of the optional board on a cabinet, said in the tip
+ * of its level (the manuals and wiring diagrams of SEGA) */
+struct Knob {
+	const char *game, *knob;
+};
+
+constexpr Knob KNOBS[] = {
+	{ "sgnascar", ", like the cabinet's REAR volume knob" },
+	{ "sgnascaro", ", like the cabinet's REAR volume knob" },
+	{ "swracer", ". On the cabinet it only shakes the panel: you feel it but don't hear it, so Main is the default" },
+};
+
+const char *
+knob_of(const std::string &game)
+{
+	for (const Knob &knob : KNOBS)
+		if (game == knob.game)
+			return knob.knob;
+	return "";
+}
+
+/* A level as the cabinet says it: "-12 dB", "0 dB" (never "-0"), "+3 dB" */
 std::string
 decibels(float db)
 {
 	char text[16];
 
-	std::snprintf(text, sizeof(text), "%s%.0f dB", db > 0.5f ? "+" : "", static_cast<double>(db));
+	std::snprintf(text, sizeof(text), "%s%.0f dB", db > 0.5f ? "+" : "", static_cast<double>(db) + 0.0);
 	return text;
 }
 
-/* The largest size up to `size` a text fits `width` at: measured there,
- * as the font has its own widths at each size */
-float
-fit(const char *text, float size, float width)
+/* The sound the game shown has to set, if any */
+SoundGame *
+sound_shown(MenuState &state)
 {
-	ImFont *const font = ImGui::GetFont();
-	const float wide = font->CalcTextSizeA(size, FLT_MAX, 0.0f, text).x;
-	float fitted = wide > width ? size * width / std::max(wide, 1.0f) : size;
-
-	while (fitted > 4.0f && font->CalcTextSizeA(fitted, FLT_MAX, 0.0f, text).x > width)
-		fitted -= 0.5f;
-	return fitted;
+	if (state.shown >= state.games.size())
+		return nullptr;
+	for (SoundGame &game : state.sound_games)
+		if (game.name == state.games[state.shown].first)
+			return &game;
+	return nullptr;
 }
 
-/* A box of the drawing: its name and where it plays (`sub`, when the card
- * has room for it), in its middle; framed when it plays, dashed when not.
- * A small box takes the short name. */
-void
-route_box(const MenuKit &kit, ImVec2 a, ImVec2 b, const char *name, const char *short_name, const char *sub, bool on)
+/* The game shown in the drawing: the parts of its cabinet, of the model
+ * chosen on the page Input; how it is played; what was pointed at */
+SoundScene
+scene_of(const MenuState &state, const SoundGame *game)
 {
-	ImDrawList *const list = ImGui::GetWindowDrawList();
-	ImFont *const font = ImGui::GetFont();
-	const MenuPalette &palette = kit.palette();
-	const float f = ImGui::GetFontSize(), inner = b.x - a.x - kit.px(6.0f);
-	const auto width = [&](float size, const char *text) { return font->CalcTextSizeA(size, FLT_MAX, 0.0f, text).x; };
-	const char *const shown = width(f * 0.8f, name) <= inner ? name : short_name;
-	const float name_size = fit(shown, f * 0.8f, inner);
-	const float second = sub ? fit(sub, f * 0.7f, inner) : 0.0f;
-	const bool with_sub = sub && name_size + second + kit.px(4.0f) <= b.y - a.y;
-	const float high = name_size + (with_sub ? second + kit.px(2.0f) : 0.0f);
-	const float top = (a.y + b.y - high) / 2.0f, mid = (a.x + b.x) / 2.0f;
+	SoundScene scene;
 
-	if (on)
-		kit.frame(list, a, b, kit.px(3.0f), palette.part, palette.stroke);
-	else {
-		kit.frame(list, a, b, kit.px(3.0f), palette.part, 0);
-		kit.dashed_frame(list, a, b, palette.outline);
+	if (state.shown < state.game_audio.size()) {
+		const MenuState::GameAudio &audio = state.game_audio[state.shown];
+		const bool chosen = state.cabinet >= 0 && static_cast<size_t>(state.cabinet) < state.cabinet_ids.size();
+		const std::string cabinet = chosen ? state.cabinet_ids[static_cast<size_t>(state.cabinet)] : "standard";
+
+		for (const SoundPart &part : audio.parts)
+			if (part.cabinet.empty() || part.cabinet == cabinet)
+				scene.parts.push_back(part);
+		scene.seated = audio.seated;
+		scene.family = audio.family;
 	}
-	list->PushClipRect(a, b, true);
-	list->AddText(font, name_size, { mid - width(name_size, shown) / 2.0f, top }, on ? palette.ink : palette.dim,
-	              shown);
-	if (with_sub)
-		list->AddText(font, second, { mid - width(second, sub) / 2.0f, top + name_size + kit.px(2.0f) },
-		              on ? palette.dim : palette.faint, sub);
-	list->PopClipRect();
+	if (game) {
+		scene.played = game->played;
+		scene.lows = game->woofer && game->played == 1 && std::string_view(WOOFER_CUTOFFS[game->cutoff]) != "off";
+	}
+	scene.pointed = state.audio_pointed < static_cast<int>(scene.parts.size()) ? state.audio_pointed : -1;
+	scene.pointed_speakers = state.audio_pointed_speakers;
+	return scene;
 }
 
-/* A line of the drawing from the box of a board to the speakers, a curve
- * of two bends; dashed when that board is not played; the level of the
- * optional board in its middle */
+/* The cabinet of the game shown with the parts of its sound, the model of
+ * the cabinet on its right; under it, the name of the part pointed at, or
+ * what the user hears */
 void
-route_line(const MenuKit &kit, ImVec2 p, ImVec2 q, bool on, const std::string &level)
+sound_drawing(const MenuKit &kit, MenuState &state, const Box &box, const SoundScene &scene)
 {
 	ImDrawList *const list = ImGui::GetWindowDrawList();
 	const MenuPalette &palette = kit.palette();
-	const float mid = (p.x + q.x) / 2.0f;
-	std::vector<ImVec2> points;
+	const float inside = kit.px(MenuKit::BOX_INSIDE), pad = kit.px(CARD_PAD), size = MenuKit::font(MenuKit::SMALL);
+	const float tiny = MenuKit::font(MenuKit::TINY), width = box.b.x - box.a.x - 2.0f * inside;
+	const bool pointing = scene.pointed >= 0;
+	const std::string caption =
+		pointing ? sound_part_name(scene.parts[static_cast<size_t>(scene.pointed)]) : sound_heard(scene);
+	/* Room for three lines, so that the drawing stays where it is */
+	const float caption_h = std::max(centred({}, width, size, caption.c_str(), 0), 3.0f * size);
+	const float title_h = kit.px(6.0f) + MenuKit::font(MenuKit::SMALL);
 
-	for (int i = 0; i <= 24; i++) {
-		const float t = static_cast<float>(i) / 24.0f, u = 1.0f - t;
-		const float x = u * u * u * p.x + 3.0f * u * u * t * mid + 3.0f * u * t * t * mid + t * t * t * q.x;
-		const float y = u * u * u * p.y + 3.0f * u * u * t * p.y + 3.0f * u * t * t * q.y + t * t * t * q.y;
+	MenuKit::write(list, { box.a.x + pad, box.a.y + kit.px(6.0f) + size - tiny }, palette.cabinet, "THE CABINET", tiny,
+	               tiny * 0.14f);
+	if (state.cabinet_names.size() > 1 && state.cabinet >= 0 &&
+	    static_cast<size_t>(state.cabinet) < state.cabinet_names.size()) {
+		const std::string model = MenuKit::capitals(state.cabinet_names[static_cast<size_t>(state.cabinet)]);
+		const float w = MenuKit::measure(model.c_str(), tiny, tiny * 0.14f);
 
-		points.push_back({ x, y });
+		MenuKit::write(list, { box.b.x - pad - w, box.a.y + kit.px(6.0f) + size - tiny }, palette.dim, model.c_str(),
+		               tiny, tiny * 0.14f);
 	}
-	if (on)
-		list->AddPolyline(points.data(), static_cast<int>(points.size()), palette.stroke, ImDrawFlags_None, kit.px(1.4f));
-	else
-		MenuKit::dashes(list, points, false, palette.outline, kit.px(1.4f), kit.px(2.0f), kit.px(4.0f));
-	if (level.empty())
-		return;
 
-	const float size = MenuKit::font(0.75f);
-	const ImVec2 text = ImGui::GetFont()->CalcTextSizeA(size, FLT_MAX, 0.0f, level.c_str());
-	const ImVec2 at = { mid - text.x / 2.0f, (p.y + q.y) / 2.0f - text.y - kit.px(3.0f) };
+	const ImVec2 a = { box.a.x + inside, box.a.y + title_h };
+	const ImVec2 b = { box.b.x - inside, box.b.y - inside - caption_h };
 
-	list->AddRectFilled({ at.x - kit.px(2.0f), at.y }, { at.x + text.x + kit.px(2.0f), at.y + text.y }, palette.screen);
-	list->AddText(ImGui::GetFont(), size, at, palette.dim, level.c_str());
+	state.audio_pointed = draw_sound_cabinet(kit, a, b, scene);
+	centred({ a.x, b.y }, width, size, caption.c_str(), pointing ? palette.ink : palette.dim);
 }
 
-/* How a game plays its two boards: each board in its box, joined to the
- * speakers of the user (stereo), or to the front and the rear in four
- * channels; a board not played dashed, the level of the optional board on
- * its line. In a card with the game's name; its height, drawn when
- * `draw`. */
-float
-route_card(const MenuKit &kit, const SoundGame &game, ImVec2 at, float width, bool draw)
-{
-	ImDrawList *const list = ImGui::GetWindowDrawList();
-	const MenuPalette &palette = kit.palette();
-	const float pad = kit.px(CARD_PAD), line = ImGui::GetTextLineHeight();
-	const float k = std::min(kit.px(1.0f), (width - 2.0f * pad) / ROUTE_W);
-	const float h = 2.0f * pad + line + kit.px(4.0f) + ROUTE_H * k;
-
-	if (!draw)
-		return h;
-
-	const Boards &boards = boards_of(game.name);
-	const ImVec2 o = { at.x + (width - ROUTE_W * k) / 2.0f, at.y + pad + line + kit.px(4.0f) };
-	const auto p = [&](float x, float y) { return ImVec2{ o.x + x * k, o.y + y * k }; };
-	const bool option = game.played != 0, four = game.played == 2;
-	const std::string title = MenuKit::capitals(game.title);
-	const float small = MenuKit::font(MenuKit::SMALL);
-
-	kit.frame(list, at, { at.x + width, at.y + h }, kit.px(MenuKit::BOX_CUT), 0, palette.line);
-	MenuKit::small_caps(list, { at.x + pad, at.y + pad + line - small }, palette.dim, title.c_str());
-	route_box(kit, p(4, 6), p(144, 48), "Main board", "Main", boards.main, true);
-	route_box(kit, p(4, 62), p(144, 104), "Optional board", "Optional", boards.option, option);
-	if (four) {
-		route_box(kit, p(222, 6), p(326, 48), "Front", "Front", "channels 1-2", true);
-		route_box(kit, p(222, 62), p(326, 104), "Rear", "Rear", "channels 3-4", true);
-		route_line(kit, p(144, 27), p(222, 27), true, "");
-		route_line(kit, p(144, 83), p(222, 83), true, "");
-	} else {
-		route_box(kit, p(222, 34), p(326, 76), "Your speakers", "Speakers", "stereo", true);
-		route_line(kit, p(144, 27), p(222, 50), true, "");
-		route_line(kit, p(144, 83), p(222, 60), option, game.played == 1 ? decibels(game.level) : "");
-	}
-	return h;
-}
-
-/* The cards of the games in the middle of the box, what the others play
- * under them */
+/* The sound of the game shown: how it is played, the level of its
+ * optional board or woofer, the cutoff of the woofer, the volume of a new
+ * Smashing Drive board */
 void
-route_cards(const MenuKit &kit, const MenuState &state, const Box &box)
+cabinet_sound(MenuKit &kit, SoundGame &game, const SoundScene &scene)
 {
-	const float inside = kit.px(MenuKit::BOX_INSIDE), gap = kit.px(TILE_GAP), size = MenuKit::font(MenuKit::SMALL);
-	const float width = std::min(box.b.x - box.a.x - 2.0f * inside, kit.px(ROUTE_W + 2.0f * CARD_PAD));
-	const float x = (box.a.x + box.b.x - width) / 2.0f;
-	std::string others;
-	std::vector<std::string> titles;
+	static constexpr const char *CUTOFFS[] = { "80 Hz", "120 Hz", "160 Hz", "200 Hz", "Off" };
+	static_assert(std::size(CUTOFFS) == std::size(WOOFER_CUTOFFS));
+	static constexpr const char *STARTS[] = { "0 (silent)", "25", "50", "75", "96 (max)" };
+	const char *const only_both = game.played != 1 ? "Both mode only" : nullptr;
+	const std::string level = decibels(game.level);
 
-	for (const auto &[name, title] : state.games) {
-		bool two = false;
+	ImGui::PushID(game.name.c_str());
+	kit.begin_group("CABINET SOUND");
+	if (game.mixed) {
+		const auto has = [&](auto is) { return std::any_of(scene.parts.begin(), scene.parts.end(), is); };
+		const bool speakers = has([](const SoundPart &part) {
+			return part.option && part.kind == SoundPart::Kind::SPEAKER;
+		});
+		const bool fourth = has([](const SoundPart &part) { return part.kind == SoundPart::Kind::UNWIRED; });
+		const std::string tip =
+			game.woofer ? std::string("Main: without the woofer. Both: with its lows, mixed into your two speakers. "
+			                          "Quad: with the woofer") +
+			                      (fourth ? " and the fourth channel" : "") + ", on a rear pair of speakers." :
+			speakers ? "Main: without the seat speakers. Both: with them, mixed into your two speakers. Quad: with "
+			           "them, on a rear pair of speakers." :
+			           "Main: without the panel shaker's signal. Both: with it, mixed into your two speakers. Quad: "
+			           "with it, on a rear pair of speakers.";
 
-		for (const SoundGame &game : state.sound_games)
-			two = two || game.name == name;
-		if (!two)
-			titles.push_back(title);
+		kit.next_tip(tip.c_str());
+		kit.choice("Mode", nullptr, Menu::PLAYED, game.played, game.locked ? "set on the command line: -o" : nullptr,
+		           false, game.later ? "Reset the game to apply" : nullptr);
+		if (game.woofer) {
+			kit.next_tip("How loud the woofer is in your two speakers, from -60 to +12 dB.");
+			kit.slider("Woofer", only_both, game.level, -60.0f, 12.0f, 1.0f, level.c_str(), nullptr, game.played != 1);
+			kit.next_tip("Only the woofer's sounds below this frequency are mixed in, as the cabinet's woofer plays "
+			             "only its lows. No manual gives the frequency: 120 Hz is a guess. Off: the whole woofer "
+			             "channel, which carries much of the game's sound.");
+			kit.choice("Woofer cutoff", only_both, CUTOFFS, game.cutoff, nullptr, game.played != 1);
+		} else {
+			const std::string about =
+				std::string(speakers ? "How loud the seat speakers are" : "How loud the panel shaker's signal is") +
+				" in your two speakers, from -60 to +12 dB" + knob_of(game.name) + ".";
+
+			kit.next_tip(about.c_str());
+			kit.slider(speakers ? "Seat speakers" : "Panel shaker", only_both, game.level, -60.0f, 12.0f, 1.0f,
+			           level.c_str(), nullptr, game.played != 1);
+		}
 	}
-	for (size_t i = 0; i < titles.size(); i++)
-		others += (i == 0 ? "" : i + 1 == titles.size() ? " and " : ", ") + titles[i];
-	others += titles.size() == 1 ? " plays only its main board, in stereo." :
-	                               " play only their main board, in stereo.";
-
-	float all_h = titles.empty() ? -gap : centred({}, width, size, others.c_str(), 0);
-
-	for (const SoundGame &game : state.sound_games)
-		all_h += route_card(kit, game, {}, width, false) + gap;
-
-	in_box(kit, box, all_h, [&](float y) {
-		for (const SoundGame &game : state.sound_games)
-			y += route_card(kit, game, { x, y }, width, true) + gap;
-		if (!titles.empty())
-			centred({ x, y }, width, size, others.c_str(), kit.palette().faint);
-	});
+	if (game.start >= 0) {
+		kit.next_tip("Smashing Drive saves its own volume, and it is silent the very first time. At that first launch, "
+		             "Odin holds VOLUME + until the game reaches this level, as an operator would. The game then "
+		             "keeps it.");
+		kit.choice("Starting volume", "first launch only", STARTS, game.start, nullptr);
+	}
+	kit.end_group();
+	ImGui::PopID();
 }
 
-} /* namespace */
-
-/* Audio: where the sound goes, how loud; how the cabinets with two sound
- * boards play them */
+/* Where Odin's sound goes: the device, the speakers of the user as the
+ * game shown reaches them, the volume, the sound in the background */
 void
-Menu::page_audio(MenuKit &kit, MenuState &state) const
+audio_output(MenuKit &kit, MenuState &state, const SoundScene &scene)
 {
-	const ImVec2 top = ImGui::GetCursorScreenPos(), room = ImGui::GetContentRegionAvail();
-	const Box box = left_box(kit, top, room);
-
-	route_cards(kit, state, box);
-	begin_settings(kit, box, top, room);
-
 	kit.begin_group("AUDIO OUTPUT");
 	std::vector<std::string> devices = { "System default" };
 	int device = 0;
@@ -546,6 +510,14 @@ Menu::page_audio(MenuKit &kit, MenuState &state) const
 	                   "Change...", devices, device, state.silent))
 		state.device = device == 0 ? "" : devices[static_cast<size_t>(device)];
 
+	const ImVec2 speakers = your_speakers_size(kit, scene);
+	const bool four = your_speakers(scene.family, scene.played) & YOUR_REAR_LEFT;
+
+	kit.next_tip("Point at one: the parts of the cabinet you hear in it light up.");
+	state.audio_pointed_speakers =
+		draw_your_speakers(kit, kit.custom_row("Your speakers", four ? "4 channels" : "stereo", speakers.x, speakers.y),
+		                   scene);
+
 	float volume = static_cast<float>(state.volume);
 	char shown[16];
 
@@ -561,31 +533,30 @@ Menu::page_audio(MenuKit &kit, MenuState &state) const
 	if (kit.choice("Sound in the background", nullptr, KEEP_MUTE, background, state.silent))
 		state.background = background == 0;
 	kit.end_group();
+}
 
-	kit.paragraph("SOUND BOARDS", "By default, as on the cabinet. Racer's optional board only drives its panel "
-	              "shaker (see the Input page).");
-	for (SoundGame &game : state.sound_games) {
-		const std::string title = MenuKit::capitals(game.title);
-		char about[160];
+} /* namespace */
 
-		ImGui::PushID(game.name.c_str());
-		kit.begin_group(title.c_str());
-		kit.next_tip("Main: the main board only. Both: the two boards mixed in stereo. Quad: each board on its own "
-		             "pair of speakers, four channels.");
-		kit.choice("Mode", nullptr, PLAYED, game.played, game.locked ? "set on the command line: -o" : nullptr, false,
-		           game.later ? "Reset the game to apply" : nullptr);
+/* Audio, a page per game: its cabinet and the parts of its sound, lit as
+ * the user hears them; its sound to set; where Odin's sound goes */
+void
+Menu::page_audio(MenuKit &kit, MenuState &state) const
+{
+	ImVec2 top = ImGui::GetCursorScreenPos(), room = ImGui::GetContentRegionAvail();
+	const float row = games_row(kit, state, top, room.x) + kit.px(ROW_GAP);
 
-		const Boards &boards = boards_of(game.name);
-		const std::string level = decibels(game.level);
+	room.y -= row - top.y;
+	top.y = row;
 
-		std::snprintf(about, sizeof(about), "Plays on the %s, from -60 to +12 dB%s.", boards.option, boards.knob);
-		kit.next_tip(about);
-		kit.slider("Optional board level", game.played != 1 ? "only with Both" : nullptr, game.level, -60.0f, 12.0f,
-		           1.0f, level.c_str(), nullptr, game.played != 1);
-		kit.end_group();
-		ImGui::PopID();
-	}
+	const Box box = left_box(kit, top, room);
+	SoundGame *const game = sound_shown(state);
+	const SoundScene scene = scene_of(state, game);
 
+	sound_drawing(kit, state, box, scene);
+	begin_settings(kit, box, top, room);
+	if (game)
+		cabinet_sound(kit, *game, scene);
+	audio_output(kit, state, scene);
 	end_settings(kit, top, room);
 }
 
@@ -986,6 +957,10 @@ Menu::page_link(MenuKit &kit, MenuState &state) const
 	link_tiles(kit, state, box, on);
 	begin_settings(kit, box, top, room);
 
+	if (state.running < state.game_gaelco.size() && state.game_gaelco[state.running] &&
+	    !state.game_links[state.running])
+		kit.paragraph("NO LINK", "The game that runs does not link cabinets: it plays alone. These settings "
+		                         "are for the games that link.");
 	kit.begin_group("LINK");
 	int chosen = on ? 1 : looped ? -1 : 0;
 
@@ -1077,10 +1052,6 @@ Menu::page_paths(MenuKit &kit, MenuState &state) const
 	if (kit.value("BIOS", "at the next launch", shown_path(state.bios, "the games folder").c_str(), change, nullptr,
 	              state.bios_given ? "set on the command line: -B" : nullptr))
 		state.choose = MenuState::Folder::BIOS;
-	kit.next_tip("ATV Track, Gaelco Football and Smashing Drive, and their sets, named as in MAME.");
-	if (kit.value("Gaelco games", "at the next launch", shown_path(state.gaelco, "the games folder").c_str(), change,
-	              nullptr, state.roms_given ? "set on the command line: -R" : nullptr))
-		state.choose = MenuState::Folder::GAELCO;
 	kit.next_tip("Files named after the game's MAME name: swracer_title.png for the library (swracer_logo.png "
 	             "instead, if there is one), swracer_bezel.png for the bezel.");
 	if (kit.value("Artwork", nullptr, shown_path(state.artwork, "none").c_str(), change, nullptr,

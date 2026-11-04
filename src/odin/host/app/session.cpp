@@ -387,15 +387,17 @@ Session::save_state_at_frame()
 	}
 }
 
-/* Holds the frames at the rate of the board, 60 per second. A frame late
- * by less than two periods is caught up, a longer delay is dropped. */
+/* Holds the frames at the rate of the board: each as long as the board
+ * says (1/60 s, or a frame of a Gaelco board's screen). A frame late by
+ * less than two periods is caught up, a longer delay is dropped. */
 void
 Session::limit_frame_rate()
 {
 	const auto now = std::chrono::steady_clock::now();
+	const std::chrono::nanoseconds frame(m_board.frame_nanoseconds());
 
-	m_next += FRAME;
-	if (now - m_next > 2 * FRAME)
+	m_next += frame;
+	if (now - m_next > 2 * frame)
 		m_next = now;
 	else if (now < m_next)
 		/* Not std::this_thread::sleep_until: with MinGW it sleeps again

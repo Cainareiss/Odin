@@ -65,6 +65,14 @@ bool buffer_storage();
 bool anisotropic_filter();
 bool border_clamp();
 bool blend_per_buffer();
+/* Whether a draw may read, as a texture, each pixel it draws once, after
+ * read_drawn() (glTextureBarrier) */
+bool texture_barrier();
+void read_drawn();
+/* Whether the depth can go from 0 to 1 (clip control), as a float; that
+ * range set, or the one by default */
+bool depth_from_0();
+void set_depth_from_0(bool on);
 #ifdef ODIN_GLES
 /* #version and precision lines for GLSL ES */
 const char *es_version_head();

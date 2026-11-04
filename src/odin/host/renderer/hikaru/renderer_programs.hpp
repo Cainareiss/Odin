@@ -89,6 +89,12 @@ struct MeshVariant {
  * unread. */
 inline constexpr char PROGRAM_LIST_HEADER[] = "odin mesh programs 1\n";
 std::vector<uint64_t> read_program_list(const std::string &path);
+/* The same for a list of the Neon 250's pipelines (pmx_vk.cpp): bit 0
+ * blended, 1-3 and 4-6 the source and destination blend codes, 7 native
+ * 2D, 8 the lists of the per-pixel sort */
+inline constexpr char PMX_LIST_HEADER[] = "odin pmx programs 1\n";
+inline constexpr uint64_t PMX_KEYS = 0x200;
+std::vector<uint64_t> read_pmx_list(const std::string &path);
 
 /* A list of programs kept up to date: the programs made from now on listed
  * in the file, after the ones it lists already; a new list where there is
@@ -100,7 +106,7 @@ public:
 	ProgramList(const ProgramList &) = delete;
 	ProgramList &operator=(const ProgramList &) = delete;
 
-	void list_in(const std::string &path);
+	void list_in(const std::string &path, const char *header = PROGRAM_LIST_HEADER);
 	void add(uint64_t key);
 
 private:

@@ -88,7 +88,7 @@ MenuSession::show_game(size_t game)
 	m_other_controls = other->controls;
 	m_other_outputs = other->outputs;
 	m_other_shakes = other->shakes();
-	m_other_forces = other->drive_first_output != 0;
+	m_other_forces = other->drive_first_output != 0 || other->wheel_motor;
 	m_other_cabinets = other->cabinets;
 	m_other_shakers = { other->shaker(0), other->shaker(1) };
 	m_other_experimental = { other->shaker_experimental(0), other->shaker_experimental(1) };
@@ -196,7 +196,7 @@ MenuSession::fill_game_shown(MenuState &state)
 	state.light_gun = light_gun_mode_on(m_settings, game_shown());
 	state.sinden_border = sinden_border_of(m_settings, game_shown());
 	/* The wheel the drive board turns, and how hard */
-	state.can_force = m_other ? m_other_forces : m_game && m_game->drive_first_output;
+	state.can_force = m_other ? m_other_forces : m_game && (m_game->drive_first_output || m_game->wheel_motor);
 	state.steers = steers_of(panel_shown().controls());
 	state.wheel_force = wheel_force_of(m_settings, game_shown());
 	state.wheel_rotation = wheel_rotation_of(m_settings, game_shown());
@@ -525,6 +525,11 @@ MenuSession::apply_sound(const MenuState &was)
 		const std::string section = "sound." + game.name;
 		const bool runs = m_game && game.name == m_game->name && m_audio;
 
+		if (game.start != before.start && game.start >= 0)
+			keep(section, "start_volume",
+			     game.start == 0 ? std::nullopt : std::optional<std::string>(START_VOLUMES[game.start]));
+		if (!game.mixed)
+			continue;
 		if (game.played != before.played) {
 			/* SDL keeps the device open on as many channels as it had:
 			 * four or two again take the game started again */
@@ -543,7 +548,16 @@ MenuSession::apply_sound(const MenuState &was)
 			std::snprintf(db, sizeof(db), "%g", static_cast<double>(game.level));
 			if (runs)
 				m_audio->set_option_level(game.level);
-			keep(section, "option_level", game.level == game.standard ? std::nullopt : std::optional<std::string>(db));
+			keep(section, game.woofer ? "woofer_level" : "option_level",
+			     game.level == game.standard ? std::nullopt : std::optional<std::string>(db));
+		}
+		if (game.cutoff != before.cutoff && game.woofer) {
+			const char *const cutoff = WOOFER_CUTOFFS[game.cutoff];
+
+			if (runs)
+				m_audio->set_woofer(*woofer_hz_named(cutoff));
+			keep(section, "woofer_cutoff",
+			     game.cutoff == game.cutoff_standard ? std::nullopt : std::optional<std::string>(cutoff));
 		}
 	}
 }

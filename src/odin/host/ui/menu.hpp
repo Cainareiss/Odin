@@ -42,6 +42,7 @@
 #include "odin/host/gfx/host_graphics.hpp"
 #include "odin/host/app/hotkeys.hpp"
 #include "odin/host/ui/menu_kit.hpp"
+#include "odin/host/ui/sound_view.hpp"
 #include "odin/host/input/roles.hpp"
 #include "odin/host/input/seats.hpp"
 #include "odin/host/video/display_options.hpp"
@@ -64,8 +65,8 @@ struct MenuSlot {
 std::string shown_path(const std::string &path, const char *none);
 
 /* A folder the library or the menu asks the system for (the library the
- * first three only) */
-enum class MenuFolder { NONE, ROMS, BIOS, GAELCO, SAVES, STATES, ARTWORK, LOG };
+ * first two only) */
+enum class MenuFolder { NONE, ROMS, BIOS, SAVES, STATES, ARTWORK, LOG };
 
 /* The library, what Odin shows when it starts without a game (as a double
  * click starts it): the games of the list, each with the files it lacks
@@ -74,14 +75,16 @@ enum class MenuFolder { NONE, ROMS, BIOS, GAELCO, SAVES, STATES, ARTWORK, LOG };
  * system for; the game to play, and why the one before did not start; what
  * the gamepad asked since the last picture (menu_nav.hpp: the choice moved
  * across and down, the game chosen played) and the name of its button that
- * plays (empty: no gamepad); the games it shows ([library]), the systems
- * of the list, how many games it hides. The thread of the board keeps it
- * and does what changed (library.cpp). */
+ * plays (empty: no gamepad); the games it shows ([library]), by system in
+ * the order of the list and by title in each; the systems of the list, how
+ * many games it hides. The thread of the board keeps it and does what
+ * changed (library.cpp). */
 struct LibraryState {
 	struct Game {
 		std::string name, title, parent;
 		std::vector<std::string> missing;
 		bool gaelco;
+		std::string system;	/* "hikaru", "gaelco" */
 	};
 
 	std::vector<Game> games;
@@ -89,7 +92,7 @@ struct LibraryState {
 	LibraryFilter filter;
 	std::vector<std::string> systems;
 	size_t hidden = 0;
-	std::string roms, bios, gaelco;
+	std::string roms, bios;
 	bool roms_given = false, bios_given = false;
 	using Folder = MenuFolder;
 	Folder choose = Folder::NONE;
@@ -110,12 +113,12 @@ struct LightGun {
 	bool present = false, aims = false;
 };
 
-/* A game whose optional sound board the user may hear, as the menu and the
- * bar show it: how it is played (Menu::PLAYED: 0 the main board, 1 both on
- * two channels, 2 the four channels apart; -1 another way the command line
- * says, for the game that runs, which `locked` says) and how the cabinet
- * plays it; the level of the optional board in the two channels and the
- * one of the list, in dB. Four channels chosen for the game that runs on
+/* A game whose optional sound board or woofer the user may hear, as the
+ * menu and the bar show it: how it is played (Menu::PLAYED: 0 the main
+ * board, 1 both on two channels, 2 the four channels apart; -1 another way
+ * the command line says, for the game that runs, which `locked` says) and
+ * how the cabinet plays it; the level of the optional board in the two
+ * channels and the one of the list, in dB. Four channels chosen for the game that runs on
  * two, or two on four, wait for it to start again (`later`) */
 struct SoundGame {
 	std::string name, title;
@@ -123,7 +126,18 @@ struct SoundGame {
 	float level, standard;
 	bool locked;
 	bool later = false;
+	/* Smashing Drive: its volume at the first power-on, of START_VOLUMES
+	 * (-1: another game) */
+	int start = -1;
+	/* A way of playing to choose: two boards, or a woofer (Game::woofer:
+	 * `level` is the woofer's, `cutoff` of WOOFER_CUTOFFS its lows in the
+	 * mix, `cutoff_standard` when the settings do not say) */
+	bool mixed = true, woofer = false;
+	int cutoff = 1, cutoff_standard = 1;
+	/* The part `level` is the level of, as the page Audio names it */
+	const char *level_name = "Woofer";
 };
+inline constexpr const char *START_VOLUMES[] = { "0", "25", "50", "75", "96" };
 
 /* The settings the pages and the bar both change: MenuState has them, the
  * bar a copy (MenuSession::fill_bar), given back once changed there
@@ -232,8 +246,9 @@ struct BarState : BarSettings {
 	std::array<bool, 2> sights{};
 	bool can_shake = false, shake = true, undo = false, light_gun = true;
 	/* The next cabinet of the link (typed in Settings); the link set by
-	 * ODIN_NETBD */
-	bool link_given = false;
+	 * ODIN_NETBD; the game that runs is on a Gaelco board and does not link
+	 * cabinets (Gaelco Football) */
+	bool link_given = false, gaelco = false;
 	std::string link_next;
 
 	/* What was asked; the page of the settings asked (Menu::Page, -1: the
@@ -343,7 +358,7 @@ struct MenuState : BarSettings {
 	 * of the save states; the settings file and the lists of the 3D
 	 * programs (empty: none). The board saying each access
 	 * (BarSettings::verbose) given on the command line. */
-	std::string roms, bios, gaelco, saves, states, artwork, settings_file, shader_lists, log_file;
+	std::string roms, bios, saves, states, artwork, settings_file, shader_lists, log_file;
 	bool roms_given = false, bios_given = false, saves_given = false, artwork_given = false;
 	/* The folder of the log from the next launch ([paths] log; empty: by
 	 * default), and ODIN_LOG giving the file instead */
@@ -362,6 +377,21 @@ struct MenuState : BarSettings {
 	size_t shown = 0, running = 0;
 	/* Each game of `games` links cabinets: the page Link lists those alone */
 	std::vector<bool> game_links;
+	/* Each game of `games` runs on a Gaelco board */
+	std::vector<bool> game_gaelco;
+	/* Each game of `games`: the parts of its sound for the page Audio (those
+	 * of the list, or a left and a right speaker of its main board), whether
+	 * it is played seated, how its boards reach the user's speakers */
+	struct GameAudio {
+		std::vector<SoundPart> parts;
+		bool seated = false;
+		SoundFamily family = SoundFamily::ONE;
+	};
+	std::vector<GameAudio> game_audio;
+	/* The page Audio: the part of the drawing pointed at last (-1: none),
+	 * or the user's speakers (YourSpeaker) */
+	int audio_pointed = -1;
+	unsigned audio_pointed_speakers = 0;
 	std::optional<size_t> show;
 	/* The panel of the cabinet of the game shown (its controls and their
 	 * inputs), which are worked now (the controls, then COIN1, COIN2 and
@@ -592,7 +622,7 @@ public:
 	static std::string cabinet_number(unsigned n) { return n == 1 ? "1 · master" : std::to_string(n); }
 	/* What Odin is, and the libraries it is made with: who wrote them,
 	 * their licence */
-	static constexpr const char *WHAT = "Sega Hikaru and Gaelco ATV Track emulator";
+	static constexpr const char *WHAT = "Sega Hikaru and Gaelco emulator, as close to the hardware as it gets";
 	static constexpr const char *LICENCES[][3] = {
 		{ "Odin", "Réda Chérif-Touil", "GPL 3.0 or later" },
 		{ "Valkyrie (the start of Odin)", "Stefano Teso", "GPL 3.0 or later" },

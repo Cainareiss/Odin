@@ -100,21 +100,11 @@ Renderer::prepare_programs(const std::function<void(unsigned, unsigned)> &progre
 void
 Renderer::draw_loading(std::string_view title, unsigned done, unsigned total, unsigned window_w, unsigned window_h)
 {
+	/* Where the picture would be */
 	const PictureRect rect = picture_rect(window_w, window_h);
-	std::vector<LoadingRect> rects;
 
-	/* Each rectangle of the screen of 640 x 480 where the picture would
-	 * be */
-	for (const LoadingRect &r : LoadingScreen::layout(title, done, total)) {
-		const unsigned x0 = rect.x + r.x * rect.w / LoadingScreen::WIDTH;
-		const unsigned x1 = rect.x + (r.x + r.w) * rect.w / LoadingScreen::WIDTH;
-		const unsigned y0 = rect.y + r.y * rect.h / LoadingScreen::HEIGHT;
-		const unsigned y1 = rect.y + (r.y + r.h) * rect.h / LoadingScreen::HEIGHT;
-
-		if (x1 > x0 && y1 > y0)
-			rects.push_back({ x0, y0, x1 - x0, y1 - y0, r.shade });
-	}
-	m_card->draw_loading(rects, window_w, window_h);
+	m_card->draw_loading(LoadingScreen::placed(title, done, total, rect.x, rect.y, rect.w, rect.h), window_w,
+	                     window_h);
 }
 
 /* No texture chosen is of the list about to be drawn. */

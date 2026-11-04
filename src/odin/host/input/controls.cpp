@@ -538,7 +538,7 @@ Controls::turn_wheel(int torque)
 {
 	const Joy *const joy = joystick(0);
 
-	if (!joy || !m_drive_output || !m_rumble || device(0) != InputDevice::JOYSTICK) {
+	if (!joy || !(m_drive_output || m_wheel_motor) || !m_rumble || device(0) != InputDevice::JOYSTICK) {
 		if (m_force)
 			m_force->release();
 		return;

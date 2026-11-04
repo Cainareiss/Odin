@@ -33,6 +33,10 @@
 #include <cstring>
 #include <string>
 
+#ifdef ODIN_GLES
+#include <SDL3/SDL_video.h>
+#endif
+
 namespace odin::gl {
 
 namespace {
@@ -251,6 +255,41 @@ blend_per_buffer()
 	return es_version() >= 32;
 }
 
+bool
+texture_barrier()
+{
+	return false;
+}
+
+void
+read_drawn()
+{
+}
+
+/* GL_EXT_clip_control */
+static PFNGLCLIPCONTROLEXTPROC
+clip_control()
+{
+	static const PFNGLCLIPCONTROLEXTPROC clip =
+		has_extension("GL_EXT_clip_control")
+			? reinterpret_cast<PFNGLCLIPCONTROLEXTPROC>(SDL_GL_GetProcAddress("glClipControlEXT"))
+			: nullptr;
+	return clip;
+}
+
+bool
+depth_from_0()
+{
+	return clip_control() != nullptr;
+}
+
+void
+set_depth_from_0(bool on)
+{
+	if (const PFNGLCLIPCONTROLEXTPROC clip = clip_control())
+		clip(GL_LOWER_LEFT_EXT, on ? GL_ZERO_TO_ONE_EXT : GL_NEGATIVE_ONE_TO_ONE_EXT);
+}
+
 const char *
 es_version_head()
 {
@@ -293,6 +332,33 @@ bool
 blend_per_buffer()
 {
 	return true;
+}
+
+bool
+texture_barrier()
+{
+	return GLEW_VERSION_4_5 || GLEW_ARB_texture_barrier || GLEW_NV_texture_barrier;
+}
+
+void
+read_drawn()
+{
+	if (GLEW_VERSION_4_5 || GLEW_ARB_texture_barrier)
+		glTextureBarrier();
+	else
+		glTextureBarrierNV();
+}
+
+bool
+depth_from_0()
+{
+	return GLEW_ARB_clip_control;
+}
+
+void
+set_depth_from_0(bool on)
+{
+	glClipControl(GL_LOWER_LEFT, on ? GL_ZERO_TO_ONE : GL_NEGATIVE_ONE_TO_ONE);
 }
 
 bool

@@ -154,7 +154,6 @@ MenuSession::MenuSession(const Options &options, Display &display, Keyboard &key
 	state.roms_given = options.given.roms;
 	state.bios = options.bios_path;
 	state.bios_given = options.given.bios;
-	state.gaelco = options.gaelco_path;
 	state.saves = SaveFolder::root(options.saves);
 	state.saves_given = !env_text("ODIN_SAVES").empty();
 	state.states = m_states = options.states.empty() ? default_states() : options.states;
@@ -219,21 +218,58 @@ MenuSession::fill_games()
 		const Game *const described = runs ? m_game : other ? &*other : nullptr;
 
 		state.game_links.push_back(described && described->link.cabinets);
-		if (!described || !(described->option_speakers || described->option_vibration))
+		state.game_gaelco.push_back(described && described->machine != "hikaru");
+
+		MenuState::GameAudio audio;
+
+		if (described) {
+			audio.parts = described->sound_parts;
+			audio.seated = described->seated;
+			audio.family = described->woofer ? SoundFamily::WOOFER :
+			               described->option_speakers || described->option_vibration ? SoundFamily::TWO_BOARDS :
+			               SoundFamily::ONE;
+		}
+		if (audio.parts.empty())
+			for (const SoundPart::Place at : { SoundPart::Place::FRONT_LEFT, SoundPart::Place::FRONT_RIGHT }) {
+				SoundPart part;
+
+				part.at = at;
+				audio.parts.push_back(part);
+			}
+		state.game_audio.push_back(std::move(audio));
+
+		const bool smash = described && described->machine == "smashdrv";
+		const bool woofer = described && described->woofer;
+
+		if (!described || !(described->option_speakers || described->option_vibration || woofer || smash))
 			continue;
 
-		/* As the cabinet: both boards in the speakers where it has
-		 * some for the optional one */
-		const int cabinet = described->option_speakers ? 1 : 0;
+		/* As the cabinet: both boards, or the woofer, in the speakers
+		 * where it has some for the optional board, or a woofer */
+		const int cabinet = described->option_speakers || woofer ? 1 : 0;
 		SoundGame sound = { name, title, cabinet, cabinet, 0.0f, 0.0f, false };
 
+		sound.mixed = described->option_speakers || described->option_vibration || woofer;
+		sound.woofer = woofer;
+		sound.level_name = woofer ? "Woofer" : described->option_speakers ? "Seat speakers" : "Panel shaker";
 		sound.level = sound.standard = static_cast<float>(described->option_level);
 		for (const auto &[key, value] : m_settings.section("sound." + name)) {
-			if (key == "mode" && mode_named(value))
+			if (key == "mode" && mode_named(value)) {
 				sound.played = played_of(*mode_named(value));
-			else if (key == "option_level" && level_named(value))
+			} else if (key == (woofer ? "woofer_level" : "option_level") && level_named(value)) {
 				sound.level = static_cast<float>(*level_named(value));
+			} else if (key == "woofer_cutoff" && woofer) {
+				for (int c = 0; c < static_cast<int>(std::size(WOOFER_CUTOFFS)); c++)
+					if (value == WOOFER_CUTOFFS[c])
+						sound.cutoff = c;
+			} else if (key == "start_volume") {
+				for (int v = 0; v < static_cast<int>(std::size(START_VOLUMES)); v++)
+					if (value == START_VOLUMES[v])
+						sound.start = v;
+			}
 		}
+		if (smash && sound.start < 0)
+			sound.start = 0;
 		if (runs && m_options.sound_asked) {
 			sound.played = m_options.sound ? played_of(*m_options.sound) : -1;
 			sound.locked = true;
@@ -720,10 +756,11 @@ MenuSession::fill_bar(BarState &bar) const
 		bar.devices = AudioOut::devices();
 	bar.sound_games.clear();
 	for (const SoundGame &game : state.sound_games)
-		if (m_game && game.name == m_game->name)
+		if (m_game && game.name == m_game->name && game.mixed)
 			bar.sound_games.push_back(game);
 	bar.link_given = state.link_given;
 	bar.link_next = state.link_next;
+	bar.gaelco = m_game && m_game->machine != "hikaru" && !m_game->link.cabinets;
 	fill_bar_inputs(bar);
 	for (size_t a = 0; a < Hotkeys::ACTIONS; a++)
 		bar.keys[a] = Hotkeys::first_text(m_hotkeys.of(static_cast<Hotkeys::Action>(a)));
@@ -966,10 +1003,6 @@ MenuSession::take_folder()
 		state.bios = folder;
 		keep("paths", "bios", folder);
 		break;
-	case Folder::GAELCO:
-		state.gaelco = folder;
-		keep("paths", "gaelco", folder);
-		break;
 	case Folder::SAVES:
 		state.saves = folder;
 		keep("paths", "saves", folder == SaveFolder::root() ? std::nullopt : std::optional(folder));
@@ -1008,7 +1041,6 @@ MenuSession::ask_folder(MenuState::Folder folder)
 	state.no_picker = false;
 	m_dialog.ask(m_display.window(), folder == Folder::ROMS ? state.roms :
 	             folder == Folder::BIOS ? (state.bios.empty() ? state.roms : state.bios) :
-	             folder == Folder::GAELCO ? (state.gaelco.empty() ? state.roms : state.gaelco) :
 	             folder == Folder::SAVES ? state.saves :
 	             folder == Folder::ARTWORK ? state.artwork :
 	             folder == Folder::LOG ? (state.log_folder.empty() ? odin_data_dir() : state.log_folder) :

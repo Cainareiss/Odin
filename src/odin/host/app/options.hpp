@@ -64,13 +64,6 @@ struct Options {
 	/* The folders of the games and of the sets of files they share (the
 	 * BIOS...), rom_files.hpp */
 	std::string rom_path, bios_path;
-	/* [paths] gaelco: folder of the Gaelco games. If empty, or with -R,
-	 * the games folder is used. */
-	std::string gaelco_path;
-	const std::string &roms_of(const std::string &machine) const
-	{
-		return machine == "hikaru" || gaelco_path.empty() || given.roms ? rom_path : gaelco_path;
-	}
 	/* The folder of the saves of the games and that of the save states
 	 * odin.ini gives (empty: by default) */
 	std::string saves, states;
@@ -132,8 +125,26 @@ Options with_settings(const Options &command, const Settings &settings);
 inline constexpr const char *MODE_NAMES[] = { "main", "mix", "quad" };
 std::optional<AudioOut::Mode> mode_named(const std::string &name);
 /* [sound.<game>] option_level: the optional board in the mix, in dB, as far
- * as the list allows (Game::LOWEST_LEVEL to HIGHEST_LEVEL) */
+ * as the list allows (Game::LOWEST_LEVEL to HIGHEST_LEVEL); woofer_level
+ * the same for a woofer */
 std::optional<double> level_named(const std::string &value);
+/* [sound.<game>] woofer_cutoff: the lows of the woofer below that many Hz
+ * in the mix, off for all of its channel (0 Hz); WOOFER_CUTOFFS[1] when it
+ * does not say */
+inline constexpr const char *WOOFER_CUTOFFS[] = { "80", "120", "160", "200", "off" };
+std::optional<double> woofer_hz_named(const std::string &value);
+
+/* How a game's sound plays besides its mode: the level of the optional
+ * board or of the woofer in the mix, in dB, and the woofer's cutoff */
+struct GameSound {
+	double level = 0;
+	double woofer_hz = 0;
+};
+
+/* The mode of -o, else of [sound.<game>], else Both where the cabinet has
+ * speakers for the optional board or a woofer, into options.sound; the
+ * levels of [sound.<game>], else of the list. Its other lines refused. */
+GameSound game_sound(Options &options, const Game &game, const Settings &settings);
 /* [players.<game>] vibration: the pads shake unless it says off (the last
  * line says) */
 bool vibration_on(const Settings &settings, const std::string &game);
