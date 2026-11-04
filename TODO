@@ -85,6 +85,24 @@ All games
   behind them and the menu sounds were not (to check).
 
 
+Gaelco games (atvtrack, gfootbal, smashdrv)
+
+- Smashing Drive's demo and ATV Track's menus and start of a race match
+  videos of cabinets, taken with a camera (colours not judged). Gaelco
+  Football was never compared: no video of its cabinet is known.
+- Smashing Drive's cabinet shows its logo between two demo loops 1.3 s
+  longer than Odin, which loads at once.
+- Two ATV Track linked over a network slow down when a word of the cable
+  takes 5 ms or more each way, and lose the link at 10 ms: Wi-Fi peaks do
+  that. 2 ms is fine. The cable answers in microseconds; Smashing Drive
+  was not tried so.
+- Two ATV Track linked on one computer never link when the second starts
+  2 s after the first ("Link Error!!! Waiting remote ID"); started together
+  they race. Cause not found (the order of the first words?).
+- The ball sensors of Gaelco Football have a program of their own (a
+  PIC) that was never dumped: the kick is modelled (see below).
+
+
 NOT EMULATED OR GUESSED
 -----------------------
 
@@ -430,6 +448,63 @@ Inputs and outputs
   (RetroShooter 3...) are not done yet (gun_serial.cpp).
 - The drive board of NASCAR is not sent on the network outputs yet
   (outputs_network.cpp).
+
+Gaelco boards
+
+- The FPGA's image has no POF header: its memory blocks are placed as in
+  the one known dump (atvtrack_fpga.cpp).
+- The DAC of Gaelco Football plays the 33 MHz crystal divided by 1024,
+  as the cabinets of the other two sound: its own was never heard
+  (atvtrack.hpp).
+- The status of the first control registers reads all ones (atvtrack.cpp).
+- A render of the 3D core ends when the PMX1 core next runs: how long the
+  chip takes is not known (atvtrack.cpp).
+- The motion platform of ATV Track moves at a guessed speed: 0.44 a frame
+  at full speed, 2.5 s to reach it. No manual gives its speed nor its
+  inverters' ramp (atvtrack.cpp).
+- The chips of the ball sensors of Gaelco Football are not known: their
+  signals follow what the program reads (atvtrack.cpp).
+- A real foot's kick is not known: the travel of the right stick, cubed,
+  gives the program a power of 10 to 127 (atvtrack_play.cpp).
+- The speed of the link cable is in the FPGA, not known: a word comes in
+  at the first slice of the SH-4 after it arrives (atvtrack.hpp).
+- A new mode of the link's port drops the words that came in before it
+  (atvtrack.cpp).
+- The link's queue to send in the FPGA never fills, plugged or not, and
+  an idle port takes nothing in (atvtrack.cpp).
+
+PowerVR Neon 250 (PMX1)
+
+- The core runs one instruction a cycle and its reads answer at once: so
+  the return link the DAC thread leaves in D0.0 at start-up is lost. What
+  the boards do is not known (pmx1_core.cpp).
+- A read of the core is done when it is queued; the chip answers a few
+  cycles later (pmx1_core.cpp).
+- Of the core's real-time threads, 3 runs before 1: the documents do not
+  give their order (pmx1_core.cpp).
+- Thread 2 is never run (pmx1_core.cpp).
+- The word that opens a thread's code (F1, a register, 2) does nothing:
+  its meaning is not known (pmx1_core.cpp).
+- A count of the core's cycles is taken as free-running (pmx1_core.cpp).
+- The games write registers 078-079, 085-08D, 0A0-0A2, 0A6-0B5 and
+  280-28E, which Odin does not emulate; odin.log says so once
+  (pmx1_core.cpp).
+- An instruction that none of the three games uses stops its thread of the
+  PMX1, said once (pmx1_core.cpp).
+- Guesses still to check: the SH-4's serial ports send at once (sh4.hpp);
+  a DREQ unit moves at once (sh4_onchip.cpp); a thread's read queue holds
+  16 (pmx1_core.hpp); Racer's Mini Deluxe seat shaker takes the main board
+  below 120 Hz (session.hpp); the coin pulse, the kick's timing and the
+  ball's height of Gaelco Football (atvtrack_play.cpp).
+- The menus show no live state of a Gaelco board: no lamp lit on the page
+  Outputs, no link state on the page Link (menu_session_state.cpp reads the
+  Hikaru board only).
+- The TA's user clip, its modes past copythrough, and reads or copies
+  outside the frame buffer are not done; odin.log says so (pmx1_ta.cpp).
+- When the host's GPU cannot sort translucent pixels, the first pass's
+  translucent polygons are sorted polygon by polygon and those of the
+  other passes keep their order (pmx1_scene.cpp).
+- A triangle whose 1/W is not a number is not drawn (pmx1_scene.cpp).
 
 Host and user interface
 

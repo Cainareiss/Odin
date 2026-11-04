@@ -186,7 +186,6 @@ apart by commas (see INPUTS below).
                                library or with -R).
  bios          a folder        Shared sets (hikaru, mie...). Default:
                                roms.
- gaelco        a folder        Gaelco games. Default: roms.
  saves         a folder        What each game keeps without power.
                                Default: saves/ in Odin's folder.
  states        a folder        Saved states (F2, F4).
@@ -215,12 +214,12 @@ apart by commas (see INPUTS below).
 
 [network]
 
- Link cabinets (Virtual-On, NASCAR, Star Wars Racer, Planet Harriers):
- each cabinet is one Odin.
+ Link cabinets (Virtual-On, NASCAR, Star Wars Racer, Planet Harriers, ATV
+ Track, Smashing Drive): each cabinet is one Odin.
 
  board         none, loop,     none: no link. loop: the cable looped back
-               ring            on itself. ring: linked to other Odins.
-                               Default none.
+               ring            on itself (a Gaelco game: as none). ring:
+                               linked to other Odins. Default none.
  port          a port          Where the cabinet before connects.
                                Default 13404.
  next          address[:port]  The cabinet after. Empty: this one.
@@ -232,7 +231,8 @@ PER GAME
 --------
 
 <game> is the MAME name: airtrix, airtrixo, braveff, pharrier, sgnascar,
-sgnascaro, swracer, von4.
+sgnascaro, swracer, von4; atvtrack, atvtracka, gfootbal, smashdrv,
+smashdrvb, smashdrvs.
 
 [players.<game>]
 
@@ -259,8 +259,11 @@ sgnascaro, swracer, von4.
                                   Default 100.
  wheel_rotation   0, 270, 360,    How far the wheel turns from one end to
                   540, 900, 1080  the other (0: all the way). Default 270.
- cabinet          standard,       NASCAR cabinet type. Default
-                  deluxe          standard.
+ cabinet          standard,       The cabinet model: deluxe (NASCAR),
+                  deluxe,         minideluxe (Star Wars Racer), vibrator
+                  minideluxe,     (ATV Track), upright (Smashing Drive).
+                  vibrator,       Default standard.
+                  upright
  card             <name>          Virtual-On card in hand (von4).
 
 [sound.<game>]
@@ -272,6 +275,24 @@ sgnascaro, swracer, von4.
                                    Default mix (swracer: main).
  option_level     -60 to 12       Level of the second board, in dB.
                                   Default 0 (NASCAR -12, swracer -13).
+
+ Games with a woofer: the Gaelco games (atvtrack, atvtracka, gfootbal,
+ smashdrv, smashdrvb, smashdrvs).
+
+ mode             main, mix, quad  main: left and right only. mix: the
+                                   woofer's lows in both. quad: left,
+                                   right, woofer and the board's fourth
+                                   channel. Default mix. With -o option:
+                                   the woofer's channel alone.
+ woofer_level     -60 to 12       Level of the woofer in the mix, in dB.
+                                  Default 0.
+ woofer_cutoff    80, 120, 160,   The woofer's lows below that many Hz in
+                  200, off        the mix (off: all of its channel).
+                                  Default 120.
+ start_volume     0, 25, 50, 75,  Smashing Drive (smashdrv, smashdrvb,
+                  96              smashdrvs): its volume at the first
+                                  power-on, Odin holding VOLUME +.
+                                  Default 0, silent as a new board.
 
 [outputs.<game>]
 
@@ -363,6 +384,50 @@ sgnascaro, swracer, von4.
   start             key:1, pad:start
   pib               key:Z, pad:y
 
+ atvtrack, atvtracka:
+  handlebar     pad:leftx, joy:axis0 (_left key:Left, _right key:Right)
+  throttle      pad:righttrigger, key:Up
+  left_brake    key:Z, pad:lefttrigger
+  right_brake   key:X, pad:rightshoulder
+  start         key:1, pad:start
+  volume_up     key:=, pad:dpup
+  volume_down   key:-, pad:dpdown
+
+ gfootbal:
+  1p_up         key:Up, pad:dpup, pad:-lefty
+  1p_down       key:Down, pad:dpdown, pad:+lefty
+  1p_left       key:Left, pad:dpleft, pad:-leftx
+  1p_right      key:Right, pad:dpright, pad:+leftx
+  1p_button1    key:Left Ctrl, pad:a
+  1p_button2    key:Left Alt, pad:b
+  1p_button3    key:Left Shift, pad:x
+  1p_kick_x     pad:rightx           (_left key:D, _right key:G)
+  1p_kick_y     pad:righty           (_up key:R, _down key:F)
+  1p_start      key:1, pad:start
+  2p_up         key:R, pad:dpup, pad:-lefty
+  2p_down       key:F, pad:dpdown, pad:+lefty
+  2p_left       key:D, pad:dpleft, pad:-leftx
+  2p_right      key:G, pad:dpright, pad:+leftx
+  2p_button1    key:A, pad:a
+  2p_button2    key:S, pad:b
+  2p_button3    key:Q, pad:x
+  2p_kick_x     pad:rightx
+  2p_kick_y     pad:righty
+  2p_start      key:2, pad:start
+  volume_up     key:=, pad:leftshoulder
+  volume_down   key:-, pad:rightshoulder
+
+ smashdrv, smashdrvb, smashdrvs:
+  wheel         pad:leftx, joy:axis0 (_left key:Left, _right key:Right)
+  gas_pedal     key:Up, pad:righttrigger
+  brake_pedal   key:Down, pad:lefttrigger
+  horn          key:1, pad:start
+  volume_up     key:=, pad:dpup
+  volume_down   key:-, pad:dpdown
+
+ A Gaelco cabinet has one coin entry and one SERVICE button: coin2,
+ 2p_service, board_test and board_service go nowhere there.
+
 
 INPUTS
 ------
@@ -443,6 +508,7 @@ For developers (tests and debugging):
  ODIN_SH4_TRANSLATE=0       The SH-4 interpreted, not translated.
  ODIN_SH4_TRACE=<prefix>    A trace of the SH-4s, a line per slice.
  ODIN_ARM7_TRANSLATE=0      The ARM7 interpreted, not translated.
+ ODIN_PMX1_TRANSLATE=0      The Neon 250's blocks run from their decoded ops.
  ODIN_ARM7_DECODED=0        The ARM7 decodes every instruction.
  ODIN_ARM7_TRACE=<prefix>   A trace of the ARM7s.
  ODIN_TURNS=0               Waiting loops run, not counted.

@@ -12,7 +12,8 @@ Odin emulates two arcade systems, for Linux, Windows and macOS, drawing with
 OpenGL or Vulkan:
 
  SEGA Hikaru       low-level, running the real chips' programs where known
- Gaelco ATV Track  two SH-4 and a PowerVR Neon 250, graphics at a high level
+ Gaelco ATV Track  low-level too, the Neon 250's microcoded core running its
+                   own code (its 3D drawn from the scene it builds)
 
 Odin runs the six Hikaru games, two of them in two versions, and the Gaelco
 games. They play with a keyboard, gamepads, wheels with force feedback
