@@ -150,12 +150,27 @@ uint32_t &Sh4::use_of(Regs &r, uint32_t i)
 	return r.fr[i - USE_FR];
 }
 
-bool Sh4::same_but(const Regs &a, const Regs &b, uint64_t free)
+uint32_t Sh4::value_of(const Regs &r, uint32_t i)
 {
-	Regs x = a, y = b;
+	return use_of(const_cast<Regs &>(r), i);
+}
 
-	each_bit(free, [&](uint32_t i) { use_of(x, i) = use_of(y, i) = 0; });
-	return x == y;
+/* The same registers but the uses in `free`, and with `interrupt_free`
+ * what an interrupt leaves (SPC, SSR, SGR, MACH, MACL, the other bank),
+ * compared where they are */
+bool Sh4::same_but(const Regs &a, const Regs &b, uint64_t free, bool interrupt_free)
+{
+	for (uint32_t i = 0; i < USE_COUNT; i++) {
+		if (!(free & (uint64_t{1} << i)) && value_of(a, i) != value_of(b, i)) {
+			return false;
+		}
+	}
+	if (a.pc != b.pc || a.gbr != b.gbr || a.vbr != b.vbr || a.dbr != b.dbr || a.sr != b.sr || a.fpscr != b.fpscr ||
+	    !std::equal(std::begin(a.xf), std::end(a.xf), std::begin(b.xf))) {
+		return false;
+	}
+	return interrupt_free || (a.mach == b.mach && a.macl == b.macl && a.spc == b.spc && a.ssr == b.ssr &&
+	                          a.sgr == b.sgr && std::equal(std::begin(a.rbank), std::end(a.rbank), std::begin(b.rbank)));
 }
 
 uint64_t Sh4::differ_of(Regs &a, Regs &b)
@@ -678,21 +693,8 @@ bool Sh4::clock_still(const ClockTurn &turn) const
 		}
 		return load_bytes(page + (addr & (PAGE_SIZE - 1)), size) == value;
 	};
-	Regs now = m_r, then = turn.start;
-
-	for (uint32_t i = 0; i < USE_COUNT; i++) {
-		if (!(turn.live & (uint64_t{1} << i))) {
-			use_of(now, i) = use_of(then, i) = 0;
-		}
-	}
-	/* Clear what an interrupt leaves, which no known form reads */
-	if (m_still_on) {
-		for (Regs *const r : {&now, &then}) {
-			r->spc = r->ssr = r->sgr = r->mach = r->macl = 0;
-			std::fill(std::begin(r->rbank), std::end(r->rbank), 0u);
-		}
-	}
-	if (m_intc.pending || m_run != Sh4Run::Running || !(now == then)) {
+	/* What an interrupt leaves no known form reads */
+	if (m_intc.pending || m_run != Sh4Run::Running || !same_but(m_r, turn.start, ~turn.live, m_still_on)) {
 		return false;
 	}
 	for (const auto &[pc, word] : turn.code) {
@@ -765,9 +767,7 @@ bool Sh4::clock_turn(const ClockTurn &turn, uint32_t value, ClockValues &out)
 				v.other = static_cast<uint32_t>(
 					load_bytes(m_rd[s.fresh_addr >> PAGE_BITS] + (s.fresh_addr & (PAGE_SIZE - 1)), s.fresh_size));
 			} else {
-				Regs before = s.before;
-
-				v.other = use_of(before, s.other);
+				v.other = value_of(s.before, s.other);
 			}
 			use_of(m_r, s.other) = v.other;
 		}
@@ -855,6 +855,14 @@ bool Sh4::clock_ordered(const ClockTurn &turn, const ClockValues &a, const Clock
 	return true;
 }
 
+/* What the slice must have left for turns to be counted: one turn and a
+ * cycle for a still turn; else room for the turns, one more, and a block
+ * to end the slice */
+int32_t Sh4::clock_room(const ClockTurn &turn) const
+{
+	return static_cast<int32_t>(turn.still ? turn.length + 1 : 2 * turn.length + BLOCK_MAX);
+}
+
 /* The whole turns that go the way the kept one went, counted without being
  * run, up to the one that would go another way and short of the end of the
  * slice: the last one found by halves. True when there were some. */
@@ -865,17 +873,19 @@ bool Sh4::clock_skip(const ClockTurn &turn)
 	ClockValues &first = m_clock_values[0], &last = m_clock_values[1];
 	const auto read_at = [&](uint32_t k) { return first_read + k * length; };
 
-	/* Room for the turns counted, one more, and a block to end the slice */
-	if (m_remaining < static_cast<int32_t>(2 * length + BLOCK_MAX)) {
+	if (m_remaining < clock_room(turn)) {
 		return false;
 	}
-	const uint32_t room = static_cast<uint32_t>((static_cast<uint64_t>(m_remaining) - BLOCK_MAX) / length) - 1;
-
 	if (turn.still) {
-		m_remaining -= static_cast<int32_t>(room * length);
-		m_skipped += room * length;
+		/* Every whole turn before the end of the slice, as wait_check()
+		 * counts those of a plain wait */
+		const uint32_t whole = static_cast<uint32_t>(m_remaining - 1) / turn.length;
+
+		m_remaining -= static_cast<int32_t>(whole * turn.length);
+		m_skipped += whole * turn.length;
 		return true;
 	}
+	const uint32_t room = static_cast<uint32_t>((static_cast<uint64_t>(m_remaining) - BLOCK_MAX) / length) - 1;
 	const uint32_t v0 = tmu_count_at(turn.channel, first_read);
 
 	if (!clock_turn(turn, v0, first)) {
@@ -937,8 +947,8 @@ bool Sh4::clock_wait(uint32_t &mark)
 			mark = inside->second;
 			return false;
 		}
-	} else if (m_remaining < static_cast<int32_t>(2 * kept->length + BLOCK_MAX)) {
-		return false;	/* no room for a turn counted, see clock_skip() */
+	} else if (m_remaining < clock_room(*kept)) {
+		return false;	/* no room for a turn counted */
 	} else if (!clock_still(*kept)) {
 		m_clock_turns.erase(kept);
 		clock_kept();
