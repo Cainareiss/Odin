@@ -382,11 +382,16 @@ scene_of(const MenuState &state, const SoundGame *game)
 		for (const SoundPart &part : audio.parts)
 			if (part.cabinet.empty() || part.cabinet == cabinet)
 				scene.parts.push_back(part);
-		scene.seated = audio.seated;
+		scene.seated = audio.seated && std::find(audio.standing.begin(), audio.standing.end(), cabinet) ==
+		                                   audio.standing.end();
 		scene.family = audio.family;
 	}
 	if (game) {
-		scene.played = game->played;
+		const bool unwired = std::any_of(scene.parts.begin(), scene.parts.end(), [](const SoundPart &part) {
+			return part.option && part.kind == SoundPart::Kind::UNWIRED;
+		});
+
+		scene.played = unwired && !game->locked ? 0 : game->played;
 		scene.lows = game->woofer && game->played == 1 && std::string_view(WOOFER_CUTOFFS[game->cutoff]) != "off";
 	}
 	scene.pointed = state.audio_pointed < static_cast<int>(scene.parts.size()) ? state.audio_pointed : -1;
@@ -449,7 +454,12 @@ cabinet_sound(MenuKit &kit, SoundGame &game, const SoundScene &scene)
 			return part.option && part.kind == SoundPart::Kind::SPEAKER;
 		});
 		const bool fourth = has([](const SoundPart &part) { return part.kind == SoundPart::Kind::UNWIRED; });
+		/* A cabinet that does not wire the optional board plays the main one */
+		const bool unwired = has([](const SoundPart &part) {
+			return part.option && part.kind == SoundPart::Kind::UNWIRED;
+		});
 		const std::string tip =
+			unwired ? "This cabinet does not wire the optional board: only the main board is heard." :
 			game.woofer ? std::string("Main: without the woofer. Both: with its lows, mixed into your two speakers. "
 			                          "Quad: with the woofer") +
 			                      (fourth ? " and the fourth channel" : "") + ", on a rear pair of speakers." :
@@ -458,9 +468,15 @@ cabinet_sound(MenuKit &kit, SoundGame &game, const SoundScene &scene)
 			           "Main: without the panel shaker's signal. Both: with it, mixed into your two speakers. Quad: "
 			           "with it, on a rear pair of speakers.";
 
+		int main_only = 0;
+		int &played = unwired && !game.locked ? main_only : game.played;
+		const char *const locked = game.locked ? "set on the command line: -o" :
+		                           unwired     ? "not wired on this cabinet" :
+		                                         nullptr;
+
 		kit.next_tip(tip.c_str());
-		kit.choice("Mode", nullptr, Menu::PLAYED, game.played, game.locked ? "set on the command line: -o" : nullptr,
-		           false, game.later ? "Reset the game to apply" : nullptr);
+		kit.choice("Mode", nullptr, Menu::PLAYED, played, locked, false,
+		           game.later ? "Reset the game to apply" : nullptr);
 		if (game.woofer) {
 			kit.next_tip("How loud the woofer is in your two speakers, from -60 to +12 dB.");
 			kit.slider("Woofer", only_both, game.level, -60.0f, 12.0f, 1.0f, level.c_str(), nullptr, game.played != 1);
@@ -468,7 +484,7 @@ cabinet_sound(MenuKit &kit, SoundGame &game, const SoundScene &scene)
 			             "only its lows. No manual gives the frequency: 120 Hz is a guess. Off: the whole woofer "
 			             "channel, which carries much of the game's sound.");
 			kit.choice("Woofer cutoff", only_both, CUTOFFS, game.cutoff, nullptr, game.played != 1);
-		} else {
+		} else if (!unwired) {
 			const std::string about =
 				std::string(speakers ? "How loud the seat speakers are" : "How loud the panel shaker's signal is") +
 				" in your two speakers, from -60 to +12 dB" + knob_of(game.name) + ".";

@@ -31,11 +31,15 @@
 #include <chrono>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
+#include <vector>
 
 #include <SDL3/SDL.h>
 
+#include "odin/host/audio/audio_out.hpp"
 #include "odin/host/ui/menu_session.hpp"
+#include "odin/machine/chips/aica/aica.hpp"
 
 namespace odin {
 
@@ -58,7 +62,7 @@ public:
 		  m_audio(audio), m_games(games),
 		  m_menus(options, display, keys, controls, settings, settings_file, games, &game, hikaru, audio,
 		          std::move(outputs), network),
-		  m_paused(false), m_next()
+		  m_paused(false), m_next(), m_shaker_on_main(game.option_vibration && !game.option_wired())
 	{
 	}
 
@@ -98,6 +102,7 @@ private:
 	bool state_saved() const;
 	void save_state_at_frame();
 	void limit_frame_rate();
+	std::span<const int16_t> shaker_sound();
 
 	const Options &m_options;
 	const Game &m_game;
@@ -118,6 +123,15 @@ private:
 	Opened m_opened;
 	bool m_paused;
 	std::chrono::steady_clock::time_point m_next;	/* when the next frame is due */
+	/* The sound the cabinet's shaker gets, which the pad feels: the
+	 * optional board's, or on a cabinet that does not wire that board
+	 * (Racer's Mini Deluxe) the main one in mono through its low-pass amp.
+	 * HEURISTIC: no document gives the cutoff of that amp (838-11651-01):
+	 * that of the Gaelco woofers, itself a guess. */
+	static constexpr double SEAT_LOWS_HZ = 120.0;
+	const bool m_shaker_on_main;
+	LowPass m_seat_lows{ SEAT_LOWS_HZ, static_cast<int>(Aica::SAMPLE_RATE) };
+	std::vector<int16_t> m_seat;
 };
 
 } /* namespace odin */

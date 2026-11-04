@@ -442,11 +442,15 @@
 			"link" : { "cabinets" : 4, "seat" : { "in" : "backup", "byte" : "0007", "bits" : 2 } },
 			"mach" : "hikaru",
 			"seated" : true,
+			"cabinets" : [ { "id" : "minideluxe", "name" : "Mini Deluxe" } ],
 			"sound_parts" : [
 				{ "part" : "speaker", "at" : "front_left", "board" : "main" },
 				{ "part" : "speaker", "at" : "front_right", "board" : "main" },
-				{ "part" : "woofer", "at" : "base", "board" : "main" },
-				{ "part" : "shaker", "at" : "panel", "board" : "option" }
+				{ "part" : "woofer", "at" : "base", "board" : "main", "cabinet" : "standard" },
+				{ "part" : "shaker", "at" : "panel", "board" : "option", "cabinet" : "standard" },
+				{ "part" : "woofer", "at" : "seat", "board" : "main", "cabinet" : "minideluxe" },
+				{ "part" : "shaker", "at" : "seat", "board" : "main", "cabinet" : "minideluxe" },
+				{ "part" : "unwired", "board" : "option", "cabinet" : "minideluxe" }
 			],
 			"rom_board" : { "eprom_mb" : 4, "315-5881" : "2903DAD5" },
 			"option_vibration" : true,
@@ -1160,6 +1164,11 @@
 				{ "name" : "COIN COUNTER", "id" : "coin_counter", "output" : 4, "role" : "counter" },
 				{ "name" : "SEAT MOTOR", "id" : "seat_motor", "output" : 19, "role" : "rumble" }
 			],
+			"cabinets" : [
+				{ "id" : "upright", "name" : "Upright", "seated" : false,
+				  "outputs" : [ { "name" : "LAMP", "id" : "lamp", "output" : 5, "role" : "lamp" },
+				               { "name" : "COIN COUNTER", "id" : "coin_counter", "output" : 4, "role" : "counter" } ] }
+			],
 			"sections" : [
 				{
 					"name" : "program",
@@ -1219,6 +1228,11 @@
 				{ "name" : "COIN COUNTER", "id" : "coin_counter", "output" : 4, "role" : "counter" },
 				{ "name" : "SEAT MOTOR", "id" : "seat_motor", "output" : 19, "role" : "rumble" }
 			],
+			"cabinets" : [
+				{ "id" : "upright", "name" : "Upright", "seated" : false,
+				  "outputs" : [ { "name" : "LAMP", "id" : "lamp", "output" : 5, "role" : "lamp" },
+				               { "name" : "COIN COUNTER", "id" : "coin_counter", "output" : 4, "role" : "counter" } ] }
+			],
 			"sections" : [
 				{
 					"name" : "program",
@@ -1277,6 +1291,11 @@
 				{ "name" : "LAMP", "id" : "lamp", "output" : 5, "role" : "lamp" },
 				{ "name" : "COIN COUNTER", "id" : "coin_counter", "output" : 4, "role" : "counter" },
 				{ "name" : "SEAT MOTOR", "id" : "seat_motor", "output" : 19, "role" : "rumble" }
+			],
+			"cabinets" : [
+				{ "id" : "upright", "name" : "Upright", "seated" : false,
+				  "outputs" : [ { "name" : "LAMP", "id" : "lamp", "output" : 5, "role" : "lamp" },
+				               { "name" : "COIN COUNTER", "id" : "coin_counter", "output" : 4, "role" : "counter" } ] }
 			],
 			"sections" : [
 				{

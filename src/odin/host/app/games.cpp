@@ -744,6 +744,13 @@ read_cabinet(const json_t *rom, const json_t *cabinet, size_t c, Game &game)
 			return false;
 		kept.motion_platform = on;
 	}
+	if (json_object_get(cabinet, "seated")) {
+		bool on = false;
+
+		if (!read_true_false(cabinet, "seated", name, on))
+			return false;
+		kept.seated = on;
+	}
 	if (const json_t *const outputs = json_object_get(cabinet, "outputs")) {
 		kept.outputs.emplace();
 		for (size_t i = 0; json_is_array(outputs) && i < json_array_size(outputs); i++) {
@@ -895,8 +902,10 @@ read_sound_parts(const json_t *rom, Game &game)
 		if (cabinet) {
 			const char *const id = json_string_value(cabinet);
 
-			right = right && id && std::any_of(game.cabinets.begin(), game.cabinets.end(),
-			                                   [id](const Game::Cabinet &c) { return c.id == id; });
+			right = right && id &&
+			        (!std::strcmp(id, "standard") ||
+			         std::any_of(game.cabinets.begin(), game.cabinets.end(),
+			                     [id](const Game::Cabinet &c) { return c.id == id; }));
 			part.cabinet = id ? id : "";
 		}
 		if (!right) {
@@ -977,7 +986,7 @@ Game::shaker(unsigned player) const
 		if (output.role == GameOutput::Role::RUMBLE && output.player == player)
 			out += (out.empty() ? "from output " : ", ") + output.name;
 	if (out.empty() && player == 0 && option_vibration)
-		out = "from the panel shaker";
+		out = option_wired() ? "from the panel shaker" : "from the seat shaker (the main board's lows)";
 	if (out.empty() && player == 0 && drive_first_output)
 		out = "from the jolts of the cabinet's wheel";
 	return out;
@@ -993,6 +1002,15 @@ Game::shaker_experimental(unsigned player) const
 }
 
 bool
+Game::option_wired() const
+{
+	return std::none_of(sound_parts.begin(), sound_parts.end(), [this](const SoundPart &part) {
+		return part.option && part.kind == SoundPart::Kind::UNWIRED &&
+		       (part.cabinet.empty() || part.cabinet == cabinet);
+	});
+}
+
+bool
 Game::use_cabinet(const std::string &id)
 {
 	if (id == "standard")
@@ -1003,6 +1021,8 @@ Game::use_cabinet(const std::string &id)
 			grounded = other.grounded;
 			if (other.motion_platform)
 				motion_platform = *other.motion_platform;
+			if (other.seated)
+				seated = *other.seated;
 			if (other.outputs)
 				outputs = *other.outputs;
 			grounded_analog = other.grounded_analog;

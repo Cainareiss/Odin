@@ -195,7 +195,7 @@ any_on(const std::vector<GameOutput> &list, GameOutput::Role role, std::span<con
  * part on the cabinet), "at" (its place in the drawing, none when
  * unwired), what feeds it ("board": main or option, or "channel": 0 to 3
  * of a Gaelco board's DAC), "cabinet" (only on that model of the list's
- * "cabinets"). */
+ * "cabinets", or on the "standard" one). */
 struct SoundPart {
 	enum class Kind : uint8_t { SPEAKER, WOOFER, SHAKER, UNWIRED };
 	enum class Place : uint8_t { NONE, FRONT_LEFT, FRONT_RIGHT, BASE, PANEL, SEAT_LEFT, SEAT_RIGHT, SEAT };
@@ -250,12 +250,13 @@ struct Game {
 	/* The other cabinets the game was sold in, which its program tells
 	 * apart (NASCAR: Deluxe): "cabinets" in the list, [{"id": ..., "name":
 	 * ..., "grounded": [...], "controls": {<id>: {fields in place of those
-	 * of that control}}}]. The cabinet of the list is "standard". */
+	 * of that control}}, "seated": false when it is played standing}]. The
+	 * cabinet of the list is "standard". */
 	struct Cabinet {
 		std::string id, name;
 		std::vector<GameControl> controls;
 		std::vector<JvsSwitch> grounded;
-		std::optional<bool> motion_platform;
+		std::optional<bool> motion_platform, seated;
 		std::optional<std::vector<GameOutput>> outputs;
 		std::vector<unsigned> grounded_analog;
 	};
@@ -268,6 +269,9 @@ struct Game {
 	 * false when the game has no such cabinet */
 	std::string cabinet = "standard";
 	bool use_cabinet(const std::string &id);
+	/* Its optional sound board is wired on the cabinet played: false when
+	 * "sound_parts" leave it unwired there (Star Wars Racer's Mini Deluxe) */
+	bool option_wired() const;
 	/* The 93C46 of the MIE of a new cabinet, the settings of the SYSTEM
 	 * MENU as SEGA left them: "mie_eeprom" in the list, 128 bytes in
 	 * hexadecimal; empty when the list does not say (a blank chip). */

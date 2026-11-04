@@ -455,7 +455,7 @@ Session::frames()
 		m_board.run_frame();
 		if (const std::string news = m_menus.card_news(); !news.empty())
 			say(news);
-		m_controls.show(m_board.io_outputs(), m_board.sound(true), m_board.drive_torque());
+		m_controls.show(m_board.io_outputs(), shaker_sound(), m_board.drive_torque());
 		if (OutputsNetwork *const outputs = m_menus.outputs())
 			outputs->show(m_board.io_outputs());
 		if (m_audio)
@@ -482,6 +482,20 @@ Session::frames()
 			limit_frame_rate();
 	}
 	return Ended::QUIT;
+}
+
+std::span<const int16_t>
+Session::shaker_sound()
+{
+	if (!m_shaker_on_main)
+		return m_board.sound(true);
+
+	const std::vector<int16_t> &main = m_board.sound(false);
+
+	m_seat.resize(main.size());
+	for (size_t i = 0; i + 1 < main.size(); i += 2)
+		m_seat[i] = m_seat[i + 1] = m_seat_lows(static_cast<int16_t>((main[i] + main[i + 1]) / 2));
+	return m_seat;
 }
 
 } /* namespace odin */

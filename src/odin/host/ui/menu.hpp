@@ -381,10 +381,12 @@ struct MenuState : BarSettings {
 	std::vector<bool> game_gaelco;
 	/* Each game of `games`: the parts of its sound for the page Audio (those
 	 * of the list, or a left and a right speaker of its main board), whether
-	 * it is played seated, how its boards reach the user's speakers */
+	 * it is played seated (and on which of its other cabinets not), how its
+	 * boards reach the user's speakers */
 	struct GameAudio {
 		std::vector<SoundPart> parts;
 		bool seated = false;
+		std::vector<std::string> standing;
 		SoundFamily family = SoundFamily::ONE;
 	};
 	std::vector<GameAudio> game_audio;

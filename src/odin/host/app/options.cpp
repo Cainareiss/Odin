@@ -445,6 +445,9 @@ game_sound(Options &options, const Game &game, const Settings &settings)
 			refuse_setting(section, key, value);
 		}
 	}
+	/* A cabinet that does not wire the optional board plays the main one */
+	if (!options.sound_asked && options.sound && !game.option_wired())
+		options.sound = AudioOut::Mode::MAIN;
 	return sound;
 }
 

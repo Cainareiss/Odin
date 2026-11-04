@@ -225,6 +225,9 @@ MenuSession::fill_games()
 		if (described) {
 			audio.parts = described->sound_parts;
 			audio.seated = described->seated;
+			for (const Game::Cabinet &model : described->cabinets)
+				if (model.seated && !*model.seated)
+					audio.standing.push_back(model.id);
 			audio.family = described->woofer ? SoundFamily::WOOFER :
 			               described->option_speakers || described->option_vibration ? SoundFamily::TWO_BOARDS :
 			               SoundFamily::ONE;
