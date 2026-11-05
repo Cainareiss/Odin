@@ -1077,6 +1077,10 @@ Menu::page_paths(MenuKit &kit, MenuState &state) const
 	if (kit.value("BIOS", "at the next launch", shown_path(state.bios, "the games folder").c_str(), change, nullptr,
 	              state.bios_given ? "set on the command line: -B" : nullptr))
 		state.choose = MenuState::Folder::BIOS;
+	kit.next_tip("ATV Track, Gaelco Football and Smashing Drive, and their sets, named as in MAME.");
+	if (kit.value("Gaelco games", "at the next launch", shown_path(state.gaelco, "the games folder").c_str(), change,
+	              nullptr, state.roms_given ? "set on the command line: -R" : nullptr))
+		state.choose = MenuState::Folder::GAELCO;
 	kit.next_tip("Files named after the game's MAME name: swracer_title.png for the library (swracer_logo.png "
 	             "instead, if there is one), swracer_bezel.png for the bezel.");
 	if (kit.value("Artwork", nullptr, shown_path(state.artwork, "none").c_str(), change, nullptr,

@@ -8,19 +8,23 @@
 Odin (ᚨ), Copyright (C) 2026 Réda Chérif-Touil
 Released under the GNU GPL, version 3 or later (see LICENSE).
 
-Odin is a low-level emulator of the SEGA Hikaru arcade board, for Linux,
-Windows and macOS. It runs the programs of the real chips wherever they
-are known, and draws with OpenGL or Vulkan.
+Odin emulates two arcade systems, for Linux, Windows and macOS, drawing with
+OpenGL or Vulkan:
 
-Odin runs the six Hikaru games, two of them in two versions. They play
-with a keyboard, gamepads, wheels with force feedback (NASCAR) or light
-guns (Brave Firefighters). Virtual-On saves to its card. Odin links
-cabinets over the network and sends the cabinet outputs as MAME does.
+ SEGA Hikaru       low-level, running the real chips' programs where known
+ Gaelco ATV Track  two SH-4 and a PowerVR Neon 250, graphics at a high level
+
+Odin runs the six Hikaru games, two of them in two versions, and the Gaelco
+games. They play with a keyboard, gamepads, wheels with force feedback
+(NASCAR) or light guns (Brave Firefighters). Virtual-On saves to its card.
+Odin links cabinets over the network and sends the cabinet outputs as MAME
+does.
 
 
 GAMES
 =====
 
+SEGA Hikaru
  airtrix    Air Trix
  airtrixo   Air Trix (original)
  braveff    Brave Firefighters
@@ -30,16 +34,27 @@ GAMES
  swracer    Star Wars Racer Arcade
  von4       Cyber Troopers Virtual-On Force
 
-Each name is a MAME set. The games also need the shared sets hikaru and
-mie; jvs13551, 18wheelr and srally2 are optional.
+Gaelco ATV Track (see INSTALL)
+ atvtrack   ATV Track
+ atvtracka  ATV Track (set 2)
+ gfootbal   Gaelco Football
+ smashdrv   Smashing Drive
+ smashdrvb  Smashing Drive (UK)
+ smashdrvs  Smashing Drive (Spain, Portugal)
+
+
+Each name is a MAME set. The Hikaru games also need the shared sets hikaru
+and mie; jvs13551, 18wheelr and srally2 are optional.
 
 The title screens and bezels of the games come in a separate pack,
 Odin-Artwork.zip, released with Odin: extract it beside the program. All
 rights to these pictures are reserved by SEGA.
 
-
 INSTALL tells how to build and start Odin, OPTIONS lists every option and
 setting, TODO what is missing or guessed.
+
+The three Gaelco games use Odin's controls. In Gaelco Football the right
+stick kicks: pull it back first to lift the ball.
 
 
 REPORTING A PROBLEM
@@ -63,6 +78,8 @@ CREDITS
 
 Odin is a hard fork of Valkyrie, the Hikaru emulator by Stefano Teso,
 Copyright (C) 2011-2013, GNU GPL version 3 or later.
+The ATV Track board follows MAME's atvtrack driver; its boot program stays
+under the BSD-3-Clause licence, Copyright (c) Samuele Zannoli.
 
 Thanks to the developers of MAME (its Hikaru driver) and Flycast, and to
 Neill Corlett for his documentation of the AICA.

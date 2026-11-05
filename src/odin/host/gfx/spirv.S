@@ -49,6 +49,10 @@ SPIRV(mesh_geom, "glsl/mesh.geom.spv")
 SPIRV(sort_frag, "glsl/sort.frag.spv")
 
 /* The window */
+SPIRV(pmx_vert, "glsl/pmx.vert.spv")
+SPIRV(pmx_frag, "glsl/pmx.frag.spv")
+SPIRV(pmx_geom, "glsl/pmx.geom.spv")
+SPIRV(pmx_native_frag, "glsl/pmx_native.frag.spv")
 SPIRV(image_vert, "glsl/image.vert.spv")
 SPIRV(image_frag, "glsl/image.frag.spv")
 SPIRV(whole_window_vert, "glsl/whole_window.vert.spv")

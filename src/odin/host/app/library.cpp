@@ -41,21 +41,24 @@ namespace {
 void
 scan_library(LibraryState &state, const GameList &games, const Options &options, const std::string &chosen)
 {
-	RomFiles files(options.rom_path, options.bios_path);
-
 	state.games.clear();
 	state.systems.clear();
 	state.selected = 0;
 	state.hidden = 0;
+
+	RomFiles hikaru(options.roms_of("hikaru"), options.bios_path), gaelco(options.roms_of("atvtrack"), options.bios_path);
+
 	for (const GameList::Entry &entry : games.entries()) {
 		const std::string &name = entry.name;
-		LibraryState::Game game{ name, entry.title, entry.parent, {} };
+		const bool theirs = entry.machine != "hikaru";
+		const std::string system = theirs ? "gaelco" : entry.machine;
+		LibraryState::Game game{ name, entry.title, entry.parent, {}, theirs };
 
-		if (std::find(state.systems.begin(), state.systems.end(), entry.machine) == state.systems.end())
-			state.systems.push_back(entry.machine);
-		for (const RomFiles::File &file : games.missing(files, name))
+		if (std::find(state.systems.begin(), state.systems.end(), system) == state.systems.end())
+			state.systems.push_back(system);
+		for (const RomFiles::File &file : games.missing(theirs ? gaelco : hikaru, name))
 			game.missing.push_back(file.name + " (" + file.set_of(name) + ".zip)");
-		if (!state.filter.shows(entry.machine, !entry.parent.empty(), game.missing.empty())) {
+		if (!state.filter.shows(system, !entry.parent.empty(), game.missing.empty())) {
 			state.hidden++;
 			continue;
 		}
@@ -65,6 +68,7 @@ scan_library(LibraryState &state, const GameList &games, const Options &options,
 	}
 	state.roms = options.rom_path;
 	state.bios = options.bios_path;
+	state.gaelco = options.roms_of("atvtrack");
 	state.roms_given = options.given.roms;
 	state.bios_given = options.given.bios;
 }

@@ -43,6 +43,8 @@
 #include "odin/host/gfx/host_graphics.hpp"
 #include "odin/host/video/picture.hpp"
 
+#include "odin/machine/boards/atvtrack/pmx1_scene.hpp"
+
 namespace odin {
 
 class Hikaru;
@@ -119,6 +121,14 @@ public:
 	 * prepared behind the loading screen with its title; detach before
 	 * the board goes. Then the window is black again. */
 	void attach(Hikaru &board, const std::string &title);
+	/* As above, for a board whose scenes the GPU draws directly: call
+	 * set_scene before the end_frame of a frame that has one */
+	void attach_scenes(const std::string &title);
+	void set_scene(PmxScene scene);
+	unsigned scale() const { return m_scale; }
+	DisplayUpscaleMode upscale_mode() const { return m_upscale_mode; }
+	bool draws_native() const { return m_own_native; }
+	unsigned anisotropy() const { return m_anisotropy; }
 	void detach();
 
 	/* A frame of the board: begin_frame before the board runs it,
@@ -249,6 +259,9 @@ private:
 	void draw_blur(unsigned window_w, unsigned window_h);
 	void draw_sinden_border(unsigned window_w, unsigned window_h);
 	void draw_over(unsigned w, unsigned h, bool bar);
+	/* Draws a frame from a board with its own drawing, in a window of w
+	 * by h */
+	void draw_own(bool late, unsigned w, unsigned h, bool bar);
 	bool build_bar(BarState *bar);
 	void read_picture(uint8_t *pixels);
 	/* The window drawn, shown; `what` it shows, for ODIN_WINDOW_FP */
@@ -299,6 +312,13 @@ private:
 	bool m_logged;
 	HostPicture m_picture;
 	HostImage m_bezel;
+	/* The drawing of a board whose scenes the GPU draws directly, and its
+	 * next scene */
+	std::unique_ptr<Drawing> m_own;
+	PmxScene m_own_scene;
+	unsigned m_own_built = 1;
+	bool m_own_fresh = false;
+	bool m_own_native = false;
 	std::atomic<Sides> m_sides{ Sides::OFF };
 	PictureHole m_hole;
 	SindenBorder m_sinden_border;

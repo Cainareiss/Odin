@@ -64,6 +64,13 @@ struct Options {
 	/* The folders of the games and of the sets of files they share (the
 	 * BIOS...), rom_files.hpp */
 	std::string rom_path, bios_path;
+	/* [paths] gaelco: folder of the Gaelco games. If empty, or with -R,
+	 * the games folder is used. */
+	std::string gaelco_path;
+	const std::string &roms_of(const std::string &machine) const
+	{
+		return machine == "hikaru" || gaelco_path.empty() || given.roms ? rom_path : gaelco_path;
+	}
 	/* The folder of the saves of the games and that of the save states
 	 * odin.ini gives (empty: by default) */
 	std::string saves, states;
@@ -133,8 +140,8 @@ bool vibration_on(const Settings &settings, const std::string &game);
 /* [library]: the games the library shows, of the list: owned_only, only
  * those whose files are all there (off, when it does not say, or on);
  * variants, the versions of a game ("parent" in the list) too (on, when it
- * does not say, or off); systems, those of these machines ("hikaru",
- * apart by commas; all, when it does not say). The last right line of
+ * does not say, or off); systems, those of these systems ("hikaru",
+ * "gaelco", apart by commas; all, when it does not say). The last right line of
  * each says. */
 struct LibraryFilter {
 	bool owned_only = false, variants = true;

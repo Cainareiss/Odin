@@ -71,6 +71,10 @@ FIRST START
    per game, named after its MAME set: airtrix, airtrixo, braveff,
    pharrier, sgnascar, sgnascaro, swracer, von4. Two shared sets are
    needed too, in the same folder (or in a BIOS folder): hikaru and mie.
+   The Gaelco games (atvtrack, atvtracka, gfootbal, smashdrv, smashdrvb,
+   smashdrvs) go in a folder of their own, the gaelco folder of page Paths,
+   or in the same folder without one. They need no shared set, and keep
+   their operator settings and scores in kept.bin in their saves folder.
 
 2. Start Odin. Its library shows the games. Click "Games folder..." and
    choose your folder. A game with missing files says which files, and in

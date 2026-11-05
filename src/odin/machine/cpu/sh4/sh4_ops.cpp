@@ -1977,7 +1977,7 @@ bool Sh4::uses(const Sh4Op &op, Uses &out)
 		T_R = 1u << 6, T_W = 1u << 7, PR_R = 1u << 8, PR_W = 1u << 9, FPUL_R = 1u << 10, FPUL_W = 1u << 11,
 		FN_R = 1u << 12, FN_W = 1u << 13, FM_R = 1u << 14,
 		MEM = 1u << 15, TO_RN = 1u << 16, TO_PR = 1u << 17, TO_FN = 1u << 18,	/* where a load goes */
-		CHOICE = 1u << 19, TARGET = 1u << 20, ON_T = 1u << 21
+		CHOICE = 1u << 19, TARGET = 1u << 20, ON_T = 1u << 21, STILL = 1u << 22
 	};
 	using S = Sh4Ops;
 	constexpr uint32_t ALU = RN_R | RM_R | RN_W, CMP = RN_R | RM_R | T_W, ONE = RM_R | RN_W;
@@ -1993,12 +1993,12 @@ bool Sh4::uses(const Sh4Op &op, Uses &out)
 		{S::mov, {ONE, O::Same}}, {S::movi, {RN_W}}, {S::mova, {R0_W}}, {S::movt, {T_R | RN_W}},
 		{S::movli, {RN_W | MEM | TO_RN}}, {S::movwi, {RN_W | MEM | TO_RN}},
 		{S::movll, {LOAD}}, {S::movll4, {LOAD}}, {S::movll0, {LOAD | R0_R}}, {S::movlp, {LOAD | RM_W}},
-		{S::movls, {STORE}}, {S::movls4, {STORE}}, {S::movls0, {STORE | R0_R}}, {S::movlm, {STORE | RN_W}},
+		{S::movls, {STORE, O::Store}}, {S::movls4, {STORE, O::Store}}, {S::movls0, {STORE | R0_R}}, {S::movlm, {STORE | RN_W}},
 		{S::stsmpr, {PR_R | RN_R | RN_W | MEM}}, {S::ldsmpr, {RN_R | RN_W | PR_W | MEM | TO_PR}},
 		{S::add, {ALU, O::Add}}, {S::addi, {RN_R | RN_W, O::Add}}, {S::sub, {ALU, O::Sub}},
 		{S::and_, {ALU}}, {S::or_, {ALU}}, {S::xor_, {ALU}},
 		{S::andi, {R0_R | R0_W}}, {S::ori, {R0_R | R0_W}}, {S::xori, {R0_R | R0_W}},
-		{S::not_, {ONE}}, {S::neg, {ONE, O::Neg}}, {S::extsb, {ONE}}, {S::extsw, {ONE}}, {S::extub, {ONE}},
+		{S::not_, {ONE, O::Not}}, {S::neg, {ONE, O::Neg}}, {S::extsb, {ONE}}, {S::extsw, {ONE}}, {S::extub, {ONE}},
 		{S::extuw, {ONE}},
 		{S::shll, {RN_R | RN_W | T_W}}, {S::shlr, {RN_R | RN_W | T_W}}, {S::shar, {RN_R | RN_W | T_W}},
 		{S::shll2, {RN_R | RN_W, O::ShiftLeft, 2}}, {S::shlr2, {RN_R | RN_W, O::ShiftRight, 2}},
@@ -2017,6 +2017,7 @@ bool Sh4::uses(const Sh4Op &op, Uses &out)
 		{S::flt, {FPUL_R | FN_W, O::ToFloat}}, {S::ftrc, {FN_R | FPUL_W, O::ToInt}},
 		{S::fsts, {FPUL_R | FN_W, O::Same}}, {S::flds, {FN_R | FPUL_W, O::Same}},
 		{S::fmov, {FM_R | FN_W, O::Same}}, {S::fmov_load, {RM_R | FN_W | MEM | TO_FN}},
+		{S::fmov_store, {FM_R | RN_R | MEM | STILL, O::Store}},
 		{S::fldi0, {FN_W}}, {S::fldi1, {FN_W}}, {S::fneg, {FN_R | FN_W, O::FNeg}}, {S::fabs_, {FN_R | FN_W}},
 		{S::fadd, {FALU, O::FAdd}}, {S::fsub, {FALU, O::FSub}}, {S::fmul, {FALU, O::FMul}},
 		{S::fdiv, {FALU, O::FDiv}},
@@ -2043,6 +2044,7 @@ bool Sh4::uses(const Sh4Op &op, Uses &out)
 	out.on_t = (f & ON_T) != 0;
 	out.target = (f & TARGET) != 0;
 	out.twice = op.n == op.m && (((f & RN_R) && (f & RM_R)) || ((f & FN_R) && (f & FM_R)));
+	out.still = (f & STILL) != 0;
 	out.order = found->second.order;
 	out.shift = found->second.shift;
 	return true;

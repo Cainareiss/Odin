@@ -861,6 +861,300 @@
 					]
 				}
 			]
+		},
+		{
+			"name" : "atvtrack",
+			"title" : "ATV Track",
+			"mach" : "atvtrack",
+			"controls" : [
+				{ "name" : "HANDLEBAR", "id" : "handlebar", "analog" : 0, "low" : "left", "role" : "steer" },
+				{ "name" : "THROTTLE", "id" : "throttle", "analog" : 1, "low" : "released", "role" : "accel" },
+				{ "name" : "LEFT BRAKE", "id" : "left_brake", "switch" : "1P PUSH1", "role" : "button1", "keys" : [ "Z" ], "pad" : [ "lefttrigger" ] },
+				{ "name" : "RIGHT BRAKE", "id" : "right_brake", "switch" : "1P PUSH2", "role" : "button2", "keys" : [ "X" ], "pad" : [ "rightshoulder" ] },
+				{ "name" : "START", "id" : "start", "switch" : "1P START", "role" : "start" }
+			],
+			"sections" : [
+				{
+					"name" : "nand0",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "15.bin", "size" : 17301504, "crc" : "84eaede7" }
+					]
+				},
+				{
+					"name" : "nand1",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "20.bin", "size" : 17301504, "crc" : "649dc331" }
+					]
+				},
+				{
+					"name" : "nand2",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "14.bin", "size" : 17301504, "crc" : "67983453" }
+					]
+				},
+				{
+					"name" : "nand3",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "19.bin", "size" : 17301504, "crc" : "9fc5c579" }
+					]
+				},
+				{
+					"name" : "fpga",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "epc1pc8.ic23", "size" : 130817, "crc" : "752444c7" }
+					]
+				}
+			]
+		},
+		{
+			"name" : "atvtracka",
+			"title" : "ATV Track (set 2)",
+			"parent" : "atvtrack",
+			"mach" : "atvtrack",
+			"controls" : [
+				{ "name" : "HANDLEBAR", "id" : "handlebar", "analog" : 0, "low" : "left", "role" : "steer" },
+				{ "name" : "THROTTLE", "id" : "throttle", "analog" : 1, "low" : "released", "role" : "accel" },
+				{ "name" : "LEFT BRAKE", "id" : "left_brake", "switch" : "1P PUSH1", "role" : "button1", "keys" : [ "Z" ], "pad" : [ "lefttrigger" ] },
+				{ "name" : "RIGHT BRAKE", "id" : "right_brake", "switch" : "1P PUSH2", "role" : "button2", "keys" : [ "X" ], "pad" : [ "rightshoulder" ] },
+				{ "name" : "START", "id" : "start", "switch" : "1P START", "role" : "start" }
+			],
+			"sections" : [
+				{
+					"name" : "nand0",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "k9f2808u0b.ic15", "size" : 17301504, "crc" : "10730001" }
+					]
+				},
+				{
+					"name" : "nand1",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "k9f2808u0b.ic20", "size" : 17301504, "crc" : "b0c34433" }
+					]
+				},
+				{
+					"name" : "nand2",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "k9f2808u0b.ic14", "size" : 17301504, "crc" : "02a12085" }
+					]
+				},
+				{
+					"name" : "nand3",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "k9f2808u0b.ic19", "size" : 17301504, "crc" : "856c1e6a" }
+					]
+				},
+				{
+					"name" : "fpga",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "epc1pc8.ic23", "size" : 130817, "crc" : "752444c7", "set" : "atvtrack" }
+					]
+				}
+			]
+		},
+		{
+			"name" : "gfootbal",
+			"title" : "Gaelco Football",
+			"mach" : "atvtrack",
+			"controls" : [
+				{ "name" : "1P UP", "id" : "1p_up", "switch" : "1P UP", "role" : "up", "pad" : [ "dpup", "-lefty" ] },
+				{ "name" : "1P DOWN", "id" : "1p_down", "switch" : "1P DOWN", "role" : "down", "pad" : [ "dpdown", "+lefty" ] },
+				{ "name" : "1P LEFT", "id" : "1p_left", "switch" : "1P LEFT", "role" : "left", "pad" : [ "dpleft", "-leftx" ] },
+				{ "name" : "1P RIGHT", "id" : "1p_right", "switch" : "1P RIGHT", "role" : "right", "pad" : [ "dpright", "+leftx" ] },
+				{ "name" : "1P BUTTON 1", "id" : "1p_button1", "switch" : "1P PUSH1", "role" : "button1" },
+				{ "name" : "1P BUTTON 2", "id" : "1p_button2", "switch" : "1P PUSH2", "role" : "button2" },
+				{ "name" : "1P BUTTON 3", "id" : "1p_button3", "switch" : "1P PUSH3", "role" : "button3" },
+				{ "name" : "1P KICK SIDE", "id" : "1p_kick_x", "analog" : 0, "low" : "left", "role" : "stick2_x" },
+				{ "name" : "1P KICK FORWARD", "id" : "1p_kick_y", "analog" : 1, "low" : "up", "role" : "stick2_y" },
+				{ "name" : "1P START", "id" : "1p_start", "switch" : "1P START", "role" : "start" },
+				{ "name" : "2P UP", "id" : "2p_up", "switch" : "2P UP", "role" : "up", "player" : 2, "pad" : [ "dpup", "-lefty" ] },
+				{ "name" : "2P DOWN", "id" : "2p_down", "switch" : "2P DOWN", "role" : "down", "player" : 2, "pad" : [ "dpdown", "+lefty" ] },
+				{ "name" : "2P LEFT", "id" : "2p_left", "switch" : "2P LEFT", "role" : "left", "player" : 2, "pad" : [ "dpleft", "-leftx" ] },
+				{ "name" : "2P RIGHT", "id" : "2p_right", "switch" : "2P RIGHT", "role" : "right", "player" : 2, "pad" : [ "dpright", "+leftx" ] },
+				{ "name" : "2P BUTTON 1", "id" : "2p_button1", "switch" : "2P PUSH1", "role" : "button1", "player" : 2 },
+				{ "name" : "2P BUTTON 2", "id" : "2p_button2", "switch" : "2P PUSH2", "role" : "button2", "player" : 2 },
+				{ "name" : "2P BUTTON 3", "id" : "2p_button3", "switch" : "2P PUSH3", "role" : "button3", "player" : 2 },
+				{ "name" : "2P KICK SIDE", "id" : "2p_kick_x", "analog" : 2, "low" : "left", "role" : "stick2_x", "player" : 2 },
+				{ "name" : "2P KICK FORWARD", "id" : "2p_kick_y", "analog" : 3, "low" : "up", "role" : "stick2_y", "player" : 2 },
+				{ "name" : "2P START", "id" : "2p_start", "switch" : "2P START", "role" : "start", "player" : 2 }
+			],
+			"sections" : [
+				{
+					"name" : "nand0",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "k9f2808u0b.ic15", "size" : 17301504, "crc" : "876ca493" }
+					]
+				},
+				{
+					"name" : "nand1",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "k9f2808u0b.ic20", "size" : 17301504, "crc" : "df9cf6e2" }
+					]
+				},
+				{
+					"name" : "nand2",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "k9f2808u0b.ic14", "size" : 17301504, "crc" : "48d901a3" }
+					]
+				},
+				{
+					"name" : "nand3",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "k9f2808u0b.ic19", "size" : 17301504, "crc" : "2db6c016" }
+					]
+				},
+				{
+					"name" : "fpga",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "epc1pc8.ic23", "size" : 130817, "crc" : "752444c7" }
+					]
+				}
+			]
+		},
+		{
+			"name" : "smashdrv",
+			"title" : "Smashing Drive",
+			"mach" : "smashdrv",
+			"controls" : [
+				{ "name" : "WHEEL", "id" : "wheel", "analog" : 0, "low" : "left", "role" : "steer" },
+				{ "name" : "GAS PEDAL", "id" : "gas_pedal", "analog" : 1, "low" : "released", "role" : "accel" },
+				{ "name" : "BRAKE PEDAL", "id" : "brake_pedal", "analog" : 2, "low" : "released", "role" : "brake" },
+				{ "name" : "HORN (START)", "id" : "horn", "switch" : "1P START", "role" : "start" },
+				{ "name" : "VOLUME UP", "id" : "volume_up", "switch" : "1P PUSH1", "role" : "button5", "keys" : [ "=" ], "pad" : [ "dpup" ] },
+				{ "name" : "VOLUME DOWN", "id" : "volume_down", "switch" : "1P PUSH2", "role" : "button6", "keys" : [ "-" ], "pad" : [ "dpdown" ] }
+			],
+			"sections" : [
+				{
+					"name" : "program",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "prg_world.ic23", "size" : 4194304, "crc" : "c642b059" }
+					]
+				},
+				{
+					"name" : "sdra",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "sdra.ic15", "size" : 16777216, "crc" : "cf702287" }
+					]
+				},
+				{
+					"name" : "sdrb",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "sdrb.ic14", "size" : 16777216, "crc" : "39b76f0e" }
+					]
+				},
+				{
+					"name" : "sdrc",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "sdrc.ic20", "size" : 16777216, "crc" : "c9021dd7" }
+					]
+				}
+			]
+		},
+		{
+			"name" : "smashdrvb",
+			"title" : "Smashing Drive (UK)",
+			"parent" : "smashdrv",
+			"mach" : "smashdrv",
+			"controls" : [
+				{ "name" : "WHEEL", "id" : "wheel", "analog" : 0, "low" : "left", "role" : "steer" },
+				{ "name" : "GAS PEDAL", "id" : "gas_pedal", "analog" : 1, "low" : "released", "role" : "accel" },
+				{ "name" : "BRAKE PEDAL", "id" : "brake_pedal", "analog" : 2, "low" : "released", "role" : "brake" },
+				{ "name" : "HORN (START)", "id" : "horn", "switch" : "1P START", "role" : "start" },
+				{ "name" : "VOLUME UP", "id" : "volume_up", "switch" : "1P PUSH1", "role" : "button5", "keys" : [ "=" ], "pad" : [ "dpup" ] },
+				{ "name" : "VOLUME DOWN", "id" : "volume_down", "switch" : "1P PUSH2", "role" : "button6", "keys" : [ "-" ], "pad" : [ "dpdown" ] }
+			],
+			"sections" : [
+				{
+					"name" : "program",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "prg.ic23", "size" : 4194304, "crc" : "5cc6d3ac" }
+					]
+				},
+				{
+					"name" : "sdra",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "sdra.ic15", "size" : 16777216, "crc" : "cf702287", "set" : "smashdrv" }
+					]
+				},
+				{
+					"name" : "sdrb",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "sdrb.ic14", "size" : 16777216, "crc" : "39b76f0e", "set" : "smashdrv" }
+					]
+				},
+				{
+					"name" : "sdrc",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "sdrc.ic20", "size" : 16777216, "crc" : "c9021dd7", "set" : "smashdrv" }
+					]
+				}
+			]
+		},
+		{
+			"name" : "smashdrvs",
+			"title" : "Smashing Drive (Spain, Portugal)",
+			"parent" : "smashdrv",
+			"mach" : "smashdrv",
+			"controls" : [
+				{ "name" : "WHEEL", "id" : "wheel", "analog" : 0, "low" : "left", "role" : "steer" },
+				{ "name" : "GAS PEDAL", "id" : "gas_pedal", "analog" : 1, "low" : "released", "role" : "accel" },
+				{ "name" : "BRAKE PEDAL", "id" : "brake_pedal", "analog" : 2, "low" : "released", "role" : "brake" },
+				{ "name" : "HORN (START)", "id" : "horn", "switch" : "1P START", "role" : "start" },
+				{ "name" : "VOLUME UP", "id" : "volume_up", "switch" : "1P PUSH1", "role" : "button5", "keys" : [ "=" ], "pad" : [ "dpup" ] },
+				{ "name" : "VOLUME DOWN", "id" : "volume_down", "switch" : "1P PUSH2", "role" : "button6", "keys" : [ "-" ], "pad" : [ "dpdown" ] }
+			],
+			"sections" : [
+				{
+					"name" : "program",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "prg_spain.ic23", "size" : 4194304, "crc" : "66b80283" }
+					]
+				},
+				{
+					"name" : "sdra",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "sdra.ic15", "size" : 16777216, "crc" : "cf702287", "set" : "smashdrv" }
+					]
+				},
+				{
+					"name" : "sdrb",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "sdrb.ic14", "size" : 16777216, "crc" : "39b76f0e", "set" : "smashdrv" }
+					]
+				},
+				{
+					"name" : "sdrc",
+					"type" : "alternative",
+					"data" : [
+						{ "name" : "sdrc.ic20", "size" : 16777216, "crc" : "c9021dd7", "set" : "smashdrv" }
+					]
+				}
+			]
 		}
 	]
 }

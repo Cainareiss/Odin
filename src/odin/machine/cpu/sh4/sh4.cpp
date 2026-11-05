@@ -514,7 +514,7 @@ bool Sh4::read_slow(const Sh4Op *op, uint32_t addr, uint32_t size, uint64_t &val
 		m_bus.unanswered(false, addr, size, 0);
 	}
 	if (m_clock_note.on) [[unlikely]] {
-		clock_noted_slow(addr, size);
+		clock_noted_slow(addr, size, value);
 	}
 	return !m_event && !past_slice(bus);
 }
@@ -1075,6 +1075,12 @@ int32_t Sh4::run_part(int32_t cycles, int32_t &used)
 	m_wait.pass = 0;
 	m_wait.busy = 0;
 	wait_mark();
+	/* Already in a known turn: no need to go round it */
+	if (m_still_on) {
+		if (const auto inside = m_clock_inside.find(m_r.pc); inside != m_clock_inside.end()) {
+			clock_mark(inside->second);
+		}
+	}
 
 	while (m_remaining > 0 && m_run == Sh4Run::Running && !m_retime) {
 		if (m_r.pc == m_wait.regs.pc) {

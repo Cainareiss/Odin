@@ -108,10 +108,11 @@ public:
 	 * up and slows down (HEURISTIC) */
 	static uint16_t smoothed(uint16_t was, uint16_t now) { return static_cast<uint16_t>((3 * was + now) / 4); }
 
-	/* nullptr when the host gives no sound device; the optional board at
-	 * option_db in the mix; on the device of that name, else (or when it
-	 * is not there) on the one the system gives */
-	static std::unique_ptr<AudioOut> make(Mode mode, double option_db, const std::string &device = "");
+	/* nullptr without a sound device. option_db: the optional board's
+	 * mix level. Uses the named device, else the system default. A rate
+	 * of 0 means the Hikaru's. */
+	static std::unique_ptr<AudioOut> make(Mode mode, double option_db, const std::string &device = "",
+	                                      int rate = 0);
 	~AudioOut();
 	AudioOut(const AudioOut &) = delete;
 	AudioOut &operator=(const AudioOut &) = delete;
@@ -137,8 +138,8 @@ public:
 	void pause(bool paused);
 
 private:
-	AudioOut(SDL_AudioStream *stream, Mode mode, int32_t option_gain)
-		: m_stream(stream), m_mode(mode), m_option_gain(option_gain)
+	AudioOut(SDL_AudioStream *stream, Mode mode, int32_t option_gain, int rate)
+		: m_stream(stream), m_mode(mode), m_option_gain(option_gain), m_rate(rate)
 	{
 	}
 
@@ -147,6 +148,7 @@ private:
 	SDL_AudioStream *m_stream;	/* bound to the device */
 	Mode m_mode;
 	int32_t m_option_gain;
+	int m_rate;
 	std::vector<int16_t> m_frames;
 	float m_volume = 1.0f;
 	bool m_heard = true;

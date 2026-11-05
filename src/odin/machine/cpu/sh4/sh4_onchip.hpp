@@ -55,6 +55,7 @@ constexpr uint32_t tcnt(uint32_t ch) { return TMU_TCNT0 + ch * 12; }
 constexpr uint32_t tcr(uint32_t ch) { return TMU_TCR0 + ch * 12; }
 constexpr uint32_t SCI_SCBRR1 = 0xE00004, SCI_SCTDR1 = 0xE0000C, SCI_SCSSR1 = 0xE00010;
 constexpr uint32_t SCIF_SCBRR2 = 0xE80004, SCIF_SCFSR2 = 0xE80010;
+constexpr uint32_t SCI_END = 0xE00020, SCIF_END = 0xE80028;
 constexpr uint32_t UDI_SDIR = 0xF00000;
 /* ICR (hardware manual, 19.3.2): the IRL pins as four requests (IRLM), the
  * edge of the NMI pin that asks (NMIE), an NMI taken even with SR.BL set

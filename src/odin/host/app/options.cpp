@@ -171,6 +171,8 @@ read_paths(const Settings &settings, Options &options)
 		} else if (key == "bios" && !value.empty()) {
 			if (!options.given.bios)
 				options.bios_path = value;
+		} else if (key == "gaelco" && !value.empty()) {
+			options.gaelco_path = value;
 		} else if (key == "saves" && !value.empty()) {
 			options.saves = value;
 		} else if (key == "artwork" && !value.empty()) {
@@ -630,7 +632,7 @@ known_settings(const GameList &games)
 	out.insert(out.end(), { { "outputs", "network", "off" }, { "network", "board", "none" },
 	                        { "network", "port", std::to_string(NetCable::PORT) }, { "network", "next", "" },
 	                        { "network", "cabinet", "1" },
-	                        { "paths", "roms", "" }, { "paths", "bios", "" },
+	                        { "paths", "roms", "" }, { "paths", "bios", "" }, { "paths", "gaelco", "" },
 	                        { "paths", "saves", SaveFolder::root() }, { "paths", "states", default_states() },
 	                        { "paths", "artwork", artwork_folder() }, { "paths", "log", odin_data_dir() },
 	                        { "log", "verbose", "off" }, { "library", "owned_only", "off" },
@@ -644,7 +646,7 @@ known_settings(const GameList &games)
 	}
 	out.insert(out.end(), { { "gamepads", "dead_zone", std::to_string(PadTuning::DEAD_ZONE) },
 	                        { "gamepads", "trigger_threshold", std::to_string(PadTuning::TRIGGER_THRESHOLD) } });
-	for (const auto &[name, title] : games.titles("hikaru")) {
+	for (const auto &[name, title] : games.titles()) {
 		const std::optional<Game> game = games.describe(name);
 
 		if (!game)

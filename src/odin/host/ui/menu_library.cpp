@@ -385,7 +385,9 @@ Menu::build_library(LibraryState &state, BarState &bar_state)
 		if (state.failed == game.name)
 			y += wrapped(list, { x, y }, width, size, palette.danger,
 			             "It failed to start: see odin.log for why.") + line;
-		if (state.roms.empty()) {
+		const std::string &roms = game.gaelco ? state.gaelco : state.roms;
+
+		if (roms.empty()) {
 			y += wrapped(list, { x, y }, width, size, palette.ink,
 			             "Choose your games folder: one folder, zip or 7z per game, named as in MAME.") + line;
 		} else if (!game.missing.empty()) {
@@ -394,19 +396,21 @@ Menu::build_library(LibraryState &state, BarState &bar_state)
 				y += wrapped(list, { x, y }, width, size, palette.dim, file);
 			y += line;
 			y += wrapped(list, { x, y }, width, size, palette.faint,
-			             "Searched in " + shown_path(state.roms, "") +
-			             (state.bios.empty() ? std::string() : " and " + shown_path(state.bios, ""))) + line;
+			             "Searched in " + shown_path(roms, "") +
+			             (game.gaelco || state.bios.empty() ? std::string() : " and " + shown_path(state.bios, ""))) +
+			     line;
 		}
 		if (!game.missing.empty()) {
 			/* The folders to choose, unless the command line gives them */
-			const char roms[] = "Games folder...", bios[] = "BIOS folder...";
+			const char *const games = game.gaelco ? "Gaelco folder..." : "Games folder...";
+			const char bios[] = "BIOS folder...";
 
 			if (!state.roms_given && !state.choosing) {
-				if (kit.button(roms, { x, y }, false))
-					state.choose = LibraryState::Folder::ROMS;
-				y += kit.button_size(roms).y + kit.px(6.0f);
+				if (kit.button(games, { x, y }, false))
+					state.choose = game.gaelco ? LibraryState::Folder::GAELCO : LibraryState::Folder::ROMS;
+				y += kit.button_size(games).y + kit.px(6.0f);
 			}
-			if (!state.bios_given && !state.choosing && !state.roms.empty() &&
+			if (!game.gaelco && !state.bios_given && !state.choosing && !state.roms.empty() &&
 			    kit.button(bios, { x, y }, false))
 				state.choose = LibraryState::Folder::BIOS;
 		}
