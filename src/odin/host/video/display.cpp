@@ -360,6 +360,15 @@ Display::set_scene(PmxScene scene)
 	m_own_fresh = true;
 }
 
+void
+Display::set_blank(bool blank)
+{
+	if (blank == m_own_blank)
+		return;
+	finish();
+	m_own_blank = blank;
+}
+
 /* On the drawing thread */
 void
 Display::draw_own(bool late, unsigned w, unsigned h, bool bar)
@@ -374,8 +383,17 @@ Display::draw_own(bool late, unsigned w, unsigned h, bool bar)
 		m_own->draw_pmx(m_own_scene, m_anisotropy);
 		m_own_fresh = false;
 	}
-	m_own->present(picture_rect(w, h, m_hole), w, h);
-	m_picture = m_own->frame_picture();
+	if (m_own_blank) {
+		/* Black where the picture goes, the bezel and the bar over it; no
+		 * blur of it at the sides */
+		const HostPicture drawn = m_own->frame_picture();
+
+		m_graphics->clear_window(w, h);
+		m_picture = HostPicture{ 0, drawn.w, drawn.h };
+	} else {
+		m_own->present(picture_rect(w, h, m_hole), w, h);
+		m_picture = m_own->frame_picture();
+	}
 	screenshot();
 	print_fingerprint();
 	draw_over(w, h, bar);
@@ -392,7 +410,7 @@ Display::detach()
 	if (m_own) {
 		run([this] { m_own.reset(); });
 		m_own_scene = {};
-		m_own_fresh = false;
+		m_own_fresh = m_own_blank = false;
 		m_picture.id = 0;
 		m_title = "Odin";
 		SDL_SetWindowTitle(m_window, "Odin");
@@ -903,7 +921,9 @@ Display::screenshot()
 
 	std::vector<uint8_t> pixels(w * h * 3);
 
-	read_picture(pixels.data());
+	/* None: a board's DAC puts out black */
+	if (m_picture.id)
+		read_picture(pixels.data());
 	std::snprintf(path, sizeof(path), "%s-%06u.ppm", m_shot_prefix, m_frame);
 	write_ppm(path, w, h, pixels.data());
 }
@@ -914,8 +934,9 @@ Display::print_fingerprint()
 	if (!m_fingerprint)
 		return;
 
-	m_pixels.resize(size_t{m_picture.w} * m_picture.h * 3);
-	read_picture(m_pixels.data());
+	m_pixels.assign(size_t{m_picture.w} * m_picture.h * 3, 0);
+	if (m_picture.id)
+		read_picture(m_pixels.data());
 	std::fprintf(stderr, "PICFP frame=%u fp=%016" PRIx64 "\n", m_frame, fnv1a(FNV_START, m_pixels.data(), m_pixels.size()));
 }
 

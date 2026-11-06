@@ -126,6 +126,9 @@ public:
 	 * end_frame of a frame that has one */
 	void attach_scenes(const std::string &game, const std::string &title);
 	void set_scene(PmxScene scene);
+	/* The DAC of that board puts out black: the picture is black, its
+	 * scenes drawn all the same (its frame buffer keeps them) */
+	void set_blank(bool blank);
 	unsigned scale() const { return m_scale; }
 	DisplayUpscaleMode upscale_mode() const { return m_upscale_mode; }
 	bool draws_native() const { return m_own_native; }
@@ -326,6 +329,7 @@ private:
 	PmxScene m_own_scene;
 	unsigned m_own_built = 1;
 	bool m_own_fresh = false;
+	bool m_own_blank = false;
 	bool m_own_native = false, m_own_sorts = false;
 	std::atomic<Sides> m_sides{ Sides::OFF };
 	PictureHole m_hole;

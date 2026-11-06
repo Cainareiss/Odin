@@ -347,6 +347,7 @@ AtvGame::run_frame()
 	}
 	if (PmxScene scene = m_board->take_scene(); scene.rendered)
 		m_display.set_scene(std::move(scene));
+	m_display.set_blank(m_board->dac_blanked());
 }
 
 } /* namespace */

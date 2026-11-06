@@ -88,6 +88,12 @@ constexpr uint32_t DAC_PLL0 = 0x120, DAC_PLL1 = 0x121, HS_FRONT = 0x0A3, HS_BACK
  * "K.T.S KDN-4350HC 14.31818MHz", the guide's "typically 14.31818MHz";
  * the boards have no other crystal for an external DAC clock */
 constexpr uint64_t DAC_FREF = 14'318'180;
+/* DAC Control: bit 0 (DAC_BLNK) at 0, the DAC puts out blanking, black
+ * (guide p. 105), as from its reset; bit 9, the gamma table in 6 bits.
+ * The table (GLUT): its address, then red, green and blue a write each,
+ * the address one on after each three (p. 104) */
+constexpr uint32_t DAC_CONTROL = 0x0A9, DAC_BLNK = 1, DAC_6BIT = 1u << 9;
+constexpr uint32_t DAC_LUT_WRITE = 0x0B4, DAC_LUT_DATA = 0x0B5, DAC_LUT_READ = 0x0B7;
 
 struct Window {
 	uint32_t offset, implicit;
@@ -337,7 +343,7 @@ void Pmx1Core::index_data(uint32_t data)
 
 void Pmx1Core::implicit_write(uint32_t addr, uint32_t value, uint32_t by)
 {
-	/* A register that does nothing yet, already said so: kept only */
+	/* A register that does nothing yet, seen before: kept only */
 	if (m_plain[addr]) {
 		m_s.implicit[addr] = value;
 		return;
@@ -370,8 +376,29 @@ void Pmx1Core::implicit_write(uint32_t addr, uint32_t value, uint32_t by)
 	case HS_FRONT:
 	case HS_BACK:
 	case HS_WIDTH:
+	case DAC_CONTROL:
 		m_s.implicit[addr] = value;
 		return;
+	/* The read and write addresses are one register (p. 104) */
+	case DAC_LUT_WRITE:
+	case DAC_LUT_READ:
+		m_s.implicit[DAC_LUT_WRITE] = m_s.implicit[DAC_LUT_READ] = value;
+		m_lut_at = (value & 0xFF) * 3;
+		return;
+	/* Not applied: the three games load a straight ramp. One that is not
+	 * is said once. */
+	case DAC_LUT_DATA: {
+		const uint32_t entry = m_lut_at / 3, ramp = (m_s.implicit[DAC_CONTROL] & DAC_6BIT) ? entry >> 2 : entry;
+
+		m_s.implicit[addr] = value;
+		if ((value & 0xFF) != ramp && !m_said_lut) {
+			m_said_lut = true;
+			std::fprintf(stderr, "pmx1: the DAC's gamma table is not a straight ramp (entry %u = %02X), not "
+			             "emulated\n", static_cast<unsigned>(entry), static_cast<unsigned>(value & 0xFF));
+		}
+		m_lut_at = (m_lut_at + 1) % (256 * 3);
+		return;
+	}
 	case INDEX_DATA:
 		m_s.implicit[addr] = value;
 		index_data(value);
@@ -399,7 +426,8 @@ void Pmx1Core::implicit_write(uint32_t addr, uint32_t value, uint32_t by)
 	if (addr > THREAD_ENABLE && addr < THREAD_ENABLE + THREADS) {
 		if (addr == 2 && (value & 1) && !m_said_enabled[addr]) {
 			m_said_enabled[addr] = true;
-			std::fprintf(stderr, "pmx1: thread 2 enabled at %08X, not run\n", m_s.next[addr]);
+			if (m_verbose)
+				std::fprintf(stderr, "pmx1: thread 2 enabled at %08X, not run\n", m_s.next[addr]);
 		}
 		return;
 	}
@@ -407,6 +435,8 @@ void Pmx1Core::implicit_write(uint32_t addr, uint32_t value, uint32_t by)
 	    m_said[addr])
 		return;
 	m_said[addr] = m_plain[addr] = true;
+	if (!m_verbose)
+		return;
 	if (by == BY_HOST)
 		std::fprintf(stderr, "pmx1: host w implicit %03X = %04X, not emulated\n", addr, value);
 	else
@@ -2061,6 +2091,11 @@ Pmx1Core::Done Pmx1Core::feed(unsigned thread, uint32_t word)
 		m_s.dac_frames += (high >> 29) & 1;
 	}
 	return queue_read(thread, m_s.regs[(d < 16 ? A0 : A1) - 1][d & 15]) ? Done::YES : Done::NO;
+}
+
+bool Pmx1Core::dac_blanked() const
+{
+	return !(m_s.implicit[DAC_CONTROL] & DAC_BLNK);
 }
 
 /* The pixel clocks of a line of a span: the HSYNC's front porch, width and

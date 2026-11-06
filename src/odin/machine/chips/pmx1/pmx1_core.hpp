@@ -124,6 +124,11 @@ public:
 	void run_dac(uint32_t per_second);
 	/* The starts of frame the DAC feed has taken */
 	uint32_t dac_frames() const { return m_s.dac_frames; }
+	/* -v: the implicit registers it does not emulate and thread 2 told on
+	 * stderr, once each (the games' start-up writes them all) */
+	void set_verbose(bool verbose) { m_verbose = verbose; }
+	/* The DAC puts out black (DAC Control, DAC_BLNK at 0) */
+	bool dac_blanked() const;
 	/* `written` is told of each write to a 3D register (its index, a
 	 * multiple of 4), `interrupt` of the interrupt line to the host */
 	void set_3d(std::function<void(uint32_t index, uint32_t value)> written) { m_3d = std::move(written); }
@@ -255,12 +260,18 @@ private:
 	std::function<void(bool)> m_interrupt;
 	State m_s{};
 	Pmx1Ta m_ta;
-	/* Implicit registers and threads already said to be not emulated */
+	/* Implicit registers and threads already seen not emulated (told with
+	 * -v) */
 	std::array<bool, IMPLICIT> m_said{};
 	bool m_said_war = false;
-	/* Implicit registers that do nothing yet, said so: a write is kept */
+	/* Implicit registers that do nothing yet, seen before: a write is kept */
 	std::array<bool, IMPLICIT> m_plain{};
 	std::array<bool, THREADS> m_said_enabled{};
+	/* The next byte of the gamma table, 0 to 767 (red, green, blue), and
+	 * whether one off the ramp was said: for that message only */
+	uint32_t m_lut_at = 0;
+	bool m_said_lut = false;
+	bool m_verbose = false;
 };
 
 } /* namespace odin */

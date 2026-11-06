@@ -162,6 +162,8 @@ public:
 		m_pmx.set_look(fine, flat_mode, card_sorts);
 	}
 	PmxScene take_scene() { return m_pmx.take_scene(); }
+	/* Its DAC puts out black */
+	bool dac_blanked() const { return m_core.dac_blanked(); }
 
 	/* The pins the SH-4 drove in its writes to the group 7800 of port A:
 	 * bit 3 the coin counter, bit 4 the lamp (measured: Smashing Drive's
@@ -182,8 +184,13 @@ public:
 	};
 	void set_motion_platform(bool on) { m_motion_platform = on; }
 
-	/* -v: the accesses nothing answers told on stderr, once each */
-	void set_verbose(bool verbose) { m_verbose = verbose; }
+	/* -v: the accesses nothing answers, and the registers of the PMX1 it
+	 * does not emulate, told on stderr once each */
+	void set_verbose(bool verbose)
+	{
+		m_verbose = verbose;
+		m_core.set_verbose(verbose);
+	}
 	/* [network]: board = ring links this cabinet to another one; any other
 	 * board leaves its cable unplugged. False when the cable cannot be
 	 * opened. */

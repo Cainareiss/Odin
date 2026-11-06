@@ -491,9 +491,19 @@ PowerVR Neon 250 (PMX1)
 - The word that opens a thread's code (F1, a register, 2) does nothing:
   its meaning is not known (pmx1_core.cpp).
 - A count of the core's cycles is taken as free-running (pmx1_core.cpp).
-- The games write registers 078-079, 085-08D, 0A0-0A2, 0A6-0B5 and
-  280-28E, which Odin does not emulate; odin.log says so once
-  (pmx1_core.cpp).
+- Implicit registers the games write that Odin does not emulate (-v says
+  so once, pmx1_core.cpp). Seen to change nothing: the GART remaps
+  (289-28E) keep their reset values, which never remap (CMP 0xFF); the
+  3D address base (286) sends the region, object, list and link
+  addresses into the frame buffer, as Odin takes them (the textures'
+  only by their pictures); the DAC's scaler is never on (its interpolation
+  bit in 0A6), its blend mode shows the main picture alone (0B1, so no
+  colour key, 0B2-0B3) and its gamma table (0B4-0B5) is a straight ramp,
+  said in odin.log if one is not. Timing only, which Odin does not keep:
+  the SDRAM and its arbiter (280-285), the DAC's flow, bursts and FIFO
+  split (0A0-0A2). Taken from the guide: the sync polarities (0A6), the
+  cursor's place with no cursor turned on (0A7-0A8), the CRC test (0AA).
+  Not known: 078-079 and 085-08D, which the guide does not give.
 - An instruction that none of the three games uses stops its thread of the
   PMX1, said once (pmx1_core.cpp).
 - Guesses still to check: the SH-4's serial ports send at once (sh4.hpp);
