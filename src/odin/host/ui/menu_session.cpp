@@ -278,7 +278,7 @@ MenuSession::fill_games()
 			}
 		}
 		if (smash && sound.start < 0)
-			sound.start = 0;
+			sound.start = START_VOLUME_STANDARD;
 		if (runs && m_options.sound_asked) {
 			sound.played = m_options.sound ? played_of(*m_options.sound) : -1;
 			sound.locked = true;

@@ -28,13 +28,13 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <filesystem>
 #include <cstdio>
 #include <memory>
 #include <span>
 #include <string>
 #include <vector>
 
+#include "odin/host/app/options.hpp"
 #include "odin/host/app/user_files.hpp"
 #include "odin/host/audio/audio_out.hpp"
 #include "odin/host/input/controls.hpp"
@@ -50,20 +50,20 @@ namespace {
 /* The operator panel, on the same pins of every board (the test page of
  * each game): SERVICE, TEST, the one coin entry, VOLUME + (the volume is a
  * control of the game list too). Pin 0.6 carries the data of the ADC. */
-constexpr PortSwitch SERVICE_PIN{ 0, 1 }, TEST_PIN{ 0, 3 }, COIN_PIN{ 0, 5 }, VOLUME_UP_PIN{ 0, 0 };
+constexpr PortSwitch SERVICE_PIN{ 0, 1 }, TEST_PIN{ 0, 3 }, COIN_PIN{ 0, 5 }, VOLUME_UP_PIN{ 0, 0 }, VOLUME_DOWN_PIN{ 0, 2 };
 /* SERVICE of player 1 in CabinetInputs (control_panel.cpp) */
 constexpr uint16_t SERVICE = 0x4000;
 constexpr unsigned COIN_FRAMES = 6;	/* HEURISTIC: a coin's pulse */
 constexpr int DAC_RATE = AtvTrack::DAC_RATE;
-/* Smashing Drive starts silent on a new board: the volume the game keeps is
- * 0. [sound.<game>] start_volume holds VOLUME + from frame 60 on the first
- * power-on, the frames that take the game to that level (measured) */
-struct StartVolume {
-	const char *level;
-	unsigned frames;
-};
-constexpr StartVolume VOLUME_HOLDS[] = { { "25", 96 }, { "50", 122 }, { "75", 147 }, { "96", 180 } };
-constexpr unsigned VOLUME_FROM = 60;
+/* Smashing Drive keeps its volume, 0 on a new board. At each power-on Odin
+ * sets the level of [sound.<game>] start_volume (options.hpp), as an
+ * operator would: VOLUME - held from frame 60 for as long as the game takes
+ * from 96 down to 0, then VOLUME + the frames that take it from 0 to each of
+ * START_VOLUMES (measured). HEURISTIC: VOLUME_DOWN_FRAMES and VOLUME_GAP,
+ * chosen with room to spare (96 is down to 0 within them, checked). */
+constexpr unsigned VOLUME_UP_FRAMES[] = { 0, 96, 122, 147, 180 };
+static_assert(std::size(VOLUME_UP_FRAMES) == std::size(START_VOLUMES));
+constexpr unsigned VOLUME_FROM = 60, VOLUME_DOWN_FRAMES = 200, VOLUME_GAP = 10;
 /* Kick on the right stick: past KICK_FROM, power is the peak within
  * KICK_RISE frames, then back under KICK_REST to rearm. Pulling back first
  * lifts the ball, until the stick rests BACKSWING_FRAMES. HEURISTIC: all of
@@ -79,7 +79,7 @@ constexpr float KICK_SOFT = 10.0f, KICK_HARD = 127.0f, KICK_GAIN = 1.2f;
 class AtvGame final : public Board {
 public:
 	AtvGame(const Game &game, Controls &controls, Display &display, const std::string &kept,
-	        unsigned volume_frames, bool verbose);
+	        std::optional<unsigned> volume_frames, bool verbose);
 	~AtvGame() override;
 
 	const std::string &game_name() const override { return m_name; }
@@ -140,7 +140,8 @@ private:
 	/* The channels of CabinetInputs of the stick that kicks each ball, side
 	 * then forward; none for a game without balls */
 	std::array<std::optional<std::array<uint8_t, 2>>, 2> m_balls;
-	unsigned m_volume_frames;
+	/* The frames VOLUME - then VOLUME + are held at power-on (0: not) */
+	unsigned m_volume_down, m_volume_up;
 	unsigned m_coin = 0;
 	Kick m_kick[2];
 	/* The outputs as JVS counts them: output n is bit n - 1 of the
@@ -171,10 +172,11 @@ make_board(const Game &game)
 }
 
 AtvGame::AtvGame(const Game &game, Controls &controls, Display &display, const std::string &kept,
-                 unsigned volume_frames, bool verbose)
+                 std::optional<unsigned> volume_frames, bool verbose)
 	: m_name(game.name), m_kept(kept), m_board(make_board(game)), m_controls(controls), m_display(display),
 	  m_wiring(game.controls), m_grounded(game.grounded_pins), m_grounded_analog(game.grounded_analog),
-	  m_volume_frames(std::filesystem::exists(kept) ? 0 : volume_frames), m_wheel_motor(game.wheel_motor)
+	  m_volume_down(volume_frames ? VOLUME_DOWN_FRAMES : 0), m_volume_up(volume_frames.value_or(0)),
+	  m_wheel_motor(game.wheel_motor)
 {
 	for (const GameControl &control : m_wiring)
 		if (control.ball != GameControl::Ball::NONE) {
@@ -278,7 +280,12 @@ AtvGame::read_controls()
 		close(TEST_PIN);
 	if (in.jvs_player[0] & SERVICE)
 		close(SERVICE_PIN);
-	if (frame() >= VOLUME_FROM && frame() < VOLUME_FROM + m_volume_frames)
+	/* The volume set at power-on: VOLUME - down to 0, then VOLUME + */
+	const unsigned up_from = VOLUME_FROM + m_volume_down + VOLUME_GAP;
+
+	if (frame() >= VOLUME_FROM && frame() < VOLUME_FROM + m_volume_down)
+		close(VOLUME_DOWN_PIN);
+	else if (m_volume_down && frame() >= up_from && frame() < up_from + m_volume_up)
 		close(VOLUME_UP_PIN);
 	for (const GameControl &control : m_wiring) {
 		if (control.port && in.jvs_player[control.button.player & 1] & control.button.mask)
@@ -366,12 +373,22 @@ play_atvtrack(const Options &options, const Game &game, const GameList &games, S
 	if (audio && sound_options.sound == AudioOut::Mode::MIX && sound.level != 0)
 		std::printf("sound: the woofer at %+g dB in the mix\n", sound.level);
 
-	unsigned volume_frames = 0;
+	std::optional<unsigned> volume_frames;
 
-	for (const auto &[key, value] : settings.section("sound." + game.name))
-		for (const StartVolume &start : VOLUME_HOLDS)
-			if (key == "start_volume" && value == start.level)
-				volume_frames = start.frames;
+	if (game.machine == "smashdrv") {
+		std::string level = START_VOLUMES[START_VOLUME_STANDARD];
+
+		for (const auto &[key, value] : settings.section("sound." + game.name))
+			if (key == "start_volume")
+				level = value;
+
+		const auto at = std::find(std::begin(START_VOLUMES), std::end(START_VOLUMES), level);
+
+		if (at == std::end(START_VOLUMES))
+			refuse_setting("sound." + game.name, "start_volume", level);
+		volume_frames = VOLUME_UP_FRAMES[at == std::end(START_VOLUMES) ? START_VOLUME_STANDARD
+		                                                               : at - std::begin(START_VOLUMES)];
+	}
 
 	AtvGame running(game, controls, display, SaveFolder::of_game(game.name, options.saves).path("kept.bin"),
 	                volume_frames, options.verbose);

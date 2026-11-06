@@ -443,6 +443,7 @@ cabinet_sound(MenuKit &kit, SoundGame &game, const SoundScene &scene)
 	static constexpr const char *CUTOFFS[] = { "80 Hz", "120 Hz", "160 Hz", "200 Hz", "Off" };
 	static_assert(std::size(CUTOFFS) == std::size(WOOFER_CUTOFFS));
 	static constexpr const char *STARTS[] = { "0 (silent)", "25", "50", "75", "96 (max)" };
+	static_assert(std::size(STARTS) == std::size(START_VOLUMES));
 	const char *const only_both = game.played != 1 ? "Both mode only" : nullptr;
 	const std::string level = decibels(game.level);
 
@@ -495,10 +496,9 @@ cabinet_sound(MenuKit &kit, SoundGame &game, const SoundScene &scene)
 		}
 	}
 	if (game.start >= 0) {
-		kit.next_tip("Smashing Drive saves its own volume, and it is silent the very first time. At that first launch, "
-		             "Odin holds VOLUME + until the game reaches this level, as an operator would. The game then "
-		             "keeps it.");
-		kit.choice("Starting volume", "first launch only", STARTS, game.start, nullptr);
+		kit.next_tip("Smashing Drive keeps its own volume, silent on a new board. At each launch, Odin holds "
+		             "VOLUME - then VOLUME + until the game reaches this level, as an operator would.");
+		kit.choice("Starting volume", "each launch", STARTS, game.start, nullptr);
 	}
 	kit.end_group();
 	ImGui::PopID();

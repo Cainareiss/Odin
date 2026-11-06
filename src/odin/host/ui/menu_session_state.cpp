@@ -527,7 +527,7 @@ MenuSession::apply_sound(const MenuState &was)
 
 		if (game.start != before.start && game.start >= 0)
 			keep(section, "start_volume",
-			     game.start == 0 ? std::nullopt : std::optional<std::string>(START_VOLUMES[game.start]));
+			     game.start == START_VOLUME_STANDARD ? std::nullopt : std::optional<std::string>(START_VOLUMES[game.start]));
 		if (!game.mixed)
 			continue;
 		if (game.played != before.played) {

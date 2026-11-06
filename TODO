@@ -495,7 +495,8 @@ PowerVR Neon 250 (PMX1)
   a DREQ unit moves at once (sh4_onchip.cpp); a thread's read queue holds
   16 (pmx1_core.hpp); Racer's Mini Deluxe seat shaker takes the main board
   below 120 Hz (session.hpp); the coin pulse, the kick's timing and the
-  ball's height of Gaelco Football (atvtrack_play.cpp).
+  ball's height of Gaelco Football, how long Odin holds the volume buttons
+  of Smashing Drive (atvtrack_play.cpp).
 - The menus show no live state of a Gaelco board: no lamp lit on the page
   Outputs, no link state on the page Link (menu_session_state.cpp reads the
   Hikaru board only).

@@ -126,8 +126,8 @@ struct SoundGame {
 	float level, standard;
 	bool locked;
 	bool later = false;
-	/* Smashing Drive: its volume at the first power-on, of START_VOLUMES
-	 * (-1: another game) */
+	/* Smashing Drive: the volume Odin sets at each power-on, of
+	 * START_VOLUMES (-1: another game) */
 	int start = -1;
 	/* A way of playing to choose: two boards, or a woofer (Game::woofer:
 	 * `level` is the woofer's, `cutoff` of WOOFER_CUTOFFS its lows in the
@@ -137,7 +137,6 @@ struct SoundGame {
 	/* The part `level` is the level of, as the page Audio names it */
 	const char *level_name = "Woofer";
 };
-inline constexpr const char *START_VOLUMES[] = { "0", "25", "50", "75", "96" };
 
 /* The settings the pages and the bar both change: MenuState has them, the
  * bar a copy (MenuSession::fill_bar), given back once changed there

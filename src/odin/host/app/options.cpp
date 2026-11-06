@@ -702,7 +702,7 @@ known_settings(const GameList &games)
 			out.insert(out.end(), { { "sound." + name, "mode", "mix" }, { "sound." + name, "woofer_level", "0" },
 			                        { "sound." + name, "woofer_cutoff", WOOFER_CUTOFFS[1] } });
 		if (game->machine == "smashdrv")
-			out.push_back({ "sound." + name, "start_volume", "0" });
+			out.push_back({ "sound." + name, "start_volume", START_VOLUMES[START_VOLUME_STANDARD] });
 		for (const auto &[key, value] : ControlPanel(game->controls, Settings(), name).bindings().standard_lines())
 			out.push_back({ "controls." + name, key, value });
 		for (const char *key : { "p1", "p2", "joy1", "joy2", "device1", "device2" })

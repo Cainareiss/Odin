@@ -133,6 +133,11 @@ std::optional<double> level_named(const std::string &value);
  * does not say */
 inline constexpr const char *WOOFER_CUTOFFS[] = { "80", "120", "160", "200", "off" };
 std::optional<double> woofer_hz_named(const std::string &value);
+/* [sound.<game>] start_volume: the volume Odin sets on Smashing Drive at
+ * each power-on, one of START_VOLUMES; START_VOLUMES[START_VOLUME_STANDARD]
+ * when it does not say */
+inline constexpr const char *START_VOLUMES[] = { "0", "25", "50", "75", "96" };
+inline constexpr int START_VOLUME_STANDARD = 3;
 
 /* How a game's sound plays besides its mode: the level of the optional
  * board or of the woofer in the mix, in dB, and the woofer's cutoff */

@@ -292,10 +292,10 @@ count, after its parent's.
  woofer_cutoff    80, 120, 160,   The woofer's lows below that many Hz in
                   200, off        the mix (off: all of its channel).
                                   Default 120.
- start_volume     0, 25, 50, 75,  Smashing Drive (smashdrv): its volume
-                  96              at the first power-on, Odin holding
-                                  VOLUME +.
-                                  Default 0, silent as a new board.
+ start_volume     0, 25, 50, 75,  Smashing Drive (smashdrv): the volume
+                  96              Odin sets at each power-on, holding
+                                  VOLUME - then VOLUME + (a new board is
+                                  silent). Default 75.
 
 [outputs.<game>]
 
