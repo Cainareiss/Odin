@@ -189,8 +189,10 @@ public:
 	 * Smashing Drive keeps in its program flash, as its test menu would;
 	 * false when it keeps none yet */
 	bool set_flash_setting(uint32_t byte, unsigned shift, unsigned bits, uint8_t value);
-	/* The same in the settings ATV Track keeps in its NAND */
-	bool set_nand_setting(uint32_t byte, unsigned shift, unsigned bits, uint8_t value);
+	/* The same in the settings ATV Track keeps in its NAND; with `only_from`,
+	 * only when those bits hold that value now */
+	bool set_nand_setting(uint32_t byte, unsigned shift, unsigned bits, uint8_t value,
+	                      std::optional<uint8_t> only_from = std::nullopt);
 
 	/* The DAC's samples a second: the 33 MHz crystal divided by 1024,
 	 * 32,226.6 a second. INFERRED for Smashing Drive and ATV Track: their

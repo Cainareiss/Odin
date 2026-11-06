@@ -774,7 +774,8 @@ void AtvTrack::move_platform()
  * block 0, names the two blocks of NFL_FS_FAT, each a copy of the
  * directory (0x8C0704C0). Byte i of a block of the four chips is on chip
  * i % 4 */
-bool AtvTrack::set_nand_setting(uint32_t byte, unsigned shift, unsigned bits, uint8_t value)
+bool AtvTrack::set_nand_setting(uint32_t byte, unsigned shift, unsigned bits, uint8_t value,
+                                std::optional<uint8_t> only_from)
 {
 	using Blocks = std::array<uint32_t, NandBank::CHIPS>;
 	constexpr uint32_t BLOCKS = NandBank::PAGES / 32, PAGE = NandBank::CHIPS * NandBank::PAGE;
@@ -886,8 +887,8 @@ bool AtvTrack::set_nand_setting(uint32_t byte, unsigned shift, unsigned bits, ui
 				const uint32_t after = (before & ~mask) | ((static_cast<uint32_t>(value) << shift) & mask);
 				const uint32_t made = (sum + ((after - before) << (8 * (byte & 1)))) & 0xFFFF;
 
-				if (after == before)
-					return true;	/* already so: the block left as it is */
+				if (after == before || (only_from && ((before & mask) >> shift) != *only_from))
+					return true;	/* already so, or not from that value: the block left as it is */
 				put(at + byte, after);
 				put(at + SUM, made & 0xFF);
 				put(at + SUM + 1, made >> 8);

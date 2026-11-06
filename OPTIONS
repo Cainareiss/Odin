@@ -263,9 +263,11 @@ count, after its parent's.
                   540, 900, 1080  the other (0: all the way). Default 270.
  cabinet          standard,       The cabinet model: deluxe (NASCAR),
                   deluxe,         minideluxe (Star Wars Racer), vibrator
-                  minideluxe,     (ATV Track), upright (Smashing Drive).
-                  vibrator,       Default standard.
-                  upright
+                  minideluxe,     (ATV Track: Odin sets its MOTION SYSTEM
+                  vibrator,       to VIBRATOR; on another cabinet, a
+                  upright         VIBRATOR goes back to PLATFORM HARD),
+                                  upright (Smashing Drive). Default
+                                  standard.
  card             <name>          Virtual-On card in hand (von4).
 
 [sound.<game>]

@@ -737,6 +737,21 @@ read_cabinet(const json_t *rom, const json_t *cabinet, size_t c, Game &game)
 			return false;
 		}
 	}
+	if (const json_t *const setting = json_object_get(cabinet, "nand_setting")) {
+		const auto byte = parse_hex_number(json_object_get(setting, "byte"), 2);
+		const json_t *const value = json_object_get(setting, "value"), *const standard = json_object_get(setting, "standard");
+		const auto a_byte = [](const json_t *v) {
+			return json_is_integer(v) && json_integer_value(v) >= 0 && json_integer_value(v) <= 255;
+		};
+
+		if (!byte || !a_byte(value) || !a_byte(standard)) {
+			std::fprintf(stderr, "ERROR: game '%s': cabinet '%s': \"nand_setting\" is not a byte, its value and "
+			             "the standard one\n", name, id);
+			return false;
+		}
+		kept.nand_setting = Game::Cabinet::Setting{ *byte, static_cast<uint8_t>(json_integer_value(value)),
+		                                            static_cast<uint8_t>(json_integer_value(standard)) };
+	}
 	if (json_object_get(cabinet, "motion_platform")) {
 		bool on = false;
 

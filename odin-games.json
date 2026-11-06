@@ -865,6 +865,7 @@
 			"motion_platform" : true,
 			"cabinets" : [
 				{ "id" : "vibrator", "name" : "Vibrator", "motion_platform" : false, "grounded_analog" : [ 2, 3 ],
+				  "nand_setting" : { "byte" : "0016", "value" : 3, "standard" : 2 },
 				  "outputs" : [ { "name" : "STOP LAMP", "id" : "stop_lamp", "output" : 5, "role" : "lamp" },
 				               { "name" : "COIN COUNTER", "id" : "coin_counter", "output" : 4, "role" : "counter" },
 				               { "name" : "SEAT MOTOR", "id" : "seat_motor", "output" : 19, "role" : "rumble" } ] }

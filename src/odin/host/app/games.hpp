@@ -264,6 +264,18 @@ struct Game {
 		std::optional<bool> motion_platform, seated;
 		std::optional<std::vector<GameOutput>> outputs;
 		std::vector<unsigned> grounded_analog;
+		/* A byte of the settings the game keeps in its NAND that this
+		 * cabinet's operator sets in the test menu: "nand_setting" in the
+		 * list, {"byte": "0016", "value": 3, "standard": 2}, its value and
+		 * the standard cabinet's (ATV Track's Vibrator: MOTION SYSTEM,
+		 * VIBRATOR and PLATFORM HARD: byte 0x16 of the settings at
+		 * 0x8C1B91F8, which 0x8C05E41C takes as its mode, in Ghidra; 3 and 2
+		 * as the test menu shows them) */
+		struct Setting {
+			uint32_t byte;
+			uint8_t value, standard;
+		};
+		std::optional<Setting> nand_setting;
 	};
 	std::vector<Cabinet> cabinets;
 	/* The ADC channels of a Gaelco board its cabinet ties to the ground,

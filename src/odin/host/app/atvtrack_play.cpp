@@ -93,9 +93,10 @@ public:
 	{
 		return m_board->set_flash_setting(byte, shift, bits, value);
 	}
-	bool set_nand_setting(uint32_t byte, unsigned shift, unsigned bits, uint8_t value)
+	bool set_nand_setting(uint32_t byte, unsigned shift, unsigned bits, uint8_t value,
+	                      std::optional<uint8_t> only_from = std::nullopt)
 	{
-		return m_board->set_nand_setting(byte, shift, bits, value);
+		return m_board->set_nand_setting(byte, shift, bits, value, only_from);
 	}
 	bool load_state(const std::string &path) override;
 	std::span<const uint8_t> io_outputs() const override { return m_outputs; }
@@ -395,6 +396,22 @@ play_atvtrack(const Options &options, const Game &game, const GameList &games, S
 		if (!set && !off)
 			std::fprintf(stderr, "link: %s keeps no settings yet: set its Link Mode once in its test menu\n",
 			             game.name.c_str());
+	}
+	/* What a cabinet asks of the game's settings, as its operator sets them
+	 * in the test menu: the cabinet played, its value; another one, the
+	 * standard cabinet's value back, only from its own */
+	for (const Game::Cabinet &model : game.cabinets) {
+		if (!model.nand_setting)
+			continue;
+
+		const Game::Cabinet::Setting &setting = *model.nand_setting;
+		const bool played = game.cabinet == model.id;
+
+		if (!running.set_nand_setting(setting.byte, 0, 8, played ? setting.value : setting.standard,
+		                              played ? std::nullopt : std::optional<uint8_t>(setting.value)) &&
+		    played)
+			std::fprintf(stderr, "cabinet: %s keeps no settings yet: set its %s cabinet once in its test menu\n",
+			             game.name.c_str(), model.name.c_str());
 	}
 
 	if (!options.state_path.empty()) {
