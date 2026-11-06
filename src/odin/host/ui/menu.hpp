@@ -584,8 +584,8 @@ public:
 	 * filtering (ANISOTROPY: its values), the window (that many times the
 	 * screen; its sizes shorter where the row is narrow; Custom among them:
 	 * the size the user gives the window by hand), how frames wait for the
-	 * display, the screens (PRESETS: the filters they name; the cabinets'
-	 * first, then Lola Retro's PC monitors), the speed limit */
+	 * display, the screens of the cabinets, or none (PRESETS: the filters
+	 * they name), the speed limit */
 	static constexpr const char *SCALES[] = { "1×", "2×", "3×", "4×", "5×", "6×" };
 	static constexpr const char *UPSCALE_MODES_SHOWN[] = { "Raw", "Snap 2D", "Native 2D" };
 	static constexpr const char *FILTERS[] = { "Off", "2×", "4×", "8×", "16×" };
@@ -598,17 +598,11 @@ public:
 	static constexpr const char *SYNCS[] = { "Off", "On", "Adaptive" };
 	static constexpr const char *APIS_SHOWN[] = { "OpenGL", "Vulkan" };
 	static constexpr const char *SCREENS[] = {
-		"None", "Monitor 29\"", "Projector 50\"", "PC monitor", "PC monitor, flat", "PC monitor good",
-		"PC monitor good, flat", "PC monitor premium", "PC monitor premium, flat", "PC monitor premium+",
-		"PC monitor premium+, flat", "PC monitor extreme", "PC monitor extreme, flat",
+		"None", "Sega monitor 29\"", "Sega projector 50\"", "Gaelco monitor 28\"", "Gaelco monitor 34\"",
 	};
 	static constexpr const char *PRESETS[] = {
-		"", "lola-retro/sega-monitor-29", "lola-retro/sega-projector-50", "lola-retro/pc-monitor-vga",
-		"lola-retro/pc-monitor-vga-flat", "lola-retro/pc-monitor-vga-good",
-		"lola-retro/pc-monitor-vga-good-flat", "lola-retro/pc-monitor-vga-premium",
-		"lola-retro/pc-monitor-vga-premium-flat",
-		"lola-retro/pc-monitor-vga-premium-plus", "lola-retro/pc-monitor-vga-premium-plus-flat",
-		"lola-retro/pc-monitor-vga-extreme", "lola-retro/pc-monitor-vga-extreme-flat",
+		"", "lola-retro/sega-monitor-29", "lola-retro/sega-projector-50", "lola-retro/gaelco-monitor-28",
+		"lola-retro/gaelco-monitor-34",
 	};
 	static_assert(std::size(SCREENS) == std::size(PRESETS));
 	static constexpr const char *PACES[] = { "60 fps (cabinet)", "Unlimited" };
@@ -700,7 +694,7 @@ private:
 	 * whole and torn, the timer of VON4 at 1× and in each upscaling mode
 	 * at 4×, a close-up of each CRT screen (in the order of PRESETS) */
 	enum Picture { UPSCALE = 0, FILTER = UPSCALE + 6, SCREEN = FILTER + 5, WHOLE, TORN, MODE, CRT = MODE + 4,
-	               PICTURES = CRT + 13 };
+	               PICTURES = CRT + 5 };
 	/* What the left of the page Display shows: what the row pointed at
 	 * or in the frame does */
 	enum Preview {

@@ -104,15 +104,12 @@ apart by commas (see INPUTS below).
                image           or its bezel picture (black without
                                one). Default image.
  filter        none, or a      CRT filter (page Display, CRT screen).
-               filter name     Default none. Filters:
+               filter name     Default none. The screens of the
+                               cabinets:
                                  lola-retro/sega-monitor-29
                                  lola-retro/sega-projector-50
-                                   (the cabinets' screens)
-                                 lola-retro/pc-monitor-vga
-                                 lola-retro/pc-monitor-vga-flat
-                                 (and -good, -premium, -premium-plus,
-                                 -extreme, each with or without -flat:
-                                 PC monitors of the VGA days)
+                                 lola-retro/gaelco-monitor-28
+                                 lola-retro/gaelco-monitor-34
 
 [sound]
 

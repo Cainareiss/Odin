@@ -523,6 +523,10 @@ PowerVR Neon 250 (PMX1)
 
 Host and user interface
 
+- The filters of the cabinets' screens (filters/lola-retro) take their
+  sizes from the manuals; the pitch, mask, beam spots, convergence and
+  curvature of their tubes are guessed, none was measured (each .glslp
+  says which).
 - The drawing thread was never run under a race detector: TSan falls over
   in the NVIDIA driver and in llvmpipe (worker.hpp, display.cpp).
 - The time the shader programs take to get ready at the first start on a
