@@ -200,6 +200,36 @@ parse_switch(const json_t *value)
 	return std::nullopt;
 }
 
+/* "1.4": a pin of the port of a Gaelco board, group 0 to 3, bit 0 to 7 */
+std::optional<PortSwitch>
+parse_pin(const json_t *value)
+{
+	const char *const text = json_string_value(value);
+
+	if (!text || std::strlen(text) != 3 || text[0] < '0' || text[0] > '3' || text[1] != '.' || text[2] < '0' ||
+	    text[2] > '7')
+		return std::nullopt;
+	return PortSwitch{ static_cast<uint8_t>(text[0] - '0'), static_cast<uint8_t>(text[2] - '0') };
+}
+
+/* "span": two values of the ADC, 0 to 255 */
+std::optional<std::array<uint8_t, 2>>
+parse_span(const json_t *value)
+{
+	std::array<uint8_t, 2> out{};
+
+	if (json_array_size(value) != out.size())
+		return std::nullopt;
+	for (size_t i = 0; i < out.size(); i++) {
+		const json_t *const end = json_array_get(value, i);
+
+		if (!json_is_integer(end) || json_integer_value(end) < 0 || json_integer_value(end) > 255)
+			return std::nullopt;
+		out[i] = static_cast<uint8_t>(json_integer_value(end));
+	}
+	return out;
+}
+
 std::optional<GameControl::Low>
 parse_low(const json_t *value)
 {
@@ -244,8 +274,9 @@ player_of(const json_t *player)
 
 /* A control: {"name": ..., "id": ..., then "switch", "analog" with "low",
  * or "positions"; "role", and "player" when it is 2; a switch may have
- * "keys", a list of key names, and "pad", a list of inputs of the
- * gamepad}. */
+ * "keys", a list of key names, "pad", a list of inputs of the gamepad,
+ * and "wheel", a part of a known wheel; on a Gaelco board, "port" for a switch, "span" or "ball" for an
+ * analog control}. */
 std::optional<GameControl>
 parse_control(const json_t *control)
 {
@@ -260,16 +291,44 @@ parse_control(const json_t *control)
 	const json_t *const player = json_object_get(control, "player");
 	const json_t *const keys = json_object_get(control, "keys");
 	const json_t *const pad = json_object_get(control, "pad");
+	const json_t *const wheel = json_object_get(control, "wheel");
+	const json_t *const pin = json_object_get(control, "port");
+	const json_t *const span = json_object_get(control, "span");
+	const json_t *const ball = json_object_get(control, "ball");
 	const auto parsed_role = role ? parse_role(role) : std::nullopt;
 
 	if (!name || !name[0] || !is_id(id) || (button != nullptr) + (analog != nullptr) + (positions != nullptr) != 1 ||
 	    !parsed_role || !player_right(player) ||
-	    (keys && (!button || !json_array_size(keys))) || (pad && (!button || !json_array_size(pad))))
+	    (keys && (!button || !json_array_size(keys))) || (pad && (!button || !json_array_size(pad))) ||
+	    (wheel && (!button || !json_is_string(wheel))) ||
+	    (pin && !button) || ((span || ball) && !analog) || (span && ball))
 		return std::nullopt;
+	if (pin) {
+		out.port = parse_pin(pin);
+		if (!out.port)
+			return std::nullopt;
+	}
+	if (span) {
+		out.span = parse_span(span);
+		if (!out.span)
+			return std::nullopt;
+	}
+	if (ball) {
+		const char *const half = json_string_value(ball);
+
+		if (half && !std::strcmp(half, "side"))
+			out.ball = GameControl::Ball::SIDE;
+		else if (half && !std::strcmp(half, "forward"))
+			out.ball = GameControl::Ball::FORWARD;
+		else
+			return std::nullopt;
+	}
 	out.name = name;
 	out.id = id;
 	out.role = *parsed_role;
 	out.player = player_of(player);
+	if (wheel)
+		out.wheel = json_string_value(wheel);
 	for (const auto &[list, names] : { std::pair{ keys, &out.keys }, std::pair{ pad, &out.pad } })
 		for (size_t k = 0; k < json_array_size(list); k++) {
 			const char *const input = json_string_value(json_array_get(list, k));
@@ -323,13 +382,15 @@ parse_control(const json_t *control)
 }
 
 /* An output: {"name": ..., "id": ..., "output": 1 to 32, "role":
- * "rumble", "mute", "lamp" or "lock", and "player" when it is 2}. */
+ * "rumble", "mute", "lamp", "lock" or "counter", and "player" when it is
+ * 2}. */
 std::optional<GameOutput>
 parse_output(const json_t *output)
 {
 	static const std::pair<const char *, GameOutput::Role> ROLES[] = {
 		{ "lamp", GameOutput::Role::LAMP }, { "lock", GameOutput::Role::LOCK },
 		{ "rumble", GameOutput::Role::RUMBLE }, { "mute", GameOutput::Role::MUTE },
+		{ "counter", GameOutput::Role::COUNTER },
 	};
 	const char *const name = json_string_value(json_object_get(output, "name"));
 	const char *const id = json_string_value(json_object_get(output, "id"));
@@ -384,10 +445,16 @@ parse_link(const json_t *link, Game::Link &out)
 	const auto shift = small("shift", 0, 7), bits = small("bits", 8, 8), first = small("first", 0, 255);
 	const json_t *const letter = json_object_get(seat, "letter");
 
-	if (!in || (std::strcmp(in, "mie") && std::strcmp(in, "backup")) || !byte || !shift || !bits || !first ||
-	    *bits == 0 || *shift + *bits > 8 || (letter && !json_is_boolean(letter)))
+	const bool known = in && (!std::strcmp(in, "mie") || !std::strcmp(in, "backup") || !std::strcmp(in, "flash") ||
+	                          !std::strcmp(in, "nand"));
+
+	if (!known || !byte || !shift || !bits || !first || *bits == 0 || *shift + *bits > 8 ||
+	    (letter && !json_is_boolean(letter)))
 		return false;
-	out.seat_in = std::strcmp(in, "mie") ? Game::Link::In::BACKUP : Game::Link::In::MIE;
+	out.seat_in = !std::strcmp(in, "mie")   ? Game::Link::In::MIE
+	              : !std::strcmp(in, "flash") ? Game::Link::In::FLASH
+	              : !std::strcmp(in, "nand")  ? Game::Link::In::NAND
+	                                          : Game::Link::In::BACKUP;
 	out.seat_byte = *byte;
 	out.seat_shift = *shift;
 	out.seat_bits = *bits;
@@ -538,24 +605,83 @@ ids_once(const Game &game)
 	return true;
 }
 
-/* The switches its wiring grounds: none is right too */
+/* The switches its wiring grounds, and pins of the port of a Gaelco board
+ * where `pins` takes them: none is right too */
 bool
-grounded_of(const json_t *list, std::vector<JvsSwitch> &out)
+grounded_of(const json_t *list, std::vector<JvsSwitch> &out, std::vector<PortSwitch> *pins = nullptr)
 {
 	if (list && !json_is_array(list))
 		return false;
 	for (size_t i = 0; i < json_array_size(list); i++) {
 		const auto sw = parse_switch(json_array_get(list, i));
+		const auto pin = pins ? parse_pin(json_array_get(list, i)) : std::nullopt;
 
-		if (!sw)
+		if (sw)
+			out.push_back(*sw);
+		else if (pin)
+			pins->push_back(*pin);
+		else
 			return false;
-		out.push_back(*sw);
 	}
 	return true;
 }
 
+/* Whether a control goes where its board takes it: on a Gaelco board
+ * (atvtrack.hpp) a switch to a pin, an analog control to a channel of the
+ * ADC or to half a ball, the side with its low end left, the forward half
+ * with it up; on the Hikaru to none of those */
+bool
+goes_right(const GameControl &control, bool gaelco)
+{
+	const bool ball = control.ball != GameControl::Ball::NONE;
+
+	if (!gaelco)
+		return !control.port && !control.span && !ball;
+	if (control.type == GameControl::Type::BUTTON)
+		return control.port.has_value();
+	if (control.type != GameControl::Type::ANALOG)
+		return false;
+	if (control.span)
+		return control.analog < 4;
+	return ball && control.low == (control.ball == GameControl::Ball::SIDE ? GameControl::Low::LEFT
+	                                                                       : GameControl::Low::UP);
+}
+
+/* Every control goes where its board takes it, a stick that kicks has its
+ * two halves, and "grounded" is of the board */
+bool
+wired(const Game &game)
+{
+	const bool gaelco = game.machine == "atvtrack" || game.machine == "smashdrv";
+	unsigned halves[2][2] = {};	/* [player][side, forward] */
+
+	for (const GameControl &control : game.controls) {
+		if (control.ball != GameControl::Ball::NONE)
+			halves[control.player][control.ball == GameControl::Ball::FORWARD]++;
+		if (!goes_right(control, gaelco)) {
+			std::fprintf(stderr, "ERROR: game '%s': control '%s' does not go where its board takes it\n",
+			             game.name.c_str(), control.id.c_str());
+			return false;
+		}
+	}
+	for (const auto &stick : halves)
+		if (stick[0] != stick[1] || stick[0] > 1) {
+			std::fprintf(stderr, "ERROR: game '%s': a stick that kicks has not one side and one forward\n",
+			             game.name.c_str());
+			return false;
+		}
+	if (gaelco ? !game.grounded.empty() : !game.grounded_pins.empty()) {
+		std::fprintf(stderr, "ERROR: game '%s': \"grounded\" is not of its board\n", game.name.c_str());
+		return false;
+	}
+	return true;
+}
+
+bool read_true_false(const json_t *rom, const char *key, const char *name, bool &on);
+
 /* A cabinet of the game but the standard one: the controls of the list,
- * some of their fields in place of theirs */
+ * some of their fields in place of theirs; its motion platform and its
+ * outputs ("outputs", the whole list) when they are not the game's */
 bool
 read_cabinet(const json_t *rom, const json_t *cabinet, size_t c, Game &game)
 {
@@ -599,6 +725,68 @@ read_cabinet(const json_t *rom, const json_t *cabinet, size_t c, Game &game)
 		std::fprintf(stderr, "ERROR: game '%s': cabinet '%s': a control it changes is not in the list\n", name, id);
 		return false;
 	}
+	if (const json_t *const analog = json_object_get(cabinet, "grounded_analog")) {
+		for (size_t i = 0; json_is_array(analog) && i < json_array_size(analog); i++) {
+			const json_t *const channel = json_array_get(analog, i);
+
+			if (!json_is_integer(channel) || json_integer_value(channel) < 0 || json_integer_value(channel) > 3) {
+				std::fprintf(stderr, "ERROR: game '%s': cabinet '%s': \"grounded_analog\" is not channels 0-3\n",
+				             name, id);
+				return false;
+			}
+			kept.grounded_analog.push_back(static_cast<unsigned>(json_integer_value(channel)));
+		}
+		if (!json_is_array(analog)) {
+			std::fprintf(stderr, "ERROR: game '%s': cabinet '%s': \"grounded_analog\" is not a list\n", name, id);
+			return false;
+		}
+	}
+	if (const json_t *const setting = json_object_get(cabinet, "nand_setting")) {
+		const auto byte = parse_hex_number(json_object_get(setting, "byte"), 2);
+		const json_t *const value = json_object_get(setting, "value"), *const standard = json_object_get(setting, "standard");
+		const auto a_byte = [](const json_t *v) {
+			return json_is_integer(v) && json_integer_value(v) >= 0 && json_integer_value(v) <= 255;
+		};
+
+		if (!byte || !a_byte(value) || !a_byte(standard)) {
+			std::fprintf(stderr, "ERROR: game '%s': cabinet '%s': \"nand_setting\" is not a byte, its value and "
+			             "the standard one\n", name, id);
+			return false;
+		}
+		kept.nand_setting = Game::Cabinet::Setting{ *byte, static_cast<uint8_t>(json_integer_value(value)),
+		                                            static_cast<uint8_t>(json_integer_value(standard)) };
+	}
+	if (json_object_get(cabinet, "motion_platform")) {
+		bool on = false;
+
+		if (!read_true_false(cabinet, "motion_platform", name, on))
+			return false;
+		kept.motion_platform = on;
+	}
+	if (json_object_get(cabinet, "seated")) {
+		bool on = false;
+
+		if (!read_true_false(cabinet, "seated", name, on))
+			return false;
+		kept.seated = on;
+	}
+	if (const json_t *const outputs = json_object_get(cabinet, "outputs")) {
+		kept.outputs.emplace();
+		for (size_t i = 0; json_is_array(outputs) && i < json_array_size(outputs); i++) {
+			auto output = parse_output(json_array_get(outputs, i));
+
+			if (!output) {
+				std::fprintf(stderr, "ERROR: game '%s': cabinet '%s': output %zu is not valid\n", name, id,
+				             i + 1);
+				return false;
+			}
+			kept.outputs->push_back(std::move(*output));
+		}
+		if (!json_is_array(outputs)) {
+			std::fprintf(stderr, "ERROR: game '%s': cabinet '%s': \"outputs\" is not a list\n", name, id);
+			return false;
+		}
+	}
 	game.cabinets.push_back(std::move(kept));
 	return true;
 }
@@ -607,7 +795,7 @@ read_cabinet(const json_t *rom, const json_t *cabinet, size_t c, Game &game)
 bool
 read_cabinets(const json_t *rom, Game &game)
 {
-	if (!grounded_of(json_object_get(rom, "grounded"), game.grounded)) {
+	if (!grounded_of(json_object_get(rom, "grounded"), game.grounded, &game.grounded_pins)) {
 		std::fprintf(stderr, "ERROR: game '%s': \"grounded\" is not a list of switches\n", game.name.c_str());
 		return false;
 	}
@@ -646,8 +834,15 @@ read_options(const json_t *rom, Game &game)
 	const char *const name = game.name.c_str();
 
 	if (!read_true_false(rom, "option_speakers", name, game.option_speakers) ||
-	    !read_true_false(rom, "option_vibration", name, game.option_vibration))
+	    !read_true_false(rom, "option_vibration", name, game.option_vibration) ||
+	    !read_true_false(rom, "woofer", name, game.woofer) ||
+	    !read_true_false(rom, "wheel_motor", name, game.wheel_motor) ||
+	    !read_true_false(rom, "motion_platform", name, game.motion_platform))
 		return false;
+	if (game.woofer && (game.option_speakers || game.option_vibration)) {
+		std::fprintf(stderr, "ERROR: game '%s': \"woofer\" with an optional sound board\n", name);
+		return false;
+	}
 	if (const json_t *const level = json_object_get(rom, "option_level")) {
 		const double db = json_number_value(level);
 
@@ -658,6 +853,85 @@ read_options(const json_t *rom, Game &game)
 			return false;
 		}
 		game.option_level = db;
+	}
+	return true;
+}
+
+/* "seated" and "sound_parts" (SoundPart): a board for a Hikaru game, the
+ * optional one only when it has one; a channel for a game with a woofer
+ * (the Gaelco boards); a cabinet of its list */
+bool
+read_sound_parts(const json_t *rom, Game &game)
+{
+	using Kind = SoundPart::Kind;
+	using Place = SoundPart::Place;
+	static const std::pair<const char *, Kind> KINDS[] = {
+		{ "speaker", Kind::SPEAKER }, { "woofer", Kind::WOOFER }, { "shaker", Kind::SHAKER },
+		{ "unwired", Kind::UNWIRED },
+	};
+	static const std::pair<const char *, Place> PLACES[] = {
+		{ "front_left", Place::FRONT_LEFT }, { "front_right", Place::FRONT_RIGHT }, { "base", Place::BASE },
+		{ "panel", Place::PANEL }, { "seat_left", Place::SEAT_LEFT }, { "seat_right", Place::SEAT_RIGHT },
+		{ "seat", Place::SEAT },
+	};
+	const char *const name = game.name.c_str();
+	const json_t *const parts = json_object_get(rom, "sound_parts");
+
+	if (!read_true_false(rom, "seated", name, game.seated))
+		return false;
+	if (parts && !json_is_array(parts)) {
+		std::fprintf(stderr, "ERROR: game '%s': \"sound_parts\" is not a list\n", name);
+		return false;
+	}
+	for (size_t i = 0; i < json_array_size(parts); i++) {
+		const json_t *const p = json_array_get(parts, i);
+		const char *const kind = json_string_value(json_object_get(p, "part"));
+		const char *const at = json_string_value(json_object_get(p, "at"));
+		const char *const board = json_string_value(json_object_get(p, "board"));
+		const json_t *const channel = json_object_get(p, "channel");
+		const json_t *const cabinet = json_object_get(p, "cabinet");
+		SoundPart part;
+		bool known = false, placed = false;
+
+		for (const auto &[word, value] : KINDS)
+			if (kind && !std::strcmp(kind, word)) {
+				part.kind = value;
+				known = true;
+			}
+		for (const auto &[word, value] : PLACES)
+			if (at && !std::strcmp(at, word)) {
+				part.at = value;
+				placed = true;
+			}
+
+		bool right = known && json_is_object(p) &&
+		             (part.kind == Kind::UNWIRED ? !json_object_get(p, "at") : placed);
+
+		if (board) {
+			const bool optional = game.option_speakers || game.option_vibration;
+
+			part.option = !std::strcmp(board, "option");
+			right = right && !channel && !game.woofer &&
+			        (!std::strcmp(board, "main") || (part.option && optional));
+		} else {
+			right = right && json_is_integer(channel) && json_integer_value(channel) >= 0 &&
+			        json_integer_value(channel) <= 3 && game.woofer;
+			part.channel = right ? static_cast<int>(json_integer_value(channel)) : -1;
+		}
+		if (cabinet) {
+			const char *const id = json_string_value(cabinet);
+
+			right = right && id &&
+			        (!std::strcmp(id, "standard") ||
+			         std::any_of(game.cabinets.begin(), game.cabinets.end(),
+			                     [id](const Game::Cabinet &c) { return c.id == id; }));
+			part.cabinet = id ? id : "";
+		}
+		if (!right) {
+			std::fprintf(stderr, "ERROR: game '%s': sound part %zu is not valid\n", name, i + 1);
+			return false;
+		}
+		game.sound_parts.push_back(std::move(part));
 	}
 	return true;
 }
@@ -731,7 +1005,7 @@ Game::shaker(unsigned player) const
 		if (output.role == GameOutput::Role::RUMBLE && output.player == player)
 			out += (out.empty() ? "from output " : ", ") + output.name;
 	if (out.empty() && player == 0 && option_vibration)
-		out = "from the optional board's panel shaker";
+		out = option_wired() ? "from the panel shaker" : "from the seat shaker (the main board's lows)";
 	if (out.empty() && player == 0 && drive_first_output)
 		out = "from the jolts of the cabinet's wheel";
 	return out;
@@ -747,6 +1021,15 @@ Game::shaker_experimental(unsigned player) const
 }
 
 bool
+Game::option_wired() const
+{
+	return std::none_of(sound_parts.begin(), sound_parts.end(), [this](const SoundPart &part) {
+		return part.option && part.kind == SoundPart::Kind::UNWIRED &&
+		       (part.cabinet.empty() || part.cabinet == cabinet);
+	});
+}
+
+bool
 Game::use_cabinet(const std::string &id)
 {
 	if (id == "standard")
@@ -755,6 +1038,13 @@ Game::use_cabinet(const std::string &id)
 		if (other.id == id) {
 			controls = other.controls;
 			grounded = other.grounded;
+			if (other.motion_platform)
+				motion_platform = *other.motion_platform;
+			if (other.seated)
+				seated = *other.seated;
+			if (other.outputs)
+				outputs = *other.outputs;
+			grounded_analog = other.grounded_analog;
 			cabinet = id;
 			return true;
 		}
@@ -829,18 +1119,32 @@ GameList::load(const std::string &path)
 			}
 		}
 	}
-	/* A parent is another game of the list */
+	/* A parent is another game of the list, not a version itself */
 	for (size_t i = 0; right && i < json_array_size(roms); i++) {
 		const json_t *const rom = json_array_get(roms, i);
 		const json_t *const parent = json_object_get(rom, "parent");
 		const char *const of = json_string_value(parent);
 		const json_t *const found = of ? find(of) : nullptr;
 
-		if (parent && (!found || found == rom)) {
+		if (parent && (!found || found == rom || json_object_get(found, "parent"))) {
 			std::fprintf(stderr, "ERROR: game '%s': \"parent\" is not another game of the list\n",
 			             json_string_value(json_object_get(rom, "name")));
 			right = false;
 		}
+	}
+	/* A version is its parent but what it says: its name, title and files
+	 * at least */
+	for (size_t i = 0; right && i < json_array_size(roms); i++) {
+		json_t *const rom = json_array_get(roms, i);
+		const char *const of = json_string_value(json_object_get(rom, "parent"));
+		const char *key;
+		json_t *value;
+
+		if (!of)
+			continue;
+		json_object_foreach(const_cast<json_t *>(find(of)), key, value)
+			if (!json_object_get(rom, key) && std::strcmp(key, "title") && std::strcmp(key, "sections"))
+				json_object_set(rom, key, value);
 	}
 	if (!right) {
 		json_decref(m_root);
@@ -922,6 +1226,17 @@ GameList::titles() const
 	for (const Entry &entry : entries()) {
 		out.emplace_back(entry.name, entry.title);
 	}
+	return out;
+}
+
+std::map<std::string, std::string>
+GameList::parents() const
+{
+	std::map<std::string, std::string> out;
+
+	for (const Entry &entry : entries())
+		if (!entry.parent.empty())
+			out.emplace(entry.name, entry.parent);
 	return out;
 }
 
@@ -1010,7 +1325,9 @@ GameList::describe(const std::string &name) const
 	const char *const io = json_string_value(json_object_get(rom, "io"));
 	game.io_board = io ? io : "837-13551";
 	if (!read_title(rom, game) || !read_controls(rom, game) || !read_outputs(rom, game) || !ids_once(game) ||
-	    !read_cabinets(rom, game) || !read_options(rom, game) || !read_boards(rom, game) || !read_chips(rom, game))
+	    !read_cabinets(rom, game) || !wired(game) || !read_options(rom, game) || !read_sound_parts(rom, game) ||
+	    !read_boards(rom, game) ||
+	    !read_chips(rom, game))
 		return std::nullopt;
 	return game;
 }

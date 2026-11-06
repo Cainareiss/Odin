@@ -30,13 +30,15 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <functional>
 #include <memory>
 #include <span>
 #include <string>
+#include <vector>
 
 #include "odin/common/repeats.hpp"
 #include "odin/machine/chips/antarctic/antarctic_list.hpp"
-#include "odin/machine/boards/atvtrack/pmx1_scene.hpp"
+#include "odin/machine/chips/pmx1/pmx1_scene.hpp"
 #include "odin/machine/boards/hikaru/hikaru_draw.hpp"
 #include "odin/host/gfx/host_graphics.hpp"
 #include "odin/host/ui/loading_screen.hpp"
@@ -194,6 +196,9 @@ public:
 	virtual void set_scale(unsigned scale) = 0;
 	/* Whether it draws Native 2D (MeshVariant::native: geometry shaders) */
 	virtual bool draws_native() const = 0;
+	/* Whether it sorts the translucent fragments of a scene of the Neon
+	 * 250 pixel by pixel (PmxDraw::per_pixel) */
+	virtual bool sorts_per_pixel() const = 0;
 
 	/* A display list drawn into the scene: its vertices sent and the
 	 * scene emptied; each of its views from an empty depth; a pass for
@@ -282,6 +287,15 @@ public:
 	/* Draws a Neon 250 scene (pmx_gl.cpp) as the frame's picture, at the
 	 * picture scale, with that texture anisotropy */
 	virtual void draw_pmx(const PmxScene &scene, unsigned anisotropy) = 0;
+	/* Makes the programs draw_pmx draws with before its first scene, and
+	 * those of the keys of a list of the Neon 250 (read_pmx_list) the card
+	 * runs; `progress` is told how many of how many are made: none, then
+	 * after each one */
+	virtual void prepare_pmx(const std::vector<uint64_t> &keys,
+	                         const std::function<void(unsigned, unsigned)> &progress) = 0;
+	/* Lists in that file the programs draw_pmx makes from now on, after
+	 * those it lists */
+	virtual void list_pmx_in(const std::string &path) = 0;
 	/* The filter of a preset (picture_filter_gl.hpp), built when the path
 	 * changes; none with an empty path, or when it does not build (said
 	 * once on stderr) */

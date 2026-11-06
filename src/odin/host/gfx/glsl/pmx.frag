@@ -32,6 +32,10 @@ layout(push_constant) uniform Draw {
 	float lod_bias;
 	int flags;
 	float scale;
+#ifdef LIST
+	uint order;
+	uint mode;
+#endif
 } draw;
 #define LOD_BIAS draw.lod_bias
 #define FLAGS draw.flags
@@ -47,8 +51,14 @@ uniform float u_scale;
 #endif
 
 #ifdef NATIVE
-layout(location = 0) noperspective in vec4 q_color;
-layout(location = 1) noperspective in vec4 q_offset;
+/* As pmx.geom: the corners of its box share one w */
+#ifdef GL_ES
+#define SCREEN_LINEAR
+#else
+#define SCREEN_LINEAR noperspective
+#endif
+layout(location = 0) SCREEN_LINEAR in vec4 q_color;
+layout(location = 1) SCREEN_LINEAR in vec4 q_offset;
 layout(location = 2) in vec2 q_uv;
 layout(location = 3) flat in vec2 q_corner0;
 layout(location = 4) flat in vec2 q_corner1;
@@ -56,9 +66,12 @@ layout(location = 5) flat in vec2 q_corner2;
 vec4 v_color, v_offset;
 vec2 v_uv;
 #elif defined(GL_ES)
-layout(location = 0) in vec4 v_color;
-layout(location = 1) in vec4 v_offset;
+/* pmx.vert: the colours times w, and w */
+layout(location = 0) in vec4 e_color;
+layout(location = 1) in vec4 e_offset;
 layout(location = 2) in vec2 v_uv;
+layout(location = 3) in float e_w;
+vec4 v_color, v_offset;
 #else
 layout(location = 0) noperspective in vec4 v_color;
 layout(location = 1) noperspective in vec4 v_offset;
@@ -66,6 +79,61 @@ layout(location = 2) in vec2 v_uv;
 #endif
 
 layout(location = 0) out vec4 o_color;
+
+#ifdef LIST
+/* The fragment goes to the list of its pixel (pmx_sort.frag), tested first
+ * against the depth the opaque polygons left: its colour, 8 bits a
+ * component as inside the chip (PG, the chip's programming guide, p. 120); its depth; the one before it;
+ * its rank in TA order << 6 | its blend codes, source | destination << 3 */
+layout(early_fragment_tests) in;
+struct node_t {
+	uint color;
+	float depth;
+	uint next;
+	uint order;
+};
+#ifdef VULKAN
+layout(std430, set = 1, binding = 0) buffer nodes_t {
+	node_t u_nodes[];
+};
+layout(set = 1, binding = 1, r32ui) uniform uimage2D u_heads;
+layout(std430, set = 1, binding = 2) buffer count_t {
+	uint u_count;
+};
+#define ORDER draw.order
+#define MODE draw.mode
+#else
+layout(binding = 0, r32ui) uniform uimage2D u_heads;
+layout(std430, binding = 0) buffer nodes_t {
+	node_t u_nodes[];
+};
+layout(std430, binding = 1) buffer count_t {
+	uint u_count;
+};
+/* The rank of the draw's first triangle; its blend codes, source | destination << 3 */
+uniform uint u_order, u_mode;
+#define ORDER u_order
+#define MODE u_mode
+#endif
+
+/* Whether blending c gives back every colour below it (pmx_sort.frag's
+ * factors): nothing added, and the colour below kept whole */
+bool
+keeps_below(vec4 c, uint mode)
+{
+	uint s = mode & 7u, d = mode >> 3;
+	bool none = s == 0u || s == 7u || (s == 4u && c.a == 0.0) || (s == 5u && c.a == 1.0);
+	bool whole = d == 1u || d == 6u || (d == 4u && c.a == 1.0) || (d == 5u && c.a == 0.0);
+
+	for (int k = 0; k < 3; k++) {
+		if (!none && c[k] != 0.0)
+			return false;
+		if (!whole && !(d == 2u && c[k] == 1.0) && !(d == 3u && c[k] == 0.0))
+			return false;
+	}
+	return true;
+}
+#endif
 
 #ifdef NATIVE
 /* Native 2D, as in mesh.frag: whether c is inside edge a-b, or on an edge
@@ -116,6 +184,9 @@ main()
 		v_offset += dx1 * d.x + dy1 * d.y;
 		v_uv += dx2 * d.x + dy2 * d.y;
 	}
+#elif defined(GL_ES)
+	v_color = e_color / e_w;
+	v_offset = e_offset / e_w;
 #endif
 	/* Bits 0-3: textured, use alpha, ignore texture alpha, offset. Bits
 	 * 4-5: shading. */
@@ -141,5 +212,23 @@ main()
 	}
 	if ((FLAGS & 8) != 0)
 		color.rgb = min(color.rgb + v_offset.rgb, vec3(1.0));
+#ifdef LIST
+	/* HEURISTIC: rounded to the nearest 8 bits; PG p. 120 gives the
+	 * width, not the rounding */
+	uint bits = packUnorm4x8(color);
+
+	if (keeps_below(unpackUnorm4x8(bits), MODE))
+		return;
+
+	uint n = atomicAdd(u_count, 1u);
+
+	if (n < uint(u_nodes.length())) {
+		u_nodes[n].color = bits;
+		u_nodes[n].depth = gl_FragCoord.z;
+		u_nodes[n].next = imageAtomicExchange(u_heads, ivec2(gl_FragCoord.xy), n + 1u);
+		u_nodes[n].order = (ORDER + uint(gl_PrimitiveID)) << 6 | MODE;
+	}
+#else
 	o_color = color;
+#endif
 }

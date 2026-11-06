@@ -46,6 +46,16 @@ pad_shown(const MenuState &state)
 	return {};
 }
 
+/* The device a player has among those shown (0: none) */
+SDL_JoystickID
+seated_id(const std::vector<MenuState::Plugged> &devices, unsigned player)
+{
+	for (const MenuState::Plugged &one : devices)
+		if (one.player == static_cast<int>(player & 1))
+			return one.id;
+	return 0;
+}
+
 /* A setting as odin.ini keeps it: none when it is the one by default */
 std::optional<std::string>
 kept_number(unsigned value, unsigned standard)
@@ -67,7 +77,7 @@ MenuSession::game_shown() const
 	const MenuState &state = m_menu_state;
 
 	return state.shown < state.games.size() ? state.games[state.shown].first :
-	       m_board ? m_board->game_name() : std::string();
+	       m_running ? m_running->game_name() : std::string();
 }
 
 /* Another game in the page Input: a panel of its own, made from the list
@@ -83,12 +93,16 @@ MenuSession::show_game(size_t game)
 	state.catching.reset();
 	state.catch_next.clear();
 	m_other.reset();
-	if (!other)
+	m_devices_of_other = other.has_value();
+	if (!other) {
+		for (unsigned player = 0; player < 2; player++)
+			state.input_device[player] = m_controls.device(player);
 		return;
+	}
 	m_other_controls = other->controls;
 	m_other_outputs = other->outputs;
 	m_other_shakes = other->shakes();
-	m_other_forces = other->drive_first_output != 0;
+	m_other_forces = other->drive_first_output != 0 || other->wheel_motor;
 	m_other_cabinets = other->cabinets;
 	m_other_shakers = { other->shaker(0), other->shaker(1) };
 	m_other_experimental = { other->shaker_experimental(0), other->shaker_experimental(1) };
@@ -96,6 +110,27 @@ MenuSession::show_game(size_t game)
 	m_other_title = other->title;
 	m_other.emplace(m_other_controls, m_settings, other->name);
 	m_other->set_wheel_rotation(wheel_rotation_of(m_settings, other->name));
+}
+
+SDL_JoystickID
+MenuSession::joystick_shown(unsigned player) const
+{
+	if (!m_other)
+		return m_controls.joystick_id(player);
+	return seated_id(m_menu_state.joysticks, player);
+}
+
+HostState
+MenuSession::host_shown() const
+{
+	HostState host = m_controls.host_state();
+
+	if (m_other)
+		for (unsigned player = 0; player < 2; player++) {
+			host.pads[player] = m_controls.gamepad_state(seated_id(m_menu_state.plugged, player));
+			host.joys[player] = m_controls.joystick_state(joystick_shown(player));
+		}
+	return host;
 }
 
 /* The display as it is now: F11 may have changed it */
@@ -126,7 +161,7 @@ MenuSession::fill_inputs(MenuState &state)
 	state.touched.clear();
 	state.now.clear();
 	{
-		const HostState host = m_controls.host_state();
+		const HostState host = host_shown();
 
 		for (size_t c = 0; c < state.panel->controls().size(); c++) {
 			state.now.push_back(state.panel->now(host, c));
@@ -196,7 +231,7 @@ MenuSession::fill_game_shown(MenuState &state)
 	state.light_gun = light_gun_mode_on(m_settings, game_shown());
 	state.sinden_border = sinden_border_of(m_settings, game_shown());
 	/* The wheel the drive board turns, and how hard */
-	state.can_force = m_other ? m_other_forces : m_game && m_game->drive_first_output;
+	state.can_force = m_other ? m_other_forces : m_game && (m_game->drive_first_output || m_game->wheel_motor);
 	state.steers = steers_of(panel_shown().controls());
 	state.wheel_force = wheel_force_of(m_settings, game_shown());
 	state.wheel_rotation = wheel_rotation_of(m_settings, game_shown());
@@ -227,7 +262,7 @@ MenuSession::fill_game_shown(MenuState &state)
 	 * gun a vibration goes to */
 	state.outputs.clear();
 	for (const GameOutput &output : m_other || !m_game ? m_other_outputs : m_game->outputs)
-		state.outputs.push_back({ output.name, output.role, !m_other && m_board && output.on(m_board->io_outputs()),
+		state.outputs.push_back({ output.name, output.role, !m_other && m_running && output.on(m_running->io_outputs()),
 		                          output.id,
 		                          output_route_of(m_settings, game_shown(), output.id, false).value_or(OutputRoute{}) });
 	if (m_outputs) {
@@ -236,13 +271,14 @@ MenuSession::fill_game_shown(MenuState &state)
 	}
 }
 
-/* The network board of the game that runs, as it is linked now */
+/* The link of the game that runs, as it is now: the network board of a
+ * Hikaru, the cable of a Gaelco board */
 void
 MenuSession::fill_link(MenuState &state)
 {
-	state.link_running = m_board != nullptr;
-	if (m_board) {
-		const Hikaru::LinkStatus link = m_board->link_status();
+	state.link_running = m_running != nullptr;
+	if (m_running) {
+		const Board::LinkStatus link = m_running->link_status();
 
 		state.link_board_now = link.board;
 		state.link_linked = link.linked;
@@ -287,6 +323,27 @@ MenuSession::fill_devices(MenuState &state)
 
 	list(state.plugged, m_controls.plugged(), "p", true);
 	list(state.joysticks, m_controls.joysticks(), "joy", false);
+
+	/* The light guns, of the game shown */
+	if (Pointers *const pointers = m_controls.pointers())
+		pointers->poll();
+	light_guns(game_shown(), panel_shown().controls(), state.guns, state.gun, state.sights);
+
+	/* A game that does not run shows the device each player would play it
+	 * with: as Controls::device(), from its settings and what they seat */
+	if (m_devices_of_other) {
+		m_devices_of_other = false;
+		for (unsigned player = 0; player < 2; player++) {
+			const auto seated = [player](const std::vector<MenuState::Plugged> &devices) {
+				return std::any_of(devices.begin(), devices.end(),
+				                   [player](const MenuState::Plugged &one) { return one.player == static_cast<int>(player); });
+			};
+			const std::optional<InputDevice> chosen = device_chosen(m_settings, game_shown(), player);
+
+			state.input_device[player] = state.gun_of(player) ? InputDevice::KEYBOARD :
+			                             device_of(chosen, state.steers, seated(state.plugged), seated(state.joysticks));
+		}
+	}
 	/* A player without the device shown is shown on the keyboard */
 	for (unsigned player = 0; player < 2; player++) {
 		const std::vector<MenuState::Plugged> &shown =
@@ -304,13 +361,8 @@ MenuSession::fill_devices(MenuState &state)
 	/* What moves says so as it is drawn */
 	state.moving = false;
 
-	/* The light guns, of the game shown */
-	if (Pointers *const pointers = m_controls.pointers())
-		pointers->poll();
-	light_guns(game_shown(), panel_shown().controls(), state.guns, state.gun, state.sights);
-
 	/* What the light gun of each player presses now, lit on its drawing */
-	const HostState host = m_controls.host_state();
+	const HostState host = host_shown();
 
 	for (unsigned player = 0; player < 2; player++) {
 		const LightGun *const gun = state.gun_of(player);
@@ -356,7 +408,9 @@ MenuSession::do_asked(MenuState &state)
 		 * device they had */
 		if (!gun.identity.empty())
 			state.input_device[player] = MenuState::Device::KEYBOARD;
-		else if (!state.device_picked && !m_other)
+		else if (!state.device_picked && m_other)
+			m_devices_of_other = true;
+		else if (!state.device_picked)
 			state.input_device[player] = m_controls.device(player);
 		state.want_gun.reset();
 		m_menu_pictures = MENU_PICTURES;
@@ -523,8 +577,13 @@ MenuSession::apply_sound(const MenuState &was)
 	for (size_t g = 0; g < now.sound_games.size() && g < was.sound_games.size(); g++) {
 		const SoundGame &game = now.sound_games[g], &before = was.sound_games[g];
 		const std::string section = "sound." + game.name;
-		const bool runs = m_game && game.name == m_game->name && m_audio;
+		const bool runs = m_game && game.name == m_game->family() && m_audio;
 
+		if (game.start != before.start && game.start >= 0)
+			keep(section, "start_volume",
+			     game.start == START_VOLUME_STANDARD ? std::nullopt : std::optional<std::string>(START_VOLUMES[game.start]));
+		if (!game.mixed)
+			continue;
 		if (game.played != before.played) {
 			/* SDL keeps the device open on as many channels as it had:
 			 * four or two again take the game started again */
@@ -543,7 +602,16 @@ MenuSession::apply_sound(const MenuState &was)
 			std::snprintf(db, sizeof(db), "%g", static_cast<double>(game.level));
 			if (runs)
 				m_audio->set_option_level(game.level);
-			keep(section, "option_level", game.level == game.standard ? std::nullopt : std::optional<std::string>(db));
+			keep(section, game.woofer ? "woofer_level" : "option_level",
+			     game.level == game.standard ? std::nullopt : std::optional<std::string>(db));
+		}
+		if (game.cutoff != before.cutoff && game.woofer) {
+			const char *const cutoff = WOOFER_CUTOFFS[game.cutoff];
+
+			if (runs)
+				m_audio->set_woofer(*woofer_hz_named(cutoff));
+			keep(section, "woofer_cutoff",
+			     game.cutoff == game.cutoff_standard ? std::nullopt : std::optional<std::string>(cutoff));
 		}
 	}
 }
@@ -725,7 +793,7 @@ MenuSession::keep_wheel_force(const std::string &game, int percent, bool runs)
 	     percent == WHEEL_FORCE ? std::nullopt : std::optional<std::string>(std::to_string(percent)));
 }
 
-/* [players.<game>] wheel_rotation: a line only when another than 270 */
+/* [players.<game>] wheel_rotation: a line only when another than WHEEL_ROTATION */
 void
 MenuSession::keep_wheel_rotation(const std::string &game, int degrees, bool runs)
 {

@@ -42,7 +42,7 @@ namespace odin {
  * .glslp file): passes, each a GLSL file with a VERTEX and a FRAGMENT
  * part, each drawing into a texture the next ones read, the last into the
  * window. They run by the rules of the OpenGL renderer of 86Box, which the
- * PC monitors of Lola Retro are written for (filters/lola-retro, from its
+ * filters of Lola Retro are written for (filters/lola-retro, from its
  * folder 86box; its tools/86box-preview.py tells these rules):
  *  - every texture is rounded up to a power of two, its picture in its
  *    lower left corner, the right way up; TexCoord spans the picture;

@@ -522,6 +522,11 @@ MenuKit::icon(ImDrawList *list, Icon icon, ImVec2 at, float side, ImU32 colour)
 		list->AddLine(p(2, 10), p(2, 14), colour, w);
 		list->AddLine(p(22, 10), p(22, 14), colour, w);
 		break;
+	case Icon::COIN:
+		/* A coin and its rim */
+		list->AddCircle(p(12, 12), 8.0f * k, colour, 0, w);
+		list->AddCircle(p(12, 12), 5.0f * k, colour, 0, w);
+		break;
 	case Icon::LOCK:
 		list->AddRect(p(5, 11), p(19, 20), colour, 2.0f * k, ImDrawFlags_None, w);
 		list->PathLineTo(p(8, 11));
@@ -1350,6 +1355,19 @@ MenuKit::slider(const char *name, const char *about, float &value, float low, fl
 	ImGui::Dummy({ width, placed.h });
 	ImGui::PopID();
 	return moved;
+}
+
+ImVec2
+MenuKit::custom_row(const char *name, const char *about, float control, float control_h)
+{
+	const float pad = px(ROW_PAD);
+	float width;
+	const ImVec2 at = begin_row(width);
+	const Placed placed = place(at, width, control, control_h, name, about, nullptr);
+
+	ImGui::SetCursorScreenPos(at);
+	ImGui::Dummy({ width, placed.h });
+	return { at.x + width - pad - control, placed.top };
 }
 
 ImVec2

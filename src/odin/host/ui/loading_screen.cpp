@@ -172,4 +172,20 @@ LoadingScreen::layout(std::string_view title, unsigned done, unsigned total)
 	return rects;
 }
 
+std::vector<LoadingRect>
+LoadingScreen::placed(std::string_view title, unsigned done, unsigned total, unsigned x, unsigned y, unsigned w,
+                      unsigned h)
+{
+	std::vector<LoadingRect> rects;
+
+	for (const LoadingRect &r : layout(title, done, total)) {
+		const unsigned x0 = x + r.x * w / WIDTH, x1 = x + (r.x + r.w) * w / WIDTH;
+		const unsigned y0 = y + r.y * h / HEIGHT, y1 = y + (r.y + r.h) * h / HEIGHT;
+
+		if (x1 > x0 && y1 > y0)
+			rects.push_back({ x0, y0, x1 - x0, y1 - y0, r.shade });
+	}
+	return rects;
+}
+
 } /* namespace odin */

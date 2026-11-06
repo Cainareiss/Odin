@@ -56,7 +56,7 @@ namespace {
 std::optional<Game>
 load_or_tell(const Options &options, const std::string &name, const GameList &games, const Settings &settings)
 {
-	RomFiles files(options.roms_of(games.machine(name)), options.bios_path);
+	RomFiles files(options.rom_path, options.bios_path);
 	std::optional<Game> loaded = games.load_game(files, name);
 
 	if (loaded) {
@@ -80,40 +80,22 @@ load_or_tell(const Options &options, const std::string &name, const GameList &ga
 	return loaded;
 }
 
-/* The sound of a game: the mode of -o, else of [sound.<game>], else the
- * mix where its cabinet has speakers for the optional board; the optional
- * board in the mix at the level of the list, or of the last lines of
- * [sound.<game>]. None at unthrottled frames, which do not keep time (-u) */
+/* The sound of a game as game_sound says. None at unthrottled frames,
+ * which do not keep time (-u) */
 std::unique_ptr<AudioOut>
 open_sound(Options &options, const Game &game, const Settings &settings)
 {
-	if (!options.sound_asked && game.option_speakers)
-		options.sound = AudioOut::Mode::MIX;
-	for (const auto &[key, value] : settings.section("sound." + game.name))
-		if (key == "mode" && !options.sound_asked && mode_named(value))
-			options.sound = mode_named(value);
-
-	double option_level = game.option_level;
-
-	for (const auto &[key, value] : settings.section("sound." + game.name)) {
-		if (key == "option_level" && level_named(value))
-			option_level = *level_named(value);
-		else if (key == "mode" && mode_named(value))
-			continue;
-		else
-			odin::refuse_setting("sound." + game.name, key, value);
-	}
-
+	const GameSound sound = game_sound(options, game, settings);
 	std::unique_ptr<AudioOut> audio;
 
 	if (options.sound && options.unthrottled && options.sound_asked)
 		std::fprintf(stderr, "sound: not with -u\n");
 	else if (options.sound && !options.unthrottled)
-		audio = AudioOut::make(*options.sound, option_level, options.sound_device);
+		audio = AudioOut::make(*options.sound, sound.level, options.sound_device);
 	if (audio && options.volume != 100)
 		audio->set_volume(static_cast<float>(options.volume) / 100.0f);
-	if (audio && options.sound == AudioOut::Mode::MIX && option_level != 0)
-		std::printf("sound: the optional board at %+g dB in the mix\n", option_level);
+	if (audio && options.sound == AudioOut::Mode::MIX && sound.level != 0)
+		std::printf("sound: the optional board at %+g dB in the mix\n", sound.level);
 	return audio;
 }
 
@@ -121,24 +103,6 @@ open_sound(Options &options, const Game &game, const Settings &settings)
  * end; the game of an archive Open... gave in `opened`. The options of the
  * command line and odin.ini hold for it, what it changes of them for itself
  * does not stay. */
-class HikaruGame final : public GameBoard {
-public:
-	explicit HikaruGame(Hikaru &board) : m_board(board) {}
-
-	const std::string &game_name() const override { return m_board.game_name(); }
-	unsigned frame() const override { return m_board.frame(); }
-	void run_frame() override { m_board.run_frame(); }
-	bool restart_asked() const override { return m_board.restart_asked(); }
-	bool save_state(const std::string &path) override { return m_board.save_state(path); }
-	bool load_state(const std::string &path) override { return m_board.load_state(path); }
-	std::span<const uint8_t> io_outputs() const override { return m_board.io_outputs(); }
-	const std::vector<int16_t> &sound(bool optional) const override { return m_board.sound(optional); }
-	std::optional<int> drive_torque() const override { return m_board.drive_torque(); }
-
-private:
-	Hikaru &m_board;
-};
-
 Ended
 play(const Options &given, const std::string &name, const GameList &games, Settings &settings,
      const std::string &settings_file, Display &display, Keyboard &keys, Pointers *pointers, Opened &opened)
@@ -212,10 +176,8 @@ play(const Options &given, const std::string &name, const GameList &games, Setti
 	Ended ended = Ended::FAILED;
 
 	if (started) {
-		HikaruGame running(*board);
-		Session session(options, *game, running, board.get(), display, keys, controls, audio.get(), std::move(outputs),
-		                network,
-		                settings, settings_file, games);
+		Session session(options, *game, *board, board.get(), display, keys, controls, audio.get(),
+		                std::move(outputs), network, settings, settings_file, games);
 
 		std::printf("Running\n");
 		ended = session.run();
@@ -271,10 +233,12 @@ print_banner()
 }
 
 /* odin.ini of the user (of this folder for a portable Odin; the one of -c),
- * each key Odin knows written in it; its path, empty when there is none */
+ * each key Odin knows written in it; its path, empty when there is none.
+ * A version of a game keeps its settings in its parent's sections. */
 std::string
 load_settings(Settings &settings, const GameList &games, const std::string &chosen)
 {
+	settings.versions(games.parents());
 	if (const std::string portable = portable_folder(); !portable.empty())
 		std::printf("portable: the files of this Odin in '%s'\n", portable.c_str());
 
@@ -368,7 +332,7 @@ main(int argc, char **argv)
 
 		odin::Options launch = options;
 		if (!opened.folder.empty())
-			launch.rom_path = launch.gaelco_path = opened.folder;
+			launch.rom_path = opened.folder;
 		opened = {};
 
 		odin::Ended ended =

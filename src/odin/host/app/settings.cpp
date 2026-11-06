@@ -148,6 +148,27 @@ read_text(const std::string &path)
 	return std::string(bytes->begin(), bytes->end());
 }
 
+/* The game of a section of one ([controls.<game>], players., sound.,
+ * outputs.); none for another */
+std::optional<std::string_view>
+game_of(std::string_view section)
+{
+	const size_t dot = section.find('.');
+	const std::string_view kind = section.substr(0, dot);
+
+	if (dot == std::string_view::npos || (kind != "controls" && kind != "players" && kind != "sound" && kind != "outputs"))
+		return std::nullopt;
+	return section.substr(dot + 1);
+}
+
+/* A section with that key */
+bool
+has_key(const Settings::Lines &lines, const std::string &key)
+{
+	return std::any_of(lines.begin(), lines.end(),
+	                   [&key](const std::pair<std::string, std::string> &line) { return line.first == key; });
+}
+
 } /* namespace */
 
 std::string
@@ -195,13 +216,47 @@ Settings::parse(std::string_view text, const std::string &origin)
 	}
 }
 
-const Settings::Lines &
+std::optional<std::string>
+Settings::parents_section(const std::string &section) const
+{
+	const std::optional<std::string_view> game = game_of(section);
+
+	if (!game)
+		return std::nullopt;
+
+	const auto parent = m_parents.find(std::string(*game));
+
+	return parent == m_parents.end() ? std::nullopt
+	                                 : std::optional(section.substr(0, section.size() - game->size()) + parent->second);
+}
+
+std::vector<std::string>
+Settings::versions_sections(const std::string &section) const
+{
+	const std::optional<std::string_view> game = game_of(section);
+	std::vector<std::string> out;
+
+	if (game)
+		for (const auto &[version, parent] : m_parents)
+			if (parent == *game)
+				out.push_back(section.substr(0, section.size() - game->size()) + version);
+	return out;
+}
+
+Settings::Lines
 Settings::section(const std::string &name) const
 {
-	static const Lines none;
-	const auto found = m_sections.find(name);
+	const auto lines = [this](const std::string &of) {
+		const auto found = m_sections.find(of);
 
-	return found == m_sections.end() ? none : found->second;
+		return found == m_sections.end() ? Lines{} : found->second;
+	};
+	const std::optional<std::string> parents = parents_section(name);
+	Lines out = parents ? lines(*parents) : Lines{};
+	const Lines own = lines(name);
+
+	out.insert(out.end(), own.begin(), own.end());
+	return out;
 }
 
 std::string
@@ -352,9 +407,17 @@ Settings::completed(std::string_view text, const std::vector<Known> &keys)
 void
 Settings::set(const std::string &section, const std::string &key, const std::optional<std::string> &value)
 {
-	Lines &lines = m_sections[section];
+	const std::string into = parents_section(section).value_or(section);
+	const auto take_out = [&key](Lines &lines) {
+		std::erase_if(lines, [&key](const std::pair<std::string, std::string> &line) { return line.first == key; });
+	};
 
-	std::erase_if(lines, [&key](const std::pair<std::string, std::string> &line) { return line.first == key; });
+	for (const std::string &own : versions_sections(into))
+		if (const auto lines = m_sections.find(own); lines != m_sections.end())
+			take_out(lines->second);
+	Lines &lines = m_sections[into];
+
+	take_out(lines);
 	if (value)
 		lines.emplace_back(key, *value);
 }
@@ -368,9 +431,18 @@ Settings::change(const std::string &path, const std::string &section, const std:
 
 	if (!text)
 		return false;
-	if (const Known *const known = known_of(m_known, section, key))
+
+	const std::string into = parents_section(section).value_or(section);
+
+	if (const Known *const known = known_of(m_known, into, key))
 		standard = known->value;
-	return write(path, changed(*text, section, key, value, standard));
+
+	std::string out = changed(*text, into, key, value, standard);
+
+	for (const std::string &own : versions_sections(into))
+		if (const auto lines = m_sections.find(own); lines != m_sections.end() && has_key(lines->second, key))
+			out = changed(out, own, key, std::nullopt);
+	return write(path, out);
 }
 
 bool

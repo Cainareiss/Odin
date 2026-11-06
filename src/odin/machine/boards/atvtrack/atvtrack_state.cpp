@@ -126,8 +126,8 @@ AtvTrack::take_kept(std::span<const uint8_t> kept)
 		const bool flash = chip == KEPT_FLASH;
 		const size_t size = flash ? FLASH_SECTOR : NandBank::BLOCK;
 
-		if (at + size > kept.size() || (flash ? !m_smash || (number + 1) * FLASH_SECTOR > m_program.size()
-		                                      : m_smash || chip >= NandBank::CHIPS || number >= NandBank::PAGES / 32))
+		if (at + size > kept.size() || (flash ? m_program.empty() || (number + 1) * FLASH_SECTOR > m_program.size()
+		                                      : !m_program.empty() || chip >= NandBank::CHIPS || number >= NandBank::PAGES / 32))
 			return false;
 		if (flash) {
 			std::copy_n(kept.data() + at, size, m_program.begin() + number * FLASH_SECTOR);
@@ -194,19 +194,23 @@ AtvTrack::save_state(const std::string &path)
 
 	char name[32] = "";
 	const std::vector<uint8_t> nv = kept();
-	const uint32_t read = m_pmx.queue_read();
 	const uint64_t times[] = { m_sh[MASTER]->time(), m_sh[SLAVE]->time() };
 	const uint8_t flags[] = { m_adc_clock, m_dac_asking, m_slave_enabled, m_slave_running, m_ball_clock };
 	const uint32_t words[] = { m_control, m_port_a, m_adc_step, m_adc_command, m_adc_sample, m_dac_time, m_dac_played,
-		                   m_dac_half, m_flash_step, m_gpu_pending, m_gpu_mask, m_ball_edge };
+		                   m_dac_half, m_flash_step, m_ball_edge };
+	const uint16_t motor_words[] = { m_motor_shift, m_motor_lines, m_system };
+	const uint8_t motor_flags[] = { m_motor_clock, m_motor_load };
 
 	std::strncpy(name, m_name.c_str(), sizeof(name) - 1);
 	const bool ok = state.put(name) && state.put(m_frame) && put_bytes(state, m_shared) &&
 	                put_bytes(state, m_master_ram) && put_bytes(state, m_slave_ram) && put_bytes(state, m_gpu_ram) &&
 	                put_bytes(state, m_iregs[MASTER]) && put_bytes(state, m_iregs[SLAVE]) &&
 	                put_bytes(state, m_cache_ram[MASTER]) && put_bytes(state, m_cache_ram[SLAVE]) &&
-	                state.put(m_dac) && state.put(flags) && state.put(words) && state.put(read) &&
-	                state.put(times) && put_cpu(state, *m_sh[MASTER]) && put_cpu(state, *m_sh[SLAVE]) && put_bytes(state, nv);
+	                state.put(m_dac) && state.put(flags) && state.put(words) &&
+	                state.put(m_core.state()) &&
+	                state.put(times) && put_cpu(state, *m_sh[MASTER]) && put_cpu(state, *m_sh[SLAVE]) &&
+	                state.put(m_motors) && state.put(motor_words) && state.put(motor_flags) && state.put(m_platform) &&
+	                put_bytes(state, nv);
 
 	if (!ok)
 		std::fprintf(stderr, "ERROR: save state: cannot write '%s'\n", path.c_str());
@@ -232,13 +236,18 @@ AtvTrack::load_state(const std::string &path)
 	reset();
 
 	uint8_t flags[5];
-	uint32_t words[12], read = 0;
+	uint32_t words[10];
+	uint16_t motor_words[3];
+	uint8_t motor_flags[2];
 	uint64_t times[2] = {};
+	Pmx1Core::State core{};
 	bool ok = state.get(m_frame) && get_bytes(state, m_shared) && get_bytes(state, m_master_ram) &&
 	          get_bytes(state, m_slave_ram) && get_bytes(state, m_gpu_ram) && get_bytes(state, m_iregs[MASTER]) &&
 	          get_bytes(state, m_iregs[SLAVE]) && get_bytes(state, m_cache_ram[MASTER]) &&
 	          get_bytes(state, m_cache_ram[SLAVE]) && state.get(m_dac) && state.get(flags) && state.get(words) &&
-	          state.get(read) && state.get(times) && get_cpu(state, *m_sh[MASTER]) && get_cpu(state, *m_sh[SLAVE]);
+	          state.get(core) && state.get(times) && get_cpu(state, *m_sh[MASTER]) &&
+	          get_cpu(state, *m_sh[SLAVE]) && state.get(m_motors) && state.get(motor_words) && state.get(motor_flags) &&
+	          state.get(m_platform);
 
 	if (ok) {
 		std::vector<uint8_t> nv(state.next_size());
@@ -264,10 +273,13 @@ AtvTrack::load_state(const std::string &path)
 	m_dac_played = words[6];
 	m_dac_half = words[7];
 	m_flash_step = words[8];
-	m_gpu_pending = words[9];
-	m_gpu_mask = words[10];
-	m_ball_edge = words[11];
-	m_pmx.set_queue_read(read);
+	m_ball_edge = words[9];
+	m_motor_shift = motor_words[0];
+	m_motor_lines = motor_words[1];
+	m_system = motor_words[2];
+	m_motor_clock = motor_flags[0];
+	m_motor_load = motor_flags[1];
+	m_core.set_state(core);
 	/* With memory and chips loaded, restore their clocks */
 	m_sh[MASTER]->set_time(times[0]);
 	m_sh[SLAVE]->set_time(times[1]);

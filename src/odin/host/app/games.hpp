@@ -27,7 +27,9 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <span>
 #include <string>
@@ -49,6 +51,14 @@ struct JvsSwitch {
 	uint16_t mask;
 };
 
+/* A switch of a Gaelco board (machine atvtrack or smashdrv): its group, 0
+ * to 3, of the four the FPGA puts on port A of the master, and its bit in
+ * the group, 0 to 7 ("1.4": group 1, bit 4) */
+struct PortSwitch {
+	uint8_t group;
+	uint8_t bit;
+};
+
 /* A control of the cabinet of a game, with the name its INPUT TEST gives
  * it, and what it drives on the JVS I/O board:
  *
@@ -67,10 +77,18 @@ struct JvsSwitch {
  * (roles.hpp), which gives its keys and pad inputs until the player
  * changes them: a role that is pressed or not for a button, one that has a
  * position for an analog channel, "gear" for a lever. "player" : 2 for a
- * control of player 2, player 1 else. */
+ * control of player 2, player 1 else.
+ *
+ * On a Gaelco board a control also says where it goes on the board, as
+ * the test page of its game shows it: a switch its pin ("port" : "1.4"),
+ * an analog control the values its channel of the ADC ("analog", 0 to 3)
+ * takes at its low end and at its high end ("span" : [254, 2]), or the half
+ * of the stick that kicks the ball of the player it is ("ball" : "side",
+ * its low end left, or "forward", its low end up; Gaelco Football). */
 struct GameControl {
 	enum class Type { BUTTON, ANALOG, POSITIONS };
 	enum class Low { LEFT, RIGHT, UP, DOWN, RELEASED, PRESSED };
+	enum class Ball { NONE, SIDE, FORWARD };
 	struct Position {
 		std::string name;
 		std::vector<JvsSwitch> switches;
@@ -110,6 +128,13 @@ struct GameControl {
 	 * inputs of the gamepad ("righttrigger", "a": bindings.hpp), as a
 	 * trigger is the trigger of a nozzle; none: those of the role */
 	std::vector<std::string> keys, pad;
+	/* The part of a known wheel a switch takes in place of its role's
+	 * ("gas", "paddle_left": bindings.hpp), as a pedal of Smashing Drive is
+	 * a switch; empty: the role's */
+	std::string wheel;
+	std::optional<PortSwitch> port;
+	std::optional<std::array<uint8_t, 2>> span;
+	Ball ball = Ball::NONE;
 };
 
 /* The players with a sight among the controls of a game: player 1, then
@@ -135,15 +160,17 @@ steers_of(const std::vector<GameControl> &controls)
 
 /* An output of the I/O board of a cabinet, with the name its OUTPUT TEST
  * or its wiring gives it: "output", 1 to 32 as JVS counts them (output 1
- * is bit 7 of the first byte), and "role", what the host does with it:
- * "rumble", the gamepad of the player shakes while it is on; "mute", the
- * vibration device the optional sound board feeds is still while it is on;
- * "lamp" and "lock" (a solenoid that holds a control), nothing but what
- * every output does: go to other programs when the user asks
- * (outputs_network.hpp). "player" : 2 for one of player 2. "id" as for a
- * control. */
+ * is bit 7 of the first byte; on a Gaelco board, output n is bit n - 1 of
+ * the group 7800 of port A for 1 to 11 (AtvTrack::system_pins; bits 11-15
+ * pick the group), channel n - 17 of the motor DAC running for 17 to 20),
+ * and "role", what the host does with it: "rumble", the gamepad of the
+ * player shakes while it is on; "mute", the vibration device the optional sound board feeds is still
+ * while it is on; "lamp", "lock" (a solenoid that holds a control) and
+ * "counter" (a coin counter), nothing but what every output does: go to
+ * other programs when the user asks (outputs_network.hpp). "player" : 2
+ * for one of player 2. "id" as for a control. */
 struct GameOutput {
-	enum class Role { LAMP, LOCK, RUMBLE, MUTE };
+	enum class Role { LAMP, LOCK, RUMBLE, MUTE, COUNTER };
 
 	std::string name;
 	std::string id;
@@ -158,16 +185,32 @@ struct GameOutput {
 	}
 };
 
-/* Whether an output of the list with that role is on, of that player (0
- * or 1) or of either (-1) */
+/* Whether an output of the list with that role is on */
 inline bool
-any_on(const std::vector<GameOutput> &list, GameOutput::Role role, std::span<const uint8_t> outputs, int player = -1)
+any_on(const std::vector<GameOutput> &list, GameOutput::Role role, std::span<const uint8_t> outputs)
 {
 	for (const GameOutput &output : list)
-		if (output.role == role && (player < 0 || output.player == player) && output.on(outputs))
+		if (output.role == role && output.on(outputs))
 			return true;
 	return false;
 }
+
+/* A part of the sound of the cabinet, as the page Audio draws it: "part"
+ * (speaker, woofer, shaker, or unwired, a channel of the board with no
+ * part on the cabinet), "at" (its place in the drawing, none when
+ * unwired), what feeds it ("board": main or option, or "channel": 0 to 3
+ * of a Gaelco board's DAC), "cabinet" (only on that model of the list's
+ * "cabinets", or on the "standard" one). */
+struct SoundPart {
+	enum class Kind : uint8_t { SPEAKER, WOOFER, SHAKER, UNWIRED };
+	enum class Place : uint8_t { NONE, FRONT_LEFT, FRONT_RIGHT, BASE, PANEL, SEAT_LEFT, SEAT_RIGHT, SEAT };
+
+	Kind kind = Kind::SPEAKER;
+	Place at = Place::NONE;
+	bool option = false;
+	int channel = -1;
+	std::string cabinet;
+};
 
 /* The ROM board of a game, what changes from one to another (MAME
  * hikaru.cpp): "eprom_mb", the size of an EPROM, 2 or 4 MB; "315-5881",
@@ -191,10 +234,14 @@ struct Game {
 	std::string title;
 	static constexpr size_t MAX_TITLE = 48;
 	std::string machine;
-	/* The game it is a version of (MAME's cloneof), whose pictures it
-	 * takes when it has none: "parent" in the list; none when it does not
-	 * say. */
+	/* The game it is a version of (MAME's cloneof): "parent" in the list;
+	 * none when it does not say. A version is its parent but what its own
+	 * entry says (its name, title and files at least), and takes its
+	 * parent's pictures when it has none. */
 	std::string parent;
+	/* The game whose settings it shares ([controls.<game>]...): its
+	 * parent, or itself */
+	const std::string &family() const { return parent.empty() ? name : parent; }
 	/* The JVS I/O board of its cabinet: "io" in the list, 837-13551 when
 	 * the list does not say. */
 	std::string io_board;
@@ -205,22 +252,47 @@ struct Game {
 	 * none when the list does not say. */
 	std::vector<GameOutput> outputs;
 	/* The switches the wiring of its cabinet ties to the ground, closed
-	 * for good: "grounded" in the list, none when it does not say. */
+	 * for good: "grounded" in the list, none when it does not say; on a
+	 * Gaelco board, pins of its port ("1.6"). */
 	std::vector<JvsSwitch> grounded;
+	std::vector<PortSwitch> grounded_pins;
 	/* The other cabinets the game was sold in, which its program tells
 	 * apart (NASCAR: Deluxe): "cabinets" in the list, [{"id": ..., "name":
 	 * ..., "grounded": [...], "controls": {<id>: {fields in place of those
-	 * of that control}}}]. The cabinet of the list is "standard". */
+	 * of that control}}, "seated": false when it is played standing}]. The
+	 * cabinet of the list is "standard". */
 	struct Cabinet {
 		std::string id, name;
 		std::vector<GameControl> controls;
 		std::vector<JvsSwitch> grounded;
+		std::optional<bool> motion_platform, seated;
+		std::optional<std::vector<GameOutput>> outputs;
+		std::vector<unsigned> grounded_analog;
+		/* A byte of the settings the game keeps in its NAND that this
+		 * cabinet's operator sets in the test menu: "nand_setting" in the
+		 * list, {"byte": "0016", "value": 3, "standard": 2}, its value and
+		 * the standard cabinet's (ATV Track's Vibrator: MOTION SYSTEM,
+		 * VIBRATOR and PLATFORM HARD: byte 0x16 of the settings at
+		 * 0x8C1B91F8, which 0x8C05E41C takes as its mode, in Ghidra; 3 and 2
+		 * as the test menu shows them) */
+		struct Setting {
+			uint32_t byte;
+			uint8_t value, standard;
+		};
+		std::optional<Setting> nand_setting;
 	};
 	std::vector<Cabinet> cabinets;
+	/* The ADC channels of a Gaelco board its cabinet ties to the ground,
+	 * which read 0: "grounded_analog" of a cabinet (ATV Track's Vibrator
+	 * has no sensors of a platform) */
+	std::vector<unsigned> grounded_analog;
 	/* The one played: its controls and wiring become those of that cabinet;
 	 * false when the game has no such cabinet */
 	std::string cabinet = "standard";
 	bool use_cabinet(const std::string &id);
+	/* Its optional sound board is wired on the cabinet played: false when
+	 * "sound_parts" leave it unwired there (Star Wars Racer's Mini Deluxe) */
+	bool option_wired() const;
 	/* The 93C46 of the MIE of a new cabinet, the settings of the SYSTEM
 	 * MENU as SEGA left them: "mie_eeprom" in the list, 128 bytes in
 	 * hexadecimal; empty when the list does not say (a blank chip). */
@@ -242,6 +314,25 @@ struct Game {
 	 * (the control panel of SWRACER): "option_vibration" in the list,
 	 * false when it does not say. */
 	bool option_vibration = false;
+	/* The cabinet has a woofer, fed by the board's second pair of channels
+	 * (the Gaelco boards, AudioOut::woofer_pairs): "woofer" in the list,
+	 * false when it does not say. */
+	bool woofer = false;
+	/* The wheel of player 1 has a motor the board drives (Board::drive_torque,
+	 * the Gaelco boards): "wheel_motor" in the list, false when it does not
+	 * say */
+	bool wheel_motor = false;
+	/* The cabinet stands on a motion platform of two motors, whose
+	 * positions the board reads on its ADC channels 2 and 3 (ATV Track):
+	 * "motion_platform" in the list, false when it does not say */
+	bool motion_platform = false;
+	/* The parts of its sound, for the page Audio: "sound_parts" in the
+	 * list; none when it does not say (a left and a right speaker of the
+	 * main board) */
+	std::vector<SoundPart> sound_parts;
+	/* It is played seated: "seated" in the list, false when it does not
+	 * say */
+	bool seated = false;
 	/* The output of TX0 of the drive board of its cabinet, which takes a
 	 * command on eight outputs from there (drive_board.hpp): "drive_board"
 	 * in the list, {"first_output": 1 to 25}; 0 when it does not say. */
@@ -257,9 +348,13 @@ struct Game {
 	 * of cabinet n is first + n - 1, in bits shift to shift + bits - 1 of
 	 * a byte of the settings of the BOOTROM in the 93C46 of the MIE
 	 * ("in": "mie") or of the block of the game in the backup RAM
-	 * ("backup"), as its test menu writes it (cabinet_settings.hpp). */
+	 * ("backup"), or of the settings of a Gaelco board in its flash ("flash") or NAND ("nand"),
+ * as its test menu writes it (cabinet_settings.hpp). */
 	struct Link {
-		enum class In { NONE, MIE, BACKUP };
+		/* FLASH: the settings Smashing Drive keeps in its program flash
+		 * (AtvTrack::set_flash_setting); NAND: those ATV Track keeps in
+		 * its NAND (set_nand_setting) */
+		enum class In { NONE, MIE, BACKUP, FLASH, NAND };
 
 		unsigned cabinets = 0;
 		In seat_in = In::NONE;
@@ -292,6 +387,15 @@ struct Game {
 	bool shaker_experimental(unsigned player) const;
 };
 
+/* Whether a title comes before another, the case of their letters aside */
+inline bool
+title_before(const std::string &a, const std::string &b)
+{
+	return std::lexicographical_compare(a.begin(), a.end(), b.begin(), b.end(), [](char x, char y) {
+		return std::tolower(static_cast<unsigned char>(x)) < std::tolower(static_cast<unsigned char>(y));
+	});
+}
+
 /* The list of the games, a JSON file (odin-games.json). A game has sections
  * and a section the files that make it up, each with its size, put together
  * as its type tells:
@@ -322,6 +426,8 @@ public:
 	};
 	std::vector<Entry> entries() const;
 	std::vector<std::pair<std::string, std::string>> titles() const;
+	/* The versions of the list, with their parent */
+	std::map<std::string, std::string> parents() const;
 	/* What the list tells of a game, without its files: nothing when it is
 	 * not in the list, or not right */
 	std::optional<Game> describe(const std::string &name) const;
@@ -334,7 +440,8 @@ public:
 	std::optional<Game> load_game(RomFiles &files, const std::string &name) const;
 
 private:
-	static constexpr unsigned VERSION = 1;
+	/* 2: a version takes from its parent what it does not say */
+	static constexpr unsigned VERSION = 2;
 
 	const json_t *find(const std::string &name) const;
 

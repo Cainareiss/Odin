@@ -23,6 +23,7 @@
  */
 
 #include "odin/host/input/controls.hpp"
+#include "odin/host/input/wheels.hpp"
 
 #include "odin/host/audio/audio_out.hpp"
 #include "odin/host/app/options.hpp"
@@ -52,6 +53,8 @@ player_value_right(const std::string &key, const std::string &value)
 		return vibration_force_named(value).has_value();
 	if (key == "wheel_rotation")
 		return wheel_rotation_named(value).has_value();
+	if (key == "device1" || key == "device2")
+		return device_named(value).has_value();
 	if (key == "sinden_border")
 		return on_off_named(value).has_value();
 	if (key == "sinden_border_style")
@@ -81,6 +84,17 @@ choose(std::array<std::string, 2> &wanted, std::array<SDL_JoystickID, 2> &picked
 	picked[player & 1] = one;
 	if (one && picked[~player & 1] == one)
 		picked[~player & 1] = 0;
+}
+
+/* The device of that id among those open (nullptr: none) */
+template <typename Devices>
+auto
+open_one(Devices &devices, SDL_JoystickID id) -> decltype(&devices.front())
+{
+	for (auto &device : devices)
+		if (id && device.id == id)
+			return &device;
+	return nullptr;
 }
 
 } /* namespace */
@@ -115,14 +129,13 @@ Controls::Controls(Keyboard &keys, const std::vector<GameControl> &controls, con
 			m_guns[key[3] - '1'] = identity_of(value);
 		} else if (key == "joy1" || key == "joy2") {
 			m_joys_wanted[key[3] - '1'] = identity_of(value);
-		} else if ((key == "device1" || key == "device2") && device_named(value)) {
-			m_chosen[key[6] - '1'] = device_named(value);
 		} else if (key == "light_gun_mode" && on_off_named(value)) {
 			m_light_gun_mode = *on_off_named(value);
 		} else if (!player_value_right(key, value)) {
 			refuse_setting("players." + game, key, value);
 		}
 	}
+	m_chosen = { device_chosen(settings, game, 0), device_chosen(settings, game, 1) };
 	/* The pads and joysticks already there come as added events; the
 	 * environment may still turn SDL's driver of the Logitech wheels on */
 	SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_LG4FF, "0");
@@ -168,10 +181,7 @@ Controls::~Controls()
 Controls::Pad *
 Controls::find(SDL_JoystickID id)
 {
-	for (Pad &pad : m_pads)
-		if (id && pad.id == id)
-			return &pad;
-	return nullptr;
+	return open_one(m_pads, id);
 }
 
 Controls::Pad *
@@ -192,10 +202,23 @@ Controls::seat(unsigned player) const
 Controls::Joy *
 Controls::find_joystick(SDL_JoystickID id)
 {
-	for (Joy &joy : m_joys)
-		if (id && joy.id == id)
-			return &joy;
-	return nullptr;
+	return open_one(m_joys, id);
+}
+
+const PadState *
+Controls::gamepad_state(SDL_JoystickID id) const
+{
+	const Pad *const pad = open_one(m_pads, id);
+
+	return pad ? &pad->state : nullptr;
+}
+
+const JoyState *
+Controls::joystick_state(SDL_JoystickID id) const
+{
+	const Joy *const joy = open_one(m_joys, id);
+
+	return joy ? &joy->state : nullptr;
 }
 
 const Controls::Joy *
@@ -363,6 +386,7 @@ Controls::open_joystick(SDL_JoystickID id)
 	joy.state.axes.assign(static_cast<size_t>(axes), 0);
 	joy.state.known.assign(static_cast<size_t>(axes), false);
 	joy.state.rest.assign(static_cast<size_t>(axes), 0);
+	joy.state.parts = wheel_parts(SDL_GetJoystickVendor(handle), SDL_GetJoystickProduct(handle));
 	for (int axis = 0; axis < axes; axis++) {
 		Sint16 first = 0;
 
@@ -538,7 +562,7 @@ Controls::turn_wheel(int torque)
 {
 	const Joy *const joy = joystick(0);
 
-	if (!joy || !m_drive_output || !m_rumble || device(0) != InputDevice::JOYSTICK) {
+	if (!joy || !(m_drive_output || m_wheel_motor) || !m_rumble || device(0) != InputDevice::JOYSTICK) {
 		if (m_force)
 			m_force->release();
 		return;
@@ -555,7 +579,8 @@ Controls::turn_wheel(int torque)
 }
 
 void
-Controls::show(std::span<const uint8_t> outputs, std::span<const int16_t> option_sound, std::optional<int> drive_torque)
+Controls::show(std::span<const uint8_t> outputs, std::span<const uint8_t> levels, std::span<const int16_t> option_sound,
+               std::optional<int> drive_torque)
 {
 	const Uint64 now = SDL_GetTicks();
 
@@ -596,9 +621,16 @@ Controls::show(std::span<const uint8_t> outputs, std::span<const int16_t> option
 	}
 	for (unsigned player = 0; player < 2; player++) {
 		Pad *const seated = seat(player);
-		/* Only the device the player plays with shakes */
-		const bool on = m_rumble && any_on(m_outputs, GameOutput::Role::RUMBLE, outputs, static_cast<int>(player));
-		const int shake = device(player) == InputDevice::PAD ? std::max<Uint16>(on ? RUMBLE : 0, player ? 0 : felt) : 0;
+		/* Only the device the player plays with shakes, as hard as the
+		 * hardest of its rumble outputs that are on drives */
+		unsigned level = 0;
+
+		for (const GameOutput &output : m_outputs)
+			if (m_rumble && output.role == GameOutput::Role::RUMBLE && output.player == player && output.on(outputs))
+				level = std::max(level, output.output <= levels.size() ? levels[output.output - 1] : 255u);
+
+		const Uint16 driven = static_cast<Uint16>(RUMBLE * level / 255 / FELT_STEP * FELT_STEP);
+		const int shake = device(player) == InputDevice::PAD ? std::max<Uint16>(driven, player ? 0 : felt) : 0;
 		const Uint16 strength = static_cast<Uint16>(std::min(shake * m_vibration_force / 100, 0xFFFF));
 
 		shake_gun(player, gun_run[player], gun_kick[player]);

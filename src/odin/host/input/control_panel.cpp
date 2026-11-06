@@ -190,17 +190,40 @@ ControlPanel::channel(const JoyInput &input, GameControl::Low low, int16_t value
 	return channel(axis, low, input.inverted ? static_cast<int16_t>(~value) : value);
 }
 
+namespace {
+
+/* An input of a joystick as it is on that one: a part of a known wheel as
+ * that wheel's own input, nullptr where the wheel has none */
+const JoyInput *
+own_input(const JoyState &joy, const JoyInput &input)
+{
+	if (input.type != JoyInput::Type::PART)
+		return &input;
+
+	const auto &part = joy.parts[input.part % WHEEL_PARTS];
+
+	return part ? &*part : nullptr;
+}
+
+} /* namespace */
+
 std::optional<uint16_t>
 ControlPanel::joy_channel(const JoyState *joy, const JoyInput &input, const GameControl &control) const
 {
-	if (!joy || input.type != JoyInput::Type::AXIS || input.index >= joy->axes.size() || !joy->known[input.index])
+	const JoyInput *const own = joy ? own_input(*joy, input) : nullptr;
+
+	/* A pedal that is a button (some Thrustmaster wheels): all its way */
+	if (own && own->type == JoyInput::Type::BUTTON && input.type == JoyInput::Type::PART &&
+	    control.low == GameControl::Low::RELEASED)
+		return own->index < joy->buttons.size() && joy->buttons[own->index] ? 0xFFFF : 0x0000;
+	if (!own || own->type != JoyInput::Type::AXIS || own->index >= joy->axes.size() || !joy->known[own->index])
 		return std::nullopt;
 
-	const int16_t value = joy->axes[input.index];
+	const int16_t value = joy->axes[own->index];
 
 	if (control.role != Role::STEER)
-		return channel(input, control.low, value);
-	return channel(input, control.low, axis_value(value * m_steer_scale));
+		return channel(*own, control.low, value);
+	return channel(*own, control.low, axis_value(value * m_steer_scale));
 }
 
 uint16_t
@@ -247,10 +270,15 @@ ControlPanel::held(const HostState &host, const HostInput &input, unsigned playe
 	}
 	if (input.kind == HostInput::Kind::JOY) {
 		const JoyState *const joy = host.joys[player & 1];
-		const JoyInput &in = input.joy;
 		if (!joy)
 			return false;
 
+		const JoyInput *const own = own_input(*joy, input.joy);
+
+		if (!own)
+			return false;
+
+		const JoyInput &in = *own;
 		const bool axis = in.index < joy->axes.size() && joy->known[in.index];
 		switch (in.type) {
 		case JoyInput::Type::BUTTON:
@@ -261,9 +289,16 @@ ControlPanel::held(const HostState &host, const HostInput &input, unsigned playe
 			return axis && joy->axes[in.index] <= -PRESSED;
 		case JoyInput::Type::AXIS_POSITIVE:
 			return axis && joy->axes[in.index] >= PRESSED;
-		case JoyInput::Type::AXIS:
-			/* The bindings give no whole axis to what is pressed */
-			return false;
+		case JoyInput::Type::AXIS: {
+			/* A pedal of a wheel pressed from half its way (HEURISTIC:
+			 * where the cabinet's switches close is not known); else the
+			 * bindings give no whole axis to what is pressed */
+			const int value = axis ? joy->axes[in.index] : 0;
+
+			return axis && input.joy.type == JoyInput::Type::PART && (in.inverted ? -value : value) > 0;
+		}
+		case JoyInput::Type::PART:
+			break;
 		}
 		return false;
 	}

@@ -30,12 +30,26 @@
 layout(triangles) in;
 layout(triangle_strip, max_vertices = 4) out;
 
+/* GLSL ES has no noperspective: pmx.vert gives the colours times w, and w;
+ * the corners below share one w, so that the colours go plain to pmx.frag */
+#ifdef GL_ES
+#define SCREEN_LINEAR
+layout(location = 0) in vec4 v_color[];
+layout(location = 1) in vec4 v_offset[];
+layout(location = 3) in float v_w[];
+#define COLOR(i) (v_color[i] / v_w[i])
+#define OFFSET(i) (v_offset[i] / v_w[i])
+#else
+#define SCREEN_LINEAR noperspective
 layout(location = 0) noperspective in vec4 v_color[];
 layout(location = 1) noperspective in vec4 v_offset[];
+#define COLOR(i) v_color[i]
+#define OFFSET(i) v_offset[i]
+#endif
 layout(location = 2) in vec2 v_uv[];
 
-layout(location = 0) noperspective out vec4 q_color;
-layout(location = 1) noperspective out vec4 q_offset;
+layout(location = 0) SCREEN_LINEAR out vec4 q_color;
+layout(location = 1) SCREEN_LINEAR out vec4 q_offset;
 layout(location = 2) out vec2 q_uv;
 layout(location = 3) flat out vec2 q_corner0;
 layout(location = 4) flat out vec2 q_corner1;
@@ -47,12 +61,13 @@ void
 corner(vec2 at, vec3 w, vec2 c[3])
 {
 	gl_Position = vec4((at / SCREEN * 2.0 - 1.0) * gl_in[0].gl_Position.w, gl_in[0].gl_Position.zw);
-	q_color = w.x * v_color[0] + w.y * v_color[1] + w.z * v_color[2];
-	q_offset = w.x * v_offset[0] + w.y * v_offset[1] + w.z * v_offset[2];
+	q_color = w.x * COLOR(0) + w.y * COLOR(1) + w.z * COLOR(2);
+	q_offset = w.x * OFFSET(0) + w.y * OFFSET(1) + w.z * OFFSET(2);
 	q_uv = w.x * v_uv[0] + w.y * v_uv[1] + w.z * v_uv[2];
 	q_corner0 = c[0];
 	q_corner1 = c[1];
 	q_corner2 = c[2];
+	gl_PrimitiveID = gl_PrimitiveIDIn;
 	EmitVertex();
 }
 

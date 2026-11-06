@@ -37,20 +37,45 @@ namespace odin {
 
 namespace {
 
-/* The file, open after its first line, or nullptr if it is not a list */
+/* The file, open after its first line, or nullptr if it is not a list
+ * with that header */
 std::FILE *
-open_program_list(const std::string &path)
+open_program_list(const std::string &path, const char *header)
 {
-	char line[sizeof(PROGRAM_LIST_HEADER)];
+	char line[64];
 	std::FILE *file = std::fopen(path.c_str(), "r");
 
 	if (!file)
 		return nullptr;
-	if (!std::fgets(line, sizeof(line), file) || std::strcmp(line, PROGRAM_LIST_HEADER) != 0) {
+	if (!std::fgets(line, sizeof(line), file) || std::strcmp(line, header) != 0) {
 		std::fclose(file);
 		return nullptr;
 	}
 	return file;
+}
+
+/* The keys of the list that `valid` takes, in its order */
+template <typename Valid>
+std::vector<uint64_t>
+read_keys(const std::string &path, const char *header, Valid valid)
+{
+	std::FILE *const file = open_program_list(path, header);
+	std::vector<uint64_t> keys;
+	char line[32];
+
+	if (!file)
+		return keys;
+	while (std::fgets(line, sizeof(line), file)) {
+		char *end;
+		const uint64_t key = std::strtoull(line, &end, 16);
+
+		/* Sixteen digits and the end of the line: a line cut short
+		 * by a crash is not a key. */
+		if (end == line + 16 && *end == '\n' && valid(key))
+			keys.push_back(key);
+	}
+	std::fclose(file);
+	return keys;
 }
 
 } /* namespace */
@@ -126,23 +151,17 @@ MeshVariant::from_key(uint64_t key)
 std::vector<uint64_t>
 read_program_list(const std::string &path)
 {
-	std::FILE *const file = open_program_list(path);
-	std::vector<uint64_t> keys;
-	char line[32];
+	return read_keys(path, PROGRAM_LIST_HEADER,
+	                 [](uint64_t key) { return MeshVariant::from_key(key).has_value(); });
+}
 
-	if (!file)
-		return keys;
-	while (std::fgets(line, sizeof(line), file)) {
-		char *end;
-		const uint64_t key = std::strtoull(line, &end, 16);
-
-		/* Sixteen digits and the end of the line: a line cut short
-		 * by a crash is not a key. */
-		if (end == line + 16 && *end == '\n' && MeshVariant::from_key(key))
-			keys.push_back(key);
-	}
-	std::fclose(file);
-	return keys;
+/* Blended: not the lists'; else no blend code */
+std::vector<uint64_t>
+read_pmx_list(const std::string &path)
+{
+	return read_keys(path, PMX_LIST_HEADER, [](uint64_t key) {
+		return key < PMX_KEYS && ((key & 1) ? (key & 0x100) == 0 : (key & 0x7F) == 0);
+	});
 }
 
 ProgramList::~ProgramList()
@@ -152,9 +171,9 @@ ProgramList::~ProgramList()
 }
 
 void
-ProgramList::list_in(const std::string &path)
+ProgramList::list_in(const std::string &path, const char *header)
 {
-	std::FILE *const held = open_program_list(path);
+	std::FILE *const held = open_program_list(path, header);
 
 	if (m_file)
 		std::fclose(m_file);
@@ -164,7 +183,7 @@ ProgramList::list_in(const std::string &path)
 	} else {
 		m_file = std::fopen(path.c_str(), "w");
 		if (m_file) {
-			std::fputs(PROGRAM_LIST_HEADER, m_file);
+			std::fputs(header, m_file);
 			std::fflush(m_file);
 		}
 	}

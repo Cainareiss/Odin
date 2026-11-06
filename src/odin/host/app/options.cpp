@@ -171,8 +171,6 @@ read_paths(const Settings &settings, Options &options)
 		} else if (key == "bios" && !value.empty()) {
 			if (!options.given.bios)
 				options.bios_path = value;
-		} else if (key == "gaelco" && !value.empty()) {
-			options.gaelco_path = value;
 		} else if (key == "saves" && !value.empty()) {
 			options.saves = value;
 		} else if (key == "artwork" && !value.empty()) {
@@ -412,6 +410,47 @@ level_named(const std::string &value)
 	return db;
 }
 
+std::optional<double>
+woofer_hz_named(const std::string &value)
+{
+	if (value == "off")
+		return 0.0;
+	for (const char *hz : WOOFER_CUTOFFS)
+		if (value == hz)
+			return std::strtod(hz, nullptr);
+	return std::nullopt;
+}
+
+GameSound
+game_sound(Options &options, const Game &game, const Settings &settings)
+{
+	const std::string section = "sound." + game.name;
+	const char *const level_key = game.woofer ? "woofer_level" : "option_level";
+	GameSound sound = { game.option_level, game.woofer ? *woofer_hz_named(WOOFER_CUTOFFS[1]) : 0.0 };
+
+	/* Not Star Wars Racer: its optional board drives only the panel
+	 * shaker, felt and not heard on the cabinet (the pad feels it in
+	 * every mode) */
+	if (!options.sound_asked && (game.option_speakers || game.woofer))
+		options.sound = AudioOut::Mode::MIX;
+	for (const auto &[key, value] : settings.section(section)) {
+		if (key == "mode" && mode_named(value)) {
+			if (!options.sound_asked)
+				options.sound = mode_named(value);
+		} else if (key == level_key && level_named(value)) {
+			sound.level = *level_named(value);
+		} else if (key == "woofer_cutoff" && game.woofer && woofer_hz_named(value)) {
+			sound.woofer_hz = *woofer_hz_named(value);
+		} else if (key != "start_volume" || game.machine != "smashdrv") {
+			refuse_setting(section, key, value);
+		}
+	}
+	/* A cabinet that does not wire the optional board plays the main one */
+	if (!options.sound_asked && options.sound && !game.option_wired())
+		options.sound = AudioOut::Mode::MAIN;
+	return sound;
+}
+
 bool
 vibration_on(const Settings &settings, const std::string &game)
 {
@@ -545,6 +584,17 @@ device_named(const std::string &value)
 	return std::nullopt;
 }
 
+std::optional<InputDevice>
+device_chosen(const Settings &settings, const std::string &game, unsigned player)
+{
+	std::optional<InputDevice> chosen;
+
+	for (const auto &[key, value] : settings.section("players." + game))
+		if (key == (player & 1 ? "device2" : "device1") && device_named(value))
+			chosen = device_named(value);
+	return chosen;
+}
+
 std::string
 cabinet_of(const Settings &settings, const std::string &game)
 {
@@ -632,7 +682,7 @@ known_settings(const GameList &games)
 	out.insert(out.end(), { { "outputs", "network", "off" }, { "network", "board", "none" },
 	                        { "network", "port", std::to_string(NetCable::PORT) }, { "network", "next", "" },
 	                        { "network", "cabinet", "1" },
-	                        { "paths", "roms", "" }, { "paths", "bios", "" }, { "paths", "gaelco", "" },
+	                        { "paths", "roms", "" }, { "paths", "bios", "" },
 	                        { "paths", "saves", SaveFolder::root() }, { "paths", "states", default_states() },
 	                        { "paths", "artwork", artwork_folder() }, { "paths", "log", odin_data_dir() },
 	                        { "log", "verbose", "off" }, { "library", "owned_only", "off" },
@@ -649,7 +699,8 @@ known_settings(const GameList &games)
 	for (const auto &[name, title] : games.titles()) {
 		const std::optional<Game> game = games.describe(name);
 
-		if (!game)
+		/* A version: its parent's sections */
+		if (!game || !game->parent.empty())
 			continue;
 		if (game->option_speakers || game->option_vibration) {
 			char db[16];
@@ -658,6 +709,11 @@ known_settings(const GameList &games)
 			out.push_back({ "sound." + name, "mode", game->option_speakers ? "mix" : "main" });
 			out.push_back({ "sound." + name, "option_level", db });
 		}
+		if (game->woofer)
+			out.insert(out.end(), { { "sound." + name, "mode", "mix" }, { "sound." + name, "woofer_level", "0" },
+			                        { "sound." + name, "woofer_cutoff", WOOFER_CUTOFFS[1] } });
+		if (game->machine == "smashdrv")
+			out.push_back({ "sound." + name, "start_volume", START_VOLUMES[START_VOLUME_STANDARD] });
 		for (const auto &[key, value] : ControlPanel(game->controls, Settings(), name).bindings().standard_lines())
 			out.push_back({ "controls." + name, key, value });
 		for (const char *key : { "p1", "p2", "joy1", "joy2", "device1", "device2" })
@@ -676,10 +732,7 @@ known_settings(const GameList &games)
 			out.push_back({ "players." + name, "vibration", "on" });
 			out.push_back({ "players." + name, "vibration_force", std::to_string(VIBRATION_FORCE) });
 		}
-		for (const GameOutput &output : game->outputs)
-			if (output.role == GameOutput::Role::RUMBLE)
-				out.push_back({ "outputs." + name, output.id, "" });
-		if (game->drive_first_output)
+		if (game->drive_first_output || game->wheel_motor)
 			out.push_back({ "players." + name, "wheel_force", std::to_string(WHEEL_FORCE) });
 		if (steers_of(game->controls))
 			out.push_back({ "players." + name, "wheel_rotation", std::to_string(WHEEL_ROTATION) });
@@ -687,6 +740,19 @@ known_settings(const GameList &games)
 			out.push_back({ "players." + name, "cabinet", "standard" });
 		if (!game->card_reader.empty())
 			out.push_back({ "players." + name, "card", "" });
+		std::vector<std::string> rumbles;
+
+		for (const GameOutput &output : game->outputs)
+			if (output.role == GameOutput::Role::RUMBLE)
+				rumbles.push_back(output.id);
+		/* And those of its other cabinets */
+		for (const Game::Cabinet &other : game->cabinets)
+			for (const GameOutput &output : other.outputs.value_or(std::vector<GameOutput>{}))
+				if (output.role == GameOutput::Role::RUMBLE &&
+				    std::find(rumbles.begin(), rumbles.end(), output.id) == rumbles.end())
+					rumbles.push_back(output.id);
+		for (const std::string &id : rumbles)
+			out.push_back({ "outputs." + name, id, "" });
 	}
 	return out;
 }

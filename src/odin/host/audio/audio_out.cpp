@@ -163,6 +163,10 @@ AudioOut::play(std::span<const int16_t> main, std::span<const int16_t> option)
 {
 	const uint32_t n = channels(m_mode);
 
+	if (m_woofer && (m_mode == Mode::MIX || m_mode == Mode::OPTION)) {
+		woofer_pairs(m_mode, option, m_low, m_woofer_frames);
+		option = m_woofer_frames;
+	}
 	interleave(m_mode, main, option, m_option_gain, m_frames);
 	if (m_frames.size() < n)
 		return;

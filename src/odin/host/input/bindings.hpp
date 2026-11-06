@@ -75,23 +75,35 @@ struct MouseInput {
 	bool is_axis() const { return type == Type::X || type == Type::Y; }
 };
 
+/* The parts of a known wheel (wheels.cpp) */
+inline constexpr size_t WHEEL_PARTS = 6;
+inline constexpr const char *WHEEL_PART_NAMES[WHEEL_PARTS] = { "gas", "brake", "paddle_left", "paddle_right", "start",
+                                                               "select" };
+
 /* An input of a joystick that is no gamepad (a wheel, its pedals, its
  * shifter, a flight stick), by its numbers in SDL's joystick API, those
  * EmulationStation gives it on Batocera: "button12"; an axis whole,
  * "axis0", or turned over, "axis2:invert" (a pedal at rest at the top of
  * its axis); half an axis, "-axis1", "+axis1"; a way of a hat, "hat0_up",
- * "_down", "_left", "_right". */
+ * "_down", "_left", "_right"; a part of a known wheel, by its name in
+ * WHEEL_PART_NAMES: its own input on that wheel, none on another
+ * joystick. */
 struct JoyInput {
-	enum class Type { BUTTON, AXIS, AXIS_NEGATIVE, AXIS_POSITIVE, HAT };
+	enum class Type { BUTTON, AXIS, AXIS_NEGATIVE, AXIS_POSITIVE, HAT, PART };
 
 	Type type;
 	uint8_t index;
 	bool inverted = false;	/* a whole axis, turned over */
 	uint8_t way = 0;	/* of a hat: SDL_HAT_UP, _RIGHT, _DOWN or _LEFT */
+	uint8_t part = 0;	/* of a part: its place in WHEEL_PART_NAMES */
 
-	/* A button, half an axis or a way of a hat: pressed or not */
+	/* A button, half an axis, a way of a hat or a part of a wheel (a pedal
+	 * pressed from half its way): pressed or not */
 	bool is_digital() const { return type != Type::AXIS; }
 };
+
+/* The inputs of the parts of one wheel, in the order of WHEEL_PART_NAMES */
+using WheelParts = std::array<std::optional<JoyInput>, WHEEL_PARTS>;
 
 /* The button of the mouse of an SDL button (SDL_BUTTON_LEFT...), -1 for
  * none */
@@ -122,12 +134,12 @@ struct HostInput {
 	static std::string text(const std::vector<HostInput> &inputs);
 	bool operator==(const HostInput &other) const { return text() == other.text(); }
 	/* The axis of a pad or of a joystick, or where the mouse points: a
-	 * channel */
+	 * channel; a part of a wheel too, a pedal (and a button: pressed) */
 	bool is_axis() const
 	{
 		switch (kind) {
 		case Kind::PAD: return pad.type == PadInput::Type::AXIS;
-		case Kind::JOY: return joy.type == JoyInput::Type::AXIS;
+		case Kind::JOY: return joy.type == JoyInput::Type::AXIS || joy.type == JoyInput::Type::PART;
 		case Kind::MOUSE: return mouse.is_axis();
 		case Kind::KEY: break;
 		}

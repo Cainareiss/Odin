@@ -25,6 +25,7 @@
 #ifndef ODIN_SH4_HPP
 #define ODIN_SH4_HPP
 
+#include <optional>
 #include <array>
 #include <cstdint>
 #include <cstring>
@@ -233,6 +234,10 @@ public:
 	 * what was there (see clock_note()). The bus must then read quiet
 	 * pages without side effects. */
 	void set_still_turns(bool on) { m_still_on = on; }
+	/* HEURISTIC: the serial ports send at once, their transmitters always
+	 * empty (the Gaelco boards: their link is not emulated); off, an access
+	 * is reported once, as for any register not emulated */
+	void set_serial_at_once(bool on) { m_serial_at_once = on; }
 
 	/* The state between two calls of run(). */
 	void save(Sh4State &out) const;
@@ -257,6 +262,16 @@ public:
 	uint32_t pr() const { return m_r.pr; }
 	uint32_t gbr() const { return m_r.gbr; }
 	uint32_t sr() const { return m_r.sr | m_r.t; }
+	/* The pins of port A the chip drives: its outputs (PCTRA) */
+	uint16_t port_a_outputs() const;
+	/* The DMA channels a device asks on its DREQ pin, in single address
+	 * mode (CHCR.RS 0010: from memory to the device, 0011: from the device
+	 * to memory), a unit a request: whether channel `ch` takes one now; a
+	 * unit the device gives, written to memory; a unit read from memory for
+	 * the device (none when the channel takes none) */
+	bool dreq_ready(uint32_t ch) const;
+	void dreq_to_memory(uint32_t ch, uint32_t value);
+	std::optional<uint32_t> dreq_from_memory(uint32_t ch);
 
 	/* Counts since the reset, for the measurements. */
 	uint64_t instructions() const { return m_instructions; }
@@ -543,6 +558,7 @@ private:
 	bool clock_still(const ClockTurn &turn) const;
 	bool clock_turn(const ClockTurn &turn, uint32_t value, ClockValues &out);
 	static bool clock_ordered(const ClockTurn &turn, const ClockValues &a, const ClockValues &b);
+	int32_t clock_room(const ClockTurn &turn) const;
 	bool clock_skip(const ClockTurn &turn);
 	void clock_put_back();
 	void clock_noted_read(uint32_t addr, uint32_t size, const void *at);
@@ -553,11 +569,12 @@ private:
 		return m_still_on && addr < 0xE0000000 && m_quiet[(addr & PHYSICAL) >> PAGE_BITS];
 	}
 	static uint32_t &use_of(Regs &r, uint32_t i);
+	static uint32_t value_of(const Regs &r, uint32_t i);
 	/* The end of an instruction run alone for clock_note(): on at `imm`,
 	 * no other block after it */
 	static void op_noted(Sh4 &c, const Sh4Op *op);
 	/* The same registers but those of `free`; the registers that differ */
-	static bool same_but(const Regs &a, const Regs &b, uint64_t free);
+	static bool same_but(const Regs &a, const Regs &b, uint64_t free, bool interrupt_free = false);
 	static uint64_t differ_of(Regs &a, Regs &b);
 	/* TCNT of a channel at a date, and the counts from a date to another,
 	 * without counting the timers (sh4_onchip.cpp) */
@@ -842,6 +859,7 @@ private:
 	/* Loops that wait on a timer, see clock_wait() */
 	bool m_clock_on;
 	bool m_still_on = false;
+	bool m_serial_at_once = false;
 	ClockNote m_clock_note;
 	std::vector<ClockTurn> m_clock_turns;	/* the last ones found */
 	ClockValues m_clock_values[2];

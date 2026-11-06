@@ -72,8 +72,7 @@ FIRST START
    pharrier, sgnascar, sgnascaro, swracer, von4. Two shared sets are
    needed too, in the same folder (or in a BIOS folder): hikaru and mie.
    The Gaelco games (atvtrack, atvtracka, gfootbal, smashdrv, smashdrvb,
-   smashdrvs) go in a folder of their own, the gaelco folder of page Paths,
-   or in the same folder without one. They need no shared set, and keep
+   smashdrvs) go in the same folder. They need no shared set, and keep
    their operator settings and scores in kept.bin in their saves folder.
 
 2. Start Odin. Its library shows the games. Click "Games folder..." and
@@ -153,11 +152,15 @@ gun's serial port (uucp or dialout).
 WHEELS
 ------
 
-NASCAR is the game with a wheel: one player per cabinet, so one wheel per
-Odin (link cabinets to race each other). Choose the wheel on the page
-Input; click a control there, then move the pedal or press the button you
-want for it. A wheel with force feedback turns as the game asks. Set how
-far it turns (Wheel rotation) and how hard (Wheel force) in its options on
+NASCAR, ATV Track and Smashing Drive steer with a wheel: one player per
+cabinet, so one wheel per Odin (link cabinets to race each other). Choose
+the wheel on the page Input. A known wheel (Logitech G25 to G923,
+Thrustmaster T150 or T300, MOZA R12 and others, from Batocera's list; only
+the G29 was tried) comes with its pedals, paddles, Start and Select set. On
+another, only the steering: click a control there, then move the pedal or
+press the button you want for it. A wheel with force feedback turns as the
+game asks. Set how far it turns (Wheel rotation: Full, its whole turn,
+unless you choose an angle) and how hard (Wheel force) in its options on
 the page Input. On Linux your user must be in the group input for the
 force feedback.
 

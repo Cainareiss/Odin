@@ -123,10 +123,15 @@ public:
 	 * compiled */
 	unsigned read_back() const { return m_read_back; }
 	unsigned compiled() const { return m_compiled; }
+	/* The program of these sources (with a geometry shader, unless its
+	 * text is empty), kept under that name in the folder: the one kept,
+	 * when this driver made it from them and takes it back, else compiled
+	 * and kept */
+	GLuint link(const std::string &name, const std::string &vertex, const std::string &fragment,
+	            const std::string &geometry);
 
 private:
 	MeshProgram compile(const MeshVariant &variant);
-	GLuint link(uint64_t key, const std::string &vertex, const std::string &fragment, const std::string &geometry);
 
 	std::unordered_map<uint64_t, MeshProgram> m_programs;
 	ProgramList m_list;

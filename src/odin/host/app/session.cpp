@@ -387,15 +387,17 @@ Session::save_state_at_frame()
 	}
 }
 
-/* Holds the frames at the rate of the board, 60 per second. A frame late
- * by less than two periods is caught up, a longer delay is dropped. */
+/* Holds the frames at the rate of the board: each as long as the board
+ * says (1/60 s, or a frame of a Gaelco board's screen). A frame late by
+ * less than two periods is caught up, a longer delay is dropped. */
 void
 Session::limit_frame_rate()
 {
 	const auto now = std::chrono::steady_clock::now();
+	const std::chrono::nanoseconds frame(m_board.frame_nanoseconds());
 
-	m_next += FRAME;
-	if (now - m_next > 2 * FRAME)
+	m_next += frame;
+	if (now - m_next > 2 * frame)
 		m_next = now;
 	else if (now < m_next)
 		/* Not std::this_thread::sleep_until: with MinGW it sleeps again
@@ -453,7 +455,7 @@ Session::frames()
 		m_board.run_frame();
 		if (const std::string news = m_menus.card_news(); !news.empty())
 			say(news);
-		m_controls.show(m_board.io_outputs(), m_board.sound(true), m_board.drive_torque());
+		m_controls.show(m_board.io_outputs(), m_board.output_levels(), shaker_sound(), m_board.drive_torque());
 		if (OutputsNetwork *const outputs = m_menus.outputs())
 			outputs->show(m_board.io_outputs());
 		if (m_audio)
@@ -480,6 +482,20 @@ Session::frames()
 			limit_frame_rate();
 	}
 	return Ended::QUIT;
+}
+
+std::span<const int16_t>
+Session::shaker_sound()
+{
+	if (!m_shaker_on_main)
+		return m_board.sound(true);
+
+	const std::vector<int16_t> &main = m_board.sound(false);
+
+	m_seat.resize(main.size());
+	for (size_t i = 0; i + 1 < main.size(); i += 2)
+		m_seat[i] = m_seat[i + 1] = m_seat_lows(static_cast<int16_t>((main[i] + main[i + 1]) / 2));
+	return m_seat;
 }
 
 } /* namespace odin */

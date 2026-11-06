@@ -213,7 +213,7 @@ public:
 	 * ring (the link) */
 	enum class Icon {
 		NONE, PAD, INPUT, DISPLAY, AUDIO, KEYBOARD, HOTKEYS, OUTPUTS, FOLDER, ABOUT, LAMP, RUMBLE, LOCK, MUTE,
-		LIST, SWAP, DEFAULTS, CLEAR, MAP, UNDO, RUNE, SETTINGS, WHEEL, LINK,
+		COIN, LIST, SWAP, DEFAULTS, CLEAR, MAP, UNDO, RUNE, SETTINGS, WHEEL, LINK,
 	};
 	static void icon(ImDrawList *list, Icon icon, ImVec2 at, float side, ImU32 colour);
 
@@ -322,6 +322,9 @@ public:
 	 * (the value and its unit): true when it moved */
 	bool slider(const char *name, const char *about, float &value, float low, float high, float step, const char *shown,
 	            const char *locked = nullptr, bool off = false);
+	/* A row whose control the caller draws, `control` wide and `control_h`
+	 * high: the top left corner it gets, beside the texts or under them */
+	ImVec2 custom_row(const char *name, const char *about, float control, float control_h);
 	/* A title and a text under it, with no frame */
 	void paragraph(const char *title, const char *text);
 	/* A key drawn: its name in a cap, the outline clear when `used`, lit

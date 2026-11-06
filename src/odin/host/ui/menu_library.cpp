@@ -49,7 +49,7 @@ namespace {
 /* In points: the margin of the window, the gap between the tiles and
  * before the sheet, what is inside a tile and the sheet; the share of the
  * width the sheet takes; a tile as the screen of the game is (4:3), three
- * on a row at most; the cuts of the corners */
+ * to eight on a row; the cuts of the corners */
 constexpr float MARGIN = 16.0f;
 constexpr float GAP = 12.0f;
 constexpr float TILE_INSIDE = 7.0f;
@@ -58,6 +58,7 @@ constexpr float SHEET_SHARE = 0.31f;
 constexpr float TILE_W = 4.0f;
 constexpr float TILE_H = 3.0f;
 constexpr int COLUMNS = 3;
+constexpr int MOST_COLUMNS = 8;
 constexpr float TILE_CUT = 5.0f;
 constexpr float SHEET_CUT = 8.0f;
 /* A game that cannot be played: its picture that dim */
@@ -69,6 +70,20 @@ constexpr float TITLE_SPACING = 0.2f;
 constexpr float LINE_ALPHA = 0.7f;
 constexpr float LINE_FADE = 0.2f;
 constexpr float SHEET_TITLE = 1.35f;
+
+/* A system of LibraryState::systems as the library names it */
+std::string
+system_name(const std::string &system)
+{
+	if (system == "hikaru")
+		return "SEGA Hikaru";
+
+	std::string name = system;
+
+	if (!name.empty())
+		name[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(name[0])));
+	return name;
+}
 
 /* The game chosen to be played, when its files are all there */
 void
@@ -267,22 +282,63 @@ Menu::build_library(LibraryState &state, BarState &bar_state)
 	MenuKit::fading_line(list, margin, room.x - margin, under, kit.stroke() * 2.0f,
 	                     MenuKit::alpha(palette.accent, LINE_ALPHA), LINE_FADE);
 
-	/* The tiles at the left, as large as COLUMNS on a row and their rows in
-	 * the height allow; the sheet at the right */
+	/* The tiles at the left, each system on rows of its own under its name
+	 * when the list has several, as many on a row (COLUMNS at least) as
+	 * makes them largest in the room the rows and names leave. The sheet at
+	 * the right. */
+	struct Group {
+		std::string system;
+		int first_row, games;
+	};
+	const bool grouped = state.systems.size() > 1;
 	const float top = under + kit.px(14.0f), bottom = room.y - margin;
 	const float sheet_w = std::round((room.x - 2.0f * margin) * SHEET_SHARE);
 	const float grid_w = room.x - 2.0f * margin - sheet_w - gap;
-	const float rows = static_cast<float>(std::max(1, (count + COLUMNS - 1) / COLUMNS));
-	const float columns = static_cast<float>(COLUMNS);
-	float tile_w = (grid_w - (columns - 1.0f) * gap) / columns;
-	float tile_h = tile_w * TILE_H / TILE_W;
+	const float head_h = std::round(line + kit.px(12.0f));
+	std::vector<Group> groups;
+	std::vector<std::pair<int, int>> spots;	/* row, column of each tile */
+	/* The tiles laid that many on a row; how wide each is then */
+	const auto lay = [&](int columns) {
+		int row = -1, column = columns;
 
-	if (rows * tile_h + (rows - 1.0f) * gap > bottom - top) {
-		tile_h = (bottom - top - (rows - 1.0f) * gap) / rows;
-		tile_w = tile_h * TILE_W / TILE_H;
-	}
-	tile_w = std::floor(tile_w);
-	tile_h = std::floor(tile_h);
+		groups.clear();
+		spots.clear();
+		for (const LibraryState::Game &game : state.games) {
+			if (grouped && (groups.empty() || groups.back().system != game.system)) {
+				groups.push_back({ game.system, row + 1, 0 });
+				column = columns;
+			}
+			if (column == columns) {
+				row++;
+				column = 0;
+			}
+			spots.emplace_back(row, column++);
+			if (grouped)
+				groups.back().games++;
+		}
+
+		const float rows = static_cast<float>(std::max(1, row + 1)), across = static_cast<float>(columns);
+		const float heads = static_cast<float>(groups.size()) * head_h;
+		const float high = (bottom - top - heads - (rows - 1.0f) * gap) / rows;
+
+		return std::floor(std::min((grid_w - (across - 1.0f) * gap) / across, high * TILE_W / TILE_H));
+	};
+	int columns = COLUMNS;
+
+	for (int more = COLUMNS + 1; more <= MOST_COLUMNS; more++)
+		if (lay(more) > lay(columns))
+			columns = more;
+
+	const float tile_w = lay(columns), tile_h = std::floor(tile_w * TILE_H / TILE_W);
+
+	/* The top of a row, under the names of the systems that start there or
+	 * above */
+	const auto row_y = [&](int r) {
+		const auto named =
+			std::count_if(groups.begin(), groups.end(), [r](const Group &g) { return g.first_row <= r; });
+
+		return top + static_cast<float>(r) * (tile_h + gap) + static_cast<float>(named) * head_h;
+	};
 
 	/* The arrows and the gamepad move the choice, as the tiles lie; Enter
 	 * or its button plays. With a menu of the bar open, they are its own. */
@@ -291,21 +347,24 @@ Menu::build_library(LibraryState &state, BarState &bar_state)
 		const auto pressed = [](ImGuiKey key) { return ImGui::IsKeyPressed(key, true) ? 1 : 0; };
 		const int across = pressed(ImGuiKey_RightArrow) - pressed(ImGuiKey_LeftArrow) + nav.across;
 		const int down = pressed(ImGuiKey_DownArrow) - pressed(ImGuiKey_UpArrow) + nav.down;
-		int chosen = state.selected + across;
+		int chosen = std::clamp(state.selected + across, 0, count - 1);
+		const auto [from_row, from_column] = spots[static_cast<size_t>(chosen)];
+		const int to = from_row + (down > 0) - (down < 0);
 
-		if (down > 0 && chosen + COLUMNS < count)
-			chosen += COLUMNS;
-		if (down < 0 && chosen >= COLUMNS)
-			chosen -= COLUMNS;
-		state.selected = std::clamp(chosen, 0, count - 1);
+		/* Up and down: the tile of the row next to it, in its column or
+		 * the last of a shorter row */
+		for (int i = 0; down && i < count; i++)
+			if (const auto [r, c] = spots[static_cast<size_t>(i)]; r == to && c <= from_column)
+				chosen = i;
+		state.selected = chosen;
 		if (pressed(ImGuiKey_Enter) || pressed(ImGuiKey_KeypadEnter) || nav.press)
 			play_chosen(state);
 	}
 
 	for (int i = 0; i < count; i++) {
 		const LibraryState::Game &game = state.games[static_cast<size_t>(i)];
-		const ImVec2 a = { margin + static_cast<float>(i % COLUMNS) * (tile_w + gap),
-			           top + static_cast<float>(i / COLUMNS) * (tile_h + gap) };
+		const auto [tile_row, tile_column] = spots[static_cast<size_t>(i)];
+		const ImVec2 a = { margin + static_cast<float>(tile_column) * (tile_w + gap), row_y(tile_row) };
 		const ImVec2 b = { a.x + tile_w, a.y + tile_h };
 		const float inside = kit.px(TILE_INSIDE);
 
@@ -359,8 +418,24 @@ Menu::build_library(LibraryState &state, BarState &bar_state)
 		          chosen ? 3.0f : 1.0f);
 	}
 
-	/* The sheet of the game chosen: its title, its name in MAME, what is
-	 * known of it; or what it lacks, where it was looked for, the folders
+	/* The name of each system over its rows, how many games it shows at
+	 * the right, a line under them */
+	for (const Group &group : groups) {
+		const float y = row_y(group.first_row) - head_h;
+		const float right = margin + static_cast<float>(columns) * (tile_w + gap) - gap;
+		std::string name = system_name(group.system);
+		const std::string games = std::to_string(group.games) + (group.games == 1 ? " game" : " games");
+
+		std::transform(name.begin(), name.end(), name.begin(),
+		               [](char c) { return static_cast<char>(std::toupper(static_cast<unsigned char>(c))); });
+		MenuKit::small_caps(list, { margin, y }, palette.dim, name.c_str());
+		list->AddText({ right - ImGui::CalcTextSize(games.c_str()).x, y }, palette.faint, games.c_str());
+		list->AddLine({ margin, y + line + kit.px(3.0f) }, { right, y + line + kit.px(3.0f) }, palette.line,
+		              kit.stroke());
+	}
+
+	/* The sheet of the game chosen: its title, its name in MAME, its
+	 * system, what is known of it; or what it lacks, where it was looked for, the folders
 	 * to choose; how to play it at its foot */
 	const ImVec2 sa = { room.x - margin - sheet_w, top }, sb = { room.x - margin, bottom };
 	const float inside = kit.px(SHEET_INSIDE), x = sa.x + inside, width = sheet_w - 2.0f * inside;
@@ -377,6 +452,8 @@ Menu::build_library(LibraryState &state, BarState &bar_state)
 
 		y += wrapped(list, { x, y }, width, MenuKit::font(SHEET_TITLE), palette.ink, game.title) + kit.px(4.0f);
 		list->AddText({ x, y }, palette.faint, game.name.c_str());
+		y += line + kit.px(2.0f);
+		list->AddText({ x, y }, palette.dim, system_name(game.system).c_str());
 		y += line + kit.px(8.0f);
 		list->AddLine({ x, y }, { x + width, y }, palette.line, kit.stroke());
 		y += kit.px(10.0f);
@@ -385,7 +462,7 @@ Menu::build_library(LibraryState &state, BarState &bar_state)
 		if (state.failed == game.name)
 			y += wrapped(list, { x, y }, width, size, palette.danger,
 			             "It failed to start: see odin.log for why.") + line;
-		const std::string &roms = game.gaelco ? state.gaelco : state.roms;
+		const std::string &roms = state.roms;
 
 		if (roms.empty()) {
 			y += wrapped(list, { x, y }, width, size, palette.ink,
@@ -402,12 +479,12 @@ Menu::build_library(LibraryState &state, BarState &bar_state)
 		}
 		if (!game.missing.empty()) {
 			/* The folders to choose, unless the command line gives them */
-			const char *const games = game.gaelco ? "Gaelco folder..." : "Games folder...";
+			const char games[] = "Games folder...";
 			const char bios[] = "BIOS folder...";
 
 			if (!state.roms_given && !state.choosing) {
 				if (kit.button(games, { x, y }, false))
-					state.choose = game.gaelco ? LibraryState::Folder::GAELCO : LibraryState::Folder::ROMS;
+					state.choose = LibraryState::Folder::ROMS;
 				y += kit.button_size(games).y + kit.px(6.0f);
 			}
 			if (!game.gaelco && !state.bios_given && !state.choosing && !state.roms.empty() &&

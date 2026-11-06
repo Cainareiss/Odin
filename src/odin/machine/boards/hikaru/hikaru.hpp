@@ -39,6 +39,7 @@
 #include <utility>
 #include <vector>
 
+#include "odin/machine/boards/board.hpp"
 #include "odin/machine/cabinet/drive_838_13366.hpp"
 #include "odin/machine/cabinet/netbd_837_13404.hpp"
 #include "odin/machine/cabinet/netbd_ring.hpp"
@@ -66,7 +67,7 @@ class StateFile;
  * a file of their own, runs them a frame at a time and keeps the save
  * states. See hikaru.cpp for the board, hikaru_bus.cpp for what each
  * processor sees, hikaru_state.cpp for the save states. */
-class Hikaru : private MemCtl::Host {
+class Hikaru final : public Board, private MemCtl::Host {
 public:
 	/* What is around the board: its screen and the control panel of the
 	 * cabinet (hikaru_host.hpp) */
@@ -93,14 +94,17 @@ public:
 	FbWrites &framebuffer_writes() { return m_fb_writes; }
 	std::span<const uint8_t> texture_ram(unsigned bank) const { return m_texram[bank]; }
 
-	const std::string &game_name() const { return m_game.name; }
+	const std::string &game_name() const override { return m_game.name; }
 	/* Frames run since power-on */
-	unsigned frame() const { return m_frame; }
+	unsigned frame() const override { return m_frame; }
 	/* The sound of the last frame of the main board, or of the optional
 	 * one: left and right, 44 100 pairs a second */
-	const std::vector<int16_t> &sound(bool optional) const { return m_sound[optional ? SLAVE : MASTER]->samples(); }
+	const std::vector<int16_t> &sound(bool optional) const override
+	{
+		return m_sound[optional ? SLAVE : MASTER]->samples();
+	}
 	/* The outputs of the I/O board of the cabinet (MieBoard::io_outputs) */
-	std::span<const uint8_t> io_outputs() const { return m_mie->io_outputs(); }
+	std::span<const uint8_t> io_outputs() const override { return m_mie->io_outputs(); }
 	/* The card reader of the cabinet (MieBoard::card_reader); none: null.
 	 * The folder of the player's cards: cards in the folder of the saves
 	 * of the game; empty when nothing is kept. */
@@ -109,16 +113,15 @@ public:
 	/* The EPROMs of the ROM board as the bus sees them: the program of the
 	 * game, as the BOOTROM copies it from 0C000000 on */
 	std::span<const uint8_t> program() const { return m_game.section("eprom"); }
-	/* The network board and its cable: whether it has one, linked to
-	 * other Odins, the port it could not open, each end plugged in */
-	struct LinkStatus {
-		bool board = false, linked = false, failed = false, previous = false, next = false;
-	};
-	LinkStatus link_status() const;
+	/* The network board and its cable */
+	LinkStatus link_status() const override;
 	/* The torque the drive board of the cabinet tells its motor, -MOST
 	 * (all to the left) to MOST (all to the right), when it runs its
 	 * program (drive_rom; drive_838_13366.hpp); nothing else */
-	std::optional<int> drive_torque() const { return m_drive ? std::optional(m_drive->torque()) : std::nullopt; }
+	std::optional<int> drive_torque() const override
+	{
+		return m_drive ? std::optional(m_drive->torque()) : std::nullopt;
+	}
 
 	/* Before the power-on: what the board keeps without power comes from
 	 * the files of this folder, over the images that come with the game,
@@ -126,11 +129,11 @@ public:
 	void keep_in(const SaveFolder &saves);
 	/* Power-on */
 	void reset();
-	void run_frame();
+	void run_frame() override;
 	/* The cabinet is to be switched off and on: the game made its
 	 * settings at its first power-on, and its seat is now in them
 	 * (take_cabinet) */
-	bool restart_asked() const { return m_restart_asked; }
+	bool restart_asked() const override { return m_restart_asked; }
 	/* Power-off: what the board keeps without power goes to the disk (false,
 	 * said on stderr, when some could not); and with ODIN_DUMPS=1, for
 	 * looking at them (the tests), the memories to <game>-<memory>.bin in
@@ -140,8 +143,8 @@ public:
 	/* False, with the reason on stderr, if the state could not be written
 	 * or is not one of this game and build; the board is then as after a
 	 * power-on. */
-	bool save_state(const std::string &path);
-	bool load_state(const std::string &path);
+	bool save_state(const std::string &path) override;
+	bool load_state(const std::string &path) override;
 
 private:
 	void run_drive(uint32_t cycles);

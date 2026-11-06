@@ -23,11 +23,10 @@
  * with Odin.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* PMX1 scenes, from the driver's lists (HEURISTIC: not the tiles the PMX
- * builds). Polygon words are PowerVR Series 2: ISP/TSP, TSP and texture
- * control. */
+/* PMX1 scenes, from the region headers and object lists the core builds.
+ * Polygon words are PowerVR Series 2: ISP/TSP, TSP and texture control. */
 
-#include "odin/machine/boards/atvtrack/pmx1.hpp"
+#include "odin/machine/chips/pmx1/pmx1.hpp"
 
 #include <algorithm>
 #include <array>
@@ -44,9 +43,8 @@ namespace odin {
 
 namespace {
 
-constexpr uint32_t VRAM_BASE = 0x18000000;
-constexpr uint32_t PAGE = 4096;
-constexpr uint32_t PAGE_ENTRIES = 0x400;	/* list size units per page */
+/* A 3D address in video RAM; the start of a strip in an object pointer */
+constexpr uint32_t VRAM_MASK = 0x01FFFFFF, START = 0x1FFFFF;
 
 /* The Dreamcast's 4-bit palette format: here 32-bit ARGB, B first in memory */
 constexpr unsigned FORMAT_8888 = 5;
@@ -57,11 +55,10 @@ constexpr uint32_t ISP_NO_Z_WRITE = 1u << 26;
 /* TSP word */
 constexpr uint32_t TSP_USE_ALPHA = 1u << 20, TSP_IGNORE_TEXTURE_ALPHA = 1u << 19;
 
-/* Offset of the largest level of a mipmapped texture, by the log2 of its
- * size: 16-bit texels, and VQ indices */
-constexpr uint32_t MAX_LIST = 1u << 20;
 /* Frames a texture stays on the GPU without being drawn */
 constexpr unsigned KEEP_IMAGES = 600;
+/* Offset of the largest level of a mipmapped texture, by the log2 of its
+ * size: 16-bit texels, and VQ indices */
 constexpr std::array<uint32_t, 11> MIP_16 = { 0x6, 0x8, 0x10, 0x30, 0xB0, 0x2B0, 0xAB0, 0x2AB0, 0xAAB0, 0x2AAB0, 0xAAAB0 };
 constexpr std::array<uint32_t, 11> MIP_VQ = { 0x0, 0x1, 0x2, 0x6, 0x16, 0x56, 0x156, 0x556, 0x1556, 0x5556, 0x15556 };
 
@@ -134,24 +131,6 @@ uint32_t rgba_of(uint32_t p, unsigned format)
 }
 
 } /* namespace */
-
-void Pmx1::render(uint32_t scene)
-{
-
-	/* The header: size and page-number location of the opaque list at
-	 * words 8-9, of the translucent list at 12-13 */
-	m_triangles.clear();
-	draw_list(word(scene + 0x24) - VRAM_BASE, word(scene + 0x20), false);
-	const size_t opaque = m_triangles.size();
-
-	draw_list(word(scene + 0x34) - VRAM_BASE, word(scene + 0x30), true);
-	sort_translucent(opaque);
-	/* A third list at words 16-17, drawn over the rest in order */
-	if (word(scene + 0x40) <= MAX_LIST)
-		draw_list(word(scene + 0x44) - VRAM_BASE, word(scene + 0x40), true);
-	build_scene();
-	m_rendered++;
-}
 
 /* The middle of what two polygons share on the screen; x below 0 if little */
 Pmx1::Point Pmx1::overlap_of(const Triangle &l, const Triangle &r)
@@ -253,27 +232,50 @@ void Pmx1::sort_translucent(size_t from)
 		return a.w + planes[i].at_x * (at.x - a.x) + planes[i].at_y * (at.y - a.y);
 	};
 
-	for (size_t i = 0; i < count; i++)
-		for (size_t j = i + 1; j < count; j++) {
-			const Plane &l = planes[i], &r = planes[j];
-			if (std::max(l.left, r.left) >= std::min(l.right, r.right) ||
-			    std::max(l.top, r.top) >= std::min(l.bottom, r.bottom))
-				continue;
+	/* A pair, i before j in depth, whose boxes share some of the screen */
+	const auto pair = [&](size_t i, size_t j) {
+		const Plane &l = planes[i], &r = planes[j];
 
-			bool swapped = false;
+		if (std::max(l.left, r.left) >= std::min(l.right, r.right) ||
+		    std::max(l.top, r.top) >= std::min(l.bottom, r.bottom))
+			return;
 
-			/* Overlapping or not, the order of those apart in depth holds */
-			if (l.most_w > r.least_w) {
-				const Point at = overlap_of(m_triangles[from + i], m_triangles[from + j]);
+		bool swapped = false;
 
-				if (at.x < 0.0)
-					continue;
-				swapped = w_at(i, at) > w_at(j, at) * SAME_PLANE;
-			}
+		/* Overlapping or not, the order of those apart in depth holds */
+		if (l.most_w > r.least_w) {
+			const Point at = overlap_of(m_triangles[from + i], m_triangles[from + j]);
 
-			after[swapped ? j : i].push_back(static_cast<uint32_t>(swapped ? i : j));
-			waits[swapped ? i : j]++;
+			if (at.x < 0.0)
+				return;
+			swapped = w_at(i, at) > w_at(j, at) * SAME_PLANE;
 		}
+		after[swapped ? j : i].push_back(static_cast<uint32_t>(swapped ? i : j));
+		waits[swapped ? i : j]++;
+	};
+	/* The pairs found from the left, not each pair tried: the boxes in the
+	 * order of their left side, each against those that start before its
+	 * right side. A box with a NaN side does not sort: it meets every other
+	 * as the test takes it. The order below depends on the pairs alone */
+	std::vector<uint32_t> by_left, odd;
+	std::vector<bool> is_odd(count);
+
+	for (uint32_t i = 0; i < count; i++) {
+		const Plane &p = planes[i];
+
+		is_odd[i] = std::isnan(p.left) || std::isnan(p.right) || std::isnan(p.top) || std::isnan(p.bottom);
+		(is_odd[i] ? odd : by_left).push_back(i);
+	}
+	std::sort(by_left.begin(), by_left.end(), [&](uint32_t a, uint32_t b) {
+		return planes[a].left < planes[b].left || (planes[a].left == planes[b].left && a < b);
+	});
+	for (size_t p = 0; p < by_left.size(); p++)
+		for (size_t q = p + 1; q < by_left.size() && planes[by_left[q]].left < planes[by_left[p]].right; q++)
+			pair(std::min(by_left[p], by_left[q]), std::max(by_left[p], by_left[q]));
+	for (const uint32_t o : odd)
+		for (uint32_t k = 0; k < count; k++)
+			if (k != o && (!is_odd[k] || k > o))
+				pair(std::min(o, k), std::max(o, k));
 
 	/* Those with nothing left behind them, in mean depth order. Polygons
 	 * that overlap in a ring take that order too. */
@@ -305,13 +307,16 @@ void Pmx1::sort_translucent(size_t from)
 	std::copy(sorted.begin(), sorted.end(), begin);
 }
 
-uint64_t Pmx1::hash_of(const Texture &t) const
+/* The bytes of the frame buffer a texture reads */
+void Pmx1::extent(const Texture &t, uint32_t &from, uint32_t &to) const
 {
 	const uint32_t bytes_a_texel = t.format == FORMAT_8888 ? 4 : 2, log2_w = log2_of(t.width);
 	uint64_t size;
 
 	if (t.vq && t.linear)
 		size = uint64_t{ 2048 } + uint64_t{ t.stride } * t.height;
+	else if (t.palettised)
+		size = uint64_t{ 2048 } + (t.mipmap ? MIP_16[log2_w] / 2 : 0) + uint64_t{ t.width } * t.height;
 	else if (t.vq)
 		size = uint64_t{ 2048 } + (t.mipmap ? MIP_VQ[log2_w] : 0) + uint64_t{ t.width } * t.height / 4;
 	else if (t.linear)
@@ -319,14 +324,19 @@ uint64_t Pmx1::hash_of(const Texture &t) const
 	else
 		size = (t.mipmap ? uint64_t{ MIP_16[log2_w] } * bytes_a_texel / 2 : 0) + uint64_t{ t.width } * t.height * bytes_a_texel;
 
-	const uint64_t to = std::min<uint64_t>(uint64_t{ t.codebook } + size, m_vram.size());
+	from = std::min<uint32_t>(t.codebook, static_cast<uint32_t>(m_vram.size()));
+	to = static_cast<uint32_t>(std::min<uint64_t>(uint64_t{ t.codebook } + size, m_vram.size()));
+}
+
+uint64_t Pmx1::hash_of(uint32_t from, uint32_t to) const
+{
 	const auto mix = [](uint64_t &hash, uint64_t word_of_8) {
 		hash = (hash ^ word_of_8) * 0x100000001B3ull;
 		hash ^= hash >> 29;
 	};
 	/* Four lanes: a scene hashes megabytes */
 	std::array<uint64_t, 4> hash = { 0xCBF29CE484222325ull, 0x9E3779B97F4A7C15ull, 0xC2B2AE3D27D4EB4Full, 0x165667B19E3779F9ull };
-	uint64_t at = t.codebook;
+	uint64_t at = from;
 
 	for (; at + 32 <= to; at += 32) {
 		std::array<uint64_t, 4> words;
@@ -349,7 +359,7 @@ uint64_t Pmx1::hash_of(const Texture &t) const
 /* A texture's image for the GPU, reloaded when its bytes change */
 uint32_t Pmx1::image_of(uint32_t tsp, uint32_t tcw)
 {
-	const uint64_t key = uint64_t{ tcw } << 32 | (tsp & 0x3F);
+	const uint64_t key = uint64_t{ tcw } << 32 | ((tcw >> 25) & 1 ? (m_stride >> 5) << 6 : 0) | (tsp & 0x3F);
 	auto found = m_card_images.find(key);
 
 	/* Already checked: nothing writes while a scene is built */
@@ -357,12 +367,23 @@ uint32_t Pmx1::image_of(uint32_t tsp, uint32_t tcw)
 		return found->second.id;
 
 	const Texture t = texture_of(tsp, tcw);
-	const uint64_t hash = hash_of(t);
+	uint32_t from = 0, to = 0;
+
+	extent(t, from, to);
+	/* Nothing wrote its bytes since they were read */
+	if (found != m_card_images.end() && m_kept && m_kept(from, to, found->second.read)) {
+		found->second.used = m_rendered;
+		return found->second.id;
+	}
+
+	const uint64_t read = m_keep ? m_keep(from, to) : 0, hash = hash_of(from, to);
 
 	if (found != m_card_images.end()) {
 		found->second.used = m_rendered;
-		if (found->second.hash == hash)
+		if (found->second.hash == hash) {
+			found->second.read = read;
 			return found->second.id;
+		}
 		m_scene.gone_images.push_back(found->second.id);
 		m_card_images.erase(found);
 	}
@@ -380,7 +401,7 @@ uint32_t Pmx1::image_of(uint32_t tsp, uint32_t tcw)
 			for (uint32_t x = 0; x < w; x++)
 				pixels[size_t{ y } * w + x] = fetch(t, w, h, mip, x, y);
 	}
-	m_card_images.emplace(key, CardImage{ image->id, hash, m_rendered });
+	m_card_images.emplace(key, CardImage{ image->id, hash, m_rendered, read });
 	m_scene.new_images.push_back(std::move(image));
 	return m_next_image - 1;
 }
@@ -409,6 +430,7 @@ void Pmx1::build_scene()
 		const bool write_z = !(state.isp & ISP_NO_Z_WRITE) && !tri.sorted;
 		const bool same = !m_scene.draws.empty() && first > 0 && tri.translucent == m_scene.draws.back().blend &&
 		                  tri.native == m_scene.draws.back().native && write_z == m_scene.draws.back().write_z &&
+		                  tri.per_pixel == m_scene.draws.back().per_pixel &&
 		                  state.isp == m_last_isp && state.tsp == m_last_tsp && state.tcw == m_last_tcw;
 
 		if (same) {
@@ -430,6 +452,7 @@ void Pmx1::build_scene()
 		draw.shading = static_cast<uint8_t>((state.tsp >> 6) & 3);
 		draw.blend = tri.translucent;
 		draw.native = tri.native;
+		draw.per_pixel = tri.per_pixel;
 		draw.write_z = write_z;
 		draw.use_alpha = state.tsp & TSP_USE_ALPHA;
 		draw.ignore_texture_alpha = state.tsp & TSP_IGNORE_TEXTURE_ALPHA;
@@ -472,50 +495,6 @@ PmxScene Pmx1::take_scene()
 	return scene;
 }
 
-/* A list: numbers of 4 KB pages of entries, which may span pages. Bit 31
- * set: 5 words of state follow (vertex buffer, second buffer, ISP/TSP, TSP,
- * texture). Otherwise a strip (draw_strip). Zero ends a page. Size counts
- * 400 per page; older pages follow in the table. */
-void Pmx1::draw_list(uint32_t table, uint32_t size, bool translucent)
-{
-	std::vector<uint32_t> pages;
-
-	for (uint32_t i = 0; i < size / PAGE_ENTRIES && i < 1024; i++) {
-		const uint32_t page = word(table + i * 4);
-
-		if (page == 0 || page >= 0x20000)
-			break;
-		pages.push_back((page << 12) - VRAM_BASE);
-	}
-	const size_t words = pages.size() * (PAGE / 4);
-	auto at_word = [&](size_t n) { return word(pages[n / (PAGE / 4)] + static_cast<uint32_t>(n % (PAGE / 4)) * 4); };
-	State state{};
-	bool stated = false;
-
-	for (size_t n = 0; n < words;) {
-		const uint32_t entry = at_word(n);
-
-		if (entry == 0 || entry == 0xDEADBEEF || !(entry & 0x7E000000)) {
-			n = (n / (PAGE / 4) + 1) * (PAGE / 4);
-			continue;
-		}
-		if (entry & 0x80000000) {
-			if (n + 6 > words)
-				break;
-			state = { at_word(n + 1) - VRAM_BASE, at_word(n + 3), at_word(n + 4), at_word(n + 5) };
-			stated = true;
-			n += 6;
-		} else {
-			n++;
-		}
-		if (stated)
-			draw_strip(state, entry, translucent);
-	}
-}
-
-/* Bits 30-25: which of 6 triangles are drawn, the first at 30. Bits 24-21:
- * words per vertex past X, Y, 1/W. Bits 19-0: first vertex, in words from
- * the buffer. */
 /* A triangle with equal 1/W at all corners is flat on the screen, and is
  * drawn as set_look() asks */
 void Pmx1::push_triangle(const State &state, Vertex a, Vertex b, Vertex c, bool translucent)
@@ -528,28 +507,55 @@ void Pmx1::push_triangle(const State &state, Vertex a, Vertex b, Vertex c, bool 
 			v->x = std::round(v->x);
 			v->y = std::round(v->y);
 		}
-	m_triangles.push_back({ state, a, b, c, translucent, native, false });
+	m_triangles.push_back({ state, a, b, c, translucent, native, false, false });
 }
 
-void Pmx1::draw_strip(const State &state, uint32_t entry, bool translucent)
+/* The triangles of `mask` of a strip whose vertices of `size` words start
+ * at `first` */
+void Pmx1::draw_triangles(const State &state, uint32_t first, uint32_t size, uint32_t mask, bool translucent)
 {
-	const uint32_t mask = (entry >> 25) & 0x3F, size = 3 + ((entry >> 21) & 15);
-	const uint32_t first = state.vertices + (entry & 0xFFFFF) * 4;
 	std::array<Vertex, 8> vs;
 	unsigned count = 0;
 
 	for (unsigned t = 0; t < 6; t++)
 		if (mask & (0x20u >> t))
 			count = t + 3;
+	if (!count)
+		return;
+
+	/* The words read, in place when all are in video RAM (X, Y, 1/W, U and
+	 * V are read for every vertex), else one by one */
+	const uint32_t span = 4 * ((count - 1) * size + std::max(size, 5u));
+	const bool inside = first <= m_vram.size() && span <= m_vram.size() - first;
+	const uint8_t *const base = inside ? m_vram.data() + first : nullptr;
+	const auto at = [&](uint32_t offset) {
+		uint32_t value;
+
+		if (!base)
+			return word(first + offset);
+		std::memcpy(&value, base + offset, 4);
+		return value;
+	};
+	const auto put = [&](float &f, uint32_t offset) {
+		const uint32_t bits = at(offset);
+
+		std::memcpy(&f, &bits, 4);
+	};
+
 	for (unsigned k = 0; k < count; k++) {
-		vs[k] = vertex(first + k * size * 4);
+		const uint32_t from = k * size * 4;
+
+		put(vs[k].x, from);
+		put(vs[k].y, from + 4);
+		put(vs[k].w, from + 8);
+		put(vs[k].u, from + 12);
+		put(vs[k].v, from + 16);
 		/* Texture and colour words follow X, Y and 1/W */
-		const uint32_t at = first + k * size * 4 + 12;
-		uint32_t next = at;
+		uint32_t next = from + 12;
 
 		if (state.isp & ISP_TEXTURE) {
 			if (state.isp & ISP_UV16) {
-				const uint32_t uv = word(next);
+				const uint32_t uv = at(next);
 				const uint32_t u_bits = uv & 0xFFFF0000u, v_bits = uv << 16;
 
 				std::memcpy(&vs[k].u, &u_bits, 4);
@@ -559,32 +565,164 @@ void Pmx1::draw_strip(const State &state, uint32_t entry, bool translucent)
 				next += 8;
 			}
 		}
-		vs[k].argb = word(next);
-		vs[k].offset = state.isp & ISP_OFFSET ? word(next + 4) : 0;
-		if (!std::isfinite(vs[k].x) || !std::isfinite(vs[k].y) || !std::isfinite(vs[k].w))
-			return;
+		vs[k].argb = at(next);
+		vs[k].offset = state.isp & ISP_OFFSET ? at(next + 4) : 0;
 	}
+	/* The TA tiles only the triangles whose X and Y are numbers. HEURISTIC:
+	 * one whose 1/W is not is not drawn either */
+	const auto real = [](const Vertex &v) {
+		return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.w);
+	};
+
 	for (unsigned t = 0; t < 6; t++)
-		if (mask & (0x20u >> t))
+		if ((mask & (0x20u >> t)) && real(vs[t]) && real(vs[t + 1]) && real(vs[t + 2]))
 			push_triangle(state, vs[t], vs[t + 1], vs[t + 2], translucent);
 }
 
-Pmx1::Vertex Pmx1::vertex(uint32_t offset) const
+/* The scene the core built from the TA's output: a region
+ * header of 5 words for each tile and pass, a tile after another, then the
+ * opaque and translucent lists, in 64-byte blocks of 15 object pointers and
+ * a link. A pointer names a strip the TA copied at Object Base + start * 4
+ * and the triangles of it that touch the tile. Each tile's list keeps the
+ * TA's order and the copies run on through the scene, so the strips sorted
+ * by their start are in the TA's order, and each draws the triangles of all
+ * its tiles: the whole screen at once gives the pixels of the tiles. */
+void Pmx1::render_tiles(uint32_t region_base, uint32_t object_base)
 {
-	Vertex v{};
-	uint32_t bits[5] = { word(offset), word(offset + 4), word(offset + 8), word(offset + 12), word(offset + 16) };
+	constexpr uint32_t LAST = 1u << 31, KEEP_Z = 1u << 30, PRESORT = 1u << 29, EMPTY = 1u << 31;
+	constexpr uint32_t MOST_HEADERS = 1u << 16;
+	std::array<uint32_t, MOST_PASSES> flags{};
+	std::array<bool, MOST_PASSES> seen{};
+	uint32_t passes = 0, pass = 0, last_at = ~0u;
 
-	std::memcpy(&v.x, &bits[0], 4);
-	std::memcpy(&v.y, &bits[1], 4);
-	std::memcpy(&v.w, &bits[2], 4);
-	std::memcpy(&v.u, &bits[3], 4);
-	std::memcpy(&v.v, &bits[4], 4);
-	return v;
+	for (uint32_t n = 0, at = region_base & VRAM_MASK; n < MOST_HEADERS; n++, at += 20) {
+		const uint32_t head = word(at), place = head & 0x7FFC;
+
+		/* The passes of a tile follow each other */
+		pass = place == last_at ? pass + 1 : 0;
+		last_at = place;
+		if (pass >= MOST_PASSES) {
+			say(1, "more passes than drawn");
+			break;
+		}
+		passes = std::max(passes, pass + 1);
+		if (seen[pass] && (head ^ flags[pass]) & (KEEP_Z | PRESORT))
+			say(2, "the tiles of a pass differ in keep Z or presort; those of the first are taken");
+		if (!seen[pass]) {
+			flags[pass] = head;
+			seen[pass] = true;
+		}
+		for (unsigned slot = 0; slot < 4; slot++) {
+			const uint32_t list = word(at + 4 + 4 * slot);
+
+			if (list & EMPTY)
+				continue;
+			if (slot & 1)
+				say(4, "a modifier volume list is not drawn");
+			else
+				take_list(list & VRAM_MASK, 2 * pass + slot / 2);
+		}
+		if (head & LAST)
+			break;
+	}
+	m_triangles.clear();
+	for (uint32_t p = 0; p < passes; p++) {
+		if (p > 0 && !(flags[p] & KEEP_Z))
+			say(8, "a pass that clears Z after another is drawn over it");
+		for (unsigned slot = 0; slot < 2; slot++) {
+			std::vector<uint32_t> &starts = m_lists[2 * p + slot];
+			const size_t from = m_triangles.size();
+
+			std::sort(starts.begin(), starts.end());
+			for (const uint32_t start : starts) {
+				uint16_t &strip = m_strips[start];
+
+				draw_object(object_base, start, (strip >> 6) & 0xF, strip & 0x3F, slot == 1);
+				strip = 0;
+			}
+			starts.clear();
+			/* A pass whose headers leave Presort clear has its translucent
+			 * objects sorted by the chip, pixel by pixel (PG, the chip's programming guide, p. 60, 82), as
+			 * the host's GPU does when it can. Else HEURISTIC: the first
+			 * pass's translucent list sorted polygon by polygon, the others
+			 * in their order (sorting the second of Smashing Drive so costs
+			 * it 6.6 %). Presort: in their order */
+			if (slot == 1 && !(flags[p] & PRESORT) && m_card_sorts)
+				for (size_t i = from; i < m_triangles.size(); i++)
+					m_triangles[i].sorted = m_triangles[i].per_pixel = true;
+			else if (slot == 1 && p == 0 && !(flags[p] & PRESORT))
+				sort_translucent(from);
+		}
+	}
+	build_scene();
+	m_rendered++;
+}
+
+/* The object pointers of a list, block after block: a strip seen first
+ * goes to list `list`, and m_strips gathers the triangles of all its tiles
+ * (bits 5-0) with its form (bits 9-6, pointer bits 24-21) and its list + 1
+ * (bits 14-10) */
+void Pmx1::take_list(uint32_t address, unsigned list)
+{
+	constexpr uint32_t LINK = 0xE, END = 0xF, MOST_BLOCKS = 1u << 16;
+
+	for (uint32_t blocks = 0; blocks < MOST_BLOCKS; blocks++) {
+		uint32_t k = 0;
+
+		const bool inside = address <= m_vram.size() - 64;
+
+		for (; k < 16; k++) {
+			uint32_t pointer;
+
+			if (inside)
+				std::memcpy(&pointer, m_vram.data() + address + 4 * k, 4);
+			else
+				pointer = word(address + 4 * k);
+
+			if (pointer >> 28 == END)
+				return;
+			if (pointer >> 28 == LINK) {
+				address = pointer & VRAM_MASK;
+				break;
+			}
+			uint16_t &strip = m_strips[pointer & START];
+
+			if (!strip) {
+				strip = static_cast<uint16_t>((list + 1) << 10 | ((pointer >> 21) & 0xF) << 6);
+				m_lists[list].push_back(pointer & START);
+			} else if (strip >> 10 != list + 1) {
+				say(16, "a strip in two lists is drawn with the first");
+			}
+			strip |= static_cast<uint16_t>((pointer >> 25) & 0x3F);
+		}
+		if (k == 16)
+			return;
+	}
+}
+
+/* The strip at Object Base + `start` words: `form` bit 3 the shadow form
+ * (5 words of state), bits 2-0 words per vertex past X, Y and 1/W */
+void Pmx1::draw_object(uint32_t object_base, uint32_t start, uint32_t form, uint32_t mask, bool translucent)
+{
+	const uint32_t at = (object_base & 0x0FF00000 & VRAM_MASK) + 4 * start;
+	const uint32_t state_words = form & 8 ? 5 : 3;
+	const State state{ word(at), word(at + 4), word(at + 8) };
+
+	draw_triangles(state, at + 4 * state_words, 3 + (form & 7), mask, translucent);
+}
+
+void Pmx1::say(unsigned what, const char *text)
+{
+	if (!(m_said & what))
+		std::fprintf(stderr, "pmx1 3D: %s\n", text);
+	m_said |= what;
 }
 
 /* Texture word: 31 mipmapped, 30 VQ (2 KB of 2x2 blocks, then an index per
- * block), 29-27 format, 26 not twiddled, then 25 stride 640 (HEURISTIC).
- * TSP: 18-17 flip, 16-15 clamp (U, V), 14-13 filter (0 nearest), 5-0 size. */
+ * block), 29-27 format, 26 not twiddled, then 25 stride: its rows as long
+ * as TEX_STRIDE says, 21 with VQ palettised: 8 bits a texel into a palette
+ * held as a VQ codebook (PG p. 78, appendix A). TSP: 18-17 flip, 16-15
+ * clamp (U, V), 14-13 filter (0 nearest), 5-0 size. */
 Pmx1::Texture Pmx1::texture_of(uint32_t tsp, uint32_t tcw) const
 {
 	Texture t{};
@@ -594,12 +732,14 @@ Pmx1::Texture Pmx1::texture_of(uint32_t tsp, uint32_t tcw) const
 	t.format = (tcw >> 27) & 7;
 	t.linear = (tcw >> 26) & 1;
 	t.vq = (tcw >> 30) & 1;
-	t.stride = (tcw >> 25) & 1 ? WIDTH : t.width;
+	t.palettised = t.vq && (tcw >> 21) & 1;
+	t.stride = (tcw >> 25) & 1 ? m_stride : t.width;
 	t.side = std::min(t.width, t.height);
 	t.flip_u = (tsp >> 18) & 1, t.flip_v = (tsp >> 17) & 1;
 	t.clamp_u = (tsp >> 16) & 1, t.clamp_v = (tsp >> 15) & 1;
 	t.bilinear = ((tsp >> 13) & 3) != 0;
-	/* HEURISTIC: the address counts 32 bytes here, 8 on the Dreamcast */
+	/* Bits 20-0: bits 25-5 of the address (PG p. 79), 8 bytes a step on
+	 * the Dreamcast */
 	t.codebook = (tcw & 0x1FFFFF) << 5;
 	/* VQ: indices follow the 2 KB of blocks, moved by the mipmap */
 	t.base = t.vq ? t.codebook + 2048 : t.codebook;
@@ -617,6 +757,10 @@ uint32_t Pmx1::mip_of(const Texture &t, uint32_t size_x)
 {
 	if (!t.mipmap)
 		return 0;
+	/* A palettised texture's levels: half the 16-bit offsets, in bytes
+	 * (PG appendix A; INFERRED: after the palette, as VQ's) */
+	if (t.palettised)
+		return MIP_16[log2_of(size_x)] / 2;
 	return t.vq ? MIP_VQ[log2_of(size_x)] : MIP_16[log2_of(size_x)] * (t.format == FORMAT_8888 ? 2 : 1);
 }
 
@@ -630,6 +774,12 @@ uint32_t Pmx1::fetch(const Texture &t, uint32_t size_x, uint32_t size_y, uint32_
 		/* One index per texel, in rows, into a palette held in the
 		 * first texel of each entry */
 		const uint32_t index_at = t.base + y * t.stride + x;
+		const uint32_t block = index_at < m_vram.size() ? m_vram[index_at] : 0;
+
+		at = t.codebook + block * 8;
+	} else if (t.palettised) {
+		/* An index a texel, twiddled as VQ's, into the same palette */
+		const uint32_t index_at = t.base + mip + twiddled(x, y, side);
 		const uint32_t block = index_at < m_vram.size() ? m_vram[index_at] : 0;
 
 		at = t.codebook + block * 8;

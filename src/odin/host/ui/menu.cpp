@@ -52,11 +52,8 @@
 PICTURE(upscale_1) PICTURE(upscale_2) PICTURE(upscale_3) PICTURE(upscale_4) PICTURE(upscale_5) PICTURE(upscale_6)
 PICTURE(filter_1) PICTURE(filter_2) PICTURE(filter_4) PICTURE(filter_8) PICTURE(filter_16) PICTURE(screen)
 PICTURE(whole) PICTURE(torn) PICTURE(mode_cabinet) PICTURE(mode_raw) PICTURE(mode_snap) PICTURE(mode_native)
-PICTURE(crt_none) PICTURE(crt_sega_monitor_29) PICTURE(crt_sega_projector_50) PICTURE(crt_pc_monitor_vga)
-PICTURE(crt_pc_monitor_vga_flat) PICTURE(crt_pc_monitor_vga_good) PICTURE(crt_pc_monitor_vga_good_flat)
-PICTURE(crt_pc_monitor_vga_premium) PICTURE(crt_pc_monitor_vga_premium_flat)
-PICTURE(crt_pc_monitor_vga_premium_plus) PICTURE(crt_pc_monitor_vga_premium_plus_flat)
-PICTURE(crt_pc_monitor_vga_extreme) PICTURE(crt_pc_monitor_vga_extreme_flat)
+PICTURE(crt_none) PICTURE(crt_sega_monitor_29) PICTURE(crt_sega_projector_50) PICTURE(crt_gaelco_monitor_28)
+PICTURE(crt_gaelco_monitor_34)
 #undef PICTURE
 /* The font of the menu (menu_fonts.S) */
 extern "C" const unsigned char odin_font_cozette[], odin_font_cozette_end[];
@@ -82,16 +79,8 @@ const std::pair<const unsigned char *, const unsigned char *> PICTURE_FILES[] = 
 	{ odin_picture_crt_none, odin_picture_crt_none_end },
 	{ odin_picture_crt_sega_monitor_29, odin_picture_crt_sega_monitor_29_end },
 	{ odin_picture_crt_sega_projector_50, odin_picture_crt_sega_projector_50_end },
-	{ odin_picture_crt_pc_monitor_vga, odin_picture_crt_pc_monitor_vga_end },
-	{ odin_picture_crt_pc_monitor_vga_flat, odin_picture_crt_pc_monitor_vga_flat_end },
-	{ odin_picture_crt_pc_monitor_vga_good, odin_picture_crt_pc_monitor_vga_good_end },
-	{ odin_picture_crt_pc_monitor_vga_good_flat, odin_picture_crt_pc_monitor_vga_good_flat_end },
-	{ odin_picture_crt_pc_monitor_vga_premium, odin_picture_crt_pc_monitor_vga_premium_end },
-	{ odin_picture_crt_pc_monitor_vga_premium_flat, odin_picture_crt_pc_monitor_vga_premium_flat_end },
-	{ odin_picture_crt_pc_monitor_vga_premium_plus, odin_picture_crt_pc_monitor_vga_premium_plus_end },
-	{ odin_picture_crt_pc_monitor_vga_premium_plus_flat, odin_picture_crt_pc_monitor_vga_premium_plus_flat_end },
-	{ odin_picture_crt_pc_monitor_vga_extreme, odin_picture_crt_pc_monitor_vga_extreme_end },
-	{ odin_picture_crt_pc_monitor_vga_extreme_flat, odin_picture_crt_pc_monitor_vga_extreme_flat_end },
+	{ odin_picture_crt_gaelco_monitor_28, odin_picture_crt_gaelco_monitor_28_end },
+	{ odin_picture_crt_gaelco_monitor_34, odin_picture_crt_gaelco_monitor_34_end },
 };
 
 /* The hints of the mouse Dear ImGui sets for itself (imgui_impl_sdl3.cpp):
@@ -771,8 +760,9 @@ Menu::page_display(MenuKit &kit, MenuState &state) const
 		screens.push_back(state.filter);
 		screen = static_cast<int>(screens.size()) - 1;
 	}
-	kit.next_tip("Imitates a screen (Lola Retro filters): the cabinets' screens from Sega's manuals, a monitor for "
-	             "Planet Harriers and NASCAR, a projector for the other games; or a PC monitor of the VGA days. "
+	kit.next_tip("Imitates a screen (Lola Retro filters): the cabinets' screens from their manuals, Sega's monitor for "
+	             "Planet Harriers and NASCAR and projector for the other Hikaru games, Gaelco's 28-inch monitor for "
+	             "Smashing Drive and Gaelco Football and 34-inch for ATV Track. "
 	             "Demanding on the graphics card.");
 	watch(PREVIEW_CRT, [&] {
 		if (kit.dropdown("CRT screen", nullptr, screens, screen) && screen >= 0 &&
@@ -1043,7 +1033,8 @@ Menu::help(int page, const MenuState &state)
 	case DISPLAY:
 		return std::string("These settings apply to every game") + kept;
 	case AUDIO:
-		return std::string("Sound only: vibration is on the Input page") + kept;
+		return state.kept ? "Cabinet sound is set per game. Vibration is on the Input page." :
+		                    std::string("Cabinet sound is set per game. Vibration is on the Input page. ") + NOT_SAVED;
 	case HOTKEYS:
 		return state.hotkey_catching || state.kept ? hotkeys_help(state) :
 		       hotkeys_help(state) + " " + NOT_SAVED;

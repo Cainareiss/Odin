@@ -480,7 +480,11 @@ push_button(Pen &pen, const Controls &c, const char *id, float x, float y, float
 	pen.light();
 }
 
-/* COIN, SERVICE and TEST in a row from there */
+/* COIN, SERVICE and TEST in a row from there; then the VOLUME rocker of
+ * the cabinets that have one by them (the Gaelco ones: behind the coin
+ * door, ATV-EN p. 19, SD-SIT p. 32, GF-EN p. 20: the English manual of ATV
+ * Track, the sit-down one of Smashing Drive, the English one of Gaelco
+ * Football) */
 void
 cabinet_row(Pen &pen, const Controls &c, float x, float y)
 {
@@ -495,6 +499,27 @@ cabinet_row(Pen &pen, const Controls &c, float x, float y)
 		pen.text(x + dx + 19.0f, y + 6.0f, label, Align::LEFT);
 		pen.light();
 	}
+	if (!c.has("volume_up"))
+		return;
+
+	const float vx = x + 340.0f;
+
+	pen.rect(vx, y - 13.0f, 56.0f, 26.0f, 6.0f, Ink::LINE);
+	for (const auto &[id, dx, sign] : { std::tuple{ "volume_down", 0.0f, "-" }, std::tuple{ "volume_up", 28.0f, "+" } }) {
+		pen.light(c.light(id));
+		pen.rect(vx + dx + 3.0f, y - 10.0f, 22.0f, 20.0f, 4.0f, c.on(id) ? Ink::LIT : Ink::PART);
+		/* Its sign dark on the lit key */
+		pen.light();
+		pen.text(vx + dx + 14.0f, y + 6.0f, sign, Align::CENTRE, TEXT, c.on(id));
+	}
+	pen.text(vx + 66.0f, y + 6.0f, "VOLUME", Align::LEFT);
+}
+
+/* How wide that row is */
+float
+cabinet_row_width(const Controls &c)
+{
+	return c.has("volume_up") ? 470.0f : 316.0f;
 }
 
 /* A pedal: its arm, the pedal going down as far as it is pushed */
@@ -882,6 +907,232 @@ virtual_on(Pen &pen, const Controls &c)
 	push_button(pen, c, "pib", 390, 60, 15, "P.I.B.", 'b');
 }
 
+/* The points of a cubic curve, after its first one */
+void
+add_curve(std::vector<ImVec2> &points, ImVec2 p0, ImVec2 p1, ImVec2 p2, ImVec2 p3, int steps = 12)
+{
+	for (int k = 1; k <= steps; k++) {
+		const float t = static_cast<float>(k) / static_cast<float>(steps), u = 1.0f - t;
+		const float a = u * u * u, b = 3.0f * u * u * t, d = 3.0f * u * t * t, e = t * t * t;
+
+		points.push_back({ a * p0.x + b * p1.x + d * p2.x + e * p3.x, a * p0.y + b * p1.y + d * p2.y + e * p3.y });
+	}
+}
+
+/* A tube along a line of points, `half` on each side of it */
+void
+tube(Pen &pen, std::span<const ImVec2> line, float half, Ink ink)
+{
+	std::vector<ImVec2> left, right;
+
+	for (size_t k = 0; k < line.size(); k++) {
+		const ImVec2 a = line[k == 0 ? 0 : k - 1], b = line[k + 1 < line.size() ? k + 1 : k];
+		const float dx = b.x - a.x, dy = b.y - a.y, len = std::max(std::hypot(dx, dy), 1e-3f);
+
+		left.push_back({ line[k].x - dy / len * half, line[k].y + dx / len * half });
+		right.push_back({ line[k].x + dy / len * half, line[k].y - dx / len * half });
+	}
+	left.insert(left.end(), right.rbegin(), right.rend());
+	pen.shape(std::move(left), true, ink);
+}
+
+/* A grip with its grooves */
+void
+grip(Pen &pen, float x, float y, float w, float h)
+{
+	pen.rect(x, y, w, h, 13.0f, Ink::PART);
+	for (float gx = x + 12.0f; gx < x + w - 8.0f; gx += 10.0f)
+		pen.line(gx, y + 6.0f, gx, y + h - 6.0f, Ink::DETAIL);
+}
+
+/* A brake lever in front of its grip, pulled towards it when held */
+void
+brake_lever(Pen &pen, const Controls &c, const char *id, float x, float y, float far)
+{
+	const float pulled = c.on(id) ? 9.0f : 0.0f;
+	std::vector<ImVec2> line = { { x, y + 4.0f + pulled } };
+
+	add_curve(line, line[0], { x + far * 0.3f, y - 13.0f + pulled }, { x + far * 0.8f, y - 13.0f + pulled },
+	          { x + far, y - 12.0f + pulled }, 8);
+	pen.light(c.light(id));
+	tube(pen, line, 3.5f, c.on(id) ? Ink::LIT : Ink::PART);
+	pen.light();
+}
+
+/* ATV Track from above (ATV-EN p. 7, 20, 44, 69): the handlebar on the
+ * tank, the left brake lever by the left grip, the right one by the twist
+ * grip of the THROTTLE, START on the throttle's housing. The handlebar
+ * turns 20 degrees each way (HEURISTIC: no manual gives its travel). The
+ * emergency stop on the tank is left out: Odin holds it released (pin 1.6
+ * grounded), nothing works it */
+void
+atv_track(Pen &pen, const Controls &c)
+{
+	const float cx = 290, cy = 196;
+	std::vector<ImVec2> tank = { { cx - 48, cy + 30 } };
+
+	add_curve(tank, tank[0], { cx - 66, cy + 64 }, { cx - 70, cy + 124 }, { cx - 52, cy + 154 });
+	add_curve(tank, tank.back(), { cx - 36, cy + 176 }, { cx + 36, cy + 176 }, { cx + 52, cy + 154 });
+	add_curve(tank, tank.back(), { cx + 70, cy + 124 }, { cx + 66, cy + 64 }, { cx + 48, cy + 30 });
+	pen.shape(tank, true, Ink::BODY);
+	pen.push();
+	pen.scale(0.66f, 0.66f, cx, cy + 104);
+	pen.shape(tank, true, Ink::DETAIL);
+	pen.pop();
+	pen.arc(cx, cy, 118, -PI * 118.0f / 180.0f, -PI * 62.0f / 180.0f, Ink::DETAIL, 0.0f);
+
+	pen.light(c.light("handlebar"));
+	pen.text(cx, cy - 142, "HANDLEBAR", Align::CENTRE);
+	pen.push();
+	pen.turn(c.value("handlebar") * 20.0f, cx, cy);
+	std::vector<ImVec2> bar = { { cx - 172, cy + 16 } };
+
+	add_curve(bar, bar[0], { cx - 115, cy - 1 }, { cx - 58, cy - 7 }, { cx, cy - 7 });
+	add_curve(bar, bar.back(), { cx + 66, cy - 7 }, { cx + 133, cy - 1 }, { cx + 200, cy + 16 });
+	tube(pen, bar, 6.5f, Ink::PART);
+	pen.rect(cx - 26, cy - 16, 52, 30, 6, Ink::PART);
+	pen.line(cx, cy - 106, cx, cy - 128, Ink::INK, 4.0f);
+	pen.light();
+
+	/* Left: the grip, its bracket, the lever */
+	grip(pen, cx - 232, cy + 1, 64, 30);
+	pen.rect(cx - 168, cy + 2, 16, 28, 4, Ink::PART);
+	brake_lever(pen, c, "left_brake", cx - 160, cy, -102);
+	pen.light(c.light("left_brake"));
+	pen.text(cx - 196, cy - 38, "LEFT BRAKE", Align::CENTRE);
+	pen.light();
+
+	/* Right: the bracket, the throttle's housing with START on it, the
+	 * twist grip lit as far as it is turned, the lever */
+	const float throttle = std::clamp(c.value("throttle"), 0.0f, 1.0f);
+
+	pen.rect(cx + 140, cy + 2, 16, 28, 4, Ink::PART);
+	pen.rect(cx + 156, cy - 8, 44, 48, 9, Ink::PART);
+	push_button(pen, c, "start", cx + 178, cy + 16, 7.5f, "", 'b');
+	pen.light(c.light("throttle"));
+	grip(pen, cx + 200, cy + 1, 64, 30);
+	if (throttle > 0.0f)
+		pen.rect(cx + 201, cy + 2, 62, 28, 12, Ink::LIT, throttle * 0.9f);
+	pen.arc(cx + 268, cy + 16, 19, -PI * 62.0f / 180.0f, PI * 62.0f / 180.0f, Ink::THICK, 3.5f);
+	pen.text(cx + 236, cy + 92, "THROTTLE", Align::CENTRE);
+	pen.light();
+	brake_lever(pen, c, "right_brake", cx + 148, cy, 102);
+	pen.light(c.light("right_brake"));
+	pen.text(cx + 198, cy - 38, "RIGHT BRAKE", Align::CENTRE);
+	pen.light(c.light("start"));
+	pen.text(cx + 178, cy + 66, "START", Align::CENTRE);
+	pen.light();
+	pen.pop();
+}
+
+/* Smashing Drive face on (SD-SIT p. 7, 15, 18, 45): the wheel under the
+ * dashboard, HORN in its middle (the game's START), the pedals under it,
+ * which are switches: down or up (SD-SIT p. 18). The wheel is drawn
+ * turning 135 degrees each way */
+void
+smashing_drive(Pen &pen, const Controls &c)
+{
+	const float cx = 300, cy = 228, R = 150, r = 124;
+
+	pen.curve({ 40, cy - 118 }, { 200, cy - 136 }, { 400, cy - 136 }, { 560, cy - 118 }, Ink::DETAIL, 0.0f);
+	pen.light(c.light("wheel"));
+	pen.push();
+	pen.turn(c.value("wheel") * 135.0f, cx, cy);
+	pen.ring(cx, cy, R, r);
+	pen.line(cx, cy - R + 3, cx, cy - r - 3, Ink::INK, 4.0f);
+	pen.shape({ { cx - r, cy - 12 }, { cx - 40, cy - 18 }, { cx - 40, cy + 16 }, { cx - r, cy + 12 } }, true, Ink::PART);
+	pen.shape({ { cx + r, cy - 12 }, { cx + 40, cy - 18 }, { cx + 40, cy + 16 }, { cx + r, cy + 12 } }, true, Ink::PART);
+	pen.shape({ { cx - 16, cy + 38 }, { cx + 16, cy + 38 }, { cx + 10, cy + r }, { cx - 10, cy + r } }, true, Ink::PART);
+	pen.circle(cx, cy, 44, Ink::PART);
+	pen.pop();
+	pen.light();
+	push_button(pen, c, "horn", cx, cy, 17, "", 'b');
+	pen.light(c.light("horn"));
+	pen.text(cx, cy + 186, "HORN  ·  START", Align::CENTRE);
+	pen.light(c.light("brake_pedal"));
+	pedal(pen, 216, 452, 70, 76, c.on("brake_pedal") ? 1.0f : 0.0f, "BRAKE");
+	pen.light(c.light("gas_pedal"));
+	pedal(pen, 330, 436, 50, 92, c.on("gas_pedal") ? 1.0f : 0.0f, "GAS");
+	pen.light();
+}
+
+/* A football: a pentagon in the middle, its seams to the edge */
+void
+ball_pattern(Pen &pen, float x, float y, float r)
+{
+	std::vector<ImVec2> pentagon;
+
+	for (int k = 0; k < 5; k++) {
+		const float a = (-90.0f + 72.0f * static_cast<float>(k)) * PI / 180.0f;
+		const ImVec2 at = { x + 0.38f * r * std::cos(a), y + 0.38f * r * std::sin(a) };
+
+		pentagon.push_back(at);
+		pen.line(at.x, at.y, x + 0.86f * r * std::cos(a), y + 0.86f * r * std::sin(a), Ink::DETAIL);
+	}
+	pen.shape(std::move(pentagon), true, Ink::DETAIL);
+}
+
+/* Gaelco Football from above (GF-EN p. 7, 14, 22, 32, 52-54): two
+ * stations under the screen, 1P on the left; on each, the stick, then A,
+ * B and C from left to right, A by the stick (the game's own "How to play"
+ * picture; INFERRED for the real panel), START alone at the back, and the
+ * ball on its arm in front, kicked forward and sideways by the foot */
+void
+football(Pen &pen, const Controls &c)
+{
+	pen.rect(150, 26, 300, 52, 6, Ink::BODY);
+	pen.line(176, 78, 424, 78, Ink::THICK, 4.0f);
+	pen.shape({ { 244, 148 }, { 244, 116 }, { 356, 116 }, { 356, 148 } }, false, Ink::THICK, 6.0f);
+	for (const auto &[p, cx] : { std::pair{ 1u, 162.0f }, std::pair{ 2u, 438.0f } }) {
+		const std::string player = std::to_string(p) + "p_";
+		const auto id = [&](const char *what) { return player + what; };
+		const auto on = [&](const char *what) { return c.on(id(what).c_str()) ? 1.0f : 0.0f; };
+		const auto light = [&](const char *what) { return c.light(id(what).c_str()); };
+		const float cy = 236;
+
+		pen.rect(cx - 100, cy - 88, 200, 176, 40, Ink::BODY);
+		pen.rect(cx - 88, cy - 76, 176, 152, 32, Ink::DETAIL);
+		pen.text(cx, cy - 104, p == 1 ? "1P" : "2P", Align::CENTRE, BIG);
+
+		/* The stick in its gate of four switches */
+		const float jx = cx - 44, jy = cy + 18;
+		const float dx = (on("right") - on("left")) * 14.0f, dy = (on("down") - on("up")) * 14.0f;
+
+		pen.light(light("up") | light("down") | light("left") | light("right"));
+		pen.circle(jx, jy, 32, Ink::DETAIL);
+		for (const auto &[gx, gy] : { std::pair{ 0.0f, -1.0f }, std::pair{ 0.0f, 1.0f }, std::pair{ -1.0f, 0.0f },
+		                              std::pair{ 1.0f, 0.0f } })
+			pen.line(jx + gx * 8, jy + gy * 8, jx + gx * 26, jy + gy * 26, Ink::DETAIL);
+		pen.line(jx, jy, jx + dx, jy + dy, Ink::THICK, 3.0f);
+		pen.circle(jx + dx, jy + dy, 17, Ink::PART);
+		pen.circle(jx + dx, jy + dy, 8, Ink::DETAIL);
+		pen.light();
+		push_button(pen, c, id("button1").c_str(), cx + 10, cy + 30, 10, "A", 't');
+		push_button(pen, c, id("button2").c_str(), cx + 42, cy + 8, 10, "B", 't');
+		push_button(pen, c, id("button3").c_str(), cx + 74, cy - 14, 10, "C", 't');
+		push_button(pen, c, id("start").c_str(), cx - 50, cy - 50, 10, "START", 'r');
+
+		/* The ball on its arm: forward is away from the player */
+		const float side = c.value(id("kick_x").c_str()), forward = std::fabs(c.value(id("kick_y").c_str()));
+		const bool kicked = std::fabs(side) > 0.1f || forward > 0.1f;
+		const float by = cy + 152;
+
+		pen.light(light("kick_x") | light("kick_y"));
+		pen.line(cx, by - 62, cx, by - 38, Ink::DETAIL);
+		pen.push();
+		pen.turn(-side * 18.0f, cx, by - 62);
+		pen.move(0.0f, -forward * 22.0f);
+		pen.line(cx, by - 62, cx, by - 36, Ink::THICK, 6.0f);
+		pen.circle(cx, by, 34, Ink::PART);
+		if (kicked)
+			pen.circle(cx, by, 33, Ink::LIT, 0.85f);
+		ball_pattern(pen, cx, by, 34);
+		pen.pop();
+		pen.text(cx + 48, by + 6, "BALL", Align::LEFT);
+		pen.light();
+	}
+}
+
 using Drawing = void (*)(Pen &, const Controls &);
 
 Drawing
@@ -890,6 +1141,9 @@ drawing_of(const std::string &game)
 	static constexpr std::pair<const char *, Drawing> DRAWINGS[] = {
 		{ "sgnascar", nascar }, { "sgnascaro", nascar }, { "braveff", brave }, { "pharrier", harriers },
 		{ "swracer", racer }, { "airtrix", air_trix }, { "airtrixo", air_trix }, { "von4", virtual_on },
+		{ "atvtrack", atv_track }, { "atvtracka", atv_track }, { "smashdrv", smashing_drive },
+		{ "smashdrvb", smashing_drive }, { "smashdrvs", smashing_drive },
+		{ "gfootbal", football },
 	};
 
 	for (const auto &[name, drawing] : DRAWINGS)
@@ -917,7 +1171,7 @@ draw_cabinet(const MenuKit &kit, const std::string &game, const CabinetNow &now,
 	drawing(pen, at_rest);
 
 	const ImVec4 e = pen.extent();
-	const ImVec2 row = { (e.x + e.z) / 2.0f - 158.0f, e.w + 40.0f };
+	const ImVec2 row = { (e.x + e.z) / 2.0f - cabinet_row_width(at_rest) / 2.0f, e.w + 40.0f };
 
 	cabinet_row(pen, at_rest, row.x, row.y);
 	pen.place(a, b);

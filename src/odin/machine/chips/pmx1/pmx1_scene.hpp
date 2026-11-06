@@ -33,7 +33,7 @@
 namespace odin {
 
 /* A Neon 250 scene as the host GPU draws it, in chip order, translucent
- * polygons last */
+ * polygons last; a triangle's rank in the scene is its order in the TA */
 struct PmxVertex {
 	float x, y, w;		/* screen position; 1/W */
 	float u, v;
@@ -46,7 +46,7 @@ struct PmxDraw {
 	uint32_t first, count;	/* vertices, three per triangle */
 	uint32_t image;		/* PmxImage::id; 0: none */
 	float lod_bias;
-	uint8_t compare;	/* 0 never, 1 <, 2 =, 3 <=, 4 >=, 5 !=, 6 >=, 7 always */
+	uint8_t compare;	/* 0 never, 1 <, 2 =, 3 <=, 4 >, 5 !=, 6 >=, 7 always */
 	uint8_t src, dst;	/* the blend codes: zero, one, other colour and its
 				 * inverse, source alpha and its inverse, those of
 				 * the destination */
@@ -54,6 +54,10 @@ struct PmxDraw {
 	PmxWrap wrap_u, wrap_v;
 	bool blend, write_z, use_alpha, ignore_texture_alpha, offset, smooth, mipmap;
 	bool native;		/* covers the chip's pixels */
+	/* One of the translucent draws that follow each other, the chip
+	 * sorting their fragments pixel by pixel from far to near, those of
+	 * equal depth in their order (PG, the chip's programming guide, p. 82) */
+	bool per_pixel;
 };
 
 /* A texture: RGBA, levels from the largest down */

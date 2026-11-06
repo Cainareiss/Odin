@@ -49,6 +49,15 @@ namespace odin {
  * sent at once. The host meets it in page 0E under its lock, and the games of
  * the cabinets keep their own pace, as each cabinet keeps its own crystals. */
 
+/* What takes the frames a cable brings in (any thread): a frame's bytes,
+ * the clock of the other end when it began to leave it, and the clocks it
+ * took */
+class NetArrivals {
+public:
+	virtual ~NetArrivals() = default;
+	virtual void arrive(std::vector<uint8_t> data, uint64_t start, uint64_t duration) = 0;
+};
+
 /* A network board on a thread of its own, run on the clock of the computer:
  * it wakes at its next event and when a frame comes, so that it answers
  * within the time the computer takes to wake a thread. The program allows
@@ -56,7 +65,7 @@ namespace odin {
  * hop after the other, then each board sends its part (0x4800 bytes for
  * four sites, 14.7 ms at 10 Mbit/s); a small frame that comes to a board
  * still busy with the parts is lost, and the ring stops. */
-class NetBoardRunner {
+class NetBoardRunner : public NetArrivals {
 public:
 	/* The longest it sleeps: what the host waits at most for an answer */
 	static constexpr std::chrono::microseconds TICK{ 250 };
@@ -75,7 +84,7 @@ public:
 	/* A frame from the previous cabinet as it comes in: its bytes, the
 	 * clock of the other board when it began to leave it and the clocks it
 	 * took to (any thread) */
-	void arrive(std::vector<uint8_t> data, uint64_t start, uint64_t duration);
+	void arrive(std::vector<uint8_t> data, uint64_t start, uint64_t duration) override;
 
 	/* HEURISTIC: a frame comes in as late after the fastest of the last
 	 * GAPS as 9 in 10 of them came, STEADY clocks (0.2 ms) at most; one
@@ -131,7 +140,7 @@ public:
 	static constexpr uint16_t PORT = 13404;
 	static constexpr uint32_t VERSION = 2;
 
-	NetCable(NetBoardRunner &runner, const std::string &game, uint16_t port, const std::string &next_host,
+	NetCable(NetArrivals &runner, const std::string &game, uint16_t port, const std::string &next_host,
 	         uint16_t next_port);
 	~NetCable() override;
 	NetCable(const NetCable &) = delete;
@@ -157,7 +166,7 @@ private:
 	bool receive_frames(intptr_t from);
 	bool hello_ok(intptr_t from);
 
-	NetBoardRunner &m_runner;
+	NetArrivals &m_runner;
 	std::string m_game;
 	uint16_t m_port;
 	std::string m_next_host;

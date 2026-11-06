@@ -1,5 +1,5 @@
 {
-	"version" : 1,
+	"version" : 2,
 	"roms" : [
 		{
 			"name" : "bootrom",
@@ -28,6 +28,11 @@
 			"name" : "airtrix",
 			"title" : "Air Trix",
 			"mach" : "hikaru",
+			"sound_parts" : [
+				{ "part" : "speaker", "at" : "front_left", "board" : "main" },
+				{ "part" : "speaker", "at" : "front_right", "board" : "main" },
+				{ "part" : "woofer", "at" : "base", "board" : "main" }
+			],
 			"rom_board" : { "eprom_mb" : 4, "315-5881" : "291B02C7" },
 			"mie_eeprom" : "42434f30010101001800040101010100121200000000000000000000060041495254524958300000000000000100010100000000000000000000000000007e4442434f30010101001800040101010100121200000000000000000000060041495254524958300000000000000100010100000000000000000000000000007e44",
 			"controls" : [
@@ -117,25 +122,6 @@
 			"title" : "Air Trix (original)",
 			"parent" : "airtrix",
 			"mach" : "hikaru",
-			"rom_board" : { "eprom_mb" : 4, "315-5881" : "291B02C7" },
-			"mie_eeprom" : "42434f30010101001800040101010100121200000000000000000000060041495254524958300000000000000100010100000000000000000000000000007e4442434f30010101001800040101010100121200000000000000000000060041495254524958300000000000000100010100000000000000000000000000007e44",
-			"controls" : [
-				{ "name" : "START", "id" : "start", "switch" : "1P START", "role" : "start" },
-				{ "name" : "LEFT", "id" : "left", "switch" : "1P PUSH1", "role" : "left", "keys" : [ "X" ] },
-				{ "name" : "RIGHT", "id" : "right", "switch" : "1P PUSH2", "role" : "right", "keys" : [ "C" ] },
-				{ "name" : "UP", "id" : "up", "switch" : "1P UP", "role" : "button5", "keys" : [ "Up" ] },
-				{ "name" : "DOWN", "id" : "down", "switch" : "1P DOWN", "role" : "button6", "keys" : [ "Down" ] },
-				{ "name" : "YAW", "id" : "yaw", "analog" : 0, "low" : "left", "role" : "stick_x" },
-				{ "name" : "ROLL", "id" : "roll", "analog" : 1, "low" : "left", "role" : "stick2_x" }
-			],
-			"outputs" : [
-				{ "name" : "LOCK MECHA.", "id" : "lock_mecha", "output" : 1, "role" : "lock" },
-				{ "name" : "LEFT LOWER LAMP", "id" : "left_lower_lamp", "output" : 2, "role" : "lamp" },
-				{ "name" : "START LAMP", "id" : "start_lamp", "output" : 3, "role" : "lamp" },
-				{ "name" : "LEFT UPPER LAMP", "id" : "left_upper_lamp", "output" : 4, "role" : "lamp" },
-				{ "name" : "RIGHT UPPER LAMP", "id" : "right_upper_lamp", "output" : 5, "role" : "lamp" },
-				{ "name" : "RIGHT LOWER LAMP", "id" : "right_lower_lamp", "output" : 6, "role" : "lamp" }
-			],
 			"sections" : [
 				{
 					"name" : "mie",
@@ -319,6 +305,14 @@
 			"title" : "Planet Harriers",
 			"link" : { "cabinets" : 2 },
 			"mach" : "hikaru",
+			"seated" : true,
+			"sound_parts" : [
+				{ "part" : "speaker", "at" : "front_left", "board" : "main" },
+				{ "part" : "speaker", "at" : "front_right", "board" : "main" },
+				{ "part" : "woofer", "at" : "base", "board" : "main" },
+				{ "part" : "speaker", "at" : "seat_left", "board" : "option" },
+				{ "part" : "speaker", "at" : "seat_right", "board" : "option" }
+			],
 			"rom_board" : { "eprom_mb" : 4, "315-5881" : "2912C68A" },
 			"option_speakers" : true,
 			"mie_eeprom" : "42434e000201010018000401010101002100000000000000000000000600000000000000000000000000000000000000000000000000000000000000000061a442434e000201010018000401010101002100000000000000000000000600000000000000000000000000000000000000000000000000000000000000000061a4",
@@ -423,6 +417,17 @@
 			"title" : "Star Wars Racer Arcade",
 			"link" : { "cabinets" : 4, "seat" : { "in" : "backup", "byte" : "0007", "bits" : 2 } },
 			"mach" : "hikaru",
+			"seated" : true,
+			"cabinets" : [ { "id" : "minideluxe", "name" : "Mini Deluxe" } ],
+			"sound_parts" : [
+				{ "part" : "speaker", "at" : "front_left", "board" : "main" },
+				{ "part" : "speaker", "at" : "front_right", "board" : "main" },
+				{ "part" : "woofer", "at" : "base", "board" : "main", "cabinet" : "standard" },
+				{ "part" : "shaker", "at" : "panel", "board" : "option", "cabinet" : "standard" },
+				{ "part" : "woofer", "at" : "seat", "board" : "main", "cabinet" : "minideluxe" },
+				{ "part" : "shaker", "at" : "seat", "board" : "main", "cabinet" : "minideluxe" },
+				{ "part" : "unwired", "board" : "option", "cabinet" : "minideluxe" }
+			],
 			"rom_board" : { "eprom_mb" : 4, "315-5881" : "2903DAD5" },
 			"option_vibration" : true,
 			"option_level" : -13,
@@ -537,6 +542,15 @@
 			"title" : "NASCAR Arcade",
 			"link" : { "cabinets" : 8, "seat" : { "in" : "backup", "byte" : "14E3", "shift" : 2, "bits" : 4, "first" : 1 } },
 			"mach" : "hikaru",
+			"seated" : true,
+			"sound_parts" : [
+				{ "part" : "speaker", "at" : "front_left", "board" : "main" },
+				{ "part" : "speaker", "at" : "front_right", "board" : "main" },
+				{ "part" : "speaker", "at" : "seat_left", "board" : "option" },
+				{ "part" : "speaker", "at" : "seat_right", "board" : "option" },
+				{ "part" : "shaker", "at" : "panel", "board" : "option", "cabinet" : "deluxe" },
+				{ "part" : "shaker", "at" : "seat", "board" : "option", "cabinet" : "deluxe" }
+			],
 			"rom_board" : { "eprom_mb" : 4, "actel" : { "key" : "56DEDF33", "id" : "4252" } },
 			"option_speakers" : true,
 			"option_level" : -12,
@@ -649,35 +663,7 @@
 			"name" : "sgnascaro",
 			"title" : "NASCAR Arcade (original)",
 			"parent" : "sgnascar",
-			"link" : { "cabinets" : 8, "seat" : { "in" : "backup", "byte" : "14E3", "shift" : 2, "bits" : 4, "first" : 1 } },
 			"mach" : "hikaru",
-			"rom_board" : { "eprom_mb" : 4, "actel" : { "key" : "56DEDF33", "id" : "4252" } },
-			"option_speakers" : true,
-			"option_level" : -12,
-			"drive_board" : { "first_output" : 15 },
-			"mie_eeprom" : "424252000101010018000401010101001000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000031a5424252000101010018000401010101001000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000031a5",
-			"io" : "837-13741",
-			"controls" : [
-				{ "name" : "STEERING WHEEL", "id" : "steering_wheel", "analog" : 0, "low" : "left", "role" : "steer" },
-				{ "name" : "GAS PEDAL", "id" : "gas_pedal", "analog" : 1, "low" : "released", "role" : "accel" },
-				{ "name" : "BRAKE PEDAL", "id" : "brake_pedal", "analog" : 2, "low" : "released", "role" : "brake" },
-				{ "name" : "GEAR POSITION", "id" : "gear", "positions" : [
-					{ "name" : "N", "switches" : [] },
-					{ "name" : "1", "switches" : [ "2P LEFT", "2P UP" ] },
-					{ "name" : "2", "switches" : [ "2P LEFT", "2P DOWN" ] },
-					{ "name" : "3", "switches" : [ "2P UP" ] },
-					{ "name" : "4", "switches" : [ "2P DOWN" ] } ],
-					"role" : "gear" },
-				{ "name" : "START BUTTON", "id" : "start", "switch" : "1P START", "role" : "start" },
-				{ "name" : "VIEW CHANGE BUTTON", "id" : "view_change", "switch" : "1P DOWN", "role" : "button4" }
-			],
-			"outputs" : [
-				{ "name" : "BASS SHAKER MUTE", "id" : "bass_shaker_mute", "output" : 14, "role" : "mute" }
-			],
-			"cabinets" : [
-				{ "id" : "deluxe", "name" : "Deluxe", "grounded" : [ "1P PUSH1" ],
-				  "controls" : { "steering_wheel" : { "low" : "right" }, "view_change" : { "switch" : "1P UP" } } }
-			],
 			"sections" : [
 				{
 					"name" : "mie",
@@ -866,13 +852,40 @@
 			"name" : "atvtrack",
 			"title" : "ATV Track",
 			"mach" : "atvtrack",
-			"controls" : [
-				{ "name" : "HANDLEBAR", "id" : "handlebar", "analog" : 0, "low" : "left", "role" : "steer" },
-				{ "name" : "THROTTLE", "id" : "throttle", "analog" : 1, "low" : "released", "role" : "accel" },
-				{ "name" : "LEFT BRAKE", "id" : "left_brake", "switch" : "1P PUSH1", "role" : "button1", "keys" : [ "Z" ], "pad" : [ "lefttrigger" ] },
-				{ "name" : "RIGHT BRAKE", "id" : "right_brake", "switch" : "1P PUSH2", "role" : "button2", "keys" : [ "X" ], "pad" : [ "rightshoulder" ] },
-				{ "name" : "START", "id" : "start", "switch" : "1P START", "role" : "start" }
+			"seated" : true,
+			"sound_parts" : [
+				{ "part" : "speaker", "at" : "front_left", "channel" : 3 },
+				{ "part" : "speaker", "at" : "front_right", "channel" : 2 },
+				{ "part" : "woofer", "at" : "base", "channel" : 1 },
+				{ "part" : "unwired", "channel" : 0 }
 			],
+			"woofer" : true,
+			"wheel_motor" : true,
+			"link" : { "cabinets" : 2, "seat" : { "in" : "nand", "byte" : "0017", "first" : 1 } },
+			"motion_platform" : true,
+			"cabinets" : [
+				{ "id" : "vibrator", "name" : "Vibrator", "motion_platform" : false, "grounded_analog" : [ 2, 3 ],
+				  "nand_setting" : { "byte" : "0016", "value" : 3, "standard" : 2 },
+				  "outputs" : [ { "name" : "STOP LAMP", "id" : "stop_lamp", "output" : 5, "role" : "lamp" },
+				               { "name" : "COIN COUNTER", "id" : "coin_counter", "output" : 4, "role" : "counter" },
+				               { "name" : "SEAT MOTOR", "id" : "seat_motor", "output" : 19, "role" : "rumble" } ] }
+			],
+			"controls" : [
+				{ "name" : "HANDLEBAR POSITION", "id" : "handlebar", "analog" : 0, "low" : "left", "span" : [ 254, 2 ], "role" : "steer" },
+				{ "name" : "THROTTLE", "id" : "throttle", "analog" : 1, "low" : "released", "span" : [ 6, 230 ], "role" : "accel" },
+				{ "name" : "LEFT BRAKE LEVER", "id" : "left_brake", "switch" : "1P PUSH1", "port" : "1.4", "role" : "button1", "keys" : [ "Z" ], "pad" : [ "lefttrigger" ], "wheel" : "paddle_left" },
+				{ "name" : "RIGHT BRAKE LEVER", "id" : "right_brake", "switch" : "1P PUSH2", "port" : "1.5", "role" : "button2", "keys" : [ "X" ], "pad" : [ "rightshoulder" ], "wheel" : "paddle_right" },
+				{ "name" : "START BUTTON", "id" : "start", "switch" : "1P START", "port" : "1.7", "role" : "start" },
+				{ "name" : "VOLUME UP", "id" : "volume_up", "switch" : "1P PUSH5", "port" : "0.0", "role" : "button5", "keys" : [ "=" ], "pad" : [ "dpup" ] },
+				{ "name" : "VOLUME DOWN", "id" : "volume_down", "switch" : "1P PUSH6", "port" : "0.2", "role" : "button6", "keys" : [ "-" ], "pad" : [ "dpdown" ] }
+			],
+			"outputs" : [
+				{ "name" : "STOP LAMP", "id" : "stop_lamp", "output" : 5, "role" : "lamp" },
+				{ "name" : "COIN COUNTER", "id" : "coin_counter", "output" : 4, "role" : "counter" },
+				{ "name" : "PLATFORM LEFT", "id" : "platform_left", "output" : 19, "role" : "rumble" },
+				{ "name" : "PLATFORM RIGHT", "id" : "platform_right", "output" : 20, "role" : "rumble" }
+			],
+			"grounded" : [ "1.6" ],
 			"sections" : [
 				{
 					"name" : "nand0",
@@ -916,13 +929,6 @@
 			"title" : "ATV Track (set 2)",
 			"parent" : "atvtrack",
 			"mach" : "atvtrack",
-			"controls" : [
-				{ "name" : "HANDLEBAR", "id" : "handlebar", "analog" : 0, "low" : "left", "role" : "steer" },
-				{ "name" : "THROTTLE", "id" : "throttle", "analog" : 1, "low" : "released", "role" : "accel" },
-				{ "name" : "LEFT BRAKE", "id" : "left_brake", "switch" : "1P PUSH1", "role" : "button1", "keys" : [ "Z" ], "pad" : [ "lefttrigger" ] },
-				{ "name" : "RIGHT BRAKE", "id" : "right_brake", "switch" : "1P PUSH2", "role" : "button2", "keys" : [ "X" ], "pad" : [ "rightshoulder" ] },
-				{ "name" : "START", "id" : "start", "switch" : "1P START", "role" : "start" }
-			],
 			"sections" : [
 				{
 					"name" : "nand0",
@@ -965,27 +971,40 @@
 			"name" : "gfootbal",
 			"title" : "Gaelco Football",
 			"mach" : "atvtrack",
+			"sound_parts" : [
+				{ "part" : "speaker", "at" : "front_left", "channel" : 3 },
+				{ "part" : "speaker", "at" : "front_right", "channel" : 2 },
+				{ "part" : "woofer", "at" : "base", "channel" : 1 }
+			],
+			"woofer" : true,
 			"controls" : [
-				{ "name" : "1P UP", "id" : "1p_up", "switch" : "1P UP", "role" : "up", "pad" : [ "dpup", "-lefty" ] },
-				{ "name" : "1P DOWN", "id" : "1p_down", "switch" : "1P DOWN", "role" : "down", "pad" : [ "dpdown", "+lefty" ] },
-				{ "name" : "1P LEFT", "id" : "1p_left", "switch" : "1P LEFT", "role" : "left", "pad" : [ "dpleft", "-leftx" ] },
-				{ "name" : "1P RIGHT", "id" : "1p_right", "switch" : "1P RIGHT", "role" : "right", "pad" : [ "dpright", "+leftx" ] },
-				{ "name" : "1P BUTTON 1", "id" : "1p_button1", "switch" : "1P PUSH1", "role" : "button1" },
-				{ "name" : "1P BUTTON 2", "id" : "1p_button2", "switch" : "1P PUSH2", "role" : "button2" },
-				{ "name" : "1P BUTTON 3", "id" : "1p_button3", "switch" : "1P PUSH3", "role" : "button3" },
-				{ "name" : "1P KICK SIDE", "id" : "1p_kick_x", "analog" : 0, "low" : "left", "role" : "stick2_x" },
-				{ "name" : "1P KICK FORWARD", "id" : "1p_kick_y", "analog" : 1, "low" : "up", "role" : "stick2_y" },
-				{ "name" : "1P START", "id" : "1p_start", "switch" : "1P START", "role" : "start" },
-				{ "name" : "2P UP", "id" : "2p_up", "switch" : "2P UP", "role" : "up", "player" : 2, "pad" : [ "dpup", "-lefty" ] },
-				{ "name" : "2P DOWN", "id" : "2p_down", "switch" : "2P DOWN", "role" : "down", "player" : 2, "pad" : [ "dpdown", "+lefty" ] },
-				{ "name" : "2P LEFT", "id" : "2p_left", "switch" : "2P LEFT", "role" : "left", "player" : 2, "pad" : [ "dpleft", "-leftx" ] },
-				{ "name" : "2P RIGHT", "id" : "2p_right", "switch" : "2P RIGHT", "role" : "right", "player" : 2, "pad" : [ "dpright", "+leftx" ] },
-				{ "name" : "2P BUTTON 1", "id" : "2p_button1", "switch" : "2P PUSH1", "role" : "button1", "player" : 2 },
-				{ "name" : "2P BUTTON 2", "id" : "2p_button2", "switch" : "2P PUSH2", "role" : "button2", "player" : 2 },
-				{ "name" : "2P BUTTON 3", "id" : "2p_button3", "switch" : "2P PUSH3", "role" : "button3", "player" : 2 },
-				{ "name" : "2P KICK SIDE", "id" : "2p_kick_x", "analog" : 2, "low" : "left", "role" : "stick2_x", "player" : 2 },
-				{ "name" : "2P KICK FORWARD", "id" : "2p_kick_y", "analog" : 3, "low" : "up", "role" : "stick2_y", "player" : 2 },
-				{ "name" : "2P START", "id" : "2p_start", "switch" : "2P START", "role" : "start", "player" : 2 }
+				{ "name" : "1P UP", "id" : "1p_up", "switch" : "1P UP", "port" : "1.0", "role" : "up", "pad" : [ "dpup", "-lefty" ] },
+				{ "name" : "1P DOWN", "id" : "1p_down", "switch" : "1P DOWN", "port" : "1.1", "role" : "down", "pad" : [ "dpdown", "+lefty" ] },
+				{ "name" : "1P LEFT", "id" : "1p_left", "switch" : "1P LEFT", "port" : "1.3", "role" : "left", "pad" : [ "dpleft", "-leftx" ] },
+				{ "name" : "1P RIGHT", "id" : "1p_right", "switch" : "1P RIGHT", "port" : "1.2", "role" : "right", "pad" : [ "dpright", "+leftx" ] },
+				{ "name" : "1P BUTTON A", "id" : "1p_button1", "switch" : "1P PUSH1", "port" : "1.4", "role" : "button1" },
+				{ "name" : "1P BUTTON B", "id" : "1p_button2", "switch" : "1P PUSH2", "port" : "1.5", "role" : "button2" },
+				{ "name" : "1P BUTTON C", "id" : "1p_button3", "switch" : "1P PUSH3", "port" : "1.6", "role" : "button3" },
+				{ "name" : "1P KICK SIDE", "id" : "1p_kick_x", "analog" : 0, "low" : "left", "ball" : "side", "role" : "stick2_x" },
+				{ "name" : "1P KICK FORWARD", "id" : "1p_kick_y", "analog" : 1, "low" : "up", "ball" : "forward", "role" : "stick2_y" },
+				{ "name" : "1P START", "id" : "1p_start", "switch" : "1P START", "port" : "1.7", "role" : "start" },
+				{ "name" : "2P UP", "id" : "2p_up", "switch" : "2P UP", "port" : "2.0", "role" : "up", "player" : 2, "pad" : [ "dpup", "-lefty" ] },
+				{ "name" : "2P DOWN", "id" : "2p_down", "switch" : "2P DOWN", "port" : "2.1", "role" : "down", "player" : 2, "pad" : [ "dpdown", "+lefty" ] },
+				{ "name" : "2P LEFT", "id" : "2p_left", "switch" : "2P LEFT", "port" : "2.3", "role" : "left", "player" : 2, "pad" : [ "dpleft", "-leftx" ] },
+				{ "name" : "2P RIGHT", "id" : "2p_right", "switch" : "2P RIGHT", "port" : "2.2", "role" : "right", "player" : 2, "pad" : [ "dpright", "+leftx" ] },
+				{ "name" : "2P BUTTON A", "id" : "2p_button1", "switch" : "2P PUSH1", "port" : "2.4", "role" : "button1", "player" : 2 },
+				{ "name" : "2P BUTTON B", "id" : "2p_button2", "switch" : "2P PUSH2", "port" : "2.5", "role" : "button2", "player" : 2 },
+				{ "name" : "2P BUTTON C", "id" : "2p_button3", "switch" : "2P PUSH3", "port" : "2.6", "role" : "button3", "player" : 2 },
+				{ "name" : "2P KICK SIDE", "id" : "2p_kick_x", "analog" : 2, "low" : "left", "ball" : "side", "role" : "stick2_x", "player" : 2 },
+				{ "name" : "2P KICK FORWARD", "id" : "2p_kick_y", "analog" : 3, "low" : "up", "ball" : "forward", "role" : "stick2_y", "player" : 2 },
+				{ "name" : "2P START", "id" : "2p_start", "switch" : "2P START", "port" : "2.7", "role" : "start", "player" : 2 },
+				{ "name" : "VOLUME UP", "id" : "volume_up", "switch" : "1P PUSH5", "port" : "0.0", "role" : "button5", "keys" : [ "=" ] },
+				{ "name" : "VOLUME DOWN", "id" : "volume_down", "switch" : "1P PUSH6", "port" : "0.2", "role" : "button6", "keys" : [ "-" ] }
+			],
+			"outputs" : [
+				{ "name" : "1P START LAMP", "id" : "1p_start_lamp", "output" : 5, "role" : "lamp" },
+				{ "name" : "2P START LAMP", "id" : "2p_start_lamp", "output" : 6, "role" : "lamp", "player" : 2 },
+				{ "name" : "COIN COUNTER", "id" : "coin_counter", "output" : 4, "role" : "counter" }
 			],
 			"sections" : [
 				{
@@ -1029,13 +1048,33 @@
 			"name" : "smashdrv",
 			"title" : "Smashing Drive",
 			"mach" : "smashdrv",
+			"seated" : true,
+			"sound_parts" : [
+				{ "part" : "speaker", "at" : "front_left", "channel" : 3 },
+				{ "part" : "speaker", "at" : "front_right", "channel" : 2 },
+				{ "part" : "woofer", "at" : "base", "channel" : 1 },
+				{ "part" : "unwired", "channel" : 0 }
+			],
+			"woofer" : true,
+			"wheel_motor" : true,
+			"link" : { "cabinets" : 2, "seat" : { "in" : "flash", "byte" : "01E1", "first" : 1 } },
 			"controls" : [
-				{ "name" : "WHEEL", "id" : "wheel", "analog" : 0, "low" : "left", "role" : "steer" },
-				{ "name" : "GAS PEDAL", "id" : "gas_pedal", "analog" : 1, "low" : "released", "role" : "accel" },
-				{ "name" : "BRAKE PEDAL", "id" : "brake_pedal", "analog" : 2, "low" : "released", "role" : "brake" },
-				{ "name" : "HORN (START)", "id" : "horn", "switch" : "1P START", "role" : "start" },
-				{ "name" : "VOLUME UP", "id" : "volume_up", "switch" : "1P PUSH1", "role" : "button5", "keys" : [ "=" ], "pad" : [ "dpup" ] },
-				{ "name" : "VOLUME DOWN", "id" : "volume_down", "switch" : "1P PUSH2", "role" : "button6", "keys" : [ "-" ], "pad" : [ "dpdown" ] }
+				{ "name" : "STEERING WHEEL", "id" : "wheel", "analog" : 0, "low" : "left", "span" : [ 2, 254 ], "role" : "steer" },
+				{ "name" : "ACCELERATOR", "id" : "gas_pedal", "switch" : "1P PUSH1", "port" : "1.4", "role" : "button1", "keys" : [ "Up" ], "pad" : [ "righttrigger" ], "wheel" : "gas" },
+				{ "name" : "BRAKE", "id" : "brake_pedal", "switch" : "1P PUSH2", "port" : "1.5", "role" : "button2", "keys" : [ "Down" ], "pad" : [ "lefttrigger" ], "wheel" : "brake" },
+				{ "name" : "HORN", "id" : "horn", "switch" : "1P START", "port" : "1.6", "role" : "start" },
+				{ "name" : "VOLUME UP", "id" : "volume_up", "switch" : "1P PUSH5", "port" : "0.0", "role" : "button5", "keys" : [ "=" ], "pad" : [ "dpup" ] },
+				{ "name" : "VOLUME DOWN", "id" : "volume_down", "switch" : "1P PUSH6", "port" : "0.2", "role" : "button6", "keys" : [ "-" ], "pad" : [ "dpdown" ] }
+			],
+			"outputs" : [
+				{ "name" : "LAMP", "id" : "lamp", "output" : 5, "role" : "lamp" },
+				{ "name" : "COIN COUNTER", "id" : "coin_counter", "output" : 4, "role" : "counter" },
+				{ "name" : "SEAT MOTOR", "id" : "seat_motor", "output" : 19, "role" : "rumble" }
+			],
+			"cabinets" : [
+				{ "id" : "upright", "name" : "Upright", "seated" : false,
+				  "outputs" : [ { "name" : "LAMP", "id" : "lamp", "output" : 5, "role" : "lamp" },
+				               { "name" : "COIN COUNTER", "id" : "coin_counter", "output" : 4, "role" : "counter" } ] }
 			],
 			"sections" : [
 				{
@@ -1073,14 +1112,6 @@
 			"title" : "Smashing Drive (UK)",
 			"parent" : "smashdrv",
 			"mach" : "smashdrv",
-			"controls" : [
-				{ "name" : "WHEEL", "id" : "wheel", "analog" : 0, "low" : "left", "role" : "steer" },
-				{ "name" : "GAS PEDAL", "id" : "gas_pedal", "analog" : 1, "low" : "released", "role" : "accel" },
-				{ "name" : "BRAKE PEDAL", "id" : "brake_pedal", "analog" : 2, "low" : "released", "role" : "brake" },
-				{ "name" : "HORN (START)", "id" : "horn", "switch" : "1P START", "role" : "start" },
-				{ "name" : "VOLUME UP", "id" : "volume_up", "switch" : "1P PUSH1", "role" : "button5", "keys" : [ "=" ], "pad" : [ "dpup" ] },
-				{ "name" : "VOLUME DOWN", "id" : "volume_down", "switch" : "1P PUSH2", "role" : "button6", "keys" : [ "-" ], "pad" : [ "dpdown" ] }
-			],
 			"sections" : [
 				{
 					"name" : "program",
@@ -1117,14 +1148,6 @@
 			"title" : "Smashing Drive (Spain, Portugal)",
 			"parent" : "smashdrv",
 			"mach" : "smashdrv",
-			"controls" : [
-				{ "name" : "WHEEL", "id" : "wheel", "analog" : 0, "low" : "left", "role" : "steer" },
-				{ "name" : "GAS PEDAL", "id" : "gas_pedal", "analog" : 1, "low" : "released", "role" : "accel" },
-				{ "name" : "BRAKE PEDAL", "id" : "brake_pedal", "analog" : 2, "low" : "released", "role" : "brake" },
-				{ "name" : "HORN (START)", "id" : "horn", "switch" : "1P START", "role" : "start" },
-				{ "name" : "VOLUME UP", "id" : "volume_up", "switch" : "1P PUSH1", "role" : "button5", "keys" : [ "=" ], "pad" : [ "dpup" ] },
-				{ "name" : "VOLUME DOWN", "id" : "volume_down", "switch" : "1P PUSH2", "role" : "button6", "keys" : [ "-" ], "pad" : [ "dpdown" ] }
-			],
 			"sections" : [
 				{
 					"name" : "program",

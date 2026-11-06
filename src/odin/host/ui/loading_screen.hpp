@@ -59,6 +59,10 @@ struct LoadingScreen {
 	/* The rectangles to fill on black: the title, the label, then the
 	 * bar, its track and what is done of it (none at 0). */
 	static std::vector<LoadingRect> layout(std::string_view title, unsigned done, unsigned total);
+	/* The same in the window, where the screen of the board is, at x, y,
+	 * w by h (picture_rect); those that come to nothing left out */
+	static std::vector<LoadingRect> placed(std::string_view title, unsigned done, unsigned total, unsigned x,
+	                                       unsigned y, unsigned w, unsigned h);
 	/* The drawing of a character, a row of five bits from the top, the
 	 * high one on the left. Small letters are drawn as capitals, any
 	 * other character than printable ASCII as a space. */
