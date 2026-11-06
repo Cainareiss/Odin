@@ -107,8 +107,8 @@ struct Options {
 };
 
 /* RUN: go on; HELP_ASKED or WRONG: the help is to be shown (exit 0 or 1),
- * print_help */
-enum class Parsed { RUN, HELP_ASKED, WRONG };
+ * print_help; VERSION_ASKED: the version alone (exit 0) */
+enum class Parsed { RUN, HELP_ASKED, VERSION_ASKED, WRONG };
 void print_help(const char *program);
 
 /* The help is shown for -h and for an option that is not right. Without

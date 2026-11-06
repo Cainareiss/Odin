@@ -61,7 +61,8 @@ COMMAND LINE
                   digits) in the current folder after these frames.
  -n <n>           Stop after frame n.
  -v               Detailed log of the board (slow).
- -h               Show the help.
+ -V, --version    Show the version (e.g. Odin v0.1.1) and exit.
+ -h, --help       Show the help.
 
 The command line comes before odin.ini.
 

@@ -35,7 +35,7 @@
 #include <span>
 #include <vector>
 
-#include <unistd.h>
+#include <getopt.h>
 
 #include "odin/common/env.hpp"
 #include "odin/host/app/hotkeys.hpp"
@@ -87,7 +87,15 @@ const char HELP[] = "Usage: %s [options]\n"
 "			at the level of the list or of odin.ini), quad (four) or off; by\n"
 "			default those the cabinet has: main, or mix\n"
 "	-v		Set verbosity (affects debug messages)\n"
-"	-h              Show this help\n";
+"	-V, --version	Show the version and exit\n"
+"	-h, --help	Show this help\n";
+
+/* The long names of -V and -h */
+const option LONG_OPTIONS[] = {
+	{ "version", no_argument, nullptr, 'V' },
+	{ "help", no_argument, nullptr, 'h' },
+	{ nullptr, 0, nullptr, 0 },
+};
 
 /* A size of the window in points as odin.ini writes it, <w>x<h>: from
  * 320 by 240 to 16384 by 16384 */
@@ -258,7 +266,8 @@ parse_options(int argc, char **argv, Options &options)
 	int opt = 0;
 	bool wrong = false;
 
-	while (opt != 'h' && (opt = getopt(argc, argv, "R:B:c:r:n:l:s:ux:a:w:fo:vh?")) != -1) {
+	while (opt != 'h' && opt != 'V' &&
+	       (opt = getopt_long(argc, argv, "R:B:c:r:n:l:s:ux:a:w:fo:vVh?", LONG_OPTIONS, nullptr)) != -1) {
 		switch (opt) {
 		case 'c':
 			options.config = optarg;
@@ -325,12 +334,16 @@ parse_options(int argc, char **argv, Options &options)
 		case 'v':
 			options.verbose = options.given.verbose = true;
 			break;
+		case 'V':
+			break;
 		default:
 			wrong = opt != 'h';
 			opt = 'h';
 			break;
 		}
 	}
+	if (opt == 'V')
+		return Parsed::VERSION_ASKED;
 	if (opt != 'h')
 		return Parsed::RUN;
 	return wrong ? Parsed::WRONG : Parsed::HELP_ASKED;
