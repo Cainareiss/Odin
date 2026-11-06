@@ -76,16 +76,26 @@ guid_text(SDL_GUID guid)
 	return text;
 }
 
+/* The path SDL tells of a device, empty for none */
+std::string
+path_text(const char *path)
+{
+	return path ? path : "";
+}
+
 /* The make a player asks for, by its GUID, and the very one picked (0:
- * any of that make), which the other player lets go of */
+ * any of that make) with its path, which the other player lets go of */
 void
-choose(std::array<std::string, 2> &wanted, std::array<SDL_JoystickID, 2> &picked, unsigned player,
-       const std::string &guid, SDL_JoystickID one)
+choose(std::array<std::string, 2> &wanted, std::array<SDL_JoystickID, 2> &picked, std::array<std::string, 2> &paths,
+       unsigned player, const std::string &guid, SDL_JoystickID one, const std::string &path)
 {
 	wanted[player & 1] = guid;
 	picked[player & 1] = one;
+	paths[player & 1] = path;
 	if (one && picked[~player & 1] == one)
 		picked[~player & 1] = 0;
+	if (same_path(device_path(paths[~player & 1]), path))
+		paths[~player & 1].clear();
 }
 
 /* The device of that id among those open (nullptr: none) */
@@ -131,6 +141,10 @@ Controls::Controls(Keyboard &keys, const std::vector<GameControl> &controls, con
 			m_guns[key[3] - '1'] = identity_of(value);
 		} else if (key == "joy1" || key == "joy2") {
 			m_joys_wanted[key[3] - '1'] = identity_of(value);
+		} else if (key == "p1_path" || key == "p2_path") {
+			m_wanted_paths[key[1] - '1'] = value;
+		} else if (key == "joy1_path" || key == "joy2_path") {
+			m_joys_wanted_paths[key[3] - '1'] = value;
 		} else if (key == "light_gun_mode" && on_off_named(value)) {
 			m_light_gun_mode = *on_off_named(value);
 		} else if (key == "invert") {
@@ -243,15 +257,19 @@ void
 Controls::reseat()
 {
 	std::vector<OpenPad> pads, joys;
+	/* A link each time: it may point to another node since */
+	const std::array<std::string, 2> paths = { device_path(m_wanted_paths[0]), device_path(m_wanted_paths[1]) };
+	const std::array<std::string, 2> joy_paths = { device_path(m_joys_wanted_paths[0]),
+	                                               device_path(m_joys_wanted_paths[1]) };
 
 	for (const Pad &pad : m_pads)
-		pads.push_back({ pad.id, pad.guid });
+		pads.push_back({ pad.id, pad.guid, pad.path });
 	for (const Joy &joy : m_joys)
 		if (joystick_fits(SDL_GetJoystickType(joy.handle), m_steers))
-			joys.push_back({ joy.id, joy.guid });
+			joys.push_back({ joy.id, joy.guid, joy.path });
 
-	const std::array<SDL_JoystickID, 2> seats = seat_pads(pads, m_wanted, m_picked, m_seats);
-	const std::array<SDL_JoystickID, 2> joy_seats = seat_pads(joys, m_joys_wanted, m_joys_picked, m_joy_seats);
+	const std::array<SDL_JoystickID, 2> seats = seat_pads(pads, m_wanted, m_picked, m_seats, paths);
+	const std::array<SDL_JoystickID, 2> joy_seats = seat_pads(joys, m_joys_wanted, m_joys_picked, m_joy_seats, joy_paths);
 
 	for (unsigned player = 0; player < 2; player++) {
 		if (joy_seats[player] == m_joy_seats[player])
@@ -260,7 +278,8 @@ Controls::reseat()
 			m_force.reset();
 		m_joy_seats[player] = joy_seats[player];
 		if (const Joy *const now = joystick(player))
-			std::printf("joystick: '%s' for player %u\n", SDL_GetJoystickName(now->handle), player + 1);
+			std::printf("joystick: '%s' (%s) for player %u\n", SDL_GetJoystickName(now->handle), now->path.c_str(),
+			            player + 1);
 	}
 
 	for (unsigned player = 0; player < 2; player++) {
@@ -273,7 +292,8 @@ Controls::reseat()
 		}
 		m_seats[player] = seats[player];
 		if (const Pad *const now = seat(player))
-			std::printf("pad: '%s' for player %u\n", SDL_GetGamepadName(now->handle), player + 1);
+			std::printf("pad: '%s' (%s) for player %u\n", SDL_GetGamepadName(now->handle), now->path.c_str(),
+			            player + 1);
 	}
 }
 
@@ -289,7 +309,7 @@ Controls::plugged() const
 		                pad_kind(SDL_GetGamepadType(pad.handle), SDL_GetGamepadVendor(pad.handle),
 		                         SDL_GetGamepadProduct(pad.handle)),
 		                pad.id, player_seated(pad.id, m_seats),
-		                SDL_GetGamepadConnectionState(pad.handle) });
+		                SDL_GetGamepadConnectionState(pad.handle), pad.path });
 	}
 	return out;
 }
@@ -297,7 +317,9 @@ Controls::plugged() const
 void
 Controls::want(unsigned player, const std::string &guid, SDL_JoystickID picked)
 {
-	choose(m_wanted, m_picked, player, guid, picked);
+	const Pad *const one = find(picked);
+
+	choose(m_wanted, m_picked, m_wanted_paths, player, guid, picked, one ? one->path : std::string());
 	reseat();
 }
 
@@ -311,7 +333,7 @@ Controls::joysticks() const
 
 		out.push_back({ name ? name : "", joy.guid, static_cast<int>(SDL_GetJoystickType(joy.handle)), joy.id,
 		                player_seated(joy.id, m_joy_seats),
-		                SDL_GetJoystickConnectionState(joy.handle) });
+		                SDL_GetJoystickConnectionState(joy.handle), joy.path });
 	}
 	return out;
 }
@@ -319,7 +341,9 @@ Controls::joysticks() const
 void
 Controls::want_joystick(unsigned player, const std::string &guid, SDL_JoystickID picked)
 {
-	choose(m_joys_wanted, m_joys_picked, player, guid, picked);
+	const Joy *const one = find_joystick(picked);
+
+	choose(m_joys_wanted, m_joys_picked, m_joys_wanted_paths, player, guid, picked, one ? one->path : std::string());
 	reseat();
 }
 
@@ -342,6 +366,7 @@ Controls::open(SDL_JoystickID id)
 	pad.handle = handle;
 	pad.id = id;
 	pad.guid = guid_text(SDL_GetGamepadGUIDForID(id));
+	pad.path = path_text(SDL_GetGamepadPathForID(id));
 	pad.tuning = PadTuning::of(m_settings, pad.guid, true);
 	for (unsigned axis = 0; axis < SDL_GAMEPAD_AXIS_COUNT; axis++)
 		pad.axes[axis] = SDL_GetGamepadAxis(handle, static_cast<SDL_GamepadAxis>(axis));
@@ -349,7 +374,8 @@ Controls::open(SDL_JoystickID id)
 	for (unsigned button = 0; button < SDL_GAMEPAD_BUTTON_COUNT; button++)
 		pad.state.buttons[button] = SDL_GetGamepadButton(handle, static_cast<SDL_GamepadButton>(button));
 	m_pads.push_back(std::move(pad));
-	std::printf("pad: '%s' plugged\n", SDL_GetGamepadName(handle));
+	std::printf("pad: '%s' plugged, %s at %s\n", SDL_GetGamepadName(handle), m_pads.back().guid.c_str(),
+	            m_pads.back().path.c_str());
 	reseat();
 	if (m_seats[0] != id && m_seats[1] != id)
 		std::printf("pad: '%s' waits, both players have one\n", SDL_GetGamepadName(handle));
@@ -392,6 +418,7 @@ Controls::open_joystick(SDL_JoystickID id)
 	joy.handle = handle;
 	joy.id = id;
 	joy.guid = guid_text(SDL_GetJoystickGUIDForID(id));
+	joy.path = path_text(SDL_GetJoystickPathForID(id));
 	joy.state.axes.assign(static_cast<size_t>(axes), 0);
 	joy.state.known.assign(static_cast<size_t>(axes), false);
 	joy.state.rest.assign(static_cast<size_t>(axes), 0);
@@ -413,8 +440,8 @@ Controls::open_joystick(SDL_JoystickID id)
 	joy.fresh.assign(static_cast<size_t>(buttons), false);
 	joy.release.assign(static_cast<size_t>(buttons), false);
 	m_joys.push_back(std::move(joy));
-	std::printf("joystick: '%s' plugged, %d axes, %d buttons, %d hats\n", SDL_GetJoystickName(handle), axes, buttons,
-	            hats);
+	std::printf("joystick: '%s' plugged, %s at %s, %d axes, %d buttons, %d hats\n", SDL_GetJoystickName(handle),
+	            m_joys.back().guid.c_str(), m_joys.back().path.c_str(), axes, buttons, hats);
 	reseat();
 }
 

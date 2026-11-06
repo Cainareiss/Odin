@@ -55,9 +55,10 @@ namespace odin {
  * system tells where it is when the window opens under it). The gamepads
  * are opened and closed as they are plugged in and out; each player has
  * the one they want for the game ([players.<game>] of the settings, "p1 =
- * <GUID> <name>": the first of that make and model), else the first free
- * one, and keeps it while others come and go (seats.hpp); a joystick the
- * same ("joy1 = <GUID> <name>"). SDL's own driver of the Logitech wheels
+ * <GUID> <name>": the first of that make and model, the one of its path
+ * when two are alike, "p1_path"), else the first free one, and keeps it
+ * while others come and go (seats.hpp); a joystick the same ("joy1 =
+ * <GUID> <name>", "joy1_path"). SDL's own driver of the Logitech wheels
  * is kept off: it would turn the centring spring of the wheel off and set
  * its rotation as soon as it sees it (SDL 3.4, Linux); the wheel stays
  * with the driver of the system. ODIN_CONTROLLERS=none leaves the
@@ -124,13 +125,14 @@ public:
 	const JoyState *joystick_state(SDL_JoystickID id) const;
 	/* The gamepads plugged in, in the order they came: name, GUID, kind
 	 * (pad_drawing.hpp), id, the player it is the pad of (-1: none), by a
-	 * wire or not (as SDL knows it) */
+	 * wire or not (as SDL knows it), its path (seats.hpp) */
 	struct Plugged {
 		std::string name, guid;
 		int kind;
 		SDL_JoystickID id;
 		int player;
 		SDL_JoystickConnectionState connection;
+		std::string path;
 	};
 	std::vector<Plugged> plugged() const;
 	/* The gamepad a player wants: its GUID, empty for the first free one,
@@ -237,6 +239,7 @@ private:
 		SDL_Gamepad *handle = nullptr;
 		SDL_JoystickID id = 0;
 		std::string guid;
+		std::string path;	/* as SDL tells it */
 		std::array<int16_t, SDL_GAMEPAD_AXIS_COUNT> axes{};	/* as SDL gives them */
 		PadTuning tuning;
 		PadState state;
@@ -253,6 +256,7 @@ private:
 		SDL_Joystick *handle = nullptr;
 		SDL_JoystickID id = 0;
 		std::string guid;
+		std::string path;	/* as SDL tells it */
 		JoyState state;
 		std::vector<bool> fresh, release;
 		std::vector<uint8_t> hats;	/* as SDL gives them */
@@ -329,10 +333,12 @@ private:
 	std::array<SDL_JoystickID, 2> m_seats{};	/* that of each player, 0: none */
 	std::array<std::string, 2> m_wanted;
 	std::array<SDL_JoystickID, 2> m_picked{};	/* the very one, 0: any of that make */
+	std::array<std::string, 2> m_wanted_paths;	/* [players.<game>] p1_path, p2_path */
 	std::vector<Joy> m_joys;	/* plugged in, in the order they came */
 	std::array<SDL_JoystickID, 2> m_joy_seats{};
 	std::array<std::string, 2> m_joys_wanted;
 	std::array<SDL_JoystickID, 2> m_joys_picked{};
+	std::array<std::string, 2> m_joys_wanted_paths;	/* joy1_path, joy2_path */
 	/* The force of the wheel of player 1, made at its first torque (none:
 	 * not tried yet, or the joystick changed) */
 	std::unique_ptr<WheelForce> m_force;

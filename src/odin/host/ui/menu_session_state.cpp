@@ -314,17 +314,21 @@ MenuSession::fill_devices(MenuState &state)
 		std::array<SDL_JoystickID, 2> seats{};
 
 		if (m_other) {
-			std::array<std::string, 2> wanted;
+			std::array<std::string, 2> wanted, paths;
 			std::vector<OpenPad> open;
 
-			for (const auto &[key, value] : m_settings.section("players." + game_shown()))
-				for (unsigned player = 0; player < 2; player++)
+			for (const auto &[key, value] : m_settings.section("players." + game_shown())) {
+				for (unsigned player = 0; player < 2; player++) {
 					if (key == keys + std::to_string(player + 1))
 						wanted[player] = identity_of(value);
+					else if (key == keys + std::to_string(player + 1) + "_path")
+						paths[player] = device_path(value);
+				}
+			}
 			for (const Controls::Plugged &one : plugged)
 				if (pads || joystick_fits(one.kind, state.steers))
-					open.push_back({ one.id, one.guid });
-			seats = seat_pads(open, wanted, {}, {});
+					open.push_back({ one.id, one.guid, one.path });
+			seats = seat_pads(open, wanted, {}, {}, paths);
 		}
 		out.clear();
 		for (const Controls::Plugged &one : plugged)
@@ -709,22 +713,36 @@ MenuSession::clear_inputs()
 }
 
 /* [players.<game>] p1 or p2 (none: the first free gamepad), joy1 or joy2;
- * the very one picked (two of a make) for this run only */
+ * p1_path... the very one picked when another of its make is plugged in,
+ * which the other player lets go of (none: any of that make) */
 void
 MenuSession::want_pad(const std::string &game, unsigned player, const std::string &guid, const std::string &name,
                       bool joystick, bool runs, SDL_JoystickID picked)
 {
 	const std::string section = "players." + game;
+	const std::string own = std::string(joystick ? "joy" : "p") + (player ? "2" : "1");
+	const std::string other = std::string(joystick ? "joy" : "p") + (player ? "1" : "2");
+	const std::vector<Controls::Plugged> plugged = joystick ? m_controls.joysticks() : m_controls.plugged();
+	const auto one = std::find_if(plugged.begin(), plugged.end(),
+	                              [picked](const Controls::Plugged &device) { return picked && device.id == picked; });
+	const auto alike = std::count_if(plugged.begin(), plugged.end(),
+	                                 [&guid](const Controls::Plugged &device) { return device.guid == guid; });
+	const std::string taken = one != plugged.end() ? one->path : std::string();
+	const std::string path = !guid.empty() && alike > 1 ? taken : std::string();
 
 	if (joystick) {
 		if (runs)
 			m_controls.want_joystick(player, guid, picked);
-		keep(section, player ? "joy2" : "joy1", guid + " " + name);
-		return;
+		keep(section, own, guid + " " + name);
+	} else {
+		if (runs)
+			m_controls.want(player, guid, picked);
+		keep(section, own, guid.empty() ? std::nullopt : std::optional(guid + " " + name));
 	}
-	if (runs)
-		m_controls.want(player, guid, picked);
-	keep(section, player ? "p2" : "p1", guid.empty() ? std::nullopt : std::optional(guid + " " + name));
+	keep(section, own + "_path", path.empty() ? std::nullopt : std::optional(path));
+	for (const auto &[key, value] : m_settings.section(section))
+		if (key == other + "_path" && same_path(device_path(value), taken))
+			keep(section, key, std::nullopt);
 }
 
 /* [players.<game>] gun1 or gun2 (none: no light gun) */

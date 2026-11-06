@@ -243,6 +243,19 @@ count, after its parent's.
  joy1, joy2       <GUID> <name>   Wheel or other joystick of player 1, 2
                                   (a wheel: NASCAR, ATV Track, Smashing
                                   Drive, one player).
+ p1_path,         <path>          The very gamepad of player 1, 2 when two
+ p2_path,                         alike share a GUID: its path, as the log
+ joy1_path,                       names it ("pad: ... plugged, <GUID> at
+ joy2_path                        <path>"); on Linux, for a path
+                                  /dev/input/event..., a link to it of
+                                  /dev/input/by-path or by-id too. The
+                                  page Input and the bar write it when two
+                                  alike are plugged in. Gone or changed: any
+                                  of the GUID asked. On Windows an Xbox pad is
+                                  XInput#0 to #3; the SDL 2 of a frontend
+                                  (before 2.33) names it by its raw input
+                                  path, as Odin does when started with
+                                  SDL_JOYSTICK_RAWINPUT=1.
  device1,         keyboard, pad,  What the player plays with (it alone
  device2          joystick        shakes or turns). Default: Odin picks.
  gun1, gun2       <identity>      Light gun of player 1, 2, as the log
