@@ -33,6 +33,9 @@ pharrier (Planet Harriers)
 
 - Linked cabinets stay linked only while a frame goes round the ring in
   less than 1 ms, the time its master leaves.
+- EXIT from the SYSTEM MENU stops the game on "I/O BD is not connected to
+  game BD.": a request to the I/O board outlasts its 10 ms, perhaps as the
+  SH-4 takes no bus time (below). Off and on brings the game back.
 
 sgnascar (NASCAR Arcade)
 
