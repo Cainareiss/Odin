@@ -172,6 +172,25 @@ public:
 		                   [](const GameControl &c) { return c.player == 1 && c.role != Role::SERVICE; });
 	}
 	const Bindings &bindings() const { return m_bindings; }
+	/* Whether a control of player 1 or a role of the cabinet takes the
+	 * mouse (a sight by default): the cursor is hidden unless its
+	 * settings say not (hide_cursor) */
+	bool takes_mouse() const
+	{
+		const auto mouse = [](const std::vector<HostInput> &inputs) {
+			return std::any_of(inputs.begin(), inputs.end(),
+			                   [](const HostInput &input) { return input.kind == HostInput::Kind::MOUSE; });
+		};
+
+		for (size_t c = 0; c < m_controls.size(); c++)
+			for (unsigned part = 0; part < 3; part++)
+				if (m_controls[c].player == 0 && mouse(m_bindings.part(c, part)))
+					return true;
+		for (const Role role : { Role::COIN1, Role::COIN2, Role::TEST, Role::BOARD_TEST, Role::BOARD_SERVICE })
+			if (mouse(m_bindings.cabinet(role)))
+				return true;
+		return false;
+	}
 	/* Whether an input of a control of the panel, or of a role of the
 	 * cabinet, is held now: a stick of an analog control from half its
 	 * way */

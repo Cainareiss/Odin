@@ -134,6 +134,7 @@ Controls::Controls(Keyboard &keys, const std::vector<GameControl> &controls, con
 	}
 	route_outputs();
 	follow_hotkeys();
+	m_hide_standard = m_panel.takes_mouse();
 	if (all_off())
 		return;
 	for (const auto &[key, value] : settings.section("players." + game)) {
@@ -147,8 +148,8 @@ Controls::Controls(Keyboard &keys, const std::vector<GameControl> &controls, con
 			m_wanted_paths[key[1] - '1'] = value;
 		} else if (key == "joy1_path" || key == "joy2_path") {
 			m_joys_wanted_paths[key[3] - '1'] = value;
-		} else if (key == "light_gun_mode" && on_off_named(value)) {
-			m_light_gun_mode = *on_off_named(value);
+		} else if ((key == "hide_cursor" || key == "light_gun_mode") && on_off_named(value)) {
+			m_hide_cursor = hide_cursor_on(settings, game, false);
 		} else if (key == "invert") {
 			/* The panel turns them over (control_panel.cpp); one
 			 * that the game cannot turn over is said */
@@ -169,15 +170,15 @@ Controls::Controls(Keyboard &keys, const std::vector<GameControl> &controls, con
 		return;
 	}
 	m_on = true;
-	m_sight = sights_of(controls)[0];
 	follow_cursor();
 }
 
-/* No pointer while the mouse aims */
+/* No pointer while the mouse aims; made so again after the bar showed it
+ * (Dear ImGui shows it while it draws) */
 void
 Controls::follow_cursor()
 {
-	if (!m_on || aims() == m_cursor_hidden)
+	if (!m_on)
 		return;
 	m_cursor_hidden = aims();
 	if (m_cursor_hidden)
@@ -755,9 +756,8 @@ Controls::host() const
 		host.pads[player] = seat(player) ? &seat(player)->state : nullptr;
 		host.joys[player] = joystick(player) ? &joystick(player)->state : nullptr;
 	}
-	/* Out of light gun mode the mouse does nothing in a game with a sight */
-	host.mice[0] = m_gun_seen[0]                                   ? &m_gun_aims[0] :
-	               m_mouse_seen && (!m_sight || m_light_gun_mode) ? &m_mouse : nullptr;
+	/* A mouse that does not play does nothing in the game */
+	host.mice[0] = m_gun_seen[0] ? &m_gun_aims[0] : m_mouse_seen && aims() ? &m_mouse : nullptr;
 	host.mice[1] = m_gun_seen[1] ? &m_gun_aims[1] : nullptr;
 	return host;
 }
@@ -768,6 +768,7 @@ Controls::rebind()
 	m_panel = ControlPanel(m_game_controls, m_settings, m_game);
 	m_panel.set_wheel_rotation(m_wheel_rotation);
 	follow_hotkeys();
+	m_hide_standard = m_panel.takes_mouse();
 }
 
 void

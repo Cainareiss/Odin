@@ -243,7 +243,7 @@ struct BarState : BarSettings {
 	std::vector<LightGun> guns;
 	std::array<std::string, 2> gun;
 	std::array<bool, 2> sights{};
-	bool can_shake = false, shake = true, undo = false, light_gun = true;
+	bool can_shake = false, shake = true, undo = false, hide_cursor = false;
 	/* The next cabinet of the link (typed in Settings); the link set by
 	 * ODIN_NETBD; the game that runs is on a Gaelco board and does not link
 	 * cabinets (Gaelco Football) */
@@ -452,9 +452,9 @@ struct MenuState : BarSettings {
 	 * vibration_force) */
 	bool can_shake = false, shake = true;
 	int vibration_force = 100;
-	/* Player 1 has a sight (sights): the mouse aims there, or is a pointer
-	 * ([players.<game>] light_gun_mode) */
-	bool light_gun = true;
+	/* The cursor hidden, the mouse controlling the game, or a normal
+	 * pointer ([players.<game>] hide_cursor) */
+	bool hide_cursor = false;
 	/* The controls of the player shown that the player may turn over
 	 * (GameControl::invertible): "Invert" and their names, their ids, and
 	 * whether each is turned over ([players.<game>] invert; bytes:

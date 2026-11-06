@@ -228,7 +228,7 @@ MenuSession::fill_game_shown(MenuState &state)
 	                           m_game && m_game->shaker_experimental(state.player & 1);
 	state.shake = vibration_on(m_settings, game_shown());
 	state.vibration_force = vibration_force_of(m_settings, game_shown());
-	state.light_gun = light_gun_mode_on(m_settings, game_shown());
+	state.hide_cursor = hide_cursor_on(m_settings, game_shown(), panel_shown().takes_mouse());
 	state.sinden_border = sinden_border_of(m_settings, game_shown());
 	/* What the player shown may turn over, and what is turned over */
 	const std::vector<std::string> inverted = inverted_of(m_settings, game_shown());
@@ -651,9 +651,9 @@ MenuSession::apply_game(const MenuState &was)
 		keep_vibration(game_shown(), now.shake, !m_other && m_game);
 	if (now.vibration_force != was.vibration_force && now.can_shake)
 		keep_vibration_force(game_shown(), now.vibration_force, !m_other && m_game);
-	/* Its light gun mode: the pointer follows when the menu closes */
-	if (now.light_gun != was.light_gun && now.sights[0])
-		keep_light_gun(game_shown(), now.light_gun, !m_other && m_game);
+	/* Whether the mouse plays: the pointer follows as the menu closes */
+	if (now.hide_cursor != was.hide_cursor)
+		keep_hide_cursor(game_shown(), now.hide_cursor, !m_other && m_game, panel_shown().takes_mouse());
 	/* Its white border for a light gun, at once too */
 	if (now.sinden_border != was.sinden_border && now.sights[0])
 		keep_sinden_border(game_shown(), now.sinden_border, !m_other && m_game);
@@ -791,13 +791,16 @@ MenuSession::keep_cabinet(const std::string &game, const std::string &id)
 	keep("players." + game, "cabinet", id == "standard" ? std::nullopt : std::optional<std::string>(id));
 }
 
-/* [players.<game>] light_gun_mode: a line only when off */
+/* [players.<game>] hide_cursor: a line only when not as by default
+ * (`standard`, ControlPanel::takes_mouse); light_gun_mode, its name before,
+ * goes */
 void
-MenuSession::keep_light_gun(const std::string &game, bool on, bool runs)
+MenuSession::keep_hide_cursor(const std::string &game, bool on, bool runs, bool standard)
 {
 	if (runs)
-		m_controls.set_light_gun_mode(on);
-	keep("players." + game, "light_gun_mode", on ? std::nullopt : std::optional<std::string>("off"));
+		m_controls.set_hide_cursor(on == standard ? std::nullopt : std::optional(on));
+	keep("players." + game, "hide_cursor", on == standard ? std::nullopt : std::optional<std::string>(on ? "on" : "off"));
+	keep("players." + game, "light_gun_mode", std::nullopt);
 }
 
 /* [players.<game>] invert: the controls of the player shown turned over or

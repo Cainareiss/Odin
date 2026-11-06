@@ -1717,9 +1717,9 @@ list_box(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, I
 	}
 }
 
-/* The buttons under the drawing, as many on a line as fit: Test, Advanced
- * options on a gamepad or a joystick, Defaults, Clear mapping (Undo for a
- * while after), Start mapping. Their height, with the room around them;
+/* The buttons under the drawing, as many on a line as fit: Test, the
+ * options of the device shown, Defaults, Clear all (Undo for a while
+ * after), Map all. Their height, with the room around them;
  * drawn and clicked when `draw`. */
 float
 buttons_bar(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, ImVec2 at, float width, bool draw)
@@ -1728,13 +1728,8 @@ buttons_bar(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows
 	using Tone = MenuKit::Tone;
 	const float across = kit.px(12.0f), down = kit.px(5.0f), h = kit.button_size("Defaults", Icon::DEFAULTS).y;
 	const char *const clear = state.undo ? "Undo" : "Clear all";
-	/* The keyboard and the mouse have options in a game the mouse aims
-	 * in, or with a control the player may turn over */
-	const bool advanced = state.on_pad() || state.on_joystick() || state.sights[0] || !state.invert_names.empty();
-	std::vector<float> widths = { kit.button_size("Test", Icon::PAD).x };
+	std::vector<float> widths = { kit.button_size("Test", Icon::PAD).x, kit.button_size("Options", Icon::SETTINGS).x };
 
-	if (advanced)
-		widths.push_back(kit.button_size("Options", Icon::SETTINGS).x);
 	widths.push_back(kit.button_size("Defaults", Icon::DEFAULTS).x);
 	widths.push_back(kit.button_size(clear, state.undo ? Icon::UNDO : Icon::CLEAR).x);
 	if (!state.mapping)
@@ -1764,7 +1759,7 @@ buttons_bar(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows
 		state.testing = !state.testing;
 		state.stop_catching();
 	}
-	if (advanced && kit.button("Options", places[i++], false, Icon::SETTINGS)) {
+	if (kit.button("Options", places[i++], false, Icon::SETTINGS)) {
 		state.advanced = true;
 		state.testing = false;
 		state.stop_catching();
@@ -1786,11 +1781,10 @@ buttons_bar(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows
 /* The advanced options of the device shown, over its box: the vibration
  * of the game; for a gamepad how hard it shakes, for a joystick the force
  * of the wheel and how far it turns for the steering; the controls the
- * player may turn over; in a game where player 1 has a sight, the light
- * gun mode and the white border of a light gun (with the controls turned
- * over, the only options of the keyboard and the mouse); the dead zone
- * and the trigger threshold of the make and model of a gamepad; Close (B,
- * Escape) */
+ * player may turn over; for the keyboard and the mouse (and in a game
+ * where player 1 has a sight) Hide cursor; with a sight, the white border
+ * of a light gun; the dead zone and the trigger threshold of the make and
+ * model of a gamepad; Close (B, Escape) */
 void
 advanced_box(const MenuKit &kit, MenuState &state, ImVec2 a, ImVec2 b)
 {
@@ -1815,10 +1809,10 @@ advanced_box(const MenuKit &kit, MenuState &state, ImVec2 a, ImVec2 b)
 		name[0] = static_cast<char>(std::tolower(static_cast<unsigned char>(name[0])));
 		game_rows.push_back(name);
 	}
-	if (gun) {
-		game_rows.push_back("light gun mode");
+	if (keys || gun)
+		game_rows.push_back("hide cursor");
+	if (gun)
 		game_rows.push_back("Sinden border");
-	}
 
 	std::string foot;
 
@@ -1932,22 +1926,25 @@ advanced_box(const MenuKit &kit, MenuState &state, ImVec2 a, ImVec2 b)
 		ImGui::PopID();
 		y += h + apart;
 	}
-	/* The mouse aims and shoots for player 1, no pointer and no bar, or is
-	 * a pointer (the gamepad: left, right or A switches it) */
-	if (gun) {
-		static constexpr char UNDER[] = "the mouse aims and shoots; off, a pointer with the bar";
+	/* The cursor hidden, the mouse controlling the game for player 1 and
+	 * no bar, or a normal pointer (the gamepad: left, right or A switches
+	 * it) */
+	if (keys || gun) {
+		static constexpr char UNDER[] = "On: the mouse controls the game, no cursor, no bar. Off: a normal pointer.";
 		const ImVec2 cells = kit.segments_size(Menu::OFF_ON);
 		const float h = std::max(line + kit.px(2.0f) + note, cells.y);
 
-		list->AddText({ lo.x, y }, palette.ink, "Light gun mode");
+		ImGui::PushID("Hide cursor");
+		list->AddText({ lo.x, y }, palette.ink, "Hide cursor");
 		MenuKit::write(list, { lo.x, y + line + kit.px(2.0f) }, palette.dim, UNDER, note);
 		if (kit.focus({ lo.x, y }, { hi.x, y + h }, kit.px(4.0f)) && (kit.side() || kit.pressed()))
-			state.light_gun = kit.side() ? kit.side() > 0 : !state.light_gun;
+			state.hide_cursor = kit.side() ? kit.side() > 0 : !state.hide_cursor;
 
-		int on = state.light_gun ? 1 : 0;
+		int on = state.hide_cursor ? 1 : 0;
 
 		if (kit.segments({ hi.x - cells.x, y + (h - cells.y) / 2.0f }, Menu::OFF_ON, on))
-			state.light_gun = on == 1;
+			state.hide_cursor = on == 1;
+		ImGui::PopID();
 		y += h + apart;
 	}
 	/* The white border of a light gun that finds the screen by it; once
@@ -2037,14 +2034,11 @@ Menu::page_input(MenuKit &kit, MenuState &state) const
 
 	const std::vector<InputRow> rows = input_rows(state);
 	/* A window wide enough (16:9) has the cabinet beside the device; a
-	 * narrower one shows either. The advanced options of a gamepad or a
-	 * joystick take the place of its box. */
+	 * narrower one shows either. The options of the device shown take the
+	 * place of its box. */
 	const ImVec2 window = ImGui::GetIO().DisplaySize;
 	const bool wide = window.x >= WIDE * window.y;
 	const bool cabinet = !wide && state.cabinet_shown;
-
-	state.advanced = state.advanced && (state.on_pad() || state.on_joystick() || state.sights[0] ||
-	                                    !state.invert_names.empty());
 
 	const bool options = state.advanced && !cabinet;
 

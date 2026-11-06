@@ -66,10 +66,10 @@ struct HotKey {
 class Hotkeys {
 public:
 	/* CARD: the player's card into the slot of the card reader, or back
-	 * out of it (Virtual-On); LIGHT_GUN: the mouse aims in the game, or is
-	 * a pointer again (Brave Firefighters); TEST and SERVICE: the TEST
-	 * switch of the cabinet and the SERVICE of player 1, held, in every
-	 * game; CLOSE_GAME: back to the library */
+	 * out of it (Virtual-On); LIGHT_GUN: the cursor hidden (the mouse
+	 * controls the game) or shown, in every game; TEST and SERVICE: the
+	 * TEST switch of the cabinet and the SERVICE of player 1, held, in
+	 * every game; CLOSE_GAME: back to the library */
 	enum class Action : uint8_t {
 		MENU, PAUSE, SAVE_STATE, LOAD_STATE, RESET, FULLSCREEN, CARD, LIGHT_GUN, TEST, SERVICE, CLOSE_GAME, QUIT
 	};

@@ -161,10 +161,10 @@ public:
 	 * into the slot, or back out of it once the reader ejected it; the
 	 * card of the list in hand (-1: none). What the note says of it. */
 	std::string card_in_out();
-	/* The light gun mode of the game that runs turned the other way and
-	 * kept (Hotkeys::Action::LIGHT_GUN); what the note says of it (empty:
-	 * no sight in the game) */
-	std::string light_gun_in_out();
+	/* The cursor of the game that runs hidden or shown, the other way,
+	 * and kept (Hotkeys::Action::LIGHT_GUN); what the note says of it
+	 * (empty: no game, or the controls off) */
+	std::string cursor_in_out();
 	std::string choose_card(int index);
 	/* A new card of a pilot of that name, as the terminal of the game
 	 * makes it (Von4Card), kept under the name in the folder of the cards
@@ -274,7 +274,7 @@ private:
 	void keep_device(const std::string &game, unsigned player, InputDevice device, bool runs);
 	void keep_vibration(const std::string &game, bool on, bool runs);
 	void keep_vibration_force(const std::string &game, int percent, bool runs);
-	void keep_light_gun(const std::string &game, bool on, bool runs);
+	void keep_hide_cursor(const std::string &game, bool on, bool runs, bool standard);
 	void keep_inverted(const std::string &game, const std::vector<std::string> &ids, const std::vector<uint8_t> &on);
 	void keep_sinden_border(const std::string &game, const SindenBorder &border, bool runs);
 	void keep_wheel_force(const std::string &game, int percent, bool runs);

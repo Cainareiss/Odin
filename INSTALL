@@ -117,7 +117,7 @@ Keyboard (all keys can be changed, page Hotkeys and page Input):
  Ctrl+R        reset
  F11           full screen
  F6            Virtual-On card in or out
- F7            light gun mode (Brave Firefighters)
+ F7            hide the cursor or show it
  Ctrl+C        close the game (back to the library)
  Ctrl+Q        quit
 
@@ -128,8 +128,8 @@ takes) holds another button instead, set on the page Hotkeys; the menu is
 then that button with A.
 
 Moving the mouse over the window shows a bar at its top: it sets the same
-things as the menu, without pausing the game (not while the mouse aims in
-Brave Firefighters: F7 turns light gun mode off).
+things as the menu, without pausing the game (not while the cursor is
+hidden, as when the mouse aims in Brave Firefighters: F7 shows it).
 
 
 LIGHT GUNS

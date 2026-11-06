@@ -165,7 +165,7 @@ apart by commas (see INPUTS below).
  reset         Ctrl+R
  fullscreen    F11, Alt+Return
  card          F6, pad:guide+y          (Virtual-On card in or out)
- light_gun     F7                       (light gun mode on or off)
+ light_gun     F7                       (hide the cursor or show it)
  test          0, pad:guide+rightstick  (TEST of the cabinet, held)
  service       9, pad:guide+leftstick   (SERVICE of player 1, held)
  close_game    Ctrl+C, pad:guide+b      (back to the library)
@@ -271,8 +271,12 @@ count, after its parent's.
  gun1, gun2       <identity>      Light gun of player 1, 2, as the log
                   <name>          names it ("pointer: ..."), e.g.
                                   "vidpid:1209:0001 GUN4IR".
- light_gun_mode   on, off         The mouse aims in the game (games with a
-                                  sight: braveff). Default on.
+ hide_cursor      on, off         No cursor, no bar: the mouse controls
+                                  the game (off: a normal pointer).
+                                  Default on when a control of player 1
+                                  or of the cabinet (coin, test...) uses
+                                  the mouse (the sight of braveff), else
+                                  off. light_gun_mode before 0.1.1.
  sinden_border    on, off         White border for a Sinden gun.
                                   Default off.
  sinden_border_   game, window    Border around the game (4:3) or the
@@ -384,6 +388,8 @@ count, after its parent's.
   start         key:1, pad:start
   stick_h       pad:leftx            (_left key:Left, _right key:Right)
   stick_v       pad:lefty            (_up key:Up, _down key:Down)
+ The stick can follow the mouse (or a trackball): stick_h = pad:leftx,
+ mouse:x and stick_v = pad:lefty, mouse:y in [controls.pharrier].
 
  swracer:
   boost         key:C, pad:a

@@ -518,9 +518,9 @@ output_route_of(const Settings &settings, const std::string &game, const std::st
 }
 
 bool
-light_gun_mode_on(const Settings &settings, const std::string &game)
+hide_cursor_on(const Settings &settings, const std::string &game, bool standard)
 {
-	return player_on(settings, game, "light_gun_mode", true);
+	return player_on(settings, game, "hide_cursor", player_on(settings, game, "light_gun_mode", standard));
 }
 
 std::optional<int>
@@ -736,7 +736,7 @@ known_settings(const GameList &games, int button)
 			if (control.role == Role::GUN_X) {
 				out.push_back({ "players." + name, control.player ? "gun2" : "gun1", "" });
 				if (!control.player)
-					out.insert(out.end(), { { "players." + name, "light_gun_mode", "on" },
+					out.insert(out.end(), { { "players." + name, "hide_cursor", "on" },
 					                        { "players." + name, "sinden_border", "off" },
 					                        { "players." + name, "sinden_border_style", SINDEN_BORDER_STYLES[0] },
 					                        { "players." + name, "sinden_border_size",

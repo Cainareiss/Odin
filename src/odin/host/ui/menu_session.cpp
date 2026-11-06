@@ -349,16 +349,16 @@ MenuSession::card_file(const std::string &name) const
 }
 
 std::string
-MenuSession::light_gun_in_out()
+MenuSession::cursor_in_out()
 {
-	if (!m_game || !m_controls.has_sight())
+	if (!m_game || !m_controls.on())
 		return {};
 
-	const bool on = !light_gun_mode_on(m_settings, m_game->name);
+	const bool on = !m_controls.hides_cursor();
 
-	keep_light_gun(m_game->name, on, true);
+	keep_hide_cursor(m_game->name, on, true, m_controls.panel().takes_mouse());
 	m_controls.follow_cursor();
-	return on ? "Light gun mode: the mouse aims" : "Light gun mode off: the mouse is a pointer";
+	return on ? "Cursor hidden: the mouse controls the game" : "Cursor shown: normal pointer";
 }
 
 /* In hand, the card goes into the slot; at the slot, it comes back to the
@@ -884,7 +884,7 @@ MenuSession::fill_bar_inputs(BarState &bar) const
 		}
 	light_guns(m_game->name, controls, bar.guns, bar.gun, bar.sights);
 	bar.shake = vibration_on(m_settings, m_game->name);
-	bar.light_gun = light_gun_mode_on(m_settings, m_game->name);
+	bar.hide_cursor = m_controls.hides_cursor();
 }
 
 /* As the menu does them: kept in odin.ini the same way */
@@ -928,8 +928,8 @@ MenuSession::do_bar(BarState &bar)
 	if (m_game) {
 		if (bar.can_shake && bar.shake != vibration_on(m_settings, m_game->name))
 			keep_vibration(m_game->name, bar.shake, true);
-		if (bar.sights[0] && bar.light_gun != light_gun_mode_on(m_settings, m_game->name)) {
-			keep_light_gun(m_game->name, bar.light_gun, true);
+		if (bar.hide_cursor != m_controls.hides_cursor()) {
+			keep_hide_cursor(m_game->name, bar.hide_cursor, true, m_controls.panel().takes_mouse());
 			m_controls.follow_cursor();
 		}
 		for (const Controls::Plugged &pad : m_controls.plugged())

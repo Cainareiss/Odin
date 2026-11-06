@@ -190,10 +190,11 @@ std::optional<OutputRoute> output_route_named(const std::string &value);
 std::string output_route_name(const OutputRoute &route);
 std::optional<OutputRoute> output_route_of(const Settings &settings, const std::string &game, const std::string &id,
                                            bool tell = true);
-/* [players.<game>] light_gun_mode: in a game where player 1 has a sight,
- * the mouse aims and shoots there, no pointer, no bar (on, when it does
- * not say), or is a pointer again (off); the last line says */
-bool light_gun_mode_on(const Settings &settings, const std::string &game);
+/* [players.<game>] hide_cursor (light_gun_mode before 0.1.1): no cursor,
+ * no bar, the mouse controls the game (on), or a normal pointer (off); its
+ * last line says, else the last of light_gun_mode, else `standard`
+ * (ControlPanel::takes_mouse) */
+bool hide_cursor_on(const Settings &settings, const std::string &game, bool standard);
 /* [players.<game>] sinden_border: a white border for a light gun that
  * finds the screen by it, in a game with one, as xemu's Chihiro draws it:
  * off when it does not say, or on; sinden_border_style: inside the edges of

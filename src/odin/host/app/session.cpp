@@ -194,10 +194,10 @@ Session::act(Hotkeys::Action action)
 		m_menus.card_news(true);
 		break;
 	case Action::LIGHT_GUN:
-		if (const std::string note = m_menus.light_gun_in_out(); !note.empty())
+		if (const std::string note = m_menus.cursor_in_out(); !note.empty())
 			say(note);
 		if (m_controls.aims())
-			m_bar_until = 0;
+			leave_bar();
 		break;
 	case Action::CLOSE_GAME:
 		m_end = Ended::CLOSED;
@@ -274,7 +274,8 @@ Session::bar_event(const SDL_Event &event)
 
 /* Shown while the mouse moved lately, is on it, holds a button pressed on
  * it or a menu of it is open; never with the menu. Hidden while the game is
- * paused, the picture is shown again without it. */
+ * paused, the picture is shown again without it; hidden, the cursor is
+ * again as the controls want it (the bar showed it). */
 void
 Session::follow_bar()
 {
@@ -290,6 +291,17 @@ Session::follow_bar()
 		m_bar.saved = state_saved();
 	else if (m_paused)
 		m_display.show_again(nullptr);
+	if (!shown)
+		m_controls.follow_cursor();
+}
+
+/* The mouse controls the game: no bar, even with the mouse on it */
+void
+Session::leave_bar()
+{
+	m_bar_until = 0;
+	m_bar.wants_mouse = m_bar.open = false;
+	m_bar_buttons = 0;
 }
 
 void
@@ -308,10 +320,13 @@ Session::do_bar()
 {
 	using Ask = BarState::Ask;
 
+	const bool aimed = m_controls.aims();
 	const Ask asked = m_menus.do_bar(m_bar);
 
 	if (const std::string note = m_menus.bar_note(); !note.empty())
 		say(note);
+	if (!aimed && m_controls.aims())
+		leave_bar();
 	switch (asked) {
 	case Ask::CLOSE:
 		act(Hotkeys::Action::CLOSE_GAME);

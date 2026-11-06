@@ -580,7 +580,7 @@ Menu::page_audio(MenuKit &kit, MenuState &state) const
  * Hotkeys::Action */
 constexpr const char *HOTKEY_NAMES[Hotkeys::ACTIONS] = {
 	"Settings (pauses the game)", "Pause", "Save state", "Load state", "Reset", "Full screen",
-	"Insert / remove card (Virtual-On)", "Light gun mode (Brave Firefighters)", "Test (the cabinet, every game)",
+	"Insert / remove card (Virtual-On)", "Hide cursor (on / off)", "Test (the cabinet, every game)",
 	"Service (player 1, every game)", "Close game", "Quit",
 };
 
