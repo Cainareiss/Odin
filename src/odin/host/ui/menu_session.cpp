@@ -118,9 +118,10 @@ press_escape()
 
 MenuSession::MenuSession(const Options &options, Display &display, Keyboard &keys, Controls &controls,
                          Settings &settings, const std::string &settings_file, const GameList &games, const Game *game,
-                         Hikaru *board, AudioOut *audio, std::unique_ptr<OutputsNetwork> outputs, bool network)
+                         const Board *running, Hikaru *board, AudioOut *audio, std::unique_ptr<OutputsNetwork> outputs,
+                         bool network)
 	: m_options(options), m_display(display), m_keys(keys), m_controls(controls), m_settings(settings),
-	  m_settings_file(settings_file), m_games(games), m_game(game), m_board(board), m_audio(audio),
+	  m_settings_file(settings_file), m_games(games), m_game(game), m_running(running), m_board(board), m_audio(audio),
 	  m_outputs(std::move(outputs)), m_hotkeys(settings), m_nav(settings),
 	  m_menu_test(game ? static_cast<unsigned>(std::max(env_int("ODIN_MENU_TEST", 0), 0)) : 0),
 	  m_menu_test_page(m_menu_test ? env_int("ODIN_MENU_PAGE", -1) : -1),

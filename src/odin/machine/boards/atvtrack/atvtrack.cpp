@@ -964,12 +964,14 @@ void AtvTrack::serve_link()
 bool AtvTrack::set_link(const NetLinkSettings &link)
 {
 	m_link.reset();
+	m_link_failed = false;
 	if (link.board != NetLinkSettings::Board::RING)
 		return true;
 	m_link = std::make_unique<GaelcoLink>(m_name, link);
 	if (m_link->ok())
 		return true;
 	m_link.reset();
+	m_link_failed = true;
 	return false;
 }
 

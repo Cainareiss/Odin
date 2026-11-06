@@ -497,9 +497,6 @@ PowerVR Neon 250 (PMX1)
   below 120 Hz (session.hpp); the coin pulse, the kick's timing and the
   ball's height of Gaelco Football, how long Odin holds the volume buttons
   of Smashing Drive (atvtrack_play.cpp).
-- The menus show no live state of a Gaelco board: no lamp lit on the page
-  Outputs, no link state on the page Link (menu_session_state.cpp reads the
-  Hikaru board only).
 - The TA's user clip, its modes past copythrough, and reads or copies
   outside the frame buffer are not done; odin.log says so (pmx1_ta.cpp).
 - When the host's GPU cannot sort translucent pixels, the first pass's

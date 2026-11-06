@@ -113,12 +113,8 @@ public:
 	/* The EPROMs of the ROM board as the bus sees them: the program of the
 	 * game, as the BOOTROM copies it from 0C000000 on */
 	std::span<const uint8_t> program() const { return m_game.section("eprom"); }
-	/* The network board and its cable: whether it has one, linked to
-	 * other Odins, the port it could not open, each end plugged in */
-	struct LinkStatus {
-		bool board = false, linked = false, failed = false, previous = false, next = false;
-	};
-	LinkStatus link_status() const;
+	/* The network board and its cable */
+	LinkStatus link_status() const override;
 	/* The torque the drive board of the cabinet tells its motor, -MOST
 	 * (all to the left) to MOST (all to the right), when it runs its
 	 * program (drive_rom; drive_838_13366.hpp); nothing else */

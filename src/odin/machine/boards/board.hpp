@@ -54,6 +54,13 @@ public:
 	virtual std::span<const uint8_t> output_levels() const { return {}; }
 	virtual const std::vector<int16_t> &sound(bool optional) const = 0;
 	virtual std::optional<int> drive_torque() const = 0;
+	/* How it links to other Odins (the page Link): whether it has a link
+	 * (a network board, a cable), linked to them or looped back, the port
+	 * it could not open, each end plugged in; none: it never links */
+	struct LinkStatus {
+		bool board = false, linked = false, failed = false, previous = false, next = false;
+	};
+	virtual LinkStatus link_status() const { return {}; }
 	/* How long its last frame lasts in its own time, in nanoseconds: a
 	 * frame of its screen, 1/60 s unless it says otherwise */
 	virtual uint64_t frame_nanoseconds() const { return 1000000000 / 60; }

@@ -158,7 +158,7 @@ library(const Options &command, const GameList &games, Settings &settings, const
 
 	controls.set_pointers(pointers);
 	MenuSession menus(options, display, keys, controls, settings, settings_file, games, nullptr, nullptr, nullptr,
-	                  nullptr, network_on(settings));
+	                  nullptr, nullptr, network_on(settings));
 	LibraryState state;
 	BarState bar;
 	Uint64 note_until = 0;

@@ -107,8 +107,8 @@ public:
 	enum class Asked { NONE, CLOSE, CLOSE_GAME, QUIT };
 
 	MenuSession(const Options &options, Display &display, Keyboard &keys, Controls &controls, Settings &settings,
-	            const std::string &settings_file, const GameList &games, const Game *game, Hikaru *board,
-	            AudioOut *audio, std::unique_ptr<OutputsNetwork> outputs, bool network);
+	            const std::string &settings_file, const GameList &games, const Game *game, const Board *running,
+	            Hikaru *board, AudioOut *audio, std::unique_ptr<OutputsNetwork> outputs, bool network);
 
 	~MenuSession()
 	{
@@ -296,6 +296,9 @@ private:
 	/* The game that runs and its board (none: the library), its sound
 	 * (none: no sound), its programs of lamps (none: nothing for them) */
 	const Game *m_game;
+	/* The board that runs (its game, its lamps, its link), and when it is
+	 * a Hikaru, that one (its cards) */
+	const Board *m_running;
 	Hikaru *m_board;
 	AudioOut *m_audio;
 	std::unique_ptr<OutputsNetwork> m_outputs;

@@ -101,6 +101,18 @@ public:
 	bool load_state(const std::string &path) override;
 	std::span<const uint8_t> io_outputs() const override { return m_outputs; }
 	std::span<const uint8_t> output_levels() const override { return m_levels; }
+	LinkStatus link_status() const override
+	{
+		const GaelcoLink *const link = m_board->link();
+		LinkStatus status;
+
+		status.failed = m_board->link_failed();
+		status.board = link || status.failed;
+		status.linked = link != nullptr;
+		status.previous = link && link->previous_linked();
+		status.next = link && link->next_linked();
+		return status;
+	}
 	const std::vector<int16_t> &sound(bool optional) const override
 	{
 		return optional ? m_board->woofer() : m_board->sound();

@@ -77,7 +77,7 @@ MenuSession::game_shown() const
 	const MenuState &state = m_menu_state;
 
 	return state.shown < state.games.size() ? state.games[state.shown].first :
-	       m_board ? m_board->game_name() : std::string();
+	       m_running ? m_running->game_name() : std::string();
 }
 
 /* Another game in the page Input: a panel of its own, made from the list
@@ -262,7 +262,7 @@ MenuSession::fill_game_shown(MenuState &state)
 	 * gun a vibration goes to */
 	state.outputs.clear();
 	for (const GameOutput &output : m_other || !m_game ? m_other_outputs : m_game->outputs)
-		state.outputs.push_back({ output.name, output.role, !m_other && m_board && output.on(m_board->io_outputs()),
+		state.outputs.push_back({ output.name, output.role, !m_other && m_running && output.on(m_running->io_outputs()),
 		                          output.id,
 		                          output_route_of(m_settings, game_shown(), output.id, false).value_or(OutputRoute{}) });
 	if (m_outputs) {
@@ -271,13 +271,14 @@ MenuSession::fill_game_shown(MenuState &state)
 	}
 }
 
-/* The network board of the game that runs, as it is linked now */
+/* The link of the game that runs, as it is now: the network board of a
+ * Hikaru, the cable of a Gaelco board */
 void
 MenuSession::fill_link(MenuState &state)
 {
-	state.link_running = m_board != nullptr;
-	if (m_board) {
-		const Hikaru::LinkStatus link = m_board->link_status();
+	state.link_running = m_running != nullptr;
+	if (m_running) {
+		const Board::LinkStatus link = m_running->link_status();
 
 		state.link_board_now = link.board;
 		state.link_linked = link.linked;

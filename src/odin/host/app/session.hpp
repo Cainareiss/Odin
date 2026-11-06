@@ -53,14 +53,14 @@ enum class Ended { QUIT, LAST_FRAME, FAILED, CLOSED, OPENED, RESTART };
  * gamepads around it, the menu and the bar over it */
 class Session {
 public:
-	/* `hikaru`: the board when it is a Hikaru, for the pages of the menu
-	 * about it (its card, its link) */
+	/* `hikaru`: the board when it is a Hikaru, for the page of the menu
+	 * about its cards */
 	Session(const Options &options, const Game &game, Board &board, Hikaru *hikaru, Display &display,
 	        Keyboard &keys, Controls &controls, AudioOut *audio, std::unique_ptr<OutputsNetwork> outputs,
 	        bool network, Settings &settings, const std::string &settings_file, const GameList &games)
 		: m_options(options), m_game(game), m_board(board), m_display(display), m_keys(keys), m_controls(controls),
 		  m_audio(audio), m_games(games),
-		  m_menus(options, display, keys, controls, settings, settings_file, games, &game, hikaru, audio,
+		  m_menus(options, display, keys, controls, settings, settings_file, games, &game, &board, hikaru, audio,
 		          std::move(outputs), network),
 		  m_paused(false), m_next(), m_shaker_on_main(game.option_vibration && !game.option_wired())
 	{

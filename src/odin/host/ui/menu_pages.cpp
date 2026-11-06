@@ -895,9 +895,9 @@ route_item(const MenuState &state, const OutputRoute &route)
 } /* namespace */
 
 /* Outputs: those of the cabinet of the game shown, lit as the game lights
- * them, and the light gun each vibration goes to (a gamepad shakes as its
- * options on the page Input say); sent to the programs of lamps, for every
- * game */
+ * them; its motors running or not, or in a light-gun game the gun each
+ * vibration goes to (a gamepad shakes as its options on the page Input
+ * say); sent to the programs of lamps, for every game */
 void
 Menu::page_outputs(MenuKit &kit, MenuState &state) const
 {
@@ -916,7 +916,19 @@ Menu::page_outputs(MenuKit &kit, MenuState &state) const
 		return output.role == GameOutput::Role::RUMBLE;
 	});
 
-	if (shakes) {
+	/* A light-gun game's vibrations may go to its guns; the motors of a
+	 * game played without guns shake the controller alone */
+	if (shakes && !state.sights[0] && !state.sights[1]) {
+		kit.begin_group("MOTORS");
+		for (const MenuState::Output &output : state.outputs) {
+			if (output.role != GameOutput::Role::RUMBLE)
+				continue;
+			kit.next_tip("A motor of the cabinet, as the game drives it. The controller shakes as hard as it runs "
+			             "(page Input, Vibration), and Send outputs passes it on to other programs.");
+			kit.text(output.name.c_str(), nullptr, output.on ? "running" : "stopped");
+		}
+		kit.end_group();
+	} else if (shakes) {
 		const std::vector<OutputRoute> routes = vibration_routes(state.panel && state.panel->two_players());
 		std::vector<MenuKit::Item> items;
 

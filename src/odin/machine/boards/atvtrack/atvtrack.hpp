@@ -64,6 +64,9 @@ public:
 	GaelcoLink &operator=(const GaelcoLink &) = delete;
 
 	bool ok() const { return m_cable != nullptr; }
+	/* The cabinet on each side plugged in (any thread) */
+	bool previous_linked() const { return m_cable && m_cable->previous_linked(); }
+	bool next_linked() const { return m_cable && m_cable->next_linked(); }
 	void send(uint16_t word);
 	std::optional<uint16_t> take();
 	/* The words that came in, dropped */
@@ -185,6 +188,10 @@ public:
 	 * board leaves its cable unplugged. False when the cable cannot be
 	 * opened. */
 	bool set_link(const NetLinkSettings &link);
+	/* The cable, as set_link() left it: none unplugged; whether its port
+	 * could not be opened */
+	const GaelcoLink *link() const { return m_link.get(); }
+	bool link_failed() const { return m_link_failed; }
 	/* Writes bits shift to shift + bits - 1 of a byte of the settings
 	 * Smashing Drive keeps in its program flash, as its test menu would;
 	 * false when it keeps none yet */
@@ -293,6 +300,7 @@ protected:
 	bool m_motor_clock = false, m_motor_load = false;
 	std::array<PlatformSide, 2> m_platform{};
 	std::unique_ptr<GaelcoLink> m_link;
+	bool m_link_failed = false;
 	bool m_motion_platform = false;
 	BallSensors m_ball{};
 	std::array<bool, 2> m_ball_kicked{};
