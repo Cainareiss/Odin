@@ -107,7 +107,7 @@ private:
 		uint32_t codebook, base, width, height, side, stride;
 		unsigned format, levels;
 		float lod_scale;
-		bool vq, linear, mipmap, flip_u, flip_v, clamp_u, clamp_v, bilinear;
+		bool vq, palettised, linear, mipmap, flip_u, flip_v, clamp_u, clamp_v, bilinear;
 	};
 	Texture texture_of(uint32_t tsp, uint32_t tcw) const;
 	void extent(const Texture &t, uint32_t &from, uint32_t &to) const;

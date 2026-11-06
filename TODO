@@ -506,6 +506,8 @@ PowerVR Neon 250 (PMX1)
   translucent polygons are sorted polygon by polygon and those of the
   other passes keep their order (pmx1_scene.cpp).
 - A triangle whose 1/W is not a number is not drawn (pmx1_scene.cpp).
+- The smaller levels of a palettised texture are taken after its palette,
+  as VQ's are: the guide does not say where they are (pmx1_scene.cpp).
 
 Host and user interface
 

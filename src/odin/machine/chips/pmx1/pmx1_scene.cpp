@@ -315,6 +315,8 @@ void Pmx1::extent(const Texture &t, uint32_t &from, uint32_t &to) const
 
 	if (t.vq && t.linear)
 		size = uint64_t{ 2048 } + uint64_t{ t.stride } * t.height;
+	else if (t.palettised)
+		size = uint64_t{ 2048 } + (t.mipmap ? MIP_16[log2_w] / 2 : 0) + uint64_t{ t.width } * t.height;
 	else if (t.vq)
 		size = uint64_t{ 2048 } + (t.mipmap ? MIP_VQ[log2_w] : 0) + uint64_t{ t.width } * t.height / 4;
 	else if (t.linear)
@@ -718,8 +720,9 @@ void Pmx1::say(unsigned what, const char *text)
 
 /* Texture word: 31 mipmapped, 30 VQ (2 KB of 2x2 blocks, then an index per
  * block), 29-27 format, 26 not twiddled, then 25 stride: its rows as long
- * as TEX_STRIDE says (PG p. 78). TSP: 18-17 flip, 16-15 clamp (U, V),
- * 14-13 filter (0 nearest), 5-0 size. */
+ * as TEX_STRIDE says, 21 with VQ palettised: 8 bits a texel into a palette
+ * held as a VQ codebook (PG p. 78, appendix A). TSP: 18-17 flip, 16-15
+ * clamp (U, V), 14-13 filter (0 nearest), 5-0 size. */
 Pmx1::Texture Pmx1::texture_of(uint32_t tsp, uint32_t tcw) const
 {
 	Texture t{};
@@ -729,6 +732,7 @@ Pmx1::Texture Pmx1::texture_of(uint32_t tsp, uint32_t tcw) const
 	t.format = (tcw >> 27) & 7;
 	t.linear = (tcw >> 26) & 1;
 	t.vq = (tcw >> 30) & 1;
+	t.palettised = t.vq && (tcw >> 21) & 1;
 	t.stride = (tcw >> 25) & 1 ? m_stride : t.width;
 	t.side = std::min(t.width, t.height);
 	t.flip_u = (tsp >> 18) & 1, t.flip_v = (tsp >> 17) & 1;
@@ -753,6 +757,10 @@ uint32_t Pmx1::mip_of(const Texture &t, uint32_t size_x)
 {
 	if (!t.mipmap)
 		return 0;
+	/* A palettised texture's levels: half the 16-bit offsets, in bytes
+	 * (PG appendix A; INFERRED: after the palette, as VQ's) */
+	if (t.palettised)
+		return MIP_16[log2_of(size_x)] / 2;
 	return t.vq ? MIP_VQ[log2_of(size_x)] : MIP_16[log2_of(size_x)] * (t.format == FORMAT_8888 ? 2 : 1);
 }
 
@@ -766,6 +774,12 @@ uint32_t Pmx1::fetch(const Texture &t, uint32_t size_x, uint32_t size_y, uint32_
 		/* One index per texel, in rows, into a palette held in the
 		 * first texel of each entry */
 		const uint32_t index_at = t.base + y * t.stride + x;
+		const uint32_t block = index_at < m_vram.size() ? m_vram[index_at] : 0;
+
+		at = t.codebook + block * 8;
+	} else if (t.palettised) {
+		/* An index a texel, twiddled as VQ's, into the same palette */
+		const uint32_t index_at = t.base + mip + twiddled(x, y, side);
 		const uint32_t block = index_at < m_vram.size() ? m_vram[index_at] : 0;
 
 		at = t.codebook + block * 8;
