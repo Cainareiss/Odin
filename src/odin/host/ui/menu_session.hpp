@@ -270,6 +270,7 @@ private:
 	void keep_vibration(const std::string &game, bool on, bool runs);
 	void keep_vibration_force(const std::string &game, int percent, bool runs);
 	void keep_light_gun(const std::string &game, bool on, bool runs);
+	void keep_inverted(const std::string &game, const std::vector<std::string> &ids, const std::vector<uint8_t> &on);
 	void keep_sinden_border(const std::string &game, const SindenBorder &border, bool runs);
 	void keep_wheel_force(const std::string &game, int percent, bool runs);
 	void keep_wheel_rotation(const std::string &game, int degrees, bool runs);

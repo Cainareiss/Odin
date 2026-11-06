@@ -230,6 +230,18 @@ MenuSession::fill_game_shown(MenuState &state)
 	state.vibration_force = vibration_force_of(m_settings, game_shown());
 	state.light_gun = light_gun_mode_on(m_settings, game_shown());
 	state.sinden_border = sinden_border_of(m_settings, game_shown());
+	/* What the player shown may turn over, and what is turned over */
+	const std::vector<std::string> inverted = inverted_of(m_settings, game_shown());
+
+	state.invert_names.clear();
+	state.invert_ids.clear();
+	state.inverted.clear();
+	for (const GameControl &control : panel_shown().controls())
+		if (control.invertible && control.player == (state.player & 1)) {
+			state.invert_names.push_back("Invert " + control.name);
+			state.invert_ids.push_back(control.id);
+			state.inverted.push_back(std::find(inverted.begin(), inverted.end(), control.id) != inverted.end());
+		}
 	/* The wheel the drive board turns, and how hard */
 	state.can_force = m_other ? m_other_forces : m_game && (m_game->drive_first_output || m_game->wheel_motor);
 	state.steers = steers_of(panel_shown().controls());
@@ -632,6 +644,9 @@ MenuSession::apply_game(const MenuState &was)
 	/* Its white border for a light gun, at once too */
 	if (now.sinden_border != was.sinden_border && now.sights[0])
 		keep_sinden_border(game_shown(), now.sinden_border, !m_other && m_game);
+	/* Its controls turned over, at once too */
+	if (now.inverted != was.inverted)
+		keep_inverted(game_shown(), now.invert_ids, now.inverted);
 	/* The force of its wheel, at once too */
 	if (now.wheel_force != was.wheel_force && now.can_force)
 		keep_wheel_force(game_shown(), now.wheel_force, !m_other && m_game);
@@ -756,6 +771,29 @@ MenuSession::keep_light_gun(const std::string &game, bool on, bool runs)
 	if (runs)
 		m_controls.set_light_gun_mode(on);
 	keep("players." + game, "light_gun_mode", on ? std::nullopt : std::optional<std::string>("off"));
+}
+
+/* [players.<game>] invert: the controls of the player shown turned over or
+ * not, those of the other player as they were; the panels made again, as
+ * after a binding */
+void
+MenuSession::keep_inverted(const std::string &game, const std::vector<std::string> &ids, const std::vector<uint8_t> &on)
+{
+	std::vector<std::string> kept = inverted_of(m_settings, game);
+	std::string line;
+
+	std::erase_if(kept, [&ids](const std::string &id) { return std::find(ids.begin(), ids.end(), id) != ids.end(); });
+	for (size_t c = 0; c < ids.size(); c++)
+		if (on[c])
+			kept.push_back(ids[c]);
+	for (const std::string &id : kept)
+		line += (line.empty() ? "" : ", ") + id;
+	keep("players." + game, "invert", line.empty() ? std::nullopt : std::optional<std::string>(line));
+	m_controls.rebind();
+	if (m_other) {
+		m_other.emplace(m_other_controls, m_settings, game_shown());
+		m_other->set_wheel_rotation(wheel_rotation_of(m_settings, game_shown()));
+	}
 }
 
 /* [players.<game>] sinden_border, sinden_border_style and

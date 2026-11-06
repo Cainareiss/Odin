@@ -451,6 +451,13 @@ struct MenuState : BarSettings {
 	/* Player 1 has a sight (sights): the mouse aims there, or is a pointer
 	 * ([players.<game>] light_gun_mode) */
 	bool light_gun = true;
+	/* The controls of the player shown that the player may turn over
+	 * (GameControl::invertible): "Invert" and their names, their ids, and
+	 * whether each is turned over ([players.<game>] invert; bytes:
+	 * MinGW's GCC reads a word at nullptr to compare two empty
+	 * vector<bool>) */
+	std::vector<std::string> invert_names, invert_ids;
+	std::vector<uint8_t> inverted;
 	/* Its white border for a light gun that finds the screen by it
 	 * ([players.<game>] sinden_border, sinden_border_style,
 	 * sinden_border_size) */

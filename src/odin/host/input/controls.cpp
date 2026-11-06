@@ -30,9 +30,11 @@
 #include "odin/machine/cabinet/drive_board.hpp"
 #include "odin/host/ui/pad_drawing.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <string_view>
 
 namespace odin {
 
@@ -131,6 +133,13 @@ Controls::Controls(Keyboard &keys, const std::vector<GameControl> &controls, con
 			m_joys_wanted[key[3] - '1'] = identity_of(value);
 		} else if (key == "light_gun_mode" && on_off_named(value)) {
 			m_light_gun_mode = *on_off_named(value);
+		} else if (key == "invert") {
+			/* The panel turns them over (control_panel.cpp); one
+			 * that the game cannot turn over is said */
+			for (const std::string_view id : list_items(value))
+				if (std::none_of(controls.begin(), controls.end(),
+				                 [id](const GameControl &control) { return control.invertible && control.id == id; }))
+					refuse_setting("players." + game, key, std::string(id));
 		} else if (!player_value_right(key, value)) {
 			refuse_setting("players." + game, key, value);
 		}

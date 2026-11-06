@@ -749,6 +749,9 @@ known_settings(const GameList &games)
 			out.push_back({ "players." + name, "wheel_force", std::to_string(WHEEL_FORCE) });
 		if (steers_of(game->controls))
 			out.push_back({ "players." + name, "wheel_rotation", std::to_string(WHEEL_ROTATION) });
+		if (std::any_of(game->controls.begin(), game->controls.end(),
+		                [](const GameControl &control) { return control.invertible; }))
+			out.push_back({ "players." + name, "invert", "" });
 		if (!game->cabinets.empty())
 			out.push_back({ "players." + name, "cabinet", "standard" });
 		if (!game->card_reader.empty())

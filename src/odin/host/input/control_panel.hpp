@@ -40,6 +40,11 @@
 
 namespace odin {
 
+/* [players.<game>] invert: the ids of the controls of the game the player
+ * turns over (GameControl::invertible), on every device; none when it does
+ * not say; the last line says */
+std::vector<std::string> inverted_of(const Settings &settings, const std::string &game);
+
 /* The dead zone of the sticks of a gamepad and how far its triggers go
  * before they press a button, in % of their way: [gamepads] of odin.ini,
  * then [gamepad.<GUID>] of its make and model. */

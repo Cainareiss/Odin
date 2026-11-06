@@ -29,6 +29,7 @@
 #include "odin/host/ui/menu.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <numbers>
@@ -1724,8 +1725,9 @@ buttons_bar(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows
 	using Tone = MenuKit::Tone;
 	const float across = kit.px(12.0f), down = kit.px(5.0f), h = kit.button_size("Defaults", Icon::DEFAULTS).y;
 	const char *const clear = state.undo ? "Undo" : "Clear all";
-	/* The keyboard and the mouse have options in a game the mouse aims in */
-	const bool advanced = state.on_pad() || state.on_joystick() || state.sights[0];
+	/* The keyboard and the mouse have options in a game the mouse aims
+	 * in, or with a control the player may turn over */
+	const bool advanced = state.on_pad() || state.on_joystick() || state.sights[0] || !state.invert_names.empty();
 	std::vector<float> widths;
 
 	if (advanced)
@@ -1773,13 +1775,14 @@ buttons_bar(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows
 	return height;
 }
 
-/* The advanced options of the device shown, over its box:
- * the vibration of the game; for a gamepad how hard it shakes, for a
- * joystick the force of the wheel and how far it turns for the steering;
- * in a game where player 1 has a sight, the light gun mode and the white
- * border of a light gun (the only options of the keyboard and the mouse);
- * the dead zone and the trigger
- * threshold of the make and model of a gamepad; Close (B, Escape) */
+/* The advanced options of the device shown, over its box: the vibration
+ * of the game; for a gamepad how hard it shakes, for a joystick the force
+ * of the wheel and how far it turns for the steering; the controls the
+ * player may turn over; in a game where player 1 has a sight, the light
+ * gun mode and the white border of a light gun (with the controls turned
+ * over, the only options of the keyboard and the mouse); the dead zone
+ * and the trigger threshold of the make and model of a gamepad; Close (B,
+ * Escape) */
 void
 advanced_box(const MenuKit &kit, MenuState &state, ImVec2 a, ImVec2 b)
 {
@@ -1790,25 +1793,31 @@ advanced_box(const MenuKit &kit, MenuState &state, ImVec2 a, ImVec2 b)
 	const bool pad = state.on_pad(), keys = !pad && !state.on_joystick();
 	const bool turns = state.steers && !pad && !keys, gun = state.sights[0];
 	/* What applies to this game only, as the rows below show it */
-	std::vector<const char *> game_rows;
+	std::vector<std::string> game_rows;
 
 	if (!keys)
-		game_rows.push_back("Vibration");
+		game_rows.push_back("vibration");
 	if (pad && state.can_shake)
 		game_rows.push_back("its force");
 	if (state.can_force && turns)
 		game_rows.push_back("wheel force");
 	if (turns)
 		game_rows.push_back("wheel rotation");
+	for (std::string name : state.invert_names) {
+		name[0] = static_cast<char>(std::tolower(static_cast<unsigned char>(name[0])));
+		game_rows.push_back(name);
+	}
 	if (gun) {
-		game_rows.push_back(keys ? "Light gun mode" : "light gun mode");
+		game_rows.push_back("light gun mode");
 		game_rows.push_back("Sinden border");
 	}
 
 	std::string foot;
 
 	for (size_t i = 0; i < game_rows.size(); i++)
-		foot += (i == 0 ? "" : i + 1 == game_rows.size() ? " and " : ", ") + std::string(game_rows[i]);
+		foot += (i == 0 ? "" : i + 1 == game_rows.size() ? " and " : ", ") + game_rows[i];
+	if (!foot.empty())
+		foot[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(foot[0])));
 	foot += game_rows.size() > 1 ? " apply to this game only" : " applies to this game only";
 	foot += pad ? "; the dead zone and trigger threshold follow this controller to every game." : ".";
 	ImDrawList *const list = ImGui::GetWindowDrawList();
@@ -1897,6 +1906,22 @@ advanced_box(const MenuKit &kit, MenuState &state, ImVec2 a, ImVec2 b)
 			turn = (turn + (kit.side() < 0 ? n - 1 : 1)) % n;
 		kit.segments({ hi.x - cells.x, y + (h - cells.y) / 2.0f }, TURNS, turn);
 		state.wheel_rotation = WHEEL_ROTATIONS[turn];
+		y += h + apart;
+	}
+	/* A control the player turns over, on every device (the gamepad:
+	 * left, right or A switches it) */
+	for (size_t c = 0; c < state.invert_names.size(); c++) {
+		const ImVec2 cells = kit.segments_size(Menu::OFF_ON);
+		const float h = std::max(line, cells.y);
+		int on = state.inverted[c] ? 1 : 0;
+
+		ImGui::PushID(state.invert_names[c].c_str());
+		list->AddText({ lo.x, y + (h - line) / 2.0f }, palette.ink, state.invert_names[c].c_str());
+		if (kit.focus({ lo.x, y }, { hi.x, y + h }, kit.px(4.0f)) && (kit.side() || kit.pressed()))
+			on = kit.side() ? kit.side() > 0 : !on;
+		kit.segments({ hi.x - cells.x, y + (h - cells.y) / 2.0f }, Menu::OFF_ON, on);
+		state.inverted[c] = on == 1;
+		ImGui::PopID();
 		y += h + apart;
 	}
 	/* The mouse aims and shoots for player 1, no pointer and no bar, or is
@@ -2010,7 +2035,8 @@ Menu::page_input(MenuKit &kit, MenuState &state) const
 	const bool wide = window.x >= WIDE * window.y;
 	const bool cabinet = !wide && state.cabinet_shown;
 
-	state.advanced = state.advanced && (state.on_pad() || state.on_joystick() || state.sights[0]);
+	state.advanced = state.advanced && (state.on_pad() || state.on_joystick() || state.sights[0] ||
+	                                    !state.invert_names.empty());
 
 	const bool options = state.advanced && !cabinet;
 

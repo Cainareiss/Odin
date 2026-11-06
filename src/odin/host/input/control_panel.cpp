@@ -93,11 +93,19 @@ idle_inputs(const std::vector<GameControl> &panel)
 }
 
 /* The controls of the game, or the standard panel, and the SERVICE switch
- * of each player */
+ * of each player; those the player turns over ([players.<game>] invert)
+ * the other way */
 std::vector<GameControl>
-panel_of(const std::vector<GameControl> &controls)
+panel_of(const std::vector<GameControl> &controls, const Settings &settings, const std::string &game)
 {
+	using Low = GameControl::Low;
 	std::vector<GameControl> panel = controls.empty() ? standard_panel() : controls;
+	const std::vector<std::string> inverted = inverted_of(settings, game);
+
+	for (GameControl &c : panel)
+		if (c.invertible && std::find(inverted.begin(), inverted.end(), c.id) != inverted.end())
+			c.low = c.low == Low::LEFT ? Low::RIGHT : c.low == Low::RIGHT ? Low::LEFT :
+			        c.low == Low::UP   ? Low::DOWN  : Low::UP;
 
 	panel.push_back(button("1P SERVICE", GameControl::CABINET_IDS[0], 0, 0x4000, Role::SERVICE));
 	panel.push_back(button("2P SERVICE", GameControl::CABINET_IDS[1], 1, 0x4000, Role::SERVICE));
@@ -112,6 +120,20 @@ axis_value(double value)
 }
 
 } /* namespace */
+
+std::vector<std::string>
+inverted_of(const Settings &settings, const std::string &game)
+{
+	std::vector<std::string> out;
+
+	for (const auto &[key, value] : settings.section("players." + game))
+		if (key == "invert") {
+			out.clear();
+			for (const std::string_view id : list_items(value))
+				out.emplace_back(id);
+		}
+	return out;
+}
 
 PadTuning
 PadTuning::of(const Settings &settings, const std::string &guid, bool tell)
@@ -149,9 +171,9 @@ PadTuning::shape(int16_t &x, int16_t &y) const
 }
 
 ControlPanel::ControlPanel(const std::vector<GameControl> &controls, const Settings &settings, const std::string &game)
-	: m_controls(panel_of(controls)), m_bindings(m_controls, settings, game), m_inputs(idle_inputs(m_controls)),
-	  m_coins_were{}, m_coins{}, m_mouse_aims{}, m_mouse_moved{}, m_mouse_seen{}, m_mouse_x{ 0.5, 0.5 },
-	  m_mouse_y{ 0.5, 0.5 }
+	: m_controls(panel_of(controls, settings, game)), m_bindings(m_controls, settings, game),
+	  m_inputs(idle_inputs(m_controls)), m_coins_were{}, m_coins{}, m_mouse_aims{}, m_mouse_moved{}, m_mouse_seen{},
+	  m_mouse_x{ 0.5, 0.5 }, m_mouse_y{ 0.5, 0.5 }
 {
 	m_positions.assign(m_controls.size(), 0);
 	m_levers_were.assign(m_controls.size(), { false, false });
