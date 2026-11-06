@@ -504,7 +504,8 @@ Menu::build(MenuState &state)
 	std::string keys_said;
 
 	if (!back.empty())
-		keys_said = back + (state.library ? ": back to the library" : ": back to the game");
+		keys_said = back + (state.testing ? ": stop the test" :
+		                    state.library ? ": back to the library" : ": back to the game");
 	if (!close.empty())
 		keys_said += (keys_said.empty() ? "" : "    ") + close + ": close game";
 	if (!quit.empty())
@@ -545,9 +546,9 @@ Menu::build(MenuState &state)
 	ImGui::EndChild();
 	ImGui::PopID();
 	m_focus.last = m_focus.count;
-	/* The advanced options of the page Input close with it */
+	/* The advanced options and the test of the page Input end with it */
 	if (m_page != INPUT)
-		state.advanced = false;
+		state.advanced = state.testing = false;
 
 	list->AddLine({ a.x, foot_top - foot_pad }, { b.x, foot_top - foot_pad }, palette.line, kit.stroke());
 	if (m_page == INPUT)

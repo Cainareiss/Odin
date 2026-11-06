@@ -486,6 +486,9 @@ struct MenuState : BarSettings {
 	 * make and model's); its options open over the drawing */
 	PadTuning tuning;
 	bool advanced = false;
+	/* The page Input tests the controls: the gamepads and the keys light
+	 * them up and work no part of the menu (the mouse does) */
+	bool testing = false;
 	/* The animations of the menu ([menu] animations): the row of the
 	 * games moves from the game shown before, since then (seconds of the
 	 * menu), the one shown at the last picture; while something moves the

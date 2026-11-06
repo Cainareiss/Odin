@@ -1459,6 +1459,15 @@ MenuKit::pill(ImDrawList *list, ImVec2 at, const char *name) const
 	write(list, { at.x + (size.x - w) / 2.0f, at.y + (size.y - small) / 2.0f }, m_palette.ink, name, small);
 }
 
+void
+MenuKit::badge(ImDrawList *list, ImVec2 at, const char *label) const
+{
+	const ImVec2 box = button_size(label);
+
+	frame(list, at, { at.x + box.x, at.y + box.y }, px(CONTROL_CUT), m_palette.accent, 0);
+	write(list, { at.x + px(BUTTON_WIDE), at.y + px(BUTTON_HIGH) }, m_palette.on_accent, label, font(SMALL));
+}
+
 int
 MenuKit::shortcut(const char *name, std::span<const std::vector<std::string>> keys, std::span<const std::string> pad,
                   int catching)

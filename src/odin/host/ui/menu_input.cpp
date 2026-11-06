@@ -1267,7 +1267,8 @@ sort_gun_rows(const MenuState &state, std::span<const InputRow> rows, const PadD
 
 /* Each column from the top down, each label at the height of its part or
  * under the one above, then from the bottom up; the right one starts under
- * the corner of the box, the left one too in a game of two (1P and 2P) */
+ * the corner of the box, the left one too in a game of two (1P and 2P) or
+ * while the controls are tried (Test mode) */
 void
 place_labels(const MenuKit &kit, std::span<Label> labels, float top, float corner, float left_corner, float bottom)
 {
@@ -1384,8 +1385,8 @@ drawn_box(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, 
 			chosen |= 1u << l.part;
 	}
 	view.draw(ImGui::GetWindowDrawList(), kit.palette(), now, chosen, kit.px(1.0f));
-	place_labels(kit, sorted.labels, a.y + kit.px(LABEL_EDGE), corner, state.panel->two_players() ? corner : 0.0f,
-	             bottom);
+	place_labels(kit, sorted.labels, a.y + kit.px(LABEL_EDGE), corner,
+	             state.panel->two_players() || state.testing ? corner : 0.0f, bottom);
 	for (Label &l : sorted.labels)
 		draw_label(kit, state, rows, l, l.left ? a.x + column : b.x - column, column - kit.px(10.0f));
 	draw_elsewhere(kit, state, rows, sorted, a, b, bottom);
@@ -1714,7 +1715,7 @@ list_box(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows, I
 	}
 }
 
-/* The buttons under the drawing, as many on a line as fit: Advanced
+/* The buttons under the drawing, as many on a line as fit: Test, Advanced
  * options on a gamepad or a joystick, Defaults, Clear mapping (Undo for a
  * while after), Start mapping. Their height, with the room around them;
  * drawn and clicked when `draw`. */
@@ -1728,7 +1729,7 @@ buttons_bar(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows
 	/* The keyboard and the mouse have options in a game the mouse aims
 	 * in, or with a control the player may turn over */
 	const bool advanced = state.on_pad() || state.on_joystick() || state.sights[0] || !state.invert_names.empty();
-	std::vector<float> widths;
+	std::vector<float> widths = { kit.button_size("Test", Icon::PAD).x };
 
 	if (advanced)
 		widths.push_back(kit.button_size("Options", Icon::SETTINGS).x);
@@ -1757,8 +1758,13 @@ buttons_bar(const MenuKit &kit, MenuState &state, std::span<const InputRow> rows
 
 	size_t i = 0;
 
+	if (kit.button("Test", places[i++], state.testing, Icon::PAD)) {
+		state.testing = !state.testing;
+		state.stop_catching();
+	}
 	if (advanced && kit.button("Options", places[i++], false, Icon::SETTINGS)) {
 		state.advanced = true;
+		state.testing = false;
 		state.stop_catching();
 	}
 	if (kit.button("Defaults", places[i++], false, Icon::DEFAULTS))
@@ -2067,13 +2073,13 @@ Menu::page_input(MenuKit &kit, MenuState &state) const
 	/* The buttons in the corners of the box: List (the classic view) for a
 	 * gamepad or the keyboard (a joystick has a list alone), the swap of the
 	 * device and the cabinet in a narrow window; in a game of two, the
-	 * player shown */
+	 * player shown; while the controls are tried, Test mode */
 	const char *const swap = cabinet ? "Device" : "Cabinet";
 	const bool classic = !cabinet && !options && !state.on_joystick();
-	const bool players = two && !cabinet && !options;
+	const bool players = two && !cabinet && !options, testing = state.testing && !cabinet && !options;
 	const ImVec2 classic_size = kit.button_size("List", Icon::LIST), swap_size = kit.button_size(swap, Icon::SWAP);
-	const float corner =
-		classic || players || !wide ? std::max(classic_size.y, swap_size.y) + kit.px(5.0f) : 0.0f;
+	const float corner = classic || players || testing || !wide ?
+	                     std::max(classic_size.y, swap_size.y) + kit.px(5.0f) : 0.0f;
 
 	kit.frame(ImGui::GetWindowDrawList(), a, b, kit.px(MenuKit::BOX_CUT), 0, palette.line);
 	if (cabinet)
@@ -2112,6 +2118,8 @@ Menu::page_input(MenuKit &kit, MenuState &state) const
 		}
 		x += kit.button_size(name).x + kit.px(4.0f);
 	}
+	if (testing)
+		kit.badge(ImGui::GetWindowDrawList(), { x, a.y + kit.px(5.0f) }, "Test mode");
 	if (!cabinet && !options) {
 		ImGui::GetWindowDrawList()->AddLine({ a.x + 1.0f, bar_top }, { b.x - 1.0f, bar_top }, palette.line, kit.stroke());
 		buttons_bar(kit, state, rows, { bar_at.x, bar_top }, bar_w, true);
@@ -2127,7 +2135,8 @@ float
 Menu::input_foot(const MenuKit &kit, MenuState &state, ImVec2 at, float width, float height, bool draw)
 {
 	/* How it works: on the keyboard drawn, its keys are clicked */
-	const char *const told = state.classic || state.on_pad() || state.on_joystick() || state.gun_of(state.player) ?
+	const char *const told = state.testing ? "Testing: each control lights up, the menu stays still." :
+	                         state.classic || state.on_pad() || state.on_joystick() || state.gun_of(state.player) ?
 	                         "Press or move a control to see it light up. Click a name to change it." :
 	                         "Press or move a control to see it light up. Click a key to change it.";
 	const float line = ImGui::GetTextLineHeight();

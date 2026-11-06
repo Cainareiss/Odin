@@ -578,6 +578,15 @@ MenuSession::event(const SDL_Event &event)
 	default:
 		break;
 	}
+	/* The test of the page Input stops first, as a list dropped open, on
+	 * the menu's key or any shortcut of a gamepad; while it runs, the
+	 * gamepads and the keys work no part of the menu */
+	const bool testing = m_menu_state.testing;
+
+	if (testing && (action == Action::MENU || (pad && action))) {
+		m_menu_state.testing = false;
+		action.reset();
+	}
 	if (action == Action::QUIT)
 		return Asked::QUIT;
 	if (action == Action::CLOSE_GAME && m_game)
@@ -588,13 +597,15 @@ MenuSession::event(const SDL_Event &event)
 		m_display.toggle_fullscreen();
 	/* The menu's own buttons; the keys of a list dropped open are the list's */
 	for (const MenuNav::Action nav : m_nav.event(event)) {
-		if (action || (!pad && m_display.menu_popup_open()) || !navigate(nav))
+		if (action || testing || (!pad && m_display.menu_popup_open()) || !navigate(nav))
 			continue;
 		m_menu_pictures = MENU_PICTURES;
 		return Asked::CLOSE;
 	}
-	/* The gamepads are Odin's, not Dear ImGui's */
-	if (!pad)
+
+	/* The gamepads are Odin's, not Dear ImGui's; a key let go still
+	 * reaches it, pressed before the test */
+	if (!pad && !(event.type == SDL_EVENT_KEY_DOWN && testing && !m_display.menu_popup_open()))
 		m_display.menu_event(event);
 	m_menu_pictures = MENU_PICTURES;
 	return Asked::NONE;
@@ -672,6 +683,7 @@ MenuSession::close()
 	m_nav.reset();
 	m_held.reset();
 	m_menu_state.advanced = false;
+	m_menu_state.testing = false;
 	m_menu_state.nav = {};
 	m_keys.swallow();
 	if (m_audio)

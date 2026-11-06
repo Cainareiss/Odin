@@ -542,3 +542,5 @@ Host and user interface
 - A key is the one that writes its name, not the one at a place: on an
   AZERTY keyboard, Q, W, A and Z are not where a QWERTY has them, nor
   where a device that sends keys puts them (keyboard.hpp; to check).
+- On the page Input, X and Y of a gamepad clear a control or set it back
+  at once, with no Undo: only Clear all has one (menu_session_input.cpp).
