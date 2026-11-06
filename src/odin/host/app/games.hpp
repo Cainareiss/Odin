@@ -180,13 +180,12 @@ struct GameOutput {
 	}
 };
 
-/* Whether an output of the list with that role is on, of that player (0
- * or 1) or of either (-1) */
+/* Whether an output of the list with that role is on */
 inline bool
-any_on(const std::vector<GameOutput> &list, GameOutput::Role role, std::span<const uint8_t> outputs, int player = -1)
+any_on(const std::vector<GameOutput> &list, GameOutput::Role role, std::span<const uint8_t> outputs)
 {
 	for (const GameOutput &output : list)
-		if (output.role == role && (player < 0 || output.player == player) && output.on(outputs))
+		if (output.role == role && output.on(outputs))
 			return true;
 	return false;
 }

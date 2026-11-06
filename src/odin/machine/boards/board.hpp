@@ -49,6 +49,9 @@ public:
 	virtual bool save_state(const std::string &path) = 0;
 	virtual bool load_state(const std::string &path) = 0;
 	virtual std::span<const uint8_t> io_outputs() const = 0;
+	/* How hard each output drives what it runs, 0 to 255, output n at
+	 * n - 1 (a motor of the cabinet); none: all or nothing */
+	virtual std::span<const uint8_t> output_levels() const { return {}; }
 	virtual const std::vector<int16_t> &sound(bool optional) const = 0;
 	virtual std::optional<int> drive_torque() const = 0;
 	/* How long its last frame lasts in its own time, in nanoseconds: a

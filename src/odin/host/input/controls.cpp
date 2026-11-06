@@ -555,7 +555,8 @@ Controls::turn_wheel(int torque)
 }
 
 void
-Controls::show(std::span<const uint8_t> outputs, std::span<const int16_t> option_sound, std::optional<int> drive_torque)
+Controls::show(std::span<const uint8_t> outputs, std::span<const uint8_t> levels, std::span<const int16_t> option_sound,
+               std::optional<int> drive_torque)
 {
 	const Uint64 now = SDL_GetTicks();
 
@@ -596,9 +597,16 @@ Controls::show(std::span<const uint8_t> outputs, std::span<const int16_t> option
 	}
 	for (unsigned player = 0; player < 2; player++) {
 		Pad *const seated = seat(player);
-		/* Only the device the player plays with shakes */
-		const bool on = m_rumble && any_on(m_outputs, GameOutput::Role::RUMBLE, outputs, static_cast<int>(player));
-		const int shake = device(player) == InputDevice::PAD ? std::max<Uint16>(on ? RUMBLE : 0, player ? 0 : felt) : 0;
+		/* Only the device the player plays with shakes, as hard as the
+		 * hardest of its rumble outputs that are on drives */
+		unsigned level = 0;
+
+		for (const GameOutput &output : m_outputs)
+			if (m_rumble && output.role == GameOutput::Role::RUMBLE && output.player == player && output.on(outputs))
+				level = std::max(level, output.output <= levels.size() ? levels[output.output - 1] : 255u);
+
+		const Uint16 driven = static_cast<Uint16>(RUMBLE * level / 255 / FELT_STEP * FELT_STEP);
+		const int shake = device(player) == InputDevice::PAD ? std::max<Uint16>(driven, player ? 0 : felt) : 0;
 		const Uint16 strength = static_cast<Uint16>(std::min(shake * m_vibration_force / 100, 0xFFFF));
 
 		shake_gun(player, gun_run[player], gun_kick[player]);

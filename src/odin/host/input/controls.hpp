@@ -158,16 +158,17 @@ public:
 		for (const JvsSwitch &sw : m_grounded)
 			inputs.jvs_player[sw.player & 1] |= sw.mask;
 	}
-	/* The outputs of the board after a frame: the pad of a player shakes
-	 * while a rumble output of that player is on, when it feels them; the
-	 * pad of player 1 also
-	 * as hard as the vibration device the sound of the optional board
-	 * feeds, when it feels it and no mute output is on, or as the shocks
-	 * the drive board is told, when it feels them. The wheel of player 1,
-	 * when it has force feedback, turns with the torque of the drive board
-	 * (`drive_torque`, when the board runs its program), else with the
-	 * force of the command the game gives it. */
-	void show(std::span<const uint8_t> outputs, std::span<const int16_t> option_sound,
+	/* The outputs of the board after a frame: the pad of a player who plays
+	 * with it shakes while a rumble output of that player is on, when it
+	 * feels them, as hard as the output drives (`levels`: none, all); the
+	 * pad of player 1 also as hard as the vibration device the sound of the
+	 * optional board feeds, when it feels it and no mute output is on, or as
+	 * the shocks the drive board is told, when it feels them. The wheel of
+	 * player 1, when the player plays with it and it has force feedback,
+	 * turns with the torque of the drive board (`drive_torque`, when the
+	 * board runs its program), else with the force of the command the game
+	 * gives it. */
+	void show(std::span<const uint8_t> outputs, std::span<const uint8_t> levels, std::span<const int16_t> option_sound,
 	          std::optional<int> drive_torque = std::nullopt);
 	/* No pad shakes and the wheel lets go (the emulation stops); the light
 	 * guns are the desktop's again */

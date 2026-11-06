@@ -100,6 +100,7 @@ public:
 	}
 	bool load_state(const std::string &path) override;
 	std::span<const uint8_t> io_outputs() const override { return m_outputs; }
+	std::span<const uint8_t> output_levels() const override { return m_levels; }
 	const std::vector<int16_t> &sound(bool optional) const override
 	{
 		return optional ? m_board->woofer() : m_board->sound();
@@ -145,6 +146,8 @@ private:
 	/* The outputs as JVS counts them: output n is bit n - 1 of the
 	 * system pins, then a channel of the motor DAC that runs (GameOutput) */
 	std::array<uint8_t, 3> m_outputs{};
+	/* How hard each one drives: a pin on, all; a channel, its level */
+	std::array<uint8_t, 24> m_levels{};
 	bool m_wheel_motor;
 };
 
@@ -312,12 +315,17 @@ AtvGame::run_frame()
 	                  m_display.sorts_per_pixel());
 	m_board->run_frame();
 	m_outputs.fill(0);
+	m_levels.fill(0);
 	for (unsigned bit = 0; bit < 11; bit++)
-		if (m_board->system_pins() & 1u << bit)
+		if (m_board->system_pins() & 1u << bit) {
 			m_outputs[bit / 8] = static_cast<uint8_t>(m_outputs[bit / 8] | 0x80u >> (bit % 8));
-	for (unsigned channel = 0; channel < 4; channel++)
-		if (m_board->motors()[channel])
+			m_levels[bit] = 255;
+		}
+	for (unsigned channel = 0; channel < 4; channel++) {
+		m_levels[16 + channel] = m_board->motors()[channel];
+		if (m_levels[16 + channel])
 			m_outputs[2] = static_cast<uint8_t>(m_outputs[2] | 0x80u >> channel);
+	}
 	if (PmxScene scene = m_board->take_scene(); scene.rendered)
 		m_display.set_scene(std::move(scene));
 }
