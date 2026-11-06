@@ -83,6 +83,9 @@ Copyright (C) 2011-2013, GNU GPL version 3 or later.
 The ATV Track board follows MAME's atvtrack driver; its boot program stays
 under the BSD-3-Clause licence, Copyright (c) Samuele Zannoli.
 
+Daniel Martin (dmanlfc) contributed to Odin and brought it the Gaelco
+boards: ATV Track, Gaelco Football and Smashing Drive.
+
 Thanks to the developers of MAME (its Hikaru driver) and Flycast, and to
 Neill Corlett for his documentation of the AICA.
 
