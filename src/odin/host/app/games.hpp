@@ -27,6 +27,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cstdint>
 #include <map>
 #include <optional>
@@ -381,6 +382,15 @@ struct Game {
 	std::string shaker(unsigned player) const;
 	bool shaker_experimental(unsigned player) const;
 };
+
+/* Whether a title comes before another, the case of their letters aside */
+inline bool
+title_before(const std::string &a, const std::string &b)
+{
+	return std::lexicographical_compare(a.begin(), a.end(), b.begin(), b.end(), [](char x, char y) {
+		return std::tolower(static_cast<unsigned char>(x)) < std::tolower(static_cast<unsigned char>(y));
+	});
+}
 
 /* The list of the games, a JSON file (odin-games.json). A game has sections
  * and a section the files that make it up, each with its size, put together

@@ -25,7 +25,6 @@
 #include "odin/host/app/library.hpp"
 
 #include <algorithm>
-#include <cctype>
 
 #include <SDL3/SDL.h>
 
@@ -70,14 +69,8 @@ scan_library(LibraryState &state, const GameList &games, const Options &options,
 	const auto rank = [&state](const LibraryState::Game &game) {
 		return std::find(state.systems.begin(), state.systems.end(), game.system) - state.systems.begin();
 	};
-	const auto lower = [](char a, char b) {
-		return std::tolower(static_cast<unsigned char>(a)) < std::tolower(static_cast<unsigned char>(b));
-	};
 	const auto before = [&](const LibraryState::Game &a, const LibraryState::Game &b) {
-		if (rank(a) != rank(b))
-			return rank(a) < rank(b);
-		return std::lexicographical_compare(a.title.begin(), a.title.end(), b.title.begin(), b.title.end(),
-		                                    lower);
+		return rank(a) != rank(b) ? rank(a) < rank(b) : title_before(a.title, b.title);
 	};
 
 	std::stable_sort(state.games.begin(), state.games.end(), before);

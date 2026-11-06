@@ -203,9 +203,9 @@ MenuSession::MenuSession(const Options &options, Display &display, Keyboard &key
 }
 
 /* Each game of the list but the versions (they share their parent's
- * settings): the ones whose optional sound board the user may hear, as the
- * cabinet plays it unless the settings or -o say; whether it links
- * cabinets */
+ * settings), by title: the ones whose optional sound board the user may
+ * hear, as the cabinet plays it unless the settings or -o say; whether it
+ * links cabinets */
 void
 MenuSession::fill_games()
 {
@@ -215,6 +215,8 @@ MenuSession::fill_games()
 	for (const GameList::Entry &entry : m_games.entries())
 		if (entry.parent.empty())
 			state.games.emplace_back(entry.name, entry.title);
+	std::stable_sort(state.games.begin(), state.games.end(),
+	                 [](const auto &a, const auto &b) { return title_before(a.second, b.second); });
 	for (const auto &[name, title] : state.games) {
 		const bool runs = m_game && name == m_game->family();
 		const std::optional<Game> other = runs ? std::nullopt : m_games.describe(name);
