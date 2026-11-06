@@ -41,8 +41,7 @@ constexpr const char *IDS[Hotkeys::ACTIONS] = { "menu", "pause", "save_state", "
  * cabinet off and on; F11 or Alt+Enter the whole display; F6 the card in
  * or out; F7 the light gun mode; 0 TEST and 9 SERVICE, or Guide with R3
  * and L3; Ctrl+C closes the game (back to the library); Ctrl+Q quits. On a
- * gamepad Guide held with Back, RB, LB, Y, B or Start, as Batocera, which
- * has no button to reset. */
+ * gamepad Guide held with Back, RB, LB, Y, B or Start; no button resets. */
 const Hotkeys::Binding STANDARD[Hotkeys::ACTIONS] = {
 	{ { { { SDLK_ESCAPE, SDL_KMOD_NONE }, { SDLK_F10, SDL_KMOD_NONE } } }, Hotkeys::GUIDE_ALONE },
 	{ { { { SDLK_P, SDL_KMOD_NONE }, {} } }, SDL_GAMEPAD_BUTTON_BACK },

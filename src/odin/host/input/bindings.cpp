@@ -125,8 +125,7 @@ const std::pair<Role, const char *> MOUSE_DEFAULTS[] = {
  * on every wheel of the mapping of EmulationStation (Batocera's
  * es_input.cfg: "joystick1left" on axis 0 for all 29). Its pedals, paddles,
  * Start and Select are the parts of a known wheel (wheels.cpp); on another
- * joystick, the user takes those on the page Input, Batocera from its
- * mapping. */
+ * joystick, the user takes those on the page Input. */
 const std::pair<Role, const char *> JOY_DEFAULTS[] = {
 	{ Role::STEER, "axis0" }, { Role::ACCEL, "gas" }, { Role::BRAKE, "brake" }, { Role::GEAR_DOWN, "paddle_left" },
 	{ Role::GEAR_UP, "paddle_right" }, { Role::START, "start" }, { Role::COIN1, "select" },

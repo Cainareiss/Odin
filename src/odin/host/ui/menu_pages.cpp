@@ -710,7 +710,7 @@ hotkeys_keyboard(const MenuKit &kit, const MenuState &state, const Box &box, con
 		others_w += kit.key_size(name.c_str()).x + gap;
 
 	const char caption[] = "Bright outline: Odin's keys. Press one to see it light up.";
-	const char guide[] = "held: the hotkey button, as on Batocera";
+	const char guide[] = "held: the hotkey button";
 	const float text_w = std::min(width, kit.px(260.0f));
 	const float caption_h = centred({}, width, size, caption, 0);
 	const float guide_w = kit.pill_size(guide_name.c_str()).x, guide_text_w = text_w - guide_w - kit.px(8.0f);

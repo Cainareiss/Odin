@@ -462,9 +462,9 @@ INPUTS
  joy:button<n>       A button of a wheel or joystick.
  joy:hat<n>_up       A hat direction (_up, _down, _left, _right).
  joy:gas             The gas pedal of a known wheel, whatever its numbers
-                     (Batocera's list: Logitech G25 to G923, PRO, Driving
-                     Force, MOMO; Thrustmaster FFB Wheel, T150, T300,
-                     Advance Racer; MOZA R12); nothing on another joystick. joy:brake,
+                     (Logitech G25 to G923, PRO, Driving Force, MOMO;
+                     Thrustmaster FFB Wheel, T150, T300, Advance Racer;
+                     MOZA R12); nothing on another joystick. joy:brake,
                      joy:paddle_left, joy:paddle_right, joy:start and
                      joy:select the same. On a button, a pedal presses it
                      from half its way.

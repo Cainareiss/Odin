@@ -82,10 +82,10 @@ inline constexpr const char *WHEEL_PART_NAMES[WHEEL_PARTS] = { "gas", "brake", "
 
 /* An input of a joystick that is no gamepad (a wheel, its pedals, its
  * shifter, a flight stick), by its numbers in SDL's joystick API, those
- * EmulationStation gives it on Batocera: "button12"; an axis whole,
- * "axis0", or turned over, "axis2:invert" (a pedal at rest at the top of
- * its axis); half an axis, "-axis1", "+axis1"; a way of a hat, "hat0_up",
- * "_down", "_left", "_right"; a part of a known wheel, by its name in
+ * EmulationStation gives it: "button12"; an axis whole, "axis0", or
+ * turned over, "axis2:invert" (a pedal at rest at the top of its axis);
+ * half an axis, "-axis1", "+axis1"; a way of a hat, "hat0_up", "_down",
+ * "_left", "_right"; a part of a known wheel, by its name in
  * WHEEL_PART_NAMES: its own input on that wheel, none on another
  * joystick. */
 struct JoyInput {

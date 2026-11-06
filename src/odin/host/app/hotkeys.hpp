@@ -49,8 +49,8 @@ struct HotKey {
 
 /* What Odin does itself on a key or on a gamepad (the page
  * Hotkeys): up to two keys for each action, and a button pressed with Guide
- * held (Guide alone: tapped, the menu by default), as Batocera has its
- * hotkey. The user changes them in the menu; [hotkeys] of odin.ini keeps
+ * held (Guide alone: tapped, the menu by default). The user changes them in
+ * the menu; [hotkeys] of odin.ini keeps
  * those that are not as by default, one line an action:
  *
  *   pause = Pause, pad:guide+back
