@@ -322,7 +322,8 @@ MenuSession::catch_pad(bool axis, int index, int value)
 /* The page Hotkeys waits for a key (Ctrl, Alt, Shift or Gui held with it
  * are its own) or for a button pressed with Guide held, or Guide tapped
  * alone; Delete, Backspace or the Clear of the gamepad (X) empties the
- * place; Escape lets it be. True when the event was taken. */
+ * place; Escape tapped lets it be, held ESCAPE_HOLD_MS it is the key. True
+ * when the event was taken. */
 bool
 MenuSession::catch_hotkey(const SDL_Event &event)
 {
@@ -335,6 +336,25 @@ MenuSession::catch_hotkey(const SDL_Event &event)
 	case SDL_EVENT_KEY_DOWN:
 	case SDL_EVENT_KEY_UP:
 		m_keys.set(event.key.key, event.key.down);
+		if (event.key.key == SDLK_ESCAPE && slot < Hotkeys::KEYS) {
+			/* Held long enough: seen as the key repeats, else as
+			 * it is let go; one down as another place waited (a
+			 * click ended that catch) is let be */
+			if (m_escape_down && m_escape_down->place != *state.hotkey_catching)
+				m_escape_down.reset();
+
+			const bool held = m_escape_down && SDL_GetTicks() - m_escape_down->since >= ESCAPE_HOLD_MS;
+
+			if (event.key.down && !event.key.repeat)
+				m_escape_down = { SDL_GetTicks(), event.key.mod, *state.hotkey_catching };
+			else if (held)
+				set_hotkey_key(action, slot, { SDLK_ESCAPE, Hotkeys::modifiers(m_escape_down->mods) });
+			else if (m_escape_down && !event.key.down)
+				state.hotkey_catching.reset();
+			if (!state.hotkey_catching)
+				m_escape_down.reset();
+			return true;
+		}
 		if (!event.key.down || event.key.repeat)
 			return true;
 		if (event.key.key == SDLK_ESCAPE) {
@@ -345,18 +365,8 @@ MenuSession::catch_hotkey(const SDL_Event &event)
 			clear_hotkey(action, slot);
 			return true;
 		}
-		if (slot < Hotkeys::KEYS && !Hotkeys::is_modifier(event.key.key)) {
-			const HotKey key{ event.key.key, Hotkeys::modifiers(event.key.mod) };
-
-			/* The action that had it told, with the key as the action took
-			 * it (TEST and SERVICE leave the modifiers) */
-			state.hotkey_moved.reset();
-			if (const auto from = m_hotkeys.set_key(action, slot, key))
-				state.hotkey_moved = { static_cast<size_t>(*from), static_cast<size_t>(action),
-				                       m_hotkeys.of(action).keys[slot], Hotkeys::NO_PAD };
-			state.hotkey_catching.reset();
-			keep_hotkeys();
-		}
+		if (slot < Hotkeys::KEYS && !Hotkeys::is_modifier(event.key.key))
+			set_hotkey_key(action, slot, { event.key.key, Hotkeys::modifiers(event.key.mod) });
 		return true;
 	case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
 	case SDL_EVENT_GAMEPAD_BUTTON_UP:
@@ -380,11 +390,30 @@ MenuSession::catch_hotkey(const SDL_Event &event)
 		} else if (std::find(nav.begin(), nav.end(), MenuNav::CLEAR) != nav.end()) {
 			clear_hotkey(action, slot);
 		}
+		if (!state.hotkey_catching)
+			m_escape_down.reset();
 		return true;
 	}
 	default:
 		return false;
 	}
+}
+
+/* The key caught for a place of an action; the action that had it told,
+ * with the key as the action took it (TEST and SERVICE leave the
+ * modifiers) */
+void
+MenuSession::set_hotkey_key(Hotkeys::Action action, size_t slot, const HotKey &key)
+{
+	MenuState &state = m_menu_state;
+
+	state.hotkey_moved.reset();
+	if (const auto from = m_hotkeys.set_key(action, slot, key))
+		state.hotkey_moved = { static_cast<size_t>(*from), static_cast<size_t>(action),
+		                       m_hotkeys.of(action).keys[slot], Hotkeys::NO_PAD };
+	state.hotkey_catching.reset();
+	m_escape_down.reset();
+	keep_hotkeys();
 }
 
 /* The key (slot 0 or 1) or the gamepad (slot KEYS) of an action emptied */
@@ -399,6 +428,7 @@ MenuSession::clear_hotkey(Hotkeys::Action action, size_t slot)
 		m_hotkeys.set_pad(action, Hotkeys::NO_PAD);
 	state.hotkey_moved.reset();
 	state.hotkey_catching.reset();
+	m_escape_down.reset();
 	keep_hotkeys();
 }
 

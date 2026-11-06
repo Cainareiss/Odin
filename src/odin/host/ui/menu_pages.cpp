@@ -857,8 +857,9 @@ Menu::hotkeys_help(const MenuState &state)
 	}
 	if (Hotkeys::held(static_cast<Hotkeys::Action>(state.hotkey_catching->first)))
 		return name + ": press the new key, held as the button is (no Ctrl, Alt or Shift). Delete empties it. "
-		              "Esc cancels.";
-	return name + ": press the new key, with Ctrl, Alt or Shift if you like. Delete empties it. Esc cancels.";
+		              "Esc cancels, held a second it is the key.";
+	return name + ": press the new key, with Ctrl, Alt or Shift if you like. Delete empties it. Esc cancels, "
+	              "held a second it is the key.";
 }
 
 namespace {

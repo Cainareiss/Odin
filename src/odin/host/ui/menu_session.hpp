@@ -210,6 +210,9 @@ private:
 	/* How long the button that presses is held to skip a control while
 	 * Start mapping: a choice of the emulator */
 	static constexpr Uint64 SKIP_HOLD_MS = 1000;
+	/* How long Escape is held on the page Hotkeys to be the key caught
+	 * (tapped, it lets the catch go): a choice of the emulator */
+	static constexpr Uint64 ESCAPE_HOLD_MS = 1000;
 
 	/* What a button of the menu asks: true for B with no list dropped open,
 	 * the menu to close */
@@ -254,6 +257,7 @@ private:
 	bool catch_hotkey(const SDL_Event &event);
 	void keep_hotkeys();
 	void clear_hotkey(Hotkeys::Action action, size_t slot);
+	void set_hotkey_key(Hotkeys::Action action, size_t slot, const HotKey &key);
 	void caught(const HostInput &input);
 	void change_inputs(bool to_defaults);
 	void clear_inputs();
@@ -338,6 +342,14 @@ private:
 		bool skipped;
 	};
 	std::optional<Held> m_held;
+	/* The page Hotkeys: Escape down since then, with those modifiers, as
+	 * that place waited for its key */
+	struct EscapeDown {
+		Uint64 since;
+		SDL_Keymod mods;
+		std::pair<size_t, size_t> place;
+	};
+	std::optional<EscapeDown> m_escape_down;
 	/* A sight caught whole: where the pointer was as it began */
 	struct AimFrom {
 		MenuSlot slot;

@@ -536,10 +536,10 @@ MenuSession::event(const SDL_Event &event)
 		if (event.key.down && !event.key.repeat && !m_display.menu_typing())
 			action = m_hotkeys.key_action(event.key.key, event.key.mod);
 		/* Escape closes a list dropped open first, then the advanced
-		 * options */
-		if (action == Action::MENU && event.key.key == SDLK_ESCAPE && m_display.menu_popup_open()) {
+		 * options, whatever action it has */
+		if (event.key.down && event.key.key == SDLK_ESCAPE && m_display.menu_popup_open()) {
 			action.reset();
-		} else if (action == Action::MENU && event.key.key == SDLK_ESCAPE && m_menu_state.advanced) {
+		} else if (event.key.down && !event.key.repeat && event.key.key == SDLK_ESCAPE && m_menu_state.advanced) {
 			action.reset();
 			m_menu_state.advanced = false;
 		}
