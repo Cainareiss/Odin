@@ -399,9 +399,17 @@ void
 MenuSession::do_asked(MenuState &state)
 {
 	if (state.hotkeys_default) {
+		m_hotkeys.set_button(SDL_GAMEPAD_BUTTON_GUIDE);
 		m_hotkeys.reset();
 		keep_hotkeys();
 		state.hotkeys_default = false;
+		m_menu_pictures = MENU_PICTURES;
+	}
+	if (state.hotkey_button_asked) {
+		m_hotkeys.set_button(*state.hotkey_button_asked);
+		keep_hotkeys();
+		state.hotkey_button_asked.reset();
+		state.hotkey_moved.reset();
 		m_menu_pictures = MENU_PICTURES;
 	}
 	if (state.choose != MenuState::Folder::NONE) {
@@ -477,6 +485,7 @@ MenuSession::draw_menu()
 	fill_inputs(state);
 	for (size_t a = 0; a < Hotkeys::ACTIONS; a++)
 		state.hotkeys[a] = m_hotkeys.of(static_cast<Hotkeys::Action>(a));
+	state.hotkey_button = m_hotkeys.button();
 	if (m_audio || m_listing)
 		state.devices = AudioOut::devices();
 	fill_game_shown(state);

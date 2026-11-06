@@ -169,9 +169,10 @@ cabinet_index(Role role)
 }
 
 /* The inputs of a held hotkey (Hotkeys::held): its keys, with player 1
- * alone (`keys`), then its button with Guide held, or Guide alone */
+ * alone (`keys`), then its button with the hotkey button held, or Guide
+ * alone */
 std::vector<HostInput>
-held_inputs(const Hotkeys::Binding &binding, bool keys)
+held_inputs(const Hotkeys::Binding &binding, bool keys, int hotkey)
 {
 	std::vector<HostInput> out;
 
@@ -189,7 +190,7 @@ held_inputs(const Hotkeys::Binding &binding, bool keys)
 		input.kind = HostInput::Kind::PAD;
 		input.pad = { PadInput::Type::BUTTON, static_cast<uint8_t>(binding.pad) };
 		if (binding.pad != Hotkeys::GUIDE_ALONE)
-			input.pad.with = SDL_GAMEPAD_BUTTON_GUIDE;
+			input.pad.with = static_cast<int8_t>(hotkey);
 		out.push_back(input);
 	}
 	return out;
@@ -590,7 +591,8 @@ Bindings::set_defaults(const Settings &settings, const std::string &game)
 			continue;
 		}
 		m_controls[c][0] = own_inputs(control.role == Role::SERVICE ?
-		                                  held_inputs(hotkeys.of(Hotkeys::Action::SERVICE), control.player == 0) :
+		                                  held_inputs(hotkeys.of(Hotkeys::Action::SERVICE), control.player == 0,
+		                                              hotkeys.button()) :
 		                                  defaults(control.role, control.player),
 		                              control, game);
 		for (const auto &[role, name] : MOUSE_DEFAULTS)
@@ -602,8 +604,9 @@ Bindings::set_defaults(const Settings &settings, const std::string &game)
 		}
 	}
 	for (size_t r = 0; r < m_cabinet.size(); r++)
-		m_cabinet[r] = cabinet_role(r) == Role::TEST ? held_inputs(hotkeys.of(Hotkeys::Action::TEST), true) :
-		                                               defaults(cabinet_role(r), 0);
+		m_cabinet[r] = cabinet_role(r) == Role::TEST ?
+		                   held_inputs(hotkeys.of(Hotkeys::Action::TEST), true, hotkeys.button()) :
+		                   defaults(cabinet_role(r), 0);
 	m_defaults = m_controls;
 	m_cabinet_defaults = m_cabinet;
 }

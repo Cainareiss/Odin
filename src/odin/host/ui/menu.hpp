@@ -310,9 +310,13 @@ struct MenuState : BarSettings {
 	std::array<Hotkeys::Binding, Hotkeys::ACTIONS> hotkeys{};
 	std::optional<std::pair<size_t, size_t>> hotkey_catching;
 	bool hotkeys_default = false;
+	/* The hotkey button ([hotkeys] button), and another one chosen */
+	int hotkey_button = SDL_GAMEPAD_BUTTON_GUIDE;
+	std::optional<int> hotkey_button_asked;
 	/* What the last key or buttons caught took from another action: from
-	 * it to the one changed, the key, else the button held with Guide (or
-	 * GUIDE_ALONE); said at the bottom of the page until the next change */
+	 * it to the one changed, the key, else the button held with the
+	 * hotkey button (or GUIDE_ALONE); said at the bottom of the page
+	 * until the next change */
 	struct HotkeyMoved {
 		size_t from = 0, to = 0;
 		std::optional<HotKey> key;

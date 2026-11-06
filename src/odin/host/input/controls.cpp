@@ -26,6 +26,7 @@
 #include "odin/host/input/wheels.hpp"
 
 #include "odin/host/audio/audio_out.hpp"
+#include "odin/host/app/hotkeys.hpp"
 #include "odin/host/app/options.hpp"
 #include "odin/machine/cabinet/drive_board.hpp"
 #include "odin/host/ui/pad_drawing.hpp"
@@ -132,6 +133,7 @@ Controls::Controls(Keyboard &keys, const std::vector<GameControl> &controls, con
 		}
 	}
 	route_outputs();
+	follow_hotkeys();
 	if (all_off())
 		return;
 	for (const auto &[key, value] : settings.section("players." + game)) {
@@ -571,16 +573,19 @@ Controls::event(const SDL_Event &event)
 	case SDL_EVENT_GAMEPAD_BUTTON_UP:
 		if (Pad *const pad = find(event.gbutton.which); pad && event.gbutton.button < SDL_GAMEPAD_BUTTON_COUNT) {
 			const unsigned button = event.gbutton.button;
+			const unsigned hotkey = static_cast<unsigned>(m_hotkey_button);
+			const bool guide = hotkey == SDL_GAMEPAD_BUTTON_GUIDE;
 
 			press(pad->state.buttons[button], pad->fresh[button], pad->release[button], event.gbutton.down);
-			if (event.gbutton.down && button != SDL_GAMEPAD_BUTTON_GUIDE &&
-			    pad->state.buttons[SDL_GAMEPAD_BUTTON_GUIDE]) {
-				pad->state.shortcut[button] = true;
+			/* Another hotkey button: Guide is in no shortcut */
+			if (event.gbutton.down && button != hotkey && (guide || button != SDL_GAMEPAD_BUTTON_GUIDE) &&
+			    pad->state.buttons[hotkey]) {
+				pad->state.shortcut[button] = guide || m_hotkey_with[button];
 				m_guide_combo = static_cast<int>(button);
 			}
 			if (!pad->state.buttons[button])
 				pad->state.shortcut[button] = false;
-			if (button != SDL_GAMEPAD_BUTTON_GUIDE)
+			if (!guide || button != SDL_GAMEPAD_BUTTON_GUIDE)
 				pad->guide_alone = pad->guide_alone && !event.gbutton.down;
 			else if (event.gbutton.down)
 				pad->guide_alone = true;
@@ -762,6 +767,16 @@ Controls::rebind()
 {
 	m_panel = ControlPanel(m_game_controls, m_settings, m_game);
 	m_panel.set_wheel_rotation(m_wheel_rotation);
+	follow_hotkeys();
+}
+
+void
+Controls::follow_hotkeys()
+{
+	const Hotkeys hotkeys(m_settings, false);
+
+	m_hotkey_button = hotkeys.button();
+	m_hotkey_with = hotkeys.combos();
 }
 
 void

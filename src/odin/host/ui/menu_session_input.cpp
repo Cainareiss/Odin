@@ -320,10 +320,10 @@ MenuSession::catch_pad(bool axis, int index, int value)
 }
 
 /* The page Hotkeys waits for a key (Ctrl, Alt, Shift or Gui held with it
- * are its own) or for a button pressed with Guide held, or Guide tapped
- * alone; Delete, Backspace or the Clear of the gamepad (X) empties the
- * place; Escape tapped lets it be, held ESCAPE_HOLD_MS it is the key. True
- * when the event was taken. */
+ * are its own) or for a button pressed with the hotkey button held, or
+ * Guide tapped alone when it is that button; Delete, Backspace or the Clear
+ * of the gamepad (X) empties the place; Escape tapped lets it be, held
+ * ESCAPE_HOLD_MS it is the key. True when the event was taken. */
 bool
 MenuSession::catch_hotkey(const SDL_Event &event)
 {
@@ -432,19 +432,27 @@ MenuSession::clear_hotkey(Hotkeys::Action action, size_t slot)
 	keep_hotkeys();
 }
 
-/* [hotkeys]: a line for each action not as by default; the panels made
- * again, which take TEST and SERVICE from there */
+/* [hotkeys]: the line of the hotkey button and one for each action not as
+ * by default with it, the others back to their comment by default with it;
+ * the menu follows the button, the panels are made again (they take TEST
+ * and SERVICE from there) */
 void
 MenuSession::keep_hotkeys()
 {
+	const int button = m_hotkeys.button();
+
+	m_settings.know(known_settings(m_games, button));
+	keep("hotkeys", "button",
+	     button == SDL_GAMEPAD_BUTTON_GUIDE ? std::nullopt : std::optional(Hotkeys::button_text(button)));
 	for (size_t a = 0; a < Hotkeys::ACTIONS; a++) {
 		const auto action = static_cast<Hotkeys::Action>(a);
 		const Hotkeys::Binding &binding = m_hotkeys.of(action);
-		const std::optional<std::string> line = binding == Hotkeys::standard(action) ? std::nullopt :
+		const std::optional<std::string> line = binding == Hotkeys::standard(action, button) ? std::nullopt :
 		                                        std::optional(Hotkeys::line(binding));
 
 		keep("hotkeys", Hotkeys::id(action), line);
 	}
+	m_nav.hotkey(button, m_hotkeys.combos());
 	rebind_panels();
 }
 

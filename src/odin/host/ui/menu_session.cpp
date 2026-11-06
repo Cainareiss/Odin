@@ -129,6 +129,8 @@ MenuSession::MenuSession(const Options &options, Display &display, Keyboard &key
 {
 	MenuState &state = m_menu_state;
 
+	m_nav.hotkey(m_hotkeys.button(), m_hotkeys.combos());
+
 	state.scale = options.display.scale;
 	state.anisotropy = options.display.anisotropy;
 	state.upscale_mode = static_cast<unsigned>(options.display.upscale_mode);
@@ -992,6 +994,7 @@ MenuSession::do_bar(BarState &bar)
 			undo();
 		return Ask::NONE;
 	case Ask::HOTKEYS_DEFAULTS:
+		m_hotkeys.set_button(SDL_GAMEPAD_BUTTON_GUIDE);
 		m_hotkeys.reset();
 		keep_hotkeys();
 		return Ask::NONE;

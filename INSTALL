@@ -123,7 +123,9 @@ Keyboard (all keys can be changed, page Hotkeys and page Input):
 
 Gamepad: Guide opens the menu, Select puts in a coin. Guide held with
 Start quits, with Back pauses, with RB saves, with LB loads, with B
-closes the game.
+closes the game. A gamepad without Guide (or whose Guide another program
+takes) holds another button instead, set on the page Hotkeys; the menu is
+then that button with A.
 
 Moving the mouse over the window shows a bar at its top: it sets the same
 things as the menu, without pausing the game (not while the mouse aims in

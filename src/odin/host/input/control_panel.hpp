@@ -71,8 +71,9 @@ struct PadTuning {
 struct PadState {
 	std::array<int16_t, SDL_GAMEPAD_AXIS_COUNT> axes{};
 	std::array<bool, SDL_GAMEPAD_BUTTON_COUNT> buttons{};
-	/* Pressed with Guide held: a shortcut of Odin (hotkeys.hpp), not the
-	 * game's, until let go; it still works with Guide (guide+leftstick) */
+	/* Pressed with the hotkey button held: a shortcut of Odin
+	 * (hotkeys.hpp), not the game's, until let go (with Guide, any button
+	 * held with it); it still works in a pair (guide+leftstick) */
 	std::array<bool, SDL_GAMEPAD_BUTTON_COUNT> shortcut{};
 	/* Where a trigger starts to press a button */
 	int16_t trigger_pressed = PadTuning{}.trigger_pressed();

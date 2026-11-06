@@ -29,6 +29,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 
@@ -48,12 +49,14 @@ struct HotKey {
 };
 
 /* What Odin does itself on a key or on a gamepad (the page
- * Hotkeys): up to two keys for each action, and a button pressed with Guide
- * held (Guide alone: tapped, the menu by default). The user changes them in
- * the menu; [hotkeys] of odin.ini keeps
- * those that are not as by default, one line an action:
+ * Hotkeys): up to two keys for each action, and a button pressed with the
+ * hotkey button held (Guide unless the user chose another; Guide alone:
+ * tapped, the menu by default). The user changes them in the menu;
+ * [hotkeys] of odin.ini keeps those that are not as by default, one line an
+ * action, "guide" there being the hotkey button:
  *
- *   pause = Pause, pad:guide+back
+ *   button = back
+ *   pause = Pause, pad:guide+x
  *   quit = Ctrl+Q, pad:guide+start
  *
  * A key may be held with others than its own (a player holding Left Ctrl
@@ -73,7 +76,7 @@ public:
 	static constexpr size_t ACTIONS = static_cast<size_t>(Action::QUIT) + 1;
 	static constexpr size_t KEYS = 2;
 	/* The gamepad of an action: none, Guide tapped alone, or a button with
-	 * Guide held (an SDL_GamepadButton) */
+	 * the hotkey button held (an SDL_GamepadButton) */
 	static constexpr int NO_PAD = -1;
 	static constexpr int GUIDE_ALONE = SDL_GAMEPAD_BUTTON_GUIDE;
 
@@ -95,13 +98,27 @@ public:
 	 * by default of its role in every game (bindings.cpp) */
 	static bool held(Action action) { return action == Action::TEST || action == Action::SERVICE; }
 
-	/* The name of an action in odin.ini; those by default */
+	/* The name of an action in odin.ini; those by default with that
+	 * hotkey button: one other than Guide is the game's tapped alone, so
+	 * the menu is that button with A, and no action takes the button */
 	static const char *id(Action action);
-	static const Binding &standard(Action action);
+	static Binding standard(Action action, int button = SDL_GAMEPAD_BUTTON_GUIDE);
 	const Binding &of(Action action) const { return m_bindings[static_cast<size_t>(action)]; }
 
+	/* The buttons that may be the hotkey button, Guide first; the name of
+	 * one in odin.ini ("back"), and the button of a name */
+	static std::span<const int> buttons();
+	static std::string button_text(int button);
+	static std::optional<int> button_of(std::string_view text);
+	/* The hotkey button; another, which those as by default follow (an
+	 * action leaves the button itself) */
+	int button() const { return m_button; }
+	void set_button(int button);
+	/* The buttons that, with the hotkey button held, are an action */
+	std::array<bool, SDL_GAMEPAD_BUTTON_COUNT> combos() const;
+
 	/* The action of a key pressed with those modifiers held; of a button
-	 * pressed with Guide held, or GUIDE_ALONE */
+	 * pressed with the hotkey button held, or GUIDE_ALONE */
 	std::optional<Action> key_action(SDL_Keycode key, SDL_Keymod mods) const;
 	std::optional<Action> pad_action(int pad) const;
 	/* A key that is an action's alone: no control of a game takes it (a
@@ -130,6 +147,7 @@ public:
 
 private:
 	std::array<Binding, ACTIONS> m_bindings;
+	int m_button = SDL_GAMEPAD_BUTTON_GUIDE;
 };
 
 } /* namespace odin */

@@ -82,23 +82,24 @@ is_switch(int kind)
 }
 
 /* The names a maker prints on the buttons that differ: Back, Start, the
- * sticks pressed, Guide, the shoulders and the triggers; the D-pad and the
+ * sticks pressed, Guide, the shoulders, the triggers and misc1 (Share of an
+ * Xbox Series, the mic of a PS5, Capture of a Switch); the D-pad and the
  * right stick (the pads of the Steam Controller) */
 struct Family {
-	const char *back, *start, *left_stick, *right_stick, *guide, *lb, *rb, *lt, *rt, *dpad, *right_axes;
+	const char *back, *start, *left_stick, *right_stick, *guide, *lb, *rb, *lt, *rt, *dpad, *right_axes, *misc;
 };
 
 const Family &
 family(int kind)
 {
-	static constexpr Family ODIN = { "Select", "Start", "L3", "R3", "Guide", "LB", "RB", "LT", "RT", "D-pad", "R stick" };
-	static constexpr Family XBOX_360 = { "Back", "Start", "LS", "RS", "Guide", "LB", "RB", "LT", "RT", "D-pad", "R stick" };
-	static constexpr Family XBOX_ONE = { "View", "Menu", "LS", "RS", "Guide", "LB", "RB", "LT", "RT", "D-pad", "R stick" };
-	static constexpr Family PS3 = { "Select", "Start", "L3", "R3", "PS", "L1", "R1", "L2", "R2", "D-pad", "R stick" };
-	static constexpr Family PS4 = { "Share", "Options", "L3", "R3", "PS", "L1", "R1", "L2", "R2", "D-pad", "R stick" };
-	static constexpr Family PS5 = { "Create", "Options", "L3", "R3", "PS", "L1", "R1", "L2", "R2", "D-pad", "R stick" };
-	static constexpr Family SWITCH = { "−", "+", "LS", "RS", "Home", "L", "R", "ZL", "ZR", "D-pad", "R stick" };
-	static constexpr Family STEAM = { "◀", "▶", "LS", "R pad", "Steam", "LB", "RB", "LT", "RT", "L pad", "R pad" };
+	static constexpr Family ODIN = { "Select", "Start", "L3", "R3", "Guide", "LB", "RB", "LT", "RT", "D-pad", "R stick", "Misc" };
+	static constexpr Family XBOX_360 = { "Back", "Start", "LS", "RS", "Guide", "LB", "RB", "LT", "RT", "D-pad", "R stick", "Misc" };
+	static constexpr Family XBOX_ONE = { "View", "Menu", "LS", "RS", "Guide", "LB", "RB", "LT", "RT", "D-pad", "R stick", "Share" };
+	static constexpr Family PS3 = { "Select", "Start", "L3", "R3", "PS", "L1", "R1", "L2", "R2", "D-pad", "R stick", "Misc" };
+	static constexpr Family PS4 = { "Share", "Options", "L3", "R3", "PS", "L1", "R1", "L2", "R2", "D-pad", "R stick", "Misc" };
+	static constexpr Family PS5 = { "Create", "Options", "L3", "R3", "PS", "L1", "R1", "L2", "R2", "D-pad", "R stick", "Mic" };
+	static constexpr Family SWITCH = { "−", "+", "LS", "RS", "Home", "L", "R", "ZL", "ZR", "D-pad", "R stick", "Capture" };
+	static constexpr Family STEAM = { "◀", "▶", "LS", "R pad", "Steam", "LB", "RB", "LT", "RT", "L pad", "R pad", "Misc" };
 
 	if (kind == PAD_STEAM_CONTROLLER)
 		return STEAM;
@@ -146,6 +147,7 @@ pad_label(const PadInput &pad, int kind)
 		case SDL_GAMEPAD_BUTTON_DPAD_LEFT: return dpad + "←";
 		case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: return dpad + "→";
 		case SDL_GAMEPAD_BUTTON_TOUCHPAD: return "Touchpad";
+		case SDL_GAMEPAD_BUTTON_MISC1: return names.misc;
 		default: {
 			/* The grips of the Steam Controller, under it */
 			if (kind == PAD_STEAM_CONTROLLER && button == SDL_GAMEPAD_BUTTON_RIGHT_PADDLE1)
@@ -518,8 +520,8 @@ touched(int key, const PadState &now)
 }
 
 /* Whether the game takes that input of a label now, as ControlPanel reads
- * it: a button pressed with Guide held is a shortcut of Odin, unless the
- * input is that pair */
+ * it: a button of a shortcut, pressed with the hotkey button held, is
+ * Odin's (PadState::shortcut), unless the input is that pair */
 bool
 taken(const PadInput &input, int key, const PadState &now)
 {

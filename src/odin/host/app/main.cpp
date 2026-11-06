@@ -34,6 +34,7 @@
 
 #include "odin/host/video/display.hpp"
 #include "odin/host/app/games.hpp"
+#include "odin/host/app/hotkeys.hpp"
 #include "odin/host/app/atvtrack_play.hpp"
 #include "odin/machine/boards/hikaru/hikaru.hpp"
 #include "odin/host/input/keyboard.hpp"
@@ -247,7 +248,7 @@ load_settings(Settings &settings, const GameList &games, const std::string &chos
 
 	if (!settings_file.empty() && settings.load(settings_file)) {
 		std::printf("settings: '%s'\n", settings_file.c_str());
-		settings.know(known_settings(games));
+		settings.know(known_settings(games, Hotkeys(settings, false).button()));
 		settings.complete(settings_file);
 	}
 	return settings_file;

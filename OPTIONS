@@ -148,6 +148,16 @@ apart by commas (see INPUTS below).
  pad:guide alone, or pad:guide+<button>. none: nothing. test and service
  take keys without Ctrl, Alt or Shift.
 
+ button        guide, back, start,     The hotkey button: "guide" in the
+               leftstick, rightstick,  lines below. Another one than Guide
+               leftshoulder,           goes to the game at each press, in
+               rightshoulder, misc1,   a shortcut too (back: a coin), so
+               touchpad                the menu is then pad:guide+a, and an
+                                       action that takes that button by
+                                       default has none (pause, with back);
+                                       while it is held, only the buttons
+                                       of its shortcuts leave the game.
+                                       Default guide.
  menu          Escape, F10, pad:guide
  pause         P, pad:guide+back
  save_state    F2, pad:guide+rightshoulder
@@ -468,7 +478,8 @@ INPUTS
  pad:+<axis>         pad:+leftx the left stick right.
  pad:<axis>:invert   A whole stick axis turned over (not a trigger).
  pad:<a>+<b>         Button b while a is held: pad:guide+x, pad:back+start
-                     (Guide and what it holds are not seen by the game).
+                     (what the hotkey button holds for a shortcut is not
+                     seen by the game; Guide, all it holds).
  joy:axis<n>         An axis of a wheel or joystick; joy:-axis<n> and
                      joy:+axis<n> its halves; joy:axis<n>:invert turned
                      over (a pedal).

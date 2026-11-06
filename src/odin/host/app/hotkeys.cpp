@@ -24,6 +24,7 @@
 
 #include "odin/host/app/hotkeys.hpp"
 
+#include <algorithm>
 #include <bit>
 #include <cstdio>
 
@@ -58,6 +59,14 @@ const Hotkeys::Binding STANDARD[Hotkeys::ACTIONS] = {
 	{ { { { SDLK_Q, SDL_KMOD_CTRL }, {} } }, SDL_GAMEPAD_BUTTON_START },
 };
 
+/* The buttons that may be the hotkey button, Guide first: not the D-pad
+ * nor the four of the face (A presses in the menu) */
+constexpr int HOTKEY_BUTTONS[] = {
+	SDL_GAMEPAD_BUTTON_GUIDE, SDL_GAMEPAD_BUTTON_BACK, SDL_GAMEPAD_BUTTON_START, SDL_GAMEPAD_BUTTON_LEFT_STICK,
+	SDL_GAMEPAD_BUTTON_RIGHT_STICK, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER,
+	SDL_GAMEPAD_BUTTON_MISC1, SDL_GAMEPAD_BUTTON_TOUCHPAD,
+};
+
 /* The modifiers as odin.ini names them */
 constexpr std::pair<SDL_Keymod, const char *> MODIFIERS[] = {
 	{ SDL_KMOD_CTRL, "Ctrl" }, { SDL_KMOD_ALT, "Alt" }, { SDL_KMOD_SHIFT, "Shift" }, { SDL_KMOD_GUI, "Gui" },
@@ -73,8 +82,19 @@ Hotkeys::Hotkeys()
 Hotkeys::Hotkeys(const Settings &settings, bool tell) : Hotkeys()
 {
 	for (const auto &[key, value] : settings.section("hotkeys")) {
+		if (key != "button")
+			continue;
+		if (const std::optional<int> button = button_of(value))
+			m_button = *button;
+		else if (tell)
+			refuse_setting("hotkeys", key, value);
+	}
+	reset();
+	for (const auto &[key, value] : settings.section("hotkeys")) {
 		size_t action = 0;
 
+		if (key == "button")
+			continue;
 		while (action < ACTIONS && key != IDS[action])
 			action++;
 
@@ -99,10 +119,67 @@ Hotkeys::id(Action action)
 	return IDS[static_cast<size_t>(action)];
 }
 
-const Hotkeys::Binding &
-Hotkeys::standard(Action action)
+Hotkeys::Binding
+Hotkeys::standard(Action action, int button)
 {
-	return STANDARD[static_cast<size_t>(action)];
+	Binding binding = STANDARD[static_cast<size_t>(action)];
+
+	if (button != SDL_GAMEPAD_BUTTON_GUIDE && action == Action::MENU)
+		binding.pad = SDL_GAMEPAD_BUTTON_SOUTH;
+	else if (button != SDL_GAMEPAD_BUTTON_GUIDE && binding.pad == button)
+		binding.pad = NO_PAD;
+	return binding;
+}
+
+std::span<const int>
+Hotkeys::buttons()
+{
+	return HOTKEY_BUTTONS;
+}
+
+std::string
+Hotkeys::button_text(int button)
+{
+	const char *const text = SDL_GetGamepadStringForButton(static_cast<SDL_GamepadButton>(button));
+
+	return text ? text : "";
+}
+
+std::optional<int>
+Hotkeys::button_of(std::string_view text)
+{
+	const int button = SDL_GetGamepadButtonFromString(std::string(trimmed(text)).c_str());
+
+	if (std::find(std::begin(HOTKEY_BUTTONS), std::end(HOTKEY_BUTTONS), button) == std::end(HOTKEY_BUTTONS))
+		return std::nullopt;
+	return button;
+}
+
+void
+Hotkeys::set_button(int button)
+{
+	std::array<bool, ACTIONS> standard_was{};
+
+	for (size_t a = 0; a < ACTIONS; a++)
+		standard_was[a] = m_bindings[a].pad == standard(static_cast<Action>(a), m_button).pad;
+	m_button = button;
+	for (Binding &binding : m_bindings)
+		if (button != SDL_GAMEPAD_BUTTON_GUIDE && (binding.pad == button || binding.pad == GUIDE_ALONE))
+			binding.pad = NO_PAD;
+	for (size_t a = 0; a < ACTIONS; a++)
+		if (standard_was[a])
+			set_pad(static_cast<Action>(a), standard(static_cast<Action>(a), button).pad);
+}
+
+std::array<bool, SDL_GAMEPAD_BUTTON_COUNT>
+Hotkeys::combos() const
+{
+	std::array<bool, SDL_GAMEPAD_BUTTON_COUNT> out{};
+
+	for (const Binding &binding : m_bindings)
+		if (binding.pad != NO_PAD && binding.pad != GUIDE_ALONE && binding.pad < SDL_GAMEPAD_BUTTON_COUNT)
+			out[static_cast<size_t>(binding.pad)] = true;
+	return out;
 }
 
 std::optional<Hotkeys::Action>
@@ -174,6 +251,10 @@ Hotkeys::set_pad(Action action, int pad)
 {
 	std::optional<Action> from;
 
+	/* The hotkey button pressed with itself is no shortcut, and another
+	 * one than Guide is the game's when tapped alone */
+	if (m_button != SDL_GAMEPAD_BUTTON_GUIDE && (pad == m_button || pad == GUIDE_ALONE))
+		pad = NO_PAD;
 	for (size_t a = 0; a < ACTIONS; a++)
 		if (pad != NO_PAD && m_bindings[a].pad == pad) {
 			m_bindings[a].pad = NO_PAD;
@@ -188,7 +269,7 @@ void
 Hotkeys::reset()
 {
 	for (size_t action = 0; action < ACTIONS; action++)
-		m_bindings[action] = STANDARD[action];
+		m_bindings[action] = standard(static_cast<Action>(action), m_button);
 }
 
 SDL_Keymod

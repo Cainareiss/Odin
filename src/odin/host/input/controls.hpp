@@ -103,11 +103,13 @@ public:
 	/* The dead zone and the trigger threshold of each gamepad read again
 	 * from the settings (control_panel.hpp: PadTuning) */
 	void retune();
-	/* Guide of a gamepad pressed and let go alone since the last call:
-	 * the menu (with another button, Guide is a shortcut) */
+	/* Guide of a gamepad pressed and let go alone since the last call,
+	 * when it is the hotkey button ([hotkeys] button): the menu (with
+	 * another button, Guide is a shortcut); another one tapped alone is
+	 * the game's */
 	bool guide_tapped() { return std::exchange(m_guide_tapped, false); }
-	/* The button pressed with Guide held since the last call: a shortcut
-	 * (-1: none) */
+	/* The button pressed with the hotkey button held since the last call:
+	 * a shortcut if Hotkeys has it (-1: none) */
 	int guide_combo() { return std::exchange(m_guide_combo, -1); }
 	/* The gamepad of a player: its name, its kind (pad_drawing.hpp: its
 	 * SDL_GamepadType, or the Steam Controller); empty and unknown when
@@ -280,6 +282,8 @@ private:
 	const Joy *joystick(unsigned player) const;
 	/* Each player takes the gamepad and the joystick seats.hpp gives them */
 	void reseat();
+	/* The hotkey button and its shortcuts, from the settings */
+	void follow_hotkeys();
 	HostState host() const;
 	void follow_guns(bool hold);
 	bool wants_guns() const { return !m_guns[0].empty() || !m_guns[1].empty(); }
@@ -311,6 +315,10 @@ private:
 	bool m_light_gun_mode = true;
 	bool m_guide_tapped = false;
 	int m_guide_combo = -1;
+	/* The hotkey button, and the buttons that are a shortcut with it:
+	 * kept from the game while it is held (with Guide, all of them) */
+	int m_hotkey_button = SDL_GAMEPAD_BUTTON_GUIDE;
+	std::array<bool, SDL_GAMEPAD_BUTTON_COUNT> m_hotkey_with{};
 	bool m_rumble = true;
 	bool m_felt = false;
 	Uint16 m_felt_level = 0;	/* how hard the felt sound shakes, smoothed */

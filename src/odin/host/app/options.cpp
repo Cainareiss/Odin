@@ -675,7 +675,7 @@ load_game_list(GameList &games)
 }
 
 std::vector<Settings::Known>
-known_settings(const GameList &games)
+known_settings(const GameList &games, int button)
 {
 	std::vector<Settings::Known> out = {
 		{ "display", "scale", "1" }, { "display", "upscale_mode", UPSCALE_MODES[0] }, { "display", "anisotropy", "1" },
@@ -687,10 +687,11 @@ known_settings(const GameList &games)
 		{ "sound", "device", "" }, { "sound", "volume", "100" }, { "sound", "background", "on" },
 	};
 
+	out.push_back({ "hotkeys", "button", Hotkeys::button_text(SDL_GAMEPAD_BUTTON_GUIDE) });
 	for (size_t a = 0; a < Hotkeys::ACTIONS; a++) {
 		const auto action = static_cast<Hotkeys::Action>(a);
 
-		out.push_back({ "hotkeys", Hotkeys::id(action), Hotkeys::line(Hotkeys::standard(action)) });
+		out.push_back({ "hotkeys", Hotkeys::id(action), Hotkeys::line(Hotkeys::standard(action, button)) });
 	}
 	out.insert(out.end(), { { "outputs", "network", "off" }, { "network", "board", "none" },
 	                        { "network", "port", std::to_string(NetCable::PORT) }, { "network", "next", "" },

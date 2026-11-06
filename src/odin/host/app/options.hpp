@@ -253,8 +253,9 @@ bool load_game_list(GameList &games);
 
 /* Every key of odin.ini, at its value by default, in the order the file
  * shows them: what holds for every game (OPTIONS), then the sound, the
- * controls and the gamepads of each game of the list */
-std::vector<Settings::Known> known_settings(const GameList &games);
+ * controls and the gamepads of each game of the list; the hotkeys as by
+ * default with that hotkey button */
+std::vector<Settings::Known> known_settings(const GameList &games, int button = SDL_GAMEPAD_BUTTON_GUIDE);
 
 } /* namespace odin */
 
