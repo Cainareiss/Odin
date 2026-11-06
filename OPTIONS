@@ -230,9 +230,11 @@ apart by commas (see INPUTS below).
 PER GAME
 --------
 
-<game> is the MAME name: airtrix, airtrixo, braveff, pharrier, sgnascar,
-sgnascaro, swracer, von4; atvtrack, atvtracka, gfootbal, smashdrv,
-smashdrvb, smashdrvs.
+<game> is the MAME name: airtrix, braveff, pharrier, sgnascar, swracer,
+von4; atvtrack, gfootbal, smashdrv. A version of a game (airtrixo,
+sgnascaro, atvtracka, smashdrvb, smashdrvs) shares the sections of its
+parent; the lines of a section of its own (an older Odin wrote one) still
+count, after its parent's.
 
 [players.<game>]
 
@@ -268,7 +270,7 @@ smashdrvb, smashdrvs.
 
 [sound.<game>]
 
- Games with a second sound board: pharrier, sgnascar, sgnascaro, swracer.
+ Games with a second sound board: pharrier, sgnascar, swracer.
 
  mode             main, mix, quad  main: main board only. mix: both on two
                                    speakers. quad: four channels.
@@ -276,8 +278,7 @@ smashdrvb, smashdrvs.
  option_level     -60 to 12       Level of the second board, in dB.
                                   Default 0 (NASCAR -12, swracer -13).
 
- Games with a woofer: the Gaelco games (atvtrack, atvtracka, gfootbal,
- smashdrv, smashdrvb, smashdrvs).
+ Games with a woofer: the Gaelco games (atvtrack, gfootbal, smashdrv).
 
  mode             main, mix, quad  main: left and right only. mix: the
                                    woofer's lows in both. quad: left,
@@ -289,9 +290,9 @@ smashdrvb, smashdrvs.
  woofer_cutoff    80, 120, 160,   The woofer's lows below that many Hz in
                   200, off        the mix (off: all of its channel).
                                   Default 120.
- start_volume     0, 25, 50, 75,  Smashing Drive (smashdrv, smashdrvb,
-                  96              smashdrvs): its volume at the first
-                                  power-on, Odin holding VOLUME +.
+ start_volume     0, 25, 50, 75,  Smashing Drive (smashdrv): its volume
+                  96              at the first power-on, Odin holding
+                                  VOLUME +.
                                   Default 0, silent as a new board.
 
 [outputs.<game>]
@@ -319,7 +320,7 @@ smashdrvb, smashdrvs.
   board_test    (none)
   board_service (none)
 
- airtrix, airtrixo:
+ airtrix:
   start         key:1, pad:start
   left          key:X, pad:dpleft
   right         key:C, pad:dpright
@@ -359,7 +360,7 @@ smashdrvb, smashdrvs.
   left_lever    pad:lefty            (_up key:Up, _down key:Down)
   right_lever   pad:righty           (_up key:R, _down key:F)
 
- sgnascar, sgnascaro:
+ sgnascar:
   steering_wheel pad:leftx, joy:axis0 (_left key:Left, _right key:Right)
   gas_pedal     pad:righttrigger, key:Up
   brake_pedal   pad:lefttrigger, key:Down
@@ -384,7 +385,7 @@ smashdrvb, smashdrvs.
   start             key:1, pad:start
   pib               key:Z, pad:y
 
- atvtrack, atvtracka:
+ atvtrack:
   handlebar     pad:leftx, joy:axis0 (_left key:Left, _right key:Right)
   throttle      pad:righttrigger, key:Up
   left_brake    key:Z, pad:lefttrigger
@@ -417,7 +418,7 @@ smashdrvb, smashdrvs.
   volume_up     key:=, pad:leftshoulder
   volume_down   key:-, pad:rightshoulder
 
- smashdrv, smashdrvb, smashdrvs:
+ smashdrv:
   wheel         pad:leftx, joy:axis0 (_left key:Left, _right key:Right)
   gas_pedal     key:Up, pad:righttrigger
   brake_pedal   key:Down, pad:lefttrigger

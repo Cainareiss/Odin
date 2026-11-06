@@ -688,7 +688,8 @@ known_settings(const GameList &games)
 	for (const auto &[name, title] : games.titles()) {
 		const std::optional<Game> game = games.describe(name);
 
-		if (!game)
+		/* A version: its parent's sections */
+		if (!game || !game->parent.empty())
 			continue;
 		if (game->option_speakers || game->option_vibration) {
 			char db[16];

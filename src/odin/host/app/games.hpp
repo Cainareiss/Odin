@@ -28,6 +28,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <span>
 #include <string>
@@ -229,10 +230,14 @@ struct Game {
 	std::string title;
 	static constexpr size_t MAX_TITLE = 48;
 	std::string machine;
-	/* The game it is a version of (MAME's cloneof), whose pictures it
-	 * takes when it has none: "parent" in the list; none when it does not
-	 * say. */
+	/* The game it is a version of (MAME's cloneof): "parent" in the list;
+	 * none when it does not say. A version is its parent but what its own
+	 * entry says (its name, title and files at least), and takes its
+	 * parent's pictures when it has none. */
 	std::string parent;
+	/* The game whose settings it shares ([controls.<game>]...): its
+	 * parent, or itself */
+	const std::string &family() const { return parent.empty() ? name : parent; }
 	/* The JVS I/O board of its cabinet: "io" in the list, 837-13551 when
 	 * the list does not say. */
 	std::string io_board;
@@ -396,6 +401,8 @@ public:
 	};
 	std::vector<Entry> entries() const;
 	std::vector<std::pair<std::string, std::string>> titles() const;
+	/* The versions of the list, with their parent */
+	std::map<std::string, std::string> parents() const;
 	/* What the list tells of a game, without its files: nothing when it is
 	 * not in the list, or not right */
 	std::optional<Game> describe(const std::string &name) const;
@@ -408,7 +415,8 @@ public:
 	std::optional<Game> load_game(RomFiles &files, const std::string &name) const;
 
 private:
-	static constexpr unsigned VERSION = 1;
+	/* 2: a version takes from its parent what it does not say */
+	static constexpr unsigned VERSION = 2;
 
 	const json_t *find(const std::string &name) const;
 

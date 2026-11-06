@@ -1100,18 +1100,32 @@ GameList::load(const std::string &path)
 			}
 		}
 	}
-	/* A parent is another game of the list */
+	/* A parent is another game of the list, not a version itself */
 	for (size_t i = 0; right && i < json_array_size(roms); i++) {
 		const json_t *const rom = json_array_get(roms, i);
 		const json_t *const parent = json_object_get(rom, "parent");
 		const char *const of = json_string_value(parent);
 		const json_t *const found = of ? find(of) : nullptr;
 
-		if (parent && (!found || found == rom)) {
+		if (parent && (!found || found == rom || json_object_get(found, "parent"))) {
 			std::fprintf(stderr, "ERROR: game '%s': \"parent\" is not another game of the list\n",
 			             json_string_value(json_object_get(rom, "name")));
 			right = false;
 		}
+	}
+	/* A version is its parent but what it says: its name, title and files
+	 * at least */
+	for (size_t i = 0; right && i < json_array_size(roms); i++) {
+		json_t *const rom = json_array_get(roms, i);
+		const char *const of = json_string_value(json_object_get(rom, "parent"));
+		const char *key;
+		json_t *value;
+
+		if (!of)
+			continue;
+		json_object_foreach(const_cast<json_t *>(find(of)), key, value)
+			if (!json_object_get(rom, key) && std::strcmp(key, "title") && std::strcmp(key, "sections"))
+				json_object_set(rom, key, value);
 	}
 	if (!right) {
 		json_decref(m_root);
@@ -1193,6 +1207,17 @@ GameList::titles() const
 	for (const Entry &entry : entries()) {
 		out.emplace_back(entry.name, entry.title);
 	}
+	return out;
+}
+
+std::map<std::string, std::string>
+GameList::parents() const
+{
+	std::map<std::string, std::string> out;
+
+	for (const Entry &entry : entries())
+		if (!entry.parent.empty())
+			out.emplace(entry.name, entry.parent);
 	return out;
 }
 

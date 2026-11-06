@@ -194,7 +194,7 @@ MenuSession::MenuSession(const Options &options, Display &display, Keyboard &key
 	read_menu_settings();
 	state.shown = state.running = state.games.size();
 	for (size_t g = 0; g < state.games.size(); g++)
-		if (game && state.games[g].first == game->name)
+		if (game && state.games[g].first == game->family())
 			state.shown = state.running = g;
 	/* The BIOS alone, or no game: the page Input shows the first one */
 	if (state.running == state.games.size())
@@ -202,17 +202,21 @@ MenuSession::MenuSession(const Options &options, Display &display, Keyboard &key
 	take_card();
 }
 
-/* Each game of the list: the ones whose optional sound board the user may
- * hear, as the cabinet plays it unless the settings or -o say; whether it
- * links cabinets */
+/* Each game of the list but the versions (they share their parent's
+ * settings): the ones whose optional sound board the user may hear, as the
+ * cabinet plays it unless the settings or -o say; whether it links
+ * cabinets */
 void
 MenuSession::fill_games()
 {
 	MenuState &state = m_menu_state;
 
-	state.games = m_games.titles();
+	state.games.clear();
+	for (const GameList::Entry &entry : m_games.entries())
+		if (entry.parent.empty())
+			state.games.emplace_back(entry.name, entry.title);
 	for (const auto &[name, title] : state.games) {
-		const bool runs = m_game && name == m_game->name;
+		const bool runs = m_game && name == m_game->family();
 		const std::optional<Game> other = runs ? std::nullopt : m_games.describe(name);
 
 		const Game *const described = runs ? m_game : other ? &*other : nullptr;
@@ -673,8 +677,12 @@ MenuSession::close()
 void
 MenuSession::show(const std::string &game)
 {
+	/* A version: its parent, which the pages show */
+	const std::optional<Game> described = m_games.describe(game);
+	const std::string family = described ? described->family() : game;
+
 	for (size_t g = 0; g < m_menu_state.games.size(); g++)
-		if (m_menu_state.games[g].first == game)
+		if (m_menu_state.games[g].first == family)
 			show_game(g);
 }
 
@@ -759,7 +767,7 @@ MenuSession::fill_bar(BarState &bar) const
 		bar.devices = AudioOut::devices();
 	bar.sound_games.clear();
 	for (const SoundGame &game : state.sound_games)
-		if (m_game && game.name == m_game->name && game.mixed)
+		if (m_game && game.name == m_game->family() && game.mixed)
 			bar.sound_games.push_back(game);
 	bar.link_given = state.link_given;
 	bar.link_next = state.link_next;

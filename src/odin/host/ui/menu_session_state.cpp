@@ -523,7 +523,7 @@ MenuSession::apply_sound(const MenuState &was)
 	for (size_t g = 0; g < now.sound_games.size() && g < was.sound_games.size(); g++) {
 		const SoundGame &game = now.sound_games[g], &before = was.sound_games[g];
 		const std::string section = "sound." + game.name;
-		const bool runs = m_game && game.name == m_game->name && m_audio;
+		const bool runs = m_game && game.name == m_game->family() && m_audio;
 
 		if (game.start != before.start && game.start >= 0)
 			keep(section, "start_volume",

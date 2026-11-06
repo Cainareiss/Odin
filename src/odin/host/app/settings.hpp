@@ -78,7 +78,9 @@ void refuse_setting(const std::string &section, const std::string &key, const st
  * "key = value" lines; a line that starts with # or ; is a comment. A key
  * keeps the order of the file. Each key Odin knows is in the file: as a
  * comment at its value by default, "# key = value", until the user changes
- * it. */
+ * it. A version of a game keeps its settings in the sections of its parent
+ * ([controls.<parent>], players., sound., outputs.); the lines of a section
+ * of its own (an older Odin wrote one) still count, after its parent's. */
 class Settings {
 public:
 	using Lines = std::vector<std::pair<std::string, std::string>>;
@@ -98,8 +100,12 @@ public:
 	bool load(const std::string &path);
 	void parse(std::string_view text, const std::string &origin);
 
-	/* The lines of a section; none when the file has no such section. */
-	const Lines &section(const std::string &name) const;
+	/* The versions of the games, with their parent */
+	void versions(std::map<std::string, std::string> parents) { m_parents = std::move(parents); }
+
+	/* The lines of a section; none when the file has no such section. A
+	 * section of a version: those of its parent's, then its own. */
+	Lines section(const std::string &name) const;
 
 	/* The keys Odin knows, in the order the file shows them */
 	void know(std::vector<Known> keys) { m_known = std::move(keys); }
@@ -114,7 +120,9 @@ public:
 	/* A key of a section given a value, or taken out (nullopt: the value
 	 * by default then; a key Odin knows goes back to its comment): the
 	 * file is read again, changed and written (write). False, said on
-	 * stderr, if it cannot be written. */
+	 * stderr, if it cannot be written. A section of a version: the key of
+	 * its parent's. The key of a game is taken out of its versions' own
+	 * sections. */
 	bool change(const std::string &path, const std::string &section, const std::string &key,
 	            const std::optional<std::string> &value);
 	/* The same change here only, for the time Odin runs */
@@ -133,9 +141,14 @@ private:
 	/* The text written whole to a file beside it and renamed over it,
 	 * then read here again */
 	bool write(const std::string &path, const std::string &text);
+	/* The section of the parent for that of a version; none for another */
+	std::optional<std::string> parents_section(const std::string &section) const;
+	/* The sections of its versions for that of a game */
+	std::vector<std::string> versions_sections(const std::string &section) const;
 
 	std::map<std::string, Lines> m_sections;
 	std::vector<Known> m_known;
+	std::map<std::string, std::string> m_parents;
 };
 
 } /* namespace odin */

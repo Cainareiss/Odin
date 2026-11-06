@@ -233,10 +233,12 @@ print_banner()
 }
 
 /* odin.ini of the user (of this folder for a portable Odin; the one of -c),
- * each key Odin knows written in it; its path, empty when there is none */
+ * each key Odin knows written in it; its path, empty when there is none.
+ * A version of a game keeps its settings in its parent's sections. */
 std::string
 load_settings(Settings &settings, const GameList &games, const std::string &chosen)
 {
+	settings.versions(games.parents());
 	if (const std::string portable = portable_folder(); !portable.empty())
 		std::printf("portable: the files of this Odin in '%s'\n", portable.c_str());
 
