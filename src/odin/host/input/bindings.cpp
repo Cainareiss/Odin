@@ -123,13 +123,15 @@ const std::pair<Role, const char *> MOUSE_DEFAULTS[] = {
 	{ Role::BUTTON1, "left" }, { Role::BUTTON2, "right" }, { Role::START, "middle" },
 };
 
-/* A joystick that is no gamepad: its first axis steers. It is that of
- * the wheel on every wheel of the mapping of EmulationStation (Batocera's
- * es_input.cfg: "joystick1left" on axis 0 for all 29), whose pedals and
- * buttons change from one wheel to another: the user takes those on the
- * page Input, Batocera from its mapping. */
+/* A joystick that is no gamepad: its first axis steers, that of the wheel
+ * on every wheel of the mapping of EmulationStation (Batocera's
+ * es_input.cfg: "joystick1left" on axis 0 for all 29). Its pedals, paddles,
+ * Start and Select are the parts of a known wheel (wheels.cpp); on another
+ * joystick, the user takes those on the page Input, Batocera from its
+ * mapping. */
 const std::pair<Role, const char *> JOY_DEFAULTS[] = {
-	{ Role::STEER, "axis0" },
+	{ Role::STEER, "axis0" }, { Role::ACCEL, "gas" }, { Role::BRAKE, "brake" }, { Role::GEAR_DOWN, "paddle_left" },
+	{ Role::GEAR_UP, "paddle_right" }, { Role::START, "start" }, { Role::COIN1, "select" },
 };
 
 /* What a line takes: what is pressed or not (a key, a button, half a
@@ -170,7 +172,8 @@ cabinet_index(Role role)
 
 /* The inputs of a button: the keys, then the inputs of the gamepad, of its
  * role or those the list of games gives it in their place, then those of
- * the joystick of its role; a name that is not one is said on stderr */
+ * the joystick of its role or the part of a wheel the list gives it in
+ * their place; a name that is not one is said on stderr */
 std::vector<HostInput>
 own_inputs(const std::vector<HostInput> &of_role, const GameControl &control, const std::string &game)
 {
@@ -192,6 +195,17 @@ own_inputs(const std::vector<HostInput> &of_role, const GameControl &control, co
 				repeats::print(stderr, "ERROR: controls: %s: %s: not a %s: %s\n", game.c_str(), control.id.c_str(),
 				             kind == Kind::KEY ? "key" : "button of a gamepad", name.c_str());
 		}
+	}
+	/* A part of a wheel the list of games gives it in place of its role's */
+	if (!control.wheel.empty()) {
+		const auto input = HostInput::parse("joy:" + control.wheel);
+
+		if (input && input->joy.type == JoyInput::Type::PART)
+			out.push_back(*input);
+		else
+			repeats::print(stderr, "ERROR: controls: %s: %s: not a part of a wheel: %s\n", game.c_str(),
+			               control.id.c_str(), control.wheel.c_str());
+		return out;
 	}
 	std::copy_if(of_role.begin(), of_role.end(), std::back_inserter(out),
 	             [](const HostInput &input) { return input.kind == Kind::JOY; });
@@ -239,7 +253,7 @@ joy_number(std::string_view text, uint8_t &number)
 	return text.substr(static_cast<size_t>(end - text.data()));
 }
 
-/* "button12", "axis0", "axis2:invert", "-axis1", "+axis1", "hat0_up" */
+/* "button12", "axis0", "axis2:invert", "-axis1", "+axis1", "hat0_up", "gas" */
 std::optional<HostInput>
 parse_joy(std::string_view text)
 {
@@ -247,6 +261,12 @@ parse_joy(std::string_view text)
 	JoyInput &joy = out.joy;
 
 	out.kind = HostInput::Kind::JOY;
+	for (size_t p = 0; p < WHEEL_PARTS; p++)
+		if (text == WHEEL_PART_NAMES[p]) {
+			joy.type = JoyInput::Type::PART;
+			joy.part = static_cast<uint8_t>(p);
+			return out;
+		}
 	if (text.substr(0, 6) == "button") {
 		joy.type = JoyInput::Type::BUTTON;
 		if (joy_number(text.substr(6), joy.index) != std::string_view())
@@ -297,6 +317,8 @@ joy_text(const JoyInput &joy)
 		return "-axis" + index;
 	case JoyInput::Type::AXIS_POSITIVE:
 		return "+axis" + index;
+	case JoyInput::Type::PART:
+		return WHEEL_PART_NAMES[joy.part % WHEEL_PARTS];
 	case JoyInput::Type::AXIS:
 		break;
 	}

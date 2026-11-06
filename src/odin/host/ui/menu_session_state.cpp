@@ -793,7 +793,7 @@ MenuSession::keep_wheel_force(const std::string &game, int percent, bool runs)
 	     percent == WHEEL_FORCE ? std::nullopt : std::optional<std::string>(std::to_string(percent)));
 }
 
-/* [players.<game>] wheel_rotation: a line only when another than 270 */
+/* [players.<game>] wheel_rotation: a line only when another than WHEEL_ROTATION */
 void
 MenuSession::keep_wheel_rotation(const std::string &game, int degrees, bool runs)
 {

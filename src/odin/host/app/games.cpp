@@ -274,8 +274,8 @@ player_of(const json_t *player)
 
 /* A control: {"name": ..., "id": ..., then "switch", "analog" with "low",
  * or "positions"; "role", and "player" when it is 2; a switch may have
- * "keys", a list of key names, and "pad", a list of inputs of the
- * gamepad; on a Gaelco board, "port" for a switch, "span" or "ball" for an
+ * "keys", a list of key names, "pad", a list of inputs of the gamepad,
+ * and "wheel", a part of a known wheel; on a Gaelco board, "port" for a switch, "span" or "ball" for an
  * analog control}. */
 std::optional<GameControl>
 parse_control(const json_t *control)
@@ -291,6 +291,7 @@ parse_control(const json_t *control)
 	const json_t *const player = json_object_get(control, "player");
 	const json_t *const keys = json_object_get(control, "keys");
 	const json_t *const pad = json_object_get(control, "pad");
+	const json_t *const wheel = json_object_get(control, "wheel");
 	const json_t *const pin = json_object_get(control, "port");
 	const json_t *const span = json_object_get(control, "span");
 	const json_t *const ball = json_object_get(control, "ball");
@@ -299,6 +300,7 @@ parse_control(const json_t *control)
 	if (!name || !name[0] || !is_id(id) || (button != nullptr) + (analog != nullptr) + (positions != nullptr) != 1 ||
 	    !parsed_role || !player_right(player) ||
 	    (keys && (!button || !json_array_size(keys))) || (pad && (!button || !json_array_size(pad))) ||
+	    (wheel && (!button || !json_is_string(wheel))) ||
 	    (pin && !button) || ((span || ball) && !analog) || (span && ball))
 		return std::nullopt;
 	if (pin) {
@@ -325,6 +327,8 @@ parse_control(const json_t *control)
 	out.id = id;
 	out.role = *parsed_role;
 	out.player = player_of(player);
+	if (wheel)
+		out.wheel = json_string_value(wheel);
 	for (const auto &[list, names] : { std::pair{ keys, &out.keys }, std::pair{ pad, &out.pad } })
 		for (size_t k = 0; k < json_array_size(list); k++) {
 			const char *const input = json_string_value(json_array_get(list, k));

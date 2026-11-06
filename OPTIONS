@@ -240,7 +240,8 @@ count, after its parent's.
 
  p1, p2           <GUID> <name>   Gamepad of player 1, 2.
  joy1, joy2       <GUID> <name>   Wheel or other joystick of player 1, 2
-                                  (a wheel: NASCAR, one player).
+                                  (a wheel: NASCAR, ATV Track, Smashing
+                                  Drive, one player).
  device1,         keyboard, pad,  What the player plays with (it alone
  device2          joystick        shakes or turns). Default: Odin picks.
  gun1, gun2       <identity>      Light gun of player 1, 2, as the log
@@ -257,10 +258,10 @@ count, after its parent's.
  vibration        on, off         The device shakes with the game.
                                   Default on.
  vibration_force  0 to 200        Shake strength, in %. Default 100.
- wheel_force      0 to 200        Force feedback strength, in % (NASCAR).
-                                  Default 100.
+ wheel_force      0 to 200        Force feedback strength, in % (NASCAR,
+                                  ATV Track, Smashing Drive). Default 100.
  wheel_rotation   0, 270, 360,    How far the wheel turns from one end to
-                  540, 900, 1080  the other (0: all the way). Default 270.
+                  540, 900, 1080  the other (0: all the way). Default 0.
  cabinet          standard,       The cabinet model: deluxe (NASCAR),
                   deluxe,         minideluxe (Star Wars Racer), vibrator
                   minideluxe,     (ATV Track: Odin sets its MOTION SYSTEM
@@ -311,12 +312,13 @@ count, after its parent's.
 
  <control id> = <input list>. Defaults below. A control that moves (a
  stick, a wheel) also has <id>_left / <id>_right or <id>_up / <id>_down
- for keys and buttons.
+ for keys and buttons. Every start also takes joy:start, the Start of a
+ known wheel (see joy:gas below).
 
  Every game:
   1p_service    key:9, pad:guide+leftstick
   2p_service    pad:guide+leftstick
-  coin1         key:5, pad:back
+  coin1         key:5, pad:back, joy:select
   coin2         key:6, pad:back
   test          key:0, pad:guide+rightstick
   board_test    (none)
@@ -364,11 +366,11 @@ count, after its parent's.
 
  sgnascar:
   steering_wheel pad:leftx, joy:axis0 (_left key:Left, _right key:Right)
-  gas_pedal     pad:righttrigger, key:Up
-  brake_pedal   pad:lefttrigger, key:Down
-  gear_down     key:X, pad:leftshoulder
-  gear_up       key:C, pad:rightshoulder
-  start         key:1, pad:start
+  gas_pedal     pad:righttrigger, joy:gas, key:Up
+  brake_pedal   pad:lefttrigger, joy:brake, key:Down
+  gear_down     key:X, pad:leftshoulder, joy:paddle_left
+  gear_up       key:C, pad:rightshoulder, joy:paddle_right
+  start         key:1, pad:start, joy:start
   view_change   key:Z, pad:y
 
  von4:
@@ -389,10 +391,10 @@ count, after its parent's.
 
  atvtrack:
   handlebar     pad:leftx, joy:axis0 (_left key:Left, _right key:Right)
-  throttle      pad:righttrigger, key:Up
-  left_brake    key:Z, pad:lefttrigger
-  right_brake   key:X, pad:rightshoulder
-  start         key:1, pad:start
+  throttle      pad:righttrigger, joy:gas, key:Up
+  left_brake    key:Z, pad:lefttrigger, joy:paddle_left
+  right_brake   key:X, pad:rightshoulder, joy:paddle_right
+  start         key:1, pad:start, joy:start
   volume_up     key:=, pad:dpup
   volume_down   key:-, pad:dpdown
 
@@ -422,9 +424,9 @@ count, after its parent's.
 
  smashdrv:
   wheel         pad:leftx, joy:axis0 (_left key:Left, _right key:Right)
-  gas_pedal     key:Up, pad:righttrigger
-  brake_pedal   key:Down, pad:lefttrigger
-  horn          key:1, pad:start
+  gas_pedal     key:Up, pad:righttrigger, joy:gas
+  brake_pedal   key:Down, pad:lefttrigger, joy:brake
+  horn          key:1, pad:start, joy:start
   volume_up     key:=, pad:dpup
   volume_down   key:-, pad:dpdown
 
@@ -452,6 +454,13 @@ INPUTS
                      over (a pedal).
  joy:button<n>       A button of a wheel or joystick.
  joy:hat<n>_up       A hat direction (_up, _down, _left, _right).
+ joy:gas             The gas pedal of a known wheel, whatever its numbers
+                     (Batocera's list: Logitech G25 to G923, PRO, Driving
+                     Force, MOMO; Thrustmaster FFB Wheel, T150, T300,
+                     Advance Racer; MOZA R12); nothing on another joystick. joy:brake,
+                     joy:paddle_left, joy:paddle_right, joy:start and
+                     joy:select the same. On a button, a pedal presses it
+                     from half its way.
  mouse:left          Mouse or light gun buttons: left, middle, right, side,
                      extra.
  mouse:x, mouse:y    Where the mouse or the light gun aims.

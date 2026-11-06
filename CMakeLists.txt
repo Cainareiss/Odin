@@ -227,7 +227,7 @@ set(ODIN_SOURCES
 	host/input/evdev.cpp host/input/rawinput.cpp
 	host/input/outputs_network.cpp host/input/sockets.cpp
 	common/cabinet_settings.cpp host/input/control_panel.cpp
-	host/input/bindings.cpp host/app/settings.cpp host/app/games.cpp
+	host/input/bindings.cpp host/input/wheels.cpp host/app/settings.cpp host/app/games.cpp
 	host/input/roles.cpp machine/core/state_file.cpp
 	host/app/user_files.cpp machine/core/worker.cpp
 	machine/boards/hikaru/hikaru.cpp

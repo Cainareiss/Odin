@@ -221,10 +221,10 @@ int vibration_force_of(const Settings &settings, const std::string &game);
 /* [players.<game>] wheel_rotation: the degrees a wheel of the host turns to
  * take the steering of the game from one end to the other, one of
  * WHEEL_ROTATIONS (0: the whole way of the wheel); WHEEL_ROTATION when it
- * does not say, a choice of the emulator as xemu's Chihiro wheels; the last
- * line says */
+ * does not say: the whole way, the angles taken as xemu's Chihiro wheels
+ * take them; the last line says */
 inline constexpr int WHEEL_ROTATIONS[] = { 0, 270, 360, 540, 900, 1080 };
-inline constexpr int WHEEL_ROTATION = 270;
+inline constexpr int WHEEL_ROTATION = 0;
 std::optional<int> wheel_rotation_named(const std::string &value);
 int wheel_rotation_of(const Settings &settings, const std::string &game);
 /* [players.<game>] device1, device2: the kind of device a player chose

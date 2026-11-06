@@ -17,7 +17,8 @@ OpenGL or Vulkan:
 
 Odin runs the six Hikaru games, two of them in two versions, and the Gaelco
 games. They play with a keyboard, gamepads, wheels with force feedback
-(NASCAR) or light guns (Brave Firefighters). Virtual-On saves to its card.
+(NASCAR, ATV Track, Smashing Drive) or light guns (Brave Firefighters).
+Virtual-On saves to its card.
 Odin links cabinets over the network and sends the cabinet outputs as MAME
 does.
 

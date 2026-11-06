@@ -873,8 +873,8 @@
 			"controls" : [
 				{ "name" : "HANDLEBAR POSITION", "id" : "handlebar", "analog" : 0, "low" : "left", "span" : [ 254, 2 ], "role" : "steer" },
 				{ "name" : "THROTTLE", "id" : "throttle", "analog" : 1, "low" : "released", "span" : [ 6, 230 ], "role" : "accel" },
-				{ "name" : "LEFT BRAKE LEVER", "id" : "left_brake", "switch" : "1P PUSH1", "port" : "1.4", "role" : "button1", "keys" : [ "Z" ], "pad" : [ "lefttrigger" ] },
-				{ "name" : "RIGHT BRAKE LEVER", "id" : "right_brake", "switch" : "1P PUSH2", "port" : "1.5", "role" : "button2", "keys" : [ "X" ], "pad" : [ "rightshoulder" ] },
+				{ "name" : "LEFT BRAKE LEVER", "id" : "left_brake", "switch" : "1P PUSH1", "port" : "1.4", "role" : "button1", "keys" : [ "Z" ], "pad" : [ "lefttrigger" ], "wheel" : "paddle_left" },
+				{ "name" : "RIGHT BRAKE LEVER", "id" : "right_brake", "switch" : "1P PUSH2", "port" : "1.5", "role" : "button2", "keys" : [ "X" ], "pad" : [ "rightshoulder" ], "wheel" : "paddle_right" },
 				{ "name" : "START BUTTON", "id" : "start", "switch" : "1P START", "port" : "1.7", "role" : "start" },
 				{ "name" : "VOLUME UP", "id" : "volume_up", "switch" : "1P PUSH5", "port" : "0.0", "role" : "button5", "keys" : [ "=" ], "pad" : [ "dpup" ] },
 				{ "name" : "VOLUME DOWN", "id" : "volume_down", "switch" : "1P PUSH6", "port" : "0.2", "role" : "button6", "keys" : [ "-" ], "pad" : [ "dpdown" ] }
@@ -1060,8 +1060,8 @@
 			"link" : { "cabinets" : 2, "seat" : { "in" : "flash", "byte" : "01E1", "first" : 1 } },
 			"controls" : [
 				{ "name" : "STEERING WHEEL", "id" : "wheel", "analog" : 0, "low" : "left", "span" : [ 2, 254 ], "role" : "steer" },
-				{ "name" : "ACCELERATOR", "id" : "gas_pedal", "switch" : "1P PUSH1", "port" : "1.4", "role" : "button1", "keys" : [ "Up" ], "pad" : [ "righttrigger" ] },
-				{ "name" : "BRAKE", "id" : "brake_pedal", "switch" : "1P PUSH2", "port" : "1.5", "role" : "button2", "keys" : [ "Down" ], "pad" : [ "lefttrigger" ] },
+				{ "name" : "ACCELERATOR", "id" : "gas_pedal", "switch" : "1P PUSH1", "port" : "1.4", "role" : "button1", "keys" : [ "Up" ], "pad" : [ "righttrigger" ], "wheel" : "gas" },
+				{ "name" : "BRAKE", "id" : "brake_pedal", "switch" : "1P PUSH2", "port" : "1.5", "role" : "button2", "keys" : [ "Down" ], "pad" : [ "lefttrigger" ], "wheel" : "brake" },
 				{ "name" : "HORN", "id" : "horn", "switch" : "1P START", "port" : "1.6", "role" : "start" },
 				{ "name" : "VOLUME UP", "id" : "volume_up", "switch" : "1P PUSH5", "port" : "0.0", "role" : "button5", "keys" : [ "=" ], "pad" : [ "dpup" ] },
 				{ "name" : "VOLUME DOWN", "id" : "volume_down", "switch" : "1P PUSH6", "port" : "0.2", "role" : "button6", "keys" : [ "-" ], "pad" : [ "dpdown" ] }

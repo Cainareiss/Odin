@@ -180,13 +180,16 @@ pad_label(const PadInput &pad, int kind)
 	return pad.inverted ? out + " (inverted)" : out;
 }
 
-/* "Axis 2 (inverted)", "Axis 1 −", "Button 4", "Hat 0 ↑" */
+/* "Axis 2 (inverted)", "Axis 1 −", "Button 4", "Hat 0 ↑", "Gas pedal" */
 std::string
 joy_label(const JoyInput &joy)
 {
+	static const char *const PARTS[WHEEL_PARTS] = { "Gas pedal", "Brake pedal", "Left paddle", "Right paddle",
+	                                                "Wheel's Start", "Wheel's Select" };
 	const std::string index = std::to_string(joy.index);
 
 	switch (joy.type) {
+	case JoyInput::Type::PART: return PARTS[joy.part % WHEEL_PARTS];
 	case JoyInput::Type::BUTTON: return "Button " + index;
 	case JoyInput::Type::AXIS_NEGATIVE: return "Axis " + index + " −";
 	case JoyInput::Type::AXIS_POSITIVE: return "Axis " + index + " +";
@@ -1783,7 +1786,7 @@ advanced_box(const MenuKit &kit, MenuState &state, ImVec2 a, ImVec2 b)
 	using Icon = MenuKit::Icon;
 	static constexpr char NO_SHAKE[] = "this game has no vibration";
 	static constexpr const char *TURNS[] = { "Full", "270°", "360°", "540°", "900°", "1080°" };
-	static_assert(std::size(TURNS) == std::size(WHEEL_ROTATIONS));
+	static_assert(std::size(TURNS) == std::size(WHEEL_ROTATIONS) && WHEEL_ROTATIONS[0] == WHEEL_ROTATION);
 	const bool pad = state.on_pad(), keys = !pad && !state.on_joystick();
 	const bool turns = state.steers && !pad && !keys, gun = state.sights[0];
 	/* What applies to this game only, as the rows below show it */
@@ -1887,7 +1890,7 @@ advanced_box(const MenuKit &kit, MenuState &state, ImVec2 a, ImVec2 b)
 		const float h = std::max(line, cells.y);
 		const auto at = std::find(std::begin(WHEEL_ROTATIONS), std::end(WHEEL_ROTATIONS), state.wheel_rotation);
 		const int n = static_cast<int>(std::size(TURNS));
-		int turn = at == std::end(WHEEL_ROTATIONS) ? 1 : static_cast<int>(at - std::begin(WHEEL_ROTATIONS));
+		int turn = at == std::end(WHEEL_ROTATIONS) ? 0 : static_cast<int>(at - std::begin(WHEEL_ROTATIONS));
 
 		list->AddText({ lo.x, y + (h - line) / 2.0f }, palette.ink, "Wheel rotation");
 		if (kit.focus({ lo.x, y }, { hi.x, y + h }, kit.px(4.0f)) && (kit.side() || kit.pressed()))

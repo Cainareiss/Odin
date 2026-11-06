@@ -23,6 +23,7 @@
  */
 
 #include "odin/host/input/controls.hpp"
+#include "odin/host/input/wheels.hpp"
 
 #include "odin/host/audio/audio_out.hpp"
 #include "odin/host/app/options.hpp"
@@ -385,6 +386,7 @@ Controls::open_joystick(SDL_JoystickID id)
 	joy.state.axes.assign(static_cast<size_t>(axes), 0);
 	joy.state.known.assign(static_cast<size_t>(axes), false);
 	joy.state.rest.assign(static_cast<size_t>(axes), 0);
+	joy.state.parts = wheel_parts(SDL_GetJoystickVendor(handle), SDL_GetJoystickProduct(handle));
 	for (int axis = 0; axis < axes; axis++) {
 		Sint16 first = 0;
 

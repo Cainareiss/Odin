@@ -96,6 +96,7 @@ struct JoyState {
 	std::vector<bool> buttons;
 	std::vector<uint8_t> hats;
 	std::vector<int16_t> rest;
+	WheelParts parts{};	/* a known wheel's (wheels.cpp) */
 };
 
 /* What the host holds now: the keys down, the pad, the joystick and the
@@ -201,9 +202,10 @@ public:
 	bool held(const HostState &host, const HostInput &input, unsigned player) const;
 
 private:
-	/* The channel an axis of the joystick of the player gives that control
-	 * (nothing: no such axis, or no value yet); a steering one, as far as
-	 * the rotation of the wheel takes it */
+	/* The channel an axis of the joystick of the player, or a part of its
+	 * wheel, gives that control (nothing: no such axis, or no value yet); a
+	 * pedal that is a button, all its way when pressed; a steering one, as
+	 * far as the rotation of the wheel takes it */
 	std::optional<uint16_t> joy_channel(const JoyState *joy, const JoyInput &input, const GameControl &control) const;
 	bool pressed(const HostState &host, const std::vector<HostInput> &inputs, unsigned player) const;
 	uint16_t analog(const HostState &host, size_t control);

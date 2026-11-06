@@ -467,7 +467,7 @@ struct MenuState : BarSettings {
 	bool can_force = false;
 	bool steers = false;
 	int wheel_force = 100;
-	int wheel_rotation = 270;
+	int wheel_rotation = WHEEL_ROTATION;
 	/* The cabinets the game shown was sold in, Standard first
 	 * (Game::cabinets): their ids and names, the one chosen
 	 * ([players.<game>] cabinet), and whether the game that runs plays

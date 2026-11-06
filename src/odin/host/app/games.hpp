@@ -128,6 +128,10 @@ struct GameControl {
 	 * inputs of the gamepad ("righttrigger", "a": bindings.hpp), as a
 	 * trigger is the trigger of a nozzle; none: those of the role */
 	std::vector<std::string> keys, pad;
+	/* The part of a known wheel a switch takes in place of its role's
+	 * ("gas", "paddle_left": bindings.hpp), as a pedal of Smashing Drive is
+	 * a switch; empty: the role's */
+	std::string wheel;
 	std::optional<PortSwitch> port;
 	std::optional<std::array<uint8_t, 2>> span;
 	Ball ball = Ball::NONE;

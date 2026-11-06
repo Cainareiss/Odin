@@ -1027,8 +1027,8 @@ atv_track(Pen &pen, const Controls &c)
 
 /* Smashing Drive face on (SD-SIT p. 7, 15, 18, 45): the wheel under the
  * dashboard, HORN in its middle (the game's START), the pedals under it,
- * which are switches: down or up (SD-SIT p. 18). The wheel turns 135
- * degrees each way, as its wheel_rotation of 270 says */
+ * which are switches: down or up (SD-SIT p. 18). The wheel is drawn
+ * turning 135 degrees each way */
 void
 smashing_drive(Pen &pen, const Controls &c)
 {

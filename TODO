@@ -440,6 +440,11 @@ Inputs and outputs
 - One term of the force of NASCAR (car +0xDC) was never seen at work in
   the races tried (to check).
 - Wheels with force feedback were not tried on Windows (wheel_force.cpp).
+- The known wheels (wheels.cpp) are those of Batocera's es_input.cfg, and
+  only the G29 was tried: the pedals of the others are taken over their
+  whole axis, and the steering of the MOMO may turn the other way.
+- A pedal of a wheel presses a switch (the pedals of Smashing Drive) from
+  half its way: where the cabinet's switches close is not known.
 - The force of NASCAR on a pad (experimental): how much of each jump
   reaches the pad is guessed (drive_board.hpp).
 - The vibration of the SWRACER panel on a pad (experimental): its strength
