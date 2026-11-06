@@ -28,6 +28,7 @@
 #include <cstdio>
 
 #include "odin/host/app/settings.hpp"
+#include "odin/host/input/keyboard.hpp"
 
 namespace odin {
 
@@ -260,7 +261,7 @@ Hotkeys::key_of(std::string_view text)
 			return std::nullopt;
 		text.remove_prefix(plus + 1);
 	}
-	key.key = SDL_GetKeyFromName(std::string(text).c_str());
+	key.key = key_named(std::string(text).c_str());
 	if (key.key == SDLK_UNKNOWN || is_modifier(key.key))
 		return std::nullopt;
 	return key;

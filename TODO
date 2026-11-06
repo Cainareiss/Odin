@@ -539,3 +539,6 @@ Host and user interface
   slow PC is not measured yet (renderer_programs.cpp; to check).
 - Debug key 2 changed nothing in the scenes tried, none of which shows a
   second layer (renderer_debug.cpp; to check).
+- A key is the one that writes its name, not the one at a place: on an
+  AZERTY keyboard, Q, W, A and Z are not where a QWERTY has them, nor
+  where a device that sends keys puts them (keyboard.hpp; to check).

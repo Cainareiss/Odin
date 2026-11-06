@@ -26,6 +26,7 @@
 
 #include "odin/common/repeats.hpp"
 #include "odin/host/app/hotkeys.hpp"
+#include "odin/host/input/keyboard.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -440,7 +441,7 @@ HostInput::parse(std::string_view text)
 		const std::string name(text.substr(4));
 
 		out.kind = Kind::KEY;
-		out.key = SDL_GetKeyFromName(name.c_str());
+		out.key = key_named(name.c_str());
 		if (out.key == SDLK_UNKNOWN)
 			return std::nullopt;
 		return out;
