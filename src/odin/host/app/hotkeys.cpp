@@ -34,14 +34,15 @@ namespace odin {
 namespace {
 
 constexpr const char *IDS[Hotkeys::ACTIONS] = { "menu", "pause", "save_state", "load_state", "reset", "fullscreen",
-                                                "card", "light_gun", "close_game", "quit" };
+                                                "card", "light_gun", "test", "service", "close_game", "quit" };
 
 /* Escape or F10 the menu, Guide tapped alone; P pauses (as in MAME); F2
  * saves the state and F4 loads it (as in RetroArch); Ctrl+R switches the
  * cabinet off and on; F11 or Alt+Enter the whole display; F6 the card in
- * or out; F7 the light gun mode; Ctrl+C closes the game (back to the
- * library); Ctrl+Q quits. On a gamepad Guide held with Back, RB, LB, Y, B
- * or Start, as Batocera, which has no button to reset. */
+ * or out; F7 the light gun mode; 0 TEST and 9 SERVICE, or Guide with R3
+ * and L3; Ctrl+C closes the game (back to the library); Ctrl+Q quits. On a
+ * gamepad Guide held with Back, RB, LB, Y, B or Start, as Batocera, which
+ * has no button to reset. */
 const Hotkeys::Binding STANDARD[Hotkeys::ACTIONS] = {
 	{ { { { SDLK_ESCAPE, SDL_KMOD_NONE }, { SDLK_F10, SDL_KMOD_NONE } } }, Hotkeys::GUIDE_ALONE },
 	{ { { { SDLK_P, SDL_KMOD_NONE }, {} } }, SDL_GAMEPAD_BUTTON_BACK },
@@ -51,6 +52,8 @@ const Hotkeys::Binding STANDARD[Hotkeys::ACTIONS] = {
 	{ { { { SDLK_F11, SDL_KMOD_NONE }, { SDLK_RETURN, SDL_KMOD_ALT } } }, Hotkeys::NO_PAD },
 	{ { { { SDLK_F6, SDL_KMOD_NONE }, {} } }, SDL_GAMEPAD_BUTTON_NORTH },
 	{ { { { SDLK_F7, SDL_KMOD_NONE }, {} } }, Hotkeys::NO_PAD },
+	{ { { { SDLK_0, SDL_KMOD_NONE }, {} } }, SDL_GAMEPAD_BUTTON_RIGHT_STICK },
+	{ { { { SDLK_9, SDL_KMOD_NONE }, {} } }, SDL_GAMEPAD_BUTTON_LEFT_STICK },
 	{ { { { SDLK_C, SDL_KMOD_CTRL }, {} } }, SDL_GAMEPAD_BUTTON_EAST },
 	{ { { { SDLK_Q, SDL_KMOD_CTRL }, {} } }, SDL_GAMEPAD_BUTTON_START },
 };
@@ -67,7 +70,7 @@ Hotkeys::Hotkeys()
 	reset();
 }
 
-Hotkeys::Hotkeys(const Settings &settings) : Hotkeys()
+Hotkeys::Hotkeys(const Settings &settings, bool tell) : Hotkeys()
 {
 	for (const auto &[key, value] : settings.section("hotkeys")) {
 		size_t action = 0;
@@ -78,7 +81,8 @@ Hotkeys::Hotkeys(const Settings &settings) : Hotkeys()
 		const std::optional<Binding> binding = action < ACTIONS ? parse(value) : std::nullopt;
 
 		if (!binding) {
-			refuse_setting("hotkeys", key, value);
+			if (tell)
+				refuse_setting("hotkeys", key, value);
 			continue;
 		}
 		m_bindings[action] = {};
@@ -104,19 +108,21 @@ Hotkeys::standard(Action action)
 std::optional<Hotkeys::Action>
 Hotkeys::key_action(SDL_Keycode key, SDL_Keymod mods) const
 {
-	const SDL_Keymod held = modifiers(mods);
+	const SDL_Keymod down_mods = modifiers(mods);
 	std::optional<Action> found;
 	int most = -1;
 
 	/* Alt+F4 closes the window (Windows): not the state F4 loads */
-	if (key == SDLK_F4 && (held & SDL_KMOD_ALT))
+	if (key == SDLK_F4 && (down_mods & SDL_KMOD_ALT))
 		return std::nullopt;
 
 	for (size_t action = 0; action < ACTIONS; action++) {
+		if (held(static_cast<Action>(action)))
+			continue;
 		for (const HotKey &k : m_bindings[action].keys) {
 			const int own = std::popcount(static_cast<unsigned>(k.mods));
 
-			if (k.key == SDLK_UNKNOWN || k.key != key || (k.mods & ~held) || own <= most)
+			if (k.key == SDLK_UNKNOWN || k.key != key || (k.mods & ~down_mods) || own <= most)
 				continue;
 			found = static_cast<Action>(action);
 			most = own;
@@ -129,7 +135,7 @@ std::optional<Hotkeys::Action>
 Hotkeys::pad_action(int pad) const
 {
 	for (size_t action = 0; action < ACTIONS; action++)
-		if (pad != NO_PAD && m_bindings[action].pad == pad)
+		if (pad != NO_PAD && m_bindings[action].pad == pad && !held(static_cast<Action>(action)))
 			return static_cast<Action>(action);
 	return std::nullopt;
 }
@@ -137,9 +143,9 @@ Hotkeys::pad_action(int pad) const
 bool
 Hotkeys::takes(SDL_Keycode key) const
 {
-	for (const Binding &binding : m_bindings)
-		for (const HotKey &k : binding.keys)
-			if (k.key == key && k.mods == SDL_KMOD_NONE)
+	for (size_t action = 0; action < ACTIONS; action++)
+		for (const HotKey &k : m_bindings[action].keys)
+			if (k.key == key && k.mods == SDL_KMOD_NONE && !held(static_cast<Action>(action)))
 				return true;
 	return false;
 }
@@ -151,7 +157,7 @@ Hotkeys::set_key(Action action, size_t slot, HotKey key)
 
 	if (slot >= KEYS)
 		return from;
-	key.mods = modifiers(key.mods);
+	key.mods = held(action) ? SDL_KMOD_NONE : modifiers(key.mods);
 	for (size_t a = 0; a < ACTIONS; a++)
 		for (HotKey &k : m_bindings[a].keys)
 			if (key.key != SDLK_UNKNOWN && k == key) {

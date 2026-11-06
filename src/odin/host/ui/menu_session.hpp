@@ -253,6 +253,7 @@ private:
 	bool catch_input(const SDL_Event &event);
 	bool catch_hotkey(const SDL_Event &event);
 	void keep_hotkeys();
+	void clear_hotkey(Hotkeys::Action action, size_t slot);
 	void caught(const HostInput &input);
 	void change_inputs(bool to_defaults);
 	void clear_inputs();
@@ -280,6 +281,7 @@ private:
 	void light_guns(const std::string &game, const std::vector<GameControl> &controls, std::vector<LightGun> &guns,
 	                std::array<std::string, 2> &gun, std::array<bool, 2> &sights) const;
 	void keep_binding(const Bindings::Line &line, const std::string &game = "");
+	void rebind_panels();
 	void fill_games();
 	void read_menu_settings();
 	void take_card();

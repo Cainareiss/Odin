@@ -204,6 +204,10 @@ Session::act(Hotkeys::Action action)
 		break;
 	case Action::QUIT:
 		return true;
+	case Action::TEST:
+	case Action::SERVICE:
+		/* Held, as the controls of the game (Hotkeys::held) */
+		break;
 	}
 	return false;
 }

@@ -789,11 +789,7 @@ MenuSession::keep_inverted(const std::string &game, const std::vector<std::strin
 	for (const std::string &id : kept)
 		line += (line.empty() ? "" : ", ") + id;
 	keep("players." + game, "invert", line.empty() ? std::nullopt : std::optional<std::string>(line));
-	m_controls.rebind();
-	if (m_other) {
-		m_other.emplace(m_other_controls, m_settings, game_shown());
-		m_other->set_wheel_rotation(wheel_rotation_of(m_settings, game_shown()));
-	}
+	rebind_panels();
 }
 
 /* [players.<game>] sinden_border, sinden_border_style and

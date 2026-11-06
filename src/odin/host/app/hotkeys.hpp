@@ -64,10 +64,11 @@ class Hotkeys {
 public:
 	/* CARD: the player's card into the slot of the card reader, or back
 	 * out of it (Virtual-On); LIGHT_GUN: the mouse aims in the game, or is
-	 * a pointer again (Brave Firefighters); CLOSE_GAME: back to the
-	 * library */
+	 * a pointer again (Brave Firefighters); TEST and SERVICE: the TEST
+	 * switch of the cabinet and the SERVICE of player 1, held, in every
+	 * game; CLOSE_GAME: back to the library */
 	enum class Action : uint8_t {
-		MENU, PAUSE, SAVE_STATE, LOAD_STATE, RESET, FULLSCREEN, CARD, LIGHT_GUN, CLOSE_GAME, QUIT
+		MENU, PAUSE, SAVE_STATE, LOAD_STATE, RESET, FULLSCREEN, CARD, LIGHT_GUN, TEST, SERVICE, CLOSE_GAME, QUIT
 	};
 	static constexpr size_t ACTIONS = static_cast<size_t>(Action::QUIT) + 1;
 	static constexpr size_t KEYS = 2;
@@ -86,8 +87,13 @@ public:
 	/* Those by default */
 	Hotkeys();
 	/* [hotkeys] of the settings over those by default; a line that is not
-	 * right is said on stderr and left out */
-	explicit Hotkeys(const Settings &settings);
+	 * right is said on stderr (unless `tell` is false) and left out */
+	explicit Hotkeys(const Settings &settings, bool tell = true);
+
+	/* An action that is a switch of the cabinet, held as long as its key
+	 * (with no modifier) or its button is: no action of Odin, the inputs
+	 * by default of its role in every game (bindings.cpp) */
+	static bool held(Action action) { return action == Action::TEST || action == Action::SERVICE; }
 
 	/* The name of an action in odin.ini; those by default */
 	static const char *id(Action action);
@@ -98,7 +104,8 @@ public:
 	 * pressed with Guide held, or GUIDE_ALONE */
 	std::optional<Action> key_action(SDL_Keycode key, SDL_Keymod mods) const;
 	std::optional<Action> pad_action(int pad) const;
-	/* A key that is an action's alone: no control of a game takes it */
+	/* A key that is an action's alone: no control of a game takes it (a
+	 * held one may still be a game's) */
 	bool takes(SDL_Keycode key) const;
 
 	/* A key (slot 0 or 1) or the gamepad of an action changed; the action

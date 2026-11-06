@@ -580,7 +580,8 @@ Menu::page_audio(MenuKit &kit, MenuState &state) const
  * Hotkeys::Action */
 constexpr const char *HOTKEY_NAMES[Hotkeys::ACTIONS] = {
 	"Settings (pauses the game)", "Pause", "Save state", "Load state", "Reset", "Full screen",
-	"Insert / remove card (Virtual-On)", "Light gun mode (Brave Firefighters)", "Close game", "Quit",
+	"Insert / remove card (Virtual-On)", "Light gun mode (Brave Firefighters)", "Test (the cabinet, every game)",
+	"Service (player 1, every game)", "Close game", "Quit",
 };
 
 /* The modifiers as their caps say them */
@@ -851,9 +852,13 @@ Menu::hotkeys_help(const MenuState &state)
 	if (state.hotkey_catching->second == Hotkeys::KEYS) {
 		const std::string guide = button_name(SDL_GAMEPAD_BUTTON_GUIDE, state.pad_types[0]);
 
-		return name + ": hold " + guide + " and press a button, or tap " + guide + " alone. Esc cancels.";
+		return name + ": hold " + guide + " and press a button, or tap " + guide + " alone. " +
+		       button_name(SDL_GAMEPAD_BUTTON_WEST, state.pad_types[0]) + " or Delete empties it. Esc cancels.";
 	}
-	return name + ": press the new key, with Ctrl, Alt or Shift if you like. Esc cancels.";
+	if (Hotkeys::held(static_cast<Hotkeys::Action>(state.hotkey_catching->first)))
+		return name + ": press the new key, held as the button is (no Ctrl, Alt or Shift). Delete empties it. "
+		              "Esc cancels.";
+	return name + ": press the new key, with Ctrl, Alt or Shift if you like. Delete empties it. Esc cancels.";
 }
 
 namespace {

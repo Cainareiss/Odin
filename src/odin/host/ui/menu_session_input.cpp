@@ -321,7 +321,8 @@ MenuSession::catch_pad(bool axis, int index, int value)
 
 /* The page Hotkeys waits for a key (Ctrl, Alt, Shift or Gui held with it
  * are its own) or for a button pressed with Guide held, or Guide tapped
- * alone; Escape lets it be. True when the event was taken. */
+ * alone; Delete, Backspace or the Clear of the gamepad (X) empties the
+ * place; Escape lets it be. True when the event was taken. */
 bool
 MenuSession::catch_hotkey(const SDL_Event &event)
 {
@@ -340,12 +341,19 @@ MenuSession::catch_hotkey(const SDL_Event &event)
 			state.hotkey_catching.reset();
 			return true;
 		}
+		if (event.key.key == SDLK_DELETE || event.key.key == SDLK_BACKSPACE) {
+			clear_hotkey(action, slot);
+			return true;
+		}
 		if (slot < Hotkeys::KEYS && !Hotkeys::is_modifier(event.key.key)) {
 			const HotKey key{ event.key.key, Hotkeys::modifiers(event.key.mod) };
 
+			/* The action that had it told, with the key as the action took
+			 * it (TEST and SERVICE leave the modifiers) */
 			state.hotkey_moved.reset();
 			if (const auto from = m_hotkeys.set_key(action, slot, key))
-				state.hotkey_moved = { static_cast<size_t>(*from), static_cast<size_t>(action), key, Hotkeys::NO_PAD };
+				state.hotkey_moved = { static_cast<size_t>(*from), static_cast<size_t>(action),
+				                       m_hotkeys.of(action).keys[slot], Hotkeys::NO_PAD };
 			state.hotkey_catching.reset();
 			keep_hotkeys();
 		}
@@ -369,6 +377,8 @@ MenuSession::catch_hotkey(const SDL_Event &event)
 		} else if (std::find(nav.begin(), nav.end(), MenuNav::BACK) != nav.end()) {
 			/* B alone is no shortcut: it lets the catch go */
 			state.hotkey_catching.reset();
+		} else if (std::find(nav.begin(), nav.end(), MenuNav::CLEAR) != nav.end()) {
+			clear_hotkey(action, slot);
 		}
 		return true;
 	}
@@ -377,7 +387,23 @@ MenuSession::catch_hotkey(const SDL_Event &event)
 	}
 }
 
-/* [hotkeys]: a line for each action not as by default */
+/* The key (slot 0 or 1) or the gamepad (slot KEYS) of an action emptied */
+void
+MenuSession::clear_hotkey(Hotkeys::Action action, size_t slot)
+{
+	MenuState &state = m_menu_state;
+
+	if (slot < Hotkeys::KEYS)
+		m_hotkeys.set_key(action, slot, {});
+	else
+		m_hotkeys.set_pad(action, Hotkeys::NO_PAD);
+	state.hotkey_moved.reset();
+	state.hotkey_catching.reset();
+	keep_hotkeys();
+}
+
+/* [hotkeys]: a line for each action not as by default; the panels made
+ * again, which take TEST and SERVICE from there */
 void
 MenuSession::keep_hotkeys()
 {
@@ -389,6 +415,7 @@ MenuSession::keep_hotkeys()
 
 		keep("hotkeys", Hotkeys::id(action), line);
 	}
+	rebind_panels();
 }
 
 /* The input caught takes the place of those of its kind on that part; the
@@ -501,17 +528,25 @@ MenuSession::undo()
 	m_undo_until = 0;
 }
 
+/* The panels of the game that runs and of the one shown made again from
+ * the settings */
+void
+MenuSession::rebind_panels()
+{
+	m_controls.rebind();
+	if (m_other) {
+		m_other.emplace(m_other_controls, m_settings, game_shown());
+		m_other->set_wheel_rotation(wheel_rotation_of(m_settings, game_shown()));
+	}
+}
+
 void
 MenuSession::keep_binding(const Bindings::Line &line, const std::string &game)
 {
 	const std::string section = "controls." + (game.empty() ? game_shown() : game);
 
 	keep(section, line.key, line.value);
-	m_controls.rebind();
-	if (m_other) {
-		m_other.emplace(m_other_controls, m_settings, game_shown());
-		m_other->set_wheel_rotation(wheel_rotation_of(m_settings, game_shown()));
-	}
+	rebind_panels();
 }
 
 } /* namespace odin */

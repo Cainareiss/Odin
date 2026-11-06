@@ -145,7 +145,8 @@ apart by commas (see INPUTS below).
 [hotkeys]
 
  Up to two keys each (Ctrl+Q written like that) and one gamepad input:
- pad:guide alone, or pad:guide+<button>. none: nothing.
+ pad:guide alone, or pad:guide+<button>. none: nothing. test and service
+ take keys without Ctrl, Alt or Shift.
 
  menu          Escape, F10, pad:guide
  pause         P, pad:guide+back
@@ -155,6 +156,8 @@ apart by commas (see INPUTS below).
  fullscreen    F11, Alt+Return
  card          F6, pad:guide+y          (Virtual-On card in or out)
  light_gun     F7                       (light gun mode on or off)
+ test          0, pad:guide+rightstick  (TEST of the cabinet, held)
+ service       9, pad:guide+leftstick   (SERVICE of player 1, held)
  close_game    Ctrl+C, pad:guide+b      (back to the library)
  quit          Ctrl+Q, pad:guide+start
 
@@ -317,7 +320,9 @@ count, after its parent's.
  for keys and buttons. Every start also takes joy:start, the Start of a
  known wheel (see joy:gas below).
 
- Every game:
+ Every game ([hotkeys] test and service give 1p_service, 2p_service and
+ test to every game, the gamepad of player 2 for its SERVICE; a line here
+ wins for that game):
   1p_service    key:9, pad:guide+leftstick
   2p_service    pad:guide+leftstick
   coin1         key:5, pad:back, joy:select

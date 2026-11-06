@@ -214,7 +214,7 @@ public:
 	                                         std::span<const HostInput::Kind> kinds, bool to_defaults);
 
 private:
-	void set_defaults(const std::string &game);
+	void set_defaults(const Settings &settings, const std::string &game);
 	void read_settings(const Settings &settings, const std::string &game);
 
 	std::vector<GameControl> m_panel;
