@@ -52,6 +52,8 @@ player_value_right(const std::string &key, const std::string &value)
 		return vibration_force_named(value).has_value();
 	if (key == "wheel_rotation")
 		return wheel_rotation_named(value).has_value();
+	if (key == "device1" || key == "device2")
+		return device_named(value).has_value();
 	if (key == "sinden_border")
 		return on_off_named(value).has_value();
 	if (key == "sinden_border_style")
@@ -81,6 +83,17 @@ choose(std::array<std::string, 2> &wanted, std::array<SDL_JoystickID, 2> &picked
 	picked[player & 1] = one;
 	if (one && picked[~player & 1] == one)
 		picked[~player & 1] = 0;
+}
+
+/* The device of that id among those open (nullptr: none) */
+template <typename Devices>
+auto
+open_one(Devices &devices, SDL_JoystickID id) -> decltype(&devices.front())
+{
+	for (auto &device : devices)
+		if (id && device.id == id)
+			return &device;
+	return nullptr;
 }
 
 } /* namespace */
@@ -115,14 +128,13 @@ Controls::Controls(Keyboard &keys, const std::vector<GameControl> &controls, con
 			m_guns[key[3] - '1'] = identity_of(value);
 		} else if (key == "joy1" || key == "joy2") {
 			m_joys_wanted[key[3] - '1'] = identity_of(value);
-		} else if ((key == "device1" || key == "device2") && device_named(value)) {
-			m_chosen[key[6] - '1'] = device_named(value);
 		} else if (key == "light_gun_mode" && on_off_named(value)) {
 			m_light_gun_mode = *on_off_named(value);
 		} else if (!player_value_right(key, value)) {
 			refuse_setting("players." + game, key, value);
 		}
 	}
+	m_chosen = { device_chosen(settings, game, 0), device_chosen(settings, game, 1) };
 	/* The pads and joysticks already there come as added events; the
 	 * environment may still turn SDL's driver of the Logitech wheels on */
 	SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_LG4FF, "0");
@@ -168,10 +180,7 @@ Controls::~Controls()
 Controls::Pad *
 Controls::find(SDL_JoystickID id)
 {
-	for (Pad &pad : m_pads)
-		if (id && pad.id == id)
-			return &pad;
-	return nullptr;
+	return open_one(m_pads, id);
 }
 
 Controls::Pad *
@@ -192,10 +201,23 @@ Controls::seat(unsigned player) const
 Controls::Joy *
 Controls::find_joystick(SDL_JoystickID id)
 {
-	for (Joy &joy : m_joys)
-		if (id && joy.id == id)
-			return &joy;
-	return nullptr;
+	return open_one(m_joys, id);
+}
+
+const PadState *
+Controls::gamepad_state(SDL_JoystickID id) const
+{
+	const Pad *const pad = open_one(m_pads, id);
+
+	return pad ? &pad->state : nullptr;
+}
+
+const JoyState *
+Controls::joystick_state(SDL_JoystickID id) const
+{
+	const Joy *const joy = open_one(m_joys, id);
+
+	return joy ? &joy->state : nullptr;
 }
 
 const Controls::Joy *

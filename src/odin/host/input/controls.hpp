@@ -118,6 +118,10 @@ public:
 	/* What the host holds now: the keys, the gamepad of each player, the
 	 * mouse */
 	HostState host_state() const { return host(); }
+	/* What an open gamepad or joystick does now, a player's or not
+	 * (nullptr: none) */
+	const PadState *gamepad_state(SDL_JoystickID id) const;
+	const JoyState *joystick_state(SDL_JoystickID id) const;
 	/* The gamepads plugged in, in the order they came: name, GUID, kind
 	 * (pad_drawing.hpp), id, the player it is the pad of (-1: none), by a
 	 * wire or not (as SDL knows it) */

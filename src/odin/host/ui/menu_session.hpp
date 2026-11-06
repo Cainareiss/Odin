@@ -243,6 +243,12 @@ private:
 	/* The game whose controls the page Input shows: its name and panel */
 	std::string game_shown() const;
 	const ControlPanel &panel_shown() const { return m_other ? *m_other : m_controls.panel(); }
+	/* The joystick of a player in the game shown (0: none), and what the
+	 * host holds for it: of a game that does not run, the gamepad and the
+	 * joystick its settings seat (fill_devices), which the game that runs
+	 * may leave unseated (the library seats no wheel) */
+	SDL_JoystickID joystick_shown(unsigned player) const;
+	HostState host_shown() const;
 	void show_game(size_t game);
 	bool catch_input(const SDL_Event &event);
 	bool catch_hotkey(const SDL_Event &event);
@@ -309,6 +315,9 @@ private:
 	Game::Link m_other_link;
 	std::string m_other_title;
 	std::optional<ControlPanel> m_other;
+	/* The game shown does not run: its devices, as its settings seat them,
+	 * at the next fill_devices */
+	bool m_devices_of_other = false;
 	MenuState m_menu_state;
 	/* The inputs as Clear mapping found them, and until when Undo puts them back */
 	Settings::Lines m_cleared;

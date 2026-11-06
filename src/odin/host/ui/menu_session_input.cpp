@@ -143,7 +143,7 @@ MenuSession::catch_input(const SDL_Event &event)
 	case SDL_EVENT_JOYSTICK_ADDED:
 	case SDL_EVENT_JOYSTICK_REMOVED: {
 		/* Where the axis was before this move */
-		const JoyState *const joy = m_controls.host_state().joys[state.player & 1];
+		const JoyState *const joy = m_controls.joystick_state(joystick_shown(state.player));
 		const size_t axis = event.jaxis.axis;
 		const int was = event.type == SDL_EVENT_JOYSTICK_AXIS_MOTION && joy && axis < joy->axes.size() ? joy->axes[axis] : 0;
 
@@ -188,8 +188,8 @@ void
 MenuSession::catch_joystick(const SDL_Event &event, int was)
 {
 	MenuState &state = m_menu_state;
-	const SDL_JoystickID mine = m_controls.joystick_id(state.player);
-	const JoyState *const joy = m_controls.host_state().joys[state.player & 1];
+	const SDL_JoystickID mine = joystick_shown(state.player);
+	const JoyState *const joy = m_controls.joystick_state(mine);
 	HostInput input{};
 	JoyInput &in = input.joy;
 

@@ -658,6 +658,7 @@ MenuSession::open(int page)
 	 * shakes */
 	for (unsigned player = 0; player < 2; player++)
 		m_menu_state.input_device[player] = m_controls.device(player);
+	m_devices_of_other = m_other.has_value();
 	m_display.open_menu(page < 0 ? m_menu_test_page : page);
 	m_menu_pictures = MENU_PICTURES;
 }
