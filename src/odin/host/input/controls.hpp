@@ -266,6 +266,7 @@ private:
 		JoyState state;
 		std::vector<bool> fresh, release;
 		std::vector<uint8_t> hats;	/* as SDL gives them */
+		std::vector<int16_t> opened;	/* the axes as SDL gave them on opening */
 	};
 
 	/* The wheel of player 1 turns with the drive board, when it can */

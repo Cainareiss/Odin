@@ -488,7 +488,9 @@ INPUTS
                      seen by the game; Guide, all it holds).
  joy:axis<n>         An axis of a wheel or joystick; joy:-axis<n> and
                      joy:+axis<n> its halves; joy:axis<n>:invert turned
-                     over (a pedal).
+                     over. A pedal goes away from where it rests, as
+                     written or not; :invert only picks the half of an
+                     axis two pedals share.
  joy:button<n>       A button of a wheel or joystick.
  joy:hat<n>_up       A hat direction (_up, _down, _left, _right).
  joy:gas             The gas pedal of a known wheel, whatever its numbers

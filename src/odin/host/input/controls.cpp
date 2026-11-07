@@ -458,15 +458,8 @@ Controls::open_joystick(SDL_JoystickID id)
 	joy.state.known.assign(static_cast<size_t>(axes), false);
 	joy.state.rest.assign(static_cast<size_t>(axes), 0);
 	joy.state.parts = wheel_parts(SDL_GetJoystickVendor(handle), SDL_GetJoystickProduct(handle));
-	for (int axis = 0; axis < axes; axis++) {
-		Sint16 first = 0;
-
-		if (SDL_GetJoystickAxisInitialState(handle, axis, &first)) {
-			joy.state.axes[static_cast<size_t>(axis)] = joy.state.rest[static_cast<size_t>(axis)] =
-				SDL_GetJoystickAxis(handle, axis);
-			joy.state.known[static_cast<size_t>(axis)] = true;
-		}
-	}
+	for (int axis = 0; axis < axes; axis++)
+		joy.opened.push_back(SDL_GetJoystickAxis(handle, axis));
 	for (int button = 0; button < buttons; button++)
 		joy.state.buttons.push_back(SDL_GetJoystickButton(handle, button));
 	for (int hat = 0; hat < hats; hat++)
@@ -576,10 +569,18 @@ Controls::event(const SDL_Event &event)
 		return true;
 	case SDL_EVENT_JOYSTICK_AXIS_MOTION:
 		if (Joy *const joy = find_joystick(event.jaxis.which); joy && event.jaxis.axis < joy->state.axes.size()) {
-			if (!joy->state.known[event.jaxis.axis])
-				joy->state.rest[event.jaxis.axis] = event.jaxis.value;
-			joy->state.axes[event.jaxis.axis] = event.jaxis.value;
-			joy->state.known[event.jaxis.axis] = true;
+			const size_t axis = event.jaxis.axis;
+
+			/* What SDL gives before the device sent anything (0 on
+			 * Linux, the centre on Windows) is no value: an axis has
+			 * one from the first that is not the one it opened with,
+			 * where it rests */
+			if (!joy->state.known[axis] && event.jaxis.value == joy->opened[axis])
+				return true;
+			if (!joy->state.known[axis])
+				joy->state.rest[axis] = event.jaxis.value;
+			joy->state.axes[axis] = event.jaxis.value;
+			joy->state.known[axis] = true;
 		}
 		return true;
 	case SDL_EVENT_JOYSTICK_BUTTON_DOWN:

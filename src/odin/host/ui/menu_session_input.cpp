@@ -242,7 +242,7 @@ MenuSession::catch_joystick(const SDL_Event &event, int was)
 	case SDL_EVENT_JOYSTICK_AXIS_MOTION: {
 		const size_t axis = event.jaxis.axis;
 
-		if (axis >= joy->rest.size())
+		if (axis >= joy->rest.size() || !joy->known[axis])
 			return;
 
 		/* From where it was as the catch began, else from its rest,

@@ -32,7 +32,11 @@ namespace {
 
 /* The wheels Batocera's EmulationStation knows (its controllers/es_input.cfg:
  * r2, l2, pageup, pagedown, start and select of each), in SDL's numbers:
- * the gas, the brake, the left and the right paddle, Start, Select */
+ * the gas, the brake, the left and the right paddle, Start, Select. Which
+ * way a pedal goes is not taken from here (ControlPanel::pedal), as it
+ * changes with the driver; ":invert" only picks the half of an axis the
+ * pedals share (Windows gives one to those of the older Logitech wheels).
+ * The G923 Xbox, as the G920, has ":invert", which es_input.cfg lacks */
 struct KnownWheel {
 	uint16_t vendor, product;
 	const char *parts[WHEEL_PARTS];
@@ -41,7 +45,7 @@ struct KnownWheel {
 const KnownWheel WHEELS[] = {
 	{ 0x046d, 0xc24f, { "axis2:invert", "axis3:invert", "button5", "button4", "button8", "button9" } },	/* G29 */
 	{ 0x046d, 0xc266, { "axis2:invert", "axis3:invert", "button5", "button4", "button8", "button9" } },	/* G923 PS4 */
-	{ 0x046d, 0xc26e, { "axis1", "axis2", "button5", "button4", "button6", "button7" } },	/* G923 Xbox */
+	{ 0x046d, 0xc26e, { "axis1:invert", "axis2:invert", "button5", "button4", "button6", "button7" } },	/* G923 Xbox */
 	{ 0x046d, 0xc262, { "axis1:invert", "axis2:invert", "button5", "button4", "button6", "button7" } },	/* G920 */
 	{ 0x046d, 0xc29b, { "axis2:invert", "axis3:invert", "button5", "button4", "button6", "button7" } },	/* G27 */
 	{ 0x046d, 0xc299, { "axis2:invert", "axis3:invert", "button5", "button4", "button11", "button8" } },	/* G25 */

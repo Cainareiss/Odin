@@ -201,15 +201,32 @@ ControlPanel::channel(const PadInput &input, GameControl::Low low, int16_t value
 	return static_cast<uint16_t>(std::clamp(over ? 0x8000 - toward : 0x8000 + toward, 0, 0xFFFF));
 }
 
-/* A whole axis of a joystick as that of a stick; turned over end for
- * end, so that a pedal at rest at 32767 gives the very rest of its
- * channel */
+/* A whole axis of a joystick as that of a stick, turned over end for end */
 uint16_t
 ControlPanel::channel(const JoyInput &input, GameControl::Low low, int16_t value)
 {
 	const PadInput axis{ PadInput::Type::AXIS, static_cast<uint8_t>(SDL_GAMEPAD_AXIS_LEFTX) };
 
 	return channel(axis, low, input.inverted ? static_cast<int16_t>(~value) : value);
+}
+
+/* At an end: further than half its way from the centre (a pedal rests a
+ * little off its very end, two pedals on one axis a little off its
+ * centre) */
+int16_t
+ControlPanel::pedal(std::optional<int16_t> rest, bool inverted, int16_t value)
+{
+	if (!rest)
+		return inverted ? static_cast<int16_t>(~value) : value;
+	if (*rest >= PRESSED)
+		return static_cast<int16_t>(~value);
+	if (*rest <= -PRESSED)
+		return value;
+
+	const int from = *rest, span = inverted ? from + 32768 : 32767 - from;
+	const int half = std::max(inverted ? from - value : value - from, 0);
+
+	return static_cast<int16_t>(static_cast<int64_t>(half) * 65535 / span - 32768);
 }
 
 namespace {
@@ -225,6 +242,15 @@ own_input(const JoyState &joy, const JoyInput &input)
 	const auto &part = joy.parts[input.part % WHEEL_PARTS];
 
 	return part ? &*part : nullptr;
+}
+
+/* Where an axis of a joystick rests, once it has a value */
+std::optional<int16_t>
+rest_of(const JoyState &joy, size_t axis)
+{
+	if (axis >= joy.rest.size() || axis >= joy.known.size() || !joy.known[axis])
+		return std::nullopt;
+	return joy.rest[axis];
 }
 
 /* The joystick of an input: another one by its GUID (nullptr when it is
@@ -260,6 +286,11 @@ ControlPanel::joy_channel(const JoyState *joy, const JoyInput &input, const Game
 
 	const int16_t value = joy->axes[own->index];
 
+	if (!GameControl::half(control.low, false)) {
+		const PadInput whole{ PadInput::Type::AXIS, static_cast<uint8_t>(SDL_GAMEPAD_AXIS_LEFTX) };
+
+		return channel(whole, control.low, pedal(rest_of(*joy, own->index), own->inverted, value));
+	}
 	if (control.role != Role::STEER)
 		return channel(*own, control.low, value);
 	return channel(*own, control.low, axis_value(value * m_steer_scale));
@@ -332,9 +363,8 @@ ControlPanel::held(const HostState &host, const HostInput &input, unsigned playe
 			/* A pedal of a wheel pressed from half its way (HEURISTIC:
 			 * where the cabinet's switches close is not known); else the
 			 * bindings give no whole axis to what is pressed */
-			const int value = axis ? joy->axes[in.index] : 0;
-
-			return axis && input.joy.type == JoyInput::Type::PART && (in.inverted ? -value : value) > 0;
+			return axis && input.joy.type == JoyInput::Type::PART &&
+			       pedal(rest_of(*joy, in.index), in.inverted, joy->axes[in.index]) >= 0;
 		}
 		case JoyInput::Type::PART:
 			break;

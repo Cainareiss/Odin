@@ -93,9 +93,9 @@ struct MouseState {
 
 /* A joystick that is no gamepad (a wheel) as the host sees it now, all
  * of its way and no dead zone: its axes as SDL gives them, its buttons,
- * its hats (SDL_HAT_UP...); which axes have a value (SDL tells the first
- * one when it opens it, else its first move), and that first value, where
- * the axis rested */
+ * its hats (SDL_HAT_UP...); which axes have a value (from the first
+ * that is not the one SDL gave on opening, as a device may send nothing
+ * before it is touched), and that first value, where the axis rests */
 struct JoyState {
 	std::vector<int16_t> axes;
 	std::vector<bool> known;
@@ -221,6 +221,12 @@ public:
 	 * there, or at 32767 turned over). */
 	static uint16_t channel(const PadInput &input, GameControl::Low low, int16_t value);
 	static uint16_t channel(const JoyInput &input, GameControl::Low low, int16_t value);
+	/* A pedal on a whole axis, from -32768 let go to 32767 all the way:
+	 * away from the end where it rests, whatever its binding says; from
+	 * the centre (the pedals of a wheel on one axis), from there on the
+	 * half its binding says, ":invert" the low one; as its binding says
+	 * while its rest is not known */
+	static int16_t pedal(std::optional<int16_t> rest, bool inverted, int16_t value);
 	/* The channel of a control nothing moves: a stick or a lever centred,
 	 * a pedal let go. */
 	static uint16_t rest(GameControl::Low low);
