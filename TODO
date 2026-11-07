@@ -184,6 +184,8 @@ SH-4
   (sh4_ops.cpp).
 - FTRC out of range gives 80000000, where the SH-4 saturates
   (sh4_ops.cpp).
+- A double with an odd register, an undefined code nobody has measured,
+  takes the pair below it (sh4_ops.cpp).
 - FSRRA, FIPR and FTRV are worked out by the host, not with the tables and
   error bounds of the SH-4 (sh4_ops.cpp).
 - FSCA uses frozen sine and cosine values (those of glibc): the table of

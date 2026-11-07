@@ -233,14 +233,20 @@ struct Sh4OpsT {
 		need(c, op, (c.m_r.sr & Sh4::SR_FD) == 0, "FPU instruction with the FPU disabled");
 	}
 
-	/* A double has its high word in FRn and its low word in FRn+1. */
+	/* A double has its high word in FRn and its low word in FRn+1.
+	 * HEURISTIC: an odd n is an undefined code that nobody has measured
+	 * on an SH-4; its low bit is dropped, as the operations of the
+	 * software manual (section 9, normal_fmul) read DR[n >> 1] and as
+	 * MAME sh4.cpp does. */
 	static double get_dr(const Sh4 &c, uint32_t n)
 	{
+		n &= 14;
 		return std::bit_cast<double>((static_cast<uint64_t>(c.m_r.fr[n]) << 32) | c.m_r.fr[n + 1]);
 	}
 	static void set_dr(Sh4 &c, uint32_t n, double v)
 	{
 		uint64_t u = std::bit_cast<uint64_t>(v);
+		n &= 14;
 		c.m_r.fr[n] = static_cast<uint32_t>(u >> 32);
 		c.m_r.fr[n + 1] = static_cast<uint32_t>(u);
 	}
@@ -1404,7 +1410,6 @@ struct Sh4OpsT {
 		if (!(c.m_r.fpscr & Sh4::FPSCR_PR)) {
 			c.m_r.fr[op->n] = bits(static_cast<float>(v));
 		} else {
-			need_even_n(c, op);
 			set_dr(c, op->n, static_cast<double>(v));
 		}
 		return go(c, op);
@@ -1417,7 +1422,6 @@ struct Sh4OpsT {
 			float v = f32(c.m_r.fr[op->n]);
 			c.m_r.fpul = (v >= -2147483648.0f && v < 2147483648.0f) ? u32(static_cast<int32_t>(v)) : 0x80000000;
 		} else {
-			need_even_n(c, op);
 			double v = get_dr(c, op->n);
 			c.m_r.fpul = (v > -2147483649.0 && v < 2147483648.0) ? u32(static_cast<int32_t>(v)) : 0x80000000;
 		}
@@ -1425,13 +1429,11 @@ struct Sh4OpsT {
 	}
 	static Ret fcnvsd(Sh4 &c, const Op *op)
 	{
-		need_even_n(c, op);
 		set_dr(c, op->n, static_cast<double>(f32(c.m_r.fpul)));
 		return go(c, op);
 	}
 	static Ret fcnvds(Sh4 &c, const Op *op)
 	{
-		need_even_n(c, op);
 		c.m_r.fpul = bits(static_cast<float>(get_dr(c, op->n)));
 		return go(c, op);
 	}
@@ -1448,20 +1450,11 @@ struct Sh4OpsT {
 		c.m_r.fr[op->n] &= 0x7FFFFFFF;
 		return go(c, op);
 	}
-	static void need_even(Sh4 &c, const Op *op)
-	{
-		need(c, op, !((op->n | op->m) & 1), "double precision with an odd register");
-	}
-	static void need_even_n(Sh4 &c, const Op *op)
-	{
-		need(c, op, !(op->n & 1), "double precision with an odd register");
-	}
 	static Ret fadd(Sh4 &c, const Op *op)
 	{
 		if (!(c.m_r.fpscr & Sh4::FPSCR_PR)) {
 			c.m_r.fr[op->n] = bits(add_first(f32(c.m_r.fr[op->m]), f32(c.m_r.fr[op->n])));
 		} else {
-			need_even(c, op);
 			set_dr(c, op->n, add_first(get_dr(c, op->m), get_dr(c, op->n)));
 		}
 		return go(c, op);
@@ -1471,7 +1464,6 @@ struct Sh4OpsT {
 		if (!(c.m_r.fpscr & Sh4::FPSCR_PR)) {
 			c.m_r.fr[op->n] = bits(f32(c.m_r.fr[op->n]) - f32(c.m_r.fr[op->m]));
 		} else {
-			need_even(c, op);
 			set_dr(c, op->n, get_dr(c, op->n) - get_dr(c, op->m));
 		}
 		return go(c, op);
@@ -1481,7 +1473,6 @@ struct Sh4OpsT {
 		if (!(c.m_r.fpscr & Sh4::FPSCR_PR)) {
 			c.m_r.fr[op->n] = bits(mul_first(f32(c.m_r.fr[op->m]), f32(c.m_r.fr[op->n])));
 		} else {
-			need_even(c, op);
 			set_dr(c, op->n, mul_first(get_dr(c, op->m), get_dr(c, op->n)));
 		}
 		return go(c, op);
@@ -1491,7 +1482,6 @@ struct Sh4OpsT {
 		if (!(c.m_r.fpscr & Sh4::FPSCR_PR)) {
 			c.m_r.fr[op->n] = bits(f32(c.m_r.fr[op->n]) / f32(c.m_r.fr[op->m]));
 		} else {
-			need_even(c, op);
 			set_dr(c, op->n, get_dr(c, op->n) / get_dr(c, op->m));
 		}
 		return go(c, op);
@@ -1509,7 +1499,6 @@ struct Sh4OpsT {
 		if (!(c.m_r.fpscr & Sh4::FPSCR_PR)) {
 			c.m_r.fr[op->n] = bits(std::sqrt(f32(c.m_r.fr[op->n])));
 		} else {
-			need_even_n(c, op);
 			set_dr(c, op->n, std::sqrt(get_dr(c, op->n)));
 		}
 		return go(c, op);
@@ -1565,7 +1554,6 @@ struct Sh4OpsT {
 		if (!(c.m_r.fpscr & Sh4::FPSCR_PR)) {
 			c.m_r.t = f32(c.m_r.fr[op->n]) == f32(c.m_r.fr[op->m]);
 		} else {
-			need_even(c, op);
 			c.m_r.t = get_dr(c, op->n) == get_dr(c, op->m);
 		}
 		return go(c, op);
@@ -1575,7 +1563,6 @@ struct Sh4OpsT {
 		if (!(c.m_r.fpscr & Sh4::FPSCR_PR)) {
 			c.m_r.t = f32(c.m_r.fr[op->n]) > f32(c.m_r.fr[op->m]);
 		} else {
-			need_even(c, op);
 			c.m_r.t = get_dr(c, op->n) > get_dr(c, op->m);
 		}
 		return go(c, op);
