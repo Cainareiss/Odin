@@ -1435,18 +1435,16 @@ struct Sh4OpsT {
 		c.m_r.fpul = bits(static_cast<float>(get_dr(c, op->n)));
 		return go(c, op);
 	}
-	/* The sign of a double is in FRn. */
+	/* The sign of a double is in FRn. FNEG and FABS work on FRn whatever
+	 * the precision, an odd n too (software manual, 9.25 and 9.40; FNEG
+	 * measured on the SH-4 of a Dreamcast, Flycast issue 2139). */
 	static Ret fneg(Sh4 &c, const Op *op)
 	{
-		if (c.m_r.fpscr & Sh4::FPSCR_PR)
-			need_even_n(c, op);
 		c.m_r.fr[op->n] ^= 0x80000000;
 		return go(c, op);
 	}
 	static Ret fabs_(Sh4 &c, const Op *op)
 	{
-		if (c.m_r.fpscr & Sh4::FPSCR_PR)
-			need_even_n(c, op);
 		c.m_r.fr[op->n] &= 0x7FFFFFFF;
 		return go(c, op);
 	}
@@ -1516,10 +1514,16 @@ struct Sh4OpsT {
 		}
 		return go(c, op);
 	}
+	/* With PR set, FSRRA, FSCA, FIPR and FTRV do nothing: no write, FPSCR
+	 * as it was (measured on the SH-4 of a Dreamcast, shrike4-rtl
+	 * model/fipr/hw_specials). */
 	/* HEURISTIC: FSRRA, FIPR and FTRV are computed by the host, where the
 	 * SH-4 has its own tables and error bounds. */
 	static Ret fsrra(Sh4 &c, const Op *op)
 	{
+		if (c.m_r.fpscr & Sh4::FPSCR_PR)
+			return go(c, op);
+
 		float v = f32(c.m_r.fr[op->n]);
 		if (!(v < 0)) {
 			c.m_r.fr[op->n] = bits(1.0f / std::sqrt(v));
@@ -1531,6 +1535,9 @@ struct Sh4OpsT {
 	 * for now: see sh4_fsca.cpp. */
 	static Ret fsca(Sh4 &c, const Op *op)
 	{
+		if (c.m_r.fpscr & Sh4::FPSCR_PR)
+			return go(c, op);
+
 		const uint32_t *const pair = sh4_fsca_table() + 2 * (c.m_r.fpul & 0xFFFF);
 
 		c.m_r.fr[op->n] = pair[0];
@@ -1540,7 +1547,8 @@ struct Sh4OpsT {
 	static Ret fipr(Sh4 &c, const Op *op)
 	{
 		need_fpu(c, op);
-		c.m_r.fr[op->n + 3] = bits(ipr(&c.m_r.fr[op->n], &c.m_r.fr[op->m]));
+		if (!(c.m_r.fpscr & Sh4::FPSCR_PR))
+			c.m_r.fr[op->n + 3] = bits(ipr(&c.m_r.fr[op->n], &c.m_r.fr[op->m]));
 		return go(c, op);
 	}
 	/* The vector FRn..FRn+3 by the matrix in XF0..XF15, one column of the
@@ -1548,7 +1556,8 @@ struct Sh4OpsT {
 	static Ret ftrv(Sh4 &c, const Op *op)
 	{
 		need_fpu(c, op);
-		trv(&c.m_r.fr[op->n], c.m_r.xf);
+		if (!(c.m_r.fpscr & Sh4::FPSCR_PR))
+			trv(&c.m_r.fr[op->n], c.m_r.xf);
 		return go(c, op);
 	}
 	static Ret fcmpeq(Sh4 &c, const Op *op)
