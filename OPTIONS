@@ -498,6 +498,11 @@ INPUTS
                      joy:paddle_left, joy:paddle_right, joy:start and
                      joy:select the same. On a button, a pedal presses it
                      from half its way.
+ joy@<GUID>:<input>  The same on another joystick than the player's (a
+                     shifter or pedals of their own), by its GUID as the
+                     log names it, e.g.
+                     joy@030000006d0400001ac2000000000000:button1. The
+                     page Input writes it when it catches such a joystick.
  mouse:left          Mouse or light gun buttons: left, middle, right, side,
                      extra.
  mouse:x, mouse:y    Where the mouse or the light gun aims.

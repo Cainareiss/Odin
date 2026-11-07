@@ -497,8 +497,9 @@ Menu::build(MenuState &state)
 	 * as it takes, under a line: the page above it; the tip of the row the
 	 * gamepad frames in its place. Input says it with the names and inputs
 	 * of its controls. While an input is caught, Input says what to do
-	 * there, keys and all. The keys are those the user set for the menu, to
-	 * close the game (over one) and to quit. */
+	 * there, keys and all, and while it says a control, all of it. The
+	 * keys are those the user set for the menu, to close the game (over
+	 * one) and to quit. */
 	const std::string back = first_key(state, Hotkeys::Action::MENU), quit = first_key(state, Hotkeys::Action::QUIT);
 	const std::string close = state.library ? std::string() : first_key(state, Hotkeys::Action::CLOSE_GAME);
 	std::string keys_said;
@@ -512,7 +513,7 @@ Menu::build(MenuState &state)
 		keys_said += (keys_said.empty() ? "" : "    ") + quit + ": quit";
 
 	const char *const keys = keys_said.c_str();
-	const bool keys_shown = m_page != INPUT || !state.catching;
+	const bool keys_shown = m_page != INPUT || (!state.catching && !input_tells(state));
 	const float keys_w = ImGui::CalcTextSize(keys).x, help_w = std::max(0.0f, w - 3.0f * pad - keys_w);
 	const std::string help = m_page == INPUT ? std::string() :
 	                         framed_tip.empty() ? this->help(m_page, state) :

@@ -516,6 +516,8 @@ MenuSession::event(const SDL_Event &event)
 {
 	using Action = Hotkeys::Action;
 
+	if (!m_menu_state.catching && !m_menu_state.mapping)
+		m_catch_from.reset();
 	if (m_menu_state.catching && catch_input(event)) {
 		m_menu_pictures = MENU_PICTURES;
 		return Asked::NONE;

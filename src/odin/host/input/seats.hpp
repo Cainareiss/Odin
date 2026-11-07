@@ -100,6 +100,20 @@ joystick_fits(int kind, bool steers)
 	return steers || kind != SDL_JOYSTICK_TYPE_WHEEL;
 }
 
+/* In a game steered by a wheel, the wheels first (kinds: SDL_JoystickType
+ * of each): a shifter or pedals of their own plugged in before it take no
+ * player's place from it */
+inline void
+wheels_first(std::vector<OpenPad> &joys, const std::vector<int> &kinds)
+{
+	std::vector<OpenPad> wheels, others;
+
+	for (size_t i = 0; i < joys.size() && i < kinds.size(); i++)
+		(kinds[i] == SDL_JOYSTICK_TYPE_WHEEL ? wheels : others).push_back(joys[i]);
+	wheels.insert(wheels.end(), others.begin(), others.end());
+	joys = std::move(wheels);
+}
+
 /* The gamepad of each player (0: none), from those open in the order they
  * were plugged in, the GUID each player wants (empty: any), the very pad
  * each one picked (0: none; two of a make share their GUID), the ones they

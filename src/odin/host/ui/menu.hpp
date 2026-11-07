@@ -421,6 +421,9 @@ struct MenuState : BarSettings {
 	/* The joysticks that are no gamepads (a wheel), the same (kind: their
 	 * SDL_JoystickType), and the one asked for the player shown */
 	std::vector<Plugged> joysticks;
+	/* The control of the page Input under the mouse in its list this
+	 * frame (-1: none): the foot says all its inputs */
+	int hovered_control = -1;
 	std::optional<Plugged> want_joystick;
 	/* The light guns and mice seen; that of each player in the game shown
 	 * (its identity; empty: none) and whether the player has a sight there;
@@ -754,6 +757,9 @@ private:
 	 * The height it takes, drawn when `draw`. */
 	static std::string help(int page, const MenuState &state);
 	static float input_foot(const MenuKit &kit, MenuState &state, ImVec2 at, float width, float height, bool draw);
+	/* Whether Input says a control there now (framed, under the mouse or
+	 * worked): the keys beside it give it their room */
+	static bool input_tells(const MenuState &state);
 	static std::string hotkeys_help(const MenuState &state);
 	/* A button of a gamepad of that kind (pad_drawing.hpp), as its maker
 	 * prints it */

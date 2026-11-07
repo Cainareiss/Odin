@@ -325,9 +325,15 @@ MenuSession::fill_devices(MenuState &state)
 						paths[player] = device_path(value);
 				}
 			}
+			std::vector<int> kinds;
+
 			for (const Controls::Plugged &one : plugged)
-				if (pads || joystick_fits(one.kind, state.steers))
+				if (pads || joystick_fits(one.kind, state.steers)) {
 					open.push_back({ one.id, one.guid, one.path });
+					kinds.push_back(one.kind);
+				}
+			if (!pads && state.steers)
+				wheels_first(open, kinds);
 			seats = seat_pads(open, wanted, {}, {}, paths);
 		}
 		out.clear();

@@ -87,7 +87,8 @@ inline constexpr const char *WHEEL_PART_NAMES[WHEEL_PARTS] = { "gas", "brake", "
  * half an axis, "-axis1", "+axis1"; a way of a hat, "hat0_up", "_down",
  * "_left", "_right"; a part of a known wheel, by its name in
  * WHEEL_PART_NAMES: its own input on that wheel, none on another
- * joystick. */
+ * joystick. That of the joystick of the player, or of another one (a
+ * shifter or pedals of their own) by its GUID. */
 struct JoyInput {
 	enum class Type { BUTTON, AXIS, AXIS_NEGATIVE, AXIS_POSITIVE, HAT, PART };
 
@@ -96,6 +97,7 @@ struct JoyInput {
 	bool inverted = false;	/* a whole axis, turned over */
 	uint8_t way = 0;	/* of a hat: SDL_HAT_UP, _RIGHT, _DOWN or _LEFT */
 	uint8_t part = 0;	/* of a part: its place in WHEEL_PART_NAMES */
+	std::string device;	/* another joystick's GUID (guid_text); empty: the player's */
 
 	/* A button, half an axis, a way of a hat or a part of a wheel (a pedal
 	 * pressed from half its way): pressed or not */
@@ -127,7 +129,8 @@ struct HostInput {
 
 	/* "key:Left Ctrl", "pad:a", "pad:-lefty", "pad:lefty:invert",
 	 * "pad:guide+leftstick", "mouse:left", "mouse:x", "joy:axis0",
-	 * "joy:button4"; nothing for what is not one */
+	 * "joy:button4", "joy@<GUID>:button1" (another joystick than the
+	 * player's); nothing for what is not one */
 	static std::optional<HostInput> parse(std::string_view text);
 	/* And back: what parse reads; a list with ", " between */
 	std::string text() const;

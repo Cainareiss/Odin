@@ -127,6 +127,8 @@ public:
 	 * (nullptr: none) */
 	const PadState *gamepad_state(SDL_JoystickID id) const;
 	const JoyState *joystick_state(SDL_JoystickID id) const;
+	/* The GUID of a joystick plugged in (guid_text), empty for none */
+	std::string joystick_guid(SDL_JoystickID id) const;
 	/* The gamepads plugged in, in the order they came: name, GUID, kind
 	 * (pad_drawing.hpp), id, the player it is the pad of (-1: none), by a
 	 * wire or not (as SDL knows it), its path (seats.hpp) */
@@ -277,6 +279,8 @@ private:
 	void close(SDL_JoystickID id);
 	void open_joystick(SDL_JoystickID id);
 	void close_joystick(SDL_JoystickID id);
+	/* m_all_joys made again, as m_joys changed */
+	void list_joysticks();
 	Pad *find(SDL_JoystickID id);
 	Pad *seat(unsigned player);
 	const Pad *seat(unsigned player) const;
@@ -345,6 +349,7 @@ private:
 	std::array<SDL_JoystickID, 2> m_picked{};	/* the very one, 0: any of that make */
 	std::array<std::string, 2> m_wanted_paths;	/* [players.<game>] p1_path, p2_path */
 	std::vector<Joy> m_joys;	/* plugged in, in the order they came */
+	std::vector<PluggedJoy> m_all_joys;	/* the same, for HostState (list_joysticks) */
 	std::array<SDL_JoystickID, 2> m_joy_seats{};
 	std::array<std::string, 2> m_joys_wanted;
 	std::array<SDL_JoystickID, 2> m_joys_picked{};

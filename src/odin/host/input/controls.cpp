@@ -247,6 +247,14 @@ Controls::joystick_state(SDL_JoystickID id) const
 	return joy ? &joy->state : nullptr;
 }
 
+std::string
+Controls::joystick_guid(SDL_JoystickID id) const
+{
+	const Joy *const joy = open_one(m_joys, id);
+
+	return joy ? joy->guid : std::string();
+}
+
 const Controls::Joy *
 Controls::joystick(unsigned player) const
 {
@@ -264,15 +272,39 @@ Controls::reseat()
 	const std::array<std::string, 2> paths = { device_path(m_wanted_paths[0]), device_path(m_wanted_paths[1]) };
 	const std::array<std::string, 2> joy_paths = { device_path(m_joys_wanted_paths[0]),
 	                                               device_path(m_joys_wanted_paths[1]) };
+	std::vector<int> kinds;
+	std::array<SDL_JoystickID, 2> joys_had = m_joy_seats;
 
 	for (const Pad &pad : m_pads)
 		pads.push_back({ pad.id, pad.guid, pad.path });
 	for (const Joy &joy : m_joys)
-		if (joystick_fits(SDL_GetJoystickType(joy.handle), m_steers))
+		if (joystick_fits(SDL_GetJoystickType(joy.handle), m_steers)) {
 			joys.push_back({ joy.id, joy.guid, joy.path });
+			kinds.push_back(SDL_GetJoystickType(joy.handle));
+		}
+	/* A game steered by a wheel: the wheels first; a player who had a
+	 * joystick, not a wheel, takes a wheel nobody has, player 1 first */
+	if (m_steers) {
+		const auto wheel = [this](SDL_JoystickID id) {
+			const Joy *const joy = open_one(m_joys, id);
+
+			return joy && SDL_GetJoystickType(joy->handle) == SDL_JOYSTICK_TYPE_WHEEL;
+		};
+		auto free_wheels = std::count(kinds.begin(), kinds.end(), SDL_JOYSTICK_TYPE_WHEEL);
+
+		wheels_first(joys, kinds);
+		for (const SDL_JoystickID had : joys_had)
+			free_wheels -= had && wheel(had);
+		for (SDL_JoystickID &had : joys_had)
+			if (had && !wheel(had) && free_wheels > 0) {
+				had = 0;
+				free_wheels--;
+			}
+	}
 
 	const std::array<SDL_JoystickID, 2> seats = seat_pads(pads, m_wanted, m_picked, m_seats, paths);
-	const std::array<SDL_JoystickID, 2> joy_seats = seat_pads(joys, m_joys_wanted, m_joys_picked, m_joy_seats, joy_paths);
+	const std::array<SDL_JoystickID, 2> joy_seats =
+		seat_pads(joys, m_joys_wanted, m_joys_picked, joys_had, joy_paths);
 
 	for (unsigned player = 0; player < 2; player++) {
 		if (joy_seats[player] == m_joy_seats[player])
@@ -445,6 +477,7 @@ Controls::open_joystick(SDL_JoystickID id)
 	m_joys.push_back(std::move(joy));
 	std::printf("joystick: '%s' plugged, %s at %s, %d axes, %d buttons, %d hats\n", SDL_GetJoystickName(handle),
 	            m_joys.back().guid.c_str(), m_joys.back().path.c_str(), axes, buttons, hats);
+	list_joysticks();
 	reseat();
 }
 
@@ -458,7 +491,16 @@ Controls::close_joystick(SDL_JoystickID id)
 	std::printf("joystick: '%s' unplugged\n", SDL_GetJoystickName(joy->handle));
 	SDL_CloseJoystick(joy->handle);
 	m_joys.erase(m_joys.begin() + (joy - m_joys.data()));
+	list_joysticks();
 	reseat();
+}
+
+void
+Controls::list_joysticks()
+{
+	m_all_joys.clear();
+	for (const Joy &joy : m_joys)
+		m_all_joys.push_back({ joy.guid, &joy.state });
 }
 
 namespace {
@@ -756,6 +798,7 @@ Controls::host() const
 		host.pads[player] = seat(player) ? &seat(player)->state : nullptr;
 		host.joys[player] = joystick(player) ? &joystick(player)->state : nullptr;
 	}
+	host.all_joys = &m_all_joys;
 	/* A mouse that does not play does nothing in the game */
 	host.mice[0] = m_gun_seen[0] ? &m_gun_aims[0] : m_mouse_seen && aims() ? &m_mouse : nullptr;
 	host.mice[1] = m_gun_seen[1] ? &m_gun_aims[1] : nullptr;

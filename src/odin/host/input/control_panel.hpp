@@ -105,14 +105,22 @@ struct JoyState {
 	WheelParts parts{};	/* a known wheel's (wheels.cpp) */
 };
 
+/* A joystick plugged in, by its GUID (guid_text), and what it holds */
+struct PluggedJoy {
+	std::string guid;
+	const JoyState *state;
+};
+
 /* What the host holds now: the keys down, the pad, the joystick and the
  * mouse of each player (nullptr: none): player 1's light gun, else the
- * mouse of the system; player 2's light gun. */
+ * mouse of the system; player 2's light gun. Every joystick plugged in,
+ * for an input of another one than the player's (JoyInput::device). */
 struct HostState {
 	const std::vector<SDL_Keycode> *keys = nullptr;
 	std::array<const PadState *, 2> pads{};
 	std::array<const JoyState *, 2> joys{};
 	std::array<const MouseState *, 2> mice{};
+	const std::vector<PluggedJoy> *all_joys = nullptr;
 };
 
 /* Where a control is now, for the drawing of the cabinet: worked or not;

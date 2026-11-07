@@ -451,6 +451,19 @@ HostInput::parse(std::string_view text)
 		return parse_mouse(text.substr(6));
 	if (text.substr(0, 4) == "joy:")
 		return parse_joy(text.substr(4));
+	/* Another joystick than the player's: its GUID, 32 hex digits */
+	if (text.substr(0, 4) == "joy@") {
+		const std::string_view guid = text.substr(4, 32);
+		std::optional<HostInput> other;
+
+		if (guid.size() == 32 && text.substr(36, 1) == ":" &&
+		    std::all_of(guid.begin(), guid.end(), [](char c) { return std::isxdigit(static_cast<unsigned char>(c)); }))
+			other = parse_joy(text.substr(37));
+		if (other)
+			std::transform(guid.begin(), guid.end(), std::back_inserter(other->joy.device),
+			               [](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); });
+		return other;
+	}
 	if (text.substr(0, 4) != "pad:")
 		return std::nullopt;
 	return parse_pad(text.substr(4));
@@ -471,7 +484,7 @@ HostInput::text() const
 		                                mouse.type == MouseInput::Type::OFF ? "off" :
 		                                                                      BUTTONS[mouse.button % MOUSE_BUTTONS]);
 	case Kind::JOY:
-		return "joy:" + joy_text(joy);
+		return (joy.device.empty() ? "joy:" : "joy@" + joy.device + ":") + joy_text(joy);
 	case Kind::PAD:
 		break;
 	}

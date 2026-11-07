@@ -227,6 +227,23 @@ own_input(const JoyState &joy, const JoyInput &input)
 	return part ? &*part : nullptr;
 }
 
+/* The joystick of an input: another one by its GUID (nullptr when it is
+ * not plugged in; two of a make share it: another than the player's own
+ * first), else that of the player */
+const JoyState *
+joy_of(const HostState &host, const JoyInput &input, unsigned player)
+{
+	const JoyState *found = nullptr;
+
+	if (input.device.empty())
+		return host.joys[player & 1];
+	if (host.all_joys)
+		for (const PluggedJoy &one : *host.all_joys)
+			if (one.guid == input.device && (!found || found == host.joys[player & 1]))
+				found = one.state;
+	return found;
+}
+
 } /* namespace */
 
 std::optional<uint16_t>
@@ -291,7 +308,7 @@ ControlPanel::held(const HostState &host, const HostInput &input, unsigned playe
 		return input.mouse.type == MouseInput::Type::BUTTON && mouse->buttons[input.mouse.button];
 	}
 	if (input.kind == HostInput::Kind::JOY) {
-		const JoyState *const joy = host.joys[player & 1];
+		const JoyState *const joy = joy_of(host, input.joy, player);
 		if (!joy)
 			return false;
 
@@ -368,7 +385,7 @@ ControlPanel::touched(const HostState &host, size_t control) const
 		    std::abs(static_cast<int>(pad->axes[input.pad.index])) >= PRESSED)
 			return true;
 		/* An axis of a joystick from half its way, as a stick or a trigger */
-		const auto at = input.kind == HostInput::Kind::JOY ? joy_channel(host.joys[c.player & 1], input.joy, c) :
+		const auto at = input.kind == HostInput::Kind::JOY ? joy_channel(joy_of(host, input.joy, c.player), input.joy, c) :
 		                                                     std::nullopt;
 
 		if (at && std::abs(*at - rest(c.low)) >= (GameControl::half(c.low, false) ? 0x4000 : 0x8000))
@@ -393,7 +410,7 @@ ControlPanel::now(const HostState &host, size_t control) const
 	if (back != on)
 		out.value = on ? 1.0f : GameControl::half(c.low, false) ? -1.0f : 0.0f;
 	for (const HostInput &input : m_bindings.of(control)) {
-		const JoyState *const joy = host.joys[c.player & 1];
+		const JoyState *const joy = joy_of(host, input.joy, c.player);
 		const MouseState *const aim = host.mice[c.player & 1];
 		float v = 0.0f;
 
@@ -454,7 +471,7 @@ ControlPanel::analog(const HostState &host, size_t c)
 			now[s] = channel(input.pad, control.low, pad->axes[input.pad.index]);
 			there[s] = true;
 		} else if (const auto at = input.kind == HostInput::Kind::JOY ?
-		                           joy_channel(host.joys[control.player & 1], input.joy, control) :
+		                           joy_channel(joy_of(host, input.joy, control.player), input.joy, control) :
 		                           std::nullopt) {
 			now[s] = *at;
 			there[s] = true;

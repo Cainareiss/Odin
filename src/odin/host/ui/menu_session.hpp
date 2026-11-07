@@ -26,6 +26,7 @@
 #define ODIN_MENU_SESSION_HPP
 
 #include <algorithm>
+#include <map>
 #include <memory>
 #include <optional>
 #include <span>
@@ -342,6 +343,13 @@ private:
 		bool skipped;
 	};
 	std::optional<Held> m_held;
+	/* A part caught (or Map all): where each axis of each joystick was
+	 * as it began (a pedal at rest; none: not known yet), the move of one
+	 * taken from there (on Windows, SDL's first value is the middle until
+	 * the device reports); the axes caught, with where they were, none
+	 * again until back there */
+	std::optional<std::map<SDL_JoystickID, std::vector<std::optional<int16_t>>>> m_catch_from;
+	std::map<std::pair<SDL_JoystickID, size_t>, int> m_catch_held;
 	/* The page Hotkeys: Escape down since then, with those modifiers, as
 	 * that place waited for its key */
 	struct EscapeDown {
