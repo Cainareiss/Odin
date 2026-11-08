@@ -43,6 +43,7 @@ struct GlDrawing::Pmx {
 	struct Program {
 		GLuint id = 0;
 		GLint most_w = 0, lod_bias = 0, flags = 0, scale = -1, order = -1, mode = -1;
+		GLint fog_density = 0, fog_color = 0, fog_vertex_color = 0;
 
 		void take(GLuint program, bool native, bool list)
 		{
@@ -50,6 +51,13 @@ struct GlDrawing::Pmx {
 			most_w = gl::uniform(id, "u_most_w");
 			lod_bias = gl::uniform(id, "u_lod_bias");
 			flags = gl::uniform(id, "u_flags");
+			fog_density = gl::uniform(id, "u_fog_density");
+			fog_color = gl::uniform(id, "u_fog_color");
+			fog_vertex_color = gl::uniform(id, "u_fog_vertex_color");
+			/* The texture on unit 0, the fog table on unit 1 */
+			glUseProgram(id);
+			glUniform1i(gl::uniform(id, "u_fog"), 1);
+			glUseProgram(0);
 			if (native)
 				scale = gl::uniform(id, "u_scale");
 			if (list) {
@@ -75,6 +83,10 @@ struct GlDrawing::Pmx {
 		GLsizeiptr room = 0, most = 0;
 	} lists;
 	GLuint vao = 0, vbo = 0;
+	/* The fog table, and what it holds */
+	GLuint fog = 0;
+	std::array<uint8_t, 256> fog_table{};
+	bool fog_loaded = false;
 	/* Where scenes are drawn, if the depth can be a float from 0 to 1 as
 	 * the chip's is: games lay polygons a hair apart at very small 1/W */
 	GLuint fine_fb = 0, fine_depth = 0;
@@ -102,6 +114,7 @@ struct GlDrawing::Pmx {
 		glDeleteProgram(lists.sort);
 		glDeleteBuffers(1, &vbo);
 		glDeleteVertexArrays(1, &vao);
+		glDeleteTextures(1, &fog);
 		for (const Program &program : programs)
 			glDeleteProgram(program.id);
 	}
@@ -226,6 +239,12 @@ GlDrawing::make_pmx(const std::function<void(unsigned, unsigned)> &progress)
 	glVertexAttribPointer(3, 4, GL_UNSIGNED_BYTE, GL_TRUE, size, at(offsetof(PmxVertex, offset)));
 	glBindVertexArray(0);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glGenTextures(1, &m_pmx->fog);
+	glBindTexture(GL_TEXTURE_2D, m_pmx->fog);
+	glTexStorage2D(GL_TEXTURE_2D, 1, GL_RG8, 128, 1);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 /* One program does every blend: the keys need none of their own */
@@ -277,6 +296,15 @@ GlDrawing::draw_pmx(const PmxScene &scene, unsigned anisotropy)
 			                image->levels[level].data());
 		pmx.images[image->id] = texture;
 	}
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, pmx.fog);
+	glBindSampler(1, 0);
+	if (!pmx.fog_loaded || pmx.fog_table != scene.fog_table) {
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 128, 1, GL_RG, GL_UNSIGNED_BYTE, scene.fog_table.data());
+		pmx.fog_table = scene.fog_table;
+		pmx.fog_loaded = true;
+	}
+	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, 0);
 
 	const GLsizei w = static_cast<GLsizei>(width()), h = static_cast<GLsizei>(height());
@@ -418,7 +446,7 @@ GlDrawing::draw_pmx(const PmxScene &scene, unsigned anisotropy)
 		const PmxDraw &draw = scene.draws[k];
 		const bool listed = sorting && draw.per_pixel;
 		const int flags = (draw.image ? 1 : 0) | (draw.use_alpha ? 2 : 0) | (draw.ignore_texture_alpha ? 4 : 0) |
-		                  (draw.offset ? 8 : 0) | draw.shading << 4;
+		                  (draw.offset ? 8 : 0) | draw.shading << 4 | draw.fog << 6;
 
 		if (listed && !collecting)
 			begin_lists();
@@ -432,10 +460,19 @@ GlDrawing::draw_pmx(const PmxScene &scene, unsigned anisotropy)
 		}
 		if (const Pmx::Program *const wanted = &pmx.programs[(draw.native ? 1 : 0) + (listed ? 2 : 0)];
 		    wanted != program) {
+			const auto rgb = [](uint32_t color) {
+				return std::array<float, 3>{ static_cast<float>((color >> 16) & 0xFF) / 255.0f,
+					                     static_cast<float>((color >> 8) & 0xFF) / 255.0f,
+					                     static_cast<float>(color & 0xFF) / 255.0f };
+			};
+
 			program = wanted;
 			glUseProgram(program->id);
 			glUniform1f(program->most_w, scene.most_w);
 			glUniform1f(program->scale, static_cast<float>(m_scale));
+			glUniform1f(program->fog_density, scene.fog_density);
+			glUniform3fv(program->fog_color, 1, rgb(scene.fog_color).data());
+			glUniform3fv(program->fog_vertex_color, 1, rgb(scene.fog_vertex_color).data());
 		}
 		glUniform1i(program->flags, flags);
 		glUniform1f(program->lod_bias, draw.lod_bias);

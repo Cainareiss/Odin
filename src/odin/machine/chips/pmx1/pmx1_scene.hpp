@@ -26,6 +26,7 @@
 #ifndef ODIN_PMX1_SCENE_HPP
 #define ODIN_PMX1_SCENE_HPP
 
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -51,6 +52,7 @@ struct PmxDraw {
 				 * inverse, source alpha and its inverse, those of
 				 * the destination */
 	uint8_t shading;	/* 0 decal, 1 modulate, 2 decal alpha, 3 modulate alpha */
+	uint8_t fog;		/* 0 table, 1 vertex, 2 none, 3 table as alpha */
 	PmxWrap wrap_u, wrap_v;
 	bool blend, write_z, use_alpha, ignore_texture_alpha, offset, smooth, mipmap;
 	bool native;		/* covers the chip's pixels */
@@ -72,6 +74,11 @@ struct PmxScene {
 	std::vector<PmxDraw> draws;
 	float most_w = 1.0f;	/* the largest 1/W */
 	bool rendered = false;	/* a frame may have none */
+	/* The fog table: 128 steps of 1/W times the density, the fog at the
+	 * start and the end of each; the fog colours (bytes B, G, R) */
+	std::array<uint8_t, 256> fog_table{};
+	float fog_density = 0.0f;
+	uint32_t fog_color = 0, fog_vertex_color = 0;
 	/* What the GPU should load and forget first */
 	std::vector<std::shared_ptr<const PmxImage>> new_images;
 	std::vector<uint32_t> gone_images;

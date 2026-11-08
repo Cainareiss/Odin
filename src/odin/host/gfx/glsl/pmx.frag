@@ -23,15 +23,20 @@
  * with Odin.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* Neon 250 pixel: texture over colour, then offset colour */
+/* Neon 250 pixel: texture over colour, then offset colour, then fog */
 
+/* u_fog: the fog table, a texel a step, the fog at its start (r) and end (g) */
 #ifdef VULKAN
 layout(set = 0, binding = 0) uniform sampler2D u_texture;
+layout(set = 0, binding = 1) uniform sampler2D u_fog;
 layout(push_constant) uniform Draw {
 	float most_w;
 	float lod_bias;
 	int flags;
 	float scale;
+	float fog_density;
+	uint fog_color;
+	uint fog_vertex_color;
 #ifdef LIST
 	uint order;
 	uint mode;
@@ -40,14 +45,23 @@ layout(push_constant) uniform Draw {
 #define LOD_BIAS draw.lod_bias
 #define FLAGS draw.flags
 #define SCALE draw.scale
+#define FOG_DENSITY draw.fog_density
+#define FOG_COLOR unpackUnorm4x8(draw.fog_color).bgr
+#define FOG_VERTEX_COLOR unpackUnorm4x8(draw.fog_vertex_color).bgr
 #else
 uniform sampler2D u_texture;
+uniform sampler2D u_fog;
 uniform float u_lod_bias;
 uniform int u_flags;
 uniform float u_scale;
+uniform float u_fog_density;
+uniform vec3 u_fog_color, u_fog_vertex_color;
 #define LOD_BIAS u_lod_bias
 #define FLAGS u_flags
 #define SCALE u_scale
+#define FOG_DENSITY u_fog_density
+#define FOG_COLOR u_fog_color
+#define FOG_VERTEX_COLOR u_fog_vertex_color
 #endif
 
 #ifdef NATIVE
@@ -162,6 +176,20 @@ in_triangle(vec2 c)
 }
 #endif
 
+/* The table's fog at this 1/W (gl_FragCoord.w): 1/W times the density,
+ * 1 to 256, 16 steps an octave, linear within a step (INFERRED: the
+ * Dreamcast CLX2's) */
+float
+table_fog(float w)
+{
+	float z = clamp(w * FOG_DENSITY, 1.0, 255.9999);
+	float octave = floor(log2(z));
+	float step = z * 16.0 / exp2(octave) - 16.0;
+	vec2 ends = texelFetch(u_fog, ivec2(int(octave) * 16 + int(step), 0), 0).rg;
+
+	return mix(ends.r, ends.g, fract(step));
+}
+
 void
 main()
 {
@@ -189,8 +217,10 @@ main()
 	v_offset = e_offset / e_w;
 #endif
 	/* Bits 0-3: textured, use alpha, ignore texture alpha, offset. Bits
-	 * 4-5: shading. */
+	 * 4-5: shading. Bits 6-7: fog (PmxDraw::fog; by the vertex: the offset
+	 * colour's alpha). */
 	vec4 color = v_color;
+	int fog = (FLAGS >> 6) & 3;
 
 	if ((FLAGS & 2) == 0)
 		color.a = 1.0;
@@ -212,6 +242,12 @@ main()
 	}
 	if ((FLAGS & 8) != 0)
 		color.rgb = min(color.rgb + v_offset.rgb, vec3(1.0));
+	if (fog == 0)
+		color.rgb = mix(color.rgb, FOG_COLOR, table_fog(gl_FragCoord.w));
+	else if (fog == 1)
+		color.rgb = mix(color.rgb, FOG_VERTEX_COLOR, v_offset.a);
+	else if (fog == 3)
+		color = vec4(FOG_COLOR, table_fog(gl_FragCoord.w));
 #ifdef LIST
 	/* HEURISTIC: rounded to the nearest 8 bits; PG p. 120 gives the
 	 * width, not the rounding */

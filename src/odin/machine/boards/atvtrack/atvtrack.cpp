@@ -56,7 +56,7 @@ constexpr uint32_t MASTER_RAM = 8u << 20, SLAVE_RAM = 16u << 20, GPU_RAM_SIZE = 
 constexpr uint32_t THREAD_KICKER = 0xB0;
 /* The 3D core's Start Render, Object Base, Region Header Base and Texture
  * Control, PVR_IRQ its interrupt */
-constexpr uint32_t START_RENDER = 0x14, OBJECT_BASE = 0x20, REGION_HEADER_BASE = 0x2C, TEXTURE_CONTROL = 0xE4;
+constexpr uint32_t START_RENDER = 0x14;
 constexpr uint32_t PVR_IRQ = 1u << 7;
 
 /* 198 MHz: the 33.000 MHz crystal of the photos of the Smashing Drive and
@@ -266,8 +266,7 @@ void AtvTrack::build()
 	m_core.set_3d([this](uint32_t index, uint32_t) {
 		if (index != START_RENDER)
 			return;
-		m_pmx.draw(m_core.register_3d(REGION_HEADER_BASE), m_core.register_3d(OBJECT_BASE),
-		           m_core.register_3d(TEXTURE_CONTROL));
+		m_pmx.draw(m_core.registers_3d());
 		m_core.interrupt_next(PVR_IRQ);
 	});
 	m_core.set_interrupt([this](bool on) { m_sh[SLAVE]->set_irq(Sh4Source::IRQ14, on); });

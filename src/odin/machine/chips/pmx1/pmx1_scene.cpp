@@ -52,7 +52,7 @@ constexpr unsigned FORMAT_8888 = 5;
 /* ISP/TSP instruction word */
 constexpr uint32_t ISP_TEXTURE = 1u << 25, ISP_OFFSET = 1u << 24, ISP_GOURAUD = 1u << 23, ISP_UV16 = 1u << 22;
 constexpr uint32_t ISP_NO_Z_WRITE = 1u << 26;
-/* TSP word */
+/* TSP word: 23-22 the fog (PmxDraw::fog) */
 constexpr uint32_t TSP_USE_ALPHA = 1u << 20, TSP_IGNORE_TEXTURE_ALPHA = 1u << 19;
 
 /* Frames a texture stays on the GPU without being drawn */
@@ -450,6 +450,7 @@ void Pmx1::build_scene()
 		draw.src = static_cast<uint8_t>(state.tsp >> 29);
 		draw.dst = static_cast<uint8_t>((state.tsp >> 26) & 7);
 		draw.shading = static_cast<uint8_t>((state.tsp >> 6) & 3);
+		draw.fog = static_cast<uint8_t>((state.tsp >> 22) & 3);
 		draw.blend = tri.translucent;
 		draw.native = tri.native;
 		draw.per_pixel = tri.per_pixel;
@@ -488,6 +489,10 @@ PmxScene Pmx1::take_scene()
 
 	scene.most_w = m_scene.most_w;
 	scene.rendered = std::exchange(m_scene.rendered, false);
+	scene.fog_table = m_scene.fog_table;
+	scene.fog_density = m_scene.fog_density;
+	scene.fog_color = m_scene.fog_color;
+	scene.fog_vertex_color = m_scene.fog_vertex_color;
 	std::swap(scene.vertices, m_scene.vertices);
 	std::swap(scene.draws, m_scene.draws);
 	std::swap(scene.new_images, m_scene.new_images);

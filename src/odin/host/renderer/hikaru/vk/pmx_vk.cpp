@@ -47,6 +47,8 @@ struct DrawPush {
 	float most_w, lod_bias;
 	int32_t flags;
 	float scale;
+	float fog_density;
+	uint32_t fog_color, fog_vertex_color;
 	uint32_t order, mode;
 };
 
@@ -108,6 +110,11 @@ struct VkDrawing::Pmx {
 	std::unordered_map<uint32_t, VkPipeline> pipelines;
 	std::unordered_map<uint32_t, VkSampler> samplers;
 	std::unordered_map<uint32_t, vk::Image> images;
+	/* The fog table, and what it holds */
+	vk::Image fog;
+	VkSampler fog_sampler = VK_NULL_HANDLE;
+	std::array<uint8_t, 256> fog_table{};
+	bool fog_loaded = false;
 	/* Descriptor sets by image and sampler, from dedicated pools. They
 	 * last as long as their image. */
 	std::unordered_map<VkSampler, uint32_t> sampler_number;
@@ -136,7 +143,7 @@ struct VkDrawing::Pmx {
 		while (from < pools.size() && pools[from].left == 0)
 			from++;
 		if (from == pools.size()) {
-			const VkDescriptorPoolSize size{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, SETS_A_POOL };
+			const VkDescriptorPoolSize size{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2 * SETS_A_POOL };
 			const VkDescriptorPoolCreateInfo info{ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO, nullptr,
 				                               VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT, SETS_A_POOL, 1, &size };
 			VkDescriptorPool pool;
@@ -153,10 +160,15 @@ struct VkDrawing::Pmx {
 		pool_of[set] = from;
 
 		const VkDescriptorImageInfo described{ sampler, image.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
-		const VkWriteDescriptorSet write{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, set, 0, 0, 1,
-			                          VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &described, nullptr, nullptr };
+		const VkDescriptorImageInfo fogged{ fog_sampler, fog.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+		constexpr VkStructureType WRITE = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		constexpr VkDescriptorType SAMPLED = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		const VkWriteDescriptorSet writes[2] = {
+			{ WRITE, nullptr, set, 0, 0, 1, SAMPLED, &described, nullptr, nullptr },
+			{ WRITE, nullptr, set, 1, 0, 1, SAMPLED, &fogged, nullptr, nullptr },
+		};
 
-		fn.vkUpdateDescriptorSets(card.device(), 1, &write, 0, nullptr);
+		fn.vkUpdateDescriptorSets(card.device(), 2, writes, 0, nullptr);
 		return set;
 	}
 
@@ -192,12 +204,18 @@ struct VkDrawing::Pmx {
 	    ProgramList &met)
 		: card(c), fn(f), cache(kept), read_back(taken), compiled(made), learned(met)
 	{
-		const VkDescriptorSetLayoutBinding binding{ 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1,
-			                                    VK_SHADER_STAGE_FRAGMENT_BIT, nullptr };
-		const VkDescriptorSetLayoutCreateInfo set{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO, nullptr, 0, 1,
-			                                   &binding };
+		/* The texture, and the fog table */
+		const VkDescriptorSetLayoutBinding bindings[2] = {
+			{ 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
+			{ 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
+		};
+		const VkDescriptorSetLayoutCreateInfo set{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO, nullptr, 0, 2,
+			                                   bindings };
 
 		card.check(fn.vkCreateDescriptorSetLayout(card.device(), &set, nullptr, &images_layout), "the images of the Neon 250");
+		fog = card.make_image(VK_FORMAT_R8G8_UNORM, 128, 1, 1,
+		                      VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
+		fog_sampler = sampler(PmxDraw{}, 1);
 
 		const VkDescriptorSetLayoutBinding lists[3] = {
 			{ 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
@@ -274,6 +292,7 @@ struct VkDrawing::Pmx {
 			fn.vkDestroyDescriptorPool(device, pool.pool, nullptr);
 		for (auto &[id, image] : images)
 			card.destroy_image(image);
+		card.destroy_image(fog);
 		for (const auto &[key, pipeline] : pipelines)
 			fn.vkDestroyPipeline(device, pipeline, nullptr);
 		for (const auto &[key, sampler] : samplers)
@@ -528,6 +547,18 @@ VkDrawing::draw_pmx(const PmxScene &scene, unsigned anisotropy)
 		pmx.images[image->id] = made;
 	}
 
+	if (!pmx.fog_loaded || pmx.fog_table != scene.fog_table) {
+		const vk::Slice in = m_card.stage(scene.fog_table.size(), 4);
+		const VkBufferImageCopy region{ in.offset, 0, 0, { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 }, { 0, 0, 0 }, { 128, 1, 1 } };
+
+		std::memcpy(in.bytes, scene.fog_table.data(), scene.fog_table.size());
+		m_card.barrier(cb, pmx.fog, vk::COPIED_TO);
+		m_fn.vkCmdCopyBufferToImage(cb, in.buffer, pmx.fog.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+		m_card.barrier(cb, pmx.fog, vk::SAMPLED);
+		pmx.fog_table = scene.fog_table;
+		pmx.fog_loaded = true;
+	}
+
 	const VkDeviceSize vertex_bytes = std::max<size_t>(scene.vertices.size(), 1) * sizeof(PmxVertex);
 	const vk::Slice vertices = m_card.stage(vertex_bytes, 16);
 
@@ -689,8 +720,11 @@ VkDrawing::draw_pmx(const PmxScene &scene, unsigned anisotropy)
 		const DrawPush push{ scene.most_w,
 			             draw.lod_bias,
 			             (draw.image ? 1 : 0) | (draw.use_alpha ? 2 : 0) | (draw.ignore_texture_alpha ? 4 : 0) |
-			                     (draw.offset ? 8 : 0) | draw.shading << 4,
+			                     (draw.offset ? 8 : 0) | draw.shading << 4 | draw.fog << 6,
 			             static_cast<float>(m_scale),
+			             scene.fog_density,
+			             scene.fog_color,
+			             scene.fog_vertex_color,
 			             draw.first / 3,
 			             (draw.src & 7u) | (draw.dst & 7u) << 3 };
 
