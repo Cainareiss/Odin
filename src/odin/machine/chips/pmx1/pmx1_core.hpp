@@ -134,6 +134,7 @@ public:
 	void set_3d(std::function<void(uint32_t index, uint32_t value)> written) { m_3d = std::move(written); }
 	void set_interrupt(std::function<void(bool on)> line) { m_interrupt = std::move(line); }
 	uint32_t register_3d(uint32_t index) const { return m_s.regs_3d[(index >> 2) & 0x1FF]; }
+	std::span<const uint32_t, 0x200> registers_3d() const { return m_s.regs_3d; }
 	/* Sets bits of Interrupt Status (the 3D core's PVR_IRQ, 7): now, or
 	 * when the core next runs, so that it sees them before the host */
 	void interrupt(uint32_t bits);

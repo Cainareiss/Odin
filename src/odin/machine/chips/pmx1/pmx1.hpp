@@ -45,10 +45,8 @@ public:
 	/* `vram` is the 32 MB the slave SH-4 sees at 18000000 */
 	explicit Pmx1(std::span<uint8_t> vram);
 
-	/* Draws the scene the core built: its region headers at
-	 * `region_base`, its objects at `object_base`, the rows of its stride
-	 * textures from `texture_control` (the 3D registers) */
-	void draw(uint32_t region_base, uint32_t object_base, uint32_t texture_control);
+	/* Draws the scene the core built, from the 3D registers (by index / 4) */
+	void draw(std::span<const uint32_t, 0x200> regs_3d);
 
 	static constexpr unsigned WIDTH = 640, HEIGHT = 480;
 	/* Scenes draw at `fine` times screen resolution. Flat polygons: as

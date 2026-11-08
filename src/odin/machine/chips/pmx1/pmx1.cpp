@@ -25,6 +25,7 @@
 
 #include "odin/machine/chips/pmx1/pmx1.hpp"
 
+#include <cmath>
 #include <cstring>
 
 namespace odin {
@@ -44,11 +45,24 @@ uint32_t Pmx1::word(uint32_t offset) const
 }
 
 /* TEX_STRIDE, bits 5-0 of Texture Control (PG, the chip's programming guide, p. 92): 32 texels a step
- * (p. 117: "Index = V*StrideRegister*32 + U") */
-void Pmx1::draw(uint32_t region_base, uint32_t object_base, uint32_t texture_control)
+ * (p. 117: "Index = V*StrideRegister*32 + U"). The fog registers are the
+ * Dreamcast CLX2's (INFERRED: the guide does not give them) */
+void Pmx1::draw(std::span<const uint32_t, 0x200> regs_3d)
 {
-	m_stride = (texture_control & 0x3F) * 32;
-	render_tiles(region_base, object_base);
+	constexpr uint32_t OBJECT_BASE = 0x20 / 4, REGION_HEADER_BASE = 0x2C / 4, TEXTURE_CONTROL = 0xE4 / 4;
+	constexpr uint32_t FOG_COLOR = 0xB0 / 4, FOG_VERTEX_COLOR = 0xB4 / 4, FOG_DENSITY = 0xB8 / 4, FOG_TABLE = 0x200 / 4;
+	const uint32_t density = regs_3d[FOG_DENSITY];
+
+	m_stride = (regs_3d[TEXTURE_CONTROL] & 0x3F) * 32;
+	m_scene.fog_color = regs_3d[FOG_COLOR];
+	m_scene.fog_vertex_color = regs_3d[FOG_VERTEX_COLOR];
+	m_scene.fog_density = static_cast<float>((density >> 8) & 0xFF) / 128.0f *
+	                      std::ldexp(1.0f, static_cast<int8_t>(density & 0xFF));
+	for (unsigned k = 0; k < 128; k++) {
+		m_scene.fog_table[2 * k] = static_cast<uint8_t>(regs_3d[FOG_TABLE + k] >> 8);
+		m_scene.fog_table[2 * k + 1] = static_cast<uint8_t>(regs_3d[FOG_TABLE + k]);
+	}
+	render_tiles(regs_3d[REGION_HEADER_BASE], regs_3d[OBJECT_BASE]);
 }
 
 } /* namespace odin */
