@@ -1,0 +1,198 @@
+--- a/src/odin/host/app/games.cpp
++++ b/src/odin/host/app/games.cpp
+@@ -23,6 +23,7 @@
+  */
+ 
+ #include "odin/host/app/games.hpp"
++#include "odin/common/io.hpp"
+ 
+ #include <algorithm>
+ #include <cstdio>
+@@ -1084,7 +1085,7 @@
+ 		json_decref(m_root);
+ 	m_root = nullptr;
+ 
+-	std::FILE *const file = std::fopen(path.c_str(), "rb");
++	std::FILE *const file = io::fopen(path, "rb");
+ 	if (!file) {
+ 		std::fprintf(stderr, "ERROR: could not open game list '%s'\n", path.c_str());
+ 		return false;
+--- a/src/odin/host/app/settings.cpp
++++ b/src/odin/host/app/settings.cpp
+@@ -23,6 +23,7 @@
+  */
+ 
+ #include "odin/host/app/settings.hpp"
++#include "odin/common/io.hpp"
+ 
+ #include "odin/common/repeats.hpp"
+ #include "odin/host/app/file_bytes.hpp"
+@@ -134,9 +135,7 @@
+ std::optional<std::string>
+ read_text(const std::string &path)
+ {
+-	std::error_code error;
+-
+-	if (!std::filesystem::exists(path, error))
++	if (!io::exists(path))
+ 		return std::string();
+ 
+ 	const std::optional<std::vector<uint8_t>> bytes = read_file(path);
+--- a/src/odin/machine/chips/card_reader.cpp
++++ b/src/odin/machine/chips/card_reader.cpp
+@@ -23,6 +23,7 @@
+  */
+ 
+ #include "odin/machine/chips/card_reader.hpp"
++#include "odin/common/io.hpp"
+ 
+ #include <algorithm>
+ #include <bit>
+@@ -685,7 +686,7 @@
+ 	std::array<uint8_t, CARD_SIZE + 1> held;
+ 	size_t n = 0;
+ 
+-	if (FILE *const f = std::fopen(path.c_str(), "rb")) {
++	if (FILE *const f = io::fopen(path, "rb")) {
+ 		n = std::fread(held.data(), 1, held.size(), f);
+ 		std::fclose(f);
+ 	}
+@@ -724,7 +725,7 @@
+ 
+ CardReader::Read CardReader::read_card_file(const std::string &path, std::array<uint8_t, CARD_SIZE> &card) const
+ {
+-	FILE *const f = std::fopen(path.c_str(), "rb");
++	FILE *const f = io::fopen(path, "rb");
+ 
+ 	if (!f)
+ 		return Read::NONE;
+--- a/src/odin/machine/core/state_file.cpp
++++ b/src/odin/machine/core/state_file.cpp
+@@ -23,13 +23,14 @@
+  */
+ 
+ #include "odin/machine/core/state_file.hpp"
++#include "odin/common/io.hpp"
+ 
+ #include <cstring>
+ 
+ namespace odin {
+ 
+ StateFile::StateFile(const std::string &path, Mode mode)
+-	: m_file(std::fopen(path.c_str(), mode == Mode::LOAD ? "rb" : "wb")), m_mode(mode)
++	: m_file(io::fopen(path, mode == Mode::LOAD ? "rb" : "wb")), m_mode(mode)
+ {
+ 	char name[32] = "", found[32];
+ 
+--- a/src/odin/machine/boards/hikaru/hikaru.cpp
++++ b/src/odin/machine/boards/hikaru/hikaru.cpp
+@@ -140,6 +140,7 @@
+  */
+ 
+ #include "odin/machine/boards/hikaru/hikaru.hpp"
++#include "odin/common/io.hpp"
+ 
+ #include <algorithm>
+ #include <cinttypes>
+@@ -382,7 +383,7 @@
+ 		if (const char *prefix = std::getenv("ODIN_SH4_TRACE")) {
+ 			const std::string path = std::string(prefix) + (which == MASTER ? "-m.txt" : "-s.txt");
+ 
+-			m_sh_trace[which] = std::fopen(path.c_str(), "w");
++			m_sh_trace[which] = io::fopen(path, "w");
+ 		}
+ 	}
+ 	m_fb_writes.set_cpu(m_sh[MASTER].get(), 0x1B000000 / Sh4::PAGE_SIZE);
+@@ -523,7 +524,7 @@
+ 		const unsigned start_pc = start ? static_cast<unsigned>(std::strtoul(start, nullptr, 16)) : 0;
+ 
+ 		if (count) {
+-			m_mie_trace = std::fopen(path, "w");
++			m_mie_trace = io::fopen(path, "w");
+ 			if (m_mie_trace)
+ 				m_mie->set_trace(m_mie_trace, count, static_cast<uint16_t>(start_pc));
+ 			else
+@@ -585,7 +586,7 @@
+ 	if (const char *prefix = std::getenv("ODIN_ARM7_TRACE")) {
+ 		const std::string path = std::string(prefix) + (which == MASTER ? "-m.txt" : "-s.txt");
+ 
+-		m_sound[which]->set_arm_trace(std::fopen(path.c_str(), "w"));
++		m_sound[which]->set_arm_trace(io::fopen(path, "w"));
+ 	}
+ }
+ 
+@@ -605,7 +606,7 @@
+ 	if (path.empty() || which != MASTER)
+ 		return;
+ 
+-	std::FILE *const file = std::fopen(path.c_str(), "r");
++	std::FILE *const file = io::fopen(path, "r");
+ 	int ahead = 0;
+ 
+ 	if (file && std::fscanf(file, "%d", &ahead) == 1) {
+--- a/src/odin/host/app/file_bytes.hpp
++++ b/src/odin/host/app/file_bytes.hpp
+@@ -30,6 +30,7 @@
+ #include <optional>
+ #include <string>
+ #include <vector>
++#include "odin/common/io.hpp"
+ 
+ namespace odin {
+ 
+@@ -38,7 +39,7 @@
+ inline std::optional<std::vector<uint8_t>>
+ read_file(const std::string &path)
+ {
+-	std::FILE *const file = std::fopen(path.c_str(), "rb");
++	std::FILE *const file = io::fopen(path, "rb");
+ 	std::vector<uint8_t> bytes;
+ 	uint8_t chunk[65536];
+ 	size_t got;
+--- a/src/odin/common/wav_file.cpp
++++ b/src/odin/common/wav_file.cpp
+@@ -23,13 +23,14 @@
+  */
+ 
+ #include "odin/common/wav_file.hpp"
++#include "odin/common/io.hpp"
+ 
+ #include "odin/common/bytes.hpp"
+ 
+ namespace odin {
+ 
+ WavFile::WavFile(const std::string &path, uint32_t rate, uint16_t channels)
+-	: m_file(std::fopen(path.c_str(), "wb")), m_rate(rate), m_channels(channels), m_bytes(0)
++	: m_file(io::fopen(path, "wb")), m_rate(rate), m_channels(channels), m_bytes(0)
+ {
+ 	if (m_file)
+ 		header();
+--- a/src/lzma/7zFile.h
++++ b/src/lzma/7zFile.h
+@@ -4,8 +4,13 @@
+ #ifndef ZIP7_INC_FILE_H
+ #define ZIP7_INC_FILE_H
+ 
+-#ifdef _WIN32
++/* P08: the UWP build has no CreateFileA (not in the app partition): the
++ * LZMA SDK's files go through the C library (USE_FOPEN, 32-bit sizes).
++ * Odin reads its archives through odin::io, not through these functions. */
++#if defined(_WIN32) && !defined(ODIN_UWP)
+ #define USE_WINDOWS_FILE
++#elif defined(_WIN32)
++#define USE_FOPEN
+ #endif
+ 
+ #ifdef USE_WINDOWS_FILE
+@@ -13,8 +18,9 @@
+ 
+ #else
+ // note: USE_FOPEN mode is limited to 32-bit file size
+-// #define USE_FOPEN
+-// #include <stdio.h>
++#ifdef USE_FOPEN
++#include <stdio.h>
++#endif
+ #endif
+ 
+ #include "7zTypes.h"

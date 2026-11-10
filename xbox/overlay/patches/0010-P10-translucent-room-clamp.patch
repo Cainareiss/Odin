@@ -1,0 +1,14 @@
+--- a/src/odin/host/renderer/hikaru/renderer_translucent.cpp
++++ b/src/odin/host/renderer/hikaru/renderer_translucent.cpp
+@@ -59,7 +59,10 @@
+ uint32_t
+ Renderer::room_at_start() const
+ {
+-	return std::max(4 * WIDTH * HEIGHT, width() * height());
++	/* P10: never more than the card can hold. Unclamped, scale 4 asks for
++	 * 157 MB of fragment nodes, past the 2^27-byte storage range Dozen
++	 * advertises (maxStorageBufferRange). */
++	return std::min(std::max(4 * WIDTH * HEIGHT, width() * height()), m_card->fragment_limit());
+ }
+ 
+ /* Room for `max` fragments. What the buffer held is lost. */

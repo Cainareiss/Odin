@@ -1,0 +1,24 @@
+--- a/src/odin/common/stop_message.hpp
++++ b/src/odin/common/stop_message.hpp
+@@ -37,6 +37,12 @@
+ using StopMessage = void (*)(const char *text);
+ inline StopMessage stop_message = nullptr;
+ 
++/* What runs after the stop message, in place of abort(), when it is set: a
++ * host that must not lose its process (the Xbox DLL parks the thread here,
++ * because JIT frames have no unwind info and a throw would end in
++ * terminate). It must not return; abort() follows if it does. */
++inline void (*stop_exit)() = nullptr;
++
+ /* The emulated machine cannot go on: why, on stderr after "FATAL: " and in
+  * the stop message, then Odin stops */
+ [[noreturn]] inline void stop_fatal(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+@@ -54,6 +60,8 @@
+ 	std::fflush(stderr);
+ 	if (stop_message)
+ 		stop_message(text);
++	if (stop_exit)
++		stop_exit();
+ 	std::abort();
+ }
+ 

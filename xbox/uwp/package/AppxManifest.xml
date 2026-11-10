@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Odin (experimental) v0.2 shell with odin_core.dll (ABI 1). Loader-only: no ROM, no BIOS, no artwork is in the package.
+     No internetClient (the shell does not connect), no broadFileSystemAccess (the games folder comes from the picker's
+     token), no expandedResources and no codeGeneration (not requested; the core's JIT is tested in the app, see
+     notes/M2-CORE-INTEGRATION.md). Capabilities kept: runFullTrust, removableStorage (see below). -->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap mp">
+
+  <Identity Name="Odin.Experimental.Xbox" Publisher="CN=irixaligned" Version="0.2.0.0" ProcessorArchitecture="x64" />
+  <mp:PhoneIdentity PhoneProductId="931a3b3e-dcc8-4c91-84db-286c99007e19" PhonePublisherId="00000000-0000-0000-0000-000000000000" />
+
+  <Properties>
+    <DisplayName>Odin (experimental)</DisplayName>
+    <PublisherDisplayName>irixaligned</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Universal" MinVersion="10.0.17134.0" MaxVersionTested="10.0.26100.0" />
+    <PackageDependency Name="Microsoft.VCLibs.140.00" MinVersion="14.0.33519.0" Publisher="CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="EN-US" />
+  </Resources>
+
+  <Applications>
+    <Application Id="App" Executable="odin_uwp.exe" EntryPoint="odin_uwp.App">
+      <uap:VisualElements
+        DisplayName="Odin (experimental)"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png"
+        Description="Odin (experimental) v0.2: shell with the Odin core, no picture yet"
+        BackgroundColor="#141416">
+        <uap:DefaultTile
+          Wide310x150Logo="Assets\Wide310x150Logo.png"
+          Square310x310Logo="Assets\Square310x310Logo.png"
+          Square71x71Logo="Assets\Square71x71Logo.png"
+          ShortName="Odin" />
+        <uap:SplashScreen Image="Assets\SplashScreen.png" BackgroundColor="#141416" />
+      </uap:VisualElements>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <!-- the Win32 exe runs as a full-trust packaged app (the shell reads the games folder, USB drives and LocalState) -->
+    <rescap:Capability Name="runFullTrust" />
+    <!-- USB drives in the library scan (drive letters E:, F:...): needed to read removable folders -->
+    <uap:Capability Name="removableStorage" />
+  </Capabilities>
+</Package>

@@ -1,0 +1,126 @@
+--- a/src/odin/host/app/user_files.cpp
++++ b/src/odin/host/app/user_files.cpp
+@@ -25,6 +25,7 @@
+ #include "odin/host/app/user_files.hpp"
+ 
+ #include "odin/common/env.hpp"
++#include "odin/common/io.hpp"
+ 
+ #include <cctype>
+ #include <cstdio>
+@@ -43,10 +44,15 @@
+ 
+ namespace {
+ 
+-/* The folder of the executable of Odin; empty when it cannot be told */
++/* The folder of the executable of Odin; empty when it cannot be told.
++ * P06: an app of the Store is given its folders by its host, so under
++ * ODIN_UWP there is none to look for (and no GetModuleFileName). */
+ std::string
+ executable_folder()
+ {
++#if defined(ODIN_UWP)
++	return {};
++#else
+ 	std::error_code error;
+ #if defined(_WIN32)
+ 	char path[MAX_PATH * 4];
+@@ -71,6 +77,7 @@
+ 
+ 	return error ? std::string() : exe.parent_path().string();
+ #endif
++#endif
+ }
+ 
+ } /* namespace */
+@@ -101,7 +108,10 @@
+ std::string
+ user_data_dir()
+ {
+-#if defined(_WIN32)
++#if defined(ODIN_UWP)
++	/* P06: no APPDATA on the Xbox: the host gives the folders */
++	return {};
++#elif defined(_WIN32)
+ 	return env_text("APPDATA");
+ #elif defined(__APPLE__)
+ 	const std::string home = home_dir();
+@@ -121,12 +131,12 @@
+ portable_folder()
+ {
+ 	const std::string folder = program_folder();
+-	std::error_code error;
+ 
+ 	if (folder.empty())
+ 		return {};
++	/* P06: a regular file, as odin::io sees it (a broker call) */
+ 	for (const char *name : { "portable.txt", "odin.ini" })
+-		if (std::filesystem::is_regular_file(std::filesystem::path(folder) / name, error))
++		if (io::file_size(folder + "/" + name))
+ 			return folder;
+ 	return {};
+ }
+@@ -170,16 +180,17 @@
+ 		return text;
+ 	};
+ 	const std::string wanted = lower(game + "_" + kind + ".png");
+-	std::error_code error;
+ 
+ 	if (folder.empty())
+ 		return {};
+-	if (const std::string exact = folder + "/" + game + "_" + kind + ".png"; std::filesystem::is_regular_file(exact, error))
++	/* P06: the folder is listed once, through odin::io */
++	if (const std::string exact = folder + "/" + game + "_" + kind + ".png"; io::file_size(exact))
+ 		return exact;
+-	for (auto it = std::filesystem::directory_iterator(folder, error); !error && it != std::filesystem::directory_iterator();
+-	     it.increment(error))
+-		if (lower(it->path().filename().string()) == wanted)
+-			return it->path().string();
++	std::vector<io::Entry> entries;
++	if (io::list(folder, entries))
++		for (const io::Entry &entry : entries)
++			if (!entry.dir && lower(entry.name) == wanted)
++				return folder + "/" + entry.name;
+ 	return parent.empty() ? std::string() : artwork_file(folder, parent, kind);
+ }
+ 
+@@ -206,7 +217,7 @@
+ std::optional<std::vector<uint8_t>>
+ read_kept(const std::string &path, size_t size)
+ {
+-	std::FILE *const file = std::fopen(path.c_str(), "rb");
++	std::FILE *const file = io::fopen(path, "rb");
+ 
+ 	if (!file)
+ 		return std::nullopt;
+@@ -227,26 +238,12 @@
+ bool
+ write_kept(const std::string &path, std::span<const uint8_t> bytes)
+ {
+-	const std::filesystem::path target(path);
+-	const std::filesystem::path temporary(path + ".new");
+-	std::error_code error;
+-
+-	if (target.has_parent_path())
+-		std::filesystem::create_directories(target.parent_path(), error);
++	/* P06: odin::io writes path.new in full and replaces path with it
++	 * (MoveFile, then ReplaceFile when the target exists) */
++	const bool ok = io::write_kept(path, bytes.data(), bytes.size());
+ 
+-	std::FILE *const file = std::fopen(temporary.string().c_str(), "wb");
+-	bool ok = file && std::fwrite(bytes.data(), 1, bytes.size(), file) == bytes.size();
+-
+-	if (file && std::fclose(file))
+-		ok = false;
+-	if (ok) {
+-		std::filesystem::rename(temporary, target, error);
+-		ok = !error;
+-	}
+-	if (!ok) {
++	if (!ok)
+ 		std::fprintf(stderr, "ERROR: cannot write '%s'\n", path.c_str());
+-		std::filesystem::remove(temporary, error);
+-	}
+ 	return ok;
+ }
+ 

@@ -1,0 +1,85 @@
+--- a/src/odin/host/gfx/vk_common.cpp
++++ b/src/odin/host/gfx/vk_common.cpp
+@@ -34,6 +34,7 @@
+ #include <SDL3/SDL_vulkan.h>
+ 
+ #include "odin/common/env.hpp"
++#include "odin/common/stop_message.hpp"
+ 
+ namespace odin::vk {
+ 
+@@ -585,8 +586,8 @@
+ void
+ Context::fatal(const char *what, VkResult result) const
+ {
+-	std::fprintf(stderr, "ERROR: vulkan: %s: %s (%d)\n", what, result_name(result), static_cast<int>(result));
+-	std::abort();
++	/* was std::abort(): the stop hook of the host runs first (P02) */
++	odin::stop_fatal("vulkan: %s: %s (%d)", what, result_name(result), static_cast<int>(result));
+ }
+ 
+ /* What was sent of the frame is done: what waited for it goes. */
+--- a/src/odin/host/gfx/host_graphics_vk.cpp
++++ b/src/odin/host/gfx/host_graphics_vk.cpp
+@@ -46,6 +46,7 @@
+ #include "odin/host/renderer/hikaru/drawing.hpp"
+ #include "odin/host/gfx/spirv.hpp"
+ #include "odin/host/gfx/vk_common.hpp"
++#include "odin/common/stop_message.hpp"
+ 
+ namespace odin {
+ 
+@@ -66,8 +67,8 @@
+ imgui_check(VkResult result)
+ {
+ 	if (result < 0) {
+-		std::fprintf(stderr, "ERROR: vulkan: the menu: %d\n", static_cast<int>(result));
+-		std::abort();
++		/* was std::abort() (P02) */
++		odin::stop_fatal("vulkan: the menu: %d", static_cast<int>(result));
+ 	}
+ }
+ 
+--- a/src/odin/host/renderer/hikaru/renderer.cpp
++++ b/src/odin/host/renderer/hikaru/renderer.cpp
+@@ -30,6 +30,7 @@
+ #include "odin/machine/boards/hikaru/hikaru_gpu.hpp"
+ #include "odin/host/ui/loading_screen.hpp"
+ #include "odin/host/video/picture.hpp"
++#include "odin/common/stop_message.hpp"
+ 
+ #include <algorithm>
+ #include <cstdio>
+@@ -359,8 +360,8 @@
+ void
+ Renderer::fatal(const char *what)
+ {
+-	std::fprintf(stderr, "renderer: %s\n", what);
+-	std::abort();
++	/* was std::abort() (P02) */
++	odin::stop_fatal("renderer: %s", what);
+ }
+ 
+ } /* namespace odin */
+--- a/src/odin/host/renderer/hikaru/renderer_textures.cpp
++++ b/src/odin/host/renderer/hikaru/renderer_textures.cpp
+@@ -27,6 +27,7 @@
+ 
+ #include "odin/host/renderer/hikaru/renderer_textures.hpp"
+ #include "odin/machine/boards/hikaru/hikaru_draw.hpp"
++#include "odin/common/stop_message.hpp"
+ 
+ #include <algorithm>
+ #include <cstdlib>
+@@ -205,9 +206,8 @@
+ 
+ 	/* Each level then lies in its bank too. */
+ 	if (levels[0].x + levels[0].w > BANK_WIDTH || levels[0].y + levels[0].h > BANK_HEIGHT) {
+-		std::fprintf(stderr, "renderer: a texture outside its bank: %s\n",
+-		             odin_texhead_str(&th));
+-		std::abort();
++		/* was std::abort() (P02) */
++		odin::stop_fatal("renderer: a texture outside its bank: %s", odin_texhead_str(&th));
+ 	}
+ 
+ 	/* Read where it lies in the bank; I4, made ABGR4444 first, four

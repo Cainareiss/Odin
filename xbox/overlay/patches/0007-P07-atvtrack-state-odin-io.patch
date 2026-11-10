@@ -1,0 +1,63 @@
+--- a/src/odin/machine/boards/atvtrack/atvtrack_state.cpp
++++ b/src/odin/machine/boards/atvtrack/atvtrack_state.cpp
+@@ -25,10 +25,11 @@
+ 
+ #include "odin/machine/boards/atvtrack/atvtrack.hpp"
+ 
++#include "odin/common/io.hpp"
++
+ #include <algorithm>
+ #include <cstdio>
+ #include <cstring>
+-#include <filesystem>
+ #include <fstream>
+ #include <memory>
+ 
+@@ -143,14 +144,12 @@
+ bool
+ AtvTrack::load_kept(const std::string &path)
+ {
+-	std::ifstream in(path, std::ios::binary);
++	/* P07: odin::io, not std::ifstream (a file the host may broker) */
++	const std::optional<std::vector<uint8_t>> bytes = io::read_file(path);
+ 
+-	if (!in)
++	if (!bytes)
+ 		return true;
+-
+-	const std::vector<uint8_t> bytes{ std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>() };
+-
+-	if (take_kept(bytes))
++	if (take_kept(*bytes))
+ 		return true;
+ 	std::fprintf(stderr, "ERROR: atvtrack: '%s' is not what this board keeps\n", path.c_str());
+ 	return false;
+@@ -163,23 +162,13 @@
+ 		return true;
+ 
+ 	const std::vector<uint8_t> bytes = kept();
+-	const std::string fresh = path + ".new";
+-	std::error_code error;
+ 
+-	std::filesystem::create_directories(std::filesystem::path(path).parent_path(), error);
+-	{
+-		std::ofstream out(fresh, std::ios::binary);
+-
+-		out.write(reinterpret_cast<const char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+-		if (!out) {
+-			std::fprintf(stderr, "ERROR: atvtrack: cannot write '%s'\n", fresh.c_str());
+-			return false;
+-		}
++	/* P07: odin::io writes path.new in full, then replaces path with it */
++	if (!io::write_kept(path, bytes.data(), bytes.size())) {
++		std::fprintf(stderr, "ERROR: atvtrack: cannot write '%s'\n", path.c_str());
++		return false;
+ 	}
+-	std::filesystem::rename(fresh, path, error);
+-	if (error)
+-		std::fprintf(stderr, "ERROR: atvtrack: cannot write '%s': %s\n", path.c_str(), error.message().c_str());
+-	return !error;
++	return true;
+ }
+ 
+ bool

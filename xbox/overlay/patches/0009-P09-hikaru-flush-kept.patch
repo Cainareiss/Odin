@@ -1,0 +1,48 @@
+--- a/src/odin/machine/boards/hikaru/hikaru.hpp
++++ b/src/odin/machine/boards/hikaru/hikaru.hpp
+@@ -139,6 +139,10 @@
+ 	 * looking at them (the tests), the memories to <game>-<memory>.bin in
+ 	 * the current folder. */
+ 	bool power_off();
++	/* P09: what power_off keeps, written while the board runs (suspend,
++	 * the in-game menu, a timer): no settle(). False when some could not
++	 * be written. */
++	bool flush_kept();
+ 
+ 	/* False, with the reason on stderr, if the state could not be written
+ 	 * or is not one of this game and build; the board is then as after a
+--- a/src/odin/machine/boards/hikaru/hikaru.cpp
++++ b/src/odin/machine/boards/hikaru/hikaru.cpp
+@@ -1157,7 +1157,7 @@
+ 	if (env_flag("ODIN_DUMPS")) {
+ 		for (const auto &memory : memories) {
+ 			const std::string path = m_game.name + "-" + memory.name + ".bin";
+-			std::FILE *const file = std::fopen(path.c_str(), "wb");
++			std::FILE *const file = io::fopen(path, "wb");
+ 
+ 			if (!file)
+ 				continue;
+@@ -1175,13 +1175,22 @@
+ 
+ 				m_netbd->save(*board);
+ 			}
+-			if (std::FILE *const file = std::fopen(path.c_str(), "wb")) {
++			if (std::FILE *const file = io::fopen(path, "wb")) {
+ 				std::fwrite(board.get(), 1, sizeof(*board), file);
+ 				std::fclose(file);
+ 			}
+ 		}
+ 	}
+ 
++	return flush_kept();
++}
++
++/* P09: the kept memories, as power_off writes them, without settle(): the
++ * board may be running (the host flushes on suspend, in the menu, on a
++ * timer) */
++bool
++Hikaru::flush_kept()
++{
+ 	bool kept = true;
+ 
+ 	for (const auto &[name, bytes] : kept_memories())

@@ -1,0 +1,85 @@
+--- a/src/odin/host/renderer/hikaru/vk/pictures_vk.cpp
++++ b/src/odin/host/renderer/hikaru/vk/pictures_vk.cpp
+@@ -71,6 +71,9 @@
+ 	                             VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, PICTURE_FORMAT);
+ 	m_presenter = m_card.make_pass(ODIN_SPIRV_OF(whole_picture_vert), ODIN_SPIRV_OF(present_frag), 1,
+ 	                               sizeof(PresentPush), VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, PICTURE_FORMAT);
++	m_presenter_window = m_card.make_pass(ODIN_SPIRV_OF(whole_picture_vert), ODIN_SPIRV_OF(present_frag), 1,
++	                                      sizeof(PresentPush), VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
++	                                      VK_FORMAT_B8G8R8A8_UNORM);
+ 
+ 	const VkCommandBuffer cb = m_card.commands();
+ 	m_none = m_card.make_image(PICTURE_FORMAT, 1, 1, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
+@@ -96,7 +99,7 @@
+ 	m_fn.vkDestroyQueryPool(m_card.device(), m_stamps, nullptr);
+ 	for (vk::Image *image : { &m_state, &m_none, &m_layers[0], &m_layers[1] })
+ 		m_card.destroy_image(*image);
+-	for (vk::Pass *pass : { &m_blender, &m_compose, &m_presenter })
++	for (vk::Pass *pass : { &m_blender, &m_compose, &m_presenter, &m_presenter_window })
+ 		m_card.destroy_pass(*pass);
+ 	m_fn.vkDestroySampler(m_card.device(), m_nearest, nullptr);
+ }
+@@ -303,11 +306,12 @@
+ 	const int32_t x = static_cast<int32_t>(rect.x), y = static_cast<int32_t>(rect.y);
+ 	const bool around = w != window_w || h != window_h;
+ 	/* The frame through the presentation into an image, in that rectangle */
+-	const auto through = [&](vk::Image &to, const VkRect2D &area, const PresentPush &push, VkAttachmentLoadOp load) {
++	const auto through = [&](vk::Image &to, const vk::Pass &presenter, const VkRect2D &area, const PresentPush &push,
++	                         VkAttachmentLoadOp load) {
+ 		m_card.barrier(cb, m_frame, vk::SAMPLED);
+ 		m_card.begin_drawing(cb, to, area, load);
+-		m_card.bind_images(cb, m_presenter, { &m_frame }, m_nearest);
+-		m_fn.vkCmdPushConstants(cb, m_presenter.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
++		m_card.bind_images(cb, presenter, { &m_frame }, m_nearest);
++		m_fn.vkCmdPushConstants(cb, presenter.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
+ 		m_fn.vkCmdDraw(cb, 3, 1, 0, 0);
+ 		m_card.end_drawing(cb);
+ 	};
+@@ -321,7 +325,7 @@
+ 		vk::Image &frame = m_filter->frame(SCREEN_WIDTH, SCREEN_HEIGHT);
+ 		const PresentPush push{ { 0.0f, 0.0f, static_cast<float>(m_scale), static_cast<float>(m_scale) }, 0.0f };
+ 
+-		through(frame, { { 0, 0 }, { SCREEN_WIDTH, SCREEN_HEIGHT } }, push, VK_ATTACHMENT_LOAD_OP_LOAD);
++		through(frame, m_presenter, { { 0, 0 }, { SCREEN_WIDTH, SCREEN_HEIGHT } }, push, VK_ATTACHMENT_LOAD_OP_LOAD);
+ 		m_filter->draw(window, x, y, w, h, m_filter_frames++);
+ 		return;
+ 	}
+@@ -343,7 +347,8 @@
+ 	                          static_cast<float>(height()) / static_cast<float>(h) },
+ 	                        static_cast<float>(window_h) };
+ 
+-	through(window, { { x, y }, { w, h } }, push, around ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD);
++	through(window, m_presenter_window, { { x, y }, { w, h } }, push,
++	        around ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD);
+ }
+ 
+ /* The filter before goes once the card is done with the frames it drew */
+--- a/src/odin/host/renderer/hikaru/vk/drawing_vk.hpp
++++ b/src/odin/host/renderer/hikaru/vk/drawing_vk.hpp
+@@ -85,6 +85,7 @@
+ 
+ 	void keep_programs_in(const std::string &folder) override;
+ 	void list_programs_in(const std::string &path) override { m_program_list.list_in(path); }
++	void flush_programs() override;
+ 	bool holds_program(uint64_t key) const override { return m_variants.contains(key); }
+ 	void begin_preparing() override {}
+ 	void prepare_program(uint64_t key) override;
+@@ -229,6 +230,9 @@
+ 	/* The passes: the blender of the 3D buffers, the composition, the
+ 	 * picture brought to the size of the window */
+ 	vk::Pass m_blender, m_compose, m_presenter;
++	/* P03b (errata 17): the presenter into the window, whose format is
++	 * B8G8R8A8 (the pictures are R8G8B8A8) */
++	vk::Pass m_presenter_window;
+ 	/* The filter of the picture, its preset, the frames it has drawn */
+ 	std::unique_ptr<VkPictureFilter> m_filter;
+ 	std::string m_filter_preset;
+@@ -268,6 +272,8 @@
+ 	/* The pipelines draw_pmx makes after prepare_pmx */
+ 	ProgramList m_pmx_list;
+ 	unsigned m_read_back = 0, m_compiled = 0;
++	/* the compiled count at the last flush (flush_programs writes only when it moved) */
++	unsigned m_flushed = 0;
+ 	bool m_preparing = false;
+ 
+ 	/* The list being drawn: its buffers (the views and the lightsets

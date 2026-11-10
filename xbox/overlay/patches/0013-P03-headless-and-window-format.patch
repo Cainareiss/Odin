@@ -1,0 +1,152 @@
+--- a/src/odin/host/gfx/vk_common.hpp
++++ b/src/odin/host/gfx/vk_common.hpp
+@@ -173,6 +173,10 @@
+ 	VkPipeline pipeline = VK_NULL_HANDLE;
+ };
+ 
++/* P03 (M3): the entry of the Vulkan ICD for the headless card (set by the
++ * host through odin_set_vulkan_icd before the first card is made) */
++void set_headless_loader(PFN_vkGetInstanceProcAddr entry);
++
+ /* The card for one window: made with the window, taken by the drawing
+  * thread (display.hpp), as OpenGL's context is. */
+ class Context {
+@@ -184,6 +188,11 @@
+ 	 * ODIN_VK_VALIDATION=1, Vulkan's validation layer, its messages on
+ 	 * stderr. */
+ 	static std::unique_ptr<Context> make(SDL_Window *window, const std::string &gpu, std::string &why);
++	/* P03 (M3): the card with no window, no surface and no swap chain, for the
++	 * graphics of the DLL. Its loader is the entry the host gave with
++	 * set_headless_loader (the ICD's vk_icdGetInstanceProcAddr); none given,
++	 * or no card that has what Odin needs: nothing, with the reason in why. */
++	static std::unique_ptr<Context> make_headless(const std::string &gpu, std::string &why);
+ 	/* The cards of the computer, with or without a window */
+ 	static std::vector<std::string> gpus();
+ 	~Context();
+@@ -373,6 +382,7 @@
+ 	bool m_host_query_reset = false;
+ 	uint32_t m_stamp_bits = 0;
+ 	bool m_validation = false;
++	bool m_headless = false;	/* P03: no surface, no swap chain, the entry of set_headless_loader */
+ 	bool m_portability_subset = false;
+ 	bool m_core13 = false;
+ 	/* The extensions the device was made with */
+--- a/src/odin/host/gfx/vk_common.cpp
++++ b/src/odin/host/gfx/vk_common.cpp
+@@ -148,6 +148,32 @@
+ 	return card;
+ }
+ 
++/* P03 (M3): the card with no window. The loader entry comes from the host
++ * (odin_set_vulkan_icd): the DLL never loads an ICD by itself. */
++namespace {
++PFN_vkGetInstanceProcAddr g_headless_entry = nullptr;
++} /* namespace */
++
++void
++set_headless_loader(PFN_vkGetInstanceProcAddr entry)
++{
++	g_headless_entry = entry;
++}
++
++std::unique_ptr<Context>
++Context::make_headless(const std::string &gpu, std::string &why)
++{
++	std::unique_ptr<Context> card(new Context());
++
++	card->m_headless = true;
++	card->m_validation = env_flag("ODIN_VK_VALIDATION");
++	if (!card->load(why) || !card->make_instance(why))
++		return nullptr;
++	if (!card->choose_gpu(gpu, why) || !card->make_device(why))
++		return nullptr;
++	return card;
++}
++
+ /* An instance of its own: OpenGL may be drawing, and SDL has not loaded
+  * Vulkan for it */
+ std::vector<std::string>
+@@ -223,10 +249,18 @@
+ bool
+ Context::load(std::string &why)
+ {
+-	m_fn.vkGetInstanceProcAddr = reinterpret_cast<PFN_vkGetInstanceProcAddr>(SDL_Vulkan_GetVkGetInstanceProcAddr());
+-	if (!m_fn.vkGetInstanceProcAddr) {
+-		why = std::string("no Vulkan loader: ") + SDL_GetError();
+-		return false;
++	if (m_headless) {
++		m_fn.vkGetInstanceProcAddr = g_headless_entry;
++		if (!m_fn.vkGetInstanceProcAddr) {
++			why = "no Vulkan ICD given (odin_set_vulkan_icd)";
++			return false;
++		}
++	} else {
++		m_fn.vkGetInstanceProcAddr = reinterpret_cast<PFN_vkGetInstanceProcAddr>(SDL_Vulkan_GetVkGetInstanceProcAddr());
++		if (!m_fn.vkGetInstanceProcAddr) {
++			why = std::string("no Vulkan loader: ") + SDL_GetError();
++			return false;
++		}
+ 	}
+ #define ODIN_VK_LOAD(name) m_fn.name = reinterpret_cast<PFN_##name>(m_fn.vkGetInstanceProcAddr(VK_NULL_HANDLE, #name));
+ 	ODIN_VK_GLOBAL(ODIN_VK_LOAD)
+@@ -255,9 +289,13 @@
+ 	std::vector<VkExtensionProperties> available(count);
+ 	m_fn.vkEnumerateInstanceExtensionProperties(nullptr, &count, available.data());
+ 
+-	Uint32 sdl_count = 0;
+-	const char *const *sdl = SDL_Vulkan_GetInstanceExtensions(&sdl_count);
+-	std::vector<const char *> extensions(sdl, sdl + sdl_count);
++	/* P03: a headless card asks for no window extensions */
++	std::vector<const char *> extensions;
++	if (!m_headless) {
++		Uint32 sdl_count = 0;
++		const char *const *sdl = SDL_Vulkan_GetInstanceExtensions(&sdl_count);
++		extensions.assign(sdl, sdl + sdl_count);
++	}
+ 	VkInstanceCreateFlags flags = 0;
+ 
+ 	/* MoltenVK is a "portability" driver: only listed when asked for */
+@@ -373,7 +411,7 @@
+ 		m_fn.vkEnumerateDeviceExtensionProperties(gpu, nullptr, &n, nullptr);
+ 		std::vector<VkExtensionProperties> extensions(n);
+ 		m_fn.vkEnumerateDeviceExtensionProperties(gpu, nullptr, &n, extensions.data());
+-		if (!has(extensions, VK_KHR_SWAPCHAIN_EXTENSION_NAME))
++		if (!m_headless && !has(extensions, VK_KHR_SWAPCHAIN_EXTENSION_NAME))
+ 			continue;
+ 
+ 		const bool core13 = api >= VK_API_VERSION_1_3;
+@@ -440,9 +478,11 @@
+ Context::shown_family(VkPhysicalDevice gpu, const std::vector<VkQueueFamilyProperties> &families) const
+ {
+ 	for (uint32_t f = 0; f < families.size(); f++) {
+-		VkBool32 shows = VK_FALSE;
++		VkBool32 shows = VK_TRUE;
+ 
+-		m_fn.vkGetPhysicalDeviceSurfaceSupportKHR(gpu, f, m_surface, &shows);
++		/* P03: no window to show in */
++		if (!m_headless)
++			m_fn.vkGetPhysicalDeviceSurfaceSupportKHR(gpu, f, m_surface, &shows);
+ 		if ((families[f].queueFlags & VK_QUEUE_GRAPHICS_BIT) && shows)
+ 			return f;
+ 	}
+@@ -455,7 +495,9 @@
+ void
+ Context::list_extensions(const std::vector<VkExtensionProperties> &extensions, uint32_t api, bool core13, bool reset_ext)
+ {
+-	m_extensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
++	m_extensions.clear();
++	if (!m_headless)
++		m_extensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+ 	/* Dear ImGui asks for this one by name, even under 1.3 */
+ 	if (has(extensions, VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME))
+ 		m_extensions.push_back(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
+@@ -1176,7 +1218,8 @@
+ 
+ 		later([this, old]() mutable { destroy_image(old); });
+ 	}
+-	m_window = make_image(VK_FORMAT_R8G8B8A8_UNORM, std::max(w, 1u), std::max(h, 1u), 1,
++	/* Errata 17: B8G8R8A8, the pixel format 1 of the frontend's picture */
++	m_window = make_image(VK_FORMAT_B8G8R8A8_UNORM, std::max(w, 1u), std::max(h, 1u), 1,
+ 	                      VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+ 	                              VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+ 	return m_window;

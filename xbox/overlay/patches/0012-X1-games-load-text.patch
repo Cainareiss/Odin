@@ -1,0 +1,55 @@
+--- a/src/odin/host/app/games.cpp
++++ b/src/odin/host/app/games.cpp
+@@ -1113,6 +1113,31 @@
+ 		return false;
+ 	}
+ 
++	return check();
++}
++
++/* X1 (not in upstream): the list from memory, for a host that embeds
++ * odin-games.json in its DLL (the Xbox core). The same checks as load. */
++bool
++GameList::load_text(const std::string &name, const char *text, size_t size)
++{
++	json_error_t error;
++
++	if (m_root)
++		json_decref(m_root);
++	m_root = json_loadb(text, size, 0, &error);
++	if (!m_root) {
++		std::fprintf(stderr, "ERROR: can't load game list '%s': %s (line %d, column %d)\n", name.c_str(),
++		             error.text, error.line, error.column);
++		return false;
++	}
++	return check();
++}
++
++/* The checks of the list just read into m_root (load and load_text) */
++bool
++GameList::check()
++{
+ 	const json_t *const version = json_object_get(m_root, "version");
+ 	const json_t *const roms = json_object_get(m_root, "roms");
+ 	bool right = true;
+--- a/src/odin/host/app/games.hpp
++++ b/src/odin/host/app/games.hpp
+@@ -417,6 +417,9 @@
+ 	/* Reads the list. False, with the reason on stderr, when the file is
+ 	 * not one. */
+ 	bool load(const std::string &path);
++	/* X1: the same list from memory (odin-games.json embedded in the Xbox
++	 * DLL); name is for the messages. */
++	bool load_text(const std::string &name, const char *text, size_t size);
+ 
+ 	bool has(const std::string &name) const;
+ 	std::string machine(const std::string &name) const;
+@@ -447,6 +450,8 @@
+ 	static constexpr unsigned VERSION = 2;
+ 
+ 	const json_t *find(const std::string &name) const;
++	/* the checks of m_root (after load or load_text) */
++	bool check();
+ 
+ 	json_t *m_root;
+ };

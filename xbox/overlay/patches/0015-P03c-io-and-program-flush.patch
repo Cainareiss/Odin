@@ -1,0 +1,104 @@
+--- a/src/odin/host/renderer/hikaru/renderer_programs.cpp
++++ b/src/odin/host/renderer/hikaru/renderer_programs.cpp
+@@ -27,6 +27,10 @@
+ 
+ #include "odin/host/renderer/hikaru/renderer_programs.hpp"
+ 
++/* P16 (M3): the program lists go through odin::io (the app partition's own
++ * file functions), not the C library's fopen on a path of the game folder */
++#include "odin/common/io.hpp"
++
+ #include <cinttypes>
+ #include <cstdio>
+ #include <cstdlib>
+@@ -43,7 +47,7 @@
+ open_program_list(const std::string &path, const char *header)
+ {
+ 	char line[64];
+-	std::FILE *file = std::fopen(path.c_str(), "r");
++	std::FILE *file = odin::io::fopen(path, "r");
+ 
+ 	if (!file)
+ 		return nullptr;
+@@ -179,9 +183,9 @@
+ 		std::fclose(m_file);
+ 	if (held) {
+ 		std::fclose(held);
+-		m_file = std::fopen(path.c_str(), "a");
++		m_file = odin::io::fopen(path, "a");
+ 	} else {
+-		m_file = std::fopen(path.c_str(), "w");
++		m_file = odin::io::fopen(path, "w");
+ 		if (m_file) {
+ 			std::fputs(header, m_file);
+ 			std::fflush(m_file);
+--- a/src/odin/host/renderer/hikaru/vk/scene_vk.cpp
++++ b/src/odin/host/renderer/hikaru/vk/scene_vk.cpp
+@@ -35,6 +35,7 @@
+ #include "odin/common/repeats.hpp"
+ #include "odin/host/gfx/spirv.hpp"
+ #include "odin/host/app/user_files.hpp"
++#include "odin/common/io.hpp"
+ 
+ #include <array>
+ #include <cinttypes>
+@@ -365,14 +366,26 @@
+ 	if (!odin::write_kept(m_cache_path, bytes))
+ 		return;
+ 
+-	const std::string ours = std::filesystem::path(m_cache_path).filename().string();
+-	std::error_code error;
+-	for (const auto &entry : std::filesystem::directory_iterator(m_cache_folder, error)) {
+-		const std::string name = entry.path().filename().string();
++	/* P16 (M3): the folder through odin::io, not std::filesystem */
++	const std::string ours = m_cache_path.substr(m_cache_path.find_last_of('/') + 1);
++	std::vector<odin::io::Entry> entries;
++
++	if (odin::io::list(m_cache_folder, entries))
++		for (const odin::io::Entry &entry : entries)
++			if (!entry.dir && entry.name.starts_with(m_cache_card) && entry.name.ends_with(".bin") &&
++			    entry.name != ours)
++				odin::io::remove(m_cache_folder + "/" + entry.name);
++}
+ 
+-		if (name.starts_with(m_cache_card) && name.ends_with(".bin") && name != ours)
+-			std::filesystem::remove(entry.path(), error);
+-	}
++/* errata 4 (M3): the pipelines made since the last flush are written now, not
++ * only when the drawing is destroyed (a killed process kept none) */
++void
++VkDrawing::flush_programs()
++{
++	if (m_compiled == m_flushed)
++		return;
++	write_cache();
++	m_flushed = m_compiled;
+ }
+ 
+ /* The pipeline of the variant and the blend, made the first time. A variant
+--- a/src/odin/host/renderer/hikaru/drawing.hpp
++++ b/src/odin/host/renderer/hikaru/drawing.hpp
+@@ -246,6 +246,8 @@
+ 	 * folder and compiled so far */
+ 	virtual void keep_programs_in(const std::string &folder) = 0;
+ 	virtual void list_programs_in(const std::string &path) = 0;
++	/* errata 4 (M3): what was made so far is written to the folder now */
++	virtual void flush_programs() = 0;
+ 	virtual bool holds_program(uint64_t key) const = 0;
+ 	virtual void begin_preparing() = 0;
+ 	virtual void prepare_program(uint64_t key) = 0;
+--- a/src/odin/host/renderer/hikaru/renderer.hpp
++++ b/src/odin/host/renderer/hikaru/renderer.hpp
+@@ -185,6 +185,12 @@
+ 
+ 	/* The picture of the last frame, whatever the size of the window */
+ 	HostPicture frame_picture() const { return m_card->frame_picture(); }
++	/* P03c (M3, C/D): the programs prepare_programs made ready, from the
++	 * kept list (read back) and compiled new; the counts of the card */
++	unsigned programs_read_back() const { return m_card->programs_read_back(); }
++	unsigned programs_compiled() const { return m_card->programs_compiled(); }
++	/* errata 4: the pipelines made so far are written to the folder now */
++	void flush_programs() { m_card->flush_programs(); }
+ 
+ 	/* The debug switches as text, for the title of the window; empty
+ 	 * without the debug keys. */

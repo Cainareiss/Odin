@@ -1,0 +1,207 @@
+--- a/src/odin/host/app/rom_files.cpp
++++ b/src/odin/host/app/rom_files.cpp
+@@ -23,12 +23,12 @@
+  */
+ 
+ #include "odin/host/app/rom_files.hpp"
++#include "odin/common/io.hpp"
+ 
+ #include <array>
+ #include <cctype>
+ #include <cstdio>
+ #include <cstring>
+-#include <filesystem>
+ #include <initializer_list>
+ #include <mutex>
+ #include <string_view>
+@@ -49,7 +49,11 @@
+ public:
+ 	explicit Zip(const std::string &path) : m_zip{}
+ 	{
+-		m_open = mz_zip_reader_init_file(&m_zip, path.c_str(), 0);
++		/* P05: the archive is read from a file of odin::io (miniz reads
++		 * it from the FILE*, it does not open it) */
++		m_file = io::fopen(path, "rb");
++		const std::optional<uint64_t> size = m_file ? io::file_size(path) : std::nullopt;
++		m_open = size && mz_zip_reader_init_cfile(&m_zip, m_file, *size, 0);
+ 		if (!m_open)
+ 			return;
+ 		for (mz_uint i = 0; i < mz_zip_reader_get_num_files(&m_zip); i++) {
+@@ -66,6 +70,8 @@
+ 	{
+ 		if (m_open)
+ 			mz_zip_reader_end(&m_zip);
++		if (m_file)
++			std::fclose(m_file);
+ 	}
+ 
+ 	bool opened() const { return m_open; }
+@@ -83,6 +89,7 @@
+ private:
+ 	mz_zip_archive m_zip;
+ 	bool m_open;
++	std::FILE *m_file = nullptr;
+ 	std::vector<mz_uint> m_index;
+ };
+ 
+@@ -123,6 +130,36 @@
+ /* What the LZMA SDK reads ahead of the archive at a time, as its example */
+ constexpr size_t LOOK_AHEAD = size_t{1} << 18;
+ 
++/* The LZMA SDK's stream over a FILE* of odin::io (P05): the LZMA SDK's own
++ * file functions are not used (they open by name, without the broker).
++ * vt comes first, so that a pointer to it is a pointer to the stream. */
++struct FileStream {
++	ISeekInStream vt;
++	std::FILE *file;
++};
++
++SRes
++file_read(ISeekInStreamPtr p, void *buf, size_t *size)
++{
++	const FileStream *const stream = reinterpret_cast<const FileStream *>(p);
++	const size_t want = *size;
++
++	*size = want ? std::fread(buf, 1, want, stream->file) : 0;
++	return std::ferror(stream->file) ? SZ_ERROR_READ : SZ_OK;
++}
++
++SRes
++file_seek(ISeekInStreamPtr p, Int64 *pos, ESzSeek origin)
++{
++	const FileStream *const stream = reinterpret_cast<const FileStream *>(p);
++	const int whence = origin == SZ_SEEK_SET ? SEEK_SET : origin == SZ_SEEK_CUR ? SEEK_CUR : SEEK_END;
++
++	if (_fseeki64(stream->file, static_cast<long long>(*pos), whence) != 0)
++		return SZ_ERROR_READ;
++	*pos = static_cast<Int64>(_ftelli64(stream->file));
++	return SZ_OK;
++}
++
+ class SevenZip final : public Archive {
+ public:
+ 	explicit SevenZip(const std::string &path) : m_look_buffer(LOOK_AHEAD)
+@@ -131,10 +168,12 @@
+ 
+ 		std::call_once(crc_table, [] { CrcGenerateTable(); });
+ 		SzArEx_Init(&m_db);
+-		m_file_open = InFile_Open(&m_file.file, path.c_str()) == 0;
++		m_file.file = io::fopen(path, "rb");
++		m_file_open = m_file.file != nullptr;
+ 		if (!m_file_open)
+ 			return;
+-		FileInStream_CreateVTable(&m_file);
++		m_file.vt.Read = file_read;
++		m_file.vt.Seek = file_seek;
+ 		LookToRead2_CreateVTable(&m_look, False);
+ 		m_look.realStream = &m_file.vt;
+ 		m_look.buf = m_look_buffer.data();
+@@ -163,7 +202,7 @@
+ 			ISzAlloc_Free(&ALLOC, m_block);
+ 		SzArEx_Free(&m_db, &ALLOC);
+ 		if (m_file_open)
+-			File_Close(&m_file.file);
++			std::fclose(m_file.file);
+ 	}
+ 
+ 	bool opened() const { return m_open; }
+@@ -182,7 +221,7 @@
+ 
+ private:
+ 	CSzArEx m_db;
+-	CFileInStream m_file{};
++	FileStream m_file{};
+ 	CLookToRead2 m_look{};
+ 	std::vector<Byte> m_look_buffer;
+ 	bool m_file_open = false, m_open = false;
+@@ -217,7 +256,7 @@
+ /* The whole file, if it has that size */
+ std::optional<std::vector<uint8_t>> read_file(const std::string &path, uint64_t size)
+ {
+-	std::FILE *const file = std::fopen(path.c_str(), "rb");
++	std::FILE *const file = io::fopen(path, "rb");
+ 	std::optional<std::vector<uint8_t>> out;
+ 
+ 	if (!file)
+@@ -238,7 +277,7 @@
+ 	static constexpr std::array<uint8_t, 4> ZIP = { 'P', 'K', 3, 4 }, EMPTY_ZIP = { 'P', 'K', 5, 6 };
+ 	static constexpr std::array<uint8_t, 6> SEVEN_ZIP = { '7', 'z', 0xBC, 0xAF, 0x27, 0x1C };
+ 	std::array<uint8_t, 6> head{};
+-	std::FILE *const file = std::fopen(path.c_str(), "rb");
++	std::FILE *const file = io::fopen(path, "rb");
+ 
+ 	if (!file)
+ 		return nullptr;
+@@ -281,13 +320,10 @@
+ RomFiles::crc_of(const std::string &path)
+ {
+ 	const auto [kept, first] = m_crcs.try_emplace(path);
+-	std::error_code error;
+ 
+ 	if (first) {
+-		const uintmax_t size = std::filesystem::file_size(path, error);
+-
+-		if (!error)
+-			if (const auto bytes = read_file(path, size))
++		if (const auto size = io::file_size(path))
++			if (const auto bytes = read_file(path, *size))
+ 				kept->second = crc32(*bytes);
+ 	}
+ 	return kept->second;
+@@ -316,25 +352,23 @@
+ std::optional<RomFiles::Place>
+ RomFiles::in_folder(const std::string &folder, const File &file, bool by_crc)
+ {
+-	std::error_code error;
+ 	std::vector<std::string> same_size;
++	std::vector<io::Entry> entries;
+ 
+ 	if (folder.empty())
+ 		return std::nullopt;
+-	if (const std::string exact = folder + "/" + file.name; std::filesystem::file_size(exact, error) == file.size && !error)
++	if (const std::string exact = folder + "/" + file.name; io::file_size(exact) == file.size)
+ 		return Place{ exact, nullptr, 0 };
+-	for (auto it = std::filesystem::directory_iterator(folder, error); !error && it != std::filesystem::directory_iterator();
+-	     it.increment(error)) {
+-		std::error_code size_error;
+-		/* As the name given is written: with / on Windows too */
+-		const std::string name = it->path().filename().string();
+-
+-		if (!it->is_regular_file(size_error) || it->file_size(size_error) != file.size || size_error)
+-			continue;
+-		if (loose(name) == loose(file.name))
+-			return Place{ folder + "/" + name, nullptr, 0 };
+-		same_size.push_back(folder + "/" + name);
+-	}
++	/* P05: one listing of the folder through odin::io, not a directory
++	 * iterator; the entries are as the name is written */
++	if (io::list(folder, entries))
++		for (const io::Entry &entry : entries) {
++			if (entry.dir || entry.size != file.size)
++				continue;
++			if (loose(entry.name) == loose(file.name))
++				return Place{ folder + "/" + entry.name, nullptr, 0 };
++			same_size.push_back(folder + "/" + entry.name);
++		}
+ 	if (by_crc && file.crc)
+ 		for (const std::string &path : same_size)
+ 			if (crc_of(path) == file.crc)
+@@ -381,15 +415,14 @@
+ bool
+ RomFiles::set_there(const std::string &game, const File &file) const
+ {
+-	std::error_code error;
+ 	const std::string &set = file.set_of(game);
+-	const auto there = [&error, &set](const std::string &dir) {
++	const auto there = [&set](const std::string &dir) {
+ 		if (dir.empty())
+ 			return false;
+ 		for (const char *const kind : ARCHIVES)
+-			if (std::filesystem::exists(dir + "/" + set + kind, error))
++			if (io::exists(dir + "/" + set + kind))
+ 				return true;
+-		return std::filesystem::is_directory(dir + "/" + set, error);
++		return io::is_dir(dir + "/" + set);
+ 	};
+ 
+ 	/* The game's own set is looked for in the folder of the ROMs only */

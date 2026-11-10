@@ -1,0 +1,14 @@
+--- a/src/odin/machine/cpu/sh4/sh4_host.cpp
++++ b/src/odin/machine/cpu/sh4/sh4_host.cpp
+@@ -66,6 +66,11 @@
+  * does r12, and jumps to the block; the way back to the run loop undoes it. */
+ void Sh4Host::clear()
+ {
++	/* P17 (M3): no code was got (the host refused the executable memory): nothing to clear, and writing it would be
++	 * a write to null. drop_blocks calls this whenever the host exists; the board reads its blocks then. */
++	if (!usable()) {
++		return;
++	}
+ 	way_in();
+ 	bytes({0x48, 0xBD});				/* mov rbp, the registers */
+ 	quad(reinterpret_cast<uintptr_t>(m_words) + MIDDLE);

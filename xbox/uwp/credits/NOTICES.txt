@@ -1,0 +1,60 @@
+Odin (experimental) v0.1 - licences, credits and source offer
+=============================================================
+
+Odin (experimental) is a SHELL: the universal frontend with a STUB host. It contains NO emulator core, so it cannot run
+any game. Nothing in this package is a game, a BIOS, a ROM, a MAME set, or artwork from any game or company.
+
+What is in the package
+----------------------
+1. The frontend (GPL-3.0-or-later). The menus, the shelf, the library, the settings and the Xbox bridge are derived from
+   SwanStationPS5, by darkxex (AngelXex) and BlackBearReloaded, https://github.com/darkxex/SwanStationPS5, GPL-3.0.
+   The original copyright and licence notices of that work are kept in its source files. The changes for this shell
+   (the Odin system registry, the stub host, the library scan by set name, the branding) are GPL-3.0-or-later.
+   Licence text: LICENSE-GPL-3.0.txt.
+
+2. The Odin catalogue data (GPL-3.0-or-later). The set names, titles, machines, parent sets and shared-set names in
+   swanui/compat/swanui_odin_sets.inc are generated from odin-games.json of the Odin project:
+     Odin (ᚨ), Copyright (C) 2026 Réda Chérif-Touil
+     Source: https://github.com/Tovarichtch/Odin
+     Commit used: 6ebf2b40ccbca9534d1a0e58b7602db11e4485d9 (branch Odin, "Merge pull request #46 from
+     Tovarichtch/gaelco-fog-fix").
+   No key, CRC, EEPROM, board or ROM data was copied: the generator reads only names, titles, machines and parents.
+   Odin's emulation code is NOT in this package (it is a later milestone). Odin is GPL-3.0-or-later.
+
+3. RetroAchievements md5 (MIT, with its own header). swanui/core/bios_choices.c uses rhash/md5.c from rcheevos,
+   Copyright (c) 2018 RetroAchievements.org (MIT, LICENSE-rcheevos-MIT.txt). The md5.c file keeps its own notice
+   (Aladdin Enterprises, 1999-2002). Nothing else of RetroAchievements is in the package: the RetroAchievements
+   sign-in, achievements and rcheevos runtime are not built; their interfaces are inert stubs.
+
+4. stb (public domain or MIT): stb_image / stb_truetype headers and stb_impl.c, as in SwanStationPS5.
+
+5. libretro.h (MIT-style header, libretro-common): the frontend includes it for the core interface types.
+
+6. Fonts and icons, with their own licences in swanui/assets/fonts: Inter, IBM Plex, Work Sans, Fraunces, Chakra Petch,
+   Noto Sans JP (SIL Open Font Licence 1.1, OFL.txt and OFL-*.txt), Tabler Icons (MIT, LICENSE-tabler-icons.txt).
+
+Not included, and not built
+---------------------------
+* ares (ISC): no ares code is in this package. The ares emulator glue, the ares tree and the ares art lists were
+  removed; the frontend texts that named ares were replaced.
+* Mesa, llvm-mingw, DXC (dxil.dll), glslang, SPIRV: not in this shell (they belong to the Odin core milestone).
+* jansson, miniz, LZMA, qrcodegen, NFS and NTFS readers, DuckStation/SwanStation core: not built in this shell.
+* No BIOS. No ROM. No MAME set. No Sega, Gaelco or other publisher artwork, logos, thumbnails, bezels or box art.
+  The package art is placeholder art drawn for this shell (Assets\, tools\make_assets_odin.ps1).
+
+Trademarks
+----------
+"Sega", "Gaelco", "Hikaru" and the game titles are names of their owners, used here only to name the systems and sets
+of the catalogue. "Xbox" and "Windows" are Microsoft's trademarks.
+
+Source offer (GPL-3.0, sections 6 and 13)
+-----------------------------------------
+The complete corresponding source of the GPL parts of this package (the frontend, the Odin shell code, and the catalogue
+generator) is available on request for at least three years. The Odin upstream source is at
+https://github.com/Tovarichtch/Odin at the commit above. The shell's own source tree is the one this package was built
+from (C:\claude-work\odinuwp\uwp, with its file manifest in notes\M2-COPY-MANIFEST.txt and notes\M2-SHELL.md).
+
+Disclaimer
+----------
+This is an unofficial, experimental build for personal use on a console in Developer Mode. It is not published.
+It is provided WITHOUT ANY WARRANTY, to the extent permitted by law; see the GPL-3.0 text.

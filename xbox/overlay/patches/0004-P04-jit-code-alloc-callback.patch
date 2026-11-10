@@ -1,0 +1,43 @@
+--- a/src/odin/machine/core/host_code.hpp
++++ b/src/odin/machine/core/host_code.hpp
+@@ -37,6 +37,17 @@
+ 
+ namespace odin {
+ 
++/* The memory of the code on Windows (P04). Unset: VirtualAlloc with
++ * PAGE_EXECUTE_READWRITE, as upstream. A host that must go through a
++ * different API sets them before the first HostCode is made: code_alloc
++ * gives size bytes at address at (0: anywhere), readable, writable and
++ * executable, or nullptr; code_free gives them back. The Xbox DLL uses
++ * VirtualAllocFromApp and VirtualProtectFromApp (odin_c.cpp). */
++using CodeAlloc = uint8_t *(*)(uintptr_t at, uint32_t size);
++using CodeFree = void (*)(uint8_t *code, uint32_t size);
++inline CodeAlloc code_alloc = nullptr;
++inline CodeFree code_free = nullptr;
++
+ /* Code written for the host while the program runs: memory the host may
+  * run, within reach of a direct call from the program when there is some,
+  * and the steps every writer of such code needs (bytes, jumps, calls, the
+--- a/src/odin/machine/core/host_code.cpp
++++ b/src/odin/machine/core/host_code.cpp
+@@ -54,6 +54,9 @@
+ uint8_t *take(uintptr_t at, uint32_t size)
+ {
+ #if defined(_WIN32)
++	/* P04: the host's callback when it set one, else as upstream */
++	if (code_alloc)
++		return code_alloc(at, size);
+ 	return static_cast<uint8_t *>(VirtualAlloc(reinterpret_cast<void *>(at), size, MEM_RESERVE | MEM_COMMIT,
+ 	                                           PAGE_EXECUTE_READWRITE));
+ #else
+@@ -85,6 +88,10 @@
+ void give_back(uint8_t *code, uint32_t size)
+ {
+ #if defined(_WIN32)
++	if (code_free) {
++		code_free(code, size);
++		return;
++	}
+ 	(void)size;
+ 	VirtualFree(code, 0, MEM_RELEASE);
+ #else

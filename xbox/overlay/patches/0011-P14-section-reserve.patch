@@ -1,0 +1,38 @@
+--- a/src/odin/host/app/games.cpp
++++ b/src/odin/host/app/games.cpp
+@@ -122,6 +122,19 @@
+ 	return bytes;
+ }
+ 
++/* P14: the bytes the files of a section add up to, reserved once: the growth
++ * of the output doubled its peak (pharrier: 434 MiB of sections, 308 MiB
++ * with this) */
++size_t
++bytes_of(const json_t *data)
++{
++	size_t total = 0;
++
++	for (size_t i = 0; i < json_array_size(data); i++)
++		total += static_cast<size_t>(json_integer_value(json_object_get(json_array_get(data, i), "size")));
++	return total;
++}
++
+ std::optional<std::vector<uint8_t>>
+ load_section(const json_t *section, RomFiles &files, const Game &game)
+ {
+@@ -152,6 +165,7 @@
+ 		const json_t *const amnt = json_object_get(section, "amnt");
+ 		const size_t step = static_cast<size_t>(json_integer_value(amnt));
+ 		size_t base = 0;
++		out.reserve(bytes_of(data));
+ 
+ 		if (!amnt || (step != 1 && step != 2 && step != 4 && step != 8))
+ 			return std::nullopt;
+@@ -171,6 +185,7 @@
+ 		return out;
+ 	}
+ 	if (!std::strcmp(type, "concatenate")) {
++		out.reserve(bytes_of(data));
+ 		for (size_t i = 0; i < num; i++) {
+ 			const auto file = load_datum(json_array_get(data, i), files, game);
+ 

@@ -1,0 +1,115 @@
+--- a/src/odin/common/io.hpp
++++ b/src/odin/common/io.hpp
+@@ -0,0 +1,112 @@
++/*
++ * Copyright (C) 2026 the Odin UWP port (new file of the patch series, not in
++ * upstream Odin; the upstream licence applies)
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
++ */
++
++#ifndef ODIN_COMMON_IO_HPP
++#define ODIN_COMMON_IO_HPP
++
++#include <cstddef>
++#include <cstdint>
++#include <cstdio>
++#include <optional>
++#include <string>
++#include <vector>
++
++/* Every file the core opens, lists, renames or removes goes through here.
++ * A Windows app reaches only what it was given (LocalState, a folder the user
++ * picked through the broker), so the host can hand the core its own functions
++ * (Host below); without them the Win32 functions of the app partition are used.
++ * Paths are UTF-8. Failures are false, nullopt or nullptr: nothing throws.
++ * The text modes "r" and "w" use the CRT's text translation (CRLF read as LF),
++ * as the upstream fopen did; "rb", "wb", "ab" and "a" are binary. */
++namespace odin::io {
++
++/* What the host provides. The functions return 0 on success; a nonzero
++ * result is a failure. open: access is READ, WRITE (create or truncate),
++ * APPEND (create or append) with TEXT added for the text modes; the host
++ * opens the file and returns a Win32 HANDLE the core owns from then on. */
++enum Access : unsigned {
++	READ = 1,
++	WRITE = 2,
++	APPEND = 4,
++	TEXT = 8,
++};
++
++/* stat flags: EXISTS 1, DIR 2 (a folder, else a file) */
++enum StatFlags : unsigned {
++	EXISTS = 1,
++	DIR = 2,
++};
++
++struct Host {
++	void *ctx = nullptr;
++	int (*open)(void *ctx, const char *path, unsigned access, void **handle) = nullptr;
++	/* 0 with the flags filled (0 = absent), else a failure */
++	int (*stat)(void *ctx, const char *path, unsigned *flags, uint64_t *size) = nullptr;
++	/* one call per entry: name (no . or ..), is_dir, size (0 for folders) */
++	int (*list)(void *ctx, const char *dir, void *sink, void (*entry)(void *sink, const char *name, unsigned is_dir,
++	                                                                  uint64_t size)) = nullptr;
++	int (*mkdir)(void *ctx, const char *path) = nullptr;
++	int (*rename_replace)(void *ctx, const char *from, const char *to) = nullptr;
++	int (*remove)(void *ctx, const char *path) = nullptr;
++};
++
++/* Installs the host's functions (all of them, or none to use Win32 again).
++ * Called once by odin_init before any board is made. */
++void set_host(const Host &host);
++
++/* Where a call that took 40 ms or more is reported (the host's log). */
++void set_log(void (*log)(const char *text));
++
++struct Entry {
++	std::string name;
++	bool dir;
++	uint64_t size;
++};
++
++/* "rb", "wb", "ab", "r", "w", "a" as upstream; any other mode is nullptr. */
++std::FILE *fopen(const std::string &path, const char *mode);
++/* Regular files only. */
++std::optional<uint64_t> file_size(const std::string &path);
++bool exists(const std::string &path);
++bool is_dir(const std::string &path);
++/* Files and folders of a folder, without . and .. */
++bool list(const std::string &dir, std::vector<Entry> &out);
++/* Creates the folder and the missing ones above it. */
++bool mkdir_p(const std::string &dir);
++/* Replaces an existing "to" (MoveFile, then ReplaceFile when it exists). */
++bool rename_replace(const std::string &from, const std::string &to);
++/* A file, or an empty folder. */
++bool remove(const std::string &path);
++/* The whole file. */
++std::optional<std::vector<uint8_t>> read_file(const std::string &path);
++/* Writes "path.new" in full, then replaces "path" with it; creates the folder. */
++bool write_kept(const std::string &path, const void *data, size_t size);
++
++/* While one of these lives, each folder is listed once: exists, is_dir and
++ * file_size of its entries are answered from that listing. Scopes nest. */
++class ListingCache {
++public:
++	ListingCache();
++	~ListingCache();
++	ListingCache(const ListingCache &) = delete;
++	ListingCache &operator=(const ListingCache &) = delete;
++};
++
++} /* namespace odin::io */
++
++#endif /* ODIN_COMMON_IO_HPP */

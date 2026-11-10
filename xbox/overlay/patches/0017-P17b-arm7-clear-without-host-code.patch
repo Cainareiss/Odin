@@ -1,0 +1,13 @@
+--- a/src/odin/machine/cpu/arm7/arm7_host.cpp
++++ b/src/odin/machine/cpu/arm7/arm7_host.cpp
+@@ -54,6 +54,10 @@
+  * the way on to the block at PC, for every block to jump to. */
+ void Arm7Host::clear()
+ {
++	/* P17b (M3): as Sh4Host::clear (P17): no code was got, nothing to clear, no write to null */
++	if (!usable()) {
++		return;
++	}
+ 	way_in();
+ 	move32(R12, ARG[2]);
+ 	move32(R14, ARG[3]);
